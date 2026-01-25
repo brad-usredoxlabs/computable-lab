@@ -1,0 +1,109 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://example.org/schemas/instrument.schema.yaml"
+title: Instrument
+description: >
+  A canonical description of a physical or virtual instrument.
+  Instruments are referenced by events and results but do not encode actions.
+
+type: object
+additionalProperties: false
+
+required:
+  - kind
+  - id
+  - name
+
+properties:
+  kind:
+    const: instrument
+    description: Record type discriminator
+
+  id:
+    type: string
+    description: Stable identifier for the instrument
+    pattern: "^INSTR-[A-Z0-9][A-Z0-9_-]*$"
+
+  name:
+    type: string
+    description: Human-readable instrument name
+    minLength: 1
+
+  domain:
+    type: string
+    description: >
+      Broad functional category used for UI behavior and grouping.
+      This is NOT an ontology term.
+    examples:
+      - qpcr
+      - gc-ms
+      - pipette
+      - plate_reader
+      - incubator
+
+  class:
+    type: array
+    description: >
+      Optional ontology references describing what this instrument is
+      in the universe (e.g., OBI, EFO).
+    items:
+      $ref: "#/$defs/curie"
+    minItems: 1
+    uniqueItems: true
+
+  manufacturer:
+    type: string
+    description: Instrument manufacturer
+
+  model:
+    type: string
+    description: Manufacturer model name or number
+
+  serial:
+    type: string
+    description: Manufacturer serial number
+
+  location:
+    type: string
+    description: Physical or logical location of the instrument
+
+  capabilities:
+    type: array
+    description: >
+      Informal list of capabilities or modes.
+      Used for discovery and filtering, not enforcement.
+    items:
+      type: string
+    uniqueItems: true
+
+  interfaces:
+    type: array
+    description: >
+      Interfaces through which this instrument can be controlled or accessed.
+    items:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          examples:
+            - usb
+            - ethernet
+            - wifi
+            - rs232
+            - file_drop
+            - api
+        details:
+          type: string
+          description: Optional free-text details
+
+  notes:
+    type: string
+    description: Free-text notes
+
+$defs:
+  curie:
+    type: string
+    description: Compact URI (CURIE), e.g. OBI:0000548
+    pattern: "^[A-Za-z][A-Za-z0-9_\\-]*:[^\\s]+$"

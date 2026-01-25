@@ -1,0 +1,57 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/study.schema.yaml"
+title: "Study"
+description: >
+  A Study groups related Experiments under a shared scientific/organizational umbrella. It is NOT a container that enumerates child records. Experiments reference studyId.
+
+type: object
+additionalProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- title
+- shortSlug
+
+properties:
+  kind:
+    const: "study"
+    description: "Record discriminator."
+
+  recordId:
+    type: string
+    description: "Stable local identifier (e.g., STU-000003)."
+
+  title:
+    type: string
+    description: "Human-readable title for the study."
+
+  state:
+    type: string
+    description: "Workflow state (draft, in_progress, accepted, superseded, archived)."
+
+  description:
+    type: string
+    description: "Optional high-level description of the study."
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+  # Optional, lightweight intent anchors (not required)
+  primaryClaimIds:
+    type: array
+    description: >
+      Optional curated list of claim recordIds that define the study's primary intent. Claims remain the authoritative holders of meaning/evidence.
+    items:
+      type: string
+    uniqueItems: true
+
+  attachments:
+    type: array
+    description: "Optional study-level attachments (charter, plan, references)."
+    items:
+      $ref: "./datatypes/file-ref.schema.yaml"

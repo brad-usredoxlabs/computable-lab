@@ -1,0 +1,28 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/plate-event.mix.schema.yaml"
+title: "PlateEventMixDetails"
+type: object
+additionalProperties: false
+required: [ labwareInstanceId, wells ]
+
+properties:
+  labwareInstanceId:
+    $ref: "./ref.schema.yaml"
+
+  wells:
+    type: array
+    minItems: 1
+    items: { type: string }
+
+  cycles:
+    type: integer
+    minimum: 1
+    description: "Optional number of mix cycles."
+
+  volume_uL:
+    type: number
+    exclusiveMinimum: 0
+    description: "Optional aspirate/dispense volume used for mixing."
+
+  notes:
+    type: string

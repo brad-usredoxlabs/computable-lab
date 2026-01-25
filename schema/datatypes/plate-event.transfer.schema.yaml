@@ -1,0 +1,65 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/plate-event.transfer.schema.yaml"
+title: "PlateEventTransferDetails"
+type: object
+additionalProperties: false
+required: [ source, target, volume_uL ]
+
+properties:
+  source:
+    type: object
+    additionalProperties: false
+    required: [ labwareInstanceId ]
+    properties:
+      labwareInstanceId:
+        $ref: "./ref.schema.yaml"
+      wells:
+        type: array
+        minItems: 1
+        items: { type: string }
+        description: "Optional if mapping is provided."
+
+  target:
+    type: object
+    additionalProperties: false
+    required: [ labwareInstanceId ]
+    properties:
+      labwareInstanceId:
+        $ref: "./ref.schema.yaml"
+      wells:
+        type: array
+        minItems: 1
+        items: { type: string }
+        description: "Optional if mapping is provided."
+
+  volume_uL:
+    type: number
+    exclusiveMinimum: 0
+    description: "Nominal transfer volume per dispense."
+
+  mapping:
+    type: array
+    description: >
+      Optional explicit source->target mapping. If present, it is canonical for replay. If omitted, source.wells and target.wells are paired positionally.
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      required: [ source_well, target_well ]
+      properties:
+        source_well: { type: string }
+        target_well: { type: string }
+        volume_uL:
+          type: number
+          exclusiveMinimum: 0
+          description: "Optional per-pair override."
+
+  notes:
+    type: string
+
+allOf:
+- anyOf:
+  - required: [ mapping ]
+  - properties:
+      source: { required: [ wells ] }
+      target: { required: [ wells ] }
