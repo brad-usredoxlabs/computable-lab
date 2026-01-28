@@ -1,0 +1,43 @@
+# UI specification for Run records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/run.schema.yaml"
+
+display:
+  titleField: "$.title"
+  icon: "run"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.recordId"
+      widget: "text"
+      label: "Record ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Basic Information"
+    fields:
+    - path: "$.title"
+      widget: "text"
+      label: "Title"
+    - path: "$.experimentId"
+      widget: "ref"
+      label: "Experiment"
+    - path: "$.protocolId"
+      widget: "ref"
+      label: "Protocol"
+
+list:
+  columns:
+  - path: "$.recordId"
+    label: "ID"
+    width: "120px"
+  - path: "$.title"
+    label: "Title"
+  - path: "$.experimentId"
+    label: "Experiment"

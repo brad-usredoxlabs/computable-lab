@@ -1,0 +1,27 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/plate-event.read.schema.yaml"
+title: "PlateEventReadDetails"
+type: object
+additionalProperties: false
+required: [ labwareInstanceId, modality ]
+
+properties:
+  labwareInstanceId:
+    $ref: "./ref.schema.yaml"
+
+  wells:
+    type: array
+    items: { type: string }
+    description: "Optional subset; omit to mean whole labware."
+
+  modality:
+    type: string
+    enum: [ fluorescence, absorbance, luminescence, microscopy, ms, qpcr, other ]
+
+  channels:
+    type: array
+    items: { type: string }
+    description: "Optional channel labels."
+
+  notes:
+    type: string

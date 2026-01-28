@@ -1,0 +1,83 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/run.schema.yaml"
+title: "Run"
+description: >
+  A Run is a single execution session. It is a thin header that links to a run-timeline (activities) and optional run-editor-state (UI conveniences). Canonical plate state is derived from PlateEvents in protocol segments.
+
+type: object
+additionalProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- experimentId
+- status
+- timelineId
+
+properties:
+  kind:
+    const: "run"
+
+  recordId:
+    type: string
+    description: "Stable local identifier (e.g., RUN-000041)."
+
+  experimentId:
+    type: string
+    description: "Parent experiment recordId (or @id if you standardize on that)."
+
+  studyId:
+    type: string
+    description: "Optional parent study recordId."
+
+  label:
+    type: string
+
+  status:
+    type: string
+    enum: [ planned, in_progress, completed, aborted, failed, superseded ]
+
+  startedAt:
+    type: string
+    format: date-time
+
+  endedAt:
+    type: string
+    format: date-time
+
+  createdBy:
+    type: string
+
+  notes:
+    type: string
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+  timelineId:
+    type: string
+    description: "recordId (or @id) of the run-timeline record."
+
+  editorStateId:
+    type: string
+    description: "Optional pointer to run-editor-state record (UI-only)."
+
+  attachments:
+    type: array
+    items:
+      $ref: "#/$defs/file_ref"
+
+$defs:
+  file_ref:
+    type: object
+    required: [ "uri" ]
+    additionalProperties: false
+    properties:
+      label: { type: string }
+      uri: { type: string }
+      mime_type: { type: string }
+      checksum: { type: string }

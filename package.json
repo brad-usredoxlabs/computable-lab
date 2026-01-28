@@ -1,0 +1,40 @@
+{
+  "name": "computable-lab",
+  "version": "1.0.0",
+  "description": "Schema-driven laboratory information and knowledge system",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "npx tsx src/server.ts",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "lab",
+    "schema",
+    "json-schema",
+    "crud",
+    "json-ld"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.55.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "ajv": "^8.12.0",
+    "ajv-formats": "^2.1.1",
+    "fastify": "^5.7.2",
+    "yaml": "^2.3.4"
+  }
+}

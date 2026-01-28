@@ -1,0 +1,23 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/plate-event.other.schema.yaml"
+title: "PlateEventOtherDetails"
+type: object
+additionalProperties: false
+required: [ description ]
+
+properties:
+  labwareInstanceId:
+    $ref: "./ref.schema.yaml"
+    description: "Optional labware instance if applicable."
+
+  wells:
+    type: array
+    items: { type: string }
+    description: "Optional affected wells."
+
+  description:
+    type: string
+    minLength: 1
+
+  notes:
+    type: string

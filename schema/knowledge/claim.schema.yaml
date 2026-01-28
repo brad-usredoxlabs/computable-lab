@@ -1,0 +1,33 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/claim.schema.yaml"
+title: "Claim"
+description: >
+  A claim is a reusable semantic statement (triple-ish). Claims are meaning holders that can be supported by literature or lab evidence (via Evidence bundles and Assertions).
+
+type: object
+additionalProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id, statement, subject, predicate, object ]
+
+properties:
+  kind:
+    const: "claim"
+
+  id:
+    type: string
+    description: "Stable identifier (e.g., CLM-0001)."
+
+  statement:
+    type: string
+    description: "Human-readable statement."
+
+  subject:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  predicate:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  object:
+    $ref: "./datatypes/ref.schema.yaml"
