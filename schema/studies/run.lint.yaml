@@ -1,4 +1,0 @@
-# Lint rules for Run records
-lintVersion: 1
-schemaId: "https://computable-lab.com/schema/computable-lab/run.schema.yaml"
-rules: []

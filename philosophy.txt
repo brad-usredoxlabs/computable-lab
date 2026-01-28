@@ -1,8 +1,0 @@
-Events describe what happened.
-WellContext describes what state resulted.
-Results describe what was measured.
-Assertions describe what it means.
-Provenance describes how a record came to exist.
-Claims are anchored concepts.
-Assertions are claim-scoped statements supported by evidence.
-Experiments collect runs and point to relevant claims/assertions, but do not own them.

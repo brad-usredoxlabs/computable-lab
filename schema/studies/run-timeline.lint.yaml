@@ -1,4 +1,0 @@
-# Lint rules for RunTimeline records
-lintVersion: 1
-schemaId: "https://computable-lab.com/schema/computable-lab/run-timeline.schema.yaml"
-rules: []
