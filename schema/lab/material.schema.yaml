@@ -1,0 +1,40 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/material.schema.yaml"
+title: "Material"
+description: >
+  A material concept used in experiments (cells, chemicals, media, etc.). Meaning about materials is expressed via Claims/Assertions, not embedded here.
+
+type: object
+additionalProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id, name, domain ]
+
+properties:
+  kind:
+    const: "material"
+
+  id:
+    type: string
+    description: "Stable local identifier (e.g., MAT-HEPG2)."
+
+  name:
+    type: string
+
+  domain:
+    type: string
+    description: "High-level material domain."
+    enum: [ cell_line, chemical, media, reagent, organism, sample, other ]
+
+  class:
+    type: array
+    description: "Ontology-backed classifications (CURIEs)."
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+    uniqueItems: true
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

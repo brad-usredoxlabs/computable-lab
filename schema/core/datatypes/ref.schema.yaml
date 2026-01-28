@@ -1,0 +1,6 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
+title: "Ref"
+type: string
+description: "RecordId, CURIE, or resolvable reference string."
+minLength: 1

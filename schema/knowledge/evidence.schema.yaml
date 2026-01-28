@@ -1,0 +1,51 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/evidence.schema.yaml"
+title: "Evidence"
+description: >
+  An evidence bundle that links sources (results/contexts/events/publications) to a target assertion (or claim). Evidence bundles carry QC notes and provenance pointers; they are referenced from Assertions/Claims.
+
+type: object
+additionalProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id, supports, sources ]
+
+properties:
+  kind:
+    const: "evidence"
+
+  id:
+    type: string
+    description: "Stable identifier (e.g., EVD-0001)."
+
+  supports:
+    type: array
+    description: "Assertions (or claims) supported by this bundle."
+    minItems: 1
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+    uniqueItems: true
+
+  sources:
+    type: array
+    minItems: 1
+    items:
+      $ref: "#/$defs/EvidenceSource"
+
+  quality:
+    type: object
+    description: "Optional QC/curation notes."
+    additionalProperties: true
+
+$defs:
+  EvidenceSource:
+    type: object
+    additionalProperties: false
+    required: [ type, ref ]
+    properties:
+      type:
+        type: string
+        enum: [ result, well_context, event, publication, file ]
+      ref:
+        $ref: "./datatypes/ref.schema.yaml"

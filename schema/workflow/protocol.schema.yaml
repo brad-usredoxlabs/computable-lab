@@ -1,0 +1,431 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/protocol.schema.yaml"
+title: "Protocol"
+description: >
+  A Protocol is a reusable, declarative recipe intended to produce PlateEvents when executed in a Run. It is NOT execution truth: no concrete labware instances, no actual timestamps, and no embedded data files. Runs instantiate protocols by binding labware/material roles and providing parameter values, then emitting canonical PlateEvents.
+
+type: object
+additionalProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- title
+- steps
+
+properties:
+  kind:
+    const: "protocol"
+    description: "Record discriminator."
+
+  recordId:
+    type: string
+    description: "Stable local identifier (e.g., PRT-000123)."
+
+  title:
+    type: string
+
+  shortSlug:
+    type: string
+    description: "Human-friendly slug for filenames/URLs."
+
+  description:
+    type: string
+
+  version:
+    type: string
+    description: "Optional semantic version for human use (e.g., '1.2.0')."
+
+  state:
+    type: string
+    description: "Workflow state (draft, accepted, superseded, deprecated)."
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+  # Declarative, reusable parameter definitions. Values are supplied at execution time by a Run.
+  parameters:
+    type: array
+    description: "Parameter definitions for this protocol."
+    items:
+      $ref: "#/$defs/ParameterDef"
+    uniqueItems: true
+
+  # Roles are abstract placeholders that Runs bind to concrete labware instances/material revisions.
+  roles:
+    type: object
+    description: "Optional abstract roles used by steps (labware, materials, instruments, etc.)."
+    additionalProperties: false
+    properties:
+      labwareRoles:
+        type: array
+        items: { $ref: "#/$defs/LabwareRole" }
+        uniqueItems: true
+      materialRoles:
+        type: array
+        items: { $ref: "#/$defs/MaterialRole" }
+        uniqueItems: true
+      instrumentRoles:
+        type: array
+        items: { $ref: "#/$defs/InstrumentRole" }
+        uniqueItems: true
+
+  steps:
+    type: array
+    minItems: 1
+    description: >
+      Ordered protocol steps. Steps are declarative and may be compiled into expected PlateEvents, but are not themselves canonical events.
+    items:
+      $ref: "#/$defs/ProtocolStep"
+
+$defs:
+  # -------------------------
+  # Parameter definitions
+  # -------------------------
+  ParameterDef:
+    type: object
+    additionalProperties: false
+    required: [ name, type ]
+    properties:
+      name:
+        type: string
+        pattern: "^[a-zA-Z][a-zA-Z0-9_]*$"
+      type:
+        type: string
+        enum: [ string, number, integer, boolean, object, array ]
+      description:
+        type: string
+      default:
+        description: "Optional default value."
+      unit:
+        type: string
+        description: "Optional unit hint (e.g., 'uL', 'min', 'C')."
+      enum:
+        type: array
+        description: "Optional enumerated allowed values."
+        items: {}
+      required:
+        type: boolean
+        description: "If true, Run must supply a value."
+      constraints:
+        type: object
+        description: "Optional numeric constraints for number/integer."
+        additionalProperties: false
+        properties:
+          minimum: { type: number }
+          maximum: { type: number }
+          exclusiveMinimum: { type: number }
+          exclusiveMaximum: { type: number }
+
+  # -------------------------
+  # Roles
+  # -------------------------
+  LabwareRole:
+    type: object
+    additionalProperties: false
+    required: [ roleId ]
+    properties:
+      roleId:
+        type: string
+        description: "Symbolic role identifier used in steps (e.g., 'plate', 'reservoir')."
+      description:
+        type: string
+      expectedLabwareKinds:
+        type: array
+        description: "Optional hint of compatible labware designs (recordIds)."
+        items: { type: string }
+        uniqueItems: true
+
+  MaterialRole:
+    type: object
+    additionalProperties: false
+    required: [ roleId ]
+    properties:
+      roleId:
+        type: string
+        description: "Symbolic material role used in steps (e.g., 'dye', 'treatment')."
+      description:
+        type: string
+      allowedMaterialIds:
+        type: array
+        description: "Optional hint: allowable material concepts."
+        items: { type: string }
+        uniqueItems: true
+
+  InstrumentRole:
+    type: object
+    additionalProperties: false
+    required: [ roleId ]
+    properties:
+      roleId:
+        type: string
+        description: "Symbolic instrument role used in steps (e.g., 'plate_reader')."
+      description:
+        type: string
+      allowedInstrumentIds:
+        type: array
+        items: { type: string }
+        uniqueItems: true
+
+  # -------------------------
+  # Well selection (abstract)
+  # -------------------------
+  WellSelector:
+    description: >
+      Abstract selection of wells. This must be resolvable by the execution layer given a bound labware instance and its labware design. Avoid hardcoding plate geometry here.
+    oneOf:
+    - type: object
+      additionalProperties: false
+      required: [ kind ]
+      properties:
+        kind: { const: "all" }
+    - type: object
+      additionalProperties: false
+      required: [ kind, wells ]
+      properties:
+        kind: { const: "explicit" }
+        wells:
+          type: array
+          minItems: 1
+          items: { type: string }
+    - type: object
+      additionalProperties: false
+      required: [ kind, range ]
+      properties:
+        kind: { const: "range" }
+        range:
+          type: object
+          additionalProperties: false
+          required: [ start, end ]
+          properties:
+            start: { type: string }
+            end: { type: string }
+    - type: object
+      additionalProperties: false
+      required: [ kind, region ]
+      properties:
+        kind: { const: "region" }
+        region:
+          type: string
+          description: "Named region defined elsewhere (e.g., layout template)."
+
+  # -------------------------
+  # Expression (parameterizable values)
+  # -------------------------
+  Expr:
+    description: >
+      A value that can be literal or parameter reference. Keep this simple so agents don't hardcode.
+    oneOf:
+    - type: number
+    - type: integer
+    - type: boolean
+    - type: string
+    - type: object
+      additionalProperties: false
+      required: [ param ]
+      properties:
+        param:
+          type: string
+          description: "Reference to a parameter by name (e.g., {param: incubation_min})."
+
+  # -------------------------
+  # Step union
+  # -------------------------
+  ProtocolStep:
+    type: object
+    additionalProperties: false
+    required: [ stepId, kind ]
+    properties:
+      stepId:
+        type: string
+        description: "Local step identifier unique within this protocol."
+      label:
+        type: string
+      notes:
+        type: string
+      kind:
+        type: string
+        enum: [ add_material, transfer, mix, wash, incubate, read, harvest, other ]
+
+      # Optional intended offset (planning aid only; not execution truth)
+      plannedOffset:
+        type: string
+        description: "Optional planned ISO-8601 duration from run start (e.g., 'PT15M')."
+
+    allOf:
+    - oneOf:
+      - $ref: "#/$defs/StepAddMaterial"
+      - $ref: "#/$defs/StepTransfer"
+      - $ref: "#/$defs/StepMix"
+      - $ref: "#/$defs/StepWash"
+      - $ref: "#/$defs/StepIncubate"
+      - $ref: "#/$defs/StepRead"
+      - $ref: "#/$defs/StepHarvest"
+      - $ref: "#/$defs/StepOther"
+
+  # -------------------------
+  # Step payloads (minimal, declarative)
+  # -------------------------
+  StepAddMaterial:
+    type: object
+    additionalProperties: false
+    required: [ kind, target, wells, material, volume_uL ]
+    properties:
+      kind: { const: "add_material" }
+      target:
+        type: object
+        additionalProperties: false
+        required: [ labwareRole ]
+        properties:
+          labwareRole: { type: string }
+      wells:
+        $ref: "#/$defs/WellSelector"
+      material:
+        type: object
+        additionalProperties: false
+        required: [ materialRole ]
+        properties:
+          materialRole:
+            type: string
+          materialId:
+            type: string
+            description: "Optional: pin to a specific material concept instead of a role."
+      volume_uL:
+        $ref: "#/$defs/Expr"
+
+  StepTransfer:
+    type: object
+    additionalProperties: false
+    required: [ kind, source, target, volume_uL ]
+    properties:
+      kind: { const: "transfer" }
+      source:
+        type: object
+        additionalProperties: false
+        required: [ labwareRole, wells ]
+        properties:
+          labwareRole: { type: string }
+          wells: { $ref: "#/$defs/WellSelector" }
+      target:
+        type: object
+        additionalProperties: false
+        required: [ labwareRole, wells ]
+        properties:
+          labwareRole: { type: string }
+          wells: { $ref: "#/$defs/WellSelector" }
+      volume_uL:
+        $ref: "#/$defs/Expr"
+      mappingHint:
+        type: object
+        description: "Optional authoring hint (not canonical) to generate concrete mappings."
+        additionalProperties: true
+
+  StepMix:
+    type: object
+    additionalProperties: false
+    required: [ kind, target, wells ]
+    properties:
+      kind: { const: "mix" }
+      target:
+        type: object
+        additionalProperties: false
+        required: [ labwareRole ]
+        properties:
+          labwareRole: { type: string }
+      wells: { $ref: "#/$defs/WellSelector" }
+      cycles: { $ref: "#/$defs/Expr" }
+      volume_uL: { $ref: "#/$defs/Expr" }
+
+  StepWash:
+    type: object
+    additionalProperties: false
+    required: [ kind, target, wells, cycles ]
+    properties:
+      kind: { const: "wash" }
+      target:
+        type: object
+        additionalProperties: false
+        required: [ labwareRole ]
+        properties:
+          labwareRole: { type: string }
+      wells: { $ref: "#/$defs/WellSelector" }
+      cycles: { $ref: "#/$defs/Expr" }
+      washVolume_uL: { $ref: "#/$defs/Expr" }
+
+  StepIncubate:
+    type: object
+    additionalProperties: false
+    required: [ kind, target, duration_min ]
+    properties:
+      kind: { const: "incubate" }
+      target:
+        type: object
+        additionalProperties: false
+        required: [ labwareRole ]
+        properties:
+          labwareRole: { type: string }
+      wells:
+        description: "Optional subset; omit for whole labware."
+        $ref: "#/$defs/WellSelector"
+      duration_min: { $ref: "#/$defs/Expr" }
+      temperature_C: { $ref: "#/$defs/Expr" }
+
+  StepRead:
+    type: object
+    additionalProperties: false
+    required: [ kind, target, modality ]
+    properties:
+      kind: { const: "read" }
+      target:
+        type: object
+        additionalProperties: false
+        required: [ labwareRole ]
+        properties:
+          labwareRole: { type: string }
+      wells:
+        description: "Optional subset; omit for whole labware."
+        $ref: "#/$defs/WellSelector"
+      modality:
+        type: string
+        enum: [ fluorescence, absorbance, luminescence, microscopy, ms, qpcr, other ]
+      channels:
+        type: array
+        items: { type: string }
+      instrumentRole:
+        type: string
+        description: "Optional role name (e.g., 'plate_reader')."
+      settings:
+        type: object
+        description: "Optional declarative read settings (not device-specific code)."
+        additionalProperties: true
+
+  StepHarvest:
+    type: object
+    additionalProperties: false
+    required: [ kind, source, wells ]
+    properties:
+      kind: { const: "harvest" }
+      source:
+        type: object
+        additionalProperties: false
+        required: [ labwareRole ]
+        properties:
+          labwareRole: { type: string }
+      wells: { $ref: "#/$defs/WellSelector" }
+      volume_uL: { $ref: "#/$defs/Expr" }
+      outputSampleRole:
+        type: string
+        description: "Optional symbolic name for downstream sample handling (execution layer decides IDs)."
+
+  StepOther:
+    type: object
+    additionalProperties: false
+    required: [ kind, description ]
+    properties:
+      kind: { const: "other" }
+      description:
+        type: string

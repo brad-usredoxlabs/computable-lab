@@ -1,0 +1,4 @@
+# Lint rules for Claim records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/claim.schema.yaml"
+rules: []

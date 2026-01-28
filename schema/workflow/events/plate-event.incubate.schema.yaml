@@ -1,0 +1,26 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/plate-event.incubate.schema.yaml"
+title: "PlateEventIncubateDetails"
+type: object
+additionalProperties: false
+required: [ labwareInstanceId, duration_min ]
+
+properties:
+  labwareInstanceId:
+    $ref: "./ref.schema.yaml"
+
+  wells:
+    type: array
+    items: { type: string }
+    description: "Optional subset; omit to mean whole labware."
+
+  duration_min:
+    type: number
+    exclusiveMinimum: 0
+
+  temperature_C:
+    type: number
+    description: "Optional temperature."
+
+  notes:
+    type: string
