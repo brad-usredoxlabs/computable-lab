@@ -1,0 +1,82 @@
+# Example: Mouse Cohort Collection
+#
+# This demonstrates a cohort collection for animal studies
+# with treatment assignment equivalence.
+
+schemaId: core/collection
+data:
+  id: COL-example-002
+  name: Treatment Group A - 10mg/kg
+  collectionType: cohort
+  description: |
+    Mouse cohort receiving compound X at 10mg/kg daily dose.
+    10 male C57BL/6 mice, 8 weeks old at study start.
+
+  members:
+  - kind: record
+    type: mouse
+    id: "MOUSE-001"
+    label: "Mouse #1"
+  - kind: record
+    type: mouse
+    id: "MOUSE-002"
+    label: "Mouse #2"
+  - kind: record
+    type: mouse
+    id: "MOUSE-003"
+    label: "Mouse #3"
+  - kind: record
+    type: mouse
+    id: "MOUSE-004"
+    label: "Mouse #4"
+  - kind: record
+    type: mouse
+    id: "MOUSE-005"
+    label: "Mouse #5"
+  - kind: record
+    type: mouse
+    id: "MOUSE-006"
+    label: "Mouse #6"
+  - kind: record
+    type: mouse
+    id: "MOUSE-007"
+    label: "Mouse #7"
+  - kind: record
+    type: mouse
+    id: "MOUSE-008"
+    label: "Mouse #8"
+  - kind: record
+    type: mouse
+    id: "MOUSE-009"
+    label: "Mouse #9"
+  - kind: record
+    type: mouse
+    id: "MOUSE-010"
+    label: "Mouse #10"
+
+  equivalence:
+    basis: treatment_assignment
+    scope: member
+    abstraction: normalized
+    template_ref:
+      kind: record
+      type: protocol_template
+      id: PROT-compound-x-10mg
+      label: "Compound X 10mg/kg daily PO"
+    tolerance:
+      timing:
+        value: 30
+        unit: min
+      volume:
+        value: 0.01
+        unit: mL
+    notes: |
+      Biological replicates - same treatment protocol assignment.
+      Individual animals may have dosing time variations within 30 min window.
+      Individual responses expected to vary biologically.
+
+  tags:
+  - compound-x
+  - 10mg-kg
+  - efficacy-study
+  - c57bl6

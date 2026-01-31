@@ -1,0 +1,102 @@
+# computable-lab Server Configuration
+#
+# Copy this file to config.yaml and customize for your environment.
+# Environment variables can be substituted using ${VAR_NAME} syntax.
+# Optional default values: ${VAR_NAME:-default_value}
+
+# Server settings
+server:
+  port: 3000
+  host: 0.0.0.0
+  logLevel: info # debug | info | warn | error
+  workspaceDir: /tmp/cl-workspaces # ephemeral, disposable
+  cors:
+    enabled: true
+    origins:
+    - "*" # Allow all origins (dev)
+    # - "https://mylab.org"       # Restrict to specific origins (prod)
+
+    # Schema configuration
+schemas:
+  source: bundled # bundled | overlay
+  bundledDir: ./schema # Where bundled schemas are located
+  # If source is 'overlay':
+  # - Bundled schemas load first (base)
+  # - Repo's .computable-lab/schema-overrides/ can override specific schemas
+
+  # Repository connections
+  # For v1, typically one repository. Array allows future multi-repo support.
+repositories:
+- id: main
+  default: true
+
+  # Git connection settings
+  git:
+    url: https://github.com/mylab-org/mylab-records.git
+    branch: main
+    auth:
+      type: token # token | github-app | ssh-key | none
+      token: ${GITHUB_TOKEN} # Use environment variable
+      # For github-app authentication:
+      # type: github-app
+      # appId: "123456"
+      # privateKeyPath: /path/to/private-key.pem
+      # installationId: "12345678"
+
+      # For SSH key authentication:
+      # type: ssh-key
+      # sshKeyPath: ~/.ssh/id_rsa
+
+      # Namespace configuration for JSON-LD identity
+  namespace:
+    baseUri: https://mylab.org/records/ # Base URI for @id derivation
+    prefix: mylab # Display prefix
+
+  # JSON-LD settings
+  jsonld:
+    context: default # default | custom
+    # customContextUrl: https://mylab.org/context.jsonld
+
+    # Sync behavior
+  sync:
+    mode: pull-on-read # pull-on-read | periodic | manual
+    pullIntervalSeconds: 60 # Seconds between pulls (if periodic)
+    autoCommit: true # Commit changes automatically
+    autoPush: true # Push after commit
+
+  # Records location in repository
+  records:
+    directory: records # Where records are stored
+
+# Example: Local development configuration (no external git)
+# repositories:
+#   - id: local
+#     default: true
+#     git:
+#       url: ""                     # Empty URL = local mode
+#       branch: main
+#       auth:
+#         type: none
+#     namespace:
+#       baseUri: http://localhost:3000/records/
+#       prefix: local
+#     jsonld:
+#       context: default
+#     sync:
+#       mode: manual
+#       autoCommit: false
+#       autoPush: false
+#     records:
+#       directory: records
+
+# Example: Multiple repositories
+# repositories:
+#   - id: lab-alpha
+#     default: true
+#     git:
+#       url: https://github.com/alpha-lab/records.git
+#       ...
+#   - id: lab-beta
+#     git:
+#       url: https://github.com/beta-lab/records.git
+#       ...

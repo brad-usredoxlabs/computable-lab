@@ -1,0 +1,27 @@
+# Configuration for test-lab repository
+server:
+  port: 3000
+  host: 0.0.0.0
+  logLevel: info
+  cors: true
+  workspaceDir: /tmp/cl-workspaces
+
+repositories:
+- id: test-lab
+  default: true
+  git:
+    url: https://github.com/brad-usredoxlabs/test-lab.git
+    branch: main
+    auth:
+      type: token
+      token: ${GITHUB_TOKEN}
+  namespace:
+    baseUri: https://brad-usredoxlabs.github.io/test-lab/
+    prefix: testlab
+  sync:
+    mode: auto
+    autoCommit: true # Enable auto-commit
+    autoPush: true # Enable auto-push to GitHub
+    pullIntervalSeconds: 300
+  records:
+    directory: records

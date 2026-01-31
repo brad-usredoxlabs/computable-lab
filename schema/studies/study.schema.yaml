@@ -16,6 +16,10 @@ required:
 - shortSlug
 
 properties:
+  $schema:
+    type: string
+    description: "JSON Schema reference for this record."
+
   kind:
     const: "study"
     description: "Record discriminator."
@@ -27,6 +31,10 @@ properties:
   title:
     type: string
     description: "Human-readable title for the study."
+
+  shortSlug:
+    type: string
+    description: "URL-friendly short identifier for the study."
 
   state:
     type: string

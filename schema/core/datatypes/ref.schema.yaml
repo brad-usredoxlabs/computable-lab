@@ -1,6 +1,67 @@
 $schema: "https://json-schema.org/draft/2020-12/schema"
 $id: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
 title: "Ref"
-type: string
-description: "RecordId, CURIE, or resolvable reference string."
-minLength: 1
+description: >
+  A reference to either an internal computable-lab record or an external ontology term. The 'kind' field discriminates between record refs (internal) and ontology refs (external).
+
+type: object
+required:
+- kind
+
+properties:
+  kind:
+    type: string
+    enum: [ record, ontology ]
+    description: >
+      Discriminator: 'record' for internal computable-lab records, 'ontology' for external ontology terms (ChEBI, CL, GO, etc.)
+
+  # For both kinds
+  id:
+    type: string
+    description: >
+      For record refs: the record ID (e.g., "STU-000123"). For ontology refs: the CURIE (e.g., "CL:0000182", "CHEBI:16236").
+
+  label:
+    type: string
+    description: >
+      Human-readable label for display. Required for ontology refs, optional for record refs (can be derived from record).
+
+  # Ontology-specific fields
+  namespace:
+    type: string
+    description: >
+      Ontology namespace/prefix (e.g., "CL", "ChEBI", "GO", "UniProt"). Required for ontology refs.
+
+  uri:
+    type: string
+    format: uri
+    description: >
+      Full IRI for the ontology term (e.g., "http://purl.obolibrary.org/obo/CL_0000182"). Optional but recommended for ontology refs.
+
+  # Record-specific fields
+  type:
+    type: string
+    description: >
+      Record type for record refs (e.g., "material", "study", "event_graph"). Required for record refs.
+
+allOf:
+# Validation for ontology refs
+- if:
+    properties:
+      kind:
+        const: ontology
+  then:
+    required:
+    - namespace
+    - id
+    - label
+
+# Validation for record refs
+- if:
+    properties:
+      kind:
+        const: record
+  then:
+    required:
+    - id
+    - type

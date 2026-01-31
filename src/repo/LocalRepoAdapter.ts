@@ -69,7 +69,16 @@ export class LocalRepoAdapter implements RepoAdapter {
     this.author = 'local-adapter';
     this.email = 'local@localhost';
   }
-  
+
+  /**
+   * Initialize the adapter by ensuring the base directory exists.
+   */
+  async initialize(): Promise<void> {
+    await mkdir(this.basePath, { recursive: true }).catch(() => {
+      // Directory already exists, ignore error
+    });
+  }
+
   /**
    * Resolve a path relative to the base directory.
    */

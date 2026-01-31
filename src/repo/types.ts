@@ -177,6 +177,17 @@ export interface RepoAdapter {
    * @returns Array of commit info
    */
   getHistory(options: HistoryOptions): Promise<CommitInfo[]>;
+  
+  /**
+   * Initialize the adapter (optional).
+   * 
+   * For GitRepoAdapter: clones the repository if not already cloned.
+   * For LocalRepoAdapter: ensures the base directory exists.
+   * 
+   * This method is optional - adapters that don't need initialization
+   * can omit this method.
+   */
+  initialize?(): Promise<void>;
 }
 
 /**

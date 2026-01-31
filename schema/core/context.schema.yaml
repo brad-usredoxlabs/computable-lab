@@ -1,0 +1,117 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: computable-lab/context
+title: Context
+description: |
+  The state/context of a subject after event graph replay.
+  Generalizes WellContext to any subject type (well, tube, mouse, patient, collection).
+  Represents what is "in" or "about" a subject at a given point in time.
+
+type: object
+required:
+- id
+- subject_ref
+
+properties:
+  id:
+    type: string
+    pattern: "^CTX-[A-Za-z0-9_-]+$"
+    description: Stable context identifier (e.g., CTX-000001)
+
+  subject_ref:
+    $ref: ./datatypes/ref.schema.yaml
+    description: |
+      The subject this context describes.
+      Can be an individual (well, tube, mouse, patient) or a collection.
+      Supports kind: record or kind: collection.
+
+  event_graph_ref:
+    $ref: ./datatypes/ref.schema.yaml
+    description: Event graph that produced this context (optional)
+
+  timepoint:
+    type: string
+    description: |
+      ISO datetime or duration offset for when context was computed.
+      Examples: "2026-01-30T18:00:00Z", "PT24H", "T+24h"
+
+  # Computed state fields (populated by event graph replay)
+  contents:
+    type: array
+    items:
+      type: object
+      properties:
+        material_ref:
+          $ref: ./datatypes/ref.schema.yaml
+          description: Reference to the material (ontology or record)
+        volume:
+          type: object
+          properties:
+            value:
+              type: number
+            unit:
+              type: string
+          required:
+          - value
+          - unit
+        concentration:
+          type: object
+          properties:
+            value:
+              type: number
+            unit:
+              type: string
+          required:
+          - value
+          - unit
+        mass:
+          type: object
+          properties:
+            value:
+              type: number
+            unit:
+              type: string
+          required:
+          - value
+          - unit
+        count:
+          type: integer
+          description: Number of items (e.g., cell count)
+    description: Materials/reagents/cells currently in the subject
+
+  total_volume:
+    type: object
+    properties:
+      value:
+        type: number
+      unit:
+        type: string
+    required:
+    - value
+    - unit
+    description: Total volume in the subject
+
+  properties:
+    type: object
+    additionalProperties: true
+    description: |
+      Additional computed properties.
+      Examples: temperature, pH, confluence, viability, etc.
+
+  # Legacy WellContext compatibility fields
+  plate_ref:
+    $ref: ./datatypes/ref.schema.yaml
+    description: "(Legacy) Reference to plate record. Use subject_ref instead."
+
+  well_id:
+    type: string
+    description: "(Legacy) Well identifier like A1. Use subject_ref instead."
+
+  notes:
+    type: string
+    description: Free-form notes about this context
+
+  tags:
+    type: array
+    items:
+      type: string
+    description: Tags for categorization and search

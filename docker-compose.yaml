@@ -1,0 +1,64 @@
+# computable-lab Server - Docker Compose Configuration
+#
+# Usage:
+#   1. Copy config.example.yaml to config.yaml and customize
+#   2. Set GITHUB_TOKEN environment variable (or add to .env file)
+#   3. Run: docker compose up -d
+#
+# Environment variables (set in .env file or shell):
+#   GITHUB_TOKEN - GitHub personal access token for repository access
+#   PORT - Server port (default: 3000)
+
+version: '3.8'
+
+services:
+  computable-lab:
+    build: .
+    image: computable-lab:latest
+    container_name: computable-lab
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      # Mount configuration file (read-only)
+      - ./config.yaml:/app/config.yaml:ro
+      # Optional: Persist workspaces across restarts (useful for dev)
+      # - cl-workspaces:/tmp/cl-workspaces
+    environment:
+      # Pass through authentication tokens from host environment
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITLAB_TOKEN=${GITLAB_TOKEN:-}
+      # Server configuration
+      - NODE_ENV=production
+      - CONFIG_PATH=/app/config.yaml
+    restart: unless-stopped
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Health check (also defined in Dockerfile)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# Optional: Named volume for workspace persistence
+# volumes:
+#   cl-workspaces:
+
+# Optional: Network configuration for multi-service setups
+# networks:
+#   default:
+#     name: lab-network

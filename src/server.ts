@@ -9,14 +9,18 @@
 
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
 
 import { SchemaRegistry, createSchemaRegistry } from './schema/SchemaRegistry.js';
 import { loadAllSchemas } from './schema/SchemaLoader.js';
 import { AjvValidator, createValidator } from './validation/AjvValidator.js';
 import { LintEngine, createLintEngine } from './lint/LintEngine.js';
-import { LocalRepoAdapter, createLocalRepoAdapter } from './repo/LocalRepoAdapter.js';
+import { createRepoAdapter } from './repo/createRepoAdapter.js';
+import { createLocalRepoAdapter } from './repo/LocalRepoAdapter.js';
+import type { RepoAdapter } from './repo/types.js';
 import { RecordStoreImpl, createRecordStore } from './store/RecordStoreImpl.js';
+import { loadConfig, getDefaultRepository } from './config/loader.js';
+import type { AppConfig, RepositoryConfig } from './config/types.js';
 import {
   createRecordHandlers,
   createSchemaHandlers,
@@ -44,8 +48,9 @@ export interface AppContext {
   schemaRegistry: SchemaRegistry;
   validator: AjvValidator;
   lintEngine: LintEngine;
-  repoAdapter: LocalRepoAdapter;
+  repoAdapter: RepoAdapter;
   store: RecordStoreImpl;
+  appConfig?: AppConfig | undefined;
 }
 
 /**
@@ -58,6 +63,29 @@ export async function initializeApp(
   const opts = { ...DEFAULT_CONFIG, ...config };
   
   console.log(`Initializing app with base path: ${basePath}`);
+  
+  // Try to load configuration from config.yaml
+  let appConfig: AppConfig | undefined;
+  let repoConfig: RepositoryConfig | undefined;
+  
+  try {
+    appConfig = await loadConfig({
+      configPath: process.env.CONFIG_PATH || resolve(basePath, 'config.yaml'),
+    });
+    repoConfig = getDefaultRepository(appConfig) ?? undefined;
+    
+    if (repoConfig) {
+      console.log(`Loaded repository configuration: ${repoConfig.id}`);
+      if (repoConfig.git?.url) {
+        console.log(`  Git URL: ${repoConfig.git.url}`);
+        console.log(`  Branch: ${repoConfig.git.branch}`);
+        console.log(`  Auto-commit: ${repoConfig.sync?.autoCommit ?? false}`);
+        console.log(`  Auto-push: ${repoConfig.sync?.autoPush ?? false}`);
+      }
+    }
+  } catch (err) {
+    console.log('No config.yaml found or error loading config, using local mode');
+  }
   
   // Initialize schema registry
   const schemaRegistry = createSchemaRegistry();
@@ -104,14 +132,32 @@ export async function initializeApp(
   // For now, lint specs would be loaded separately if they exist
   // TODO: Load lint specs from schema directory
   
-  // Initialize repo adapter (local filesystem for dev)
-  const repoAdapter = createLocalRepoAdapter({
-    basePath,
-  });
+  // Initialize repo adapter based on configuration
+  let repoAdapter: RepoAdapter;
+  
+  if (repoConfig && repoConfig.git?.url) {
+    // Use GitRepoAdapter when git URL is configured
+    const workspaceDir = appConfig?.server?.workspaceDir || '/tmp/cl-workspaces';
+    const workspacePath = join(workspaceDir, repoConfig.id);
+    
+    repoAdapter = await createRepoAdapter({
+      repoConfig,
+      workspacePath,
+    });
+  } else {
+    // Fallback to local adapter
+    console.log('Using LocalRepoAdapter (no git URL configured)');
+    repoAdapter = createLocalRepoAdapter({
+      basePath,
+    });
+  }
+  
+  // Get records directory from config or use default
+  const recordsDir = repoConfig?.records?.directory || opts.recordsDir;
   
   // Initialize record store
   const store = createRecordStore(repoAdapter, validator, lintEngine, {
-    baseDir: opts.recordsDir,
+    baseDir: recordsDir,
   });
   
   console.log(`App initialized`);
@@ -122,6 +168,7 @@ export async function initializeApp(
     lintEngine,
     repoAdapter,
     store,
+    appConfig,
   };
 }
 
