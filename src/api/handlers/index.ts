@@ -9,3 +9,5 @@ export * from './UIHandlers.js';
 export * from './metaHandlers.js';
 export * from './LibraryHandlers.js';
 export * from './configHandlers.js';
+export * from './GitHandlers.js';
+export * from './TreeHandlers.js';

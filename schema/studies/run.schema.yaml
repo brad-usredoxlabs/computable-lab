@@ -14,7 +14,6 @@ required:
 - recordId
 - experimentId
 - status
-- timelineId
 
 properties:
   kind:
@@ -23,6 +22,14 @@ properties:
   recordId:
     type: string
     description: "Stable local identifier (e.g., RUN-000041)."
+
+  title:
+    type: string
+    description: "Human-readable run title."
+
+  shortSlug:
+    type: string
+    description: "URL-safe short identifier for the run."
 
   experimentId:
     type: string

@@ -271,12 +271,16 @@ export class RecordStoreImpl implements RecordStore {
     const kind = payload.kind as string || envelope.meta?.kind || 'unknown';
     const title = payload.title as string || payload.name as string || '';
     
+    // Extract links from payload if present
+    const links = payload.links as { studyId?: string; experimentId?: string; runId?: string } | undefined;
+    
     // Generate path
     const path = generatePath({
       recordId: envelope.recordId,
       kind,
       slug: title,
       baseDir: this.config.baseDir,
+      ...(links !== undefined ? { links } : {}),
     });
     
     // Serialize to YAML

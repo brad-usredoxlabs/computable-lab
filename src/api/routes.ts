@@ -10,6 +10,8 @@ import type { RecordHandlers } from './handlers/RecordHandlers.js';
 import type { SchemaHandlers } from './handlers/SchemaHandlers.js';
 import type { ValidationHandlers } from './handlers/ValidationHandlers.js';
 import type { UIHandlers } from './handlers/UIHandlers.js';
+import type { GitHandlers } from './handlers/GitHandlers.js';
+import type { TreeHandlers } from './handlers/TreeHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -20,6 +22,8 @@ export interface RouteOptions {
   schemaHandlers: SchemaHandlers;
   validationHandlers: ValidationHandlers;
   uiHandlers?: UIHandlers;
+  gitHandlers?: GitHandlers;
+  treeHandlers?: TreeHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -115,5 +119,51 @@ export function registerRoutes(
     
     // Get record with UI spec (for rendering)
     fastify.get('/ui/record/:recordId', uiHandlers.getRecordWithUI.bind(uiHandlers));
+  }
+  
+  // ============================================================================
+  // Git Routes (optional - requires gitHandlers)
+  // ============================================================================
+  
+  const { gitHandlers } = options;
+  
+  if (gitHandlers) {
+    // Get git status (branch, modified files, etc.)
+    fastify.get('/git/status', gitHandlers.getStatus.bind(gitHandlers));
+    
+    // Commit and push changes
+    fastify.post('/git/commit-push', gitHandlers.commitAndPush.bind(gitHandlers));
+    
+    // Pull latest changes from remote
+    fastify.post('/git/sync', gitHandlers.sync.bind(gitHandlers));
+    
+    // Push committed changes
+    fastify.post('/git/push', gitHandlers.push.bind(gitHandlers));
+  }
+  
+  // ============================================================================
+  // Tree Routes (optional - requires treeHandlers)
+  // ============================================================================
+  
+  const { treeHandlers } = options;
+  
+  if (treeHandlers) {
+    // Get study hierarchy tree
+    fastify.get('/tree/studies', treeHandlers.getStudies.bind(treeHandlers));
+    
+    // Get records for a run
+    fastify.get('/tree/records', treeHandlers.getRecordsForRun.bind(treeHandlers));
+    
+    // Get inbox records
+    fastify.get('/tree/inbox', treeHandlers.getInbox.bind(treeHandlers));
+    
+    // Search records by title
+    fastify.get('/tree/search', treeHandlers.searchRecords.bind(treeHandlers));
+    
+    // File a record from inbox into a run
+    fastify.post('/records/:id/file', treeHandlers.fileRecord.bind(treeHandlers));
+    
+    // Rebuild the index
+    fastify.post('/index/rebuild', treeHandlers.rebuildIndex.bind(treeHandlers));
   }
 }

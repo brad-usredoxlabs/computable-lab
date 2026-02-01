@@ -29,6 +29,10 @@ properties:
     type: string
     description: "Human-readable experiment title."
 
+  shortSlug:
+    type: string
+    description: "URL-safe short identifier for the experiment."
+
   studyId:
     type: string
     description: "Parent Study recordId."
@@ -68,9 +72,9 @@ properties:
     additionalProperties: false
     properties:
       measurementType:
-        $ref: "./datatypes/ontology-term.schema.yaml"
+        type: string
       technologyType:
-        $ref: "./datatypes/ontology-term.schema.yaml"
+        type: string
       factors:
         type: array
         items:
@@ -79,8 +83,7 @@ properties:
       materials:
         type: array
         description: "Optional material refs relevant to the experiment (convenience only)."
-        items:
-          $ref: "./datatypes/material-ref.schema.yaml"
+        items: { type: string }
         uniqueItems: true
       instruments:
         type: array
@@ -91,8 +94,7 @@ properties:
   attachments:
     type: array
     description: "Optional experiment-level attachments (plans, reports, figures)."
-    items:
-      $ref: "./datatypes/file-ref.schema.yaml"
+    items: { type: string }
 
 $defs:
   Factor:
@@ -101,6 +103,6 @@ $defs:
     required: [ factorName, factorValue ]
     properties:
       factorName:
-        $ref: "./datatypes/ontology-term.schema.yaml"
+        type: string
       factorValue:
         type: string

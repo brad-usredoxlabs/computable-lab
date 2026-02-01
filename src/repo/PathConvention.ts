@@ -37,6 +37,12 @@ export interface PathGenerationOptions {
   extension?: string;
   /** Base directory (default: 'records') */
   baseDir?: string;
+  /** Hierarchical links (for organizing under parent records) */
+  links?: {
+    studyId?: string;
+    experimentId?: string;
+    runId?: string;
+  };
 }
 
 /**
@@ -94,6 +100,7 @@ export function generatePath(options: PathGenerationOptions): string {
     slug,
     extension = 'yaml',
     baseDir = 'records',
+    links,
   } = options;
   
   // Validate recordId
@@ -112,8 +119,22 @@ export function generatePath(options: PathGenerationOptions): string {
   // Build filename
   const filename = `${recordId}${PATH_SEPARATOR}${safeSlug}.${extension}`;
   
+  // Build directory path with hierarchical links if provided
+  let dirPath = `${baseDir}/${kind}`;
+  
+  // For event-graph kind with runId link, use hierarchical structure
+  if (kind === 'event-graph' && links?.runId) {
+    // Event graphs under runs: records/studies/{studyId}/{experimentId}/{runId}/event-graphs/{filename}
+    if (links.studyId && links.experimentId) {
+      dirPath = `${baseDir}/studies/${links.studyId}/${links.experimentId}/${links.runId}/event-graphs`;
+    } else if (links.runId) {
+      // Fallback: just use runId if we don't have full hierarchy
+      dirPath = `${baseDir}/runs/${links.runId}/event-graphs`;
+    }
+  }
+  
   // Build full path
-  return `${baseDir}/${kind}/${filename}`;
+  return `${dirPath}/${filename}`;
 }
 
 /**

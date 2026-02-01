@@ -7,6 +7,7 @@
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { RecordStore } from '../../store/types.js';
+import type { IndexManager } from '../../index/IndexManager.js';
 import { createEnvelope, extractRecordId } from '../../types/RecordEnvelope.js';
 import type {
   CreateRecordRequest,
@@ -19,9 +20,9 @@ import type {
 } from '../types.js';
 
 /**
- * Create record handlers bound to a RecordStore.
+ * Create record handlers bound to a RecordStore and optional IndexManager.
  */
-export function createRecordHandlers(store: RecordStore) {
+export function createRecordHandlers(store: RecordStore, indexManager?: IndexManager) {
   return {
     /**
      * GET /records
@@ -209,6 +210,16 @@ export function createRecordHandlers(store: RecordStore) {
         
         reply.status(201);
         
+        // Update index after successful create
+        if (indexManager && result.envelope) {
+          try {
+            // Path is available in result.envelope.meta?.path if needed
+            await indexManager.rebuild(); // For now, rebuild to ensure consistency
+          } catch (indexErr) {
+            console.error('Failed to update index after create:', indexErr);
+          }
+        }
+        
         // Build response with conditional properties (exactOptionalPropertyTypes)
         const response: RecordMutationResponse = {
           success: true,
@@ -220,6 +231,10 @@ export function createRecordHandlers(store: RecordStore) {
         return response;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        const stack = err instanceof Error ? err.stack : undefined;
+        console.error('CREATE RECORD ERROR:', message);
+        console.error('Stack:', stack);
+        console.error('Request body:', JSON.stringify(request.body, null, 2));
         reply.status(500);
         return {
           error: 'INTERNAL_ERROR',
@@ -313,6 +328,15 @@ export function createRecordHandlers(store: RecordStore) {
           };
         }
         
+        // Update index after successful update
+        if (indexManager && result.envelope) {
+          try {
+            await indexManager.rebuild(); // For now, rebuild to ensure consistency
+          } catch (indexErr) {
+            console.error('Failed to update index after update:', indexErr);
+          }
+        }
+        
         // Build response with conditional properties (exactOptionalPropertyTypes)
         const response: RecordMutationResponse = {
           success: true,
@@ -378,6 +402,15 @@ export function createRecordHandlers(store: RecordStore) {
             success: false,
             error: result.error || 'Failed to delete record',
           };
+        }
+        
+        // Update index after successful delete
+        if (indexManager) {
+          try {
+            await indexManager.rebuild(); // For now, rebuild to ensure consistency
+          } catch (indexErr) {
+            console.error('Failed to update index after delete:', indexErr);
+          }
         }
         
         return {

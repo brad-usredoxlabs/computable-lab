@@ -25,7 +25,10 @@ import {
   createRecordHandlers,
   createSchemaHandlers,
   createValidationHandlers,
+  createGitHandlers,
+  createTreeHandlers,
 } from './api/handlers/index.js';
+import { IndexManager, createIndexManager } from './index/index.js';
 import { registerRoutes } from './api/routes.js';
 import type { ServerConfig } from './api/types.js';
 
@@ -50,6 +53,7 @@ export interface AppContext {
   lintEngine: LintEngine;
   repoAdapter: RepoAdapter;
   store: RecordStoreImpl;
+  indexManager: IndexManager;
   appConfig?: AppConfig | undefined;
 }
 
@@ -160,6 +164,19 @@ export async function initializeApp(
     baseDir: recordsDir,
   });
   
+  // Initialize index manager
+  const indexManager = createIndexManager(repoAdapter, {
+    baseDir: recordsDir,
+  });
+  
+  // Build initial index
+  try {
+    await indexManager.rebuild();
+    console.log(`Index built with ${indexManager.size()} records`);
+  } catch (err) {
+    console.warn('Failed to build initial index:', err);
+  }
+  
   console.log(`App initialized`);
   
   return {
@@ -168,6 +185,7 @@ export async function initializeApp(
     lintEngine,
     repoAdapter,
     store,
+    indexManager,
     appConfig,
   };
 }
@@ -196,18 +214,24 @@ export async function createServer(
   }
   
   // Create handlers
-  const recordHandlers = createRecordHandlers(ctx.store);
+  const recordHandlers = createRecordHandlers(ctx.store, ctx.indexManager);
   const schemaHandlers = createSchemaHandlers(ctx.schemaRegistry);
   const validationHandlers = createValidationHandlers(ctx.validator, ctx.lintEngine);
+  const gitHandlers = createGitHandlers(ctx.repoAdapter);
+  const treeHandlers = createTreeHandlers(ctx.indexManager, ctx.store);
   
-  // Register routes
-  registerRoutes(fastify, {
-    recordHandlers,
-    schemaHandlers,
-    validationHandlers,
-    schemaCount: () => ctx.schemaRegistry.size,
-    ruleCount: () => ctx.lintEngine.ruleCount,
-  });
+  // Register API routes with /api prefix
+  await fastify.register(async (instance) => {
+    registerRoutes(instance, {
+      recordHandlers,
+      schemaHandlers,
+      validationHandlers,
+      gitHandlers,
+      treeHandlers,
+      schemaCount: () => ctx.schemaRegistry.size,
+      ruleCount: () => ctx.lintEngine.ruleCount,
+    });
+  }, { prefix: '/api' });
   
   return fastify;
 }
