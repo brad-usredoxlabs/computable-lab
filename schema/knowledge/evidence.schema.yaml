@@ -5,7 +5,7 @@ description: >
   An evidence bundle that links sources (results/contexts/events/publications) to a target assertion (or claim). Evidence bundles carry QC notes and provenance pointers; they are referenced from Assertions/Claims.
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 
@@ -46,6 +46,6 @@ $defs:
     properties:
       type:
         type: string
-        enum: [ result, well_context, event, publication, file ]
+        enum: [ result, context, event, publication, file, event_graph ]
       ref:
         $ref: "./datatypes/ref.schema.yaml"

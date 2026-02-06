@@ -5,7 +5,7 @@ description: >
   A claim is a reusable semantic statement (triple-ish). Claims are meaning holders that can be supported by literature or lab evidence (via Evidence bundles and Assertions).
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 

@@ -5,11 +5,11 @@ description: >
   An assertion is a claim evaluated in a specific scope/context, supported by evidence bundles. Assertions are testable, contextual, and link to results/events via evidence.
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 
-required: [ kind, id, claim_ref, statement, scope, evidence_refs ]
+required: [ kind, id, claim_ref, statement, scope ]
 
 properties:
   kind:
@@ -55,7 +55,6 @@ properties:
 
   evidence_refs:
     type: array
-    minItems: 1
     items:
       $ref: "./datatypes/ref.schema.yaml"
     uniqueItems: true

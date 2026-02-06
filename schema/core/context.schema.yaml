@@ -18,14 +18,14 @@ properties:
     description: Stable context identifier (e.g., CTX-000001)
 
   subject_ref:
-    $ref: ./datatypes/ref.schema.yaml
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
     description: |
       The subject this context describes.
       Can be an individual (well, tube, mouse, patient) or a collection.
       Supports kind: record or kind: collection.
 
   event_graph_ref:
-    $ref: ./datatypes/ref.schema.yaml
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
     description: Event graph that produced this context (optional)
 
   timepoint:
@@ -41,7 +41,7 @@ properties:
       type: object
       properties:
         material_ref:
-          $ref: ./datatypes/ref.schema.yaml
+          $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
           description: Reference to the material (ontology or record)
         volume:
           type: object
@@ -99,7 +99,7 @@ properties:
 
   # Legacy WellContext compatibility fields
   plate_ref:
-    $ref: ./datatypes/ref.schema.yaml
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
     description: "(Legacy) Reference to plate record. Use subject_ref instead."
 
   well_id:

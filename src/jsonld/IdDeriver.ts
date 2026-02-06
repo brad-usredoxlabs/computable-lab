@@ -191,7 +191,7 @@ export function inferKindFromRecordId(recordId: string): string | undefined {
     'EVD-': 'evidence',
     'NAR-': 'narrative',
     'TML-': 'timeline',
-    'WCX-': 'well-context',
+    'CTX-': 'context',
   };
   
   for (const [prefix, kind] of Object.entries(prefixMap)) {

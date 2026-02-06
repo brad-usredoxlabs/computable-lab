@@ -142,6 +142,7 @@ export class AjvValidator implements Validator {
     // Ajv2020 natively supports JSON Schema Draft 2020-12
     this.ajv = new Ajv2020({
       strict: opts.strict,
+      strictRequired: false, // Disable strict required check for conditional schemas (if/then)
       allowUnionTypes: opts.allowUnionTypes,
       discriminator: opts.discriminator,
       allErrors: true, // Report all errors, not just the first

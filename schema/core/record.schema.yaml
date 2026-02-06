@@ -18,4 +18,4 @@ oneOf:
 - $ref: "./claim.schema.yaml"
 - $ref: "./assertion.schema.yaml"
 - $ref: "./evidence.schema.yaml"
-- $ref: "./well-context.schema.yaml"
+- $ref: "./context.schema.yaml"
