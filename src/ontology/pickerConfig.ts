@@ -59,7 +59,7 @@ export const DEFAULT_PICKER_CONFIGS: Record<string, RefPickerConfig> = {
   material: {
     allowedKinds: ['record', 'ontology'],
     localRecordTypes: ['material'],
-    olsOntologies: ['chebi', 'obi'],
+    olsOntologies: ['chebi', 'cl', 'uberon', 'go', 'ncbitaxon', 'ncit'],
     placeholder: 'Search materials or chemicals...',
     label: 'Material',
     allowPromoteToLocal: true,

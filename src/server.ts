@@ -27,6 +27,8 @@ import {
   createValidationHandlers,
   createGitHandlers,
   createTreeHandlers,
+  createLibraryHandlers,
+  createOntologyHandlers,
 } from './api/handlers/index.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { registerRoutes } from './api/routes.js';
@@ -219,7 +221,9 @@ export async function createServer(
   const validationHandlers = createValidationHandlers(ctx.validator, ctx.lintEngine);
   const gitHandlers = createGitHandlers(ctx.repoAdapter);
   const treeHandlers = createTreeHandlers(ctx.indexManager, ctx.store);
-  
+  const libraryHandlers = createLibraryHandlers(ctx.store);
+  const ontologyHandlers = createOntologyHandlers();
+
   // Register API routes with /api prefix
   await fastify.register(async (instance) => {
     registerRoutes(instance, {
@@ -228,10 +232,20 @@ export async function createServer(
       validationHandlers,
       gitHandlers,
       treeHandlers,
+      libraryHandlers,
+      ontologyHandlers,
       schemaCount: () => ctx.schemaRegistry.size,
       ruleCount: () => ctx.lintEngine.ruleCount,
     });
   }, { prefix: '/api' });
+
+  // Rebuild library index on startup
+  try {
+    await libraryHandlers.rebuildIndex();
+    console.log('Library index built');
+  } catch (err) {
+    console.warn('Failed to build library index:', err);
+  }
   
   return fastify;
 }

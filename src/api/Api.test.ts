@@ -66,7 +66,7 @@ properties:
     it('should return health status', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/health',
+        url: '/api/health',
       });
       
       expect(response.statusCode).toBe(200);
@@ -81,7 +81,7 @@ properties:
     it('should list schemas', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/schemas',
+        url: '/api/schemas',
       });
       
       expect(response.statusCode).toBe(200);
@@ -94,7 +94,7 @@ properties:
       const schemaId = encodeURIComponent('https://test.com/schema/test-record.schema.yaml');
       const response = await app.inject({
         method: 'GET',
-        url: `/schemas/${schemaId}`,
+        url: `/api/schemas/${schemaId}`,
       });
       
       expect(response.statusCode).toBe(200);
@@ -107,7 +107,7 @@ properties:
       const schemaId = encodeURIComponent('https://test.com/schema/nonexistent.schema.yaml');
       const response = await app.inject({
         method: 'GET',
-        url: `/schemas/${schemaId}`,
+        url: `/api/schemas/${schemaId}`,
       });
       
       expect(response.statusCode).toBe(404);
@@ -118,7 +118,7 @@ properties:
     it('should validate a valid payload', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: '/validate',
+        url: '/api/validate',
         payload: {
           schemaId: 'https://test.com/schema/test-record.schema.yaml',
           payload: {
@@ -138,7 +138,7 @@ properties:
     it('should reject an invalid payload', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: '/validate',
+        url: '/api/validate',
         payload: {
           schemaId: 'https://test.com/schema/test-record.schema.yaml',
           payload: {
@@ -157,7 +157,7 @@ properties:
     it('should return 404 for non-existent schema', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: '/validate',
+        url: '/api/validate',
         payload: {
           schemaId: 'https://test.com/schema/nonexistent.schema.yaml',
           payload: {},
@@ -172,7 +172,7 @@ properties:
     it('should list records (initially empty)', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/records',
+        url: '/api/records',
       });
       
       expect(response.statusCode).toBe(200);
@@ -183,7 +183,7 @@ properties:
     it('should create a record', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: '/records',
+        url: '/api/records',
         payload: {
           schemaId: 'https://test.com/schema/test-record.schema.yaml',
           payload: {
@@ -203,7 +203,7 @@ properties:
     it('should get a record by ID', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/records/TEST-001',
+        url: '/api/records/TEST-001',
       });
       
       expect(response.statusCode).toBe(200);
@@ -215,7 +215,7 @@ properties:
     it('should update a record', async () => {
       const response = await app.inject({
         method: 'PUT',
-        url: '/records/TEST-001',
+        url: '/api/records/TEST-001',
         payload: {
           payload: {
             kind: 'test',
@@ -234,7 +234,7 @@ properties:
     it('should reject duplicate record creation', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: '/records',
+        url: '/api/records',
         payload: {
           schemaId: 'https://test.com/schema/test-record.schema.yaml',
           payload: {
@@ -253,7 +253,7 @@ properties:
     it('should return 404 for non-existent record', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/records/TEST-999',
+        url: '/api/records/TEST-999',
       });
       
       expect(response.statusCode).toBe(404);
@@ -262,7 +262,7 @@ properties:
     it('should delete a record', async () => {
       const response = await app.inject({
         method: 'DELETE',
-        url: '/records/TEST-001',
+        url: '/api/records/TEST-001',
       });
       
       expect(response.statusCode).toBe(200);
@@ -273,7 +273,7 @@ properties:
     it('should return 404 after deletion', async () => {
       const response = await app.inject({
         method: 'GET',
-        url: '/records/TEST-001',
+        url: '/api/records/TEST-001',
       });
       
       expect(response.statusCode).toBe(404);
@@ -284,7 +284,7 @@ properties:
     it('should lint a payload', async () => {
       const response = await app.inject({
         method: 'POST',
-        url: '/lint',
+        url: '/api/lint',
         payload: {
           payload: {
             kind: 'test',

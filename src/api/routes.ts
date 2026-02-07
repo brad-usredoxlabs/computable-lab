@@ -12,6 +12,8 @@ import type { ValidationHandlers } from './handlers/ValidationHandlers.js';
 import type { UIHandlers } from './handlers/UIHandlers.js';
 import type { GitHandlers } from './handlers/GitHandlers.js';
 import type { TreeHandlers } from './handlers/TreeHandlers.js';
+import type { LibraryHandlers } from './handlers/LibraryHandlers.js';
+import type { OntologyHandlers } from './handlers/OntologyHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -24,6 +26,8 @@ export interface RouteOptions {
   uiHandlers?: UIHandlers;
   gitHandlers?: GitHandlers;
   treeHandlers?: TreeHandlers;
+  libraryHandlers?: LibraryHandlers;
+  ontologyHandlers?: OntologyHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -150,20 +154,45 @@ export function registerRoutes(
   if (treeHandlers) {
     // Get study hierarchy tree
     fastify.get('/tree/studies', treeHandlers.getStudies.bind(treeHandlers));
-    
+
     // Get records for a run
     fastify.get('/tree/records', treeHandlers.getRecordsForRun.bind(treeHandlers));
-    
+
     // Get inbox records
     fastify.get('/tree/inbox', treeHandlers.getInbox.bind(treeHandlers));
-    
+
     // Search records by title
     fastify.get('/tree/search', treeHandlers.searchRecords.bind(treeHandlers));
-    
+
     // File a record from inbox into a run
     fastify.post('/records/:id/file', treeHandlers.fileRecord.bind(treeHandlers));
-    
+
     // Rebuild the index
     fastify.post('/index/rebuild', treeHandlers.rebuildIndex.bind(treeHandlers));
+  }
+
+  // ============================================================================
+  // Library Routes (optional - requires libraryHandlers)
+  // ============================================================================
+
+  const { libraryHandlers } = options;
+
+  if (libraryHandlers) {
+    // Static paths before parameterized
+    fastify.get('/library/search', libraryHandlers.searchLibrary.bind(libraryHandlers));
+    fastify.get('/library/stats', libraryHandlers.getLibraryStats.bind(libraryHandlers));
+    fastify.get('/library/:type', libraryHandlers.listLibraryType.bind(libraryHandlers));
+    fastify.post('/library/promote', libraryHandlers.promoteOntologyTerm.bind(libraryHandlers));
+    fastify.post('/library/reindex', libraryHandlers.reindexLibrary.bind(libraryHandlers));
+  }
+
+  // ============================================================================
+  // Ontology Routes (optional - requires ontologyHandlers)
+  // ============================================================================
+
+  const { ontologyHandlers } = options;
+
+  if (ontologyHandlers) {
+    fastify.get('/ontology/search', ontologyHandlers.searchOntology.bind(ontologyHandlers));
   }
 }

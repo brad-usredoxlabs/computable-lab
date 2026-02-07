@@ -24,5 +24,9 @@ properties:
     type: number
     exclusiveMinimum: 0
 
+  concentration:
+    $ref: "./amount.schema.yaml"
+    description: "Optional concentration (e.g. {value: 10, unit: 'nM'})."
+
   notes:
     type: string
