@@ -1,0 +1,99 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/bio/sequence-interval.schema.yaml"
+title: "SequenceInterval"
+description: >
+  A neutral location primitive: an interval on a parent sequence with a strand.
+  Meaning about the interval (gene region, exon, primer binding site, amplicon, etc.)
+  is expressed via Claims/Assertions that reference this interval node.
+
+type: object
+unevaluatedProperties: false
+
+allOf:
+  - $ref: "../core/common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+  - kind
+  - id
+  - on_sequence
+  - start
+  - end
+
+properties:
+  kind:
+    const: "sequence_interval"
+
+  id:
+    type: string
+    description: "Stable identifier (e.g., INT-000042)."
+
+  label:
+    type: string
+
+  description:
+    type: string
+
+  on_sequence:
+    $ref: "../core/datatypes/ref.schema.yaml"
+    description: "Ref to the parent sequence node that this interval is defined on."
+
+  start:
+    type: integer
+    minimum: 1
+    description: "1-based inclusive coordinate on the parent sequence."
+
+  end:
+    type: integer
+    minimum: 1
+    description: "1-based inclusive coordinate on the parent sequence."
+
+  coordinate_system:
+    type: string
+    enum: ["1-based-inclusive"]
+    default: "1-based-inclusive"
+    description: "Fixed for now to avoid ambiguity."
+
+  strand:
+    type: string
+    enum: ["+", "-", "na", "unknown"]
+    default: "unknown"
+    description: >
+      '+' or '-' if meaningful; 'na' if strand is not applicable (e.g., protein);
+      'unknown' if not specified.
+
+  corresponds_to_sequence:
+    $ref: "../core/datatypes/ref.schema.yaml"
+    description: >
+      Optional: ref to a child sequence node that is asserted to be the substring
+      (or reverse-complement substring) implied by (on_sequence, start, end, strand).
+      The semantics of "substring_of" should be expressed as a Claim.
+
+  provenance:
+    type: object
+    unevaluatedProperties: false
+    description: "Optional provenance pointers; meaning still lives in Claims."
+    properties:
+      identifiers:
+        type: array
+        items:
+          type: object
+          unevaluatedProperties: false
+          required: [system, value]
+          properties:
+            system: { type: string }
+            value:  { type: string }
+            url:    { type: string }
+      citations:
+        type: array
+        items:
+          type: object
+          unevaluatedProperties: false
+          required: [system, value]
+          properties:
+            system: { type: string }
+            value:  { type: string }
+            url:    { type: string }
+
+  notes:
+    type: object
+    additionalProperties: true

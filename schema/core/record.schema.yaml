@@ -19,3 +19,5 @@ oneOf:
 - $ref: "./assertion.schema.yaml"
 - $ref: "./evidence.schema.yaml"
 - $ref: "./context.schema.yaml"
+- $ref: "../bio/sequence.schema.yaml"
+- $ref: "../bio/sequence-interval.schema.yaml"

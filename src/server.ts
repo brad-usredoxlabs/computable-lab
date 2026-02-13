@@ -33,6 +33,7 @@ import {
 import { IndexManager, createIndexManager } from './index/index.js';
 import { registerRoutes } from './api/routes.js';
 import type { ServerConfig } from './api/types.js';
+import { createMcpServer, mcpPlugin } from './mcp/index.js';
 
 /**
  * Default server configuration.
@@ -246,7 +247,11 @@ export async function createServer(
   } catch (err) {
     console.warn('Failed to build library index:', err);
   }
-  
+
+  // Register MCP server on /mcp
+  const mcpServer = createMcpServer(ctx);
+  await fastify.register(mcpPlugin, { prefix: '/mcp', mcpServer });
+
   return fastify;
 }
 

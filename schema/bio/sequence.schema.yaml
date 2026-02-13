@@ -1,0 +1,111 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/bio/sequence.schema.yaml"
+title: "Sequence"
+description: >
+  A neutral biological sequence literal (DNA/RNA/protein). Meaning/role is expressed
+  through Claims/Assertions (e.g., "is forward primer", "is CDS of gene X"), not by
+  fields on this record.
+
+type: object
+unevaluatedProperties: false
+
+allOf:
+  - $ref: "../core/common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+  - kind
+  - id
+  - alphabet
+  - residues
+
+properties:
+  kind:
+    const: "sequence"
+
+  id:
+    type: string
+    description: "Stable identifier (e.g., SEQ-000123 or seq:sha256:<hash>)."
+
+  label:
+    type: string
+    description: "Human-friendly name (e.g., IL6_FWD_primer_v2)."
+
+  description:
+    type: string
+
+  alphabet:
+    type: string
+    enum: ["dna", "rna", "protein", "iupac_dna", "iupac_rna"]
+    description: >
+      Declares the symbol set and semantics. Use iupac_* if ambiguity codes are allowed.
+
+  residues:
+    type: string
+    minLength: 1
+    description: >
+      Raw sequence string. Recommended: uppercase, no whitespace. Canonicalization rules,
+      if applied, should be declared in `canonicalization`.
+
+  topology:
+    type: string
+    enum: ["linear", "circular"]
+    default: "linear"
+
+  strandedness:
+    type: string
+    enum: ["single", "double", "unknown"]
+    default: "unknown"
+
+  length:
+    type: integer
+    minimum: 1
+    description: >
+      Convenience; can be derived from residues. Keep if you want stable "declared length"
+      for validation/UI.
+
+  canonicalization:
+    type: object
+    unevaluatedProperties: false
+    description: "Optional details about how residues were canonicalized and checksummed."
+    properties:
+      rules:
+        type: array
+        items: { type: string }
+        description: "E.g., ['strip_whitespace', 'uppercase']"
+
+      canonical_residues:
+        type: string
+        description: "If residues were stored raw, put canonical form here."
+
+      checksum:
+        type: object
+        unevaluatedProperties: false
+        required: [algo, value]
+        properties:
+          algo:
+            type: string
+            enum: ["sha256", "blake3", "md5"]
+          value:
+            type: string
+
+  identifiers:
+    type: array
+    description: "External identifiers for this sequence (accessions, URIs, etc.)."
+    items:
+      type: object
+      unevaluatedProperties: false
+      required: [system, value]
+      properties:
+        system:
+          type: string
+          description: "e.g., genbank, refseq, uniprot, doi, uri"
+        value:
+          type: string
+        url:
+          type: string
+          description: "Optional resolvable URL/IRI."
+
+  notes:
+    type: object
+    description: "Loose bag for non-semantic UI notes. Do not put meaning here."
+    additionalProperties: true
