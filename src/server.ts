@@ -15,12 +15,12 @@ import { SchemaRegistry, createSchemaRegistry } from './schema/SchemaRegistry.js
 import { loadAllSchemas } from './schema/SchemaLoader.js';
 import { AjvValidator, createValidator } from './validation/AjvValidator.js';
 import { LintEngine, createLintEngine } from './lint/LintEngine.js';
-import { createRepoAdapter } from './repo/createRepoAdapter.js';
+import { createRepoAdapter, isGitRepoAdapter } from './repo/createRepoAdapter.js';
 import { createLocalRepoAdapter } from './repo/LocalRepoAdapter.js';
 import type { RepoAdapter } from './repo/types.js';
 import { RecordStoreImpl, createRecordStore } from './store/RecordStoreImpl.js';
 import { loadConfig, getDefaultRepository } from './config/loader.js';
-import type { AppConfig, RepositoryConfig } from './config/types.js';
+import { DEFAULT_CONFIG as DEFAULT_APP_CONFIG, type AppConfig, type RepositoryConfig } from './config/types.js';
 import {
   createRecordHandlers,
   createSchemaHandlers,
@@ -30,6 +30,7 @@ import {
   createLibraryHandlers,
   createOntologyHandlers,
   createAIHandlers,
+  createMetaHandlers,
   ConfigHandlers,
 } from './api/handlers/index.js';
 import { IndexManager, createIndexManager } from './index/index.js';
@@ -101,6 +102,7 @@ export async function initializeApp(
     }
   } catch (err) {
     console.log('No config.yaml found or error loading config, using local mode');
+    appConfig = { ...DEFAULT_APP_CONFIG };
   }
   
   // Initialize schema registry
@@ -235,13 +237,22 @@ export async function createServer(
   const libraryHandlers = createLibraryHandlers(ctx.store);
   const ontologyHandlers = createOntologyHandlers();
 
-  // Create config handlers (if config was loaded from a file)
-  let configHandlers: ConfigHandlers | undefined;
-  if (ctx.appConfig && ctx.configPath) {
-    configHandlers = new ConfigHandlers(ctx.configPath, ctx.appConfig, (updated) => {
-      ctx.appConfig = updated;
-    });
-  }
+  // Create meta handlers
+  const repoConfig = ctx.appConfig ? getDefaultRepository(ctx.appConfig) ?? undefined : undefined;
+  const metaHandlers = createMetaHandlers({
+    schemaRegistry: ctx.schemaRegistry,
+    getRuleCount: () => ctx.lintEngine.ruleCount,
+    ...(isGitRepoAdapter(ctx.repoAdapter) ? { gitRepoAdapter: ctx.repoAdapter } : {}),
+    ...(repoConfig ? { repoConfig, namespace: repoConfig.namespace } : {}),
+  });
+
+  // Create config handlers — always available so the UI can add repos
+  // even when no config.yaml exists yet (it will be created on first PATCH).
+  const configHandlers = new ConfigHandlers(
+    ctx.configPath ?? resolve(process.cwd(), 'config.yaml'),
+    ctx.appConfig ?? { ...DEFAULT_APP_CONFIG },
+    (updated) => { ctx.appConfig = updated; },
+  );
 
   // Create tool registry for dual-registration (MCP + agent)
   const toolRegistry = new ToolRegistry();
@@ -293,12 +304,13 @@ export async function createServer(
       treeHandlers,
       libraryHandlers,
       ontologyHandlers,
+      metaHandlers,
       schemaCount: () => ctx.schemaRegistry.size,
       ruleCount: () => ctx.lintEngine.ruleCount,
     };
     if (aiHandlers) routeOpts.aiHandlers = aiHandlers;
     if (aiInfo) routeOpts.aiInfo = aiInfo;
-    if (configHandlers) routeOpts.configHandlers = configHandlers;
+    routeOpts.configHandlers = configHandlers;
     registerRoutes(instance, routeOpts);
   }, { prefix: '/api' });
 

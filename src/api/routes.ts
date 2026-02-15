@@ -16,6 +16,7 @@ import type { LibraryHandlers } from './handlers/LibraryHandlers.js';
 import type { OntologyHandlers } from './handlers/OntologyHandlers.js';
 import type { AIHandlers } from './handlers/AIHandlers.js';
 import type { ConfigHandlers } from './handlers/configHandlers.js';
+import type { MetaHandlers } from './handlers/metaHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -32,6 +33,7 @@ export interface RouteOptions {
   ontologyHandlers?: OntologyHandlers;
   aiHandlers?: AIHandlers;
   configHandlers?: ConfigHandlers;
+  metaHandlers?: MetaHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -72,6 +74,17 @@ export function registerRoutes(
     };
   });
   
+  // ============================================================================
+  // Meta Routes (optional - requires metaHandlers)
+  // ============================================================================
+
+  const { metaHandlers } = options;
+
+  if (metaHandlers) {
+    fastify.get('/meta', metaHandlers.getMeta);
+    fastify.post('/sync', metaHandlers.postSync);
+  }
+
   // ============================================================================
   // Record Routes
   // ============================================================================

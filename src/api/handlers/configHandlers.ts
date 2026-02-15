@@ -7,8 +7,9 @@
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { AppConfig, AIConfig, RepositoryConfig } from '../../config/types.js';
+import { DEFAULT_REPO_CONFIG } from '../../config/types.js';
 import { validateConfig, ConfigValidationError } from '../../config/loader.js';
-import { writeFile, rename } from 'node:fs/promises';
+import { writeFile, rename, mkdir } from 'node:fs/promises';
 import { stringify as stringifyYaml } from 'yaml';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -93,6 +94,7 @@ export async function writeConfigYaml(
 ): Promise<void> {
   const yamlContent = stringifyYaml(config, { indent: 2 });
   const dir = dirname(configPath);
+  await mkdir(dir, { recursive: true });
   const tmpPath = join(dir, `.config.yaml.${randomUUID()}.tmp`);
   await writeFile(tmpPath, yamlContent, 'utf-8');
   await rename(tmpPath, configPath);
@@ -107,7 +109,7 @@ function checkRestartRequired(
     const existingRepo = existing.repositories.find(
       (r) => r.id === updatedRepo.id,
     );
-    if (!existingRepo) continue;
+    if (!existingRepo) return true; // new repo added
 
     if (existingRepo.git.url !== updatedRepo.git.url) return true;
     if (existingRepo.git.branch !== updatedRepo.git.branch) return true;
@@ -193,22 +195,20 @@ export class ConfigHandlers {
 
         const idx = updatedRepos.findIndex((r) => r.id === patchRepo.id);
         if (idx === -1) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Validation failed',
-            details: [
-              {
-                path: 'repositories',
-                message: `Repository '${patchRepo.id}' not found`,
-              },
-            ],
-          });
+          // New repository — merge patch onto defaults
+          const newRepo = mergeConfigPatch(
+            { id: patchRepo.id, ...DEFAULT_REPO_CONFIG } as unknown as Record<string, unknown>,
+            patchRepo,
+          ) as unknown as RepositoryConfig;
+          // Mark first repo as default if none exist yet
+          if (updatedRepos.length === 0) newRepo.default = true;
+          updatedRepos.push(newRepo);
+        } else {
+          updatedRepos[idx] = mergeConfigPatch(
+            updatedRepos[idx] as unknown as Record<string, unknown>,
+            patchRepo,
+          ) as unknown as RepositoryConfig;
         }
-
-        updatedRepos[idx] = mergeConfigPatch(
-          updatedRepos[idx] as unknown as Record<string, unknown>,
-          patchRepo,
-        ) as unknown as RepositoryConfig;
       }
 
       updated.repositories = updatedRepos;
