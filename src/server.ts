@@ -32,6 +32,9 @@ import {
   createAIHandlers,
   createMetaHandlers,
   ConfigHandlers,
+  createProtocolHandlers,
+  createExecutionHandlers,
+  createMeasurementHandlers,
 } from './api/handlers/index.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { registerRoutes } from './api/routes.js';
@@ -266,6 +269,11 @@ export async function createServer(
     },
   );
 
+  // Create protocol, execution, and measurement handlers
+  const protocolHandlers = createProtocolHandlers(ctx);
+  const executionHandlers = createExecutionHandlers(ctx);
+  const measurementHandlers = createMeasurementHandlers(ctx);
+
   // Create tool registry for dual-registration (MCP + agent)
   const toolRegistry = new ToolRegistry();
 
@@ -317,6 +325,9 @@ export async function createServer(
       libraryHandlers,
       ontologyHandlers,
       metaHandlers,
+      protocolHandlers,
+      executionHandlers,
+      measurementHandlers,
       schemaCount: () => ctx.schemaRegistry.size,
       ruleCount: () => ctx.lintEngine.ruleCount,
     };

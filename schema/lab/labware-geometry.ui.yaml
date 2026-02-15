@@ -1,0 +1,86 @@
+# UI specification for LabwareGeometry records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/labware-geometry.schema.yaml"
+
+display:
+  titleField: "$.id"
+  subtitleField: "$.manufacturer.name"
+  icon: "labware-geometry"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Labware Reference"
+    fields:
+    - path: "$.labwareRef"
+      widget: "ref"
+      label: "Labware"
+      required: true
+  - title: "Manufacturer"
+    fields:
+    - path: "$.manufacturer.name"
+      widget: "text"
+      label: "Manufacturer"
+    - path: "$.manufacturer.catalogNumber"
+      widget: "text"
+      label: "Catalog Number"
+  - title: "Dimensions"
+    fields:
+    - path: "$.dimensions.xLength_mm"
+      widget: "text"
+      label: "X Length (mm)"
+      required: true
+    - path: "$.dimensions.yLength_mm"
+      widget: "text"
+      label: "Y Length (mm)"
+      required: true
+    - path: "$.dimensions.zHeight_mm"
+      widget: "text"
+      label: "Z Height (mm)"
+      required: true
+  - title: "Well Layout"
+    fields:
+    - path: "$.wellLayout.rows"
+      widget: "text"
+      label: "Rows"
+      required: true
+    - path: "$.wellLayout.cols"
+      widget: "text"
+      label: "Columns"
+      required: true
+    - path: "$.wellLayout.wellSpacing_mm"
+      widget: "text"
+      label: "Well Spacing (mm)"
+  - title: "Robot Compatibility"
+    fields:
+    - path: "$.compatibleRobots"
+      widget: "array"
+      label: "Compatible Robots"
+    - path: "$.gripHeight_mm"
+      widget: "text"
+      label: "Grip Height (mm)"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "180px"
+  - path: "$.manufacturer.name"
+    label: "Manufacturer"
+  - path: "$.wellLayout.rows"
+    label: "Rows"
+    width: "60px"
+  - path: "$.wellLayout.cols"
+    label: "Cols"
+    width: "60px"

@@ -78,6 +78,34 @@ properties:
     items:
       $ref: "#/$defs/Labware"
 
+  implementsRef:
+    type: string
+    description: "PlannedRun recordId this execution implements."
+
+  executionMeta:
+    type: object
+    description: "Post-execution metadata (present when event graph is an executed run)."
+    additionalProperties: false
+    properties:
+      startedAt:
+        type: string
+        format: date-time
+      completedAt:
+        type: string
+        format: date-time
+      executedBy:
+        type: string
+        description: "Operator identifier."
+      instrumentRef:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Robot/instrument that executed the run."
+      instrumentLogRef:
+        type: string
+        description: "Link to instrument-log record."
+      status:
+        type: string
+        enum: [ completed, aborted, partial, error ]
+
   tags:
     type: array
     items:
@@ -125,6 +153,35 @@ $defs:
       notes:
         type: string
         description: "Optional notes about this event."
+      deviations:
+        type: array
+        description: "Structured operator feedback about deviations during execution."
+        items:
+          type: object
+          additionalProperties: false
+          required: [ code, message ]
+          properties:
+            code:
+              type: string
+              enum:
+              - insufficient_volume
+              - contamination_suspected
+              - step_skipped
+              - manual_intervention
+              - timing_deviation
+              - equipment_malfunction
+              - sample_lost
+              - other
+            message:
+              type: string
+            severity:
+              type: string
+              enum: [ info, warning, error ]
+            reportedBy:
+              type: string
+            reportedAt:
+              type: string
+              format: date-time
 
   Labware:
     type: object

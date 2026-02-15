@@ -17,6 +17,9 @@ import type { OntologyHandlers } from './handlers/OntologyHandlers.js';
 import type { AIHandlers } from './handlers/AIHandlers.js';
 import type { ConfigHandlers } from './handlers/configHandlers.js';
 import type { MetaHandlers } from './handlers/metaHandlers.js';
+import type { ProtocolHandlers } from './handlers/ProtocolHandlers.js';
+import type { ExecutionHandlers } from './handlers/ExecutionHandlers.js';
+import type { MeasurementHandlers } from './handlers/MeasurementHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -34,6 +37,9 @@ export interface RouteOptions {
   aiHandlers?: AIHandlers;
   configHandlers?: ConfigHandlers;
   metaHandlers?: MetaHandlers;
+  protocolHandlers?: ProtocolHandlers;
+  executionHandlers?: ExecutionHandlers;
+  measurementHandlers?: MeasurementHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -240,5 +246,44 @@ export function registerRoutes(
   if (configHandlers) {
     fastify.get('/config', configHandlers.getConfig.bind(configHandlers));
     fastify.patch('/config', configHandlers.patchConfig.bind(configHandlers));
+  }
+
+  // ============================================================================
+  // Protocol Routes (optional - requires protocolHandlers)
+  // ============================================================================
+
+  const { protocolHandlers } = options;
+
+  if (protocolHandlers) {
+    fastify.post('/protocols/from-event-graph', protocolHandlers.saveFromEventGraph.bind(protocolHandlers));
+    fastify.get('/protocols/:id/load', protocolHandlers.loadProtocol.bind(protocolHandlers));
+    fastify.post('/protocols/:id/bind', protocolHandlers.bindProtocol.bind(protocolHandlers));
+  }
+
+  // ============================================================================
+  // Execution Pipeline Routes (optional - requires executionHandlers)
+  // ============================================================================
+
+  const { executionHandlers } = options;
+
+  if (executionHandlers) {
+    fastify.post('/planned-runs', executionHandlers.createPlannedRun.bind(executionHandlers));
+    fastify.get('/planned-runs/:id', executionHandlers.getPlannedRun.bind(executionHandlers));
+    fastify.post('/planned-runs/:id/compile', executionHandlers.compilePlannedRun.bind(executionHandlers));
+    fastify.get('/robot-plans/:id', executionHandlers.getRobotPlan.bind(executionHandlers));
+    fastify.get('/robot-plans/:id/artifact', executionHandlers.getRobotPlanArtifact.bind(executionHandlers));
+  }
+
+  // ============================================================================
+  // Measurement Routes (optional - requires measurementHandlers)
+  // ============================================================================
+
+  const { measurementHandlers } = options;
+
+  if (measurementHandlers) {
+    fastify.post('/measurements/ingest', measurementHandlers.ingestMeasurement.bind(measurementHandlers));
+    fastify.get('/measurements/:id', measurementHandlers.getMeasurement.bind(measurementHandlers));
+    fastify.get('/measurements/:id/well/:well', measurementHandlers.getMeasurementWell.bind(measurementHandlers));
+    fastify.post('/plate-maps/export', measurementHandlers.exportPlateMap.bind(measurementHandlers));
   }
 }

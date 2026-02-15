@@ -18,6 +18,8 @@ import { registerPdbTools } from './pdbTools.js';
 import { registerReactomeTools } from './reactomeTools.js';
 import { registerChemTools } from './chemTools.js';
 import { registerEuropmcTools } from './europmcTools.js';
+import { registerProtocolTools } from './protocolTools.js';
+import { registerExecutionTools } from './executionTools.js';
 
 export function registerAllTools(server: McpServer, ctx: AppContext, registry?: ToolRegistry): void {
   registerRecordTools(server, ctx, registry);
@@ -35,4 +37,8 @@ export function registerAllTools(server: McpServer, ctx: AppContext, registry?: 
   registerReactomeTools(server, registry);
   registerChemTools(server, registry);
   registerEuropmcTools(server, registry);
+
+  // Protocol management & execution pipeline tools
+  registerProtocolTools(server, ctx, registry);
+  registerExecutionTools(server, ctx, registry);
 }

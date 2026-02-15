@@ -34,6 +34,42 @@ properties:
       $ref: "./datatypes/ref.schema.yaml"
     uniqueItems: true
 
+  pipetteHints:
+    type: object
+    description: "Default liquid handling parameters for this material class."
+    additionalProperties: false
+    properties:
+      liquidClass:
+        type: string
+        enum: [ aqueous, viscous, volatile, other ]
+      aspirateSpeed_uL_s:
+        type: number
+        exclusiveMinimum: 0
+      dispenseSpeed_uL_s:
+        type: number
+        exclusiveMinimum: 0
+      blowoutSpeed_uL_s:
+        type: number
+        exclusiveMinimum: 0
+      touchTip:
+        type: boolean
+      touchTipSpeed_mm_s:
+        type: number
+        exclusiveMinimum: 0
+      blowout:
+        type: boolean
+      airGap_uL:
+        type: number
+        minimum: 0
+      dispenseDelay_s:
+        type: number
+        minimum: 0
+      withdrawSpeed_mm_s:
+        type: number
+        exclusiveMinimum: 0
+      notes:
+        type: string
+
   tags:
     type: array
     items: { type: string }

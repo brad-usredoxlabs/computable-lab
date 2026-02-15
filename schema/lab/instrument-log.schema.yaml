@@ -1,0 +1,99 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/instrument-log.schema.yaml"
+title: "InstrumentLog"
+description: >
+  Raw robot/instrument telemetry and operational log. Non-FAIR (operational data).
+  Stores timestamped entries with optional links to events and planned runs.
+
+type: object
+additionalProperties: false
+
+required:
+- kind
+- id
+- logType
+- status
+
+properties:
+  kind:
+    const: "instrument-log"
+
+  id:
+    type: string
+    description: "Identifier (e.g., ILOG-PLR000001-001)."
+
+  instrumentRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Which instrument produced this log."
+
+  plannedRunRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Which planned run this log is associated with."
+
+  eventGraphRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Which event graph this log is associated with."
+
+  logType:
+    type: string
+    enum: [ robot_telemetry, instrument_readout, error_log, operator_notes ]
+
+  startedAt:
+    type: string
+    format: date-time
+
+  completedAt:
+    type: string
+    format: date-time
+
+  status:
+    type: string
+    enum: [ completed, aborted, error ]
+
+  entries:
+    type: array
+    description: "Summary log entries (queryable)."
+    items:
+      $ref: "#/$defs/LogEntry"
+
+  artifacts:
+    type: array
+    description: "Raw log file references."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ role ]
+      properties:
+        fileRef:
+          $ref: "./datatypes/file-ref.schema.yaml"
+        role:
+          type: string
+          description: "Artifact role (e.g., raw_log)."
+
+  notes:
+    type: string
+
+$defs:
+  LogEntry:
+    type: object
+    additionalProperties: false
+    required: [ entryType, message ]
+    properties:
+      timestamp:
+        type: string
+        format: date-time
+      eventRef:
+        type: string
+        description: "Links to event in event graph."
+      entryType:
+        type: string
+        enum: [ info, warning, error, telemetry ]
+      code:
+        type: string
+        description: "Machine-readable code."
+      message:
+        type: string
+      data:
+        type: object
+        description: "Structured telemetry (pressure, actual volume, etc.)."
+        additionalProperties: true

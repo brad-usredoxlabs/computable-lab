@@ -1,0 +1,153 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/robot-plan.schema.yaml"
+title: "RobotPlan"
+description: >
+  Per-platform compiled execution artifact. Generated from a PlannedRun for a
+  specific robot platform. Non-FAIR (generated, may be cached).
+
+type: object
+additionalProperties: false
+
+required:
+- kind
+- id
+- plannedRunRef
+- targetPlatform
+- status
+
+properties:
+  kind:
+    const: "robot-plan"
+
+  id:
+    type: string
+    description: "Identifier (e.g., RP-PLR000001-opentrons)."
+
+  plannedRunRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Back-pointer to the PlannedRun."
+
+  targetPlatform:
+    type: string
+    enum: [ opentrons_ot2, opentrons_flex, integra_assist ]
+
+  generatedAt:
+    type: string
+    format: date-time
+
+  generatorVersion:
+    type: string
+    description: "Toolchain version that generated this plan."
+
+  deckSlots:
+    type: array
+    description: "Robot-specific deck slot assignments."
+    items:
+      $ref: "#/$defs/DeckSlot"
+
+  pipettes:
+    type: array
+    description: "Pipette mount assignments."
+    items:
+      $ref: "#/$defs/PipetteAssignment"
+
+  executionSteps:
+    type: array
+    description: "Fully resolved execution steps (numeric, device-specific)."
+    items:
+      $ref: "#/$defs/ExecutionStep"
+
+  artifacts:
+    type: array
+    description: "Generated code or config file references."
+    items:
+      $ref: "#/$defs/PlanArtifact"
+
+  status:
+    type: string
+    enum: [ compiled, validated, error ]
+
+  errors:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [ stepId, message ]
+      properties:
+        stepId:
+          type: string
+        message:
+          type: string
+
+  notes:
+    type: string
+
+$defs:
+  DeckSlot:
+    type: object
+    additionalProperties: false
+    required: [ slotId, labwareRole ]
+    properties:
+      slotId:
+        type: string
+        description: "Robot-specific slot name (e.g., A1)."
+      labwareRole:
+        type: string
+      labwareGeometryRef:
+        $ref: "./datatypes/ref.schema.yaml"
+      orientation:
+        type: string
+        enum: [ landscape, portrait ]
+
+  PipetteAssignment:
+    type: object
+    additionalProperties: false
+    required: [ mount, type, model ]
+    properties:
+      mount:
+        type: string
+        enum: [ left, right ]
+      type:
+        type: string
+        enum: [ single, multi_8, multi_96 ]
+      model:
+        type: string
+        description: "Pipette model identifier (e.g., p300_single_gen2)."
+      tipRackSlots:
+        type: array
+        items: { type: string }
+
+  ExecutionStep:
+    type: object
+    additionalProperties: false
+    required: [ stepId, command ]
+    properties:
+      stepId:
+        type: string
+      sourceStepRef:
+        type: string
+        description: "Back-reference to protocol/event step."
+      command:
+        type: string
+        enum: [ pick_up_tip, aspirate, dispense, drop_tip, touch_tip, blow_out, mix, move_labware ]
+      params:
+        type: object
+        description: "Command-specific numeric parameters."
+        additionalProperties: true
+        properties:
+          slotId: { type: string }
+          well: { type: string }
+          volume_uL: { type: number }
+          flowRate_uL_s: { type: number }
+          height_mm: { type: number }
+
+  PlanArtifact:
+    type: object
+    additionalProperties: false
+    required: [ role ]
+    properties:
+      role:
+        type: string
+        description: "Artifact role (e.g., opentrons_python, integra_config)."
+      fileRef:
+        $ref: "./datatypes/file-ref.schema.yaml"

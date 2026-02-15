@@ -1,0 +1,4 @@
+# Lint rules for PlannedRun records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/planned-run.schema.yaml"
+rules: []

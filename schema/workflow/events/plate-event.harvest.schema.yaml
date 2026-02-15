@@ -30,5 +30,24 @@ properties:
       $ref: "./ref.schema.yaml"
     uniqueItems: true
 
+  inputs:
+    type: array
+    description: "Cross-graph lineage: upstream contexts consumed by this harvest."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ contextRef ]
+      properties:
+        contextRef:
+          $ref: "./ref.schema.yaml"
+          description: "Reference to upstream Context (from another event graph)."
+        amount:
+          type: object
+          additionalProperties: false
+          properties:
+            value: { type: number }
+            unit: { type: string }
+          required: [ value, unit ]
+
   notes:
     type: string

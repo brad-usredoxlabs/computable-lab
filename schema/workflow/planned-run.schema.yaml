@@ -1,0 +1,192 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/planned-run.schema.yaml"
+title: "PlannedRun"
+description: >
+  A persisted, versioned run intent. Binds abstract protocol roles to concrete
+  labware instances, materials, and instruments. FAIR record.
+
+type: object
+additionalProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- title
+- sourceType
+- sourceRef
+- state
+
+properties:
+  kind:
+    const: "planned-run"
+
+  recordId:
+    type: string
+    description: "Stable local identifier (e.g., PLR-000001)."
+
+  title:
+    type: string
+
+  protocolRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Reference to the source protocol record."
+
+  sourceType:
+    type: string
+    enum: [ protocol, event-graph ]
+    description: "What was the source of this planned run."
+
+  sourceRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Reference to the source protocol or event graph."
+
+  state:
+    type: string
+    enum: [ draft, ready, executing, completed, failed ]
+
+  bindings:
+    type: object
+    description: "Role bindings resolving abstract roles to concrete instances."
+    additionalProperties: false
+    properties:
+      labware:
+        type: array
+        items:
+          $ref: "#/$defs/LabwareBinding"
+      materials:
+        type: array
+        items:
+          $ref: "#/$defs/MaterialBinding"
+      instruments:
+        type: array
+        items:
+          $ref: "#/$defs/InstrumentBinding"
+      parameters:
+        type: array
+        items:
+          $ref: "#/$defs/ParameterBinding"
+
+  deckLayout:
+    type: object
+    description: "Robot-agnostic deck layout intent."
+    additionalProperties: false
+    properties:
+      assignments:
+        type: array
+        items:
+          $ref: "#/$defs/DeckAssignment"
+
+  pipetteConstraints:
+    type: array
+    description: "Resolved pipetting constraints from material hints and step overrides."
+    items:
+      $ref: "#/$defs/PipetteConstraint"
+
+  checksums:
+    type: object
+    description: "Checksums for reproducibility."
+    additionalProperties: false
+    properties:
+      protocolSha:
+        type: string
+      geometryShas:
+        type: object
+        additionalProperties:
+          type: string
+
+  notes:
+    type: string
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+$defs:
+  LabwareBinding:
+    type: object
+    additionalProperties: false
+    required: [ roleId ]
+    properties:
+      roleId:
+        type: string
+      labwareInstanceRef:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Concrete labware instance."
+      labwareGeometryRef:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Physical geometry definition."
+
+  MaterialBinding:
+    type: object
+    additionalProperties: false
+    required: [ roleId ]
+    properties:
+      roleId:
+        type: string
+      materialRef:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Concrete material reference."
+      lotNumber:
+        type: string
+
+  InstrumentBinding:
+    type: object
+    additionalProperties: false
+    required: [ roleId ]
+    properties:
+      roleId:
+        type: string
+      instrumentRef:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Concrete instrument reference."
+
+  ParameterBinding:
+    type: object
+    additionalProperties: false
+    required: [ name, value ]
+    properties:
+      name:
+        type: string
+      value:
+        description: "Resolved literal value."
+
+  DeckAssignment:
+    type: object
+    additionalProperties: false
+    required: [ labwareRole, position ]
+    properties:
+      labwareRole:
+        type: string
+      position:
+        type: string
+        description: "Abstract position name (e.g., slot_1)."
+      orientation:
+        type: string
+        enum: [ landscape, portrait ]
+
+  PipetteConstraint:
+    type: object
+    additionalProperties: false
+    required: [ stepRef ]
+    properties:
+      stepRef:
+        type: string
+        description: "Which protocol step this constraint applies to."
+      liquidClass:
+        type: string
+      aspirateSpeed_uL_s:
+        type: number
+        exclusiveMinimum: 0
+      dispenseSpeed_uL_s:
+        type: number
+        exclusiveMinimum: 0
+      touchTip:
+        type: boolean
+      blowout:
+        type: boolean
+      airGap_uL:
+        type: number
+        minimum: 0

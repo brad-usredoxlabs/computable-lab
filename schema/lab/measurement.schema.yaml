@@ -1,0 +1,137 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/measurement.schema.yaml"
+title: "Measurement"
+description: >
+  Instrument measurement dataset. FAIR record (1 per read event).
+  Contains parsed instrument output with per-well data.
+
+type: object
+additionalProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- title
+- assayType
+
+properties:
+  kind:
+    const: "measurement"
+
+  recordId:
+    type: string
+    description: "Stable local identifier (e.g., MSR-000001)."
+
+  title:
+    type: string
+
+  eventGraphRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Which event graph this measurement belongs to."
+
+  readEventRef:
+    type: string
+    description: "eventId of the read event that produced this measurement."
+
+  instrumentRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Which instrument performed the measurement."
+
+  labwareInstanceRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Which plate was read."
+
+  assayType:
+    type: string
+    enum: [ qpcr, plate_reader, microscopy, gc_ms, flow, other ]
+
+  channels:
+    type: array
+    description: "Measurement channels/filters."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ channelId ]
+      properties:
+        channelId:
+          type: string
+        target:
+          type: string
+          description: "What is being measured (e.g., gene name)."
+        reporter:
+          type: string
+          description: "Dye or filter (e.g., FITC, TRITC)."
+
+  shape:
+    type: object
+    description: "Dataset shape metadata."
+    additionalProperties: false
+    properties:
+      wells:
+        type: integer
+        minimum: 1
+      channels:
+        type: integer
+        minimum: 1
+      timepoints:
+        type: integer
+        minimum: 1
+        description: "e.g., qPCR cycles."
+
+  data:
+    type: array
+    description: "Inline measurement values (for small datasets)."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ well, metric, value ]
+      properties:
+        well:
+          type: string
+        channelId:
+          type: string
+        metric:
+          type: string
+          description: "Measurement metric (e.g., Ct, RFU, OD)."
+        value:
+          type: number
+        unit:
+          type: string
+
+  artifacts:
+    type: array
+    description: "References to raw/processed data files."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ role ]
+      properties:
+        fileRef:
+          $ref: "./datatypes/file-ref.schema.yaml"
+        role:
+          type: string
+          description: "Artifact role (raw_data, processed_data, etc.)."
+
+  parserInfo:
+    type: object
+    description: "Provenance of the parser that produced this record."
+    additionalProperties: false
+    properties:
+      parserId:
+        type: string
+        description: "Parser identifier (e.g., quantstudio_v2)."
+      parserVersion:
+        type: string
+      parsedAt:
+        type: string
+        format: date-time
+
+  notes:
+    type: string
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true
