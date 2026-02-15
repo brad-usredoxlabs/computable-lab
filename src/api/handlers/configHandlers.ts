@@ -1,413 +1,267 @@
 /**
- * Configuration handlers for reading/updating server settings.
- * 
- * Provides endpoints:
- * - GET /config/repository - Get non-sensitive repo config
- * - PUT /config/repository - Update repo config (requires admin key)
- * - POST /config/repository/test - Test connection without saving
- * - GET /config/auth/status - Get auth status (not the actual token)
- * - PUT /config/auth - Update auth credentials (requires admin key)
+ * Config management handlers for GET /api/config and PATCH /api/config.
+ *
+ * Exposes repositories and ai sections of config.yaml with secrets redacted.
+ * The server and schemas sections are omitted (require restart).
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import type { 
-  RepositoryConfig, 
-  GitAuthConfig,
-  SyncConfig,
-  NamespaceConfig 
-} from '../../config/types.js';
+import type { AppConfig, AIConfig, RepositoryConfig } from '../../config/types.js';
+import { validateConfig, ConfigValidationError } from '../../config/loader.js';
+import { writeFile, rename } from 'node:fs/promises';
+import { stringify as stringifyYaml } from 'yaml';
+import { dirname, join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 
-/**
- * Admin key for protected endpoints.
- * In production, this should come from environment variable or config.
- */
-const ADMIN_KEY = process.env.COMPUTABLE_LAB_ADMIN_KEY || '';
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
 
-/**
- * Check if admin key is required and valid.
- */
-function validateAdminKey(request: FastifyRequest): boolean {
-  // If no admin key is configured, allow all (dev mode)
-  if (!ADMIN_KEY) {
-    return true;
-  }
-  const providedKey = request.headers['x-admin-key'] as string;
-  return providedKey === ADMIN_KEY;
-}
+const REDACTED = '***';
 
-/**
- * Repository config response (non-sensitive).
- */
-export interface RepoConfigResponse {
-  id: string;
-  git: {
-    url: string;
-    branch: string;
-  };
-  namespace: NamespaceConfig;
-  sync: SyncConfig;
-  records: {
-    directory: string;
-  };
-}
+/** Property names whose string values are replaced with "***" in responses. */
+const SECRET_KEYS = new Set(['token', 'apiKey', 'privateKeyPath', 'sshKeyPath']);
 
-/**
- * Auth status response (write-only pattern).
- */
-export interface AuthStatusResponse {
-  type: 'token' | 'github-app' | 'ssh-key' | 'none';
-  configured: boolean;
-  lastValidated?: string;
-  valid?: boolean;
-}
+// ---------------------------------------------------------------------------
+// Helper functions
+// ---------------------------------------------------------------------------
 
-/**
- * Connection test result.
- */
-export interface ConnectionTestResult {
-  success: boolean;
-  message: string;
-  details?: {
-    canConnect: boolean;
-    canAuth: boolean;
-    branchExists: boolean;
-  };
-}
-
-/**
- * Context for config handlers.
- */
-export interface ConfigContext {
-  /** Get current repository config */
-  getRepoConfig: () => RepositoryConfig | undefined;
-  /** Update repository config */
-  updateRepoConfig?: (config: Partial<RepositoryConfig>) => Promise<void>;
-  /** Test repository connection */
-  testConnection?: (url: string, branch: string, auth?: GitAuthConfig) => Promise<ConnectionTestResult>;
-  /** Validate current auth */
-  validateAuth?: () => Promise<boolean>;
-  /** Last auth validation time */
-  lastAuthValidation?: Date;
-}
-
-/**
- * Create config handlers.
- */
-export function createConfigHandlers(ctx: ConfigContext) {
-  /**
-   * GET /config/repository - Get repository configuration.
-   */
-  async function getRepoConfig(
-    _request: FastifyRequest,
-    reply: FastifyReply
-  ): Promise<RepoConfigResponse | { error: string }> {
-    const config = ctx.getRepoConfig();
-    
-    if (!config) {
-      return reply.status(404).send({ error: 'No repository configured' });
+/** Deep-clone an object and replace secret fields with the redaction placeholder. */
+export function redactSecrets(obj: unknown): unknown {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) return obj.map(redactSecrets);
+  if (typeof obj === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      if (SECRET_KEYS.has(key) && typeof value === 'string' && value.length > 0) {
+        result[key] = REDACTED;
+      } else {
+        result[key] = redactSecrets(value);
+      }
     }
-    
-    // Return non-sensitive config only
-    const response: RepoConfigResponse = {
-      id: config.id,
-      git: {
-        url: redactUrl(config.git.url),
-        branch: config.git.branch,
-      },
-      namespace: config.namespace,
-      sync: config.sync,
-      records: config.records,
-    };
-    
-    return reply.send(response);
+    return result;
+  }
+  return obj;
+}
+
+/** Returns `true` when a value is the redaction placeholder. */
+export function isRedacted(val: unknown): boolean {
+  return val === REDACTED;
+}
+
+/**
+ * Deep-merge `patch` into `existing`, skipping any value that is the
+ * redaction placeholder so that existing secrets are preserved.
+ */
+export function mergeConfigPatch(
+  existing: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const result = { ...existing };
+
+  for (const [key, patchValue] of Object.entries(patch)) {
+    if (isRedacted(patchValue)) continue;
+
+    const existingValue = existing[key];
+
+    if (
+      patchValue !== null &&
+      patchValue !== undefined &&
+      typeof patchValue === 'object' &&
+      !Array.isArray(patchValue) &&
+      existingValue !== null &&
+      existingValue !== undefined &&
+      typeof existingValue === 'object' &&
+      !Array.isArray(existingValue)
+    ) {
+      result[key] = mergeConfigPatch(
+        existingValue as Record<string, unknown>,
+        patchValue as Record<string, unknown>,
+      );
+    } else {
+      result[key] = patchValue;
+    }
   }
 
-  /**
-   * PUT /config/repository - Update repository configuration.
-   */
-  async function updateRepoConfigHandler(
-    request: FastifyRequest<{
-      Body: {
-        git?: { url?: string; branch?: string };
-        namespace?: Partial<NamespaceConfig>;
-        sync?: Partial<SyncConfig>;
-        records?: { directory?: string };
-      };
-    }>,
-    reply: FastifyReply
+  return result;
+}
+
+/** Serialize config to YAML and write atomically (tmp-file + rename). */
+export async function writeConfigYaml(
+  configPath: string,
+  config: AppConfig,
+): Promise<void> {
+  const yamlContent = stringifyYaml(config, { indent: 2 });
+  const dir = dirname(configPath);
+  const tmpPath = join(dir, `.config.yaml.${randomUUID()}.tmp`);
+  await writeFile(tmpPath, yamlContent, 'utf-8');
+  await rename(tmpPath, configPath);
+}
+
+/** Return `true` when git URL, branch, or auth changed for any repository. */
+function checkRestartRequired(
+  existing: AppConfig,
+  updated: AppConfig,
+): boolean {
+  for (const updatedRepo of updated.repositories) {
+    const existingRepo = existing.repositories.find(
+      (r) => r.id === updatedRepo.id,
+    );
+    if (!existingRepo) continue;
+
+    if (existingRepo.git.url !== updatedRepo.git.url) return true;
+    if (existingRepo.git.branch !== updatedRepo.git.branch) return true;
+    if (
+      JSON.stringify(existingRepo.git.auth) !==
+      JSON.stringify(updatedRepo.git.auth)
+    )
+      return true;
+  }
+  return false;
+}
+
+/** Build the GET / PATCH response body (repositories + ai, secrets redacted). */
+function buildConfigResponse(config: AppConfig) {
+  return {
+    repositories: redactSecrets(config.repositories),
+    ai: config.ai ? redactSecrets(config.ai) : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Patch body shape
+// ---------------------------------------------------------------------------
+
+interface ConfigPatchBody {
+  repositories?: Array<Record<string, unknown> & { id: string }>;
+  ai?: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// Handler class
+// ---------------------------------------------------------------------------
+
+export class ConfigHandlers {
+  constructor(
+    private configPath: string,
+    private appConfig: AppConfig,
+    private onConfigUpdate?: (config: AppConfig) => void,
+  ) {}
+
+  // ---- GET /api/config ----------------------------------------------------
+
+  async getConfig(_request: FastifyRequest, reply: FastifyReply) {
+    return reply.send(buildConfigResponse(this.appConfig));
+  }
+
+  // ---- PATCH /api/config --------------------------------------------------
+
+  async patchConfig(
+    request: FastifyRequest<{ Body: ConfigPatchBody }>,
+    reply: FastifyReply,
   ) {
-    // Check admin authorization
-    if (!validateAdminKey(request)) {
-      return reply.status(401).send({ error: 'Admin key required' });
-    }
+    const patch = request.body;
 
-    if (!ctx.updateRepoConfig) {
-      return reply.status(501).send({ error: 'Config update not supported' });
-    }
-
-    const body = request.body;
-    const currentConfig = ctx.getRepoConfig();
-
-    if (!currentConfig) {
-      return reply.status(404).send({ error: 'No repository configured' });
-    }
-
-    try {
-      // Build update object
-      const updates: Partial<RepositoryConfig> = {};
-
-      if (body.git) {
-        updates.git = {
-          ...currentConfig.git,
-          ...(body.git.url && { url: body.git.url }),
-          ...(body.git.branch && { branch: body.git.branch }),
-        };
-      }
-
-      if (body.namespace) {
-        updates.namespace = {
-          ...currentConfig.namespace,
-          ...body.namespace,
-        };
-      }
-
-      if (body.sync) {
-        updates.sync = {
-          ...currentConfig.sync,
-          ...body.sync,
-        };
-      }
-
-      if (body.records) {
-        updates.records = {
-          ...currentConfig.records,
-          ...body.records,
-        };
-      }
-
-      await ctx.updateRepoConfig(updates);
-
-      return reply.send({ 
-        success: true, 
-        message: 'Configuration updated',
-        requiresRestart: false, // Config hot-reloaded
-      });
-    } catch (err) {
-      return reply.status(500).send({ 
-        error: err instanceof Error ? err.message : 'Update failed' 
-      });
-    }
-  }
-
-  /**
-   * POST /config/repository/test - Test repository connection.
-   */
-  async function testRepoConnection(
-    request: FastifyRequest<{
-      Body: {
-        url: string;
-        branch: string;
-        auth?: GitAuthConfig;
-      };
-    }>,
-    reply: FastifyReply
-  ) {
-    // Check admin authorization
-    if (!validateAdminKey(request)) {
-      return reply.status(401).send({ error: 'Admin key required' });
-    }
-
-    if (!ctx.testConnection) {
-      return reply.status(501).send({ error: 'Connection test not supported' });
-    }
-
-    const { url, branch, auth } = request.body;
-
-    if (!url) {
-      return reply.status(400).send({ error: 'URL is required' });
-    }
-
-    try {
-      const result = await ctx.testConnection(url, branch || 'main', auth);
-      return reply.send(result);
-    } catch (err) {
-      return reply.send({
+    if (!patch || typeof patch !== 'object') {
+      return reply.status(400).send({
         success: false,
-        message: err instanceof Error ? err.message : 'Connection test failed',
-      });
-    }
-  }
-
-  /**
-   * GET /config/auth/status - Get authentication status.
-   */
-  async function getAuthStatus(
-    _request: FastifyRequest,
-    reply: FastifyReply
-  ): Promise<AuthStatusResponse> {
-    const config = ctx.getRepoConfig();
-
-    if (!config) {
-      return reply.send({
-        type: 'none',
-        configured: false,
+        error: 'Request body must be an object',
       });
     }
 
-    const auth = config.git.auth;
-    const response: AuthStatusResponse = {
-      type: auth.type,
-      configured: isAuthConfigured(auth),
-    };
+    // Snapshot the current config so we can diff later
+    const existing = structuredClone(this.appConfig);
+    const updated = structuredClone(existing);
 
-    // Add validation info if available
-    if (ctx.lastAuthValidation) {
-      response.lastValidated = ctx.lastAuthValidation.toISOString();
+    // -- Merge repositories (matched by id) ---------------------------------
+    if (patch.repositories && Array.isArray(patch.repositories)) {
+      const updatedRepos = [...updated.repositories];
+
+      for (const patchRepo of patch.repositories) {
+        if (!patchRepo.id || typeof patchRepo.id !== 'string') {
+          return reply.status(400).send({
+            success: false,
+            error: 'Validation failed',
+            details: [
+              {
+                path: 'repositories[].id',
+                message: 'id is required for each repository',
+              },
+            ],
+          });
+        }
+
+        const idx = updatedRepos.findIndex((r) => r.id === patchRepo.id);
+        if (idx === -1) {
+          return reply.status(400).send({
+            success: false,
+            error: 'Validation failed',
+            details: [
+              {
+                path: 'repositories',
+                message: `Repository '${patchRepo.id}' not found`,
+              },
+            ],
+          });
+        }
+
+        updatedRepos[idx] = mergeConfigPatch(
+          updatedRepos[idx] as unknown as Record<string, unknown>,
+          patchRepo,
+        ) as unknown as RepositoryConfig;
+      }
+
+      updated.repositories = updatedRepos;
     }
 
-    // Optionally validate current auth
-    if (ctx.validateAuth && response.configured) {
-      try {
-        response.valid = await ctx.validateAuth();
-      } catch {
-        response.valid = false;
+    // -- Merge AI config ----------------------------------------------------
+    if (patch.ai !== undefined) {
+      if (updated.ai) {
+        updated.ai = mergeConfigPatch(
+          updated.ai as unknown as Record<string, unknown>,
+          patch.ai,
+        ) as unknown as AIConfig;
+      } else {
+        updated.ai = patch.ai as unknown as AIConfig;
       }
     }
 
-    return reply.send(response);
-  }
-
-  /**
-   * PUT /config/auth - Update authentication credentials.
-   */
-  async function updateAuth(
-    request: FastifyRequest<{
-      Body: {
-        type: 'token' | 'github-app' | 'ssh-key' | 'none';
-        token?: string;
-        appId?: string;
-        privateKeyPath?: string;
-        installationId?: string;
-        sshKeyPath?: string;
-      };
-    }>,
-    reply: FastifyReply
-  ) {
-    // Check admin authorization
-    if (!validateAdminKey(request)) {
-      return reply.status(401).send({ error: 'Admin key required' });
-    }
-
-    if (!ctx.updateRepoConfig) {
-      return reply.status(501).send({ error: 'Config update not supported' });
-    }
-
-    const currentConfig = ctx.getRepoConfig();
-    if (!currentConfig) {
-      return reply.status(404).send({ error: 'No repository configured' });
-    }
-
-    const body = request.body;
-    
+    // -- Validate the merged config -----------------------------------------
     try {
-      // Build new auth config
-      const newAuth: GitAuthConfig = { type: body.type };
-
-      switch (body.type) {
-        case 'token':
-          if (!body.token) {
-            return reply.status(400).send({ error: 'Token is required' });
-          }
-          newAuth.token = body.token;
-          break;
-
-        case 'github-app':
-          if (!body.appId || !body.privateKeyPath || !body.installationId) {
-            return reply.status(400).send({ 
-              error: 'appId, privateKeyPath, and installationId are required' 
-            });
-          }
-          newAuth.appId = body.appId;
-          newAuth.privateKeyPath = body.privateKeyPath;
-          newAuth.installationId = body.installationId;
-          break;
-
-        case 'ssh-key':
-          if (!body.sshKeyPath) {
-            return reply.status(400).send({ error: 'sshKeyPath is required' });
-          }
-          newAuth.sshKeyPath = body.sshKeyPath;
-          break;
-
-        case 'none':
-          // No additional config needed
-          break;
+      validateConfig(updated);
+    } catch (err) {
+      if (err instanceof ConfigValidationError) {
+        return reply.status(400).send({
+          success: false,
+          error: 'Validation failed',
+          details: [{ path: err.path, message: err.message }],
+        });
       }
+      throw err;
+    }
 
-      // Update config with new auth
-      await ctx.updateRepoConfig({
-        git: {
-          ...currentConfig.git,
-          auth: newAuth,
-        },
-      });
+    // -- Determine if a restart is needed -----------------------------------
+    const restartRequired = checkRestartRequired(existing, updated);
 
-      return reply.send({
-        success: true,
-        message: 'Authentication updated',
-        type: body.type,
-        configured: body.type !== 'none',
-      });
+    // -- Atomic write to disk -----------------------------------------------
+    try {
+      await writeConfigYaml(this.configPath, updated);
     } catch (err) {
       return reply.status(500).send({
-        error: err instanceof Error ? err.message : 'Update failed',
+        success: false,
+        error: `Failed to write config: ${err instanceof Error ? err.message : String(err)}`,
       });
     }
-  }
 
-  return {
-    getRepoConfig,
-    updateRepoConfig: updateRepoConfigHandler,
-    testRepoConnection,
-    getAuthStatus,
-    updateAuth,
-  };
-}
+    // -- Update in-memory config --------------------------------------------
+    this.appConfig = updated;
+    this.onConfigUpdate?.(updated);
 
-/**
- * Check if auth is configured.
- */
-function isAuthConfigured(auth: GitAuthConfig): boolean {
-  switch (auth.type) {
-    case 'token':
-      return Boolean(auth.token);
-    case 'github-app':
-      return Boolean(auth.appId && auth.privateKeyPath && auth.installationId);
-    case 'ssh-key':
-      return Boolean(auth.sshKeyPath);
-    case 'none':
-      return false;
-    default:
-      return false;
+    return reply.send({
+      success: true,
+      message: 'Configuration updated.',
+      restartRequired,
+      config: buildConfigResponse(updated),
+    });
   }
 }
-
-/**
- * Redact sensitive parts of a URL.
- */
-function redactUrl(url: string): string {
-  try {
-    const parsed = new URL(url);
-    if (parsed.username) {
-      parsed.username = '***';
-    }
-    if (parsed.password) {
-      parsed.password = '***';
-    }
-    return parsed.toString();
-  } catch {
-    return url;
-  }
-}
-
-export type ConfigHandlers = ReturnType<typeof createConfigHandlers>;

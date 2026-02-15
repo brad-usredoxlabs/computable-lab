@@ -30,6 +30,7 @@ import {
   createLibraryHandlers,
   createOntologyHandlers,
   createAIHandlers,
+  ConfigHandlers,
 } from './api/handlers/index.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { registerRoutes } from './api/routes.js';
@@ -66,6 +67,7 @@ export interface AppContext {
   store: RecordStoreImpl;
   indexManager: IndexManager;
   appConfig?: AppConfig | undefined;
+  configPath?: string | undefined;
 }
 
 /**
@@ -82,11 +84,10 @@ export async function initializeApp(
   // Try to load configuration from config.yaml
   let appConfig: AppConfig | undefined;
   let repoConfig: RepositoryConfig | undefined;
-  
+  const configPath = process.env.CONFIG_PATH || resolve(basePath, 'config.yaml');
+
   try {
-    appConfig = await loadConfig({
-      configPath: process.env.CONFIG_PATH || resolve(basePath, 'config.yaml'),
-    });
+    appConfig = await loadConfig({ configPath });
     repoConfig = getDefaultRepository(appConfig) ?? undefined;
     
     if (repoConfig) {
@@ -198,6 +199,7 @@ export async function initializeApp(
     store,
     indexManager,
     appConfig,
+    configPath,
   };
 }
 
@@ -232,6 +234,14 @@ export async function createServer(
   const treeHandlers = createTreeHandlers(ctx.indexManager, ctx.store);
   const libraryHandlers = createLibraryHandlers(ctx.store);
   const ontologyHandlers = createOntologyHandlers();
+
+  // Create config handlers (if config was loaded from a file)
+  let configHandlers: ConfigHandlers | undefined;
+  if (ctx.appConfig && ctx.configPath) {
+    configHandlers = new ConfigHandlers(ctx.configPath, ctx.appConfig, (updated) => {
+      ctx.appConfig = updated;
+    });
+  }
 
   // Create tool registry for dual-registration (MCP + agent)
   const toolRegistry = new ToolRegistry();
@@ -288,6 +298,7 @@ export async function createServer(
     };
     if (aiHandlers) routeOpts.aiHandlers = aiHandlers;
     if (aiInfo) routeOpts.aiInfo = aiInfo;
+    if (configHandlers) routeOpts.configHandlers = configHandlers;
     registerRoutes(instance, routeOpts);
   }, { prefix: '/api' });
 

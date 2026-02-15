@@ -229,7 +229,7 @@ function validateRepositoryConfig(config: unknown, path: string): asserts config
 /**
  * Validate the entire configuration.
  */
-function validateConfig(config: unknown): asserts config is Partial<AppConfig> {
+export function validateConfig(config: unknown): asserts config is Partial<AppConfig> {
   if (!config || typeof config !== 'object') {
     throw new ConfigValidationError('must be an object', '', config);
   }

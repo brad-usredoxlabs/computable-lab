@@ -15,6 +15,7 @@ import type { TreeHandlers } from './handlers/TreeHandlers.js';
 import type { LibraryHandlers } from './handlers/LibraryHandlers.js';
 import type { OntologyHandlers } from './handlers/OntologyHandlers.js';
 import type { AIHandlers } from './handlers/AIHandlers.js';
+import type { ConfigHandlers } from './handlers/configHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -30,6 +31,7 @@ export interface RouteOptions {
   libraryHandlers?: LibraryHandlers;
   ontologyHandlers?: OntologyHandlers;
   aiHandlers?: AIHandlers;
+  configHandlers?: ConfigHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -212,5 +214,16 @@ export function registerRoutes(
   if (aiHandlers) {
     fastify.post('/ai/draft-events', aiHandlers.draftEvents.bind(aiHandlers));
     fastify.post('/ai/draft-events/stream', aiHandlers.draftEventsStream.bind(aiHandlers));
+  }
+
+  // ============================================================================
+  // Config Routes (optional - requires configHandlers)
+  // ============================================================================
+
+  const { configHandlers } = options;
+
+  if (configHandlers) {
+    fastify.get('/config', configHandlers.getConfig.bind(configHandlers));
+    fastify.patch('/config', configHandlers.patchConfig.bind(configHandlers));
   }
 }
