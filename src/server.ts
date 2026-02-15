@@ -251,7 +251,19 @@ export async function createServer(
   const configHandlers = new ConfigHandlers(
     ctx.configPath ?? resolve(process.cwd(), 'config.yaml'),
     ctx.appConfig ?? { ...DEFAULT_APP_CONFIG },
-    (updated) => { ctx.appConfig = updated; },
+    (updated) => {
+      ctx.appConfig = updated;
+      // Refresh aiInfo so the health endpoint reflects config changes
+      if (updated.ai?.inference?.baseUrl) {
+        aiInfo = {
+          available: true,
+          inferenceUrl: updated.ai.inference.baseUrl,
+          model: updated.ai.inference.model,
+        };
+      } else {
+        aiInfo = undefined;
+      }
+    },
   );
 
   // Create tool registry for dual-registration (MCP + agent)
@@ -310,6 +322,7 @@ export async function createServer(
     };
     if (aiHandlers) routeOpts.aiHandlers = aiHandlers;
     if (aiInfo) routeOpts.aiInfo = aiInfo;
+    routeOpts.getAiInfo = () => aiInfo;
     routeOpts.configHandlers = configHandlers;
     registerRoutes(instance, routeOpts);
   }, { prefix: '/api' });

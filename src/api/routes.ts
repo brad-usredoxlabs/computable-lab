@@ -38,6 +38,7 @@ export interface RouteOptions {
   ruleCount: () => number;
   uiSpecCount?: () => number;
   aiInfo?: { available: boolean; inferenceUrl: string; model: string };
+  getAiInfo?: () => { available: boolean; inferenceUrl: string; model: string } | undefined;
 }
 
 /**
@@ -64,8 +65,9 @@ export function registerRoutes(
       schemas: { loaded: schemaCount() },
       lintRules: { loaded: ruleCount() },
     };
-    if (options.aiInfo) {
-      components!.ai = options.aiInfo;
+    const currentAiInfo = options.getAiInfo?.() ?? options.aiInfo;
+    if (currentAiInfo) {
+      components!.ai = currentAiInfo;
     }
     return {
       status: 'ok',
