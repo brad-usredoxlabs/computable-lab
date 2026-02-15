@@ -7,6 +7,8 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ToolRegistry } from '../../ai/ToolRegistry.js';
+import { dualRegister } from './dualRegister.js';
 import { jsonResult, errorResult } from '../helpers.js';
 
 const EPMC_BASE = 'https://www.ebi.ac.uk/europepmc/webservices/rest';
@@ -18,9 +20,9 @@ function withTimeout(): { signal: AbortSignal; cleanup: () => void } {
   return { signal: controller.signal, cleanup: () => clearTimeout(timer) };
 }
 
-export function registerEuropmcTools(server: McpServer): void {
+export function registerEuropmcTools(server: McpServer, registry?: ToolRegistry): void {
   // ── europepmc_search ───────────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'europepmc_search',
     'Search Europe PMC for biomedical and life science literature. Better linking and open access detection than PubMed alone. Supports advanced queries with field tags.',
     {
@@ -99,7 +101,7 @@ export function registerEuropmcTools(server: McpServer): void {
   );
 
   // ── europepmc_citations ────────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'europepmc_citations',
     'Get articles that cite a given article (forward citation lookup). Useful for finding follow-up work and impact.',
     {
@@ -173,7 +175,7 @@ export function registerEuropmcTools(server: McpServer): void {
   );
 
   // ── europepmc_references ───────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'europepmc_references',
     'Get the reference list (bibliography) of a given article. Useful for discovering foundational papers and related work.',
     {

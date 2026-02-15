@@ -7,6 +7,8 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ToolRegistry } from '../../ai/ToolRegistry.js';
+import { dualRegister } from './dualRegister.js';
 import { jsonResult, errorResult } from '../helpers.js';
 
 const PUBCHEM_BASE = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug';
@@ -18,9 +20,9 @@ function withTimeout(): { signal: AbortSignal; cleanup: () => void } {
   return { signal: controller.signal, cleanup: () => clearTimeout(timer) };
 }
 
-export function registerChemTools(server: McpServer): void {
+export function registerChemTools(server: McpServer, registry?: ToolRegistry): void {
   // ── chebi_search ───────────────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'chebi_search',
     'Search ChEBI for small molecules, metabolites, and chemical entities by name or identifier. Returns ChEBI IDs, names, formulas, and InChI keys.',
     {
@@ -71,7 +73,7 @@ export function registerChemTools(server: McpServer): void {
   );
 
   // ── chebi_fetch ────────────────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'chebi_fetch',
     'Fetch detailed information about a ChEBI compound by ID, including formula, mass, synonyms, and cross-references.',
     {
@@ -135,7 +137,7 @@ export function registerChemTools(server: McpServer): void {
   );
 
   // ── pubchem_search ─────────────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'pubchem_search',
     'Search PubChem for compounds by name, SMILES, InChI, or formula. Returns CIDs, names, formulas, molecular weights, and canonical SMILES.',
     {
@@ -223,7 +225,7 @@ export function registerChemTools(server: McpServer): void {
   );
 
   // ── pubchem_fetch ──────────────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'pubchem_fetch',
     'Fetch detailed PubChem compound information by CID, including synonyms, description, and computed properties.',
     {

@@ -218,6 +218,7 @@ export interface HealthResponse {
   components?: {
     schemas?: { loaded: number };
     lintRules?: { loaded: number };
+    ai?: { available: boolean; inferenceUrl: string; model: string };
   };
 }
 

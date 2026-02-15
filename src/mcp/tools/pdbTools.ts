@@ -7,6 +7,8 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ToolRegistry } from '../../ai/ToolRegistry.js';
+import { dualRegister } from './dualRegister.js';
 import { jsonResult, errorResult } from '../helpers.js';
 
 const PDB_DATA_BASE = 'https://data.rcsb.org/rest/v1';
@@ -19,9 +21,9 @@ function withTimeout(): { signal: AbortSignal; cleanup: () => void } {
   return { signal: controller.signal, cleanup: () => clearTimeout(timer) };
 }
 
-export function registerPdbTools(server: McpServer): void {
+export function registerPdbTools(server: McpServer, registry?: ToolRegistry): void {
   // ── pdb_search ─────────────────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'pdb_search',
     'Search RCSB Protein Data Bank for macromolecular structures. Supports text queries for molecule names, authors, organisms, etc.',
     {
@@ -109,7 +111,7 @@ export function registerPdbTools(server: McpServer): void {
   );
 
   // ── pdb_fetch ──────────────────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'pdb_fetch',
     'Fetch detailed information about a PDB structure entry including title, method, resolution, polymer entities, and ligands.',
     {

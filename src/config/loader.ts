@@ -327,7 +327,12 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<AppCo
     schemas: deepMerge(DEFAULT_CONFIG.schemas, partialConfig.schemas ?? {}),
     repositories: (partialConfig.repositories ?? []).map(applyRepoDefaults),
   };
-  
+
+  // Pass through AI config if present
+  if (partialConfig.ai !== undefined) {
+    config.ai = partialConfig.ai;
+  }
+
   return config;
 }
 

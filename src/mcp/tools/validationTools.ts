@@ -5,11 +5,13 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AppContext } from '../../server.js';
+import type { ToolRegistry } from '../../ai/ToolRegistry.js';
+import { dualRegister } from './dualRegister.js';
 import { jsonResult, errorResult } from '../helpers.js';
 
-export function registerValidationTools(server: McpServer, ctx: AppContext): void {
+export function registerValidationTools(server: McpServer, ctx: AppContext, registry?: ToolRegistry): void {
   // validate_payload — Structural validation only
-  server.tool(
+  dualRegister(server, registry,
     'validate_payload',
     'Validate a payload against a JSON Schema. Returns validation errors if any.',
     {
@@ -27,7 +29,7 @@ export function registerValidationTools(server: McpServer, ctx: AppContext): voi
   );
 
   // lint_payload — Business rule linting only
-  server.tool(
+  dualRegister(server, registry,
     'lint_payload',
     'Lint a payload against business rules defined in lint specs. Returns violations if any.',
     {
@@ -45,7 +47,7 @@ export function registerValidationTools(server: McpServer, ctx: AppContext): voi
   );
 
   // validate_full — Both structural validation and lint
-  server.tool(
+  dualRegister(server, registry,
     'validate_full',
     'Run both structural validation and lint rules against a payload. Returns combined results.',
     {

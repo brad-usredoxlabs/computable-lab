@@ -5,11 +5,13 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AppContext } from '../../server.js';
+import type { ToolRegistry } from '../../ai/ToolRegistry.js';
+import { dualRegister } from './dualRegister.js';
 import { jsonResult, errorResult } from '../helpers.js';
 
-export function registerTreeTools(server: McpServer, ctx: AppContext): void {
+export function registerTreeTools(server: McpServer, ctx: AppContext, registry?: ToolRegistry): void {
   // tree_studies — Get the full study hierarchy
-  server.tool(
+  dualRegister(server, registry,
     'tree_studies',
     'Get the study/experiment/run hierarchy tree. Shows all studies with nested experiments and runs, including record counts per run.',
     {},
@@ -24,7 +26,7 @@ export function registerTreeTools(server: McpServer, ctx: AppContext): void {
   );
 
   // tree_records_for_run — Get all records linked to a run
-  server.tool(
+  dualRegister(server, registry,
     'tree_records_for_run',
     'Get all records linked to a specific run.',
     { runId: z.string().describe('The run record ID') },
@@ -39,7 +41,7 @@ export function registerTreeTools(server: McpServer, ctx: AppContext): void {
   );
 
   // tree_inbox — Get unfiled records
-  server.tool(
+  dualRegister(server, registry,
     'tree_inbox',
     'Get records in the inbox (unfiled records not yet linked to a run).',
     {},
@@ -54,7 +56,7 @@ export function registerTreeTools(server: McpServer, ctx: AppContext): void {
   );
 
   // tree_file_record — File a record from inbox into a run
-  server.tool(
+  dualRegister(server, registry,
     'tree_file_record',
     'File a record from the inbox into a specific run. Updates the record links and status.',
     {

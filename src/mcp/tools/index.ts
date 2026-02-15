@@ -4,6 +4,7 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AppContext } from '../../server.js';
+import type { ToolRegistry } from '../../ai/ToolRegistry.js';
 import { registerRecordTools } from './recordTools.js';
 import { registerSchemaTools } from './schemaTools.js';
 import { registerValidationTools } from './validationTools.js';
@@ -18,20 +19,20 @@ import { registerReactomeTools } from './reactomeTools.js';
 import { registerChemTools } from './chemTools.js';
 import { registerEuropmcTools } from './europmcTools.js';
 
-export function registerAllTools(server: McpServer, ctx: AppContext): void {
-  registerRecordTools(server, ctx);
-  registerSchemaTools(server, ctx);
-  registerValidationTools(server, ctx);
-  registerTreeTools(server, ctx);
-  registerLibraryTools(server, ctx);
-  registerOntologyTools(server);
-  registerGitTools(server, ctx);
+export function registerAllTools(server: McpServer, ctx: AppContext, registry?: ToolRegistry): void {
+  registerRecordTools(server, ctx, registry);
+  registerSchemaTools(server, ctx, registry);
+  registerValidationTools(server, ctx, registry);
+  registerTreeTools(server, ctx, registry);
+  registerLibraryTools(server, ctx, registry);
+  registerOntologyTools(server, registry);
+  registerGitTools(server, ctx, registry);
 
   // External knowledge base tools
-  registerNcbiTools(server);
-  registerUniprotTools(server);
-  registerPdbTools(server);
-  registerReactomeTools(server);
-  registerChemTools(server);
-  registerEuropmcTools(server);
+  registerNcbiTools(server, registry);
+  registerUniprotTools(server, registry);
+  registerPdbTools(server, registry);
+  registerReactomeTools(server, registry);
+  registerChemTools(server, registry);
+  registerEuropmcTools(server, registry);
 }

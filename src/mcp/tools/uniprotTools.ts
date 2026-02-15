@@ -6,6 +6,8 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ToolRegistry } from '../../ai/ToolRegistry.js';
+import { dualRegister } from './dualRegister.js';
 import { jsonResult, errorResult } from '../helpers.js';
 
 const UNIPROT_BASE = 'https://rest.uniprot.org';
@@ -17,9 +19,9 @@ function withTimeout(): { signal: AbortSignal; cleanup: () => void } {
   return { signal: controller.signal, cleanup: () => clearTimeout(timer) };
 }
 
-export function registerUniprotTools(server: McpServer): void {
+export function registerUniprotTools(server: McpServer, registry?: ToolRegistry): void {
   // ── uniprot_search ─────────────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'uniprot_search',
     'Search UniProt for proteins by name, gene, organism, or keyword. Returns accessions, protein names, gene names, organisms, and functions.',
     {
@@ -91,7 +93,7 @@ export function registerUniprotTools(server: McpServer): void {
   );
 
   // ── uniprot_fetch ──────────────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'uniprot_fetch',
     'Fetch a UniProt protein entry by accession. Returns full protein details including function, GO terms, cross-references, and sequence. With asRecord=true, returns a sequence.schema.yaml-compliant payload ready for record_create.',
     {

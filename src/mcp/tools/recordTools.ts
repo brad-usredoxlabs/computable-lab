@@ -5,13 +5,15 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AppContext } from '../../server.js';
+import type { ToolRegistry } from '../../ai/ToolRegistry.js';
+import { dualRegister } from './dualRegister.js';
 import { jsonResult, errorResult } from '../helpers.js';
 import { createEnvelope } from '../../types/RecordEnvelope.js';
 import type { RecordFilter, CreateRecordOptions, UpdateRecordOptions } from '../../store/types.js';
 
-export function registerRecordTools(server: McpServer, ctx: AppContext): void {
+export function registerRecordTools(server: McpServer, ctx: AppContext, registry?: ToolRegistry): void {
   // record_get — Retrieve a single record by ID
-  server.tool(
+  dualRegister(server, registry,
     'record_get',
     'Get a record by its recordId. Returns the full RecordEnvelope with payload and metadata.',
     { recordId: z.string().describe('The record identifier (e.g., "STU-000001")') },
@@ -29,7 +31,7 @@ export function registerRecordTools(server: McpServer, ctx: AppContext): void {
   );
 
   // record_list — List records with optional filters
-  server.tool(
+  dualRegister(server, registry,
     'record_list',
     'List records with optional filters. Returns an array of RecordEnvelopes.',
     {
@@ -53,7 +55,7 @@ export function registerRecordTools(server: McpServer, ctx: AppContext): void {
   );
 
   // record_create — Create a new record (returns validation + lint inline)
-  server.tool(
+  dualRegister(server, registry,
     'record_create',
     'Create a new record. Provide schemaId and payload. Returns the created record plus validation and lint results for self-correction.',
     {
@@ -86,7 +88,7 @@ export function registerRecordTools(server: McpServer, ctx: AppContext): void {
   );
 
   // record_update — Update an existing record (returns validation + lint inline)
-  server.tool(
+  dualRegister(server, registry,
     'record_update',
     'Update an existing record. Provide recordId and new payload. Returns validation and lint results for self-correction.',
     {
@@ -125,7 +127,7 @@ export function registerRecordTools(server: McpServer, ctx: AppContext): void {
   );
 
   // record_delete — Delete a record
-  server.tool(
+  dualRegister(server, registry,
     'record_delete',
     'Delete a record by its recordId.',
     { recordId: z.string().describe('The record identifier to delete') },
@@ -140,7 +142,7 @@ export function registerRecordTools(server: McpServer, ctx: AppContext): void {
   );
 
   // record_search — Full-text search across records
-  server.tool(
+  dualRegister(server, registry,
     'record_search',
     'Search records by query string. Searches across recordId, title, kind, and path. Returns results sorted by relevance.',
     {

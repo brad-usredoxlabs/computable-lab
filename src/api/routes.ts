@@ -14,6 +14,7 @@ import type { GitHandlers } from './handlers/GitHandlers.js';
 import type { TreeHandlers } from './handlers/TreeHandlers.js';
 import type { LibraryHandlers } from './handlers/LibraryHandlers.js';
 import type { OntologyHandlers } from './handlers/OntologyHandlers.js';
+import type { AIHandlers } from './handlers/AIHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -28,9 +29,11 @@ export interface RouteOptions {
   treeHandlers?: TreeHandlers;
   libraryHandlers?: LibraryHandlers;
   ontologyHandlers?: OntologyHandlers;
+  aiHandlers?: AIHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
+  aiInfo?: { available: boolean; inferenceUrl: string; model: string };
 }
 
 /**
@@ -53,13 +56,17 @@ export function registerRoutes(
   // ============================================================================
   
   fastify.get('/health', async (): Promise<HealthResponse> => {
+    const components: HealthResponse['components'] = {
+      schemas: { loaded: schemaCount() },
+      lintRules: { loaded: ruleCount() },
+    };
+    if (options.aiInfo) {
+      components!.ai = options.aiInfo;
+    }
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
-      components: {
-        schemas: { loaded: schemaCount() },
-        lintRules: { loaded: ruleCount() },
-      },
+      components,
     };
   });
   
@@ -194,5 +201,16 @@ export function registerRoutes(
 
   if (ontologyHandlers) {
     fastify.get('/ontology/search', ontologyHandlers.searchOntology.bind(ontologyHandlers));
+  }
+
+  // ============================================================================
+  // AI Agent Routes (optional - requires aiHandlers)
+  // ============================================================================
+
+  const { aiHandlers } = options;
+
+  if (aiHandlers) {
+    fastify.post('/ai/draft-events', aiHandlers.draftEvents.bind(aiHandlers));
+    fastify.post('/ai/draft-events/stream', aiHandlers.draftEventsStream.bind(aiHandlers));
   }
 }

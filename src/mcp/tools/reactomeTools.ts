@@ -6,6 +6,8 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ToolRegistry } from '../../ai/ToolRegistry.js';
+import { dualRegister } from './dualRegister.js';
 import { jsonResult, errorResult } from '../helpers.js';
 
 const REACTOME_BASE = 'https://reactome.org/ContentService';
@@ -17,9 +19,9 @@ function withTimeout(): { signal: AbortSignal; cleanup: () => void } {
   return { signal: controller.signal, cleanup: () => clearTimeout(timer) };
 }
 
-export function registerReactomeTools(server: McpServer): void {
+export function registerReactomeTools(server: McpServer, registry?: ToolRegistry): void {
   // ── reactome_search ────────────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'reactome_search',
     'Search Reactome for pathways, reactions, and biological processes. Returns stable identifiers, names, species, and summaries.',
     {
@@ -92,7 +94,7 @@ export function registerReactomeTools(server: McpServer): void {
   );
 
   // ── reactome_pathway ───────────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'reactome_pathway',
     'Fetch details of a Reactome pathway including sub-events (reactions/sub-pathways), participants, and literature references.',
     {
@@ -165,7 +167,7 @@ export function registerReactomeTools(server: McpServer): void {
   );
 
   // ── reactome_participants ──────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'reactome_participants',
     'Get physical entity participants of a Reactome event (pathway or reaction). Returns inputs, outputs, catalysts, and regulators.',
     {

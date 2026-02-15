@@ -8,6 +8,8 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ToolRegistry } from '../../ai/ToolRegistry.js';
+import { dualRegister } from './dualRegister.js';
 import { jsonResult, errorResult } from '../helpers.js';
 
 const EUTILS_BASE = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
@@ -91,9 +93,9 @@ function withTimeout(): { signal: AbortSignal; cleanup: () => void } {
   return { signal: controller.signal, cleanup: () => clearTimeout(timer) };
 }
 
-export function registerNcbiTools(server: McpServer): void {
+export function registerNcbiTools(server: McpServer, registry?: ToolRegistry): void {
   // ── pubmed_search ──────────────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'pubmed_search',
     'Search PubMed for biomedical literature. Returns article summaries with PMIDs, titles, authors, journals, and DOIs.',
     {
@@ -160,7 +162,7 @@ export function registerNcbiTools(server: McpServer): void {
   );
 
   // ── pubmed_fetch ───────────────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'pubmed_fetch',
     'Fetch PubMed article abstract and metadata by PMID.',
     {
@@ -215,7 +217,7 @@ export function registerNcbiTools(server: McpServer): void {
   );
 
   // ── ncbi_gene_search ──────────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'ncbi_gene_search',
     'Search NCBI Gene database for gene information. Returns gene IDs, symbols, names, organisms, and summaries.',
     {
@@ -281,7 +283,7 @@ export function registerNcbiTools(server: McpServer): void {
   );
 
   // ── ncbi_sequence_fetch ────────────────────────────────────────
-  server.tool(
+  dualRegister(server, registry,
     'ncbi_sequence_fetch',
     'Fetch a nucleotide or protein sequence from NCBI by accession. Returns FASTA sequence and metadata. With asRecord=true, returns a sequence.schema.yaml-compliant payload ready for record_create.',
     {

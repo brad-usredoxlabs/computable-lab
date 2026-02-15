@@ -5,6 +5,8 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AppContext } from '../../server.js';
+import type { ToolRegistry } from '../../ai/ToolRegistry.js';
+import { dualRegister } from './dualRegister.js';
 import { jsonResult, errorResult } from '../helpers.js';
 
 const LIBRARY_TYPES = ['material', 'labware', 'assay', 'reagent', 'buffer', 'cell_line', 'collection', 'context'] as const;
@@ -20,9 +22,9 @@ const LIBRARY_SCHEMA_IDS: Record<string, string> = {
   context: 'core/context',
 };
 
-export function registerLibraryTools(server: McpServer, ctx: AppContext): void {
+export function registerLibraryTools(server: McpServer, ctx: AppContext, registry?: ToolRegistry): void {
   // library_search — Search library records
-  server.tool(
+  dualRegister(server, registry,
     'library_search',
     `Search library records (materials, labware, assays, reagents, etc.). Valid types: ${LIBRARY_TYPES.join(', ')}`,
     {
@@ -79,7 +81,7 @@ export function registerLibraryTools(server: McpServer, ctx: AppContext): void {
   );
 
   // library_promote — Promote an ontology term to a local library record
-  server.tool(
+  dualRegister(server, registry,
     'library_promote',
     'Promote an ontology term to a local library record. Creates a new record from an ontology reference.',
     {

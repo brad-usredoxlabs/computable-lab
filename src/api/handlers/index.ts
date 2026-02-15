@@ -12,3 +12,4 @@ export * from './configHandlers.js';
 export * from './GitHandlers.js';
 export * from './TreeHandlers.js';
 export * from './OntologyHandlers.js';
+export * from './AIHandlers.js';

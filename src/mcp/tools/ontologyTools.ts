@@ -4,13 +4,15 @@
 
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ToolRegistry } from '../../ai/ToolRegistry.js';
+import { dualRegister } from './dualRegister.js';
 import { jsonResult, errorResult } from '../helpers.js';
 
 const OLS4_BASE = 'https://www.ebi.ac.uk/ols4/api/search';
 const OLS4_TIMEOUT_MS = 8_000;
 
-export function registerOntologyTools(server: McpServer): void {
-  server.tool(
+export function registerOntologyTools(server: McpServer, registry?: ToolRegistry): void {
+  dualRegister(server, registry,
     'ontology_search',
     'Search external ontologies (EBI OLS4) for terms. Returns matching terms with CURIEs, labels, and descriptions.',
     {

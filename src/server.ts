@@ -29,11 +29,19 @@ import {
   createTreeHandlers,
   createLibraryHandlers,
   createOntologyHandlers,
+  createAIHandlers,
 } from './api/handlers/index.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { registerRoutes } from './api/routes.js';
 import type { ServerConfig } from './api/types.js';
 import { createMcpServer, mcpPlugin } from './mcp/index.js';
+import {
+  ToolRegistry,
+  createInferenceClient,
+  createToolBridge,
+  createAgentOrchestrator,
+  testInferenceEndpoint,
+} from './ai/index.js';
 
 /**
  * Default server configuration.
@@ -225,9 +233,49 @@ export async function createServer(
   const libraryHandlers = createLibraryHandlers(ctx.store);
   const ontologyHandlers = createOntologyHandlers();
 
+  // Create tool registry for dual-registration (MCP + agent)
+  const toolRegistry = new ToolRegistry();
+
+  // Register MCP server on /mcp (also populates toolRegistry)
+  const mcpServer = createMcpServer(ctx, toolRegistry);
+  await fastify.register(mcpPlugin, { prefix: '/mcp', mcpServer });
+
+  // Initialize AI agent (if configured)
+  let aiHandlers: ReturnType<typeof createAIHandlers> | undefined;
+  let aiInfo: { available: boolean; inferenceUrl: string; model: string } | undefined;
+
+  const aiConfig = ctx.appConfig?.ai;
+  if (aiConfig?.inference?.baseUrl) {
+    const inferenceConfig = aiConfig.inference;
+    const agentConfig = aiConfig.agent ?? {};
+
+    // Test inference endpoint reachability
+    const probe = await testInferenceEndpoint(inferenceConfig.baseUrl, inferenceConfig.apiKey);
+    aiInfo = {
+      available: probe.available,
+      inferenceUrl: inferenceConfig.baseUrl,
+      model: inferenceConfig.model,
+    };
+
+    if (probe.available) {
+      const inferenceClient = createInferenceClient(inferenceConfig);
+      const toolBridge = createToolBridge(toolRegistry);
+      const orchestrator = createAgentOrchestrator(
+        inferenceClient,
+        toolBridge,
+        inferenceConfig,
+        agentConfig,
+      );
+      aiHandlers = createAIHandlers(orchestrator);
+      console.log(`AI agent initialized (model: ${inferenceConfig.model}, tools: ${toolRegistry.size})`);
+    } else {
+      console.warn(`AI agent disabled — inference endpoint not reachable: ${probe.error}`);
+    }
+  }
+
   // Register API routes with /api prefix
   await fastify.register(async (instance) => {
-    registerRoutes(instance, {
+    const routeOpts: import('./api/routes.js').RouteOptions = {
       recordHandlers,
       schemaHandlers,
       validationHandlers,
@@ -237,7 +285,10 @@ export async function createServer(
       ontologyHandlers,
       schemaCount: () => ctx.schemaRegistry.size,
       ruleCount: () => ctx.lintEngine.ruleCount,
-    });
+    };
+    if (aiHandlers) routeOpts.aiHandlers = aiHandlers;
+    if (aiInfo) routeOpts.aiInfo = aiInfo;
+    registerRoutes(instance, routeOpts);
   }, { prefix: '/api' });
 
   // Rebuild library index on startup
@@ -247,10 +298,6 @@ export async function createServer(
   } catch (err) {
     console.warn('Failed to build library index:', err);
   }
-
-  // Register MCP server on /mcp
-  const mcpServer = createMcpServer(ctx);
-  await fastify.register(mcpPlugin, { prefix: '/mcp', mcpServer });
 
   return fastify;
 }

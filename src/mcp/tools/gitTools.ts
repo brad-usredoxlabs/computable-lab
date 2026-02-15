@@ -5,6 +5,8 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { AppContext } from '../../server.js';
+import type { ToolRegistry } from '../../ai/ToolRegistry.js';
+import { dualRegister } from './dualRegister.js';
 import type { RepoAdapter, CommitInfo } from '../../repo/types.js';
 import type { GitStatus, SyncResult } from '../../config/types.js';
 import { jsonResult, errorResult } from '../helpers.js';
@@ -23,9 +25,9 @@ function isGitCapable(adapter: RepoAdapter): adapter is GitCapableAdapter {
   return typeof (adapter as GitCapableAdapter).commitFiles === 'function';
 }
 
-export function registerGitTools(server: McpServer, ctx: AppContext): void {
+export function registerGitTools(server: McpServer, ctx: AppContext, registry?: ToolRegistry): void {
   // git_status — Get current repository status
-  server.tool(
+  dualRegister(server, registry,
     'git_status',
     'Get the current git status: branch, modified/staged/untracked files, ahead/behind counts.',
     {},
@@ -43,7 +45,7 @@ export function registerGitTools(server: McpServer, ctx: AppContext): void {
   );
 
   // git_commit — Commit and optionally push changes
-  server.tool(
+  dualRegister(server, registry,
     'git_commit',
     'Commit all staged changes and optionally push to remote.',
     {
@@ -78,7 +80,7 @@ export function registerGitTools(server: McpServer, ctx: AppContext): void {
   );
 
   // git_history — Get recent commit history
-  server.tool(
+  dualRegister(server, registry,
     'git_history',
     'Get recent commit history for a file or the entire repository.',
     {

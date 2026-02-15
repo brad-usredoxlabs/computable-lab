@@ -12,6 +12,45 @@ export interface AppConfig {
   server: ServerConfig;
   schemas: SchemaConfig;
   repositories: RepositoryConfig[];
+  ai?: AIConfig;
+}
+
+/**
+ * AI agent orchestrator configuration.
+ */
+export interface AIConfig {
+  inference: InferenceConfig;
+  agent: AgentConfig;
+}
+
+/**
+ * LLM inference endpoint configuration.
+ */
+export interface InferenceConfig {
+  /** Base URL for OpenAI-compatible API (e.g. "http://dgx-spark:8000/v1") */
+  baseUrl: string;
+  /** Model name served by the endpoint */
+  model: string;
+  /** Optional API key */
+  apiKey?: string;
+  /** Per-completion timeout in ms (default 120_000) */
+  timeoutMs?: number;
+  /** Max tokens per completion (default 4096) */
+  maxTokens?: number;
+  /** Temperature for generation (default 0.1) */
+  temperature?: number;
+}
+
+/**
+ * Agent behavior configuration.
+ */
+export interface AgentConfig {
+  /** Max tool-calling round trips (default 15) */
+  maxTurns?: number;
+  /** Max tool calls per single turn (default 5) */
+  maxToolCallsPerTurn?: number;
+  /** Path to system prompt template (default "prompts/event-graph-agent.md") */
+  systemPromptPath?: string;
 }
 
 /**
