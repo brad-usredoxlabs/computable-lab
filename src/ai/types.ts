@@ -95,17 +95,17 @@ export interface AgentRequest {
 export interface EditorContext {
   /** Current labware definitions. */
   labwares: LabwareSummary[];
-  /** Current event count and recent events. */
-  eventSummary: {
+  /** Current event summary — string from frontend, or structured object. */
+  eventSummary: string | {
     totalEvents: number;
     recentEvents: EventSummary[];
   };
-  /** Currently selected wells, if any. */
-  selectedWells?: { labwareId: string; wells: string[] };
+  /** Currently selected wells — string[] from frontend, or structured object. */
+  selectedWells?: string[] | { labwareId: string; wells: string[] };
   /** Active vocabulary pack ID. */
   vocabPackId: string;
-  /** Available verbs from the active vocab pack. */
-  availableVerbs: VerbSummary[];
+  /** Available verbs — string[] from frontend, or VerbSummary[]. */
+  availableVerbs: (string | VerbSummary)[];
   /** The run this event graph is attached to (if any). */
   runId?: string;
   /** The event graph record ID (if saved). */
@@ -116,11 +116,14 @@ export interface LabwareSummary {
   labwareId: string;
   labwareType: string;
   name: string;
-  addressing: {
-    type: 'grid' | 'linear' | 'single';
-    rows?: string[];
-    columns?: string[];
+  /** Grid addressing — may be a structured object or flat rows/columns. */
+  addressing?: {
+    type?: 'grid' | 'linear' | 'single';
+    rows?: string[] | number;
+    columns?: string[] | number;
   };
+  rows?: number;
+  columns?: number;
 }
 
 export interface EventSummary {

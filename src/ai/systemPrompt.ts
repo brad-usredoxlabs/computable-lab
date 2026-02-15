@@ -6,7 +6,7 @@
 
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { EditorContext, LabwareSummary, EventSummary, VerbSummary } from './types.js';
+import type { EditorContext, LabwareSummary, EventSummary } from './types.js';
 
 let cachedTemplate: string | null = null;
 let cachedTemplatePath: string | null = null;
@@ -33,18 +33,30 @@ function formatLabwares(labwares: LabwareSummary[]): string {
   if (labwares.length === 0) return '(none)';
   return labwares
     .map((lw) => {
-      const addr = lw.addressing.type === 'grid'
-        ? `${lw.addressing.rows?.length ?? 0} rows x ${lw.addressing.columns?.length ?? 0} cols`
-        : lw.addressing.type;
+      let addr: string;
+      if (lw.addressing?.type === 'grid') {
+        const rows = Array.isArray(lw.addressing.rows) ? lw.addressing.rows.length : (lw.addressing.rows ?? 0);
+        const cols = Array.isArray(lw.addressing.columns) ? lw.addressing.columns.length : (lw.addressing.columns ?? 0);
+        addr = `${rows} rows x ${cols} cols`;
+      } else if (lw.addressing?.type) {
+        addr = lw.addressing.type;
+      } else if (lw.rows != null || lw.columns != null) {
+        addr = `${lw.rows ?? '?'} rows x ${lw.columns ?? '?'} cols`;
+      } else {
+        addr = 'unknown layout';
+      }
       return `- **${lw.name}** (${lw.labwareId}): ${lw.labwareType}, ${addr}`;
     })
     .join('\n');
 }
 
-function formatEventSummary(eventSummary: { totalEvents: number; recentEvents: EventSummary[] }): string {
+function formatEventSummary(eventSummary: EditorContext['eventSummary']): string {
+  // Frontend sends a pre-formatted string
+  if (typeof eventSummary === 'string') return eventSummary;
+  // Structured format
   if (eventSummary.totalEvents === 0) return 'No events yet (empty graph).';
   const recent = eventSummary.recentEvents
-    .map((e) => {
+    .map((e: EventSummary) => {
       let desc = `${e.verb} (${e.event_type})`;
       if (e.materialLabel) desc += ` — ${e.materialLabel}`;
       if (e.targetWells && e.targetWells.length > 0) desc += ` → ${e.targetWells.join(', ')}`;
@@ -54,14 +66,21 @@ function formatEventSummary(eventSummary: { totalEvents: number; recentEvents: E
   return `${eventSummary.totalEvents} events total. Recent:\n${recent}`;
 }
 
-function formatSelectedWells(selectedWells?: { labwareId: string; wells: string[] }): string {
-  if (!selectedWells || selectedWells.wells.length === 0) return '(none selected)';
+function formatSelectedWells(selectedWells?: EditorContext['selectedWells']): string {
+  if (!selectedWells) return '(none selected)';
+  // Frontend sends string[]
+  if (Array.isArray(selectedWells)) {
+    return selectedWells.length === 0 ? '(none selected)' : `Wells: ${selectedWells.join(', ')}`;
+  }
+  // Structured format
+  if (selectedWells.wells.length === 0) return '(none selected)';
   return `Labware: ${selectedWells.labwareId}, Wells: ${selectedWells.wells.join(', ')}`;
 }
 
-function formatVocabPack(vocabPackId: string, verbs: VerbSummary[]): string {
+function formatVocabPack(vocabPackId: string, verbs: EditorContext['availableVerbs']): string {
   const verbList = verbs
     .map((v) => {
+      if (typeof v === 'string') return `- \`${v}\``;
       let line = `- \`${v.verb}\` (${v.eventKind})`;
       if (v.description) line += `: ${v.description}`;
       return line;
