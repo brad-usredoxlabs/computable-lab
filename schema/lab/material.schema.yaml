@@ -70,6 +70,16 @@ properties:
       notes:
         type: string
 
+  definition:
+    type: string
+    description: "Ontology definition of this material (aids search and disambiguation)."
+
+  synonyms:
+    type: array
+    description: "Alternative names or abbreviations for this material."
+    items: { type: string }
+    uniqueItems: true
+
   tags:
     type: array
     items: { type: string }
