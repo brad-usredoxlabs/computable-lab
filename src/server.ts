@@ -35,6 +35,8 @@ import {
   createProtocolHandlers,
   createExecutionHandlers,
   createMeasurementHandlers,
+  createBiosourceHandlers,
+  createKnowledgeAIHandlers,
 } from './api/handlers/index.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { registerRoutes } from './api/routes.js';
@@ -281,8 +283,12 @@ export async function createServer(
   const mcpServer = createMcpServer(ctx, toolRegistry);
   await fastify.register(mcpPlugin, { prefix: '/mcp', mcpServer });
 
+  // Create bio-source proxy handlers (uses populated toolRegistry)
+  const biosourceHandlers = createBiosourceHandlers(toolRegistry);
+
   // Initialize AI agent (if configured)
   let aiHandlers: ReturnType<typeof createAIHandlers> | undefined;
+  let knowledgeAIHandlers: ReturnType<typeof createKnowledgeAIHandlers> | undefined;
   let aiInfo: { available: boolean; inferenceUrl: string; model: string } | undefined;
 
   const aiConfig = ctx.appConfig?.ai;
@@ -308,6 +314,19 @@ export async function createServer(
         agentConfig,
       );
       aiHandlers = createAIHandlers(orchestrator);
+
+      // Knowledge extraction — single-turn completion, no tools needed
+      const knowledgeAgentConfig: typeof agentConfig = {
+        ...agentConfig,
+        systemPromptPath: 'prompts/knowledge-extraction-agent.md',
+      };
+      knowledgeAIHandlers = createKnowledgeAIHandlers(
+        inferenceClient,
+        toolBridge, // passed for API compat but unused
+        inferenceConfig,
+        knowledgeAgentConfig,
+      );
+
       console.log(`AI agent initialized (model: ${inferenceConfig.model}, tools: ${toolRegistry.size})`);
     } else {
       console.warn(`AI agent disabled — inference endpoint not reachable: ${probe.error}`);
@@ -328,10 +347,12 @@ export async function createServer(
       protocolHandlers,
       executionHandlers,
       measurementHandlers,
+      biosourceHandlers,
       schemaCount: () => ctx.schemaRegistry.size,
       ruleCount: () => ctx.lintEngine.ruleCount,
     };
     if (aiHandlers) routeOpts.aiHandlers = aiHandlers;
+    if (knowledgeAIHandlers) routeOpts.knowledgeAIHandlers = knowledgeAIHandlers;
     if (aiInfo) routeOpts.aiInfo = aiInfo;
     routeOpts.getAiInfo = () => aiInfo;
     routeOpts.configHandlers = configHandlers;

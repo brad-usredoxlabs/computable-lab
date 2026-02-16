@@ -27,6 +27,18 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
     headers['Authorization'] = `Bearer ${apiKey}`;
   }
 
+  // Normalize max_tokens → max_completion_tokens for newer OpenAI models
+  // (gpt-4o, gpt-5.x, o-series require max_completion_tokens).
+  // Most OpenAI-compatible providers accept both, but OpenAI rejects max_tokens
+  // on newer models. Send max_completion_tokens universally for compatibility.
+  function normalizeRequest(req: CompletionRequest): Record<string, unknown> {
+    const { max_tokens, ...rest } = req;
+    if (max_tokens != null) {
+      return { ...rest, max_completion_tokens: max_tokens };
+    }
+    return rest;
+  }
+
   return {
     async complete(request: CompletionRequest): Promise<CompletionResponse> {
       const controller = new AbortController();
@@ -36,7 +48,7 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
         const res = await fetch(`${baseUrl}/chat/completions`, {
           method: 'POST',
           headers,
-          body: JSON.stringify(request),
+          body: JSON.stringify(normalizeRequest(request)),
           signal: controller.signal,
         });
 
@@ -64,7 +76,7 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
         const res = await fetch(`${baseUrl}/chat/completions`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ ...request, stream: true }),
+          body: JSON.stringify({ ...normalizeRequest(request), stream: true }),
           signal: controller.signal,
         });
 

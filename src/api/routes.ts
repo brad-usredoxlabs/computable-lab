@@ -20,6 +20,8 @@ import type { MetaHandlers } from './handlers/metaHandlers.js';
 import type { ProtocolHandlers } from './handlers/ProtocolHandlers.js';
 import type { ExecutionHandlers } from './handlers/ExecutionHandlers.js';
 import type { MeasurementHandlers } from './handlers/MeasurementHandlers.js';
+import type { BiosourceHandlers } from './handlers/BiosourceHandlers.js';
+import type { KnowledgeAIHandlers } from './handlers/KnowledgeAIHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -40,6 +42,8 @@ export interface RouteOptions {
   protocolHandlers?: ProtocolHandlers;
   executionHandlers?: ExecutionHandlers;
   measurementHandlers?: MeasurementHandlers;
+  biosourceHandlers?: BiosourceHandlers;
+  knowledgeAIHandlers?: KnowledgeAIHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -285,5 +289,27 @@ export function registerRoutes(
     fastify.get('/measurements/:id', measurementHandlers.getMeasurement.bind(measurementHandlers));
     fastify.get('/measurements/:id/well/:well', measurementHandlers.getMeasurementWell.bind(measurementHandlers));
     fastify.post('/plate-maps/export', measurementHandlers.exportPlateMap.bind(measurementHandlers));
+  }
+
+  // ============================================================================
+  // Bio-Source Proxy Routes (optional - requires biosourceHandlers)
+  // ============================================================================
+
+  const { biosourceHandlers } = options;
+
+  if (biosourceHandlers) {
+    fastify.get('/biosource/:source/search', biosourceHandlers.search.bind(biosourceHandlers));
+    fastify.get('/biosource/:source/fetch', biosourceHandlers.fetch.bind(biosourceHandlers));
+  }
+
+  // ============================================================================
+  // Knowledge Extraction AI Routes (optional - requires knowledgeAIHandlers)
+  // ============================================================================
+
+  const { knowledgeAIHandlers } = options;
+
+  if (knowledgeAIHandlers) {
+    fastify.post('/ai/extract-knowledge', knowledgeAIHandlers.extractKnowledge.bind(knowledgeAIHandlers));
+    fastify.post('/ai/extract-knowledge/stream', knowledgeAIHandlers.extractKnowledgeStream.bind(knowledgeAIHandlers));
   }
 }

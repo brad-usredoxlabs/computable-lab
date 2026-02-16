@@ -16,3 +16,5 @@ export * from './AIHandlers.js';
 export * from './ProtocolHandlers.js';
 export * from './ExecutionHandlers.js';
 export * from './MeasurementHandlers.js';
+export * from './BiosourceHandlers.js';
+export * from './KnowledgeAIHandlers.js';
