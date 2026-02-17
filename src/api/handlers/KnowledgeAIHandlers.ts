@@ -64,11 +64,13 @@ function buildKnowledgeSystemPrompt(
   sourceData: Record<string, unknown>,
   userHint: string | undefined,
   templatePath: string,
+  predicateBlock: string,
 ): string {
   const template = loadKnowledgePrompt(templatePath);
   return template
     .replace('{{SOURCE_DATA}}', JSON.stringify(sourceData, null, 2))
-    .replace('{{USER_HINT}}', userHint || '(none)');
+    .replace('{{USER_HINT}}', userHint || '(none)')
+    .replace('{{ALLOWED_PREDICATES}}', predicateBlock);
 }
 
 // ============================================================================
@@ -295,6 +297,7 @@ function generateAssertionsAndEvidence(
       },
       statement: claim.statement,
       scope: {},
+      confidence: 3,
       evidence_refs: [
         {
           kind: 'record',
@@ -337,12 +340,13 @@ async function runKnowledgeExtraction(opts: {
   inferenceConfig: InferenceConfig;
   agentConfig: AgentConfig;
   body: ExtractKnowledgeBody;
+  predicateBlock?: string;
   onEvent?: (event: AgentEvent) => void;
 }): Promise<KnowledgeResult> {
-  const { inferenceClient, inferenceConfig, agentConfig, body, onEvent } = opts;
+  const { inferenceClient, inferenceConfig, agentConfig, body, predicateBlock = '', onEvent } = opts;
 
   const templatePath = agentConfig.systemPromptPath ?? 'prompts/knowledge-extraction-agent.md';
-  const systemPrompt = buildKnowledgeSystemPrompt(body.sourceData, body.userHint, templatePath);
+  const systemPrompt = buildKnowledgeSystemPrompt(body.sourceData, body.userHint, templatePath, predicateBlock);
 
   const userPrompt = `Extract structured claims from this ${body.source} record (ID: ${body.sourceId}).${
     body.userHint ? ` Focus on: ${body.userHint}` : ''
@@ -457,6 +461,7 @@ export function createKnowledgeAIHandlers(
   _toolBridge: ToolBridge,
   inferenceConfig: InferenceConfig,
   agentConfig: AgentConfig,
+  predicatePromptBlock: string = '',
 ): KnowledgeAIHandlers {
   return {
     async extractKnowledge(request, reply) {
@@ -473,6 +478,7 @@ export function createKnowledgeAIHandlers(
           inferenceConfig,
           agentConfig,
           body,
+          predicateBlock: predicatePromptBlock,
         });
         return result;
       } catch (err) {
@@ -504,6 +510,7 @@ export function createKnowledgeAIHandlers(
           inferenceConfig,
           agentConfig,
           body,
+          predicateBlock: predicatePromptBlock,
           onEvent: sendEvent,
         });
 

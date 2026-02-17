@@ -15,6 +15,8 @@ import { SchemaRegistry, createSchemaRegistry } from './schema/SchemaRegistry.js
 import { loadAllSchemas } from './schema/SchemaLoader.js';
 import { AjvValidator, createValidator } from './validation/AjvValidator.js';
 import { LintEngine, createLintEngine } from './lint/LintEngine.js';
+import { loadAllLintSpecs } from './lint/LintSpecLoader.js';
+import { PredicateRegistry, loadPredicateRegistry } from './registry/PredicateRegistry.js';
 import { createRepoAdapter, isGitRepoAdapter } from './repo/createRepoAdapter.js';
 import { createLocalRepoAdapter } from './repo/LocalRepoAdapter.js';
 import type { RepoAdapter } from './repo/types.js';
@@ -74,6 +76,7 @@ export interface AppContext {
   indexManager: IndexManager;
   appConfig?: AppConfig | undefined;
   configPath?: string | undefined;
+  predicateRegistry?: PredicateRegistry | undefined;
 }
 
 /**
@@ -150,10 +153,48 @@ export async function initializeApp(
   
   // Initialize lint engine
   const lintEngine = createLintEngine();
-  
+
+  // Load predicate registry
+  let predicateRegistry: PredicateRegistry | undefined;
+  const registryPath = resolve(schemaDir, 'registry/predicates.registry.yaml');
+  try {
+    predicateRegistry = loadPredicateRegistry(registryPath);
+    console.log(`Loaded ${predicateRegistry.size} predicates from registry`);
+  } catch (err) {
+    console.warn('Failed to load predicate registry:', err instanceof Error ? err.message : err);
+  }
+
   // Load lint specs (*.lint.yaml files from schema directory)
-  // For now, lint specs would be loaded separately if they exist
-  // TODO: Load lint specs from schema directory
+  const lintLoadResult = await loadAllLintSpecs({ basePath: schemaDir, recursive: true });
+
+  if (lintLoadResult.errors.length > 0) {
+    console.warn('Lint spec loading warnings:');
+    for (const err of lintLoadResult.errors) {
+      console.warn(`  - ${err.path}: ${err.error}`);
+    }
+  }
+
+  // Inject predicate registry IDs into the approved-predicate rule before adding to engine
+  let lintSpecCount = 0;
+  let lintRuleCount = 0;
+  for (const { name, spec } of lintLoadResult.specs) {
+    if (spec.rules.length === 0) continue;
+
+    // Inject registry values into the approved-predicate rule
+    if (predicateRegistry) {
+      for (const rule of spec.rules) {
+        if (rule.id === 'approved-predicate' && rule.assert.op === 'in') {
+          (rule.assert as { values: string[] }).values = predicateRegistry.getAllIds();
+        }
+      }
+    }
+
+    lintEngine.addSpec(name, spec);
+    lintSpecCount++;
+    lintRuleCount += spec.rules.length;
+  }
+
+  console.log(`Loaded ${lintSpecCount} lint specs, ${lintRuleCount} rules`);
   
   // Initialize repo adapter based on configuration
   let repoAdapter: RepoAdapter;
@@ -207,6 +248,7 @@ export async function initializeApp(
     indexManager,
     appConfig,
     configPath,
+    predicateRegistry,
   };
 }
 
@@ -325,6 +367,7 @@ export async function createServer(
         toolBridge, // passed for API compat but unused
         inferenceConfig,
         knowledgeAgentConfig,
+        ctx.predicateRegistry?.formatForPrompt() ?? '',
       );
 
       console.log(`AI agent initialized (model: ${inferenceConfig.model}, tools: ${toolRegistry.size})`);

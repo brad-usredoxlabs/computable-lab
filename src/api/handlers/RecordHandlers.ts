@@ -357,6 +357,55 @@ export function createRecordHandlers(store: RecordStore, indexManager?: IndexMan
     },
     
     /**
+     * POST /claims/check-duplicates
+     * Check if any of the given SPO triples already exist as claims.
+     */
+    async checkClaimDuplicates(
+      request: FastifyRequest<{
+        Body: { triples: Array<{ subjectId: string; predicateId: string; objectId: string }> };
+      }>,
+      reply: FastifyReply
+    ): Promise<{ duplicates: Record<string, string> } | ApiError> {
+      try {
+        const { triples } = request.body;
+        if (!Array.isArray(triples)) {
+          reply.status(400);
+          return { error: 'BAD_REQUEST', message: 'triples must be an array' };
+        }
+
+        const existing = await store.list({ kind: 'claim' });
+        // Build lookup: "subjectId|predicateId|objectId" → record ID
+        const existingKeys = new Map<string, string>();
+        for (const env of existing) {
+          const p = env.payload as Record<string, unknown> | undefined;
+          if (!p) continue;
+          const subj = p.subject as Record<string, unknown> | undefined;
+          const pred = p.predicate as Record<string, unknown> | undefined;
+          const obj = p.object as Record<string, unknown> | undefined;
+          if (subj?.id && pred?.id && obj?.id) {
+            const key = `${String(subj.id)}|${String(pred.id)}|${String(obj.id)}`;
+            existingKeys.set(key, String(p.id ?? env.recordId));
+          }
+        }
+
+        const duplicates: Record<string, string> = {};
+        for (const t of triples) {
+          const key = `${t.subjectId}|${t.predicateId}|${t.objectId}`;
+          const match = existingKeys.get(key);
+          if (match) {
+            duplicates[key] = match;
+          }
+        }
+
+        return { duplicates };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        reply.status(500);
+        return { error: 'INTERNAL_ERROR', message: `Failed to check duplicates: ${message}` };
+      }
+    },
+
+    /**
      * DELETE /records/:id
      * Delete a record.
      */

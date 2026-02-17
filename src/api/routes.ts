@@ -115,7 +115,10 @@ export function registerRoutes(
   
   // Delete record
   fastify.delete('/records/:id', recordHandlers.deleteRecord.bind(recordHandlers));
-  
+
+  // Check claim duplicates
+  fastify.post('/claims/check-duplicates', recordHandlers.checkClaimDuplicates.bind(recordHandlers));
+
   // ============================================================================
   // Schema Routes
   // ============================================================================

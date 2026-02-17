@@ -1,4 +1,15 @@
 # Lint rules for Claim records
 lintVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/claim.schema.yaml"
-rules: []
+rules:
+  - id: "approved-predicate"
+    title: "Predicate must be from the approved registry"
+    severity: "warning"
+    scope: "record"
+    assert:
+      op: "in"
+      path: "$.predicate.id"
+      values: []              # injected from PredicateRegistry at startup
+    message:
+      template: "Predicate '{{$.predicate.id}}' is not in the approved predicate registry"
+      paths: ["$.predicate.id"]

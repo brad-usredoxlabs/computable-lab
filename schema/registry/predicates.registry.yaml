@@ -1,0 +1,261 @@
+# Predicate Registry — curated allow-list of relationship predicates.
+#
+# Source of truth for the ~28 predicates used in knowledge claims.
+# Consumed by:
+#   - PredicateRegistry.ts  (typed access, prompt formatting)
+#   - LintEngine             (claim predicate validation)
+#   - Knowledge extraction AI (approved predicate list in prompt)
+
+registryVersion: 1
+
+families:
+  - name: "Causality & Regulation"
+    description: "Causal, activation, inhibition, and phenotype relationships"
+  - name: "Mereology & Location"
+    description: "Part-whole and spatial relationships"
+  - name: "Lineage & Taxonomy"
+    description: "Derivation, taxonomy, and participation relationships"
+  - name: "Functional & Molecular"
+    description: "Molecular function, role, and process relationships"
+  - name: "Measurement & Assay"
+    description: "Assay readouts, markers, and measurement relationships"
+  - name: "Association"
+    description: "General association, attribute, and targeting relationships"
+
+predicates:
+
+  # ── Causality & Regulation ──────────────────────────────────────────
+
+  - id: "RO:0002406"
+    label: "directly activates"
+    namespace: "RO"
+    family: "Causality & Regulation"
+    subject_kinds: ["protein", "gene", "chemical", "complex"]
+    object_kinds: ["protein", "gene", "pathway", "complex"]
+    description: "Subject directly activates the object (e.g. kinase phosphorylates substrate)"
+
+  - id: "RO:0002408"
+    label: "directly inhibits"
+    namespace: "RO"
+    family: "Causality & Regulation"
+    subject_kinds: ["protein", "gene", "chemical", "complex"]
+    object_kinds: ["protein", "gene", "pathway", "complex"]
+    description: "Subject directly inhibits the object"
+
+  - id: "RO:0002212"
+    label: "positively regulates"
+    namespace: "RO"
+    family: "Causality & Regulation"
+    subject_kinds: ["protein", "gene", "chemical", "process"]
+    object_kinds: ["process", "pathway", "gene"]
+    description: "Subject positively regulates the object process or activity"
+
+  - id: "RO:0002213"
+    label: "negatively regulates"
+    namespace: "RO"
+    family: "Causality & Regulation"
+    subject_kinds: ["protein", "gene", "chemical", "process"]
+    object_kinds: ["process", "pathway", "gene"]
+    description: "Subject negatively regulates the object process or activity"
+
+  - id: "RO:0002304"
+    label: "contributes to"
+    namespace: "RO"
+    family: "Causality & Regulation"
+    subject_kinds: ["protein", "gene", "chemical", "process"]
+    object_kinds: ["process", "phenotype", "disease"]
+    description: "Subject contributes to the object outcome"
+
+  - id: "RO:0002200"
+    label: "has phenotype"
+    namespace: "RO"
+    family: "Causality & Regulation"
+    subject_kinds: ["organism", "cell", "gene", "protein"]
+    object_kinds: ["phenotype", "disease"]
+    description: "Subject has the specified phenotype"
+
+  - id: "RO:0002411"
+    label: "causally upstream of"
+    namespace: "RO"
+    family: "Causality & Regulation"
+    subject_kinds: ["process", "protein", "gene"]
+    object_kinds: ["process", "pathway"]
+    description: "Subject is causally upstream of the object in a pathway"
+
+  - id: "RO:0002436"
+    label: "molecularly interacts with"
+    namespace: "RO"
+    family: "Causality & Regulation"
+    subject_kinds: ["protein", "chemical", "complex"]
+    object_kinds: ["protein", "chemical", "complex"]
+    description: "Subject physically interacts with the object at the molecular level"
+
+  # ── Mereology & Location ────────────────────────────────────────────
+
+  - id: "BFO:0000050"
+    label: "part of"
+    namespace: "BFO"
+    family: "Mereology & Location"
+    subject_kinds: ["protein", "domain", "cell", "tissue", "chemical"]
+    object_kinds: ["complex", "cell", "tissue", "organ", "organism", "pathway"]
+    description: "Subject is a part of the object"
+
+  - id: "BFO:0000051"
+    label: "has part"
+    namespace: "BFO"
+    family: "Mereology & Location"
+    subject_kinds: ["complex", "cell", "tissue", "organ", "organism", "pathway"]
+    object_kinds: ["protein", "domain", "cell", "tissue", "chemical"]
+    description: "Subject has the object as a part"
+
+  - id: "RO:0001025"
+    label: "located in"
+    namespace: "RO"
+    family: "Mereology & Location"
+    subject_kinds: ["protein", "chemical", "cell", "organism"]
+    object_kinds: ["cell", "tissue", "organ", "compartment", "location"]
+    description: "Subject is located in the object"
+
+  - id: "RO:0002131"
+    label: "overlaps with"
+    namespace: "RO"
+    family: "Mereology & Location"
+    subject_kinds: ["domain", "pathway", "process"]
+    object_kinds: ["domain", "pathway", "process"]
+    description: "Subject overlaps spatially or functionally with the object"
+
+  # ── Lineage & Taxonomy ──────────────────────────────────────────────
+
+  - id: "RO:0001000"
+    label: "derives from"
+    namespace: "RO"
+    family: "Lineage & Taxonomy"
+    subject_kinds: ["cell", "tissue", "organism", "protein", "chemical"]
+    object_kinds: ["cell", "tissue", "organism", "protein", "chemical"]
+    description: "Subject derives from or originates from the object"
+
+  - id: "RO:0002160"
+    label: "only in taxon"
+    namespace: "RO"
+    family: "Lineage & Taxonomy"
+    subject_kinds: ["protein", "gene", "process", "phenotype"]
+    object_kinds: ["organism", "taxon"]
+    description: "Subject is found only in the specified taxon"
+
+  - id: "RO:0000056"
+    label: "participates in"
+    namespace: "RO"
+    family: "Lineage & Taxonomy"
+    subject_kinds: ["protein", "gene", "chemical", "cell"]
+    object_kinds: ["process", "pathway", "reaction"]
+    description: "Subject participates in the object process or event"
+
+  # ── Functional & Molecular ──────────────────────────────────────────
+
+  - id: "RO:0002331"
+    label: "involved in"
+    namespace: "RO"
+    family: "Functional & Molecular"
+    subject_kinds: ["protein", "gene", "chemical"]
+    object_kinds: ["process", "pathway"]
+    description: "Subject is involved in the object biological process"
+
+  - id: "RO:0002215"
+    label: "capable of"
+    namespace: "RO"
+    family: "Functional & Molecular"
+    subject_kinds: ["protein", "cell", "organism"]
+    object_kinds: ["process", "function", "activity"]
+    description: "Subject is capable of performing the object activity"
+
+  - id: "RO:0000087"
+    label: "has role"
+    namespace: "RO"
+    family: "Functional & Molecular"
+    subject_kinds: ["chemical", "protein", "cell"]
+    object_kinds: ["role", "function"]
+    description: "Subject has the specified biological or chemical role"
+
+  - id: "RO:0000085"
+    label: "has function"
+    namespace: "RO"
+    family: "Functional & Molecular"
+    subject_kinds: ["protein", "gene", "domain"]
+    object_kinds: ["function", "activity"]
+    description: "Subject has the specified molecular function"
+
+  - id: "RO:0002233"
+    label: "has input"
+    namespace: "RO"
+    family: "Functional & Molecular"
+    subject_kinds: ["process", "reaction", "pathway"]
+    object_kinds: ["chemical", "protein", "complex"]
+    description: "Process or reaction takes the object as input"
+
+  - id: "RO:0002234"
+    label: "has output"
+    namespace: "RO"
+    family: "Functional & Molecular"
+    subject_kinds: ["process", "reaction", "pathway"]
+    object_kinds: ["chemical", "protein", "complex"]
+    description: "Process or reaction produces the object as output"
+
+  # ── Measurement & Assay ─────────────────────────────────────────────
+
+  - id: "CL:measures"
+    label: "measures"
+    namespace: "CL"
+    family: "Measurement & Assay"
+    subject_kinds: ["assay", "measurement", "instrument"]
+    object_kinds: ["property", "quantity", "chemical", "protein"]
+    description: "Subject assay or instrument measures the object quantity"
+
+  - id: "CL:readout_of"
+    label: "readout of"
+    namespace: "CL"
+    family: "Measurement & Assay"
+    subject_kinds: ["measurement", "signal"]
+    object_kinds: ["process", "reaction", "assay"]
+    description: "Subject measurement is a readout of the object process"
+
+  - id: "CL:marker_for"
+    label: "marker for"
+    namespace: "CL"
+    family: "Measurement & Assay"
+    subject_kinds: ["protein", "chemical", "gene"]
+    object_kinds: ["disease", "cell", "phenotype", "process"]
+    description: "Subject serves as a biomarker for the object condition"
+
+  - id: "CL:indicates"
+    label: "indicates"
+    namespace: "CL"
+    family: "Measurement & Assay"
+    subject_kinds: ["measurement", "result", "observation"]
+    object_kinds: ["process", "phenotype", "disease", "state"]
+    description: "Subject measurement or observation indicates the object state"
+
+  # ── Association ─────────────────────────────────────────────────────
+
+  - id: "SIO:000008"
+    label: "has attribute"
+    namespace: "SIO"
+    family: "Association"
+    subject_kinds: ["protein", "chemical", "cell", "organism", "material"]
+    object_kinds: ["property", "attribute", "quantity"]
+    description: "Subject has the specified attribute or property"
+
+  - id: "RO:0002353"
+    label: "output of"
+    namespace: "RO"
+    family: "Association"
+    subject_kinds: ["chemical", "protein", "cell", "material"]
+    object_kinds: ["process", "reaction", "protocol"]
+    description: "Subject is an output of the object process"
+
+  - id: "CL:targets"
+    label: "targets"
+    namespace: "CL"
+    family: "Association"
+    subject_kinds: ["chemical", "protein", "antibody", "drug"]
+    object_kinds: ["protein", "gene", "pathway", "cell"]
+    description: "Subject targets the object (e.g. drug targets protein)"
