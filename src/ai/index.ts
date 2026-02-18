@@ -25,7 +25,7 @@ export type {
 } from './types.js';
 
 export { ToolRegistry } from './ToolRegistry.js';
-export { createInferenceClient, testInferenceEndpoint } from './InferenceClient.js';
+export { createInferenceClient, testInferenceEndpoint, listInferenceModels } from './InferenceClient.js';
 export { createToolBridge, AGENT_ALLOWED_TOOLS } from './ToolBridge.js';
 export { createAgentOrchestrator } from './AgentOrchestrator.js';
 export { buildSystemPrompt } from './systemPrompt.js';

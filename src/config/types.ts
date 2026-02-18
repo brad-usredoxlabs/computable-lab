@@ -27,6 +27,8 @@ export interface AIConfig {
  * LLM inference endpoint configuration.
  */
 export interface InferenceConfig {
+  /** Provider family used for UI presets / diagnostics */
+  provider?: 'openai' | 'openai-compatible';
   /** Base URL for OpenAI-compatible API (e.g. "http://dgx-spark:8000/v1") */
   baseUrl: string;
   /** Model name served by the endpoint */
@@ -57,7 +59,7 @@ export interface AgentConfig {
  * Server settings.
  */
 export interface ServerConfig {
-  /** Port to listen on (default: 3000) */
+  /** Port to listen on (default: 3001) */
   port: number;
   /** Host to bind to (default: '0.0.0.0') */
   host: string;
@@ -186,7 +188,7 @@ export interface RecordsConfig {
  */
 export const DEFAULT_CONFIG: AppConfig = {
   server: {
-    port: 3000,
+    port: 3001,
     host: '0.0.0.0',
     logLevel: 'info',
     workspaceDir: '/tmp/cl-workspaces',

@@ -493,11 +493,14 @@ export function createKnowledgeAIHandlers(
 
     async extractKnowledgeStream(request, reply) {
       const body = request.body;
+      const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '*';
 
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': origin,
+        'Vary': 'Origin',
       });
 
       const sendEvent = (event: AgentEvent) => {

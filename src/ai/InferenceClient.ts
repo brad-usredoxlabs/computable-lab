@@ -17,7 +17,8 @@ import type {
  * Create an inference client for the given config.
  */
 export function createInferenceClient(config: InferenceConfig): InferenceClient {
-  const { baseUrl, apiKey, timeoutMs = 120_000 } = config;
+  const { apiKey, timeoutMs = 120_000 } = config;
+  const baseUrl = normalizeBaseUrl(config.baseUrl);
 
   // Build common headers
   const headers: Record<string, string> = {
@@ -135,6 +136,30 @@ export async function testInferenceEndpoint(
   baseUrl: string,
   apiKey?: string,
 ): Promise<{ available: boolean; model?: string; error?: string }> {
+  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  const modelsResult = await listInferenceModels(normalizedBaseUrl, apiKey);
+  if (!modelsResult.available) {
+    const unavailable: { available: boolean; model?: string; error?: string } = {
+      available: false,
+    };
+    if (modelsResult.error) unavailable.error = modelsResult.error;
+    return unavailable;
+  }
+  const available: { available: boolean; model?: string; error?: string } = {
+    available: true,
+  };
+  const firstModel = modelsResult.models[0];
+  if (firstModel) available.model = firstModel;
+  return available;
+}
+
+/**
+ * Fetch available model IDs from an OpenAI-compatible endpoint.
+ */
+export async function listInferenceModels(
+  baseUrl: string,
+  apiKey?: string,
+): Promise<{ available: boolean; models: string[]; error?: string }> {
   try {
     const reqHeaders: Record<string, string> = {};
     if (apiKey) {
@@ -151,21 +176,31 @@ export async function testInferenceEndpoint(
       });
 
       if (!res.ok) {
-        return { available: false, error: `HTTP ${res.status}` };
+        const body = await res.text().catch(() => '');
+        return {
+          available: false,
+          models: [],
+          error: body ? `HTTP ${res.status}: ${body}` : `HTTP ${res.status}`,
+        };
       }
 
       const json = (await res.json()) as { data?: Array<{ id?: string }> };
-      const firstModel = json.data?.[0]?.id;
-      const result: { available: boolean; model?: string; error?: string } = { available: true };
-      if (firstModel) result.model = firstModel;
-      return result;
+      const models = (json.data ?? [])
+        .map((entry) => entry.id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0);
+      return { available: true, models };
     } finally {
       clearTimeout(timer);
     }
   } catch (err) {
     return {
       available: false,
+      models: [],
       error: err instanceof Error ? err.message : String(err),
     };
   }
+}
+
+function normalizeBaseUrl(baseUrl: string): string {
+  return baseUrl.replace(/\/+$/, '');
 }

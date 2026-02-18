@@ -51,12 +51,14 @@ import {
   createAgentOrchestrator,
   testInferenceEndpoint,
 } from './ai/index.js';
+import type { AIHandlers } from './api/handlers/AIHandlers.js';
+import type { KnowledgeAIHandlers } from './api/handlers/KnowledgeAIHandlers.js';
 
 /**
  * Default server configuration.
  */
 const DEFAULT_CONFIG: Required<ServerConfig> = {
-  port: 3000,
+  port: 3001,
   host: '0.0.0.0',
   recordsDir: 'records',
   schemaDir: 'schema',
@@ -272,6 +274,8 @@ export async function createServer(
   if (opts.cors) {
     await fastify.register(cors, {
       origin: true,
+      methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
     });
   }
   
@@ -293,26 +297,6 @@ export async function createServer(
     ...(repoConfig ? { repoConfig, namespace: repoConfig.namespace } : {}),
   });
 
-  // Create config handlers — always available so the UI can add repos
-  // even when no config.yaml exists yet (it will be created on first PATCH).
-  const configHandlers = new ConfigHandlers(
-    ctx.configPath ?? resolve(process.cwd(), 'config.yaml'),
-    ctx.appConfig ?? { ...DEFAULT_APP_CONFIG },
-    (updated) => {
-      ctx.appConfig = updated;
-      // Refresh aiInfo so the health endpoint reflects config changes
-      if (updated.ai?.inference?.baseUrl) {
-        aiInfo = {
-          available: true,
-          inferenceUrl: updated.ai.inference.baseUrl,
-          model: updated.ai.inference.model,
-        };
-      } else {
-        aiInfo = undefined;
-      }
-    },
-  );
-
   // Create protocol, execution, and measurement handlers
   const protocolHandlers = createProtocolHandlers(ctx);
   const executionHandlers = createExecutionHandlers(ctx);
@@ -328,25 +312,45 @@ export async function createServer(
   // Create bio-source proxy handlers (uses populated toolRegistry)
   const biosourceHandlers = createBiosourceHandlers(toolRegistry);
 
-  // Initialize AI agent (if configured)
-  let aiHandlers: ReturnType<typeof createAIHandlers> | undefined;
-  let knowledgeAIHandlers: ReturnType<typeof createKnowledgeAIHandlers> | undefined;
-  let aiInfo: { available: boolean; inferenceUrl: string; model: string } | undefined;
+  // Initialize AI runtime state and hot-reload on config changes.
+  let aiHandlersImpl: ReturnType<typeof createAIHandlers> | undefined;
+  let knowledgeAIHandlersImpl: ReturnType<typeof createKnowledgeAIHandlers> | undefined;
+  let aiInfo: {
+    available: boolean;
+    inferenceUrl: string;
+    model: string;
+    provider?: string;
+    error?: string;
+  } | undefined;
 
-  const aiConfig = ctx.appConfig?.ai;
-  if (aiConfig?.inference?.baseUrl) {
+  const initializeAiRuntime = async (appConfig: AppConfig | undefined) => {
+    aiHandlersImpl = undefined;
+    knowledgeAIHandlersImpl = undefined;
+    aiInfo = undefined;
+
+    const aiConfig = appConfig?.ai;
+    if (!aiConfig?.inference?.baseUrl) {
+      return;
+    }
+
     const inferenceConfig = aiConfig.inference;
     const agentConfig = aiConfig.agent ?? {};
 
-    // Test inference endpoint reachability
     const probe = await testInferenceEndpoint(inferenceConfig.baseUrl, inferenceConfig.apiKey);
     aiInfo = {
       available: probe.available,
       inferenceUrl: inferenceConfig.baseUrl,
       model: inferenceConfig.model,
+      ...(inferenceConfig.provider ? { provider: inferenceConfig.provider } : {}),
+      ...(probe.error ? { error: probe.error } : {}),
     };
 
-    if (probe.available) {
+    if (!probe.available) {
+      console.warn(`AI agent disabled — inference endpoint not reachable: ${probe.error}`);
+      return;
+    }
+
+    try {
       const inferenceClient = createInferenceClient(inferenceConfig);
       const toolBridge = createToolBridge(toolRegistry);
       const orchestrator = createAgentOrchestrator(
@@ -355,26 +359,99 @@ export async function createServer(
         inferenceConfig,
         agentConfig,
       );
-      aiHandlers = createAIHandlers(orchestrator);
+      aiHandlersImpl = createAIHandlers(orchestrator);
 
-      // Knowledge extraction — single-turn completion, no tools needed
       const knowledgeAgentConfig: typeof agentConfig = {
         ...agentConfig,
         systemPromptPath: 'prompts/knowledge-extraction-agent.md',
       };
-      knowledgeAIHandlers = createKnowledgeAIHandlers(
+      knowledgeAIHandlersImpl = createKnowledgeAIHandlers(
         inferenceClient,
-        toolBridge, // passed for API compat but unused
+        toolBridge,
         inferenceConfig,
         knowledgeAgentConfig,
         ctx.predicateRegistry?.formatForPrompt() ?? '',
       );
 
+      aiInfo = {
+        available: true,
+        inferenceUrl: inferenceConfig.baseUrl,
+        model: inferenceConfig.model,
+        ...(inferenceConfig.provider ? { provider: inferenceConfig.provider } : {}),
+      };
+
       console.log(`AI agent initialized (model: ${inferenceConfig.model}, tools: ${toolRegistry.size})`);
-    } else {
-      console.warn(`AI agent disabled — inference endpoint not reachable: ${probe.error}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      aiInfo = {
+        available: false,
+        inferenceUrl: inferenceConfig.baseUrl,
+        model: inferenceConfig.model,
+        ...(inferenceConfig.provider ? { provider: inferenceConfig.provider } : {}),
+        error: message,
+      };
+      console.warn(`AI agent disabled — initialization failed: ${message}`);
     }
-  }
+  };
+
+  await initializeAiRuntime(ctx.appConfig);
+
+  const aiUnavailableMessage = () => {
+    if (!ctx.appConfig?.ai?.inference?.baseUrl) {
+      return 'AI is not configured. Open Settings and add provider, model, and API key.';
+    }
+    return aiInfo?.error
+      ? `AI is currently unavailable: ${aiInfo.error}`
+      : 'AI is currently unavailable. Check provider, model, API key, and endpoint.';
+  };
+
+  const aiHandlers: AIHandlers = {
+    async draftEvents(request, reply) {
+      if (!aiHandlersImpl) {
+        reply.status(503);
+        return { error: 'AI_UNAVAILABLE', message: aiUnavailableMessage() };
+      }
+      return aiHandlersImpl.draftEvents(request, reply);
+    },
+    async draftEventsStream(request, reply) {
+      if (!aiHandlersImpl) {
+        reply.status(503);
+        await reply.send({ error: 'AI_UNAVAILABLE', message: aiUnavailableMessage() });
+        return;
+      }
+      return aiHandlersImpl.draftEventsStream(request, reply);
+    },
+  };
+
+  const knowledgeAIHandlers: KnowledgeAIHandlers = {
+    async extractKnowledge(request, reply) {
+      if (!knowledgeAIHandlersImpl) {
+        reply.status(503);
+        return { error: 'AI_UNAVAILABLE', message: aiUnavailableMessage() };
+      }
+      return knowledgeAIHandlersImpl.extractKnowledge(request, reply);
+    },
+    async extractKnowledgeStream(request, reply) {
+      if (!knowledgeAIHandlersImpl) {
+        reply.status(503);
+        await reply.send({ error: 'AI_UNAVAILABLE', message: aiUnavailableMessage() });
+        return;
+      }
+      return knowledgeAIHandlersImpl.extractKnowledgeStream(request, reply);
+    },
+  };
+
+  // Create config handlers — always available so the UI can add repos
+  // even when no config.yaml exists yet (it will be created on first PATCH).
+  const configHandlers = new ConfigHandlers(
+    ctx.configPath ?? resolve(process.cwd(), 'config.yaml'),
+    ctx.appConfig ?? { ...DEFAULT_APP_CONFIG },
+    async (updated) => {
+      ctx.appConfig = updated;
+      await initializeAiRuntime(updated);
+    },
+    () => aiInfo,
+  );
 
   // Register API routes with /api prefix
   await fastify.register(async (instance) => {
@@ -394,8 +471,8 @@ export async function createServer(
       schemaCount: () => ctx.schemaRegistry.size,
       ruleCount: () => ctx.lintEngine.ruleCount,
     };
-    if (aiHandlers) routeOpts.aiHandlers = aiHandlers;
-    if (knowledgeAIHandlers) routeOpts.knowledgeAIHandlers = knowledgeAIHandlers;
+    routeOpts.aiHandlers = aiHandlers;
+    routeOpts.knowledgeAIHandlers = knowledgeAIHandlers;
     if (aiInfo) routeOpts.aiInfo = aiInfo;
     routeOpts.getAiInfo = () => aiInfo;
     routeOpts.configHandlers = configHandlers;
@@ -460,7 +537,7 @@ export async function startServer(
  */
 async function main() {
   const basePath = process.env.APP_BASE_PATH || process.cwd();
-  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
   const host = process.env.HOST || '0.0.0.0';
   
   await startServer(basePath, {

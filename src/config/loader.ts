@@ -18,6 +18,7 @@ import type {
   GitConfig,
   GitAuthConfig,
   NamespaceConfig,
+  AIConfig,
 } from './types.js';
 import { DEFAULT_CONFIG, DEFAULT_REPO_CONFIG } from './types.js';
 
@@ -227,6 +228,41 @@ function validateRepositoryConfig(config: unknown, path: string): asserts config
 }
 
 /**
+ * Validate AI configuration.
+ */
+function validateAIConfig(config: unknown, path = 'ai'): asserts config is AIConfig {
+  if (!config || typeof config !== 'object') {
+    throw new ConfigValidationError('must be an object', path, config);
+  }
+
+  const c = config as Record<string, unknown>;
+  const inference = c.inference as Record<string, unknown> | undefined;
+
+  if (!inference || typeof inference !== 'object') {
+    throw new ConfigValidationError('inference is required', `${path}.inference`, inference);
+  }
+
+  if (!inference.baseUrl || typeof inference.baseUrl !== 'string') {
+    throw new ConfigValidationError('baseUrl is required', `${path}.inference.baseUrl`, inference.baseUrl);
+  }
+  if (!inference.model || typeof inference.model !== 'string') {
+    throw new ConfigValidationError('model is required', `${path}.inference.model`, inference.model);
+  }
+
+  if (
+    inference.provider !== undefined &&
+    inference.provider !== 'openai' &&
+    inference.provider !== 'openai-compatible'
+  ) {
+    throw new ConfigValidationError(
+      'provider must be one of: openai, openai-compatible',
+      `${path}.inference.provider`,
+      inference.provider,
+    );
+  }
+}
+
+/**
  * Validate the entire configuration.
  */
 export function validateConfig(config: unknown): asserts config is Partial<AppConfig> {
@@ -261,6 +297,10 @@ export function validateConfig(config: unknown): asserts config is Partial<AppCo
     if (defaults.length > 1) {
       throw new ConfigValidationError('only one repository can be marked as default', 'repositories', null);
     }
+  }
+
+  if (c.ai !== undefined) {
+    validateAIConfig(c.ai, 'ai');
   }
 }
 
@@ -391,7 +431,7 @@ export function createLocalDevConfig(basePath: string): AppConfig {
         auth: { type: 'none' },
       },
       namespace: {
-        baseUri: 'http://localhost:3000/records/',
+        baseUri: 'http://localhost:3001/records/',
         prefix: 'local',
       },
       jsonld: { context: 'default' },

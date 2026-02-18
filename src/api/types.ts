@@ -218,7 +218,7 @@ export interface HealthResponse {
   components?: {
     schemas?: { loaded: number };
     lintRules?: { loaded: number };
-    ai?: { available: boolean; inferenceUrl: string; model: string };
+    ai?: { available: boolean; inferenceUrl: string; model: string; provider?: string; error?: string };
   };
 }
 
@@ -230,7 +230,7 @@ export interface HealthResponse {
  * Server configuration options.
  */
 export interface ServerConfig {
-  /** HTTP port (default: 3000) */
+  /** HTTP port (default: 3001) */
   port?: number;
   /** HTTP host (default: '0.0.0.0') */
   host?: string;

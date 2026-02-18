@@ -47,8 +47,8 @@ export interface RouteOptions {
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
-  aiInfo?: { available: boolean; inferenceUrl: string; model: string };
-  getAiInfo?: () => { available: boolean; inferenceUrl: string; model: string } | undefined;
+  aiInfo?: { available: boolean; inferenceUrl: string; model: string; provider?: string; error?: string };
+  getAiInfo?: () => { available: boolean; inferenceUrl: string; model: string; provider?: string; error?: string } | undefined;
 }
 
 /**
@@ -220,6 +220,7 @@ export function registerRoutes(
     fastify.get('/library/stats', libraryHandlers.getLibraryStats.bind(libraryHandlers));
     fastify.get('/library/:type', libraryHandlers.listLibraryType.bind(libraryHandlers));
     fastify.post('/library/promote', libraryHandlers.promoteOntologyTerm.bind(libraryHandlers));
+    fastify.post('/library/promote-context', libraryHandlers.promoteContext.bind(libraryHandlers));
     fastify.post('/library/reindex', libraryHandlers.reindexLibrary.bind(libraryHandlers));
   }
 
@@ -253,6 +254,7 @@ export function registerRoutes(
   if (configHandlers) {
     fastify.get('/config', configHandlers.getConfig.bind(configHandlers));
     fastify.patch('/config', configHandlers.patchConfig.bind(configHandlers));
+    fastify.post('/config/ai/test', configHandlers.testAiConfig.bind(configHandlers));
   }
 
   // ============================================================================

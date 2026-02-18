@@ -13,6 +13,7 @@ import { writeFile, rename, mkdir } from 'node:fs/promises';
 import { stringify as stringifyYaml } from 'yaml';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { testInferenceEndpoint, listInferenceModels } from '../../ai/index.js';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -130,6 +131,14 @@ function buildConfigResponse(config: AppConfig) {
   };
 }
 
+interface AiStatusSnapshot {
+  available: boolean;
+  inferenceUrl: string;
+  model: string;
+  provider?: string;
+  error?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Patch body shape
 // ---------------------------------------------------------------------------
@@ -137,6 +146,13 @@ function buildConfigResponse(config: AppConfig) {
 interface ConfigPatchBody {
   repositories?: Array<Record<string, unknown> & { id: string }>;
   ai?: Record<string, unknown>;
+}
+
+interface AiTestBody {
+  provider?: unknown;
+  baseUrl?: unknown;
+  apiKey?: unknown;
+  model?: unknown;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,13 +163,17 @@ export class ConfigHandlers {
   constructor(
     private configPath: string,
     private appConfig: AppConfig,
-    private onConfigUpdate?: (config: AppConfig) => void,
+    private onConfigUpdate?: (config: AppConfig) => Promise<void>,
+    private getAiStatus?: () => AiStatusSnapshot | undefined,
   ) {}
 
   // ---- GET /api/config ----------------------------------------------------
 
   async getConfig(_request: FastifyRequest, reply: FastifyReply) {
-    return reply.send(buildConfigResponse(this.appConfig));
+    return reply.send({
+      ...buildConfigResponse(this.appConfig),
+      aiStatus: this.getAiStatus?.() ?? null,
+    });
   }
 
   // ---- PATCH /api/config --------------------------------------------------
@@ -255,13 +275,59 @@ export class ConfigHandlers {
 
     // -- Update in-memory config --------------------------------------------
     this.appConfig = updated;
-    this.onConfigUpdate?.(updated);
+    await this.onConfigUpdate?.(updated);
 
     return reply.send({
       success: true,
       message: 'Configuration updated.',
       restartRequired,
-      config: buildConfigResponse(updated),
+      config: {
+        ...buildConfigResponse(updated),
+        aiStatus: this.getAiStatus?.() ?? null,
+      },
+    });
+  }
+
+  // ---- POST /api/config/ai/test -------------------------------------------
+
+  async testAiConfig(
+    request: FastifyRequest<{ Body: AiTestBody }>,
+    reply: FastifyReply,
+  ) {
+    const body = request.body;
+    const baseUrl = typeof body?.baseUrl === 'string' ? body.baseUrl.trim() : '';
+    const model = typeof body?.model === 'string' ? body.model.trim() : '';
+    const postedApiKey = typeof body?.apiKey === 'string' ? body.apiKey.trim() : undefined;
+    const apiKey = postedApiKey && postedApiKey.length > 0
+      ? postedApiKey
+      : this.appConfig.ai?.inference?.apiKey;
+    const provider = body?.provider === 'openai' || body?.provider === 'openai-compatible'
+      ? body.provider
+      : 'openai-compatible';
+
+    if (!baseUrl) {
+      return reply.status(400).send({ success: false, error: 'baseUrl is required' });
+    }
+
+    const normalizedBaseUrl = baseUrl.replace(/\/+$/, '');
+    const probe = await testInferenceEndpoint(normalizedBaseUrl, apiKey);
+    const modelsResult = await listInferenceModels(normalizedBaseUrl, apiKey);
+
+    const modelKnown = model.length > 0 && modelsResult.models.includes(model);
+    const modelWarning = model.length > 0 && modelsResult.models.length > 0 && !modelKnown
+      ? `Model "${model}" not returned by provider /models list.`
+      : undefined;
+
+    return reply.send({
+      success: probe.available,
+      available: probe.available,
+      provider,
+      baseUrl: normalizedBaseUrl,
+      model: model || probe.model || null,
+      modelKnown,
+      modelWarning,
+      models: modelsResult.models,
+      error: probe.error,
     });
   }
 }
