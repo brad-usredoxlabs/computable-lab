@@ -1,0 +1,74 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/execution-incident.schema.yaml"
+title: "ExecutionIncident"
+description: >
+  Operational incident record for LabOS execution reliability workflows.
+  Used for alerting, triage, and acknowledgement.
+
+type: object
+additionalProperties: false
+
+required:
+- kind
+- recordId
+- title
+- status
+- incidentType
+- source
+- detectedAt
+
+properties:
+  kind:
+    const: "execution-incident"
+
+  recordId:
+    type: string
+
+  title:
+    type: string
+
+  status:
+    type: string
+    enum: [ open, acked, resolved ]
+
+  incidentType:
+    type: string
+    enum: [ adapter_health, retry_exhausted, runtime_failure ]
+
+  severity:
+    type: string
+    enum: [ info, warning, critical ]
+
+  source:
+    type: object
+    additionalProperties: false
+    required: [ kind, id ]
+    properties:
+      kind:
+        type: string
+        enum: [ adapter, execution-run, robot-plan, system ]
+      id:
+        type: string
+
+  dedupeKey:
+    type: string
+
+  details:
+    type: object
+    additionalProperties: true
+
+  detectedAt:
+    type: string
+    format: date-time
+
+  acknowledgedAt:
+    type: string
+    format: date-time
+
+  resolvedAt:
+    type: string
+    format: date-time
+
+  notes:
+    type: string
+

@@ -1,0 +1,42 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/execution-worker-state.schema.yaml"
+title: Execution Worker State
+description: Runtime state snapshot for background execution workers (polling, incident scans, retries).
+type: object
+required:
+  - kind
+  - recordId
+  - workerId
+  - running
+  - intervalMs
+  - errorStreak
+  - updatedAt
+properties:
+  kind:
+    const: execution-worker-state
+  recordId:
+    type: string
+    pattern: "^[A-Z][A-Z0-9-]*-[A-Z0-9-]+$"
+  workerId:
+    type: string
+    minLength: 1
+  running:
+    type: boolean
+  intervalMs:
+    type: integer
+    minimum: 1
+  lastRunAt:
+    type: string
+    format: date-time
+  lastRunSummary:
+    type: object
+    additionalProperties: true
+  errorStreak:
+    type: integer
+    minimum: 0
+  lastError:
+    type: string
+  updatedAt:
+    type: string
+    format: date-time
+additionalProperties: true

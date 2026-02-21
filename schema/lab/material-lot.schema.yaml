@@ -1,0 +1,82 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/material-lot.schema.yaml"
+title: "Material Lot"
+description: >
+  A physical or derived lot of a material definition. Material lots are execution-bound
+  inventory entities that can be consumed by runs and traced to source contexts.
+
+type: object
+additionalProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id, material_ref ]
+
+properties:
+  kind:
+    const: "material-lot"
+
+  id:
+    type: string
+    description: "Stable lot identifier (e.g., LOT-HEPG2-20260217-01)."
+
+  material_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Reference to canonical material definition (e.g., MAT-...)."
+
+  lot_number:
+    type: string
+
+  batch_id:
+    type: string
+
+  supplier:
+    type: object
+    additionalProperties: false
+    properties:
+      name: { type: string }
+      catalog_number: { type: string }
+      vendor_lot: { type: string }
+
+  concentration:
+    type: object
+    additionalProperties: false
+    required: [ value, unit ]
+    properties:
+      value: { type: number }
+      unit: { type: string }
+
+  amount:
+    type: object
+    additionalProperties: false
+    required: [ value, unit ]
+    properties:
+      value: { type: number }
+      unit: { type: string }
+
+  storage:
+    type: object
+    additionalProperties: false
+    properties:
+      temperature_C: { type: number }
+      location: { type: string }
+
+  status:
+    type: string
+    enum: [ available, reserved, consumed, expired, discarded ]
+
+  source_context_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Optional context this lot was promoted/derived from."
+
+  source_event_graph_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  derived_via:
+    type: string
+    description: "Optional free-text description of derivation method."
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

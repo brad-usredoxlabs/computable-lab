@@ -1,0 +1,48 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/context-promotion.schema.yaml"
+title: "Context Promotion"
+description: >
+  Provenance record describing promotion of execution context(s) into a reusable asset
+  such as material lot, plate snapshot, or library bundle.
+
+type: object
+additionalProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, recordId, source_context_refs, output_ref, output_kind ]
+
+properties:
+  kind:
+    const: "context-promotion"
+
+  recordId:
+    type: string
+
+  source_context_refs:
+    type: array
+    minItems: 1
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+
+  source_event_graph_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  output_kind:
+    type: string
+    enum: [ material-lot, plate-snapshot, library-bundle ]
+
+  output_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  method:
+    type: string
+    description: "Promotion mode or SOP identifier."
+
+  notes:
+    type: string
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

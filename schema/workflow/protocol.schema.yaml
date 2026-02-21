@@ -47,6 +47,20 @@ properties:
     items: { type: string }
     uniqueItems: true
 
+  layoutTemplateRefs:
+    type: array
+    description: "Optional reusable plate/reservoir layout templates this protocol can bind."
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+    uniqueItems: true
+
+  libraryBundleRefs:
+    type: array
+    description: "Optional library bundles (vendor/custom) this protocol is designed to consume."
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+    uniqueItems: true
+
   # Declarative, reusable parameter definitions. Values are supplied at execution time by a Run.
   parameters:
     type: array
@@ -73,6 +87,25 @@ properties:
         type: array
         items: { $ref: "#/$defs/InstrumentRole" }
         uniqueItems: true
+      layoutTemplateRoles:
+        type: array
+        items: { $ref: "#/$defs/LayoutTemplateRole" }
+        uniqueItems: true
+      libraryRoles:
+        type: array
+        items: { $ref: "#/$defs/LibraryRole" }
+        uniqueItems: true
+      contextRoles:
+        type: array
+        items: { $ref: "#/$defs/ContextRole" }
+        uniqueItems: true
+
+  executionProfiles:
+    type: array
+    description: "Optional reusable execution strategies (single-channel vs multi-channel, lane sequencing)."
+    items:
+      $ref: "#/$defs/ExecutionProfile"
+    uniqueItems: true
 
   steps:
     type: array
@@ -170,6 +203,70 @@ $defs:
         type: array
         items: { type: string }
         uniqueItems: true
+
+  LayoutTemplateRole:
+    type: object
+    additionalProperties: false
+    required: [ roleId ]
+    properties:
+      roleId:
+        type: string
+      description:
+        type: string
+      allowedTemplateIds:
+        type: array
+        items: { type: string }
+        uniqueItems: true
+
+  LibraryRole:
+    type: object
+    additionalProperties: false
+    required: [ roleId ]
+    properties:
+      roleId:
+        type: string
+      description:
+        type: string
+      allowedLibraryIds:
+        type: array
+        items: { type: string }
+        uniqueItems: true
+
+  ContextRole:
+    type: object
+    additionalProperties: false
+    required: [ roleId ]
+    properties:
+      roleId:
+        type: string
+      description:
+        type: string
+      expectedContextTags:
+        type: array
+        items: { type: string }
+        uniqueItems: true
+
+  ExecutionProfile:
+    type: object
+    additionalProperties: false
+    required: [ profileId, pipetteMode, laneStrategy ]
+    properties:
+      profileId:
+        type: string
+      label:
+        type: string
+      pipetteMode:
+        type: string
+        enum: [ single_channel, multi_channel_parallel ]
+      laneStrategy:
+        type: string
+        enum: [ sequential_lanes, parallel_lanes ]
+      laneGroupIds:
+        type: array
+        items: { type: string }
+        uniqueItems: true
+      notes:
+        type: string
 
   # -------------------------
   # Well selection (abstract)

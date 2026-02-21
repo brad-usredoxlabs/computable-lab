@@ -7,7 +7,7 @@
 #
 # Environment variables (set in .env file or shell):
 #   GITHUB_TOKEN - GitHub personal access token for repository access
-#   PORT - Server port (default: 3000)
+#   PORT - Server port (default: 3001)
 
 version: '3.8'
 
@@ -17,7 +17,7 @@ services:
     image: computable-lab:latest
     container_name: computable-lab
     ports:
-      - "${PORT:-3000}:3000"
+      - "${PORT:-3001}:3001"
     volumes:
       # Mount configuration file (read-only)
       - ./config.yaml:/app/config.yaml:ro
@@ -30,6 +30,23 @@ services:
       # Server configuration
       - NODE_ENV=production
       - CONFIG_PATH=/app/config.yaml
+      # LabOS simulator profile (optional)
+      - LABOS_SIMULATE_ASSIST_PLUS=${LABOS_SIMULATE_ASSIST_PLUS:-0}
+      - LABOS_SIMULATE_GEMINI=${LABOS_SIMULATE_GEMINI:-0}
+      - LABOS_EXECUTION_MAX_RUN_MS=${LABOS_EXECUTION_MAX_RUN_MS:-14400000}
+      - LABOS_EXECUTION_STALE_UNKNOWN_MS=${LABOS_EXECUTION_STALE_UNKNOWN_MS:-1800000}
+      - LABOS_RETRY_MAX_ATTEMPTS=${LABOS_RETRY_MAX_ATTEMPTS:-3}
+      - LABOS_INTEGRA_ASSIST_SUBMIT_URL=${LABOS_INTEGRA_ASSIST_SUBMIT_URL:-}
+      - LABOS_INTEGRA_ASSIST_BASE_URL=${LABOS_INTEGRA_ASSIST_BASE_URL:-}
+      - LABOS_INTEGRA_ASSIST_STATUS_URL_TEMPLATE=${LABOS_INTEGRA_ASSIST_STATUS_URL_TEMPLATE:-}
+      - LABOS_INTEGRA_ASSIST_CANCEL_URL_TEMPLATE=${LABOS_INTEGRA_ASSIST_CANCEL_URL_TEMPLATE:-}
+      - LABOS_INTEGRA_ASSIST_API_TOKEN=${LABOS_INTEGRA_ASSIST_API_TOKEN:-}
+      - LABOS_GEMINI_READ_URL=${LABOS_GEMINI_READ_URL:-}
+      - LABOS_GEMINI_API_TOKEN=${LABOS_GEMINI_API_TOKEN:-}
+      - LABOS_SIDECAR_INTEGRA_ASSIST_CMD=${LABOS_SIDECAR_INTEGRA_ASSIST_CMD:-echo}
+      - LABOS_SIDECAR_INTEGRA_ASSIST_ARGS=${LABOS_SIDECAR_INTEGRA_ASSIST_ARGS:-AssistPlus sidecar stub}
+      - LABOS_SIDECAR_GEMINI_CMD=${LABOS_SIDECAR_GEMINI_CMD:-echo}
+      - LABOS_SIDECAR_GEMINI_ARGS=${LABOS_SIDECAR_GEMINI_ARGS:-Gemini sidecar stub}
     restart: unless-stopped
     # Resource limits (adjust based on your needs)
     deploy:
@@ -48,7 +65,7 @@ services:
         max-file: "3"
     # Health check (also defined in Dockerfile)
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 30s
       timeout: 10s
       retries: 3

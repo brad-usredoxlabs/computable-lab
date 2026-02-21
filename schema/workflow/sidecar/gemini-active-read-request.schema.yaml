@@ -1,0 +1,21 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/sidecar/gemini-active-read-request.schema.yaml"
+title: Gemini Active Read Request
+type: object
+required:
+  - adapterId
+  - parameters
+properties:
+  adapterId:
+    const: molecular_devices_gemini
+  instrumentRef:
+    type: object
+    additionalProperties: true
+  outputPath:
+    type: string
+    minLength: 1
+  parameters:
+    type: object
+    additionalProperties: true
+additionalProperties: false
+

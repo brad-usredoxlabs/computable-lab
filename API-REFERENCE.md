@@ -303,9 +303,111 @@ Payload must contain `recordId` or `id` field.
 
 ---
 
+### LabOS Execution Extensions
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/execution/orchestrate` | One-shot guarded compile/validate/execute |
+| GET | `/execution/health/adapters` | Adapter readiness/probe health summary |
+| GET | `/execution/sidecar/contracts` | Sidecar contract manifest (Assist/Gemini schemas) |
+| GET | `/execution/sidecar/contracts/diagnostics` | Sidecar contract readiness diagnostics |
+| GET | `/execution/sidecar/contracts/examples` | Canonical sidecar contract sample payloads |
+| POST | `/execution/sidecar/contracts/self-test` | Sidecar contract conformance self-test |
+| POST | `/execution/sidecar/contracts/self-test/persist` | Run self-test and persist sidecar-contract-report |
+| POST | `/execution/sidecar/contracts/validate` | Validate payload against a sidecar contract schema |
+| POST | `/execution/sidecar/contracts/validate-batch` | Validate multiple payloads against sidecar contracts |
+| POST | `/execution/sidecar/contracts/gate` | Evaluate sidecar contract readiness gate |
+| GET | `/execution/workers/leases` | Worker lease owner/expiry/status view |
+| GET | `/execution/ops/snapshot` | Consolidated execution operations snapshot |
+| GET | `/execution/failure-runbook` | Failure code runbook guidance |
+| GET | `/execution/incidents` | List execution incidents |
+| POST | `/execution/incidents/scan` | Scan and create deduplicated incidents |
+| POST | `/execution/incidents/:id/ack` | Acknowledge incident |
+| POST | `/execution/incidents/:id/resolve` | Resolve incident |
+| GET | `/execution/incidents/summary` | Aggregate incident counts by status/severity/type |
+| GET | `/execution/incidents/worker/status` | Incident scan worker status |
+| POST | `/execution/incidents/worker/start` | Start incident scan worker |
+| POST | `/execution/incidents/worker/takeover` | Force lease takeover and start incident scan worker |
+| POST | `/execution/incidents/worker/stop` | Stop incident scan worker |
+| POST | `/execution/incidents/worker/run-once` | Run one incident scan cycle |
+| POST | `/execution/recovery/reconcile` | Force reconciliation cycle for running executions |
+| GET | `/execution/retry-worker/status` | Transient retry worker status |
+| POST | `/execution/retry-worker/start` | Start transient retry worker |
+| POST | `/execution/retry-worker/takeover` | Force lease takeover and start transient retry worker |
+| POST | `/execution/retry-worker/stop` | Stop transient retry worker |
+| POST | `/execution/retry-worker/run-once` | Run one transient retry cycle |
+| POST | `/execution/poller/takeover` | Force lease takeover and start execution poller |
+| POST | `/execution-runs/:id/resolve` | Manual terminal state resolution override |
+| GET | `/execution/parameters/schema` | Runtime execution parameter schema by target |
+| POST | `/execution/parameters/validate` | Validate execution parameters without running |
+| GET | `/measurements/active-read/schema` | Active-read parameter schema by adapter |
+| POST | `/measurements/active-read/validate` | Validate active-read parameters without running |
+
+Background worker runtime state is persisted as `execution-worker-state` records (poller, retry worker, incident worker), with lease metadata to reduce duplicate loop ownership across processes.
+
+---
+
+### Protocol
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/protocols/from-event-graph` | Extract a reusable `protocol` record from an `event-graph` record |
+| GET | `/protocols/:id/load` | Load a protocol record for editor usage |
+| POST | `/protocols/:id/bind` | Bind protocol roles/parameters and create a `planned-run` |
+
+`POST /protocols/from-event-graph` body:
+- `eventGraphId` (required): source event-graph recordId
+- `title` (optional): protocol title override
+- `tags` (optional): additional tags
+
+Response (`201`): `{ success: true, recordId: "PRT-000001" }`
+
+---
+
 ## MCP Tools
 
 All MCP tools return `CallToolResult` — either `jsonResult(data)` or `errorResult(message)`. Error results have `isError: true`.
+
+LabOS runtime parameter tools:
+- `protocol_save_from_event_graph`
+- `protocol_load`
+- `protocol_list`
+- `protocol_bind`
+- `execution_orchestrate`
+- `adapter_health_check`
+- `execution_failure_runbook`
+- `execution_incidents_list`
+- `execution_incidents_scan`
+- `execution_incident_ack`
+- `execution_incident_resolve`
+- `execution_incidents_summary`
+- `execution_incident_worker_status`
+- `execution_incident_worker_start`
+- `execution_incident_worker_takeover`
+- `execution_incident_worker_stop`
+- `execution_incident_worker_run_once`
+- `execution_recovery_reconcile`
+- `execution_retry_worker_status`
+- `execution_retry_worker_start`
+- `execution_retry_worker_takeover`
+- `execution_retry_worker_stop`
+- `execution_retry_worker_run_once`
+- `execution_worker_leases`
+- `execution_ops_snapshot`
+- `execution_sidecar_contracts`
+- `execution_sidecar_contract_diagnostics`
+- `execution_sidecar_contract_examples`
+- `execution_sidecar_contract_self_test`
+- `execution_sidecar_contract_self_test_persist`
+- `execution_sidecar_contract_validate`
+- `execution_sidecar_contract_validate_batch`
+- `execution_sidecar_contract_gate`
+- `execution_poller_takeover`
+- `execution_run_resolve`
+- `execution_parameter_schema`
+- `execution_parameter_validate`
+- `measurement_active_read_schema`
+- `measurement_active_read_validate`
 
 ### Record & Schema Management
 

@@ -59,6 +59,18 @@ properties:
         type: array
         items:
           $ref: "#/$defs/MaterialBinding"
+      contexts:
+        type: array
+        items:
+          $ref: "#/$defs/ContextBinding"
+      layoutTemplates:
+        type: array
+        items:
+          $ref: "#/$defs/LayoutTemplateBinding"
+      libraries:
+        type: array
+        items:
+          $ref: "#/$defs/LibraryBinding"
       instruments:
         type: array
         items:
@@ -96,6 +108,32 @@ properties:
         additionalProperties:
           type: string
 
+  executionPlan:
+    type: object
+    description: "Resolved execution strategy for lanes/replicates."
+    additionalProperties: false
+    properties:
+      profileRef:
+        $ref: "./datatypes/ref.schema.yaml"
+      pipetteMode:
+        type: string
+        enum: [ single_channel, multi_channel_parallel ]
+      laneStrategy:
+        type: string
+        enum: [ sequential_lanes, parallel_lanes ]
+      laneGroups:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ laneId, wells ]
+          properties:
+            laneId: { type: string }
+            wells:
+              type: array
+              minItems: 1
+              items: { type: string }
+
   notes:
     type: string
 
@@ -131,6 +169,37 @@ $defs:
         description: "Concrete material reference."
       lotNumber:
         type: string
+
+  ContextBinding:
+    type: object
+    additionalProperties: false
+    required: [ roleId, contextRef ]
+    properties:
+      roleId:
+        type: string
+      contextRef:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Concrete source context (supports context-as-input for dilution/backgrounds)."
+
+  LayoutTemplateBinding:
+    type: object
+    additionalProperties: false
+    required: [ roleId, templateRef ]
+    properties:
+      roleId:
+        type: string
+      templateRef:
+        $ref: "./datatypes/ref.schema.yaml"
+
+  LibraryBinding:
+    type: object
+    additionalProperties: false
+    required: [ roleId, libraryRef ]
+    properties:
+      roleId:
+        type: string
+      libraryRef:
+        $ref: "./datatypes/ref.schema.yaml"
 
   InstrumentBinding:
     type: object

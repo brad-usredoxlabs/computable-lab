@@ -1,0 +1,27 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/sidecar/integra-assist-submit-request.schema.yaml"
+title: INTEGRA Assist Submit Request
+type: object
+required:
+  - robotPlanId
+  - targetPlatform
+  - artifactUri
+  - vialabXml
+  - parameters
+properties:
+  robotPlanId:
+    type: string
+    minLength: 1
+  targetPlatform:
+    const: integra_assist
+  artifactUri:
+    type: string
+    minLength: 1
+  vialabXml:
+    type: string
+    minLength: 1
+  parameters:
+    type: object
+    additionalProperties: true
+additionalProperties: false
+

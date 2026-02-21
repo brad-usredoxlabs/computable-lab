@@ -1,0 +1,105 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/execution-run.schema.yaml"
+title: "ExecutionRun"
+description: >
+  Operational tracking record for a concrete execution attempt of a robot plan.
+  Non-FAIR operational state; links planned/compiled intents to runtime outcomes.
+
+type: object
+additionalProperties: false
+
+required:
+- kind
+- recordId
+- robotPlanRef
+- status
+- mode
+- startedAt
+
+properties:
+  kind:
+    const: "execution-run"
+
+  recordId:
+    type: string
+    description: "Stable local identifier (e.g., EXR-000001)."
+
+  robotPlanRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Reference to compiled robot plan."
+
+  plannedRunRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Reference to source planned run."
+
+  parentExecutionRunRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Optional parent execution-run when this run is a retry."
+
+  attempt:
+    type: integer
+    minimum: 1
+    description: "Attempt number for a given robot plan (1 for first execution, increments on retries)."
+
+  status:
+    type: string
+    enum: [ running, completed, failed, canceled ]
+
+  mode:
+    type: string
+    description: "Execution mode (sidecar_process, opentrons_http, opentrons_http_two_step, etc.)."
+
+  startedAt:
+    type: string
+    format: date-time
+
+  completedAt:
+    type: string
+    format: date-time
+
+  externalRunId:
+    type: string
+    description: "External runtime id (e.g., Opentrons run id)."
+
+  externalProtocolId:
+    type: string
+    description: "External protocol id, if the target platform has one."
+
+  lastStatusRaw:
+    type: string
+    description: "Last raw external status string observed."
+
+  lastPolledAt:
+    type: string
+    format: date-time
+
+  cancellationRequestedAt:
+    type: string
+    format: date-time
+
+  cancelResponse:
+    description: "Raw cancel response payload from external runtime."
+
+  materializedEventGraphId:
+    type: string
+    description: "Generated event-graph record id materialized from this run."
+
+  failureClass:
+    type: string
+    enum: [ transient, terminal, unknown ]
+    description: "Retry policy classification for failed runs."
+
+  retryRecommended:
+    type: boolean
+    description: "Whether automatic/manual retry is recommended."
+
+  failureCode:
+    type: string
+    description: "Machine-readable failure code for runbook and automation logic."
+
+  retryReason:
+    type: string
+    description: "Machine-readable reason for retry recommendation."
+
+  notes:
+    type: string

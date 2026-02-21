@@ -1,5 +1,5 @@
 /**
- * ProtocolHandlers — Stub HTTP handlers for protocol management.
+ * ProtocolHandlers — HTTP handlers for protocol management.
  *
  * Provides endpoints for saving event graphs as protocols, loading protocols
  * for editing, and binding protocol roles to concrete instances (wizard flow).
@@ -8,15 +8,20 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { AppContext } from '../../server.js';
 import type { ApiError } from '../types.js';
+import { ExecutionOrchestrator, ExecutionError } from '../../execution/ExecutionOrchestrator.js';
+import { ProtocolExtractionService, ProtocolExtractionError } from '../../protocol/ProtocolExtractionService.js';
 
-export function createProtocolHandlers(_ctx: AppContext) {
+export function createProtocolHandlers(ctx: AppContext) {
+  const orchestrator = new ExecutionOrchestrator(ctx);
+  const extraction = new ProtocolExtractionService(ctx);
+
   return {
     /**
      * POST /protocols/from-event-graph
      * Save an event graph as a protocol record.
      */
     async saveFromEventGraph(
-      _request: FastifyRequest<{
+      request: FastifyRequest<{
         Body: {
           eventGraphId: string;
           title?: string;
@@ -25,12 +30,25 @@ export function createProtocolHandlers(_ctx: AppContext) {
       }>,
       reply: FastifyReply,
     ): Promise<{ success: boolean; recordId?: string } | ApiError> {
-      // TODO: Implement protocol extraction from event graph
-      reply.status(501);
-      return {
-        error: 'NOT_IMPLEMENTED',
-        message: 'Protocol save from event graph is not yet implemented.',
-      };
+      try {
+        const saved = await extraction.saveFromEventGraph({
+          eventGraphId: request.body.eventGraphId,
+          ...(request.body.title !== undefined ? { title: request.body.title } : {}),
+          ...(request.body.tags !== undefined ? { tags: request.body.tags } : {}),
+        });
+        reply.status(201);
+        return { success: true, recordId: saved.recordId };
+      } catch (err) {
+        if (err instanceof ProtocolExtractionError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
     },
 
     /**
@@ -38,17 +56,28 @@ export function createProtocolHandlers(_ctx: AppContext) {
      * Load a protocol for the editor (returns event graph shape).
      */
     async loadProtocol(
-      _request: FastifyRequest<{
+      request: FastifyRequest<{
         Params: { id: string };
       }>,
       reply: FastifyReply,
     ): Promise<{ protocol: unknown } | ApiError> {
-      // TODO: Implement protocol loading with event graph shape
-      reply.status(501);
-      return {
-        error: 'NOT_IMPLEMENTED',
-        message: 'Protocol load is not yet implemented.',
-      };
+      try {
+        const protocol = await ctx.store.get(request.params.id);
+        if (!protocol) {
+          reply.status(404);
+          return {
+            error: 'NOT_FOUND',
+            message: `Protocol not found: ${request.params.id}`,
+          };
+        }
+        return { protocol };
+      } catch (err) {
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
     },
 
     /**
@@ -56,7 +85,7 @@ export function createProtocolHandlers(_ctx: AppContext) {
      * Start wizard: bind abstract roles to concrete instances, creating a PlannedRun.
      */
     async bindProtocol(
-      _request: FastifyRequest<{
+      request: FastifyRequest<{
         Params: { id: string };
         Body: {
           bindings?: {
@@ -69,12 +98,33 @@ export function createProtocolHandlers(_ctx: AppContext) {
       }>,
       reply: FastifyReply,
     ): Promise<{ success: boolean; plannedRunId?: string } | ApiError> {
-      // TODO: Implement protocol binding wizard
-      reply.status(501);
-      return {
-        error: 'NOT_IMPLEMENTED',
-        message: 'Protocol binding is not yet implemented.',
-      };
+      try {
+        const protocol = await ctx.store.get(request.params.id);
+        if (!protocol) {
+          reply.status(404);
+          return { error: 'NOT_FOUND', message: `Protocol not found: ${request.params.id}` };
+        }
+
+        const title = ((protocol.payload as Record<string, unknown>)['title'] as string | undefined) ?? request.params.id;
+        const planned = await orchestrator.createPlannedRun({
+          title: `${title} bound run`,
+          sourceType: 'protocol',
+          sourceRef: { kind: 'record', id: request.params.id, type: 'protocol' },
+          bindings: request.body.bindings,
+        });
+        reply.status(201);
+        return { success: true, plannedRunId: planned.recordId };
+      } catch (err) {
+        if (err instanceof ExecutionError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
     },
   };
 }

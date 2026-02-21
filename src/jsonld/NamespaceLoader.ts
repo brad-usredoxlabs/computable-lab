@@ -39,7 +39,7 @@ export const NAMESPACE_CONFIG_PATH = '.computable-lab/namespace.yaml';
  * Default fallback namespace (for local development).
  */
 export const DEFAULT_NAMESPACE: NamespaceConfig = {
-  baseUri: 'http://localhost:3000/records/',
+  baseUri: 'http://localhost:3001/records/',
   prefix: 'local',
 };
 

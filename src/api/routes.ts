@@ -276,11 +276,66 @@ export function registerRoutes(
   const { executionHandlers } = options;
 
   if (executionHandlers) {
+    fastify.get('/execution/adapters', executionHandlers.listAdapters.bind(executionHandlers));
+    fastify.get('/execution/health/adapters', executionHandlers.getAdapterHealth.bind(executionHandlers));
+    fastify.get('/execution/sidecar/contracts', executionHandlers.listSidecarContracts.bind(executionHandlers));
+    fastify.get('/execution/sidecar/contracts/diagnostics', executionHandlers.sidecarContractDiagnostics.bind(executionHandlers));
+    fastify.get('/execution/sidecar/contracts/examples', executionHandlers.listSidecarContractExamples.bind(executionHandlers));
+    fastify.post('/execution/sidecar/contracts/self-test', executionHandlers.sidecarContractSelfTest.bind(executionHandlers));
+    fastify.post('/execution/sidecar/contracts/self-test/persist', executionHandlers.sidecarContractSelfTestPersist.bind(executionHandlers));
+    fastify.post('/execution/sidecar/contracts/validate', executionHandlers.validateSidecarContract.bind(executionHandlers));
+    fastify.post('/execution/sidecar/contracts/validate-batch', executionHandlers.validateSidecarContractBatch.bind(executionHandlers));
+    fastify.post('/execution/sidecar/contracts/gate', executionHandlers.sidecarContractGate.bind(executionHandlers));
+    fastify.get('/execution/failure-runbook', executionHandlers.getFailureRunbook.bind(executionHandlers));
+    fastify.get('/execution/incidents', executionHandlers.listIncidents.bind(executionHandlers));
+    fastify.post('/execution/incidents/scan', executionHandlers.scanIncidents.bind(executionHandlers));
+    fastify.post('/execution/incidents/:id/ack', executionHandlers.acknowledgeIncident.bind(executionHandlers));
+    fastify.post('/execution/incidents/:id/resolve', executionHandlers.resolveIncident.bind(executionHandlers));
+    fastify.get('/execution/incidents/summary', executionHandlers.incidentSummary.bind(executionHandlers));
+    fastify.get('/execution/incidents/worker/status', executionHandlers.incidentWorkerStatus.bind(executionHandlers));
+    fastify.post('/execution/incidents/worker/start', executionHandlers.startIncidentWorker.bind(executionHandlers));
+    fastify.post('/execution/incidents/worker/takeover', executionHandlers.takeoverIncidentWorker.bind(executionHandlers));
+    fastify.post('/execution/incidents/worker/stop', executionHandlers.stopIncidentWorker.bind(executionHandlers));
+    fastify.post('/execution/incidents/worker/run-once', executionHandlers.runIncidentWorkerOnce.bind(executionHandlers));
+    fastify.get('/execution/capabilities', executionHandlers.getCapabilities.bind(executionHandlers));
+    fastify.get('/execution/parameters/schema', executionHandlers.getExecutionParameterSchemas.bind(executionHandlers));
+    fastify.post('/execution/parameters/validate', executionHandlers.validateExecutionParameters.bind(executionHandlers));
+    fastify.get('/execution-runs', executionHandlers.listExecutionRuns.bind(executionHandlers));
+    fastify.get('/execution-runs/latest', executionHandlers.getLatestExecutionRun.bind(executionHandlers));
+    fastify.get('/execution-runs/:id', executionHandlers.getExecutionRun.bind(executionHandlers));
+    fastify.get('/execution-runs/:id/event-graph', executionHandlers.getExecutionRunEventGraph.bind(executionHandlers));
+    fastify.get('/execution-runs/:id/timeline', executionHandlers.getExecutionRunTimeline.bind(executionHandlers));
+    fastify.get('/execution-runs/:id/status', executionHandlers.getExecutionRunStatus.bind(executionHandlers));
+    fastify.get('/execution-runs/:id/lineage', executionHandlers.getExecutionRunLineage.bind(executionHandlers));
+    fastify.post('/execution-runs/:id/retry', executionHandlers.retryExecutionRun.bind(executionHandlers));
+    fastify.post('/execution-runs/:id/resolve', executionHandlers.resolveExecutionRun.bind(executionHandlers));
+    fastify.post('/execution-runs/:id/cancel', executionHandlers.cancelExecutionRun.bind(executionHandlers));
+    fastify.get('/execution/poller/status', executionHandlers.pollerStatus.bind(executionHandlers));
+    fastify.get('/execution/workers/leases', executionHandlers.workerLeases.bind(executionHandlers));
+    fastify.get('/execution/ops/snapshot', executionHandlers.getOpsSnapshot.bind(executionHandlers));
+    fastify.post('/execution/poller/start', executionHandlers.startPoller.bind(executionHandlers));
+    fastify.post('/execution/poller/takeover', executionHandlers.takeoverPoller.bind(executionHandlers));
+    fastify.post('/execution/poller/stop', executionHandlers.stopPoller.bind(executionHandlers));
+    fastify.post('/execution/poller/poll-once', executionHandlers.pollOnce.bind(executionHandlers));
+    fastify.get('/execution/retry-worker/status', executionHandlers.retryWorkerStatus.bind(executionHandlers));
+    fastify.post('/execution/retry-worker/start', executionHandlers.startRetryWorker.bind(executionHandlers));
+    fastify.post('/execution/retry-worker/takeover', executionHandlers.takeoverRetryWorker.bind(executionHandlers));
+    fastify.post('/execution/retry-worker/stop', executionHandlers.stopRetryWorker.bind(executionHandlers));
+    fastify.post('/execution/retry-worker/run-once', executionHandlers.runRetryWorkerOnce.bind(executionHandlers));
+    fastify.post('/execution/recovery/reconcile', executionHandlers.reconcileRecovery.bind(executionHandlers));
+    fastify.post('/execution-runs/:id/materialize', executionHandlers.materializeExecutionRun.bind(executionHandlers));
+    fastify.post('/execution/orchestrate', executionHandlers.orchestrateExecution.bind(executionHandlers));
+    fastify.post('/measurements/validate-parser', executionHandlers.validateMeasurementParser.bind(executionHandlers));
     fastify.post('/planned-runs', executionHandlers.createPlannedRun.bind(executionHandlers));
     fastify.get('/planned-runs/:id', executionHandlers.getPlannedRun.bind(executionHandlers));
+    fastify.get('/planned-runs/:id/logs', executionHandlers.listPlannedRunLogs.bind(executionHandlers));
     fastify.post('/planned-runs/:id/compile', executionHandlers.compilePlannedRun.bind(executionHandlers));
     fastify.get('/robot-plans/:id', executionHandlers.getRobotPlan.bind(executionHandlers));
+    fastify.get('/robot-plans/:id/status', executionHandlers.getRobotPlanStatus.bind(executionHandlers));
+    fastify.get('/robot-plans/:id/logs', executionHandlers.listRobotPlanLogs.bind(executionHandlers));
     fastify.get('/robot-plans/:id/artifact', executionHandlers.getRobotPlanArtifact.bind(executionHandlers));
+    fastify.post('/robot-plans/:id/execute', executionHandlers.executeRobotPlan.bind(executionHandlers));
+    fastify.post('/robot-plans/:id/cancel', executionHandlers.cancelRobotPlan.bind(executionHandlers));
   }
 
   // ============================================================================
@@ -291,6 +346,9 @@ export function registerRoutes(
 
   if (measurementHandlers) {
     fastify.post('/measurements/ingest', measurementHandlers.ingestMeasurement.bind(measurementHandlers));
+    fastify.post('/measurements/active-read', measurementHandlers.activeReadMeasurement.bind(measurementHandlers));
+    fastify.get('/measurements/active-read/schema', measurementHandlers.getActiveReadSchemas.bind(measurementHandlers));
+    fastify.post('/measurements/active-read/validate', measurementHandlers.validateActiveRead.bind(measurementHandlers));
     fastify.get('/measurements/:id', measurementHandlers.getMeasurement.bind(measurementHandlers));
     fastify.get('/measurements/:id/well/:well', measurementHandlers.getMeasurementWell.bind(measurementHandlers));
     fastify.post('/plate-maps/export', measurementHandlers.exportPlateMap.bind(measurementHandlers));

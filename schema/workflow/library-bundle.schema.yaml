@@ -1,0 +1,64 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/library-bundle.schema.yaml"
+title: "Library Bundle"
+description: >
+  Versioned reusable collection of compounds/lots/layout templates and optional vendor
+  plate metadata. A protocol binds to a library bundle at execution time.
+
+type: object
+additionalProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, recordId, title, entries ]
+
+properties:
+  kind:
+    const: "library-bundle"
+
+  recordId:
+    type: string
+
+  title:
+    type: string
+
+  shortSlug:
+    type: string
+
+  version:
+    type: string
+
+  source:
+    type: object
+    additionalProperties: false
+    properties:
+      vendor: { type: string }
+      catalog_number: { type: string }
+      plate_format: { type: string }
+      lot_number: { type: string }
+
+  default_layout_template_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  entries:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      required: [ entry_id, ref ]
+      properties:
+        entry_id: { type: string }
+        ref: { $ref: "./datatypes/ref.schema.yaml" }
+        role_tags:
+          type: array
+          items: { type: string }
+          uniqueItems: true
+        position_hint:
+          type: string
+          description: "Optional intended address (e.g., A1, B7)."
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

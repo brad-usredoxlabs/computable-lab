@@ -6,7 +6,7 @@
 
 # Server settings
 server:
-  port: 3000
+  port: 3001
   host: 0.0.0.0
   logLevel: info # debug | info | warn | error
   workspaceDir: /tmp/cl-workspaces # ephemeral, disposable
@@ -78,7 +78,7 @@ repositories:
 #       auth:
 #         type: none
 #     namespace:
-#       baseUri: http://localhost:3000/records/
+#       baseUri: http://localhost:3001/records/
 #       prefix: local
 #     jsonld:
 #       context: default
@@ -100,3 +100,23 @@ repositories:
 #     git:
 #       url: https://github.com/beta-lab/records.git
 #       ...
+
+# -----------------------------------------------------------------------------
+# LabOS simulator profile (env-driven; set in shell/.env/docker-compose)
+# -----------------------------------------------------------------------------
+# LABOS_SIMULATE_ASSIST_PLUS=1
+# LABOS_SIMULATE_GEMINI=1
+# LABOS_EXECUTION_MAX_RUN_MS=14400000
+# LABOS_EXECUTION_STALE_UNKNOWN_MS=1800000
+# LABOS_RETRY_MAX_ATTEMPTS=3
+# LABOS_INTEGRA_ASSIST_SUBMIT_URL=http://assist-sidecar:8080/runs
+# LABOS_INTEGRA_ASSIST_BASE_URL=http://assist-sidecar:8080
+# LABOS_INTEGRA_ASSIST_STATUS_URL_TEMPLATE=http://assist-sidecar:8080/runs/{runId}
+# LABOS_INTEGRA_ASSIST_CANCEL_URL_TEMPLATE=http://assist-sidecar:8080/runs/{runId}/cancel
+# LABOS_INTEGRA_ASSIST_API_TOKEN=
+# LABOS_GEMINI_READ_URL=http://gemini-sidecar:8090/read
+# LABOS_GEMINI_API_TOKEN=
+# LABOS_SIDECAR_INTEGRA_ASSIST_CMD=python3
+# LABOS_SIDECAR_INTEGRA_ASSIST_ARGS=assist_plus_driver.py
+# LABOS_SIDECAR_GEMINI_CMD=python3
+# LABOS_SIDECAR_GEMINI_ARGS=gemini_driver.py

@@ -65,14 +65,14 @@ USER nodejs
 # Environment variables
 ENV NODE_ENV=production
 ENV CONFIG_PATH=/app/config.yaml
-ENV PORT=3000
+ENV PORT=3001
 
 # Expose port
-EXPOSE 3000
+EXPOSE 3001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
+  CMD curl -f http://localhost:3001/health || exit 1
 
 # Start server
 CMD ["node", "dist/server.js"]

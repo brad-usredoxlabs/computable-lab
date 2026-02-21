@@ -1,0 +1,33 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+recordId: MAT-clofibrate-yy2t
+kind: material
+id: MAT-clofibrate-yy2t
+name: Clofibrate
+domain: other
+class:
+  - kind: ontology
+    id: NCIT:C378
+    namespace: NCIT
+    label: Clofibrate
+    uri: http://purl.obolibrary.org/obo/NCIT_C378
+  - kind: ontology
+    id: CHEBI:3750
+    namespace: CHEBI
+    label: clofibrate
+    uri: http://purl.obolibrary.org/obo/CHEBI_3750
+definition: An aryloxyisobutyric acid derivate with antihyperlipidemic activity.
+  Although the exact mechanism of action has not been fully characterized,
+  clofibrate may enhance the conversion of very-low-density lipoprotein (VLDL)
+  to low-density lipoprotein (LDL), decreasing the production of hepatic VLDL,
+  inhibiting cholesterol production, and increasing fecal excretion of neutral
+  sterols.
+synonyms:
+  - 2-(4-Chlorophenoxy)-2-methylpropanoic acid ethyl ester
+  - Atromid S
+  - Atromid-S
+  - CFB
+  - CLOFIBRATE
+  - Clofibrate
+  - Ethyl 2-(4-Chlorophenoxy)-2-methylpropanoate
+  - Ethyl p-Chlorophenoxyisobyturate
+tags: []

@@ -1,0 +1,53 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/plate-snapshot.schema.yaml"
+title: "Plate Snapshot"
+description: >
+  Frozen reusable plate state derived from one execution context set. Can be rebound
+  into future protocols as a source plate or calibration/control artifact.
+
+type: object
+additionalProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, recordId, title, labware_ref, wells ]
+
+properties:
+  kind:
+    const: "plate-snapshot"
+
+  recordId:
+    type: string
+
+  title:
+    type: string
+
+  labware_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  source_event_graph_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  captured_at:
+    type: string
+    format: date-time
+
+  wells:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      required: [ well, context_ref ]
+      properties:
+        well: { type: string }
+        context_ref: { $ref: "./datatypes/ref.schema.yaml" }
+        role:
+          type: string
+          enum: [ sample, positive_control, negative_control, vehicle_control, blank, standard_curve, treatment, other ]
+        notes: { type: string }
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true
