@@ -35,6 +35,7 @@ import {
   createMetaHandlers,
   ConfigHandlers,
   createProtocolHandlers,
+  createComponentHandlers,
   createExecutionHandlers,
   createMeasurementHandlers,
   createBiosourceHandlers,
@@ -299,6 +300,7 @@ export async function createServer(
 
   // Create protocol, execution, and measurement handlers
   const protocolHandlers = createProtocolHandlers(ctx);
+  const componentHandlers = createComponentHandlers(ctx);
   const executionHandlers = createExecutionHandlers(ctx);
   const measurementHandlers = createMeasurementHandlers(ctx);
 
@@ -465,6 +467,7 @@ export async function createServer(
       ontologyHandlers,
       metaHandlers,
       protocolHandlers,
+      componentHandlers,
       executionHandlers,
       measurementHandlers,
       biosourceHandlers,

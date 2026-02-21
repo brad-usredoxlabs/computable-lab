@@ -18,6 +18,7 @@ import type { AIHandlers } from './handlers/AIHandlers.js';
 import type { ConfigHandlers } from './handlers/configHandlers.js';
 import type { MetaHandlers } from './handlers/metaHandlers.js';
 import type { ProtocolHandlers } from './handlers/ProtocolHandlers.js';
+import type { ComponentHandlers } from './handlers/ComponentHandlers.js';
 import type { ExecutionHandlers } from './handlers/ExecutionHandlers.js';
 import type { MeasurementHandlers } from './handlers/MeasurementHandlers.js';
 import type { BiosourceHandlers } from './handlers/BiosourceHandlers.js';
@@ -40,6 +41,7 @@ export interface RouteOptions {
   configHandlers?: ConfigHandlers;
   metaHandlers?: MetaHandlers;
   protocolHandlers?: ProtocolHandlers;
+  componentHandlers?: ComponentHandlers;
   executionHandlers?: ExecutionHandlers;
   measurementHandlers?: MeasurementHandlers;
   biosourceHandlers?: BiosourceHandlers;
@@ -267,6 +269,24 @@ export function registerRoutes(
     fastify.post('/protocols/from-event-graph', protocolHandlers.saveFromEventGraph.bind(protocolHandlers));
     fastify.get('/protocols/:id/load', protocolHandlers.loadProtocol.bind(protocolHandlers));
     fastify.post('/protocols/:id/bind', protocolHandlers.bindProtocol.bind(protocolHandlers));
+  }
+
+  // ============================================================================
+  // Component Graph Routes (optional - requires componentHandlers)
+  // ============================================================================
+
+  const { componentHandlers } = options;
+
+  if (componentHandlers) {
+    fastify.post('/components', componentHandlers.createComponent.bind(componentHandlers));
+    fastify.get('/components', componentHandlers.listComponents.bind(componentHandlers));
+    fastify.get('/components/:id', componentHandlers.getComponent.bind(componentHandlers));
+    fastify.put('/components/:id', componentHandlers.updateComponent.bind(componentHandlers));
+    fastify.post('/components/:id/publish', componentHandlers.publishComponent.bind(componentHandlers));
+    fastify.post('/components/:id/instantiate', componentHandlers.instantiateComponent.bind(componentHandlers));
+    fastify.get('/components/instances/:id/status', componentHandlers.componentInstanceStatus.bind(componentHandlers));
+    fastify.post('/components/instances/:id/upgrade', componentHandlers.upgradeComponentInstance.bind(componentHandlers));
+    fastify.post('/components/suggest-from-event-graph', componentHandlers.suggestFromEventGraph.bind(componentHandlers));
   }
 
   // ============================================================================

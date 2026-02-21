@@ -364,11 +364,36 @@ Response (`201`): `{ success: true, recordId: "PRT-000001" }`
 
 ---
 
+### Components
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/components` | Create a graph-component draft |
+| GET | `/components` | List graph-components |
+| GET | `/components/:id` | Get a graph-component |
+| PUT | `/components/:id` | Update a graph-component draft |
+| POST | `/components/:id/publish` | Publish immutable graph-component-version |
+| POST | `/components/:id/instantiate` | Create graph-component-instance |
+| GET | `/components/instances/:id/status` | Get instance staleness and latest-version status |
+| POST | `/components/instances/:id/upgrade` | Upgrade instance to latest component version |
+| POST | `/components/suggest-from-event-graph` | Suggest repeated patterns for component promotion |
+
+---
+
 ## MCP Tools
 
 All MCP tools return `CallToolResult` — either `jsonResult(data)` or `errorResult(message)`. Error results have `isError: true`.
 
 LabOS runtime parameter tools:
+- `component_create`
+- `component_list`
+- `component_get`
+- `component_update`
+- `component_publish`
+- `component_instantiate`
+- `component_instance_status`
+- `component_instance_upgrade`
+- `component_suggest_from_event_graph`
 - `protocol_save_from_event_graph`
 - `protocol_load`
 - `protocol_list`

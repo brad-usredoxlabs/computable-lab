@@ -1,0 +1,141 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/graph-component.schema.yaml"
+title: "Graph Component"
+description: >
+  Reusable event-graph subgraph definition. Represents a composable component
+  that can be instantiated in protocols/event graphs with role bindings.
+
+type: object
+additionalProperties: false
+required:
+  - kind
+  - recordId
+  - title
+  - state
+  - template
+properties:
+  kind:
+    const: "graph-component"
+  recordId:
+    type: string
+  title:
+    type: string
+  description:
+    type: string
+  state:
+    type: string
+    enum: [ draft, published, deprecated ]
+  latestVersionRef:
+    type: object
+    additionalProperties: false
+    required: [ kind, id, type ]
+    properties:
+      kind: { const: "record" }
+      id: { type: string }
+      type: { const: "graph-component-version" }
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+  roles:
+    type: object
+    additionalProperties: false
+    properties:
+      labwareRoles:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ roleId ]
+          properties:
+            roleId: { type: string }
+            description: { type: string }
+            expectedLabwareKinds:
+              type: array
+              items: { type: string }
+              uniqueItems: true
+      materialRoles:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ roleId ]
+          properties:
+            roleId: { type: string }
+            description: { type: string }
+            allowedMaterialIds:
+              type: array
+              items: { type: string }
+              uniqueItems: true
+      instrumentRoles:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ roleId ]
+          properties:
+            roleId: { type: string }
+            description: { type: string }
+            allowedInstrumentIds:
+              type: array
+              items: { type: string }
+              uniqueItems: true
+      parameterDefs:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ name, type ]
+          properties:
+            name: { type: string }
+            type:
+              type: string
+              enum: [ string, number, integer, boolean, object, array ]
+            description: { type: string }
+            default: {}
+            required: { type: boolean }
+  compatibility:
+    type: object
+    additionalProperties: false
+    properties:
+      targetPlatforms:
+        type: array
+        items:
+          type: string
+          enum: [ opentrons_ot2, opentrons_flex, integra_assist, generic ]
+        uniqueItems: true
+      modalities:
+        type: array
+        items:
+          type: string
+          enum: [ fluorescence, absorbance, luminescence, microscopy, ms, qpcr, other ]
+        uniqueItems: true
+  template:
+    type: object
+    additionalProperties: false
+    required:
+      - source
+    properties:
+      source:
+        type: object
+        additionalProperties: false
+        required: [ kind ]
+        properties:
+          kind:
+            type: string
+            enum: [ event-graph-ref, inline ]
+          eventGraphId:
+            type: string
+          eventIds:
+            type: array
+            items: { type: string }
+            uniqueItems: true
+          labwareIds:
+            type: array
+            items: { type: string }
+            uniqueItems: true
+      insertionHints:
+        type: object
+        additionalProperties: true
+  notes:
+    type: string

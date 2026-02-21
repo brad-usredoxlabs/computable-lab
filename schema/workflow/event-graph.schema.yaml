@@ -113,6 +113,19 @@ properties:
     uniqueItems: true
     description: "Optional tags for categorization."
 
+  componentInstanceRefs:
+    type: array
+    description: "Optional graph-component-instance refs inserted in this event graph timeline."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ kind, id, type ]
+      properties:
+        kind: { const: "record" }
+        id: { type: string }
+        type: { const: "graph-component-instance" }
+    uniqueItems: true
+
 $defs:
   PlateEvent:
     type: object

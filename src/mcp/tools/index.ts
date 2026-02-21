@@ -20,6 +20,7 @@ import { registerChemTools } from './chemTools.js';
 import { registerEuropmcTools } from './europmcTools.js';
 import { registerProtocolTools } from './protocolTools.js';
 import { registerExecutionTools } from './executionTools.js';
+import { registerComponentTools } from './componentTools.js';
 
 export function registerAllTools(server: McpServer, ctx: AppContext, registry?: ToolRegistry): void {
   registerRecordTools(server, ctx, registry);
@@ -40,5 +41,6 @@ export function registerAllTools(server: McpServer, ctx: AppContext, registry?: 
 
   // Protocol management & execution pipeline tools
   registerProtocolTools(server, ctx, registry);
+  registerComponentTools(server, ctx, registry);
   registerExecutionTools(server, ctx, registry);
 }

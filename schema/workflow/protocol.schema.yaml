@@ -107,6 +107,19 @@ properties:
       $ref: "#/$defs/ExecutionProfile"
     uniqueItems: true
 
+  componentInstanceRefs:
+    type: array
+    description: "Optional graph-component-instance refs linked to this protocol."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ kind, id, type ]
+      properties:
+        kind: { const: "record" }
+        id: { type: string }
+        type: { const: "graph-component-instance" }
+    uniqueItems: true
+
   steps:
     type: array
     minItems: 1
