@@ -90,26 +90,6 @@ export class ExecutionControlService {
     return firstEntry?.data ?? {};
   }
 
-  private async updatePlannedRunState(plannedRunId: string, state: 'executing' | 'completed' | 'failed'): Promise<void> {
-    const env = await this.ctx.store.get(plannedRunId);
-    if (!env) return;
-    const payload = env.payload;
-    if (!payload || typeof payload !== 'object') return;
-    const rec = payload as Record<string, unknown>;
-    if (rec['kind'] !== 'planned-run') return;
-    await this.ctx.store.update({
-      envelope: {
-        recordId: env.recordId,
-        schemaId: env.schemaId,
-        payload: {
-          ...rec,
-          state,
-        },
-      },
-      message: `Set ${plannedRunId} to ${state} on cancel`,
-    });
-  }
-
   private async markExecutionRunCanceled(robotPlanId: string, cancelResponse: unknown): Promise<void> {
     const runs = await this.ctx.store.list({ kind: 'execution-run', limit: 200 });
     const match = runs
@@ -118,7 +98,6 @@ export class ExecutionControlService {
       .sort((a, b) => b.env.recordId.localeCompare(a.env.recordId))[0];
     if (!match) return;
 
-    const payload = match.payload;
     const nextPayload: Record<string, unknown> = {
       ...(match.env.payload as Record<string, unknown>),
       status: 'canceled',
@@ -135,10 +114,6 @@ export class ExecutionControlService {
       message: `Mark ${match.env.recordId} canceled`,
     });
 
-    const plannedRunId = payload.plannedRunRef?.id;
-    if (plannedRunId) {
-      await this.updatePlannedRunState(plannedRunId, 'failed');
-    }
   }
 
   private async markLatestLogAborted(robotPlanId: string): Promise<void> {

@@ -6,7 +6,7 @@ description: >
   labware instances, materials, and instruments. FAIR record.
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 

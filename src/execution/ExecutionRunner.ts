@@ -176,36 +176,6 @@ export class ExecutionRunner {
     return `EXR-${String(max + 1).padStart(6, '0')}`;
   }
 
-  private async updatePlannedRunState(plannedRunId: string, state: 'executing' | 'completed' | 'failed'): Promise<void> {
-    const envelope = await this.ctx.store.get(plannedRunId);
-    if (!envelope) {
-      return;
-    }
-    const payload = envelope.payload;
-    if (!payload || typeof payload !== 'object') {
-      return;
-    }
-    const record = payload as Record<string, unknown>;
-    if (record['kind'] !== 'planned-run') {
-      return;
-    }
-
-    const updateResult = await this.ctx.store.update({
-      envelope: {
-        recordId: envelope.recordId,
-        schemaId: envelope.schemaId,
-        payload: {
-          ...record,
-          state,
-        },
-      },
-      message: `Set ${plannedRunId} state to ${state}`,
-    });
-    if (!updateResult.success) {
-      throw new ExecutionError('UPDATE_FAILED', updateResult.error ?? `Failed to update planned run ${plannedRunId}`, 400);
-    }
-  }
-
   private async nextAttemptForRobotPlan(robotPlanId: string): Promise<number> {
     const runs = await this.ctx.store.list({ kind: 'execution-run', limit: 500 });
     let maxAttempt = 0;
@@ -239,9 +209,6 @@ export class ExecutionRunner {
     const target = payload.targetPlatform;
     const runtimeParameters = validateExecuteParameters(target, options?.parameters ?? {});
     const plannedRunId = payload.plannedRunRef?.kind === 'record' ? payload.plannedRunRef.id : undefined;
-    if (plannedRunId) {
-      await this.updatePlannedRunState(plannedRunId, 'executing');
-    }
 
     const startedAt = new Date().toISOString();
     const executionRunId = await this.nextExecutionRunId();
@@ -262,9 +229,6 @@ export class ExecutionRunner {
     try {
       sidecar = await this.executeTarget(target, robotPlanId, artifact.fileRef.uri, runtimeParameters);
     } catch (err) {
-      if (plannedRunId) {
-        await this.updatePlannedRunState(plannedRunId, 'failed');
-      }
       const classified = classifyExecutionFailure({
         mode: 'unknown',
         stderr: err instanceof Error ? err.message : String(err),
@@ -324,9 +288,6 @@ export class ExecutionRunner {
     }
 
     const status: 'completed' | 'error' = sidecar.ok ? 'completed' : 'error';
-    if (plannedRunId) {
-      await this.updatePlannedRunState(plannedRunId, sidecar.ok ? 'completed' : 'failed');
-    }
 
     await this.ctx.store.create({
       envelope: {

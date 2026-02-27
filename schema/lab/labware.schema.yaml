@@ -5,7 +5,7 @@ description: >
   A labware design/specification (e.g., a 96-well plate type, reservoir type, tube rack). Instances used in runs are represented by LabwareInstance records.
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 

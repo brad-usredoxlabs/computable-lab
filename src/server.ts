@@ -40,10 +40,14 @@ import {
   createMeasurementHandlers,
   createBiosourceHandlers,
   createKnowledgeAIHandlers,
+  createTagHandlers,
 } from './api/handlers/index.js';
 import { IndexManager, createIndexManager } from './index/index.js';
+import { createUISpecLoader, loadAllUISpecs, type UISpecLoader } from './ui/UISpecLoader.js';
+import { createUIHandlers } from './api/handlers/UIHandlers.js';
 import { registerRoutes } from './api/routes.js';
 import type { ServerConfig } from './api/types.js';
+import { resolveGitHubIdentity, type ResolvedIdentity } from './identity/GitHubIdentity.js';
 import { createMcpServer, mcpPlugin } from './mcp/index.js';
 import {
   ToolRegistry,
@@ -77,9 +81,11 @@ export interface AppContext {
   repoAdapter: RepoAdapter;
   store: RecordStoreImpl;
   indexManager: IndexManager;
+  uiSpecLoader: UISpecLoader;
   appConfig?: AppConfig | undefined;
   configPath?: string | undefined;
   predicateRegistry?: PredicateRegistry | undefined;
+  identity?: ResolvedIdentity | undefined;
 }
 
 /**
@@ -219,12 +225,21 @@ export async function initializeApp(
     });
   }
   
+  // Resolve GitHub identity from PAT (if configured)
+  let identity: ResolvedIdentity | undefined;
+  if (repoConfig?.git?.auth?.type === 'token' && repoConfig.git.auth.token) {
+    identity = await resolveGitHubIdentity(repoConfig.git.auth.token);
+    console.log(`Resolved identity: ${identity.username}`);
+  }
+
   // Get records directory from config or use default
   const recordsDir = repoConfig?.records?.directory || opts.recordsDir;
-  
-  // Initialize record store
+
+  // Initialize record store (use resolved identity for git commits)
   const store = createRecordStore(repoAdapter, validator, lintEngine, {
     baseDir: recordsDir,
+    author: identity?.username ?? 'record-store',
+    email: identity?.email ?? 'store@computable-lab.com',
   });
   
   // Initialize index manager
@@ -232,6 +247,17 @@ export async function initializeApp(
     baseDir: recordsDir,
   });
   
+  // Load UI specs (*.ui.yaml files from schema directory)
+  const uiSpecLoader = createUISpecLoader();
+  const uiLoadResult = await loadAllUISpecs(uiSpecLoader, schemaDir);
+  if (uiLoadResult.errors.length > 0) {
+    console.warn('UI spec loading warnings:');
+    for (const err of uiLoadResult.errors) {
+      console.warn(`  - ${err.path}: ${err.error}`);
+    }
+  }
+  console.log(`Loaded ${uiLoadResult.loaded} UI specs`);
+
   // Build initial index
   try {
     await indexManager.rebuild();
@@ -239,9 +265,9 @@ export async function initializeApp(
   } catch (err) {
     console.warn('Failed to build initial index:', err);
   }
-  
+
   console.log(`App initialized`);
-  
+
   return {
     schemaRegistry,
     validator,
@@ -249,9 +275,11 @@ export async function initializeApp(
     repoAdapter,
     store,
     indexManager,
+    uiSpecLoader,
     appConfig,
     configPath,
     predicateRegistry,
+    identity,
   };
 }
 
@@ -281,13 +309,15 @@ export async function createServer(
   }
   
   // Create handlers
-  const recordHandlers = createRecordHandlers(ctx.store, ctx.indexManager);
+  const recordHandlers = createRecordHandlers(ctx.store, ctx.indexManager, ctx.identity);
   const schemaHandlers = createSchemaHandlers(ctx.schemaRegistry);
   const validationHandlers = createValidationHandlers(ctx.validator, ctx.lintEngine);
   const gitHandlers = createGitHandlers(ctx.repoAdapter);
   const treeHandlers = createTreeHandlers(ctx.indexManager, ctx.store);
   const libraryHandlers = createLibraryHandlers(ctx.store);
   const ontologyHandlers = createOntologyHandlers();
+  const tagHandlers = createTagHandlers(ctx.store);
+  const uiHandlers = createUIHandlers(ctx.uiSpecLoader, ctx.store, ctx.schemaRegistry);
 
   // Create meta handlers
   const repoConfig = ctx.appConfig ? getDefaultRepository(ctx.appConfig) ?? undefined : undefined;
@@ -461,10 +491,12 @@ export async function createServer(
       recordHandlers,
       schemaHandlers,
       validationHandlers,
+      uiHandlers,
       gitHandlers,
       treeHandlers,
       libraryHandlers,
       ontologyHandlers,
+      tagHandlers,
       metaHandlers,
       protocolHandlers,
       componentHandlers,
@@ -473,6 +505,7 @@ export async function createServer(
       biosourceHandlers,
       schemaCount: () => ctx.schemaRegistry.size,
       ruleCount: () => ctx.lintEngine.ruleCount,
+      uiSpecCount: () => ctx.uiSpecLoader.size(),
     };
     routeOpts.aiHandlers = aiHandlers;
     routeOpts.knowledgeAIHandlers = knowledgeAIHandlers;
@@ -517,6 +550,7 @@ export async function startServer(
     
     console.log(`Server listening on http://${opts.host}:${opts.port}`);
     console.log(`Schemas loaded: ${ctx.schemaRegistry.size}`);
+    console.log(`UI specs loaded: ${ctx.uiSpecLoader.size()}`);
     console.log(`Lint rules loaded: ${ctx.lintEngine.ruleCount}`);
     
     // Handle shutdown

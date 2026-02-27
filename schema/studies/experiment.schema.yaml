@@ -5,7 +5,7 @@ description: >
   An Experiment is a long-lived effort within a Study (e.g., "Validate Assay"). It captures intent (claims), scope, and lightweight management metadata. It does NOT embed assertions, evidence, runs, or event logs. Those are standalone records: Runs reference experimentId; meaning is bound to Claims/Assertions/EvidenceBundles.
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 

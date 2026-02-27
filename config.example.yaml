@@ -24,6 +24,15 @@ schemas:
   # - Bundled schemas load first (base)
   # - Repo's .computable-lab/schema-overrides/ can override specific schemas
 
+# Execution provider routing
+execution:
+  mode: local # local | remote | hybrid
+  # Adapter-specific override map used when mode is hybrid
+  adapters:
+    integra_assist: local # local | remote
+    opentrons_ot2: local
+    opentrons_flex: local
+
   # Repository connections
   # For v1, typically one repository. Array allows future multi-repo support.
 repositories:
@@ -120,3 +129,7 @@ repositories:
 # LABOS_SIDECAR_INTEGRA_ASSIST_ARGS=assist_plus_driver.py
 # LABOS_SIDECAR_GEMINI_CMD=python3
 # LABOS_SIDECAR_GEMINI_ARGS=gemini_driver.py
+# CL_EXECUTION_MODE=local
+# CL_EXECUTION_ADAPTER_MODE_INTEGRA_ASSIST=local
+# CL_EXECUTION_ADAPTER_MODE_OPENTRONS_OT2=local
+# CL_EXECUTION_ADAPTER_MODE_OPENTRONS_FLEX=local

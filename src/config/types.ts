@@ -13,6 +13,20 @@ export interface AppConfig {
   schemas: SchemaConfig;
   repositories: RepositoryConfig[];
   ai?: AIConfig;
+  execution?: ExecutionConfig;
+}
+
+export type ExecutionMode = 'local' | 'remote' | 'hybrid';
+export type AdapterExecutionMode = 'local' | 'remote';
+
+/**
+ * Execution provider routing configuration.
+ */
+export interface ExecutionConfig {
+  /** Global execution mode default. */
+  mode: ExecutionMode;
+  /** Optional per-adapter override used when mode is hybrid. */
+  adapters?: Record<string, AdapterExecutionMode>;
 }
 
 /**
@@ -202,6 +216,10 @@ export const DEFAULT_CONFIG: AppConfig = {
     bundledDir: './schema',
   },
   repositories: [],
+  execution: {
+    mode: 'local',
+    adapters: {},
+  },
 };
 
 /**

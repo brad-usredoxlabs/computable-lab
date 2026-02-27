@@ -1,0 +1,159 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/execution-task.schema.yaml"
+title: "ExecutionTask"
+description: >
+  Queue/claim contract record for remote executor workers. Tracks lease ownership,
+  monotonic sequence ingestion, and status transitions for one execution-run.
+
+type: object
+additionalProperties: false
+
+required:
+- kind
+- recordId
+- executionRunRef
+- robotPlanRef
+- adapterId
+- targetPlatform
+- status
+- contractVersion
+- createdAt
+- updatedAt
+
+properties:
+  kind:
+    const: "execution-task"
+
+  recordId:
+    type: string
+
+  executionRunRef:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  robotPlanRef:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  plannedRunRef:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  adapterId:
+    type: string
+
+  targetPlatform:
+    type: string
+    enum: [ integra_assist, opentrons_ot2, opentrons_flex ]
+
+  status:
+    type: string
+    enum: [ queued, claimed, running, cancel_requested, completed, failed, canceled ]
+
+  runtimeParameters:
+    type: object
+    additionalProperties: true
+
+  contractVersion:
+    type: string
+
+  artifactRefs:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [ role, uri ]
+      properties:
+        role:
+          type: string
+        uri:
+          type: string
+        mimeType:
+          type: string
+        label:
+          type: string
+
+  executorId:
+    type: string
+
+  claimedAt:
+    type: string
+    format: date-time
+
+  leaseDurationMs:
+    type: integer
+    minimum: 1
+
+  leaseExpiresAt:
+    type: string
+    format: date-time
+
+  lastHeartbeatAt:
+    type: string
+    format: date-time
+
+  lastSequence:
+    type: integer
+    minimum: 0
+
+  progress:
+    type: object
+    additionalProperties: true
+
+  failure:
+    type: object
+    additionalProperties: false
+    properties:
+      code:
+        type: string
+      class:
+        type: string
+        enum: [ transient, terminal, unknown ]
+      message:
+        type: string
+
+  external:
+    type: object
+    additionalProperties: false
+    properties:
+      runId:
+        type: string
+      protocolId:
+        type: string
+      rawStatus:
+        type: string
+
+  startedAt:
+    type: string
+    format: date-time
+
+  completedAt:
+    type: string
+    format: date-time
+
+  artifacts:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [ role, uri ]
+      properties:
+        role:
+          type: string
+        uri:
+          type: string
+        sha256:
+          type: string
+        mimeType:
+          type: string
+
+  measurements:
+    type: array
+    items:
+      type: object
+      additionalProperties: true
+
+  createdAt:
+    type: string
+    format: date-time
+
+  updatedAt:
+    type: string
+    format: date-time

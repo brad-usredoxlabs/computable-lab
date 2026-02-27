@@ -9,7 +9,6 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { AppContext } from '../../server.js';
 import type { ApiError } from '../types.js';
 import { ExecutionOrchestrator, ExecutionError } from '../../execution/ExecutionOrchestrator.js';
-import { ExecutionRunner } from '../../execution/ExecutionRunner.js';
 import { AdapterRegistry } from '../../execution/adapters/AdapterRegistry.js';
 import { ExecutionControlService } from '../../execution/ExecutionControlService.js';
 import { ExecutionPoller } from '../../execution/ExecutionPoller.js';
@@ -27,15 +26,17 @@ import { ExecutionIncidentWorker } from '../../execution/ExecutionIncidentWorker
 import { WorkerLeaseViewService } from '../../execution/WorkerLeaseViewService.js';
 import { ExecutionOpsSnapshotService } from '../../execution/ExecutionOpsSnapshotService.js';
 import { SidecarContractConformanceService } from '../../execution/SidecarContractConformanceService.js';
+import { createExecutionProvider, resolveExecutionMode } from '../../execution/providers/createExecutionProvider.js';
+import { ExecutionTaskService } from '../../execution/ExecutionTaskService.js';
 
 export function createExecutionHandlers(ctx: AppContext) {
   const orchestrator = new ExecutionOrchestrator(ctx);
-  const runner = new ExecutionRunner(ctx);
+  const provider = createExecutionProvider(ctx);
   const adapterRegistry = new AdapterRegistry();
   const controlService = new ExecutionControlService(ctx);
   const poller = new ExecutionPoller(ctx, controlService);
   const materializer = new ExecutionMaterializer(ctx);
-  const executionRunService = new ExecutionRunService(ctx, runner, controlService);
+  const executionRunService = new ExecutionRunService(ctx, provider, controlService);
   const timelineService = new ExecutionTimelineService(ctx, executionRunService);
   const parserValidationService = new MeasurementParserValidationService(ctx);
   const capabilitiesService = new ExecutionCapabilitiesService();
@@ -47,9 +48,52 @@ export function createExecutionHandlers(ctx: AppContext) {
   const workerLeases = new WorkerLeaseViewService(ctx);
   const opsSnapshot = new ExecutionOpsSnapshotService(ctx, adapterHealth, incidents, workerLeases);
   const sidecarConformance = new SidecarContractConformanceService(ctx);
+  const taskService = new ExecutionTaskService(ctx);
   void poller.restore().catch(() => undefined);
   void retryWorker.restore().catch(() => undefined);
   void incidentWorker.restore().catch(() => undefined);
+
+  function parseExecutorTokenScopes(): Map<string, Set<string>> {
+    const map = new Map<string, Set<string>>();
+    const raw = process.env['CL_EXECUTOR_TOKENS'];
+    if (!raw) return map;
+    const entries = raw.split(';').map((v) => v.trim()).filter(Boolean);
+    for (const entry of entries) {
+      const [token, scopesPart] = entry.split('=', 2);
+      if (!token) continue;
+      const scopes = new Set(
+        (scopesPart ?? '*')
+          .split(',')
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean),
+      );
+      map.set(token, scopes.size > 0 ? scopes : new Set(['*']));
+    }
+    return map;
+  }
+
+  function authenticateExecutor(request: FastifyRequest, adapterId?: string): { authorized: boolean; token?: string; scopes?: Set<string> } {
+    const configured = parseExecutorTokenScopes();
+    if (configured.size === 0) {
+      return { authorized: true, scopes: new Set(['*']) };
+    }
+    const header = request.headers.authorization;
+    if (!header || !header.toLowerCase().startsWith('bearer ')) {
+      return { authorized: false };
+    }
+    const token = header.slice(7).trim();
+    const scopes = configured.get(token);
+    if (!scopes) {
+      return { authorized: false };
+    }
+    if (adapterId) {
+      const normalized = adapterId.toLowerCase();
+      if (!scopes.has('*') && !scopes.has(normalized)) {
+        return { authorized: false };
+      }
+    }
+    return { authorized: true, token, scopes };
+  }
 
   return {
     /**
@@ -152,7 +196,7 @@ export function createExecutionHandlers(ctx: AppContext) {
         Body: { force?: boolean };
       }>,
       reply: FastifyReply,
-    ): Promise<{ success: boolean; executionRunId: string; logId: string; status: 'completed' | 'error' } | ApiError> {
+    ): Promise<{ success: boolean; executionRunId: string; logId?: string; taskId?: string; status: 'queued' | 'completed' | 'error' } | ApiError> {
       try {
         const result = await executionRunService.retryExecutionRunWithOptions(request.params.id, {
           force: request.body?.force === true,
@@ -548,15 +592,16 @@ export function createExecutionHandlers(ctx: AppContext) {
         Body: { parameters?: Record<string, unknown> };
       }>,
       reply: FastifyReply,
-    ): Promise<{ success: boolean; executionRunId: string; logId: string; status: 'completed' | 'error' } | ApiError> {
+    ): Promise<{ success: boolean; executionRunId: string; logId?: string; taskId?: string; status: 'queued' | 'completed' | 'error' } | ApiError> {
       try {
-        const result = await runner.executeRobotPlan(request.params.id, {
+        const result = await provider.executeRobotPlan(request.params.id, {
           ...(request.body?.parameters ? { parameters: request.body.parameters } : {}),
         });
         return {
           success: true,
           executionRunId: result.executionRunId,
-          logId: result.logId,
+          ...(result.logId ? { logId: result.logId } : {}),
+          ...(result.taskId ? { taskId: result.taskId } : {}),
           status: result.status,
         };
       } catch (err) {
@@ -595,7 +640,8 @@ export function createExecutionHandlers(ctx: AppContext) {
       normalizedParameters?: Record<string, unknown>;
       executionRunId?: string;
       logId?: string;
-      status?: 'completed' | 'error';
+      status?: 'queued' | 'completed' | 'error';
+      taskId?: string;
       dryRun?: boolean;
     } | ApiError> {
       try {
@@ -653,7 +699,7 @@ export function createExecutionHandlers(ctx: AppContext) {
           };
         }
 
-        const executed = await runner.executeRobotPlan(robotPlanId, {
+        const executed = await provider.executeRobotPlan(robotPlanId, {
           parameters: normalizedParameters,
         });
         return {
@@ -663,7 +709,8 @@ export function createExecutionHandlers(ctx: AppContext) {
           targetPlatform,
           normalizedParameters,
           executionRunId: executed.executionRunId,
-          logId: executed.logId,
+          ...(executed.logId ? { logId: executed.logId } : {}),
+          ...(executed.taskId ? { taskId: executed.taskId } : {}),
           status: executed.status,
         };
       } catch (err) {
@@ -1257,7 +1304,13 @@ export function createExecutionHandlers(ctx: AppContext) {
      * Consolidated runtime capability map.
      */
     async getCapabilities(): Promise<{ capabilities: Record<string, unknown> }> {
-      return { capabilities: capabilitiesService.getCapabilities() };
+      return {
+        capabilities: {
+          ...capabilitiesService.getCapabilities(),
+          provider: provider.descriptor(),
+          executionMode: resolveExecutionMode(ctx),
+        },
+      };
     },
 
     /**
@@ -1355,6 +1408,202 @@ export function createExecutionHandlers(ctx: AppContext) {
           error: 'BAD_REQUEST',
           message: err instanceof Error ? err.message : String(err),
         };
+      }
+    },
+
+    /**
+     * POST /execution-tasks/claim
+     * Claim queued execution tasks for an executor worker.
+     */
+    async claimExecutionTasks(
+      request: FastifyRequest<{
+        Body: {
+          executorId: string;
+          capabilities?: string[];
+          maxTasks?: number;
+          leaseDurationMs?: number;
+        };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: boolean; tasks?: unknown[]; claimed?: number } | ApiError> {
+      try {
+        const auth = authenticateExecutor(request);
+        if (!auth.authorized) {
+          reply.status(401);
+          return { error: 'UNAUTHORIZED', message: 'Missing or invalid executor bearer token' };
+        }
+        const requestedCapabilities = request.body.capabilities ?? [];
+        const effectiveCapabilities = (() => {
+          if (!auth.scopes || auth.scopes.has('*')) return requestedCapabilities;
+          if (requestedCapabilities.length === 0) return Array.from(auth.scopes);
+          const allowed = new Set(Array.from(auth.scopes).map((s) => s.toLowerCase()));
+          return requestedCapabilities.filter((c) => allowed.has(c.toLowerCase()));
+        })();
+        const result = await taskService.claimTasks({
+          executorId: request.body.executorId,
+          capabilities: effectiveCapabilities,
+          ...(request.body.maxTasks !== undefined ? { maxTasks: request.body.maxTasks } : {}),
+          ...(request.body.leaseDurationMs !== undefined ? { leaseDurationMs: request.body.leaseDurationMs } : {}),
+        });
+        return { success: true, tasks: result.tasks, claimed: result.claimed };
+      } catch (err) {
+        if (err instanceof ExecutionError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return { error: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    /**
+     * POST /execution-tasks/:id/heartbeat
+     * Renew task lease and update running progress.
+     */
+    async heartbeatExecutionTask(
+      request: FastifyRequest<{
+        Params: { id: string };
+        Body: {
+          executorId: string;
+          sequence: number;
+          at?: string;
+          status?: 'claimed' | 'running';
+          progress?: Record<string, unknown>;
+        };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: boolean; accepted?: boolean; task?: unknown } | ApiError> {
+      try {
+        const scope = await taskService.getTaskScope(request.params.id);
+        const auth = authenticateExecutor(request, scope.adapterId);
+        if (!auth.authorized) {
+          reply.status(403);
+          return { error: 'FORBIDDEN', message: 'Executor token is missing or not scoped for this adapter' };
+        }
+        const result = await taskService.heartbeat(request.params.id, request.body);
+        return { success: true, accepted: result.accepted, task: result.task };
+      } catch (err) {
+        if (err instanceof ExecutionError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return { error: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    /**
+     * POST /execution-tasks/:id/logs
+     * Append executor log entries using monotonic sequence idempotency.
+     */
+    async appendExecutionTaskLogs(
+      request: FastifyRequest<{
+        Params: { id: string };
+        Body: {
+          executorId: string;
+          sequence: number;
+          entries: Array<{
+            timestamp?: string;
+            level?: string;
+            code?: string;
+            message: string;
+            data?: Record<string, unknown>;
+          }>;
+        };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: boolean; accepted?: boolean; logId?: string; task?: unknown } | ApiError> {
+      try {
+        const scope = await taskService.getTaskScope(request.params.id);
+        const auth = authenticateExecutor(request, scope.adapterId);
+        if (!auth.authorized) {
+          reply.status(403);
+          return { error: 'FORBIDDEN', message: 'Executor token is missing or not scoped for this adapter' };
+        }
+        const result = await taskService.appendLogs(request.params.id, request.body);
+        return { success: true, accepted: result.accepted, ...(result.logId ? { logId: result.logId } : {}), task: result.task };
+      } catch (err) {
+        if (err instanceof ExecutionError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return { error: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    /**
+     * POST /execution-tasks/:id/status
+     * Update task/execution status projection.
+     */
+    async updateExecutionTaskStatus(
+      request: FastifyRequest<{
+        Params: { id: string };
+        Body: {
+          executorId: string;
+          sequence: number;
+          status: 'running' | 'failed' | 'completed' | 'canceled' | 'cancel_requested';
+          at?: string;
+          failure?: { code?: string; class?: 'transient' | 'terminal' | 'unknown'; message?: string };
+          external?: { runId?: string; protocolId?: string; rawStatus?: string };
+        };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: boolean; accepted?: boolean; task?: unknown } | ApiError> {
+      try {
+        const scope = await taskService.getTaskScope(request.params.id);
+        const auth = authenticateExecutor(request, scope.adapterId);
+        if (!auth.authorized) {
+          reply.status(403);
+          return { error: 'FORBIDDEN', message: 'Executor token is missing or not scoped for this adapter' };
+        }
+        const result = await taskService.updateStatus(request.params.id, request.body);
+        return { success: true, accepted: result.accepted, task: result.task };
+      } catch (err) {
+        if (err instanceof ExecutionError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return { error: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    /**
+     * POST /execution-tasks/:id/complete
+     * Mark task terminal with completion payload.
+     */
+    async completeExecutionTask(
+      request: FastifyRequest<{
+        Params: { id: string };
+        Body: {
+          executorId: string;
+          sequence: number;
+          finalStatus: 'completed' | 'failed' | 'canceled';
+          startedAt?: string;
+          completedAt?: string;
+          artifacts?: Array<{ role: string; uri: string; sha256?: string; mimeType?: string }>;
+          measurements?: Array<Record<string, unknown>>;
+        };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: boolean; accepted?: boolean; task?: unknown } | ApiError> {
+      try {
+        const scope = await taskService.getTaskScope(request.params.id);
+        const auth = authenticateExecutor(request, scope.adapterId);
+        if (!auth.authorized) {
+          reply.status(403);
+          return { error: 'FORBIDDEN', message: 'Executor token is missing or not scoped for this adapter' };
+        }
+        const result = await taskService.complete(request.params.id, request.body);
+        return { success: true, accepted: result.accepted, task: result.task };
+      } catch (err) {
+        if (err instanceof ExecutionError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return { error: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : String(err) };
       }
     },
 

@@ -6,7 +6,7 @@ description: >
   inventory entities that can be consumed by runs and traced to source contexts.
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 

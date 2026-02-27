@@ -5,7 +5,7 @@ description: >
   A concrete, physical instance of a Labware design (e.g., "Plate A for RUN-000041"), optionally identified by barcode. Runs and PlateEvents should reference instances.
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 

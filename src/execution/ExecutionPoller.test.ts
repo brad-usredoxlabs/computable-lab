@@ -149,7 +149,7 @@ describe('ExecutionPoller', () => {
     await rm(testDir, { recursive: true, force: true });
   });
 
-  it('polls running execution-runs and updates run/planned-run state', async () => {
+  it('polls running execution-runs and updates execution-run state without mutating planned-run state', async () => {
     process.env['LABOS_OPENTRONS_BASE_URL'] = 'http://localhost:31950';
     const fakeFetch = async () => ({
       ok: true,
@@ -169,7 +169,7 @@ describe('ExecutionPoller', () => {
     expect(materialized).not.toBeNull();
 
     const plannedRun = await ctx.store.get('PLR-000001');
-    expect((plannedRun?.payload as { state?: string }).state).toBe('completed');
+    expect((plannedRun?.payload as { state?: string }).state).toBe('executing');
     delete process.env['LABOS_OPENTRONS_BASE_URL'];
   });
 
@@ -208,7 +208,7 @@ describe('ExecutionPoller', () => {
     expect(payload.status).toBe('failed');
     expect(payload.lastStatusRaw).toBe('timeout');
     const plannedRun = await ctx.store.get('PLR-000001');
-    expect((plannedRun?.payload as { state?: string }).state).toBe('failed');
+    expect((plannedRun?.payload as { state?: string }).state).toBe('executing');
     delete process.env['LABOS_EXECUTION_MAX_RUN_MS'];
   });
 

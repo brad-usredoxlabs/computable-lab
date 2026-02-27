@@ -10,17 +10,17 @@ import yaml from 'yaml';
 import type {
   UISpec,
   FieldHint,
-  WidgetType,
   UISpecLoadResult,
 } from './types.js';
 
 /**
  * Valid widget types for validation.
  */
-const VALID_WIDGET_TYPES: Set<WidgetType> = new Set([
+const VALID_WIDGET_TYPES: Set<string> = new Set([
   'text', 'textarea', 'number', 'select', 'multiselect',
   'checkbox', 'radio', 'date', 'datetime', 'ref', 'reflist',
-  'array', 'object', 'hidden', 'readonly', 'custom',
+  'array', 'object', 'hidden', 'readonly', 'custom', 'markdown',
+  'combobox',
 ]);
 
 /**
@@ -112,6 +112,13 @@ export class UISpecLoader {
   clear(): void {
     this.cache.clear();
   }
+
+  /**
+   * Get the number of cached specs.
+   */
+  size(): number {
+    return this.cache.size;
+  }
   
   /**
    * Validate a UI spec structure.
@@ -180,8 +187,8 @@ export class UISpecLoader {
     
     // Validate layout
     if (form.layout !== undefined) {
-      if (!['vertical', 'horizontal', 'grid'].includes(form.layout as string)) {
-        errors.push(`${path}.layout: must be 'vertical', 'horizontal', or 'grid'`);
+      if (!['vertical', 'horizontal', 'grid', 'sections'].includes(form.layout as string)) {
+        errors.push(`${path}.layout: must be 'vertical', 'horizontal', 'grid', or 'sections'`);
       }
     }
     
@@ -240,7 +247,7 @@ export class UISpecLoader {
       errors.push(`${path}: missing required 'widget'`);
     } else if (typeof field.widget !== 'string') {
       errors.push(`${path}.widget: must be a string`);
-    } else if (!VALID_WIDGET_TYPES.has(field.widget as WidgetType)) {
+    } else if (!VALID_WIDGET_TYPES.has(field.widget as string)) {
       errors.push(`${path}.widget: invalid widget type '${field.widget}'`);
     }
     
@@ -267,10 +274,10 @@ export class UISpecLoader {
       }
     }
     
-    // Validate refKind for ref widgets
+    // Validate refKind for ref widgets (warn but don't error — can be inferred from path)
     if (['ref', 'reflist'].includes(field.widget as string)) {
-      if (!field.refKind || typeof field.refKind !== 'string') {
-        errors.push(`${path}.refKind: required for ref/reflist widgets`);
+      if (field.refKind !== undefined && typeof field.refKind !== 'string') {
+        errors.push(`${path}.refKind: must be a string if provided`);
       }
     }
     
@@ -522,4 +529,49 @@ function inferRefKind(name: string): string {
  */
 export function createUISpecLoader(): UISpecLoader {
   return new UISpecLoader();
+}
+
+/**
+ * Load all *.ui.yaml files from a directory tree.
+ */
+export async function loadAllUISpecs(
+  loader: UISpecLoader,
+  basePath: string,
+): Promise<{ loaded: number; errors: Array<{ path: string; error: string }> }> {
+  const { readdir, readFile, stat } = await import('node:fs/promises');
+  const { resolve: resolvePath, join: joinPath } = await import('node:path');
+
+  const errors: Array<{ path: string; error: string }> = [];
+  let loaded = 0;
+
+  async function walk(dir: string): Promise<void> {
+    let entries;
+    try {
+      entries = await readdir(dir);
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const fullPath = joinPath(dir, entry);
+      const stats = await stat(fullPath);
+      if (stats.isDirectory()) {
+        await walk(fullPath);
+      } else if (entry.endsWith('.ui.yaml')) {
+        try {
+          const content = await readFile(fullPath, 'utf-8');
+          const result = loader.load(content, fullPath);
+          if (result.success) {
+            loaded++;
+          } else {
+            errors.push({ path: fullPath, error: result.error || 'Unknown error' });
+          }
+        } catch (err) {
+          errors.push({ path: fullPath, error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    }
+  }
+
+  await walk(resolvePath(basePath));
+  return { loaded, errors };
 }

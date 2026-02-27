@@ -18,11 +18,12 @@ import type {
   ListRecordsResponse,
   ApiError,
 } from '../types.js';
+import type { ResolvedIdentity } from '../../identity/GitHubIdentity.js';
 
 /**
  * Create record handlers bound to a RecordStore and optional IndexManager.
  */
-export function createRecordHandlers(store: RecordStore, indexManager?: IndexManager) {
+export function createRecordHandlers(store: RecordStore, indexManager?: IndexManager, identity?: ResolvedIdentity) {
   return {
     /**
      * GET /records
@@ -156,8 +157,39 @@ export function createRecordHandlers(store: RecordStore, indexManager?: IndexMan
           };
         }
         
+        // Inject provenance fields
+        const now = new Date().toISOString();
+        const payloadWithProvenance = {
+          ...payload,
+          createdAt: now,
+          updatedAt: now,
+          ...(identity ? { createdBy: identity.username } : {}),
+        };
+
+        // Inherit FAIR fields from parent record
+        const typedPayload = payloadWithProvenance as Record<string, unknown>;
+        const parentId = (typedPayload.experimentId as string | undefined)
+          ?? (typedPayload.studyId as string | undefined);
+
+        if (parentId) {
+          try {
+            const parent = await store.get(parentId);
+            if (parent) {
+              const pp = parent.payload as Record<string, unknown>;
+              if (!typedPayload.license && pp.license)
+                typedPayload.license = pp.license;
+              if (!(typedPayload.keywords as string[] | undefined)?.length && (pp.keywords as string[] | undefined)?.length)
+                typedPayload.keywords = [...(pp.keywords as string[])];
+              if (!(typedPayload.tags as string[] | undefined)?.length && (pp.tags as string[] | undefined)?.length)
+                typedPayload.tags = [...(pp.tags as string[])];
+            }
+          } catch {
+            // Non-fatal: proceed without inheritance
+          }
+        }
+
         // Create envelope
-        const envelope = createEnvelope(payload, schemaId);
+        const envelope = createEnvelope(payloadWithProvenance, schemaId);
         if (!envelope) {
           reply.status(400);
           return {
@@ -277,11 +309,17 @@ export function createRecordHandlers(store: RecordStore, indexManager?: IndexMan
           };
         }
         
+        // Inject updatedAt (preserve createdAt and createdBy from existing payload)
+        const payloadWithProvenance = {
+          ...payload,
+          updatedAt: new Date().toISOString(),
+        };
+
         // Create updated envelope (handle meta per exactOptionalPropertyTypes)
         const envelope = {
           recordId: id,
           schemaId: existing.schemaId,
-          payload,
+          payload: payloadWithProvenance,
           ...(existing.meta !== undefined ? { meta: existing.meta } : {}),
         };
         

@@ -160,19 +160,21 @@ export function parseRecordPath(path: string): ParsedPath | null {
     return null;
   }
   
-  // Split filename by separator
-  const separatorIndex = filename.indexOf(PATH_SEPARATOR);
-  const recordId = filename.slice(0, separatorIndex);
-  const rest = filename.slice(separatorIndex + PATH_SEPARATOR.length);
-  
-  // Extract slug and extension
-  const dotIndex = rest.lastIndexOf('.');
-  if (dotIndex === -1) {
+  // Remove extension first to avoid confusion
+  const extDotIndex = filename.lastIndexOf('.');
+  if (extDotIndex === -1) {
     return null;
   }
-  
-  const slug = rest.slice(0, dotIndex);
-  const extension = rest.slice(dotIndex + 1);
+  const extension = filename.slice(extDotIndex + 1);
+  const nameWithoutExt = filename.slice(0, extDotIndex);
+
+  // Split on the LAST __ separator (recordId may itself contain __)
+  const separatorIndex = nameWithoutExt.lastIndexOf(PATH_SEPARATOR);
+  if (separatorIndex === -1) {
+    return null;
+  }
+  const recordId = nameWithoutExt.slice(0, separatorIndex);
+  const slug = nameWithoutExt.slice(separatorIndex + PATH_SEPARATOR.length);
   
   // Extract kind from path (second-to-last component)
   const kind = parts.length >= 2 ? parts[parts.length - 2] : '';

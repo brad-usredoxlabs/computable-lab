@@ -6,7 +6,7 @@ description: >
   such as material lot, plate snapshot, or library bundle.
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 

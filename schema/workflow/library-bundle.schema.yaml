@@ -6,7 +6,7 @@ description: >
   plate metadata. A protocol binds to a library bundle at execution time.
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 

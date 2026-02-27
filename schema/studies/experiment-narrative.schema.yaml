@@ -5,7 +5,7 @@ description: >
   A thin, curated narrative spine for an Experiment. This record does NOT duplicate run/event content. It provides ordering, curation, and lightweight rationale links by pointing to other records (runs, decisions, claims, evidence bundles, notes). Parents should not enumerate children; this narrative is optional and exists only when a human-readable storyline and/or audit trail is needed.
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"

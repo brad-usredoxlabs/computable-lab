@@ -5,7 +5,7 @@ description: >
   A Protocol is a reusable, declarative recipe intended to produce PlateEvents when executed in a Run. It is NOT execution truth: no concrete labware instances, no actual timestamps, and no embedded data files. Runs instantiate protocols by binding labware/material roles and providing parameter values, then emitting canonical PlateEvents.
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 

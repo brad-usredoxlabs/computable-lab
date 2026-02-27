@@ -24,7 +24,8 @@ export type WidgetType =
   | 'object'         // Nested object
   | 'hidden'         // Hidden field
   | 'readonly'       // Read-only display
-  | 'custom';        // Custom widget (requires renderer)
+  | 'custom'         // Custom widget (requires renderer)
+  | 'combobox';      // Autocomplete combobox (local + ontology suggestions)
 
 /**
  * Layout direction for form sections.

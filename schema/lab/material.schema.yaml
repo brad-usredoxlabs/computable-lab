@@ -5,7 +5,7 @@ description: >
   A material concept used in experiments (cells, chemicals, media, etc.). Meaning about materials is expressed via Claims/Assertions, not embedded here.
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 

@@ -6,7 +6,7 @@ description: >
   roles, and lane groupings independent of a specific execution run.
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 

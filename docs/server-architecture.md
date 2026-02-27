@@ -11,6 +11,7 @@ The computable-lab server operates as a **stateless appliance** that connects to
 3. **Bundled Schemas** — Schemas ship with the server, with optional repo overlays
 4. **Derived Identity** — `recordId` is canonical; `@id` is computed from namespace config
 5. **Multi-Repo Ready** — Single repo for v1, but architecture supports routing to multiple repos
+6. **Execution Control Plane** — `computable-lab` compiles/publishes contracts and ingests outcomes; execution runtimes are provider-backed and swappable
 
 ---
 

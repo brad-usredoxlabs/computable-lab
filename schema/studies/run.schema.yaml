@@ -5,7 +5,7 @@ description: >
   A Run is a single execution session. It is a thin header that links to a run-timeline (activities) and optional run-editor-state (UI conveniences). Canonical plate state is derived from PlateEvents in protocol segments.
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 

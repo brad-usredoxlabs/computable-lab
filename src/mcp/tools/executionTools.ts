@@ -10,7 +10,6 @@ import { dualRegister } from './dualRegister.js';
 import { jsonResult, errorResult } from '../helpers.js';
 import type { RecordFilter } from '../../store/types.js';
 import { ExecutionOrchestrator, ExecutionError } from '../../execution/ExecutionOrchestrator.js';
-import { ExecutionRunner } from '../../execution/ExecutionRunner.js';
 import { ExecutionControlService } from '../../execution/ExecutionControlService.js';
 import { ExecutionPoller } from '../../execution/ExecutionPoller.js';
 import { ExecutionMaterializer } from '../../execution/ExecutionMaterializer.js';
@@ -40,14 +39,15 @@ import {
 import { AdapterRegistry } from '../../execution/adapters/AdapterRegistry.js';
 import { PlateMapExporter } from '../../execution/PlateMapExporter.js';
 import { ParserRegistry } from '../../measurement/parsers/ParserRegistry.js';
+import { createExecutionProvider, resolveExecutionMode } from '../../execution/providers/createExecutionProvider.js';
 
 export function registerExecutionTools(server: McpServer, ctx: AppContext, registry?: ToolRegistry): void {
   const orchestrator = new ExecutionOrchestrator(ctx);
-  const runner = new ExecutionRunner(ctx);
+  const provider = createExecutionProvider(ctx);
   const controlService = new ExecutionControlService(ctx);
   const poller = new ExecutionPoller(ctx, controlService);
   const materializer = new ExecutionMaterializer(ctx);
-  const executionRunService = new ExecutionRunService(ctx, runner, controlService);
+  const executionRunService = new ExecutionRunService(ctx, provider, controlService);
   const retryWorker = new ExecutionRetryWorker(ctx, executionRunService);
   const timelineService = new ExecutionTimelineService(ctx, executionRunService);
   const capabilitiesService = new ExecutionCapabilitiesService();
@@ -233,7 +233,13 @@ export function registerExecutionTools(server: McpServer, ctx: AppContext, regis
     'execution_capabilities',
     'Get consolidated execution capability map including adapters, parsers, and runtime env contracts.',
     {},
-    async () => jsonResult({ capabilities: capabilitiesService.getCapabilities() })
+    async () => jsonResult({
+      capabilities: {
+        ...capabilitiesService.getCapabilities(),
+        provider: provider.descriptor(),
+        executionMode: resolveExecutionMode(ctx),
+      },
+    })
   );
 
   // execution_parameter_schema — List runtime execute parameter schemas
@@ -281,7 +287,7 @@ export function registerExecutionTools(server: McpServer, ctx: AppContext, regis
     },
     async (args) => {
       try {
-        const result = await runner.executeRobotPlan(args.robotPlanId, {
+        const result = await provider.executeRobotPlan(args.robotPlanId, {
           ...(args.parameters !== undefined ? { parameters: args.parameters } : {}),
         });
         return jsonResult({ success: true, executionRunId: result.executionRunId, logId: result.logId, status: result.status });
@@ -354,7 +360,7 @@ export function registerExecutionTools(server: McpServer, ctx: AppContext, regis
             dryRun: true,
           });
         }
-        const executed = await runner.executeRobotPlan(robotPlanId, {
+        const executed = await provider.executeRobotPlan(robotPlanId, {
           parameters: normalizedParameters,
         });
         return jsonResult({

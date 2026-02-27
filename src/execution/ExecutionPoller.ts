@@ -177,26 +177,6 @@ export class ExecutionPoller {
     return this.status();
   }
 
-  private async updatePlannedRunState(plannedRunId: string, state: 'executing' | 'completed' | 'failed'): Promise<void> {
-    const envelope = await this.ctx.store.get(plannedRunId);
-    if (!envelope) return;
-    const payload = envelope.payload;
-    if (!payload || typeof payload !== 'object') return;
-    const record = payload as Record<string, unknown>;
-    if (record['kind'] !== 'planned-run') return;
-    await this.ctx.store.update({
-      envelope: {
-        recordId: envelope.recordId,
-        schemaId: envelope.schemaId,
-        payload: {
-          ...record,
-          state,
-        },
-      },
-      message: `Poller set ${plannedRunId} state to ${state}`,
-    });
-  }
-
   async pollOnce(limit: number = 100): Promise<Record<string, unknown>> {
     if (this.inFlight) {
       return {
@@ -255,10 +235,6 @@ export class ExecutionPoller {
         });
         updated += 1;
         failed += 1;
-        const plannedRunId = payload.plannedRunRef?.id;
-        if (plannedRunId) {
-          await this.updatePlannedRunState(plannedRunId, 'failed');
-        }
         continue;
       }
 
@@ -296,10 +272,6 @@ export class ExecutionPoller {
         updated += 1;
         failed += 1;
         staleUnknownFailed += 1;
-        const plannedRunId = payload.plannedRunRef?.id;
-        if (plannedRunId) {
-          await this.updatePlannedRunState(plannedRunId, 'failed');
-        }
         continue;
       }
 
@@ -340,10 +312,6 @@ export class ExecutionPoller {
       }
       if (nextStatus === 'completed') {
         completed += 1;
-        const plannedRunId = payload.plannedRunRef?.id;
-        if (plannedRunId) {
-          await this.updatePlannedRunState(plannedRunId, 'completed');
-        }
         if (!payload.materializedEventGraphId) {
           try {
             await this.materializer.materializeFromExecutionRun(env.recordId);
@@ -353,10 +321,6 @@ export class ExecutionPoller {
         }
       } else if (nextStatus === 'failed') {
         failed += 1;
-        const plannedRunId = payload.plannedRunRef?.id;
-        if (plannedRunId) {
-          await this.updatePlannedRunState(plannedRunId, 'failed');
-        }
       }
     }
 

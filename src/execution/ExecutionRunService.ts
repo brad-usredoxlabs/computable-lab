@@ -1,7 +1,8 @@
 import type { AppContext } from '../server.js';
 import { ExecutionControlService } from './ExecutionControlService.js';
 import { ExecutionError } from './ExecutionOrchestrator.js';
-import { ExecutionRunner } from './ExecutionRunner.js';
+import type { ExecutionProvider } from './providers/ExecutionProvider.js';
+import { createExecutionProvider } from './providers/createExecutionProvider.js';
 
 type ExecutionRunPayload = {
   kind?: string;
@@ -23,12 +24,12 @@ type ExecutionRunView = { recordId: string; payload: ExecutionRunPayload };
 
 export class ExecutionRunService {
   private readonly ctx: AppContext;
-  private readonly runner: ExecutionRunner;
+  private readonly provider: ExecutionProvider;
   private readonly control: ExecutionControlService;
 
-  constructor(ctx: AppContext, runner?: ExecutionRunner, control?: ExecutionControlService) {
+  constructor(ctx: AppContext, provider?: ExecutionProvider, control?: ExecutionControlService) {
     this.ctx = ctx;
-    this.runner = runner ?? new ExecutionRunner(ctx);
+    this.provider = provider ?? createExecutionProvider(ctx);
     this.control = control ?? new ExecutionControlService(ctx);
   }
 
@@ -59,14 +60,14 @@ export class ExecutionRunService {
     };
   }
 
-  async retryExecutionRun(executionRunId: string): Promise<{ executionRunId: string; logId: string; status: 'completed' | 'error' }> {
+  async retryExecutionRun(executionRunId: string): Promise<{ executionRunId: string; logId?: string; taskId?: string; status: 'queued' | 'completed' | 'error' }> {
     return this.retryExecutionRunWithOptions(executionRunId, {});
   }
 
   async retryExecutionRunWithOptions(
     executionRunId: string,
     options: { force?: boolean }
-  ): Promise<{ executionRunId: string; logId: string; status: 'completed' | 'error' }> {
+  ): Promise<{ executionRunId: string; logId?: string; taskId?: string; status: 'queued' | 'completed' | 'error' }> {
     const run = await this.getExecutionRun(executionRunId);
     if (run.payload.status === 'running' && !options.force) {
       throw new ExecutionError('BAD_REQUEST', `Execution run ${executionRunId} is currently running`, 400);
@@ -89,7 +90,7 @@ export class ExecutionRunService {
         400
       );
     }
-    return this.runner.executeRobotPlan(robotPlanId, {
+    return this.provider.executeRobotPlan(robotPlanId, {
       parentExecutionRunId: executionRunId,
     });
   }

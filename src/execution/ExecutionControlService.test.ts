@@ -163,7 +163,7 @@ describe('ExecutionControlService', () => {
     const executionRun = await ctx.store.get('EXR-000001');
     expect((executionRun?.payload as { status?: string }).status).toBe('canceled');
     const plannedRun = await ctx.store.get('PLR-000001');
-    expect((plannedRun?.payload as { state?: string }).state).toBe('failed');
+    expect((plannedRun?.payload as { state?: string }).state).toBe('executing');
     const log = await ctx.store.get('ILOG-000001');
     expect((log?.payload as { status?: string }).status).toBe('aborted');
   });

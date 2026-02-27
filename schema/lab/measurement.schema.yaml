@@ -6,7 +6,7 @@ description: >
   Contains parsed instrument output with per-well data.
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 

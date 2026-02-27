@@ -146,6 +146,7 @@ definitions:
         - "markdown"
         - "code"
         - "hidden"
+        - "combobox"
         default: "text"
         description: "Widget type for rendering"
       required:

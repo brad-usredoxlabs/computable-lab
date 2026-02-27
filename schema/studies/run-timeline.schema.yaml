@@ -5,7 +5,7 @@ description: >
   Ordered activities for a Run. Canonical timeline for plate events, acquisitions, and sample operations within the run.
 
 type: object
-additionalProperties: false
+unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 

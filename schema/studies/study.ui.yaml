@@ -41,11 +41,47 @@ form:
     collapsible: true
     fields:
     - path: "$.tags"
-      widget: "array"
+      widget: "combobox"
       label: "Tags"
+      props:
+        sources: ["local"]
+        field: "tags"
     - path: "$.primaryClaimIds"
       widget: "array"
       label: "Primary Claim IDs"
+  - title: "FAIR"
+    collapsible: true
+    collapsed: true
+    fields:
+    - path: "$.license"
+      widget: "text"
+      label: "License"
+    - path: "$.keywords"
+      widget: "combobox"
+      label: "Keywords"
+      props:
+        sources: ["local", "ols"]
+        ontologies: ["efo", "chebi", "go"]
+        field: "keywords"
+    - path: "$.relatedIdentifiers"
+      widget: "array"
+      label: "Related Identifiers"
+  - title: "Provenance"
+    collapsible: true
+    collapsed: true
+    fields:
+    - path: "$.createdAt"
+      widget: "text"
+      label: "Created"
+      readonly: true
+    - path: "$.createdBy"
+      widget: "text"
+      label: "Created By"
+      readonly: true
+    - path: "$.updatedAt"
+      widget: "text"
+      label: "Updated"
+      readonly: true
 
 list:
   columns:

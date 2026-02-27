@@ -19,3 +19,4 @@ export * from './MeasurementHandlers.js';
 export * from './BiosourceHandlers.js';
 export * from './KnowledgeAIHandlers.js';
 export * from './ComponentHandlers.js';
+export * from './TagHandlers.js';

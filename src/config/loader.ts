@@ -19,6 +19,7 @@ import type {
   GitAuthConfig,
   NamespaceConfig,
   AIConfig,
+  ExecutionConfig,
 } from './types.js';
 import { DEFAULT_CONFIG, DEFAULT_REPO_CONFIG } from './types.js';
 
@@ -262,6 +263,26 @@ function validateAIConfig(config: unknown, path = 'ai'): asserts config is AICon
   }
 }
 
+function validateExecutionConfig(config: unknown, path = 'execution'): asserts config is ExecutionConfig {
+  if (!config || typeof config !== 'object') {
+    throw new ConfigValidationError('must be an object', path, config);
+  }
+  const c = config as Record<string, unknown>;
+  if (c.mode !== undefined && c.mode !== 'local' && c.mode !== 'remote' && c.mode !== 'hybrid') {
+    throw new ConfigValidationError('mode must be one of: local, remote, hybrid', `${path}.mode`, c.mode);
+  }
+  if (c.adapters !== undefined) {
+    if (!c.adapters || typeof c.adapters !== 'object' || Array.isArray(c.adapters)) {
+      throw new ConfigValidationError('adapters must be an object map', `${path}.adapters`, c.adapters);
+    }
+    for (const [adapterId, value] of Object.entries(c.adapters as Record<string, unknown>)) {
+      if (value !== 'local' && value !== 'remote') {
+        throw new ConfigValidationError('adapter mode must be local or remote', `${path}.adapters.${adapterId}`, value);
+      }
+    }
+  }
+}
+
 /**
  * Validate the entire configuration.
  */
@@ -301,6 +322,10 @@ export function validateConfig(config: unknown): asserts config is Partial<AppCo
 
   if (c.ai !== undefined) {
     validateAIConfig(c.ai, 'ai');
+  }
+
+  if (c.execution !== undefined) {
+    validateExecutionConfig(c.execution, 'execution');
   }
 }
 
@@ -366,6 +391,7 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<AppCo
     server: deepMerge(DEFAULT_CONFIG.server, partialConfig.server ?? {}),
     schemas: deepMerge(DEFAULT_CONFIG.schemas, partialConfig.schemas ?? {}),
     repositories: (partialConfig.repositories ?? []).map(applyRepoDefaults),
+    execution: deepMerge(DEFAULT_CONFIG.execution ?? { mode: 'local', adapters: {} }, partialConfig.execution ?? {}),
   };
 
   // Pass through AI config if present

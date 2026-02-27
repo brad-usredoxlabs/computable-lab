@@ -23,6 +23,7 @@ import type { ExecutionHandlers } from './handlers/ExecutionHandlers.js';
 import type { MeasurementHandlers } from './handlers/MeasurementHandlers.js';
 import type { BiosourceHandlers } from './handlers/BiosourceHandlers.js';
 import type { KnowledgeAIHandlers } from './handlers/KnowledgeAIHandlers.js';
+import type { TagHandlers } from './handlers/TagHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -46,6 +47,7 @@ export interface RouteOptions {
   measurementHandlers?: MeasurementHandlers;
   biosourceHandlers?: BiosourceHandlers;
   knowledgeAIHandlers?: KnowledgeAIHandlers;
+  tagHandlers?: TagHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -237,6 +239,16 @@ export function registerRoutes(
   }
 
   // ============================================================================
+  // Tag Suggestion Routes (optional - requires tagHandlers)
+  // ============================================================================
+
+  const { tagHandlers } = options;
+
+  if (tagHandlers) {
+    fastify.get('/tags/suggest', tagHandlers.suggestTags.bind(tagHandlers));
+  }
+
+  // ============================================================================
   // AI Agent Routes (optional - requires aiHandlers)
   // ============================================================================
 
@@ -320,6 +332,11 @@ export function registerRoutes(
     fastify.get('/execution/capabilities', executionHandlers.getCapabilities.bind(executionHandlers));
     fastify.get('/execution/parameters/schema', executionHandlers.getExecutionParameterSchemas.bind(executionHandlers));
     fastify.post('/execution/parameters/validate', executionHandlers.validateExecutionParameters.bind(executionHandlers));
+    fastify.post('/execution-tasks/claim', executionHandlers.claimExecutionTasks.bind(executionHandlers));
+    fastify.post('/execution-tasks/:id/heartbeat', executionHandlers.heartbeatExecutionTask.bind(executionHandlers));
+    fastify.post('/execution-tasks/:id/logs', executionHandlers.appendExecutionTaskLogs.bind(executionHandlers));
+    fastify.post('/execution-tasks/:id/status', executionHandlers.updateExecutionTaskStatus.bind(executionHandlers));
+    fastify.post('/execution-tasks/:id/complete', executionHandlers.completeExecutionTask.bind(executionHandlers));
     fastify.get('/execution-runs', executionHandlers.listExecutionRuns.bind(executionHandlers));
     fastify.get('/execution-runs/latest', executionHandlers.getLatestExecutionRun.bind(executionHandlers));
     fastify.get('/execution-runs/:id', executionHandlers.getExecutionRun.bind(executionHandlers));

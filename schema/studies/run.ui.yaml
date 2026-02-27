@@ -31,6 +31,63 @@ form:
     - path: "$.protocolId"
       widget: "ref"
       label: "Protocol"
+    - path: "$.status"
+      widget: "select"
+      label: "Status"
+    - path: "$.notes"
+      widget: "markdown"
+      label: "Notes"
+  - title: "Timing"
+    collapsible: true
+    fields:
+    - path: "$.startedAt"
+      widget: "datetime"
+      label: "Started"
+    - path: "$.endedAt"
+      widget: "datetime"
+      label: "Ended"
+  - title: "Metadata"
+    collapsible: true
+    fields:
+    - path: "$.tags"
+      widget: "combobox"
+      label: "Tags"
+      props:
+        sources: ["local"]
+        field: "tags"
+  - title: "FAIR"
+    collapsible: true
+    collapsed: true
+    fields:
+    - path: "$.license"
+      widget: "text"
+      label: "License"
+    - path: "$.keywords"
+      widget: "combobox"
+      label: "Keywords"
+      props:
+        sources: ["local", "ols"]
+        ontologies: ["efo", "chebi", "go"]
+        field: "keywords"
+    - path: "$.relatedIdentifiers"
+      widget: "array"
+      label: "Related Identifiers"
+  - title: "Provenance"
+    collapsible: true
+    collapsed: true
+    fields:
+    - path: "$.createdAt"
+      widget: "text"
+      label: "Created"
+      readonly: true
+    - path: "$.createdBy"
+      widget: "text"
+      label: "Created By"
+      readonly: true
+    - path: "$.updatedAt"
+      widget: "text"
+      label: "Updated"
+      readonly: true
 
 list:
   columns:
