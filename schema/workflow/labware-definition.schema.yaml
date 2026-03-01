@@ -1,0 +1,131 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml"
+title: "Labware Definition"
+description: >
+  Minimal robot-planning-focused labware definition. Can be imported from
+  platform-native definitions (e.g., Opentrons) while preserving only fields
+  needed for mapping, compatibility checks, and volume warnings.
+
+type: object
+additionalProperties: false
+required:
+  - kind
+  - recordId
+  - type
+  - id
+  - display_name
+  - topology
+  - capacity
+
+properties:
+  kind:
+    const: "labware-definition"
+  recordId:
+    type: string
+  type:
+    const: "labware_definition"
+  id:
+    type: string
+    description: "Stable internal identifier."
+  display_name:
+    type: string
+  vendor:
+    type: string
+  platform_aliases:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [ platform, alias ]
+      properties:
+        platform:
+          type: string
+          enum: [ opentrons_ot2, opentrons_flex, integra_assist_plus, generic ]
+        alias:
+          type: string
+    uniqueItems: true
+  read_only:
+    type: boolean
+    description: "Imported/vendor definitions should be marked true."
+  source:
+    type: object
+    additionalProperties: false
+    properties:
+      kind:
+        type: string
+        enum: [ imported, curated, user ]
+      url:
+        type: string
+      hash:
+        type: string
+      version:
+        type: string
+
+  topology:
+    type: object
+    additionalProperties: false
+    required: [ addressing ]
+    properties:
+      addressing:
+        type: string
+        enum: [ grid, linear, single ]
+      rows:
+        type: integer
+        minimum: 1
+      columns:
+        type: integer
+        minimum: 1
+      linear_count:
+        type: integer
+        minimum: 1
+      row_pitch_mm:
+        type: number
+        exclusiveMinimum: 0
+      col_pitch_mm:
+        type: number
+        exclusiveMinimum: 0
+      well_pitch_mm:
+        type: number
+        exclusiveMinimum: 0
+      orientation_default:
+        type: string
+        enum: [ landscape, portrait ]
+      orientation_allowed:
+        type: array
+        items:
+          type: string
+          enum: [ landscape, portrait ]
+        uniqueItems: true
+
+  capacity:
+    type: object
+    additionalProperties: false
+    required: [ max_well_volume_uL ]
+    properties:
+      max_well_volume_uL:
+        type: number
+        exclusiveMinimum: 0
+      min_working_volume_uL:
+        type: number
+        minimum: 0
+
+  aspiration_hints:
+    type: object
+    additionalProperties: false
+    properties:
+      single_well_multichannel_source:
+        type: boolean
+        description: >
+          If true, multichannel aspiration can intentionally use one source well/trough.
+      per_channel_source_expected:
+        type: boolean
+      notes:
+        type: string
+
+  compatibility_tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+  notes:
+    type: string

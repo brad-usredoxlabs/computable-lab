@@ -13,7 +13,8 @@
     "test:run": "vitest run",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
-    "mcp": "npx tsx src/mcp-stdio.ts"
+    "mcp": "npx tsx src/mcp-stdio.ts",
+    "import:opentrons-labware": "npx tsx src/tools/importOpentronsLabware.ts"
   },
   "keywords": [
     "lab",

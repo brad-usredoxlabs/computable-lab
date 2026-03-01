@@ -1,0 +1,74 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/pipette-capability.schema.yaml"
+title: "Pipette Capability"
+description: >
+  Capability profile used for compatibility checks and channel/spacing mapping.
+  Supports fixed and adjustable-spacing multichannel tools.
+
+type: object
+additionalProperties: false
+required:
+  - kind
+  - recordId
+  - type
+  - id
+  - display_name
+  - tool_type
+  - channels_supported
+  - volume_families
+
+properties:
+  kind:
+    const: "pipette-capability"
+  recordId:
+    type: string
+  type:
+    const: "pipette_capability"
+  id:
+    type: string
+  display_name:
+    type: string
+  tool_type:
+    type: string
+    enum: [ pipette ]
+  channels_supported:
+    type: array
+    minItems: 1
+    items:
+      type: integer
+      minimum: 1
+    uniqueItems: true
+  spacing_mode:
+    type: string
+    enum: [ fixed, adjustable, mixed ]
+    default: fixed
+  fixed_spacing_mm:
+    type: number
+    exclusiveMinimum: 0
+  volume_families:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      required: [ name, volume_min_uL, volume_max_uL ]
+      properties:
+        name:
+          type: string
+        volume_min_uL:
+          type: number
+          minimum: 0
+        volume_max_uL:
+          type: number
+          exclusiveMinimum: 0
+        spacing_min_mm:
+          type: number
+          exclusiveMinimum: 0
+        spacing_max_mm:
+          type: number
+          exclusiveMinimum: 0
+  platform:
+    type: string
+    enum: [ opentrons_ot2, opentrons_flex, integra_assist_plus, generic ]
+  notes:
+    type: string

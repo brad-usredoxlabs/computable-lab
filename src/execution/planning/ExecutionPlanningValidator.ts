@@ -277,7 +277,7 @@ export class ExecutionPlanningValidator {
         if (def?.footprint && Array.isArray(slot.compatible_footprints) && slot.compatible_footprints.length > 0) {
           if (!slot.compatible_footprints.includes(def.footprint)) {
             issues.push({
-              severity: 'error',
+              severity: 'warning',
               code: 'INCOMPATIBLE_FOOTPRINT',
               path: `${pPath}.slot_id`,
               message: `Footprint "${def.footprint}" is not compatible with slot "${p.slot_id}".`,
@@ -425,7 +425,7 @@ export class ExecutionPlanningValidator {
     } else {
       if (primaryToolBinding?.mount && primaryTool.mount && primaryTool.mount !== 'na' && primaryToolBinding.mount !== primaryTool.mount) {
         issues.push({
-          severity: 'error',
+          severity: 'warning',
           code: 'TOOL_MOUNT_MISMATCH',
           path: 'tool_bindings.primary_liquid_handler.mount',
           message: `Primary tool mount "${primaryToolBinding.mount}" does not match environment tool mount "${primaryTool.mount}".`,
@@ -443,7 +443,7 @@ export class ExecutionPlanningValidator {
 
       if (primaryToolBinding?.default_tip_type && !(primaryTool.tip_types ?? []).includes(primaryToolBinding.default_tip_type)) {
         issues.push({
-          severity: 'error',
+          severity: 'warning',
           code: 'TIP_TYPE_UNSUPPORTED',
           path: 'tool_bindings.primary_liquid_handler.default_tip_type',
           message: `Tool "${primaryToolId}" does not support tip type "${primaryToolBinding.default_tip_type}".`,
@@ -454,7 +454,7 @@ export class ExecutionPlanningValidator {
         const tipType = tipracks[i]?.tip_type;
         if (typeof tipType === 'string' && !(primaryTool.tip_types ?? []).includes(tipType)) {
           issues.push({
-            severity: 'error',
+            severity: 'warning',
             code: 'TIP_TYPE_UNSUPPORTED',
             path: `placements.tipracks[${i}].tip_type`,
             message: `Tool "${primaryToolId}" does not support tip type "${tipType}".`,
@@ -473,7 +473,7 @@ export class ExecutionPlanningValidator {
         for (const vol of volumes) {
           if (typeof minVol === 'number' && vol < minVol) {
             issues.push({
-              severity: 'error',
+              severity: 'warning',
               code: 'VOLUME_BELOW_MIN',
               path: eventPath,
               message: `Event${eventId} requires ${vol} uL, below primary tool minimum ${minVol} uL.`,
@@ -481,7 +481,7 @@ export class ExecutionPlanningValidator {
           }
           if (typeof maxVol === 'number' && vol > maxVol) {
             issues.push({
-              severity: 'error',
+              severity: 'warning',
               code: 'VOLUME_ABOVE_MAX',
               path: eventPath,
               message: `Event${eventId} requires ${vol} uL, above primary tool maximum ${maxVol} uL.`,
@@ -493,7 +493,7 @@ export class ExecutionPlanningValidator {
         for (const requested of channelHints) {
           if (requested > maxChannels) {
             issues.push({
-              severity: 'error',
+              severity: 'warning',
               code: 'CHANNEL_REQUIREMENT_UNSATISFIED',
               path: eventPath,
               message: `Event${eventId} requests ${requested} channels, but primary tool supports ${maxChannels}.`,

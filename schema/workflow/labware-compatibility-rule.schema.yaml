@@ -1,0 +1,59 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/labware-compatibility-rule.schema.yaml"
+title: "Labware Compatibility Rule"
+description: >
+  Optional override rules for cases where geometry alone is insufficient
+  (e.g., platform slot constraints, robot-specific behavior exceptions).
+
+type: object
+additionalProperties: false
+required:
+  - kind
+  - recordId
+  - type
+  - id
+  - match
+  - behavior
+
+properties:
+  kind:
+    const: "labware-compatibility-rule"
+  recordId:
+    type: string
+  type:
+    const: "labware_compatibility_rule"
+  id:
+    type: string
+  enabled:
+    type: boolean
+    default: true
+  match:
+    type: object
+    additionalProperties: false
+    properties:
+      platform:
+        type: string
+        enum: [ opentrons_ot2, opentrons_flex, integra_assist_plus, generic ]
+      deck_slot_id:
+        type: string
+      labware_definition_id:
+        type: string
+      pipette_capability_id:
+        type: string
+  behavior:
+    type: object
+    additionalProperties: false
+    properties:
+      force_orientation:
+        type: string
+        enum: [ landscape, portrait ]
+      mapping_mode:
+        type: string
+        enum: [ single_source_multichannel, per_channel, invalid ]
+      severity:
+        type: string
+        enum: [ warning, error ]
+      message:
+        type: string
+  notes:
+    type: string
