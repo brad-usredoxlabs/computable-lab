@@ -95,6 +95,10 @@ export function createExecutionHandlers(ctx: AppContext) {
     return { authorized: true, token, scopes };
   }
 
+  function isTargetPlatform(value: string): value is 'opentrons_ot2' | 'opentrons_flex' | 'integra_assist' {
+    return value === 'opentrons_ot2' || value === 'opentrons_flex' || value === 'integra_assist';
+  }
+
   return {
     /**
      * GET /execution-runs
@@ -392,6 +396,99 @@ export function createExecutionHandlers(ctx: AppContext) {
     },
 
     /**
+     * POST /execution-plans/validate
+     * Validate an execution-plan against its referenced environment and event graph.
+     */
+    async validateExecutionPlan(
+      request: FastifyRequest<{
+        Body: { executionPlanId: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{
+      success: boolean;
+      executionPlanId?: string;
+      executionEnvironmentId?: string;
+      eventGraphId?: string;
+      validation?: { valid: boolean; issues: unknown[] };
+    } | ApiError> {
+      try {
+        if (!request.body?.executionPlanId) {
+          reply.status(400);
+          return { error: 'BAD_REQUEST', message: 'executionPlanId is required' };
+        }
+        const result = await orchestrator.validateExecutionPlan({
+          executionPlanId: request.body.executionPlanId,
+        });
+        return {
+          success: true,
+          executionPlanId: result.executionPlanId,
+          executionEnvironmentId: result.executionEnvironmentId,
+          eventGraphId: result.eventGraphId,
+          validation: result.validation,
+        };
+      } catch (err) {
+        if (err instanceof ExecutionError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
+     * POST /execution-plans/:id/emit
+     * Emit target-specific robot artifacts from a validated execution-plan.
+     */
+    async emitExecutionPlan(
+      request: FastifyRequest<{
+        Params: { id: string };
+        Body: { targetPlatform: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{
+      success: boolean;
+      executionPlanId?: string;
+      robotPlanId?: string;
+      artifacts?: unknown[];
+    } | ApiError> {
+      const targetPlatform = request.body?.targetPlatform;
+      if (!targetPlatform || !isTargetPlatform(targetPlatform)) {
+        reply.status(400);
+        return {
+          error: 'BAD_REQUEST',
+          message: `Unsupported targetPlatform: ${String(targetPlatform)}`,
+        };
+      }
+
+      try {
+        const result = await orchestrator.emitExecutionPlan({
+          executionPlanId: request.params.id,
+          targetPlatform,
+        });
+        return {
+          success: true,
+          executionPlanId: result.executionPlanId,
+          robotPlanId: result.robotPlanId,
+          artifacts: result.artifacts,
+        };
+      } catch (err) {
+        if (err instanceof ExecutionError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
      * POST /planned-runs
      * Create a planned run (from protocol or event graph).
      */
@@ -494,7 +591,7 @@ export function createExecutionHandlers(ctx: AppContext) {
       reply: FastifyReply,
     ): Promise<{ success: boolean; robotPlanId?: string } | ApiError> {
       const targetPlatform = request.body.targetPlatform;
-      if (targetPlatform !== 'opentrons_ot2' && targetPlatform !== 'opentrons_flex' && targetPlatform !== 'integra_assist') {
+      if (!isTargetPlatform(targetPlatform)) {
         reply.status(400);
         return {
           error: 'BAD_REQUEST',

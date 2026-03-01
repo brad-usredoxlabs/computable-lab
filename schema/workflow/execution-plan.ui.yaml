@@ -1,0 +1,77 @@
+# UI specification for ExecutionPlan records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/execution-plan.schema.yaml"
+
+display:
+  titleField: "$.id"
+  subtitleField: "$.execution_environment_ref"
+  icon: "execution-plan"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.recordId"
+      widget: "text"
+      label: "Record ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.id"
+      widget: "text"
+      label: "Plan ID"
+      required: true
+    - path: "$.version"
+      widget: "text"
+      label: "Version"
+      required: true
+  - title: "References"
+    fields:
+    - path: "$.event_graph_ref"
+      widget: "text"
+      label: "Event Graph Ref"
+      required: true
+    - path: "$.execution_environment_ref"
+      widget: "text"
+      label: "Execution Environment Ref"
+      required: true
+  - title: "Planning"
+    fields:
+    - path: "$.placements.labware"
+      widget: "array"
+      label: "Labware Placements"
+    - path: "$.placements.tipracks"
+      widget: "array"
+      label: "Tiprack Placements"
+    - path: "$.tool_bindings"
+      widget: "object"
+      label: "Tool Bindings"
+    - path: "$.strategy"
+      widget: "object"
+      label: "Strategy"
+  - title: "Overrides and Artifacts"
+    fields:
+    - path: "$.event_overrides"
+      widget: "array"
+      label: "Event Overrides"
+    - path: "$.derived_artifacts"
+      widget: "array"
+      label: "Derived Artifacts"
+
+list:
+  columns:
+  - path: "$.recordId"
+    label: "ID"
+    width: "140px"
+  - path: "$.id"
+    label: "Plan"
+  - path: "$.event_graph_ref"
+    label: "Event Graph"
+    width: "180px"
+  - path: "$.execution_environment_ref"
+    label: "Environment"
+    width: "180px"

@@ -308,6 +308,9 @@ export function registerRoutes(
   const { executionHandlers } = options;
 
   if (executionHandlers) {
+    const executionPlanningEnabled =
+      process.env['CL_FEATURE_EXECUTION_PLANNING'] === '1' ||
+      process.env['CL_FEATURE_EXECUTION_PLANNING'] === 'true';
     fastify.get('/execution/adapters', executionHandlers.listAdapters.bind(executionHandlers));
     fastify.get('/execution/health/adapters', executionHandlers.getAdapterHealth.bind(executionHandlers));
     fastify.get('/execution/sidecar/contracts', executionHandlers.listSidecarContracts.bind(executionHandlers));
@@ -332,6 +335,10 @@ export function registerRoutes(
     fastify.get('/execution/capabilities', executionHandlers.getCapabilities.bind(executionHandlers));
     fastify.get('/execution/parameters/schema', executionHandlers.getExecutionParameterSchemas.bind(executionHandlers));
     fastify.post('/execution/parameters/validate', executionHandlers.validateExecutionParameters.bind(executionHandlers));
+    if (executionPlanningEnabled) {
+      fastify.post('/execution-plans/validate', executionHandlers.validateExecutionPlan.bind(executionHandlers));
+      fastify.post('/execution-plans/:id/emit', executionHandlers.emitExecutionPlan.bind(executionHandlers));
+    }
     fastify.post('/execution-tasks/claim', executionHandlers.claimExecutionTasks.bind(executionHandlers));
     fastify.post('/execution-tasks/:id/heartbeat', executionHandlers.heartbeatExecutionTask.bind(executionHandlers));
     fastify.post('/execution-tasks/:id/logs', executionHandlers.appendExecutionTaskLogs.bind(executionHandlers));

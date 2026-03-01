@@ -93,6 +93,7 @@ export function createProtocolHandlers(ctx: AppContext) {
             materials?: Array<{ roleId: string; materialRef?: unknown }>;
             instruments?: Array<{ roleId: string; instrumentRef?: unknown }>;
             parameters?: Array<{ name: string; value: unknown }>;
+            executionPlanRef?: { kind?: string; id?: string; type?: string } | string;
           };
         };
       }>,
