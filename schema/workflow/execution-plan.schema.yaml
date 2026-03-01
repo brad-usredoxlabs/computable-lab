@@ -1,0 +1,244 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/execution-plan.schema.yaml"
+title: "ExecutionPlan"
+description: >
+  Declarative run plan binding event-graph intent to a specific execution
+  environment. Captures physical placements, tool bindings, and strategy.
+
+type: object
+additionalProperties: false
+
+required:
+- kind
+- recordId
+- type
+- id
+- version
+- event_graph_ref
+- execution_environment_ref
+- placements
+- tool_bindings
+- strategy
+
+properties:
+  kind:
+    const: "execution-plan"
+
+  recordId:
+    type: string
+    description: "Canonical record identity for computable-lab storage."
+
+  type:
+    const: "execution_plan"
+
+  id:
+    type: string
+    pattern: "^[A-Z0-9._-]{6,}$"
+
+  version:
+    type: string
+    pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+
+  created_at:
+    type: string
+    format: date-time
+
+  created_by:
+    type: string
+
+  event_graph_ref:
+    type: string
+
+  execution_environment_ref:
+    type: string
+
+  placements:
+    type: object
+    additionalProperties: false
+    required: [ labware ]
+    properties:
+      labware:
+        type: array
+        minItems: 1
+        items:
+          type: object
+          additionalProperties: false
+          required: [ labware_ref, labware_id, slot_id ]
+          properties:
+            labware_ref:
+              type: string
+            labware_id:
+              type: string
+            slot_id:
+              type: string
+            orientation:
+              type: string
+              enum: [ default, rot90, rot180, rot270 ]
+            notes:
+              type: string
+      tipracks:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ tiprack_id, slot_id, tip_type ]
+          properties:
+            tiprack_id:
+              type: string
+            slot_id:
+              type: string
+            tip_type:
+              type: string
+            starting_tip:
+              type: string
+            next_tip_well:
+              type: string
+            consumed_count:
+              type: integer
+              minimum: 0
+            depleted:
+              type: boolean
+      waste:
+        type: object
+        additionalProperties: false
+        properties:
+          slot_id:
+            type: string
+          labware_id:
+            type: string
+
+  tool_bindings:
+    type: object
+    additionalProperties: false
+    required: [ primary_liquid_handler ]
+    properties:
+      primary_liquid_handler:
+        type: object
+        additionalProperties: false
+        required: [ tool_id ]
+        properties:
+          tool_id:
+            type: string
+          mount:
+            type: string
+            enum: [ left, right, center, na ]
+          default_tip_type:
+            type: string
+      secondary_tools:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ tool_id ]
+          properties:
+            tool_id:
+              type: string
+            mount:
+              type: string
+
+  strategy:
+    type: object
+    additionalProperties: false
+    required: [ tip_policy, channelization, batching ]
+    properties:
+      tip_policy:
+        type: string
+        enum: [ new_tip_each_transfer, new_tip_each_source, reuse_within_batch, custom ]
+      channelization:
+        type: string
+        enum: [ single_channel, multi_channel_prefer, multi_channel_force, auto ]
+      batching:
+        type: string
+        enum: [ none, group_by_source, group_by_destination, multi_dispense_prefer, auto ]
+      liquid_class_default:
+        type: string
+
+  tip_management:
+    type: object
+    additionalProperties: false
+    properties:
+      mode:
+        type: string
+        enum: [ robot, manual ]
+      replacement_policy:
+        type: string
+        enum: [ full_rack_default, partial_override ]
+      pause_on_depletion:
+        type: boolean
+      racks:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ tiprack_id ]
+          properties:
+            tiprack_id:
+              type: string
+            next_tip_well:
+              type: string
+            consumed_count:
+              type: integer
+              minimum: 0
+            depleted:
+              type: boolean
+      runtime_actions:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ action_id, kind ]
+          properties:
+            action_id:
+              type: string
+            kind:
+              type: string
+              enum: [ pause_for_tip_reload, operator_prompt, note ]
+            message:
+              type: string
+            target_tiprack_id:
+              type: string
+
+  event_overrides:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [ event_id ]
+      properties:
+        event_id:
+          type: string
+        aspirate_speed:
+          type: number
+        dispense_speed:
+          type: number
+        mix_cycles:
+          type: integer
+          minimum: 0
+        mix_volume_ul:
+          type: number
+          minimum: 0
+        liquid_class:
+          type: string
+        tip_policy:
+          type: string
+          enum: [ inherit, new_tip_each_transfer, new_tip_each_source, reuse_within_batch ]
+
+  derived_artifacts:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [ target, path, sha256 ]
+      properties:
+        target:
+          type: string
+          enum: [ pylabrobot, pyalab, opentrons_api ]
+        path:
+          type: string
+        sha256:
+          type: string
+        generator_version:
+          type: string
+
+  hash:
+    type: string

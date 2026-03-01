@@ -157,13 +157,13 @@ export function createRecordHandlers(store: RecordStore, indexManager?: IndexMan
           };
         }
         
-        // Inject provenance fields
+        // Inject payload provenance fields that are schema-compatible.
+        // Keep actor provenance in envelope meta so strict schemas are not violated.
         const now = new Date().toISOString();
         const payloadWithProvenance = {
           ...payload,
           createdAt: now,
           updatedAt: now,
-          ...(identity ? { createdBy: identity.username } : {}),
         };
 
         // Inherit FAIR fields from parent record
@@ -189,7 +189,20 @@ export function createRecordHandlers(store: RecordStore, indexManager?: IndexMan
         }
 
         // Create envelope
-        const envelope = createEnvelope(payloadWithProvenance, schemaId);
+        const envelope = createEnvelope(
+          payloadWithProvenance,
+          schemaId,
+          identity
+            ? {
+                createdAt: now,
+                updatedAt: now,
+                createdBy: identity.username,
+              }
+            : {
+                createdAt: now,
+                updatedAt: now,
+              }
+        );
         if (!envelope) {
           reply.status(400);
           return {
@@ -309,7 +322,7 @@ export function createRecordHandlers(store: RecordStore, indexManager?: IndexMan
           };
         }
         
-        // Inject updatedAt (preserve createdAt and createdBy from existing payload)
+        // Inject updatedAt in payload (schema-compatible provenance field).
         const payloadWithProvenance = {
           ...payload,
           updatedAt: new Date().toISOString(),

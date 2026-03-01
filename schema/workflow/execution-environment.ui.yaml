@@ -1,0 +1,78 @@
+# UI specification for ExecutionEnvironment records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/execution-environment.schema.yaml"
+
+display:
+  titleField: "$.id"
+  subtitleField: "$.robot.model"
+  icon: "execution-environment"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.recordId"
+      widget: "text"
+      label: "Record ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.id"
+      widget: "text"
+      label: "Environment ID"
+      required: true
+    - path: "$.version"
+      widget: "text"
+      label: "Version"
+      required: true
+  - title: "Robot"
+    fields:
+    - path: "$.robot.family"
+      widget: "select"
+      label: "Family"
+      required: true
+    - path: "$.robot.model"
+      widget: "text"
+      label: "Model"
+      required: true
+    - path: "$.robot.runtime_targets"
+      widget: "array"
+      label: "Runtime Targets"
+  - title: "Deck and Tooling"
+    fields:
+    - path: "$.deck.deck_id"
+      widget: "text"
+      label: "Deck ID"
+      required: true
+    - path: "$.deck.slots"
+      widget: "array"
+      label: "Deck Slots"
+    - path: "$.tools"
+      widget: "array"
+      label: "Tools"
+  - title: "Labware and Constraints"
+    fields:
+    - path: "$.labware_registry.definitions"
+      widget: "array"
+      label: "Labware Definitions"
+    - path: "$.constraints"
+      widget: "object"
+      label: "Constraints"
+
+list:
+  columns:
+  - path: "$.recordId"
+    label: "ID"
+    width: "140px"
+  - path: "$.id"
+    label: "Environment"
+  - path: "$.robot.family"
+    label: "Family"
+    width: "160px"
+  - path: "$.robot.model"
+    label: "Model"
+    width: "180px"

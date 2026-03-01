@@ -24,3 +24,5 @@ oneOf:
 - $ref: "./context.schema.yaml"
 - $ref: "../bio/sequence.schema.yaml"
 - $ref: "../bio/sequence-interval.schema.yaml"
+- $ref: "../workflow/execution-environment.schema.yaml"
+- $ref: "../workflow/execution-plan.schema.yaml"
