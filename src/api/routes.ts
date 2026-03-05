@@ -24,6 +24,7 @@ import type { MeasurementHandlers } from './handlers/MeasurementHandlers.js';
 import type { BiosourceHandlers } from './handlers/BiosourceHandlers.js';
 import type { KnowledgeAIHandlers } from './handlers/KnowledgeAIHandlers.js';
 import type { TagHandlers } from './handlers/TagHandlers.js';
+import type { MaterialPrepHandlers } from './handlers/MaterialPrepHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -48,6 +49,7 @@ export interface RouteOptions {
   biosourceHandlers?: BiosourceHandlers;
   knowledgeAIHandlers?: KnowledgeAIHandlers;
   tagHandlers?: TagHandlers;
+  materialPrepHandlers?: MaterialPrepHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -250,6 +252,11 @@ export function registerRoutes(
 
   if (tagHandlers) {
     fastify.get('/tags/suggest', tagHandlers.suggestTags.bind(tagHandlers));
+  }
+
+  const { materialPrepHandlers } = options;
+  if (materialPrepHandlers) {
+    fastify.post('/materials/recipes/:id/execute', materialPrepHandlers.executeRecipe.bind(materialPrepHandlers));
   }
 
   // ============================================================================

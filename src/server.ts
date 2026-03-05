@@ -41,6 +41,7 @@ import {
   createBiosourceHandlers,
   createKnowledgeAIHandlers,
   createTagHandlers,
+  createMaterialPrepHandlers,
 } from './api/handlers/index.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { createUISpecLoader, loadAllUISpecs, type UISpecLoader } from './ui/UISpecLoader.js';
@@ -317,6 +318,7 @@ export async function createServer(
   const libraryHandlers = createLibraryHandlers(ctx.store);
   const ontologyHandlers = createOntologyHandlers();
   const tagHandlers = createTagHandlers(ctx.store);
+  const materialPrepHandlers = createMaterialPrepHandlers(ctx.store);
   const uiHandlers = createUIHandlers(ctx.uiSpecLoader, ctx.store, ctx.schemaRegistry);
 
   // Create meta handlers
@@ -497,6 +499,7 @@ export async function createServer(
       libraryHandlers,
       ontologyHandlers,
       tagHandlers,
+      materialPrepHandlers,
       metaHandlers,
       protocolHandlers,
       componentHandlers,

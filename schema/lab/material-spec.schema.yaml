@@ -1,0 +1,64 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml"
+title: "Material Spec"
+description: >
+  A reusable formulation/specification for a material concept (e.g. "Clofibrate
+  100 mM in DMSO"). This is an abstract intended state, not a specific lot or
+  physical container.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id, name, material_ref ]
+
+properties:
+  kind:
+    const: "material-spec"
+
+  id:
+    type: string
+    description: "Stable local identifier (e.g., MSP-CLOFIBRATE-100MM-DMSO)."
+
+  name:
+    type: string
+
+  material_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Reference to canonical material concept."
+
+  formulation:
+    type: object
+    additionalProperties: false
+    properties:
+      concentration:
+        type: object
+        additionalProperties: false
+        required: [ value, unit ]
+        properties:
+          value: { type: number, exclusiveMinimum: 0 }
+          unit: { type: string }
+      solvent_ref:
+        $ref: "./datatypes/ref.schema.yaml"
+      grade:
+        type: string
+      ph:
+        type: number
+      notes:
+        type: string
+
+  handling:
+    type: object
+    additionalProperties: false
+    properties:
+      storage_temperature_C: { type: number }
+      light_sensitive: { type: boolean }
+      max_freeze_thaw_cycles: { type: integer, minimum: 0 }
+      stability_note: { type: string }
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+

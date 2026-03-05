@@ -1,0 +1,47 @@
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/recipe.schema.yaml"
+
+display:
+  titleField: "$.name"
+  icon: "recipe"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Recipe"
+    fields:
+    - path: "$.name"
+      widget: "text"
+      label: "Name"
+      required: true
+    - path: "$.output_material_spec_ref"
+      widget: "ref"
+      label: "Output Material Spec"
+    - path: "$.input_roles"
+      widget: "array"
+      label: "Input Roles"
+    - path: "$.steps"
+      widget: "array"
+      label: "Steps"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "150px"
+  - path: "$.name"
+    label: "Name"
+  - path: "$.output_material_spec_ref.id"
+    label: "Output Spec"
+
