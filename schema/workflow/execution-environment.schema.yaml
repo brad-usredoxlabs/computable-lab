@@ -45,6 +45,14 @@ properties:
   created_by:
     type: string
 
+  createdAt:
+    type: string
+    format: date-time
+
+  updatedAt:
+    type: string
+    format: date-time
+
   robot:
     type: object
     additionalProperties: false

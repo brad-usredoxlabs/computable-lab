@@ -3,9 +3,9 @@ import { createHash } from 'node:crypto';
 import type { AppContext } from '../server.js';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import type { FileOperationResult } from '../repo/types.js';
-import { compileAssistPlusPlan } from './compilers/assistPlusCompiler.js';
 import { compileOpentronsPlan } from './compilers/opentronsCompiler.js';
 import { ExecutionPlanningValidator, type PlanningValidationResult } from './planning/ExecutionPlanningValidator.js';
+import { createAssistPlusEmitter, type AssistPlusEmitter, type AssistEmitterMode } from './emitters/assist/AssistPlusEmitter.js';
 
 const PLANNED_RUN_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/planned-run.schema.yaml';
 const ROBOT_PLAN_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/robot-plan.schema.yaml';
@@ -117,6 +117,8 @@ type CompiledPlan = {
   notes?: string;
   errors?: Array<{ stepId: string; message: string }>;
   artifacts?: RobotPlanArtifact[];
+  emitter?: string;
+  emitterVersion?: string;
 };
 
 export class ExecutionError extends Error {
@@ -202,10 +204,17 @@ function artifactPathFor(robotPlanId: string, targetPlatform: TargetPlatform, ex
 export class ExecutionOrchestrator {
   private readonly ctx: AppContext;
   private readonly planningValidator: ExecutionPlanningValidator;
+  private readonly assistEmitter: AssistPlusEmitter;
 
-  constructor(ctx: AppContext) {
+  constructor(
+    ctx: AppContext,
+    options?: {
+      assistEmitter?: AssistPlusEmitter;
+    }
+  ) {
     this.ctx = ctx;
     this.planningValidator = new ExecutionPlanningValidator();
+    this.assistEmitter = options?.assistEmitter ?? createAssistPlusEmitter(ctx);
   }
 
   private async nextRecordId(prefix: string, kind: string): Promise<string> {
@@ -441,11 +450,14 @@ export class ExecutionOrchestrator {
   async emitExecutionPlan(input: {
     executionPlanId: string;
     targetPlatform: TargetPlatform;
+    assistEmitter?: AssistEmitterMode;
   }): Promise<{
     robotPlanId: string;
     executionPlanId: string;
     envelope: RecordEnvelope<RobotPlanPayload>;
     artifacts: ExecutionPlanDerivedArtifact[];
+    emitter?: string;
+    emitterVersion?: string;
   }> {
     const context = await this.resolveExecutionPlanContext(input.executionPlanId);
     const validation = this.planningValidator.validate({
@@ -465,6 +477,7 @@ export class ExecutionOrchestrator {
       eventGraph: context.eventGraph,
       executionEnvironment: context.executionEnvironment,
       executionPlan: context.executionPlan,
+      ...(input.assistEmitter ? { assistEmitter: input.assistEmitter } : {}),
     });
 
     const payload: RobotPlanPayload = {
@@ -511,8 +524,11 @@ export class ExecutionOrchestrator {
     const derivedArtifacts = await this.computeDerivedArtifacts(input.targetPlatform, payload.artifacts);
     const targetId = this.mapDerivedArtifactTarget(input.targetPlatform);
     const previous = (context.executionPlan.derived_artifacts ?? []).filter((entry) => entry.target !== targetId);
+    const { ['$schema']: _legacySchema, ...executionPlanWithoutSchema } =
+      context.executionPlan as ExecutionPlanPayload & { $schema?: unknown };
+    void _legacySchema;
     const updatedPlanPayload: ExecutionPlanPayload = {
-      ...context.executionPlan,
+      ...executionPlanWithoutSchema,
       derived_artifacts: [...previous, ...derivedArtifacts],
     };
     const planUpdate = await this.ctx.store.update({
@@ -524,6 +540,20 @@ export class ExecutionOrchestrator {
       message: `Update derived artifacts for ${context.executionPlanEnvelope.recordId}`,
     });
     if (!planUpdate.success) {
+      if (planUpdate.validation && !planUpdate.validation.valid && planUpdate.validation.errors.length > 0) {
+        const summary = planUpdate.validation.errors
+          .slice(0, 3)
+          .map((err) => `${err.path}: ${err.message}`)
+          .join('; ');
+        throw new ExecutionError('UPDATE_FAILED', `Validation failed while persisting derived artifacts: ${summary}`, 500);
+      }
+      if (planUpdate.lint && !planUpdate.lint.valid && planUpdate.lint.violations.length > 0) {
+        const summary = planUpdate.lint.violations
+          .slice(0, 3)
+          .map((v) => `${v.path ?? '/'}: ${v.message}`)
+          .join('; ');
+        throw new ExecutionError('UPDATE_FAILED', `Lint failed while persisting derived artifacts: ${summary}`, 500);
+      }
       throw new ExecutionError('UPDATE_FAILED', planUpdate.error ?? 'Failed to persist derived artifacts', 500);
     }
 
@@ -532,6 +562,8 @@ export class ExecutionOrchestrator {
       executionPlanId: context.executionPlanEnvelope.recordId,
       envelope: result.envelope as RecordEnvelope<RobotPlanPayload>,
       artifacts: derivedArtifacts,
+      ...(compiled.emitter ? { emitter: compiled.emitter } : {}),
+      ...(compiled.emitterVersion ? { emitterVersion: compiled.emitterVersion } : {}),
     };
   }
 
@@ -589,6 +621,7 @@ export class ExecutionOrchestrator {
     eventGraph?: EventGraphPayload;
     executionEnvironment?: ExecutionEnvironmentPayload;
     executionPlan?: ExecutionPlanPayload;
+    assistEmitter?: AssistEmitterMode;
   }): Promise<CompiledPlan> {
     if (input.targetPlatform === 'opentrons_ot2' || input.targetPlatform === 'opentrons_flex') {
       const compiled = compileOpentronsPlan({
@@ -630,7 +663,10 @@ export class ExecutionOrchestrator {
     }
 
     if (input.targetPlatform === 'integra_assist') {
-      const compiled = compileAssistPlusPlan({
+      const assistEmitter = input.assistEmitter && input.assistEmitter !== 'default'
+        ? createAssistPlusEmitter(this.ctx, undefined, input.assistEmitter)
+        : this.assistEmitter;
+      const compiled = await assistEmitter.emit({
         robotPlanId: input.robotPlanId,
         ...(input.plannedRun ? { plannedRun: input.plannedRun } : {}),
         ...(input.protocolEnvelope !== undefined ? { protocolEnvelope: input.protocolEnvelope } : {}),
@@ -662,7 +698,9 @@ export class ExecutionOrchestrator {
             },
           },
         ],
-        notes: compiled.notes,
+        notes: `${compiled.notes ?? 'Assist Plus emitted.'} [emitter=${compiled.emitter}${compiled.emitterVersion ? `;version=${compiled.emitterVersion}` : ''}]`,
+        emitter: compiled.emitter,
+        ...(compiled.emitterVersion ? { emitterVersion: compiled.emitterVersion } : {}),
       };
     }
 

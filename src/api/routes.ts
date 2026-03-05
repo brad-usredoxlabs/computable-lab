@@ -193,6 +193,10 @@ export function registerRoutes(
   const { treeHandlers } = options;
   
   if (treeHandlers) {
+    // Run method attachment + summary
+    fastify.get('/runs/:id/method', treeHandlers.getRunMethod.bind(treeHandlers));
+    fastify.post('/runs/:id/method/attach-template', treeHandlers.attachTemplateToRunMethod.bind(treeHandlers));
+
     // Get study hierarchy tree
     fastify.get('/tree/studies', treeHandlers.getStudies.bind(treeHandlers));
 
@@ -308,9 +312,10 @@ export function registerRoutes(
   const { executionHandlers } = options;
 
   if (executionHandlers) {
+    // Default ON for local/dev usage. Set CL_FEATURE_EXECUTION_PLANNING=0/false to disable explicitly.
     const executionPlanningEnabled =
-      process.env['CL_FEATURE_EXECUTION_PLANNING'] === '1' ||
-      process.env['CL_FEATURE_EXECUTION_PLANNING'] === 'true';
+      process.env['CL_FEATURE_EXECUTION_PLANNING'] !== '0' &&
+      process.env['CL_FEATURE_EXECUTION_PLANNING'] !== 'false';
     fastify.get('/execution/adapters', executionHandlers.listAdapters.bind(executionHandlers));
     fastify.get('/execution/health/adapters', executionHandlers.getAdapterHealth.bind(executionHandlers));
     fastify.get('/execution/sidecar/contracts', executionHandlers.listSidecarContracts.bind(executionHandlers));

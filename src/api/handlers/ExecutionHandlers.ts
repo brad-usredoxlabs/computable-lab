@@ -28,6 +28,7 @@ import { ExecutionOpsSnapshotService } from '../../execution/ExecutionOpsSnapsho
 import { SidecarContractConformanceService } from '../../execution/SidecarContractConformanceService.js';
 import { createExecutionProvider, resolveExecutionMode } from '../../execution/providers/createExecutionProvider.js';
 import { ExecutionTaskService } from '../../execution/ExecutionTaskService.js';
+import type { AssistEmitterMode } from '../../execution/emitters/assist/AssistPlusEmitter.js';
 
 export function createExecutionHandlers(ctx: AppContext) {
   const orchestrator = new ExecutionOrchestrator(ctx);
@@ -446,7 +447,7 @@ export function createExecutionHandlers(ctx: AppContext) {
     async emitExecutionPlan(
       request: FastifyRequest<{
         Params: { id: string };
-        Body: { targetPlatform: string };
+        Body: { targetPlatform: string; assistEmitter?: AssistEmitterMode };
       }>,
       reply: FastifyReply,
     ): Promise<{
@@ -454,6 +455,8 @@ export function createExecutionHandlers(ctx: AppContext) {
       executionPlanId?: string;
       robotPlanId?: string;
       artifacts?: unknown[];
+      emitter?: string;
+      emitterVersion?: string;
     } | ApiError> {
       const targetPlatform = request.body?.targetPlatform;
       if (!targetPlatform || !isTargetPlatform(targetPlatform)) {
@@ -463,17 +466,28 @@ export function createExecutionHandlers(ctx: AppContext) {
           message: `Unsupported targetPlatform: ${String(targetPlatform)}`,
         };
       }
+      const assistEmitter = request.body?.assistEmitter;
+      if (assistEmitter !== undefined && assistEmitter !== 'default' && assistEmitter !== 'local' && assistEmitter !== 'pyalab') {
+        reply.status(400);
+        return {
+          error: 'BAD_REQUEST',
+          message: `Unsupported assistEmitter: ${String(assistEmitter)}`,
+        };
+      }
 
       try {
         const result = await orchestrator.emitExecutionPlan({
           executionPlanId: request.params.id,
           targetPlatform,
+          ...(assistEmitter ? { assistEmitter } : {}),
         });
         return {
           success: true,
           executionPlanId: result.executionPlanId,
           robotPlanId: result.robotPlanId,
           artifacts: result.artifacts,
+          ...(result.emitter ? { emitter: result.emitter } : {}),
+          ...(result.emitterVersion ? { emitterVersion: result.emitterVersion } : {}),
         };
       } catch (err) {
         if (err instanceof ExecutionError) {
@@ -655,17 +669,13 @@ export function createExecutionHandlers(ctx: AppContext) {
         Querystring: { role?: string };
       }>,
       reply: FastifyReply,
-    ): Promise<{ role: string; uri: string; filename: string; content: string } | ApiError> {
+    ): Promise<ApiError | void> {
       try {
         const artifact = await orchestrator.getRobotPlanArtifact(request.params.id, request.query.role);
         reply.header('content-type', artifact.mimeType);
         reply.header('content-disposition', `attachment; filename="${artifact.filename}"`);
-        return {
-          role: artifact.role,
-          uri: artifact.uri,
-          filename: artifact.filename,
-          content: artifact.content,
-        };
+        reply.send(artifact.content);
+        return;
       } catch (err) {
         if (err instanceof ExecutionError) {
           reply.status(err.statusCode);

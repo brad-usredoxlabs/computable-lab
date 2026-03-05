@@ -106,6 +106,51 @@ properties:
         type: string
         enum: [ completed, aborted, partial, error ]
 
+  methodContext:
+    type: object
+    description: "Run-attached method metadata and lock semantics."
+    additionalProperties: false
+    required: [ runId, vocabId, platform, deckVariant, locked ]
+    properties:
+      runId:
+        type: string
+      sourceTemplateId:
+        type: string
+      vocabId:
+        type: string
+        enum: [ liquid-handling/v1, animal-handling/v1 ]
+      platform:
+        type: string
+        enum: [ manual, integra_assist, opentrons_ot2, opentrons_flex ]
+      deckVariant:
+        type: string
+      locked:
+        type: boolean
+
+  deckLayout:
+    type: object
+    description: "Deck placement state associated with this method instance."
+    additionalProperties: false
+    properties:
+      placements:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ slotId ]
+          properties:
+            slotId:
+              type: string
+            labwareId:
+              type: string
+            moduleId:
+              type: string
+      labwareOrientations:
+        type: object
+        additionalProperties:
+          type: string
+          enum: [ portrait, landscape ]
+
   tags:
     type: array
     items:

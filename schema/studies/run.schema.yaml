@@ -73,6 +73,38 @@ properties:
     type: string
     description: "Optional pointer to run-editor-state record (UI-only)."
 
+  methodEventGraphId:
+    type: string
+    description: "Active method event-graph instance attached to this run."
+
+  methodPlatform:
+    type: string
+    enum: [ manual, integra_assist, opentrons_ot2, opentrons_flex ]
+    description: "Execution platform lock for the active run method."
+
+  methodVocabId:
+    type: string
+    enum: [ liquid-handling/v1, animal-handling/v1 ]
+    description: "Vocabulary lock for the active run method."
+
+  methodTemplateRef:
+    type: object
+    additionalProperties: false
+    required: [ kind, id ]
+    properties:
+      kind:
+        const: "record"
+      id:
+        type: string
+      type:
+        type: string
+    description: "Template component this run method was derived from."
+
+  methodAttachedAt:
+    type: string
+    format: date-time
+    description: "Timestamp of latest method attach/replace action."
+
   attachments:
     type: array
     items:

@@ -162,6 +162,31 @@ function collectChannelHints(details: unknown): number[] {
   return hints;
 }
 
+function eventMentionsLabwareId(details: unknown, labwareId: string): boolean {
+  if (!details || typeof details !== 'object') return false;
+  const seen = new Set<unknown>();
+
+  function visit(node: unknown): boolean {
+    if (node === null || node === undefined) return false;
+    if (typeof node === 'string') return node === labwareId;
+    if (typeof node !== 'object') return false;
+    if (seen.has(node)) return false;
+    seen.add(node);
+    if (Array.isArray(node)) {
+      for (const entry of node) {
+        if (visit(entry)) return true;
+      }
+      return false;
+    }
+    for (const value of Object.values(node as Record<string, unknown>)) {
+      if (visit(value)) return true;
+    }
+    return false;
+  }
+
+  return visit(details);
+}
+
 function isWellAddress(value: string): boolean {
   return /^[A-Z]+[0-9]+$/.test(value);
 }
@@ -201,6 +226,7 @@ export class ExecutionPlanningValidator {
         .map((lw) => lw.labwareId)
         .filter((id): id is string => typeof id === 'string' && id.length > 0),
     );
+    const events = eventGraph.events ?? [];
 
     const labwarePlacements = executionPlan.placements?.labware ?? [];
     const tipracks = executionPlan.placements?.tipracks ?? [];
@@ -287,7 +313,16 @@ export class ExecutionPlanningValidator {
       }
     }
 
-    for (const labwareId of [...evgLabwareIds].sort()) {
+    const eventReferencedLabwareIds = new Set<string>();
+    for (const ev of events) {
+      for (const labwareId of evgLabwareIds) {
+        if (eventMentionsLabwareId(ev?.details, labwareId)) {
+          eventReferencedLabwareIds.add(labwareId);
+        }
+      }
+    }
+
+    for (const labwareId of [...eventReferencedLabwareIds].sort()) {
       if (!labwarePlacements.some((p) => p?.labware_ref === labwareId)) {
         issues.push({
           severity: 'error',
@@ -354,7 +389,6 @@ export class ExecutionPlanningValidator {
       }
     }
 
-    const events = eventGraph.events ?? [];
     const hasLiquidSteps = events.some((ev) => {
       const id = (ev.details ?? {}) as Record<string, unknown>;
       return ev.eventId !== undefined && (id['volume_uL'] !== undefined || id['volume_ul'] !== undefined || id['sourceWell'] !== undefined || id['targetWell'] !== undefined);
