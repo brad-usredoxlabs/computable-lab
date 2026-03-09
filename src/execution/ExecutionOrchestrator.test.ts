@@ -63,9 +63,7 @@ properties:
   kind: { const: "robot-plan" }
   id: { type: string }
   plannedRunRef: { type: object }
-  targetPlatform:
-    type: string
-    enum: [opentrons_ot2, opentrons_flex, integra_assist]
+  targetPlatform: { type: string }
   status:
     type: string
     enum: [compiled, validated, error]
@@ -197,6 +195,21 @@ properties:
 describe('ExecutionOrchestrator', () => {
   const testDir = resolve(process.cwd(), 'tmp/execution-orchestrator-test');
   let ctx: AppContext;
+
+  function platformForCompilerFamily(compilerFamily: string): string {
+    const match = ctx.platformRegistry.listPlatforms().find((platform) => platform.compilerFamily === compilerFamily);
+    if (!match) {
+      throw new Error(`No platform found for compiler family ${compilerFamily}`);
+    }
+    return match.id;
+  }
+
+  function platformsForCompilerFamily(compilerFamily: string): string[] {
+    return ctx.platformRegistry
+      .listPlatforms()
+      .filter((platform) => platform.compilerFamily === compilerFamily)
+      .map((platform) => platform.id);
+  }
 
   beforeAll(async () => {
     await mkdir(resolve(testDir, 'schema'), { recursive: true });
@@ -348,8 +361,10 @@ describe('ExecutionOrchestrator', () => {
     await rm(testDir, { recursive: true, force: true });
   });
 
-  it('creates and compiles a planned run for Assist Plus', async () => {
+  it('creates and compiles planned runs by compiler family', async () => {
     const orchestrator = new ExecutionOrchestrator(ctx);
+    const assistPlatform = platformForCompilerFamily('assist_plus');
+    const opentronsPlatforms = platformsForCompilerFamily('opentrons');
 
     const planned = await orchestrator.createPlannedRun({
       title: 'Run 1',
@@ -363,7 +378,7 @@ describe('ExecutionOrchestrator', () => {
 
     const compiled = await orchestrator.compilePlannedRun({
       plannedRunId: planned.recordId,
-      targetPlatform: 'integra_assist',
+      targetPlatform: assistPlatform,
     });
     expect(compiled.robotPlanId).toBe('RP-000001');
 
@@ -391,14 +406,18 @@ describe('ExecutionOrchestrator', () => {
       parameters: { unknownKey: true },
     })).rejects.toThrow(/Invalid execute parameters/);
 
-    const compiledOt2 = await orchestrator.compilePlannedRun({
+    const [primaryOpentronsPlatform, secondaryOpentronsPlatform] = opentronsPlatforms
+    expect(primaryOpentronsPlatform).toBeTruthy();
+    expect(secondaryOpentronsPlatform).toBeTruthy();
+
+    const compiledPrimaryOpentrons = await orchestrator.compilePlannedRun({
       plannedRunId: planned.recordId,
-      targetPlatform: 'opentrons_ot2',
+      targetPlatform: primaryOpentronsPlatform,
     });
-    expect(compiledOt2.robotPlanId).toBe('RP-000002');
-    const ot2Artifact = await orchestrator.getRobotPlanArtifact(compiledOt2.robotPlanId, 'opentrons_python');
-    expect(ot2Artifact.filename.endsWith('.py')).toBe(true);
-    expect(ot2Artifact.content).toContain('def run(protocol):');
+    expect(compiledPrimaryOpentrons.robotPlanId).toBe('RP-000002');
+    const primaryOpentronsArtifact = await orchestrator.getRobotPlanArtifact(compiledPrimaryOpentrons.robotPlanId, 'opentrons_python');
+    expect(primaryOpentronsArtifact.filename.endsWith('.py')).toBe(true);
+    expect(primaryOpentronsArtifact.content).toContain('def run(protocol):');
 
     process.env['LABOS_OPENTRONS_SUBMIT_URL'] = 'http://localhost:31950/opentrons/submit';
     const fakeFetch = async () => ({
@@ -407,7 +426,7 @@ describe('ExecutionOrchestrator', () => {
       text: async () => '{"submissionId":"SUB-001"}',
     });
     const apiRunner = new ExecutionRunner(ctx, undefined, fakeFetch);
-    const apiRun = await apiRunner.executeRobotPlan(compiledOt2.robotPlanId);
+    const apiRun = await apiRunner.executeRobotPlan(compiledPrimaryOpentrons.robotPlanId);
     expect(apiRun.logId).toBe('ILOG-000003');
     expect(apiRun.status).toBe('completed');
     delete process.env['LABOS_OPENTRONS_SUBMIT_URL'];
@@ -415,9 +434,9 @@ describe('ExecutionOrchestrator', () => {
     const plannedAfterDirect = await ctx.store.get(planned.recordId);
     expect(['ready', 'completed']).toContain((plannedAfterDirect?.payload as { state?: string }).state);
 
-    const compiledFlex = await orchestrator.compilePlannedRun({
+    const compiledSecondaryOpentrons = await orchestrator.compilePlannedRun({
       plannedRunId: planned.recordId,
-      targetPlatform: 'opentrons_flex',
+      targetPlatform: secondaryOpentronsPlatform,
     });
     process.env['LABOS_OPENTRONS_API_MODE'] = 'two_step';
     process.env['LABOS_OPENTRONS_BASE_URL'] = 'http://localhost:31950';
@@ -436,7 +455,7 @@ describe('ExecutionOrchestrator', () => {
       };
     };
     const twoStepRunner = new ExecutionRunner(ctx, undefined, twoStepFetch);
-    const twoStepRun = await twoStepRunner.executeRobotPlan(compiledFlex.robotPlanId);
+    const twoStepRun = await twoStepRunner.executeRobotPlan(compiledSecondaryOpentrons.robotPlanId);
     expect(twoStepRun.logId).toBe('ILOG-000004');
     expect(twoStepRun.status).toBe('completed');
 
@@ -455,11 +474,11 @@ describe('ExecutionOrchestrator', () => {
       };
     };
     const controlService = new ExecutionControlService(ctx, controlFetch);
-    const runtime = await controlService.getRobotPlanStatus(compiledFlex.robotPlanId);
+    const runtime = await controlService.getRobotPlanStatus(compiledSecondaryOpentrons.robotPlanId);
     expect(runtime['normalizedStatus']).toBe('executing');
-    const logs = await controlService.listRobotPlanLogs(compiledFlex.robotPlanId);
+    const logs = await controlService.listRobotPlanLogs(compiledSecondaryOpentrons.robotPlanId);
     expect(logs.length).toBeGreaterThan(0);
-    const cancel = await controlService.cancelRobotPlan(compiledFlex.robotPlanId);
+    const cancel = await controlService.cancelRobotPlan(compiledSecondaryOpentrons.robotPlanId);
     expect(cancel['cancelRequested']).toBe(true);
     const canceledRun = await ctx.store.get('EXR-000004');
     expect((canceledRun?.payload as { status?: string }).status).toBe('canceled');
@@ -474,6 +493,7 @@ describe('ExecutionOrchestrator', () => {
 
   it('validates and emits execution plans with artifact hashes', async () => {
     const orchestrator = new ExecutionOrchestrator(ctx);
+    const opentronsPlatform = platformForCompilerFamily('opentrons');
 
     const validation = await orchestrator.validateExecutionPlan({
       executionPlanId: 'EPL-000001',
@@ -482,7 +502,7 @@ describe('ExecutionOrchestrator', () => {
 
     const emitted = await orchestrator.emitExecutionPlan({
       executionPlanId: 'EPL-000001',
-      targetPlatform: 'opentrons_ot2',
+      targetPlatform: opentronsPlatform,
     });
     expect(emitted.robotPlanId).toMatch(/^RP-\d{6}$/);
     expect(emitted.artifacts.length).toBeGreaterThan(0);
@@ -497,6 +517,7 @@ describe('ExecutionOrchestrator', () => {
 
   it('supports planned-run compatibility via executionPlanRef binding', async () => {
     const orchestrator = new ExecutionOrchestrator(ctx);
+    const opentronsPlatform = platformForCompilerFamily('opentrons');
 
     const planned = await orchestrator.createPlannedRun({
       title: 'Compatibility Run',
@@ -509,12 +530,33 @@ describe('ExecutionOrchestrator', () => {
 
     const compiled = await orchestrator.compilePlannedRun({
       plannedRunId: planned.recordId,
-      targetPlatform: 'opentrons_ot2',
+      targetPlatform: opentronsPlatform,
     });
 
     expect(compiled.robotPlanId).toMatch(/^RP-\d{6}$/);
     const plan = await ctx.store.get('EPL-000001');
     const payload = plan?.payload as { derived_artifacts?: Array<{ target?: string; sha256?: string }> };
     expect(payload.derived_artifacts?.some((entry) => entry.target === 'opentrons_api' && (entry.sha256?.length ?? 0) === 64)).toBe(true);
+  });
+
+  it('rejects emit/compile for manual compiler families', async () => {
+    const orchestrator = new ExecutionOrchestrator(ctx);
+    const manualPlatform = platformForCompilerFamily('manual');
+
+    const planned = await orchestrator.createPlannedRun({
+      title: 'Manual Run',
+      sourceType: 'protocol',
+      sourceRef: { kind: 'record', id: 'PRO-000001', type: 'protocol' },
+    });
+
+    await expect(orchestrator.compilePlannedRun({
+      plannedRunId: planned.recordId,
+      targetPlatform: manualPlatform,
+    })).rejects.toThrow(/manual planning platform/i);
+
+    await expect(orchestrator.emitExecutionPlan({
+      executionPlanId: 'EPL-000001',
+      targetPlatform: manualPlatform,
+    })).rejects.toThrow(/manual planning platform/i);
   });
 });

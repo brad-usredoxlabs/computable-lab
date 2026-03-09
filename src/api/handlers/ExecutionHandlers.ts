@@ -96,8 +96,19 @@ export function createExecutionHandlers(ctx: AppContext) {
     return { authorized: true, token, scopes };
   }
 
-  function isTargetPlatform(value: string): value is 'opentrons_ot2' | 'opentrons_flex' | 'integra_assist' {
+  function isExecuteTargetPlatform(value: string): value is 'opentrons_ot2' | 'opentrons_flex' | 'integra_assist' {
     return value === 'opentrons_ot2' || value === 'opentrons_flex' || value === 'integra_assist';
+  }
+
+  function resolveCompilerFamily(targetPlatform: string): string {
+    const platform = ctx.platformRegistry.getPlatform(targetPlatform);
+    if (!platform) {
+      throw new ExecutionError('BAD_REQUEST', `Unknown platform "${targetPlatform}"`, 400);
+    }
+    if (!platform.compilerFamily || platform.compilerFamily.trim().length === 0) {
+      throw new ExecutionError('COMPILER_UNAVAILABLE', `Platform "${targetPlatform}" does not define a compiler family`, 400);
+    }
+    return platform.compilerFamily;
   }
 
   return {
@@ -459,23 +470,31 @@ export function createExecutionHandlers(ctx: AppContext) {
       emitterVersion?: string;
     } | ApiError> {
       const targetPlatform = request.body?.targetPlatform;
-      if (!targetPlatform || !isTargetPlatform(targetPlatform)) {
-        reply.status(400);
-        return {
-          error: 'BAD_REQUEST',
-          message: `Unsupported targetPlatform: ${String(targetPlatform)}`,
-        };
-      }
-      const assistEmitter = request.body?.assistEmitter;
-      if (assistEmitter !== undefined && assistEmitter !== 'default' && assistEmitter !== 'local' && assistEmitter !== 'pyalab') {
-        reply.status(400);
-        return {
-          error: 'BAD_REQUEST',
-          message: `Unsupported assistEmitter: ${String(assistEmitter)}`,
-        };
-      }
-
       try {
+        if (!targetPlatform || typeof targetPlatform !== 'string') {
+          reply.status(400);
+          return {
+            error: 'BAD_REQUEST',
+            message: `Unsupported targetPlatform: ${String(targetPlatform)}`,
+          };
+        }
+        const compilerFamily = resolveCompilerFamily(targetPlatform);
+        const assistEmitter = request.body?.assistEmitter;
+        if (assistEmitter !== undefined && assistEmitter !== 'default' && assistEmitter !== 'local' && assistEmitter !== 'pyalab') {
+          reply.status(400);
+          return {
+            error: 'BAD_REQUEST',
+            message: `Unsupported assistEmitter: ${String(assistEmitter)}`,
+          };
+        }
+        if (assistEmitter !== undefined && compilerFamily !== 'assist_plus') {
+          reply.status(400);
+          return {
+            error: 'BAD_REQUEST',
+            message: `assistEmitter is only valid for compilerFamily "assist_plus", not "${compilerFamily}"`,
+          };
+        }
+
         const result = await orchestrator.emitExecutionPlan({
           executionPlanId: request.params.id,
           targetPlatform,
@@ -604,16 +623,16 @@ export function createExecutionHandlers(ctx: AppContext) {
       }>,
       reply: FastifyReply,
     ): Promise<{ success: boolean; robotPlanId?: string } | ApiError> {
-      const targetPlatform = request.body.targetPlatform;
-      if (!isTargetPlatform(targetPlatform)) {
-        reply.status(400);
-        return {
-          error: 'BAD_REQUEST',
-          message: `Unsupported targetPlatform: ${targetPlatform}`,
-        };
-      }
-
       try {
+        const targetPlatform = request.body.targetPlatform;
+        if (!targetPlatform || typeof targetPlatform !== 'string') {
+          reply.status(400);
+          return {
+            error: 'BAD_REQUEST',
+            message: `Unsupported targetPlatform: ${String(targetPlatform)}`,
+          };
+        }
+        resolveCompilerFamily(targetPlatform);
         const result = await orchestrator.compilePlannedRun({
           plannedRunId: request.params.id,
           targetPlatform,
@@ -765,6 +784,10 @@ export function createExecutionHandlers(ctx: AppContext) {
           if (!targetPlatform) {
             reply.status(400);
             return { error: 'BAD_REQUEST', message: 'targetPlatform is required when plannedRunId is provided' };
+          }
+          if (!isExecuteTargetPlatform(targetPlatform)) {
+            reply.status(400);
+            return { error: 'BAD_REQUEST', message: `Unsupported targetPlatform: ${targetPlatform}` };
           }
           const compiled = await orchestrator.compilePlannedRun({
             plannedRunId: request.body.plannedRunId!,

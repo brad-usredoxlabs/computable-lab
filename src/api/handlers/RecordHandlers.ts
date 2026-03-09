@@ -2,7 +2,8 @@
  * RecordHandlers — HTTP handlers for record CRUD operations.
  * 
  * These handlers are thin wrappers around RecordStore.
- * They contain NO schema-specific logic or business rules.
+ * Lightweight normalization hooks are permitted where the product needs
+ * ergonomic record authoring without exposing backend logistics.
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
@@ -19,6 +20,7 @@ import type {
   ApiError,
 } from '../types.js';
 import type { ResolvedIdentity } from '../../identity/GitHubIdentity.js';
+import { normalizeEventGraphMaterialUsage } from '../../materials/AddMaterialSupport.js';
 
 /**
  * Create record handlers bound to a RecordStore and optional IndexManager.
@@ -128,7 +130,7 @@ export function createRecordHandlers(store: RecordStore, indexManager?: IndexMan
       reply: FastifyReply
     ): Promise<RecordMutationResponse | ApiError> {
       try {
-        const { schemaId, payload, message } = request.body;
+        const { schemaId, message } = request.body;
         
         // Validate request
         if (!schemaId) {
@@ -139,13 +141,14 @@ export function createRecordHandlers(store: RecordStore, indexManager?: IndexMan
           };
         }
         
-        if (!payload) {
+        if (!request.body.payload) {
           reply.status(400);
           return {
             error: 'BAD_REQUEST',
             message: 'payload is required',
           };
         }
+        const payload = await normalizeEventGraphMaterialUsage(store, schemaId, request.body.payload);
         
         // Extract recordId from payload
         const recordId = extractRecordId(payload);
@@ -161,7 +164,7 @@ export function createRecordHandlers(store: RecordStore, indexManager?: IndexMan
         // Keep actor provenance in envelope meta so strict schemas are not violated.
         const now = new Date().toISOString();
         const payloadWithProvenance = {
-          ...payload,
+          ...(payload as Record<string, unknown>),
           createdAt: now,
           updatedAt: now,
         };
@@ -301,10 +304,10 @@ export function createRecordHandlers(store: RecordStore, indexManager?: IndexMan
     ): Promise<RecordMutationResponse | ApiError> {
       try {
         const { id } = request.params;
-        const { payload, expectedSha, message } = request.body;
+        const { expectedSha, message } = request.body;
         
         // Validate request
-        if (!payload) {
+        if (!request.body.payload) {
           reply.status(400);
           return {
             error: 'BAD_REQUEST',
@@ -323,8 +326,9 @@ export function createRecordHandlers(store: RecordStore, indexManager?: IndexMan
         }
         
         // Inject updatedAt in payload (schema-compatible provenance field).
+        const normalizedPayload = await normalizeEventGraphMaterialUsage(store, existing.schemaId, request.body.payload);
         const payloadWithProvenance = {
-          ...payload,
+          ...(normalizedPayload as Record<string, unknown>),
           updatedAt: new Date().toISOString(),
         };
 

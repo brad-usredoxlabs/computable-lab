@@ -1,16 +1,8 @@
 import type { AppContext } from '../server.js';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
+import { extractAddMaterialVolume, normalizeRef, resolveAddMaterialRef } from '../materials/AddMaterialSupport.js';
 
 const PROTOCOL_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml';
-
-type Ref = {
-  kind: 'record' | 'ontology';
-  id: string;
-  type?: string;
-  namespace?: string;
-  label?: string;
-  uri?: string;
-};
 
 type EventGraphEvent = {
   eventId?: unknown;
@@ -51,30 +43,6 @@ function toIdToken(input: string): string {
   const trimmed = input.trim().toLowerCase();
   const normalized = trimmed.replaceAll(/[^a-z0-9]+/g, '_').replaceAll(/^_+|_+$/g, '');
   return normalized.length > 0 ? normalized : 'unknown';
-}
-
-function normalizeRef(input: unknown, fallbackType?: string): Ref | null {
-  if (typeof input === 'string' && input.trim().length > 0) {
-    return {
-      kind: 'record',
-      id: input.trim(),
-      ...(fallbackType ? { type: fallbackType } : {}),
-    };
-  }
-  if (input === null || typeof input !== 'object') return null;
-  const obj = input as Record<string, unknown>;
-  if (obj['kind'] !== 'record' && obj['kind'] !== 'ontology') return null;
-  if (typeof obj['id'] !== 'string' || obj['id'].trim().length === 0) return null;
-  const normalized: Ref = {
-    kind: obj['kind'],
-    id: obj['id'].trim(),
-  };
-  if (typeof obj['type'] === 'string' && obj['type'].trim().length > 0) normalized.type = obj['type'].trim();
-  if (typeof obj['namespace'] === 'string' && obj['namespace'].trim().length > 0) normalized.namespace = obj['namespace'].trim();
-  if (typeof obj['label'] === 'string' && obj['label'].trim().length > 0) normalized.label = obj['label'].trim();
-  if (typeof obj['uri'] === 'string' && obj['uri'].trim().length > 0) normalized.uri = obj['uri'].trim();
-  if (!normalized.type && fallbackType && normalized.kind === 'record') normalized.type = fallbackType;
-  return normalized;
 }
 
 function asStringArray(input: unknown): string[] {
@@ -234,7 +202,8 @@ export class ProtocolExtractionService {
 
       if (eventType === 'add_material') {
         const targetRole = ensureLabwareRole(details['labwareInstanceId']);
-        const material = ensureMaterialRole(details['materialId']);
+        const material = ensureMaterialRole(resolveAddMaterialRef(details));
+        const volume = extractAddMaterialVolume(details);
         return {
           stepId,
           kind: 'add_material',
@@ -244,7 +213,13 @@ export class ProtocolExtractionService {
             materialRole: material.materialRole,
             ...(material.materialId ? { materialId: material.materialId } : {}),
           },
-          volume_uL: typeof details['volume_uL'] === 'number' ? details['volume_uL'] : 0.1,
+          volume_uL: volume?.unit === 'mL'
+            ? volume.value * 1000
+            : volume?.unit === 'uL'
+              ? volume.value
+              : typeof details['volume_uL'] === 'number'
+                ? details['volume_uL']
+                : 0.1,
           ...(notes ? { notes } : {}),
           ...(plannedOffset ? { plannedOffset } : {}),
         };

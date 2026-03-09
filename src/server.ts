@@ -42,6 +42,7 @@ import {
   createKnowledgeAIHandlers,
   createTagHandlers,
   createMaterialPrepHandlers,
+  createPlatformHandlers,
 } from './api/handlers/index.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { createUISpecLoader, loadAllUISpecs, type UISpecLoader } from './ui/UISpecLoader.js';
@@ -59,6 +60,8 @@ import {
 } from './ai/index.js';
 import type { AIHandlers } from './api/handlers/AIHandlers.js';
 import type { KnowledgeAIHandlers } from './api/handlers/KnowledgeAIHandlers.js';
+import { loadPlatformRegistry } from './platform-registry/YamlPlatformRegistryLoader.js';
+import type { PlatformRegistry } from './platform-registry/PlatformRegistry.js';
 
 /**
  * Default server configuration.
@@ -87,6 +90,7 @@ export interface AppContext {
   configPath?: string | undefined;
   predicateRegistry?: PredicateRegistry | undefined;
   identity?: ResolvedIdentity | undefined;
+  platformRegistry: PlatformRegistry;
 }
 
 /**
@@ -259,6 +263,9 @@ export async function initializeApp(
   }
   console.log(`Loaded ${uiLoadResult.loaded} UI specs`);
 
+  const { registry: platformRegistry, source: platformRegistrySource } = await loadPlatformRegistry(basePath);
+  console.log(`Loaded ${platformRegistry.listPlatforms().length} platform manifests from ${platformRegistrySource}`);
+
   // Build initial index
   try {
     await indexManager.rebuild();
@@ -281,6 +288,7 @@ export async function initializeApp(
     configPath,
     predicateRegistry,
     identity,
+    platformRegistry,
   };
 }
 
@@ -314,11 +322,12 @@ export async function createServer(
   const schemaHandlers = createSchemaHandlers(ctx.schemaRegistry);
   const validationHandlers = createValidationHandlers(ctx.validator, ctx.lintEngine);
   const gitHandlers = createGitHandlers(ctx.repoAdapter);
-  const treeHandlers = createTreeHandlers(ctx.indexManager, ctx.store);
+  const treeHandlers = createTreeHandlers(ctx.indexManager, ctx.store, ctx.platformRegistry);
   const libraryHandlers = createLibraryHandlers(ctx.store);
   const ontologyHandlers = createOntologyHandlers();
   const tagHandlers = createTagHandlers(ctx.store);
-  const materialPrepHandlers = createMaterialPrepHandlers(ctx.store);
+  const materialPrepHandlers = createMaterialPrepHandlers(ctx.store, ctx.indexManager);
+  const platformHandlers = createPlatformHandlers(ctx.platformRegistry);
   const uiHandlers = createUIHandlers(ctx.uiSpecLoader, ctx.store, ctx.schemaRegistry);
 
   // Create meta handlers
@@ -500,6 +509,7 @@ export async function createServer(
       ontologyHandlers,
       tagHandlers,
       materialPrepHandlers,
+      platformHandlers,
       metaHandlers,
       protocolHandlers,
       componentHandlers,

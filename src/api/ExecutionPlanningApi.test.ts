@@ -62,9 +62,7 @@ properties:
   kind: { const: "robot-plan" }
   id: { type: string }
   plannedRunRef: { type: object }
-  targetPlatform:
-    type: string
-    enum: [opentrons_ot2, opentrons_flex, integra_assist]
+  targetPlatform: { type: string }
   status:
     type: string
     enum: [compiled, validated, error]
@@ -80,6 +78,14 @@ describe('Execution Planning API', () => {
   const testDir = resolve(process.cwd(), 'tmp/execution-planning-api-test');
   let ctx: AppContext;
   let app: FastifyInstance;
+
+  function platformForCompilerFamily(compilerFamily: string): string {
+    const match = ctx.platformRegistry.listPlatforms().find((platform) => platform.compilerFamily === compilerFamily);
+    if (!match) {
+      throw new Error(`No platform found for compiler family ${compilerFamily}`);
+    }
+    return match.id;
+  }
 
   beforeAll(async () => {
     process.env['CL_FEATURE_EXECUTION_PLANNING'] = '1';
@@ -211,6 +217,8 @@ describe('Execution Planning API', () => {
   });
 
   it('validates and emits execution plans via API', async () => {
+    const opentronsPlatform = platformForCompilerFamily('opentrons')
+
     const validate = await app.inject({
       method: 'POST',
       url: '/api/execution-plans/validate',
@@ -224,7 +232,7 @@ describe('Execution Planning API', () => {
     const emit = await app.inject({
       method: 'POST',
       url: '/api/execution-plans/EPL-000001/emit',
-      payload: { targetPlatform: 'opentrons_ot2' },
+      payload: { targetPlatform: opentronsPlatform },
     });
     expect(emit.statusCode).toBe(200);
     const emitBody = JSON.parse(emit.payload) as {
@@ -237,4 +245,31 @@ describe('Execution Planning API', () => {
     expect(emitBody.artifacts?.[0]?.sha256?.length).toBe(64);
     expect(emitBody.artifacts?.[0]?.target).toBe('opentrons_api');
   });
+
+  it('rejects assistEmitter for non-assist_plus compiler families', async () => {
+    const opentronsPlatform = platformForCompilerFamily('opentrons')
+    const manualPlatform = platformForCompilerFamily('manual')
+
+    const opentronsResponse = await app.inject({
+      method: 'POST',
+      url: '/api/execution-plans/EPL-000001/emit',
+      payload: { targetPlatform: opentronsPlatform, assistEmitter: 'local' },
+    })
+    expect(opentronsResponse.statusCode).toBe(400)
+    expect(opentronsResponse.json()).toMatchObject({
+      error: 'BAD_REQUEST',
+    })
+    expect(opentronsResponse.json().message).toContain('assistEmitter is only valid for compilerFamily "assist_plus"')
+
+    const manualResponse = await app.inject({
+      method: 'POST',
+      url: '/api/execution-plans/EPL-000001/emit',
+      payload: { targetPlatform: manualPlatform, assistEmitter: 'pyalab' },
+    })
+    expect(manualResponse.statusCode).toBe(400)
+    expect(manualResponse.json()).toMatchObject({
+      error: 'BAD_REQUEST',
+    })
+    expect(manualResponse.json().message).toContain('assistEmitter is only valid for compilerFamily "assist_plus"')
+  })
 });

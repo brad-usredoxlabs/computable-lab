@@ -13,6 +13,7 @@ import type { IndexManager } from '../../index/IndexManager.js';
 import type { RecordStore } from '../../store/types.js';
 import type { StudyTreeNode, IndexEntry } from '../../index/types.js';
 import { createEnvelope } from '../../types/RecordEnvelope.js';
+import type { PlatformRegistry } from '../../platform-registry/PlatformRegistry.js';
 
 /**
  * Response types for tree endpoints.
@@ -42,7 +43,7 @@ export interface RunMethodSummaryResponse {
   runId: string;
   hasMethod: boolean;
   methodEventGraphId?: string;
-  methodPlatform?: 'manual' | 'integra_assist' | 'opentrons_ot2' | 'opentrons_flex';
+  methodPlatform?: string;
   methodVocabId?: 'liquid-handling/v1' | 'animal-handling/v1';
   methodTemplateId?: string;
 }
@@ -58,7 +59,7 @@ type SavedTemplateSnapshot = {
   events?: unknown[];
   labwares?: unknown[];
   deck?: {
-    platform?: 'manual' | 'integra_assist' | 'opentrons_ot2' | 'opentrons_flex';
+    platform?: string;
     variant?: string;
     placements?: DeckPlacement[];
   };
@@ -86,17 +87,13 @@ function eventGraphIdFromRecordId(prefix: string = 'EVG'): string {
   return `${prefix}-${ts}-${rand}`;
 }
 
-function allowedPlatformsForVocab(vocabId: 'liquid-handling/v1' | 'animal-handling/v1'): Array<'manual' | 'integra_assist' | 'opentrons_ot2' | 'opentrons_flex'> {
-  if (vocabId === 'animal-handling/v1') return ['manual'];
-  return ['manual', 'integra_assist', 'opentrons_ot2', 'opentrons_flex'];
-}
-
 /**
  * Create tree handlers bound to an IndexManager and RecordStore.
  */
 export function createTreeHandlers(
   indexManager: IndexManager,
-  recordStore: RecordStore
+  recordStore: RecordStore,
+  platformRegistry: PlatformRegistry
 ) {
   return {
     /**
@@ -118,10 +115,7 @@ export function createTreeHandlers(
       const payload = (runRecord.payload ?? {}) as Record<string, unknown>;
       const methodEventGraphId = typeof payload['methodEventGraphId'] === 'string' ? payload['methodEventGraphId'] : undefined;
       const methodPlatformRaw = payload['methodPlatform'];
-      const methodPlatform = methodPlatformRaw === 'manual'
-        || methodPlatformRaw === 'integra_assist'
-        || methodPlatformRaw === 'opentrons_ot2'
-        || methodPlatformRaw === 'opentrons_flex'
+      const methodPlatform = typeof methodPlatformRaw === 'string' && platformRegistry.hasPlatform(methodPlatformRaw)
         ? methodPlatformRaw
         : undefined;
       const methodTemplate = toObject(payload['methodTemplateRef']);
@@ -151,7 +145,7 @@ export function createTreeHandlers(
           templateId?: string;
           replace?: boolean;
           vocabId?: 'liquid-handling/v1' | 'animal-handling/v1';
-          platform?: 'manual' | 'integra_assist' | 'opentrons_ot2' | 'opentrons_flex';
+          platform?: string;
           deckVariant?: string;
         };
       }>,
@@ -170,28 +164,24 @@ export function createTreeHandlers(
       const replace = request.body?.replace === true;
       const vocabId = request.body?.vocabId ?? 'liquid-handling/v1';
       const platform = request.body?.platform ?? 'manual';
-      const deckVariant = request.body?.deckVariant
-        ?? (platform === 'integra_assist'
-          ? 'assist_plus_3pos'
-          : platform === 'opentrons_flex'
-            ? 'ot3_standard'
-            : platform === 'opentrons_ot2'
-              ? 'ot2_standard'
-              : 'manual_collapsed');
-
       if (vocabId !== 'liquid-handling/v1' && vocabId !== 'animal-handling/v1') {
         reply.status(400);
         return { error: 'BAD_REQUEST', message: 'vocabId must be one of: liquid-handling/v1, animal-handling/v1' };
       }
 
-      if (platform !== 'manual' && platform !== 'integra_assist' && platform !== 'opentrons_ot2' && platform !== 'opentrons_flex') {
+      const platformManifest = platformRegistry.getPlatform(platform);
+      if (!platformManifest) {
         reply.status(400);
-        return { error: 'BAD_REQUEST', message: 'platform must be one of: manual, integra_assist, opentrons_ot2, opentrons_flex' };
+        return { error: 'BAD_REQUEST', message: `Unknown platform "${platform}"` };
       }
-      const allowedPlatforms = allowedPlatformsForVocab(vocabId);
-      if (!allowedPlatforms.includes(platform)) {
+      if (!platformRegistry.isPlatformAllowedForVocab(platform, vocabId)) {
         reply.status(400);
         return { error: 'BAD_REQUEST', message: `platform "${platform}" is not allowed for vocabulary "${vocabId}"` };
+      }
+      const deckVariant = request.body?.deckVariant ?? platformManifest.defaultVariant;
+      if (!platformRegistry.getVariant(platform, deckVariant)) {
+        reply.status(400);
+        return { error: 'BAD_REQUEST', message: `deckVariant "${deckVariant}" is not valid for platform "${platform}"` };
       }
 
       const runRecord = await recordStore.get(runId);

@@ -29,7 +29,6 @@ properties:
 
   targetPlatform:
     type: string
-    enum: [ opentrons_ot2, opentrons_flex, integra_assist ]
 
   generatedAt:
     type: string

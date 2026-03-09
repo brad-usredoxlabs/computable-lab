@@ -39,6 +39,8 @@ properties:
         required:
           type: boolean
           default: true
+        material_ref:
+          $ref: "./datatypes/ref.schema.yaml"
         allowed_material_spec_refs:
           type: array
           items:
@@ -89,4 +91,3 @@ properties:
     type: array
     items: { type: string }
     uniqueItems: true
-

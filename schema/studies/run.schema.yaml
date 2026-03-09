@@ -79,7 +79,6 @@ properties:
 
   methodPlatform:
     type: string
-    enum: [ manual, integra_assist, opentrons_ot2, opentrons_flex ]
     description: "Execution platform lock for the active run method."
 
   methodVocabId:

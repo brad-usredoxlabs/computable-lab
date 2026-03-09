@@ -1,5 +1,6 @@
 import { ExecutionError } from './ExecutionOrchestrator.js';
 import type { AppContext } from '../server.js';
+import { extractAddMaterialVolume, resolveAddMaterialRef } from '../materials/AddMaterialSupport.js';
 
 type PlateEvent = {
   eventId: string;
@@ -65,11 +66,14 @@ export class PlateMapExporter {
       const details = event.details ?? {};
 
       if (event.event_type === 'add_material') {
-        const labwareId = refId(details['labwareInstanceId']);
+        const labwareId = refId(details['labwareInstanceId']) ?? (typeof details['labwareId'] === 'string' ? details['labwareId'] : undefined);
         if (!labwareId) continue;
-        const material = refId(details['materialId']);
+        const material = resolveAddMaterialRef(details)?.id;
         const wells = normalizeWells(details['wells']);
-        const volume_uL = typeof details['volume_uL'] === 'number' ? details['volume_uL'] : undefined;
+        const volume = extractAddMaterialVolume(details);
+        const volume_uL = volume
+          ? (volume.unit === 'mL' ? volume.value * 1000 : volume.value)
+          : typeof details['volume_uL'] === 'number' ? details['volume_uL'] : undefined;
         for (const well of wells) {
           latestByWell.set(`${labwareId}:${well}`, {
             labwareId,

@@ -121,7 +121,6 @@ properties:
         enum: [ liquid-handling/v1, animal-handling/v1 ]
       platform:
         type: string
-        enum: [ manual, integra_assist, opentrons_ot2, opentrons_flex ]
       deckVariant:
         type: string
       locked:

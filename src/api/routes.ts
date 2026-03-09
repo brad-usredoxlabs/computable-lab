@@ -25,6 +25,7 @@ import type { BiosourceHandlers } from './handlers/BiosourceHandlers.js';
 import type { KnowledgeAIHandlers } from './handlers/KnowledgeAIHandlers.js';
 import type { TagHandlers } from './handlers/TagHandlers.js';
 import type { MaterialPrepHandlers } from './handlers/MaterialPrepHandlers.js';
+import type { PlatformHandlers } from './handlers/PlatformHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -50,6 +51,7 @@ export interface RouteOptions {
   knowledgeAIHandlers?: KnowledgeAIHandlers;
   tagHandlers?: TagHandlers;
   materialPrepHandlers?: MaterialPrepHandlers;
+  platformHandlers?: PlatformHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -256,7 +258,16 @@ export function registerRoutes(
 
   const { materialPrepHandlers } = options;
   if (materialPrepHandlers) {
+    fastify.get('/materials/formulations/summary', materialPrepHandlers.getFormulationsSummary.bind(materialPrepHandlers));
+    fastify.get('/materials/inventory', materialPrepHandlers.getInventory.bind(materialPrepHandlers));
+    fastify.post('/materials/formulations', materialPrepHandlers.createFormulation.bind(materialPrepHandlers));
     fastify.post('/materials/recipes/:id/execute', materialPrepHandlers.executeRecipe.bind(materialPrepHandlers));
+  }
+
+  const { platformHandlers } = options;
+  if (platformHandlers) {
+    fastify.get('/platforms', platformHandlers.listPlatforms.bind(platformHandlers));
+    fastify.get('/platforms/:id', platformHandlers.getPlatform.bind(platformHandlers));
   }
 
   // ============================================================================
