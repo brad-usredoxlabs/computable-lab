@@ -88,6 +88,16 @@ function extractConcentration(details: Record<string, unknown>): Quantity | null
   };
 }
 
+function extractInstanceLot(details: Record<string, unknown>): Record<string, string> | null {
+  const lot = asRecord(details['instance_lot']);
+  if (!lot) return null;
+  const normalized: Record<string, string> = {};
+  if (typeof lot['vendor'] === 'string' && lot['vendor'].trim().length > 0) normalized.vendor = lot['vendor'].trim();
+  if (typeof lot['catalog_number'] === 'string' && lot['catalog_number'].trim().length > 0) normalized.catalog_number = lot['catalog_number'].trim();
+  if (typeof lot['lot_number'] === 'string' && lot['lot_number'].trim().length > 0) normalized.lot_number = lot['lot_number'].trim();
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
 function implicitAliquotId(eventGraphId: string, eventId: string): string {
   const seed = `${eventGraphId}_${eventId}`.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   return `ALQ-IMPLICIT-${seed || 'UNKNOWN'}`;
@@ -112,6 +122,7 @@ async function upsertImplicitAliquot(
   const aliquotId = implicitAliquotId(eventGraphId, eventId);
   const concentration = extractConcentration(details);
   const volume = extractAddMaterialVolume(details);
+  const lot = extractInstanceLot(details);
   const label = specRef.label || specRef.id;
   const payload: Record<string, unknown> = {
     kind: 'aliquot',
@@ -123,6 +134,7 @@ async function upsertImplicitAliquot(
   };
   if (concentration) payload.concentration = concentration;
   if (volume) payload.volume = volume;
+  if (lot) payload.lot = lot;
 
   const existing = await store.get(aliquotId);
   if (!existing) {
@@ -140,18 +152,22 @@ async function upsertImplicitAliquot(
     }
   } else {
     const updated = await store.update({
-      envelope: {
-        recordId: existing.recordId,
-        schemaId: existing.schemaId,
-        payload: {
+      envelope: (() => {
+        const mergedPayload: Record<string, unknown> = {
           ...(existing.payload as Record<string, unknown>),
           ...payload,
           createdAt: (existing.payload as Record<string, unknown>)['createdAt'],
           createdBy: (existing.payload as Record<string, unknown>)['createdBy'],
           updatedAt: new Date().toISOString(),
-        },
-        ...(existing.meta ? { meta: existing.meta } : {}),
-      },
+        };
+        if (!lot) delete mergedPayload.lot;
+        return {
+          recordId: existing.recordId,
+          schemaId: existing.schemaId,
+          payload: mergedPayload,
+          ...(existing.meta ? { meta: existing.meta } : {}),
+        };
+      })(),
       message: `Refresh implicit aliquot ${aliquotId} for ${eventGraphId}:${eventId}`,
     });
     if (!updated.success) {

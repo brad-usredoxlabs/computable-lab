@@ -61,6 +61,14 @@ properties:
   note:
     type: string
 
+  instance_lot:
+    type: object
+    additionalProperties: false
+    properties:
+      vendor: { type: string }
+      catalog_number: { type: string }
+      lot_number: { type: string }
+
   notes:
     type: string
     description: "Deprecated legacy notes field."
