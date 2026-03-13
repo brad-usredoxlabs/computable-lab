@@ -8,25 +8,21 @@ import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { EditorContext, LabwareSummary, EventSummary } from './types.js';
 
-let cachedTemplate: string | null = null;
-let cachedTemplatePath: string | null = null;
+const promptCache = new Map<string, string>();
 
 /**
  * Load the prompt template from disk (cached after first load).
  */
 function loadPromptTemplate(templatePath: string): string {
-  if (cachedTemplate && cachedTemplatePath === templatePath) {
-    return cachedTemplate;
-  }
-
+  const cached = promptCache.get(templatePath);
+  if (cached) return cached;
   const absPath = resolve(templatePath);
   if (!existsSync(absPath)) {
     throw new Error(`System prompt template not found: ${absPath}`);
   }
-
-  cachedTemplate = readFileSync(absPath, 'utf-8');
-  cachedTemplatePath = templatePath;
-  return cachedTemplate;
+  const template = readFileSync(absPath, 'utf-8');
+  promptCache.set(templatePath, template);
+  return template;
 }
 
 function formatLabwares(labwares: LabwareSummary[]): string {
@@ -122,12 +118,13 @@ export function buildSystemPrompt(
   templatePath = 'prompts/event-graph-agent.md',
 ): string {
   const template = loadPromptTemplate(templatePath);
+  const materialRules = loadPromptTemplate('prompts/material-system-rules.md');
 
   // Generate a group ID for this prompt
   const groupId = `ag-${Date.now().toString(36)}`;
   const isoNow = new Date().toISOString();
 
-  return template
+  return `${materialRules.trim()}\n\n---\n\n${template}`
     .replace('{{LABWARES}}', formatLabwares(context.labwares))
     .replace('{{EVENT_SUMMARY}}', formatEventSummary(context.eventSummary))
     .replace('{{SELECTED_WELLS}}', formatSelectedWells(context.selectedWells))

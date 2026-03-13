@@ -87,7 +87,7 @@ export function registerAiPlanningTools(server: McpServer, ctx: AppContext, regi
     server,
     registry,
     'lab_settings_get',
-    'Get current lab planning settings such as material tracking mode.',
+    'Get current lab planning settings such as material tracking mode. Use this to decide whether formulation-spec additions can rely on implicit instances or should prefer explicit tracked instances.',
     {},
     async () => jsonResult({ materialTracking: effectiveMaterialTracking(ctx) }),
   );
@@ -96,7 +96,7 @@ export function registerAiPlanningTools(server: McpServer, ctx: AppContext, regi
     server,
     registry,
     'formulations_summary',
-    'List local formulation specs with recipe, represented material, ingredients, preferred sources, and available instance count.',
+    'List local formulation specs with recipe, represented material, ingredients, preferred sources, and available instance count. Use this when the user asks what reagents or materials are available in the library; formulations are usually the primary addable objects.',
     {
       query: z.string().optional().describe('Search query'),
       outputSpecId: z.string().optional().describe('Filter by output material-spec ID'),
@@ -210,7 +210,7 @@ export function registerAiPlanningTools(server: McpServer, ctx: AppContext, regi
     server,
     registry,
     'inventory_list',
-    'List local prepared instances with formulation/spec and lot metadata.',
+    'List local prepared instances with formulation/spec and lot metadata. Use this when the user asks what tracked batches, prepared tubes, or lot-backed instances are available.',
     {
       query: z.string().optional().describe('Search query'),
       materialSpecId: z.string().optional().describe('Filter by material-spec ID'),
@@ -279,7 +279,7 @@ export function registerAiPlanningTools(server: McpServer, ctx: AppContext, regi
     server,
     registry,
     'materials_search_addable',
-    'Search local addable materials ranked for event authoring: formulations first, instances second, material concepts third.',
+    'Primary tool for answering what materials are available or addable in the lab. Searches local addable results ranked for event authoring: formulations first, instances second, material concepts third. Prefer this over generic library_search for availability questions.',
     {
       query: z.string().describe('Search query'),
       limit: z.number().optional().describe('Maximum results'),

@@ -26,7 +26,7 @@ export function registerLibraryTools(server: McpServer, ctx: AppContext, registr
   // library_search — Search library records
   dualRegister(server, registry,
     'library_search',
-    `Search library records (materials, labware, assays, reagents, etc.). Valid types: ${LIBRARY_TYPES.join(', ')}`,
+    `Generic search across library record types (materials, labware, assays, reagents, etc.). Valid types: ${LIBRARY_TYPES.join(', ')}. Do not use this as the primary tool for "what materials are available?" questions; prefer ranked addable-material or formulation tools for that.`,
     {
       query: z.string().optional().describe('Search query (searches name, id, keywords)'),
       type: z.string().optional().describe('Library type to filter by'),
