@@ -312,6 +312,13 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
             quantity?: FlexibleQuantity;
             constraints: string[];
           }>;
+          preferredSources?: Array<{
+            roleId: string;
+            vendor?: string;
+            catalogNumber?: string;
+            materialRef?: { id: string; label?: string };
+            materialSpecRef?: { id: string; label?: string };
+          }>;
           steps: Array<{ order: number; instruction: string; parameters?: Record<string, unknown> }>;
           scale?: {
             defaultBatchVolume?: Quantity;
@@ -441,6 +448,30 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
                       };
                     })
                 : [],
+              ...(Array.isArray(payload.preferred_sources)
+                ? {
+                    preferredSources: payload.preferred_sources
+                      .filter(isObject)
+                      .map((source) => {
+                        const materialRef = refValue(source.material_ref);
+                        const materialSpecRef = refValue(source.material_spec_ref);
+                        return {
+                          roleId: stringValue(source.role_id) ?? '',
+                          ...(() => {
+                            const vendor = stringValue(source.vendor);
+                            return vendor ? { vendor } : {};
+                          })(),
+                          ...(() => {
+                            const catalogNumber = stringValue(source.catalog_number);
+                            return catalogNumber ? { catalogNumber } : {};
+                          })(),
+                          ...(materialRef?.id ? { materialRef: { id: materialRef.id, ...(materialRef.label ? { label: materialRef.label } : {}) } } : {}),
+                          ...(materialSpecRef?.id ? { materialSpecRef: { id: materialSpecRef.id, ...(materialSpecRef.label ? { label: materialSpecRef.label } : {}) } } : {}),
+                        };
+                      })
+                      .filter((source) => source.roleId),
+                  }
+                : {}),
               steps: Array.isArray(payload.steps)
                 ? payload.steps
                     .filter(isObject)
