@@ -55,10 +55,13 @@ function parseAgentFinalResponse(
 
   try {
     const parsed = JSON.parse(jsonMatch[1]) as Record<string, unknown>;
-    const result: AgentResult = { success: true, usage: usageResult };
-    if (Array.isArray(parsed.events)) result.events = parsed.events;
-    if (Array.isArray(parsed.notes)) result.notes = parsed.notes;
-    if (Array.isArray(parsed.unresolvedRefs)) result.unresolvedRefs = parsed.unresolvedRefs;
+    const result: AgentResult = {
+      success: true,
+      usage: usageResult,
+      events: Array.isArray(parsed.events) ? parsed.events : [],
+      notes: Array.isArray(parsed.notes) ? parsed.notes : [],
+      unresolvedRefs: Array.isArray(parsed.unresolvedRefs) ? parsed.unresolvedRefs : [],
+    };
     return result;
   } catch {
     return {
