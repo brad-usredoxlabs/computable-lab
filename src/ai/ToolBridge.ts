@@ -22,6 +22,9 @@ export const AGENT_ALLOWED_TOOLS = [
   'lint_payload',
   // Library (read-only)
   'library_search',
+  'materials_search_addable',
+  'formulations_summary',
+  'inventory_list',
   // Ontology
   'ontology_search',
   // Chemistry
@@ -34,6 +37,10 @@ export const AGENT_ALLOWED_TOOLS = [
   // Tree navigation
   'tree_studies',
   'tree_records_for_run',
+  // Platform / settings
+  'platforms_list',
+  'platform_get',
+  'lab_settings_get',
 ] as const;
 
 /**

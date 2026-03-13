@@ -106,6 +106,19 @@ export interface EditorContext {
   vocabPackId: string;
   /** Available verbs — string[] from frontend, or VerbSummary[]. */
   availableVerbs: (string | VerbSummary)[];
+  /** Active deck/workflow platform. */
+  deckPlatform?: string;
+  /** Active deck variant. */
+  deckVariant?: string;
+  /** Current deck placements. */
+  deckPlacements?: DeckPlacementSummary[];
+  /** Whether the editor is in manual pipetting mode. */
+  manualPipettingMode?: boolean;
+  /** Lab-level material tracking behavior. */
+  materialTracking?: {
+    mode: 'relaxed' | 'tracked';
+    allowAdHocEventInstances: boolean;
+  };
   /** The run this event graph is attached to (if any). */
   runId?: string;
   /** The event graph record ID (if saved). */
@@ -124,6 +137,12 @@ export interface LabwareSummary {
   };
   rows?: number;
   columns?: number;
+}
+
+export interface DeckPlacementSummary {
+  slotId: string;
+  labwareId?: string;
+  moduleId?: string;
 }
 
 export interface EventSummary {

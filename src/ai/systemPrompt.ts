@@ -89,6 +89,31 @@ function formatVocabPack(vocabPackId: string, verbs: EditorContext['availableVer
   return `${vocabPackId}\n\nAvailable verbs:\n${verbList}`;
 }
 
+function formatDeckContext(context: EditorContext): string {
+  const platform = context.deckPlatform ?? 'unknown';
+  const variant = context.deckVariant ?? 'unknown';
+  const mode = context.manualPipettingMode ? 'manual' : 'robot-aware';
+  const placements = (context.deckPlacements ?? []).length > 0
+    ? context.deckPlacements!
+        .map((placement) => {
+          const contents = placement.labwareId
+            ? `labware=${placement.labwareId}`
+            : placement.moduleId
+              ? `module=${placement.moduleId}`
+              : 'empty';
+          return `- ${placement.slotId}: ${contents}`;
+        })
+        .join('\n')
+    : '(no deck placements)';
+  return `Platform: ${platform}\nVariant: ${variant}\nMode: ${mode}\nPlacements:\n${placements}`;
+}
+
+function formatMaterialTracking(context: EditorContext): string {
+  const tracking = context.materialTracking;
+  if (!tracking) return 'mode=relaxed, allowAdHocEventInstances=true';
+  return `mode=${tracking.mode}, allowAdHocEventInstances=${tracking.allowAdHocEventInstances ? 'true' : 'false'}`;
+}
+
 /**
  * Build the full system prompt from the template and editor context.
  */
@@ -107,6 +132,8 @@ export function buildSystemPrompt(
     .replace('{{EVENT_SUMMARY}}', formatEventSummary(context.eventSummary))
     .replace('{{SELECTED_WELLS}}', formatSelectedWells(context.selectedWells))
     .replace('{{VOCAB_PACK}}', formatVocabPack(context.vocabPackId, context.availableVerbs))
+    .replace('{{DECK_CONTEXT}}', formatDeckContext(context))
+    .replace('{{MATERIAL_TRACKING}}', formatMaterialTracking(context))
     .replace('{{RUN_ID}}', context.runId ?? 'none')
     .replace('{{ISO_NOW}}', isoNow)
     .replace('{{GROUP_ID}}', groupId);
