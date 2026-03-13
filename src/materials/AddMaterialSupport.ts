@@ -1,5 +1,6 @@
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import type { RecordStore } from '../store/types.js';
+import type { MaterialTrackingConfig } from '../config/types.js';
 
 const ALIQUOT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml';
 
@@ -22,6 +23,17 @@ type AddMaterialEvent = {
   event_type?: unknown;
   details?: unknown;
 };
+
+type MaterialUsageOptions = {
+  materialTracking?: MaterialTrackingConfig;
+};
+
+export class MaterialUsagePolicyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'MaterialUsagePolicyError';
+  }
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -182,6 +194,7 @@ export async function normalizeEventGraphMaterialUsage(
   store: RecordStore,
   schemaId: string,
   payload: unknown,
+  options: MaterialUsageOptions = {},
 ): Promise<unknown> {
   if (schemaId !== 'https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml') return payload;
   const graph = asRecord(payload);
@@ -190,6 +203,10 @@ export async function normalizeEventGraphMaterialUsage(
   const events = Array.isArray(graph['events']) ? graph['events'] as AddMaterialEvent[] : null;
   if (!eventGraphId || !events) return payload;
 
+  const materialTracking: MaterialTrackingConfig = {
+    mode: options.materialTracking?.mode ?? 'relaxed',
+    allowAdHocEventInstances: options.materialTracking?.allowAdHocEventInstances ?? true,
+  };
   let changed = false;
   const nextEvents = await Promise.all(events.map(async (event, index) => {
     if (event.event_type !== 'add_material') return event;
@@ -208,6 +225,16 @@ export async function normalizeEventGraphMaterialUsage(
         return null;
       })();
     if (!inferredSpec || inferredSpec.kind !== 'record') return event;
+    const lot = extractInstanceLot(details);
+    if (
+      materialTracking.mode === 'tracked'
+      && materialTracking.allowAdHocEventInstances === false
+      && !lot
+    ) {
+      throw new MaterialUsagePolicyError(
+        `Tracked material policy requires provenance when using formulation ${inferredSpec.label || inferredSpec.id} without an explicit instance`
+      );
+    }
 
     const aliquotRef = await upsertImplicitAliquot(store, eventGraphId, eventId, inferredSpec, details);
     changed = true;

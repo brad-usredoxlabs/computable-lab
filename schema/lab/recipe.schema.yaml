@@ -45,6 +45,17 @@ properties:
           type: array
           items:
             $ref: "./datatypes/ref.schema.yaml"
+        quantity:
+          type: object
+          additionalProperties: false
+          required: [ value, unit ]
+          properties:
+            value:
+              oneOf:
+              - type: number
+              - type: string
+            unit:
+              type: string
         constraints:
           type: array
           items: { type: string }
@@ -86,6 +97,24 @@ properties:
           properties:
             value: { type: number, exclusiveMinimum: 0 }
             unit: { type: string }
+
+  preferred_sources:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [ role_id ]
+      properties:
+        role_id:
+          type: string
+        vendor:
+          type: string
+        catalog_number:
+          type: string
+        material_ref:
+          $ref: "./datatypes/ref.schema.yaml"
+        material_spec_ref:
+          $ref: "./datatypes/ref.schema.yaml"
 
   tags:
     type: array

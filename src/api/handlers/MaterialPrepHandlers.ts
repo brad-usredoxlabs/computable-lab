@@ -59,12 +59,20 @@ type CreateFormulationBody = {
       required?: boolean;
       materialRefId?: string;
       allowedMaterialSpecRefIds?: string[];
+      quantity?: { value: number | string; unit: string };
       constraints?: string[];
     }>;
     steps?: Array<{
       order?: number;
       instruction?: string;
       parameters?: Record<string, unknown>;
+    }>;
+    preferredSources?: Array<{
+      roleId?: string;
+      vendor?: string;
+      catalogNumber?: string;
+      materialRefId?: string;
+      materialSpecRefId?: string;
     }>;
     scale?: {
       defaultBatchVolume?: { value: number; unit: string };
@@ -76,6 +84,7 @@ type CreateFormulationBody = {
 
 type RefShape = { kind: 'record'; id: string; type: string; label?: string };
 type Quantity = { value: number; unit: string };
+type FlexibleQuantity = { value: number | string; unit: string };
 
 function randomToken(): string {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -115,6 +124,17 @@ function quantityValue(value: unknown): Quantity | undefined {
   const unit = stringValue(value.unit);
   if (numeric === undefined || !unit) return undefined;
   return { value: numeric, unit };
+}
+
+function flexibleQuantityValue(value: unknown): FlexibleQuantity | undefined {
+  if (!isObject(value)) return undefined;
+  const rawValue = value.value;
+  const normalizedValue = typeof rawValue === 'number'
+    ? (Number.isFinite(rawValue) ? rawValue : undefined)
+    : stringValue(rawValue);
+  const unit = stringValue(value.unit);
+  if (normalizedValue === undefined || !unit) return undefined;
+  return { value: normalizedValue, unit };
 }
 
 function refValue(value: unknown): RefShape | null {
@@ -289,6 +309,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
             required: boolean;
             materialRef?: { id: string; label?: string };
             allowedMaterialSpecRefs: Array<{ id: string; label?: string }>;
+            quantity?: FlexibleQuantity;
             constraints: string[];
           }>;
           steps: Array<{ order: number; instruction: string; parameters?: Record<string, unknown> }>;
@@ -412,6 +433,10 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
                               .filter((entry): entry is RefShape => Boolean(entry))
                               .map((entry) => ({ id: entry.id, ...(entry.label ? { label: entry.label } : {}) }))
                           : [],
+                        ...(() => {
+                          const quantity = flexibleQuantityValue(role.quantity);
+                          return quantity ? { quantity } : {};
+                        })(),
                         constraints: isStringArray(role.constraints) ? role.constraints : [],
                       };
                     })
@@ -454,6 +479,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
               entry.recipeName,
               entry.outputSpec.name,
               entry.outputSpec.materialName,
+              ...entry.inputRoles.map((role) => role.materialRef?.label ?? role.allowedMaterialSpecRefs[0]?.label ?? role.roleId),
               ...entry.recipeTags,
               ...entry.steps.map((step) => step.instruction),
             ]
@@ -664,7 +690,17 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
           return { error: 'INVALID_FORMULATION', message: 'recipe.steps must include at least one step' };
         }
 
-        let materialId = stringValue(outputSpec.materialRefId);
+        const inferredOutputMaterialRef = (() => {
+          if (!Array.isArray(recipe.inputRoles)) return undefined;
+          const materialRoleIds = Array.from(new Set(
+            recipe.inputRoles
+              .map((role) => stringValue(role.materialRefId))
+              .filter((entry): entry is string => Boolean(entry))
+          ));
+          return materialRoleIds.length === 1 ? materialRoleIds[0] : undefined;
+        })();
+
+        let materialId = stringValue(outputSpec.materialRefId) ?? inferredOutputMaterialRef;
         const materialInput = body.material;
         if (!materialId && materialInput) {
           materialId = stringValue(materialInput.id) ?? token('MAT');
@@ -765,6 +801,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
             throw new Error(`Duplicate roleId: ${roleId}`);
           }
           roleIds.add(roleId);
+          const quantity = flexibleQuantityValue(role.quantity);
           return {
             role_id: roleId,
             role_type: stringValue(role.roleType) ?? 'other',
@@ -779,6 +816,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
                     .map((entry) => toRef(entry, 'material-spec', entry)),
                 }
               : {}),
+            ...(quantity ? { quantity } : {}),
             ...(role.constraints?.length ? { constraints: dedupeStrings(role.constraints) } : {}),
           };
         });
@@ -804,6 +842,19 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
           steps,
           output_material_spec_ref: toRef(materialSpecId, 'material-spec', stringValue(outputSpec.name) ?? materialSpecId),
         };
+        if (Array.isArray(recipe.preferredSources) && recipe.preferredSources.length > 0) {
+          const preferredSources = recipe.preferredSources
+            .filter(isObject)
+            .map((source) => ({
+              role_id: stringValue(source.roleId) ?? '',
+              ...(stringValue(source.vendor) ? { vendor: stringValue(source.vendor) } : {}),
+              ...(stringValue(source.catalogNumber) ? { catalog_number: stringValue(source.catalogNumber) } : {}),
+              ...(stringValue(source.materialRefId) ? { material_ref: toRef(stringValue(source.materialRefId)!, 'material', stringValue(source.materialRefId)!) } : {}),
+              ...(stringValue(source.materialSpecRefId) ? { material_spec_ref: toRef(stringValue(source.materialSpecRefId)!, 'material-spec', stringValue(source.materialSpecRefId)!) } : {}),
+            }))
+            .filter((source) => source.role_id);
+          if (preferredSources.length > 0) recipePayload.preferred_sources = preferredSources;
+        }
 
         if (recipe.scale && isObject(recipe.scale)) {
           const scale: Record<string, unknown> = {};

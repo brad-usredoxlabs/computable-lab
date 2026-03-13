@@ -43,6 +43,7 @@ import {
   createTagHandlers,
   createMaterialPrepHandlers,
   createPlatformHandlers,
+  createLabSettingsHandlers,
 } from './api/handlers/index.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { createUISpecLoader, loadAllUISpecs, type UISpecLoader } from './ui/UISpecLoader.js';
@@ -318,7 +319,12 @@ export async function createServer(
   }
   
   // Create handlers
-  const recordHandlers = createRecordHandlers(ctx.store, ctx.indexManager, ctx.identity);
+  const recordHandlers = createRecordHandlers(
+    ctx.store,
+    ctx.indexManager,
+    ctx.identity,
+    () => ctx.appConfig?.lab?.materialTracking,
+  );
   const schemaHandlers = createSchemaHandlers(ctx.schemaRegistry);
   const validationHandlers = createValidationHandlers(ctx.validator, ctx.lintEngine);
   const gitHandlers = createGitHandlers(ctx.repoAdapter);
@@ -328,6 +334,7 @@ export async function createServer(
   const tagHandlers = createTagHandlers(ctx.store);
   const materialPrepHandlers = createMaterialPrepHandlers(ctx.store, ctx.indexManager);
   const platformHandlers = createPlatformHandlers(ctx.platformRegistry);
+  const labSettingsHandlers = createLabSettingsHandlers(ctx.appConfig);
   const uiHandlers = createUIHandlers(ctx.uiSpecLoader, ctx.store, ctx.schemaRegistry);
 
   // Create meta handlers
@@ -510,6 +517,7 @@ export async function createServer(
       tagHandlers,
       materialPrepHandlers,
       platformHandlers,
+      labSettingsHandlers,
       metaHandlers,
       protocolHandlers,
       componentHandlers,

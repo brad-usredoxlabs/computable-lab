@@ -22,3 +22,4 @@ export * from './ComponentHandlers.js';
 export * from './TagHandlers.js';
 export * from './MaterialPrepHandlers.js';
 export * from './PlatformHandlers.js';
+export * from './LabSettingsHandlers.js';

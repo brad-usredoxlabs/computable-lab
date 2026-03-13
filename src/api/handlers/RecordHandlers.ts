@@ -20,12 +20,18 @@ import type {
   ApiError,
 } from '../types.js';
 import type { ResolvedIdentity } from '../../identity/GitHubIdentity.js';
-import { normalizeEventGraphMaterialUsage } from '../../materials/AddMaterialSupport.js';
+import type { MaterialTrackingConfig } from '../../config/types.js';
+import { MaterialUsagePolicyError, normalizeEventGraphMaterialUsage } from '../../materials/AddMaterialSupport.js';
 
 /**
  * Create record handlers bound to a RecordStore and optional IndexManager.
  */
-export function createRecordHandlers(store: RecordStore, indexManager?: IndexManager, identity?: ResolvedIdentity) {
+export function createRecordHandlers(
+  store: RecordStore,
+  indexManager?: IndexManager,
+  identity?: ResolvedIdentity,
+  getMaterialTracking?: () => MaterialTrackingConfig | undefined,
+) {
   return {
     /**
      * GET /records
@@ -53,6 +59,13 @@ export function createRecordHandlers(store: RecordStore, indexManager?: IndexMan
           ...(offset !== undefined ? { offset: Number(offset) } : {}),
         };
       } catch (err) {
+        if (err instanceof MaterialUsagePolicyError) {
+          reply.status(422);
+          return {
+            error: 'INVALID_MATERIAL_USAGE',
+            message: err.message,
+          };
+        }
         const message = err instanceof Error ? err.message : String(err);
         reply.status(500);
         return {
@@ -148,7 +161,13 @@ export function createRecordHandlers(store: RecordStore, indexManager?: IndexMan
             message: 'payload is required',
           };
         }
-        const payload = await normalizeEventGraphMaterialUsage(store, schemaId, request.body.payload);
+        const currentMaterialTracking = getMaterialTracking?.();
+        const payload = await normalizeEventGraphMaterialUsage(
+          store,
+          schemaId,
+          request.body.payload,
+          currentMaterialTracking ? { materialTracking: currentMaterialTracking } : {},
+        );
         
         // Extract recordId from payload
         const recordId = extractRecordId(payload);
@@ -326,7 +345,13 @@ export function createRecordHandlers(store: RecordStore, indexManager?: IndexMan
         }
         
         // Inject updatedAt in payload (schema-compatible provenance field).
-        const normalizedPayload = await normalizeEventGraphMaterialUsage(store, existing.schemaId, request.body.payload);
+        const currentMaterialTracking = getMaterialTracking?.();
+        const normalizedPayload = await normalizeEventGraphMaterialUsage(
+          store,
+          existing.schemaId,
+          request.body.payload,
+          currentMaterialTracking ? { materialTracking: currentMaterialTracking } : {},
+        );
         const payloadWithProvenance = {
           ...(normalizedPayload as Record<string, unknown>),
           updatedAt: new Date().toISOString(),
@@ -402,6 +427,13 @@ export function createRecordHandlers(store: RecordStore, indexManager?: IndexMan
         };
         return response;
       } catch (err) {
+        if (err instanceof MaterialUsagePolicyError) {
+          reply.status(422);
+          return {
+            error: 'INVALID_MATERIAL_USAGE',
+            message: err.message,
+          };
+        }
         const errMessage = err instanceof Error ? err.message : String(err);
         reply.status(500);
         return {

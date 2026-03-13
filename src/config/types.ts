@@ -14,10 +14,22 @@ export interface AppConfig {
   repositories: RepositoryConfig[];
   ai?: AIConfig;
   execution?: ExecutionConfig;
+  lab?: LabConfig;
 }
 
 export type ExecutionMode = 'local' | 'remote' | 'hybrid';
 export type AdapterExecutionMode = 'local' | 'remote';
+
+export type MaterialTrackingMode = 'relaxed' | 'tracked';
+
+export interface MaterialTrackingConfig {
+  mode: MaterialTrackingMode;
+  allowAdHocEventInstances: boolean;
+}
+
+export interface LabConfig {
+  materialTracking: MaterialTrackingConfig;
+}
 
 /**
  * Execution provider routing configuration.
@@ -219,6 +231,12 @@ export const DEFAULT_CONFIG: AppConfig = {
   execution: {
     mode: 'local',
     adapters: {},
+  },
+  lab: {
+    materialTracking: {
+      mode: 'relaxed',
+      allowAdHocEventInstances: true,
+    },
   },
 };
 

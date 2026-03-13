@@ -20,6 +20,7 @@ import type {
   NamespaceConfig,
   AIConfig,
   ExecutionConfig,
+  LabConfig,
 } from './types.js';
 import { DEFAULT_CONFIG, DEFAULT_REPO_CONFIG } from './types.js';
 
@@ -283,6 +284,28 @@ function validateExecutionConfig(config: unknown, path = 'execution'): asserts c
   }
 }
 
+function validateLabConfig(config: unknown, path = 'lab'): asserts config is LabConfig {
+  if (!config || typeof config !== 'object') {
+    throw new ConfigValidationError('must be an object', path, config);
+  }
+  const c = config as Record<string, unknown>;
+  const materialTracking = c.materialTracking;
+  if (!materialTracking || typeof materialTracking !== 'object' || Array.isArray(materialTracking)) {
+    throw new ConfigValidationError('materialTracking must be an object', `${path}.materialTracking`, materialTracking);
+  }
+  const mt = materialTracking as Record<string, unknown>;
+  if (mt.mode !== undefined && mt.mode !== 'relaxed' && mt.mode !== 'tracked') {
+    throw new ConfigValidationError('mode must be one of: relaxed, tracked', `${path}.materialTracking.mode`, mt.mode);
+  }
+  if (mt.allowAdHocEventInstances !== undefined && typeof mt.allowAdHocEventInstances !== 'boolean') {
+    throw new ConfigValidationError(
+      'allowAdHocEventInstances must be a boolean',
+      `${path}.materialTracking.allowAdHocEventInstances`,
+      mt.allowAdHocEventInstances,
+    );
+  }
+}
+
 /**
  * Validate the entire configuration.
  */
@@ -326,6 +349,10 @@ export function validateConfig(config: unknown): asserts config is Partial<AppCo
 
   if (c.execution !== undefined) {
     validateExecutionConfig(c.execution, 'execution');
+  }
+
+  if (c.lab !== undefined) {
+    validateLabConfig(c.lab, 'lab');
   }
 }
 
@@ -392,6 +419,7 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<AppCo
     schemas: deepMerge(DEFAULT_CONFIG.schemas, partialConfig.schemas ?? {}),
     repositories: (partialConfig.repositories ?? []).map(applyRepoDefaults),
     execution: deepMerge(DEFAULT_CONFIG.execution ?? { mode: 'local', adapters: {} }, partialConfig.execution ?? {}),
+    lab: deepMerge(DEFAULT_CONFIG.lab ?? { materialTracking: { mode: 'relaxed', allowAdHocEventInstances: true } }, partialConfig.lab ?? {}),
   };
 
   // Pass through AI config if present

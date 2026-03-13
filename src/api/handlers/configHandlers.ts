@@ -128,6 +128,7 @@ function buildConfigResponse(config: AppConfig) {
   return {
     repositories: redactSecrets(config.repositories),
     ai: config.ai ? redactSecrets(config.ai) : null,
+    lab: config.lab ? redactSecrets(config.lab) : null,
   };
 }
 
@@ -146,6 +147,7 @@ interface AiStatusSnapshot {
 interface ConfigPatchBody {
   repositories?: Array<Record<string, unknown> & { id: string }>;
   ai?: Record<string, unknown>;
+  lab?: Record<string, unknown>;
 }
 
 interface AiTestBody {
@@ -244,6 +246,16 @@ export class ConfigHandlers {
       } else {
         updated.ai = patch.ai as unknown as AIConfig;
       }
+    }
+
+    if (patch.lab !== undefined) {
+      const mergedLab = (updated.lab
+        ? mergeConfigPatch(
+            updated.lab as unknown as Record<string, unknown>,
+            patch.lab,
+          )
+        : patch.lab) as unknown as NonNullable<AppConfig['lab']>
+      updated.lab = mergedLab
     }
 
     // -- Validate the merged config -----------------------------------------

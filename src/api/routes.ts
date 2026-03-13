@@ -26,6 +26,7 @@ import type { KnowledgeAIHandlers } from './handlers/KnowledgeAIHandlers.js';
 import type { TagHandlers } from './handlers/TagHandlers.js';
 import type { MaterialPrepHandlers } from './handlers/MaterialPrepHandlers.js';
 import type { PlatformHandlers } from './handlers/PlatformHandlers.js';
+import type { LabSettingsHandlers } from './handlers/LabSettingsHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -52,6 +53,7 @@ export interface RouteOptions {
   tagHandlers?: TagHandlers;
   materialPrepHandlers?: MaterialPrepHandlers;
   platformHandlers?: PlatformHandlers;
+  labSettingsHandlers?: LabSettingsHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -262,6 +264,11 @@ export function registerRoutes(
     fastify.get('/materials/inventory', materialPrepHandlers.getInventory.bind(materialPrepHandlers));
     fastify.post('/materials/formulations', materialPrepHandlers.createFormulation.bind(materialPrepHandlers));
     fastify.post('/materials/recipes/:id/execute', materialPrepHandlers.executeRecipe.bind(materialPrepHandlers));
+  }
+
+  const { labSettingsHandlers } = options;
+  if (labSettingsHandlers) {
+    fastify.get('/settings/lab', labSettingsHandlers.getLabSettings.bind(labSettingsHandlers));
   }
 
   const { platformHandlers } = options;
