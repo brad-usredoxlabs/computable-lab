@@ -199,6 +199,9 @@ export function registerRoutes(
   const { treeHandlers } = options;
   
   if (treeHandlers) {
+    fastify.get('/templates/search', treeHandlers.searchTemplates.bind(treeHandlers));
+    fastify.post('/templates/:id/materialize', treeHandlers.materializeTemplate.bind(treeHandlers));
+
     // Run method attachment + summary
     fastify.get('/runs/:id/method', treeHandlers.getRunMethod.bind(treeHandlers));
     fastify.post('/runs/:id/method/attach-template', treeHandlers.attachTemplateToRunMethod.bind(treeHandlers));
