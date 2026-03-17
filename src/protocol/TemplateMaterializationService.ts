@@ -285,7 +285,7 @@ function createSeedEvent(input: {
   };
 }
 
-async function buildSeedEventsFromSnapshot(
+export async function buildSeedEventsFromSnapshot(
   store: RecordStore,
   binding: Extract<TemplateLabwareBinding, { kind: 'plate-snapshot' }>,
   labwareName?: string

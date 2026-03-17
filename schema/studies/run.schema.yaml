@@ -104,6 +104,55 @@ properties:
     format: date-time
     description: "Timestamp of latest method attach/replace action."
 
+  templateInputResolutions:
+    type: array
+    description: "Protocol input resolution state for run-attached methods."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ templateLabwareId, slotLabel, kind, status ]
+      properties:
+        templateLabwareId:
+          type: string
+        slotLabel:
+          type: string
+        kind:
+          type: string
+          enum: [ existing-snapshot, upstream-run ]
+        status:
+          type: string
+          enum: [ planned, run_created, resolved ]
+        snapshotId:
+          type: string
+        upstreamTemplateId:
+          type: string
+        upstreamOutputId:
+          type: string
+        upstreamRunId:
+          type: string
+        producedSnapshotId:
+          type: string
+
+  runOutputs:
+    type: array
+    description: "Declared or produced reusable outputs for this run."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ outputId, label, sourceLabwareId, status ]
+      properties:
+        outputId:
+          type: string
+        label:
+          type: string
+        sourceLabwareId:
+          type: string
+        status:
+          type: string
+          enum: [ declared, produced ]
+        snapshotId:
+          type: string
+
   attachments:
     type: array
     items:

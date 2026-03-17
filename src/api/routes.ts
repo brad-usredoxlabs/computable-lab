@@ -204,7 +204,11 @@ export function registerRoutes(
 
     // Run method attachment + summary
     fastify.get('/runs/:id/method', treeHandlers.getRunMethod.bind(treeHandlers));
+    fastify.post('/runs/create-from-template', treeHandlers.createRunFromTemplate.bind(treeHandlers));
     fastify.post('/runs/:id/method/attach-template', treeHandlers.attachTemplateToRunMethod.bind(treeHandlers));
+    fastify.post('/runs/:id/inputs/:templateLabwareId/create-upstream-run', treeHandlers.createUpstreamRunForInput.bind(treeHandlers));
+    fastify.post('/runs/:id/inputs/:templateLabwareId/use-existing-plate', treeHandlers.useExistingPlateForInput.bind(treeHandlers));
+    fastify.post('/runs/:id/outputs/:outputId/promote', treeHandlers.promoteRunOutput.bind(treeHandlers));
 
     // Get study hierarchy tree
     fastify.get('/tree/studies', treeHandlers.getStudies.bind(treeHandlers));
