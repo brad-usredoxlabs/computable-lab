@@ -110,6 +110,19 @@ function formatMaterialTracking(context: EditorContext): string {
   return `mode=${tracking.mode}, allowAdHocEventInstances=${tracking.allowAdHocEventInstances ? 'true' : 'false'}`;
 }
 
+function formatMentions(context: EditorContext): string {
+  if (!context.mentions || context.mentions.length === 0) return '(none)';
+  return context.mentions.map((mention) => {
+    if (mention.type === 'material') {
+      return `- material ${mention.entityKind ?? 'material'}: ${mention.label}${mention.id ? ` (${mention.id})` : ''}`;
+    }
+    if (mention.type === 'labware') {
+      return `- labware: ${mention.label}${mention.id ? ` (${mention.id})` : ''}`;
+    }
+    return `- ${mention.selectionKind ?? 'selection'} selection: ${mention.label}${mention.labwareId ? ` [${mention.labwareId}]` : ''}${mention.wells?.length ? ` -> ${mention.wells.join(', ')}` : ''}`;
+  }).join('\n');
+}
+
 /**
  * Build the full system prompt from the template and editor context.
  */
@@ -131,6 +144,7 @@ export function buildSystemPrompt(
     .replace('{{VOCAB_PACK}}', formatVocabPack(context.vocabPackId, context.availableVerbs))
     .replace('{{DECK_CONTEXT}}', formatDeckContext(context))
     .replace('{{MATERIAL_TRACKING}}', formatMaterialTracking(context))
+    .replace('{{PROMPT_MENTIONS}}', formatMentions(context))
     .replace('{{RUN_ID}}', context.runId ?? 'none')
     .replace('{{ISO_NOW}}', isoNow)
     .replace('{{GROUP_ID}}', groupId);

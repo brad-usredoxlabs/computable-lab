@@ -87,3 +87,25 @@ For questions such as:
 
 Prefer the ranked local addable-material tool, then formulation and inventory
 tools. Do not rely on generic library search over only `material` records.
+
+## Prompt Mentions
+
+The UI may inject explicit local references into the prompt using mention tokens.
+
+Examples:
+
+- `[[material-spec:MSP-123|1 mM Clofibrate in DMSO]]`
+- `[[aliquot:ALQ-001|Clofibrate stock tube]]`
+- `[[material:MAT-001|Fenofibrate]]`
+- `[[labware:plate-1|Assay Plate]]`
+- `[[selection:source|plate-1|A1,A2|Source: Assay Plate A1, A2]]`
+- `[[selection:target|reservoir-1|B1,B2|Target: Reservoir 1 B1, B2]]`
+
+Treat these as exact user-selected local references.
+
+- Do not replace them with ontology terms unless the user asks for ontology grounding specifically.
+- Do not replace a mentioned formulation with a bare concept.
+- Do not ignore source/target selection mentions when drafting transfer or add-material events.
+- `selection:source` and `selection:target` mentions should dominate source/destination inference.
+- For transfer events, use source and target mentions directly unless the user explicitly overrides them.
+- For add-material events, prefer `selection:target` as the destination wells/labware. If only one selection mention is present, use that one as the destination by default.

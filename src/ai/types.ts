@@ -106,6 +106,8 @@ export interface EditorContext {
   vocabPackId: string;
   /** Available verbs — string[] from frontend, or VerbSummary[]. */
   availableVerbs: (string | VerbSummary)[];
+  /** Structured prompt mentions resolved client-side from slash commands. */
+  mentions?: PromptMention[];
   /** Active deck/workflow platform. */
   deckPlatform?: string;
   /** Active deck variant. */
@@ -143,6 +145,16 @@ export interface DeckPlacementSummary {
   slotId: string;
   labwareId?: string;
   moduleId?: string;
+}
+
+export interface PromptMention {
+  type: 'material' | 'labware' | 'selection';
+  entityKind?: 'material' | 'material-spec' | 'aliquot';
+  selectionKind?: 'source' | 'target';
+  id?: string;
+  label: string;
+  labwareId?: string;
+  wells?: string[];
 }
 
 export interface EventSummary {

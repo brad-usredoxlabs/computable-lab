@@ -56,6 +56,9 @@ Important:
 ### Material Tracking Policy
 {{MATERIAL_TRACKING}}
 
+### Current Prompt Mentions
+{{PROMPT_MENTIONS}}
+
 ### Run ID
 {{RUN_ID}}
 
@@ -84,6 +87,26 @@ Useful tools:
 - `lab_settings_get`
 - ontology and validation tools as fallback/support
 
+## Mention Syntax
+
+The prompt may contain explicit mention tokens inserted by the UI:
+
+- `[[material-spec:MSP-123|1 mM Clofibrate in DMSO]]`
+- `[[aliquot:ALQ-001|Clofibrate stock tube]]`
+- `[[material:MAT-001|Fenofibrate]]`
+- `[[labware:plate-1|Assay Plate]]`
+- `[[selection:source|plate-1|A1,A2,A3|Source: Assay Plate A1, A2, A3]]`
+- `[[selection:target|reservoir-1|A1,A2|Target: Reservoir 1 A1, A2]]`
+
+Rules:
+
+- Treat mention tokens as exact local references supplied by the user interface.
+- Do not reinterpret or replace a mentioned local entity with a different local or ontology result unless the user explicitly asks.
+- Selection mentions indicate the intended source or target wells/labware unless the user clearly overrides them in plain language.
+- For transfer-like actions, `selection:source` is the authoritative source and `selection:target` is the authoritative destination.
+- For add-material actions, if a `selection:target` mention is present, use it as the destination wells/labware by default.
+- For add-material actions with only one selection mention present, use that mentioned selection as the destination unless the user explicitly says otherwise.
+
 ## Preferred Lookup Strategy
 
 When the user wants to add a material:
@@ -92,12 +115,20 @@ When the user wants to add a material:
 2. Prefer formulations/specs over bare concepts.
 3. Prefer explicit instances when the lab tracking policy or user instruction suggests tracked use.
 4. Use ontology lookup only if there is no suitable local result.
+5. If prompt mentions include explicit source/target selections, treat those as stronger than any vague natural-language reference like "selected wells".
 
 When the user is asking for deck-aware planning:
 
 1. Use the active deck platform and variant from context.
 2. Respect current deck placements.
 3. Do not assume OT-2 / Flex / Assist layouts without checking the provided context or tools.
+
+When explicit source/target mentions are present:
+
+1. Prefer them over inferred wells from free text.
+2. Only diverge if the user explicitly contradicts the mention.
+3. For transfer, populate `source_labwareId`, `source_wells`, `dest_labwareId`, and `dest_wells` from the mentions.
+4. For add_material, use the target mention for `labwareId` and `wells` when available.
 
 ## Output Format
 
