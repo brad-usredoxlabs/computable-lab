@@ -137,5 +137,33 @@ properties:
       insertionHints:
         type: object
         additionalProperties: true
+        properties:
+          version:
+            type: string
+          sourceEventGraphId:
+            type: string
+          playbackPosition:
+            type: integer
+          anchorLabwareId:
+            type: string
+          experimentTypes:
+            type: array
+            items: { type: string }
+            uniqueItems: true
+          outputArtifacts:
+            type: array
+            items:
+              type: object
+              additionalProperties: false
+              required: [ outputId, label, kind, sourceLabwareId ]
+              properties:
+                outputId:
+                  type: string
+                label:
+                  type: string
+                kind:
+                  const: "plate-snapshot"
+                sourceLabwareId:
+                  type: string
   notes:
     type: string

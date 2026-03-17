@@ -14,6 +14,12 @@ import type { RecordStore } from '../../store/types.js';
 import type { StudyTreeNode, IndexEntry } from '../../index/types.js';
 import { createEnvelope } from '../../types/RecordEnvelope.js';
 import type { PlatformRegistry } from '../../platform-registry/PlatformRegistry.js';
+import {
+  materializeTemplate as materializeTemplateService,
+  searchTemplates as searchTemplatesService,
+  type TemplateLabwareBinding,
+  type TemplateSearchResult,
+} from '../../protocol/TemplateMaterializationService.js';
 
 /**
  * Response types for tree endpoints.
@@ -48,6 +54,25 @@ export interface RunMethodSummaryResponse {
   methodTemplateId?: string;
 }
 
+export interface TemplateSearchResponse {
+  items: TemplateSearchResult[];
+  total: number;
+}
+
+export interface MaterializeTemplateResponse {
+  templateId: string;
+  title: string;
+  experimentTypes: string[];
+  outputs: Array<{
+    outputId: string;
+    label: string;
+    kind: 'plate-snapshot';
+    sourceLabwareId: string;
+  }>;
+  snapshot: SavedTemplateSnapshot;
+  appliedBindings: TemplateLabwareBinding[];
+}
+
 type DeckPlacement = {
   slotId: string;
   labwareId?: string;
@@ -56,6 +81,13 @@ type DeckPlacement = {
 
 type SavedTemplateSnapshot = {
   sourceEventGraphId?: string | null;
+  experimentTypes?: string[];
+  outputArtifacts?: Array<{
+    outputId: string;
+    label: string;
+    kind: 'plate-snapshot';
+    sourceLabwareId: string;
+  }>;
   events?: unknown[];
   labwares?: unknown[];
   deck?: {
@@ -71,14 +103,6 @@ type SavedTemplateSnapshot = {
 
 function toObject(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
-}
-
-function parseSavedTemplateSnapshot(template: unknown): SavedTemplateSnapshot {
-  const obj = toObject(template);
-  if (!obj) return {};
-  const insertionHints = toObject(obj['insertionHints']);
-  if (insertionHints) return insertionHints as SavedTemplateSnapshot;
-  return obj as SavedTemplateSnapshot;
 }
 
 function eventGraphIdFromRecordId(prefix: string = 'EVG'): string {
@@ -147,6 +171,7 @@ export function createTreeHandlers(
           vocabId?: 'liquid-handling/v1' | 'animal-handling/v1';
           platform?: string;
           deckVariant?: string;
+          bindings?: TemplateLabwareBinding[];
         };
       }>,
       reply: FastifyReply
@@ -203,19 +228,18 @@ export function createTreeHandlers(
       let events: unknown[] = [];
       let labwares: unknown[] = [];
       let placements: Array<{ slotId: string; labwareId?: string; moduleId?: string }> = [];
+      const bindings = Array.isArray(request.body?.bindings) ? request.body.bindings : [];
       if (templateId && templateId.trim().length > 0) {
-        const templateRecord = await recordStore.get(templateId);
-        if (!templateRecord) {
-          reply.status(404);
-          return { error: 'NOT_FOUND', message: `Template not found: ${templateId}` };
+        let snapshot: SavedTemplateSnapshot;
+        try {
+          const materialized = await materializeTemplateService(recordStore, templateId, bindings);
+          snapshot = materialized.snapshot;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          const status = message.includes('not found') ? 404 : 422;
+          reply.status(status);
+          return { error: status === 404 ? 'NOT_FOUND' : 'BAD_TEMPLATE', message };
         }
-        const templatePayload = (templateRecord.payload ?? {}) as Record<string, unknown>;
-        const template = toObject(templatePayload['template']);
-        if (!template) {
-          reply.status(422);
-          return { error: 'BAD_TEMPLATE', message: `Template ${templateId} does not include template payload.` };
-        }
-        const snapshot = parseSavedTemplateSnapshot(template);
         events = Array.isArray(snapshot.events) ? snapshot.events : [];
         labwares = Array.isArray(snapshot.labwares) ? snapshot.labwares : [];
         if (events.length === 0 || labwares.length === 0) {
@@ -262,6 +286,7 @@ export function createTreeHandlers(
           platform,
           deckVariant,
           locked: true,
+          ...(bindings.length > 0 ? { templateBindings: bindings } : {}),
         },
         deckLayout: {
           placements,
@@ -344,6 +369,59 @@ export function createTreeHandlers(
     ): Promise<StudyTreeResponse> {
       const studies = await indexManager.getStudyTree();
       return { studies };
+    },
+
+    async searchTemplates(
+      request: FastifyRequest<{
+        Querystring: {
+          q?: string;
+          platform?: string;
+          deckVariant?: string;
+          experimentType?: string;
+          semantic?: string;
+          material?: string;
+          limit?: string;
+        };
+      }>,
+      _reply: FastifyReply
+    ): Promise<TemplateSearchResponse> {
+      const items = await searchTemplatesService(recordStore, {
+        ...(typeof request.query.q === 'string' ? { q: request.query.q } : {}),
+        ...(typeof request.query.platform === 'string' ? { platform: request.query.platform } : {}),
+        ...(typeof request.query.deckVariant === 'string' ? { deckVariant: request.query.deckVariant } : {}),
+        ...(typeof request.query.experimentType === 'string' ? { experimentType: request.query.experimentType } : {}),
+        ...(typeof request.query.semantic === 'string' ? { semantic: request.query.semantic } : {}),
+        ...(typeof request.query.material === 'string' ? { material: request.query.material } : {}),
+        ...(typeof request.query.limit === 'string' ? { limit: Number(request.query.limit) } : {}),
+      });
+      return {
+        items,
+        total: items.length,
+      };
+    },
+
+    async materializeTemplate(
+      request: FastifyRequest<{
+        Params: { id: string };
+        Body: { bindings?: TemplateLabwareBinding[] };
+      }>,
+      reply: FastifyReply
+    ): Promise<MaterializeTemplateResponse | { error: string; message: string }> {
+      try {
+        const result = await materializeTemplateService(
+          recordStore,
+          request.params.id,
+          Array.isArray(request.body?.bindings) ? request.body.bindings : []
+        );
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        reply.status(message.includes('not found') ? 404 : 422);
+        return {
+          error: message.includes('not found') ? 'NOT_FOUND' : 'BAD_TEMPLATE',
+          message,
+        };
+      }
     },
     
     /**

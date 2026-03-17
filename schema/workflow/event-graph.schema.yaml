@@ -125,6 +125,54 @@ properties:
         type: string
       locked:
         type: boolean
+      templateBindings:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ templateLabwareId, kind ]
+          properties:
+            templateLabwareId:
+              type: string
+            kind:
+              type: string
+              enum: [ protocol-template, plate-snapshot ]
+            templateId:
+              type: string
+            outputId:
+              type: string
+            resolvedSnapshotId:
+              type: string
+            snapshotId:
+              type: string
+
+  templateContext:
+    type: object
+    description: "Template provenance for editor-only graphs that are not yet run-attached methods."
+    additionalProperties: false
+    properties:
+      sourceTemplateId:
+        type: string
+      templateBindings:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ templateLabwareId, kind ]
+          properties:
+            templateLabwareId:
+              type: string
+            kind:
+              type: string
+              enum: [ protocol-template, plate-snapshot ]
+            templateId:
+              type: string
+            outputId:
+              type: string
+            resolvedSnapshotId:
+              type: string
+            snapshotId:
+              type: string
 
   deckLayout:
     type: object
