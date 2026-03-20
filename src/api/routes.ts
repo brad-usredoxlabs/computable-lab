@@ -27,6 +27,7 @@ import type { TagHandlers } from './handlers/TagHandlers.js';
 import type { MaterialPrepHandlers } from './handlers/MaterialPrepHandlers.js';
 import type { PlatformHandlers } from './handlers/PlatformHandlers.js';
 import type { LabSettingsHandlers } from './handlers/LabSettingsHandlers.js';
+import type { VendorSearchHandlers } from './handlers/VendorSearchHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -54,6 +55,7 @@ export interface RouteOptions {
   materialPrepHandlers?: MaterialPrepHandlers;
   platformHandlers?: PlatformHandlers;
   labSettingsHandlers?: LabSettingsHandlers;
+  vendorSearchHandlers?: VendorSearchHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -253,6 +255,12 @@ export function registerRoutes(
 
   if (ontologyHandlers) {
     fastify.get('/ontology/search', ontologyHandlers.searchOntology.bind(ontologyHandlers));
+  }
+
+  const { vendorSearchHandlers } = options;
+
+  if (vendorSearchHandlers) {
+    fastify.get('/vendors/search', vendorSearchHandlers.searchVendors.bind(vendorSearchHandlers));
   }
 
   // ============================================================================
