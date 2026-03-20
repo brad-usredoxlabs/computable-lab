@@ -28,6 +28,10 @@ properties:
     $ref: "./datatypes/ref.schema.yaml"
     description: "Reference to canonical material concept."
 
+  vendor_product_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Optional commercial source product used as-is or as canonical sourcing metadata."
+
   formulation:
     type: object
     additionalProperties: false
@@ -61,4 +65,3 @@ properties:
     type: array
     items: { type: string }
     uniqueItems: true
-

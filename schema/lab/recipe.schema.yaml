@@ -41,6 +41,8 @@ properties:
           default: true
         material_ref:
           $ref: "./datatypes/ref.schema.yaml"
+        vendor_product_ref:
+          $ref: "./datatypes/ref.schema.yaml"
         allowed_material_spec_refs:
           type: array
           items:
@@ -114,6 +116,8 @@ properties:
         material_ref:
           $ref: "./datatypes/ref.schema.yaml"
         material_spec_ref:
+          $ref: "./datatypes/ref.schema.yaml"
+        vendor_product_ref:
           $ref: "./datatypes/ref.schema.yaml"
 
   tags:

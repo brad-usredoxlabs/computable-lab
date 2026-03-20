@@ -32,6 +32,14 @@ properties:
     $ref: "../../core/datatypes/ref.schema.yaml"
     description: "Explicit material instance ref."
 
+  material_instance_ref:
+    $ref: "../../core/datatypes/ref.schema.yaml"
+    description: "Explicit general material instance ref."
+
+  vendor_product_ref:
+    $ref: "../../core/datatypes/ref.schema.yaml"
+    description: "Commercial sourced product ref."
+
   materialId:
     $ref: "../../core/datatypes/ref.schema.yaml"
     description: "Deprecated legacy material ref field."
@@ -77,4 +85,6 @@ anyOf:
   - required: [ material_ref ]
   - required: [ material_spec_ref ]
   - required: [ aliquot_ref ]
+  - required: [ material_instance_ref ]
+  - required: [ vendor_product_ref ]
   - required: [ materialId ]

@@ -6,6 +6,7 @@ import type { IndexManager } from '../../index/IndexManager.js';
 
 const SCHEMA_IDS = {
   material: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
+  vendorProduct: 'https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml',
   materialSpec: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml',
   recipe: 'https://computable-lab.com/schema/computable-lab/recipe.schema.yaml',
   aliquot: 'https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml',
@@ -32,11 +33,22 @@ type CreateFormulationBody = {
     id?: string;
     name?: string;
     domain?: string;
+    classRefs?: Array<{
+      kind?: 'record' | 'ontology';
+      id?: string;
+      type?: string;
+      label?: string;
+      namespace?: string;
+      uri?: string;
+    }>;
+    definition?: string;
+    synonyms?: string[];
   };
   outputSpec?: {
     id?: string;
     name?: string;
     materialRefId?: string;
+    vendorProductRefId?: string;
     concentration?: { value: number; unit: string };
     solventRefId?: string;
     grade?: string;
@@ -58,6 +70,7 @@ type CreateFormulationBody = {
       roleType?: string;
       required?: boolean;
       materialRefId?: string;
+      vendorProductRefId?: string;
       allowedMaterialSpecRefIds?: string[];
       quantity?: { value: number | string; unit: string };
       constraints?: string[];
@@ -73,6 +86,7 @@ type CreateFormulationBody = {
       catalogNumber?: string;
       materialRefId?: string;
       materialSpecRefId?: string;
+      vendorProductRefId?: string;
     }>;
     scale?: {
       defaultBatchVolume?: { value: number; unit: string };
@@ -82,7 +96,14 @@ type CreateFormulationBody = {
   };
 };
 
-type RefShape = { kind: 'record'; id: string; type: string; label?: string };
+type RefShape = {
+  kind: 'record' | 'ontology';
+  id: string;
+  type?: string;
+  label?: string;
+  namespace?: string;
+  uri?: string;
+};
 type Quantity = { value: number; unit: string };
 type FlexibleQuantity = { value: number | string; unit: string };
 
@@ -149,6 +170,27 @@ function refValue(value: unknown): RefShape | null {
     type,
     ...(label ? { label } : {}),
   };
+}
+
+function looseRefValue(value: unknown): RefShape | null {
+  if (!isObject(value)) return null;
+  const kind = value.kind === 'ontology' ? 'ontology' : value.kind === 'record' ? 'record' : null;
+  const id = stringValue(value.id);
+  if (!kind || !id) return null;
+  return {
+    kind,
+    id,
+    ...(stringValue(value.type) ? { type: stringValue(value.type)! } : {}),
+    ...(stringValue(value.label) ? { label: stringValue(value.label)! } : {}),
+    ...(stringValue(value.namespace) ? { namespace: stringValue(value.namespace)! } : {}),
+    ...(stringValue(value.uri) ? { uri: stringValue(value.uri)! } : {}),
+  };
+}
+
+async function vendorProductMaterialRef(store: RecordStore, vendorProductId: string): Promise<RefShape | null> {
+  const envelope = await store.get(vendorProductId);
+  const payload = asPayload(envelope);
+  return payload ? refValue(payload.material_ref) : null;
 }
 
 function parseOutputSpecRef(recipePayload: Record<string, unknown>): RefShape | null {
@@ -292,6 +334,8 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
             name: string;
             materialId?: string;
             materialName?: string;
+            vendorProductId?: string;
+            vendorProductLabel?: string;
             concentration?: Quantity;
             solventRefId?: string;
             solventLabel?: string;
@@ -308,6 +352,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
             roleType: string;
             required: boolean;
             materialRef?: { id: string; label?: string };
+            vendorProductRef?: { id: string; label?: string };
             allowedMaterialSpecRefs: Array<{ id: string; label?: string }>;
             quantity?: FlexibleQuantity;
             constraints: string[];
@@ -318,6 +363,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
             catalogNumber?: string;
             materialRef?: { id: string; label?: string };
             materialSpecRef?: { id: string; label?: string };
+            vendorProductRef?: { id: string; label?: string };
           }>;
           steps: Array<{ order: number; instruction: string; parameters?: Record<string, unknown> }>;
           scale?: {
@@ -399,6 +445,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
             const materialName = stringValue(materialPayload?.name) ?? materialRef?.label;
             const concentration = quantityValue(formulationRef?.concentration);
             const grade = stringValue(formulationRef?.grade);
+            const vendorProductRef = refValue(specPayload?.vendor_product_ref);
 
             items.push({
               recipeId: envelope.recordId,
@@ -413,6 +460,8 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
                 ...(solventRef?.id ? { solventRefId: solventRef.id } : {}),
                 ...(solventRef?.label ? { solventLabel: solventRef.label } : {}),
                 ...(grade ? { grade } : {}),
+                ...(vendorProductRef?.id ? { vendorProductId: vendorProductRef.id } : {}),
+                ...(vendorProductRef?.label ? { vendorProductLabel: vendorProductRef.label } : {}),
                 ...(handling && Object.keys(handling).length > 0 ? { handling } : {}),
               },
               inputRoles: Array.isArray(payload.input_roles)
@@ -420,6 +469,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
                     .filter(isObject)
                     .map((role) => {
                       const roleMaterialRef = refValue(role.material_ref);
+                      const roleVendorProductRef = refValue(role.vendor_product_ref);
                       const roleMaterialEnvelope = roleMaterialRef ? materialMap.get(roleMaterialRef.id) ?? null : null;
                       const roleMaterialName = stringValue(asPayload(roleMaterialEnvelope)?.name) ?? roleMaterialRef?.label;
                       return {
@@ -431,6 +481,14 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
                               materialRef: {
                                 id: roleMaterialRef.id,
                                 ...(roleMaterialName ? { label: roleMaterialName } : {}),
+                              },
+                            }
+                          : {}),
+                        ...(roleVendorProductRef?.id
+                          ? {
+                              vendorProductRef: {
+                                id: roleVendorProductRef.id,
+                                ...(roleVendorProductRef.label ? { label: roleVendorProductRef.label } : {}),
                               },
                             }
                           : {}),
@@ -455,6 +513,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
                       .map((source) => {
                         const materialRef = refValue(source.material_ref);
                         const materialSpecRef = refValue(source.material_spec_ref);
+                        const vendorProductRef = refValue(source.vendor_product_ref);
                         return {
                           roleId: stringValue(source.role_id) ?? '',
                           ...(() => {
@@ -467,6 +526,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
                           })(),
                           ...(materialRef?.id ? { materialRef: { id: materialRef.id, ...(materialRef.label ? { label: materialRef.label } : {}) } } : {}),
                           ...(materialSpecRef?.id ? { materialSpecRef: { id: materialSpecRef.id, ...(materialSpecRef.label ? { label: materialSpecRef.label } : {}) } } : {}),
+                          ...(vendorProductRef?.id ? { vendorProductRef: { id: vendorProductRef.id, ...(vendorProductRef.label ? { label: vendorProductRef.label } : {}) } } : {}),
                         };
                       })
                       .filter((source) => source.roleId),
@@ -511,6 +571,8 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
               entry.outputSpec.name,
               entry.outputSpec.materialName,
               ...entry.inputRoles.map((role) => role.materialRef?.label ?? role.allowedMaterialSpecRefs[0]?.label ?? role.roleId),
+              ...entry.inputRoles.map((role) => role.vendorProductRef?.label),
+              ...(entry.preferredSources ?? []).flatMap((source) => [source.vendor, source.catalogNumber, source.vendorProductRef?.label]),
               ...entry.recipeTags,
               ...entry.steps.map((step) => step.instruction),
             ]
@@ -732,6 +794,20 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
         })();
 
         let materialId = stringValue(outputSpec.materialRefId) ?? inferredOutputMaterialRef;
+        if (!materialId && stringValue(outputSpec.vendorProductRefId)) {
+          materialId = (await vendorProductMaterialRef(store, stringValue(outputSpec.vendorProductRefId)!))?.id;
+        }
+        if (!materialId && Array.isArray(recipe.inputRoles)) {
+          const vendorBoundMaterialIds = Array.from(new Set((await Promise.all(
+            recipe.inputRoles
+              .map((role) => stringValue(role.vendorProductRefId))
+              .filter((entry): entry is string => Boolean(entry))
+              .map((vendorProductId) => vendorProductMaterialRef(store, vendorProductId))
+          ))
+            .map((ref) => ref?.id)
+            .filter((entry): entry is string => Boolean(entry))));
+          if (vendorBoundMaterialIds.length === 1) materialId = vendorBoundMaterialIds[0];
+        }
         const materialInput = body.material;
         if (!materialId && materialInput) {
           materialId = stringValue(materialInput.id) ?? token('MAT');
@@ -748,6 +824,15 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
                 id: materialId,
                 name: stringValue(materialInput.name),
                 domain: stringValue(materialInput.domain) ?? 'other',
+                ...(Array.isArray(materialInput.classRefs)
+                  ? {
+                      class: materialInput.classRefs
+                        .map((entry) => looseRefValue(entry))
+                        .filter((entry): entry is RefShape => Boolean(entry)),
+                    }
+                  : {}),
+                ...(stringValue(materialInput.definition) ? { definition: stringValue(materialInput.definition) } : {}),
+                ...(isStringArray(materialInput.synonyms) ? { synonyms: dedupeStrings(materialInput.synonyms) } : {}),
               },
               SCHEMA_IDS.material,
               `Create material ${materialId} for formulation`
@@ -788,6 +873,9 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
           name: stringValue(outputSpec.name),
           material_ref: toRef(materialId, 'material', materialId),
         };
+        if (stringValue(outputSpec.vendorProductRefId)) {
+          specPayload.vendor_product_ref = toRef(stringValue(outputSpec.vendorProductRefId)!, 'vendor-product', stringValue(outputSpec.vendorProductRefId)!);
+        }
         const formulation: Record<string, unknown> = {};
         const concentration = quantityValue(outputSpec.concentration);
         if (concentration && !ALLOWED_CONCENTRATION_UNITS.has(concentration.unit)) {
@@ -840,6 +928,9 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
             ...(stringValue(role.materialRefId)
               ? { material_ref: toRef(stringValue(role.materialRefId)!, 'material', stringValue(role.materialRefId)!) }
               : {}),
+            ...(stringValue(role.vendorProductRefId)
+              ? { vendor_product_ref: toRef(stringValue(role.vendorProductRefId)!, 'vendor-product', stringValue(role.vendorProductRefId)!) }
+              : {}),
             ...(role.allowedMaterialSpecRefIds?.length
               ? {
                   allowed_material_spec_refs: role.allowedMaterialSpecRefIds
@@ -882,6 +973,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
               ...(stringValue(source.catalogNumber) ? { catalog_number: stringValue(source.catalogNumber) } : {}),
               ...(stringValue(source.materialRefId) ? { material_ref: toRef(stringValue(source.materialRefId)!, 'material', stringValue(source.materialRefId)!) } : {}),
               ...(stringValue(source.materialSpecRefId) ? { material_spec_ref: toRef(stringValue(source.materialSpecRefId)!, 'material-spec', stringValue(source.materialSpecRefId)!) } : {}),
+              ...(stringValue(source.vendorProductRefId) ? { vendor_product_ref: toRef(stringValue(source.vendorProductRefId)!, 'vendor-product', stringValue(source.vendorProductRefId)!) } : {}),
             }))
             .filter((source) => source.role_id);
           if (preferredSources.length > 0) recipePayload.preferred_sources = preferredSources;

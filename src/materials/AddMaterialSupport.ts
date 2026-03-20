@@ -3,6 +3,7 @@ import type { RecordStore } from '../store/types.js';
 import type { MaterialTrackingConfig } from '../config/types.js';
 
 const ALIQUOT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml';
+const MATERIAL_INSTANCE_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/material-instance.schema.yaml';
 
 type RefShape = {
   kind: 'record' | 'ontology';
@@ -67,8 +68,12 @@ export function normalizeRef(value: unknown, fallbackType?: string): RefShape | 
 export function resolveAddMaterialRef(details: Record<string, unknown>): RefShape | null {
   const aliquotRef = normalizeRef(details['aliquot_ref'], 'aliquot');
   if (aliquotRef) return aliquotRef;
+  const materialInstanceRef = normalizeRef(details['material_instance_ref'], 'material-instance');
+  if (materialInstanceRef) return materialInstanceRef;
   const specRef = normalizeRef(details['material_spec_ref'], 'material-spec');
   if (specRef) return specRef;
+  const vendorProductRef = normalizeRef(details['vendor_product_ref'], 'vendor-product');
+  if (vendorProductRef) return vendorProductRef;
   return normalizeRef(details['material_ref'] ?? details['materialId'], 'material');
 }
 
@@ -113,6 +118,11 @@ function extractInstanceLot(details: Record<string, unknown>): Record<string, st
 function implicitAliquotId(eventGraphId: string, eventId: string): string {
   const seed = `${eventGraphId}_${eventId}`.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   return `ALQ-IMPLICIT-${seed || 'UNKNOWN'}`;
+}
+
+function implicitMaterialInstanceId(eventGraphId: string, eventId: string): string {
+  const seed = `${eventGraphId}_${eventId}`.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return `MINST-IMPLICIT-${seed || 'UNKNOWN'}`;
 }
 
 function toRecordRef(id: string, type: string, label?: string): RefShape {
@@ -190,6 +200,80 @@ async function upsertImplicitAliquot(
   return toRecordRef(aliquotId, 'aliquot', payload.name as string);
 }
 
+async function upsertImplicitMaterialInstance(
+  store: RecordStore,
+  eventGraphId: string,
+  eventId: string,
+  vendorProductRef: RefShape,
+  details: Record<string, unknown>,
+): Promise<RefShape> {
+  const instanceId = implicitMaterialInstanceId(eventGraphId, eventId);
+  const concentration = extractConcentration(details);
+  const volume = extractAddMaterialVolume(details);
+  const lot = extractInstanceLot(details);
+  const label = vendorProductRef.label || vendorProductRef.id;
+  const vendorProductEnvelope = await store.get(vendorProductRef.id);
+  const vendorProductPayload = getEnvelopePayload(vendorProductEnvelope);
+  const materialRef = normalizeRef(vendorProductPayload?.['material_ref'], 'material');
+  const payload: Record<string, unknown> = {
+    kind: 'material-instance',
+    id: instanceId,
+    name: `Ad hoc instance of ${label}`,
+    description: `Implicit add-material instance for ${eventGraphId}:${eventId}`,
+    vendor_product_ref: toRecordRef(vendorProductRef.id, 'vendor-product', label),
+    tags: ['implicit', 'ad_hoc', 'event_graph_usage'],
+    prepared_on: new Date().toISOString(),
+    status: 'available',
+  };
+  if (materialRef?.kind === 'record') {
+    payload.material_ref = toRecordRef(materialRef.id, 'material', materialRef.label || materialRef.id);
+  }
+  if (concentration) payload.concentration = concentration;
+  if (volume) payload.volume = volume;
+  if (lot) payload.lot = lot;
+
+  const existing = await store.get(instanceId);
+  if (!existing) {
+    const created = await store.create({
+      envelope: {
+        recordId: instanceId,
+        schemaId: MATERIAL_INSTANCE_SCHEMA_ID,
+        payload,
+        meta: { kind: 'material-instance' },
+      },
+      message: `Create implicit material instance ${instanceId} for ${eventGraphId}:${eventId}`,
+    });
+    if (!created.success) {
+      throw new Error(created.error || `Failed to create implicit material instance ${instanceId}`);
+    }
+  } else {
+    const updated = await store.update({
+      envelope: (() => {
+        const mergedPayload: Record<string, unknown> = {
+          ...(existing.payload as Record<string, unknown>),
+          ...payload,
+          createdAt: (existing.payload as Record<string, unknown>)['createdAt'],
+          createdBy: (existing.payload as Record<string, unknown>)['createdBy'],
+          updatedAt: new Date().toISOString(),
+        };
+        if (!lot) delete mergedPayload.lot;
+        return {
+          recordId: existing.recordId,
+          schemaId: existing.schemaId,
+          payload: mergedPayload,
+          ...(existing.meta ? { meta: existing.meta } : {}),
+        };
+      })(),
+      message: `Refresh implicit material instance ${instanceId} for ${eventGraphId}:${eventId}`,
+    });
+    if (!updated.success) {
+      throw new Error(updated.error || `Failed to update implicit material instance ${instanceId}`);
+    }
+  }
+
+  return toRecordRef(instanceId, 'material-instance', payload.name as string);
+}
+
 export async function normalizeEventGraphMaterialUsage(
   store: RecordStore,
   schemaId: string,
@@ -214,6 +298,7 @@ export async function normalizeEventGraphMaterialUsage(
     const details = asRecord(event.details);
     if (!details) return event;
     if (normalizeRef(details['aliquot_ref'], 'aliquot')) return event;
+    if (normalizeRef(details['material_instance_ref'], 'material-instance')) return event;
 
     const explicitSpec = normalizeRef(details['material_spec_ref'], 'material-spec');
     const inferredSpec = explicitSpec
@@ -248,10 +333,42 @@ export async function normalizeEventGraphMaterialUsage(
     };
   }));
 
+  const normalizedEvents = await Promise.all(nextEvents.map(async (event, index) => {
+    if (event.event_type !== 'add_material') return event;
+    const eventId = typeof event.eventId === 'string' && event.eventId.trim().length > 0 ? event.eventId.trim() : `event_${index + 1}`;
+    const details = asRecord(event.details);
+    if (!details) return event;
+    if (normalizeRef(details['aliquot_ref'], 'aliquot')) return event;
+    if (normalizeRef(details['material_instance_ref'], 'material-instance')) return event;
+
+    const vendorProductRef = normalizeRef(details['vendor_product_ref'], 'vendor-product');
+    if (!vendorProductRef || vendorProductRef.kind !== 'record') return event;
+    const lot = extractInstanceLot(details);
+    if (
+      materialTracking.mode === 'tracked'
+      && materialTracking.allowAdHocEventInstances === false
+      && !lot
+    ) {
+      throw new MaterialUsagePolicyError(
+        `Tracked material policy requires provenance when using vendor product ${vendorProductRef.label || vendorProductRef.id} without an explicit material instance`
+      );
+    }
+    const materialInstanceRef = await upsertImplicitMaterialInstance(store, eventGraphId, eventId, vendorProductRef, details);
+    changed = true;
+    return {
+      ...event,
+      details: {
+        ...details,
+        vendor_product_ref: details['vendor_product_ref'] ?? toRecordRef(vendorProductRef.id, 'vendor-product', vendorProductRef.label || vendorProductRef.id),
+        material_instance_ref: materialInstanceRef,
+      },
+    };
+  }));
+
   if (!changed) return payload;
   return {
     ...graph,
-    events: nextEvents,
+    events: normalizedEvents,
   };
 }
 

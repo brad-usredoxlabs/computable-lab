@@ -1,0 +1,62 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml"
+title: "Vendor Product"
+description: >
+  A commercial catalog product sourced from a vendor. Vendor products are linked
+  to a canonical material concept but preserve vendor/catalog/grade details
+  without requiring inventory receiving workflows.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id, name, vendor, catalog_number, material_ref ]
+
+properties:
+  kind:
+    const: "vendor-product"
+
+  id:
+    type: string
+    description: "Stable vendor product identifier (e.g., VPR-SIGMA-D8418)."
+
+  name:
+    type: string
+
+  vendor:
+    type: string
+
+  catalog_number:
+    type: string
+
+  material_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Canonical linked material concept."
+
+  grade:
+    type: string
+
+  product_url:
+    type: string
+    format: uri
+
+  package_size:
+    type: string
+
+  formulation:
+    type: string
+    description: "Vendor-described formulation, purity, or presentation."
+
+  description:
+    type: string
+
+  synonyms:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true
