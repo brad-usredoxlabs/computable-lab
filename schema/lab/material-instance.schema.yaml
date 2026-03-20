@@ -81,6 +81,33 @@ properties:
     items: { type: string }
     uniqueItems: true
 
+  derivation_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  biological_state:
+    type: object
+    additionalProperties: false
+    properties:
+      passage_number:
+        type: integer
+      vessel_type:
+        type: string
+      medium_note:
+        type: string
+      qc_note:
+        type: string
+
+  derived_state:
+    type: object
+    additionalProperties: false
+    properties:
+      derivation_type:
+        type: string
+      collection_duration:
+        type: string
+      source_note:
+        type: string
+
 anyOf:
   - required: [ material_ref ]
   - required: [ material_spec_ref ]

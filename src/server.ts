@@ -42,6 +42,7 @@ import {
   createKnowledgeAIHandlers,
   createTagHandlers,
   createMaterialPrepHandlers,
+  createMaterialLifecycleHandlers,
   createPlatformHandlers,
   createLabSettingsHandlers,
   createVendorSearchHandlers,
@@ -335,6 +336,7 @@ export async function createServer(
   const vendorSearchHandlers = createVendorSearchHandlers();
   const tagHandlers = createTagHandlers(ctx.store);
   const materialPrepHandlers = createMaterialPrepHandlers(ctx.store, ctx.indexManager);
+  const materialLifecycleHandlers = createMaterialLifecycleHandlers(ctx.store);
   const platformHandlers = createPlatformHandlers(ctx.platformRegistry);
   const labSettingsHandlers = createLabSettingsHandlers(ctx.appConfig);
   const uiHandlers = createUIHandlers(ctx.uiSpecLoader, ctx.store, ctx.schemaRegistry);
@@ -519,6 +521,7 @@ export async function createServer(
       vendorSearchHandlers,
       tagHandlers,
       materialPrepHandlers,
+      materialLifecycleHandlers,
       platformHandlers,
       labSettingsHandlers,
       metaHandlers,

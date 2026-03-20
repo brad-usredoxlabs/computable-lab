@@ -25,6 +25,7 @@ import type { BiosourceHandlers } from './handlers/BiosourceHandlers.js';
 import type { KnowledgeAIHandlers } from './handlers/KnowledgeAIHandlers.js';
 import type { TagHandlers } from './handlers/TagHandlers.js';
 import type { MaterialPrepHandlers } from './handlers/MaterialPrepHandlers.js';
+import type { MaterialLifecycleHandlers } from './handlers/MaterialLifecycleHandlers.js';
 import type { PlatformHandlers } from './handlers/PlatformHandlers.js';
 import type { LabSettingsHandlers } from './handlers/LabSettingsHandlers.js';
 import type { VendorSearchHandlers } from './handlers/VendorSearchHandlers.js';
@@ -53,6 +54,7 @@ export interface RouteOptions {
   knowledgeAIHandlers?: KnowledgeAIHandlers;
   tagHandlers?: TagHandlers;
   materialPrepHandlers?: MaterialPrepHandlers;
+  materialLifecycleHandlers?: MaterialLifecycleHandlers;
   platformHandlers?: PlatformHandlers;
   labSettingsHandlers?: LabSettingsHandlers;
   vendorSearchHandlers?: VendorSearchHandlers;
@@ -279,6 +281,15 @@ export function registerRoutes(
     fastify.get('/materials/inventory', materialPrepHandlers.getInventory.bind(materialPrepHandlers));
     fastify.post('/materials/formulations', materialPrepHandlers.createFormulation.bind(materialPrepHandlers));
     fastify.post('/materials/recipes/:id/execute', materialPrepHandlers.executeRecipe.bind(materialPrepHandlers));
+  }
+
+  const { materialLifecycleHandlers } = options;
+  if (materialLifecycleHandlers) {
+    fastify.get('/materials/search', materialLifecycleHandlers.searchMaterials.bind(materialLifecycleHandlers));
+    fastify.post('/materials/instances', materialLifecycleHandlers.createMaterialInstance.bind(materialLifecycleHandlers));
+    fastify.post('/materials/instances/:id/split', materialLifecycleHandlers.splitMaterialInstance.bind(materialLifecycleHandlers));
+    fastify.post('/materials/derivations', materialLifecycleHandlers.createMaterialDerivation.bind(materialLifecycleHandlers));
+    fastify.post('/materials/promote-from-context', materialLifecycleHandlers.promoteMaterialFromContext.bind(materialLifecycleHandlers));
   }
 
   const { labSettingsHandlers } = options;

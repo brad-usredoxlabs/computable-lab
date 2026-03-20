@@ -11,7 +11,7 @@ unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 
-required: [ kind, id, material_spec_ref ]
+required: [ kind, id ]
 
 properties:
   kind:
@@ -28,6 +28,9 @@ properties:
     $ref: "./datatypes/ref.schema.yaml"
 
   parent_aliquot_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  parent_material_instance_ref:
     $ref: "./datatypes/ref.schema.yaml"
 
   source_lot_ref:
@@ -89,3 +92,8 @@ properties:
     items: { type: string }
     uniqueItems: true
 
+
+anyOf:
+  - required: [ material_spec_ref ]
+  - required: [ parent_aliquot_ref ]
+  - required: [ parent_material_instance_ref ]
