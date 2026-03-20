@@ -34,6 +34,18 @@ type MaterialSearchItem = {
   subtitle?: string;
 };
 
+type MaterialLineageResponse = {
+  material: Record<string, unknown>;
+  parent?: { recordId: string; kind: string; title: string };
+  children: Array<{ recordId: string; kind: string; title: string }>;
+  derivation?: {
+    recordId: string;
+    derivationType?: string;
+    inputs: Array<{ recordId: string; kind: string; title: string }>;
+    outputs: Array<{ recordId: string; kind: string; title: string }>;
+  };
+};
+
 type CreateMaterialInstanceBody = {
   name?: string;
   materialRef?: RefShape;
@@ -239,6 +251,22 @@ function matchesSearch(item: MaterialSearchItem, query: string): boolean {
   return [item.recordId, item.title, item.subtitle ?? '', item.kind].some((entry) => entry.toLowerCase().includes(q));
 }
 
+function lowerIncludes(value: unknown, query: string): boolean {
+  return typeof value === 'string' && value.toLowerCase().includes(query);
+}
+
+function recordSummary(envelope: RecordEnvelope | null): { recordId: string; kind: string; title: string } | null {
+  const payload = asPayload(envelope);
+  if (!payload) return null;
+  const kind = stringValue(payload.kind) ?? '';
+  if (!kind) return null;
+  return {
+    recordId: envelope!.recordId,
+    kind,
+    title: stringValue(payload.name) ?? stringValue(payload.title) ?? envelope!.recordId,
+  };
+}
+
 function buildInstancePayload(recordId: string, body: CreateMaterialInstanceBody, fallbackName: string): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     kind: 'material-instance',
@@ -331,10 +359,14 @@ export function createMaterialLifecycleHandlers(store: RecordStore) {
 
   return {
     async searchMaterials(
-      request: FastifyRequest<{ Querystring: { q?: string; limit?: string } }>,
+      request: FastifyRequest<{ Querystring: { q?: string; limit?: string; category?: string; status?: string; vendor?: string; derivationType?: string } }>,
       _reply: FastifyReply,
     ): Promise<{ items: MaterialSearchItem[] }> {
       const query = stringValue(request.query.q) ?? '';
+      const category = stringValue(request.query.category);
+      const statusFilter = stringValue(request.query.status)?.toLowerCase();
+      const vendorFilter = stringValue(request.query.vendor)?.toLowerCase();
+      const derivationTypeFilter = stringValue(request.query.derivationType)?.toLowerCase();
       const limit = Math.min(Math.max(Number(request.query.limit) || 25, 1), 100);
       const envelopes = (await Promise.all([
         store.list({ schemaId: SCHEMA_IDS.materialSpec, limit: 1000 }),
@@ -342,14 +374,134 @@ export function createMaterialLifecycleHandlers(store: RecordStore) {
         store.list({ schemaId: SCHEMA_IDS.materialInstance, limit: 1000 }),
         store.list({ schemaId: SCHEMA_IDS.aliquot, limit: 1000 }),
         store.list({ schemaId: SCHEMA_IDS.material, limit: 1000 }),
-      ])).flat();
+      ])).flat().map((envelope) => ({ envelope, payload: asPayload(envelope) })).filter((entry) => entry.payload);
       const items = envelopes
-        .map(classifyMaterialRecord)
-        .filter((entry): entry is MaterialSearchItem => Boolean(entry))
-        .filter((entry) => matchesSearch(entry, query))
+        .map((entry) => ({ item: classifyMaterialRecord(entry.envelope), payload: entry.payload! }))
+        .filter((entry): entry is { item: MaterialSearchItem; payload: Record<string, unknown> } => Boolean(entry.item))
+        .filter(({ item, payload }) => {
+          if (category && item.category !== category) return false;
+          if (statusFilter && stringValue(payload.status)?.toLowerCase() !== statusFilter) return false;
+          if (vendorFilter) {
+            const lot = isObject(payload.lot) ? payload.lot : null;
+            const vendor = stringValue(payload.vendor) ?? stringValue(lot?.vendor);
+            if (!lowerIncludes(vendor, vendorFilter)) return false;
+          }
+          if (derivationTypeFilter) {
+            const derived = isObject(payload.derived_state) ? payload.derived_state : null;
+            if (!lowerIncludes(stringValue(derived?.derivation_type), derivationTypeFilter)) return false;
+          }
+          return matchesSearch(item, query)
+            || lowerIncludes(stringValue(payload.status), query)
+            || lowerIncludes(stringValue(isObject(payload.lot) ? payload.lot.lot_number : undefined), query)
+            || lowerIncludes(stringValue(isObject(payload.lot) ? payload.lot.catalog_number : undefined), query);
+        })
+        .map(({ item }) => item)
         .sort((a, b) => a.title.localeCompare(b.title))
         .slice(0, limit);
       return { items };
+    },
+
+    async getMaterial(
+      request: FastifyRequest<{ Params: { id: string } }>,
+      reply: FastifyReply,
+    ): Promise<{ record: RecordEnvelope } | ApiError> {
+      const record = await store.get(request.params.id);
+      if (!record) {
+        reply.status(404);
+        return { error: 'NOT_FOUND', message: `Material record not found: ${request.params.id}` };
+      }
+      return { record };
+    },
+
+    async updateMaterialStatus(
+      request: FastifyRequest<{ Params: { id: string }; Body: { status?: string; note?: string; changedAt?: string } }>,
+      reply: FastifyReply,
+    ): Promise<{ success: true; status: string } | ApiError> {
+      const envelope = await store.get(request.params.id);
+      const payload = asPayload(envelope);
+      if (!payload) {
+        reply.status(404);
+        return { error: 'NOT_FOUND', message: `Material record not found: ${request.params.id}` };
+      }
+      const status = stringValue(request.body?.status);
+      if (!status) {
+        reply.status(400);
+        return { error: 'BAD_REQUEST', message: 'status is required' };
+      }
+      const updatedPayload: Record<string, unknown> = {
+        ...payload,
+        status,
+      };
+      const updated = await store.update({
+        envelope: {
+          recordId: envelope!.recordId,
+          schemaId: envelope!.schemaId,
+          payload: updatedPayload,
+        },
+        message: `Update material status: ${request.params.id} -> ${status}`,
+      });
+      if (!updated.success) {
+        reply.status(400);
+        return { error: 'UPDATE_FAILED', message: updated.error || 'Failed to update material status' };
+      }
+      return { success: true, status };
+    },
+
+    async getMaterialLineage(
+      request: FastifyRequest<{ Params: { id: string } }>,
+      reply: FastifyReply,
+    ): Promise<MaterialLineageResponse | ApiError> {
+      const envelope = await store.get(request.params.id);
+      const payload = asPayload(envelope);
+      if (!payload) {
+        reply.status(404);
+        return { error: 'NOT_FOUND', message: `Material record not found: ${request.params.id}` };
+      }
+
+      const parentRef = refValue(payload.parent_material_instance_ref) ?? refValue(payload.parent_aliquot_ref);
+      const derivationRef = refValue(payload.derivation_ref);
+      const parent = parentRef ? recordSummary(await store.get(parentRef.id)) : null;
+
+      const [aliquots, instances, derivationEnvelope] = await Promise.all([
+        store.list({ schemaId: SCHEMA_IDS.aliquot, limit: 2000 }),
+        store.list({ schemaId: SCHEMA_IDS.materialInstance, limit: 2000 }),
+        derivationRef ? store.get(derivationRef.id) : Promise.resolve(null),
+      ]);
+
+      const children = [...aliquots, ...instances]
+        .map((entry) => ({ entry, payload: asPayload(entry) }))
+        .filter((entry) => entry.payload)
+        .filter(({ payload }) => {
+          const childParent = refValue(payload!.parent_material_instance_ref) ?? refValue(payload!.parent_aliquot_ref);
+          return childParent?.id === request.params.id;
+        })
+        .map(({ entry }) => recordSummary(entry))
+        .filter((entry): entry is { recordId: string; kind: string; title: string } => Boolean(entry));
+
+      const derivationPayload = asPayload(derivationEnvelope);
+      const derivation = (() => {
+        if (!derivationPayload) return undefined;
+        const derivationType = stringValue(derivationPayload.derivation_type);
+        return {
+          recordId: derivationEnvelope!.recordId,
+          inputs: (Array.isArray(derivationPayload.inputs) ? derivationPayload.inputs : [])
+            .map(refValue)
+            .filter((entry): entry is RefShape => Boolean(entry))
+            .map((entry) => ({ recordId: entry.id, kind: entry.type || 'record', title: entry.label || entry.id })),
+          outputs: (Array.isArray(derivationPayload.outputs) ? derivationPayload.outputs : [])
+            .map(refValue)
+            .filter((entry): entry is RefShape => Boolean(entry))
+            .map((entry) => ({ recordId: entry.id, kind: entry.type || 'record', title: entry.label || entry.id })),
+          ...(derivationType ? { derivationType } : {}),
+        };
+      })();
+
+      return {
+        material: payload,
+        ...(parent ? { parent } : {}),
+        children,
+        ...(derivation ? { derivation } : {}),
+      };
     },
 
     async createMaterialInstance(

@@ -90,10 +90,18 @@ properties:
     properties:
       passage_number:
         type: integer
+      parent_culture_ref:
+        $ref: "./datatypes/ref.schema.yaml"
       vessel_type:
         type: string
       medium_note:
         type: string
+      seeding_density:
+        type: string
+      confluence:
+        type: string
+      freeze_thaw_count:
+        type: integer
       qc_note:
         type: string
 
@@ -104,6 +112,17 @@ properties:
       derivation_type:
         type: string
       collection_duration:
+        type: string
+      collection_date:
+        type: string
+        format: date-time
+      source_material_refs:
+        type: array
+        items:
+          $ref: "./datatypes/ref.schema.yaml"
+      clarification_note:
+        type: string
+      filtration_note:
         type: string
       source_note:
         type: string

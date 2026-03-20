@@ -286,6 +286,9 @@ export function registerRoutes(
   const { materialLifecycleHandlers } = options;
   if (materialLifecycleHandlers) {
     fastify.get('/materials/search', materialLifecycleHandlers.searchMaterials.bind(materialLifecycleHandlers));
+    fastify.get('/materials/:id', materialLifecycleHandlers.getMaterial.bind(materialLifecycleHandlers));
+    fastify.get('/materials/:id/lineage', materialLifecycleHandlers.getMaterialLineage.bind(materialLifecycleHandlers));
+    fastify.post('/materials/:id/status', materialLifecycleHandlers.updateMaterialStatus.bind(materialLifecycleHandlers));
     fastify.post('/materials/instances', materialLifecycleHandlers.createMaterialInstance.bind(materialLifecycleHandlers));
     fastify.post('/materials/instances/:id/split', materialLifecycleHandlers.splitMaterialInstance.bind(materialLifecycleHandlers));
     fastify.post('/materials/derivations', materialLifecycleHandlers.createMaterialDerivation.bind(materialLifecycleHandlers));

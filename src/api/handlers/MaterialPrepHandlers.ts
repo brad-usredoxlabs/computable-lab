@@ -8,6 +8,7 @@ const SCHEMA_IDS = {
   material: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
   vendorProduct: 'https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml',
   materialSpec: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml',
+  materialInstance: 'https://computable-lab.com/schema/computable-lab/material-instance.schema.yaml',
   recipe: 'https://computable-lab.com/schema/computable-lab/recipe.schema.yaml',
   aliquot: 'https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml',
   eventGraph: 'https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml',
@@ -18,6 +19,7 @@ const ALLOWED_CONCENTRATION_UNITS = new Set(['g', 'mM', 'uM', 'nM', 'mg/mL', '%'
 type ExecuteRecipeBody = {
   scale?: number;
   outputCount?: number;
+  outputMode?: 'batch' | 'batch-and-split';
   outputVolume?: { value: number; unit: string };
   bindings?: Record<string, { aliquotId: string }>;
   outputMetadata?: {
@@ -276,6 +278,8 @@ export interface MaterialPrepHandlers {
       recipeId: string;
       recipeName: string;
       preparationEventGraphId: string;
+      materialInstanceId: string;
+      materialInstanceName: string;
       createdAliquotIds: string[];
       createdAliquots: Array<{
         aliquotId: string;
@@ -1030,6 +1034,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
       const recipeId = request.params.id;
       const scale = Number.isFinite(request.body?.scale) ? Number(request.body.scale) : 1;
       const outputCount = Number.isFinite(request.body?.outputCount) ? Math.max(1, Math.floor(Number(request.body.outputCount))) : 1;
+      const outputMode = request.body?.outputMode === 'batch' ? 'batch' : 'batch-and-split';
       const outputVolume = request.body?.outputVolume && Number.isFinite(request.body.outputVolume.value)
         ? request.body.outputVolume
         : { value: 100, unit: 'uL' };
@@ -1123,6 +1128,43 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
       }
 
       const now = new Date().toISOString();
+      const materialInstanceId = `MINST-${Date.now().toString(36).toUpperCase()}-${randomToken()}`;
+      const materialInstanceName = `${recipeName} batch`;
+      const batchVolume = {
+        value: Number((outputVolume.value * scale * Math.max(outputMode === 'batch-and-split' ? outputCount : 1, 1)).toFixed(6)),
+        unit: outputVolume.unit,
+      };
+      const materialRefFromSpec = outputSpecPayload ? refValue(outputSpecPayload.material_ref) : null;
+      const batchPayload: Record<string, unknown> = {
+        kind: 'material-instance',
+        id: materialInstanceId,
+        name: materialInstanceName,
+        material_spec_ref: outputSpecRef,
+        ...(materialRefFromSpec ? { material_ref: materialRefFromSpec } : {}),
+        volume: batchVolume,
+        status: 'available',
+        prepared_on: now,
+        tags: ['recipe-output', 'prepared-batch'],
+        ...(request.body?.outputMetadata?.storageLocation ? { storage: { location: request.body.outputMetadata.storageLocation } } : {}),
+      };
+      const batchEnvelope = createEnvelope(
+        batchPayload,
+        SCHEMA_IDS.materialInstance,
+        { createdAt: now, updatedAt: now }
+      );
+      if (!batchEnvelope) {
+        reply.status(500);
+        return { error: 'CREATE_FAILED', message: 'Failed to create material instance envelope' };
+      }
+      const createdBatch = await store.create({
+        envelope: batchEnvelope,
+        message: `Create material instance ${materialInstanceId} from recipe ${recipeId}`,
+      });
+      if (!createdBatch.success) {
+        reply.status(500);
+        return { error: 'CREATE_FAILED', message: createdBatch.error || `Failed to create material instance ${materialInstanceId}` };
+      }
+
       const createdAliquots: Array<{
         aliquotId: string;
         name: string;
@@ -1132,6 +1174,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
         status?: string;
       }> = [];
 
+      if (outputMode === 'batch-and-split') {
       for (let i = 0; i < outputCount; i += 1) {
         const aliquotId = `ALQ-${Date.now().toString(36).toUpperCase()}-${randomToken()}-${i + 1}`;
         const baseVolume = {
@@ -1145,6 +1188,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
           id: aliquotId,
           name: `${recipeName} output ${i + 1}`,
           material_spec_ref: outputSpecRef,
+          parent_material_instance_ref: toRef(materialInstanceId, 'material-instance', materialInstanceName),
           volume: baseVolume,
           source_lot_ref: toRef(recipeId, 'recipe', recipeName),
           tags: ['recipe-output'],
@@ -1189,6 +1233,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
           status: 'available',
         });
       }
+      }
 
       const prepEventGraphId = `EVG-PREP-${Date.now().toString(36).toUpperCase()}-${randomToken()}`;
       const prepPayload = {
@@ -1213,6 +1258,9 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
                 aliquot_ref: toRef(entry.aliquotId, 'aliquot', entry.name),
                 ...(entry.volume ? { volume: entry.volume } : {}),
               })),
+              material_instance_ref: toRef(materialInstanceId, 'material-instance', materialInstanceName),
+              output_mode: outputMode,
+              batch_volume: batchVolume,
               ...(request.body?.outputMetadata
                 ? {
                     output_metadata: {
@@ -1261,6 +1309,8 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
         recipeId,
         recipeName,
         preparationEventGraphId: prepEventGraphId,
+        materialInstanceId,
+        materialInstanceName,
         createdAliquotIds: createdAliquots.map((entry) => entry.aliquotId),
         createdAliquots,
         bindings: boundInputs.map((entry) => ({
