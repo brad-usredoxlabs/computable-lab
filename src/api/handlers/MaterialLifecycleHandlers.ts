@@ -251,6 +251,50 @@ function matchesSearch(item: MaterialSearchItem, query: string): boolean {
   return [item.recordId, item.title, item.subtitle ?? '', item.kind].some((entry) => entry.toLowerCase().includes(q));
 }
 
+function collectSearchableStrings(value: unknown, out: string[]): void {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed) out.push(trimmed);
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((entry) => collectSearchableStrings(entry, out));
+    return;
+  }
+  if (isObject(value)) {
+    Object.values(value).forEach((entry) => collectSearchableStrings(entry, out));
+  }
+}
+
+function payloadMatchesSearch(payload: Record<string, unknown>, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const searchable: string[] = [];
+  collectSearchableStrings(
+    {
+      name: payload.name,
+      title: payload.title,
+      definition: payload.definition,
+      synonyms: payload.synonyms,
+      tags: payload.tags,
+      status: payload.status,
+      vendor: payload.vendor,
+      catalog_number: payload.catalog_number,
+      formulation: payload.formulation,
+      description: payload.description,
+      material_ref: payload.material_ref,
+      material_spec_ref: payload.material_spec_ref,
+      vendor_product_ref: payload.vendor_product_ref,
+      lot: payload.lot,
+      biological_state: payload.biological_state,
+      derived_state: payload.derived_state,
+      class: payload.class,
+    },
+    searchable,
+  );
+  return searchable.some((entry) => entry.toLowerCase().includes(q));
+}
+
 function lowerIncludes(value: unknown, query: string): boolean {
   return typeof value === 'string' && value.toLowerCase().includes(query);
 }
@@ -391,6 +435,7 @@ export function createMaterialLifecycleHandlers(store: RecordStore) {
             if (!lowerIncludes(stringValue(derived?.derivation_type), derivationTypeFilter)) return false;
           }
           return matchesSearch(item, query)
+            || payloadMatchesSearch(payload, query)
             || lowerIncludes(stringValue(payload.status), query)
             || lowerIncludes(stringValue(isObject(payload.lot) ? payload.lot.lot_number : undefined), query)
             || lowerIncludes(stringValue(isObject(payload.lot) ? payload.lot.catalog_number : undefined), query);
