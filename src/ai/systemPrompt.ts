@@ -73,6 +73,40 @@ function formatSelectedWells(selectedWells?: EditorContext['selectedWells']): st
   return `Labware: ${selectedWells.labwareId}, Wells: ${selectedWells.wells.join(', ')}`;
 }
 
+function formatPaneSelection(
+  label: string,
+  selection?: EditorContext['sourceSelection'] | EditorContext['targetSelection'],
+): string {
+  if (!selection || selection.wells.length === 0) return `${label}: (none)`;
+  return `${label}: ${selection.labwareName} (${selection.labwareId}) -> ${selection.wells.join(', ')}`;
+}
+
+function formatWellStateSnapshot(context: EditorContext): string {
+  const entries = context.wellStateSnapshot ?? [];
+  if (entries.length === 0) return '(none)';
+  return entries
+    .map((entry) => {
+      const materials = entry.materials.length > 0
+        ? entry.materials
+            .map((material) => {
+              const parts = [material.label];
+              if (typeof material.volume_uL === 'number') parts.push(`${material.volume_uL.toFixed(3)} uL`);
+              if (material.concentration) parts.push(`${material.concentration.value} ${material.concentration.unit}`);
+              return parts.join(' | ');
+            })
+            .join('; ')
+        : 'empty';
+      const flags = [
+        `total=${entry.totalVolume_uL.toFixed(3)} uL`,
+        `events=${entry.eventCount}`,
+        ...(entry.harvested ? ['harvested=true'] : []),
+        ...(entry.lastEventId ? [`last=${entry.lastEventId}`] : []),
+      ].join(', ');
+      return `- ${entry.labwareName} (${entry.labwareId}) ${entry.wellId}: ${materials} [${flags}]`;
+    })
+    .join('\n');
+}
+
 function formatVocabPack(vocabPackId: string, verbs: EditorContext['availableVerbs']): string {
   const verbList = verbs
     .map((v) => {
@@ -141,6 +175,9 @@ export function buildSystemPrompt(
     .replace('{{LABWARES}}', formatLabwares(context.labwares))
     .replace('{{EVENT_SUMMARY}}', formatEventSummary(context.eventSummary))
     .replace('{{SELECTED_WELLS}}', formatSelectedWells(context.selectedWells))
+    .replace('{{SOURCE_SELECTION}}', formatPaneSelection('Source Selection', context.sourceSelection))
+    .replace('{{TARGET_SELECTION}}', formatPaneSelection('Target Selection', context.targetSelection))
+    .replace('{{WELL_STATE_SNAPSHOT}}', formatWellStateSnapshot(context))
     .replace('{{VOCAB_PACK}}', formatVocabPack(context.vocabPackId, context.availableVerbs))
     .replace('{{DECK_CONTEXT}}', formatDeckContext(context))
     .replace('{{MATERIAL_TRACKING}}', formatMaterialTracking(context))

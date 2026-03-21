@@ -3,11 +3,17 @@
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import type { AgentOrchestrator, EditorContext, AgentEvent } from '../../ai/types.js';
+import type {
+  AgentOrchestrator,
+  EditorContext,
+  AgentEvent,
+  ConversationHistoryMessage,
+} from '../../ai/types.js';
 
 export interface DraftEventsBody {
   prompt: string;
   context: EditorContext;
+  history?: ConversationHistoryMessage[];
 }
 
 export interface AIHandlers {
@@ -30,7 +36,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
       request: FastifyRequest<{ Body: DraftEventsBody }>,
       reply: FastifyReply,
     ) {
-      const { prompt, context } = request.body;
+      const { prompt, context, history } = request.body;
 
       if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
         reply.status(400);
@@ -38,7 +44,11 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
       }
 
       try {
-        const result = await orchestrator.run({ prompt, context });
+        const result = await orchestrator.run({
+          prompt,
+          context,
+          ...(history ? { history } : {}),
+        });
         return result;
       } catch (err) {
         request.log.error(err, 'Agent orchestrator failed');
@@ -54,7 +64,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
       request: FastifyRequest<{ Body: DraftEventsBody }>,
       reply: FastifyReply,
     ) {
-      const { prompt, context } = request.body;
+      const { prompt, context, history } = request.body;
       const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '*';
 
       reply.raw.writeHead(200, {
@@ -73,6 +83,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
         const result = await orchestrator.run({
           prompt,
           context,
+          ...(history ? { history } : {}),
           onEvent: sendEvent,
         });
 

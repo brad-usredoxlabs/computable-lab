@@ -86,10 +86,17 @@ export interface ToolExecutionResult {
 export interface AgentRequest {
   /** The user's natural-language instruction. */
   prompt: string;
+  /** Recent conversational turns prior to the current prompt. */
+  history?: ConversationHistoryMessage[];
   /** Current editor context (from browser). */
   context: EditorContext;
   /** Optional callback for streaming intermediate events. */
   onEvent?: (event: AgentEvent) => void;
+}
+
+export interface ConversationHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 export interface EditorContext {
@@ -102,6 +109,36 @@ export interface EditorContext {
   };
   /** Currently selected wells — string[] from frontend, or structured object. */
   selectedWells?: string[] | { labwareId: string; wells: string[] };
+  /** Explicit source-pane selection from the editor. */
+  sourceSelection?: {
+    labwareId: string;
+    labwareName: string;
+    wells: string[];
+  };
+  /** Explicit target-pane selection from the editor. */
+  targetSelection?: {
+    labwareId: string;
+    labwareName: string;
+    wells: string[];
+  };
+  /** Compact derived well-state snapshot for selected or recently referenced wells. */
+  wellStateSnapshot?: Array<{
+    labwareId: string;
+    labwareName: string;
+    wellId: string;
+    totalVolume_uL: number;
+    materials: Array<{
+      label: string;
+      volume_uL?: number;
+      concentration?: {
+        value: number;
+        unit: string;
+      };
+    }>;
+    lastEventId?: string;
+    eventCount: number;
+    harvested: boolean;
+  }>;
   /** Active vocabulary pack ID. */
   vocabPackId: string;
   /** Available verbs — string[] from frontend, or VerbSummary[]. */

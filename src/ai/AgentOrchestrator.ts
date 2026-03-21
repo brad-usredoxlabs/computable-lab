@@ -12,6 +12,7 @@ import type {
   AgentRequest,
   AgentResult,
   ChatMessage,
+  ConversationHistoryMessage,
 } from './types.js';
 import { buildSystemPrompt } from './systemPrompt.js';
 
@@ -73,6 +74,35 @@ function parseAgentFinalResponse(
   }
 }
 
+function normalizeHistoryMessage(message: ConversationHistoryMessage): ChatMessage | null {
+  const content = typeof message.content === 'string' ? message.content.trim() : '';
+  if ((message.role !== 'user' && message.role !== 'assistant') || content.length === 0) {
+    return null;
+  }
+  return {
+    role: message.role,
+    content,
+  };
+}
+
+function summarizeConversationHistory(history: ChatMessage[]): string | null {
+  if (history.length === 0) return null;
+  const lines = history
+    .slice(-6)
+    .map((message, index) => {
+      const speaker = message.role === 'user' ? 'User' : 'Assistant';
+      const content = (message.content ?? '').replace(/\s+/g, ' ').trim().slice(0, 240);
+      return `${index + 1}. ${speaker}: ${content}`;
+    })
+    .filter((line) => !line.endsWith(':'));
+  if (lines.length === 0) return null;
+  return [
+    'Recent conversation context:',
+    ...lines,
+    'Treat the latest user message as a continuation of this exchange when resolving references like "yes", "that one", or omitted wells/materials.',
+  ].join('\n');
+}
+
 /**
  * Create an agent orchestrator.
  */
@@ -90,12 +120,18 @@ export function createAgentOrchestrator(
 
   return {
     async run(request: AgentRequest): Promise<AgentResult> {
-      const { prompt, context, onEvent } = request;
+      const { prompt, context, history, onEvent } = request;
 
       // 1. Build the message array
       const systemPrompt = buildSystemPrompt(context, systemPromptPath);
+      const historyMessages = Array.isArray(history)
+        ? history.map(normalizeHistoryMessage).filter((message): message is ChatMessage => message !== null)
+        : [];
+      const historySummary = summarizeConversationHistory(historyMessages);
       const messages: ChatMessage[] = [
         { role: 'system', content: systemPrompt },
+        ...(historySummary ? [{ role: 'system' as const, content: historySummary }] : []),
+        ...historyMessages,
         { role: 'user', content: prompt },
       ];
 

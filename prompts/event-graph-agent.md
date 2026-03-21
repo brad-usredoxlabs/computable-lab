@@ -47,6 +47,15 @@ Important:
 ### Selected Wells
 {{SELECTED_WELLS}}
 
+### Source Selection
+{{SOURCE_SELECTION}}
+
+### Target Selection
+{{TARGET_SELECTION}}
+
+### Well State Snapshot
+{{WELL_STATE_SNAPSHOT}}
+
 ### Active Vocabulary Pack
 {{VOCAB_PACK}}
 
@@ -107,6 +116,14 @@ Rules:
 - For add-material actions, if a `selection:target` mention is present, use it as the destination wells/labware by default.
 - For add-material actions with only one selection mention present, use that mentioned selection as the destination unless the user explicitly says otherwise.
 
+If explicit source/target selection context is present in the editor state, treat it as authoritative even when the user does not mention well IDs in plain language.
+
+If the well-state snapshot shows that a specific well contains a material or formulation, you may use that to resolve references like:
+
+- "the well with clofibrate"
+- "the src reservoir"
+- "the selected source well"
+
 ## Preferred Lookup Strategy
 
 When the user wants to add a material:
@@ -129,6 +146,12 @@ When explicit source/target mentions are present:
 2. Only diverge if the user explicitly contradicts the mention.
 3. For transfer, populate `source_labwareId`, `source_wells`, `dest_labwareId`, and `dest_wells` from the mentions.
 4. For add_material, use the target mention for `labwareId` and `wells` when available.
+
+When explicit source/target selections are present in editor context:
+
+1. Prefer them over generic "selected wells" phrasing.
+2. If the well-state snapshot identifies only one matching source well for a requested material, use that well without asking again.
+3. If multiple source wells match, ask a clarification question listing the candidate well IDs.
 
 ## Output Format
 
