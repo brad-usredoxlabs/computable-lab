@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiError } from '../types.js';
+import { parseConcentration, type Concentration } from '../../materials/concentration.js';
 
 export interface VendorSearchResultItem {
   vendor: 'thermo' | 'sigma';
@@ -9,6 +10,8 @@ export interface VendorSearchResultItem {
   description?: string;
   grade?: string;
   formulation?: string;
+  declaredConcentration?: Concentration;
+  compositionSourceText?: string;
 }
 
 export interface VendorSearchResponse {
@@ -25,6 +28,72 @@ type VendorStatus = VendorSearchResponse['vendors'][number];
 
 const VENDOR_TIMEOUT_MS = 8_000;
 const BROWSER_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36';
+const DECLARED_CONCENTRATION_PATTERN = /(\d+(?:\.\d+)?)\s*(µM|uM|mM|nM|pM|fM|M|mg\s*\/\s*mL|ug\s*\/\s*mL|ng\s*\/\s*mL|g\s*\/\s*L|U\s*\/\s*mL|U\s*\/\s*uL|cells\s*\/\s*mL|cells\s*\/\s*uL|%\s*v\s*\/\s*v|%\s*w\s*\/\s*v)\b/i;
+
+function canonicalConcentrationUnit(unit: string): string {
+  const trimmed = unit.replace(/\s+/g, '').replace('µ', 'u');
+  switch (trimmed.toLowerCase()) {
+    case 'm':
+      return 'M';
+    case 'mm':
+      return 'mM';
+    case 'um':
+      return 'uM';
+    case 'nm':
+      return 'nM';
+    case 'pm':
+      return 'pM';
+    case 'fm':
+      return 'fM';
+    case 'mg/ml':
+      return 'mg/mL';
+    case 'ug/ml':
+      return 'ug/mL';
+    case 'ng/ml':
+      return 'ng/mL';
+    case 'g/l':
+      return 'g/L';
+    case 'u/ml':
+      return 'U/mL';
+    case 'u/ul':
+      return 'U/uL';
+    case 'cells/ml':
+      return 'cells/mL';
+    case 'cells/ul':
+      return 'cells/uL';
+    case '%v/v':
+      return '% v/v';
+    case '%w/v':
+      return '% w/v';
+    default:
+      return unit.trim();
+  }
+}
+
+export function parseDeclaredConcentrationText(...parts: Array<string | undefined>): { concentration: Concentration; sourceText: string } | null {
+  for (const part of parts) {
+    const sourceText = String(part || '').trim();
+    if (!sourceText) continue;
+    const match = sourceText.match(DECLARED_CONCENTRATION_PATTERN);
+    if (!match) continue;
+    const value = Number(match[1]);
+    const unit = canonicalConcentrationUnit(match[2] || '');
+    const concentration = parseConcentration({ value, unit });
+    if (!concentration) continue;
+    return { concentration, sourceText };
+  }
+  return null;
+}
+
+function withDeclaredConcentration(item: VendorSearchResultItem): VendorSearchResultItem {
+  const declared = parseDeclaredConcentrationText(item.formulation, item.description, item.name);
+  if (!declared) return item;
+  return {
+    ...item,
+    declaredConcentration: declared.concentration,
+    compositionSourceText: declared.sourceText,
+  };
+}
 
 function stripHtml(value: string): string {
   return value
@@ -80,12 +149,12 @@ async function searchThermo(query: string, limit: number): Promise<VendorSearchR
     const productUrl = product.hijackUrl && product.hijackUrl.trim()
       ? (product.hijackUrl.startsWith('http') ? product.hijackUrl : `https://www.thermofisher.com${product.hijackUrl}`)
       : `https://www.thermofisher.com/search/results?query=${encodeURIComponent(catalogNumber)}`;
-    items.push({
+    items.push(withDeclaredConcentration({
       vendor: 'thermo',
       name,
       catalogNumber,
       productUrl,
-    });
+    }));
     if (items.length >= limit) break;
   }
   return items;
@@ -113,12 +182,12 @@ async function searchSigma(query: string, limit: number): Promise<VendorSearchRe
     const dedupeKey = `${catalogNumber}::${name}`.toLowerCase();
     if (seen.has(dedupeKey)) continue;
     seen.add(dedupeKey);
-    items.push({
+    items.push(withDeclaredConcentration({
       vendor: 'sigma',
       name,
       catalogNumber,
       productUrl,
-    });
+    }));
     if (items.length >= limit) break;
   }
 

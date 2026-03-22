@@ -91,6 +91,7 @@ Useful tools:
 - `materials_search_addable`
 - `formulations_summary`
 - `inventory_list`
+- `material_composition_get`
 - `platforms_list`
 - `platform_get`
 - `lab_settings_get`
@@ -124,6 +125,14 @@ If the well-state snapshot shows that a specific well contains a material or for
 - "the src reservoir"
 - "the selected source well"
 
+The well-state snapshot may mark concentration as known, unknown, or absent.
+
+- Known means you may reason from the numeric value.
+- Unknown means the system explicitly does not know the effective concentration.
+- Absent means no concentration was recorded.
+
+Do not invent numeric concentrations when the snapshot or tools report `unknown`.
+
 ## Preferred Lookup Strategy
 
 When the user wants to add a material:
@@ -133,6 +142,7 @@ When the user wants to add a material:
 3. Prefer explicit instances when the lab tracking policy or user instruction suggests tracked use.
 4. Use ontology lookup only if there is no suitable local result.
 5. If prompt mentions include explicit source/target selections, treat those as stronger than any vague natural-language reference like "selected wells".
+6. If you need formulation or aliquot concentration details, use `material_composition_get` or the concentration-bearing fields returned by `formulations_summary` / `inventory_list`.
 
 When the user is asking for deck-aware planning:
 

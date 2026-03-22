@@ -20,6 +20,8 @@ type MeasurementPayload = {
   readEventRef?: string;
   instrumentRef?: Ref;
   labwareInstanceRef?: Ref;
+  measurementContextRef?: Ref;
+  seriesId?: string;
   channels?: Array<{ channelId: string }>;
   shape?: { wells?: number; channels?: number };
   data: MeasurementRow[];
@@ -98,7 +100,9 @@ export class MeasurementService {
     instrumentRef?: unknown;
     labwareInstanceRef?: unknown;
     eventGraphRef?: unknown;
+    measurementContextRef?: unknown;
     readEventRef?: string;
+    seriesId?: string;
     parserId?: string;
     rawData?: unknown;
   }): Promise<{ recordId: string }> {
@@ -125,6 +129,7 @@ export class MeasurementService {
     const eventGraphRef = parseRef(input.eventGraphRef);
     const instrumentRef = parseRef(input.instrumentRef);
     const labwareInstanceRef = parseRef(input.labwareInstanceRef);
+    const measurementContextRef = parseRef(input.measurementContextRef);
 
     const recordId = await this.nextRecordId();
     const parsedAt = new Date().toISOString();
@@ -137,6 +142,8 @@ export class MeasurementService {
       ...(typeof input.readEventRef === 'string' ? { readEventRef: input.readEventRef } : {}),
       ...(instrumentRef ? { instrumentRef } : {}),
       ...(labwareInstanceRef ? { labwareInstanceRef } : {}),
+      ...(measurementContextRef ? { measurementContextRef } : {}),
+      ...(typeof input.seriesId === 'string' && input.seriesId.length > 0 ? { seriesId: input.seriesId } : {}),
       ...(channels.size > 0 ? { channels: [...channels].map((channelId) => ({ channelId })) } : {}),
       shape: {
         wells: wells.size,

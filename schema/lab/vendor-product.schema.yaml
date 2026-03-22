@@ -48,6 +48,152 @@ properties:
     type: string
     description: "Vendor-described formulation, purity, or presentation."
 
+  declared_composition:
+    type: array
+    description: "Structured vendor-declared composition captured without OCR."
+    items:
+      $ref: "./datatypes/composition-entry.schema.yaml"
+
+  documents:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [ id, file_ref, provenance ]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        document_kind:
+          type: string
+          enum:
+          - product_sheet
+          - formulation_sheet
+          - certificate_of_analysis
+          - safety_data_sheet
+          - label
+          - other
+        file_ref:
+          $ref: "./datatypes/file-ref.schema.yaml"
+        provenance:
+          type: object
+          additionalProperties: false
+          required: [ source_type, added_at ]
+          properties:
+            source_type:
+              type: string
+              enum:
+              - upload
+              - url
+              - vendor_page
+              - manual
+            added_at:
+              type: string
+              format: date-time
+            note:
+              type: string
+        extraction:
+          type: object
+          additionalProperties: false
+          properties:
+            method:
+              type: string
+              enum: [ plain_text, pdf_text, ocr, unsupported, failed ]
+            extracted_at:
+              type: string
+              format: date-time
+            page_count:
+              type: integer
+              minimum: 1
+            ocr_attempted:
+              type: boolean
+            ocr_available:
+              type: boolean
+            text_excerpt:
+              type: string
+
+  composition_drafts:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [ id, source_document_id, extraction_method, status, created_at, items ]
+      properties:
+        id:
+          type: string
+        source_document_id:
+          type: string
+        extraction_method:
+          type: string
+          enum: [ plain_text, pdf_text, ocr ]
+        status:
+          type: string
+          enum: [ draft, reviewed, rejected, applied ]
+        overall_confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        created_at:
+          type: string
+          format: date-time
+        notes:
+          type: string
+        extracted_text_excerpt:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [ component_name, role ]
+            properties:
+              component_name:
+                type: string
+              role:
+                type: string
+                enum:
+                - solute
+                - solvent
+                - buffer_component
+                - additive
+                - activity_source
+                - cells
+                - other
+              concentration:
+                $ref: "./datatypes/concentration.schema.yaml"
+              confidence:
+                type: number
+                minimum: 0
+                maximum: 1
+              source_page:
+                type: integer
+                minimum: 1
+              source_text:
+                type: string
+
+  composition_provenance:
+    type: object
+    additionalProperties: false
+    properties:
+      source_type:
+        type: string
+        enum:
+        - vendor_catalog
+        - vendor_search
+        - vendor_page
+        - manual
+      vendor:
+        type: string
+      source_url:
+        type: string
+        format: uri
+      source_text:
+        type: string
+      captured_at:
+        type: string
+        format: date-time
+
   description:
     type: string
 

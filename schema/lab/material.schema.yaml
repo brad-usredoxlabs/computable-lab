@@ -74,6 +74,15 @@ properties:
     type: string
     description: "Ontology definition of this material (aids search and disambiguation)."
 
+  molecular_weight:
+    description: "Optional molecular weight for relevant chemical-like materials."
+    allOf:
+    - $ref: "./datatypes/amount.schema.yaml"
+    - type: object
+      properties:
+        unit:
+          const: "g/mol"
+
   synonyms:
     type: array
     description: "Alternative names or abbreviations for this material."

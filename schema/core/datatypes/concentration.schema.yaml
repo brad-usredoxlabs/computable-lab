@@ -1,0 +1,41 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/concentration.schema.yaml"
+title: "Concentration"
+description: >
+  Typed concentration value with an explicit scientific basis.
+
+type: object
+additionalProperties: false
+required: [ value, unit, basis ]
+properties:
+  value:
+    type: number
+    exclusiveMinimum: 0
+  unit:
+    type: string
+    enum:
+    - M
+    - mM
+    - uM
+    - nM
+    - pM
+    - fM
+    - g/L
+    - mg/mL
+    - ug/mL
+    - ng/mL
+    - U/mL
+    - U/uL
+    - cells/mL
+    - cells/uL
+    - "% v/v"
+    - "% w/v"
+  basis:
+    type: string
+    enum:
+    - molar
+    - mass_per_volume
+    - activity_per_volume
+    - count_per_volume
+    - volume_fraction
+    - mass_fraction

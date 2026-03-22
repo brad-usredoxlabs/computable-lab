@@ -3,6 +3,9 @@ import type { RecordEnvelope } from '../../store/types.js';
 import type { RecordStore } from '../../store/types.js';
 import { createEnvelope } from '../../types/RecordEnvelope.js';
 import type { IndexManager } from '../../index/IndexManager.js';
+import { parseConcentration, toStoredConcentration, type Concentration } from '../../materials/concentration.js';
+import { deriveSimpleStoredComposition, primaryParsedCompositionEntries, toStoredCompositionEntries } from '../../materials/composition.js';
+import { extractPrimaryDeclaredConcentration } from '../../materials/vendorComposition.js';
 
 const SCHEMA_IDS = {
   material: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
@@ -13,8 +16,6 @@ const SCHEMA_IDS = {
   aliquot: 'https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml',
   eventGraph: 'https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml',
 } as const;
-
-const ALLOWED_CONCENTRATION_UNITS = new Set(['g', 'mM', 'uM', 'nM', 'mg/mL', '%', 'U', 'X']);
 
 type ExecuteRecipeBody = {
   scale?: number;
@@ -35,6 +36,10 @@ type CreateFormulationBody = {
     id?: string;
     name?: string;
     domain?: string;
+    molecularWeight?: {
+      value?: number;
+      unit?: string;
+    };
     classRefs?: Array<{
       kind?: 'record' | 'ontology';
       id?: string;
@@ -51,8 +56,16 @@ type CreateFormulationBody = {
     name?: string;
     materialRefId?: string;
     vendorProductRefId?: string;
-    concentration?: { value: number; unit: string };
+    concentration?: Concentration;
+    solventRef?: RefShape;
     solventRefId?: string;
+    composition?: Array<{
+      componentRef?: RefShape;
+      component_ref?: RefShape;
+      role?: string;
+      concentration?: Concentration;
+      source?: string;
+    }>;
     grade?: string;
     ph?: number;
     notes?: string;
@@ -149,6 +162,16 @@ function quantityValue(value: unknown): Quantity | undefined {
   return { value: numeric, unit };
 }
 
+function molecularWeightValue(value: unknown): Quantity | undefined {
+  const parsed = quantityValue(value);
+  if (!parsed || parsed.unit !== 'g/mol') return undefined;
+  return parsed;
+}
+
+function concentrationValue(value: unknown): Concentration | undefined {
+  return parseConcentration(value);
+}
+
 function flexibleQuantityValue(value: unknown): FlexibleQuantity | undefined {
   if (!isObject(value)) return undefined;
   const rawValue = value.value;
@@ -193,6 +216,18 @@ async function vendorProductMaterialRef(store: RecordStore, vendorProductId: str
   const envelope = await store.get(vendorProductId);
   const payload = asPayload(envelope);
   return payload ? refValue(payload.material_ref) : null;
+}
+
+async function vendorProductDeclaredConcentration(store: RecordStore, vendorProductId: string): Promise<Concentration | undefined> {
+  const envelope = await store.get(vendorProductId);
+  const payload = asPayload(envelope);
+  return payload ? extractPrimaryDeclaredConcentration(payload.declared_composition) : undefined;
+}
+
+async function vendorProductDeclaredComposition(store: RecordStore, vendorProductId: string): Promise<Record<string, unknown>[] | undefined> {
+  const envelope = await store.get(vendorProductId);
+  const payload = asPayload(envelope);
+  return payload ? toStoredCompositionEntries(payload.declared_composition) : undefined;
 }
 
 function parseOutputSpecRef(recipePayload: Record<string, unknown>): RefShape | null {
@@ -340,7 +375,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
             materialName?: string;
             vendorProductId?: string;
             vendorProductLabel?: string;
-            concentration?: Quantity;
+            concentration?: Concentration;
             solventRefId?: string;
             solventLabel?: string;
             grade?: string;
@@ -412,7 +447,8 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
               .filter((entry): entry is Quantity => Boolean(entry));
 
             const formulationRef = specPayload?.formulation && isObject(specPayload.formulation) ? specPayload.formulation : null;
-            const solventRef = refValue(formulationRef?.solvent_ref);
+            const recipeOutput = payload.output && isObject(payload.output) ? payload.output : null;
+            const solventRef = refValue(recipeOutput?.solvent_ref) ?? refValue(formulationRef?.solvent_ref);
             const handling = specPayload?.handling && isObject(specPayload.handling)
               ? {
                   ...(() => {
@@ -447,8 +483,9 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
             const totalAvailableVolume = sumSingleUnitQuantities(availableVolumes);
             const lastPreparedAt = stringValue(asPayload(availableAliquots[0] ?? null)?.createdAt);
             const materialName = stringValue(materialPayload?.name) ?? materialRef?.label;
-            const concentration = quantityValue(formulationRef?.concentration);
-            const grade = stringValue(formulationRef?.grade);
+            const concentration = concentrationValue(recipeOutput?.concentration) ?? concentrationValue(formulationRef?.concentration);
+            const composition = primaryParsedCompositionEntries(recipeOutput?.composition, formulationRef?.composition);
+            const grade = stringValue(recipeOutput?.grade) ?? stringValue(formulationRef?.grade);
             const vendorProductRef = refValue(specPayload?.vendor_product_ref);
 
             items.push({
@@ -461,6 +498,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
                 ...(materialRef?.id ? { materialId: materialRef.id } : {}),
                 ...(materialName ? { materialName } : {}),
                 ...(concentration ? { concentration } : {}),
+                ...(composition.length > 0 ? { composition } : {}),
                 ...(solventRef?.id ? { solventRefId: solventRef.id } : {}),
                 ...(solventRef?.label ? { solventLabel: solventRef.label } : {}),
                 ...(grade ? { grade } : {}),
@@ -627,7 +665,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
             name: string;
           };
           volume?: Quantity;
-          concentration?: Quantity;
+          concentration?: Concentration;
           storage?: {
             temperatureC?: number;
             location?: string;
@@ -687,7 +725,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
 
             const status = stringValue(payload.status);
             const volume = quantityValue(payload.volume);
-            const concentration = quantityValue(payload.concentration);
+            const concentration = concentrationValue(payload.concentration);
             const createdAt = stringValue(payload.createdAt);
 
             items.push({
@@ -835,6 +873,9 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
                         .filter((entry): entry is RefShape => Boolean(entry)),
                     }
                   : {}),
+                ...(molecularWeightValue(materialInput.molecularWeight)
+                  ? { molecular_weight: molecularWeightValue(materialInput.molecularWeight) }
+                  : {}),
                 ...(stringValue(materialInput.definition) ? { definition: stringValue(materialInput.definition) } : {}),
                 ...(isStringArray(materialInput.synonyms) ? { synonyms: dedupeStrings(materialInput.synonyms) } : {}),
               },
@@ -881,16 +922,29 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
           specPayload.vendor_product_ref = toRef(stringValue(outputSpec.vendorProductRefId)!, 'vendor-product', stringValue(outputSpec.vendorProductRefId)!);
         }
         const formulation: Record<string, unknown> = {};
-        const concentration = quantityValue(outputSpec.concentration);
-        if (concentration && !ALLOWED_CONCENTRATION_UNITS.has(concentration.unit)) {
-          reply.status(422);
-          return {
-            error: 'INVALID_FORMULATION',
-            message: `outputSpec.concentration.unit must be one of: ${Array.from(ALLOWED_CONCENTRATION_UNITS).join(', ')}`,
-          };
-        }
+        const declaredVendorConcentration = stringValue(outputSpec.vendorProductRefId)
+          ? await vendorProductDeclaredConcentration(store, stringValue(outputSpec.vendorProductRefId)!)
+          : undefined;
+        const resolvedConcentration = outputSpec.concentration ?? declaredVendorConcentration;
+        const concentration = toStoredConcentration(resolvedConcentration);
         if (concentration) formulation.concentration = concentration;
-        if (stringValue(outputSpec.solventRefId)) formulation.solvent_ref = toRef(stringValue(outputSpec.solventRefId)!, 'material-spec', stringValue(outputSpec.solventRefId)!);
+        const solventRef = looseRefValue(outputSpec.solventRef)
+          ?? (stringValue(outputSpec.solventRefId)
+            ? toRef(stringValue(outputSpec.solventRefId)!, 'material', stringValue(outputSpec.solventRefId)!)
+            : null);
+        if (solventRef) formulation.solvent_ref = solventRef;
+        const composition = toStoredCompositionEntries(outputSpec.composition)
+          ?? (stringValue(outputSpec.vendorProductRefId)
+            ? await vendorProductDeclaredComposition(store, stringValue(outputSpec.vendorProductRefId)!)
+            : undefined)
+          ?? deriveSimpleStoredComposition({
+            materialRef: toRef(materialId, 'material', stringValue(outputSpec.name) ?? materialId),
+            materialLabel: stringValue(outputSpec.name) ?? materialId,
+            ...(resolvedConcentration ? { concentration: resolvedConcentration } : {}),
+            solventRef,
+            ...(solventRef?.label ? { solventLabel: solventRef.label } : {}),
+          });
+        if (composition) formulation.composition = composition;
         if (stringValue(outputSpec.grade)) formulation.grade = stringValue(outputSpec.grade);
         if (typeof outputSpec.ph === 'number' && Number.isFinite(outputSpec.ph)) formulation.ph = outputSpec.ph;
         if (stringValue(outputSpec.notes)) formulation.notes = stringValue(outputSpec.notes);
@@ -968,6 +1022,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
           steps,
           output_material_spec_ref: toRef(materialSpecId, 'material-spec', stringValue(outputSpec.name) ?? materialSpecId),
         };
+        if (Object.keys(formulation).length > 0) recipePayload.output = { ...formulation };
         if (Array.isArray(recipe.preferredSources) && recipe.preferredSources.length > 0) {
           const preferredSources = recipe.preferredSources
             .filter(isObject)
@@ -1058,6 +1113,10 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
 
       const outputSpecEnv = await store.get(outputSpecRef.id);
       const outputSpecPayload = asPayload(outputSpecEnv);
+      const recipeOutput = recipePayload.output && isObject(recipePayload.output) ? recipePayload.output : null;
+      const specFormulation = outputSpecPayload?.formulation && isObject(outputSpecPayload.formulation)
+        ? outputSpecPayload.formulation
+        : null;
       const recipeName = stringValue(recipePayload.name) ?? recipeId;
       const bindings = isObject(request.body?.bindings) ? request.body.bindings : {};
       const inputRoles = Array.isArray(recipePayload.input_roles)
@@ -1135,6 +1194,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
         unit: outputVolume.unit,
       };
       const materialRefFromSpec = outputSpecPayload ? refValue(outputSpecPayload.material_ref) : null;
+      const outputConcentration = toStoredConcentration(recipeOutput?.concentration) ?? toStoredConcentration(specFormulation?.concentration);
       const batchPayload: Record<string, unknown> = {
         kind: 'material-instance',
         id: materialInstanceId,
@@ -1147,6 +1207,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
         tags: ['recipe-output', 'prepared-batch'],
         ...(request.body?.outputMetadata?.storageLocation ? { storage: { location: request.body.outputMetadata.storageLocation } } : {}),
       };
+      if (outputConcentration) batchPayload.concentration = outputConcentration;
       const batchEnvelope = createEnvelope(
         batchPayload,
         SCHEMA_IDS.materialInstance,
@@ -1197,6 +1258,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
           createdAt: now,
           updatedAt: now,
         };
+        if (outputConcentration) aliquotPayload.concentration = outputConcentration;
         if (containerType || request.body?.outputMetadata?.barcodePrefix) {
           aliquotPayload.container = {
             ...(containerType ? { type: containerType } : {}),

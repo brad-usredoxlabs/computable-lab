@@ -22,6 +22,7 @@ import { registerProtocolTools } from './protocolTools.js';
 import { registerExecutionTools } from './executionTools.js';
 import { registerComponentTools } from './componentTools.js';
 import { registerAiPlanningTools } from './aiPlanningTools.js';
+import { registerVendorDocumentTools } from './vendorDocumentTools.js';
 
 export function registerAllTools(server: McpServer, ctx: AppContext, registry?: ToolRegistry): void {
   registerRecordTools(server, ctx, registry);
@@ -45,4 +46,5 @@ export function registerAllTools(server: McpServer, ctx: AppContext, registry?: 
   registerComponentTools(server, ctx, registry);
   registerExecutionTools(server, ctx, registry);
   registerAiPlanningTools(server, ctx, registry);
+  registerVendorDocumentTools(server, ctx, registry);
 }

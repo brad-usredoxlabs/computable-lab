@@ -37,14 +37,15 @@ properties:
     additionalProperties: false
     properties:
       concentration:
-        type: object
-        additionalProperties: false
-        required: [ value, unit ]
-        properties:
-          value: { type: number, exclusiveMinimum: 0 }
-          unit: { type: string }
+        oneOf:
+        - $ref: "./datatypes/concentration.schema.yaml"
+        - $ref: "./datatypes/amount.schema.yaml"
       solvent_ref:
         $ref: "./datatypes/ref.schema.yaml"
+      composition:
+        type: array
+        items:
+          $ref: "./datatypes/composition-entry.schema.yaml"
       grade:
         type: string
       ph:

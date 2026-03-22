@@ -35,6 +35,14 @@ form:
     - path: "$.description"
       widget: "markdown"
       label: "Description"
+  - title: "Chemistry"
+    fields:
+    - path: "$.molecular_weight.value"
+      widget: "number"
+      label: "Molecular Weight Value"
+    - path: "$.molecular_weight.unit"
+      widget: "text"
+      label: "Molecular Weight Unit"
 
 list:
   columns:

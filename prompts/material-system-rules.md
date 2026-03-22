@@ -61,6 +61,20 @@ In `tracked` mode:
 - prefer explicit instances when available
 - if ad hoc instances are disallowed, do not assume implicit creation is acceptable
 
+## Concentration Truth
+
+Concentration can be in one of three states:
+
+- known numeric concentration
+- explicitly unknown concentration
+- no concentration information provided
+
+Treat these as distinct.
+
+- Do not convert `unknown` into a guessed numeric value.
+- If a source well or inventory item has unknown concentration, preserve that uncertainty in reasoning.
+- Prefer local formulation or aliquot concentration over inferring from a semantic material concept.
+
 ## Roles
 
 Roles are contextual, not intrinsic to materials.

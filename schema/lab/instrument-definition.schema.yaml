@@ -1,0 +1,49 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/instrument-definition.schema.yaml"
+title: "Instrument Definition"
+description: >
+  Reusable instrument definition for measurement setup semantics.
+  Defines the instrument class or model used to generate a measurement context.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- name
+- instrument_type
+
+properties:
+  kind:
+    const: "instrument-definition"
+
+  id:
+    type: string
+    pattern: '^INSTDEF-[A-Za-z0-9_-]+$'
+
+  name:
+    type: string
+    minLength: 1
+
+  vendor:
+    type: string
+
+  model:
+    type: string
+
+  instrument_type:
+    type: string
+    enum: [ plate_reader, qpcr, gc_ms, lc_ms, microscopy, other ]
+
+  supported_readout_def_refs:
+    type: array
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

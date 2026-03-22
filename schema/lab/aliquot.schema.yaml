@@ -48,12 +48,9 @@ properties:
         type: string
 
   concentration:
-    type: object
-    additionalProperties: false
-    required: [ value, unit ]
-    properties:
-      value: { type: number, exclusiveMinimum: 0 }
-      unit: { type: string }
+    oneOf:
+    - $ref: "./datatypes/concentration.schema.yaml"
+    - $ref: "./datatypes/amount.schema.yaml"
 
   volume:
     type: object

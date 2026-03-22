@@ -43,6 +43,14 @@ properties:
     $ref: "./datatypes/ref.schema.yaml"
     description: "Which plate was read."
 
+  measurementContextRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Measurement context that planned or scoped this read."
+
+  seriesId:
+    type: string
+    description: "Optional grouping key for repeated reads across timepoints or linked runs."
+
   assayType:
     type: string
     enum: [ qpcr, plate_reader, microscopy, gc_ms, flow, other ]

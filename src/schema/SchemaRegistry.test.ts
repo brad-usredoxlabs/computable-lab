@@ -3,7 +3,11 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { SchemaRegistry, createSchemaRegistry } from './SchemaRegistry.js';
+import { loadSchemasFromContent } from './SchemaLoader.js';
+import { createValidator } from '../validation/AjvValidator.js';
 import type { SchemaEntry } from './types.js';
 
 // Helper to create a mock schema entry
@@ -200,6 +204,273 @@ describe('SchemaRegistry', () => {
       expect(result.unresolved).toContain(
         'https://example.com/study.yaml -> https://example.com/missing.yaml'
       );
+    });
+
+    it('registers the concentration and composition datatypes', async () => {
+      const schemaRoot = join(process.cwd(), 'schema');
+      const paths = [
+        'core/datatypes/ref.schema.yaml',
+        'core/datatypes/amount.schema.yaml',
+        'core/datatypes/concentration.schema.yaml',
+        'core/datatypes/composition-entry.schema.yaml',
+        'core/common.schema.yaml',
+        'lab/material.schema.yaml',
+      ];
+
+      const contents = new Map<string, string>();
+      for (const path of paths) {
+        contents.set(path, await readFile(join(schemaRoot, path), 'utf8'));
+      }
+
+      const result = loadSchemasFromContent(contents);
+      expect(result.errors).toEqual([]);
+
+      registry.addSchemas(result.entries);
+
+      expect(registry.has('https://computable-lab.com/schema/computable-lab/datatypes/concentration.schema.yaml')).toBe(true);
+      expect(registry.has('https://computable-lab.com/schema/computable-lab/datatypes/composition-entry.schema.yaml')).toBe(true);
+      expect(
+        registry.getDependencies('https://computable-lab.com/schema/computable-lab/datatypes/composition-entry.schema.yaml')
+      ).toEqual([
+        'https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml',
+        'https://computable-lab.com/schema/computable-lab/datatypes/concentration.schema.yaml',
+      ]);
+    });
+  });
+
+  describe('validation', () => {
+    it('validates concentration and optional material molecular weight', async () => {
+      const schemaRoot = join(process.cwd(), 'schema');
+      const paths = [
+        'core/datatypes/amount.schema.yaml',
+        'core/datatypes/ref.schema.yaml',
+        'core/datatypes/concentration.schema.yaml',
+        'core/datatypes/composition-entry.schema.yaml',
+        'core/datatypes/file-ref.schema.yaml',
+        'core/common.schema.yaml',
+        'lab/material.schema.yaml',
+        'lab/recipe.schema.yaml',
+        'lab/vendor-product.schema.yaml',
+        'workflow/events/plate-event.add-material.schema.yaml',
+      ];
+
+      const contents = new Map<string, string>();
+      for (const path of paths) {
+        contents.set(path, await readFile(join(schemaRoot, path), 'utf8'));
+      }
+
+      const result = loadSchemasFromContent(contents);
+      expect(result.errors).toEqual([]);
+
+      const validator = createValidator({ strict: false });
+      validator.addSchemas(result.entries.map((entry) => entry.schema));
+
+      expect(
+        validator.validate(
+          { value: 1, unit: 'mM', basis: 'molar' },
+          'https://computable-lab.com/schema/computable-lab/datatypes/concentration.schema.yaml'
+        ).valid
+      ).toBe(true);
+
+      expect(
+        validator.validate(
+          {
+            kind: 'material',
+            id: 'MAT-CLOFIBRATE',
+            name: 'Clofibrate',
+            domain: 'chemical',
+            molecular_weight: { value: 242.7, unit: 'g/mol' },
+          },
+          'https://computable-lab.com/schema/computable-lab/material.schema.yaml'
+        ).valid
+      ).toBe(true);
+
+      expect(
+        validator.validate(
+          {
+            kind: 'material',
+            id: 'MAT-CLOFIBRATE',
+            name: 'Clofibrate',
+            domain: 'chemical',
+            molecular_weight: { value: 242.7, unit: 'mg' },
+          },
+          'https://computable-lab.com/schema/computable-lab/material.schema.yaml'
+        ).valid
+      ).toBe(false);
+
+      expect(
+        validator.validate(
+          {
+            kind: 'vendor-product',
+            id: 'VPR-SIGMA-D8418',
+            name: 'Clofibrate sodium salt solution',
+            vendor: 'Sigma-Aldrich',
+            catalog_number: 'D8418',
+            material_ref: {
+              kind: 'record',
+              id: 'MAT-CLOFIBRATE',
+              type: 'material',
+              label: 'Clofibrate',
+            },
+            declared_composition: [
+              {
+                component_ref: {
+                  kind: 'record',
+                  id: 'MAT-CLOFIBRATE',
+                  type: 'material',
+                  label: 'Clofibrate',
+                },
+                role: 'solute',
+                concentration: { value: 100, unit: 'mM', basis: 'molar' },
+                source: 'vendor declaration',
+              },
+            ],
+            composition_provenance: {
+              source_type: 'vendor_search',
+              vendor: 'Sigma-Aldrich',
+              source_url: 'https://example.com/product',
+              source_text: 'Clofibrate sodium salt solution, 100 mM',
+              captured_at: '2026-03-21T12:00:00.000Z',
+            },
+            documents: [
+              {
+                id: 'VDOC-TEST-1',
+                title: 'Vendor product sheet',
+                document_kind: 'formulation_sheet',
+                file_ref: {
+                  file_name: 'product-sheet.pdf',
+                  media_type: 'application/pdf',
+                  source_url: 'https://example.com/product-sheet.pdf',
+                  size_bytes: 1024,
+                  sha256: 'abc123',
+                  page_count: 2,
+                },
+                provenance: {
+                  source_type: 'upload',
+                  added_at: '2026-03-21T12:00:00.000Z',
+                  note: 'Uploaded from vendor page',
+                },
+                extraction: {
+                  method: 'pdf_text',
+                  extracted_at: '2026-03-21T12:01:00.000Z',
+                  page_count: 2,
+                  ocr_attempted: false,
+                  ocr_available: false,
+                  text_excerpt: 'RPMI 1640 contains glucose 2 g/L',
+                },
+              },
+            ],
+            composition_drafts: [
+              {
+                id: 'VDRAFT-TEST-1',
+                source_document_id: 'VDOC-TEST-1',
+                extraction_method: 'pdf_text',
+                status: 'draft',
+                overall_confidence: 0.83,
+                created_at: '2026-03-21T12:01:00.000Z',
+                extracted_text_excerpt: 'RPMI 1640 contains glucose 2 g/L',
+                items: [
+                  {
+                    component_name: 'Glucose',
+                    role: 'solute',
+                    concentration: { value: 2, unit: 'g/L', basis: 'mass_per_volume' },
+                    confidence: 0.83,
+                    source_page: 1,
+                    source_text: 'Glucose 2 g/L',
+                  },
+                ],
+              },
+            ],
+          },
+          'https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml'
+        ).valid
+      ).toBe(true);
+
+      expect(
+        validator.validate(
+          {
+            kind: 'recipe',
+            id: 'RCP-RPMI-1640',
+            name: 'Prepare RPMI 1640',
+            input_roles: [
+              {
+                role_id: 'base_media',
+                role_type: 'buffer_component',
+                material_ref: {
+                  kind: 'record',
+                  id: 'MAT-RPMI-BASE',
+                  type: 'material',
+                  label: 'RPMI base',
+                },
+              },
+            ],
+            output_material_spec_ref: {
+              kind: 'record',
+              id: 'MSP-RPMI-1640',
+              type: 'material-spec',
+              label: 'RPMI 1640',
+            },
+            output: {
+              composition: [
+                {
+                  component_ref: {
+                    kind: 'record',
+                    id: 'MAT-GLUCOSE',
+                    type: 'material',
+                    label: 'Glucose',
+                  },
+                  role: 'solute',
+                  concentration: { value: 2, unit: 'g/L', basis: 'mass_per_volume' },
+                },
+                {
+                  component_ref: {
+                    kind: 'record',
+                    id: 'MAT-SODIUM-BICARB',
+                    type: 'material',
+                    label: 'Sodium bicarbonate',
+                  },
+                  role: 'buffer_component',
+                },
+              ],
+            },
+            steps: [
+              {
+                order: 1,
+                instruction: 'Combine components and sterile filter.',
+              },
+            ],
+          },
+          'https://computable-lab.com/schema/computable-lab/recipe.schema.yaml'
+        ).valid
+      ).toBe(true);
+
+      expect(
+        validator.validate(
+          {
+            wells: ['A1'],
+            material_spec_ref: {
+              kind: 'record',
+              id: 'MSP-RPMI-1640',
+              type: 'material-spec',
+              label: 'RPMI 1640',
+            },
+            volume: { value: 100, unit: 'uL' },
+            composition_snapshot: [
+              {
+                component_ref: {
+                  kind: 'record',
+                  id: 'MAT-GLUCOSE',
+                  type: 'material',
+                  label: 'Glucose',
+                },
+                role: 'solute',
+                concentration: { value: 2, unit: 'g/L', basis: 'mass_per_volume' },
+              },
+            ],
+          },
+          'https://computable-lab.com/schema/computable-lab/workflow/events/plate-event.add-material.schema.yaml'
+        ).valid
+      ).toBe(true);
     });
   });
   

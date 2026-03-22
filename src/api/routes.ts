@@ -29,6 +29,9 @@ import type { MaterialLifecycleHandlers } from './handlers/MaterialLifecycleHand
 import type { PlatformHandlers } from './handlers/PlatformHandlers.js';
 import type { LabSettingsHandlers } from './handlers/LabSettingsHandlers.js';
 import type { VendorSearchHandlers } from './handlers/VendorSearchHandlers.js';
+import type { VendorDocumentHandlers } from './handlers/VendorDocumentHandlers.js';
+import type { ChemistryHandlers } from './handlers/ChemistryHandlers.js';
+import type { SemanticsHandlers } from './handlers/SemanticsHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -58,6 +61,9 @@ export interface RouteOptions {
   platformHandlers?: PlatformHandlers;
   labSettingsHandlers?: LabSettingsHandlers;
   vendorSearchHandlers?: VendorSearchHandlers;
+  vendorDocumentHandlers?: VendorDocumentHandlers;
+  chemistryHandlers?: ChemistryHandlers;
+  semanticsHandlers?: SemanticsHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -263,6 +269,32 @@ export function registerRoutes(
 
   if (vendorSearchHandlers) {
     fastify.get('/vendors/search', vendorSearchHandlers.searchVendors.bind(vendorSearchHandlers));
+  }
+
+  const { vendorDocumentHandlers } = options;
+
+  if (vendorDocumentHandlers) {
+    fastify.post('/vendors/:id/documents/extract', vendorDocumentHandlers.extractVendorDocument.bind(vendorDocumentHandlers));
+  }
+
+  const { chemistryHandlers } = options;
+
+  if (chemistryHandlers) {
+    fastify.get('/chemistry/molecular-weight', chemistryHandlers.resolveMolecularWeight.bind(chemistryHandlers));
+  }
+
+  const { semanticsHandlers } = options;
+
+  if (semanticsHandlers) {
+    fastify.get('/semantics/instruments', semanticsHandlers.listInstruments.bind(semanticsHandlers));
+    fastify.get('/semantics/readouts', semanticsHandlers.listReadouts.bind(semanticsHandlers));
+    fastify.get('/semantics/assays', semanticsHandlers.listAssays.bind(semanticsHandlers));
+    fastify.get('/semantics/measurement-contexts', semanticsHandlers.listMeasurementContexts.bind(semanticsHandlers));
+    fastify.post('/semantics/measurement-contexts', semanticsHandlers.createMeasurementContext.bind(semanticsHandlers));
+    fastify.get('/semantics/well-groups', semanticsHandlers.listWellGroups.bind(semanticsHandlers));
+    fastify.post('/semantics/well-groups', semanticsHandlers.createWellGroup.bind(semanticsHandlers));
+    fastify.get('/semantics/well-role-assignments', semanticsHandlers.listWellRoleAssignments.bind(semanticsHandlers));
+    fastify.post('/semantics/well-role-assignments', semanticsHandlers.createWellRoleAssignment.bind(semanticsHandlers));
   }
 
   // ============================================================================

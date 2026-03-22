@@ -25,6 +25,7 @@ export const AGENT_ALLOWED_TOOLS = [
   'materials_search_addable',
   'formulations_summary',
   'inventory_list',
+  'material_composition_get',
   // Ontology
   'ontology_search',
   // Chemistry

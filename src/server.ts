@@ -43,9 +43,12 @@ import {
   createTagHandlers,
   createMaterialPrepHandlers,
   createMaterialLifecycleHandlers,
+  createSemanticsHandlers,
   createPlatformHandlers,
   createLabSettingsHandlers,
   createVendorSearchHandlers,
+  createVendorDocumentHandlers,
+  createChemistryHandlers,
 } from './api/handlers/index.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { createUISpecLoader, loadAllUISpecs, type UISpecLoader } from './ui/UISpecLoader.js';
@@ -334,9 +337,12 @@ export async function createServer(
   const libraryHandlers = createLibraryHandlers(ctx.store);
   const ontologyHandlers = createOntologyHandlers();
   const vendorSearchHandlers = createVendorSearchHandlers();
+  const vendorDocumentHandlers = createVendorDocumentHandlers(ctx.store);
+  const chemistryHandlers = createChemistryHandlers();
   const tagHandlers = createTagHandlers(ctx.store);
   const materialPrepHandlers = createMaterialPrepHandlers(ctx.store, ctx.indexManager);
   const materialLifecycleHandlers = createMaterialLifecycleHandlers(ctx.store);
+  const semanticsHandlers = createSemanticsHandlers(ctx);
   const platformHandlers = createPlatformHandlers(ctx.platformRegistry);
   const labSettingsHandlers = createLabSettingsHandlers(ctx.appConfig);
   const uiHandlers = createUIHandlers(ctx.uiSpecLoader, ctx.store, ctx.schemaRegistry);
@@ -519,10 +525,13 @@ export async function createServer(
       libraryHandlers,
       ontologyHandlers,
       vendorSearchHandlers,
+      vendorDocumentHandlers,
+      chemistryHandlers,
       tagHandlers,
-      materialPrepHandlers,
-      materialLifecycleHandlers,
-      platformHandlers,
+    materialPrepHandlers,
+    materialLifecycleHandlers,
+    semanticsHandlers,
+    platformHandlers,
       labSettingsHandlers,
       metaHandlers,
       protocolHandlers,

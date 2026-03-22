@@ -34,6 +34,12 @@ form:
     - path: "$.formulation.concentration.unit"
       widget: "text"
       label: "Concentration Unit"
+    - path: "$.formulation.concentration.basis"
+      widget: "text"
+      label: "Concentration Basis"
+    - path: "$.formulation.solvent_ref"
+      widget: "ref"
+      label: "Solvent"
     - path: "$.formulation.grade"
       widget: "text"
       label: "Grade"
@@ -53,4 +59,3 @@ list:
     label: "Name"
   - path: "$.material_ref.id"
     label: "Material"
-

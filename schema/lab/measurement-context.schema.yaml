@@ -1,0 +1,60 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/measurement-context.schema.yaml"
+title: "Measurement Context"
+description: >
+  A specific measurement setup over a plate, wells, or derived sample.
+  This is the context within which well/sample roles have meaning.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- name
+- source_ref
+- instrument_ref
+- readout_def_refs
+
+properties:
+  kind:
+    const: "measurement-context"
+
+  id:
+    type: string
+    pattern: '^MCTX-[A-Za-z0-9_-]+$'
+
+  name:
+    type: string
+    minLength: 1
+
+  source_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  instrument_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  assay_def_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  readout_def_refs:
+    type: array
+    minItems: 1
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+
+  timepoint:
+    type: string
+
+  series_id:
+    type: string
+
+  notes:
+    type: string
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

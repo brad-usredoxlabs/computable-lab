@@ -35,7 +35,7 @@ properties:
           type: string
         role_type:
           type: string
-          enum: [ solute, solvent, diluent, additive, cells, matrix, other ]
+          enum: [ solute, solvent, diluent, additive, buffer_component, activity_source, cells, matrix, other ]
         required:
           type: boolean
           default: true
@@ -78,6 +78,27 @@ properties:
 
   output_material_spec_ref:
     $ref: "./datatypes/ref.schema.yaml"
+
+  output:
+    type: object
+    additionalProperties: false
+    properties:
+      concentration:
+        oneOf:
+        - $ref: "./datatypes/concentration.schema.yaml"
+        - $ref: "./datatypes/amount.schema.yaml"
+      solvent_ref:
+        $ref: "./datatypes/ref.schema.yaml"
+      composition:
+        type: array
+        items:
+          $ref: "./datatypes/composition-entry.schema.yaml"
+      grade:
+        type: string
+      ph:
+        type: number
+      notes:
+        type: string
 
   scale:
     type: object

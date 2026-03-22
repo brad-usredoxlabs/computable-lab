@@ -1,0 +1,63 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/readout-definition.schema.yaml"
+title: "Readout Definition"
+description: >
+  Reusable physical readout/channel definition used inside a measurement context.
+  Separates instrument readout mechanics from biological interpretation.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- name
+- instrument_type
+- mode
+
+properties:
+  kind:
+    const: "readout-definition"
+
+  id:
+    type: string
+    pattern: '^RDEF-[A-Za-z0-9_-]+$'
+
+  name:
+    type: string
+    minLength: 1
+
+  instrument_type:
+    type: string
+    enum: [ plate_reader, qpcr, gc_ms, lc_ms, microscopy, other ]
+
+  mode:
+    type: string
+    enum: [ fluorescence, absorbance, luminescence, ct, peak_area, image_feature, other ]
+
+  channel_label:
+    type: string
+
+  excitation_nm:
+    type: number
+    exclusiveMinimum: 0
+
+  emission_nm:
+    type: number
+    exclusiveMinimum: 0
+
+  units:
+    type: string
+
+  proxy_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  target_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

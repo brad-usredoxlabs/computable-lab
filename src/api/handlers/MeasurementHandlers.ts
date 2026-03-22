@@ -30,7 +30,9 @@ export function createMeasurementHandlers(ctx: AppContext) {
           instrumentRef?: unknown;
           labwareInstanceRef?: unknown;
           eventGraphRef?: unknown;
+          measurementContextRef?: unknown;
           readEventRef?: string;
+          seriesId?: string;
           parserId?: string;
           rawData?: unknown;
         };
@@ -65,7 +67,9 @@ export function createMeasurementHandlers(ctx: AppContext) {
           instrumentRef?: unknown;
           labwareInstanceRef?: unknown;
           eventGraphRef?: unknown;
+          measurementContextRef?: unknown;
           readEventRef?: string;
+          seriesId?: string;
           parserId?: string;
           outputPath?: string;
           parameters?: Record<string, unknown>;

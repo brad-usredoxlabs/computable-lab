@@ -19,7 +19,9 @@ type ActiveReadRequest = {
   instrumentRef?: unknown;
   labwareInstanceRef?: unknown;
   eventGraphRef?: unknown;
+  measurementContextRef?: unknown;
   readEventRef?: string;
+  seriesId?: string;
   parserId?: string;
   outputPath?: string;
   parameters?: Record<string, unknown>;
@@ -236,7 +238,9 @@ export class MeasurementActiveControlService {
       ...(input.instrumentRef !== undefined ? { instrumentRef: input.instrumentRef } : {}),
       ...(input.labwareInstanceRef !== undefined ? { labwareInstanceRef: input.labwareInstanceRef } : {}),
       ...(input.eventGraphRef !== undefined ? { eventGraphRef: input.eventGraphRef } : {}),
+      ...(input.measurementContextRef !== undefined ? { measurementContextRef: input.measurementContextRef } : {}),
       ...(input.readEventRef !== undefined ? { readEventRef: input.readEventRef } : {}),
+      ...(input.seriesId !== undefined ? { seriesId: input.seriesId } : {}),
       parserId: input.parserId ?? command.defaultParserId,
       rawData: { path: rawDataPath },
     });

@@ -92,6 +92,10 @@ function formatWellStateSnapshot(context: EditorContext): string {
               const parts = [material.label];
               if (typeof material.volume_uL === 'number') parts.push(`${material.volume_uL.toFixed(3)} uL`);
               if (material.concentration) parts.push(`${material.concentration.value} ${material.concentration.unit}`);
+              else if (material.concentrationUnknown) parts.push('concentration=unknown');
+              if (typeof material.count === 'number') parts.push(`count=${material.count.toFixed(3)}`);
+              if (material.materialSpecRefId) parts.push(`spec=${material.materialSpecRefId}`);
+              if (material.aliquotRefId) parts.push(`aliquot=${material.aliquotRefId}`);
               return parts.join(' | ');
             })
             .join('; ')

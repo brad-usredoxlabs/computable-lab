@@ -1,5 +1,5 @@
 $schema: "https://json-schema.org/draft/2020-12/schema"
-$id: "https://computable-lab.com/schema/computable-lab/datatypes/plate-event.add-material.schema.yaml"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/events/plate-event.add-material.schema.yaml"
 title: "PlateEventAddMaterialDetails"
 type: object
 additionalProperties: false
@@ -11,7 +11,7 @@ properties:
     description: "Target labware id in editor-native event graphs."
 
   labwareInstanceId:
-    $ref: "../../core/datatypes/ref.schema.yaml"
+    $ref: "../../datatypes/ref.schema.yaml"
     description: "Target labware instance ref in normalized/runtime payloads."
 
   wells:
@@ -21,27 +21,27 @@ properties:
     description: "Target wells."
 
   material_ref:
-    $ref: "../../core/datatypes/ref.schema.yaml"
+    $ref: "../../datatypes/ref.schema.yaml"
     description: "Material concept ref."
 
   material_spec_ref:
-    $ref: "../../core/datatypes/ref.schema.yaml"
+    $ref: "../../datatypes/ref.schema.yaml"
     description: "Reusable formulation/material-spec ref."
 
   aliquot_ref:
-    $ref: "../../core/datatypes/ref.schema.yaml"
+    $ref: "../../datatypes/ref.schema.yaml"
     description: "Explicit material instance ref."
 
   material_instance_ref:
-    $ref: "../../core/datatypes/ref.schema.yaml"
+    $ref: "../../datatypes/ref.schema.yaml"
     description: "Explicit general material instance ref."
 
   vendor_product_ref:
-    $ref: "../../core/datatypes/ref.schema.yaml"
+    $ref: "../../datatypes/ref.schema.yaml"
     description: "Commercial sourced product ref."
 
   materialId:
-    $ref: "../../core/datatypes/ref.schema.yaml"
+    $ref: "../../datatypes/ref.schema.yaml"
     description: "Deprecated legacy material ref field."
 
   volume:
@@ -58,8 +58,16 @@ properties:
     description: "Deprecated legacy volume field."
 
   concentration:
-    $ref: "../../core/datatypes/amount.schema.yaml"
+    oneOf:
+    - $ref: "../../datatypes/concentration.schema.yaml"
+    - $ref: "../../datatypes/amount.schema.yaml"
     description: "Optional concentration."
+
+  composition_snapshot:
+    type: array
+    items:
+      $ref: "../../datatypes/composition-entry.schema.yaml"
+    description: "Optional component-level composition snapshot used for well-state replay."
 
   count:
     type: number

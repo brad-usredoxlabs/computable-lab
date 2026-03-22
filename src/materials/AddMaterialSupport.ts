@@ -1,6 +1,8 @@
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import type { RecordStore } from '../store/types.js';
 import type { MaterialTrackingConfig } from '../config/types.js';
+import { toStoredConcentration } from './concentration.js';
+import { extractPrimaryDeclaredConcentration } from './vendorComposition.js';
 
 const ALIQUOT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml';
 const MATERIAL_INSTANCE_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/material-instance.schema.yaml';
@@ -94,15 +96,8 @@ export function extractAddMaterialVolume(details: Record<string, unknown>): Quan
   return null;
 }
 
-function extractConcentration(details: Record<string, unknown>): Quantity | null {
-  const concentration = asRecord(details['concentration']);
-  if (!concentration) return null;
-  if (typeof concentration['value'] !== 'number' || !Number.isFinite(concentration['value']) || concentration['value'] <= 0) return null;
-  if (typeof concentration['unit'] !== 'string' || concentration['unit'].trim().length === 0) return null;
-  return {
-    value: concentration['value'],
-    unit: concentration['unit'].trim(),
-  };
+function extractConcentration(details: Record<string, unknown>): Record<string, unknown> | null {
+  return toStoredConcentration(details['concentration']) ?? null;
 }
 
 function extractInstanceLot(details: Record<string, unknown>): Record<string, string> | null {
@@ -142,7 +137,12 @@ async function upsertImplicitAliquot(
   details: Record<string, unknown>,
 ): Promise<RefShape> {
   const aliquotId = implicitAliquotId(eventGraphId, eventId);
-  const concentration = extractConcentration(details);
+  const specEnvelope = await store.get(specRef.id);
+  const specPayload = getEnvelopePayload(specEnvelope);
+  const formulation = specPayload?.['formulation'] && typeof specPayload['formulation'] === 'object'
+    ? specPayload['formulation'] as Record<string, unknown>
+    : null;
+  const concentration = extractConcentration(details) ?? (formulation ? toStoredConcentration(formulation['concentration']) ?? null : null);
   const volume = extractAddMaterialVolume(details);
   const lot = extractInstanceLot(details);
   const label = specRef.label || specRef.id;
@@ -215,6 +215,9 @@ async function upsertImplicitMaterialInstance(
   const vendorProductEnvelope = await store.get(vendorProductRef.id);
   const vendorProductPayload = getEnvelopePayload(vendorProductEnvelope);
   const materialRef = normalizeRef(vendorProductPayload?.['material_ref'], 'material');
+  const declaredConcentration = vendorProductPayload
+    ? toStoredConcentration(extractPrimaryDeclaredConcentration(vendorProductPayload['declared_composition']))
+    : undefined;
   const payload: Record<string, unknown> = {
     kind: 'material-instance',
     id: instanceId,
@@ -228,7 +231,7 @@ async function upsertImplicitMaterialInstance(
   if (materialRef?.kind === 'record') {
     payload.material_ref = toRecordRef(materialRef.id, 'material', materialRef.label || materialRef.id);
   }
-  if (concentration) payload.concentration = concentration;
+  if (concentration ?? declaredConcentration) payload.concentration = concentration ?? declaredConcentration;
   if (volume) payload.volume = volume;
   if (lot) payload.lot = lot;
 

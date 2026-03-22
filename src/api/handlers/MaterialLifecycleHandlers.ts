@@ -2,6 +2,8 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiError } from '../types.js';
 import type { RecordEnvelope } from '../../store/types.js';
 import type { RecordStore } from '../../store/types.js';
+import { toStoredConcentration, type Concentration } from '../../materials/concentration.js';
+import { extractPrimaryDeclaredConcentration } from '../../materials/vendorComposition.js';
 
 const SCHEMA_IDS = {
   material: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
@@ -53,7 +55,7 @@ type CreateMaterialInstanceBody = {
   vendorProductRef?: RefShape;
   parentMaterialInstanceRef?: RefShape;
   preparedOn?: string;
-  concentration?: Quantity;
+  concentration?: Concentration;
   volume?: Quantity;
   lot?: Record<string, unknown>;
   storage?: Record<string, unknown>;
@@ -199,12 +201,13 @@ function classifyMaterialRecord(envelope: RecordEnvelope): MaterialSearchItem | 
   if (kind === 'vendor-product') {
     const vendor = stringValue(payload.vendor);
     const catalog = stringValue(payload.catalog_number);
+    const concentration = extractPrimaryDeclaredConcentration(payload.declared_composition);
     return {
       recordId: envelope.recordId,
       kind,
       title,
       category: 'vendor-reagent',
-      subtitle: [vendor, catalog].filter(Boolean).join(' · ') || 'Commercial reagent',
+      subtitle: [vendor, catalog, concentration ? `${concentration.value} ${concentration.unit}` : undefined].filter(Boolean).join(' · ') || 'Commercial reagent',
     };
   }
   if (kind === 'material-instance') {
@@ -329,7 +332,7 @@ function buildInstancePayload(recordId: string, body: CreateMaterialInstanceBody
   if (derivationRef) payload.derivation_ref = derivationRef;
   const preparedOn = normalizeDateTime(body.preparedOn);
   if (preparedOn) payload.prepared_on = preparedOn;
-  const concentration = quantityValue(body.concentration);
+  const concentration = toStoredConcentration(body.concentration);
   if (concentration) payload.concentration = concentration;
   const volume = quantityValue(body.volume);
   if (volume) payload.volume = volume;
@@ -592,6 +595,7 @@ export function createMaterialLifecycleHandlers(store: RecordStore) {
       }
       const parentName = stringValue(parentPayload.name) ?? request.params.id;
       const parentSpecRef = refValue(parentPayload.material_spec_ref);
+      const parentConcentration = toStoredConcentration(parentPayload.concentration);
       const createdIds: string[] = [];
       for (const item of items) {
         const aliquotId = stringValue(item.id) ?? token('ALQ');
@@ -602,6 +606,7 @@ export function createMaterialLifecycleHandlers(store: RecordStore) {
           parent_material_instance_ref: toRef(request.params.id, 'material-instance', parentName),
           ...(parentSpecRef ? { material_spec_ref: parentSpecRef } : {}),
           ...(quantityValue(item.volume) ? { volume: quantityValue(item.volume) } : {}),
+          ...(parentConcentration ? { concentration: parentConcentration } : {}),
           ...(isObject(item.lot) ? { lot: item.lot } : {}),
           ...(isObject(item.storage) ? { storage: item.storage } : {}),
           ...(dedupeStrings(item.tags) ? { tags: dedupeStrings(item.tags) } : {}),

@@ -133,7 +133,14 @@ export interface EditorContext {
       concentration?: {
         value: number;
         unit: string;
+        basis?: string;
       };
+      concentrationUnknown?: boolean;
+      count?: number;
+      materialSpecRefId?: string;
+      aliquotRefId?: string;
+      materialInstanceRefId?: string;
+      vendorProductRefId?: string;
     }>;
     lastEventId?: string;
     eventCount: number;
