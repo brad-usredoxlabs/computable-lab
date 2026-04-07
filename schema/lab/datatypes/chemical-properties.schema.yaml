@@ -1,0 +1,19 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/chemical-properties.schema.yaml"
+title: "Chemical Properties"
+description: >
+  Optional concept-level chemistry fields for canonical material records.
+
+type: object
+additionalProperties: false
+
+properties:
+  molecular_formula:
+    type: string
+    description: "Canonical molecular formula string, e.g. C15H10O5."
+  cas_number:
+    type: string
+    description: "CAS Registry Number if known."
+  solubility:
+    type: string
+    description: "Free-text solubility note from a trusted source."

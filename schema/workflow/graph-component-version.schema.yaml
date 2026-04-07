@@ -1,0 +1,38 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/graph-component-version.schema.yaml"
+title: "Graph Component Version"
+description: >
+  Immutable published snapshot of a graph-component.
+
+type: object
+additionalProperties: false
+required:
+  - kind
+  - recordId
+  - componentRef
+  - version
+  - publishedAt
+  - snapshot
+properties:
+  kind:
+    const: "graph-component-version"
+  recordId:
+    type: string
+  componentRef:
+    type: object
+    additionalProperties: false
+    required: [ kind, id, type ]
+    properties:
+      kind: { const: "record" }
+      id: { type: string }
+      type: { const: "graph-component" }
+  version:
+    type: string
+  publishedAt:
+    type: string
+    format: date-time
+  notes:
+    type: string
+  snapshot:
+    type: object
+    additionalProperties: true

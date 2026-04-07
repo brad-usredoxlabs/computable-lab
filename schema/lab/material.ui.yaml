@@ -1,0 +1,69 @@
+# UI specification for Material records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/material.schema.yaml"
+
+display:
+  titleField: "$.name"
+  icon: "material"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Basic Information"
+    fields:
+    - path: "$.name"
+      widget: "text"
+      label: "Name"
+      required: true
+    - path: "$.domain"
+      widget: "select"
+      label: "Domain"
+    - path: "$.class"
+      widget: "array"
+      label: "Classifications"
+    - path: "$.description"
+      widget: "markdown"
+      label: "Description"
+  - title: "Chemistry"
+    visible:
+      when: "$.domain"
+      operator: "equals"
+      value: "chemical"
+    fields:
+    - path: "$.molecular_weight.value"
+      widget: "number"
+      label: "Molecular Weight Value"
+    - path: "$.molecular_weight.unit"
+      widget: "text"
+      label: "Molecular Weight Unit"
+      readonly: true
+    - path: "$.chemical_properties.molecular_formula"
+      widget: "text"
+      label: "Molecular Formula"
+    - path: "$.chemical_properties.cas_number"
+      widget: "text"
+      label: "CAS Number"
+    - path: "$.chemical_properties.solubility"
+      widget: "textarea"
+      label: "Solubility"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "120px"
+  - path: "$.name"
+    label: "Name"
+  - path: "$.domain"
+    label: "Domain"

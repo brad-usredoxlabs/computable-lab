@@ -1,0 +1,118 @@
+id: integra_assist
+label: Integra Assist Plus
+allowedVocabIds:
+  - liquid-handling/v1
+defaultVariant: assist_plus_3pos
+toolTypeIds:
+  - pipette_assist_voyager_4ch_300
+  - pipette_assist_voyager_4ch_1250
+  - pipette_assist_voyager_6ch_300
+  - pipette_assist_voyager_6ch_1250
+  - pipette_assist_voyager_8ch_12_5
+  - pipette_assist_voyager_8ch_50
+  - pipette_assist_voyager_8ch_125
+  - pipette_assist_voyager_8ch_300
+  - pipette_assist_voyager_8ch_1250
+  - pipette_assist_voyager_12ch_12_5
+  - pipette_assist_voyager_12ch_50
+  - pipette_assist_voyager_12ch_125
+  - pipette_assist_viaflow_8ch_12_5
+  - pipette_assist_viaflow_8ch_50
+  - pipette_assist_viaflow_8ch_125
+  - pipette_assist_viaflow_8ch_300
+  - pipette_assist_viaflow_8ch_1250
+  - pipette_assist_viaflow_12ch_12_5
+  - pipette_assist_viaflow_12ch_50
+  - pipette_assist_viaflow_12ch_125
+  - pipette_assist_viaflow_12ch_300
+  - pipette_assist_viaflow_12ch_1250
+  - pipette_assist_viaflow_16ch_12_5
+  - pipette_assist_viaflow_16ch_50
+  - pipette_assist_viaflow_16ch_125
+compilerFamily: assist_plus
+modules:
+  - id: assist_heater
+    label: Assist Heater
+  - id: mag_module
+    label: MAG / HEATMAG
+  - id: coldplate
+    label: COLDPLATE / BIOSHAKE
+variants:
+  - id: assist_plus_3pos
+    title: Integra Assist Plus (3-position universal)
+    slots:
+      - id: A
+        kind: special
+        label: Pipette head park
+        orientationMode: flippable
+        row: 1
+        col: 1
+        reachable: false
+      - id: B
+        kind: standard
+        label: Portrait SBS slot
+        orientationMode: locked_portrait
+        row: 1
+        col: 2
+        reachable: true
+      - id: C
+        kind: standard
+        orientationMode: flippable
+        row: 1
+        col: 3
+        reachable: true
+      - id: D
+        kind: standard
+        orientationMode: flippable
+        row: 1
+        col: 4
+        reachable: true
+      - id: WASTE
+        kind: trash
+        label: Waste
+        orientationMode: not_applicable
+        row: 1
+        col: 5
+        reachable: false
+  - id: assist_plus_4pos_portrait
+    title: Integra Assist Plus (4-position portrait)
+    slots:
+      - id: A
+        kind: special
+        label: Pipette head park
+        orientationMode: flippable
+        row: 1
+        col: 1
+        reachable: false
+      - id: B
+        kind: standard
+        label: Portrait SBS slot
+        orientationMode: locked_portrait
+        row: 1
+        col: 2
+        reachable: true
+      - id: C
+        kind: standard
+        orientationMode: flippable
+        row: 1
+        col: 3
+        reachable: true
+      - id: D
+        kind: standard
+        orientationMode: flippable
+        row: 1
+        col: 4
+        reachable: true
+      - id: E
+        kind: standard
+        orientationMode: flippable
+        row: 1
+        col: 5
+        reachable: true
+      - id: WASTE
+        kind: trash
+        label: Waste
+        orientationMode: not_applicable
+        row: 1
+        col: 6
+        reachable: false

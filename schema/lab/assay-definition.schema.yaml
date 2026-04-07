@@ -1,0 +1,83 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/assay-definition.schema.yaml"
+title: "Assay Definition"
+description: >
+  Reusable assay-level measurement definition. Provides biologist-facing assay intent,
+  recommended readouts, and expected role classes for semantic role assignment.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- name
+- assay_type
+- instrument_type
+- readout_def_refs
+
+properties:
+  kind:
+    const: "assay-definition"
+
+  id:
+    type: string
+    pattern: '^ASSAY-[A-Za-z0-9_-]+$'
+
+  name:
+    type: string
+    minLength: 1
+
+  assay_type:
+    type: string
+    minLength: 1
+
+  instrument_type:
+    type: string
+    enum: [ plate_reader, qpcr, gc_ms, lc_ms, microscopy, other ]
+
+  readout_def_refs:
+    type: array
+    minItems: 1
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+
+  target_refs:
+    type: array
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+
+  panel_targets:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - readout_def_ref
+        - panel_role
+      properties:
+        name:
+          type: string
+        target_ref:
+          $ref: "./datatypes/ref.schema.yaml"
+        readout_def_ref:
+          $ref: "./datatypes/ref.schema.yaml"
+        panel_role:
+          type: string
+          enum: [ target, housekeeping, positive_control, no_template_control, reference, other ]
+
+  expected_role_types:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+  notes:
+    type: string
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

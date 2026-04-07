@@ -1,0 +1,347 @@
+# Lint Rule Schema v1.0
+# Defines the structure for declarative lint rules in computable-lab
+
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/lint/lint-v1.schema.yaml"
+title: "Lint Rule Specification v1"
+description: "Schema for declarative lint rules in computable-lab"
+type: "object"
+
+properties:
+  # Version specification
+  lintVersion:
+    type: "integer"
+    enum: [ 1 ]
+    description: "Lint specification version"
+    default: 1
+
+  # Global rule configuration
+  global:
+    type: "object"
+    description: "Global configuration for all rules"
+    properties:
+      failOnWarnings:
+        type: "boolean"
+        description: "Whether to treat warnings as errors"
+        default: false
+
+      includeInfo:
+        type: "boolean"
+        description: "Whether to include informational messages"
+        default: true
+
+      customMessages:
+        type: "object"
+        description: "Custom error message templates"
+        additionalProperties:
+          type: "string"
+          description: "Custom message template"
+
+  # Individual rule definitions
+  rules:
+    type: "array"
+    description: "Array of lint rule definitions"
+    items:
+      $ref: "#/definitions/rule"
+
+# Definitions
+definitions:
+  # Rule definition
+  rule:
+    type: "object"
+    description: "Individual lint rule definition"
+    required:
+    - "id"
+    - "title"
+    - "assert"
+    - "message"
+    - "scope"
+    - "severity"
+
+    properties:
+      # Rule identification
+      id:
+        type: "string"
+        pattern: "^[a-zA-Z][a-zA-Z0-9-]*$"
+        description: "Unique rule identifier (alphanumeric with hyphens)"
+
+      title:
+        type: "string"
+        description: "Human-readable rule title"
+        minLength: 1
+
+      description:
+        type: "string"
+        description: "Detailed rule description"
+        minLength: 1
+
+      # Rule configuration
+      severity:
+        type: "string"
+        enum: [ "error", "warning", "info" ]
+        description: "Rule severity level"
+        default: "error"
+
+      scope:
+        type: "string"
+        enum: [ "record", "collection", "repo" ]
+        description: "Scope of rule application"
+        default: "record"
+
+      schemaId:
+        type: "string"
+        format: "uri"
+        description: "Schema this rule applies to (if specific)"
+
+      # Conditional application
+      when:
+        $ref: "#/definitions/predicate"
+        description: "Optional condition for when rule applies"
+
+      # Rule assertion
+      assert:
+        $ref: "#/definitions/predicate"
+        description: "Main assertion to validate"
+
+      # Message configuration
+      message:
+        type: "object"
+        description: "Error message configuration"
+        required:
+        - "template"
+
+        properties:
+          template:
+            type: "string"
+            description: "Message template with {{path}} placeholders"
+            minLength: 1
+
+          paths:
+            type: "array"
+            description: "Paths referenced in the template"
+            items:
+              type: "string"
+              pattern: '^(\$\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)$'
+              description: "Valid JSONPath-like reference"
+
+      # Dependencies
+      dependsOn:
+        type: "array"
+        description: "Rules this rule depends on"
+        items:
+          type: "string"
+          pattern: "^[a-zA-Z][a-zA-Z0-9-]*$"
+          description: "Dependent rule ID"
+
+  # Predicate operators
+  predicate:
+    type: "object"
+    description: "Predicate for rule conditions and assertions"
+    oneOf:
+    # Exists predicate
+    - type: "object"
+      required: [ "op", "path" ]
+      properties:
+        op:
+          type: "string"
+          const: "exists"
+        path:
+          type: "string"
+          pattern: '^(\$\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)$'
+          description: "Path to check for existence"
+
+    # Non-empty predicate
+    - type: "object"
+      required: [ "op", "path" ]
+      properties:
+        op:
+          type: "string"
+          const: "nonEmpty"
+        path:
+          type: "string"
+          pattern: '^(\$\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)$'
+          description: "Path to check for non-empty value"
+
+    # Regex predicate
+    - type: "object"
+      required: [ "op", "path", "pattern" ]
+      properties:
+        op:
+          type: "string"
+          const: "regex"
+        path:
+          type: "string"
+          pattern: '^(\$\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)$'
+          description: "Path to validate with regex"
+        pattern:
+          type: "string"
+          description: "Regular expression pattern"
+
+    # Equals predicate
+    - type: "object"
+      required: [ "op", "path", "value" ]
+      properties:
+        op:
+          type: "string"
+          const: "equals"
+        path:
+          type: "string"
+          pattern: '^(\$\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)$'
+          description: "Path to compare"
+        value:
+          description: "Value to compare against"
+          anyOf:
+          - type: "string"
+          - type: "number"
+          - type: "boolean"
+          - type: "null"
+
+    # In predicate
+    - type: "object"
+      required: [ "op", "path", "values" ]
+      properties:
+        op:
+          type: "string"
+          const: "in"
+        path:
+          type: "string"
+          pattern: '^(\$\.|[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)$'
+          description: "Path to check membership"
+        values:
+          type: "array"
+          description: "Array of allowed values"
+          minItems: 1
+          items:
+            anyOf:
+            - type: "string"
+            - type: "number"
+            - type: "boolean"
+
+    # All predicate (AND)
+    - type: "object"
+      required: [ "op", "predicates" ]
+      properties:
+        op:
+          type: "string"
+          const: "all"
+        predicates:
+          type: "array"
+          description: "All predicates must be true"
+          minItems: 1
+          items:
+            $ref: "#/definitions/predicate"
+
+    # Any predicate (OR)
+    - type: "object"
+      required: [ "op", "predicates" ]
+      properties:
+        op:
+          type: "string"
+          const: "any"
+        predicates:
+          type: "array"
+          description: "At least one predicate must be true"
+          minItems: 1
+          items:
+            $ref: "#/definitions/predicate"
+
+    # Not predicate (NOT)
+    - type: "object"
+      required: [ "op", "not" ]
+      properties:
+        op:
+          type: "string"
+          const: "not"
+        not:
+          $ref: "#/definitions/predicate"
+          description: "Predicate to negate"
+
+# Additional validation
+additionalProperties: false
+
+# Example usage
+examples:
+- title: "Basic required field rule"
+  value:
+    lintVersion: 1
+    rules:
+    - id: "required-title"
+      title: "Title is required"
+      severity: "error"
+      scope: "record"
+      schemaId: "https://computable-lab.com/schemas/record"
+      assert:
+        op: "exists"
+        path: "$.data.title"
+      message:
+        template: "data.title is required"
+        paths: [ "$.data.title" ]
+
+- title: "Complex validation rule"
+  value:
+    lintVersion: 1
+    rules:
+    - id: "valid-email-format"
+      title: "Email format validation"
+      severity: "error"
+      scope: "record"
+      schemaId: "https://computable-lab.com/schemas/user"
+      assert:
+        op: "regex"
+        path: "$.data.email"
+        pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+      message:
+        template: "data.email must be a valid email address"
+        paths: [ "$.data.email" ]
+
+- title: "Conditional validation"
+  value:
+    lintVersion: 1
+    rules:
+    - id: "conditional-validation"
+      title: "Conditional field validation"
+      severity: "warning"
+      scope: "record"
+      schemaId: "https://computable-lab.com/schemas/experiment"
+      when:
+        op: "exists"
+        path: "$.data.requiresApproval"
+      assert:
+        op: "equals"
+        path: "$.data.requiresApproval"
+        value: true
+      message:
+        template: "data.approvalRequired must be set when requiresApproval is true"
+        paths: [ "$.data.approvalRequired", "$.data.requiresApproval" ]
+
+- title: "Complex validation with dependencies"
+  value:
+    lintVersion: 1
+    rules:
+    - id: "base-validation"
+      title: "Base validation"
+      severity: "error"
+      scope: "record"
+      assert:
+        op: "exists"
+        path: "$.data.baseField"
+      message:
+        template: "data.baseField is required"
+        paths: [ "$.data.baseField" ]
+
+    - id: "dependent-validation"
+      title: "Dependent validation"
+      severity: "warning"
+      scope: "record"
+      dependsOn: [ "base-validation" ]
+      assert:
+        op: "all"
+        predicates:
+        - op: "exists"
+          path: "$.data.dependentField"
+        - op: "regex"
+          path: "$.data.dependentField"
+          pattern: "^[A-Z]{2}-[0-9]+$"
+      message:
+        template: "data.dependentField must be in format XX-NNNNN"
+        paths: [ "$.data.dependentField" ]

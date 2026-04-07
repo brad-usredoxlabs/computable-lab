@@ -1,0 +1,60 @@
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml"
+
+display:
+  titleField: "$.name"
+  icon: "tube"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Aliquot"
+    fields:
+    - path: "$.name"
+      widget: "text"
+      label: "Name"
+    - path: "$.material_spec_ref"
+      widget: "ref"
+      label: "Material Spec"
+    - path: "$.volume.value"
+      widget: "number"
+      label: "Volume Value"
+    - path: "$.volume.unit"
+      widget: "text"
+      label: "Volume Unit"
+    - path: "$.concentration.value"
+      widget: "number"
+      label: "Concentration Value"
+    - path: "$.concentration.unit"
+      widget: "text"
+      label: "Concentration Unit"
+    - path: "$.container.location"
+      widget: "text"
+      label: "Location"
+    - path: "$.freeze_thaw_count"
+      widget: "number"
+      label: "Freeze/Thaw Count"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "150px"
+  - path: "$.name"
+    label: "Name"
+  - path: "$.material_spec_ref.id"
+    label: "Spec"
+  - path: "$.volume.value"
+    label: "Volume"
+

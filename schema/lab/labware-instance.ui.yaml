@@ -1,0 +1,43 @@
+# UI specification for LabwareInstance records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/labware-instance.schema.yaml"
+
+display:
+  titleField: "$.name"
+  icon: "labware-instance"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.recordId"
+      widget: "text"
+      label: "Record ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Basic Information"
+    fields:
+    - path: "$.name"
+      widget: "text"
+      label: "Name"
+    - path: "$.labwareId"
+      widget: "ref"
+      label: "Labware Definition"
+    - path: "$.barcode"
+      widget: "text"
+      label: "Barcode"
+
+list:
+  columns:
+  - path: "$.recordId"
+    label: "ID"
+    width: "120px"
+  - path: "$.name"
+    label: "Name"
+  - path: "$.labwareId"
+    label: "Labware"

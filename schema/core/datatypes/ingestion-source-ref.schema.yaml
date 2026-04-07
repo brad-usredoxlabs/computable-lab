@@ -1,0 +1,26 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/ingestion-source-ref.schema.yaml"
+title: "Ingestion Source Reference"
+description: >
+  Provenance pointer from an ingestion record to a source artifact and optional
+  fragment location such as page, section, row, or cell.
+
+type: object
+additionalProperties: false
+required: [ artifact_ref ]
+properties:
+  artifact_ref:
+    $ref: "./ref.schema.yaml"
+  page:
+    type: integer
+    minimum: 1
+  section_label:
+    type: string
+  row_label:
+    type: string
+  cell_label:
+    type: string
+  quote:
+    type: string
+  locator_text:
+    type: string

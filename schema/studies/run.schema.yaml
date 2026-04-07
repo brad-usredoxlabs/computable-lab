@@ -1,0 +1,170 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/run.schema.yaml"
+title: "Run"
+description: >
+  A Run is a single execution session. It is a thin header that links to a run-timeline (activities) and optional run-editor-state (UI conveniences). Canonical plate state is derived from PlateEvents in protocol segments.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- experimentId
+- status
+
+properties:
+  kind:
+    const: "run"
+
+  recordId:
+    type: string
+    description: "Stable local identifier (e.g., RUN-000041)."
+
+  title:
+    type: string
+    description: "Human-readable run title."
+
+  shortSlug:
+    type: string
+    description: "URL-safe short identifier for the run."
+
+  experimentId:
+    type: string
+    description: "Parent experiment recordId (or @id if you standardize on that)."
+
+  studyId:
+    type: string
+    description: "Optional parent study recordId."
+
+  label:
+    type: string
+
+  status:
+    type: string
+    enum: [ planned, in_progress, completed, aborted, failed, superseded ]
+
+  startedAt:
+    type: string
+    format: date-time
+
+  endedAt:
+    type: string
+    format: date-time
+
+  createdBy:
+    type: string
+
+  notes:
+    type: string
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+  timelineId:
+    type: string
+    description: "recordId (or @id) of the run-timeline record."
+
+  editorStateId:
+    type: string
+    description: "Optional pointer to run-editor-state record (UI-only)."
+
+  methodEventGraphId:
+    type: string
+    description: "Active method event-graph instance attached to this run."
+
+  methodPlatform:
+    type: string
+    description: "Execution platform lock for the active run method."
+
+  methodVocabId:
+    type: string
+    enum: [ liquid-handling/v1, animal-handling/v1 ]
+    description: "Vocabulary lock for the active run method."
+
+  methodTemplateRef:
+    type: object
+    additionalProperties: false
+    required: [ kind, id ]
+    properties:
+      kind:
+        const: "record"
+      id:
+        type: string
+      type:
+        type: string
+    description: "Template component this run method was derived from."
+
+  methodAttachedAt:
+    type: string
+    format: date-time
+    description: "Timestamp of latest method attach/replace action."
+
+  templateInputResolutions:
+    type: array
+    description: "Protocol input resolution state for run-attached methods."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ templateLabwareId, slotLabel, kind, status ]
+      properties:
+        templateLabwareId:
+          type: string
+        slotLabel:
+          type: string
+        kind:
+          type: string
+          enum: [ existing-snapshot, upstream-run ]
+        status:
+          type: string
+          enum: [ planned, run_created, resolved ]
+        snapshotId:
+          type: string
+        upstreamTemplateId:
+          type: string
+        upstreamOutputId:
+          type: string
+        upstreamRunId:
+          type: string
+        producedSnapshotId:
+          type: string
+
+  runOutputs:
+    type: array
+    description: "Declared or produced reusable outputs for this run."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ outputId, label, sourceLabwareId, status ]
+      properties:
+        outputId:
+          type: string
+        label:
+          type: string
+        sourceLabwareId:
+          type: string
+        status:
+          type: string
+          enum: [ declared, produced ]
+        snapshotId:
+          type: string
+
+  attachments:
+    type: array
+    items:
+      $ref: "#/$defs/file_ref"
+
+$defs:
+  file_ref:
+    type: object
+    required: [ "uri" ]
+    additionalProperties: false
+    properties:
+      label: { type: string }
+      uri: { type: string }
+      mime_type: { type: string }
+      checksum: { type: string }

@@ -1,0 +1,52 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/equipment-class.schema.yaml"
+title: "Equipment Class"
+description: >
+  Reusable metadata for a class of equipment. Semantic verb support stays in
+  equipment-capability records, but class metadata can declare expected readiness
+  requirements and backend hints.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- name
+
+properties:
+  kind:
+    const: "equipment-class"
+
+  id:
+    type: string
+    pattern: "^EQC-[A-Z0-9][A-Z0-9_-]*$"
+
+  name:
+    type: string
+    minLength: 1
+
+  manufacturer:
+    type: string
+
+  modelFamily:
+    type: string
+
+  executionBackends:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+  readinessRequirements:
+    type: object
+    additionalProperties: false
+    properties:
+      calibrationRequired:
+        type: boolean
+      qualificationRequired:
+        type: boolean
+
+  notes:
+    type: string

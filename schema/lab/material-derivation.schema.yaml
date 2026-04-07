@@ -1,0 +1,51 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/material-derivation.schema.yaml"
+title: "Material Derivation"
+description: >
+  Provenance record for how one or more material inputs produced one or more material outputs.
+  Used for batch preparation, culture expansion, conditioned media collection, harvest, and similar workflows.
+type: object
+additionalProperties: false
+required:
+  - kind
+  - id
+  - name
+  - derivation_type
+  - inputs
+  - outputs
+properties:
+  kind:
+    const: material-derivation
+  id:
+    type: string
+    pattern: '^MDER-[A-Za-z0-9_-]+$'
+  name:
+    type: string
+    minLength: 1
+  derivation_type:
+    type: string
+    enum:
+      - preparation
+      - culture
+      - conditioning
+      - collection
+      - harvest
+      - split
+      - other
+  inputs:
+    type: array
+    items:
+      $ref: '../core/ref.schema.yaml'
+  outputs:
+    type: array
+    items:
+      $ref: '../core/ref.schema.yaml'
+  protocol_ref:
+    $ref: '../core/ref.schema.yaml'
+  source_event_graph_ref:
+    $ref: '../core/ref.schema.yaml'
+  conditions:
+    type: object
+    additionalProperties: true
+  notes:
+    type: string

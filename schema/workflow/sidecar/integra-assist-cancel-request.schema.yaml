@@ -1,0 +1,10 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/sidecar/integra-assist-cancel-request.schema.yaml"
+title: INTEGRA Assist Cancel Request
+type: object
+required: [actionType]
+properties:
+  actionType:
+    const: stop
+additionalProperties: false
+

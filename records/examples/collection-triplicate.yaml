@@ -1,0 +1,43 @@
+# Example: Technical Replicate Collection
+#
+# This demonstrates a collection of triplicate wells with
+# equivalence declaration stating they have equivalent event graphs.
+
+schemaId: core/collection
+data:
+  id: COL-example-001
+  name: Triplicate wells A1/A2/A3
+  collectionType: technical_replicate
+  description: Technical replicates for Treatment X (10µM, 24h)
+
+  members:
+  - kind: record
+    type: well
+    id: "PLATE-001:A1"
+    label: "A1"
+  - kind: record
+    type: well
+    id: "PLATE-001:A2"
+    label: "A2"
+  - kind: record
+    type: well
+    id: "PLATE-001:A3"
+    label: "A3"
+
+  equivalence:
+    basis: event_graph
+    scope: member
+    abstraction: normalized
+    template_ref:
+      kind: record
+      type: event_graph_template
+      id: EGT-treatment-x-10um-24h
+      label: "Treatment X 10µM 24h"
+    notes: |
+      Technical replicates - expected identical handling.
+      Reagent additions from same stock, same pipette.
+
+  tags:
+  - treatment-x
+  - 24h
+  - dose-response

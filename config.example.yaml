@@ -1,0 +1,150 @@
+# computable-lab Server Configuration
+#
+# Copy this file to config.yaml and customize for your environment.
+# Environment variables can be substituted using ${VAR_NAME} syntax.
+# Optional default values: ${VAR_NAME:-default_value}
+
+# Server settings
+server:
+  port: 3001
+  host: 0.0.0.0
+  logLevel: info # debug | info | warn | error
+  workspaceDir: /tmp/cl-workspaces # ephemeral, disposable
+  cors:
+    enabled: true
+    origins:
+    - "*" # Allow all origins (dev)
+    # - "https://mylab.org"       # Restrict to specific origins (prod)
+
+    # Schema configuration
+schemas:
+  source: bundled # bundled | overlay
+  bundledDir: ./schema # Where bundled schemas are located
+  # If source is 'overlay':
+  # - Bundled schemas load first (base)
+  # - Repo's .computable-lab/schema-overrides/ can override specific schemas
+
+# Execution provider routing
+execution:
+  mode: local # local | remote | hybrid
+  # Adapter-specific override map used when mode is hybrid
+  adapters:
+    integra_assist: local # local | remote
+    opentrons_ot2: local
+    opentrons_flex: local
+
+  # Repository connections
+  # For v1, typically one repository. Array allows future multi-repo support.
+repositories:
+- id: main
+  default: true
+
+  # Git connection settings
+  git:
+    url: https://github.com/mylab-org/mylab-records.git
+    branch: main
+    auth:
+      type: token # token | github-app | ssh-key | none
+      token: ${GITHUB_TOKEN} # Use environment variable
+      # For github-app authentication:
+      # type: github-app
+      # appId: "123456"
+      # privateKeyPath: /path/to/private-key.pem
+      # installationId: "12345678"
+
+      # For SSH key authentication:
+      # type: ssh-key
+      # sshKeyPath: ~/.ssh/id_rsa
+
+      # Namespace configuration for JSON-LD identity
+  namespace:
+    baseUri: https://mylab.org/records/ # Base URI for @id derivation
+    prefix: mylab # Display prefix
+
+  # JSON-LD settings
+  jsonld:
+    context: default # default | custom
+    # customContextUrl: https://mylab.org/context.jsonld
+
+    # Sync behavior
+  sync:
+    mode: pull-on-read # pull-on-read | periodic | manual
+    pullIntervalSeconds: 60 # Seconds between pulls (if periodic)
+    autoCommit: true # Commit changes automatically
+    autoPush: true # Push after commit
+
+  # Records location in repository
+  records:
+    directory: records # Where records are stored
+
+# Example: Local development configuration (no external git)
+# repositories:
+#   - id: local
+#     default: true
+#     git:
+#       url: ""                     # Empty URL = local mode
+#       branch: main
+#       auth:
+#         type: none
+#     namespace:
+#       baseUri: http://localhost:3001/records/
+#       prefix: local
+#     jsonld:
+#       context: default
+#     sync:
+#       mode: manual
+#       autoCommit: false
+#       autoPush: false
+#     records:
+#       directory: records
+
+# Example: Multiple repositories
+# repositories:
+#   - id: lab-alpha
+#     default: true
+#     git:
+#       url: https://github.com/alpha-lab/records.git
+#       ...
+#   - id: lab-beta
+#     git:
+#       url: https://github.com/beta-lab/records.git
+#       ...
+
+# -----------------------------------------------------------------------------
+# LabOS simulator profile (env-driven; set in shell/.env/docker-compose)
+# -----------------------------------------------------------------------------
+# LABOS_SIMULATE_ASSIST_PLUS=1
+# LABOS_SIMULATE_GEMINI=1
+# LABOS_EXECUTION_MAX_RUN_MS=14400000
+# LABOS_EXECUTION_STALE_UNKNOWN_MS=1800000
+# LABOS_RETRY_MAX_ATTEMPTS=3
+# LABOS_INTEGRA_ASSIST_SUBMIT_URL=http://assist-sidecar:8080/runs
+# LABOS_INTEGRA_ASSIST_BASE_URL=http://assist-sidecar:8080
+# LABOS_INTEGRA_ASSIST_STATUS_URL_TEMPLATE=http://assist-sidecar:8080/runs/{runId}
+# LABOS_INTEGRA_ASSIST_CANCEL_URL_TEMPLATE=http://assist-sidecar:8080/runs/{runId}/cancel
+# LABOS_INTEGRA_ASSIST_API_TOKEN=
+# LABOS_GEMINI_READ_URL=http://gemini-sidecar:8090/read
+# LABOS_GEMINI_API_TOKEN=
+# LABOS_SIDECAR_INTEGRA_ASSIST_CMD=python3
+# LABOS_SIDECAR_INTEGRA_ASSIST_ARGS=assist_plus_driver.py
+# LABOS_SIDECAR_GEMINI_CMD=python3
+# LABOS_SIDECAR_GEMINI_ARGS=gemini_driver.py
+# CL_EXECUTION_MODE=local
+# CL_EXECUTION_ADAPTER_MODE_INTEGRA_ASSIST=local
+# CL_EXECUTION_ADAPTER_MODE_OPENTRONS_OT2=local
+# CL_EXECUTION_ADAPTER_MODE_OPENTRONS_FLEX=local
+
+# -----------------------------------------------------------------------------
+# Optional external integrations
+# -----------------------------------------------------------------------------
+# EXA_API_KEY=...
+# integrations:
+#   exa:
+#     enabled: true
+#     apiKey: ${EXA_API_KEY}
+#     baseUrl: https://api.exa.ai
+#     defaultSearchType: auto
+#     defaultContentMode: highlights
+#     defaultMaxCharacters: 4000
+#     userLocation: US
+#     timeoutMs: 20000

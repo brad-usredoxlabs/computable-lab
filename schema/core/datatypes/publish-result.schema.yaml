@@ -1,0 +1,22 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/publish-result.schema.yaml"
+title: "Publish Result"
+description: >
+  Publish outcome metadata recorded on ingestion candidates and bundles after
+  approval and canonical record creation.
+
+type: object
+additionalProperties: false
+required: [ published ]
+properties:
+  published:
+    type: boolean
+  record_ref:
+    $ref: "./ref.schema.yaml"
+  published_at:
+    type: string
+    format: date-time
+  published_by:
+    type: string
+  note:
+    type: string

@@ -1,0 +1,46 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/ingestion-issue.schema.yaml"
+title: "Ingestion Issue"
+description: >
+  Reviewable issue or ambiguity emitted during ingestion normalization, matching,
+  or publish preparation.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id, job_ref, severity, issue_type, title, resolution_status ]
+
+properties:
+  kind:
+    const: "ingestion-issue"
+  id:
+    type: string
+  job_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+  bundle_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+  candidate_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+  severity:
+    type: string
+    enum: [ info, warning, error ]
+  issue_type:
+    type: string
+    enum: [ name_ambiguity, ontology_match_ambiguous, missing_vendor_identifier, table_parse_gap, symbol_normalization_changed, variant_grouping_uncertain, source_conflict, publish_blocker, parser_not_implemented, other ]
+  title:
+    type: string
+  detail:
+    type: string
+  suggested_action:
+    type: string
+  resolution_status:
+    type: string
+    enum: [ open, accepted, resolved, waived, rejected ]
+  resolution_note:
+    type: string
+  evidence_refs:
+    type: array
+    items:
+      $ref: "./datatypes/ingestion-source-ref.schema.yaml"

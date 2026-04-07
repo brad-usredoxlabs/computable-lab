@@ -1,0 +1,85 @@
+# UI specification for Equipment records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/equipment.schema.yaml"
+
+display:
+  titleField: "$.name"
+  icon: "equipment"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.name"
+      widget: "text"
+      label: "Name"
+      required: true
+    - path: "$.status"
+      widget: "select"
+      label: "Status"
+      required: true
+      options:
+      - value: "active"
+        label: "Active"
+      - value: "out_of_service"
+        label: "Out of Service"
+      - value: "retired"
+        label: "Retired"
+      - value: "maintenance"
+        label: "Maintenance"
+  - title: "Details"
+    fields:
+    - path: "$.equipmentClassRef"
+      widget: "ref"
+      label: "Equipment Class"
+      refKind: "equipment-class"
+    - path: "$.manufacturer"
+      widget: "text"
+      label: "Manufacturer"
+    - path: "$.model"
+      widget: "text"
+      label: "Model"
+    - path: "$.serialNumber"
+      widget: "text"
+      label: "Serial Number"
+    - path: "$.assetTag"
+      widget: "text"
+      label: "Asset Tag"
+    - path: "$.location"
+      widget: "text"
+      label: "Location"
+  - title: "Readiness"
+    fields:
+    - path: "$.readiness.calibrationRequired"
+      widget: "checkbox"
+      label: "Calibration Required"
+    - path: "$.readiness.qualificationRequired"
+      widget: "checkbox"
+      label: "Qualification Required"
+  - title: "Notes"
+    fields:
+    - path: "$.notes"
+      widget: "markdown"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "120px"
+  - path: "$.name"
+    label: "Name"
+  - path: "$.status"
+    label: "Status"
+  - path: "$.location"
+    label: "Location"

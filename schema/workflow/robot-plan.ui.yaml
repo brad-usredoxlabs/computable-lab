@@ -1,0 +1,67 @@
+# UI specification for RobotPlan records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/robot-plan.schema.yaml"
+
+display:
+  titleField: "$.id"
+  subtitleField: "$.targetPlatform"
+  icon: "robot-plan"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Plan Details"
+    fields:
+    - path: "$.plannedRunRef"
+      widget: "ref"
+      label: "Planned Run"
+      required: true
+    - path: "$.targetPlatform"
+      widget: "select"
+      label: "Target Platform"
+      required: true
+    - path: "$.status"
+      widget: "select"
+      label: "Status"
+      required: true
+    - path: "$.generatorVersion"
+      widget: "text"
+      label: "Generator Version"
+  - title: "Deck Slots"
+    fields:
+    - path: "$.deckSlots"
+      widget: "array"
+      label: "Deck Slots"
+  - title: "Pipettes"
+    fields:
+    - path: "$.pipettes"
+      widget: "array"
+      label: "Pipette Assignments"
+  - title: "Execution Steps"
+    fields:
+    - path: "$.executionSteps"
+      widget: "array"
+      label: "Execution Steps"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "200px"
+  - path: "$.targetPlatform"
+    label: "Platform"
+    width: "140px"
+  - path: "$.status"
+    label: "Status"
+    width: "100px"

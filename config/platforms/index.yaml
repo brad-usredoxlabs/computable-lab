@@ -1,0 +1,5 @@
+platforms:
+  - manual.yaml
+  - integra_assist.yaml
+  - opentrons_ot2.yaml
+  - opentrons_flex.yaml

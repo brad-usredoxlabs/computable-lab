@@ -1,0 +1,45 @@
+# UI specification for Claim records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/claim.schema.yaml"
+
+display:
+  titleField: "$.statement"
+  icon: "claim"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Claim Content"
+    fields:
+    - path: "$.statement"
+      widget: "text"
+      label: "Statement"
+      required: true
+    - path: "$.subject"
+      widget: "ref"
+      label: "Subject"
+    - path: "$.predicate"
+      widget: "text"
+      label: "Predicate"
+    - path: "$.object"
+      widget: "ref"
+      label: "Object"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "120px"
+  - path: "$.statement"
+    label: "Statement"

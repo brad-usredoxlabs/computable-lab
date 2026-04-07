@@ -1,0 +1,28 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/file-ref.schema.yaml"
+title: "File Reference"
+description: >
+  Reference metadata for an uploaded or linked file used as supporting
+  provenance for a record.
+
+type: object
+additionalProperties: false
+required: [ file_name, media_type ]
+properties:
+  file_name:
+    type: string
+  media_type:
+    type: string
+  source_url:
+    type: string
+    format: uri
+  size_bytes:
+    type: integer
+    minimum: 0
+  sha256:
+    type: string
+  stored_path:
+    type: string
+  page_count:
+    type: integer
+    minimum: 1

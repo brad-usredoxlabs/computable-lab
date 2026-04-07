@@ -1,0 +1,144 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/execution-remediation-decision.schema.yaml"
+title: "ExecutionRemediationDecision"
+description: >
+  Append-only decision record capturing whether a proposed remediation attached
+  to the active compiled plan was accepted or rejected.
+
+type: object
+additionalProperties: false
+
+required:
+- kind
+- recordId
+- executionRunRef
+- plannedRunRef
+- robotPlanRef
+- decision
+- proposedRemediation
+- actor
+- authority
+- rationale
+- decidedAt
+- activePolicy
+
+properties:
+  kind:
+    const: "execution-remediation-decision"
+
+  recordId:
+    type: string
+
+  executionRunRef:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  plannedRunRef:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  robotPlanRef:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  decision:
+    type: string
+    enum: [ accepted, rejected ]
+
+  proposedRemediation:
+    $ref: "#/$defs/proposed_remediation"
+
+  acceptedDiff:
+    $ref: "#/$defs/execution_diff"
+
+  actor:
+    $ref: "#/$defs/evidence_actor"
+
+  authority:
+    $ref: "#/$defs/approval_authority"
+
+  rationale:
+    type: string
+
+  decidedAt:
+    type: string
+    format: date-time
+
+  activePolicy:
+    $ref: "#/$defs/active_policy"
+
+$defs:
+  approval_authority:
+    type: string
+    enum: [ none, run-operator, supervisor, project-owner, lab-manager, qa-reviewer, organization-admin, system ]
+
+  evidence_actor:
+    type: object
+    additionalProperties: false
+    required: [ actorId, role ]
+    properties:
+      actorId:
+        type: string
+      role:
+        type: string
+        enum: [ run-operator, supervisor, qa-reviewer, system ]
+      displayName:
+        type: string
+
+  execution_diff:
+    type: object
+    additionalProperties: false
+    required: [ target, path, op ]
+    properties:
+      stepId:
+        type: string
+      target:
+        type: string
+        enum: [ protocol-step, robot-step, run ]
+      path:
+        type: string
+      op:
+        type: string
+        enum: [ add, replace, remove, annotate ]
+      previousValue: {}
+      value: {}
+      note:
+        type: string
+
+  proposed_remediation:
+    type: object
+    additionalProperties: false
+    required: [ code, stepId, action ]
+    properties:
+      code:
+        type: string
+      stepId:
+        type: string
+      action:
+        type: string
+      disposition:
+        type: string
+      message:
+        type: string
+      authority:
+        type: string
+      backendId:
+        type: string
+      equipmentRef:
+        $ref: "./datatypes/ref.schema.yaml"
+
+  active_policy:
+    type: object
+    additionalProperties: false
+    required: [ scope, profileIds, approvalAuthority, originProfileId, settings ]
+    properties:
+      scope:
+        type: object
+        additionalProperties: true
+      profileIds:
+        type: array
+        items: { type: string }
+      approvalAuthority:
+        $ref: "#/$defs/approval_authority"
+      originProfileId:
+        type: string
+      settings:
+        type: object
+        additionalProperties: true

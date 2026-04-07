@@ -1,0 +1,58 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml"
+title: "Verb Definition"
+description: >
+  Semantic action verb defined independently of any backend or execution target.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- canonical
+- label
+
+properties:
+  kind:
+    const: "verb-definition"
+
+  id:
+    type: string
+    pattern: "^VERB-[A-Z0-9][A-Z0-9_-]*$"
+
+  canonical:
+    type: string
+    minLength: 1
+
+  label:
+    type: string
+    minLength: 1
+
+  domain:
+    type: string
+    enum: [ liquid_handling, sample_prep, thermal, analytical_readout, manual, other ]
+
+  backendHints:
+    type: array
+    description: >
+      Optional non-authoritative hints about common backends that can realize the
+      semantic verb.
+    items: { type: string }
+    uniqueItems: true
+
+  broaderVerbRefs:
+    type: array
+    items:
+      allOf:
+      - $ref: "./datatypes/ref.schema.yaml"
+      - type: object
+        properties:
+          kind: { const: record }
+          type: { const: verb-definition }
+    uniqueItems: true
+
+  notes:
+    type: string

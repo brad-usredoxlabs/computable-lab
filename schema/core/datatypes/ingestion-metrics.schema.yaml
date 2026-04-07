@@ -1,0 +1,31 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/ingestion-metrics.schema.yaml"
+title: "Ingestion Metrics"
+description: >
+  Human-facing aggregate counts and progress summaries for ingestion jobs and
+  review bundles.
+
+type: object
+additionalProperties: false
+properties:
+  plates_detected:
+    type: integer
+    minimum: 0
+  wells_detected:
+    type: integer
+    minimum: 0
+  unused_wells_detected:
+    type: integer
+    minimum: 0
+  materials_detected:
+    type: integer
+    minimum: 0
+  variants_detected:
+    type: integer
+    minimum: 0
+  issues_open:
+    type: integer
+    minimum: 0
+  issues_blocking:
+    type: integer
+    minimum: 0

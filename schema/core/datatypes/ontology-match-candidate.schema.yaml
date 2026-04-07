@@ -1,0 +1,28 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/ontology-match-candidate.schema.yaml"
+title: "Ontology Match Candidate"
+description: >
+  Ranked ontology suggestion for an ingestion candidate or ingredient during
+  normalization and matching.
+
+type: object
+additionalProperties: false
+required: [ namespace, term_id, label, match_type, score ]
+properties:
+  namespace:
+    type: string
+  term_id:
+    type: string
+  label:
+    type: string
+  match_type:
+    type: string
+    enum: [ exact, synonym, normalized, ai_ranked, manual, other ]
+  score:
+    type: number
+    minimum: 0
+    maximum: 1
+  rationale:
+    type: string
+  accepted:
+    type: boolean

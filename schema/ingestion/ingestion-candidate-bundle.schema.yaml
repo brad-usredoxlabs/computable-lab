@@ -1,0 +1,60 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/ingestion-candidate-bundle.schema.yaml"
+title: "Ingestion Candidate Bundle"
+description: >
+  Reviewable grouping of ingestion candidates that can be approved and
+  published together.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id, job_ref, title, bundle_type, status ]
+
+properties:
+  kind:
+    const: "ingestion-candidate-bundle"
+  id:
+    type: string
+  job_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+  title:
+    type: string
+  bundle_type:
+    type: string
+    enum: [ screening_library, formulation_family, vendor_product_batch, other ]
+  summary:
+    type: string
+  status:
+    type: string
+    enum: [ draft, in_review, approved, partially_approved, rejected, published ]
+  candidate_refs:
+    type: array
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+  issue_refs:
+    type: array
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+  metrics:
+    $ref: "./datatypes/ingestion-metrics.schema.yaml"
+  publish_plan:
+    type: object
+    additionalProperties: false
+    properties:
+      target_kinds:
+        type: array
+        items:
+          type: string
+      requires_review:
+        type: boolean
+  review_snapshot:
+    type: object
+    additionalProperties: false
+    properties:
+      summary:
+        type: string
+      captured_at:
+        type: string
+        format: date-time

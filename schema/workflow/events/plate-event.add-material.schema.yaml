@@ -1,0 +1,98 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/events/plate-event.add-material.schema.yaml"
+title: "PlateEventAddMaterialDetails"
+type: object
+additionalProperties: false
+required: [ wells ]
+
+properties:
+  labwareId:
+    type: string
+    description: "Target labware id in editor-native event graphs."
+
+  labwareInstanceId:
+    $ref: "../../datatypes/ref.schema.yaml"
+    description: "Target labware instance ref in normalized/runtime payloads."
+
+  wells:
+    type: array
+    minItems: 1
+    items: { type: string }
+    description: "Target wells."
+
+  material_ref:
+    $ref: "../../datatypes/ref.schema.yaml"
+    description: "Material concept ref."
+
+  material_spec_ref:
+    $ref: "../../datatypes/ref.schema.yaml"
+    description: "Reusable formulation/material-spec ref."
+
+  aliquot_ref:
+    $ref: "../../datatypes/ref.schema.yaml"
+    description: "Explicit material instance ref."
+
+  material_instance_ref:
+    $ref: "../../datatypes/ref.schema.yaml"
+    description: "Explicit general material instance ref."
+
+  vendor_product_ref:
+    $ref: "../../datatypes/ref.schema.yaml"
+    description: "Commercial sourced product ref."
+
+  materialId:
+    $ref: "../../datatypes/ref.schema.yaml"
+    description: "Deprecated legacy material ref field."
+
+  volume:
+    type: object
+    additionalProperties: false
+    required: [ value, unit ]
+    properties:
+      value: { type: number, minimum: 0 }
+      unit: { type: string }
+
+  volume_uL:
+    type: number
+    minimum: 0
+    description: "Deprecated legacy volume field."
+
+  concentration:
+    oneOf:
+    - $ref: "../../datatypes/concentration.schema.yaml"
+    - $ref: "../../datatypes/amount.schema.yaml"
+    description: "Optional concentration."
+
+  composition_snapshot:
+    type: array
+    items:
+      $ref: "../../datatypes/composition-entry.schema.yaml"
+    description: "Optional component-level composition snapshot used for well-state replay."
+
+  count:
+    type: number
+    exclusiveMinimum: 0
+    description: "Optional count-based addition, e.g. cells."
+
+  note:
+    type: string
+
+  instance_lot:
+    type: object
+    additionalProperties: false
+    properties:
+      vendor: { type: string }
+      catalog_number: { type: string }
+      lot_number: { type: string }
+
+  notes:
+    type: string
+    description: "Deprecated legacy notes field."
+
+anyOf:
+  - required: [ material_ref ]
+  - required: [ material_spec_ref ]
+  - required: [ aliquot_ref ]
+  - required: [ material_instance_ref ]
+  - required: [ vendor_product_ref ]
+  - required: [ materialId ]

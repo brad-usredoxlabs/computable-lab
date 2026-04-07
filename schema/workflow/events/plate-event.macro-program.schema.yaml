@@ -1,0 +1,17 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/plate-event-macro-program.schema.yaml"
+title: "PlateEvent Macro Program Details"
+type: object
+description: >
+  Authoring-time macro/vignette payload. Preserves higher-level reusable program
+  configuration on event graphs before platform-specific compilation.
+
+additionalProperties: true
+
+required:
+- program
+
+properties:
+  program:
+    type: object
+    additionalProperties: true

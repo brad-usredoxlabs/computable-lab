@@ -1,0 +1,48 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/well-group.schema.yaml"
+title: "Well Group"
+description: >
+  A reusable named grouping of wells on a specific source plate or labware surface.
+  Used to simplify repeated semantic role assignment.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- name
+- source_ref
+- well_ids
+
+properties:
+  kind:
+    const: "well-group"
+
+  id:
+    type: string
+    pattern: '^WG-[A-Za-z0-9_-]+$'
+
+  name:
+    type: string
+    minLength: 1
+
+  source_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  well_ids:
+    type: array
+    minItems: 1
+    items:
+      type: string
+    uniqueItems: true
+
+  notes:
+    type: string
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

@@ -1,0 +1,4 @@
+# Lint rules for RobotPlan records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/robot-plan.schema.yaml"
+rules: []

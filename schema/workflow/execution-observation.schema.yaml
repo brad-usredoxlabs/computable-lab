@@ -1,0 +1,96 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/execution-observation.schema.yaml"
+title: "ExecutionObservation"
+description: >
+  Append-only execution evidence describing what was actually observed during a
+  run, optionally linked back to a deviation record.
+
+type: object
+additionalProperties: false
+
+required:
+- kind
+- recordId
+- executionRunRef
+- plannedRunRef
+- robotPlanRef
+- observationType
+- observedOutcome
+- actor
+- recordedAt
+
+properties:
+  kind:
+    const: "execution-observation"
+
+  recordId:
+    type: string
+
+  executionRunRef:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  plannedRunRef:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  robotPlanRef:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  observationType:
+    type: string
+    enum: [ step-outcome, runtime-note, measurement ]
+
+  compiledIntent:
+    $ref: "#/$defs/intent_snapshot"
+
+  observedOutcome:
+    type: object
+    additionalProperties: false
+    required: [ outcomeCode ]
+    properties:
+      stepId:
+        type: string
+      outcomeCode:
+        type: string
+      status:
+        type: string
+      details:
+        type: object
+        additionalProperties: true
+
+  actor:
+    $ref: "#/$defs/evidence_actor"
+
+  recordedAt:
+    type: string
+    format: date-time
+
+  deviationRef:
+    $ref: "./datatypes/ref.schema.yaml"
+
+$defs:
+  evidence_actor:
+    type: object
+    additionalProperties: false
+    required: [ actorId, role ]
+    properties:
+      actorId:
+        type: string
+      role:
+        type: string
+        enum: [ run-operator, supervisor, qa-reviewer, system ]
+      displayName:
+        type: string
+
+  intent_snapshot:
+    type: object
+    additionalProperties: false
+    required: [ source, snapshot ]
+    properties:
+      stepId:
+        type: string
+      source:
+        type: string
+        enum: [ protocol-compilation, robot-plan, run ]
+      snapshot:
+        type: object
+        additionalProperties: true

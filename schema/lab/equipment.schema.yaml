@@ -1,0 +1,72 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/equipment.schema.yaml"
+title: "Equipment"
+description: >
+  Physical equipment or major tool used by the backend for admissibility checks.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- name
+- status
+
+properties:
+  kind:
+    const: "equipment"
+
+  id:
+    type: string
+    pattern: "^EQP-[A-Z0-9][A-Z0-9_-]*$"
+
+  name:
+    type: string
+    minLength: 1
+
+  equipmentClassRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: equipment-class }
+
+  manufacturer:
+    type: string
+
+  model:
+    type: string
+
+  serialNumber:
+    type: string
+
+  assetTag:
+    type: string
+
+  location:
+    type: string
+
+  status:
+    type: string
+    enum: [ active, out_of_service, retired, maintenance ]
+
+  executionBackends:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+  readiness:
+    type: object
+    additionalProperties: false
+    properties:
+      calibrationRequired:
+        type: boolean
+      qualificationRequired:
+        type: boolean
+
+  notes:
+    type: string

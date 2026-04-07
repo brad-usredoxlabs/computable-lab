@@ -1,0 +1,97 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/graph-component-instance.schema.yaml"
+title: "Graph Component Instance"
+description: >
+  An instantiated component bound into a concrete protocol/event-graph context.
+
+type: object
+additionalProperties: false
+required:
+  - kind
+  - recordId
+  - componentRef
+  - componentVersionRef
+  - status
+properties:
+  kind:
+    const: "graph-component-instance"
+  recordId:
+    type: string
+  componentRef:
+    type: object
+    additionalProperties: false
+    required: [ kind, id, type ]
+    properties:
+      kind: { const: "record" }
+      id: { type: string }
+      type: { const: "graph-component" }
+  componentVersionRef:
+    type: object
+    additionalProperties: false
+    required: [ kind, id, type ]
+    properties:
+      kind: { const: "record" }
+      id: { type: string }
+      type: { const: "graph-component-version" }
+  sourceRef:
+    type: object
+    additionalProperties: false
+    required: [ kind, id, type ]
+    properties:
+      kind: { const: "record" }
+      id: { type: string }
+      type:
+        type: string
+        enum: [ protocol, event_graph ]
+  bindings:
+    type: object
+    additionalProperties: false
+    properties:
+      labware:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ roleId ]
+          properties:
+            roleId: { type: string }
+            labwareInstanceRef: { type: object, additionalProperties: true }
+      materials:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ roleId ]
+          properties:
+            roleId: { type: string }
+            materialRef: { type: object, additionalProperties: true }
+      instruments:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ roleId ]
+          properties:
+            roleId: { type: string }
+            instrumentRef: { type: object, additionalProperties: true }
+      parameters:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ name ]
+          properties:
+            name: { type: string }
+            value: {}
+  status:
+    type: string
+    enum: [ unbound, partial, bound, stale ]
+  render:
+    type: object
+    additionalProperties: false
+    properties:
+      mode:
+        type: string
+        enum: [ collapsed, expanded ]
+  notes:
+    type: string

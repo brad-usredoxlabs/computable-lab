@@ -1,0 +1,26 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/composition-entry.schema.yaml"
+title: "Composition Entry"
+description: >
+  Structured formulation entry for a component in a mixture or stock.
+
+type: object
+additionalProperties: false
+required: [ component_ref, role ]
+properties:
+  component_ref:
+    $ref: "./ref.schema.yaml"
+  role:
+    type: string
+    enum:
+    - solute
+    - solvent
+    - buffer_component
+    - additive
+    - activity_source
+    - cells
+    - other
+  concentration:
+    $ref: "./concentration.schema.yaml"
+  source:
+    type: string

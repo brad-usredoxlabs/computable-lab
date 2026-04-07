@@ -1,0 +1,4 @@
+# Lint rules for LabwareGeometry records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/labware-geometry.schema.yaml"
+rules: []

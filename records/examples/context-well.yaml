@@ -1,0 +1,70 @@
+# Example: Well Context
+#
+# This demonstrates a context record showing the state of a well
+# after event graph replay. Generalizes the legacy WellContext.
+
+schemaId: core/context
+data:
+  id: CTX-example-001
+
+  subject_ref:
+    kind: record
+    type: well
+    id: "PLATE-001:A1"
+    label: "A1"
+
+  event_graph_ref:
+    kind: record
+    type: event_graph
+    id: EG-example-001
+    label: "Experiment 2026-01-30"
+
+  timepoint: "2026-01-30T18:00:00Z"
+
+  contents:
+  - material_ref:
+      kind: ontology
+      namespace: CHEBI
+      id: "CHEBI:16236"
+      label: ethanol
+    volume:
+      value: 10
+      unit: µL
+    concentration:
+      value: 70
+      unit: "%"
+
+  - material_ref:
+      kind: record
+      type: material
+      id: MAT-hek293
+      label: HEK293 cells
+    count: 50000
+
+  - material_ref:
+      kind: ontology
+      namespace: CHEBI
+      id: "CHEBI:27584"
+      label: DMSO
+    volume:
+      value: 1
+      unit: µL
+    concentration:
+      value: 0.1
+      unit: "%"
+
+  total_volume:
+    value: 200
+    unit: µL
+
+  properties:
+    confluence: 80
+    viability: 95.5
+    pH: 7.4
+
+  notes: Context computed after 24h treatment with compound X
+
+  tags:
+  - treatment-x
+  - 24h
+  - hek293

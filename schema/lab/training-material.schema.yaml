@@ -1,0 +1,89 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/training-material.schema.yaml"
+title: "Training Material"
+description: >
+  Source material or formal learning artifact used to train or qualify personnel.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- title
+- materialType
+
+properties:
+  kind:
+    const: "training-material"
+
+  id:
+    type: string
+    pattern: "^TRM-[A-Z0-9][A-Z0-9_-]*$"
+
+  title:
+    type: string
+    minLength: 1
+
+  version:
+    type: string
+
+  materialType:
+    type: string
+    enum: [ sop, slide_deck, video, quiz, worksheet, observation_checklist, other ]
+
+  effectiveAt:
+    type: string
+    format: date-time
+
+  supersededByRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: training-material }
+
+  scope:
+    type: object
+    additionalProperties: false
+    properties:
+      verbRefs:
+        type: array
+        items:
+          allOf:
+          - $ref: "./datatypes/ref.schema.yaml"
+          - type: object
+            properties:
+              kind: { const: record }
+              type: { const: verb-definition }
+        uniqueItems: true
+      methodIds:
+        type: array
+        items: { type: string }
+        uniqueItems: true
+      equipmentRefs:
+        type: array
+        items:
+          allOf:
+          - $ref: "./datatypes/ref.schema.yaml"
+          - type: object
+            properties:
+              kind: { const: record }
+              type: { const: equipment }
+        uniqueItems: true
+      equipmentClassRefs:
+        type: array
+        items:
+          allOf:
+          - $ref: "./datatypes/ref.schema.yaml"
+          - type: object
+            properties:
+              kind: { const: record }
+              type: { const: equipment-class }
+        uniqueItems: true
+
+  notes:
+    type: string

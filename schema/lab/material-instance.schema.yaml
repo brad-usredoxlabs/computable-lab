@@ -1,0 +1,130 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/material-instance.schema.yaml"
+title: "Material Instance"
+description: >
+  A concrete material in the lab, such as a purchased bottle, a prepared stock,
+  a cultured flask, or a collected derived material. This is the general
+  instance layer above specialized aliquot lineage.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id, name ]
+
+properties:
+  kind:
+    const: "material-instance"
+
+  id:
+    type: string
+    description: "Stable material instance identifier (e.g., MINST-000123)."
+
+  name:
+    type: string
+
+  material_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  material_spec_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  vendor_product_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  parent_material_instance_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  prepared_on:
+    type: string
+    format: date-time
+
+  concentration:
+    oneOf:
+    - $ref: "./datatypes/concentration.schema.yaml"
+    - $ref: "./datatypes/amount.schema.yaml"
+
+  volume:
+    type: object
+    additionalProperties: false
+    required: [ value, unit ]
+    properties:
+      value: { type: number, minimum: 0 }
+      unit: { type: string }
+
+  lot:
+    type: object
+    additionalProperties: false
+    properties:
+      vendor: { type: string }
+      catalog_number: { type: string }
+      lot_number: { type: string }
+      expiration_date: { type: string, format: date }
+
+  storage:
+    type: object
+    additionalProperties: false
+    properties:
+      location: { type: string }
+      temperature_C: { type: number }
+
+  status:
+    type: string
+    enum: [ available, reserved, consumed, expired, discarded ]
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+  derivation_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  biological_state:
+    type: object
+    additionalProperties: false
+    properties:
+      passage_number:
+        type: integer
+      parent_culture_ref:
+        $ref: "./datatypes/ref.schema.yaml"
+      vessel_type:
+        type: string
+      medium_note:
+        type: string
+      seeding_density:
+        type: string
+      confluence:
+        type: string
+      freeze_thaw_count:
+        type: integer
+      qc_note:
+        type: string
+
+  derived_state:
+    type: object
+    additionalProperties: false
+    properties:
+      derivation_type:
+        type: string
+      collection_duration:
+        type: string
+      collection_date:
+        type: string
+        format: date-time
+      source_material_refs:
+        type: array
+        items:
+          $ref: "./datatypes/ref.schema.yaml"
+      clarification_note:
+        type: string
+      filtration_note:
+        type: string
+      source_note:
+        type: string
+
+anyOf:
+  - required: [ material_ref ]
+  - required: [ material_spec_ref ]
+  - required: [ vendor_product_ref ]
