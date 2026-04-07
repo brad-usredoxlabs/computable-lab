@@ -1,0 +1,61 @@
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml"
+
+display:
+  titleField: "$.name"
+  icon: "flask"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Spec"
+    fields:
+    - path: "$.name"
+      widget: "text"
+      label: "Name"
+      required: true
+    - path: "$.material_ref"
+      widget: "ref"
+      label: "Material"
+    - path: "$.formulation.concentration.value"
+      widget: "number"
+      label: "Concentration Value"
+    - path: "$.formulation.concentration.unit"
+      widget: "text"
+      label: "Concentration Unit"
+    - path: "$.formulation.concentration.basis"
+      widget: "text"
+      label: "Concentration Basis"
+    - path: "$.formulation.solvent_ref"
+      widget: "ref"
+      label: "Solvent"
+    - path: "$.formulation.grade"
+      widget: "text"
+      label: "Grade"
+    - path: "$.handling.storage_temperature_C"
+      widget: "number"
+      label: "Storage Temp (C)"
+    - path: "$.handling.stability_note"
+      widget: "text"
+      label: "Stability Notes"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "150px"
+  - path: "$.name"
+    label: "Name"
+  - path: "$.material_ref.id"
+    label: "Material"

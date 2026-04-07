@@ -1,0 +1,20 @@
+id: manual
+label: Manual
+allowedVocabIds:
+  - liquid-handling/v1
+  - animal-handling/v1
+defaultVariant: manual_collapsed
+toolTypeIds:
+  - pipette_1ch
+  - pipette_4ch_fixed
+  - pipette_6ch_fixed
+  - pipette_8ch_fixed
+  - pipette_12ch
+  - pipette_4ch_adjustable
+  - pipette_6ch_adjustable
+compilerFamily: manual
+modules: []
+variants:
+  - id: manual_collapsed
+    title: Manual Technician Mode
+    slots: []

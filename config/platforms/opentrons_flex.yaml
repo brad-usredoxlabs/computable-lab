@@ -1,0 +1,41 @@
+id: opentrons_flex
+label: Opentrons Flex
+allowedVocabIds:
+  - liquid-handling/v1
+defaultVariant: ot3_standard
+toolTypeIds:
+  - pipette_1ch
+  - pipette_8ch_fixed
+  - pipette_96ch
+compilerFamily: opentrons
+modules:
+  - id: heater_shaker
+    label: Heater-Shaker
+  - id: temperature
+    label: Temperature Module
+  - id: magnetic
+    label: Magnetic Module
+  - id: waste_chute
+    label: Waste Chute
+  - id: gripper_staging
+    label: Staging Column
+variants:
+  - id: ot3_standard
+    title: Opentrons Flex
+    slots:
+      - { id: A1, kind: standard, row: 1, col: 1, reachable: true }
+      - { id: A2, kind: standard, row: 1, col: 2, reachable: true }
+      - { id: A3, kind: trash, label: Trash bin, orientationMode: not_applicable, row: 1, col: 3, reachable: false }
+      - { id: A4, kind: special, label: Staging, orientationMode: not_applicable, row: 1, col: 4, reachable: false, stagingOnly: true }
+      - { id: B1, kind: standard, row: 2, col: 1, reachable: true }
+      - { id: B2, kind: standard, row: 2, col: 2, reachable: true }
+      - { id: B3, kind: standard, row: 2, col: 3, reachable: true }
+      - { id: B4, kind: special, label: Staging, orientationMode: not_applicable, row: 2, col: 4, reachable: false, stagingOnly: true }
+      - { id: C1, kind: standard, row: 3, col: 1, reachable: true }
+      - { id: C2, kind: standard, row: 3, col: 2, reachable: true }
+      - { id: C3, kind: standard, row: 3, col: 3, reachable: true }
+      - { id: C4, kind: special, label: Staging, orientationMode: not_applicable, row: 3, col: 4, reachable: false, stagingOnly: true }
+      - { id: D1, kind: standard, row: 4, col: 1, reachable: true }
+      - { id: D2, kind: standard, row: 4, col: 2, reachable: true }
+      - { id: D3, kind: special, label: Chute/Accessory, orientationMode: not_applicable, row: 4, col: 3, reachable: false }
+      - { id: D4, kind: special, label: Staging, orientationMode: not_applicable, row: 4, col: 4, reachable: false, stagingOnly: true }

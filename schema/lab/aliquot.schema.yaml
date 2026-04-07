@@ -1,0 +1,96 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml"
+title: "Aliquot"
+description: >
+  A physical, execution-bound material instance. Aliquots may derive from a
+  parent aliquot or a source lot and are the objects consumed during protocol
+  execution.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id ]
+
+properties:
+  kind:
+    const: "aliquot"
+
+  id:
+    type: string
+    description: "Stable aliquot identifier (e.g., ALQ-000123)."
+
+  name:
+    type: string
+
+  material_spec_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  parent_aliquot_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  parent_material_instance_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  source_lot_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  container:
+    type: object
+    additionalProperties: false
+    properties:
+      type:
+        type: string
+      barcode:
+        type: string
+      location:
+        type: string
+
+  concentration:
+    oneOf:
+    - $ref: "./datatypes/concentration.schema.yaml"
+    - $ref: "./datatypes/amount.schema.yaml"
+
+  volume:
+    type: object
+    additionalProperties: false
+    required: [ value, unit ]
+    properties:
+      value: { type: number, minimum: 0 }
+      unit: { type: string }
+
+  freeze_thaw_count:
+    type: integer
+    minimum: 0
+
+  storage:
+    type: object
+    additionalProperties: false
+    properties:
+      temperature_C: { type: number }
+      location: { type: string }
+
+  lot:
+    type: object
+    additionalProperties: false
+    properties:
+      vendor: { type: string }
+      catalog_number: { type: string }
+      lot_number: { type: string }
+      expiration_date: { type: string, format: date }
+
+  status:
+    type: string
+    enum: [ available, reserved, consumed, expired, discarded ]
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+
+anyOf:
+  - required: [ material_spec_ref ]
+  - required: [ parent_aliquot_ref ]
+  - required: [ parent_material_instance_ref ]

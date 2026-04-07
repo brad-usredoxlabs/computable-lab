@@ -1,0 +1,77 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/equipment-training-requirement.schema.yaml"
+title: "Equipment Training Requirement"
+description: >
+  Training or authorization prerequisites that apply to a specific equipment item
+  or equipment class before use.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+
+properties:
+  kind:
+    const: "equipment-training-requirement"
+
+  id:
+    type: string
+    pattern: "^ETR-[A-Z0-9][A-Z0-9_-]*$"
+
+  equipmentRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: equipment }
+
+  equipmentClassRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: equipment-class }
+
+  verbRefs:
+    type: array
+    items:
+      allOf:
+      - $ref: "./datatypes/ref.schema.yaml"
+      - type: object
+        properties:
+          kind: { const: record }
+          type: { const: verb-definition }
+    uniqueItems: true
+
+  methodIds:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+  requiredTrainingMaterialRefs:
+    type: array
+    items:
+      allOf:
+      - $ref: "./datatypes/ref.schema.yaml"
+      - type: object
+        properties:
+          kind: { const: record }
+          type: { const: training-material }
+    uniqueItems: true
+
+  supervisedUseAllowedBeforeQualification:
+    type: boolean
+    default: false
+
+  notes:
+    type: string
+
+oneOf:
+- required: [ equipmentRef ]
+- required: [ equipmentClassRef ]

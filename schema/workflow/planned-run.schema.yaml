@@ -1,0 +1,388 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/planned-run.schema.yaml"
+title: "PlannedRun"
+description: >
+  A persisted, versioned run intent. Binds abstract protocol roles to concrete
+  labware instances, materials, and instruments. FAIR record.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- title
+- sourceType
+- sourceRef
+- state
+
+properties:
+  protocolLayer:
+    type: string
+    const: "lab"
+    description: "Explicit protocol-layer marker for a lab-specific compiled plan."
+
+  kind:
+    const: "planned-run"
+
+  recordId:
+    type: string
+    description: "Stable local identifier (e.g., PLR-000001)."
+
+  title:
+    type: string
+
+  protocolRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Reference to the source protocol record."
+
+  sourceType:
+    type: string
+    enum: [ protocol, event-graph ]
+    description: "What was the source of this planned run."
+
+  sourceRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Reference to the source protocol or event graph."
+
+  state:
+    type: string
+    enum: [ draft, ready, executing, completed, failed ]
+
+  bindings:
+    type: object
+    description: "Role bindings resolving abstract roles to concrete instances."
+    additionalProperties: false
+    properties:
+      labware:
+        type: array
+        items:
+          $ref: "#/$defs/LabwareBinding"
+      materials:
+        type: array
+        items:
+          $ref: "#/$defs/MaterialBinding"
+      contexts:
+        type: array
+        items:
+          $ref: "#/$defs/ContextBinding"
+      layoutTemplates:
+        type: array
+        items:
+          $ref: "#/$defs/LayoutTemplateBinding"
+      libraries:
+        type: array
+        items:
+          $ref: "#/$defs/LibraryBinding"
+      instruments:
+        type: array
+        items:
+          $ref: "#/$defs/InstrumentBinding"
+      parameters:
+        type: array
+        items:
+          $ref: "#/$defs/ParameterBinding"
+
+  deckLayout:
+    type: object
+    description: "Robot-agnostic deck layout intent."
+    additionalProperties: false
+    properties:
+      assignments:
+        type: array
+        items:
+          $ref: "#/$defs/DeckAssignment"
+
+  pipetteConstraints:
+    type: array
+    description: "Resolved pipetting constraints from material hints and step overrides."
+    items:
+      $ref: "#/$defs/PipetteConstraint"
+
+  checksums:
+    type: object
+    description: "Checksums for reproducibility."
+    additionalProperties: false
+    properties:
+      protocolSha:
+        type: string
+      geometryShas:
+        type: object
+        additionalProperties:
+          type: string
+
+  executionPlan:
+    type: object
+    description: "Resolved execution strategy for lanes/replicates."
+    additionalProperties: false
+    properties:
+      profileRef:
+        $ref: "./datatypes/ref.schema.yaml"
+      pipetteMode:
+        type: string
+        enum: [ single_channel, multi_channel_parallel ]
+      laneStrategy:
+        type: string
+        enum: [ sequential_lanes, parallel_lanes ]
+      laneGroups:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ laneId, wells ]
+          properties:
+            laneId: { type: string }
+            wells:
+              type: array
+              minItems: 1
+              items: { type: string }
+
+  protocolCompilation:
+    type: object
+    description: "Compiler output lowering a universal protocol into a lab protocol plan."
+    additionalProperties: false
+    properties:
+      status:
+        type: string
+        enum: [ ready, blocked ]
+      sourceLayer:
+        type: string
+        enum: [ universal ]
+      targetLayer:
+        type: string
+        enum: [ lab ]
+      diagnostics:
+        type: array
+        items:
+          $ref: "#/$defs/ProtocolCompilerDiagnostic"
+      remediationOptions:
+        type: array
+        items:
+          $ref: "#/$defs/ProtocolCompilerRemediation"
+      steps:
+        type: array
+        items:
+          $ref: "#/$defs/CompiledProtocolStep"
+      activePolicy:
+        type: object
+        additionalProperties: false
+        properties:
+          scope:
+            type: object
+            additionalProperties: true
+          profiles:
+            type: array
+            items:
+              type: object
+              additionalProperties: true
+          settings:
+            type: object
+            additionalProperties: true
+
+  notes:
+    type: string
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+$defs:
+  LabwareBinding:
+    type: object
+    additionalProperties: false
+    required: [ roleId ]
+    properties:
+      roleId:
+        type: string
+      labwareInstanceRef:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Concrete labware instance."
+      labwareGeometryRef:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Physical geometry definition."
+
+  MaterialBinding:
+    type: object
+    additionalProperties: false
+    required: [ roleId ]
+    properties:
+      roleId:
+        type: string
+      materialRef:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Concrete material reference."
+      lotNumber:
+        type: string
+
+  ContextBinding:
+    type: object
+    additionalProperties: false
+    required: [ roleId, contextRef ]
+    properties:
+      roleId:
+        type: string
+      contextRef:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Concrete source context (supports context-as-input for dilution/backgrounds)."
+
+  LayoutTemplateBinding:
+    type: object
+    additionalProperties: false
+    required: [ roleId, templateRef ]
+    properties:
+      roleId:
+        type: string
+      templateRef:
+        $ref: "./datatypes/ref.schema.yaml"
+
+  LibraryBinding:
+    type: object
+    additionalProperties: false
+    required: [ roleId, libraryRef ]
+    properties:
+      roleId:
+        type: string
+      libraryRef:
+        $ref: "./datatypes/ref.schema.yaml"
+
+  InstrumentBinding:
+    type: object
+    additionalProperties: false
+    required: [ roleId ]
+    properties:
+      roleId:
+        type: string
+      instrumentRef:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Concrete instrument reference."
+
+  ParameterBinding:
+    type: object
+    additionalProperties: false
+    required: [ name, value ]
+    properties:
+      name:
+        type: string
+      value:
+        description: "Resolved literal value."
+
+  DeckAssignment:
+    type: object
+    additionalProperties: false
+    required: [ labwareRole, position ]
+    properties:
+      labwareRole:
+        type: string
+      position:
+        type: string
+        description: "Abstract position name (e.g., slot_1)."
+      orientation:
+        type: string
+        enum: [ landscape, portrait ]
+
+  PipetteConstraint:
+    type: object
+    additionalProperties: false
+    required: [ stepRef ]
+    properties:
+      stepRef:
+        type: string
+        description: "Which protocol step this constraint applies to."
+      liquidClass:
+        type: string
+      aspirateSpeed_uL_s:
+        type: number
+        exclusiveMinimum: 0
+      dispenseSpeed_uL_s:
+        type: number
+        exclusiveMinimum: 0
+      touchTip:
+        type: boolean
+      blowout:
+        type: boolean
+      airGap_uL:
+        type: number
+
+  CompiledProtocolStep:
+    type: object
+    additionalProperties: false
+    required: [ stepId, kind, canonicalVerb, executionMode, disposition ]
+    properties:
+      stepId:
+        type: string
+      kind:
+        type: string
+      canonicalVerb:
+        type: string
+      verbRef:
+        $ref: "./datatypes/ref.schema.yaml"
+      methodId:
+        type: string
+      selectedBackendId:
+        type: string
+      executionMode:
+        type: string
+        enum: [ manual, instrument ]
+      equipmentRef:
+        $ref: "./datatypes/ref.schema.yaml"
+      disposition:
+        type: string
+        enum: [ allowed, needs-confirmation, blocked ]
+      requiresConfirmation:
+        type: boolean
+      notes:
+        type: string
+
+  ProtocolCompilerDiagnostic:
+    type: object
+    additionalProperties: false
+    required: [ code, stepId, severity, message, subject ]
+    properties:
+      code:
+        type: string
+      stepId:
+        type: string
+      severity:
+        type: string
+        enum: [ info, warning, error ]
+      message:
+        type: string
+      subject:
+        type: string
+        enum: [ step, verb, equipment, person, policy, backend ]
+      disposition:
+        type: string
+        enum: [ allowed, needs-confirmation, blocked ]
+      backendId:
+        type: string
+      recordIds:
+        type: array
+        items: { type: string }
+        uniqueItems: true
+
+  ProtocolCompilerRemediation:
+    type: object
+    additionalProperties: false
+    required: [ code, stepId, action, disposition, message ]
+    properties:
+      code:
+        type: string
+      stepId:
+        type: string
+      action:
+        type: string
+      disposition:
+        type: string
+        enum: [ allowed, needs-confirmation, blocked ]
+      message:
+        type: string
+      authority:
+        type: string
+      backendId:
+        type: string
+      equipmentRef:
+        $ref: "./datatypes/ref.schema.yaml"
+        minimum: 0

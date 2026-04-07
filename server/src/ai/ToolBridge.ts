@@ -1,0 +1,175 @@
+/**
+ * Bridges the ToolRegistry to OpenAI-format tool definitions
+ * and executes tool calls in-process for the agent orchestrator.
+ */
+
+import type { ToolRegistry } from './ToolRegistry.js';
+import type { ToolBridge, ToolDefinition, ToolExecutionResult } from './types.js';
+
+/**
+ * Tools the agent is allowed to use (read-only + validation).
+ * Write operations are explicitly excluded.
+ */
+export const AGENT_ALLOWED_TOOLS = [
+  // Records (read-only)
+  'record_get',
+  'record_list',
+  'record_search',
+  // Schema
+  'schema_get',
+  // Validation
+  'validate_payload',
+  'lint_payload',
+  // Library (read-only)
+  'library_search',
+  'materials_search_addable',
+  'formulations_summary',
+  'inventory_list',
+  'material_composition_get',
+  // Ontology
+  'ontology_search',
+  // Chemistry
+  'chebi_search',
+  'chebi_fetch',
+  'pubchem_search',
+  // Web search
+  'web_search_exa',
+  'web_get_contents_exa',
+  // Genomics
+  'ncbi_gene_search',
+  'uniprot_search',
+  // Tree navigation
+  'tree_studies',
+  'tree_records_for_run',
+  // Platform / settings
+  'platforms_list',
+  'platform_get',
+  'lab_settings_get',
+] as const;
+
+/**
+ * Domain-specific tool subsets for run-centered draft endpoints.
+ * Each domain only exposes the tools relevant to its AI task.
+ */
+export const DOMAIN_TOOL_SUBSETS = {
+  'event-graph': [
+    'record_get',
+    'record_list',
+    'record_search',
+    'schema_get',
+    'validate_payload',
+    'lint_payload',
+    'library_search',
+    'materials_search_addable',
+    'ontology_search',
+    'platforms_list',
+    'platform_get',
+    'lab_settings_get',
+    'tree_records_for_run',
+  ],
+  'meaning': [
+    'record_get',
+    'record_list',
+    'record_search',
+    'schema_get',
+    'validate_payload',
+    'library_search',
+    'ontology_search',
+    'chebi_search',
+    'chebi_fetch',
+    'ncbi_gene_search',
+    'uniprot_search',
+  ],
+  'evidence': [
+    'record_get',
+    'record_list',
+    'record_search',
+    'schema_get',
+    'validate_payload',
+    'lint_payload',
+    'library_search',
+    'ontology_search',
+    'web_search_exa',
+    'web_get_contents_exa',
+    'tree_studies',
+    'tree_records_for_run',
+  ],
+} as const satisfies Record<string, readonly string[]>;
+
+export type DraftDomain = keyof typeof DOMAIN_TOOL_SUBSETS;
+
+/**
+ * Create a ToolBridge that filters the registry to an allowlist
+ * and converts entries to OpenAI-compatible tool definitions.
+ */
+export function createToolBridge(
+  registry: ToolRegistry,
+  allowedTools: readonly string[] = AGENT_ALLOWED_TOOLS,
+): ToolBridge {
+  return {
+    getToolDefinitions(): ToolDefinition[] {
+      return allowedTools
+        .map((name) => {
+          const entry = registry.get(name);
+          if (!entry) return null;
+          return {
+            type: 'function' as const,
+            function: {
+              name: entry.name,
+              description: entry.description,
+              parameters: entry.inputSchema,
+            },
+          };
+        })
+        .filter((d): d is ToolDefinition => d !== null);
+    },
+
+    async executeTool(
+      name: string,
+      args: Record<string, unknown>,
+    ): Promise<ToolExecutionResult> {
+      const start = performance.now();
+
+      // Check allowlist
+      if (!allowedTools.includes(name)) {
+        return {
+          success: false,
+          content: JSON.stringify({ error: `Tool "${name}" is not allowed for the agent` }),
+          durationMs: performance.now() - start,
+        };
+      }
+
+      const entry = registry.get(name);
+      if (!entry) {
+        return {
+          success: false,
+          content: JSON.stringify({ error: `Tool "${name}" not found in registry` }),
+          durationMs: performance.now() - start,
+        };
+      }
+
+      try {
+        const result = await entry.handler(args);
+        const isError = result.isError === true;
+        // Extract text content from CallToolResult
+        const text = result.content
+          .map((c) => ('text' in c ? c.text : ''))
+          .join('\n');
+
+        return {
+          success: !isError,
+          content: text,
+          durationMs: performance.now() - start,
+        };
+      } catch (err) {
+        return {
+          success: false,
+          content: JSON.stringify({
+            error: err instanceof Error ? err.message : String(err),
+          }),
+          durationMs: performance.now() - start,
+        };
+      }
+    },
+  };
+}

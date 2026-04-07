@@ -1,0 +1,29 @@
+# Sample Study Record
+$schema: "https://computable-lab.com/schema/computable-lab/study.schema.yaml"
+
+kind: study
+recordId: STU-0001
+title: Hepatocyte Toxicity Screening of Novel Compounds
+shortSlug: hepatocyte-toxicity
+
+state: in_progress
+
+description: >
+  This study evaluates the hepatotoxic potential of novel small molecule  compounds using primary human hepatocyte cultures. The goal is to identify compounds with favorable safety profiles for further development.
+
+tags:
+- hepatotoxicity
+- safety-screening
+- primary-hepatocytes
+- adme-tox
+
+primaryClaimIds:
+- CLM-0001
+- CLM-0002
+- CLM-0003
+
+keywords:
+- hepatocyte
+- toxicity
+- drug-screening
+- cell-viability

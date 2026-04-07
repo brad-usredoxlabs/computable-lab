@@ -1,0 +1,107 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/ingestion-job.schema.yaml"
+title: "Ingestion Job"
+description: >
+  Top-level persisted job state for a staged ingestion run. Tracks source
+  artifacts, review bundles, issues, and publish status.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id, name, status, stage, source_kind, submitted_at ]
+
+properties:
+  kind:
+    const: "ingestion-job"
+  id:
+    type: string
+  name:
+    type: string
+  status:
+    type: string
+    enum: [ queued, running, waiting_for_review, approved_for_publish, publishing, published, failed, cancelled ]
+  stage:
+    type: string
+    enum: [ collect, extract, normalize, match, review, publish ]
+  source_kind:
+    type: string
+    enum: [ vendor_plate_map_pdf, vendor_formulation_html, vendor_plate_map_spreadsheet, vendor_catalog_page, other ]
+  adapter_kind:
+    type: string
+  ontology_preferences:
+    type: array
+    description: "Ordered ontology preference list for ingestion-time matching."
+    items:
+      type: string
+      pattern: "^[A-Za-z][A-Za-z0-9_-]*$"
+    uniqueItems: true
+  submitted_by:
+    type: string
+  submitted_at:
+    type: string
+    format: date-time
+  started_at:
+    type: string
+    format: date-time
+  completed_at:
+    type: string
+    format: date-time
+  source_refs:
+    type: array
+    items:
+      $ref: "./datatypes/ingestion-source-ref.schema.yaml"
+  artifact_refs:
+    type: array
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+  bundle_refs:
+    type: array
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+  issue_refs:
+    type: array
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+  progress:
+    type: object
+    additionalProperties: false
+    required: [ phase, current, total, unit, updated_at ]
+    properties:
+      phase:
+        type: string
+      current:
+        type: integer
+        minimum: 0
+      total:
+        type: integer
+        minimum: 0
+      unit:
+        type: string
+      percent:
+        type: number
+        minimum: 0
+        maximum: 100
+      message:
+        type: string
+      updated_at:
+        type: string
+        format: date-time
+  metrics:
+    $ref: "./datatypes/ingestion-metrics.schema.yaml"
+  publish_summary:
+    type: object
+    additionalProperties: false
+    properties:
+      published_bundle_count:
+        type: integer
+        minimum: 0
+      published_record_count:
+        type: integer
+        minimum: 0
+      last_published_at:
+        type: string
+        format: date-time
+  notes:
+    type: string

@@ -1,0 +1,80 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: computable-lab/collection
+title: Collection
+description: |
+  A first-class grouping of subjects (wells, tubes, mice, patients, etc.).
+  Collections can be used anywhere a subject ref is accepted.
+  Supports optional equivalence declarations for replicate handling.
+
+type: object
+required:
+- id
+- name
+- members
+
+properties:
+  id:
+    type: string
+    pattern: "^COL-[A-Za-z0-9_-]+$"
+    description: Stable collection identifier (e.g., COL-000001)
+
+  name:
+    type: string
+    minLength: 1
+    description: Human-readable name for the collection
+
+  collectionType:
+    type: string
+    enum:
+    - technical_replicate
+    - biological_replicate
+    - tubeset
+    - cage_group
+    - cohort
+    - trial_arm
+    - pool
+    - batch
+    - set
+    - custom
+    description: |
+      Type of collection (extensible).
+      - technical_replicate: Same sample measured multiple times
+      - biological_replicate: Independent biological samples
+      - tubeset: Group of tubes
+      - cage_group: Animals in same cage
+      - cohort: Study cohort
+      - trial_arm: Clinical trial arm
+      - pool: Pooled sample
+      - batch: Processing batch
+      - set: Generic grouping
+      - custom: User-defined type
+
+  description:
+    type: string
+    description: Detailed description of the collection
+
+  members:
+    type: array
+    minItems: 1
+    items:
+      $ref: ./datatypes/ref.schema.yaml
+    description: |
+      References to member subjects. Each member can be:
+      - An individual subject (well, tube, mouse, patient)
+      - Another collection (nested groupings)
+
+  equivalence:
+    $ref: ./datatypes/equivalence.schema.yaml
+    description: |
+      Optional declaration that members have equivalent event histories.
+      Use this to explicitly state that replicates are expected to be equivalent.
+
+  tags:
+    type: array
+    items:
+      type: string
+    description: Free-form tags for categorization and search
+
+  notes:
+    type: string
+    description: Additional notes about the collection

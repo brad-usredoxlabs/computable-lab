@@ -1,0 +1,70 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/person.schema.yaml"
+title: "Person"
+description: >
+  Canonical personnel record used for backend authorization and operational
+  admissibility checks.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- displayName
+- status
+
+properties:
+  kind:
+    const: "person"
+
+  id:
+    type: string
+    pattern: "^PER-[A-Z0-9][A-Z0-9_-]*$"
+
+  displayName:
+    type: string
+    minLength: 1
+
+  status:
+    type: string
+    enum: [ active, inactive, contractor, suspended ]
+
+  organizationId:
+    type: string
+
+  labIds:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+  roleIds:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+  contact:
+    type: object
+    additionalProperties: false
+    properties:
+      email:
+        type: string
+        format: email
+      phone:
+        type: string
+
+  supervisorRefs:
+    type: array
+    items:
+      allOf:
+      - $ref: "./datatypes/ref.schema.yaml"
+      - type: object
+        properties:
+          kind: { const: record }
+          type: { const: person }
+    uniqueItems: true
+
+  notes:
+    type: string

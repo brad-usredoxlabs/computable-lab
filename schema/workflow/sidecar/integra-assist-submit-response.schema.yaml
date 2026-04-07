@@ -1,0 +1,29 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/sidecar/integra-assist-submit-response.schema.yaml"
+title: INTEGRA Assist Submit Response
+type: object
+required:
+  - contractVersion
+  - adapterId
+  - operation
+  - result
+properties:
+  contractVersion:
+    const: labos-bridge/v1
+  adapterId:
+    const: integra_assist
+  operation:
+    const: submit
+  result:
+    type: object
+    required: [runId, status]
+    properties:
+      runId:
+        type: string
+        minLength: 1
+      status:
+        type: string
+        minLength: 1
+    additionalProperties: true
+additionalProperties: true
+

@@ -1,0 +1,193 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/recipe.schema.yaml"
+title: "Recipe"
+description: >
+  A preparation recipe/protocol that consumes role-bound inputs and produces a
+  target material-spec output.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id, name, input_roles, output_material_spec_ref, steps ]
+
+properties:
+  kind:
+    const: "recipe"
+
+  id:
+    type: string
+    description: "Stable local identifier (e.g., RCP-CLOFIBRATE-STOCK-V1)."
+
+  name:
+    type: string
+
+  input_roles:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      required: [ role_id, role_type ]
+      properties:
+        role_id:
+          type: string
+        role_type:
+          type: string
+          enum: [ solute, solvent, diluent, additive, buffer_component, activity_source, cells, matrix, other ]
+        required:
+          type: boolean
+          default: true
+        material_ref:
+          $ref: "./datatypes/ref.schema.yaml"
+        vendor_product_ref:
+          $ref: "./datatypes/ref.schema.yaml"
+        allowed_material_spec_refs:
+          type: array
+          items:
+            $ref: "./datatypes/ref.schema.yaml"
+        measure_mode:
+          type: string
+          enum: [ target_concentration, fixed_amount, qs_to_final ]
+        source_state:
+          type: string
+          enum: [ solid, liquid, stock_solution, formulation, cells, other ]
+        stock_concentration:
+          oneOf:
+          - $ref: "./datatypes/concentration.schema.yaml"
+          - $ref: "./datatypes/amount.schema.yaml"
+        target_contribution:
+          $ref: "./datatypes/concentration.schema.yaml"
+        required_amount:
+          $ref: "./datatypes/amount.schema.yaml"
+        molecular_weight:
+          allOf:
+          - $ref: "./datatypes/amount.schema.yaml"
+          - type: object
+            properties:
+              unit:
+                const: "g/mol"
+        composition_snapshot:
+          type: array
+          items:
+            $ref: "./datatypes/composition-entry.schema.yaml"
+        quantity:
+          type: object
+          additionalProperties: false
+          required: [ value, unit ]
+          properties:
+            value:
+              oneOf:
+              - type: number
+              - type: string
+            unit:
+              type: string
+        constraints:
+          type: array
+          items: { type: string }
+
+  steps:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      required: [ order, instruction ]
+      properties:
+        order: { type: integer, minimum: 1 }
+        instruction: { type: string }
+        parameters:
+          type: object
+          additionalProperties: true
+
+  output_material_spec_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  output:
+    type: object
+    additionalProperties: false
+    properties:
+      concentration:
+        oneOf:
+        - $ref: "./datatypes/concentration.schema.yaml"
+        - $ref: "./datatypes/amount.schema.yaml"
+      solvent_ref:
+        $ref: "./datatypes/ref.schema.yaml"
+      composition:
+        type: array
+        items:
+          $ref: "./datatypes/composition-entry.schema.yaml"
+      grade:
+        type: string
+      ph:
+        type: number
+      notes:
+        type: string
+
+  scale:
+    type: object
+    additionalProperties: false
+    properties:
+      default_batch_volume:
+        type: object
+        additionalProperties: false
+        required: [ value, unit ]
+        properties:
+          value: { type: number, exclusiveMinimum: 0 }
+          unit: { type: string }
+      supported_batch_volumes:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ value, unit ]
+          properties:
+            value: { type: number, exclusiveMinimum: 0 }
+            unit: { type: string }
+
+  batch:
+    type: object
+    additionalProperties: false
+    properties:
+      default_output_quantity:
+        type: object
+        additionalProperties: false
+        required: [ value, unit ]
+        properties:
+          value: { type: number, exclusiveMinimum: 0 }
+          unit: { type: string }
+      supported_output_quantities:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ value, unit ]
+          properties:
+            value: { type: number, exclusiveMinimum: 0 }
+            unit: { type: string }
+
+  preferred_sources:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [ role_id ]
+      properties:
+        role_id:
+          type: string
+        vendor:
+          type: string
+        catalog_number:
+          type: string
+        material_ref:
+          $ref: "./datatypes/ref.schema.yaml"
+        material_spec_ref:
+          $ref: "./datatypes/ref.schema.yaml"
+        vendor_product_ref:
+          $ref: "./datatypes/ref.schema.yaml"
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

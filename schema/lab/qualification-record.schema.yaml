@@ -1,0 +1,54 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/qualification-record.schema.yaml"
+title: "Qualification Record"
+description: >
+  Qualification or readiness record for a specific equipment item.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- equipmentRef
+- performedAt
+- status
+
+properties:
+  kind:
+    const: "qualification-record"
+
+  id:
+    type: string
+    pattern: "^QUAL-[A-Z0-9][A-Z0-9_-]*$"
+
+  equipmentRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: equipment }
+
+  qualificationType:
+    type: string
+
+  performedAt:
+    type: string
+    format: date-time
+
+  dueAt:
+    type: string
+    format: date-time
+
+  status:
+    type: string
+    enum: [ pass, fail, limited_use ]
+
+  performedByRef:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  notes:
+    type: string

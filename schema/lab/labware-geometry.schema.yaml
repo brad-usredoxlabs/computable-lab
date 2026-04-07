@@ -1,0 +1,148 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/labware-geometry.schema.yaml"
+title: "LabwareGeometry"
+description: >
+  Physical geometry definition for a labware type, used for robot planning.
+  Opentrons-compatible structure. Non-FAIR (uses id, not recordId).
+
+type: object
+additionalProperties: false
+
+required:
+- kind
+- id
+- labwareRef
+- dimensions
+- wellLayout
+
+properties:
+  kind:
+    const: "labware-geometry"
+
+  id:
+    type: string
+    description: "Stable identifier (e.g., GEO-corning-96-flat)."
+
+  labwareRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Reference to the abstract labware record."
+
+  manufacturer:
+    type: object
+    additionalProperties: false
+    properties:
+      name:
+        type: string
+      catalogNumber:
+        type: string
+
+  dimensions:
+    type: object
+    additionalProperties: false
+    required: [ xLength_mm, yLength_mm, zHeight_mm ]
+    properties:
+      xLength_mm:
+        type: number
+        exclusiveMinimum: 0
+      yLength_mm:
+        type: number
+        exclusiveMinimum: 0
+      zHeight_mm:
+        type: number
+        exclusiveMinimum: 0
+
+  wellLayout:
+    type: object
+    additionalProperties: false
+    required: [ rows, cols ]
+    properties:
+      rows:
+        type: integer
+        minimum: 1
+      cols:
+        type: integer
+        minimum: 1
+      wellSpacing_mm:
+        type: number
+        exclusiveMinimum: 0
+
+  wells:
+    type: object
+    description: "Per-well geometry keyed by well address (e.g., A1)."
+    additionalProperties:
+      $ref: "#/$defs/WellGeometry"
+
+  wellGroups:
+    type: array
+    description: "Shorthand for plates with uniform wells."
+    items:
+      $ref: "#/$defs/WellGroup"
+
+  stackingOffset_mm:
+    type: object
+    additionalProperties: false
+    properties:
+      x: { type: number }
+      y: { type: number }
+      z: { type: number }
+
+  gripHeight_mm:
+    type: number
+    description: "Opentrons gripper compatibility height."
+
+  compatibleRobots:
+    type: array
+    items:
+      type: string
+    uniqueItems: true
+    description: "Robot platforms this geometry is validated for."
+
+  notes:
+    type: string
+
+$defs:
+  WellGeometry:
+    type: object
+    additionalProperties: false
+    properties:
+      x_mm: { type: number }
+      y_mm: { type: number }
+      z_mm: { type: number }
+      depth_mm:
+        type: number
+        exclusiveMinimum: 0
+      diameter_mm:
+        type: number
+        exclusiveMinimum: 0
+      totalVolume_uL:
+        type: number
+        exclusiveMinimum: 0
+      bottomShape:
+        type: string
+        enum: [ flat, v, u, round ]
+
+  WellGroup:
+    type: object
+    additionalProperties: false
+    required: [ wells ]
+    properties:
+      wells:
+        description: "Well selector: 'all' or array of well addresses."
+        oneOf:
+        - type: string
+          const: "all"
+        - type: array
+          items: { type: string }
+          minItems: 1
+      depth_mm:
+        type: number
+        exclusiveMinimum: 0
+      diameter_mm:
+        type: number
+        exclusiveMinimum: 0
+      totalVolume_uL:
+        type: number
+        exclusiveMinimum: 0
+      bottomShape:
+        type: string
+        enum: [ flat, v, u, round ]

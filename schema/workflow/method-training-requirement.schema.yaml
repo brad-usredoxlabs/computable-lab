@@ -1,0 +1,46 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/method-training-requirement.schema.yaml"
+title: "Method Training Requirement"
+description: >
+  Training or qualification prerequisites associated with a method or scoped
+  procedure identifier.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- methodId
+
+properties:
+  kind:
+    const: "method-training-requirement"
+
+  id:
+    type: string
+    pattern: "^MTR-[A-Z0-9][A-Z0-9_-]*$"
+
+  methodId:
+    type: string
+    minLength: 1
+
+  requiredTrainingMaterialRefs:
+    type: array
+    items:
+      allOf:
+      - $ref: "./datatypes/ref.schema.yaml"
+      - type: object
+        properties:
+          kind: { const: record }
+          type: { const: training-material }
+    uniqueItems: true
+
+  requiresEquipmentQualification:
+    type: boolean
+    default: false
+
+  notes:
+    type: string

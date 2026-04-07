@@ -1,0 +1,39 @@
+id: opentrons_ot2
+label: Opentrons OT-2
+allowedVocabIds:
+  - liquid-handling/v1
+defaultVariant: ot2_standard
+toolTypeIds:
+  - pipette_1ch
+  - pipette_8ch_fixed
+  - pipette_12ch
+compilerFamily: opentrons
+modules:
+  - id: heater_shaker
+    label: Heater-Shaker
+  - id: temperature
+    label: Temperature Module
+  - id: magnetic
+    label: Magnetic Module
+variants:
+  - id: ot2_standard
+    title: Opentrons OT-2
+    slots:
+      - { id: "1", kind: standard, row: 4, col: 1, reachable: true }
+      - { id: "2", kind: standard, row: 4, col: 2, reachable: true }
+      - { id: "3", kind: standard, row: 4, col: 3, reachable: true }
+      - { id: "4", kind: standard, row: 3, col: 1, reachable: true }
+      - { id: "5", kind: standard, row: 3, col: 2, reachable: true }
+      - { id: "6", kind: standard, row: 3, col: 3, reachable: true }
+      - { id: "7", kind: standard, row: 2, col: 1, reachable: true }
+      - { id: "8", kind: standard, row: 2, col: 2, reachable: true }
+      - { id: "9", kind: standard, row: 2, col: 3, reachable: true }
+      - { id: "10", kind: standard, row: 1, col: 1, reachable: true }
+      - { id: "11", kind: standard, row: 1, col: 2, reachable: true }
+      - id: "12"
+        kind: trash
+        label: Fixed trash
+        orientationMode: not_applicable
+        row: 1
+        col: 3
+        reachable: false

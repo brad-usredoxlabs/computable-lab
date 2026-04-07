@@ -1,0 +1,30 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/sidecar/gemini-active-read-response.schema.yaml"
+title: Gemini Active Read Response
+type: object
+required:
+  - contractVersion
+  - adapterId
+  - operation
+  - result
+properties:
+  contractVersion:
+    const: labos-bridge/v1
+  adapterId:
+    const: molecular_devices_gemini
+  operation:
+    const: active_read
+  result:
+    type: object
+    required: [rawDataPath]
+    properties:
+      rawDataPath:
+        type: string
+        minLength: 1
+      parserId:
+        type: string
+      status:
+        type: string
+    additionalProperties: true
+additionalProperties: true
+

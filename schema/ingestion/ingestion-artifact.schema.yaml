@@ -1,0 +1,120 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/ingestion-artifact.schema.yaml"
+title: "Ingestion Artifact"
+description: >
+  Uploaded or fetched source artifact for an ingestion job, with optional text,
+  HTML, or table extraction products.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id, job_ref, artifact_role ]
+
+properties:
+  kind:
+    const: "ingestion-artifact"
+  id:
+    type: string
+  job_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+  artifact_role:
+    type: string
+    enum: [ primary_source, supporting_source, ocr_output, html_snapshot, spreadsheet_snapshot, normalized_extract ]
+  source_url:
+    type: string
+    format: uri
+  file_ref:
+    $ref: "./datatypes/file-ref.schema.yaml"
+  media_type:
+    type: string
+  sha256:
+    type: string
+  fetch_metadata:
+    type: object
+    additionalProperties: false
+    properties:
+      fetched_at:
+        type: string
+        format: date-time
+      status_code:
+        type: integer
+      final_url:
+        type: string
+        format: uri
+  text_extract:
+    type: object
+    additionalProperties: false
+    properties:
+      extracted_at:
+        type: string
+        format: date-time
+      method:
+        type: string
+      excerpt:
+        type: string
+  table_extracts:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [ id ]
+      properties:
+        id:
+          type: string
+        page:
+          type: integer
+          minimum: 1
+        row_count:
+          type: integer
+          minimum: 0
+        column_count:
+          type: integer
+          minimum: 0
+        note:
+          type: string
+  html_extract:
+    type: object
+    additionalProperties: false
+    properties:
+      extracted_at:
+        type: string
+        format: date-time
+      method:
+        type: string
+      title:
+        type: string
+      vendor:
+        type: string
+      variant_count:
+        type: integer
+        minimum: 0
+      excerpt:
+        type: string
+  page_map:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [ page ]
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        label:
+          type: string
+        note:
+          type: string
+  provenance:
+    type: object
+    additionalProperties: false
+    properties:
+      source_type:
+        type: string
+        enum: [ upload, url, vendor_page, manual ]
+      added_at:
+        type: string
+        format: date-time
+      note:
+        type: string

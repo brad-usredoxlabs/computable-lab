@@ -1,0 +1,90 @@
+$schema: https://json-schema.org/draft/2020-12/schema
+$id: computable-lab/datatypes/equivalence
+title: Equivalence
+description: |
+  Declares that collection members have equivalent event histories.
+  Equivalence is an explicit, inspectable hypothesis—not an implicit
+  side-effect of sharing a template.
+
+type: object
+required:
+- basis
+
+properties:
+  basis:
+    type: string
+    enum:
+    - event_graph
+    - context
+    - treatment_assignment
+    - custom
+    description: |
+      What aspect is asserted to be equivalent:
+      - event_graph: members' event graphs are equivalent (under some abstraction)
+      - context: members' resulting contexts are equivalent (stronger claim)
+      - treatment_assignment: members share the same assignment/template but graphs may vary
+      - custom: user-defined equivalence type
+
+  scope:
+    type: string
+    enum:
+    - member
+    - group
+    default: member
+    description: |
+      - member: equivalence describes each member individually (typical for replicates)
+      - group: equivalence describes the collection as a whole (e.g., pooled sample)
+
+  abstraction:
+    type: string
+    enum:
+    - strict
+    - normalized
+    - semantic
+    default: normalized
+    description: |
+      - strict: identical event nodes/edges after canonicalization
+      - normalized: equivalent after ignoring irrelevant differences (timestamps, user IDs, etc.)
+      - semantic: equivalent under ontology-annotated meaning (future extension)
+
+  template_ref:
+    $ref: ./ref.schema.yaml
+    description: Event graph template or protocol template used to establish equivalence
+
+  event_graph_refs:
+    type: array
+    items:
+      $ref: ./ref.schema.yaml
+    description: Explicit per-member event graph instances (optional, for verification)
+
+  context_refs:
+    type: array
+    items:
+      $ref: ./ref.schema.yaml
+    description: Explicit per-member context instances (optional, for verification)
+
+  tolerance:
+    type: object
+    additionalProperties: true
+    description: |
+      Allowable deviations from strict equivalence.
+      Example: { timing: { value: 5, unit: "min" }, volume: { value: 1, unit: "µL" } }
+    properties:
+      timing:
+        type: object
+        properties:
+          value:
+            type: number
+          unit:
+            type: string
+      volume:
+        type: object
+        properties:
+          value:
+            type: number
+          unit:
+            type: string
+
+  notes:
+    type: string
+    description: Free-form notes about the equivalence assertion

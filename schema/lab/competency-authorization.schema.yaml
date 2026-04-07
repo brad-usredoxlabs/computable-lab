@@ -1,0 +1,123 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/competency-authorization.schema.yaml"
+title: "Competency Authorization"
+description: >
+  Authorization record describing what work a person may perform under what
+  scope and restrictions.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- personRef
+- effectiveAt
+- status
+
+properties:
+  kind:
+    const: "competency-authorization"
+
+  id:
+    type: string
+    pattern: "^AUTH-[A-Z0-9][A-Z0-9_-]*$"
+
+  personRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: person }
+
+  status:
+    type: string
+    enum: [ active, suspended, revoked ]
+
+  basis:
+    type: object
+    additionalProperties: false
+    properties:
+      trainingRecordRefs:
+        type: array
+        items:
+          allOf:
+          - $ref: "./datatypes/ref.schema.yaml"
+          - type: object
+            properties:
+              kind: { const: record }
+              type: { const: training-record }
+        uniqueItems: true
+      notes:
+        type: string
+
+  scope:
+    type: object
+    additionalProperties: false
+    properties:
+      verbRefs:
+        type: array
+        items:
+          allOf:
+          - $ref: "./datatypes/ref.schema.yaml"
+          - type: object
+            properties:
+              kind: { const: record }
+              type: { const: verb-definition }
+        uniqueItems: true
+      methodIds:
+        type: array
+        items: { type: string }
+        uniqueItems: true
+      equipmentRefs:
+        type: array
+        items:
+          allOf:
+          - $ref: "./datatypes/ref.schema.yaml"
+          - type: object
+            properties:
+              kind: { const: record }
+              type: { const: equipment }
+        uniqueItems: true
+      equipmentClassRefs:
+        type: array
+        items:
+          allOf:
+          - $ref: "./datatypes/ref.schema.yaml"
+          - type: object
+            properties:
+              kind: { const: record }
+              type: { const: equipment-class }
+        uniqueItems: true
+
+  effectiveAt:
+    type: string
+    format: date-time
+
+  expiresAt:
+    type: string
+    format: date-time
+
+  approvedByRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: person }
+
+  restrictions:
+    type: object
+    additionalProperties: false
+    properties:
+      supervisedOnly:
+        type: boolean
+        default: false
+      notes:
+        type: string
+
+  notes:
+    type: string

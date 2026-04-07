@@ -1,0 +1,71 @@
+version: 1
+title: "Material Profile Registry"
+description: >
+  Additive profile metadata for material authoring and ingestion. Profiles do not
+  change the canonical `material` schema; they describe which optional field
+  groups should be emphasized for each material domain.
+
+profiles:
+  chemical:
+    label: "Chemical"
+    applies_when:
+      domain: [chemical]
+    field_groups:
+    - id: identity
+      label: "Identity"
+      fields: [name, domain, class, definition, synonyms]
+    - id: chemistry
+      label: "Chemistry"
+      fields:
+      - molecular_weight
+      - chemical_properties.molecular_formula
+      - chemical_properties.cas_number
+      - chemical_properties.solubility
+  cell_line:
+    label: "Cell Line"
+    applies_when:
+      domain: [cell_line]
+    field_groups:
+    - id: identity
+      label: "Identity"
+      fields: [name, domain, class, definition, synonyms]
+  media:
+    label: "Media"
+    applies_when:
+      domain: [media]
+    field_groups:
+    - id: identity
+      label: "Identity"
+      fields: [name, domain, class, definition, synonyms]
+  reagent:
+    label: "Reagent"
+    applies_when:
+      domain: [reagent]
+    field_groups:
+    - id: identity
+      label: "Identity"
+      fields: [name, domain, class, definition, synonyms]
+  organism:
+    label: "Organism"
+    applies_when:
+      domain: [organism]
+    field_groups:
+    - id: identity
+      label: "Identity"
+      fields: [name, domain, class, definition, synonyms]
+  sample:
+    label: "Sample"
+    applies_when:
+      domain: [sample]
+    field_groups:
+    - id: identity
+      label: "Identity"
+      fields: [name, domain, class, definition, synonyms]
+  other:
+    label: "Other"
+    applies_when:
+      domain: [other]
+    field_groups:
+    - id: identity
+      label: "Identity"
+      fields: [name, domain, class, definition, synonyms]

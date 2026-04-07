@@ -1,0 +1,59 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/ingestion-candidate.schema.yaml"
+title: "Ingestion Candidate"
+description: >
+  Proposed publishable object emitted by an ingestion pipeline before
+  canonicalization into a persistent scientific record.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id, job_ref, candidate_type, title, status, payload ]
+
+properties:
+  kind:
+    const: "ingestion-candidate"
+  id:
+    type: string
+  job_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+  bundle_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+  candidate_type:
+    type: string
+    enum: [ material, vendor_product, formulation, recipe, plate_layout, labware_instance, well_assignment ]
+  title:
+    type: string
+  status:
+    type: string
+    enum: [ draft, needs_review, approved, rejected, published ]
+  source_refs:
+    type: array
+    items:
+      $ref: "./datatypes/ingestion-source-ref.schema.yaml"
+  confidence:
+    type: number
+    minimum: 0
+    maximum: 1
+  normalized_name:
+    type: string
+  payload:
+    type: object
+    additionalProperties: true
+  proposed_record_kind:
+    type: string
+  proposed_schema_id:
+    type: string
+    format: uri
+  match_refs:
+    type: array
+    items:
+      $ref: "./datatypes/ontology-match-candidate.schema.yaml"
+  issue_refs:
+    type: array
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+  publish_result:
+    $ref: "./datatypes/publish-result.schema.yaml"

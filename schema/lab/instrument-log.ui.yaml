@@ -1,0 +1,72 @@
+# UI specification for InstrumentLog records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/instrument-log.schema.yaml"
+
+display:
+  titleField: "$.id"
+  subtitleField: "$.logType"
+  icon: "instrument-log"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Log Details"
+    fields:
+    - path: "$.logType"
+      widget: "select"
+      label: "Log Type"
+      required: true
+    - path: "$.status"
+      widget: "select"
+      label: "Status"
+      required: true
+    - path: "$.startedAt"
+      widget: "text"
+      label: "Started At"
+    - path: "$.completedAt"
+      widget: "text"
+      label: "Completed At"
+  - title: "References"
+    fields:
+    - path: "$.instrumentRef"
+      widget: "ref"
+      label: "Instrument"
+    - path: "$.plannedRunRef"
+      widget: "ref"
+      label: "Planned Run"
+    - path: "$.eventGraphRef"
+      widget: "ref"
+      label: "Event Graph"
+  - title: "Entries"
+    fields:
+    - path: "$.entries"
+      widget: "array"
+      label: "Log Entries"
+  - title: "Notes"
+    fields:
+    - path: "$.notes"
+      widget: "markdown"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "200px"
+  - path: "$.logType"
+    label: "Type"
+    width: "140px"
+  - path: "$.status"
+    label: "Status"
+    width: "100px"

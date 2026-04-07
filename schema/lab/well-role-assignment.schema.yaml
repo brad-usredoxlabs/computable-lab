@@ -1,0 +1,96 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/well-role-assignment.schema.yaml"
+title: "Well Role Assignment"
+description: >
+  Assignment of semantic well or sample roles within a specific measurement context.
+  The same well may have different roles in different measurement contexts.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- measurement_context_ref
+- subject_refs
+- role_family
+- role_type
+
+properties:
+  kind:
+    const: "well-role-assignment"
+
+  id:
+    type: string
+    pattern: '^WRA-[A-Za-z0-9_-]+$'
+
+  measurement_context_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  subject_refs:
+    type: array
+    minItems: 1
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+
+  role_family:
+    type: string
+    enum: [ sample, control, calibration ]
+
+  role_type:
+    type: string
+    enum:
+      - sample
+      - positive_control
+      - negative_control
+      - vehicle_control
+      - blank
+      - standard
+      - standard_curve
+      - qc_sample
+      - internal_standard
+      - external_standard
+      - no_template_control
+      - housekeeping_control
+      - unknown_sample
+      - calibrator
+      - reference
+      - other
+
+  readout_def_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  target_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  expected_behavior:
+    type: string
+    enum: [ increase, decrease, present, absent, range, stable, none ]
+
+  calibration:
+    type: object
+    additionalProperties: false
+    properties:
+      standard_level:
+        type: string
+      nominal_value:
+        type: number
+      nominal_unit:
+        type: string
+
+  generated_context_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  generated_claim_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  generated_assertion_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  generated_evidence_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+
+  notes:
+    type: string

@@ -1,0 +1,131 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/operation-template.schema.yaml"
+title: "Operation Template"
+description: >
+  Reusable saved action/vignette template. Operation templates capture semantic
+  defaults and optional execution defaults that can be applied while authoring
+  event graphs without hard-coding a specific run instance.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id, name, category, scope, base_event_type ]
+
+properties:
+  kind:
+    const: "operation-template"
+
+  id:
+    type: string
+    description: "Stable template identifier (e.g., OPT-TRANSFER-MEDIA-V1)."
+
+  name:
+    type: string
+
+  version:
+    type: integer
+    minimum: 1
+
+  category:
+    type: string
+    enum: [ transfer, serial_dilution, add_material, wash, incubate, read, custom ]
+
+  scope:
+    type: string
+    enum: [ well, plate, program ]
+
+  description:
+    type: string
+
+  visibility:
+    type: string
+    enum: [ personal, team ]
+
+  status:
+    type: string
+    enum: [ active, deprecated ]
+
+  base_event_type:
+    type: string
+    enum: [ transfer, multi_dispense, add_material, wash, incubate, read ]
+
+  semantic_defaults:
+    type: object
+    additionalProperties: true
+    properties:
+      transfer_mode:
+        type: string
+        enum: [ transfer, multi_dispense ]
+      volume:
+        type: object
+        additionalProperties: false
+        required: [ value, unit ]
+        properties:
+          value: { type: number, minimum: 0 }
+          unit: { type: string }
+      dead_volume:
+        type: object
+        additionalProperties: false
+        required: [ value, unit ]
+        properties:
+          value: { type: number, minimum: 0 }
+          unit:
+            type: string
+            enum: [ uL, mL, "%" ]
+      discard_to_waste:
+        type: boolean
+
+  execution_defaults:
+    type: object
+    additionalProperties: true
+    properties:
+      tip_policy:
+        type: string
+        enum: [ inherit, new_tip_each_transfer, new_tip_each_source, reuse_within_batch ]
+      aspirate_height_mm:
+        type: number
+      dispense_height_mm:
+        type: number
+      air_gap:
+        type: object
+        additionalProperties: false
+        required: [ value, unit ]
+        properties:
+          value: { type: number, minimum: 0 }
+          unit:
+            type: string
+            enum: [ uL, mL ]
+      pre_mix:
+        $ref: "#/$defs/MixHint"
+      post_mix:
+        $ref: "#/$defs/MixHint"
+      touch_tip_after_aspirate:
+        type: boolean
+      touch_tip_after_dispense:
+        type: boolean
+      blowout:
+        type: boolean
+
+  tags:
+    type: array
+    items: { type: string }
+
+$defs:
+  MixHint:
+    type: object
+    additionalProperties: false
+    properties:
+      enabled:
+        type: boolean
+      cycles:
+        type: integer
+        minimum: 1
+      volume:
+        type: object
+        additionalProperties: false
+        required: [ value, unit ]
+        properties:
+          value: { type: number, minimum: 0 }
+          unit: { type: string }

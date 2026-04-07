@@ -1,0 +1,77 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/training-record.schema.yaml"
+title: "Training Record"
+description: >
+  Record that a person completed, failed, or is progressing through a training
+  artifact.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- personRef
+- trainingMaterialRef
+- status
+- completedAt
+
+properties:
+  kind:
+    const: "training-record"
+
+  id:
+    type: string
+    pattern: "^TRR-[A-Z0-9][A-Z0-9_-]*$"
+
+  personRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: person }
+
+  trainingMaterialRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: training-material }
+
+  trainerRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: person }
+
+  status:
+    type: string
+    enum: [ passed, completed, failed, in_progress ]
+
+  completedAt:
+    type: string
+    format: date-time
+
+  expiresAt:
+    type: string
+    format: date-time
+
+  evidenceRefs:
+    type: array
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+    uniqueItems: true
+
+  limitations:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+  notes:
+    type: string

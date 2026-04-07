@@ -1,0 +1,4 @@
+# Lint rules for Experiment records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/experiment.schema.yaml"
+rules: []

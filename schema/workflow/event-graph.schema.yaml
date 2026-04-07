@@ -1,0 +1,321 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml"
+title: "Event Graph"
+description: >
+  An Event Graph stores a collection of plate events and their associated labwares. This is the primary data structure for capturing experimental workflows in the  Labware Event Editor.
+
+type: object
+additionalProperties: false
+
+required:
+- id
+- events
+- labwares
+
+properties:
+  id:
+    type: string
+    description: "Unique identifier for this event graph (e.g., EVG-m3abc123-x7f9)."
+
+  name:
+    type: string
+    description: "Human-readable name for this event graph."
+
+  description:
+    type: string
+    description: "Optional description of the experiment or workflow."
+
+  runId:
+    type: string
+    description: "Optional reference to a protocol run that generated these events."
+
+  protocolId:
+    type: string
+    description: "Optional reference to the protocol this is based on."
+
+  links:
+    type: object
+    description: "Hierarchical links to parent records for filing/navigation."
+    additionalProperties: false
+    properties:
+      studyId:
+        type: string
+        description: "Parent study recordId."
+      experimentId:
+        type: string
+        description: "Parent experiment recordId."
+      runId:
+        type: string
+        description: "Parent run recordId."
+
+  status:
+    type: string
+    enum:
+    - inbox
+    - filed
+    - draft
+    description: "Filing status (inbox = not yet organized, filed = organized under a run)."
+
+  createdAt:
+    type: string
+    format: date-time
+    description: "ISO-8601 timestamp when this event graph was created."
+
+  updatedAt:
+    type: string
+    format: date-time
+    description: "ISO-8601 timestamp when this event graph was last modified."
+
+  events:
+    type: array
+    description: "Array of plate events in chronological order."
+    items:
+      $ref: "#/$defs/PlateEvent"
+
+  labwares:
+    type: array
+    description: "Array of labware definitions used in this event graph."
+    items:
+      $ref: "#/$defs/Labware"
+
+  implementsRef:
+    type: string
+    description: "PlannedRun recordId this execution implements."
+
+  executionMeta:
+    type: object
+    description: "Post-execution metadata (present when event graph is an executed run)."
+    additionalProperties: false
+    properties:
+      startedAt:
+        type: string
+        format: date-time
+      completedAt:
+        type: string
+        format: date-time
+      executedBy:
+        type: string
+        description: "Operator identifier."
+      instrumentRef:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Robot/instrument that executed the run."
+      instrumentLogRef:
+        type: string
+        description: "Link to instrument-log record."
+      status:
+        type: string
+        enum: [ completed, aborted, partial, error ]
+
+  methodContext:
+    type: object
+    description: "Run-attached method metadata and lock semantics."
+    additionalProperties: false
+    required: [ runId, vocabId, platform, deckVariant, locked ]
+    properties:
+      runId:
+        type: string
+      sourceTemplateId:
+        type: string
+      vocabId:
+        type: string
+        enum: [ liquid-handling/v1, animal-handling/v1 ]
+      platform:
+        type: string
+      deckVariant:
+        type: string
+      locked:
+        type: boolean
+      templateBindings:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ templateLabwareId, kind ]
+          properties:
+            templateLabwareId:
+              type: string
+            kind:
+              type: string
+              enum: [ protocol-template, plate-snapshot ]
+            templateId:
+              type: string
+            outputId:
+              type: string
+            resolvedSnapshotId:
+              type: string
+            snapshotId:
+              type: string
+
+  templateContext:
+    type: object
+    description: "Template provenance for editor-only graphs that are not yet run-attached methods."
+    additionalProperties: false
+    properties:
+      sourceTemplateId:
+        type: string
+      templateBindings:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ templateLabwareId, kind ]
+          properties:
+            templateLabwareId:
+              type: string
+            kind:
+              type: string
+              enum: [ protocol-template, plate-snapshot ]
+            templateId:
+              type: string
+            outputId:
+              type: string
+            resolvedSnapshotId:
+              type: string
+            snapshotId:
+              type: string
+
+  deckLayout:
+    type: object
+    description: "Deck placement state associated with this method instance."
+    additionalProperties: false
+    properties:
+      placements:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ slotId ]
+          properties:
+            slotId:
+              type: string
+            labwareId:
+              type: string
+            moduleId:
+              type: string
+      labwareOrientations:
+        type: object
+        additionalProperties:
+          type: string
+          enum: [ portrait, landscape ]
+
+  tags:
+    type: array
+    items:
+      type: string
+    uniqueItems: true
+    description: "Optional tags for categorization."
+
+  componentInstanceRefs:
+    type: array
+    description: "Optional graph-component-instance refs inserted in this event graph timeline."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ kind, id, type ]
+      properties:
+        kind: { const: "record" }
+        id: { type: string }
+        type: { const: "graph-component-instance" }
+    uniqueItems: true
+
+$defs:
+  PlateEvent:
+    type: object
+    description: "A single event that affects wells in a labware."
+    required:
+    - eventId
+    - event_type
+    - details
+    properties:
+      eventId:
+        type: string
+        description: "Unique identifier for this event."
+      event_type:
+        type: string
+        enum:
+        - add_material
+        - transfer
+        - mix
+        - wash
+        - incubate
+        - read
+        - harvest
+        - multi_dispense
+        - serial_dilution
+        - macro_program
+        - other
+        description: "Type of the event."
+      at:
+        type: string
+        format: date-time
+        description: "ISO datetime - actual execution time."
+      t_offset:
+        type: string
+        description: "ISO duration - planned offset from run start."
+      details:
+        type: object
+        description: "Event-specific details (wells, volumes, materials, etc.)."
+        additionalProperties: true
+      notes:
+        type: string
+        description: "Optional notes about this event."
+      deviations:
+        type: array
+        description: "Structured operator feedback about deviations during execution."
+        items:
+          type: object
+          additionalProperties: false
+          required: [ code, message ]
+          properties:
+            code:
+              type: string
+              enum:
+              - insufficient_volume
+              - contamination_suspected
+              - step_skipped
+              - manual_intervention
+              - timing_deviation
+              - equipment_malfunction
+              - sample_lost
+              - other
+            message:
+              type: string
+            severity:
+              type: string
+              enum: [ info, warning, error ]
+            reportedBy:
+              type: string
+            reportedAt:
+              type: string
+              format: date-time
+
+  Labware:
+    type: object
+    description: "A labware (plate, tube rack, reservoir, etc.) used in the event graph."
+    required:
+    - labwareId
+    - labwareType
+    properties:
+      labwareId:
+        type: string
+        description: "Unique identifier for this labware instance."
+      labwareType:
+        type: string
+        description: "Type of labware (e.g., 'plate_96', 'reservoir_12', 'tube')."
+      name:
+        type: string
+        description: "Human-readable name for this labware."
+      addressing:
+        type: object
+        description: "Addressing scheme (grid, linear, single)."
+        additionalProperties: true
+      geometry:
+        type: object
+        description: "Physical geometry (volumes, well shape)."
+        additionalProperties: true
+      color:
+        type: string
+        description: "Optional color for visualization."
+      notes:
+        type: string
+        description: "Optional notes."

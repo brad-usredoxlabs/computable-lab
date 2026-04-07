@@ -1,0 +1,4 @@
+# Lint rules for Labware records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/labware.schema.yaml"
+rules: []
