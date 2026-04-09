@@ -13,13 +13,28 @@ export interface TapTabEditorHandle {
 }
 
 /**
+ * Widget type literal union for field rendering.
+ */
+export type WidgetType =
+  | 'text'
+  | 'number'
+  | 'date'
+  | 'checkbox'
+  | 'select'
+  | 'ref'
+  | 'combobox'
+  | 'textarea'
+  | 'markdown'
+  | 'hidden';
+
+/**
  * Field configuration for a FieldRow component.
  */
 export interface FieldRowAttrs {
   /** JSONPath to the field value */
   path: string;
   /** Widget type for rendering */
-  widget: string;
+  widget: WidgetType;
   /** Display label for the field */
   label: string;
   /** Current value of the field */
@@ -54,8 +69,6 @@ export interface TapTabEditorProps {
   uiSpec: UISpec;
   /** JSON schema for validation */
   schema: Record<string, unknown>;
-  /** Callback when a field changes */
-  onFieldChange?: (path: string, value: unknown) => void;
   /** Whether the editor is disabled */
   disabled?: boolean;
 }

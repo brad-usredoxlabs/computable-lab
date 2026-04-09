@@ -1,0 +1,76 @@
+# UI specification for Training Record records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/training-record.schema.yaml"
+
+display:
+  titleField: "$.id"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Training"
+    fields:
+    - path: "$.personRef"
+      widget: "ref"
+      label: "Person"
+      required: true
+      refKind: "person"
+    - path: "$.trainingMaterialRef"
+      widget: "ref"
+      label: "Training Material"
+      required: true
+      refKind: "training-material"
+    - path: "$.trainerRef"
+      widget: "ref"
+      label: "Trainer"
+      refKind: "person"
+  - title: "Status"
+    fields:
+    - path: "$.status"
+      widget: "select"
+      label: "Status"
+      required: true
+      options:
+      - value: "passed"
+        label: "Passed"
+      - value: "completed"
+        label: "Completed"
+      - value: "failed"
+        label: "Failed"
+      - value: "in_progress"
+        label: "In Progress"
+    - path: "$.completedAt"
+      widget: "date"
+      label: "Completed At"
+      required: true
+    - path: "$.expiresAt"
+      widget: "date"
+      label: "Expires At"
+  - title: "Notes"
+    fields:
+    - path: "$.notes"
+      widget: "markdown"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "120px"
+  - path: "$.personRef"
+    label: "Person"
+  - path: "$.status"
+    label: "Status"
+  - path: "$.completedAt"
+    label: "Completed"

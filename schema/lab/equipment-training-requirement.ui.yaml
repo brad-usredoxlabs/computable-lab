@@ -1,0 +1,51 @@
+# UI specification for Equipment Training Requirement records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/equipment-training-requirement.schema.yaml"
+
+display:
+  titleField: "$.id"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Equipment"
+    fields:
+    - path: "$.equipmentRef"
+      widget: "ref"
+      label: "Equipment"
+      refKind: "equipment"
+    - path: "$.equipmentClassRef"
+      widget: "ref"
+      label: "Equipment Class"
+      refKind: "equipment-class"
+  - title: "Policy"
+    fields:
+    - path: "$.supervisedUseAllowedBeforeQualification"
+      widget: "checkbox"
+      label: "Supervised Use Allowed Before Qualification"
+  - title: "Notes"
+    fields:
+    - path: "$.notes"
+      widget: "markdown"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "140px"
+  - path: "$.equipmentRef"
+    label: "Equipment"
+  - path: "$.equipmentClassRef"
+    label: "Equipment Class"

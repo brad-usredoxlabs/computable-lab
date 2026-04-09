@@ -1,0 +1,79 @@
+# UI specification for Competency Authorization records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/competency-authorization.schema.yaml"
+
+display:
+  titleField: "$.id"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Authorization"
+    fields:
+    - path: "$.personRef"
+      widget: "ref"
+      label: "Person"
+      refKind: "person"
+      required: true
+    - path: "$.status"
+      widget: "select"
+      label: "Status"
+      required: true
+      options:
+      - value: "active"
+        label: "Active"
+      - value: "suspended"
+        label: "Suspended"
+      - value: "revoked"
+        label: "Revoked"
+    - path: "$.approvedByRef"
+      widget: "ref"
+      label: "Approved By"
+      refKind: "person"
+  - title: "Dates"
+    fields:
+    - path: "$.effectiveAt"
+      widget: "date"
+      label: "Effective Date"
+      required: true
+    - path: "$.expiresAt"
+      widget: "date"
+      label: "Expires At"
+  - title: "Restrictions"
+    fields:
+    - path: "$.restrictions.supervisedOnly"
+      widget: "checkbox"
+      label: "Supervised Only"
+    - path: "$.restrictions.notes"
+      widget: "textarea"
+      label: "Restriction Notes"
+  - title: "Notes"
+    fields:
+    - path: "$.notes"
+      widget: "markdown"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "140px"
+  - path: "$.personRef"
+    label: "Person"
+  - path: "$.status"
+    label: "Status"
+  - path: "$.effectiveAt"
+    label: "Effective"
+  - path: "$.expiresAt"
+    label: "Expires"

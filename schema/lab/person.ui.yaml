@@ -1,0 +1,68 @@
+# UI specification for Person records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/person.schema.yaml"
+
+display:
+  titleField: "$.displayName"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.displayName"
+      widget: "text"
+      label: "Display Name"
+      required: true
+    - path: "$.status"
+      widget: "select"
+      label: "Status"
+      required: true
+      options:
+      - value: "active"
+        label: "Active"
+      - value: "inactive"
+        label: "Inactive"
+      - value: "contractor"
+        label: "Contractor"
+      - value: "suspended"
+        label: "Suspended"
+  - title: "Organization"
+    fields:
+    - path: "$.organizationId"
+      widget: "text"
+      label: "Organization ID"
+  - title: "Contact"
+    fields:
+    - path: "$.contact.email"
+      widget: "text"
+      label: "Email"
+    - path: "$.contact.phone"
+      widget: "text"
+      label: "Phone"
+  - title: "Notes"
+    fields:
+    - path: "$.notes"
+      widget: "markdown"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "120px"
+  - path: "$.displayName"
+    label: "Name"
+  - path: "$.status"
+    label: "Status"
+  - path: "$.organizationId"
+    label: "Organization"

@@ -6,6 +6,10 @@
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 
+// Cache for editable field row elements - refreshed only when doc changes
+let cachedFields: HTMLElement[] | null = null;
+let lastDocSize: number = 0;
+
 /**
  * Creates a ProseMirror plugin that handles Tab/Shift+Tab navigation
  * between non-readonly FieldRow elements.
@@ -23,26 +27,25 @@ export function createTabNavPlugin(): Plugin {
         // Prevent default browser behavior
         event.preventDefault();
 
-        // Find all editable FieldRow value elements
-        const fieldRows = Array.from(
-          view.dom.querySelectorAll('.taptab-field-row:not(.readonly) .taptab-field-value')
-        ) as HTMLElement[];
+        // Check if cache needs invalidation (doc size changed)
+        const currentDocSize = view.state.doc.content.size;
+        if (cachedFields === null || currentDocSize !== lastDocSize) {
+          // Refresh cache - query all editable field rows
+          cachedFields = Array.from(
+            view.dom.querySelectorAll('.taptab-field-row:not(.readonly) .taptab-field-value')
+          ) as HTMLElement[];
+          lastDocSize = currentDocSize;
+        }
+
+        const fieldRows = cachedFields;
 
         if (fieldRows.length === 0) {
           return true;
         }
 
-        // Find the currently focused element
+        // Find the currently focused element using findIndex
         const activeElement = view.dom.ownerDocument.activeElement;
-
-        // Determine current index by checking which field value contains the active element
-        let currentIndex = -1;
-        for (let i = 0; i < fieldRows.length; i++) {
-          if (fieldRows[i].contains(activeElement) || fieldRows[i] === activeElement) {
-            currentIndex = i;
-            break;
-          }
-        }
+        const currentIndex = Array.from(fieldRows).findIndex(el => el.contains(activeElement));
 
         // Calculate next index with wrapping
         const shiftKey = event.shiftKey;

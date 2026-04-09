@@ -1,0 +1,76 @@
+# UI specification for Qualification Record records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/qualification-record.schema.yaml"
+
+display:
+  titleField: "$.id"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Qualification"
+    fields:
+    - path: "$.equipmentRef"
+      widget: "ref"
+      label: "Equipment"
+      refKind: "equipment"
+      required: true
+    - path: "$.qualificationType"
+      widget: "text"
+      label: "Qualification Type"
+    - path: "$.performedByRef"
+      widget: "ref"
+      label: "Performed By"
+      refKind: "person"
+  - title: "Status"
+    fields:
+    - path: "$.status"
+      widget: "select"
+      label: "Status"
+      required: true
+      options:
+      - value: "pass"
+        label: "Pass"
+      - value: "fail"
+        label: "Fail"
+      - value: "limited_use"
+        label: "Limited Use"
+    - path: "$.performedAt"
+      widget: "date"
+      label: "Performed At"
+      required: true
+    - path: "$.dueAt"
+      widget: "date"
+      label: "Due At"
+  - title: "Notes"
+    fields:
+    - path: "$.notes"
+      widget: "markdown"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "140px"
+  - path: "$.equipmentRef"
+    label: "Equipment"
+  - path: "$.qualificationType"
+    label: "Type"
+  - path: "$.status"
+    label: "Status"
+  - path: "$.performedAt"
+    label: "Performed"
+  - path: "$.dueAt"
+    label: "Due"

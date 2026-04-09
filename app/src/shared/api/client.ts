@@ -1819,6 +1819,25 @@ export const apiClient = {
     return { success: true };
   },
 
+  /**
+   * Search records by kind (type).
+   * Calls GET /tree/search?q=<query>&kind=<kind>&limit=<limit>
+   */
+  async searchRecordsByKind(
+    query: string,
+    kind: string,
+    limit: number = 15
+  ): Promise<{ records: Array<{ recordId: string; title: string; kind: string }>; total: number }> {
+    const params = new URLSearchParams({ q: query, kind, limit: String(limit) });
+    const response = await fetch(`${API_BASE}/tree/search?${params.toString()}`, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!response.ok) {
+      throw await ApiError.fromResponse(response);
+    }
+    return response.json() as Promise<{ records: Array<{ recordId: string; title: string; kind: string }>; total: number }>;
+  },
+
   async bindProtocol(
     protocolId: string,
     bindings?: Record<string, unknown> & {

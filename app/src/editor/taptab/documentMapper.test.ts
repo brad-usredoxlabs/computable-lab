@@ -99,11 +99,9 @@ const testData: Record<string, unknown> = {
   },
 };
 
-const emptySchema: Record<string, unknown> = {};
-
 describe('buildDocument', () => {
   it('produces doc with correct number of sections', () => {
-    const doc = buildDocument(testUISpec, emptySchema, testData);
+    const doc = buildDocument(testUISpec, testData);
 
     expect(doc.type).toBe('doc');
     expect(Array.isArray(doc.content)).toBe(true);
@@ -113,7 +111,7 @@ describe('buildDocument', () => {
   });
 
   it('excludes hidden fields from field count', () => {
-    const doc = buildDocument(testUISpec, emptySchema, testData);
+    const doc = buildDocument(testUISpec, testData);
     const identitySection = doc.content[0] as JSONContent;
     const readinessSection = doc.content[1] as JSONContent;
 
@@ -131,7 +129,7 @@ describe('buildDocument', () => {
   });
 
   it('populates field values from record data', () => {
-    const doc = buildDocument(testUISpec, emptySchema, testData);
+    const doc = buildDocument(testUISpec, testData);
     const readinessSection = doc.content[1] as JSONContent;
 
     const fieldRows = (readinessSection.content ?? []).filter(
@@ -149,7 +147,7 @@ describe('buildDocument', () => {
   });
 
   it('handles nested paths', () => {
-    const doc = buildDocument(testUISpec, emptySchema, testData);
+    const doc = buildDocument(testUISpec, testData);
     const readinessSection = doc.content[1] as JSONContent;
 
     const fieldRows = (readinessSection.content ?? []).filter(
@@ -161,7 +159,7 @@ describe('buildDocument', () => {
   });
 
   it('omits section when all fields are hidden', () => {
-    const doc = buildDocument(testUISpec, emptySchema, testData);
+    const doc = buildDocument(testUISpec, testData);
 
     // Check that no section with title 'Hidden Section' exists
     const hiddenSection = doc.content.find(
@@ -173,7 +171,7 @@ describe('buildDocument', () => {
   });
 
   it('includes section heading with correct title', () => {
-    const doc = buildDocument(testUISpec, emptySchema, testData);
+    const doc = buildDocument(testUISpec, testData);
     const identitySection = doc.content[0] as JSONContent;
 
     expect(identitySection.type).toBe('section');
@@ -185,7 +183,7 @@ describe('buildDocument', () => {
   });
 
   it('handles empty data gracefully', () => {
-    const doc = buildDocument(testUISpec, emptySchema, {});
+    const doc = buildDocument(testUISpec, {});
 
     expect(doc.type).toBe('doc');
     expect(doc.content.length).toBe(2); // Still 2 sections, just with empty values
@@ -219,7 +217,7 @@ describe('buildDocument', () => {
       },
     };
 
-    const doc = buildDocument(uiSpecWithMissingLabels, emptySchema, { someField: 'value' });
+    const doc = buildDocument(uiSpecWithMissingLabels, { someField: 'value' });
     const section = doc.content[0] as JSONContent;
     const fieldRow = (section.content ?? [])[1] as JSONContent;
 

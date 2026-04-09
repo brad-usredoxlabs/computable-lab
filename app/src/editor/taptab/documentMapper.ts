@@ -23,7 +23,6 @@ interface JSONContent {
  */
 export function buildDocument(
   uiSpec: UISpec,
-  _schema: Record<string, unknown>,
   data: Record<string, unknown>,
 ): { type: 'doc'; content: JSONContent[] } {
   const sections: JSONContent[] = [];

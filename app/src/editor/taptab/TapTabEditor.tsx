@@ -40,7 +40,7 @@ export interface TapTabEditorHandle {
  * TapTabEditor component that renders a TipTap editor with custom extensions.
  */
 export const TapTabEditor = forwardRef<TapTabEditorHandle, TapTabEditorProps>(function TapTabEditor(
-  { data, uiSpec, schema, disabled }: TapTabEditorProps,
+  { data, uiSpec, disabled }: TapTabEditorProps,
   ref
 ) {
   const editor = useEditor({
@@ -52,7 +52,7 @@ export const TapTabEditor = forwardRef<TapTabEditorHandle, TapTabEditorProps>(fu
       FieldRow,
       TabNavExtension,
     ],
-    content: useMemo(() => buildDocument(uiSpec, schema, data), [uiSpec, schema, data]),
+    content: useMemo(() => buildDocument(uiSpec, data), [uiSpec, data]),
     editable: !disabled,
   });
 

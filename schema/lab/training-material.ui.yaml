@@ -1,0 +1,75 @@
+# UI specification for Training Material records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/training-material.schema.yaml"
+
+display:
+  titleField: "$.title"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.title"
+      widget: "text"
+      label: "Title"
+      required: true
+    - path: "$.version"
+      widget: "text"
+      label: "Version"
+  - title: "Classification"
+    fields:
+    - path: "$.materialType"
+      widget: "select"
+      label: "Material Type"
+      required: true
+      options:
+      - value: "sop"
+        label: "SOP"
+      - value: "slide_deck"
+        label: "Slide Deck"
+      - value: "video"
+        label: "Video"
+      - value: "quiz"
+        label: "Quiz"
+      - value: "worksheet"
+        label: "Worksheet"
+      - value: "observation_checklist"
+        label: "Observation Checklist"
+      - value: "other"
+        label: "Other"
+    - path: "$.effectiveAt"
+      widget: "date"
+      label: "Effective Date"
+  - title: "Lineage"
+    fields:
+    - path: "$.supersededByRef"
+      widget: "ref"
+      label: "Superseded By"
+      refKind: "training-material"
+  - title: "Notes"
+    fields:
+    - path: "$.notes"
+      widget: "markdown"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "120px"
+  - path: "$.title"
+    label: "Title"
+  - path: "$.materialType"
+    label: "Type"
+  - path: "$.version"
+    label: "Version"
