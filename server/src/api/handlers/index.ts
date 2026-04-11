@@ -2,6 +2,7 @@
  * Handler exports for the API layer.
  */
 
+export * from './RecordSearchHandlers.js';
 export * from './RecordHandlers.js';
 export * from './SchemaHandlers.js';
 export * from './ValidationHandlers.js';

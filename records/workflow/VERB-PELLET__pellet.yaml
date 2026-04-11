@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml
+kind: verb-definition
+id: VERB-PELLET
+canonical: pellet
+label: Pellet
+domain: sample_prep
+broaderVerbRefs:
+  - kind: record
+    type: verb-definition
+    id: VERB-CENTRIFUGE
+    label: Centrifuge

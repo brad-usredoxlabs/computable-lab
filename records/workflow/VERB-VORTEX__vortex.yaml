@@ -1,0 +1,11 @@
+$schema: https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml
+kind: verb-definition
+id: VERB-VORTEX
+canonical: vortex
+label: Vortex
+domain: sample_prep
+broaderVerbRefs:
+  - kind: record
+    type: verb-definition
+    id: VERB-MIX
+    label: Mix

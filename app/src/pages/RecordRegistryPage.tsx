@@ -1,11 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
-import { RecordListTable } from '../components/registry/RecordListTable';
-import { SlideOverEditor } from '../components/registry/SlideOverEditor';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { AiDraftBar } from '../components/registry/AiDraftBar';
 import { CsvImportModal } from '../components/registry/CsvImportModal';
-import { apiClient } from '../shared/api/client';
+import { TapTabEditor, serializeDocument, isDirty } from '../editor/taptab';
+import type { TapTabEditorHandle } from '../editor/taptab/types';
 import type { UISpec } from '../types/uiSpec';
 import type { JsonSchema } from '../types/kernel';
+import { apiClient } from '../shared/api/client';
+import { RelatedRecordsCard } from '../components/registry/RelatedRecordsCard';
 
 const REGISTRY_TABS = [
   { id: 'people', label: 'People', kinds: ['person'] },
@@ -35,6 +36,12 @@ export default function RecordRegistryPage() {
   const [selectedSchema, setSelectedSchema] = useState<JsonSchema | null>(null);
   const [editorMode, setEditorMode] = useState<'edit' | 'create'>('edit');
   const [csvModalOpen, setCsvModalOpen] = useState(false);
+
+  // Editor state for inline TapTabEditor
+  const taptabRef = useRef<TapTabEditorHandle>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
     async function loadUiSpecs() {
@@ -84,19 +91,10 @@ export default function RecordRegistryPage() {
     setSelectedRecord(null);
     setSelectedUiSpec(null);
     setSelectedSchema(null);
+    setDirty(false);
   }, [activeTab]);
 
-  const columns = useMemo(() => {
-    const tab = REGISTRY_TABS.find(t => t.id === activeTab);
-    if (!tab) return [];
-    for (const schemaId of tab.kinds) {
-      const uiSpec = uiSpecs.get(schemaId);
-      if (uiSpec?.list?.columns?.length) {
-        return uiSpec.list.columns.map(c => ({ path: c.path, label: c.label, width: c.width as string }));
-      }
-    }
-    return [{ path: '$.id', label: 'ID', width: '140px' }, { path: '$.kind', label: 'Kind' }, { path: '$.status', label: 'Status' }];
-  }, [activeTab, uiSpecs]);
+
 
   function handleDraftReady(payload: Record<string, unknown>) {
     setSelectedRecord({ recordId: '', schemaId: activeTabSchemaId, payload });
@@ -115,10 +113,46 @@ export default function RecordRegistryPage() {
     setSelectedUiSpec(uiSpecs.get(recordData.schemaId) || null);
     setSelectedSchema(schemas.get(recordData.schemaId) || null);
     setEditorMode('edit');
+    setDirty(false);
   };
 
   const handleSaved = async () => {
     await refreshRecords();
+  };
+
+  const handleSave = async () => {
+    if (!selectedRecord) return;
+    const editor = taptabRef.current?.getEditor();
+    if (!editor) return;
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const serialized = serializeDocument(editor.getJSON(), selectedRecord.payload);
+      if (editorMode === 'create') {
+        await apiClient.createRecord(selectedRecord.schemaId, serialized);
+      } else {
+        await apiClient.updateRecord(selectedRecord.recordId, serialized);
+      }
+      handleSaved();
+      setSelectedRecord(null);
+      setSelectedUiSpec(null);
+      setSelectedSchema(null);
+      setDirty(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setSelectedRecord(null);
+    setSelectedUiSpec(null);
+    setSelectedSchema(null);
+    setDirty(false);
+    setError(null);
   };
 
   const activeTabConfig = REGISTRY_TABS.find(t => t.id === activeTab)!;
@@ -139,47 +173,143 @@ export default function RecordRegistryPage() {
     );
   }, [uiSpecs, activeTabSchemaId]);
 
+  // Dirty state tracking interval
+  useEffect(() => {
+    if (!selectedRecord || !selectedUiSpec) return;
+
+    const interval = setInterval(() => {
+      const editor = taptabRef.current?.getEditor();
+      if (!editor) return;
+
+      const currentPayload = serializeDocument(editor.getJSON(), selectedRecord.payload);
+      setDirty(isDirty(selectedRecord.payload, currentPayload));
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [selectedRecord, selectedUiSpec]);
+
+  const title = editorMode === 'create' ? 'New Record' : (selectedRecord ? selectedRecord.recordId : 'New Record');
+
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-semibold text-gray-900">Records</h1>
-        <button
-          onClick={() => setCsvModalOpen(true)}
-          className="text-sm px-3 py-1.5 border border-gray-300 rounded text-gray-600 hover:bg-gray-50"
-        >
-          Import CSV
-        </button>
+    <div className="flex h-[calc(100vh-4rem)]">
+      {/* Left Panel - Record List */}
+      <div className="w-80 flex-shrink-0 flex flex-col border-r border-gray-200 bg-white">
+        {/* Tabs */}
+        <div className="flex flex-wrap gap-1 border-b border-gray-200 p-2">
+          {REGISTRY_TABS.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as TabId)}
+              className={`px-2 py-1 text-xs rounded ${
+                activeTab === tab.id
+                  ? 'bg-blue-100 text-blue-700 font-medium'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {/* AiDraftBar */}
+        <div className="p-2 border-b border-gray-100">
+          <AiDraftBar schemaId={activeTabSchemaId} onDraftReady={handleDraftReady} />
+        </div>
+        {/* Record List - Compact */}
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="text-sm text-center py-8 text-gray-500">Loading...</div>
+          ) : records.length === 0 ? (
+            <div className="text-sm text-center py-8 text-gray-500">No records found</div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {records.map((record) => {
+                const isSelected = record.recordId === selectedRecord?.recordId;
+                const displayName = (record.payload as { name?: string; title?: string; id?: string }).name ||
+                                   (record.payload as { name?: string; title?: string; id?: string }).title ||
+                                   record.recordId;
+                const kind = (record.payload as { kind?: string }).kind || 'record';
+                return (
+                  <div
+                    key={record.recordId}
+                    onClick={() => handleSelectRecord({ recordId: record.recordId, payload: record.payload })}
+                    className={`p-3 cursor-pointer hover:bg-gray-50 ${
+                      isSelected ? 'bg-blue-50 border-l-4 border-blue-500' : 'border-l-4 border-transparent'
+                    }`}
+                  >
+                    <div className="font-medium text-sm text-gray-900 truncate">{displayName}</div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      <span className="inline-block px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                        {kind}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
-      <div className="flex gap-1 border-b border-gray-200 mb-4">
-        {REGISTRY_TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as TabId)}
-            className={`px-4 py-2 text-sm ${
-              activeTab === tab.id
-                ? 'border-b-2 border-blue-500 text-blue-600 font-medium'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+
+      {/* Right Panel - Editor */}
+      <div className="flex-1 flex flex-col bg-white">
+        {selectedRecord && selectedUiSpec && selectedSchema ? (
+          <>
+            {/* Header with title */}
+            <div className="border-b border-gray-200 p-4">
+              <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+            </div>
+            {/* TapTab Editor */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <TapTabEditor
+                ref={taptabRef}
+                data={selectedRecord.payload}
+                uiSpec={selectedUiSpec}
+                schema={selectedSchema}
+                disabled={saving}
+              />
+              {selectedRecord.recordId && editorMode !== 'create' && (
+                <div className="border-t border-gray-100 p-4 mt-4">
+                  <RelatedRecordsCard
+                    recordId={selectedRecord.recordId}
+                    onNavigate={(id) => {
+                      window.open(`/records/${encodeURIComponent(id)}`, '_blank')
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+            {/* Save/Cancel Bar */}
+            <div className="border-t border-gray-200 p-4 flex items-center gap-3 bg-white">
+              <button
+                onClick={handleSave}
+                disabled={saving || !dirty}
+                className="bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
+              >
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+              <button
+                onClick={handleCancel}
+                className="border border-gray-300 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              {dirty && !saving && (
+                <span className="w-2 h-2 rounded-full bg-orange-400" title="Unsaved changes" />
+              )}
+              {error && <span className="text-red-500 text-xs">{error}</span>}
+            </div>
+          </>
+        ) : (
+          /* Placeholder when no record selected */
+          <div className="flex-1 flex items-center justify-center text-gray-500">
+            <div className="text-center">
+              <p className="text-lg">Select a record to edit</p>
+              <p className="text-sm mt-2">Or create a new record using the AiDraftBar</p>
+            </div>
+          </div>
+        )}
       </div>
-      <AiDraftBar schemaId={activeTabSchemaId} onDraftReady={handleDraftReady} />
-      <RecordListTable records={records} columns={columns} onSelect={handleSelectRecord} selectedId={selectedRecord?.recordId} loading={loading} />
-      <SlideOverEditor
-        open={selectedRecord !== null}
-        onClose={() => {
-          setSelectedRecord(null);
-          setSelectedUiSpec(null);
-          setSelectedSchema(null);
-        }}
-        record={selectedRecord}
-        uiSpec={selectedUiSpec}
-        schema={selectedSchema}
-        onSaved={handleSaved}
-        mode={editorMode}
-      />
+
       <CsvImportModal
         open={csvModalOpen}
         onClose={() => setCsvModalOpen(false)}

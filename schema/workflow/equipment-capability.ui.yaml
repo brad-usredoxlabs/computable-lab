@@ -1,0 +1,56 @@
+# UI specification for Equipment-Capability records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/equipment-capability.schema.yaml"
+
+display:
+  titleField: "$.id"
+  icon: "equipment"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.status"
+      widget: "select"
+      label: "Status"
+      required: true
+      options:
+      - value: "active"
+        label: "Active"
+      - value: "draft"
+        label: "Draft"
+      - value: "deprecated"
+        label: "Deprecated"
+  - title: "Equipment Link"
+    fields:
+    - path: "$.equipmentRef"
+      widget: "ref"
+      label: "Equipment"
+      refKind: "equipment"
+    - path: "$.equipmentClassRef"
+      widget: "ref"
+      label: "Equipment Class"
+      refKind: "equipment-class"
+  - title: "Notes"
+    fields:
+    - path: "$.notes"
+      widget: "markdown"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "160px"
+  - path: "$.status"
+    label: "Status"

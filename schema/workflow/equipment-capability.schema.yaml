@@ -70,6 +70,28 @@ properties:
         constraints:
           type: object
           additionalProperties: true
+          properties:
+            acceptedLabware:
+              type: array
+              description: "Labware formats this capability can accept. If omitted, no labware constraint is enforced."
+              items:
+                type: object
+                additionalProperties: false
+                required: [ labwareRef ]
+                properties:
+                  labwareRef:
+                    description: "Reference to a labware definition record."
+                    allOf:
+                    - $ref: "./datatypes/ref.schema.yaml"
+                    - type: object
+                      properties:
+                        kind: { const: record }
+                        type: { const: labware }
+                  subModule:
+                    type: string
+                    description: "Optional sub-module name (e.g., rotor model, adapter) that enables this labware acceptance."
+                  notes:
+                    type: string
         notes:
           type: string
 

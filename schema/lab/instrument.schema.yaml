@@ -59,9 +59,23 @@ properties:
     type: string
     description: Manufacturer serial number
 
+  equipmentRef:
+    description: "Optional link to equipment record for asset tracking, calibration, and training."
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: equipment }
+
   location:
     type: string
     description: Physical or logical location of the instrument
+
+  status:
+    type: string
+    description: "Operational status of the instrument."
+    enum: [ active, out_of_service, retired, maintenance ]
 
   capabilities:
     type: array

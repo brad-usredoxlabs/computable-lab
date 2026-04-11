@@ -35,6 +35,15 @@ properties:
         kind: { const: record }
         type: { const: equipment-class }
 
+  instrumentRef:
+    description: "Optional link to instrument record when this equipment is also a measuring device."
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: instrument }
+
   manufacturer:
     type: string
 

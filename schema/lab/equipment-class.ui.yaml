@@ -1,0 +1,57 @@
+# UI specification for Equipment-Class records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/equipment-class.schema.yaml"
+
+display:
+  titleField: "$.name"
+  icon: "equipment"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.name"
+      widget: "text"
+      label: "Name"
+      required: true
+  - title: "Details"
+    fields:
+    - path: "$.manufacturer"
+      widget: "text"
+      label: "Manufacturer"
+    - path: "$.modelFamily"
+      widget: "text"
+      label: "Model Family"
+  - title: "Readiness Requirements"
+    fields:
+    - path: "$.readinessRequirements.calibrationRequired"
+      widget: "checkbox"
+      label: "Calibration Required"
+    - path: "$.readinessRequirements.qualificationRequired"
+      widget: "checkbox"
+      label: "Qualification Required"
+  - title: "Notes"
+    fields:
+    - path: "$.notes"
+      widget: "markdown"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "140px"
+  - path: "$.name"
+    label: "Name"
+  - path: "$.manufacturer"
+    label: "Manufacturer"

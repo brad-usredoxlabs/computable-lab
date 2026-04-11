@@ -6,6 +6,7 @@
  */
 
 import type { FastifyInstance } from 'fastify';
+import type { RecordSearchHandlers } from './handlers/RecordSearchHandlers.js';
 import type { RecordHandlers } from './handlers/RecordHandlers.js';
 import type { SchemaHandlers } from './handlers/SchemaHandlers.js';
 import type { ValidationHandlers } from './handlers/ValidationHandlers.js';
@@ -47,6 +48,7 @@ import type { HealthResponse } from './types.js';
  */
 export interface RouteOptions {
   recordHandlers: RecordHandlers;
+  recordSearchHandlers?: RecordSearchHandlers;
   relatedRecordsHandlers?: RelatedRecordsHandlers;
   schemaHandlers: SchemaHandlers;
   validationHandlers: ValidationHandlers;
@@ -159,6 +161,15 @@ export function registerRoutes(
   const { relatedRecordsHandlers } = options;
   if (relatedRecordsHandlers) {
     fastify.get('/records/:id/related', relatedRecordsHandlers.getRelatedRecords.bind(relatedRecordsHandlers));
+  }
+
+  // ============================================================================
+  // Record Search Route
+  // ============================================================================
+
+  const { recordSearchHandlers } = options;
+  if (recordSearchHandlers) {
+    fastify.post('/ai/search-records', recordSearchHandlers.searchRecords.bind(recordSearchHandlers));
   }
 
   // ============================================================================

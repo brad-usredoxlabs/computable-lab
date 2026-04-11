@@ -1,0 +1,6 @@
+$schema: https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml
+kind: verb-definition
+id: VERB-THERMAL-CYCLE
+canonical: thermal_cycle
+label: Thermal Cycle
+domain: thermal

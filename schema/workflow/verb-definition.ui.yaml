@@ -1,0 +1,65 @@
+# UI specification for Verb-Definition records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml"
+
+display:
+  titleField: "$.label"
+  icon: "workflow"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.canonical"
+      widget: "text"
+      label: "Canonical Slug"
+      required: true
+    - path: "$.label"
+      widget: "text"
+      label: "Label"
+      required: true
+  - title: "Classification"
+    fields:
+    - path: "$.domain"
+      widget: "select"
+      label: "Domain"
+      options:
+      - value: "liquid_handling"
+        label: "Liquid Handling"
+      - value: "sample_prep"
+        label: "Sample Preparation"
+      - value: "thermal"
+        label: "Thermal"
+      - value: "analytical_readout"
+        label: "Analytical Readout"
+      - value: "manual"
+        label: "Manual"
+      - value: "other"
+        label: "Other"
+  - title: "Notes"
+    fields:
+    - path: "$.notes"
+      widget: "markdown"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "140px"
+  - path: "$.canonical"
+    label: "Canonical"
+  - path: "$.label"
+    label: "Label"
+  - path: "$.domain"
+    label: "Domain"

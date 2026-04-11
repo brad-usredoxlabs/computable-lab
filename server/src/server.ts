@@ -52,6 +52,7 @@ import {
   createChemistryHandlers,
   createIngestionHandlers,
   createRunWorkspaceHandlers,
+  createRecordSearchHandlers,
 } from './api/handlers/index.js';
 import { createIngestionAIHandlers } from './api/handlers/IngestionAIHandlers.js';
 import { createMaterialAIHandlers } from './api/handlers/MaterialAIHandlers.js';
@@ -612,12 +613,17 @@ export async function createServer(
   });
 
   const relatedRecordsHandlers = createRelatedRecordsHandlers(ctx.store);
+  const recordSearchHandlers = createRecordSearchHandlers(
+    ctx.store,
+    ctx.appConfig ?? DEFAULT_APP_CONFIG,
+  );
   const readinessHandlers = createReadinessHandlers(ctx);
 
   // Register API routes with /api prefix
   await fastify.register(async (instance) => {
     const routeOpts: import('./api/routes.js').RouteOptions = {
       recordHandlers,
+      recordSearchHandlers,
       relatedRecordsHandlers,
       schemaHandlers,
       validationHandlers,

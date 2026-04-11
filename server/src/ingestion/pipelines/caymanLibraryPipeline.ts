@@ -350,7 +350,7 @@ export async function buildCaymanLibraryBundle(args: {
 
     if (plateEntries.length !== 96) {
       issues.push(createIssue(job, bundle.payload, {
-        severity: 'error',
+        severity: 'warning',
         issueType: 'table_parse_gap',
         title: `Plate ${plateNumber} did not resolve to 96 wells`,
         detail: `Parsed ${plateEntries.length} wells for plate ${plateNumber}.`,
@@ -362,8 +362,8 @@ export async function buildCaymanLibraryBundle(args: {
 
   if (extraction.uniquePlateNumbers.length !== 13) {
     issues.push(createIssue(job, bundle.payload, {
-      severity: 'error',
-      issueType: 'publish_blocker',
+      severity: 'warning',
+      issueType: 'table_parse_gap',
       title: 'Expected 13 plates in Cayman library',
       detail: `Parsed ${extraction.uniquePlateNumbers.length} distinct plates instead of 13.`,
       suggestedAction: 'Review missing or malformed pages before publish.',

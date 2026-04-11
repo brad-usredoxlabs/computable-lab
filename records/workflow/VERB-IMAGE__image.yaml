@@ -1,0 +1,6 @@
+$schema: https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml
+kind: verb-definition
+id: VERB-IMAGE
+canonical: image
+label: Image
+domain: analytical_readout

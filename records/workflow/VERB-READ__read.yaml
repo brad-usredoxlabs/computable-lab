@@ -1,0 +1,6 @@
+$schema: https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml
+kind: verb-definition
+id: VERB-READ
+canonical: read
+label: Read
+domain: analytical_readout

@@ -1,0 +1,6 @@
+$schema: https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml
+kind: verb-definition
+id: VERB-WEIGH
+canonical: weigh
+label: Weigh
+domain: analytical_readout
