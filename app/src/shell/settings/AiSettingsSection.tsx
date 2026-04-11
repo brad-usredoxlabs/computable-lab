@@ -168,8 +168,13 @@ export function AiSettingsSection({ ai, aiStatus, editingSection, onEditChange, 
       })
 
       setModelOptions(result.models)
-      if (result.models.length > 0 && !model) {
-        setModel(result.models[0])
+      if (result.models.length > 0) {
+        // Always sync model to the first available if current value is empty
+        // or not in the fetched list (stale from a previous endpoint).
+        const resolved = (model === '__custom__' ? customModel : model).trim()
+        if (!resolved || !result.models.includes(resolved)) {
+          setModel(result.models[0])
+        }
       }
       if (result.available) {
         if (resolvedModel && result.modelWarning) {
@@ -194,14 +199,21 @@ export function AiSettingsSection({ ai, aiStatus, editingSection, onEditChange, 
       setFeedback({ type: 'error', message: 'Base URL is required' })
       return { ok: false }
     }
-    const resolvedModel = (model === '__custom__' ? customModel : model).trim()
-    if (!resolvedModel) {
-      setFeedback({ type: 'error', message: 'Model is required' })
+
+    // Test connection first — this may populate modelOptions and update model state.
+    const probe = await testConnection()
+    if (!probe?.available) {
       return { ok: false }
     }
 
-    const probe = await testConnection()
-    if (!probe?.available) {
+    // Check model AFTER test so the auto-selected model from testConnection is available.
+    // Read model from probe.models as fallback since setState is async.
+    let resolvedModel = (model === '__custom__' ? customModel : model).trim()
+    if (!resolvedModel && probe.models.length > 0) {
+      resolvedModel = probe.models[0]
+    }
+    if (!resolvedModel) {
+      setFeedback({ type: 'error', message: 'Model is required' })
       return { ok: false }
     }
 
@@ -209,7 +221,7 @@ export function AiSettingsSection({ ai, aiStatus, editingSection, onEditChange, 
       buildAiPatch(
         provider,
         baseUrl.trim(),
-        (model === '__custom__' ? customModel : model).trim(),
+        resolvedModel,
         apiKey,
         timeoutMs,
         maxTokens,
