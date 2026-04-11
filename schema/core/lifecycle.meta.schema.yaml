@@ -1,0 +1,85 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/lifecycle.meta.schema.yaml"
+title: "Lifecycle Specification"
+description: "Meta-schema for declarative record lifecycle state machines."
+type: object
+required: [lifecycleVersion, id, states, transitions]
+additionalProperties: false
+properties:
+  lifecycleVersion:
+    type: integer
+    const: 1
+  id:
+    type: string
+    description: "Unique lifecycle identifier (e.g., 'document-control')."
+  description:
+    type: string
+  states:
+    type: array
+    items:
+      type: object
+      required: [id]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        initial:
+          type: boolean
+          default: false
+        terminal:
+          type: boolean
+          default: false
+        description:
+          type: string
+    minItems: 2
+  transitions:
+    type: array
+    items:
+      type: object
+      required: [from, to, role]
+      additionalProperties: false
+      properties:
+        from:
+          oneOf:
+          - type: string
+          - type: array
+            items: { type: string }
+        to:
+          type: string
+        role:
+          type: string
+          description: "Role name (resolved via schema lifecycleRoles mapping)."
+        label:
+          type: string
+          description: "Human-readable transition label."
+        guards:
+          type: array
+          items:
+            type: object
+            required: [type]
+            additionalProperties: true
+            properties:
+              type:
+                type: string
+                enum: [requires_different_person, requires_field_set, requires_active_policy]
+              field:
+                type: string
+              than:
+                type: string
+        description:
+          type: string
+  roles:
+    type: array
+    items:
+      type: object
+      required: [id]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        description:
+          type: string

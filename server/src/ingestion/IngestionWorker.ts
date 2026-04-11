@@ -146,16 +146,21 @@ export class IngestionWorkerShell {
       && running.payload.source_kind !== 'vendor_formulation_html'
       && running.payload.source_kind !== 'vendor_plate_map_spreadsheet'
     ) {
-      // B4: Instrument source kinds have stub parsers — create an info issue
+      // B4: Instrument and vendor_protocol_pdf source kinds have stub parsers — create an info issue
       // so the user knows extraction is not yet automated for this source kind.
       const isInstrument = running.payload.source_kind.startsWith('instrument_');
-      if (isInstrument) {
+      const isVendorProtocolPdf = running.payload.source_kind === 'vendor_protocol_pdf';
+      if (isInstrument || isVendorProtocolPdf) {
         const stubIssue = buildIngestionIssueEnvelope({
           job: running.payload,
           severity: 'info',
           issueType: 'parser_not_implemented',
-          title: `Parser not yet implemented for ${running.payload.source_kind.replace(/_/g, ' ')}`,
-          detail: `Automated extraction for "${running.payload.source_kind}" is not yet available. The job has been moved to review so you can inspect the uploaded artifacts manually. A dedicated parser will be added in a future release.`,
+          title: isVendorProtocolPdf
+            ? 'Protocol PDF adapter is under development'
+            : `Parser not yet implemented for ${running.payload.source_kind.replace(/_/g, ' ')}`,
+          detail: isVendorProtocolPdf
+            ? 'Protocol PDF adapter is under development. The job has been moved to review so you can inspect the uploaded artifacts manually.'
+            : `Automated extraction for "${running.payload.source_kind}" is not yet available. The job has been moved to review so you can inspect the uploaded artifacts manually. A dedicated parser will be added in a future release.`,
           suggestedAction: 'Review uploaded artifacts manually and create candidates by hand, or wait for parser support.',
         });
         await this.store.create({
@@ -165,7 +170,7 @@ export class IngestionWorkerShell {
         });
       }
 
-      const progressMessage = isInstrument
+      const progressMessage = isInstrument || isVendorProtocolPdf
         ? `No automated parser for ${running.payload.source_kind.replace(/_/g, ' ')} yet — ready for manual review`
         : 'Ready for review';
 

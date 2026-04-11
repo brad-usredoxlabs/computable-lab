@@ -1,0 +1,66 @@
+lifecycleVersion: 1
+id: document-control
+description: "Standard document control lifecycle for regulated records."
+
+roles:
+- id: author
+  label: "Author"
+  description: "The person who created or owns the document."
+- id: reviewer
+  label: "Reviewer"
+  description: "A qualified person who reviews the document for correctness."
+- id: approver
+  label: "Approver"
+  description: "A person with authority to approve the document for use."
+
+states:
+- id: draft
+  label: "Draft"
+  initial: true
+  description: "Document is being authored. Not yet submitted for review."
+- id: in_review
+  label: "In Review"
+  description: "Document has been submitted and is awaiting reviewer assessment."
+- id: approved
+  label: "Approved"
+  description: "Document has been reviewed and approved."
+- id: effective
+  label: "Effective"
+  description: "Document is the current active version in use."
+- id: superseded
+  label: "Superseded"
+  terminal: true
+  description: "Document has been replaced by a newer version."
+- id: archived
+  label: "Archived"
+  terminal: true
+  description: "Document has been retired from use."
+
+transitions:
+- from: draft
+  to: in_review
+  role: author
+  label: "Submit for review"
+- from: in_review
+  to: approved
+  role: reviewer
+  label: "Approve"
+  guards:
+  - type: requires_different_person
+    than: author
+- from: in_review
+  to: draft
+  role: reviewer
+  label: "Return to draft"
+- from: approved
+  to: effective
+  role: approver
+  label: "Make effective"
+- from: effective
+  to: superseded
+  role: author
+  label: "Supersede"
+- from: [draft, in_review, approved, effective]
+  to: archived
+  role: approver
+  label: "Archive"

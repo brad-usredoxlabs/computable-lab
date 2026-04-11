@@ -61,6 +61,18 @@ form:
     - path: "$.notes"
       widget: "markdown"
       label: "Notes"
+  - title: "Document Control"
+    fields:
+    - path: "$.reviewerRef"
+      widget: "ref"
+      label: "Reviewer"
+      refKind: "person"
+      help: "Person assigned to review this document."
+    - path: "$.approverRef"
+      widget: "ref"
+      label: "Approver"
+      refKind: "person"
+      help: "Person with authority to approve this document."
 
 list:
   columns:

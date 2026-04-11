@@ -6,7 +6,7 @@
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import type { AppConfig, AIConfig, RepositoryConfig, IntegrationsConfig } from '../../config/types.js';
+import type { AppConfig, AIConfig, RepositoryConfig, IntegrationsConfig, AIProfile } from '../../config/types.js';
 import { DEFAULT_REPO_CONFIG } from '../../config/types.js';
 import { validateConfig, ConfigValidationError } from '../../config/loader.js';
 import { writeFile, rename, mkdir } from 'node:fs/promises';
@@ -129,9 +129,17 @@ function checkRestartRequired(
 
 /** Build the GET / PATCH response body (repositories + ai, secrets redacted). */
 function buildConfigResponse(config: AppConfig) {
+  const ai = config.ai;
+  const profileNames = ai?.profiles ? Object.keys(ai.profiles) : [];
+  const activeProfile = ai?.activeProfile && ai.profiles?.[ai.activeProfile]
+    ? ai.activeProfile
+    : undefined;
+
   return {
     repositories: redactSecrets(config.repositories),
-    ai: config.ai ? redactSecrets(config.ai) : null,
+    ai: ai ? redactSecrets(ai) : null,
+    aiProfiles: profileNames,
+    aiActiveProfile: activeProfile ?? null,
     lab: config.lab ? redactSecrets(config.lab) : null,
     integrations: config.integrations ? redactSecrets(config.integrations) : null,
   };
@@ -357,5 +365,149 @@ export class ConfigHandlers {
       models: modelsResult.models,
       error: probe.error,
     });
+  }
+
+  // ---- GET /api/config/ai/profiles -----------------------------------------
+
+  async listAiProfiles(_request: FastifyRequest, reply: FastifyReply) {
+    const ai = this.appConfig.ai;
+    const profiles = ai?.profiles ?? {};
+    const profileNames = Object.keys(profiles);
+    const activeProfile = ai?.activeProfile && profiles[ai.activeProfile]
+      ? ai.activeProfile
+      : undefined;
+
+    return reply.send({
+      profiles: profileNames.map(name => {
+        const p = profiles[name]!;
+        return {
+          name,
+          provider: p.inference.provider ?? 'openai-compatible',
+          baseUrl: p.inference.baseUrl,
+          model: p.inference.model,
+          active: name === activeProfile,
+        };
+      }),
+      activeProfile: activeProfile ?? null,
+    });
+  }
+
+  // ---- PUT /api/config/ai/profiles/:name -----------------------------------
+
+  async saveAiProfile(
+    request: FastifyRequest<{ Params: { name: string }; Body: Record<string, unknown> }>,
+    reply: FastifyReply,
+  ) {
+    const { name } = request.params;
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return reply.status(400).send({ success: false, error: 'Profile name is required' });
+    }
+
+    const body = request.body as { inference?: Record<string, unknown>; agent?: Record<string, unknown> };
+    if (!body?.inference?.baseUrl || !body?.inference?.model) {
+      return reply.status(400).send({ success: false, error: 'inference.baseUrl and inference.model are required' });
+    }
+
+    const updated = structuredClone(this.appConfig);
+    if (!updated.ai) {
+      updated.ai = { inference: body.inference as unknown as AppConfig['ai'] extends infer T ? T extends { inference: infer I } ? I : never : never, agent: {} } as AIConfig;
+    }
+    if (!updated.ai.profiles) {
+      updated.ai.profiles = {};
+    }
+
+    // If saving over an existing profile, preserve secrets that are redacted
+    const existing = updated.ai.profiles[name.trim()];
+    const newInference = { ...body.inference };
+    if (existing && isRedacted(newInference.apiKey)) {
+      newInference.apiKey = existing.inference.apiKey;
+    }
+
+    updated.ai.profiles[name.trim()] = {
+      inference: newInference,
+      agent: body.agent ?? existing?.agent ?? {},
+    } as unknown as AIProfile;
+
+    try {
+      await writeConfigYaml(this.configPath, updated);
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: `Failed to write config: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    this.appConfig = updated;
+    await this.onConfigUpdate?.(updated);
+
+    return reply.send({ success: true, message: `Profile "${name.trim()}" saved.` });
+  }
+
+  // ---- POST /api/config/ai/profiles/:name/activate ------------------------
+
+  async activateAiProfile(
+    request: FastifyRequest<{ Params: { name: string } }>,
+    reply: FastifyReply,
+  ) {
+    const { name } = request.params;
+    const profiles = this.appConfig.ai?.profiles ?? {};
+
+    if (!profiles[name]) {
+      return reply.status(404).send({ success: false, error: `Profile "${name}" not found` });
+    }
+
+    const updated = structuredClone(this.appConfig);
+    if (!updated.ai) return reply.status(400).send({ success: false, error: 'AI not configured' });
+
+    // Copy the profile's settings into the top-level inference/agent fields
+    const profile = updated.ai.profiles?.[name];
+    if (!profile) return reply.status(404).send({ success: false, error: `Profile "${name}" not found` });
+    updated.ai.inference = profile.inference;
+    updated.ai.agent = profile.agent;
+    updated.ai.activeProfile = name;
+
+    try {
+      await writeConfigYaml(this.configPath, updated);
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: `Failed to write config: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    this.appConfig = updated;
+    await this.onConfigUpdate?.(updated);
+
+    return reply.send({
+      success: true,
+      message: `Switched to profile "${name}".`,
+      config: {
+        ...buildConfigResponse(updated),
+        aiStatus: this.getAiStatus?.() ?? null,
+      },
+    });
+  }
+
+  // ---- DELETE /api/config/ai/profiles/:name --------------------------------
+
+  async deleteAiProfile(
+    request: FastifyRequest<{ Params: { name: string } }>,
+    reply: FastifyReply,
+  ) {
+    const { name } = request.params;
+    const profiles = this.appConfig.ai?.profiles;
+
+    if (!profiles?.[name]) {
+      return reply.status(404).send({ success: false, error: `Profile "${name}" not found` });
+    }
+
+    const updated = structuredClone(this.appConfig);
+    delete updated.ai!.profiles![name];
+    if (updated.ai!.activeProfile === name) {
+      delete updated.ai!.activeProfile;
+    }
+
+    try {
+      await writeConfigYaml(this.configPath, updated);
+    } catch (err) {
+      return reply.status(500).send({ success: false, error: `Failed to write config: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    this.appConfig = updated;
+    return reply.send({ success: true, message: `Profile "${name}" deleted.` });
   }
 }

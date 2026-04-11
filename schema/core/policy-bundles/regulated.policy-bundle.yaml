@@ -1,0 +1,16 @@
+kind: policy-bundle
+id: POL-REGULATED
+label: "Regulated"
+level: 3
+description: "Full QMS enforcement. Expired training, authorizations, and stale calibrations block execution. Operator binding required. For GxP and publication-grade work."
+settings:
+  allowAutoCreate: deny
+  allowSubstitutions: confirm
+  allowPlaceholders: deny
+  allowRemediation: confirm
+  allowSupervisedUse: deny
+  allowExpiredTraining: deny
+  allowExpiredAuthorization: deny
+  allowOutOfCalibrationEquipment: deny
+  allowUnqualifiedEquipment: deny
+  approvalAuthority: qa-reviewer

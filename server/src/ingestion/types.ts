@@ -13,6 +13,7 @@ export type IngestionSourceKind =
   | 'vendor_formulation_html'
   | 'vendor_plate_map_spreadsheet'
   | 'vendor_catalog_page'
+  | 'vendor_protocol_pdf'
   | 'instrument_plate_reader'
   | 'instrument_qpcr'
   | 'instrument_gc_ms'
@@ -190,4 +191,32 @@ export interface IngestionPublishResult {
 
 export interface IngestionContext {
   store: RecordStore;
+}
+
+// Protocol PDF extraction types
+export interface MaterialReference {
+  name: string;
+  volume?: string;
+  concentration?: string;
+}
+
+export interface ExtractedProtocolStep {
+  stepNumber: number;
+  rawText: string;
+  verbKeyword: 'add' | 'vortex' | 'incubate' | 'centrifuge' | 'pipette' | 'wash' | 'elute' | 'mix' | 'transfer' | 'aspirate' | 'discard' | 'other';
+  materials: MaterialReference[];
+  equipmentHints: string[];
+  parameters: {
+    temperature?: string;
+    duration?: string;
+    speed?: string;
+    volume?: string;
+  };
+}
+
+export interface ProtocolPdfExtraction {
+  title: string;
+  steps: ExtractedProtocolStep[];
+  materialsIndex: MaterialReference[];
+  equipmentIndex: string[];
 }

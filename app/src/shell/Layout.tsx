@@ -12,7 +12,8 @@ export function Layout() {
       <header className="header">
         <nav className="nav">
           <Link to="/" className="nav-brand">Semantic ELN</Link>
-          <Link to="/browser" className="nav-link">Records</Link>
+          <Link to="/browser" className="nav-link">Browser</Link>
+          <Link to="/registry" className="nav-link">Records</Link>
           <Link to="/labware-editor?new=1" className="nav-link">Labware Editor</Link>
           <Link to="/formulations" className="nav-link">Formulations</Link>
           <Link to="/materials" className="nav-link">Materials</Link>

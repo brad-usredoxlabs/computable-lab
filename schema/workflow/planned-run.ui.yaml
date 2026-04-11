@@ -42,6 +42,13 @@ form:
     - path: "$.protocolRef"
       widget: "ref"
       label: "Protocol"
+  - title: "Operator"
+    fields:
+    - path: "$.operatorRef"
+      widget: "ref"
+      label: "Operator"
+      refKind: "person"
+      help: "Person performing this run. Optional — used for readiness and compliance checks."
   - title: "Bindings"
     fields:
     - path: "$.bindings.labware"

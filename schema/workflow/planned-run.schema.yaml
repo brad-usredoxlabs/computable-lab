@@ -47,6 +47,15 @@ properties:
     $ref: "./datatypes/ref.schema.yaml"
     description: "Reference to the source protocol or event graph."
 
+  operatorRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: person }
+    description: "Optional reference to the person performing this run. Used for readiness checks against competency-authorizations and training records."
+
   state:
     type: string
     enum: [ draft, ready, executing, completed, failed ]

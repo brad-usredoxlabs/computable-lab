@@ -51,7 +51,7 @@ export const TapTabEditor = forwardRef<TapTabEditorHandle, TapTabEditorProps>(fu
       SectionHeading,
       FieldRow,
       TabNavExtension,
-    ],
+    ] as any[],
     content: useMemo(() => buildDocument(uiSpec, data), [uiSpec, data]),
     editable: !disabled,
   });

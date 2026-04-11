@@ -95,6 +95,8 @@ export interface AgentConfig {
 }
 
 export interface AIConfig {
+  activeProfile?: string
+  profiles?: Record<string, { inference: InferenceConfig; agent: AgentConfig }>
   inference: InferenceConfig
   agent: AgentConfig
 }

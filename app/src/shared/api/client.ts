@@ -558,6 +558,13 @@ export interface LabSettings {
     mode: 'relaxed' | 'tracked'
     allowAdHocEventInstances: boolean
   }
+  policyBundleId: string
+  activePolicyBundle: {
+    id: string
+    label: string
+    level: number
+    description?: string
+  } | null
 }
 
 export interface FormulationSummary {
@@ -977,6 +984,36 @@ export const apiClient = {
   },
 
   /**
+   * List records filtered by kind (type).
+   * Calls GET /records?kind=<kind>&limit=<limit>&offset=<offset>
+   */
+  async listRecordsByKind(
+    kind: string,
+    limit: number = 50,
+    offset: number = 0
+  ): Promise<{ records: RecordEnvelope[]; total: number }> {
+    const params = new URLSearchParams({
+      kind,
+      limit: String(limit),
+      offset: String(offset),
+    })
+    const response = await request<RecordsResponse>(`/records?${params.toString()}`)
+    return {
+      records: response.records,
+      total: response.total ?? response.records.length,
+    }
+  },
+
+  /**
+   * Get all UI specs.
+   * Calls GET /ui/specs and returns the array of specs.
+   */
+  async getAllUiSpecs(): Promise<Array<{ schemaId: string; spec: UISpec }>> {
+    const response = await request<{ specs: Array<{ schemaId: string; spec: UISpec }> }>('/ui/specs')
+    return response.specs
+  },
+
+  /**
    * Get a specific record by ID.
    */
   async getRecord(recordId: string): Promise<RecordEnvelope> {
@@ -1308,6 +1345,13 @@ export const apiClient = {
     return request<LabSettings>('/settings/lab')
   },
 
+  async patchLabSettings(patch: Partial<LabSettings>): Promise<LabSettings> {
+    return request<LabSettings>('/settings/lab', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    })
+  },
+
   async listSemanticsInstruments(params: {
     instrumentType?: string
   } = {}): Promise<{ items: InstrumentDefinition[] }> {
@@ -1521,6 +1565,44 @@ export const apiClient = {
     return request<AiConnectionTestResponse>('/config/ai/test', {
       method: 'POST',
       body: JSON.stringify(req),
+    })
+  },
+
+  /**
+   * List saved AI profiles.
+   */
+  async listAiProfiles(): Promise<{
+    profiles: Array<{ name: string; provider: string; baseUrl: string; model: string; active: boolean }>;
+    activeProfile: string | null;
+  }> {
+    return request('/config/ai/profiles')
+  },
+
+  /**
+   * Save an AI profile (create or update).
+   */
+  async saveAiProfile(name: string, profile: { inference: Record<string, unknown>; agent?: Record<string, unknown> }): Promise<{ success: boolean; message?: string }> {
+    return request(`/config/ai/profiles/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify(profile),
+    })
+  },
+
+  /**
+   * Activate an AI profile — copies its settings into the active inference config.
+   */
+  async activateAiProfile(name: string): Promise<{ success: boolean; message?: string; config?: unknown }> {
+    return request(`/config/ai/profiles/${encodeURIComponent(name)}/activate`, {
+      method: 'POST',
+    })
+  },
+
+  /**
+   * Delete an AI profile.
+   */
+  async deleteAiProfile(name: string): Promise<{ success: boolean; message?: string }> {
+    return request(`/config/ai/profiles/${encodeURIComponent(name)}`, {
+      method: 'DELETE',
     })
   },
 
@@ -1804,6 +1886,50 @@ export const apiClient = {
   ): Promise<{ suggestions: Array<{ value: string; count: number }>; total: number }> {
     const params = new URLSearchParams({ q: query, field, limit: String(limit) })
     return request(`/tags/suggest?${params.toString()}`)
+  },
+
+  /**
+   * Draft a record using AI from natural language prompt.
+   * POSTs to /ai/draft-record with schemaId and prompt.
+   */
+  async draftRecord(
+    schemaId: string,
+    prompt: string
+  ): Promise<{ success: boolean; payload?: Record<string, unknown>; error?: string; notes?: string[] }> {
+    return request('/ai/draft-record', {
+      method: 'POST',
+      body: JSON.stringify({ schemaId, prompt }),
+    })
+  },
+
+  /**
+   * Get related records (reverse references) for a given record.
+   * Calls GET /records/:id/related?limit=<limit>
+   */
+  async getRelatedRecords(
+    recordId: string,
+    limit?: number
+  ): Promise<{ related: Array<{ recordId: string; schemaId: string; kind: string; title: string; refField: string }> }> {
+    const params = new URLSearchParams({ limit: String(limit || 50) })
+    const response = await request<{ related: Array<{ recordId: string; schemaId: string; kind: string; title: string; refField: string }> }>(
+      `/records/${encodeURIComponent(recordId)}/related?${params.toString()}`
+    )
+    return response
+  },
+
+  /**
+   * Advance a record's lifecycle state by triggering an event.
+   * Calls PUT /records/:recordId with the new state.
+   */
+  async advanceRecordState(
+    recordId: string,
+    event: string,
+    actorId?: string
+  ): Promise<WriteResponse> {
+    return request<WriteResponse>(`/records/${encodeURIComponent(recordId)}/lifecycle/advance`, {
+      method: 'PUT',
+      body: JSON.stringify({ event, actorId }),
+    })
   },
 
   /**
@@ -2115,6 +2241,85 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify(body),
     })
+  },
+
+  async getReadinessReport(plannedRunId: string): Promise<{
+    plannedRunId: string
+    overallStatus: 'ready' | 'warnings' | 'blocked'
+    operator: {
+      personId: string | null
+      authorization: {
+        status: string
+        matchingAuthorizations: Array<{ id: string; status: string; expiresAt?: string }>
+        trainingGaps: Array<{ trainingMaterialId: string; reason: string }>
+      } | null
+    }
+    equipment: Array<{
+      equipmentId: string
+      name: string
+      calibration: { status: string; dueAt: string | null; daysSinceLast: number | null }
+    }>
+    summary: { totalEquipment: number; calibrationIssues: number; authorizationIssues: number; trainingGaps: number }
+  }> {
+    const response = await request<{
+      plannedRunId: string
+      overallStatus: 'ready' | 'warnings' | 'blocked'
+      operator: {
+        personId: string | null
+        authorization: {
+          status: string
+          matchingAuthorizations: Array<{ id: string; status: string; expiresAt?: string }>
+          trainingGaps: Array<{ trainingMaterialId: string; reason: string }>
+        } | null
+      }
+      equipment: Array<{
+        equipmentId: string
+        name: string
+        calibration: { status: string; dueAt: string | null; daysSinceLast: number | null }
+      }>
+      summary: { totalEquipment: number; calibrationIssues: number; authorizationIssues: number; trainingGaps: number }
+    }>(`/execution/readiness?plannedRunId=${encodeURIComponent(plannedRunId)}`)
+    return response
+  },
+
+  /**
+   * Get valid transitions for a record in a lifecycle.
+   * Calls GET /lifecycle/:lifecycleId/transitions?state=:currentState&actorId=:actorId
+   * Returns empty array if endpoint not available (404).
+   */
+  async getValidTransitions(
+    _recordId: string,
+    lifecycleId: string,
+    actorId?: string
+  ): Promise<{
+    transitions: Array<{
+      event: string
+      targetState: string
+      label: string
+      role: string
+      allowed: boolean
+    }>
+  }> {
+    const params = new URLSearchParams({ state: 'draft' })
+    if (actorId) params.set('actorId', actorId)
+    
+    try {
+      const response = await request<{
+        transitions: Array<{
+          event: string
+          targetState: string
+          label: string
+          role: string
+          allowed: boolean
+        }>
+      }>(`/lifecycle/${encodeURIComponent(lifecycleId)}/transitions?${params.toString()}`)
+      return response
+    } catch (error) {
+      if (ApiError.isApiError(error) && error.status === 404) {
+        return { transitions: [] }
+      }
+      throw error
+    }
   },
 }
 

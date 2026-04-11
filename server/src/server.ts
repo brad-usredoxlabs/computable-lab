@@ -23,7 +23,7 @@ import { createLocalRepoAdapter } from './repo/LocalRepoAdapter.js';
 import type { RepoAdapter } from './repo/types.js';
 import { RecordStoreImpl, createRecordStore } from './store/RecordStoreImpl.js';
 import { loadConfig, getDefaultRepository } from './config/loader.js';
-import { DEFAULT_CONFIG as DEFAULT_APP_CONFIG, type AppConfig, type RepositoryConfig } from './config/types.js';
+import { DEFAULT_CONFIG as DEFAULT_APP_CONFIG, type AppConfig, type RepositoryConfig, resolveAiProfile } from './config/types.js';
 import {
   createRecordHandlers,
   createSchemaHandlers,
@@ -71,11 +71,17 @@ import {
   RunContextAssembler,
 } from './ai/index.js';
 import { createRunDraftHandlers } from './api/handlers/RunDraftHandlers.js';
+import { createRelatedRecordsHandlers } from './api/handlers/RelatedRecordsHandlers.js';
+import { createAiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandlers.js';
+import { createReadinessHandlers } from './api/handlers/ReadinessHandlers.js';
 import type { AIHandlers } from './api/handlers/AIHandlers.js';
 import type { KnowledgeAIHandlers } from './api/handlers/KnowledgeAIHandlers.js';
+import type { AiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandlers.js';
 import { loadPlatformRegistry } from './platform-registry/YamlPlatformRegistryLoader.js';
 import type { PlatformRegistry } from './platform-registry/PlatformRegistry.js';
 import { ArtifactBlobStore } from './ingestion/ArtifactBlobStore.js';
+import { LifecycleEngine, loadLifecyclesFromDir } from './lifecycle/index.js';
+import { PolicyBundleService } from './policy/PolicyBundleService.js';
 
 /**
  * Default server configuration.
@@ -108,6 +114,8 @@ export interface AppContext {
   predicateRegistry?: PredicateRegistry | undefined;
   identity?: ResolvedIdentity | undefined;
   platformRegistry: PlatformRegistry;
+  lifecycleEngine: LifecycleEngine;
+  policyBundleService: PolicyBundleService;
 }
 
 /**
@@ -227,6 +235,18 @@ export async function initializeApp(
 
   console.log(`Loaded ${lintSpecCount} lint specs, ${lintRuleCount} rules`);
   
+  // Initialize lifecycle engine and load lifecycle specs
+  const lifecycleEngine = new LifecycleEngine()
+  const lifecycleDir = resolve(schemaDir, 'core/lifecycles')
+  const loadedCount = loadLifecyclesFromDir(lifecycleDir, lifecycleEngine)
+  console.log(`Loaded ${loadedCount} lifecycle specs`)
+
+  // Initialize policy bundle service and load bundles
+  const policyBundleService = new PolicyBundleService()
+  const bundleDir = resolve(schemaDir, 'core/policy-bundles')
+  const bundleCount = policyBundleService.loadFromDir(bundleDir)
+  console.log(`Loaded ${bundleCount} policy bundles`)
+
   // Initialize repo adapter based on configuration
   let repoAdapter: RepoAdapter;
   let workspaceRoot = basePath;
@@ -311,6 +331,8 @@ export async function initializeApp(
     predicateRegistry,
     identity,
     platformRegistry,
+    lifecycleEngine,
+    policyBundleService,
   };
 }
 
@@ -354,6 +376,7 @@ export async function createServer(
     ctx.indexManager,
     ctx.identity,
     () => ctx.appConfig?.lab?.materialTracking,
+    ctx.lifecycleEngine,
   );
   const schemaHandlers = createSchemaHandlers(ctx.schemaRegistry);
   const validationHandlers = createValidationHandlers(ctx.validator, ctx.lintEngine);
@@ -375,7 +398,7 @@ export async function createServer(
   const runWorkspaceHandlers = createRunWorkspaceHandlers(ctx);
   const runContextAssembler = new RunContextAssembler(ctx.store);
   const platformHandlers = createPlatformHandlers(ctx.platformRegistry);
-  const labSettingsHandlers = createLabSettingsHandlers(ctx.appConfig);
+  const labSettingsHandlers = createLabSettingsHandlers(ctx.appConfig, ctx.policyBundleService);
   const uiHandlers = createUIHandlers(ctx.uiSpecLoader, ctx.store, ctx.schemaRegistry);
 
   // Create meta handlers
@@ -408,6 +431,7 @@ export async function createServer(
   let knowledgeAIHandlersImpl: ReturnType<typeof createKnowledgeAIHandlers> | undefined;
   let ingestionAIHandlersImpl = createIngestionAIHandlers(undefined, ctx.store);
   let materialAIHandlersImpl = createMaterialAIHandlers(undefined, ctx.store);
+  let aiRecordDraftHandlersImpl: ReturnType<typeof createAiRecordDraftHandlers> | undefined;
   let currentOrchestrator: import('./ai/types.js').AgentOrchestrator | undefined;
   let aiInfo: {
     available: boolean;
@@ -422,6 +446,7 @@ export async function createServer(
     knowledgeAIHandlersImpl = undefined;
     ingestionAIHandlersImpl = createIngestionAIHandlers(undefined, ctx.store);
     materialAIHandlersImpl = createMaterialAIHandlers(undefined, ctx.store);
+    aiRecordDraftHandlersImpl = undefined;
     currentOrchestrator = undefined;
     aiInfo = undefined;
 
@@ -430,8 +455,9 @@ export async function createServer(
       return;
     }
 
-    const inferenceConfig = aiConfig.inference;
-    const agentConfig = aiConfig.agent ?? {};
+    const profile = resolveAiProfile(aiConfig);
+    const inferenceConfig = profile.inference;
+    const agentConfig = profile.agent ?? {};
 
     const probe = await testInferenceEndpoint(inferenceConfig.baseUrl, inferenceConfig.apiKey);
     aiInfo = {
@@ -460,6 +486,11 @@ export async function createServer(
       aiHandlersImpl = createAIHandlers(orchestrator);
       ingestionAIHandlersImpl = createIngestionAIHandlers(orchestrator, ctx.store);
       materialAIHandlersImpl = createMaterialAIHandlers(orchestrator, ctx.store);
+      aiRecordDraftHandlersImpl = createAiRecordDraftHandlers(
+        ctx.schemaRegistry,
+        ctx.uiSpecLoader,
+        appConfig,
+      );
 
       const knowledgeAgentConfig: typeof agentConfig = {
         ...agentConfig,
@@ -549,6 +580,16 @@ export async function createServer(
     },
   };
 
+  const aiRecordDraftHandlers: AiRecordDraftHandlers = {
+    async draftRecord(request, reply) {
+      if (!aiRecordDraftHandlersImpl) {
+        reply.status(503);
+        return { success: false, error: 'AI_UNAVAILABLE', message: aiUnavailableMessage() };
+      }
+      return aiRecordDraftHandlersImpl.draftRecord(request, reply);
+    },
+  };
+
   // Create config handlers — always available so the UI can add repos
   // even when no config.yaml exists yet (it will be created on first PATCH).
   const configHandlers = new ConfigHandlers(
@@ -570,10 +611,14 @@ export async function createServer(
     getOrchestrator: () => currentOrchestrator,
   });
 
+  const relatedRecordsHandlers = createRelatedRecordsHandlers(ctx.store);
+  const readinessHandlers = createReadinessHandlers(ctx);
+
   // Register API routes with /api prefix
   await fastify.register(async (instance) => {
     const routeOpts: import('./api/routes.js').RouteOptions = {
       recordHandlers,
+      relatedRecordsHandlers,
       schemaHandlers,
       validationHandlers,
       uiHandlers,
@@ -599,6 +644,7 @@ export async function createServer(
       executionHandlers,
       measurementHandlers,
       biosourceHandlers,
+      readinessHandlers,
       schemaCount: () => ctx.schemaRegistry.size,
       ruleCount: () => ctx.lintEngine.ruleCount,
       uiSpecCount: () => ctx.uiSpecLoader.size(),
@@ -607,6 +653,7 @@ export async function createServer(
     routeOpts.knowledgeAIHandlers = knowledgeAIHandlers;
     routeOpts.ingestionAIHandlers = ingestionAIHandlersImpl;
     routeOpts.materialAIHandlers = materialAIHandlersImpl;
+    routeOpts.aiRecordDraftHandlers = aiRecordDraftHandlers;
     if (aiInfo) routeOpts.aiInfo = aiInfo;
     routeOpts.getAiInfo = () => aiInfo;
     routeOpts.configHandlers = configHandlers;

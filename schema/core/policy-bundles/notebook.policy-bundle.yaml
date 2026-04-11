@@ -1,0 +1,16 @@
+kind: policy-bundle
+id: POL-NOTEBOOK
+label: "Lab Notebook"
+level: 1
+description: "Informational QMS checks. Issues are surfaced but never block. For labs wanting visibility."
+settings:
+  allowAutoCreate: allow
+  allowSubstitutions: allow
+  allowPlaceholders: confirm
+  allowRemediation: allow
+  allowSupervisedUse: allow
+  allowExpiredTraining: allow
+  allowExpiredAuthorization: allow
+  allowOutOfCalibrationEquipment: allow
+  allowUnqualifiedEquipment: allow
+  approvalAuthority: run-operator

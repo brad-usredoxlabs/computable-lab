@@ -45,7 +45,8 @@ properties:
 
   state:
     type: string
-    description: "Workflow state (draft, accepted, superseded, deprecated)."
+    description: "Workflow state (draft, in_review, approved, effective, superseded, archived, accepted, deprecated)."
+    enum: [draft, in_review, approved, effective, superseded, archived, accepted, deprecated]
 
   tags:
     type: array
@@ -111,6 +112,29 @@ properties:
     items:
       $ref: "#/$defs/ExecutionProfile"
     uniqueItems: true
+
+  lifecycleId:
+    type: string
+    const: "document-control"
+    description: "Lifecycle governing this record's state transitions."
+
+  reviewerRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: person }
+    description: "Person assigned to review this protocol."
+
+  approverRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: person }
+    description: "Person with authority to approve this protocol for use."
 
   componentInstanceRefs:
     type: array

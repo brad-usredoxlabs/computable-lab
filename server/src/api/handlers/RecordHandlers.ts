@@ -22,6 +22,8 @@ import type {
 import type { ResolvedIdentity } from '../../identity/GitHubIdentity.js';
 import type { MaterialTrackingConfig } from '../../config/types.js';
 import { MaterialUsagePolicyError, normalizeEventGraphMaterialUsage } from '../../materials/AddMaterialSupport.js';
+import { LifecycleEngine } from '../../lifecycle/LifecycleEngine.js';
+import { checkLifecycleTransition } from '../../lifecycle/lifecycleMiddleware.js';
 
 /**
  * Create record handlers bound to a RecordStore and optional IndexManager.
@@ -31,6 +33,7 @@ export function createRecordHandlers(
   indexManager?: IndexManager,
   identity?: ResolvedIdentity,
   getMaterialTracking?: () => MaterialTrackingConfig | undefined,
+  lifecycleEngine?: LifecycleEngine,
 ) {
   return {
     /**
@@ -342,6 +345,26 @@ export function createRecordHandlers(
             error: 'NOT_FOUND',
             message: `Record not found: ${id}`,
           };
+        }
+        
+        // Check lifecycle transition if lifecycleEngine is available
+        if (lifecycleEngine) {
+          const actorId = (request.headers['x-actor-id'] as string) || 'anonymous'
+          const previousPayload = existing.payload as Record<string, unknown>
+          const nextPayload = request.body.payload as Record<string, unknown>
+          const lifecycleResult = checkLifecycleTransition(lifecycleEngine, {
+            previousPayload,
+            nextPayload,
+            actorId,
+          })
+          
+          if (!lifecycleResult.allowed) {
+            reply.status(422)
+            return {
+              error: 'LIFECYCLE_TRANSITION_DENIED',
+              message: lifecycleResult.error || 'Lifecycle transition not allowed',
+            }
+          }
         }
         
         // Inject updatedAt in payload (schema-compatible provenance field).

@@ -7,10 +7,12 @@
  * Only one section can be edited at a time to prevent conflicting saves.
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useServerMeta } from '../shared/hooks/useServerMeta'
 import { useConfig } from '../shared/hooks/useConfig'
+import { apiClient, type LabSettings } from '../shared/api/client'
+import { PolicyBundleSelector } from '../components/settings/PolicyBundleSelector'
 import {
   RepositorySection,
   AddRepositorySection,
@@ -59,8 +61,40 @@ export function SettingsPage() {
   const { meta, repoStatus, loading: metaLoading, error: metaError, refresh: refreshMeta, sync, syncing } = useServerMeta()
   const { config, loading: configLoading, error: configError, patchConfig, saving, testAiConfig } = useConfig()
 
+  // Lab settings state
+  const [labSettings, setLabSettings] = useState<LabSettings | null>(null)
+  const [labSettingsLoading, setLabSettingsLoading] = useState(true)
+  const [labSettingsError, setLabSettingsError] = useState<string | null>(null)
+
   // Only one editable section at a time
   const [editingSection, setEditingSection] = useState<SectionId | null>(null)
+
+  // Load lab settings
+  useEffect(() => {
+    let cancelled = false
+    async function loadLabSettings() {
+      try {
+        const settings = await apiClient.getLabSettings()
+        if (!cancelled) setLabSettings(settings)
+      } catch (err) {
+        if (!cancelled) setLabSettingsError(err instanceof Error ? err.message : 'Failed to load lab settings')
+      } finally {
+        if (!cancelled) setLabSettingsLoading(false)
+      }
+    }
+    loadLabSettings()
+    return () => { cancelled = true }
+  }, [])
+
+  // Handle policy bundle change
+  const handlePolicyBundleChanged = useCallback(async (bundleId: string) => {
+    try {
+      const updated = await apiClient.patchLabSettings({ policyBundleId: bundleId })
+      setLabSettings(updated)
+    } catch (err) {
+      alert(`Failed to update policy bundle: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    }
+  }, [])
 
   const handleSync = async () => {
     const result = await sync()
@@ -206,6 +240,28 @@ export function SettingsPage() {
           onSave={handleSave}
           saving={saving}
         />
+
+        {/* ---- Policy Bundle Selector ---- */}
+        <Section title="Policy Bundle">
+          {labSettingsLoading ? (
+            <div className="info-row">
+              <span className="info-row__value">Loading...</span>
+            </div>
+          ) : labSettingsError ? (
+            <div className="info-row">
+              <span className="info-row__value" style={{ color: '#c92a2a' }}>{labSettingsError}</span>
+            </div>
+          ) : labSettings ? (
+            <PolicyBundleSelector
+              currentBundleId={labSettings.policyBundleId}
+              onBundleChanged={handlePolicyBundleChanged}
+            />
+          ) : (
+            <div className="info-row">
+              <span className="info-row__value">Not configured</span>
+            </div>
+          )}
+        </Section>
 
         {/* ---- Sync controls (from meta) ---- */}
         {meta?.repository && (

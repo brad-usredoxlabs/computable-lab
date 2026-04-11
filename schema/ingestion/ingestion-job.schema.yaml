@@ -27,7 +27,7 @@ properties:
     enum: [ collect, extract, normalize, match, review, publish ]
   source_kind:
     type: string
-    enum: [ vendor_plate_map_pdf, vendor_formulation_html, vendor_plate_map_spreadsheet, vendor_catalog_page, other ]
+    enum: [ vendor_plate_map_pdf, vendor_formulation_html, vendor_plate_map_spreadsheet, vendor_catalog_page, vendor_protocol_pdf, other ]
   adapter_kind:
     type: string
   ontology_preferences:

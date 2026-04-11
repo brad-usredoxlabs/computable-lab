@@ -30,6 +30,7 @@ export interface MaterialTrackingConfig {
 
 export interface LabConfig {
   materialTracking: MaterialTrackingConfig;
+  policyBundleId?: string;
 }
 
 export interface IntegrationsConfig {
@@ -61,11 +62,37 @@ export interface ExecutionConfig {
 }
 
 /**
- * AI agent orchestrator configuration.
+ * A named AI configuration profile (inference + agent settings).
  */
-export interface AIConfig {
+export interface AIProfile {
   inference: InferenceConfig;
   agent: AgentConfig;
+}
+
+/**
+ * AI agent orchestrator configuration.
+ *
+ * The active profile is resolved as:
+ *   1. profiles[activeProfile]   (if both exist)
+ *   2. inline inference + agent  (legacy / single-profile mode)
+ */
+export interface AIConfig {
+  /** Currently active profile name. */
+  activeProfile?: string;
+  /** Named profiles. */
+  profiles?: Record<string, AIProfile>;
+  inference: InferenceConfig;
+  agent: AgentConfig;
+}
+
+/**
+ * Resolve the effective inference + agent config from an AIConfig,
+ * respecting activeProfile when profiles are defined.
+ */
+export function resolveAiProfile(ai: AIConfig): AIProfile {
+  const profile = ai.activeProfile ? ai.profiles?.[ai.activeProfile] : undefined;
+  if (profile) return profile;
+  return { inference: ai.inference, agent: ai.agent };
 }
 
 /**
@@ -256,6 +283,7 @@ export const DEFAULT_CONFIG: AppConfig = {
       mode: 'relaxed',
       allowAdHocEventInstances: true,
     },
+    policyBundleId: 'POL-SANDBOX',
   },
 };
 

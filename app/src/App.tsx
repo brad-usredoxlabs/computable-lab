@@ -12,6 +12,7 @@ import { IngestionPage } from './ingestion/IngestionPage'
 const LabwareEventEditor = lazy(async () => import('./graph/LabwareEventEditor').then((module) => ({ default: module.LabwareEventEditor })))
 const RunWorkspacePage = lazy(async () => import('./graph/RunWorkspacePage').then((module) => ({ default: module.RunWorkspacePage })))
 const RecordBrowser = lazy(() => import('./knowledge/RecordBrowser'))
+const RecordRegistryPage = lazy(() => import('./pages/RecordRegistryPage'))
 const LiteratureExplorer = lazy(async () => import('./knowledge/LiteratureExplorer').then((module) => ({ default: module.LiteratureExplorer })))
 const ComponentLibraryPage = lazy(async () => import('./knowledge/ComponentLibraryPage').then((module) => ({ default: module.ComponentLibraryPage })))
 const FormulationsPage = lazy(async () => import('./editor/FormulationsPage').then((module) => ({ default: module.FormulationsPage })))
@@ -69,6 +70,9 @@ export function App() {
 
             {/* Record Browser */}
             <Route path="browser" element={<DeferredRoute><RecordBrowser /></DeferredRoute>} />
+
+            {/* Record Registry */}
+            <Route path="registry" element={<DeferredRoute><RecordRegistryPage /></DeferredRoute>} />
           </Route>
         </Routes>
       </BrowserRouter>

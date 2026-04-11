@@ -6,6 +6,13 @@ const DEFAULT_SETTINGS: LabSettings = {
     mode: 'relaxed',
     allowAdHocEventInstances: true,
   },
+  policyBundleId: 'POL-SANDBOX',
+  activePolicyBundle: {
+    id: 'POL-SANDBOX',
+    label: 'Sandbox',
+    level: 0,
+    description: 'Zero friction. All QMS checks allow. For demos and exploration.',
+  },
 }
 
 export function useLabSettings() {

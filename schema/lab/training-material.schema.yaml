@@ -87,3 +87,26 @@ properties:
 
   notes:
     type: string
+
+  lifecycleId:
+    type: string
+    const: "document-control"
+    description: "Lifecycle governing this record's state transitions."
+
+  reviewerRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: person }
+    description: "Person assigned to review this training material."
+
+  approverRef:
+    allOf:
+    - $ref: "./datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: person }
+    description: "Person with authority to approve this training material."

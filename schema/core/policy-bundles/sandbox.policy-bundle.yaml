@@ -1,0 +1,16 @@
+kind: policy-bundle
+id: POL-SANDBOX
+label: "Sandbox"
+level: 0
+description: "Zero friction. All QMS checks allow. For demos, exploration, and first-time users."
+settings:
+  allowAutoCreate: allow
+  allowSubstitutions: allow
+  allowPlaceholders: allow
+  allowRemediation: allow
+  allowSupervisedUse: allow
+  allowExpiredTraining: allow
+  allowExpiredAuthorization: allow
+  allowOutOfCalibrationEquipment: allow
+  allowUnqualifiedEquipment: allow
+  approvalAuthority: none

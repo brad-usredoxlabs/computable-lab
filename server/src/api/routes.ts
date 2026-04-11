@@ -37,6 +37,9 @@ import type { MaterialAIHandlers } from './handlers/MaterialAIHandlers.js';
 import type { SemanticsHandlers } from './handlers/SemanticsHandlers.js';
 import type { RunWorkspaceHandlers } from './handlers/RunWorkspaceHandlers.js';
 import type { RunDraftHandlers } from './handlers/RunDraftHandlers.js';
+import type { RelatedRecordsHandlers } from './handlers/RelatedRecordsHandlers.js';
+import type { AiRecordDraftHandlers } from './handlers/AiRecordDraftHandlers.js';
+import type { ReadinessHandlers } from './handlers/ReadinessHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -44,6 +47,7 @@ import type { HealthResponse } from './types.js';
  */
 export interface RouteOptions {
   recordHandlers: RecordHandlers;
+  relatedRecordsHandlers?: RelatedRecordsHandlers;
   schemaHandlers: SchemaHandlers;
   validationHandlers: ValidationHandlers;
   uiHandlers?: UIHandlers;
@@ -74,6 +78,8 @@ export interface RouteOptions {
   semanticsHandlers?: SemanticsHandlers;
   runWorkspaceHandlers?: RunWorkspaceHandlers;
   runDraftHandlers?: RunDraftHandlers;
+  aiRecordDraftHandlers?: AiRecordDraftHandlers;
+  readinessHandlers?: ReadinessHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -148,6 +154,12 @@ export function registerRoutes(
 
   // Check claim duplicates
   fastify.post('/claims/check-duplicates', recordHandlers.checkClaimDuplicates.bind(recordHandlers));
+
+  // Related records (reverse-reference query)
+  const { relatedRecordsHandlers } = options;
+  if (relatedRecordsHandlers) {
+    fastify.get('/records/:id/related', relatedRecordsHandlers.getRelatedRecords.bind(relatedRecordsHandlers));
+  }
 
   // ============================================================================
   // Schema Routes
@@ -418,6 +430,12 @@ export function registerRoutes(
     fastify.post('/ai/assist/stream', aiHandlers.assistStream.bind(aiHandlers));
   }
 
+  const { aiRecordDraftHandlers } = options;
+
+  if (aiRecordDraftHandlers) {
+    fastify.post('/ai/draft-record', aiRecordDraftHandlers.draftRecord.bind(aiRecordDraftHandlers));
+  }
+
   const { ingestionAIHandlers } = options;
   if (ingestionAIHandlers) {
     fastify.post('/ai/infer-source-kind', ingestionAIHandlers.inferSourceKind.bind(ingestionAIHandlers));
@@ -443,6 +461,10 @@ export function registerRoutes(
     fastify.get('/config', configHandlers.getConfig.bind(configHandlers));
     fastify.patch('/config', configHandlers.patchConfig.bind(configHandlers));
     fastify.post('/config/ai/test', configHandlers.testAiConfig.bind(configHandlers));
+    fastify.get('/config/ai/profiles', configHandlers.listAiProfiles.bind(configHandlers));
+    fastify.put('/config/ai/profiles/:name', configHandlers.saveAiProfile.bind(configHandlers));
+    fastify.post('/config/ai/profiles/:name/activate', configHandlers.activateAiProfile.bind(configHandlers));
+    fastify.delete('/config/ai/profiles/:name', configHandlers.deleteAiProfile.bind(configHandlers));
   }
 
   // ============================================================================
@@ -602,5 +624,15 @@ export function registerRoutes(
   if (knowledgeAIHandlers) {
     fastify.post('/ai/extract-knowledge', knowledgeAIHandlers.extractKnowledge.bind(knowledgeAIHandlers));
     fastify.post('/ai/extract-knowledge/stream', knowledgeAIHandlers.extractKnowledgeStream.bind(knowledgeAIHandlers));
+  }
+
+  // ============================================================================
+  // Readiness Routes (optional - requires readinessHandlers)
+  // ============================================================================
+
+  const { readinessHandlers } = options;
+
+  if (readinessHandlers) {
+    fastify.get('/execution/readiness', readinessHandlers.getReadinessReport.bind(readinessHandlers));
   }
 }

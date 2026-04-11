@@ -1,0 +1,60 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/policy-bundle.schema.yaml"
+title: "Policy Bundle"
+description: "Named, pre-configured enforcement level for compiler policy settings."
+type: object
+unevaluatedProperties: false
+allOf:
+  - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [kind, id, label, level, settings]
+
+properties:
+  kind:
+    const: "policy-bundle"
+  id:
+    type: string
+    pattern: "^POL-[A-Z0-9][A-Z0-9_-]*$"
+  label:
+    type: string
+  level:
+    type: integer
+    minimum: 0
+    maximum: 3
+    description: "Enforcement level: 0=sandbox, 1=notebook, 2=tracked, 3=regulated"
+  description:
+    type: string
+  settings:
+    type: object
+    additionalProperties: false
+    properties:
+      allowAutoCreate:
+        type: string
+        enum: [allow, confirm, deny]
+      allowSubstitutions:
+        type: string
+        enum: [allow, confirm, deny]
+      allowPlaceholders:
+        type: string
+        enum: [allow, confirm, deny]
+      allowRemediation:
+        type: string
+        enum: [allow, confirm, deny]
+      allowSupervisedUse:
+        type: string
+        enum: [allow, confirm, deny]
+      allowExpiredTraining:
+        type: string
+        enum: [allow, confirm, deny]
+      allowExpiredAuthorization:
+        type: string
+        enum: [allow, confirm, deny]
+      allowOutOfCalibrationEquipment:
+        type: string
+        enum: [allow, confirm, deny]
+      allowUnqualifiedEquipment:
+        type: string
+        enum: [allow, confirm, deny]
+      approvalAuthority:
+        type: string
+        enum: [none, run-operator, supervisor, project-owner, lab-manager, qa-reviewer, organization-admin]
