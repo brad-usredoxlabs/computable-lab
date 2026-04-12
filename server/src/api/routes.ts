@@ -430,6 +430,7 @@ export function registerRoutes(
     fastify.post('/ingestion/jobs/:id/run', ingestionHandlers.runJob.bind(ingestionHandlers));
     fastify.post('/ingestion/jobs/:id/bundles/:bundleId/approve', ingestionHandlers.approveBundle.bind(ingestionHandlers));
     fastify.post('/ingestion/jobs/:id/bundles/:bundleId/publish', ingestionHandlers.publishBundle.bind(ingestionHandlers));
+    fastify.post('/ingestion/jobs/:id/extraction-spec', ingestionHandlers.attachExtractionSpec.bind(ingestionHandlers));
   }
 
   // ============================================================================

@@ -14,6 +14,7 @@ export type IngestionSourceKind =
   | 'vendor_plate_map_spreadsheet'
   | 'vendor_catalog_page'
   | 'vendor_protocol_pdf'
+  | 'ai_assisted'
   | 'instrument_plate_reader'
   | 'instrument_qpcr'
   | 'instrument_gc_ms'
@@ -81,6 +82,7 @@ export interface IngestionArtifactPayload {
   html_extract?: Record<string, unknown> | undefined;
   page_map?: Array<Record<string, unknown>> | undefined;
   provenance?: Record<string, unknown> | undefined;
+  extractionSpec?: Record<string, unknown> | undefined;
 }
 
 export interface IngestionBundlePayload {

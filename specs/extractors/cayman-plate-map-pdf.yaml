@@ -1,0 +1,101 @@
+# Extraction spec for Cayman Chemical screening library plate map PDFs.
+# Replaces the hardcoded CaymanPlateMapPdf.ts adapter with data-driven extraction.
+
+kind: extraction-spec
+id: XSPEC-CAYMAN-PLATE-MAP-PDF
+status: confirmed
+
+match:
+  filePatterns:
+    - "*.pdf"
+  contentSignals:
+    - "Cayman Chemical"
+    - "Screening Library"
+    - "Plate"
+    - "Well"
+    - "Contents"
+    - "Item No"
+  minConfidence: 0.8
+  vendor: "Cayman Chemical"
+  description: "Cayman Chemical screening library plate map PDF with compound-to-well assignments"
+
+sourceAnalysis:
+  fileType: pdf
+  contentSummary: "Cayman Chemical screening library plate map with compounds assigned to 96-well plates"
+  detectedStructure: tabular
+
+targets:
+  - targetSchema: "lab/material"
+    recordKind: material
+    idPrefix: "MAT-"
+    fieldMappings:
+      - targetField: name
+        source: contents
+        transform: normalize_chemical
+      - targetField: vendorItemNumber
+        source: item_number
+        transform: trim
+    defaults:
+      domain: chemical
+      tags:
+        - cayman_library
+        - screening_compound
+
+  - targetSchema: "workflow/plate-layout"
+    recordKind: plate-layout
+    idPrefix: "PLT-"
+    fieldMappings:
+      - targetField: plateNumber
+        source: plate_number
+        transform: none
+      - targetField: well
+        source: well
+        transform: uppercase
+      - targetField: contents
+        source: contents
+        transform: normalize_chemical
+      - targetField: itemNumber
+        source: item_number
+        transform: trim
+    defaults:
+      labwareType: "96-well"
+      format:
+        rows: 8
+        cols: 12
+        wellNaming: "A1..H12"
+
+tableExtraction:
+  method: pdf_table
+  columns:
+    - plate_number
+    - well
+    - contents
+    - item_number
+  headerRow: 0
+  skipRows: 0
+
+matching:
+  enabled: true
+  ontologyPreferences:
+    - chebi
+    - ncit
+  batchSize: 12
+  cacheEnabled: true
+
+userContext:
+  defaultConcentration:
+    value: 1.0
+    unit: mM
+    basis: molar
+  solvent: DMSO
+  packageSizes:
+    - "25 µL"
+    - "50 µL"
+  expectedPlateCount: 13
+
+notes: >
+  Ported from server/src/ingestion/adapters/caymanPlateMapPdf.ts.
+  The original adapter also handles multi-line compound names, Greek symbol
+  normalization, and "Unused" well detection. The generic runner handles
+  normalize_chemical transform; unused well detection should be added as
+  a post-extraction filter in the pipeline.

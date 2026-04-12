@@ -111,7 +111,7 @@ interface RecordMutationResponse {
 
 ## REST API Endpoints
 
-Base URL: `http://localhost:3000/api`
+Base URL: `http://localhost:3001/api` (backend dev server; frontend Vite dev server runs on `http://localhost:5174` and proxies `/api/*` to the backend)
 
 ### Health
 

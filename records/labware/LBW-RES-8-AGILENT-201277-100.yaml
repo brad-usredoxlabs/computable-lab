@@ -1,0 +1,17 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: LBW-RES-8-AGILENT-201277-100
+name: Agilent 8-Channel Reservoir
+labwareType: reservoir
+format:
+  rows: 1
+  cols: 8
+  wellCount: 8
+  wellNaming: "A1..H1"
+manufacturer:
+  name: Agilent
+  catalogNumber: "201277-100"
+tags:
+  - seed
+  - reservoir
+  - 8-channel

@@ -219,6 +219,18 @@ export interface VerbSummary {
   description?: string;
 }
 
+export interface AgentClarificationOption {
+  id: string;
+  label: string;
+  snippet?: string;
+}
+
+export interface AgentClarification {
+  prompt: string;
+  entityType: string;
+  options: AgentClarificationOption[];
+}
+
 export interface AgentResult {
   /** Whether the agent completed successfully. */
   success: boolean;
@@ -232,6 +244,8 @@ export interface AgentResult {
   error?: string;
   /** If the agent needs more information from the user. */
   clarificationNeeded?: string;
+  /** Structured clarification request with options. */
+  clarification?: AgentClarification;
   /** Token usage for observability. */
   usage?: {
     promptTokens: number;

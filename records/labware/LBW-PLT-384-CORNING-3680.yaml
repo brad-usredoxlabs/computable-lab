@@ -1,0 +1,18 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: LBW-PLT-384-CORNING-3680
+name: Corning 384-Well White Flat-Bottom Plate
+labwareType: plate
+format:
+  rows: 16
+  cols: 24
+  wellCount: 384
+  wellNaming: "A1..P24"
+manufacturer:
+  name: Corning
+  catalogNumber: "3680"
+tags:
+  - seed
+  - plate
+  - 384-well
+  - flat-bottom

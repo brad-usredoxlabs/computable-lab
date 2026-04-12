@@ -4,9 +4,18 @@ import { useRegisterAiChat } from '../shared/context/AiPanelContext'
 import { SourceKindSuggestionBadge, RunMappingPanel } from './components/IngestionAiSuggestion'
 import { IngestionJobDetailPanel } from './components/IngestionJobDetail'
 import { IngestionJobList } from './components/IngestionJobList'
+import { AiAnalysisPanel } from './components/AiAnalysisPanel'
 import { useAiChat } from '../shared/hooks/useAiChat'
 import type { AiContext } from '../types/aiContext'
-import type { CreateIngestionJobRequest, IngestionJobDetail, IngestionJobSummary, IngestionSourceKind, SourceKindSuggestion } from '../types/ingestion'
+import type {
+  CreateIngestionJobRequest,
+  IngestionJobDetail,
+  IngestionJobSummary,
+  IngestionSourceKind,
+  SourceKindSuggestion,
+  AnalyzeIngestionResponse,
+  AnalyzeIngestionDraftSpec,
+} from '../types/ingestion'
 
 const SOURCE_KIND_OPTIONS: Array<{ value: IngestionSourceKind; label: string }> = [
   { value: 'vendor_plate_map_pdf', label: 'Vendor plate map PDF' },
@@ -85,6 +94,13 @@ export function IngestionPage() {
   const [sourceKindSuggestion, setSourceKindSuggestion] = useState<SourceKindSuggestion | null>(null)
   const [sourceKindLoading, setSourceKindLoading] = useState(false)
 
+  // AI-assisted mode state
+  const [aiMode, setAiMode] = useState(false)
+  const [aiIntentPrompt, setAiIntentPrompt] = useState('')
+  const [aiAnalyzing, setAiAnalyzing] = useState(false)
+  const [aiAnalysis, setAiAnalysis] = useState<AnalyzeIngestionResponse | null>(null)
+  const [aiAnalysisFile, setAiAnalysisFile] = useState<File | null>(null)
+
   const handleFileChange = useCallback(async (file: File | null) => {
     setSelectedFile(file)
     setSourceKindSuggestion(null)
@@ -111,6 +127,104 @@ export function IngestionPage() {
       setSourceKindLoading(false)
     }
   }, [])
+
+  // AI-assisted analysis handlers
+  const handleAiAnalyze = useCallback(async () => {
+    if (!aiAnalysisFile || !aiIntentPrompt.trim()) {
+      setError('Please select a file and enter an intent prompt.')
+      return
+    }
+
+    setAiAnalyzing(true)
+    setError(null)
+    try {
+      const result = await apiClient.analyzeIngestion(aiAnalysisFile, aiIntentPrompt.trim())
+      setAiAnalysis(result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to analyze file')
+      setAiAnalysis(null)
+    } finally {
+      setAiAnalyzing(false)
+    }
+  }, [aiAnalysisFile, aiIntentPrompt])
+
+  const handleAiReAnalyze = useCallback(async (answers: string[]) => {
+    if (!aiAnalysisFile || !aiIntentPrompt.trim()) {
+      setError('Please select a file and enter an intent prompt.')
+      return
+    }
+
+    setAiAnalyzing(true)
+    setError(null)
+    try {
+      // Append answers to the prompt for re-analysis
+      const enhancedPrompt = `${aiIntentPrompt.trim()}\n\nUser answers:\n${answers.map((a, i) => `${i + 1}. ${a}`).join('\n')}`
+      const result = await apiClient.analyzeIngestion(aiAnalysisFile, enhancedPrompt)
+      setAiAnalysis(result)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to re-analyze file')
+    } finally {
+      setAiAnalyzing(false)
+    }
+  }, [aiAnalysisFile, aiIntentPrompt])
+
+  const handleAiConfirmAndRun = useCallback(async (spec: AnalyzeIngestionDraftSpec) => {
+    if (!aiAnalysisFile) {
+      setError('No file selected')
+      return
+    }
+
+    setSubmitting(true)
+    setError(null)
+    try {
+      // Create ingestion job with ai_assisted source kind
+      const request: CreateIngestionJobRequest = {
+        ...(name.trim() ? { name: name.trim() } : {}),
+        sourceKind: 'other', // AI-assisted mode uses 'other' as source kind
+        adapterKind: 'ai_assisted',
+        ontologyPreferences,
+        source: {
+          fileName: aiAnalysisFile.name,
+          mediaType: aiAnalysisFile.type || 'application/octet-stream',
+          sizeBytes: aiAnalysisFile.size,
+          contentBase64: await fileToBase64(aiAnalysisFile),
+          note: `AI-assisted extraction. Intent: ${aiIntentPrompt}`,
+        },
+      }
+      const created = await apiClient.createIngestionJob(request)
+      
+      // Attach extraction spec to the job
+      // Note: The actual endpoint for attaching extraction spec may vary
+      // This is a placeholder - adjust based on actual API
+      try {
+        await apiClient.createRecord('https://computable-lab.com/schema/computable-lab/extraction-spec.schema.yaml', {
+          id: `${created.job.recordId}-spec`,
+          job_ref: { kind: 'record', id: created.job.recordId, type: 'ingestion-job' },
+          spec: spec,
+          source_intent: aiIntentPrompt,
+        })
+      } catch (specErr) {
+        console.warn('Failed to attach extraction spec:', specErr)
+        // Continue even if spec attachment fails
+      }
+
+      // Run the job
+      await apiClient.runIngestionJob(created.job.recordId, {})
+      
+      // Reset AI mode state
+      setAiAnalysis(null)
+      setAiAnalysisFile(null)
+      setAiIntentPrompt('')
+      
+      // Load jobs and show the running job
+      await loadJobs(created.job.recordId)
+      setRunningJobId(created.job.recordId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create and run ingestion job')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [aiAnalysisFile, aiIntentPrompt, name, ontologyPreferences])
 
   // AI panel
   const aiContext = useMemo((): AiContext => ({
@@ -314,7 +428,84 @@ export function IngestionPage() {
 
       {error && <div className="error-banner">{error}</div>}
 
-      <section className="ingestion-toolbar">
+      {/* Mode Toggle */}
+      <section className="ingestion-mode-toggle">
+        <div className="mode-toggle-container">
+          <button
+            className={`mode-toggle-btn ${!aiMode ? 'active' : ''}`}
+            onClick={() => setAiMode(false)}
+          >
+            Classic
+          </button>
+          <button
+            className={`mode-toggle-btn ${aiMode ? 'active' : ''}`}
+            onClick={() => setAiMode(true)}
+          >
+            AI-Assisted
+          </button>
+        </div>
+      </section>
+
+      {/* AI-Assisted Form */}
+      {aiMode && (
+        <section className="ingestion-ai-form">
+          <div className="ai-form-header">
+            <h3>AI-Assisted Ingestion</h3>
+            <p>Upload a file and describe what you want to extract. The AI will analyze it and create an extraction plan.</p>
+          </div>
+          
+          <div className="ai-form-fields">
+            <label className="ingestion-field">
+              <span>Upload file</span>
+              <input
+                type="file"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null
+                  setAiAnalysisFile(file)
+                  setAiAnalysis(null)
+                }}
+              />
+              {aiAnalysisFile && (
+                <span className="ai-file-name">Selected: {aiAnalysisFile.name}</span>
+              )}
+            </label>
+            
+            <label className="ingestion-field">
+              <span>Describe your intent</span>
+              <textarea
+                value={aiIntentPrompt}
+                onChange={(e) => setAiIntentPrompt(e.target.value)}
+                placeholder="e.g., Extract materials and their concentrations from this Cayman plate map PDF"
+                rows={4}
+              />
+            </label>
+            
+            <div className="ai-form-actions">
+              <button
+                className="btn btn-primary"
+                onClick={() => { void handleAiAnalyze() }}
+                disabled={aiAnalyzing || !aiAnalysisFile || !aiIntentPrompt.trim()}
+              >
+                {aiAnalyzing ? 'Analyzing...' : 'Analyze'}
+              </button>
+            </div>
+          </div>
+
+          {/* Analysis Results */}
+          {aiAnalysis && (
+            <AiAnalysisPanel
+              analysis={aiAnalysis}
+              onReAnalyze={handleAiReAnalyze}
+              onConfirmAndRun={handleAiConfirmAndRun}
+              isRunning={submitting}
+            />
+          )}
+        </section>
+      )}
+
+      {/* Classic Form */}
+      {!aiMode && (
+        <section className="ingestion-toolbar">
         <label className="ingestion-field">
           <span>Job title</span>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Cayman lipid library PDF" />
@@ -358,6 +549,7 @@ export function IngestionPage() {
           </button>
         </div>
       </section>
+      )}
 
       <section className="ingestion-ontology-preferences">
         <div className="ingestion-panel__head">
@@ -425,6 +617,57 @@ export function IngestionPage() {
         .ingestion-hero { margin-bottom: 1rem; padding: 1.25rem; border-radius: 16px; background: linear-gradient(135deg, #f1f3f5, #ffffff); border: 1px solid #e9ecef; }
         .ingestion-eyebrow, .ingestion-section__eyebrow { margin: 0 0 0.25rem 0; color: #868e96; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; }
         .ingestion-copy { color: #495057; margin: 0.5rem 0 0; max-width: 860px; }
+        .ingestion-mode-toggle { margin-bottom: 1rem; }
+        .mode-toggle-container {
+          display: flex;
+          background: #e9ecef;
+          border-radius: 10px;
+          padding: 0.25rem;
+          width: fit-content;
+        }
+        .mode-toggle-btn {
+          padding: 0.6rem 1.5rem;
+          border: none;
+          background: transparent;
+          border-radius: 8px;
+          cursor: pointer;
+          font-size: 0.9rem;
+          font-weight: 500;
+          color: #495057;
+          transition: all 0.2s;
+        }
+        .mode-toggle-btn.active {
+          background: white;
+          color: #339af0;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .ingestion-ai-form {
+          margin-bottom: 1rem;
+          background: white;
+          border: 1px solid #e9ecef;
+          border-radius: 16px;
+          padding: 1.5rem;
+        }
+        .ai-form-header { margin-bottom: 1.5rem; }
+        .ai-form-header h3 { margin: 0 0 0.5rem 0; color: #343a40; }
+        .ai-form-header p { margin: 0; color: #868e96; font-size: 0.9rem; }
+        .ai-form-fields { display: flex; flex-direction: column; gap: 1rem; }
+        .ai-file-name {
+          display: block;
+          margin-top: 0.5rem;
+          color: #364fc7;
+          font-size: 0.85rem;
+        }
+        .ingestion-field textarea {
+          padding: 0.65rem 0.75rem;
+          border: 1px solid #ced4da;
+          border-radius: 10px;
+          background: white;
+          font-family: inherit;
+          font-size: 0.9rem;
+          resize: vertical;
+        }
+        .ai-form-actions { margin-top: 0.5rem; }
         .ingestion-toolbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.75rem; margin-bottom: 1rem; align-items: end; }
         .ingestion-ontology-preferences { margin-bottom: 1rem; background: white; border: 1px solid #e9ecef; border-radius: 16px; padding: 1rem; }
         .ingestion-ontology-list { display: flex; flex-wrap: wrap; gap: 0.75rem; }

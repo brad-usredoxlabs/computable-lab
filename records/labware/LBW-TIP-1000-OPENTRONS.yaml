@@ -1,0 +1,17 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: LBW-TIP-1000-OPENTRONS
+name: Opentrons 1000 µL Filter Tip Rack
+labwareType: tiprack
+format:
+  rows: 8
+  cols: 12
+  wellCount: 96
+  wellNaming: "A1..H12"
+manufacturer:
+  name: Opentrons
+tags:
+  - seed
+  - tiprack
+  - 1000uL
+  - filter-tip

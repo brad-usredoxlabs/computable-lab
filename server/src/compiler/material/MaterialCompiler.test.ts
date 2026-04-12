@@ -22,6 +22,10 @@ class MemoryRecordStore implements RecordStore {
     return structuredClone(this.records.get(recordId) ?? null);
   }
 
+  async getByPath(_path: string): Promise<RecordEnvelope | null> {
+    throw new Error('not implemented in test store');
+  }
+
   async getWithValidation(_options: GetRecordOptions): Promise<StoreResult> {
     throw new Error('not implemented in test store');
   }

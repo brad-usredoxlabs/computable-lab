@@ -113,23 +113,47 @@ export class RecordStoreImpl implements RecordStore {
     if (!entry) {
       return null;
     }
-    
+
     const file = await this.repo.getFile(entry.path);
     if (!file) {
       return null;
     }
-    
+
     const result = parseRecord(file.content, entry.path);
     if (!result.success || !result.envelope) {
       return null;
     }
-    
+
     // Add meta info
     return {
       ...result.envelope,
       meta: {
         ...result.envelope.meta,
         path: entry.path,
+        commitSha: file.sha,
+      },
+    };
+  }
+
+  async getByPath(path: string): Promise<RecordEnvelope | null> {
+    const file = await this.repo.getFile(path);
+    if (!file) {
+      return null;
+    }
+
+    const result = parseRecord(file.content, path);
+    if (!result.success || !result.envelope) {
+      return null;
+    }
+
+    // Prime the path cache so a subsequent get() by recordId is also fast.
+    this.pathCache.set(result.envelope.recordId, { path, sha: file.sha });
+
+    return {
+      ...result.envelope,
+      meta: {
+        ...result.envelope.meta,
+        path,
         commitSha: file.sha,
       },
     };

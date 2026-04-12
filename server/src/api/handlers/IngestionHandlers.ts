@@ -1,8 +1,9 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiError } from '../types.js';
-import type { RecordStore } from '../../store/types.js';
+import type { RecordStore, RecordEnvelope } from '../../store/types.js';
 import { ArtifactBlobStore } from '../../ingestion/ArtifactBlobStore.js';
 import { createIngestionService } from '../../ingestion/IngestionService.js';
+import { INGESTION_SCHEMA_IDS, type IngestionArtifactPayload, type IngestionJobPayload } from '../../ingestion/types.js';
 import type {
   CreateIngestionArtifactInput,
   CreateIngestionJobInput,
@@ -28,6 +29,10 @@ type CreateJobBody = {
   ontologyPreferences?: unknown;
   submittedBy?: unknown;
   source?: ArtifactBody | undefined;
+};
+
+type ExtractionSpecBody = {
+  extractionSpec: unknown;
 };
 
 function stringValue(value: unknown): string | undefined {
@@ -67,6 +72,7 @@ export interface IngestionHandlers {
   runJob(request: FastifyRequest<{ Params: { id: string }; Body: { source?: ArtifactBody } }>, reply: FastifyReply): Promise<IngestionJobDetail | ApiError>;
   approveBundle(request: FastifyRequest<{ Params: { id: string; bundleId: string } }>, reply: FastifyReply): Promise<IngestionJobDetail | ApiError>;
   publishBundle(request: FastifyRequest<{ Params: { id: string; bundleId: string } }>, reply: FastifyReply): Promise<{ detail: IngestionJobDetail; publishResult: IngestionPublishResult } | ApiError>;
+  attachExtractionSpec(request: FastifyRequest<{ Params: { id: string }; Body: ExtractionSpecBody }>, reply: FastifyReply): Promise<{ success: true; job: unknown } | ApiError>;
 }
 
 export function createIngestionHandlers(store: RecordStore, blobStore: ArtifactBlobStore): IngestionHandlers {
@@ -154,6 +160,85 @@ export function createIngestionHandlers(store: RecordStore, blobStore: ArtifactB
     async publishBundle(request, reply) {
       try {
         return await service.publishBundle(request.params.id, request.params.bundleId);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        reply.status(message.includes('not found') ? 404 : 400);
+        return { error: message.includes('not found') ? 'NOT_FOUND' : 'BAD_REQUEST', message };
+      }
+    },
+
+    async attachExtractionSpec(request, reply) {
+      const { extractionSpec } = request.body;
+      if (!extractionSpec || typeof extractionSpec !== 'object') {
+        reply.status(400);
+        return { error: 'BAD_REQUEST', message: 'extractionSpec is required and must be an object' };
+      }
+
+      try {
+        // Get the job
+        const jobEnvelope = await store.get(request.params.id);
+        if (!jobEnvelope || jobEnvelope.schemaId !== INGESTION_SCHEMA_IDS.job) {
+          reply.status(404);
+          return { error: 'NOT_FOUND', message: `Ingestion job not found: ${request.params.id}` };
+        }
+
+        const job = jobEnvelope as RecordEnvelope<IngestionJobPayload>;
+        
+        // Get the primary artifact
+        const firstArtifactRef = (job.payload.artifact_refs ?? [])[0];
+        const primaryArtifactId = (firstArtifactRef && typeof firstArtifactRef === 'object' && typeof (firstArtifactRef as Record<string, unknown>).id === 'string')
+          ? ((firstArtifactRef as Record<string, unknown>).id as string)
+          : undefined;
+        if (!primaryArtifactId) {
+          reply.status(400);
+          return { error: 'BAD_REQUEST', message: 'Job has no primary artifact' };
+        }
+
+        const artifactEnvelope = await store.get(primaryArtifactId);
+        if (!artifactEnvelope || artifactEnvelope.schemaId !== INGESTION_SCHEMA_IDS.artifact) {
+          reply.status(404);
+          return { error: 'NOT_FOUND', message: `Artifact not found: ${primaryArtifactId}` };
+        }
+
+        const artifact = artifactEnvelope as RecordEnvelope<IngestionArtifactPayload>;
+
+        // Update the artifact with the extraction spec
+        const updateResult = await store.update({
+          envelope: {
+            ...artifact,
+            payload: {
+              ...artifact.payload,
+              extractionSpec: extractionSpec as Record<string, unknown>,
+            },
+          },
+          message: `Attach extraction spec to artifact ${artifact.recordId}`,
+          skipLint: true,
+        });
+
+        if (!updateResult.success || !updateResult.envelope) {
+          reply.status(500);
+          return { error: 'INTERNAL_ERROR', message: updateResult.error ?? 'Failed to update artifact' };
+        }
+
+        // Update the job source_kind to ai_assisted
+        const jobUpdateResult = await store.update({
+          envelope: {
+            ...job,
+            payload: {
+              ...job.payload,
+              source_kind: 'ai_assisted',
+            },
+          },
+          message: `Set job ${job.recordId} source kind to ai_assisted`,
+          skipLint: true,
+        });
+
+        if (!jobUpdateResult.success || !jobUpdateResult.envelope) {
+          reply.status(500);
+          return { error: 'INTERNAL_ERROR', message: jobUpdateResult.error ?? 'Failed to update job' };
+        }
+
+        return { success: true, job: jobUpdateResult.envelope.payload };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         reply.status(message.includes('not found') ? 404 : 400);

@@ -1,0 +1,18 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: LBW-PLT-96-CORNING-3595
+name: Corning 96-Well Clear Flat-Bottom Plate
+labwareType: plate
+format:
+  rows: 8
+  cols: 12
+  wellCount: 96
+  wellNaming: "A1..H12"
+manufacturer:
+  name: Corning
+  catalogNumber: "3595"
+tags:
+  - seed
+  - plate
+  - 96-well
+  - flat-bottom

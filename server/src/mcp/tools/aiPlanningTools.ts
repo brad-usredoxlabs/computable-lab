@@ -843,6 +843,65 @@ export function registerAiPlanningTools(server: McpServer, ctx: AppContext, regi
   dualRegister(
     server,
     registry,
+    'search_records',
+    'Search local records by a free-text query across multiple record kinds. Call this BEFORE asking the user for any entity ID. Pass kinds like ["labware"], ["material"], ["equipment"], ["protocol"], ["plate-layout-template"], ["operation-template"], ["aliquot"], ["material-spec"], or multiple at once. Returns a list of matching records with recordId, title, snippet, and kind. If zero results, try a shorter or more general query before giving up.',
+    {
+      query: z.string().describe('Free-text search fragment, e.g. "12-channel reservoir" or "clofibrate"'),
+      kinds: z.array(z.string()).describe('Record kinds to search, e.g. ["labware"] or ["material","material-spec","aliquot"]'),
+      limit: z.number().optional().describe('Maximum total results across all kinds (default 20)'),
+    },
+    async (args) => {
+      try {
+        const q = args.query.toLowerCase();
+        const limit = typeof args.limit === 'number' && args.limit > 0 ? args.limit : 20;
+        const results: Array<{
+          recordId: string;
+          title: string;
+          snippet: string;
+          kind: string;
+          schemaId: string;
+        }> = [];
+        for (const kind of args.kinds) {
+          const records = await ctx.store.list({ kind });
+          for (const record of records) {
+            const payload = record.payload as Record<string, unknown>;
+            const searchable = [
+              payload.name,
+              payload.title,
+              payload.label,
+              payload.manufacturer,
+              payload.model,
+              payload.modelFamily,
+              payload.canonical,
+              payload.id,
+            ]
+              .filter((v): v is string | number => v !== undefined && v !== null)
+              .map((v) => String(v).toLowerCase());
+            if (searchable.some((s) => s.includes(q))) {
+              results.push({
+                recordId: record.recordId,
+                title: String(payload.name || payload.title || payload.label || record.recordId),
+                snippet: [payload.manufacturer, payload.model || payload.modelFamily, payload.domain]
+                  .filter(Boolean)
+                  .join(' — '),
+                kind: String(payload.kind || kind),
+                schemaId: record.schemaId,
+              });
+              if (results.length >= limit) break;
+            }
+          }
+          if (results.length >= limit) break;
+        }
+        return jsonResult({ items: results });
+      } catch (err) {
+        return errorResult(`Tool error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    },
+  );
+
+  dualRegister(
+    server,
+    registry,
     'operation_template_build_event',
     'Build a template-backed transfer vignette event payload for an event graph. Use this after selecting a saved operation template so AI and UI authoring share the same macro structure.',
     {

@@ -351,7 +351,18 @@ function sumSingleUnitQuantities(values: Quantity[]): Quantity | undefined {
   return { value: Number(total.toFixed(6)), unit };
 }
 
-async function listBySchema(store: RecordStore, schemaId: string): Promise<RecordEnvelope[]> {
+async function listBySchema(
+  store: RecordStore,
+  schemaId: string,
+  indexManager?: IndexManager,
+): Promise<RecordEnvelope[]> {
+  if (indexManager) {
+    // Fast path: pull paths from the index and load by path, avoiding
+    // store.list's full recursive scan + parse-every-file.
+    const entries = await indexManager.query({ schemaId });
+    const loaded = await Promise.all(entries.map((entry) => store.getByPath(entry.path)));
+    return loaded.filter((env): env is RecordEnvelope => env !== null);
+  }
   return store.list({ schemaId, limit: 10000 });
 }
 
@@ -481,10 +492,10 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
     async getFormulationsSummary(request, reply) {
       try {
         const [materials, specs, recipes, aliquots] = await Promise.all([
-          listBySchema(store, SCHEMA_IDS.material),
-          listBySchema(store, SCHEMA_IDS.materialSpec),
-          listBySchema(store, SCHEMA_IDS.recipe),
-          listBySchema(store, SCHEMA_IDS.aliquot),
+          listBySchema(store, SCHEMA_IDS.material, indexManager),
+          listBySchema(store, SCHEMA_IDS.materialSpec, indexManager),
+          listBySchema(store, SCHEMA_IDS.recipe, indexManager),
+          listBySchema(store, SCHEMA_IDS.aliquot, indexManager),
         ]);
 
         const search = request.query.q?.trim().toLowerCase() ?? '';
@@ -850,9 +861,9 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
     async getInventory(request, reply) {
       try {
         const [specs, recipes, aliquots] = await Promise.all([
-          listBySchema(store, SCHEMA_IDS.materialSpec),
-          listBySchema(store, SCHEMA_IDS.recipe),
-          listBySchema(store, SCHEMA_IDS.aliquot),
+          listBySchema(store, SCHEMA_IDS.materialSpec, indexManager),
+          listBySchema(store, SCHEMA_IDS.recipe, indexManager),
+          listBySchema(store, SCHEMA_IDS.aliquot, indexManager),
         ]);
 
         const specMap = new Map(specs.map((envelope) => [envelope.recordId, envelope]));

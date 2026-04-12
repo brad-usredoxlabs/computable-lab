@@ -185,6 +185,8 @@ export interface Labware {
   definitionWarnings?: string[]
   /** Optional notes */
   notes?: string
+  /** Source record ID if this labware was created from a persisted record */
+  sourceRecordId?: string
 }
 
 /**
@@ -707,4 +709,83 @@ export function parseGridWellId(wellId: WellId, labware: Labware): { row: number
   if (row === -1 || col === -1) return null
 
   return { row, col }
+}
+
+/**
+ * Payload shape for a persisted labware record from the record store.
+ * This is the shape returned from the /ai/search-records endpoint for labware records.
+ */
+export interface LabwareRecordPayload {
+  kind: 'labware'
+  recordId: string
+  name: string
+  labwareType?: string
+  format?: {
+    rows?: number
+    cols?: number
+    wellCount?: number
+    wellNaming?: string
+  }
+  manufacturer?: {
+    name?: string
+    catalogNumber?: string
+    url?: string
+  }
+  tags?: string[]
+}
+
+/**
+ * Map a persisted labware record (from the record store) into the in-memory
+ * editor Labware shape. The editor's reducer uses a small fixed union of
+ * LabwareType values for rendering. This mapper picks the best-matching
+ * LabwareType from the record's format + labwareType fields.
+ */
+export function labwareRecordToEditorLabware(
+  record: LabwareRecordPayload,
+): Labware {
+  const editorType = pickEditorLabwareType(record)
+  // Delegate geometry/wells/etc. to the existing factory, then overwrite
+  // name + a few metadata fields from the record.
+  const base = createLabware(editorType, record.name)
+  return {
+    ...base,
+    // Store the source recordId so the editor knows this labware came
+    // from a persisted record rather than a manual click.
+    sourceRecordId: record.recordId,
+  }
+}
+
+function pickEditorLabwareType(record: LabwareRecordPayload): LabwareType {
+  const format = record.format ?? {}
+  const rows = format.rows
+  const cols = format.cols
+  const wellCount = format.wellCount ?? (rows && cols ? rows * cols : undefined)
+  const kind = (record.labwareType ?? '').toLowerCase()
+
+  // Reservoirs
+  if (kind.includes('reservoir')) {
+    if (cols === 12) return 'reservoir_12'
+    if (cols === 8) return 'reservoir_8'
+    return 'reservoir_1'
+  }
+
+  // Tip racks — keep as plate_96 for now unless the union has a tip type
+  if (kind.includes('tip')) {
+    return 'plate_96'
+  }
+
+  // Tube racks and tubes
+  if (kind.includes('tube_rack') || kind.includes('tuberack')) {
+    return 'tubeset_24'
+  }
+  if (kind.includes('tube')) {
+    return 'tube'
+  }
+
+  // Plates
+  if (wellCount === 384) return 'plate_384'
+  if (wellCount === 96 && kind.includes('deep')) return 'deepwell_96'
+  if (wellCount === 96) return 'plate_96'
+
+  return 'plate_96'
 }

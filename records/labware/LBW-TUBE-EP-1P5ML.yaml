@@ -1,0 +1,16 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: LBW-TUBE-EP-1P5ML
+name: Eppendorf 1.5 mL Safe-Lock Microtube
+labwareType: tube
+format:
+  rows: 1
+  cols: 1
+  wellCount: 1
+manufacturer:
+  name: Eppendorf
+tags:
+  - seed
+  - tube
+  - 1.5mL
+  - microtube

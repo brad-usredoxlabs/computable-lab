@@ -116,7 +116,14 @@ export interface RecordStore {
    * Get a record by ID.
    */
   get(recordId: string): Promise<RecordEnvelope | null>;
-  
+
+  /**
+   * Get a record by its repo-relative file path. Skips the recordId→path
+   * lookup, so callers that already know the path (e.g. from an index)
+   * avoid a recursive directory scan.
+   */
+  getByPath(path: string): Promise<RecordEnvelope | null>;
+
   /**
    * Get a record with validation/lint results.
    */

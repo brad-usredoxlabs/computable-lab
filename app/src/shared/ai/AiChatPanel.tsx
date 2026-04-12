@@ -272,7 +272,13 @@ export function AiChatPanel() {
         ) : (
           <>
             {/* Messages */}
-            <ChatMessageList messages={chat.messages} />
+            <ChatMessageList
+              messages={chat.messages}
+              onPickClarification={(entityType, optionId, optionLabel) => {
+                const token = `[[${entityType}:${optionId}|${optionLabel}]]`
+                chat.sendPrompt(`Use ${token} — continue.`)
+              }}
+            />
 
             {/* Preview details and accept/reject controls */}
             {chat.previewEvents.length > 0 && (

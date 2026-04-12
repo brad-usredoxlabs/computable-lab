@@ -231,6 +231,48 @@ export interface OntologyMappingItem {
   suggestions: OntologyTermSuggestion[]
 }
 
+// AI ingestion analyze types
+
+export interface AnalyzeIngestionFileAnalysis {
+  fileType: string
+  contentSummary: string
+  detectedStructure: string
+  tableCount?: number
+  rowEstimate?: number
+}
+
+export interface AnalyzeIngestionDraftSpec {
+  targets: Array<{
+    targetSchema: string
+    recordKind: string
+    idPrefix: string
+    fieldMappings: Array<{
+      targetField: string
+      source: string
+      transform?: string
+    }>
+    defaults?: Record<string, unknown>
+  }>
+  tableExtraction?: {
+    method: string
+    columns?: string[]
+    headerRow?: number
+  }
+  matching?: {
+    ontologyPreferences?: string[]
+    batchSize?: number
+  }
+}
+
+export interface AnalyzeIngestionResponse {
+  success: boolean
+  analysis?: AnalyzeIngestionFileAnalysis
+  draftSpec?: AnalyzeIngestionDraftSpec
+  questions?: string[]
+  confidence?: number
+  error?: string
+}
+
 export interface IngestionPublishResult {
   bundleId: string
   createdRecordIds: string[]

@@ -77,12 +77,25 @@ export interface OntologyRefProposal {
   usedInEvents: string[]
 }
 
+export interface AiClarificationOption {
+  id: string
+  label: string
+  snippet?: string
+}
+
+export interface AiClarification {
+  prompt: string
+  entityType: string
+  options: AiClarificationOption[]
+}
+
 export interface AiAgentResult {
   success: boolean
   events: PlateEvent[]
   notes: string[]
   unresolvedRefs?: OntologyRefProposal[]
   clarificationNeeded?: string
+  clarification?: AiClarification
   error?: string
   usage?: {
     inputTokens?: number
@@ -117,6 +130,8 @@ export interface ChatMessage {
   isStreaming?: boolean
   /** File attachments on user messages */
   attachments?: ChatMessageAttachment[]
+  /** Structured clarification (numbered options) from the AI */
+  clarification?: AiClarification
 }
 
 export interface AiConversationMessage {

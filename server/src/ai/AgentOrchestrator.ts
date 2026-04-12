@@ -11,6 +11,7 @@ import type {
   AgentOrchestrator,
   AgentRequest,
   AgentResult,
+  AgentClarificationOption,
   ChatMessage,
   ConversationHistoryMessage,
 } from './types.js';
@@ -63,6 +64,26 @@ function parseAgentFinalResponse(
       notes: Array.isArray(parsed.notes) ? parsed.notes : [],
       unresolvedRefs: Array.isArray(parsed.unresolvedRefs) ? parsed.unresolvedRefs : [],
     };
+
+    // Structured clarification (from the proactive-resolution prompt)
+    if (parsed.clarification && typeof parsed.clarification === 'object' && parsed.clarification !== null) {
+      const c = parsed.clarification as Record<string, unknown>;
+      const optionsRaw = Array.isArray(c.options) ? c.options : [];
+      const options = optionsRaw
+        .map((o): AgentClarificationOption | null => {
+          if (!o || typeof o !== 'object') return null;
+          const oo = o as Record<string, unknown>;
+          if (typeof oo.id !== 'string' || typeof oo.label !== 'string') return null;
+          const out: AgentClarificationOption = { id: oo.id, label: oo.label };
+          if (typeof oo.snippet === 'string') out.snippet = oo.snippet;
+          return out;
+        })
+        .filter((o): o is AgentClarificationOption => o !== null);
+      if (typeof c.prompt === 'string' && typeof c.entityType === 'string' && options.length > 0) {
+        result.clarification = { prompt: c.prompt, entityType: c.entityType, options };
+      }
+    }
+
     return result;
   } catch {
     return {

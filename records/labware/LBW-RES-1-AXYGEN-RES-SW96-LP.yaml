@@ -1,0 +1,17 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: LBW-RES-1-AXYGEN-RES-SW96-LP
+name: Axygen Single-Well Reservoir 100 mL
+labwareType: reservoir
+format:
+  rows: 1
+  cols: 1
+  wellCount: 1
+  wellNaming: "A1"
+manufacturer:
+  name: Axygen
+  catalogNumber: "RES-SW96-LP"
+tags:
+  - seed
+  - reservoir
+  - single-well

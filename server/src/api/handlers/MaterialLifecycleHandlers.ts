@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiError } from '../types.js';
 import type { RecordEnvelope } from '../../store/types.js';
 import type { RecordStore } from '../../store/types.js';
+import type { IndexManager } from '../../index/IndexManager.js';
 import { toStoredConcentration, type Concentration } from '../../materials/concentration.js';
 import { extractPrimaryDeclaredConcentration } from '../../materials/vendorComposition.js';
 
@@ -360,7 +361,15 @@ async function inferContextMaterial(store: RecordStore, sourceContextIds: string
   };
 }
 
-export function createMaterialLifecycleHandlers(store: RecordStore) {
+const MATERIAL_SEARCH_SCHEMA_IDS = [
+  SCHEMA_IDS.materialSpec,
+  SCHEMA_IDS.vendorProduct,
+  SCHEMA_IDS.materialInstance,
+  SCHEMA_IDS.aliquot,
+  SCHEMA_IDS.material,
+] as const;
+
+export function createMaterialLifecycleHandlers(store: RecordStore, indexManager?: IndexManager) {
   async function createDerivationFromBody(
     body: CreateMaterialDerivationBody,
     reply: FastifyReply,
@@ -415,13 +424,30 @@ export function createMaterialLifecycleHandlers(store: RecordStore) {
       const vendorFilter = stringValue(request.query.vendor)?.toLowerCase();
       const derivationTypeFilter = stringValue(request.query.derivationType)?.toLowerCase();
       const limit = Math.min(Math.max(Number(request.query.limit) || 25, 1), 100);
-      const envelopes = (await Promise.all([
-        store.list({ schemaId: SCHEMA_IDS.materialSpec, limit: 1000 }),
-        store.list({ schemaId: SCHEMA_IDS.vendorProduct, limit: 1000 }),
-        store.list({ schemaId: SCHEMA_IDS.materialInstance, limit: 1000 }),
-        store.list({ schemaId: SCHEMA_IDS.aliquot, limit: 1000 }),
-        store.list({ schemaId: SCHEMA_IDS.material, limit: 1000 }),
-      ])).flat().map((envelope) => ({ envelope, payload: asPayload(envelope) })).filter((entry) => entry.payload);
+
+      let rawEnvelopes: RecordEnvelope[];
+      if (indexManager) {
+        // Fast path: use the in-memory index to find matching paths by
+        // schemaId, then load envelopes by path. Avoids store.get's
+        // recordId→path lookup which does a full recursive directory scan.
+        const indexHits = (await Promise.all(
+          MATERIAL_SEARCH_SCHEMA_IDS.map((schemaId) => indexManager.query({ schemaId })),
+        )).flat();
+        const loaded = await Promise.all(
+          indexHits.map((entry) => store.getByPath(entry.path)),
+        );
+        rawEnvelopes = loaded.filter((env): env is RecordEnvelope => env !== null);
+      } else {
+        // Fallback: scan via store.list. Slower because each call walks the
+        // full records tree and parses every YAML file before filtering.
+        rawEnvelopes = (await Promise.all(
+          MATERIAL_SEARCH_SCHEMA_IDS.map((schemaId) => store.list({ schemaId, limit: 1000 })),
+        )).flat();
+      }
+
+      const envelopes = rawEnvelopes
+        .map((envelope) => ({ envelope, payload: asPayload(envelope) }))
+        .filter((entry) => entry.payload);
       const items = envelopes
         .map((entry) => ({ item: classifyMaterialRecord(entry.envelope), payload: entry.payload! }))
         .filter((entry): entry is { item: MaterialSearchItem; payload: Record<string, unknown> } => Boolean(entry.item))

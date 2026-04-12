@@ -17,6 +17,7 @@ const LiteratureExplorer = lazy(async () => import('./knowledge/LiteratureExplor
 const ComponentLibraryPage = lazy(async () => import('./knowledge/ComponentLibraryPage').then((module) => ({ default: module.ComponentLibraryPage })))
 const FormulationsPage = lazy(async () => import('./editor/FormulationsPage').then((module) => ({ default: module.FormulationsPage })))
 const MaterialsPage = lazy(async () => import('./editor/MaterialsPage').then((module) => ({ default: module.MaterialsPage })))
+const LabwareTestPage = lazy(async () => import('./pages/LabwareTestPage').then((module) => ({ default: module.default })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -73,6 +74,9 @@ export function App() {
 
             {/* Record Registry */}
             <Route path="registry" element={<DeferredRoute><RecordRegistryPage /></DeferredRoute>} />
+
+            {/* Labware Test Page - for testing LabwarePicker */}
+            <Route path="labware-test" element={<DeferredRoute><LabwareTestPage /></DeferredRoute>} />
           </Route>
         </Routes>
       </BrowserRouter>

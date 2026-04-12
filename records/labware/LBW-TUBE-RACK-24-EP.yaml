@@ -1,0 +1,16 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: LBW-TUBE-RACK-24-EP
+name: Eppendorf 24-Position 1.5/2 mL Tube Rack
+labwareType: tube_rack
+format:
+  rows: 4
+  cols: 6
+  wellCount: 24
+  wellNaming: "A1..D6"
+manufacturer:
+  name: Eppendorf
+tags:
+  - seed
+  - tube_rack
+  - 24-position

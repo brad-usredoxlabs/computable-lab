@@ -11,11 +11,12 @@
 import { createContext, useContext, useReducer, useCallback, type ReactNode } from 'react'
 import type { WellId } from '../../types/plate'
 import type { PlateEvent } from '../../types/events'
-import type { Labware, LabwareType } from '../../types/labware'
+import type { Labware, LabwareType, LabwareRecordPayload } from '../../types/labware'
 import {
   clampLabwareOrientation,
   createLabware,
   getLabwareDefaultOrientation,
+  labwareRecordToEditorLabware,
   normalizeLabwareWithDefinition,
 } from '../../types/labware'
 
@@ -497,6 +498,7 @@ interface LabwareEditorContextValue {
   
   // Convenience methods
   addLabware: (labwareType: LabwareType, name?: string) => Labware
+  addLabwareFromRecord: (record: LabwareRecordPayload) => Labware
   removeLabware: (labwareId: string) => void
   setActiveLabware: (labwareId: string | null) => void
   
@@ -544,6 +546,12 @@ export function LabwareEditorProvider({ children }: { children: ReactNode }) {
   // Convenience methods
   const addLabware = useCallback((labwareType: LabwareType, name?: string): Labware => {
     const labware = createLabware(labwareType, name)
+    dispatch({ type: 'ADD_LABWARE', labware })
+    return labware
+  }, [])
+  
+  const addLabwareFromRecord = useCallback((record: LabwareRecordPayload): Labware => {
+    const labware = labwareRecordToEditorLabware(record)
     dispatch({ type: 'ADD_LABWARE', labware })
     return labware
   }, [])
@@ -669,6 +677,7 @@ export function LabwareEditorProvider({ children }: { children: ReactNode }) {
     state,
     dispatch,
     addLabware,
+    addLabwareFromRecord,
     removeLabware,
     setActiveLabware,
     selectWells,

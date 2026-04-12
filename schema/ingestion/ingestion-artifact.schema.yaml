@@ -118,3 +118,7 @@ properties:
         format: date-time
       note:
         type: string
+  extractionSpec:
+    type: object
+    description: "AI-generated extraction spec driving the generic runner."
+    additionalProperties: true

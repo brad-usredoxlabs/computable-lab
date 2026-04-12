@@ -5,132 +5,12 @@
 
 import { useState } from 'react'
 import { useLabwareEditor } from '../context/LabwareEditorContext'
-import type { LabwareType } from '../../types/labware'
 import {
-  LABWARE_TYPE_LABELS,
   LABWARE_TYPE_ICONS,
   getLabwareWellCount,
 } from '../../types/labware'
-
-/**
- * Available labware types grouped by category
- */
-const LABWARE_TYPE_OPTIONS: { category: string; types: LabwareType[] }[] = [
-  {
-    category: 'Plates',
-    types: ['plate_96', 'plate_384', 'deepwell_96'],
-  },
-  {
-    category: 'Reservoirs',
-    types: ['reservoir_12', 'reservoir_8', 'reservoir_1'],
-  },
-  {
-    category: 'Tubes',
-    types: ['tube', 'tubeset_24'],
-  },
-]
-
-/**
- * Add labware dialog
- */
-function AddLabwareDialog({
-  onAdd,
-  onCancel,
-}: {
-  onAdd: (labwareType: LabwareType, name: string) => void
-  onCancel: () => void
-}) {
-  const [selectedType, setSelectedType] = useState<LabwareType>('plate_96')
-  const [name, setName] = useState('')
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    onAdd(selectedType, name || LABWARE_TYPE_LABELS[selectedType])
-  }
-
-  return (
-    <div className="add-labware-dialog">
-      <form onSubmit={handleSubmit}>
-        <h4>Add Labware</h4>
-        
-        <div className="form-group">
-          <label htmlFor="labware-type">Type:</label>
-          <select
-            id="labware-type"
-            value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value as LabwareType)}
-            className="select"
-          >
-            {LABWARE_TYPE_OPTIONS.map((group) => (
-              <optgroup key={group.category} label={group.category}>
-                {group.types.map((type) => (
-                  <option key={type} value={type}>
-                    {LABWARE_TYPE_ICONS[type]} {LABWARE_TYPE_LABELS[type]}
-                  </option>
-                ))}
-              </optgroup>
-            ))}
-          </select>
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="labware-name">Name:</label>
-          <input
-            id="labware-name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={LABWARE_TYPE_LABELS[selectedType]}
-            className="input"
-          />
-        </div>
-
-        <div className="dialog-actions">
-          <button type="button" onClick={onCancel} className="btn btn-secondary">
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-primary">
-            Add
-          </button>
-        </div>
-      </form>
-
-      <style>{`
-        .add-labware-dialog {
-          padding: 1rem;
-          background: white;
-          border-radius: 8px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
-        .add-labware-dialog h4 {
-          margin: 0 0 1rem;
-        }
-        .add-labware-dialog .form-group {
-          margin-bottom: 0.75rem;
-        }
-        .add-labware-dialog label {
-          display: block;
-          font-size: 0.875rem;
-          margin-bottom: 0.25rem;
-        }
-        .add-labware-dialog .select,
-        .add-labware-dialog .input {
-          width: 100%;
-          padding: 0.5rem;
-          border: 1px solid #dee2e6;
-          border-radius: 4px;
-          font-size: 0.875rem;
-        }
-        .dialog-actions {
-          display: flex;
-          gap: 0.5rem;
-          justify-content: flex-end;
-          margin-top: 1rem;
-        }
-      `}</style>
-    </div>
-  )
-}
+import { LabwarePicker } from './LabwarePicker'
+import type { LabwareRecordPayload } from '../../types/labware'
 
 /**
  * Single labware item in the list
@@ -313,18 +193,18 @@ function LabwareItem({
  * LabwareList component
  */
 export function LabwareList() {
-  const { state, addLabware, removeLabware, setActiveLabware, dispatch } = useLabwareEditor()
-  const [showAddDialog, setShowAddDialog] = useState(false)
+  const { state, removeLabware, setActiveLabware, dispatch, addLabwareFromRecord } = useLabwareEditor()
+  const [showPicker, setShowPicker] = useState(false)
 
   const labwareIds = Array.from(state.labwares.keys())
 
-  const handleAddLabware = (labwareType: LabwareType, name: string) => {
-    addLabware(labwareType, name)
-    setShowAddDialog(false)
-  }
-
   const handleRename = (labwareId: string, newName: string) => {
     dispatch({ type: 'UPDATE_LABWARE', labwareId, updates: { name: newName } })
+  }
+
+  const handlePickLabware = (record: LabwareRecordPayload) => {
+    addLabwareFromRecord(record)
+    setShowPicker(false)
   }
 
   return (
@@ -333,19 +213,18 @@ export function LabwareList() {
         <h3>Labware</h3>
         <button
           className="btn btn-primary btn-sm"
-          onClick={() => setShowAddDialog(true)}
+          onClick={() => setShowPicker(true)}
         >
           + Add
         </button>
       </div>
 
-      {showAddDialog && (
-        <div className="labware-list__dialog-container">
-          <AddLabwareDialog
-            onAdd={handleAddLabware}
-            onCancel={() => setShowAddDialog(false)}
-          />
-        </div>
+      {showPicker && (
+        <LabwarePicker
+          open={showPicker}
+          onClose={() => setShowPicker(false)}
+          onPick={handlePickLabware}
+        />
       )}
 
       <div className="labware-list__items">
@@ -387,10 +266,6 @@ export function LabwareList() {
         .labware-list__header h3 {
           margin: 0;
           font-size: 1rem;
-        }
-        .labware-list__dialog-container {
-          padding: 0.5rem;
-          border-bottom: 1px solid #e9ecef;
         }
         .labware-list__items {
           flex: 1;

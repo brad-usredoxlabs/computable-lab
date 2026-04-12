@@ -197,9 +197,10 @@ export function useAiChat({ aiContext, onAcceptEvent }: UseAiChatOptions): UseAi
                 m.id === assistantId
                   ? {
                       ...m,
-                      content: result.clarificationNeeded || content,
+                      content: result.clarification?.prompt ?? result.clarificationNeeded ?? content,
                       streamEvents: [...accumulated],
                       events: result.events ?? [],
+                      clarification: result.clarification,
                       usage: result.usage,
                       isStreaming: false,
                     }

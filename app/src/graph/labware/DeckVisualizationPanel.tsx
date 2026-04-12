@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Labware, LabwareType } from '../../types/labware'
+import type { Labware, LabwareType, LabwareRecordPayload } from '../../types/labware'
 import { isTipRackType, LABWARE_TYPE_ICONS, LABWARE_TYPE_LABELS } from '../../types/labware'
 import { LABWARE_DEFINITIONS, getLabwareDefinitionByLegacyType } from '../../types/labwareDefinition'
 import { ToolSelector, type SelectedTool } from '../tools'
@@ -7,6 +7,7 @@ import type { AssistPipetteModel } from '../lib/assistPipetteRegistry'
 import { getAssistPipetteTipFamilies } from '../lib/assistPipetteRegistry'
 import type { PlatformManifest } from '../../types/platformRegistry'
 import { defaultVariantForPlatform, getDeckSlotLockedOrientation, getPlatformManifest, getVariantManifest } from '../../shared/lib/platformRegistry'
+import { LabwarePicker } from './LabwarePicker'
 
 export interface DeckPlacement {
   slotId: string
@@ -264,6 +265,7 @@ export function DeckVisualizationPanel({
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [pendingType, setPendingType] = useState<LabwareType | null>(null)
   const [nameInput, setNameInput] = useState('')
+  const [showLabwarePicker, setShowLabwarePicker] = useState(false)
   const availablePlatforms = useMemo(
     () => (allowedPlatformIds?.length ? platforms.filter((entry) => allowedPlatformIds.includes(entry.id)) : platforms),
     [allowedPlatformIds, platforms]
@@ -366,6 +368,16 @@ export function DeckVisualizationPanel({
     if (benchSlotId) onChangePlacement(benchSlotId, { labwareId: undefined })
     onRemoveLabware?.(labwareId)
   }
+  const handlePickLabwareFromPicker = (record: LabwareRecordPayload) => {
+    // Create labware from the record payload
+    const labwareType = record.labwareType as LabwareType
+    const created = onAddLabware(labwareType, record.name)
+    if (selectedSlotId) {
+      placeLabwareInSlot(selectedSlotId, created.labwareId)
+    }
+    setShowLabwarePicker(false)
+  }
+
   const startAdd = (type: LabwareType) => {
     setPendingType(type)
     setNameInput('')
@@ -494,25 +506,7 @@ export function DeckVisualizationPanel({
       <div className="deck-panel__tray">
         <span className="tray-label">Labware Tray</span>
         <div className="tray-actions">
-          <button className="tray-add" onClick={() => setIsAddOpen((v) => !v)}>+ Add</button>
-          {isAddOpen && (
-            <div className="tray-add-menu">
-              {platform === 'integra_assist' && !selectedTool?.assistPipetteModel && (
-                <div className="tray-add-hint">Select an Assist pipette model to show compatible tipracks.</div>
-              )}
-              {availableLabwareTypes.map((type) => (
-                <button key={type} className="tray-add-item" onClick={() => startAdd(type)}>
-                  <span>{LABWARE_TYPE_ICONS[type]}</span>
-                  <span>
-                    {getLabwareDefinitionByLegacyType(type)?.display_name || LABWARE_TYPE_LABELS[type]}
-                    <small className="tray-add-meta">
-                      {Math.round(getLabwareDefinitionByLegacyType(type)?.capacity.max_well_volume_uL || 0)} µL max/well
-                    </small>
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
+          <button className="tray-add" onClick={() => setShowLabwarePicker(true)}>+ Add</button>
         </div>
         {labwares.map((labware) => (
           <div key={labware.labwareId} className="tray-chip-wrap">
@@ -540,6 +534,14 @@ export function DeckVisualizationPanel({
           </div>
         ))}
       </div>
+      {showLabwarePicker && (
+        <LabwarePicker
+          open={showLabwarePicker}
+          onClose={() => setShowLabwarePicker(false)}
+          onPick={handlePickLabwareFromPicker}
+        />
+      )}
+
       {pendingType && (
         <div className="name-modal-backdrop" onClick={() => setPendingType(null)}>
           <div className="name-modal" onClick={(e) => e.stopPropagation()}>

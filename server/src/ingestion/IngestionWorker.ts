@@ -1,10 +1,9 @@
 import type { RecordEnvelope, RecordStore } from '../store/types.js';
 import { ArtifactBlobStore } from './ArtifactBlobStore.js';
-import { extractCaymanPlateMapPdf } from './adapters/caymanPlateMapPdf.js';
-import { extractCaymanPlateMapSpreadsheet } from './adapters/caymanPlateMapSpreadsheet.js';
 import { extractVendorFormulationHtml } from './adapters/vendorFormulationHtml.js';
-import { buildCaymanLibraryBundle } from './pipelines/caymanLibraryPipeline.js';
+import { runExtractionSpec } from './adapters/specDrivenExtractor.js';
 import { buildVendorFormulationBundle } from './pipelines/vendorFormulationPipeline.js';
+import { buildAiAssistedBundle } from './pipelines/aiAssistedPipeline.js';
 import { publishCaymanLibraryBundle } from './publishers/CaymanLibraryPublisher.js';
 import { publishVendorFormulationBundle } from './publishers/VendorFormulationPublisher.js';
 import { buildIngestionIssueEnvelope, createRecordRef } from './records.js';
@@ -19,6 +18,9 @@ import {
   type IngestionJobPayload,
   type IngestionPublishResult,
 } from './types.js';
+import { findMatchingSpec } from './extractorLibrary.js';
+import { MaterialMatchService } from './matching/MaterialMatchService.js';
+import { OntologyMatchService } from './matching/OntologyMatchService.js';
 
 function asJobEnvelope(envelope: RecordEnvelope | null): RecordEnvelope<IngestionJobPayload> | null {
   return envelope?.schemaId === INGESTION_SCHEMA_IDS.job ? envelope as RecordEnvelope<IngestionJobPayload> : null;
@@ -32,13 +34,6 @@ function refId(value: unknown): string | undefined {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
   return typeof (value as Record<string, unknown>).id === 'string'
     ? ((value as Record<string, unknown>).id as string)
-    : undefined;
-}
-
-function artifactFileName(artifact: RecordEnvelope<IngestionArtifactPayload>): string | undefined {
-  const fileRef = artifact.payload.file_ref;
-  return fileRef && typeof fileRef === 'object' && typeof (fileRef as Record<string, unknown>).file_name === 'string'
-    ? ((fileRef as Record<string, unknown>).file_name as string)
     : undefined;
 }
 
@@ -117,31 +112,14 @@ export class IngestionWorkerShell {
     return (result.envelope as RecordEnvelope<IngestionJobPayload> | undefined) ?? null;
   }
 
-  private async findSupportingSpreadsheetArtifact(
-    job: RecordEnvelope<IngestionJobPayload>,
-    primaryArtifactId: string,
-  ): Promise<RecordEnvelope<IngestionArtifactPayload> | null> {
-    const artifactIds = (job.payload.artifact_refs ?? [])
-      .map((entry) => refId(entry))
-      .filter((value): value is string => Boolean(value))
-      .filter((value) => value !== primaryArtifactId);
-    for (const artifactId of artifactIds) {
-      const artifact = asArtifactEnvelope(await this.store.get(artifactId));
-      if (!artifact) continue;
-      const fileName = artifactFileName(artifact)?.toLowerCase();
-      const mediaType = artifact.payload.media_type?.toLowerCase();
-      if (fileName?.endsWith('.xlsx') || mediaType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
-        return artifact;
-      }
-    }
-    return null;
-  }
-
   async runJob(jobId: string, source?: CreateIngestionArtifactInput): Promise<RecordEnvelope<IngestionJobPayload> | null> {
     const running = await this.markRunning(jobId);
     if (!running) return null;
 
-    if (
+    // Handle ai_assisted source kind separately - it has its own extraction flow
+    if (running.payload.source_kind === 'ai_assisted') {
+      // ai_assisted jobs are handled below in the main extraction flow
+    } else if (
       running.payload.source_kind !== 'vendor_plate_map_pdf'
       && running.payload.source_kind !== 'vendor_formulation_html'
       && running.payload.source_kind !== 'vendor_plate_map_spreadsheet'
@@ -221,66 +199,68 @@ export class IngestionWorkerShell {
     };
     let metrics: Record<string, number>;
 
-    if (running.payload.source_kind === 'vendor_plate_map_pdf' || running.payload.source_kind === 'vendor_plate_map_spreadsheet') {
+    if (running.payload.source_kind === 'ai_assisted') {
+      // AI-assisted extraction flow:
+      // 1. Check extractor library first for a matching spec
+      // 2. If no match, use the extraction spec from the artifact's extractionSpec field
+      // 3. Run the spec-driven extractor
+      // 4. Build candidates and issues
+
       const persistedBase64 = await this.resolveStoredContentBase64(artifact, source);
       if (!persistedBase64) {
-        throw new Error('Cayman ingestion requires source.contentBase64.');
+        throw new Error('AI-assisted ingestion requires source.contentBase64.');
       }
-      const sourceFileName = String(source?.fileName ?? (artifact.payload.file_ref as Record<string, unknown> | undefined)?.file_name ?? '');
-      let extraction = running.payload.source_kind === 'vendor_plate_map_spreadsheet'
-        ? await extractCaymanPlateMapSpreadsheet({
-            contentBase64: persistedBase64,
-            ...(sourceFileName ? { fileName: sourceFileName } : {}),
-          })
-        : await extractCaymanPlateMapPdf({
-            contentBase64: persistedBase64,
-            ...(sourceFileName ? { fileName: sourceFileName } : {}),
-          });
 
-      if (running.payload.source_kind === 'vendor_plate_map_pdf') {
-        const spreadsheetArtifact = await this.findSupportingSpreadsheetArtifact(running, primaryArtifactId);
-        if (spreadsheetArtifact) {
-          const spreadsheetBase64 = await this.resolveStoredContentBase64(spreadsheetArtifact);
-          if (spreadsheetBase64) {
-            const spreadsheetFileName = artifactFileName(spreadsheetArtifact);
-            const spreadsheetExtraction = await extractCaymanPlateMapSpreadsheet({
-              contentBase64: spreadsheetBase64,
-              ...(spreadsheetFileName ? { fileName: spreadsheetFileName } : {}),
-            });
-            extraction = {
-              ...extraction,
-              ...(spreadsheetExtraction.materialMetadata ? { materialMetadata: spreadsheetExtraction.materialMetadata } : {}),
-              warnings: [...extraction.warnings, ...spreadsheetExtraction.warnings],
-            };
-          }
+      const sourceFileName = String(source?.fileName ?? (artifact.payload.file_ref as Record<string, unknown> | undefined)?.file_name ?? 'unknown');
+      
+      // Step 1: Try to find a matching spec from the extractor library
+      let extractionSpec: Record<string, unknown> | null = null;
+      const libraryDir = process.env.CL_EXTRACTOR_LIBRARY_DIR ?? `${process.cwd()}/specs/extractors`;
+      
+      try {
+        // Decode base64 to get text preview (first 4000 chars)
+        const fileContent = Buffer.from(persistedBase64, 'base64').toString('utf8');
+        const contentPreview = fileContent.slice(0, 4000);
+        
+        const libraryMatch = await findMatchingSpec(sourceFileName, contentPreview, libraryDir);
+        if (libraryMatch) {
+          extractionSpec = libraryMatch.spec;
         }
+      } catch (err) {
+        // Library scan failed, will fall back to artifact's extractionSpec
+        console.warn(`Extractor library scan failed: ${err instanceof Error ? err.message : String(err)}`);
       }
 
+      // Step 2: If no library match, use the extraction spec from the artifact
+      if (!extractionSpec && artifact.payload.extractionSpec) {
+        extractionSpec = artifact.payload.extractionSpec as Record<string, unknown>;
+      }
+
+      if (!extractionSpec) {
+        throw new Error('No extraction spec found: neither in library nor on artifact. Run AI analysis first or add a spec to specs/extractors/.');
+      }
+
+      // Step 3: Run the spec-driven extractor
+      const fileContent = Buffer.from(persistedBase64, 'base64');
+      const fileType = artifact.payload.media_type || 'text/plain';
+      
+      const extraction = await runExtractionSpec(extractionSpec, fileContent, fileType);
+
+      // Step 4: Update artifact with extraction results
       const artifactUpdate = await this.store.update({
         envelope: {
           ...artifact,
           payload: {
             ...artifact.payload,
-            sha256: artifact.payload.sha256 ?? extraction.sha256,
+            sha256: artifact.payload.sha256 ?? extraction.totalRows > 0 ? 'extracted' : undefined,
             text_extract: {
               extracted_at: new Date().toISOString(),
-              method: 'pdf_text',
-              excerpt: extraction.entries.slice(0, 10).map((entry) => `${entry.plateNumber} ${entry.well} ${entry.normalizedContents}`).join(' | '),
+              method: 'spec_driven_extraction',
+              excerpt: `Extracted ${extraction.totalRows} rows with ${extraction.totalIssues} issues`,
             },
-            table_extracts: extraction.uniquePlateNumbers.map((plateNumber) => ({
-              id: `plate-${plateNumber}`,
-              page: extraction.entries.find((entry) => entry.plateNumber === plateNumber)?.pageNumber ?? 1,
-              row_count: extraction.entries.filter((entry) => entry.plateNumber === plateNumber).length,
-              column_count: 4,
-              note: `Plate ${plateNumber}`,
-            })),
-            page_map: extraction.pages.map((page) => ({
-              page: page.pageNumber,
-              label: `Source page ${page.pageNumber}`,
-            })),
           },
         },
-        message: `Attach Cayman extraction to artifact ${artifact.recordId}`,
+        message: `Attach AI-assisted extraction to artifact ${artifact.recordId}`,
         skipLint: true,
       });
       if (!artifactUpdate.success || !artifactUpdate.envelope) {
@@ -288,43 +268,29 @@ export class IngestionWorkerShell {
       }
       artifactPayload = artifactUpdate.envelope.payload as IngestionArtifactPayload;
 
-      pipeline = await buildCaymanLibraryBundle({
-        store: this.store,
-        job: currentJob.payload,
-        artifact: artifactPayload,
+      // Step 5: Build the bundle using the AI-assisted pipeline
+      const materialMatchService = new MaterialMatchService(this.store);
+      const ontologyMatchService = new OntologyMatchService();
+      
+      pipeline = await buildAiAssistedBundle(
         extraction,
-        onProgress: async (progress) => {
-          const phaseToStage = progress.phase === 'normalize'
-            ? 'normalize'
-            : progress.phase === 'match'
-              ? 'match'
-              : 'review';
-          currentJob = await this.updateJobEnvelope(
-            currentJob,
-            `Update ingestion job ${jobId} progress`,
-            (payload) => ({
-              ...payload,
-              stage: phaseToStage,
-              progress: this.buildProgress({
-                phase: progress.phase,
-                current: progress.current,
-                total: progress.total,
-                unit: progress.unit,
-                message: progress.message,
-              }),
-            }),
-          );
-        },
-      });
+        extractionSpec,
+        materialMatchService,
+        materialMatchService,
+        ontologyMatchService,
+        jobId,
+        currentJob.payload,
+        artifactPayload,
+      );
+
       metrics = {
-        plates_detected: extraction.uniquePlateNumbers.length,
-        wells_detected: extraction.entries.length,
-        unused_wells_detected: extraction.unusedWellCount,
-        materials_detected: extraction.uniqueMaterialCount,
+        rows_extracted: extraction.totalRows,
+        issues_found: extraction.totalIssues,
+        candidates_created: pipeline.candidates.length,
         issues_open: pipeline.issues.length,
         issues_blocking: pipeline.issues.filter((issue) => issue.payload.severity === 'error').length,
       };
-    } else {
+    } else if (running.payload.source_kind === 'vendor_plate_map_pdf' || running.payload.source_kind === 'vendor_plate_map_spreadsheet') {
       const persistedBase64 = await this.resolveStoredContentBase64(artifact, source);
       const extraction = await extractVendorFormulationHtml({
         ...(persistedBase64 ? { contentBase64: persistedBase64 } : {}),
@@ -377,6 +343,24 @@ export class IngestionWorkerShell {
         issues_open: pipeline.issues.length,
         issues_blocking: pipeline.issues.filter((issue) => issue.payload.severity === 'error').length,
       };
+    } else {
+      // Fallback for any other source kinds - just mark as ready for review
+      return this.updateJobEnvelope(
+        currentJob,
+        `Advance ingestion job ${jobId} to review`,
+        (payload) => ({
+          ...payload,
+          stage: 'review',
+          status: 'waiting_for_review',
+          progress: this.buildProgress({
+            phase: 'review',
+            current: 1,
+            total: 1,
+            unit: 'job',
+            message: 'Ready for review',
+          }),
+        }),
+      );
     }
 
     const bundleCreate = await this.store.create({

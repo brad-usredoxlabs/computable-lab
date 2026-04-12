@@ -1,0 +1,17 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: LBW-RES-12-INTEGRA-4332
+name: Integra 12-Channel 10 mL Reagent Reservoir
+labwareType: reservoir
+format:
+  rows: 1
+  cols: 12
+  wellCount: 12
+  wellNaming: "A1..L1"
+manufacturer:
+  name: Integra
+  catalogNumber: "4332"
+tags:
+  - seed
+  - reservoir
+  - 12-channel
