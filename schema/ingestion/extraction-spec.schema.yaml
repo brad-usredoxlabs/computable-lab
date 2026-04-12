@@ -1,0 +1,178 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/extraction-spec.schema.yaml"
+title: "Extraction Spec"
+description: >
+  AI-generated specification for extracting structured records from an uploaded file.
+  Drives the generic extraction runner in the ingestion pipeline.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "../core/common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- id
+- targets
+
+properties:
+  kind:
+    const: "extraction-spec"
+
+  id:
+    type: string
+    pattern: "^XSPEC-[A-Z0-9][A-Z0-9_-]*$"
+
+  status:
+    type: string
+    enum: [ draft, confirmed, executed, failed ]
+
+  match:
+    type: object
+    description: "Criteria for auto-detecting when this spec applies to an uploaded file. Used by the extractor library to match files to known specs without AI."
+    additionalProperties: false
+    properties:
+      filePatterns:
+        type: array
+        description: "Glob patterns for file names (e.g., ['*.pdf', '*.xlsx'])."
+        items:
+          type: string
+      contentSignals:
+        type: array
+        description: "Strings that should appear in the file content for this spec to match. All signals must be present (AND logic)."
+        items:
+          type: string
+      minConfidence:
+        type: number
+        description: "Minimum fraction of contentSignals that must match (0.0-1.0). Defaults to 1.0 (all must match)."
+        minimum: 0
+        maximum: 1
+      vendor:
+        type: string
+        description: "Vendor name for display when this spec matches (e.g., 'Cayman Chemical')."
+      description:
+        type: string
+        description: "Human-readable description of what files this spec handles."
+
+  sourceAnalysis:
+    type: object
+    description: "AI's analysis of the source file."
+    additionalProperties: false
+    required: [ fileType, contentSummary, detectedStructure ]
+    properties:
+      fileType:
+        type: string
+        description: "Detected file type."
+        enum: [ pdf, xlsx, csv, html, docx, txt, other ]
+      contentSummary:
+        type: string
+        description: "Human-readable summary of what the file contains."
+      detectedStructure:
+        type: string
+        description: "What structure was detected."
+        enum: [ tabular, prose_steps, mixed, unstructured ]
+      tableCount:
+        type: integer
+        minimum: 0
+      rowEstimate:
+        type: integer
+        minimum: 0
+      suggestedSourceKind:
+        type: string
+        description: "Maps to ingestion-job source kinds when a known adapter exists."
+
+  targets:
+    type: array
+    description: "What record types to extract and how to map fields."
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      required: [ targetSchema, fieldMappings ]
+      properties:
+        targetSchema:
+          type: string
+          description: "Schema ID of the target record type (e.g., 'lab/material', 'workflow/protocol')."
+        recordKind:
+          type: string
+          description: "The kind value for generated records (e.g., 'material', 'labware')."
+        idPrefix:
+          type: string
+          description: "Prefix for generated record IDs (e.g., 'MAT-', 'PRT-')."
+        fieldMappings:
+          type: array
+          description: "How source columns/fields map to target schema fields."
+          items:
+            type: object
+            additionalProperties: false
+            required: [ targetField, source ]
+            properties:
+              targetField:
+                type: string
+                description: "JSON path in the target schema (e.g., 'name', 'manufacturer')."
+              source:
+                type: string
+                description: "Source column name, cell reference, or extraction instruction."
+              transform:
+                type: string
+                description: "Optional transformation to apply."
+                enum: [ none, lowercase, uppercase, trim, normalize_chemical, parse_concentration, parse_volume, parse_duration ]
+        defaults:
+          type: object
+          description: "Default values for fields not in the source."
+          additionalProperties: true
+
+  tableExtraction:
+    type: object
+    description: "Instructions for extracting tabular data from the source file."
+    additionalProperties: false
+    properties:
+      method:
+        type: string
+        enum: [ pdf_table, csv, xlsx_sheet, html_table, ai_extract ]
+      sheetName:
+        type: string
+        description: "For xlsx: which sheet to read."
+      headerRow:
+        type: integer
+        description: "0-based index of the header row."
+        minimum: 0
+      skipRows:
+        type: integer
+        description: "Number of rows to skip after the header."
+        minimum: 0
+      columns:
+        type: array
+        description: "Expected column names in order."
+        items:
+          type: string
+
+  matching:
+    type: object
+    description: "Configuration for ontology and local record matching."
+    additionalProperties: false
+    properties:
+      enabled:
+        type: boolean
+        default: true
+      ontologyPreferences:
+        type: array
+        items:
+          type: string
+        description: "Preferred ontology namespaces in priority order (e.g., ['chebi', 'ncit'])."
+      batchSize:
+        type: integer
+        minimum: 1
+        maximum: 50
+        default: 12
+      cacheEnabled:
+        type: boolean
+        default: true
+
+  userContext:
+    type: object
+    description: "Answers from the user interview, preserved for reproducibility."
+    additionalProperties: true
+
+  notes:
+    type: string

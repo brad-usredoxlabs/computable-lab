@@ -1,0 +1,9 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-class.schema.yaml
+kind: equipment-class
+id: EQC-EPPENDORF-5810R
+name: Eppendorf 5810R Centrifuge
+manufacturer: Eppendorf
+modelFamily: "5810R"
+readinessRequirements:
+  calibrationRequired: true
+  qualificationRequired: false

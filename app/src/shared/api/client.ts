@@ -897,6 +897,48 @@ export interface MolecularWeightResolutionResponse {
   pubchemCid?: number
 }
 
+// === AI Ingestion Analyze Types ===
+
+export interface AnalyzeIngestionFileAnalysis {
+  fileType: string
+  contentSummary: string
+  detectedStructure: string
+  tableCount?: number
+  rowEstimate?: number
+}
+
+export interface AnalyzeIngestionDraftSpec {
+  targets: Array<{
+    targetSchema: string
+    recordKind: string
+    idPrefix: string
+    fieldMappings: Array<{
+      targetField: string
+      source: string
+      transform?: string
+    }>
+    defaults?: Record<string, unknown>
+  }>
+  tableExtraction?: {
+    method: string
+    columns?: string[]
+    headerRow?: number
+  }
+  matching?: {
+    ontologyPreferences?: string[]
+    batchSize?: number
+  }
+}
+
+export interface AnalyzeIngestionResponse {
+  success: boolean
+  analysis?: AnalyzeIngestionFileAnalysis
+  draftSpec?: AnalyzeIngestionDraftSpec
+  questions?: string[]
+  confidence?: number
+  error?: string
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {}
@@ -1661,6 +1703,35 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify(body),
     })
+  },
+
+  async analyzeIngestion(file: File, prompt: string): Promise<AnalyzeIngestionResponse> {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('prompt', prompt)
+    
+    const url = `${API_BASE}/ai/analyze-ingestion`
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw await ApiError.fromResponse(response)
+      }
+
+      return await response.json() as AnalyzeIngestionResponse
+    } catch (error) {
+      if (ApiError.isApiError(error)) {
+        throw error
+      }
+      if (error instanceof TypeError) {
+        throw new NetworkError('Failed to connect to server')
+      }
+      throw error
+    }
   },
 
   // === Git API ===

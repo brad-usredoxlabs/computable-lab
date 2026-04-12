@@ -1,0 +1,24 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-capability.schema.yaml
+kind: equipment-capability
+id: ECP-5810R-PLATE-ROTOR
+status: active
+equipmentClassRef:
+  kind: record
+  type: equipment-class
+  id: EQC-EPPENDORF-5810R
+  label: Eppendorf 5810R Centrifuge
+capabilities:
+  - verbRef:
+      kind: record
+      type: verb-definition
+      id: VERB-CENTRIFUGE
+      label: Centrifuge
+    constraints:
+      acceptedLabware:
+        - labwareRef:
+            kind: record
+            type: labware
+            id: LBW-96-PLATE-SBS
+            label: "96-Well SBS Microplate"
+          subModule: "A-4-81 Microplate Rotor"
+    notes: "Eppendorf A-4-81 rotor for SBS microplates, max 4 plates, 4000 x g"

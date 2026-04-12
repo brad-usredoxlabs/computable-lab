@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: LBW-15ML-CONICAL
+name: "15 mL Conical Centrifuge Tube"
+labwareType: tube
+tags:
+  - conical
+  - centrifuge-tube

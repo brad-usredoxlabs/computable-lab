@@ -243,4 +243,219 @@ describe('ProtocolCompiler', () => {
     expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'AUTHORIZATION_MISSING')).toBe(true);
     expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'NO_ADMISSIBLE_BACKEND')).toBe(true);
   });
+
+  it('produces a labware-incompatible warning when step labware is not in capability acceptedLabware', async () => {
+    const records = [
+      envelope('schema://verb', {
+        kind: 'verb-definition',
+        id: 'VERB-CENTRIFUGE',
+        canonical: 'centrifuge',
+        label: 'Centrifuge',
+      }),
+      envelope('schema://equipment-class', {
+        kind: 'equipment-class',
+        id: 'EQC-CENTRIFUGE',
+        name: 'Centrifuge',
+        executionBackends: ['centrifuge'],
+      }),
+      envelope('schema://equipment', {
+        kind: 'equipment',
+        id: 'EQP-CENTRIFUGE-1',
+        name: 'Centrifuge 1',
+        status: 'active',
+        equipmentClassRef: { kind: 'record', type: 'equipment-class', id: 'EQC-CENTRIFUGE' },
+      }),
+      envelope('schema://equipment-capability', {
+        kind: 'equipment-capability',
+        id: 'ECP-CENTRIFUGE-TUBE',
+        status: 'active',
+        equipmentClassRef: { kind: 'record', type: 'equipment-class', id: 'EQC-CENTRIFUGE' },
+        capabilities: [
+          {
+            verbRef: { kind: 'record', type: 'verb-definition', id: 'VERB-CENTRIFUGE' },
+            backendImplementations: ['centrifuge'],
+            constraints: {
+              acceptedLabware: [
+                {
+                  labwareRef: { kind: 'record', type: 'labware', id: 'LAB-1-5ML-TUBE' },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    ];
+
+    const compiler = new ProtocolCompiler(createStore(records));
+    const result = await compiler.lowerToLabProtocol({
+      protocolEnvelope: protocolEnvelope([
+        {
+          stepId: 'centrifuge-1',
+          kind: 'other',
+          semanticVerb: { canonical: 'centrifuge' },
+          labwareRef: { id: 'LAB-96-WELL-PLATE' },
+          methodRequirement: {
+            instrumentRole: 'centrifuge',
+          },
+        },
+      ]),
+      bindings: {
+        instruments: [
+          {
+            roleId: 'centrifuge',
+            instrumentRef: { kind: 'record', type: 'equipment', id: 'EQP-CENTRIFUGE-1' },
+          },
+        ],
+      },
+      context: {
+        scope: { organizationId: 'org-1' },
+      },
+    });
+
+    expect(result.status).toBe('ready');
+    expect(result.diagnostics.some((d) => d.code === 'labware-incompatible')).toBe(true);
+    const labwareDiag = result.diagnostics.find((d) => d.code === 'labware-incompatible');
+    expect(labwareDiag?.severity).toBe('warning');
+    expect(labwareDiag?.message).toContain('LAB-96-WELL-PLATE');
+    expect(labwareDiag?.message).toContain('EQP-CENTRIFUGE-1');
+    expect(labwareDiag?.message).toContain('centrifuge');
+  });
+
+  it('passes silently when capability has no acceptedLabware constraint', async () => {
+    const records = [
+      envelope('schema://verb', {
+        kind: 'verb-definition',
+        id: 'VERB-CENTRIFUGE',
+        canonical: 'centrifuge',
+        label: 'Centrifuge',
+      }),
+      envelope('schema://equipment-class', {
+        kind: 'equipment-class',
+        id: 'EQC-CENTRIFUGE',
+        name: 'Centrifuge',
+        executionBackends: ['centrifuge'],
+      }),
+      envelope('schema://equipment', {
+        kind: 'equipment',
+        id: 'EQP-CENTRIFUGE-1',
+        name: 'Centrifuge 1',
+        status: 'active',
+        equipmentClassRef: { kind: 'record', type: 'equipment-class', id: 'EQC-CENTRIFUGE' },
+      }),
+      envelope('schema://equipment-capability', {
+        kind: 'equipment-capability',
+        id: 'ECP-CENTRIFUGE-UNCONSTRAINED',
+        status: 'active',
+        equipmentClassRef: { kind: 'record', type: 'equipment-class', id: 'EQC-CENTRIFUGE' },
+        capabilities: [
+          {
+            verbRef: { kind: 'record', type: 'verb-definition', id: 'VERB-CENTRIFUGE' },
+            backendImplementations: ['centrifuge'],
+            // No constraints.acceptedLabware - open world assumption
+          },
+        ],
+      }),
+    ];
+
+    const compiler = new ProtocolCompiler(createStore(records));
+    const result = await compiler.lowerToLabProtocol({
+      protocolEnvelope: protocolEnvelope([
+        {
+          stepId: 'centrifuge-1',
+          kind: 'other',
+          semanticVerb: { canonical: 'centrifuge' },
+          labwareRef: { id: 'LAB-96-WELL-PLATE' },
+          methodRequirement: {
+            instrumentRole: 'centrifuge',
+          },
+        },
+      ]),
+      bindings: {
+        instruments: [
+          {
+            roleId: 'centrifuge',
+            instrumentRef: { kind: 'record', type: 'equipment', id: 'EQP-CENTRIFUGE-1' },
+          },
+        ],
+      },
+      context: {
+        scope: { organizationId: 'org-1' },
+      },
+    });
+
+    expect(result.status).toBe('ready');
+    expect(result.diagnostics.some((d) => d.code === 'labware-incompatible')).toBe(false);
+  });
+
+  it('passes silently when step has no labware reference', async () => {
+    const records = [
+      envelope('schema://verb', {
+        kind: 'verb-definition',
+        id: 'VERB-CENTRIFUGE',
+        canonical: 'centrifuge',
+        label: 'Centrifuge',
+      }),
+      envelope('schema://equipment-class', {
+        kind: 'equipment-class',
+        id: 'EQC-CENTRIFUGE',
+        name: 'Centrifuge',
+        executionBackends: ['centrifuge'],
+      }),
+      envelope('schema://equipment', {
+        kind: 'equipment',
+        id: 'EQP-CENTRIFUGE-1',
+        name: 'Centrifuge 1',
+        status: 'active',
+        equipmentClassRef: { kind: 'record', type: 'equipment-class', id: 'EQC-CENTRIFUGE' },
+      }),
+      envelope('schema://equipment-capability', {
+        kind: 'equipment-capability',
+        id: 'ECP-CENTRIFUGE-TUBE',
+        status: 'active',
+        equipmentClassRef: { kind: 'record', type: 'equipment-class', id: 'EQC-CENTRIFUGE' },
+        capabilities: [
+          {
+            verbRef: { kind: 'record', type: 'verb-definition', id: 'VERB-CENTRIFUGE' },
+            backendImplementations: ['centrifuge'],
+            constraints: {
+              acceptedLabware: [
+                {
+                  labwareRef: { kind: 'record', type: 'labware', id: 'LAB-1-5ML-TUBE' },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    ];
+
+    const compiler = new ProtocolCompiler(createStore(records));
+    const result = await compiler.lowerToLabProtocol({
+      protocolEnvelope: protocolEnvelope([
+        {
+          stepId: 'centrifuge-1',
+          kind: 'other',
+          semanticVerb: { canonical: 'centrifuge' },
+          // No labwareRef - should pass silently
+          methodRequirement: {
+            instrumentRole: 'centrifuge',
+          },
+        },
+      ]),
+      bindings: {
+        instruments: [
+          {
+            roleId: 'centrifuge',
+            instrumentRef: { kind: 'record', type: 'equipment', id: 'EQP-CENTRIFUGE-1' },
+          },
+        ],
+      },
+      context: {
+        scope: { organizationId: 'org-1' },
+      },
+    });
+
+    expect(result.status).toBe('ready');
+    expect(result.diagnostics.some((d) => d.code === 'labware-incompatible')).toBe(false);
+  });
 });

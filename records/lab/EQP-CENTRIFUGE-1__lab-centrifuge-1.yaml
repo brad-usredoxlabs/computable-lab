@@ -1,0 +1,17 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment.schema.yaml
+kind: equipment
+id: EQP-CENTRIFUGE-1
+name: "Lab Centrifuge #1 (Eppendorf 5810R)"
+equipmentClassRef:
+  kind: record
+  type: equipment-class
+  id: EQC-EPPENDORF-5810R
+  label: Eppendorf 5810R Centrifuge
+manufacturer: Eppendorf
+model: "5810R"
+serialNumber: "5810R-2024-00142"
+location: "Lab 204, Bench 3"
+status: active
+readiness:
+  calibrationRequired: true
+  qualificationRequired: false

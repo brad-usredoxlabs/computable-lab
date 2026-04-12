@@ -1,0 +1,52 @@
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/extraction-spec.schema.yaml"
+
+display:
+  titleField: "$.sourceAnalysis.contentSummary"
+  icon: "ingestion"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.status"
+      widget: "select"
+      label: "Status"
+      options:
+      - value: "draft"
+        label: "Draft"
+      - value: "confirmed"
+        label: "Confirmed"
+      - value: "executed"
+        label: "Executed"
+      - value: "failed"
+        label: "Failed"
+  - title: "Source Analysis"
+    fields:
+    - path: "$.sourceAnalysis.fileType"
+      widget: "text"
+      label: "File Type"
+      readonly: true
+    - path: "$.sourceAnalysis.contentSummary"
+      widget: "textarea"
+      label: "Content Summary"
+      readonly: true
+    - path: "$.sourceAnalysis.detectedStructure"
+      widget: "text"
+      label: "Detected Structure"
+      readonly: true
+  - title: "Notes"
+    fields:
+    - path: "$.notes"
+      widget: "markdown"
+      label: "Notes"

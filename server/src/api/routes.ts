@@ -34,6 +34,7 @@ import type { VendorDocumentHandlers } from './handlers/VendorDocumentHandlers.j
 import type { ChemistryHandlers } from './handlers/ChemistryHandlers.js';
 import type { IngestionHandlers } from './handlers/IngestionHandlers.js';
 import type { IngestionAIHandlers } from './handlers/IngestionAIHandlers.js';
+import type { AiIngestionHandlers } from './handlers/AiIngestionHandlers.js';
 import type { MaterialAIHandlers } from './handlers/MaterialAIHandlers.js';
 import type { SemanticsHandlers } from './handlers/SemanticsHandlers.js';
 import type { RunWorkspaceHandlers } from './handlers/RunWorkspaceHandlers.js';
@@ -76,6 +77,7 @@ export interface RouteOptions {
   chemistryHandlers?: ChemistryHandlers;
   ingestionHandlers?: IngestionHandlers;
   ingestionAIHandlers?: IngestionAIHandlers;
+  aiIngestionHandlers?: AiIngestionHandlers;
   materialAIHandlers?: MaterialAIHandlers;
   semanticsHandlers?: SemanticsHandlers;
   runWorkspaceHandlers?: RunWorkspaceHandlers;
@@ -453,6 +455,11 @@ export function registerRoutes(
     fastify.post('/ai/infer-source-kind', ingestionAIHandlers.inferSourceKind.bind(ingestionAIHandlers));
     fastify.post('/ai/suggest-ingestion-mapping', ingestionAIHandlers.suggestIngestionMapping.bind(ingestionAIHandlers));
     fastify.post('/ai/explain-ingestion-issue', ingestionAIHandlers.explainIngestionIssue.bind(ingestionAIHandlers));
+  }
+
+  const { aiIngestionHandlers } = options;
+  if (aiIngestionHandlers) {
+    fastify.post('/ai/analyze-ingestion', aiIngestionHandlers.analyzeIngestion.bind(aiIngestionHandlers));
   }
 
   const { materialAIHandlers } = options;

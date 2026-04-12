@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: LBW-1_5ML-MICROTUBE
+name: "1.5 mL Microcentrifuge Tube"
+labwareType: tube
+tags:
+  - microtube
+  - centrifuge-tube

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { AiDraftBar } from '../components/registry/AiDraftBar';
+import { RecordSearchCombobox } from '../components/registry/RecordSearchCombobox';
 import { CsvImportModal } from '../components/registry/CsvImportModal';
 import { TapTabEditor, serializeDocument, isDirty } from '../editor/taptab';
 import type { TapTabEditorHandle } from '../editor/taptab/types';
@@ -15,6 +15,8 @@ const REGISTRY_TABS = [
   { id: 'authorizations', label: 'Authorizations', kinds: ['competency-authorization', 'equipment-training-requirement'] },
   { id: 'instruments', label: 'Instruments', kinds: ['instrument'] },
   { id: 'calibrations', label: 'Calibrations', kinds: ['calibration-record', 'qualification-record'] },
+  { id: 'verbs', label: 'Verbs', kinds: ['verb-definition'] },
+  { id: 'capabilities', label: 'Capabilities', kinds: ['equipment-capability'] },
 ] as const;
 
 type TabId = (typeof REGISTRY_TABS)[number]['id'];
@@ -96,12 +98,7 @@ export default function RecordRegistryPage() {
 
 
 
-  function handleDraftReady(payload: Record<string, unknown>) {
-    setSelectedRecord({ recordId: '', schemaId: activeTabSchemaId, payload });
-    setEditorMode('create');
-    setSelectedUiSpec(uiSpecs.get(activeTabSchemaId) || null);
-    setSelectedSchema(schemas.get(activeTabSchemaId) || null);
-  }
+
 
   const handleSelectRecord = (record: { recordId: string; payload: Record<string, unknown> }) => {
     const recordData: RecordData = {
@@ -210,9 +207,25 @@ export default function RecordRegistryPage() {
             </button>
           ))}
         </div>
-        {/* AiDraftBar */}
+        {/* RecordSearchCombobox */}
         <div className="p-2 border-b border-gray-100">
-          <AiDraftBar schemaId={activeTabSchemaId} onDraftReady={handleDraftReady} />
+          <RecordSearchCombobox
+            kinds={activeTabConfig.kinds as unknown as string[]}
+            schemaId={activeTabSchemaId}
+            placeholder={`Search ${activeTabConfig.label.toLowerCase()}...`}
+            onSelect={(record) => {
+              if (record.isNew) {
+                setSelectedRecord({ recordId: '', schemaId: record.schemaId, payload: record.payload });
+                setEditorMode('create');
+              } else {
+                // Load full record for editing
+                handleSelectRecord({ recordId: record.recordId, payload: record.payload });
+              }
+              // Load uiSpec and schema for TapTab
+              setSelectedUiSpec(uiSpecs.get(record.schemaId) || null);
+              setSelectedSchema(schemas.get(record.schemaId) || null);
+            }}
+          />
         </div>
         {/* Record List - Compact */}
         <div className="flex-1 overflow-y-auto">
@@ -304,7 +317,7 @@ export default function RecordRegistryPage() {
           <div className="flex-1 flex items-center justify-center text-gray-500">
             <div className="text-center">
               <p className="text-lg">Select a record to edit</p>
-              <p className="text-sm mt-2">Or create a new record using the AiDraftBar</p>
+              <p className="text-sm mt-2">Or search for a record using the combobox above</p>
             </div>
           </div>
         )}

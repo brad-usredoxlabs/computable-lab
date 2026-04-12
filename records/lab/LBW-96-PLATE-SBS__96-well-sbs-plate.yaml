@@ -1,0 +1,13 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: LBW-96-PLATE-SBS
+name: "96-Well SBS Microplate"
+labwareType: plate
+format:
+  rows: 8
+  cols: 12
+  wellCount: 96
+  wellNaming: "A1..H12"
+tags:
+  - SBS
+  - microplate

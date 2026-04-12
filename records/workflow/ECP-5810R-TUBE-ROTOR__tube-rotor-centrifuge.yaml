@@ -1,0 +1,30 @@
+$schema: https://computable-lab.com/schema/computable-lab/equipment-capability.schema.yaml
+kind: equipment-capability
+id: ECP-5810R-TUBE-ROTOR
+status: active
+equipmentClassRef:
+  kind: record
+  type: equipment-class
+  id: EQC-EPPENDORF-5810R
+  label: Eppendorf 5810R Centrifuge
+capabilities:
+  - verbRef:
+      kind: record
+      type: verb-definition
+      id: VERB-CENTRIFUGE
+      label: Centrifuge
+    constraints:
+      acceptedLabware:
+        - labwareRef:
+            kind: record
+            type: labware
+            id: LBW-15ML-CONICAL
+            label: "15 mL Conical Centrifuge Tube"
+          subModule: "F-34-6-38 Fixed-Angle Rotor"
+        - labwareRef:
+            kind: record
+            type: labware
+            id: LBW-1_5ML-MICROTUBE
+            label: "1.5 mL Microcentrifuge Tube"
+          subModule: "FA-45-30-11 Fixed-Angle Rotor"
+    notes: "Tube rotors for the 5810R. F-34-6-38 holds 6x 15mL tubes at 14000 x g. FA-45-30-11 holds 30x 1.5mL tubes at 16900 x g."

@@ -42,6 +42,7 @@ type ProtocolStepPayload = {
   verbRef?: { id?: unknown } | null;
   methodRequirement?: ProtocolMethodRequirement | null;
   executionPreference?: ProtocolExecutionPreference | null;
+  labwareRef?: { id?: unknown } | null;
 };
 
 type ProtocolPayload = {
@@ -413,6 +414,26 @@ export class ProtocolCompiler {
               recordIds: [equipmentId],
             });
             continue;
+          }
+
+          // Check labware compatibility if the capability has acceptedLabware constraints
+          const matchedCapability = capability.matches[0];
+          const acceptedLabware = matchedCapability?.constraints?.acceptedLabware as Array<{ labwareRef: { id: string } }> | undefined;
+          const stepLabwareRef = step.labwareRef as { id?: string } | undefined;
+
+          if (acceptedLabware && acceptedLabware.length > 0 && stepLabwareRef?.id) {
+            const labwareAccepted = acceptedLabware.some(
+              (al) => al.labwareRef?.id === stepLabwareRef.id
+            );
+            if (!labwareAccepted) {
+              diagnostics.push({
+                code: 'labware-incompatible',
+                stepId,
+                severity: 'warning',
+                message: `Labware ${stepLabwareRef.id} is not in the accepted labware list for ${equipmentId} performing ${canonicalVerb}`,
+                subject: 'equipment',
+              });
+            }
           }
 
           const admissibility = await this.admissibilityService.evaluate(admissibilityInput({

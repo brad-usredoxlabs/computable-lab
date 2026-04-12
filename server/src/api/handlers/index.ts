@@ -30,6 +30,7 @@ export * from './VendorSearchHandlers.js';
 export * from './VendorDocumentHandlers.js';
 export * from './ChemistryHandlers.js';
 export * from './IngestionHandlers.js';
+export * from './AiIngestionHandlers.js';
 export * from './RunWorkspaceHandlers.js';
 export * from './RunDraftHandlers.js';
 export * from './RelatedRecordsHandlers.js';

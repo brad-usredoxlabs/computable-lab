@@ -56,6 +56,7 @@ import {
 } from './api/handlers/index.js';
 import { createIngestionAIHandlers } from './api/handlers/IngestionAIHandlers.js';
 import { createMaterialAIHandlers } from './api/handlers/MaterialAIHandlers.js';
+import { createAiIngestionHandlers } from './api/handlers/AiIngestionHandlers.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { createUISpecLoader, loadAllUISpecs, type UISpecLoader } from './ui/UISpecLoader.js';
 import { createUIHandlers } from './api/handlers/UIHandlers.js';
@@ -432,6 +433,7 @@ export async function createServer(
   let knowledgeAIHandlersImpl: ReturnType<typeof createKnowledgeAIHandlers> | undefined;
   let ingestionAIHandlersImpl = createIngestionAIHandlers(undefined, ctx.store);
   let materialAIHandlersImpl = createMaterialAIHandlers(undefined, ctx.store);
+  let aiIngestionHandlersImpl = createAiIngestionHandlers(undefined, ctx.store);
   let aiRecordDraftHandlersImpl: ReturnType<typeof createAiRecordDraftHandlers> | undefined;
   let currentOrchestrator: import('./ai/types.js').AgentOrchestrator | undefined;
   let aiInfo: {
@@ -447,6 +449,7 @@ export async function createServer(
     knowledgeAIHandlersImpl = undefined;
     ingestionAIHandlersImpl = createIngestionAIHandlers(undefined, ctx.store);
     materialAIHandlersImpl = createMaterialAIHandlers(undefined, ctx.store);
+    aiIngestionHandlersImpl = createAiIngestionHandlers(undefined, ctx.store);
     aiRecordDraftHandlersImpl = undefined;
     currentOrchestrator = undefined;
     aiInfo = undefined;
@@ -487,6 +490,7 @@ export async function createServer(
       aiHandlersImpl = createAIHandlers(orchestrator);
       ingestionAIHandlersImpl = createIngestionAIHandlers(orchestrator, ctx.store);
       materialAIHandlersImpl = createMaterialAIHandlers(orchestrator, ctx.store);
+      aiIngestionHandlersImpl = createAiIngestionHandlers(orchestrator, ctx.store);
       aiRecordDraftHandlersImpl = createAiRecordDraftHandlers(
         ctx.schemaRegistry,
         ctx.uiSpecLoader,
@@ -659,6 +663,7 @@ export async function createServer(
     routeOpts.aiHandlers = aiHandlers;
     routeOpts.knowledgeAIHandlers = knowledgeAIHandlers;
     routeOpts.ingestionAIHandlers = ingestionAIHandlersImpl;
+    routeOpts.aiIngestionHandlers = aiIngestionHandlersImpl;
     routeOpts.materialAIHandlers = materialAIHandlersImpl;
     routeOpts.aiRecordDraftHandlers = aiRecordDraftHandlers;
     if (aiInfo) routeOpts.aiInfo = aiInfo;
