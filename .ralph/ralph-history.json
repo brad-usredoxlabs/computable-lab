@@ -25,12 +25,31 @@
       "exitCode": 1,
       "completionDetected": false,
       "errors": []
+    },
+    {
+      "iteration": 3,
+      "startedAt": "2026-04-12T04:57:37.789Z",
+      "endedAt": "2026-04-12T04:57:39.692Z",
+      "durationMs": 895,
+      "agent": "claude-code",
+      "model": "",
+      "toolsUsed": {},
+      "filesModified": [],
+      "exitCode": 1,
+      "completionDetected": false,
+      "errors": [
+        "{\"type\":\"assistant\",\"message\":{\"id\":\"ed7bc270-3af6-450b-89f4-2b6071f83405\",\"container\":null,\"model\":\"<synthetic>\",\"role\":\"assistant\",\"stop_reason\":\"stop_sequence\",\"stop_sequence\":\"\",\"type\":\"message\",\"",
+        "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":true,\"duration_ms\":88,\"duration_api_ms\":0,\"num_turns\":1,\"result\":\"API Error: 400 Invalid HTTP request received.\",\"stop_reason\":\"stop_sequence\",\"session_"
+      ]
     }
   ],
-  "totalDurationMs": 12386,
+  "totalDurationMs": 13281,
   "struggleIndicators": {
-    "repeatedErrors": {},
-    "noProgressIterations": 2,
-    "shortIterations": 2
+    "repeatedErrors": {
+      "{\"type\":\"assistant\",\"message\":{\"id\":\"ed7bc270-3af6-450b-89f4-2b6071f83405\",\"container\":null,\"model\":": 1,
+      "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":true,\"duration_ms\":88,\"duration_api_ms\":0,\"num_turns": 1
+    },
+    "noProgressIterations": 3,
+    "shortIterations": 3
   }
 }
