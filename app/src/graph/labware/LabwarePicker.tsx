@@ -21,6 +21,11 @@ interface LabwareSearchResult {
   snippet?: string
   url?: string
   schemaId?: string
+  // Labware-specific fields (for local results)
+  labwareType?: string
+  format?: { rows?: number; cols?: number; wellCount?: number; wellNaming?: string }
+  manufacturer?: { name?: string; catalogNumber?: string; url?: string }
+  tags?: string[]
 }
 
 export interface LabwarePickerProps {
@@ -100,13 +105,46 @@ export function LabwarePicker({ open, onClose, onPick }: LabwarePickerProps) {
       // Search local labware records
       const { records: localRecords } = await apiClient.searchRecordsByKind(searchQuery, 'labware', 10)
 
-      const localResults: LabwareSearchResult[] = localRecords.map((r) => ({
-        recordId: r.recordId,
-        title: r.title || r.recordId,
-        kind: r.kind || 'labware',
-        source: 'local' as const,
-        snippet: (r as any).description || (r as any).snippet,
-      }))
+      // Fetch full record details for each result to get labware-specific fields
+      const localResults: LabwareSearchResult[] = []
+      for (const r of localRecords) {
+        try {
+          const fullRecord = await apiClient.getRecord(r.recordId)
+          const payload = fullRecord.payload as Record<string, unknown>
+          
+          // Extract labware-specific fields with proper typing
+          const labwareType = payload.labwareType as string | undefined
+          const format = payload.format as { rows?: number; cols?: number; wellCount?: number; wellNaming?: string } | undefined
+          const manufacturer = payload.manufacturer as { name?: string; catalogNumber?: string; url?: string } | undefined
+          const tags = payload.tags as string[] | undefined
+          
+          localResults.push({
+            recordId: r.recordId,
+            title: (payload.name || payload.title || r.title || r.recordId) as string,
+            kind: (payload.kind || 'labware') as string,
+            source: 'local' as const,
+            snippet: [
+              typeof (manufacturer as any)?.name === 'string' ? (manufacturer as any).name : undefined,
+              labwareType,
+              format?.rows ? `${format.rows}x${format.cols}` : undefined
+            ].filter(Boolean).join(' — '),
+            labwareType,
+            format,
+            manufacturer,
+            tags,
+          })
+        } catch (err) {
+          console.warn(`Failed to fetch full record ${r.recordId}:`, err)
+          // Fallback to basic info
+          localResults.push({
+            recordId: r.recordId,
+            title: r.title || r.recordId,
+            kind: r.kind || 'labware',
+            source: 'local' as const,
+            snippet: '',
+          })
+        }
+      }
 
       // If no local results and query is long enough, try web search
       let webResults: LabwareSearchResult[] = []
@@ -171,8 +209,7 @@ export function LabwarePicker({ open, onClose, onPick }: LabwarePickerProps) {
 
   const handleSelectResult = async (result: LabwareSearchResult) => {
     if (result.source === 'local') {
-      // For local results, construct the payload from the search hit
-      // The search result should have enough info to build a LabwareRecordPayload
+      // For local results, use the stored payload data from the search result
       const payload: LabwareRecordPayload = {
         kind: 'labware',
         recordId: result.recordId,

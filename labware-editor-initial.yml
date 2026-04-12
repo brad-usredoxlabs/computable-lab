@@ -1,0 +1,201 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - navigation [ref=e5]:
+      - link "Semantic ELN" [ref=e6] [cursor=pointer]:
+        - /url: /
+      - link "Browser" [ref=e7] [cursor=pointer]:
+        - /url: /browser
+      - link "Records" [ref=e8] [cursor=pointer]:
+        - /url: /registry
+      - link "Labware Editor" [ref=e9] [cursor=pointer]:
+        - /url: /labware-editor?new=1
+      - link "Formulations" [ref=e10] [cursor=pointer]:
+        - /url: /formulations
+      - link "Materials" [ref=e11] [cursor=pointer]:
+        - /url: /materials
+      - link "Component Library" [ref=e12] [cursor=pointer]:
+        - /url: /component-library
+      - link "Literature" [ref=e13] [cursor=pointer]:
+        - /url: /literature
+      - link "Ingestion" [ref=e14] [cursor=pointer]:
+        - /url: /ingestion
+      - link "Settings" [ref=e15] [cursor=pointer]:
+        - /url: /settings
+      - link "brad-usredoxlabs/test-lab main" [ref=e16] [cursor=pointer]:
+        - /url: /settings
+        - generic [ref=e18]: brad-usredoxlabs/test-lab
+        - generic [ref=e19]:
+          - img [ref=e20]
+          - text: main
+  - main [ref=e24]:
+    - generic [ref=e26]:
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - link "Browser" [ref=e29] [cursor=pointer]:
+            - /url: /browser
+          - generic [ref=e30]: /
+          - generic [ref=e31]: Labware Event Editor
+        - heading "New Event Graph" [level=1] [ref=e32]
+        - paragraph [ref=e33]: Create and manage events across multiple labwares with side-by-side source/target view.
+      - generic [ref=e35]:
+        - generic [ref=e37]:
+          - generic [ref=e38]:
+            - generic [ref=e39]:
+              - heading "New Event Graph" [level=2] [ref=e40]
+              - generic [ref=e41]: Draft
+            - paragraph [ref=e42]: Keep the same deck, source pane, target pane, and ribbon, while shifting the active editing layer from planning to biology to readouts to results.
+          - tablist "Editor mode" [ref=e44]:
+            - tab "Plan" [selected] [ref=e45] [cursor=pointer]
+            - tab "Biology" [ref=e46] [cursor=pointer]
+            - tab "Readouts" [ref=e47] [cursor=pointer]
+            - tab "Results" [ref=e48] [cursor=pointer]
+        - generic [ref=e49]:
+          - generic [ref=e50]:
+            - generic [ref=e51]:
+              - generic [ref=e52]: "Vocab:"
+              - button "📦 Liquid Handling ▼" [ref=e54] [cursor=pointer]:
+                - generic [ref=e55]: 📦
+                - generic [ref=e56]: Liquid Handling
+                - generic [ref=e57]: ▼
+            - generic [ref=e60]:
+              - button "New Method" [ref=e61] [cursor=pointer]
+              - button "Load Template" [ref=e62] [cursor=pointer]
+              - button "Save as Template" [disabled] [ref=e63]
+              - button "💾 Save & Push" [disabled] [ref=e64]
+          - generic [ref=e65]:
+            - generic [ref=e67]:
+              - generic [ref=e68]:
+                - generic [ref=e69]:
+                  - strong [ref=e70]: Deck Visualization
+                  - generic [ref=e71]: Manual Technician Mode
+                - generic [ref=e72]:
+                  - generic [ref=e73]:
+                    - text: Tool
+                    - button "Tool" [ref=e75] [cursor=pointer]:
+                      - generic [ref=e76]: 🔧
+                      - generic [ref=e77]: Select tool...
+                      - generic [ref=e78]: ▼
+                  - generic [ref=e79]:
+                    - text: Robot
+                    - combobox "Robot" [ref=e80]:
+                      - option "Integra Assist Plus"
+                      - option "Manual" [selected]
+                      - option "Opentrons Flex"
+                      - option "Opentrons OT-2"
+              - generic [ref=e81]:
+                - generic [ref=e82]: Labware Tray
+                - button "+ Add" [ref=e84] [cursor=pointer]
+              - generic [ref=e85]:
+                - strong [ref=e86]: Manual workflow selected.
+                - generic [ref=e87]: "Virtual bench (unlabelled slots):"
+            - generic [ref=e90]:
+              - generic [ref=e91]:
+                - generic [ref=e92]:
+                  - button "⏮" [disabled] [ref=e93]
+                  - button "⏪" [disabled] [ref=e94]
+                  - button "▶" [disabled] [ref=e95]
+                  - button "⏩" [disabled] [ref=e96]
+                  - button "⏭" [disabled] [ref=e97]
+                - generic [ref=e99]: No events yet
+                - generic [ref=e100]:
+                  - generic [ref=e101]: 0/0
+                  - generic [ref=e102]: Start
+                - button "+" [ref=e104] [cursor=pointer]:
+                  - generic [ref=e105]: +
+              - generic [ref=e106]:
+                - generic [ref=e107]:
+                  - generic [ref=e108]: Create New Event
+                  - generic [ref=e109]: Selected wells stay independent from event focus.
+                - button "Manage Programs" [ref=e111] [cursor=pointer]
+                - generic [ref=e112]:
+                  - generic [ref=e113]:
+                    - generic [ref=e114]: Common
+                    - generic [ref=e115]:
+                      - button "💧 Add Material Well" [ref=e116] [cursor=pointer]:
+                        - generic [ref=e117]: 💧
+                        - generic [ref=e118]: Add Material
+                        - generic [ref=e119]: Well
+                      - button "↔️ Transfer Well" [ref=e120] [cursor=pointer]:
+                        - generic [ref=e121]: ↔️
+                        - generic [ref=e122]: Transfer
+                        - generic [ref=e123]: Well
+                      - button "📉 Serial Dilution Program" [ref=e124] [cursor=pointer]:
+                        - generic [ref=e125]: 📉
+                        - generic [ref=e126]: Serial Dilution
+                        - generic [ref=e127]: Program
+                  - generic [ref=e128]:
+                    - generic [ref=e129]: Saved Programs
+                    - button "🧩 Transfer media v1 Program" [ref=e131] [cursor=pointer]:
+                      - generic [ref=e132]: 🧩
+                      - generic [ref=e133]: Transfer media v1
+                      - generic [ref=e134]: Program
+                  - generic [ref=e135]:
+                    - generic [ref=e136]: Plate Actions
+                    - generic [ref=e137]:
+                      - button "🌡️ Incubate Plate" [ref=e138] [cursor=pointer]:
+                        - generic [ref=e139]: 🌡️
+                        - generic [ref=e140]: Incubate
+                        - generic [ref=e141]: Plate
+                      - button "📊 Read Plate" [ref=e142] [cursor=pointer]:
+                        - generic [ref=e143]: 📊
+                        - generic [ref=e144]: Read
+                        - generic [ref=e145]: Plate
+                      - button "🚿 Wash Plate" [ref=e146] [cursor=pointer]:
+                        - generic [ref=e147]: 🚿
+                        - generic [ref=e148]: Wash
+                        - generic [ref=e149]: Plate
+                      - button "🧪 Harvest Plate" [ref=e150] [cursor=pointer]:
+                        - generic [ref=e151]: 🧪
+                        - generic [ref=e152]: Harvest
+                        - generic [ref=e153]: Plate
+                  - button "More Actions" [ref=e154] [cursor=pointer]
+                - generic [ref=e155]:
+                  - generic [ref=e156]:
+                    - generic [ref=e157]: Wells
+                    - generic [ref=e158]:
+                      - textbox "0 wells:" [ref=e159]:
+                        - /placeholder: A1, A2...
+                      - button "← 0" [disabled] [ref=e160]
+                  - textbox "Description..." [ref=e162]
+                - button "✓" [ref=e164] [cursor=pointer]
+            - generic [ref=e167]:
+              - generic [ref=e168]:
+                - generic [ref=e170]: SOURCE
+                - generic [ref=e173]:
+                  - generic [ref=e174]: 📭
+                  - paragraph [ref=e175]: No source labware selected
+                  - paragraph [ref=e176]: Use the deck slots to place labware and assign source or target.
+              - button "↔" [ref=e179] [cursor=pointer]
+              - generic [ref=e180]:
+                - generic [ref=e182]: TARGET
+                - generic [ref=e185]:
+                  - generic [ref=e186]: 📭
+                  - paragraph [ref=e187]: No target labware selected
+                  - paragraph [ref=e188]: Use the deck slots to place labware and assign source or target.
+      - generic [ref=e189]:
+        - heading "How to Use" [level=2] [ref=e190]
+        - list [ref=e191]:
+          - listitem [ref=e192]:
+            - strong [ref=e193]: "Add labware:"
+            - text: Click "+ Add" in the selector bar and choose a labware type
+          - listitem [ref=e194]:
+            - strong [ref=e195]: "Assign panes:"
+            - text: "Click a labware pill to cycle: unassigned → source (blue) → target (green) → unassigned"
+          - listitem [ref=e196]:
+            - strong [ref=e197]: "Select wells:"
+            - text: Click wells in the source/target panes (shift+click to add, ctrl+click to toggle)
+          - listitem [ref=e198]:
+            - strong [ref=e199]: "Hover wells:"
+            - text: Mouse over a well to see its contents (volume, materials, events)
+          - listitem [ref=e200]:
+            - strong [ref=e201]: "Add event:"
+            - text: Hover over the + button and choose event type
+          - listitem [ref=e202]:
+            - strong [ref=e203]: "Edit event:"
+            - text: Click an event pill to edit its details in the form row
+          - listitem [ref=e204]:
+            - strong [ref=e205]: "Well context:"
+            - text: Select wells to see detailed event history below
+    - button "▲ AI Assistant" [ref=e206] [cursor=pointer]:
+      - generic [ref=e207]: ▲
+      - generic [ref=e208]: AI Assistant
