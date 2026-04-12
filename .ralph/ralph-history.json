@@ -51,12 +51,25 @@
       "exitCode": 1,
       "completionDetected": false,
       "errors": []
+    },
+    {
+      "iteration": 5,
+      "startedAt": "2026-04-12T23:12:18.291Z",
+      "endedAt": "2026-04-12T23:12:26.336Z",
+      "durationMs": 7034,
+      "agent": "claude-code",
+      "model": "",
+      "toolsUsed": {},
+      "filesModified": [],
+      "exitCode": 1,
+      "completionDetected": false,
+      "errors": []
     }
   ],
-  "totalDurationMs": 25071,
+  "totalDurationMs": 32105,
   "struggleIndicators": {
     "repeatedErrors": {},
-    "noProgressIterations": 4,
-    "shortIterations": 4
+    "noProgressIterations": 5,
+    "shortIterations": 5
   }
 }
