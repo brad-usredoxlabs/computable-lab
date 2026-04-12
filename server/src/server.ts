@@ -616,6 +616,7 @@ export async function createServer(
   const recordSearchHandlers = createRecordSearchHandlers(
     ctx.store,
     ctx.appConfig ?? DEFAULT_APP_CONFIG,
+    ctx.schemaRegistry,
   );
   const readinessHandlers = createReadinessHandlers(ctx);
 

@@ -170,6 +170,7 @@ export function registerRoutes(
   const { recordSearchHandlers } = options;
   if (recordSearchHandlers) {
     fastify.post('/ai/search-records', recordSearchHandlers.searchRecords.bind(recordSearchHandlers));
+    fastify.post('/ai/precompile-record', recordSearchHandlers.precompileRecord.bind(recordSearchHandlers));
   }
 
   // ============================================================================

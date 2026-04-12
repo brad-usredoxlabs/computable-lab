@@ -1903,6 +1903,23 @@ export const apiClient = {
   },
 
   /**
+   * Precompile a record from search result context.
+   * Takes a schema ID and search result context to produce a pre-filled record payload.
+   * POSTs to /ai/precompile-record with schemaId, title, snippet, and optional url.
+   */
+  async precompileRecord(
+    schemaId: string,
+    title: string,
+    snippet: string,
+    url?: string
+  ): Promise<{ success: boolean; payload?: Record<string, unknown>; error?: string; notes?: string[] }> {
+    return request('/ai/precompile-record', {
+      method: 'POST',
+      body: JSON.stringify({ schemaId, title, snippet, url }),
+    })
+  },
+
+  /**
    * Get related records (reverse references) for a given record.
    * Calls GET /records/:id/related?limit=<limit>
    */
@@ -2320,6 +2337,32 @@ export const apiClient = {
       }
       throw error
     }
+  },
+
+  /**
+   * Search records by query and kinds.
+   * Calls POST /ai/search-records with { query, kinds }.
+   * Returns combined local and web (Exa) search results.
+   */
+  async searchRecords(
+    query: string,
+    kinds: string[]
+  ): Promise<{
+    results: Array<{
+      origin: 'local' | 'web'
+      recordId?: string
+      title: string
+      snippet: string
+      url?: string
+      kind?: string
+      schemaId?: string
+    }>
+    sources: string[]
+  }> {
+    return request('/ai/search-records', {
+      method: 'POST',
+      body: JSON.stringify({ query, kinds }),
+    })
   },
 }
 
