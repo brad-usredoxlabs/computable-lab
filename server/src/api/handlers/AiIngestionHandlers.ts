@@ -257,10 +257,34 @@ export function createAiIngestionHandlers(
 ): AiIngestionHandlers {
   return {
     async analyzeIngestion(request, reply) {
-      // Get the file from multipart request
-      const fileStream = await request.file();
-      
-      if (!fileStream) {
+      // Iterate multipart parts — @fastify/multipart does not auto-attach
+      // field values to request.body, so we must pull both the file and the
+      // prompt field from the stream directly.
+      let fileBuffer: Buffer | undefined;
+      let fileName = '';
+      let mimeType = '';
+      let prompt: string | undefined;
+
+      try {
+        for await (const part of request.parts()) {
+          if (part.type === 'file' && part.fieldname === 'file') {
+            fileBuffer = await part.toBuffer();
+            fileName = part.filename;
+            mimeType = part.mimetype;
+          } else if (part.type === 'field' && part.fieldname === 'prompt') {
+            prompt = typeof part.value === 'string' ? part.value : String(part.value ?? '');
+          }
+        }
+      } catch (err) {
+        request.log.error(err, 'Failed to read multipart upload');
+        reply.status(400);
+        return {
+          success: false,
+          error: `Failed to read upload: ${err instanceof Error ? err.message : String(err)}`,
+        };
+      }
+
+      if (!fileBuffer) {
         reply.status(400);
         return {
           success: false,
@@ -268,31 +292,13 @@ export function createAiIngestionHandlers(
         };
       }
 
-      const prompt = request.body?.prompt as string | undefined;
-
-      if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+      if (!prompt || prompt.trim().length === 0) {
         reply.status(400);
         return {
           success: false,
           error: 'Prompt is required and must be a non-empty string',
         };
       }
-
-      // Read file buffer
-      let fileBuffer: Buffer;
-      try {
-        fileBuffer = await fileStream.toBuffer();
-      } catch (err) {
-        request.log.error(err, 'Failed to read file');
-        reply.status(500);
-        return {
-          success: false,
-          error: `Failed to read file: ${err instanceof Error ? err.message : String(err)}`,
-        };
-      }
-
-      const fileName = fileStream.filename;
-      const mimeType = fileStream.mimetype;
 
       // Check if AI is configured
       if (!orchestrator) {
@@ -326,7 +332,7 @@ export function createAiIngestionHandlers(
       let result: string;
       try {
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('AI analysis timed out')), 30000); // 30 second timeout
+          setTimeout(() => reject(new Error('AI analysis timed out')), 5 * 60 * 1000); // 5 minute timeout
         });
 
         const aiPromise = orchestrator.run({

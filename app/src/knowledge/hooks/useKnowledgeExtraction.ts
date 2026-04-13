@@ -106,7 +106,7 @@ export function useKnowledgeExtraction(): UseKnowledgeExtractionReturn {
 
             // Filter out refs already resolved in this session
             const pending = (extractionResult.unresolvedRefs ?? []).filter(
-              (p) => !resolvedCache.current.has(p.ref.id),
+              (p) => p?.ref?.id && !resolvedCache.current.has(p.ref.id),
             )
             setUnresolvedRefs(pending)
             break

@@ -231,6 +231,11 @@ export interface AgentClarification {
   options: AgentClarificationOption[];
 }
 
+export interface AgentLabwareAddition {
+  recordId: string;
+  reason?: string;
+}
+
 export interface AgentResult {
   /** Whether the agent completed successfully. */
   success: boolean;
@@ -246,6 +251,8 @@ export interface AgentResult {
   clarificationNeeded?: string;
   /** Structured clarification request with options. */
   clarification?: AgentClarification;
+  /** Proposed labware additions to apply before events. */
+  labwareAdditions?: AgentLabwareAddition[];
   /** Token usage for observability. */
   usage?: {
     promptTokens: number;

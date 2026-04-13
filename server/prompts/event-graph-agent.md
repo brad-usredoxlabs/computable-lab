@@ -205,6 +205,31 @@ Rules for the clarification block:
 - Include at most 8 options. If more matches exist, pick the top 8 and add a note saying how many were omitted.
 - If the search returned 0 results and a plain-language question is the only option, return `clarificationNeeded` as a plain-text top-level field instead of the structured block (fallback path — UI will render as prose).
 
+## Proposing labware additions
+
+The editor's `labwares` list shows the labware already present in the current graph. Sometimes the user asks you to work with labware that is not in this list.
+
+You MAY propose adding labware to the editor, but only under these rules:
+
+1. You MUST first call `search_records` with `kinds: ["labware"]` and a short query derived from the user's phrasing (e.g. "12-channel reservoir", "96 deepwell").
+2. Only propose additions whose `recordId` came back from `search_records` as a LOCAL result. Never invent IDs. Never propose labware that only matched via web/vendor results — if no local match exists, ask the user in a clarification block instead.
+3. Return proposed additions in a top-level `labwareAdditions` field of your JSON output:
+
+```json
+{
+  "events": [ ... ],
+  "notes": ["Proposing to add LBW-RES-12-INTEGRA-4332 to the editor before this transfer."],
+  "labwareAdditions": [
+    { "recordId": "LBW-RES-12-INTEGRA-4332", "reason": "user asked to add material to the 12-channel reservoir, which is not yet in the editor" }
+  ],
+  "unresolvedRefs": []
+}
+```
+
+4. When you draft the `events` block, reference the labware via its `labwareId` (which the human will see as the same recordId after they accept). You may optimistically assume the addition is approved when drafting events — the frontend applies labware additions BEFORE events on accept, so the reference will resolve.
+5. If multiple candidate labware match and you cannot confidently pick one, DO NOT include `labwareAdditions`. Return a `clarification` block instead.
+6. Never include `labwareAdditions` without a matching explanation in `notes` — the user will see both.
+
 ## Output Format
 
 Return only a JSON object:
@@ -229,11 +254,13 @@ Return only a JSON object:
   ],
   "notes": [],
   "unresolvedRefs": [],
-  "clarification": null
+  "clarification": null,
+  "labwareAdditions": []
 }
 ```
 
 `"clarification"` is optional. Include it (and leave `"events"` empty) when 2+ search results need user disambiguation. Omit the field entirely when drafting events normally.
+`"labwareAdditions"` is optional. Include it when proposing to add labware to the editor before the generated events.
 
 ## Event Detail Schemas
 

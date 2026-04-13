@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Labware, LabwareType, LabwareRecordPayload } from '../../types/labware'
-import { isTipRackType, LABWARE_TYPE_ICONS, LABWARE_TYPE_LABELS } from '../../types/labware'
-import { LABWARE_DEFINITIONS, getLabwareDefinitionByLegacyType } from '../../types/labwareDefinition'
+import { isTipRackType, LABWARE_TYPE_LABELS } from '../../types/labware'
+import { getLabwareDefinitionByLegacyType } from '../../types/labwareDefinition'
 import { ToolSelector, type SelectedTool } from '../tools'
 import type { AssistPipetteModel } from '../lib/assistPipetteRegistry'
-import { getAssistPipetteTipFamilies } from '../lib/assistPipetteRegistry'
 import type { PlatformManifest } from '../../types/platformRegistry'
 import { defaultVariantForPlatform, getDeckSlotLockedOrientation, getPlatformManifest, getVariantManifest } from '../../shared/lib/platformRegistry'
 import { LabwarePicker } from './LabwarePicker'
@@ -167,69 +166,6 @@ function tipVolumeBadge(labware?: Labware): { label: string; color: string } | n
   return { label: 'TIP', color: '#cbd5e1' }
 }
 
-function labwareTypesForPlatform(platform: string): LabwareType[] {
-  const platformKey = platform === 'integra_assist' ? 'integra_assist_plus' : platform
-  const commonTypes = new Set<LabwareType>()
-  const platformTypes = new Set<LabwareType>()
-  for (const definition of LABWARE_DEFINITIONS) {
-    const legacyTypes = definition.legacy_labware_types as LabwareType[]
-    for (const legacyType of definition.legacy_labware_types) {
-      if (!legacyType.startsWith('tiprack_')) {
-        commonTypes.add(legacyType as LabwareType)
-      }
-    }
-    if (platform === 'integra_assist') {
-      for (const legacyType of legacyTypes) {
-        if (legacyType.startsWith('tiprack_assist_')) {
-          platformTypes.add(legacyType)
-        }
-      }
-    }
-    const aliases = definition.platform_aliases || []
-    if (aliases.some((alias) => alias.platform === platformKey)) {
-      for (const legacyType of definition.legacy_labware_types) {
-        platformTypes.add(legacyType as LabwareType)
-      }
-    }
-  }
-  if (platform === 'manual') {
-    for (const definition of LABWARE_DEFINITIONS) {
-      for (const legacyType of definition.legacy_labware_types) {
-        platformTypes.add(legacyType as LabwareType)
-      }
-    }
-  }
-  const ordered = [...commonTypes, ...platformTypes]
-  return Array.from(new Set(ordered))
-}
-
-function filterAssistTipracksForSelectedTool(
-  types: LabwareType[],
-  selectedTool: SelectedTool | null
-): LabwareType[] {
-  const nonTipTypes = types.filter((type) => !type.startsWith('tiprack_assist_'))
-  if (!selectedTool?.assistPipetteModel) {
-    return nonTipTypes
-  }
-  const compatibleFamilies = getAssistPipetteTipFamilies(selectedTool.assistPipetteModel.id).map((f) => f.id)
-  const allowedAssistTipTypes = new Set<LabwareType>()
-  for (const family of compatibleFamilies) {
-    if (family === 'tip_12_5ul') {
-      allowedAssistTipTypes.add('tiprack_assist_12_5_384')
-    }
-    if (family === 'tip_125ul') {
-      allowedAssistTipTypes.add('tiprack_assist_125_384')
-    }
-    if (family === 'tip_300ul') {
-      allowedAssistTipTypes.add('tiprack_assist_300')
-    }
-    if (family === 'tip_1250ul') {
-      allowedAssistTipTypes.add('tiprack_assist_1250')
-    }
-  }
-  return [...nonTipTypes, ...types.filter((type) => allowedAssistTipTypes.has(type))]
-}
-
 export function DeckVisualizationPanel({
   platform,
   variant,
@@ -262,7 +198,6 @@ export function DeckVisualizationPanel({
 }: DeckVisualizationPanelProps) {
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null)
   const [draggingLabwareId, setDraggingLabwareId] = useState<string | null>(null)
-  const [isAddOpen, setIsAddOpen] = useState(false)
   const [pendingType, setPendingType] = useState<LabwareType | null>(null)
   const [nameInput, setNameInput] = useState('')
   const [showLabwarePicker, setShowLabwarePicker] = useState(false)
@@ -309,11 +244,6 @@ export function DeckVisualizationPanel({
     }
     return explicitBench.sort((a, b) => a.slotId.localeCompare(b.slotId))
   }, [placements, unplacedLabwares])
-  const availableLabwareTypes = useMemo(() => {
-    const base = labwareTypesForPlatform(platform)
-    if (platform !== 'integra_assist') return base
-    return filterAssistTipracksForSelectedTool(base, selectedTool)
-  }, [platform, selectedTool])
 
   const placeLabwareInSlot = (slotId: string, labwareId: string) => {
     const currentSlot = slotByLabware.get(labwareId)
@@ -378,11 +308,6 @@ export function DeckVisualizationPanel({
     setShowLabwarePicker(false)
   }
 
-  const startAdd = (type: LabwareType) => {
-    setPendingType(type)
-    setNameInput('')
-    setIsAddOpen(false)
-  }
   const submitNamedAdd = () => {
     if (!pendingType) return
     const created = onAddLabware(pendingType, nameInput.trim() || undefined)

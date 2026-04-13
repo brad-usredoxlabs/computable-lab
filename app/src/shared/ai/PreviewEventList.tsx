@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { useLabwareEditor } from '../../graph/context/LabwareEditorContext'
+import { useOptionalLabwareEditor } from '../../graph/context/LabwareEditorContext'
 import { getEventFocusTargets } from '../../graph/lib/eventFocus'
 import type { WellId } from '../../types/plate'
 import type { AddMaterialDetails, PlateEvent, TransferDetails } from '../../types/events'
@@ -35,16 +35,16 @@ function paneStatusLabel(isSource: boolean, isTarget: boolean): string | null {
 }
 
 export function PreviewEventList({ previewEvents }: PreviewEventListProps) {
-  const {
-    state,
-    clearSelection,
-    selectWells,
-    setSourceLabware,
-    setTargetLabware,
-    setActiveLabware,
-  } = useLabwareEditor()
+  const editor = useOptionalLabwareEditor()
+  const state = editor?.state
+  const clearSelection = editor?.clearSelection
+  const selectWells = editor?.selectWells
+  const setSourceLabware = editor?.setSourceLabware
+  const setTargetLabware = editor?.setTargetLabware
+  const setActiveLabware = editor?.setActiveLabware
 
   const previewRows = useMemo(() => {
+    if (!state) return []
     return previewEvents.map((event) => {
       const color = EVENT_TYPE_COLORS[event.event_type] || '#868e96'
 
@@ -71,11 +71,11 @@ export function PreviewEventList({ previewEvents }: PreviewEventListProps) {
           destinationStatus: paneStatusLabel(isSource, isTarget),
           focus: () => {
             if (!labwareId) return
-            clearSelection()
-            setTargetLabware(labwareId)
-            setActiveLabware(labwareId)
+            clearSelection?.()
+            setTargetLabware?.(labwareId)
+            setActiveLabware?.(labwareId)
             if (wells.length > 0) {
-              selectWells(labwareId, wells, 'replace')
+              selectWells?.(labwareId, wells, 'replace')
             }
           },
         }
@@ -100,18 +100,18 @@ export function PreviewEventList({ previewEvents }: PreviewEventListProps) {
           destination: `Source: ${formatLabwareLabel(sourceName, transferDetails.sourceWells)}\nTarget: ${formatLabwareLabel(targetName, transferDetails.destWells)}`,
           destinationStatus: null,
           focus: () => {
-            clearSelection()
+            clearSelection?.()
             if (transferDetails.sourceLabwareId) {
-              setSourceLabware(transferDetails.sourceLabwareId)
-              setActiveLabware(transferDetails.sourceLabwareId)
+              setSourceLabware?.(transferDetails.sourceLabwareId)
+              setActiveLabware?.(transferDetails.sourceLabwareId)
               if (transferDetails.sourceWells.length > 0) {
-                selectWells(transferDetails.sourceLabwareId, transferDetails.sourceWells, 'replace')
+                selectWells?.(transferDetails.sourceLabwareId, transferDetails.sourceWells, 'replace')
               }
             }
             if (transferDetails.destLabwareId) {
-              setTargetLabware(transferDetails.destLabwareId)
+              setTargetLabware?.(transferDetails.destLabwareId)
               if (transferDetails.destWells.length > 0) {
-                selectWells(transferDetails.destLabwareId, transferDetails.destWells, 'replace')
+                selectWells?.(transferDetails.destLabwareId, transferDetails.destWells, 'replace')
               }
             }
           },
@@ -133,11 +133,11 @@ export function PreviewEventList({ previewEvents }: PreviewEventListProps) {
         destinationStatus: firstTarget ? paneStatusLabel(state.sourceLabwareId === firstTarget.labwareId, state.targetLabwareId === firstTarget.labwareId) : null,
         focus: () => {
           if (!firstTarget) return
-          clearSelection()
-          setTargetLabware(firstTarget.labwareId)
-          setActiveLabware(firstTarget.labwareId)
+          clearSelection?.()
+          setTargetLabware?.(firstTarget.labwareId)
+          setActiveLabware?.(firstTarget.labwareId)
           if (firstTarget.wells.length > 0) {
-            selectWells(firstTarget.labwareId, firstTarget.wells, 'replace')
+            selectWells?.(firstTarget.labwareId, firstTarget.wells, 'replace')
           }
         },
       }
@@ -149,9 +149,7 @@ export function PreviewEventList({ previewEvents }: PreviewEventListProps) {
     setActiveLabware,
     setSourceLabware,
     setTargetLabware,
-    state.labwares,
-    state.sourceLabwareId,
-    state.targetLabwareId,
+    state,
   ])
 
   const handleFocus = useCallback((focus: () => void) => {

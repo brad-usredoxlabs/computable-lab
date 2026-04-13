@@ -367,7 +367,7 @@ export async function createServer(
   // Register multipart support for file uploads
   await fastify.register(multipart, {
     limits: {
-      fileSize: 10 * 1024 * 1024, // 10 MB
+      fileSize: 25 * 1024 * 1024, // 25 MB — match JSON bodyLimit
       files: 5,
     },
   });

@@ -944,12 +944,20 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${path}`
-  
+
+  // Only set Content-Type: application/json when there's actually a body —
+  // otherwise Fastify rejects the request with "Body cannot be empty when
+  // content-type is set to 'application/json'".
+  const hasBody = options.body != null
+  const baseHeaders: Record<string, string> = hasBody
+    ? { 'Content-Type': 'application/json' }
+    : {}
+
   try {
     const response = await fetch(url, {
       ...options,
       headers: {
-        'Content-Type': 'application/json',
+        ...baseHeaders,
         ...options.headers,
       },
     })
@@ -964,7 +972,7 @@ async function request<T>(
       throw error
     }
     if (error instanceof TypeError) {
-      throw new NetworkError('Failed to connect to server')
+      throw new NetworkError(`Failed to connect to server (${path}): ${error.message}`)
     }
     throw error
   }
@@ -1728,7 +1736,7 @@ export const apiClient = {
         throw error
       }
       if (error instanceof TypeError) {
-        throw new NetworkError('Failed to connect to server')
+        throw new NetworkError(`Failed to connect to server (/ai/analyze-ingestion): ${error.message}`)
       }
       throw error
     }

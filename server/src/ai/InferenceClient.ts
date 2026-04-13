@@ -196,9 +196,32 @@ export async function listInferenceModels(
     return {
       available: false,
       models: [],
-      error: err instanceof Error ? err.message : String(err),
+      error: describeFetchError(err, baseUrl),
     };
   }
+}
+
+function describeFetchError(err: unknown, baseUrl: string): string {
+  if (!(err instanceof Error)) return String(err);
+  // Node's undici fetch wraps the real reason in err.cause. Surface it so
+  // the UI doesn't just show an opaque "fetch failed".
+  const cause = (err as Error & { cause?: unknown }).cause;
+  const causeMessage =
+    cause instanceof Error
+      ? cause.message
+      : typeof cause === 'object' && cause && 'code' in cause
+        ? String((cause as { code?: unknown }).code)
+        : cause != null
+          ? String(cause)
+          : undefined;
+  if (err.name === 'AbortError') {
+    return `Timed out connecting to ${baseUrl}/models (5s)`;
+  }
+  const parts = [`${err.message} (${baseUrl}/models)`];
+  if (causeMessage && causeMessage !== err.message) {
+    parts.push(`cause: ${causeMessage}`);
+  }
+  return parts.join(' — ');
 }
 
 function normalizeBaseUrl(baseUrl: string): string {

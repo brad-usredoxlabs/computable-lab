@@ -89,6 +89,11 @@ export interface AiClarification {
   options: AiClarificationOption[]
 }
 
+export interface AiLabwareAddition {
+  recordId: string
+  reason?: string
+}
+
 export interface AiAgentResult {
   success: boolean
   events: PlateEvent[]
@@ -97,6 +102,7 @@ export interface AiAgentResult {
   clarificationNeeded?: string
   clarification?: AiClarification
   error?: string
+  labwareAdditions?: AiLabwareAddition[]
   usage?: {
     inputTokens?: number
     outputTokens?: number
@@ -132,6 +138,8 @@ export interface ChatMessage {
   attachments?: ChatMessageAttachment[]
   /** Structured clarification (numbered options) from the AI */
   clarification?: AiClarification
+  /** Proposed labware additions from the AI */
+  labwareAdditions?: AiLabwareAddition[]
 }
 
 export interface AiConversationMessage {

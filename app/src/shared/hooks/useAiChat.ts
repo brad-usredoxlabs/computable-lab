@@ -8,6 +8,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { streamAssist, getAiHealth } from '../api/aiClient'
+import { apiClient } from '../api/client'
 import { parsePromptMentions } from '../lib/aiPromptMentions'
 import type { PlateEvent } from '../../types/events'
 import type { RecordRef } from '../../types/ref'
@@ -18,6 +19,7 @@ import type {
   AiHealthStatus,
   OntologyRefProposal,
   AiConversationMessage,
+  AiLabwareAddition,
 } from '../../types/ai'
 
 function generateMessageId(): string {
@@ -45,6 +47,7 @@ export interface UseAiChatReturn {
   messages: ChatMessage[]
   isStreaming: boolean
   previewEvents: PlateEvent[]
+  previewLabwareAdditions: AiLabwareAddition[]
   hasPreview: boolean
   unresolvedRefs: OntologyRefProposal[]
   sendPrompt: (prompt: string, attachments?: FileAttachment[]) => void
@@ -64,17 +67,25 @@ export interface UseAiChatReturn {
  */
 export type AcceptEventHandler = (event: PlateEvent) => void
 
+/**
+ * Callback for adding labware from a record.
+ */
+export type AddLabwareFromRecordHandler = (record: Record<string, unknown>) => void
+
 interface UseAiChatOptions {
   /** Page-level AI context — determines surface and context payload. */
   aiContext: AiContext
   /** Handler called for each accepted preview event. */
   onAcceptEvent?: AcceptEventHandler
+  /** Handler called to add labware from a record (for AI-proposed additions). */
+  onAddLabwareFromRecord?: AddLabwareFromRecordHandler
 }
 
-export function useAiChat({ aiContext, onAcceptEvent }: UseAiChatOptions): UseAiChatReturn {
+export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [previewEvents, setPreviewEvents] = useState<PlateEvent[]>([])
+  const [previewLabwareAdditions, setPreviewLabwareAdditions] = useState<AiLabwareAddition[]>([])
   const [unresolvedRefs, setUnresolvedRefs] = useState<OntologyRefProposal[]>([])
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null)
 
@@ -89,6 +100,10 @@ export function useAiChat({ aiContext, onAcceptEvent }: UseAiChatOptions): UseAi
 
   const onAcceptEventRef = useRef(onAcceptEvent)
   onAcceptEventRef.current = onAcceptEvent
+
+  // Ref to the labware addition handler.
+  const addLabwareFromRecordRef = useRef(onAddLabwareFromRecord)
+  addLabwareFromRecordRef.current = onAddLabwareFromRecord
 
   // Check health on mount
   const checkHealth = useCallback(() => {
@@ -188,8 +203,9 @@ export function useAiChat({ aiContext, onAcceptEvent }: UseAiChatOptions): UseAi
           if (event.type === 'done') {
             const result = event.result
             setPreviewEvents(result.events ?? [])
+            setPreviewLabwareAdditions(result.labwareAdditions ?? [])
             const pending = (result.unresolvedRefs ?? []).filter(
-              (p) => !resolvedCache.current.has(p.ref.id)
+              (p) => p?.ref?.id && !resolvedCache.current.has(p.ref.id)
             )
             setUnresolvedRefs(pending)
             setMessages((prev) =>
@@ -201,6 +217,7 @@ export function useAiChat({ aiContext, onAcceptEvent }: UseAiChatOptions): UseAi
                       streamEvents: [...accumulated],
                       events: result.events ?? [],
                       clarification: result.clarification,
+                      labwareAdditions: result.labwareAdditions,
                       usage: result.usage,
                       isStreaming: false,
                     }
@@ -261,7 +278,38 @@ export function useAiChat({ aiContext, onAcceptEvent }: UseAiChatOptions): UseAi
   // ------------------------------------------------------------------
   // Accept preview events → add to editor (applies cached resolutions)
   // ------------------------------------------------------------------
-  const acceptPreview = useCallback(() => {
+  const acceptPreview = useCallback(async () => {
+    // Apply AI-proposed labware additions FIRST so events can reference them.
+    for (const addition of previewLabwareAdditions) {
+      try {
+        // Fetch the full record by ID using the apiClient.
+        const record = await apiClient.getRecord(addition.recordId)
+        if (record && record.payload) {
+          addLabwareFromRecordRef.current?.(record.payload as Record<string, unknown>)
+        } else {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: generateMessageId(),
+              role: 'system',
+              content: `Skipped labware addition: ${addition.recordId} not found locally.`,
+              timestamp: Date.now(),
+            },
+          ])
+        }
+      } catch (err) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: generateMessageId(),
+            role: 'system',
+            content: `Skipped labware addition ${addition.recordId}: ${(err as Error).message}.`,
+            timestamp: Date.now(),
+          },
+        ])
+      }
+    }
+
     const cache = resolvedCache.current
     const handler = onAcceptEventRef.current
     if (handler) {
@@ -270,6 +318,7 @@ export function useAiChat({ aiContext, onAcceptEvent }: UseAiChatOptions): UseAi
       }
     }
     setPreviewEvents([])
+    setPreviewLabwareAdditions([])
     setMessages((prev) => [
       ...prev,
       {
@@ -279,7 +328,7 @@ export function useAiChat({ aiContext, onAcceptEvent }: UseAiChatOptions): UseAi
         timestamp: Date.now(),
       },
     ])
-  }, [previewEvents])
+  }, [previewEvents, previewLabwareAdditions])
 
   // ------------------------------------------------------------------
   // Accept preview events with resolved material refs
@@ -317,6 +366,7 @@ export function useAiChat({ aiContext, onAcceptEvent }: UseAiChatOptions): UseAi
   const rejectPreview = useCallback(() => {
     const count = previewEvents.length
     setPreviewEvents([])
+    setPreviewLabwareAdditions([])
     setUnresolvedRefs([])
     setMessages((prev) => [
       ...prev,
@@ -335,6 +385,7 @@ export function useAiChat({ aiContext, onAcceptEvent }: UseAiChatOptions): UseAi
   const clearHistory = useCallback(() => {
     setMessages([])
     setPreviewEvents([])
+    setPreviewLabwareAdditions([])
     setUnresolvedRefs([])
   }, [])
 
@@ -342,6 +393,7 @@ export function useAiChat({ aiContext, onAcceptEvent }: UseAiChatOptions): UseAi
     messages,
     isStreaming,
     previewEvents,
+    previewLabwareAdditions,
     hasPreview: previewEvents.length > 0,
     unresolvedRefs,
     sendPrompt,

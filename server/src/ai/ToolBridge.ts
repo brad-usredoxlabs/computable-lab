@@ -15,6 +15,7 @@ export const AGENT_ALLOWED_TOOLS = [
   'record_get',
   'record_list',
   'record_search',
+  'search_records',
   // Schema
   'schema_get',
   // Validation
@@ -56,6 +57,7 @@ export const DOMAIN_TOOL_SUBSETS = {
     'record_get',
     'record_list',
     'record_search',
+    'search_records',
     'schema_get',
     'validate_payload',
     'lint_payload',

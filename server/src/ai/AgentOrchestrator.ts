@@ -12,6 +12,7 @@ import type {
   AgentRequest,
   AgentResult,
   AgentClarificationOption,
+  AgentLabwareAddition,
   ChatMessage,
   ConversationHistoryMessage,
 } from './types.js';
@@ -81,6 +82,22 @@ function parseAgentFinalResponse(
         .filter((o): o is AgentClarificationOption => o !== null);
       if (typeof c.prompt === 'string' && typeof c.entityType === 'string' && options.length > 0) {
         result.clarification = { prompt: c.prompt, entityType: c.entityType, options };
+      }
+    }
+
+    // Labware additions (from the labware-additions prompt)
+    if (Array.isArray(parsed.labwareAdditions)) {
+      const additions: AgentLabwareAddition[] = [];
+      for (const raw of parsed.labwareAdditions) {
+        if (!raw || typeof raw !== 'object') continue;
+        const r = raw as Record<string, unknown>;
+        if (typeof r.recordId !== 'string' || r.recordId.length === 0) continue;
+        const entry: AgentLabwareAddition = { recordId: r.recordId };
+        if (typeof r.reason === 'string') entry.reason = r.reason;
+        additions.push(entry);
+      }
+      if (additions.length > 0) {
+        result.labwareAdditions = additions;
       }
     }
 

@@ -42,7 +42,7 @@ import type { PlateEvent, TransferDetails } from '../types/events'
 import { getEventSummary, normalizeTransferDetails, withCanonicalTransferDetails } from '../types/events'
 import type { WellId } from '../types/plate'
 import type { MacroProgram } from '../types/macroProgram'
-import type { Labware, LabwareType } from '../types/labware'
+import type { Labware, LabwareType, LabwareRecordPayload } from '../types/labware'
 import { getLabwareDefaultOrientation, getLabwareWellIds, isTipRackType, normalizeLabwareWithDefinition } from '../types/labware'
 import type { LabwareOrientation } from './labware/LabwareCanvas'
 import { flatSelection, infoMessage, validResult, warningMessage, type SelectionExpansion } from './tools'
@@ -695,6 +695,7 @@ function LabwareEventEditorContent({
     clearSelection,
     addEvent,
     addLabware,
+    addLabwareFromRecord,
     removeLabware,
     updateEvent,
     deleteEvent,
@@ -898,6 +899,9 @@ function LabwareEventEditorContent({
   const aiChat = useAiChat({
     aiContext: labwareAiContext,
     onAcceptEvent: addEvent,
+    onAddLabwareFromRecord: (record) => {
+      addLabwareFromRecord(record as unknown as LabwareRecordPayload);
+    },
   })
   useRegisterAiChat(aiChat)
   const { platforms, loading: platformsLoading } = usePlatformRegistry()

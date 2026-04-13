@@ -286,6 +286,7 @@ export function AiChatPanel() {
                 <PreviewEventList previewEvents={chat.previewEvents} />
                 <PreviewBanner
                   previewEvents={chat.previewEvents}
+                  previewLabwareAdditions={chat.previewLabwareAdditions}
                   unresolvedCount={chat.unresolvedRefs.length}
                   onAccept={handleAccept}
                   onReject={chat.rejectPreview}
