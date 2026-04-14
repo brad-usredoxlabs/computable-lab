@@ -5,7 +5,7 @@
  * Supports tool-constrained selection expansion (e.g., 8-channel pipette auto-selects column).
  */
 
-import { useCallback } from 'react'
+import { useCallback, type ReactNode } from 'react'
 import type { WellId } from '../../types/plate'
 import type { Labware } from '../../types/labware'
 import { LABWARE_CATEGORIES } from '../../types/labware'
@@ -52,6 +52,8 @@ interface LabwareCanvasProps {
   paneContext?: 'source' | 'target'
   /** Callback for validation messages from tool expansion */
   onValidation?: (messages: ValidationMessage[]) => void
+  /** Optional preview event badges overlay rendered inside the SVG */
+  previewEventBadges?: ReactNode
 }
 
 /**
@@ -73,6 +75,7 @@ function GridLabwareCanvas({
   highlightedWells,
   wellContents,
   previewWellContents,
+  previewEventBadges,
   onSelectWells,
   onWellHover,
   width = 500,
@@ -360,6 +363,9 @@ function GridLabwareCanvas({
             )
           })
         )}
+
+      {/* Preview event badges overlay */}
+      {previewEventBadges}
     </svg>
   )
 }

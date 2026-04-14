@@ -8,6 +8,7 @@ import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { useLabwareEditor, type LabwareOrientation as PoseOrientation } from '../context/LabwareEditorContext'
 import { LabwareCanvas, type ToolExpander } from './LabwareCanvas'
 import { WellTooltip } from './WellTooltip'
+import { PreviewEventBadges } from './PreviewEventBadges'
 import type { WellId } from '../../types/plate'
 import type { PlateEvent } from '../../types/events'
 import type { TransferDetails } from '../../types/events'
@@ -19,8 +20,9 @@ import { normalizeTransferDetails } from '../../types/events'
 import { computeLabwareStates } from '../lib/eventGraph'
 import { getEventFocusTargets } from '../lib/eventFocus'
 import { getEventSummary } from '../../types/events'
-import { getLabwareDefaultOrientation, isTipRackType } from '../../types/labware'
+import { getLabwareDefaultOrientation, isTipRackType, type Labware } from '../../types/labware'
 import type { PreviewEventState } from '../../shared/hooks/useAiChat'
+import { getWellCenterSvg } from '../lib/labwareView'
 
 interface DualLabwarePaneProps {
   /** Active editor mode */
@@ -37,6 +39,8 @@ interface DualLabwarePaneProps {
   previewEvents?: PlateEvent[]
   /** Per-event preview state for filtering rejected events */
   previewEventStates?: Map<string, PreviewEventState>
+  /** Callback to set preview event state */
+  setPreviewEventState?: (eventId: string, state: PreviewEventState) => void
   /** Lock tiprack orientation to landscape */
   lockLandscapeTipracks?: boolean
   /** Whether a labware can currently rotate in the active deck/platform context */
@@ -103,6 +107,7 @@ export function DualLabwarePane({
   onValidation,
   previewEvents = [],
   previewEventStates,
+  setPreviewEventState,
   lockLandscapeTipracks = false,
   canRotateLabware,
   getRotateDisabledReason,
@@ -132,6 +137,17 @@ export function DualLabwarePane({
     position: { x: number; y: number }
   } | null>(null)
   const [activeOverlayPane, setActiveOverlayPane] = useState<'source' | 'target' | null>(null)
+
+  // Hover state for preview event badges
+  const [hoveredPreviewEventId, setHoveredPreviewEventId] = useState<string | null>(null)
+
+  // Compute highlighted wells from hovered preview event
+  const hoverHighlightedWells = useMemo(() => {
+    if (!hoveredPreviewEventId) return new Set<WellId>()
+    const event = previewEvents.find((e) => e.eventId === hoveredPreviewEventId)
+    if (!event) return new Set<WellId>()
+    return new Set(getAffectedWells(event))
+  }, [hoveredPreviewEventId, previewEvents])
 
   const sourceOrientation = sourceLabware ? getLabwareOrientation(sourceLabware.labwareId) : 'landscape'
   const targetOrientation = targetLabware ? getLabwareOrientation(targetLabware.labwareId) : 'landscape'
@@ -178,6 +194,36 @@ export function DualLabwarePane({
     () => computeLabwareStates(appliedEvents, state.labwares),
     [appliedEvents, state.labwares]
   )
+
+  // Helper to check if an event affects a given labware
+  const eventAffectsLabware = useCallback((event: PlateEvent, labwareId: string): boolean => {
+    const details = event.details as Record<string, unknown>
+    const eventLabwareId = details.labwareId as string | undefined
+    const sourceLabwareId = (details.source as { labwareInstanceId?: string } | undefined)?.labwareInstanceId
+    const targetLabwareId = (details.target as { labwareInstanceId?: string } | undefined)?.labwareInstanceId
+    const sourceLabwareIdLegacy = details.source_labwareId as string | undefined
+    const destLabwareId = details.dest_labwareId as string | undefined
+
+    return eventLabwareId === labwareId
+      || sourceLabwareId === labwareId
+      || targetLabwareId === labwareId
+      || sourceLabwareIdLegacy === labwareId
+      || destLabwareId === labwareId
+  }, [])
+
+  // Get badge preview events for a labware (all events, including rejected)
+  const getBadgePreviewEvents = useCallback((labwareId: string): PlateEvent[] => {
+    return previewEvents.filter((event) => eventAffectsLabware(event, labwareId))
+  }, [previewEvents, eventAffectsLabware])
+
+  // Well center calculator for a labware
+  const getWellCenter = useCallback((labware: Labware) => {
+    const orientation = getLabwareOrientation(labware.labwareId)
+    // Use default SVG dimensions that match LabwareCanvas
+    const svgWidth = labware.addressing.type === 'grid' ? 500 : (labware.addressing.type === 'linear' ? 500 : 150)
+    const svgHeight = labware.addressing.type === 'grid' ? 380 : (labware.addressing.type === 'linear' ? 120 : 200)
+    return (wellId: WellId) => getWellCenterSvg(labware, wellId, orientation, svgWidth, svgHeight)
+  }, [getLabwareOrientation])
 
   // Source hover handler
   const handleSourceWellHover = useCallback(
@@ -476,7 +522,7 @@ export function DualLabwarePane({
             <LabwareCanvas
               labware={sourceLabware}
               selectedWells={sourceSelection?.selectedWells || new Set()}
-              highlightedWells={sourceSelection?.highlightedWells || new Set()}
+              highlightedWells={new Set([...(sourceSelection?.highlightedWells || []), ...hoverHighlightedWells])}
               wellContents={effectiveSourceWellContents}
               previewWellContents={sourcePreviewWells}
               onSelectWells={handleSourceSelectWells}
@@ -488,6 +534,18 @@ export function DualLabwarePane({
               toolExpander={toolExpander}
               paneContext="source"
               onValidation={onValidation}
+              previewEventBadges={
+                setPreviewEventState ? (
+                  <PreviewEventBadges
+                    labware={sourceLabware}
+                    previewEvents={getBadgePreviewEvents(sourceLabware.labwareId)}
+                    previewEventStates={previewEventStates || new Map()}
+                    onSetState={setPreviewEventState}
+                    onHoverEvent={setHoveredPreviewEventId}
+                    wellCenter={getWellCenter(sourceLabware)}
+                  />
+                ) : undefined
+              }
             />
           ) : (
             <EmptyPane label="source" />
@@ -548,7 +606,7 @@ export function DualLabwarePane({
             <LabwareCanvas
               labware={targetLabware}
               selectedWells={targetSelection?.selectedWells || new Set()}
-              highlightedWells={targetSelection?.highlightedWells || new Set()}
+              highlightedWells={new Set([...(targetSelection?.highlightedWells || []), ...hoverHighlightedWells])}
               wellContents={effectiveTargetWellContents}
               previewWellContents={targetPreviewWells}
               onSelectWells={handleTargetSelectWells}
@@ -560,6 +618,18 @@ export function DualLabwarePane({
               toolExpander={toolExpander}
               paneContext="target"
               onValidation={onValidation}
+              previewEventBadges={
+                setPreviewEventState ? (
+                  <PreviewEventBadges
+                    labware={targetLabware}
+                    previewEvents={getBadgePreviewEvents(targetLabware.labwareId)}
+                    previewEventStates={previewEventStates || new Map()}
+                    onSetState={setPreviewEventState}
+                    onHoverEvent={setHoveredPreviewEventId}
+                    wellCenter={getWellCenter(targetLabware)}
+                  />
+                ) : undefined
+              }
             />
           ) : (
             <EmptyPane label="target" />

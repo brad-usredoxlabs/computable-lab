@@ -4365,6 +4365,7 @@ function LabwareEventEditorContent({
                 toolExpander={sessionAwareExpander}
                 previewEvents={aiChat.previewEvents}
                 previewEventStates={aiChat.previewEventStates}
+                setPreviewEventState={aiChat.setPreviewEventState}
                 onValidation={handleToolSessionValidation}
                 lockLandscapeTipracks={executionTargetPlatform === 'opentrons_ot2' || executionTargetPlatform === 'opentrons_flex'}
                 canRotateLabware={canRotateLabwareInPane}
@@ -4576,6 +4577,7 @@ function LabwareEventEditorContent({
                 toolExpander={sessionAwareExpander}
                 previewEvents={aiChat.previewEvents}
                 previewEventStates={aiChat.previewEventStates}
+                setPreviewEventState={aiChat.setPreviewEventState}
                 onValidation={handleToolSessionValidation}
                 lockLandscapeTipracks={executionTargetPlatform === 'opentrons_ot2' || executionTargetPlatform === 'opentrons_flex'}
                 canRotateLabware={canRotateLabwareInPane}
@@ -4607,6 +4609,7 @@ function LabwareEventEditorContent({
                 toolExpander={sessionAwareExpander}
                 previewEvents={aiChat.previewEvents}
                 previewEventStates={aiChat.previewEventStates}
+                setPreviewEventState={aiChat.setPreviewEventState}
                 onValidation={handleToolSessionValidation}
                 lockLandscapeTipracks={executionTargetPlatform === 'opentrons_ot2' || executionTargetPlatform === 'opentrons_flex'}
                 canRotateLabware={canRotateLabwareInPane}
@@ -4638,6 +4641,7 @@ function LabwareEventEditorContent({
                 toolExpander={sessionAwareExpander}
                 previewEvents={aiChat.previewEvents}
                 previewEventStates={aiChat.previewEventStates}
+                setPreviewEventState={aiChat.setPreviewEventState}
                 onValidation={handleToolSessionValidation}
                 lockLandscapeTipracks={executionTargetPlatform === 'opentrons_ot2' || executionTargetPlatform === 'opentrons_flex'}
                 canRotateLabware={canRotateLabwareInPane}

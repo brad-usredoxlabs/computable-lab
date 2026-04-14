@@ -3,6 +3,134 @@ import type { WellId } from '../../types/plate'
 
 export type LabwareOrientation = 'portrait' | 'landscape'
 
+/**
+ * Calculate the center (cx, cy) of a well in SVG coordinates for a grid labware.
+ * This mirrors the positioning logic in LabwareCanvas.tsx.
+ */
+export function getGridWellCenter(
+  labware: Labware,
+  wellId: WellId,
+  orientation: LabwareOrientation,
+  svgWidth: number = 500,
+  svgHeight: number = 380
+): { cx: number; cy: number } | null {
+  if (labware.addressing.type !== 'grid') return null
+
+  const padding = 40
+  const rows = labware.addressing.rows || 8
+  const cols = labware.addressing.columns || 12
+  const availableWidth = svgWidth - padding * 2
+  const availableHeight = svgHeight - padding * 2
+  const wellWidth = availableWidth / cols
+  const wellHeight = availableHeight / rows
+
+  // Parse well ID (e.g., "A1" -> row "A", col 1)
+  const match = wellId.match(/^([A-Z]+)(\d+)$/)
+  if (!match) return null
+
+  const rowLabel = match[1]
+  const colNum = parseInt(match[2], 10)
+
+  const rowLabels = labware.addressing.rowLabels || Array.from({ length: rows }, (_, i) => String.fromCharCode(65 + i))
+  const colLabels = labware.addressing.columnLabels || Array.from({ length: cols }, (_, i) => String(i + 1))
+
+  const rowIndex = rowLabels.indexOf(rowLabel)
+  const colIndex = colLabels.indexOf(String(colNum))
+
+  if (rowIndex < 0 || colIndex < 0) return null
+
+  // Handle orientation
+  let displayRow: number
+  let displayCol: number
+  if (orientation === 'portrait') {
+    displayRow = colIndex
+    displayCol = rowIndex
+  } else {
+    displayRow = rowIndex
+    displayCol = colIndex
+  }
+
+  const cx = padding + displayCol * wellWidth + wellWidth / 2
+  const cy = padding + displayRow * wellHeight + wellHeight / 2
+
+  return { cx, cy }
+}
+
+/**
+ * Calculate the center of a linear labware well in SVG coordinates.
+ */
+export function getLinearWellCenter(
+  labware: Labware,
+  wellId: WellId,
+  orientation: 'portrait' | 'landscape',
+  svgWidth: number,
+  svgHeight: number
+): { cx: number; cy: number } | null {
+  if (labware.addressing.type !== 'linear') return null
+
+  const labels = labware.addressing.linearLabels || []
+  const idx = labels.indexOf(wellId)
+  if (idx < 0) return null
+
+  const useTroughStyle = labware.linearWellStyle === 'trough'
+
+  if (orientation === 'landscape') {
+    const padding = useTroughStyle ? 24 : 30
+    const availableWidth = svgWidth - padding * 2
+    const cellWidth = availableWidth / Math.max(1, labels.length)
+    const x = padding + idx * cellWidth + cellWidth / 2
+    const y = svgHeight / 2
+    return { cx: x, cy: y }
+  } else {
+    // Portrait
+    const padding = 30
+    const labelWidth = 30
+    const availableHeight = svgHeight - padding * 2
+    const slotHeight = availableHeight / labels.length
+    const x = labelWidth + (svgWidth - padding - labelWidth) / 2
+    const y = padding + idx * slotHeight + slotHeight / 2
+    return { cx: x, cy: y }
+  }
+}
+
+/**
+ * Calculate the center of a single labware well.
+ */
+export function getSingleWellCenter(
+  labware: Labware,
+  _wellId: WellId,
+  svgWidth: number = 150,
+  svgHeight: number = 200
+): { cx: number; cy: number } | null {
+  if (labware.addressing.type !== 'single') return null
+
+  const centerX = svgWidth / 2
+  const centerY = svgHeight / 2
+  return { cx: centerX, cy: centerY }
+}
+
+/**
+ * Get the center of a well in SVG coordinates for any labware type.
+ */
+export function getWellCenterSvg(
+  labware: Labware,
+  wellId: WellId,
+  orientation: LabwareOrientation = 'landscape',
+  svgWidth: number = 500,
+  svgHeight: number = 380
+): { cx: number; cy: number } | null {
+  if (labware.addressing.type === 'grid') {
+    return getGridWellCenter(labware, wellId, orientation, svgWidth, svgHeight)
+  }
+  if (labware.addressing.type === 'linear') {
+    return getLinearWellCenter(labware, wellId, orientation, svgWidth, svgHeight)
+  }
+  if (labware.addressing.type === 'single') {
+    return getSingleWellCenter(labware, wellId, svgWidth, svgHeight)
+  }
+  return null
+}
+
 export interface GridViewTransform {
   orientation: LabwareOrientation
   displayRows: number
