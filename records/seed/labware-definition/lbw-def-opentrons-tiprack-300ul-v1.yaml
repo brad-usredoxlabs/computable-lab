@@ -4,10 +4,6 @@ recordId: lbw-def-opentrons-tiprack-300ul-v1
 type: labware_definition
 id: opentrons/tiprack_300ul@v1
 display_name: "OT-2 Tip Rack 300 uL"
-vendor: Opentrons
-source: opentrons
-specificity: concrete
-read_only: true
 legacy_labware_types:
   - tiprack_ot2_300
 topology:

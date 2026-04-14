@@ -4,8 +4,6 @@ recordId: lbw-def-generic-tube-1-v1
 type: labware_definition
 id: generic/tube_1@v1
 display_name: "Single Tube"
-source: generic
-specificity: generic
 legacy_labware_types:
   - tube
 topology:

@@ -4,10 +4,6 @@ recordId: lbw-def-integra-tiprack-300ul-96-v1
 type: labware_definition
 id: integra/tiprack_300ul_96@v1
 display_name: "Assist Tip Rack 300 uL (96)"
-vendor: Integra
-source: integra
-specificity: concrete
-read_only: true
 legacy_labware_types:
   - tiprack_assist_300
 topology:

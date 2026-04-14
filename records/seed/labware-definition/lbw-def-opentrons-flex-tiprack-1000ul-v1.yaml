@@ -4,10 +4,6 @@ recordId: lbw-def-opentrons-flex-tiprack-1000ul-v1
 type: labware_definition
 id: opentrons_flex/tiprack_1000ul@v1
 display_name: "Flex Tip Rack 1000 uL"
-vendor: Opentrons
-source: opentrons
-specificity: concrete
-read_only: true
 legacy_labware_types:
   - tiprack_flex_1000
 topology:

@@ -4,8 +4,6 @@ recordId: lbw-def-generic-reservoir-1-v1
 type: labware_definition
 id: generic/reservoir_1@v1
 display_name: "Single Reservoir"
-source: generic
-specificity: generic
 legacy_labware_types:
   - reservoir_1
 topology:

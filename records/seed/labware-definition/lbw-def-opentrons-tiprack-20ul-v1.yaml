@@ -4,10 +4,6 @@ recordId: lbw-def-opentrons-tiprack-20ul-v1
 type: labware_definition
 id: opentrons/tiprack_20ul@v1
 display_name: "OT-2 Tip Rack 20 uL"
-vendor: Opentrons
-source: opentrons
-specificity: concrete
-read_only: true
 legacy_labware_types:
   - tiprack_ot2_20
 topology:

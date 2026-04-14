@@ -4,10 +4,6 @@ recordId: lbw-def-integra-tiprack-125ul-384-v1
 type: labware_definition
 id: integra/tiprack_125ul_384@v1
 display_name: "Assist Tip Rack 125 uL (384)"
-vendor: Integra
-source: integra
-specificity: concrete
-read_only: true
 legacy_labware_types:
   - tiprack_assist_125_384
 topology:
