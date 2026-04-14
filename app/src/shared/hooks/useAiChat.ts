@@ -60,6 +60,7 @@ export interface UseAiChatReturn {
   acceptPreviewWithResolutions: (resolutions: Map<string, RecordRef>) => void
   rejectPreview: () => void
   setPreviewEventState: (eventId: string, state: PreviewEventState) => void
+  setPreviewEvents: (events: PlateEvent[]) => void
   commitAcceptedPreviewEvents: () => Promise<void>
   clearHistory: () => void
   aiAvailable: boolean | null
@@ -122,6 +123,14 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
       next.set(eventId, state)
       return next
     })
+  }
+
+  // Test-only hook to set preview events directly (for e2e testing)
+  function setPreviewEventsTestOnly(events: PlateEvent[]) {
+    setPreviewEvents(events)
+    const nextStates = new Map<string, PreviewEventState>()
+    events.forEach((e) => nextStates.set(e.eventId, 'pending'))
+    setPreviewEventStatesMap(nextStates)
   }
 
   // Check health on mount
@@ -517,6 +526,7 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
     acceptPreviewWithResolutions,
     rejectPreview,
     setPreviewEventState,
+    setPreviewEvents: setPreviewEventsTestOnly,
     commitAcceptedPreviewEvents,
     clearHistory,
     aiAvailable,

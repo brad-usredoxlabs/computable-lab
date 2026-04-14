@@ -904,6 +904,25 @@ function LabwareEventEditorContent({
     },
   })
   useRegisterAiChat(aiChat)
+
+  // Test-only hooks for e2e testing of preview event badges
+  // Exposed on window only in dev/test builds
+  useEffect(() => {
+    if (import.meta.env.DEV || import.meta.env.VITEST) {
+      const win = window as any
+      win.__test_setPreviewEvents = (events: PlateEvent[]) => {
+        aiChat.setPreviewEvents(events)
+      }
+      win.__test_setPreviewEventState = (eventId: string, state: 'pending' | 'accepted' | 'rejected') => {
+        aiChat.setPreviewEventState(eventId, state)
+      }
+      return () => {
+        const win = window as any
+        delete win.__test_setPreviewEvents
+        delete win.__test_setPreviewEventState
+      }
+    }
+  }, [aiChat])
   const { platforms, loading: platformsLoading } = usePlatformRegistry()
   const deckPlatformManifest = useMemo(
     () => getPlatformManifest(platforms, deckPlatform),
