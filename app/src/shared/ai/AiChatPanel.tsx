@@ -283,13 +283,19 @@ export function AiChatPanel() {
             {/* Preview details and accept/reject controls */}
             {chat.previewEvents.length > 0 && (
               <>
-                <PreviewEventList previewEvents={chat.previewEvents} />
+                <PreviewEventList
+                  previewEvents={chat.previewEvents}
+                  previewEventStates={chat.previewEventStates}
+                  setPreviewEventState={chat.setPreviewEventState}
+                />
                 <PreviewBanner
                   previewEvents={chat.previewEvents}
                   previewLabwareAdditions={chat.previewLabwareAdditions}
+                  previewEventStates={chat.previewEventStates}
                   unresolvedCount={chat.unresolvedRefs.length}
                   onAccept={handleAccept}
                   onReject={chat.rejectPreview}
+                  onCommitAccepted={chat.commitAcceptedPreviewEvents}
                   isAccepting={chat.isAccepting}
                 />
               </>

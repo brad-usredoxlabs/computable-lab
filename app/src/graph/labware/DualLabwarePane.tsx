@@ -20,6 +20,7 @@ import { computeLabwareStates } from '../lib/eventGraph'
 import { getEventFocusTargets } from '../lib/eventFocus'
 import { getEventSummary } from '../../types/events'
 import { getLabwareDefaultOrientation, isTipRackType } from '../../types/labware'
+import type { PreviewEventState } from '../../shared/hooks/useAiChat'
 
 interface DualLabwarePaneProps {
   /** Active editor mode */
@@ -34,6 +35,8 @@ interface DualLabwarePaneProps {
   onValidation?: (messages: ValidationMessage[]) => void
   /** AI preview events (shown as purple overlay) */
   previewEvents?: PlateEvent[]
+  /** Per-event preview state for filtering rejected events */
+  previewEventStates?: Map<string, PreviewEventState>
   /** Lock tiprack orientation to landscape */
   lockLandscapeTipracks?: boolean
   /** Whether a labware can currently rotate in the active deck/platform context */
@@ -99,6 +102,7 @@ export function DualLabwarePane({
   toolExpander,
   onValidation,
   previewEvents = [],
+  previewEventStates,
   lockLandscapeTipracks = false,
   canRotateLabware,
   getRotateDisabledReason,
@@ -293,7 +297,12 @@ export function DualLabwarePane({
     const contents = new Map<WellId, { color?: string }>()
     if (!sourceLabware || previewEvents.length === 0) return contents
 
-    previewEvents.forEach((event) => {
+    // Filter out rejected events
+    const visiblePreviewEvents = previewEvents.filter(
+      (e) => (previewEventStates?.get(e.eventId) ?? 'pending') !== 'rejected',
+    )
+
+    visiblePreviewEvents.forEach((event) => {
       const details = event.details as Record<string, unknown>
       const eventLabwareId = details.labwareId as string
       const normalized = normalizeTransferDetails(event.details as TransferDetails)
@@ -310,14 +319,19 @@ export function DualLabwarePane({
       }
     })
     return contents
-  }, [previewEvents, sourceLabware])
+  }, [previewEvents, previewEventStates, sourceLabware])
 
   // Calculate preview well contents for target labware
   const targetPreviewWells = useMemo(() => {
     const contents = new Map<WellId, { color?: string }>()
     if (!targetLabware || previewEvents.length === 0) return contents
 
-    previewEvents.forEach((event) => {
+    // Filter out rejected events
+    const visiblePreviewEvents = previewEvents.filter(
+      (e) => (previewEventStates?.get(e.eventId) ?? 'pending') !== 'rejected',
+    )
+
+    visiblePreviewEvents.forEach((event) => {
       const details = event.details as Record<string, unknown>
       const eventLabwareId = details.labwareId as string
       const normalized = normalizeTransferDetails(event.details as TransferDetails)
@@ -334,7 +348,7 @@ export function DualLabwarePane({
       }
     })
     return contents
-  }, [previewEvents, targetLabware])
+  }, [previewEvents, previewEventStates, targetLabware])
 
   // Handlers for source pane
   const handleSourceSelectWells = useCallback(

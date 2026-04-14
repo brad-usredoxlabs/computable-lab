@@ -7,18 +7,21 @@
 import { useMemo } from 'react'
 import type { PlateEvent } from '../../types/events'
 import type { AiLabwareAddition } from '../../types/ai'
+import type { PreviewEventState } from '../hooks/useAiChat'
 import { getAffectedWells } from '../../types/events'
 
 interface PreviewBannerProps {
   previewEvents: PlateEvent[]
   previewLabwareAdditions?: AiLabwareAddition[]
+  previewEventStates?: Map<string, PreviewEventState>
   unresolvedCount?: number
   onAccept: () => void
   onReject: () => void
+  onCommitAccepted?: () => void
   isAccepting?: boolean
 }
 
-export function PreviewBanner({ previewEvents, previewLabwareAdditions = [], unresolvedCount, onAccept, onReject, isAccepting = false }: PreviewBannerProps) {
+export function PreviewBanner({ previewEvents, previewLabwareAdditions = [], previewEventStates, unresolvedCount, onAccept, onReject, onCommitAccepted, isAccepting = false }: PreviewBannerProps) {
   const wellCount = useMemo(() => {
     const allWells = new Set<string>()
     for (const event of previewEvents) {
@@ -28,6 +31,15 @@ export function PreviewBanner({ previewEvents, previewLabwareAdditions = [], unr
     }
     return allWells.size
   }, [previewEvents])
+
+  const acceptedCount = useMemo(() => {
+    if (!previewEventStates) return 0
+    let count = 0
+    for (const state of previewEventStates.values()) {
+      if (state === 'accepted') count++
+    }
+    return count
+  }, [previewEventStates])
 
   if (previewEvents.length === 0 && previewLabwareAdditions.length === 0) return null
 
@@ -48,15 +60,17 @@ export function PreviewBanner({ previewEvents, previewLabwareAdditions = [], unr
           </ul>
         </div>
       )}
-      <span className="preview-banner__info">
-        {previewEvents.length} event{previewEvents.length !== 1 ? 's' : ''}
-        {wellCount > 0 && ` · ${wellCount} well${wellCount !== 1 ? 's' : ''}`}
-        {unresolvedCount != null && unresolvedCount > 0 && (
-          <span className="preview-banner__unresolved">
-            {' '}&middot; {unresolvedCount} new material{unresolvedCount !== 1 ? 's' : ''}
-          </span>
-        )}
-      </span>
+      {previewEvents.length > 0 && (
+        <span className="preview-banner__info">
+          {previewEvents.length} event{previewEvents.length !== 1 ? 's' : ''}
+          {wellCount > 0 && ` · ${wellCount} well${wellCount !== 1 ? 's' : ''}`}
+          {unresolvedCount != null && unresolvedCount > 0 && (
+            <span className="preview-banner__unresolved">
+              {' '}&middot; {unresolvedCount} new material{unresolvedCount !== 1 ? 's' : ''}
+            </span>
+          )}
+        </span>
+      )}
       <div className="preview-banner__actions">
         <button
           className="preview-banner__btn preview-banner__btn--reject"
@@ -64,6 +78,13 @@ export function PreviewBanner({ previewEvents, previewLabwareAdditions = [], unr
           disabled={isAccepting}
         >
           Reject
+        </button>
+        <button
+          className="preview-banner__btn preview-banner__btn--commit"
+          onClick={onCommitAccepted}
+          disabled={acceptedCount === 0 || isAccepting || !onCommitAccepted}
+        >
+          Commit Accepted ({acceptedCount})
         </button>
         <button
           className="preview-banner__btn preview-banner__btn--accept"
@@ -167,6 +188,15 @@ export function PreviewBanner({ previewEvents, previewLabwareAdditions = [], unr
 
         .preview-banner__btn--reject:hover {
           background: #e03131;
+        }
+
+        .preview-banner__btn--commit {
+          background: #339af0;
+          color: white;
+        }
+
+        .preview-banner__btn--commit:hover {
+          background: #228be6;
         }
 
         .preview-banner__btn:disabled {

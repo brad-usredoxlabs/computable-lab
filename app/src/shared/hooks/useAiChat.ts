@@ -43,12 +43,15 @@ function buildConversationHistory(messages: ChatMessage[]): AiConversationMessag
     }))
 }
 
+export type PreviewEventState = 'pending' | 'accepted' | 'rejected'
+
 export interface UseAiChatReturn {
   messages: ChatMessage[]
   isStreaming: boolean
   isAccepting: boolean
   previewEvents: PlateEvent[]
   previewLabwareAdditions: AiLabwareAddition[]
+  previewEventStates: Map<string, PreviewEventState>
   hasPreview: boolean
   unresolvedRefs: OntologyRefProposal[]
   sendPrompt: (prompt: string, attachments?: FileAttachment[]) => void
@@ -56,6 +59,8 @@ export interface UseAiChatReturn {
   acceptPreview: () => void
   acceptPreviewWithResolutions: (resolutions: Map<string, RecordRef>) => void
   rejectPreview: () => void
+  setPreviewEventState: (eventId: string, state: PreviewEventState) => void
+  commitAcceptedPreviewEvents: () => Promise<void>
   clearHistory: () => void
   aiAvailable: boolean | null
   recheckHealth: () => void
@@ -88,6 +93,7 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
   const [isAccepting, setIsAccepting] = useState(false)
   const [previewEvents, setPreviewEvents] = useState<PlateEvent[]>([])
   const [previewLabwareAdditions, setPreviewLabwareAdditions] = useState<AiLabwareAddition[]>([])
+  const [previewEventStates, setPreviewEventStatesMap] = useState<Map<string, PreviewEventState>>(new Map())
   const [unresolvedRefs, setUnresolvedRefs] = useState<OntologyRefProposal[]>([])
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null)
 
@@ -106,6 +112,17 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
   // Ref to the labware addition handler.
   const addLabwareFromRecordRef = useRef(onAddLabwareFromRecord)
   addLabwareFromRecordRef.current = onAddLabwareFromRecord
+
+  // ------------------------------------------------------------------
+  // Per-event preview state
+  // ------------------------------------------------------------------
+  function setPreviewEventState(eventId: string, state: PreviewEventState) {
+    setPreviewEventStatesMap((prev) => {
+      const next = new Map(prev)
+      next.set(eventId, state)
+      return next
+    })
+  }
 
   // Check health on mount
   const checkHealth = useCallback(() => {
@@ -206,6 +223,12 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
             const result = event.result
             setPreviewEvents(result.events ?? [])
             setPreviewLabwareAdditions(result.labwareAdditions ?? [])
+            // Initialize preview event states to 'pending' for all new events
+            const nextStates = new Map<string, PreviewEventState>()
+            ;(result.events ?? []).forEach((e: PlateEvent) => {
+              nextStates.set(e.eventId, 'pending')
+            })
+            setPreviewEventStatesMap(nextStates)
             const pending = (result.unresolvedRefs ?? []).filter(
               (p) => p?.ref?.id && !resolvedCache.current.has(p.ref.id)
             )
@@ -226,6 +249,21 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
                   : m
               )
             )
+            // Check for empty-success case: AI completed but proposed nothing
+            const hasEvents = (result.events?.length ?? 0) > 0
+            const hasLabware = (result.labwareAdditions?.length ?? 0) > 0
+            if (result.success && !hasEvents && !hasLabware) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `sys-${Date.now()}`,
+                  role: 'system',
+                  content: 'AI completed the task but did not propose any changes.',
+                  timestamp: Date.now(),
+                  isStreaming: false,
+                },
+              ])
+            }
             break
           }
 
@@ -393,6 +431,7 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
     const count = previewEvents.length
     setPreviewEvents([])
     setPreviewLabwareAdditions([])
+    setPreviewEventStatesMap(new Map())
     setUnresolvedRefs([])
     setMessages((prev) => [
       ...prev,
@@ -404,6 +443,54 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
       },
     ])
   }, [previewEvents])
+
+  // ------------------------------------------------------------------
+  // Commit accepted preview events
+  // ------------------------------------------------------------------
+  const commitAcceptedPreviewEvents = useCallback(async () => {
+    const toApply = previewEvents.filter(
+      (e) => previewEventStates.get(e.eventId) === 'accepted',
+    )
+
+    // Apply labware additions first (same as acceptPreview)
+    if (previewLabwareAdditions.length > 0) {
+      for (const addition of previewLabwareAdditions) {
+        try {
+          const record = await apiClient.getRecord(addition.recordId)
+          if (record && record.payload) {
+            addLabwareFromRecordRef.current?.(record.payload as Record<string, unknown>)
+          }
+        } catch {
+          // Silently skip labware additions that fail during commit
+        }
+      }
+    }
+
+    // Apply accepted events
+    const handler = onAcceptEventRef.current
+    if (handler) {
+      for (const event of toApply) {
+        handler(event)
+      }
+    }
+
+    // Clear all preview state
+    setPreviewEvents([])
+    setPreviewLabwareAdditions([])
+    setPreviewEventStatesMap(new Map())
+
+    // Add system message
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `sys-${Date.now()}`,
+        role: 'system',
+        content: `Committed ${toApply.length} event${toApply.length === 1 ? '' : 's'}.`,
+        timestamp: Date.now(),
+        isStreaming: false,
+      },
+    ])
+  }, [previewEvents, previewEventStates, previewLabwareAdditions])
 
   // ------------------------------------------------------------------
   // Clear chat history
@@ -421,6 +508,7 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
     isAccepting,
     previewEvents,
     previewLabwareAdditions,
+    previewEventStates,
     hasPreview: previewEvents.length > 0,
     unresolvedRefs,
     sendPrompt,
@@ -428,6 +516,8 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
     acceptPreview,
     acceptPreviewWithResolutions,
     rejectPreview,
+    setPreviewEventState,
+    commitAcceptedPreviewEvents,
     clearHistory,
     aiAvailable,
     recheckHealth: checkHealth,

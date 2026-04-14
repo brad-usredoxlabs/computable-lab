@@ -11,9 +11,12 @@ import {
   getRefLabel,
   normalizeTransferDetails,
 } from '../../types/events'
+import type { PreviewEventState } from '../hooks/useAiChat'
 
 interface PreviewEventListProps {
   previewEvents: PlateEvent[]
+  previewEventStates: Map<string, PreviewEventState>
+  setPreviewEventState: (eventId: string, state: PreviewEventState) => void
 }
 
 function formatWellList(wells: WellId[]): string {
@@ -34,7 +37,7 @@ function paneStatusLabel(isSource: boolean, isTarget: boolean): string | null {
   return 'Not currently focused'
 }
 
-export function PreviewEventList({ previewEvents }: PreviewEventListProps) {
+export function PreviewEventList({ previewEvents, previewEventStates, setPreviewEventState }: PreviewEventListProps) {
   const editor = useOptionalLabwareEditor()
   const state = editor?.state
   const clearSelection = editor?.clearSelection
@@ -162,28 +165,78 @@ export function PreviewEventList({ previewEvents }: PreviewEventListProps) {
     <div className="preview-event-list">
       <div className="preview-event-list__header">Preview Changes</div>
       <div className="preview-event-list__rows">
-        {previewRows.map((row) => (
-          <button
-            key={row.key}
-            type="button"
-            className="preview-event-list__row"
-            onClick={() => handleFocus(row.focus)}
-          >
-            <span className="preview-event-list__accent" style={{ background: row.color }} />
-            <div className="preview-event-list__body">
-              <div className="preview-event-list__title-row">
-                <span className="preview-event-list__title">{row.title}</span>
-                <span className="preview-event-list__focus">Focus</span>
+        {previewRows.map((row) => {
+          const currentState = previewEventStates.get(row.key) ?? 'pending'
+          const borderColor = currentState === 'accepted'
+            ? '#40c057'
+            : currentState === 'rejected'
+              ? '#fa5252'
+              : '#c77dff'
+          return (
+            <button
+              key={row.key}
+              type="button"
+              className="preview-event-list__row"
+              style={{ borderColor }}
+              onClick={() => handleFocus(row.focus)}
+            >
+              <span className="preview-event-list__accent" style={{ background: row.color }} />
+              <div className="preview-event-list__body">
+                <div className="preview-event-list__title-row">
+                  <span className="preview-event-list__title">{row.title}</span>
+                  <span className="preview-event-list__focus">Focus</span>
+                </div>
+                <div className="preview-event-list__primary">{row.primary}</div>
+                {row.secondary && <div className="preview-event-list__secondary">{row.secondary}</div>}
+                <div className="preview-event-list__destination">{row.destination}</div>
+                {row.destinationStatus && (
+                  <div className="preview-event-list__status">{row.destinationStatus}</div>
+                )}
+                <div className="preview-event-controls">
+                  <button
+                    type="button"
+                    className="preview-event-controls__btn"
+                    aria-label="Accept event"
+                    data-state={currentState === 'accepted' ? 'active' : 'inactive'}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setPreviewEventState(row.key, 'accepted')
+                    }}
+                    title="Accept"
+                  >
+                    ✓
+                  </button>
+                  <button
+                    type="button"
+                    className="preview-event-controls__btn"
+                    aria-label="Reject event"
+                    data-state={currentState === 'rejected' ? 'active' : 'inactive'}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setPreviewEventState(row.key, 'rejected')
+                    }}
+                    title="Reject"
+                  >
+                    ✗
+                  </button>
+                  <button
+                    type="button"
+                    className="preview-event-controls__btn"
+                    aria-label="Reset to pending"
+                    data-state={currentState === 'pending' ? 'active' : 'inactive'}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setPreviewEventState(row.key, 'pending')
+                    }}
+                    title="Reset to pending"
+                  >
+                    ○
+                  </button>
+                </div>
               </div>
-              <div className="preview-event-list__primary">{row.primary}</div>
-              {row.secondary && <div className="preview-event-list__secondary">{row.secondary}</div>}
-              <div className="preview-event-list__destination">{row.destination}</div>
-              {row.destinationStatus && (
-                <div className="preview-event-list__status">{row.destinationStatus}</div>
-              )}
-            </div>
-          </button>
-        ))}
+            </button>
+          )
+        })}
       </div>
 
       <style>{`
@@ -288,6 +341,55 @@ export function PreviewEventList({ previewEvents }: PreviewEventListProps) {
           font-size: 0.72rem;
           font-weight: 600;
           color: #7c6f64;
+        }
+
+        .preview-event-controls {
+          display: flex;
+          gap: 0.25rem;
+          margin-top: 0.4rem;
+          justify-content: flex-end;
+        }
+
+        .preview-event-controls__btn {
+          width: 24px;
+          height: 24px;
+          border: 1px solid #dee2e6;
+          border-radius: 4px;
+          background: white;
+          font-size: 0.75rem;
+          cursor: pointer;
+          transition: all 0.15s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0;
+        }
+
+        .preview-event-controls__btn:hover {
+          transform: scale(1.1);
+        }
+
+        .preview-event-controls__btn[data-state="active"] {
+          background: #f0f0f0;
+          font-weight: 700;
+        }
+
+        .preview-event-controls__btn[aria-label="Accept event"][data-state="active"] {
+          background: #d3f9d8;
+          border-color: #40c057;
+          color: #2f9e44;
+        }
+
+        .preview-event-controls__btn[aria-label="Reject event"][data-state="active"] {
+          background: #ffc9c9;
+          border-color: #fa5252;
+          color: #e03131;
+        }
+
+        .preview-event-controls__btn[aria-label="Reset to pending"][data-state="active"] {
+          background: #e7e5ee;
+          border-color: #c77dff;
+          color: #7b2cbf;
         }
       `}</style>
     </div>
