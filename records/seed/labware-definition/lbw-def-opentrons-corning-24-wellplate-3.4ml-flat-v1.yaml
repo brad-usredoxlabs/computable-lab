@@ -1,0 +1,31 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-opentrons-corning-24-wellplate-3.4ml-flat-v1
+type: labware_definition
+id: opentrons/corning_24_wellplate_3.4ml_flat@v1
+display_name: "corning_24_wellplate_3.4ml_flat"
+vendor: Opentrons
+source: opentrons
+specificity: concrete
+read_only: true
+platform_aliases:
+  - platform: opentrons_ot2
+    alias: corning_24_wellplate_3.4ml_flat
+  - platform: opentrons_flex
+    alias: corning_24_wellplate_3.4ml_flat
+legacy_labware_types:
+  - tubeset_24
+topology:
+  addressing: grid
+  rows: 4
+  columns: 6
+  well_pitch_mm: 13.5
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 3400
+  min_working_volume_uL: 50
+render_hints:
+  profile: tubeset

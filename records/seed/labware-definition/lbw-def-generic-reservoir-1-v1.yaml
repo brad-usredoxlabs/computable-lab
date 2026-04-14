@@ -1,0 +1,21 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-reservoir-1-v1
+type: labware_definition
+id: generic/reservoir_1@v1
+display_name: "Single Reservoir"
+source: generic
+specificity: generic
+legacy_labware_types:
+  - reservoir_1
+topology:
+  addressing: single
+  orientation_default: portrait
+  orientation_allowed:
+    - portrait
+    - landscape
+capacity:
+  max_well_volume_uL: 300000
+  min_working_volume_uL: 5000
+render_hints:
+  profile: reservoir

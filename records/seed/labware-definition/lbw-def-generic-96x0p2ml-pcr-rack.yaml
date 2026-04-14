@@ -1,0 +1,24 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-96x0p2ml-pcr-rack
+type: labware_definition
+id: generic/96x0p2ml_pcr_rack@v1
+display_name: "Generic 96-Position 0.2 mL PCR Strip Tube Rack"
+source: generic
+specificity: generic
+legacy_labware_types:
+  - tubeset_96x0p2ml
+topology:
+  addressing: grid
+  rows: 8
+  columns: 12
+  well_pitch_mm: 9
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 200
+  min_working_volume_uL: 10
+render_hints:
+  profile: tubeset

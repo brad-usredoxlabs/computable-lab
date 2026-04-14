@@ -1,0 +1,24 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-384-well-plate
+type: labware_definition
+id: generic/384_well_plate@v1
+display_name: Generic 384-Well Plate
+source: generic
+specificity: generic
+legacy_labware_types:
+  - plate_384
+topology:
+  addressing: grid
+  rows: 16
+  columns: 24
+  well_pitch_mm: 4.5
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 150
+  min_working_volume_uL: 5
+render_hints:
+  profile: plate

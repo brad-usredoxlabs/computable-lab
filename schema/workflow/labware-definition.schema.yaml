@@ -129,3 +129,14 @@ properties:
 
   notes:
     type: string
+
+  legacy_labware_types:
+    type: array
+    items:
+      type: string
+    description: "Legacy LabwareType enum values this definition satisfies."
+
+  render_hints:
+    type: object
+    additionalProperties: true
+    description: "Rendering hints for the labware definition."

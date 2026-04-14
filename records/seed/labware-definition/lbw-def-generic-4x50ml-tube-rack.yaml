@@ -1,0 +1,24 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-4x50ml-tube-rack
+type: labware_definition
+id: generic/4x50ml_tube_rack@v1
+display_name: "Generic 4-Position 50 mL Conical Tube Rack"
+source: generic
+specificity: generic
+legacy_labware_types:
+  - tubeset_4x50ml
+topology:
+  addressing: grid
+  rows: 2
+  columns: 2
+  well_pitch_mm: 30
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 50000
+  min_working_volume_uL: 500
+render_hints:
+  profile: tubeset

@@ -1,0 +1,24 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-6x15ml-tube-rack
+type: labware_definition
+id: generic/6x15ml_tube_rack@v1
+display_name: "Generic 6-Position 15 mL Conical Tube Rack"
+source: generic
+specificity: generic
+legacy_labware_types:
+  - tubeset_6x15ml
+topology:
+  addressing: grid
+  rows: 2
+  columns: 3
+  well_pitch_mm: 20
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 15000
+  min_working_volume_uL: 200
+render_hints:
+  profile: tubeset

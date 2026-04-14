@@ -1,0 +1,28 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-12-reservoir
+type: labware_definition
+id: generic/reservoir_12@v1
+display_name: Generic 12-Channel Reservoir
+source: generic
+specificity: generic
+legacy_labware_types:
+  - reservoir_12
+topology:
+  addressing: linear
+  linear_count: 12
+  linear_axis: x
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 25000
+  min_working_volume_uL: 500
+aspiration_hints:
+  multichannel_source_mode: single_well
+  single_well_multichannel_source: true
+  per_channel_source_expected: false
+render_hints:
+  profile: reservoir
+  linear_well_style: trough

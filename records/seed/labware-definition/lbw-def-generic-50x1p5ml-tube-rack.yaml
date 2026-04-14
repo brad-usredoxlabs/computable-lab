@@ -1,0 +1,24 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-50x1p5ml-tube-rack
+type: labware_definition
+id: generic/50x1p5ml_tube_rack@v1
+display_name: "Generic 50-Position 1.5 mL Tube Rack"
+source: generic
+specificity: generic
+legacy_labware_types:
+  - tubeset_50x1p5ml
+topology:
+  addressing: grid
+  rows: 5
+  columns: 10
+  well_pitch_mm: 13
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 1500
+  min_working_volume_uL: 50
+render_hints:
+  profile: tubeset

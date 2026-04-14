@@ -1,0 +1,33 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-opentrons-nest-12-reservoir-22ml-v1
+type: labware_definition
+id: opentrons/nest_12_reservoir_22ml@v1
+display_name: "12-Channel Reservoir"
+vendor: Opentrons
+read_only: true
+platform_aliases:
+  - platform: opentrons_ot2
+    alias: nest_12_reservoir_22ml
+  - platform: opentrons_flex
+    alias: nest_12_reservoir_22ml
+legacy_labware_types:
+  - reservoir_12
+topology:
+  addressing: linear
+  linear_count: 12
+  linear_axis: x
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 22000
+  min_working_volume_uL: 1000
+aspiration_hints:
+  multichannel_source_mode: single_well
+  single_well_multichannel_source: true
+  per_channel_source_expected: false
+render_hints:
+  profile: reservoir
+  linear_well_style: trough

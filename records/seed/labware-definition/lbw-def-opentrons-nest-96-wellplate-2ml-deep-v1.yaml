@@ -1,0 +1,31 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-opentrons-nest-96-wellplate-2ml-deep-v1
+type: labware_definition
+id: opentrons/nest_96_wellplate_2ml_deep@v1
+display_name: "NEST 96 Well Plate 2 mL Deep"
+vendor: Opentrons
+source: opentrons
+specificity: concrete
+read_only: true
+platform_aliases:
+  - platform: opentrons_ot2
+    alias: nest_96_wellplate_2ml_deep
+  - platform: opentrons_flex
+    alias: nest_96_wellplate_2ml_deep
+legacy_labware_types:
+  - deepwell_96
+topology:
+  addressing: grid
+  rows: 8
+  columns: 12
+  well_pitch_mm: 9
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 2000
+  min_working_volume_uL: 1
+render_hints:
+  profile: plate

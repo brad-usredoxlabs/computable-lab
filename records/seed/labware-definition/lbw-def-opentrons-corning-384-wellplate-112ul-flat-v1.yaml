@@ -1,0 +1,31 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-opentrons-corning-384-wellplate-112ul-flat-v1
+type: labware_definition
+id: opentrons/corning_384_wellplate_112ul_flat@v1
+display_name: "Corning 384 Well Plate 112 µL Flat"
+vendor: Opentrons
+source: opentrons
+specificity: concrete
+read_only: true
+platform_aliases:
+  - platform: opentrons_ot2
+    alias: corning_384_wellplate_112ul_flat
+  - platform: opentrons_flex
+    alias: corning_384_wellplate_112ul_flat
+legacy_labware_types:
+  - plate_384
+topology:
+  addressing: grid
+  rows: 16
+  columns: 24
+  well_pitch_mm: 4.5
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 112
+  min_working_volume_uL: 1
+render_hints:
+  profile: plate

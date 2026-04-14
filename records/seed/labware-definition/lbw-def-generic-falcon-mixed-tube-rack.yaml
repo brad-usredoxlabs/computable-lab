@@ -1,0 +1,25 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-falcon-mixed-tube-rack
+type: labware_definition
+id: generic/falcon_mixed_tube_rack@v1
+display_name: "Generic 10-Tube Falcon Rack (4×50 mL + 6×15 mL)"
+source: generic
+specificity: generic
+notes: "Opentrons-compatible mixed tube rack. Wells A1, B1, A2, B2, A3, B3 hold 15 mL conicals (15000 µL max). Wells A4, B4, A5, B5 hold 50 mL conicals (50000 µL max)."
+legacy_labware_types:
+  - tubeset_mixed_4x50ml_6x15ml
+topology:
+  addressing: grid
+  rows: 2
+  columns: 5
+  well_pitch_mm: 30
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 50000
+  min_working_volume_uL: 200
+render_hints:
+  profile: tubeset

@@ -1,0 +1,21 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-tube-1-v1
+type: labware_definition
+id: generic/tube_1@v1
+display_name: "Single Tube"
+source: generic
+specificity: generic
+legacy_labware_types:
+  - tube
+topology:
+  addressing: single
+  orientation_default: portrait
+  orientation_allowed:
+    - portrait
+    - landscape
+capacity:
+  max_well_volume_uL: 50000
+  min_working_volume_uL: 100
+render_hints:
+  profile: tube

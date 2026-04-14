@@ -1,0 +1,26 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-integra-tiprack-125ul-384-v1
+type: labware_definition
+id: integra/tiprack_125ul_384@v1
+display_name: "Assist Tip Rack 125 uL (384)"
+vendor: Integra
+source: integra
+specificity: concrete
+read_only: true
+legacy_labware_types:
+  - tiprack_assist_125_384
+topology:
+  addressing: grid
+  rows: 16
+  columns: 24
+  well_pitch_mm: 4.5
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 125
+  min_working_volume_uL: 1
+render_hints:
+  profile: tiprack
