@@ -1,0 +1,18 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-ethanol-70
+recordId: mat-seed-ethanol-70
+name: Ethanol, 70% (seed)
+domain: chemical
+definition: Ethanol solution at 70% concentration, commonly used for disinfection and sterilization.
+formula: C2H5OH
+chemical_properties:
+  cas: 64-17-5
+synonyms:
+  - EtOH 70%
+  - 70% ethanol
+  - 70% EtOH
+tags:
+  - solvent
+  - disinfectant
+  - seed

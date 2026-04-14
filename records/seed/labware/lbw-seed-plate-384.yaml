@@ -1,0 +1,19 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-plate-384
+name: Generic 384 Well Plate (seed)
+labwareType: plate
+format:
+  rows: 16
+  cols: 24
+  wellCount: 384
+  wellNaming: "A1..P24"
+manufacturer:
+  name: generic
+tags:
+  - seed
+  - plate
+  - 384-well
+aliases:
+  - "384-well plate"
+  - "384 well plate"

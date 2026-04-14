@@ -84,6 +84,7 @@ import type { PlatformRegistry } from './platform-registry/PlatformRegistry.js';
 import { ArtifactBlobStore } from './ingestion/ArtifactBlobStore.js';
 import { LifecycleEngine, loadLifecyclesFromDir } from './lifecycle/index.js';
 import { PolicyBundleService } from './policy/PolicyBundleService.js';
+import { createLabwareLookup } from './ai/compiler/labwareLookup.js';
 
 /**
  * Default server configuration.
@@ -480,11 +481,25 @@ export async function createServer(
     try {
       const inferenceClient = createInferenceClient(inferenceConfig);
       const toolBridge = createToolBridge(toolRegistry);
+      
+      // Placeholder deps - stub functions that return null
+      // A follow-up spec will wire real fetchers
+      const placeholderDeps = {
+        fetchMaterialSpec: async (_id: string) => null,
+        fetchAliquot: async (_id: string) => null,
+        fetchMaterial: async (_id: string) => null,
+        fetchLabware: async (_id: string) => null,
+        fetchProtocol: async (_id: string) => null,
+        fetchGraphComponent: async (_id: string) => null,
+        searchLabwareByHint: createLabwareLookup(ctx.store),
+      };
+      
       const orchestrator = createAgentOrchestrator(
         inferenceClient,
         toolBridge,
         inferenceConfig,
         agentConfig,
+        placeholderDeps,
       );
       currentOrchestrator = orchestrator;
       aiHandlersImpl = createAIHandlers(orchestrator);

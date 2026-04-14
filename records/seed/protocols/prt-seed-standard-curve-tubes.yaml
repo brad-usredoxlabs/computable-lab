@@ -1,0 +1,104 @@
+$schema: https://computable-lab.com/schema/computable-lab/protocol.schema.yaml
+kind: protocol
+recordId: prt-seed-standard-curve-tubes
+shortSlug: standard-curve-tubes
+title: 4-Point Standard Curve (1.5 mL Tubes)
+description: Seed protocol shipped with computable-lab for out-of-box usage. This protocol uses a tube rack for standard curve preparation.
+version: "1.0.0"
+state: effective
+tags:
+  - seed
+  - tube-rack
+roles:
+  labwareRoles:
+    - roleId: tube_rack
+      description: 50-position 1.5 mL tube rack for standard curve
+      expectedLabwareKinds:
+        - lbw-seed-tuberack-50x1p5ml
+      notes: "Uses tubeset_50x1p5ml labware type"
+  materialRoles:
+    - roleId: standard_stock
+      description: Standard stock solution
+      allowedMaterialIds:
+        - standard
+    - roleId: buffer
+      description: Buffer for dilution
+      allowedMaterialIds:
+        - buffer
+parameters: []
+steps:
+  - stepId: step-1
+    kind: add_material
+    label: Add buffer to positions A1-A4
+    target:
+      labwareRole: tube_rack
+    wells:
+      kind: explicit
+      wells:
+        - A1
+        - A2
+        - A3
+        - A4
+    material:
+      materialRole: buffer
+    volume_uL: 900
+  - stepId: step-2
+    kind: add_material
+    label: Add stock to A1
+    target:
+      labwareRole: tube_rack
+    wells:
+      kind: explicit
+      wells:
+        - A1
+    material:
+      materialRole: standard_stock
+    volume_uL: 100
+  - stepId: step-3
+    kind: transfer
+    label: Transfer from A1 to A2
+    source:
+      labwareRole: tube_rack
+      wells:
+        kind: explicit
+        wells:
+          - A1
+    target:
+      labwareRole: tube_rack
+      wells:
+        kind: explicit
+        wells:
+          - A2
+    volume_uL: 100
+  - stepId: step-4
+    kind: transfer
+    label: Transfer from A2 to A3
+    source:
+      labwareRole: tube_rack
+      wells:
+        kind: explicit
+        wells:
+          - A2
+    target:
+      labwareRole: tube_rack
+      wells:
+        kind: explicit
+        wells:
+          - A3
+    volume_uL: 100
+  - stepId: step-5
+    kind: transfer
+    label: Transfer from A3 to A4
+    source:
+      labwareRole: tube_rack
+      wells:
+        kind: explicit
+        wells:
+          - A3
+    target:
+      labwareRole: tube_rack
+      wells:
+        kind: explicit
+        wells:
+          - A4
+    volume_uL: 100

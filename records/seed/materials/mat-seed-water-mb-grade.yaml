@@ -1,0 +1,18 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-water-mb-grade
+recordId: mat-seed-water-mb-grade
+name: Water, molecular biology grade (seed)
+domain: chemical
+definition: High-purity water suitable for molecular biology applications, typically nuclease-free.
+formula: H2O
+chemical_properties:
+  cas: 7732-18-5
+synonyms:
+  - water
+  - H2O
+  - molecular grade water
+  - nuclease-free water
+tags:
+  - solvent
+  - seed

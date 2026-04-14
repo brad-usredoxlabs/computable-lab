@@ -1,0 +1,17 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-ethanol-absolute
+recordId: mat-seed-ethanol-absolute
+name: Ethanol, absolute (seed)
+domain: chemical
+definition: Absolute (100%) ethanol, a pure solvent used in chemical and biological applications.
+formula: C2H5OH
+chemical_properties:
+  cas: 64-17-5
+synonyms:
+  - Absolute ethanol
+  - 100% ethanol
+  - Anhydrous ethanol
+tags:
+  - solvent
+  - seed

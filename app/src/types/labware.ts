@@ -25,6 +25,12 @@ export type LabwareType =
   | 'reservoir_1'
   | 'tube'
   | 'tubeset_24'
+  // TODO: migrate to record-store-driven labware types (see task #13 / future UI-migration session)
+  | 'tubeset_6x15ml'
+  | 'tubeset_4x50ml'
+  | 'tubeset_50x1p5ml'
+  | 'tubeset_96x0p2ml'
+  | 'tubeset_mixed_4x50ml_6x15ml'
   | 'deepwell_96'
   | 'tiprack_ot2_20'
   | 'tiprack_ot2_200'
@@ -49,6 +55,11 @@ export const LABWARE_TYPE_LABELS: Record<LabwareType, string> = {
   reservoir_1: 'Single Reservoir',
   tube: 'Single Tube',
   tubeset_24: '24-Tube Rack',
+  tubeset_6x15ml: '6 × 15 mL Tube Rack',
+  tubeset_4x50ml: '4 × 50 mL Tube Rack',
+  tubeset_50x1p5ml: '50 × 1.5 mL Tube Rack',
+  tubeset_96x0p2ml: '96 × 0.2 mL PCR Tube Rack',
+  tubeset_mixed_4x50ml_6x15ml: '10-Tube Mixed Rack (4×50mL + 6×15mL)',
   deepwell_96: '96-Well Deep Well (2 mL)',
   tiprack_ot2_20: 'OT-2 Tip Rack 20 uL',
   tiprack_ot2_200: 'OT-2 Tip Rack 200 uL',
@@ -74,6 +85,11 @@ export const LABWARE_TYPE_ICONS: Record<LabwareType, string> = {
   reservoir_1: '🧴',
   tube: '🧪',
   tubeset_24: '🧪',
+  tubeset_6x15ml: '🧪',
+  tubeset_4x50ml: '🧪',
+  tubeset_50x1p5ml: '🧪',
+  tubeset_96x0p2ml: '🧪',
+  tubeset_mixed_4x50ml_6x15ml: '🧪',
   deepwell_96: '🔬',
   tiprack_ot2_20: '🪡',
   tiprack_ot2_200: '🪡',
@@ -101,6 +117,11 @@ export const LABWARE_CATEGORIES: Record<LabwareType, LabwareCategory> = {
   reservoir_1: 'reservoir',
   tube: 'tube',
   tubeset_24: 'tube',
+  tubeset_6x15ml: 'tube',
+  tubeset_4x50ml: 'tube',
+  tubeset_50x1p5ml: 'tube',
+  tubeset_96x0p2ml: 'tube',
+  tubeset_mixed_4x50ml_6x15ml: 'tube',
   deepwell_96: 'plate',
   tiprack_ot2_20: 'tiprack',
   tiprack_ot2_200: 'tiprack',
@@ -142,7 +163,7 @@ export interface LabwareGeometry {
   /** Minimum recommended volume in µL */
   minVolume_uL: number
   /** Well shape (optional for visualization) */
-  wellShape?: 'round' | 'square' | 'v-bottom'
+  wellShape?: 'round' | 'square' | 'v-bottom' | 'conical'
   /** Well diameter in mm (optional) */
   wellDiameter_mm?: number
 }
@@ -187,6 +208,8 @@ export interface Labware {
   notes?: string
   /** Source record ID if this labware was created from a persisted record */
   sourceRecordId?: string
+  /** Optional per-well geometry overrides for heterogeneous labware (e.g., mixed tube racks) */
+  wellOverrides?: Record<string, { maxVolume_uL?: number; wellShape?: 'round' | 'square' | 'v-bottom' | 'conical' }>
 }
 
 /**
@@ -307,6 +330,121 @@ export const LABWARE_CONFIGS: Record<LabwareType, Omit<Labware, 'labwareId' | 'n
     wellPitch_mm: 13.5,
     orientationPolicy: 'rotatable',
     color: '#fd7e14',
+  },
+  // TODO: migrate to record-store-driven labware types (see task #13 / future UI-migration session)
+  tubeset_6x15ml: {
+    labwareType: 'tubeset_6x15ml',
+    addressing: {
+      type: 'grid',
+      rows: 2,
+      columns: 3,
+      rowLabels: ['A', 'B'],
+      columnLabels: ['1', '2', '3'],
+    },
+    geometry: {
+      maxVolume_uL: 15000,
+      minVolume_uL: 200,
+      wellShape: 'conical',
+    },
+    layoutFamily: 'tube',
+    wellPitch_mm: 20,
+    orientationPolicy: 'rotatable',
+    color: '#fd7e14',
+  },
+  tubeset_4x50ml: {
+    labwareType: 'tubeset_4x50ml',
+    addressing: {
+      type: 'grid',
+      rows: 2,
+      columns: 2,
+      rowLabels: ['A', 'B'],
+      columnLabels: ['1', '2'],
+    },
+    geometry: {
+      maxVolume_uL: 50000,
+      minVolume_uL: 500,
+      wellShape: 'conical',
+    },
+    layoutFamily: 'tube',
+    wellPitch_mm: 30,
+    orientationPolicy: 'rotatable',
+    color: '#fd7e14',
+  },
+  tubeset_50x1p5ml: {
+    labwareType: 'tubeset_50x1p5ml',
+    addressing: {
+      type: 'grid',
+      rows: 5,
+      columns: 10,
+      rowLabels: ['A', 'B', 'C', 'D', 'E'],
+      columnLabels: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'],
+    },
+    geometry: {
+      maxVolume_uL: 1500,
+      minVolume_uL: 50,
+      wellShape: 'round',
+    },
+    layoutFamily: 'tube',
+    wellPitch_mm: 13,
+    orientationPolicy: 'rotatable',
+    color: '#fd7e14',
+  },
+  tubeset_96x0p2ml: {
+    labwareType: 'tubeset_96x0p2ml',
+    addressing: {
+      type: 'grid',
+      rows: 8,
+      columns: 12,
+      rowLabels: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'],
+      columnLabels: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
+    },
+    geometry: {
+      maxVolume_uL: 200,
+      minVolume_uL: 10,
+      wellShape: 'round',
+    },
+    layoutFamily: 'tube',
+    wellPitch_mm: 9,
+    orientationPolicy: 'rotatable',
+    color: '#fd7e14',
+  },
+  // Opentrons opentrons_10_tuberack_falcon_4x50ml_6x15ml_conical.
+  // Wells A1, B1, A2, B2, A3, B3 hold 15 mL conicals.
+  // Wells A4, B4, A5, B5 hold 50 mL conicals.
+  // Geometry and max volume vary per cell — use heterogeneous well
+  // entries below.
+  // Note: wellOverrides is an optional field added to support mixed-tube racks.
+  // It is not part of the YAML schema, only the TypeScript config type.
+  tubeset_mixed_4x50ml_6x15ml: {
+    labwareType: 'tubeset_mixed_4x50ml_6x15ml',
+    addressing: {
+      type: 'grid',
+      rows: 2,
+      columns: 5,
+      rowLabels: ['A', 'B'],
+      columnLabels: ['1', '2', '3', '4', '5'],
+    },
+    geometry: {
+      maxVolume_uL: 15000,
+      minVolume_uL: 50,
+      wellShape: 'conical',
+    },
+    layoutFamily: 'tube',
+    wellPitch_mm: 25,
+    orientationPolicy: 'rotatable',
+    color: '#fd7e14',
+    wellOverrides: {
+      A1: { maxVolume_uL: 15000, wellShape: 'conical' },
+      B1: { maxVolume_uL: 15000, wellShape: 'conical' },
+      A2: { maxVolume_uL: 15000, wellShape: 'conical' },
+      B2: { maxVolume_uL: 15000, wellShape: 'conical' },
+      A3: { maxVolume_uL: 15000, wellShape: 'conical' },
+      B3: { maxVolume_uL: 15000, wellShape: 'conical' },
+      A4: { maxVolume_uL: 50000, wellShape: 'conical' },
+      B4: { maxVolume_uL: 50000, wellShape: 'conical' },
+      A5: { maxVolume_uL: 50000, wellShape: 'conical' },
+      B5: { maxVolume_uL: 50000, wellShape: 'conical' },
+    },
   },
   deepwell_96: {
     labwareType: 'deepwell_96',

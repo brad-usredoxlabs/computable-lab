@@ -15,9 +15,10 @@ interface PreviewBannerProps {
   unresolvedCount?: number
   onAccept: () => void
   onReject: () => void
+  isAccepting?: boolean
 }
 
-export function PreviewBanner({ previewEvents, previewLabwareAdditions = [], unresolvedCount, onAccept, onReject }: PreviewBannerProps) {
+export function PreviewBanner({ previewEvents, previewLabwareAdditions = [], unresolvedCount, onAccept, onReject, isAccepting = false }: PreviewBannerProps) {
   const wellCount = useMemo(() => {
     const allWells = new Set<string>()
     for (const event of previewEvents) {
@@ -57,13 +58,23 @@ export function PreviewBanner({ previewEvents, previewLabwareAdditions = [], unr
         )}
       </span>
       <div className="preview-banner__actions">
-        <button className="preview-banner__btn preview-banner__btn--reject" onClick={onReject}>
+        <button
+          className="preview-banner__btn preview-banner__btn--reject"
+          onClick={onReject}
+          disabled={isAccepting}
+        >
           Reject
         </button>
-        <button className="preview-banner__btn preview-banner__btn--accept" onClick={onAccept}>
-          {unresolvedCount != null && unresolvedCount > 0
-            ? 'Accept & Create Materials…'
-            : 'Accept'}
+        <button
+          className="preview-banner__btn preview-banner__btn--accept"
+          onClick={onAccept}
+          disabled={isAccepting}
+        >
+          {isAccepting
+            ? 'Accepting…'
+            : unresolvedCount != null && unresolvedCount > 0
+              ? 'Accept & Create Materials…'
+              : 'Accept'}
         </button>
       </div>
 
@@ -156,6 +167,12 @@ export function PreviewBanner({ previewEvents, previewLabwareAdditions = [], unr
 
         .preview-banner__btn--reject:hover {
           background: #e03131;
+        }
+
+        .preview-banner__btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          pointer-events: none;
         }
       `}</style>
     </div>

@@ -1,0 +1,14 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-tuberack-4x50ml
+name: Generic 4-Position 50 mL Conical Tube Rack (seed)
+labwareType: tubeset_4x50ml
+tags:
+  - seed
+  - tube-rack
+  - 50ml
+aliases:
+  - 50 mL tube rack
+  - 50ml tube rack
+  - 4-position tube rack
+  - falcon 50 rack

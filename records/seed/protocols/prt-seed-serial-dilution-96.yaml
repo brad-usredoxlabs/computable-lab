@@ -1,0 +1,212 @@
+$schema: https://computable-lab.com/schema/computable-lab/protocol.schema.yaml
+kind: protocol
+recordId: prt-seed-serial-dilution-96
+shortSlug: serial-dilution-96
+title: 10-Point Serial Dilution (96-Well Plate)
+description: Seed protocol shipped with computable-lab for out-of-box usage.
+version: "1.0.0"
+state: effective
+tags:
+  - seed
+roles:
+  labwareRoles:
+    - roleId: source_plate
+      description: Source 96-well plate containing stock solution
+      expectedLabwareKinds:
+        - lbw-seed-plate-96-flat
+    - roleId: dest_plate
+      description: Destination 96-well plate for serial dilution
+      expectedLabwareKinds:
+        - lbw-seed-plate-96-flat
+  materialRoles:
+    - roleId: stock
+      description: Stock solution to be diluted
+      allowedMaterialIds:
+        - generic_stock
+    - roleId: diluent
+      description: Diluent buffer
+      allowedMaterialIds:
+        - buffer
+parameters: []
+steps:
+  - stepId: step-1
+    kind: add_material
+    label: Add diluent to destination plate wells B1-B10
+    target:
+      labwareRole: dest_plate
+    wells:
+      kind: explicit
+      wells:
+        - B1
+        - B2
+        - B3
+        - B4
+        - B5
+        - B6
+        - B7
+        - B8
+        - B9
+        - B10
+    material:
+      materialRole: diluent
+    volume_uL: 180
+  - stepId: step-2
+    kind: transfer
+    label: Transfer stock to first dilution well
+    source:
+      labwareRole: source_plate
+      wells:
+        kind: explicit
+        wells:
+          - A1
+    target:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B1
+    volume_uL: 20
+  - stepId: step-3
+    kind: transfer
+    label: Serial transfer from B1 to B2
+    source:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B1
+    target:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B2
+    volume_uL: 20
+  - stepId: step-4
+    kind: transfer
+    label: Serial transfer from B2 to B3
+    source:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B2
+    target:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B3
+    volume_uL: 20
+  - stepId: step-5
+    kind: transfer
+    label: Serial transfer from B3 to B4
+    source:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B3
+    target:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B4
+    volume_uL: 20
+  - stepId: step-6
+    kind: transfer
+    label: Serial transfer from B4 to B5
+    source:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B4
+    target:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B5
+    volume_uL: 20
+  - stepId: step-7
+    kind: transfer
+    label: Serial transfer from B5 to B6
+    source:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B5
+    target:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B6
+    volume_uL: 20
+  - stepId: step-8
+    kind: transfer
+    label: Serial transfer from B6 to B7
+    source:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B6
+    target:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B7
+    volume_uL: 20
+  - stepId: step-9
+    kind: transfer
+    label: Serial transfer from B7 to B8
+    source:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B7
+    target:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B8
+    volume_uL: 20
+  - stepId: step-10
+    kind: transfer
+    label: Serial transfer from B8 to B9
+    source:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B8
+    target:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B9
+    volume_uL: 20
+  - stepId: step-11
+    kind: transfer
+    label: Serial transfer from B9 to B10
+    source:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B9
+    target:
+      labwareRole: dest_plate
+      wells:
+        kind: explicit
+        wells:
+          - B10
+    volume_uL: 20

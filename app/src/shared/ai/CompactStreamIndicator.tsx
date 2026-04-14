@@ -16,7 +16,16 @@ interface CompactStreamIndicatorProps {
 
 export function CompactStreamIndicator({ events, isStreaming }: CompactStreamIndicatorProps) {
   const [expanded, setExpanded] = useState(false)
-  if (events.length === 0) return null
+  if (events.length === 0) {
+    if (!isStreaming) return null
+    return (
+      <div className="stream-compact">
+        <span className="stream-compact__spinner" aria-hidden />
+        <span className="stream-compact__turn">Connecting…</span>
+        <CompactStreamStyles />
+      </div>
+    )
+  }
 
   const turnLabel = lastTurnLabel(events)       // e.g. "Turn 3" or ""
   const toolLabel = lastToolLabel(events)       // e.g. "search_records" or ""

@@ -1,0 +1,17 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-methanol
+recordId: mat-seed-methanol
+name: Methanol (seed)
+domain: chemical
+definition: Methanol, a simple alcohol used as a solvent and reagent in chemical and biological applications.
+formula: CH3OH
+chemical_properties:
+  cas: 67-56-1
+synonyms:
+  - Methanol
+  - Methyl alcohol
+  - Carbinol
+tags:
+  - solvent
+  - seed

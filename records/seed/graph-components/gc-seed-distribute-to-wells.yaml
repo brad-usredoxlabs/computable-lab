@@ -1,0 +1,32 @@
+$schema: https://computable-lab.com/schema/computable-lab/graph-component.schema.yaml
+kind: graph-component
+recordId: gc-seed-distribute-to-wells
+title: Distribute material to wells
+description: Reusable sub-procedure that distributes a specified volume of material to selected wells in a labware.
+state: published
+tags:
+  - seed
+  - distribute
+  - reusable
+roles:
+  labwareRoles:
+    - roleId: target_labware
+      description: Target labware to receive the material
+  materialRoles:
+    - roleId: material
+      description: Material to be distributed
+  parameterDefs:
+    - name: volume_uL
+      type: number
+      description: Volume in microliters to distribute to each well
+      required: true
+    - name: target_wells
+      type: array
+      description: List of well identifiers to receive the material
+      required: true
+template:
+  source:
+    kind: inline
+    eventIds:
+      - add_material_event
+notes: "This graph-component represents a reusable pattern for distributing material to multiple wells. When instantiated in a protocol, the target_labware role must be bound to a concrete labware instance, and the material role must be bound to a material revision."

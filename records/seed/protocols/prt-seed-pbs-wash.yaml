@@ -1,0 +1,47 @@
+$schema: https://computable-lab.com/schema/computable-lab/protocol.schema.yaml
+kind: protocol
+recordId: prt-seed-pbs-wash
+shortSlug: pbs-wash
+title: Generic PBS Wash
+description: Seed protocol shipped with computable-lab for out-of-box usage.
+version: "1.0.0"
+state: effective
+tags:
+  - seed
+roles:
+  labwareRoles:
+    - roleId: plate
+      description: 96-well plate to be washed
+      expectedLabwareKinds:
+        - lbw-seed-plate-96-flat
+  materialRoles:
+    - roleId: wash_buffer
+      description: PBS wash buffer
+      allowedMaterialIds:
+        - pbs_buffer
+parameters: []
+steps:
+  - stepId: step-1
+    kind: add_material
+    label: Add PBS to all wells
+    target:
+      labwareRole: plate
+    wells:
+      kind: all
+    material:
+      materialRole: wash_buffer
+    volume_uL: 200
+  - stepId: step-2
+    kind: incubate
+    label: Incubate
+    target:
+      labwareRole: plate
+    duration_min: 2
+  - stepId: step-3
+    kind: wash
+    label: Aspirate contents
+    target:
+      labwareRole: plate
+    wells:
+      kind: all
+    cycles: 1

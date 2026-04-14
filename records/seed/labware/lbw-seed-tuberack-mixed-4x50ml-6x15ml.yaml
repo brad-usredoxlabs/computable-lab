@@ -1,0 +1,16 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-tuberack-mixed-4x50ml-6x15ml
+name: Generic 10-Tube Falcon Rack, 4×50 mL + 6×15 mL (seed)
+labwareType: tubeset_mixed_4x50ml_6x15ml
+tags:
+  - seed
+  - tube-rack
+  - mixed
+  - opentrons
+aliases:
+  - falcon mixed rack
+  - 10-tube rack
+  - mixed tube rack
+  - opentrons tube rack
+notes: "Opentrons-compatible well labels: A1, B1, A2, B2, A3, B3 (15 mL conicals); A4, B4, A5, B5 (50 mL conicals)."

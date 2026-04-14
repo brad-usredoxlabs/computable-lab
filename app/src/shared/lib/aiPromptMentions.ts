@@ -1,6 +1,6 @@
 import type { PromptMention } from '../../types/ai'
 
-const MENTION_PATTERN = /\[\[(material|material-spec|aliquot|labware|selection):(.*?)\]\]/g
+const MENTION_PATTERN = /\[\[(material|material-spec|aliquot|labware|selection|protocol|graph-component):(.*?)\]\]/g
 
 export interface ParsedPromptMention {
   mention: PromptMention
@@ -19,6 +19,10 @@ export function formatLabwareMentionToken(id: string, label: string): string {
 
 export function formatSelectionMentionToken(selectionKind: 'source' | 'target', labwareId: string, wells: string[], label: string): string {
   return `[[selection:${selectionKind}|${labwareId}|${wells.join(',')}|${label}]]`
+}
+
+export function formatProtocolMentionToken(entityKind: 'protocol' | 'graph-component', id: string, label: string): string {
+  return `[[${entityKind}:${id}|${label}]]`
 }
 
 export function parsePromptMentionMatches(prompt: string): ParsedPromptMention[] {
@@ -76,6 +80,23 @@ export function parsePromptMentionMatches(prompt: string): ParsedPromptMention[]
         start,
         end,
       })
+      continue
+    }
+    if (kind === 'protocol' || kind === 'graph-component') {
+      const [id = '', label = id] = body.split('|')
+      if (!id) continue
+      mentions.push({
+        mention: {
+          type: 'protocol',
+          entityKind: kind,
+          id,
+          label,
+        },
+        raw,
+        start,
+        end,
+      })
+      continue
     }
   }
   return mentions

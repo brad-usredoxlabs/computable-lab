@@ -16,6 +16,9 @@ import type {
   RunTreeNode,
   IndexQuery,
 } from './types.js';
+import { resolveSeedRecordsDir } from './seedRecordsDir.js';
+import { readdirSync, statSync, readFileSync } from 'node:fs';
+import { join, extname } from 'node:path';
 
 const INDEX_VERSION = 1;
 const INDEX_PATH = 'records/_index/records.jsonl';
@@ -28,6 +31,68 @@ export interface IndexManagerConfig {
   baseDir?: string;
   /** Path for the index file (default: 'records/_index/records.jsonl') */
   indexPath?: string;
+}
+
+/**
+ * Internal helper to build an IndexEntry from parsed record data.
+ * Used by both repo-based and filesystem-based entry extraction.
+ */
+function buildIndexEntry(
+  recordId: string,
+  schemaId: string,
+  content: string,
+  filePath: string,
+  payload: Record<string, unknown>
+): IndexEntry {
+  // Extract links - handle both flat and nested formats
+  // Build links object only with defined values (exactOptionalPropertyTypes)
+  const rawStudyId = (payload.links as Record<string, unknown> | undefined)?.studyId 
+    ?? payload.studyId;
+  const rawExperimentId = (payload.links as Record<string, unknown> | undefined)?.experimentId 
+    ?? payload.experimentId;
+  const rawRunId = (payload.links as Record<string, unknown> | undefined)?.runId 
+    ?? payload.runId;
+  
+  const hasLinks = rawStudyId || rawExperimentId || rawRunId;
+  
+  // Determine status
+  let status: IndexEntry['status'] = 'draft';
+  if (payload.status === 'inbox' || payload.status === 'filed' || payload.status === 'draft') {
+    status = payload.status;
+  } else if (rawRunId) {
+    status = 'filed';
+  } else if (filePath.includes('_inbox/')) {
+    status = 'inbox';
+  }
+  
+  // Compute content hash
+  const hash = createHash('sha256').update(content).digest('hex').slice(0, 16);
+  
+  // Build entry with conditional properties (exactOptionalPropertyTypes)
+  const kind = payload.kind as string | undefined;
+  const title = (payload.title || payload.name || payload.label) as string | undefined;
+  const createdAt = payload.createdAt as string | undefined;
+  const updatedAt = payload.updatedAt as string | undefined;
+  
+  // Build links object conditionally
+  const links: IndexEntry['links'] = hasLinks ? {
+    ...(rawStudyId ? { studyId: rawStudyId as string } : {}),
+    ...(rawExperimentId ? { experimentId: rawExperimentId as string } : {}),
+    ...(rawRunId ? { runId: rawRunId as string } : {}),
+  } : undefined;
+  
+  return {
+    recordId,
+    schemaId,
+    status,
+    path: filePath,
+    hash,
+    ...(kind !== undefined ? { kind } : {}),
+    ...(title !== undefined ? { title } : {}),
+    ...(links !== undefined ? { links } : {}),
+    ...(createdAt !== undefined ? { createdAt } : {}),
+    ...(updatedAt !== undefined ? { updatedAt } : {}),
+  };
 }
 
 /**
@@ -88,8 +153,11 @@ export class IndexManager {
   
   /**
    * Rebuild the entire index by scanning all YAML files.
+   * 
+   * @param seedDir - Optional override for seed records directory path.
+   *                  If not provided, will auto-detect using resolveSeedRecordsDir().
    */
-  async rebuild(): Promise<RecordIndex> {
+  async rebuild(seedDir?: string | null): Promise<RecordIndex> {
     console.log('Rebuilding record index...');
     
     const files = await this.repo.listFiles({
@@ -114,6 +182,34 @@ export class IndexManager {
       }
     }
     
+    // Scan and merge seed records
+    const resolvedSeedDir = seedDir ?? resolveSeedRecordsDir();
+    if (resolvedSeedDir) {
+      const seedFiles = this.recursiveYamlFiles(resolvedSeedDir);
+      let seedCount = 0;
+      
+      for (const filePath of seedFiles) {
+        try {
+          const entry = await this.extractEntryFromContent(filePath);
+          if (entry) {
+            // Only add seed entry if no connected-lab record with same id exists
+            if (!this.entries.has(entry.recordId)) {
+              entries.push(entry);
+              this.entries.set(entry.recordId, entry);
+              seedCount++;
+            }
+          }
+        } catch (error) {
+          console.warn(`Failed to parse seed record ${filePath}:`, error);
+          // Skip malformed seed records, continue with others
+        }
+      }
+      
+      console.log(`[index-manager] merged ${seedCount} seed records from ${resolvedSeedDir}`);
+    } else {
+      console.log('[index-manager] no seed records found');
+    }
+    
     this.loaded = true;
     
     // Save to disk
@@ -129,16 +225,63 @@ export class IndexManager {
   }
   
   /**
-   * Extract an IndexEntry from a record file.
+   * Recursively find all YAML files in a directory.
+   * Uses node:fs directly to avoid adding dependencies.
    */
-  private async extractEntry(filePath: string): Promise<IndexEntry | null> {
+  private recursiveYamlFiles(dir: string): string[] {
+    const results: string[] = [];
+    
     try {
-      const file = await this.repo.getFile(filePath);
-      if (!file) {
+      const items = readdirSync(dir);
+      
+      for (const item of items) {
+        const fullPath = join(dir, item);
+        const stat = statSync(fullPath);
+        
+        if (stat.isDirectory()) {
+          // Recurse into subdirectories
+          results.push(...this.recursiveYamlFiles(fullPath));
+        } else if (extname(item) === '.yaml' || extname(item) === '.yml') {
+          results.push(fullPath);
+        }
+      }
+    } catch (error) {
+      console.warn(`Failed to scan directory ${dir}:`, error);
+    }
+    
+    return results;
+  }
+  
+  /**
+   * Extract an IndexEntry from a record file read from the filesystem.
+   * This is used for seed records which are read directly from disk.
+   * Reuses the extractEntry() logic by reading content first, then calling extractEntry().
+   */
+  private async extractEntryFromContent(filePath: string): Promise<IndexEntry | null> {
+    try {
+      const fileContent = readFileSync(filePath, 'utf-8');
+      return await this.extractEntry(filePath, fileContent);
+    } catch (error) {
+      console.warn(`Failed to extract entry from ${filePath}:`, error);
+      return null;
+    }
+  }
+  
+  /**
+   * Extract an IndexEntry from a record file.
+   * 
+   * @param filePath - Path to the record file
+   * @param content - Optional pre-fetched file content. If not provided, will read from repo.
+   */
+  private async extractEntry(filePath: string, content?: string): Promise<IndexEntry | null> {
+    try {
+      // If content not provided, read from repo
+      const fileContent = content ?? (await this.repo.getFile(filePath))?.content;
+      if (!fileContent) {
         return null;
       }
       
-      const result = parseRecord(file.content, filePath);
+      const result = parseRecord(fileContent, filePath);
       if (!result.success || !result.envelope) {
         return null;
       }
@@ -146,55 +289,16 @@ export class IndexManager {
       const { envelope } = result;
       const payload = envelope.payload as Record<string, unknown>;
       
-      // Extract links - handle both flat and nested formats
-      // Build links object only with defined values (exactOptionalPropertyTypes)
-      const rawStudyId = (payload.links as Record<string, unknown> | undefined)?.studyId 
-        ?? payload.studyId;
-      const rawExperimentId = (payload.links as Record<string, unknown> | undefined)?.experimentId 
-        ?? payload.experimentId;
-      const rawRunId = (payload.links as Record<string, unknown> | undefined)?.runId 
-        ?? payload.runId;
+      // schemaId is required in IndexEntry, provide default if missing
+      const schemaId = envelope.schemaId ?? 'unknown';
       
-      const hasLinks = rawStudyId || rawExperimentId || rawRunId;
-      
-      // Determine status
-      let status: IndexEntry['status'] = 'draft';
-      if (payload.status === 'inbox' || payload.status === 'filed' || payload.status === 'draft') {
-        status = payload.status;
-      } else if (rawRunId) {
-        status = 'filed';
-      } else if (filePath.includes('_inbox/')) {
-        status = 'inbox';
-      }
-      
-      // Compute content hash
-      const hash = createHash('sha256').update(file.content).digest('hex').slice(0, 16);
-      
-      // Build entry with conditional properties (exactOptionalPropertyTypes)
-      const kind = payload.kind as string | undefined;
-      const title = (payload.title || payload.name || payload.label) as string | undefined;
-      const createdAt = payload.createdAt as string | undefined;
-      const updatedAt = payload.updatedAt as string | undefined;
-      
-      // Build links object conditionally
-      const links: IndexEntry['links'] = hasLinks ? {
-        ...(rawStudyId ? { studyId: rawStudyId as string } : {}),
-        ...(rawExperimentId ? { experimentId: rawExperimentId as string } : {}),
-        ...(rawRunId ? { runId: rawRunId as string } : {}),
-      } : undefined;
-      
-      return {
-        recordId: envelope.recordId,
-        schemaId: envelope.schemaId,
-        status,
-        path: filePath,
-        hash,
-        ...(kind !== undefined ? { kind } : {}),
-        ...(title !== undefined ? { title } : {}),
-        ...(links !== undefined ? { links } : {}),
-        ...(createdAt !== undefined ? { createdAt } : {}),
-        ...(updatedAt !== undefined ? { updatedAt } : {}),
-      };
+      return buildIndexEntry(
+        envelope.recordId,
+        schemaId,
+        fileContent,
+        filePath,
+        payload
+      );
     } catch (error) {
       console.warn(`Failed to extract entry from ${filePath}:`, error);
       return null;

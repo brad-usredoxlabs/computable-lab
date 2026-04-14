@@ -6,8 +6,8 @@ import type { PlateEvent } from './events'
 import type { OntologyRef } from './ref'
 
 export interface PromptMention {
-  type: 'material' | 'labware' | 'selection'
-  entityKind?: 'material' | 'material-spec' | 'aliquot'
+  type: 'material' | 'labware' | 'selection' | 'protocol'
+  entityKind?: 'material' | 'material-spec' | 'aliquot' | 'protocol' | 'graph-component'
   selectionKind?: 'source' | 'target'
   id?: string
   label: string
@@ -41,6 +41,11 @@ export interface AiThinkingEvent {
   text: string
 }
 
+export interface AiTextDeltaEvent {
+  type: 'text_delta'
+  delta: string
+}
+
 export interface AiDraftEvent {
   type: 'draft'
   events: PlateEvent[]
@@ -63,6 +68,7 @@ export type AiStreamEvent =
   | AiToolCallEvent
   | AiToolResultEvent
   | AiThinkingEvent
+  | AiTextDeltaEvent
   | AiDraftEvent
   | AiDoneEvent
   | AiErrorEvent

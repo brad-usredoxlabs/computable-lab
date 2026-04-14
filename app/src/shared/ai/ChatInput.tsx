@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useOptionalLabwareEditor } from '../../graph/context/LabwareEditorContext'
 import { apiClient } from '../api/client'
 import { searchRecords } from '../api/treeClient'
+import { LABWARE_DEFINITIONS } from '../../types/labwareDefinition'
 import {
   formatLabwareMentionToken,
   formatMaterialMentionToken,
   formatSelectionMentionToken,
+  formatProtocolMentionToken,
   parsePromptMentionMatches,
   parsePromptMentions,
 } from '../lib/aiPromptMentions'
@@ -21,7 +23,7 @@ interface ChatInputProps {
   disabled?: boolean
 }
 
-type SlashCommandKind = 'material' | 'labware' | 'source' | 'target'
+type SlashCommandKind = 'material' | 'labware' | 'source' | 'target' | 'protocol'
 
 interface SlashMatch {
   kind: SlashCommandKind
@@ -43,6 +45,7 @@ const MATERIAL_ALIASES = new Set(['m', 'material'])
 const LABWARE_ALIASES = new Set(['l', 'labware'])
 const SOURCE_ALIASES = new Set(['s', 'source', 'src'])
 const TARGET_ALIASES = new Set(['t', 'target', 'tar'])
+const PROTOCOL_ALIASES = new Set(['p', 'protocol'])
 
 function badgeStyles(badge: string): { background: string; color: string; border: string } {
   switch (badge) {
@@ -54,10 +57,16 @@ function badgeStyles(badge: string): { background: string; color: string; border
       return { background: '#f3e8ff', color: '#7e22ce', border: '#d8b4fe' }
     case 'Labware':
       return { background: '#fef3c7', color: '#92400e', border: '#fcd34d' }
+    case 'Generic':
+      return { background: '#fef3c7', color: '#92400e', border: '#fcd34d' }
     case 'Source':
       return { background: '#e0f2fe', color: '#075985', border: '#7dd3fc' }
     case 'Target':
       return { background: '#fee2e2', color: '#991b1b', border: '#fca5a5' }
+    case 'Protocol':
+      return { background: '#e0e7ff', color: '#3730a3', border: '#c7d2fe' }
+    case 'Component':
+      return { background: '#ede9fe', color: '#5b21b6', border: '#ddd6fe' }
     default:
       return { background: '#e5e7eb', color: '#374151', border: '#d1d5db' }
   }
@@ -83,7 +92,9 @@ function detectSlashCommand(text: string, cursor: number): SlashMatch | null {
           ? 'source'
           : TARGET_ALIASES.has(raw)
             ? 'target'
-            : null
+            : PROTOCOL_ALIASES.has(raw)
+              ? 'protocol'
+              : null
     if (!kind) continue
     const start = lineStart + i
     return { kind, start, end: cursor, query }
@@ -133,23 +144,11 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled }: ChatInput
   const [materialOptions, setMaterialOptions] = useState<SuggestionOption[]>([])
   const [materialLoading, setMaterialLoading] = useState(false)
 
-  const labwareOptions = useMemo<SuggestionOption[]>(() => {
-    if (!slashMatch || slashMatch.kind !== 'labware' || !state) return []
-    const query = normalize(slashMatch.query)
-    return Array.from(state.labwares.values())
-      .map((labware) => ({
-        key: `labware:${labware.labwareId}`,
-        label: labware.name,
-        badge: 'Labware',
-        subtitle: `${labware.labwareType} • ${labware.labwareId}`,
-        insertText: formatLabwareMentionToken(labware.labwareId, labware.name),
-      }))
-      .filter((option) => {
-        if (!query) return true
-        return [option.label, option.subtitle, option.key].some((value) => normalize(value ?? '').includes(query))
-      })
-      .slice(0, 8)
-  }, [slashMatch, state?.labwares])
+  const [labwareOptions, setLabwareOptions] = useState<SuggestionOption[]>([])
+  const [labwareLoading, setLabwareLoading] = useState(false)
+
+  const [protocolOptions, setProtocolOptions] = useState<SuggestionOption[]>([])
+  const [protocolLoading, setProtocolLoading] = useState(false)
 
   const selectionOptions = useMemo<SuggestionOption[]>(() => {
     if (!slashMatch || (slashMatch.kind !== 'source' && slashMatch.kind !== 'target')) return []
@@ -180,7 +179,9 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled }: ChatInput
     ? materialOptions
     : slashMatch?.kind === 'labware'
       ? labwareOptions
-      : selectionOptions
+      : slashMatch?.kind === 'protocol'
+        ? protocolOptions
+        : selectionOptions
 
   const mentionMatches = useMemo(() => parsePromptMentionMatches(value), [value])
   const mentionsPreview = useMemo(() => mentionMatches.map((entry) => entry.mention), [mentionMatches])
@@ -272,6 +273,176 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled }: ChatInput
   }, [slashMatch])
 
   useEffect(() => {
+    if (!slashMatch || slashMatch.kind !== 'labware') {
+      setLabwareOptions([])
+      setLabwareLoading(false)
+      return
+    }
+    const query = slashMatch.query.trim()
+    // Empty query: show only in-editor instances, no record index blast
+    if (query.length === 0) {
+      if (!state) {
+        setLabwareOptions([])
+        setLabwareLoading(false)
+        return
+      }
+      const options: SuggestionOption[] = Array.from(state.labwares.values()).map((labware) => ({
+        key: `labware:inst:${labware.labwareId}`,
+        label: labware.name,
+        badge: 'Labware',
+        subtitle: `${labware.labwareType} • ${labware.labwareId}`,
+        insertText: formatLabwareMentionToken(labware.labwareId, labware.name),
+      }))
+      setLabwareOptions(options.slice(0, 10))
+      setLabwareLoading(false)
+      return
+    }
+    let cancelled = false
+    setLabwareLoading(true)
+    const normalizedQuery = normalize(query)
+
+    // Gather from all three sources
+    const instanceOptions: SuggestionOption[] = Array.from(state?.labwares.values() ?? [])
+      .map((labware) => ({
+        key: `labware:inst:${labware.labwareId}`,
+        label: labware.name,
+        badge: 'Labware',
+        subtitle: `${labware.labwareType} • ${labware.labwareId}`,
+        insertText: formatLabwareMentionToken(labware.labwareId, labware.name),
+      }))
+      .filter((option) =>
+        [option.label, option.subtitle, option.key].some((value) => normalize(value ?? '').includes(normalizedQuery))
+      )
+
+    // Generic definitions
+    const genericOptions: SuggestionOption[] = LABWARE_DEFINITIONS
+      .map((definition) => ({
+        key: `labware:def:${definition.id}`,
+        label: definition.display_name,
+        badge: 'Generic' as const,
+        subtitle: definition.id,
+        insertText: formatLabwareMentionToken(`def:${definition.id}`, definition.display_name),
+      }))
+      .filter((option) =>
+        [option.label, option.subtitle, option.key].some((value) => normalize(value ?? '').includes(normalizedQuery))
+      )
+
+    // Record index
+    searchRecords(query, { kind: 'labware', limit: 6 })
+      .then((result) => {
+        if (cancelled) return
+        const recordOptions: SuggestionOption[] = result.records.map((record) => ({
+          key: `labware:rec:${record.recordId}`,
+          label: record.title ?? record.recordId,
+          badge: 'Record' as const,
+          subtitle: record.recordId,
+          insertText: formatLabwareMentionToken(record.recordId, record.title ?? record.recordId),
+        }))
+
+        // De-dup and combine: instances first, then generics, then records
+        const seen = new Set<string>()
+        const combined: SuggestionOption[] = []
+
+        for (const opt of instanceOptions) {
+          if (!seen.has(opt.key)) {
+            seen.add(opt.key)
+            combined.push(opt)
+          }
+        }
+        for (const opt of genericOptions) {
+          if (!seen.has(opt.key)) {
+            seen.add(opt.key)
+            combined.push(opt)
+          }
+        }
+        for (const opt of recordOptions) {
+          if (!seen.has(opt.key)) {
+            seen.add(opt.key)
+            combined.push(opt)
+          }
+        }
+
+        if (!cancelled) {
+          setLabwareOptions(combined.slice(0, 10))
+          setLabwareLoading(false)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLabwareOptions(instanceOptions.slice(0, 10))
+      })
+      .finally(() => {
+        if (!cancelled) setLabwareLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [slashMatch, state?.labwares])
+
+  useEffect(() => {
+    if (!slashMatch || slashMatch.kind !== 'protocol') {
+      setProtocolOptions([])
+      setProtocolLoading(false)
+      return
+    }
+    const query = slashMatch.query.trim()
+    if (query.length < 1) {
+      setProtocolOptions([])
+      setProtocolLoading(false)
+      return
+    }
+    let cancelled = false
+    setProtocolLoading(true)
+    Promise.all([
+      searchRecords(query, { kind: 'protocol', limit: 6 }),
+      searchRecords(query, { kind: 'graph-component', limit: 6 }),
+    ])
+      .then(([protocols, components]) => {
+        if (cancelled) return
+        const next: SuggestionOption[] = []
+        const seen = new Set<string>()
+        
+        // Add protocols first
+        for (const item of protocols.records) {
+          const key = `protocol:${item.recordId}`
+          if (seen.has(key)) continue
+          seen.add(key)
+          next.push({
+            key,
+            label: item.title ?? item.recordId,
+            badge: 'Protocol',
+            subtitle: item.recordId,
+            insertText: formatProtocolMentionToken('protocol', item.recordId, item.title ?? item.recordId),
+          })
+        }
+        
+        // Then add graph-components
+        for (const item of components.records) {
+          const key = `graph-component:${item.recordId}`
+          if (seen.has(key)) continue
+          seen.add(key)
+          next.push({
+            key,
+            label: item.title ?? item.recordId,
+            badge: 'Component',
+            subtitle: item.recordId,
+            insertText: formatProtocolMentionToken('graph-component', item.recordId, item.title ?? item.recordId),
+          })
+        }
+        
+        setProtocolOptions(next.slice(0, 10))
+      })
+      .catch(() => {
+        if (!cancelled) setProtocolOptions([])
+      })
+      .finally(() => {
+        if (!cancelled) setProtocolLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [slashMatch])
+
+  useEffect(() => {
     if (focusedIndex >= 0 && listRef.current) {
       const items = listRef.current.querySelectorAll('[data-option]')
       const current = items[focusedIndex] as HTMLElement | undefined
@@ -305,7 +476,11 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled }: ChatInput
   const showDropdown = dropdownOpen && Boolean(slashMatch) && (
     options.length > 0
     || materialLoading
+    || labwareLoading
+    || protocolLoading
     || slashKind === 'material'
+    || slashKind === 'labware'
+    || slashKind === 'protocol'
   )
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -437,7 +612,7 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled }: ChatInput
     }
   }, [attachments, handleAttach, handleAttachError])
 
-  const commandHint = '/m material, /l labware, /s source selection, /t target selection'
+  const commandHint = '/m material, /l labware, /p protocol, /s source selection, /t target selection'
 
   const removeMentionAt = useCallback((index: number) => {
     const match = mentionMatches[index]
@@ -529,6 +704,8 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled }: ChatInput
         >
           {materialLoading && options.length === 0 ? (
             <div style={{ padding: '12px', fontSize: '0.85rem', color: '#64748b' }}>Searching materials...</div>
+          ) : labwareLoading && options.length === 0 ? (
+            <div style={{ padding: '12px', fontSize: '0.85rem', color: '#64748b' }}>Searching labware...</div>
           ) : (
             options.map((option, index) => (
               <button

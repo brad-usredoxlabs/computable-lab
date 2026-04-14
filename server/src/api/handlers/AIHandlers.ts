@@ -99,6 +99,8 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
         reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
       };
 
+      sendEvent({ type: 'status', message: 'Received — preparing agent…' });
+
       try {
         const result = await orchestrator.run({
           prompt,

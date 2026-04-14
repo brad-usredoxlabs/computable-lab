@@ -460,7 +460,7 @@ export class ConfigHandlers {
     const profile = updated.ai.profiles?.[name];
     if (!profile) return reply.status(404).send({ success: false, error: `Profile "${name}" not found` });
     updated.ai.inference = profile.inference;
-    updated.ai.agent = profile.agent;
+    updated.ai.agent = profile.agent ?? {};
     updated.ai.activeProfile = name;
 
     try {

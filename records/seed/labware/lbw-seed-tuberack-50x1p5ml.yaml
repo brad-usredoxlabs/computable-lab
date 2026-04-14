@@ -1,0 +1,14 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-tuberack-50x1p5ml
+name: Generic 50-Position 1.5 mL Cryovial Rack (seed)
+labwareType: tubeset_50x1p5ml
+tags:
+  - seed
+  - tube-rack
+  - cryovial
+aliases:
+  - eppendorf rack
+  - cryovial rack
+  - 1.5 mL rack
+  - microcentrifuge rack

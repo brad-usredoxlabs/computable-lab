@@ -1,0 +1,26 @@
+$schema: https://computable-lab.com/schema/computable-lab/protocol.schema.yaml
+kind: protocol
+recordId: prt-seed-incubate-plate
+shortSlug: incubate-plate
+title: Generic Plate Incubation
+description: Seed protocol shipped with computable-lab for out-of-box usage.
+version: "1.0.0"
+state: effective
+tags:
+  - seed
+roles:
+  labwareRoles:
+    - roleId: plate
+      description: 96-well plate to be incubated
+      expectedLabwareKinds:
+        - lbw-seed-plate-96-flat
+  materialRoles: []
+parameters: []
+steps:
+  - stepId: step-1
+    kind: incubate
+    label: Incubate plate at 37°C
+    target:
+      labwareRole: plate
+    duration_min: 30
+    temperature_C: 37

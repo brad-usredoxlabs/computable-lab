@@ -1,0 +1,13 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-tuberack-96x0p2ml
+name: Generic 96-Position 0.2 mL PCR Strip Tube Rack (seed)
+labwareType: tubeset_96x0p2ml
+tags:
+  - seed
+  - tube-rack
+  - pcr
+aliases:
+  - pcr rack
+  - strip tube rack
+  - 96 position pcr rack

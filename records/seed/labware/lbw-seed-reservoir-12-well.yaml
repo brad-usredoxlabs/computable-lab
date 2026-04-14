@@ -1,0 +1,18 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-reservoir-12-well
+name: Generic 12 Well Reservoir (seed)
+labwareType: reservoir
+format:
+  rows: 1
+  cols: 12
+  wellCount: 12
+  wellNaming: "A1..L1"
+manufacturer:
+  name: generic
+tags:
+  - seed
+  - reservoir
+aliases:
+  - "12-well reservoir"
+  - "12 well reservoir"

@@ -1,0 +1,13 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-tris-hcl-ph75
+recordId: mat-seed-tris-hcl-ph75
+name: Tris-HCl, pH 7.5 (seed)
+domain: chemical
+definition: Tris hydrochloride buffer at pH 7.5, commonly used in molecular biology and biochemistry.
+synonyms:
+  - Tris-HCl
+  - Tris hydrochloride
+tags:
+  - buffer
+  - seed

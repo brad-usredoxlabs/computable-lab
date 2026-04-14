@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-tube-1p5ml
+name: 1.5 mL Microcentrifuge Tube (seed)
+labwareType: tube
+manufacturer:
+  name: generic
+tags:
+  - seed
+  - tube

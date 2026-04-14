@@ -1,4 +1,32 @@
 # Lint rules for Protocol records
 lintVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/protocol.schema.yaml"
+
+# Intended rules (pending DSL support for cross-array relational checks):
+#
+#   artifact-step-binding
+#     For every producedArtifacts[i].artifactId, at least one step must
+#     reference it (currently only StepHarvest.producesArtifactId, but the
+#     rule should admit any future step kind that can emit artifacts).
+#     Severity: error.
+#
+#   artifact-role-closure
+#     Every producedArtifacts[i].derivedFromRoles[j] must appear in
+#     roles.materialRoles[*].roleId or roles.labwareRoles[*].roleId.
+#     Severity: error.
+#
+#   harvest-artifact-declared
+#     Any StepHarvest.producesArtifactId must match a declared
+#     producedArtifacts[*].artifactId. Severity: error.
+#
+#   material-artifact-has-derivation-type
+#     When producedArtifacts[i].kind == 'material', derivationType SHOULD be
+#     set so runs know which material-derivation flavor to emit.
+#     Severity: warning.
+#
+# These rules require quantification over arrays and path-to-path comparison,
+# which the current predicate DSL (exists/nonEmpty/regex/equals/in/all/any/not)
+# does not yet support. Track DSL extension separately; do not hard-code these
+# checks in TypeScript.
+
 rules: []

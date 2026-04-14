@@ -106,6 +106,20 @@ properties:
         items: { $ref: "#/$defs/ContextRole" }
         uniqueItems: true
 
+  # Declarative contract for artifacts this protocol produces when executed.
+  # Runs must satisfy this contract by emitting matching material-derivation
+  # (or measurement/dataset) records referencing this protocol.
+  producedArtifacts:
+    type: array
+    description: >
+      Declarative contract for artifacts this protocol produces. Every entry
+      must be bound to at least one step (e.g., a harvest step's
+      producesArtifactId) and, at run time, materialized as a concrete record
+      whose provenance points back at this protocol.
+    items:
+      $ref: "#/$defs/ProducedArtifact"
+    uniqueItems: true
+
   executionProfiles:
     type: array
     description: "Optional reusable execution strategies (single-channel vs multi-channel, lane sequencing)."
@@ -287,6 +301,56 @@ $defs:
         type: array
         items: { type: string }
         uniqueItems: true
+
+  # -------------------------
+  # Produced artifacts
+  # -------------------------
+  ProducedArtifact:
+    type: object
+    additionalProperties: false
+    required: [ artifactId, kind ]
+    properties:
+      artifactId:
+        type: string
+        pattern: "^[a-zA-Z][a-zA-Z0-9_]*$"
+        description: "Symbolic output name referenced by steps (e.g., 'purified_dna')."
+      description:
+        type: string
+      kind:
+        type: string
+        enum: [ material, measurement, dataset ]
+        description: "What sort of artifact this protocol yields."
+      derivationType:
+        type: string
+        enum: [ preparation, culture, conditioning, collection, harvest, split, other ]
+        description: >
+          Hint for the material-derivation record a run should emit when this
+          artifact is produced. Only meaningful when kind = material.
+      materialSpecRef:
+        allOf:
+        - $ref: "./datatypes/ref.schema.yaml"
+        - type: object
+          properties:
+            kind: { const: record }
+            type: { const: material-spec }
+        description: "Optional: pins the output to a material-spec."
+      derivedFromRoles:
+        type: array
+        description: >
+          Role identifiers (from roles.materialRoles or roles.labwareRoles)
+          this artifact is derived from. Used by lint to enforce closure.
+        items: { type: string }
+        uniqueItems: true
+      cardinality:
+        type: object
+        additionalProperties: false
+        description: "Expected quantity characteristics."
+        properties:
+          perRun:     { type: integer, minimum: 0 }
+          perWell:    { type: boolean }
+          perHarvest: { type: boolean }
+      expectedVolume_uL:
+        $ref: "#/$defs/Expr"
 
   ExecutionProfile:
     type: object
@@ -607,9 +671,12 @@ $defs:
           labwareRole: { type: string }
       wells: { $ref: "#/$defs/WellSelector" }
       volume_uL: { $ref: "#/$defs/Expr" }
-      outputSampleRole:
+      producesArtifactId:
         type: string
-        description: "Optional symbolic name for downstream sample handling (execution layer decides IDs)."
+        description: >
+          Optional reference to a Protocol.producedArtifacts[].artifactId. When
+          set, runs emit a material-derivation (or equivalent) record for this
+          artifact on harvest.
 
   StepOther:
     type: object

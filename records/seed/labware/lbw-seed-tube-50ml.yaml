@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-tube-50ml
+name: 50 mL Conical Tube (seed)
+labwareType: tube
+manufacturer:
+  name: generic
+tags:
+  - seed
+  - tube

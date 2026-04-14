@@ -290,6 +290,7 @@ export function AiChatPanel() {
                   unresolvedCount={chat.unresolvedRefs.length}
                   onAccept={handleAccept}
                   onReject={chat.rejectPreview}
+                  isAccepting={chat.isAccepting}
                 />
               </>
             )}

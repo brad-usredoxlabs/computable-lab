@@ -1,0 +1,16 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-dmso-anhydrous
+recordId: mat-seed-dmso-anhydrous
+name: Dimethyl sulfoxide (DMSO), anhydrous (seed)
+domain: chemical
+definition: Anhydrous dimethyl sulfoxide, a polar aprotic solvent commonly used in chemical and biological applications.
+formula: (CH3)2SO
+chemical_properties:
+  cas: 67-68-5
+synonyms:
+  - DMSO
+  - dimethyl sulfoxide
+tags:
+  - solvent
+  - seed

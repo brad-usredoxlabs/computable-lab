@@ -155,6 +155,10 @@ export function AiSettingsSection({ ai, aiStatus, editingSection, onEditChange, 
       setFeedback({ type: 'error', message: 'Base URL is required' })
       return null
     }
+    if (provider === 'openai' && !apiKey.trim() && ai?.inference.apiKey !== REDACTED) {
+      setFeedback({ type: 'error', message: 'API Key is required for OpenAI' })
+      return null
+    }
 
     setTesting(true)
     setFeedback(null)
@@ -192,7 +196,7 @@ export function AiSettingsSection({ ai, aiStatus, editingSection, onEditChange, 
     } finally {
       setTesting(false)
     }
-  }, [onTest, provider, baseUrl, apiKey, model, customModel])
+  }, [onTest, provider, baseUrl, apiKey, model, customModel, ai])
 
   const saveValidated = useCallback(async () => {
     if (!baseUrl.trim()) {
@@ -568,8 +572,8 @@ export function AiSettingsSection({ ai, aiStatus, editingSection, onEditChange, 
             <InfoRow label="Timeout" value={`${ai.inference.timeoutMs ?? 120000}ms`} />
             <InfoRow label="Max Tokens" value={ai.inference.maxTokens ?? 4096} />
             <InfoRow label="Temperature" value={ai.inference.temperature ?? 0.1} />
-            <InfoRow label="Max Turns" value={ai.agent.maxTurns ?? 15} />
-            <InfoRow label="Max Tool Calls" value={ai.agent.maxToolCallsPerTurn ?? 5} />
+            <InfoRow label="Max Turns" value={ai?.agent?.maxTurns ?? 15} />
+            <InfoRow label="Max Tool Calls" value={ai?.agent?.maxToolCallsPerTurn ?? 5} />
           </>
         }
         editContent={

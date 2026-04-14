@@ -335,6 +335,10 @@ function StreamLogEntry({ event }: { event: AiStreamEvent }) {
         </div>
       )
 
+    case 'text_delta':
+      // Skip rendering text_delta events individually - they're shown in the assistant bubble
+      return null
+
     default:
       return null
   }
@@ -350,6 +354,8 @@ function formatEventAsText(event: AiStreamEvent): string {
       return `[result] ${event.toolName}${event.result != null ? ' ' + (typeof event.result === 'string' ? event.result : JSON.stringify(event.result)) : ''}`
     case 'thinking':
       return `[thinking] ${event.text}`
+    case 'text_delta':
+      return `[text_delta] ${event.delta}`
     case 'draft':
       return `[draft] ${event.events.length} events`
     case 'error':

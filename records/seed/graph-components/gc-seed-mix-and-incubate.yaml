@@ -1,0 +1,40 @@
+$schema: https://computable-lab.com/schema/computable-lab/graph-component.schema.yaml
+kind: graph-component
+recordId: gc-seed-mix-and-incubate
+title: Mix and incubate
+description: Reusable sub-procedure that mixes material in specified wells and then incubates at a specified temperature for a duration.
+state: published
+tags:
+  - seed
+  - mix
+  - incubate
+  - reusable
+roles:
+  labwareRoles:
+    - roleId: target_labware
+      description: Target labware containing material to mix and incubate
+  materialRoles: []
+  parameterDefs:
+    - name: cycles
+      type: integer
+      description: Number of mixing cycles
+      required: true
+    - name: duration_min
+      type: number
+      description: Incubation duration in minutes
+      required: true
+    - name: temperature_C
+      type: number
+      description: Incubation temperature in Celsius (optional, defaults to ambient)
+      required: false
+    - name: target_wells
+      type: array
+      description: List of well identifiers to mix and incubate
+      required: true
+template:
+  source:
+    kind: inline
+    eventIds:
+      - mix_event
+      - incubate_event
+notes: "This graph-component represents a common pattern of mixing followed by incubation. When instantiated in a protocol, the target_labware role must be bound to a concrete labware instance."

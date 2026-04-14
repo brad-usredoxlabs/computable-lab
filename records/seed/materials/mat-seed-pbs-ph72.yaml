@@ -1,0 +1,13 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-pbs-ph72
+recordId: mat-seed-pbs-ph72
+name: Phosphate Buffered Saline (PBS), pH 7.2 (seed)
+domain: chemical
+definition: Phosphate buffered saline at pH 7.2, a common buffer solution used in biological applications.
+synonyms:
+  - PBS
+  - phosphate buffered saline
+tags:
+  - buffer
+  - seed

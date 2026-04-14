@@ -1,0 +1,15 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-reservoir-1-well
+name: Generic 1 Well Reservoir (seed)
+labwareType: reservoir
+format:
+  rows: 1
+  cols: 1
+  wellCount: 1
+  wellNaming: "A1"
+manufacturer:
+  name: generic
+tags:
+  - seed
+  - reservoir

@@ -26,7 +26,7 @@ properties:
   labwareType:
     type: string
     description: "High-level category."
-    enum: [ plate, reservoir, tube_rack, tiprack, tube, dish, slide, other ]
+    enum: [ plate, reservoir, tube_rack, tiprack, tube, dish, slide, other, tubeset_6x15ml, tubeset_4x50ml, tubeset_50x1p5ml, tubeset_96x0p2ml, tubeset_mixed_4x50ml_6x15ml ]
 
   format:
     type: object
@@ -61,6 +61,12 @@ properties:
     type: array
     items: { type: string }
     uniqueItems: true
+
+  aliases:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+    description: "Alternative names for the labware"
 
   notes:
     type: string

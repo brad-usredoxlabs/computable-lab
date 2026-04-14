@@ -1,0 +1,14 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-tuberack-6x15ml
+name: Generic 6-Position 15 mL Conical Tube Rack (seed)
+labwareType: tubeset_6x15ml
+tags:
+  - seed
+  - tube-rack
+  - 15ml
+aliases:
+  - 15 mL tube rack
+  - 15ml tube rack
+  - 6-position tube rack
+  - falcon 15 rack

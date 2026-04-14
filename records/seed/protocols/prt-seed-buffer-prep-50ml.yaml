@@ -1,0 +1,63 @@
+$schema: https://computable-lab.com/schema/computable-lab/protocol.schema.yaml
+kind: protocol
+recordId: prt-seed-buffer-prep-50ml
+shortSlug: buffer-prep-50ml
+title: Buffer Preparation in 50 mL Conical
+description: Seed protocol shipped with computable-lab for out-of-box usage. This protocol uses a mixed tube rack for buffer preparation.
+version: "1.0.0"
+state: effective
+tags:
+  - seed
+  - tube-rack
+roles:
+  labwareRoles:
+    - roleId: tube_rack
+      description: Mixed tube rack with 50 mL and 15 mL positions
+      expectedLabwareKinds:
+        - lbw-seed-tuberack-mixed-4x50ml-6x15ml
+      notes: "Uses tubeset_mixed_4x50ml_6x15ml labware type"
+  materialRoles:
+    - roleId: base_buffer
+      description: Base buffer solution
+      allowedMaterialIds:
+        - buffer
+    - roleId: additive
+      description: Buffer additive
+      allowedMaterialIds:
+        - chemical
+parameters: []
+steps:
+  - stepId: step-1
+    kind: add_material
+    label: Add base buffer to 50 mL position (A4)
+    target:
+      labwareRole: tube_rack
+    wells:
+      kind: explicit
+      wells:
+        - A4
+    material:
+      materialRole: base_buffer
+    volume_uL: 40000
+  - stepId: step-2
+    kind: add_material
+    label: Add additive to A4
+    target:
+      labwareRole: tube_rack
+    wells:
+      kind: explicit
+      wells:
+        - A4
+    material:
+      materialRole: additive
+    volume_uL: 1000
+  - stepId: step-3
+    kind: mix
+    label: Mix by inversion
+    target:
+      labwareRole: tube_rack
+    wells:
+      kind: explicit
+      wells:
+        - A4
+    cycles: 10

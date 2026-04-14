@@ -1,0 +1,17 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-plate-96-pcr
+name: Generic 96 Well PCR Plate (seed)
+labwareType: plate
+format:
+  rows: 8
+  cols: 12
+  wellCount: 96
+  wellNaming: "A1..H12"
+manufacturer:
+  name: generic
+tags:
+  - seed
+  - plate
+  - 96-well
+  - pcr

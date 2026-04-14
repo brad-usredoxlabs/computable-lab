@@ -46,6 +46,7 @@ function buildConversationHistory(messages: ChatMessage[]): AiConversationMessag
 export interface UseAiChatReturn {
   messages: ChatMessage[]
   isStreaming: boolean
+  isAccepting: boolean
   previewEvents: PlateEvent[]
   previewLabwareAdditions: AiLabwareAddition[]
   hasPreview: boolean
@@ -84,6 +85,7 @@ interface UseAiChatOptions {
 export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
+  const [isAccepting, setIsAccepting] = useState(false)
   const [previewEvents, setPreviewEvents] = useState<PlateEvent[]>([])
   const [previewLabwareAdditions, setPreviewLabwareAdditions] = useState<AiLabwareAddition[]>([])
   const [unresolvedRefs, setUnresolvedRefs] = useState<OntologyRefProposal[]>([])
@@ -159,7 +161,7 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
       const assistantMsg: ChatMessage = {
         id: assistantId,
         role: 'assistant',
-        content: '',
+        content: 'Connecting to assistant…',
         timestamp: Date.now(),
         streamEvents: [],
         isStreaming: true,
@@ -279,56 +281,80 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
   // Accept preview events → add to editor (applies cached resolutions)
   // ------------------------------------------------------------------
   const acceptPreview = useCallback(async () => {
-    // Apply AI-proposed labware additions FIRST so events can reference them.
-    for (const addition of previewLabwareAdditions) {
-      try {
-        // Fetch the full record by ID using the apiClient.
-        const record = await apiClient.getRecord(addition.recordId)
-        if (record && record.payload) {
-          addLabwareFromRecordRef.current?.(record.payload as Record<string, unknown>)
-        } else {
+    if (isAccepting) return
+    setIsAccepting(true)
+    try {
+      // Track labware-addition outcomes for the summary message.
+      const totalLabwareAttempts = previewLabwareAdditions.length
+      let labwareFailures = 0
+
+      // Apply AI-proposed labware additions FIRST so events can reference them.
+      for (const addition of previewLabwareAdditions) {
+        try {
+          // Fetch the full record by ID using the apiClient.
+          const record = await apiClient.getRecord(addition.recordId)
+          if (record && record.payload) {
+            addLabwareFromRecordRef.current?.(record.payload as Record<string, unknown>)
+          } else {
+            labwareFailures++
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: generateMessageId(),
+                role: 'system',
+                content: `Error: Skipped labware addition — ${addition.recordId} not found locally.`,
+                timestamp: Date.now(),
+              },
+            ])
+          }
+        } catch (err) {
+          labwareFailures++
           setMessages((prev) => [
             ...prev,
             {
               id: generateMessageId(),
               role: 'system',
-              content: `Skipped labware addition: ${addition.recordId} not found locally.`,
+              content: `Error: Skipped labware addition ${addition.recordId}: ${(err as Error).message}.`,
               timestamp: Date.now(),
             },
           ])
         }
-      } catch (err) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: generateMessageId(),
-            role: 'system',
-            content: `Skipped labware addition ${addition.recordId}: ${(err as Error).message}.`,
-            timestamp: Date.now(),
-          },
-        ])
       }
-    }
 
-    const cache = resolvedCache.current
-    const handler = onAcceptEventRef.current
-    if (handler) {
-      for (const event of previewEvents) {
-        handler(cache.size > 0 ? rewriteEventRefs(event, cache) : event)
+      const cache = resolvedCache.current
+      const handler = onAcceptEventRef.current
+      if (handler) {
+        for (const event of previewEvents) {
+          handler(cache.size > 0 ? rewriteEventRefs(event, cache) : event)
+        }
       }
+
+      // Compute the final summary message based on outcomes.
+      const eventCount = previewEvents.length
+      let summary: string
+      if (totalLabwareAttempts > 0 && labwareFailures === totalLabwareAttempts && eventCount === 0) {
+        summary = `Accept failed — all ${totalLabwareAttempts} labware addition${totalLabwareAttempts !== 1 ? 's' : ''} could not be added.`
+      } else if (labwareFailures > 0) {
+        summary = `Accepted ${eventCount} event${eventCount !== 1 ? 's' : ''} (${labwareFailures} labware addition${labwareFailures !== 1 ? 's' : ''} failed — see above).`
+      } else {
+        summary = `Accepted ${eventCount} event${eventCount !== 1 ? 's' : ''}.`
+      }
+
+      setPreviewEvents([])
+      setPreviewLabwareAdditions([])
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: generateMessageId(),
+          role: 'system',
+          content: summary,
+          timestamp: Date.now(),
+        },
+      ])
+    } finally {
+      setIsAccepting(false)
     }
-    setPreviewEvents([])
-    setPreviewLabwareAdditions([])
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: generateMessageId(),
-        role: 'system',
-        content: `Accepted ${previewEvents.length} event${previewEvents.length !== 1 ? 's' : ''}.`,
-        timestamp: Date.now(),
-      },
-    ])
-  }, [previewEvents, previewLabwareAdditions])
+  }, [previewEvents, previewLabwareAdditions, isAccepting])
 
   // ------------------------------------------------------------------
   // Accept preview events with resolved material refs
@@ -392,6 +418,7 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
   return {
     messages,
     isStreaming,
+    isAccepting,
     previewEvents,
     previewLabwareAdditions,
     hasPreview: previewEvents.length > 0,
@@ -415,10 +442,14 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
  * Build human-readable assistant content from accumulated SSE events.
  */
 function buildAssistantContent(events: AiStreamEvent[]): string {
+  let modelText = ''
   const parts: string[] = []
 
   for (const ev of events) {
     switch (ev.type) {
+      case 'text_delta':
+        modelText += ev.delta
+        break
       case 'status':
         parts.push(ev.message)
         break
@@ -449,7 +480,12 @@ function buildAssistantContent(events: AiStreamEvent[]): string {
     }
   }
 
-  return parts.join('\n') || 'Thinking...'
+  // Model text (streamed) comes first; summary lines after.
+  const sections: string[] = []
+  if (modelText.length > 0) sections.push(modelText)
+  if (parts.length > 0) sections.push(parts.join('\n'))
+
+  return sections.join('\n\n') || 'Thinking...'
 }
 
 /**

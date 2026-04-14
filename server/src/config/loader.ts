@@ -263,6 +263,23 @@ function validateAIConfig(config: unknown, path = 'ai'): asserts config is AICon
       inference.provider,
     );
   }
+
+  // Normalize: agent block is optional in config.yaml but the type contract
+  // (AIConfig.agent, AIProfile.agent) requires it to exist. Default to {}
+  // here so every downstream consumer can read ai.agent.* without guarding.
+  if (c.agent === undefined || c.agent === null) {
+    c.agent = {};
+  }
+  if (c.profiles && typeof c.profiles === 'object' && !Array.isArray(c.profiles)) {
+    for (const profile of Object.values(c.profiles as Record<string, unknown>)) {
+      if (profile && typeof profile === 'object') {
+        const p = profile as Record<string, unknown>;
+        if (p.agent === undefined || p.agent === null) {
+          p.agent = {};
+        }
+      }
+    }
+  }
 }
 
 function validateExecutionConfig(config: unknown, path = 'execution'): asserts config is ExecutionConfig {

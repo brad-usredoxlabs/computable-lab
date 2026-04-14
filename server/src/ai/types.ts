@@ -80,6 +80,29 @@ export interface ToolExecutionResult {
 }
 
 // ============================================================================
+// Mention resolution types
+// ============================================================================
+
+export interface ResolvedMention {
+  raw: string;                              // the original [[...]] token
+  kind: 'material-spec' | 'aliquot' | 'material' | 'labware' | 'selection';
+  id: string;
+  label: string;
+  resolved?: Record<string, unknown>;       // entity data, if lookup succeeded
+  error?: string;                            // if lookup failed
+}
+
+export interface ResolveMentionDeps {
+  fetchMaterialSpec?: (id: string) => Promise<Record<string, unknown> | null>;
+  fetchAliquot?: (id: string) => Promise<Record<string, unknown> | null>;
+  fetchMaterial?: (id: string) => Promise<Record<string, unknown> | null>;
+  fetchLabware?: (id: string) => Promise<Record<string, unknown> | null>;
+  fetchProtocol?: (id: string) => Promise<Record<string, unknown> | null>;
+  fetchGraphComponent?: (id: string) => Promise<Record<string, unknown> | null>;
+  searchLabwareByHint?: (hint: string) => Promise<Array<{ recordId: string; title: string }>>;
+}
+
+// ============================================================================
 // Agent request / response
 // ============================================================================
 
@@ -297,9 +320,10 @@ export interface OntologyRefProposal {
 
 export type AgentEvent =
   | { type: 'status'; message: string }
-  | { type: 'tool_call'; tool: string; args: Record<string, unknown> }
-  | { type: 'tool_result'; tool: string; success: boolean; durationMs: number }
+  | { type: 'tool_call'; toolName: string; args: Record<string, unknown> }
+  | { type: 'tool_result'; toolName: string; success: boolean; durationMs: number }
   | { type: 'thinking'; content: string }
+  | { type: 'text_delta'; delta: string }
   | { type: 'draft'; events: PlateEventProposal[] }
   | { type: 'done'; result: AgentResult }
   | { type: 'error'; message: string };
@@ -330,4 +354,36 @@ export interface ToolBridge {
   getToolDefinitions(): ToolDefinition[];
   /** Execute a tool call by name. */
   executeTool(name: string, args: Record<string, unknown>): Promise<ToolExecutionResult>;
+}
+
+// ============================================================================
+// Agent instrumentation / summary types
+// ============================================================================
+
+export interface TurnStats {
+  turn: number;
+  durationMs: number;
+  finishReason: string;
+  promptTokens: number;
+  completionTokens: number;
+  tools: Array<{ name: string; durationMs: number; success: boolean }>;
+}
+
+export interface AgentSummary {
+  traceId: string;
+  surface: string;
+  model: string;
+  success: boolean;
+  error?: string;
+  elapsedMs: number;
+  turns: TurnStats[];
+  totals: {
+    turns: number;
+    toolCalls: number;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+  resolvedMentions: number;
+  bypass?: 'compiler' | null;
 }

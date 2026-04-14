@@ -1,0 +1,19 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-plate-96-flat
+name: Generic 96 Well Plate, Flat Bottom (seed)
+labwareType: plate
+format:
+  rows: 8
+  cols: 12
+  wellCount: 96
+  wellNaming: "A1..H12"
+manufacturer:
+  name: generic
+tags:
+  - seed
+  - plate
+  - 96-well
+aliases:
+  - "96-well plate"
+  - "96 well plate"
