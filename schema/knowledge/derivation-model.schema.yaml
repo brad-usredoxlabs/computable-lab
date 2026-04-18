@@ -1,0 +1,86 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/derivation-model.schema.yaml"
+title: "DerivationModel"
+description: >
+  A versioned, declarative worksheet that maps typed inputs to a typed output
+  (compiler-specs/30-context.md §10, compiler-specs/70-derivation-models.md).
+  Derivation models are the sole source of model-derived context fields.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [kind, id, name, version, inputs, output, steps]
+
+properties:
+  kind:
+    const: "derivation-model"
+
+  id:
+    type: string
+    pattern: '^DM-[A-Za-z0-9_-]+$'
+    description: "Stable identifier (e.g., DM-ideal-mixing)."
+
+  name:
+    type: string
+
+  version:
+    type: integer
+    minimum: 1
+    description: "Model version. Pinned on the consuming context via derivation_versions."
+
+  description:
+    type: string
+
+  assumptions:
+    type: array
+    items:
+      type: string
+    description: "Human-readable assumptions (e.g., 'ideal mixing', 'no volume loss')."
+
+  inputs:
+    type: array
+    minItems: 1
+    description: "Declared typed inputs the worksheet consumes."
+    items:
+      type: object
+      additionalProperties: false
+      required: [name, type]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          description: "Lightweight type tag (e.g., context, volume, fraction, number, material-ref)."
+        required:
+          type: boolean
+          default: true
+        description:
+          type: string
+
+  output:
+    type: object
+    additionalProperties: false
+    required: [name, type]
+    description: "Declared typed output produced by the worksheet."
+    properties:
+      name:
+        type: string
+      type:
+        type: string
+      description:
+        type: string
+
+  steps:
+    type: array
+    minItems: 1
+    description: "Ordered list of operations. Each step has an 'op' keyword and op-specific fields. Schema does not validate op identity."
+    items:
+      type: object
+      additionalProperties: true
+      required: [op]
+      properties:
+        op:
+          type: string
+          description: "Operation keyword (e.g., sum, weighted_average, divide, assign)."

@@ -3,6 +3,7 @@ import { ProtocolCompiler } from './ProtocolCompiler.js';
 import type { RecordStore } from '../../store/types.js';
 import type { RecordEnvelope } from '../../types/RecordEnvelope.js';
 import type { PolicyProfile } from '../../policy/types.js';
+import type { LocalProtocolPayload } from './LocalProtocolBuilder.js';
 
 function envelope<T extends { id?: string; recordId?: string; kind: string }>(schemaId: string, payload: T): RecordEnvelope<T> {
   return {
@@ -120,6 +121,12 @@ describe('ProtocolCompiler', () => {
     expect(result.steps[0]?.executionMode).toBe('instrument');
     expect(result.steps[0]?.disposition).toBe('allowed');
     expect(result.diagnostics.some((diagnostic) => diagnostic.code === 'NO_ADMISSIBLE_BACKEND')).toBe(false);
+    
+    // Verify localProtocol field is populated
+    expect(result.localProtocol).toBeDefined();
+    expect((result.localProtocol as LocalProtocolPayload).kind).toBe('local-protocol');
+    expect((result.localProtocol as LocalProtocolPayload).protocolLayer).toBe('lab');
+    expect((result.localProtocol as LocalProtocolPayload).inherits_from.id).toBe('PRO-000001');
   });
 
   it('falls back to a manual backend when remediation is allowed and no equipment path is available', async () => {

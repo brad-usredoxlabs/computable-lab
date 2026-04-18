@@ -1,0 +1,17 @@
+attributeVersion: 1
+subject_type: equipment
+attribute: location
+description: "Where a piece of equipment physically lives (zone + optional position)."
+value_schema:
+  type: object
+  additionalProperties: false
+  required: [zone_ref]
+  properties:
+    zone_ref:
+      type: string
+      description: "Reference to a facility-zone record (e.g., 'FZ-walkin-4c')."
+    position:
+      type: string
+      description: "Optional free-text position within the zone (e.g., 'shelf 3, left')."
+    notes:
+      type: string

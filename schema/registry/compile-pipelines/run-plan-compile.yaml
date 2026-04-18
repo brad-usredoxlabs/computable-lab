@@ -1,0 +1,61 @@
+# Run-plan compile pipeline (compiler-specs/60 §3, 50 §7).
+# Data-driven declaration of the passes executed when a planned-run record
+# is compiled. Not yet dispatched by the compiler — kept aligned with
+# server/src/compiler/* so a future dispatcher can be swapped in.
+
+pipelineId: run-plan-compile
+entrypoint: run-plan-compile
+description: >
+  Compiles a planned-run into a validated, context-bound execution plan.
+  Matches bindings against material-instance / labware-instance capabilities,
+  derives per-step contexts, and projects the run-plan compile result.
+
+passes:
+  - id: parse_planned_run
+    family: parse
+    description: "Parse planned-run envelope; extract bindings."
+
+  - id: resolve_local_protocol
+    family: normalize
+    description: "Resolve the localProtocolRef (or fall back to sourceType/protocolRef)."
+    depends_on: [parse_planned_run]
+
+  - id: resolve_policy_profile
+    family: normalize
+    description: "Resolve the active PolicyProfile."
+    depends_on: [parse_planned_run]
+
+  - id: resolve_material_bindings
+    family: disambiguate
+    description: >
+      Bind material roles to concrete material-instances. May emit
+      needs-confirmation when multiple instances satisfy a role.
+    depends_on: [resolve_local_protocol]
+
+  - id: resolve_labware_bindings
+    family: disambiguate
+    description: "Bind labware roles to labware-instances present in the lab."
+    depends_on: [resolve_local_protocol]
+
+  - id: capability_check
+    family: validate
+    description: >
+      Check equipment + labware + operator capabilities: 'can this rotor
+      spin at 15,000g with this labware?' Emits policy-blocked on violation.
+    depends_on: [resolve_material_bindings, resolve_labware_bindings, resolve_policy_profile]
+
+  - id: derive_per_step_context
+    family: derive_context
+    description: "Pre-compute the context entering each step so diagnostics can reference it."
+    depends_on: [capability_check]
+
+  - id: ai_plan_quality_scoring
+    family: derive_context
+    description: "Optional AI-ranked plan quality score. Separate from correctness."
+    when: "config.ai_ranking_enabled"
+    depends_on: [derive_per_step_context]
+
+  - id: project_result
+    family: project
+    description: "Assemble the RunPlanCompileResult."
+    depends_on: [derive_per_step_context]

@@ -40,12 +40,16 @@ properties:
 
   sourceType:
     type: string
-    enum: [ protocol, event-graph ]
-    description: "What was the source of this planned run."
+    enum: [ protocol, event-graph, local-protocol ]
+    description: "What was the source of this planned run. Phase-1 addition: local-protocol."
 
   sourceRef:
     $ref: "./datatypes/ref.schema.yaml"
     description: "Reference to the source protocol or event graph."
+
+  localProtocolRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Optional: reference to the local-protocol (LPR-*) this run is compiled from. Required-when-sourceType=local-protocol enforced by the compiler, not this schema."
 
   operatorRef:
     allOf:

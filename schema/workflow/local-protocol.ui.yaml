@@ -1,0 +1,40 @@
+# UI specification for LocalProtocol records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/local-protocol.schema.yaml"
+
+display:
+  titleField: "$.title"
+  icon: "protocol"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.recordId"
+      widget: "text"
+      label: "Record ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Basic Information"
+    fields:
+    - path: "$.title"
+      widget: "text"
+      label: "Title"
+      required: true
+    - path: "$.inherits_from"
+      widget: "text"
+      label: "Inherits from (global protocol ref)"
+      required: true
+    - path: "$.status"
+      widget: "select"
+      label: "Status"
+  - title: "Notes"
+    fields:
+    - path: "$.notes"
+      widget: "textarea"
+      label: "Notes"

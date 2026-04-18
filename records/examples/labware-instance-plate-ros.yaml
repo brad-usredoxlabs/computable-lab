@@ -1,0 +1,10 @@
+# Labware instance for ROS assay 96-well plate
+
+kind: labware-instance
+recordId: LI-PLATE-ROS-1
+labwareId: LBW-96-WELL-PLATE
+label: "ROS Assay Plate 1"
+
+notes: "96-well plate used for ROS positive and vehicle control assays"
+
+state: in_use

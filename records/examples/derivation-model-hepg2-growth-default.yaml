@@ -1,0 +1,31 @@
+kind: derivation-model
+id: DM-hepg2-growth-default
+name: "HepG2 default growth"
+version: 1
+description: >
+  Model for expected HepG2 cell count at time T given an initial seeding
+  count and an assumed doubling time. Uses exponential growth: count = seed * 2^(duration_hours / doubling_time_hours).
+assumptions:
+  - "Log-phase exponential growth throughout the interval."
+  - "No lag phase; no plateau — model is invalid outside its linear regime."
+  - "Doubling time is characteristic of HepG2 under standard DMEM/10% FBS at 37°C."
+inputs:
+  - name: seeded_cell_count
+    type: number
+    description: "Cells seeded at T0 (absolute count, not concentration)."
+  - name: duration_hours
+    type: number
+    description: "Elapsed hours from seeding to the query time."
+  - name: doubling_time_hours
+    type: number
+    required: false
+    description: "HepG2 doubling time. Default 30h under standard conditions."
+output:
+  name: expected_cell_count
+  type: number
+  description: "Model-derived cell count at query time."
+steps:
+  - op: expr
+    expression: "seeded_cell_count * 2 ** (duration_hours / doubling_time_hours)"
+    into: expected_cell_count
+    note: "Exponential doubling; unit-check: cells * dimensionless = cells."

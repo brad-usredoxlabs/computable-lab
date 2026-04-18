@@ -1,0 +1,48 @@
+kind: derivation-model
+id: DM-ph-equilibration
+name: "pH equilibration (Henderson-Hasselbalch)"
+version: 1
+description: >
+  Model for equilibrated pH of a buffered solution after a known quantity of
+  strong acid is added, using the Henderson-Hasselbalch equation. Inputs are
+  the buffer's pKa, total buffer concentration, moles of acid added, and
+  base solution volume. Output is the resulting pH.
+assumptions:
+  - "Buffer remains within its effective pH range (pKa +/- 1)."
+  - "Added acid is fully dissociated (strong acid)."
+  - "Temperature is held at 25°C; pKa values are 25°C values."
+  - "Volume change from acid addition is negligible."
+inputs:
+  - name: buffer_pKa
+    type: number
+    description: "pKa of the conjugate acid of the buffer (e.g., HEPES ≈ 7.55)."
+  - name: buffer_concentration
+    type: number
+    description: "Total buffer concentration in mol/L (acid + base forms)."
+  - name: acid_added_moles
+    type: number
+    description: "Moles of strong acid (e.g., HCl) added."
+  - name: base_volume_liters
+    type: number
+    description: "Volume of the buffered solution in liters (before acid)."
+output:
+  name: equilibrated_ph
+  type: number
+  description: "Resulting pH after the acid addition equilibrates."
+steps:
+  - op: expr
+    expression: "buffer_concentration * base_volume_liters"
+    into: total_buffer_moles
+    note: "Total moles of buffer in the system."
+  - op: expr
+    expression: "(total_buffer_moles / 2) - acid_added_moles"
+    into: base_form_moles
+    note: "Assume the buffer starts at pH = pKa (equal acid/base forms). Subtract added acid from base form."
+  - op: expr
+    expression: "(total_buffer_moles / 2) + acid_added_moles"
+    into: acid_form_moles
+    note: "Added acid converts base form to acid form mole-for-mole."
+  - op: expr
+    expression: "buffer_pKa + log(base_form_moles / acid_form_moles)"
+    into: equilibrated_ph
+    note: "Henderson-Hasselbalch: pH = pKa + log([A-]/[HA]). Use base-10 log."

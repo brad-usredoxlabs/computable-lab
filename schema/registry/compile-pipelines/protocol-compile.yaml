@@ -1,0 +1,51 @@
+# Protocol compile pipeline (compiler-specs/60 §3).
+# Today this file is declarative documentation — the compiler does not yet
+# read it. Keep it in sync with server/src/compiler/protocol/ProtocolCompiler.ts
+# so a future data-driven dispatcher can be swapped in without change here.
+
+pipelineId: protocol-compile
+entrypoint: protocol-compile
+description: >
+  Compiles a universal protocol record into a lab-layer compiled protocol.
+  Resolves verbs, binds equipment, applies policy profile, derives step
+  diagnostics, and projects the ProtocolCompilerResult.
+
+passes:
+  - id: parse_envelope
+    family: parse
+    description: "Parse the inbound RecordEnvelope; extract protocol payload."
+
+  - id: resolve_policy_profile
+    family: normalize
+    description: "Resolve the active PolicyProfile for the compile context."
+    depends_on: [parse_envelope]
+
+  - id: normalize_steps
+    family: normalize
+    description: "Normalize step records (verb refs, argument shapes)."
+    depends_on: [parse_envelope]
+
+  - id: verb_lint
+    family: validate
+    description: "Run verb-level lint rules (verb exists, arguments well-formed)."
+    depends_on: [normalize_steps]
+
+  - id: equipment_binding
+    family: disambiguate
+    description: "Bind verbs to equipment; emit needs-confirmation when multiple bindings are plausible."
+    depends_on: [verb_lint, resolve_policy_profile]
+
+  - id: capability_check
+    family: validate
+    description: "Check that bound equipment satisfies verb capability requirements under the active policy."
+    depends_on: [equipment_binding]
+
+  - id: derive_step_diagnostics
+    family: derive_context
+    description: "Compute per-step diagnostics and remediation options."
+    depends_on: [capability_check]
+
+  - id: project_result
+    family: project
+    description: "Assemble the ProtocolCompilerResult (status, steps, diagnostics, localProtocol)."
+    depends_on: [derive_step_diagnostics]

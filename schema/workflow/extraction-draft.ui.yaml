@@ -1,0 +1,17 @@
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/workflow/extraction-draft.schema.yaml"
+display:
+  titleField: title
+  subtitleField: status
+form:
+  layout: sections
+  sections:
+    - id: source
+      title: "Source artifact"
+      fields: [source_artifact]
+    - id: candidates
+      title: "Extracted candidates"
+      fields: [candidates]
+    - id: status
+      title: "Review status"
+      fields: [status, notes]

@@ -1,0 +1,14 @@
+attributeVersion: 1
+subject_type: ambient
+attribute: temperature
+description: "Ambient temperature reading not tied to a specific zone (general lab-space)."
+value_schema:
+  type: object
+  additionalProperties: false
+  required: [value, unit]
+  properties:
+    value:
+      type: number
+    unit:
+      type: string
+      enum: [C, F, K]

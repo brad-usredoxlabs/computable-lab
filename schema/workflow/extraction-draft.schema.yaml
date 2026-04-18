@@ -1,0 +1,79 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/extraction-draft.schema.yaml"
+title: "ExtractionDraft"
+description: >
+  AI pre-compiler output: candidate records extracted from an unstructured
+  source artifact (vendor PDF, literature procedure, user free-text), pending
+  human review and promotion to canonical records.
+
+type: object
+unevaluatedProperties: false
+allOf:
+  - $ref: "../core/common.schema.yaml#/$defs/FAIRCommon"
+
+required: [kind, recordId, source_artifact, candidates, status]
+
+properties:
+  kind:
+    const: "extraction-draft"
+
+  recordId:
+    type: string
+    pattern: '^XDR-[A-Za-z0-9_-]+$'
+    description: "Extraction draft record id (XDR-*)."
+
+  source_artifact:
+    type: object
+    additionalProperties: false
+    required: [kind, id]
+    description: "The unstructured input the candidates were extracted from."
+    properties:
+      kind:
+        type: string
+        enum: [file, publication, freetext]
+      id:
+        type: string
+      locator:
+        type: string
+        description: "Optional sub-locator (page, section, line range)."
+
+  candidates:
+    type: array
+    description: >
+      Candidate structured records proposed by the extractor. Each candidate
+      has a target record kind, the draft YAML body, a confidence score, and
+      optional ambiguity spans.
+    items:
+      type: object
+      additionalProperties: false
+      required: [target_kind, draft, confidence]
+      properties:
+        target_kind:
+          type: string
+          description: "The canonical record kind the candidate targets (e.g., material-spec, event-graph, protocol)."
+        draft:
+          type: object
+          description: "The candidate's YAML body (unvalidated at this layer)."
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        ambiguity_spans:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [path, reason]
+            properties:
+              path:
+                type: string
+                description: "JSON-path into draft where ambiguity lives."
+              reason:
+                type: string
+
+  status:
+    type: string
+    enum: [pending_review, partially_promoted, rejected, promoted]
+
+  notes:
+    type: string

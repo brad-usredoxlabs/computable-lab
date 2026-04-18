@@ -1,0 +1,7 @@
+attributeVersion: 1
+subject_type: equipment-mount
+attribute: mounted_rotor
+description: "Which rotor is currently installed in this mount."
+value_schema:
+  type: string
+  description: "Reference string to a rotor record."

@@ -1,0 +1,104 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/local-protocol.schema.yaml"
+title: "LocalProtocol"
+description: >
+  Lab-layer realization of a global protocol. Makes lab-specific decisions
+  (equipment bindings, parameter refinements, material substitutions, timing
+  and tip policies) into a persistent, versionable, citable record.
+  See compiler-specs/50-protocol-lifecycle.md §5.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- title
+- inherits_from
+- status
+
+properties:
+  protocolLayer:
+    type: string
+    const: "lab"
+
+  kind:
+    const: "local-protocol"
+
+  recordId:
+    type: string
+    pattern: "^LPR-[A-Za-z0-9_-]+$"
+    description: "Stable local identifier (e.g., LPR-ros-hepg2-spectramax-v1)."
+
+  title:
+    type: string
+
+  inherits_from:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Required: the global protocol this realizes."
+
+  lab_state_refs:
+    type: array
+    description: "Environmental lab-state assumptions this local-protocol depends on (50 §10)."
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+    uniqueItems: true
+
+  overrides:
+    type: object
+    additionalProperties: false
+    description: "Structured, additive overrides relative to the inherited global protocol."
+    properties:
+      bindings:
+        type: array
+        items:
+          type: object
+          additionalProperties: true
+        description: "Concrete stocks/equipment that satisfy each abstract global role."
+      parameters:
+        type: array
+        items:
+          type: object
+          additionalProperties: true
+        description: "Parameter values resolved at the lab layer."
+      substitutions:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [role, material_ref]
+          properties:
+            role:
+              type: string
+            material_ref:
+              $ref: "./datatypes/ref.schema.yaml"
+            rationale:
+              type: string
+      timing_policies:
+        type: array
+        items:
+          type: object
+          additionalProperties: true
+      tip_policies:
+        type: array
+        items:
+          type: object
+          additionalProperties: true
+
+  supersedes:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Prior local-protocol this one replaces (append-only)."
+
+  status:
+    type: string
+    enum: [draft, active, superseded, retracted]
+
+  notes:
+    type: string
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

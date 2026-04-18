@@ -1,0 +1,20 @@
+# Material spec for Hydrogen Peroxide (H2O2)
+# Used as ROS inducer in positive control assays
+
+kind: material-spec
+id: MAT-SPEC-H2O2
+name: "Hydrogen peroxide"
+material_ref:
+  kind: ontology
+  namespace: CHEBI
+  id: "CHEBI:16240"
+  label: hydrogen peroxide
+
+material_class: ros-inducer
+
+formulation:
+  notes: "Stock solution for ROS induction assays"
+
+tags:
+  - ros-inducer
+  - oxidant

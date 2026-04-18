@@ -1,0 +1,14 @@
+attributeVersion: 1
+subject_type: facility-zone
+attribute: temperature
+description: "Observed temperature of a named facility zone (walk-in, incubator room, bench)."
+value_schema:
+  type: object
+  additionalProperties: false
+  required: [value, unit]
+  properties:
+    value:
+      type: number
+    unit:
+      type: string
+      enum: [C, F, K]

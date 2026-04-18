@@ -1,0 +1,81 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/lab-state.schema.yaml"
+title: "LabState"
+description: >
+  Time-varying declarative fact about the lab (equipment location, mount, stock
+  volume, ambient temperature, etc.). Append-only via supersedes.
+  See compiler-specs/50-protocol-lifecycle.md §10.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- subject_type
+- attribute
+- value
+- valid_from
+- asserted_by
+- status
+
+properties:
+  kind:
+    const: "lab-state"
+
+  recordId:
+    type: string
+    pattern: "^LST-[A-Za-z0-9_-]+$"
+    description: "Stable local identifier (e.g., LST-fuge-location-2026-04-17)."
+
+  subject_type:
+    type: string
+    enum: [equipment, equipment-mount, facility-zone, stock, ambient, operator-state]
+    description: "What kind of subject this fact is about."
+
+  subject_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Reference to the subject record. Required for all subject_types except 'ambient'."
+
+  attribute:
+    type: string
+    description: "Attribute name. Valid (subject_type, attribute) pairs live in schema/registry/lab-state-attributes/."
+
+  value:
+    description: "Attribute value. Shape is attribute-specific; see schema/registry/lab-state-attributes/."
+
+  valid_from:
+    type: string
+    format: date-time
+    description: "When this fact became true."
+
+  valid_until:
+    type: string
+    format: date-time
+    description: "Optional — when this fact ceased to be true (usually unset on active records)."
+
+  supersedes:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Prior lab-state this one replaces (append-only chain)."
+
+  asserted_by:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Operator who asserted this fact."
+
+  evidence_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Optional evidence record supporting this fact."
+
+  status:
+    type: string
+    enum: [active, superseded, retracted]
+
+  notes:
+    type: string
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

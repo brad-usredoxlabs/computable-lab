@@ -1,0 +1,63 @@
+# Event graph for ROS vehicle control assay
+# Demonstrates create_container, add_material (DMSO vehicle only), incubate, and read events
+
+id: EG-ROS-VEH-B1
+name: "ROS Vehicle Control - Well B1"
+description: "Vehicle control assay with DMSO only (no inducer)"
+
+subject_ref:
+  kind: record
+  type: well
+  id: "LI-PLATE-ROS-1:B1"
+  label: "B1"
+
+events:
+  - eventId: evt-create-container-B1
+    event_type: create_container
+    details:
+      labwareInstanceId:
+        kind: record
+        id: LI-PLATE-ROS-1
+        type: labware-instance
+      labware_definition_ref:
+        kind: record
+        id: LBW-96-WELL-PLATE
+        type: labware
+
+  - eventId: evt-add-dmsO-B1
+    event_type: add_material
+    details:
+      material_ref:
+        kind: record
+        id: MAT-SPEC-DMSO
+        type: material-spec
+      volume:
+        value: 100
+        unit: uL
+
+  - eventId: evt-incubate-B1
+    event_type: incubate
+    details:
+      duration:
+        value: 30
+        unit: min
+      temperature:
+        value: 37
+        unit: degC
+
+  - eventId: evt-read-B1
+    event_type: read
+    details:
+      readout: ros-fluorescence
+      value: 1200
+      unit: RFU
+
+labwares:
+  - labwareId: LI-PLATE-ROS-1
+    labwareType: plate_96
+    name: "ROS Assay Plate 1"
+
+tags:
+  - ros-assay
+  - vehicle-control
+  - dmso

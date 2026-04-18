@@ -1,0 +1,7 @@
+# Lint rules for LabState records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/lab-state.schema.yaml"
+
+# No rules in Phase 1. Cross-reference validation (subject_ref consistency
+# with subject_type, attribute name resolving in the lab-state-attributes
+# registry) happens in the cascade walker, not in lint.

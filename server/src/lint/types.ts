@@ -26,7 +26,12 @@ export type PredicateOp =
   | 'in' 
   | 'all' 
   | 'any' 
-  | 'not';
+  | 'not'
+  | 'has_material_class'
+  | 'state_is'
+  | 'context_contains'
+  | 'lineage_includes'
+  | 'time_within';
 
 /**
  * Base predicate interface.
@@ -103,6 +108,65 @@ export interface NotPredicate extends BasePredicate {
 }
 
 /**
+ * HasMaterialClass predicate - checks if context contains a component with matching material class.
+ */
+export interface HasMaterialClassPredicate extends BasePredicate {
+  op: 'has_material_class';
+  /** Material class to search for in context.contents[*].material_class. */
+  class: string;
+  /** Optional custom path to the contents array (defaults to 'contents'). */
+  path?: string;
+}
+
+/**
+ * StateIs predicate - checks if the context's state field equals a given value.
+ */
+export interface StateIsPredicate extends BasePredicate {
+  op: 'state_is';
+  /** Expected state value (e.g., 'sealed'). */
+  value: string;
+  /** Optional custom path (defaults to 'state'). */
+  path?: string;
+}
+
+/**
+ * ContextContains predicate - checks if context contains a component with matching material id.
+ */
+export interface ContextContainsPredicate extends BasePredicate {
+  op: 'context_contains';
+  /** Material id or regex to find. */
+  material: string;
+  /** Whether 'material' should be compiled as a regex. */
+  regex?: boolean;
+  /** Optional custom path to the contents array (defaults to 'contents'). */
+  path?: string;
+}
+
+/**
+ * LineageIncludes predicate - checks if any ancestor event_graph in the context's lineage used the given verb.
+ */
+export interface LineageIncludesPredicate extends BasePredicate {
+  op: 'lineage_includes';
+  /** Verb name that must appear somewhere in the context's lineage. */
+  verb: string;
+  /** Optional custom path to the lineage array (defaults to 'lineage'). */
+  path?: string;
+}
+
+/**
+ * TimeWithin predicate - checks if the context's timestamp is within a given ISO-8601 duration.
+ */
+export interface TimeWithinPredicate extends BasePredicate {
+  op: 'time_within';
+  /** ISO-8601 duration (e.g., 'PT1H', 'P1D'). */
+  duration: string;
+  /** Optional reference timestamp (ISO-8601); defaults to now. */
+  reference?: string;
+  /** Path to the timestamp under test (defaults to 'observed.timestamp'). */
+  path?: string;
+}
+
+/**
  * Union of all predicate types.
  */
 export type Predicate = 
@@ -113,7 +177,12 @@ export type Predicate =
   | InPredicate
   | AllPredicate
   | AnyPredicate
-  | NotPredicate;
+  | NotPredicate
+  | HasMaterialClassPredicate
+  | StateIsPredicate
+  | ContextContainsPredicate
+  | LineageIncludesPredicate
+  | TimeWithinPredicate;
 
 /**
  * Message configuration for a lint rule.

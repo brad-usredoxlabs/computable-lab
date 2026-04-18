@@ -1,0 +1,15 @@
+attributeVersion: 1
+subject_type: stock
+attribute: volume
+description: "Remaining volume of a material stock."
+value_schema:
+  type: object
+  additionalProperties: false
+  required: [value, unit]
+  properties:
+    value:
+      type: number
+      minimum: 0
+    unit:
+      type: string
+      enum: [uL, mL, L]

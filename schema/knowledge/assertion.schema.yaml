@@ -9,7 +9,7 @@ unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 
-required: [ kind, id, claim_ref, statement, scope ]
+required: [ kind, id, scope ]
 
 properties:
   kind:
@@ -28,14 +28,31 @@ properties:
     description: "Human-readable contextual statement."
 
   scope:
-    type: object
-    description: "Context scope for the assertion."
-    additionalProperties: false
-    properties:
-      control_context:
-        $ref: "./datatypes/ref.schema.yaml"
-      treated_context:
-        $ref: "./datatypes/ref.schema.yaml"
+    type: string
+    enum: [single_context, comparison, series, global]
+    description: "Canonical assertion shape (compiler-specs/40-knowledge.md §5)."
+
+  context_refs:
+    type: array
+    description: "Contexts this assertion ranges over. For single_context: one. For comparison/series: two or more. For global: empty or omitted."
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+    uniqueItems: true
+
+  roles:
+    type: array
+    description: "Role bindings for each context (compiler-specs/40 §4, §5.1). Each entry binds a context-role record to a context_ref in context_refs."
+    items:
+      type: object
+      additionalProperties: false
+      required: [role_ref, context_ref]
+      properties:
+        role_ref:
+          $ref: "./datatypes/ref.schema.yaml"
+          description: "Reference to a context-role (CR-*) record."
+        context_ref:
+          $ref: "./datatypes/ref.schema.yaml"
+          description: "Which context in context_refs plays this role."
 
   outcome:
     type: object
@@ -52,6 +69,14 @@ properties:
       effect_size:
         type: object
         additionalProperties: true
+      layer:
+        type: string
+        enum: [event_derived, model_derived, observed]
+        description: "Which provenance layer produced this outcome (compiler-specs/30 §4)."
+      significance:
+        type: object
+        additionalProperties: true
+        description: "Optional statistical significance block (p_value, ci, method, etc.)."
 
   confidence:
     type: integer
@@ -64,3 +89,27 @@ properties:
     items:
       $ref: "./datatypes/ref.schema.yaml"
     uniqueItems: true
+
+  status:
+    type: string
+    enum: [active, retracted]
+    default: active
+    description: "Lifecycle state. Retracted records remain for provenance but are excluded from active queries (compiler-specs/40 §7)."
+
+  retraction:
+    type: object
+    additionalProperties: false
+    description: "Details of retraction. Present only when status == retracted."
+    properties:
+      reason:
+        type: string
+        description: "Why this record was retracted."
+      retracted_at:
+        type: string
+        format: date-time
+      retracted_by:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Operator who retracted."
+      superseded_by:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Replacement record id, if any."

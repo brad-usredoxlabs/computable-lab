@@ -1,0 +1,8 @@
+# Lint rules for LocalProtocol records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/local-protocol.schema.yaml"
+
+# No rules in Phase 1. Structural validity is carried by the JSON Schema;
+# cross-layer invariants (same-verbs-same-order, substitution-class
+# compatibility) are enforced by the structural-correspondence compiler pass
+# (50 §6), not by lint.

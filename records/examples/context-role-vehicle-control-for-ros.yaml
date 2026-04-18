@@ -1,0 +1,15 @@
+kind: context-role
+id: CR-vehicle-control-for-ros
+name: "Vehicle control for ROS assay"
+description: "A context whose subject receives only the delivery vehicle (e.g., DMSO) with no inducer, establishing the baseline ROS signal."
+applicable_domains:
+  - ros-assay
+prerequisites:
+  - has_material_class:
+      class: solvent-vehicle
+  - not:
+      has_material_class:
+        class: ros-inducer
+expected_outcome:
+  direction: no_change
+  readout: ros-fluorescence

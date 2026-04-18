@@ -1,0 +1,15 @@
+kind: context-role
+id: CR-positive-control-for-ros
+name: "Positive control for ROS assay"
+description: "A context whose subject is a known ROS inducer at a dose expected to produce a measurable increase in the assay's ROS readout."
+applicable_domains:
+  - ros-assay
+prerequisites:
+  - has_material_class:
+      class: ros-inducer
+  - nonEmpty:
+      path: contents
+expected_outcome:
+  direction: increased
+  readout: ros-fluorescence
+  relative_to: vehicle-control

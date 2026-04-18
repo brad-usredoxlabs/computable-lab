@@ -8,358 +8,302 @@ Depends on: 10-charter, 20-event-graph-ir, 30-context, 40-knowledge
 
 ## 1. Purpose
 
-A biology lab produces results by binding three things together: a **recipe** (what to do), a **setting** (where and with what), and an **execution** (what was actually done). The compiler needs each of these as a distinct, versionable, computable artifact — conflating them has historically been the failure mode of lab information systems.
+Biology labs produce results by binding three things together: a **recipe** (what to do), a **setting** (where and with what), and an **execution** (what was actually done). This spec names the three biologist-facing lifecycle layers, maps each layer to the record kinds that implement it, and names the two new kinds and targeted extensions required to complete the picture.
 
-This specification names the four record kinds that make up the protocol/run lifecycle, plus the two supporting kinds that make the lifecycle honest about reality. Together they are the compiler's canonical answer to "what is a protocol?" and "what happened on the bench?"
+Unlike 20–40, the lifecycle domain is **already heavily implemented**. This spec is mostly a statement of deltas against the existing schemas in `schema/workflow/` and the existing services in `server/src/compiler/protocol/`, `server/src/execution/`, and `server/src/capabilities/`. Where a concept already exists in a usable form, this spec preserves it and says so. Only genuine gaps are new design.
 
-The lifecycle is also the bridge between top-down thinking (a vendor's assay procedure, a published method) and bottom-up reality (our specific centrifuge, our specific dye lot, our specific technician on a Tuesday). Neither side is authoritative on its own. The lifecycle is how they meet.
-
-## 2. The four-kind lifecycle
+## 2. The biologist-facing three layers
 
 ```
-  high-level-protocol    ┐
-    (platform-agnostic   │
-     recipe)             │
-         │               │  authored top-down
-         │               │  (vendor, literature, in-house)
-         ▼               ┘
-  local-protocol         ┐
-    (lab-specific        │
-     realization of HLP) │  authored per-lab once,
-         │               │  re-used across runs
-         │               ┘
-         ▼
-  planned-run            ┐
-    (instance-level      │
-     binding)            │  authored per-run,
-         │               │  fully bound, compile-checked
-         │               ┘
-         ▼
-  executed-run           ┐
-    (actualized event    │
-     graph)              │  recorded by operator +
-                         │  ingestion, append-only
-                         ┘
+┌────────────────────────────────────────────────────────────────────┐
+│  GLOBAL  — platform-agnostic recipe                                │
+│  e.g., Thermo DCFDA kit PDF protocol.                              │
+│  "Spin at 15,000 × g for 5 min."                                   │
+└────────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌────────────────────────────────────────────────────────────────────┐
+│  LOCAL  — lab-specific realization of the global recipe            │
+│  "We spin in the Eppendorf 5810R, which lives in the 4°C walk-in,  │
+│   so our spins are cold whether or not the protocol specifies it." │
+└────────────────────────────────────────────────────────────────────┘
+                                │
+                                ▼
+┌────────────────────────────────────────────────────────────────────┐
+│  ACTUAL  — this specific run, performed on a specific day          │
+│  "Angel did it on 2026-04-17; centrifuge ran 08:34→08:39."         │
+└────────────────────────────────────────────────────────────────────┘
 ```
 
-Each kind *refines* the previous one along a specific axis:
+The three layers are the user's mental model. The implementation maps each to one or more existing record kinds plus, in the case of **local**, one new kind.
 
-| Step | What's abstract at input | What's concrete at output |
+## 3. Map: layers to record kinds
+
+| Biologist-facing layer | Record kind(s) | Status |
 |---|---|---|
-| HLP → local-protocol | Equipment class, material class, environmental assumptions, timing policy | Specific rotor model, specific stock, specific fridge, specific defaults |
-| Local-protocol → planned-run | Stock identity, operator identity, plate identity | Bound `MI-*`, `LWI-*`, `PRS-*` references |
-| Planned-run → executed-run | Intended actions | Timestamps, actual values, emitted data artifacts, any deviations |
+| Global protocol | `protocol` (`protocolLayer: "universal"`) | Exists; add `source` field |
+| Local protocol | `local-protocol` (`protocolLayer: "lab"`) | **New kind** |
+| Planned run | `planned-run` | Exists; add `localProtocolRef`; `protocolCompilation` becomes a view onto the referenced local-protocol |
+| Actual run — canonical truth | `event-graph` (materialized) | Exists (20) |
+| Actual run — operational envelope | `execution-run` | Exists; preserve as-is |
+| Actual run — study-session header | `studies/run` | Exists; preserve as-is |
+| Deviations from plan | `execution-deviation` | Exists; add `severity`, `environmental` |
+| Deviation evidence | `execution-observation` | Exists; preserve |
+| Remediation approvals | `execution-remediation-decision` | Exists; preserve |
+| Ops-critical alerting | `execution-incident` | Exists; preserve |
+| Robot-workcell configuration | `execution-environment` | Exists; add `lab_state_refs` for equipment-mount facts |
+| Lab-level time-varying facts | `lab-state` | **New kind** |
+| Compile-time: event-graph + env → plan | `execution-plan` | Exists; preserve as compile artifact |
+| Compile-time: per-platform lowered | `robot-plan` | Exists; preserve as compile artifact |
 
-Refinement is strict. Nothing that was concrete at one stage becomes abstract at the next. Verbs and ordering are preserved through the entire chain — §5 makes this precise.
+Everything in this spec elaborates one row in this table.
 
-## 3. High-level protocol (HLP)
+## 4. Global protocol
 
-A `high-level-protocol` is a **platform-agnostic recipe**: the sequence of lab actions required to perform an assay, stated in terms that any adequately equipped lab could in principle follow.
+The existing `protocol` record kind (`schema/workflow/protocol.schema.yaml`, `protocolLayer: "universal"`) is the global layer unchanged. Its existing shape — ordered `steps[]`, abstract `roles` (labware / material / instrument / context / layoutTemplate / library), declarative `parameters`, `producedArtifacts`, `executionProfiles`, `reviewerRef` / `approverRef` — remains authoritative.
 
-### 3.1 What an HLP contains
+### 4.1 One addition: `source`
 
-- An ordered list of protocol **steps**, each tagged with a verb from the 20-event-graph-ir catalog.
-- Named **roles** (material-role, labware-role, instrument-role, context-role) that each step's participants are drawn from. Roles are abstract — `plate_reader`, `redox_sensitive_dye`, `living_cells` — not concrete instances.
-- Declared **parameters** (incubation times, temperatures, volumes) that a downstream local-protocol or planned-run can bind or override.
-- **Produced artifacts** — the declarative contract for what the protocol yields (materials, measurements, datasets).
-- **Environmental assumptions** expressed abstractly (e.g., "37°C incubator with 5% CO₂ atmosphere") — not bound to a specific lab-state.
+```
+source:
+  type: vendor | literature | internal | derived
+  ref:  <publication-ref | document-ref | event-graph-ref>
+```
 
-The existing `schema/workflow/protocol.schema.yaml` with `protocolLayer: "universal"` is the HLP schema. Its structure is preserved; 50 only clarifies its role.
+`derived` is used for protocols produced by assay-definition promotion (30 §12.2), where `ref` points at the source event-graph.
 
-### 3.2 Sources of HLPs
+### 4.2 Phase 1 scope
 
-An HLP's origin is declared in a `source` field:
+Global protocols enter the system primarily by AI-assisted ingestion of vendor PDFs and literature (80) — this path already exists via `server/src/protocol/ProtocolExtractionService.ts` and `server/src/protocol/ProtocolImportService.ts`. No rich WYSIWYG editor in Phase 1; curation is via focused form widgets and YAML review.
 
-| Source | Example |
-|---|---|
-| `vendor` | Thermo DCFDA kit protocol |
-| `literature` | Method section of a published paper |
-| `internal` | In-house assay authored by the lab |
-| `derived` | Generated by assay-definition promotion (see 30 §12.2) |
+## 5. Local protocol (new kind)
 
-`vendor` and `literature` sources carry a reference (publication-ref or document-ref). `derived` carries a `prepared_from` field pointing at the event subgraph and source contexts that produced it.
+`local-protocol` is a **new first-class record kind** that makes the lab layer of the existing universal→lab compilation a persistent, versionable, citable record.
 
-### 3.3 Phase 1 scope for HLP
+### 5.1 Why it's a new kind, not more fields on `planned-run`
 
-HLPs enter the system primarily by **AI-assisted ingestion** (see 80): vendor PDFs and literature procedures are extracted into candidate HLP records for human review, then committed. Phase 1 does not provide a rich WYSIWYG editor for HLPs; they are reviewed and corrected in YAML or through focused form widgets for specific fields.
+Today, the universal→lab compilation lives inside `planned-run.protocolCompilation` as an embedded result of `ProtocolCompiler.compile()`. Every planned-run re-derives the same lab-specific decisions ("our fuge is in the cold room," "we substitute DCFDA-Thermo-A123 for the abstract redox dye role") from scratch.
 
-This is a deliberate scoping choice. Biologist-facing editing happens at the **local-protocol** layer, where the content is lab-specific and the biologist's own. HLPs are the world-facing layer and should stabilize through ingestion + curation, not through bench authoring.
+Making local-protocol a standalone kind buys:
 
-### 3.4 HLPs are not runs
+- **Amortized lab decisions.** Decide "our fuge spins are cold" once per lab+assay, reuse across every planned-run.
+- **Lab-state anchoring.** A local-protocol can declare `lab_state_refs: [LST-fuge-location]`; when the fuge moves, the compiler knows which local-protocols just became stale.
+- **Citable, versionable, supersedable** at the lab layer independently of any single run.
+- **Diff-viewable** against the global protocol it realizes.
 
-An HLP does not produce events. It declares what events *would* be produced given concrete bindings. Only planned-runs and executed-runs contain events. This separation matters: it means an HLP can be referenced, cited, superseded, and cross-compared at the recipe level without dragging in the specific instances of every lab that has used it.
-
-## 4. Local-protocol
-
-A `local-protocol` is a **lab-specific realization of an HLP**. It is the layer where the global recipe meets the specific laboratory.
-
-### 4.1 Why this layer exists
-
-Every biology lab has equipment, stocks, and conventions that the HLP is silent about. The HLP says "spin at 15,000 × g." Our lab's Eppendorf microfuge does 15,000 × g — but it lives inside the 4°C walk-in, so our spins are cold whether or not the HLP specified temperature. Our DCFDA stock is Thermo lot #A123, frozen in 10 µL single-use aliquots, because that's how we made it. Our plate reader is the SpectraMax-7 at deck position 3.
-
-The local-protocol carries these facts, **once**, and is re-used across every planned-run that does this assay in our lab. Without this layer, every planned-run re-derives lab-specific decisions, and drift is guaranteed.
-
-### 4.2 Inheritance and structured overrides
+### 5.2 Shape
 
 ```
 LPR-<id>
-  inherits_from: <HLP-ref>          # required
-  lab_state_refs: [<LST-...>, ...]  # environmental assumptions (see §9)
+  kind: local-protocol
+  protocolLayer: "lab"
+  inherits_from: <protocol-ref>              # required; the global protocol
+  lab_state_refs: [<LST-...>, ...]           # environmental assumptions (see §10)
   overrides:
-    bindings: [ ... ]               # which concrete stocks/equipment satisfy which HLP role
-    parameters: [ ... ]             # parameter values resolved at the lab layer
-    substitutions: [ ... ]          # material-class-level substitutions (§4.4)
-    timing_policies: [ ... ]        # how "incubate 30 min" maps to our incubator's known ramp time
-    tip_policies: [ ... ]           # tip reuse conventions per pipetting family
+    bindings: [ ... ]                         # which concrete stocks/equipment satisfy which global role
+    parameters: [ ... ]                       # parameter values resolved at the lab layer
+    substitutions: [ ... ]                    # material-class-level substitutions (§5.4)
+    timing_policies: [ ... ]                  # how "incubate 30 min" maps to our incubator's ramp
+    tip_policies: [ ... ]                     # tip reuse conventions per pipetting family
+  supersedes?: <LPR-...>                      # append-only versioning
+  status: draft | active | superseded | retracted
   notes?: string
 ```
 
-The `overrides` block is strictly **additive with respect to the HLP's abstract structure**. A local-protocol cannot add, remove, reorder, or retype steps. It can only fill in, narrow, or substitute inside the HLP's declared shape.
+### 5.3 Inheritance semantics
 
-### 4.3 Re-compilation on HLP change
+A local-protocol's `inherits_from` edge resolves to a specific version of a global protocol. If the global protocol is superseded, the local-protocol receives a cascade diagnostic (same mechanism as 40 §7.2) but is **not** automatically updated. Biologist reviews the diff, authors a new local-protocol version pointing at the new global version.
 
-If the HLP version the local-protocol inherits from is superseded, the local-protocol receives a diagnostic (not an automatic update). The biologist reviews the HLP diff, authors a new local-protocol version (with `supersedes` pointing at the old local-protocol), and the runs that still use the old local-protocol remain valid under the pinned HLP version.
+### 5.4 Substitutions
 
-Append-only versioning everywhere; same mechanism as 30 §12.5 and 40 §7.
-
-### 4.4 Substitutions
-
-A substitution says: "wherever the HLP calls for a member of material-class X, we use this specific stock/spec."
+A substitution says: "wherever this global protocol calls for a member of material-class X, we use this specific stock/spec."
 
 ```
 substitutions:
-  - hlp_role: redox_sensitive_dye
+  - role: redox_sensitive_dye
     material_ref: MSP-DCFDA-Thermo-A123
-    rationale: "Our standard DCFDA stock; prepared in-house from the Thermo kit."
-  - hlp_role: vehicle_solvent
-    material_ref: MSP-DMSO-SigmaUltraPure
+    rationale: "Standard DCFDA stock; prepared in-house from the Thermo kit."
 ```
 
-The compiler verifies the substitution is structurally valid: the referenced material-spec must satisfy the material-class the HLP declared. This check reuses the context-role / predicate-DSL machinery in 40 §4.3 — a material-class check and a context-role prerequisite use the same vocabulary.
+Structural validity is checked using the context-role predicate DSL (40 §4.3): the substituted material must satisfy the class the global protocol declared. Invalid substitutions are **errors**, not warnings.
 
-Invalid substitutions (e.g., substituting a dye that does not belong to `redox-sensitive-dye` class) produce an **error** diagnostic. The compiler does not allow a local-protocol to silently violate its HLP's contract.
+### 5.5 Structured overrides, not structural rewrites
 
-### 4.5 Diff view
+`overrides` is strictly additive with respect to the global protocol's shape. A local-protocol cannot add, remove, reorder, or retype steps. Same-verbs-same-order is enforced here — see §6.
 
-A local-protocol is presented to the biologist alongside its HLP via a structured diff: the HLP's abstract shape on one side, the local-protocol's concrete fill-ins on the other. Diffable fields are exactly the `overrides` block; non-diffable structure is pinned.
+### 5.6 Implementation: refactor the existing ProtocolCompiler
 
-This surface is primarily a Phase 2 deliverable, but the record shape supports it in Phase 1.
+`server/src/compiler/protocol/ProtocolCompiler.ts` today emits a `ProtocolCompilerResult` with `sourceLayer: 'universal', targetLayer: 'lab'` that gets embedded in `planned-run.protocolCompilation`. The refactor:
 
-## 5. Structural correspondence: "same verbs, same order"
+1. The compiler emits a **`local-protocol` record** as its persistent artifact.
+2. `planned-run.protocolCompilation` becomes a materialized view onto the referenced `local-protocol`, not an embedded re-computation.
+3. The existing compiler's diagnostic set (`ProtocolCompilerDiagnostic`, `ProtocolCompilerRemediation`) is preserved.
+4. `planned-run` gains a `localProtocolRef` field; `sourceType` enum gains `local-protocol`.
 
-The load-bearing invariant of this lifecycle is:
+This is a migration, scoped as part of Phase 1 for the ROS workflow.
 
-> **For every HLP → local-protocol → planned-run → executed-run chain, the ordered sequence of event verbs must match exactly at every level, with the sole permitted structural elaboration being multi-channel fan-out (20 §7) and the compile-time expansion of macro steps into their primitive events.**
+## 6. Structural correspondence: "same verbs, same order"
 
-This is the resolution of C17 (the "protocol implements" question from the planning session). It makes the protocol-lifecycle *structural*, not merely nominal.
+The load-bearing invariant of the lifecycle:
 
-### 5.1 What this enables
+> **For every global → local → planned-run → executed event-graph chain, the ordered sequence of event verbs must match exactly at every level, with the sole permitted structural elaboration being multi-channel fan-out (20 §7) and the compile-time expansion of macro steps into their primitive events.**
 
-- **Deviation computation is exact.** For any `actualizes` edge (executed event → planned event), the verb must match. Mismatches are deviations, not semantic puzzles.
-- **Re-compilation is safe.** When an HLP or local-protocol version changes, the compiler can mechanically re-align each downstream planned-run's events to the updated source.
-- **Bindings are positional.** A planned-run's Nth event binds the Nth step of the local-protocol, which in turn maps to the Nth step of the HLP.
-- **Promotion (30 §12) is well-defined.** An assay-definition promoted from an executed-run is an HLP whose step shape is the run's event shape, minus concrete bindings.
+This is the resolution of C17 from the planning session.
 
-### 5.2 How it's checked
+### 6.1 What it enables
 
-The compiler performs a **structural correspondence pass** at local-protocol-compile and at run-plan-compile:
+- **Deviation computation is positional.** The Nth executed event `actualizes` the Nth planned event; verb mismatch is a deviation, not a semantic puzzle.
+- **Re-compilation is mechanical.** When a global or local-protocol version changes, the compiler can align downstream planned-runs by position.
+- **Bindings are positional.** A planned-run's Nth event binds the Nth step of the local-protocol, which in turn maps to the Nth step of the global protocol.
+- **Promotion is well-defined** (30 §12). An assay-definition promoted from an executed event-graph is a global protocol whose step shape is the run's event shape minus concrete bindings.
 
-1. Walk the HLP's `steps[]` in order.
+### 6.2 How it's checked
+
+A **structural-correspondence pass** runs at local-protocol-compile and at run-plan-compile:
+
+1. Walk the global protocol's `steps[]` in order.
 2. Walk the local-protocol's steps (or the planned-run's planned events) in order.
-3. At each position, require verb equality. For macro steps in the HLP that expand into multiple primitive events, require the primitive sequence to be an exact expansion of the macro definition.
-4. For multi-channel expansions, require the multi-channel event's wells to align with the HLP step's well-selector.
-5. On mismatch, emit an **error** (structural invalid), not a warning. There is no graceful partial correspondence.
+3. At each position, require verb equality. Macros in the global protocol must expand into an exact primitive sequence per the macro definition.
+4. For multi-channel expansions, require the multi-channel event's wells to align with the global step's well-selector.
+5. On mismatch, emit a structural **error** (not a warning). No graceful partial correspondence.
 
-### 5.3 What it does *not* constrain
+### 6.3 What is *not* constrained
 
-- **Parameters** (volume, duration, temperature) may change across layers, subject to HLP-declared constraints.
-- **Bindings** of roles to concrete instances may change across layers.
-- **Substitutions** of material-class members may change across layers, subject to §4.4.
-- **Tip and timing policies** may change across layers.
+- **Parameters** (volume, duration, temperature) may change across layers subject to declared constraints.
+- **Bindings** to concrete instances may change.
+- **Substitutions** of material-class members may change subject to §5.4.
+- **Tip and timing policies** may change.
 
-Verb and order are the minimal invariant. Everything else is a refinement knob.
+Verb and order are the minimal invariant; everything else is a refinement knob.
 
-### 5.4 Macro steps
+### 6.4 If a lab needs a different structure
 
-An HLP may include macro steps that stand for a fixed sequence of primitive events (e.g., "wash 3×" = three `wash` events). Macros are expanded at local-protocol-compile time. The expansion is mechanical and declarative; the HLP's macro definition is the authoritative mapping.
+It is authoring a **sibling global protocol**, not a variant local-protocol. The "we do it differently" case is a branch at the global layer, not a rewrite at the local layer.
 
-Macros are preserved in v1 for the existing `plate-event.macro-program` verb family; they are not a Phase 1 expansion target. The rule for 50: macros are allowed at the HLP layer and are expanded no later than planned-run compile. The verb-and-order invariant applies to the expanded form.
+## 7. Planned run
 
-## 6. Planned-run
+The existing `planned-run.schema.yaml` is preserved. Its role is unchanged: instance-level binding of a local-protocol to concrete material-instances, labware-instances, operators, and instruments, with compiler-emitted diagnostics and remediation.
 
-A `planned-run` is an **instance-level binding** of a local-protocol to the real world on a specific day.
+### 7.1 Changes
 
-### 6.1 What a planned-run contains
+- **Required**: `localProtocolRef` (new). A planned-run must reference a local-protocol; it cannot directly point at a global protocol.
+- **`sourceType`** enum gains `local-protocol` (today: `protocol | event-graph`).
+- **`protocolCompilation`** block becomes a **materialized view** onto the referenced local-protocol, not an independent computation.
 
-- A reference to the local-protocol (`inherits_from` chain resolves to an HLP).
-- **Concrete bindings**:
-  - Material-instances (`MI-*`, `ALQ-*`) for each material role, respecting substitutions already declared in the local-protocol.
-  - Labware-instances (`LWI-*`) for each labware role.
-  - Instruments (`INS-*`) for each instrument role.
-  - Operators (`PRS-*`).
-  - Contexts (`CTX-*`) for each context-role (see 40 §4) — e.g., "well A1 has role `positive-control-for-ros`."
-- **Parameter values** resolved to concrete numbers, any remaining HLP-declared parameter that was not fixed by the local-protocol.
-- The **planned event graph**: the ordered sequence of planned events with all roles resolved to concrete instances. Structural correspondence to the local-protocol is re-checked here.
-- Optional **execution strategy**: pipette mode (single-channel / multi-channel), lane grouping, robot mapping if the run will be robot-executed.
-- Compile result (`ready` / `needs-confirmation` / `needs-missing-fact` / `policy-blocked` / `execution-blocked`) from the kernel, preserved from the existing `planned-run.protocolCompilation` shape.
+### 7.2 What stays
 
-The existing `schema/workflow/planned-run.schema.yaml` already carries most of this. 50 preserves it and sharpens the requirement that planned-runs are structurally downstream of a local-protocol, which is in turn downstream of an HLP.
+- `bindings: { labware, materials, contexts, layoutTemplates, libraries, instruments, parameters }` — unchanged.
+- `deckLayout`, `pipetteConstraints`, `executionPlan` — unchanged.
+- `protocolCompilation.diagnostics` / `remediationOptions` shape — unchanged (the existing shape is already the right carrier for chatbox/quick-fix UX; see §12).
+- State enum (`draft | ready | executing | completed | failed`) — unchanged.
 
-### 6.2 Capability matching
+### 7.3 Capability matching — already exists
 
-At planned-run compile time, the compiler performs a **capability-matching pass**:
+The "can this rotor spin at 15,000 × g with this labware?" check is `server/src/capabilities/EquipmentCapabilityService.ts` consuming `equipment-capability` records. No new commitment. This spec confirms that path is authoritative for capability matching and that Phase 1 exercises it via the ROS workflow.
 
-- For each planned event, read the bound instrument's capabilities (from `equipment-capability` records).
-- Verify that the instrument supports the event's verb.
-- Verify that the bound labware is in the instrument's `acceptedLabware` list for that verb, accounting for sub-modules (e.g., which rotor is currently mounted — see §9.3).
-- Verify that any constraint (e.g., `volume_min_ul`, `volume_max_ul` for pipettes, `max_g_force` for centrifuges) is satisfied by the planned parameters.
+### 7.4 AI-proposed plans — already exists
 
-The authoritative question this pass answers is: **can this rotor spin at 15,000 × g with this labware?** If not, a `policy-blocked` or `execution-blocked` diagnostic is emitted, with remediation options (different rotor, different labware, different instrument).
+`server/src/execution/planning/` and `server/src/mcp/tools/aiPlanningTools.ts` already propose candidate planned-runs. The load-bearing principle: **ranking is advisory; correctness is authoritative.** The compiler refuses invalid plans; it does not pick among valid ones. Ranking lives above the compiler boundary.
 
-Capability matching is a Phase 1 requirement for the ROS workflow. The existing `equipment-capability.schema.yaml` is the data source; 60 §compiler details the pass implementation.
+## 8. Actual run: what happened
 
-### 6.3 AI-proposed plans and ranking
+The actual-run layer is **not a new record kind**. It is a composite of three existing records, each with a distinct role.
 
-Multiple valid bindings often satisfy a local-protocol. Which specific DCFDA aliquot to use? Which of three compatible plate readers? Which operator is qualified and available?
+| Record kind | Role |
+|---|---|
+| `event-graph` | The canonical truth of what occurred. Ordered events, resource nodes, edges (20). |
+| `execution-run` | Operational envelope. Attempt counters, lease ownership, external runtime IDs, status transitions, failure classification. Points at the materialized event-graph via `materializedEventGraphId`. |
+| `studies/run` | Study-session header. Registers this execution within an experiment/study context. Points at the active event-graph via `methodEventGraphId`. |
 
-The AI layer (80) may **propose candidate planned-runs**, ranked by a quality score that considers:
-- Freshness of stocks (older aliquots preferred for use before expiry).
-- Operator availability and qualification.
-- Instrument preference (recently calibrated, low recent-failure-rate).
-- Constraint satisfaction (a plan that satisfies more soft preferences ranks higher).
-
-**The ranking is advisory, not authoritative.** The biologist selects which planned-run to commit; the compiler only validates correctness. This distinction — correctness vs. preference — is load-bearing. The compiler refuses invalid plans; it does not pick among valid ones.
-
-### 6.4 Planned-run versioning
-
-A planned-run is committed once. If bindings change before execution starts (e.g., a stock ran out, a different operator is assigned), a new planned-run record is authored with `supersedes` pointing at the old one. The old planned-run remains in history; only `state: draft` planned-runs are mutable in place.
-
-Existing states (`draft`, `ready`, `executing`, `completed`, `failed`) on the current `planned-run.schema.yaml` are preserved.
-
-## 7. Executed-run
-
-An `executed-run` is the **actualized event graph**: what was actually done, with wallclock timestamps, actual parameter values, actual operator, and any data artifacts produced.
-
-### 7.1 What an executed-run contains
-
-- A reference to the planned-run (`plannedRunRef`).
-- An `event-graph-ref` to the canonical event graph record that materialized during the run.
-- Timestamps (`startedAt`, `completedAt`, plus per-event timestamps via the event graph).
-- Actual parameter values where they diverged from planned (the divergence is carried in `deviation` records; see §8).
-- Data artifacts produced (`DAT-*` refs, plate reader output, images).
-- Overall `status` (`running`, `completed`, `failed`, `canceled`).
-- A `materialized_event_graph_id` pointing at the canonical event graph that the run populated.
-
-### 7.2 The `actualizes` edge
-
-Every event in the executed event graph carries an `actualizes` edge (20 §2.2) to the corresponding planned event. The structural-correspondence invariant (§5) means this mapping is positional and exact — the Nth actual event `actualizes` the Nth planned event.
-
-The verb must match. If the operator performed a verb different from the planned verb, the planned event is marked "not executed" and a **deviation** (§8) with the actual event is recorded.
-
-### 7.3 How executed-runs are authored in Phase 1
-
-Three authoring paths, all valid, often mixed within a single run:
-
-1. **Robot/instrument ingestion** — when a run is executed on an Opentrons or similar, the run log is ingested into an event graph. The ingestion pass aligns to the planned event graph via the `actualizes` edges.
-2. **Bench app logging** — a biologist uses a future bench-side UI to log events as they happen. Phase 1 does not deliver this UI, but the record shape supports it.
-3. **Post-hoc authoring** — the biologist records the run in the UI or via YAML after the fact, binding events to the planned-run. Phase 1 primary path.
-
-In all three paths, the compiler re-checks structural correspondence, capability constraints (what *was* used must support what *was* done), and emits diagnostics for any inconsistency.
-
-### 7.4 Relationship to the existing `execution-run` kind
-
-The existing `schema/workflow/execution-run.schema.yaml` is an **operational** tracking record (non-FAIR, runtime state) for robot execution. It is preserved as-is for that role.
-
-`executed-run` is the **canonical lifecycle kind** this spec introduces (FAIR, authoritative), linking a planned-run to its materialized event graph. Phase 1 implementation may realize `executed-run` by extending the existing `execution-run` shape with canonical-FAIR fields, or by introducing a new kind. The data-modeling choice is a schema-evolution question; 50 commits to the semantic role.
-
-## 8. Deviation
-
-A `deviation` is a **first-class record** of a divergence between planned intent and executed reality.
-
-### 8.1 Shape
+The ordering is:
 
 ```
-DEV-<id>
-  executed_run_ref: <EXR-...>
-  planned_run_ref: <PLR-...>
-  planned_event_ref: <EVT-...>       # the planned event that was deviated from
-  actual_event_ref?: <EVT-...>       # the event that was actually performed, if any
-  kind: remediation | operator | runtime | environmental
-  severity: minor | significant | major
-  reason: string                     # required, biologist-readable
-  authored_by: <operator-ref>
-  authority: <approval-authority>    # run-operator | supervisor | qa-reviewer | ...
-  recorded_at: <iso-datetime>
-  status: accepted | observed
+planned-run ──execute──▶ execution-run ──materialize──▶ event-graph
+                              │                              │
+                              └─ optionally registered by ───┴─▶ studies/run
 ```
 
-The existing `execution-deviation.schema.yaml` carries most of this. 50 formalizes two additions:
+### 8.1 What this spec does with these kinds
 
-- **`severity`** — required, three-level scale (§8.3).
-- **`kind: environmental`** — added to the existing enum to cover lab-state-change-triggered deviations (§9.4).
+**Nothing by way of schema changes.** Their existing shapes are preserved. This spec's contribution is to name their respective roles so downstream consumers stop looking for a single "executed-run" kind that doesn't need to exist.
 
-### 8.2 Deviation vs retraction vs supersession
+### 8.2 The `actualizes` edge
 
-Three related-but-distinct concepts:
+Every event in the materialized event-graph carries an `actualizes` edge (20 §2.2) to the corresponding planned event. Structural-correspondence (§6) makes this mapping positional. Mismatches are deviations (§9).
 
-| Concept | Meaning | Primary use |
-|---|---|---|
-| Retraction | "This was wrong" | Assertions, claims, material-specs found to be incorrect |
-| Supersession | "This was right at the time but is replaced" | HLP and local-protocol version bumps |
-| Deviation | "This was planned but what happened was different" | Executed-run diverging from planned-run |
+### 8.3 Authoring paths in Phase 1
 
-A deviation does not invalidate the planned-run it deviates from; the planned-run remains the intended plan, and the executed-run + deviations together tell the true story of what happened.
+1. **Robot/instrument ingestion** — `ExecutionMaterializer` / `ExecutionPoller` stack already consumes run logs and materializes event-graphs.
+2. **Post-hoc authoring** — biologist records events in YAML or the UI after the fact, binding to the planned-run.
+3. **Bench-side real-time logging** — record shape supports it; UI deferred.
 
-### 8.3 Severity scale
+## 9. Deviations: keep the existing four-record stack
 
-- **`minor`** — within declared tolerance; no expected material change to downstream results. Example: incubation ran 29 minutes instead of 30. Compiler downgrades affected diagnostics to info.
-- **`significant`** — outside tolerance but the run remains analyzable. Example: operator used a different DCFDA lot than planned. Compiler flags affected assertions for reviewer attention.
-- **`major`** — invalidates the run for its intended purpose, or requires the run to be repeated, or flags downstream assertions as unreliable. Example: wrong centrifuge speed by a factor of 5. Compiler flags the run and its assertions; biologist decides whether to retract assertions.
+The existing operational stack is coherent. **No unification.** Four records, four roles:
 
-Severity is authored by the biologist (the compiler cannot know biological impact from a numeric diff alone). The compiler validates that the authored severity is internally consistent (e.g., a `major` deviation on a centrifuge step cannot be paired with an unqualified `ready` run status).
+| Record | Role |
+|---|---|
+| `execution-deviation` | Authoritative "this differed from plan." |
+| `execution-observation` | Append-only evidence (step-outcome / runtime-note / measurement); may link to a deviation. |
+| `execution-remediation-decision` | Accept/reject approval workflow for a proposed remediation. |
+| `execution-incident` | Ops-critical alerting (adapter_health / retry_exhausted / runtime_failure). Fires alerts, not analytics. |
 
-### 8.4 Multiple deviations per run
+### 9.1 Two targeted changes to `execution-deviation`
 
-A single executed-run may carry many deviations. Each is its own record; the run's overall reliability is a function of its deviation set, evaluated by the biologist and recorded as a note or assertion on the run.
+1. **Add required `severity`**: `minor | significant | major` — the **biologist-relevance axis**, distinct from `execution-incident.severity` (ops urgency).
+   - `minor`: within declared tolerance; no expected material change to downstream results. (Example: incubation ran 29 min instead of 30.)
+   - `significant`: outside tolerance but run remains analyzable. (Example: different DCFDA lot than planned.)
+   - `major`: invalidates the run or flags downstream assertions as unreliable. (Example: wrong centrifuge speed by 5×.)
+2. **Add `environmental`** to the `deviationType` enum (today: `remediation | operator | runtime`). Used when lab-state changed during execution in a way that affected the run.
 
-### 8.5 Deviations are append-only
+### 9.2 Why biologist-severity is distinct from incident-severity
 
-A deviation record is never mutated. If a deviation was mis-classified (e.g., authored as `minor` but on review is `major`), a new deviation record with `supersedes` is authored. The history is preserved.
+`execution-incident.severity` (`info | warning | critical`) is ops alerting — "is this firing a page." `execution-deviation.severity` (`minor | significant | major`) is biological consequence — "does this change what the data means." The same run can have a `critical` incident (the adapter dropped connection) and a `minor` deviation (the connection drop caused a 30-second pause). They answer different questions.
 
-## 9. Lab-state
+## 10. Lab-state (new kind)
 
-`lab-state` is a **new first-class record kind**: time-varying declarative records capturing facts about the lab that local-protocols and planned-runs depend on.
+`lab-state` is a **new first-class record kind**: time-varying declarative records capturing facts about the lab that protocols depend on.
 
-### 9.1 Why this kind exists
+### 10.1 Why it's a new kind
 
-Labs have state that is neither an HLP concern nor a per-run concern, but a lab-level fact that persists until it changes:
+Labs have facts that are neither a global-protocol concern nor a per-run concern:
 
-- The Eppendorf microfuge is in the 4°C walk-in this month.
+- The Eppendorf 5810R lives in the 4°C walk-in this month.
 - The SpectraMax-7 has the fluorescence filter cube installed today.
 - We have 47 mL of DCFDA-Thermo-A123 stock on hand.
 - The 37°C incubator has been running at 36.9°C since last Monday (verified by external probe).
-- The walk-in freezer is at -22°C instead of -20°C pending compressor service.
 
-These facts condition what protocols are runnable, what capabilities are available, and what downstream diagnostics mean. Without a home for them, they live in someone's head.
+These condition what protocols are runnable, what capabilities are available, and what diagnostics mean. Without a home, they live in someone's head.
 
-### 9.2 Shape
+### 10.2 Lab-state vs execution-environment
+
+`execution-environment` is robot-workcell-specific configuration for robot-plan compilation (deck slots, tools, labware_registry, constraints). It answers: "how is this robot assembled right now?"
+
+`lab-state` is lab-level facts affecting the whole lab, not just robots. It answers: "what's true about our lab right now that a protocol might depend on?" This includes manual-bench equipment (the fuge in the fridge), facility-level conditions (walk-in temperature), and stock levels — none of which belong in an execution-environment.
+
+Where they overlap — equipment mounts, tool configuration — `execution-environment` **references** relevant `lab-state` records (new field: `lab_state_refs[]`) rather than duplicating the fact. Lab-state is the single source of truth for time-varying hardware reality; execution-environment assembles those facts for robot compilation.
+
+### 10.3 Shape
 
 ```
 LST-<id>
+  kind: lab-state
   subject_type: equipment | equipment-mount | facility-zone | stock | ambient | operator-state
-  subject_ref: <ref>                 # to equipment, facility, stock, etc.
+  subject_ref: <ref>
   attribute: string                  # e.g., "location", "mounted_rotor", "stock_volume", "ambient_temperature"
-  value: <attribute-specific>        # structure varies by attribute
+  value: <attribute-specific>
   valid_from: <iso-datetime>
-  valid_until?: <iso-datetime>       # open-ended if omitted
+  valid_until?: <iso-datetime>
   supersedes?: <LST-...>             # append-only chain
   asserted_by: <operator-ref>
-  evidence_ref?: <EVD-...>           # optional evidence (e.g., a calibration result, a photo)
-  status: active | retracted
+  evidence_ref?: <EVD-...>
+  status: active | superseded | retracted
   notes?: string
 ```
 
-The set of valid `(subject_type, attribute)` pairs is declarative, lives in a registry, and is versioned — adding a new lab-state flavor is a YAML authoring task, not a TypeScript change. Phase 1 seeds the following:
+The set of valid `(subject_type, attribute)` pairs is declarative, lives in a registry at `schema/registry/lab-state-attributes/`, and is versioned — adding a new lab-state flavor is YAML authoring, not TypeScript.
+
+### 10.4 Phase 1 seed attributes
 
 | subject_type | attribute | value shape |
 |---|---|---|
@@ -370,210 +314,133 @@ The set of valid `(subject_type, attribute)` pairs is declarative, lives in a re
 | ambient | temperature | `{ value, unit }` |
 | facility-zone | temperature | `{ value, unit }` |
 
-### 9.3 How local-protocols reference lab-state
+### 10.5 The cascade
 
-A local-protocol declares `lab_state_refs: [...]` listing the lab-state records whose values its overrides depend on. Example:
+When a lab-state record is superseded, the compiler:
 
-```
-# LPR-ros-assay-v3
-inherits_from: HLP-ros-assay-v1
-lab_state_refs:
-  - LST-eppendorf-fuge-location-2026-03     # "in walk-in fridge"
-  - LST-spectramax-filter-cube-2026-04      # "fluorescence cube installed"
-  - LST-dmem-fbs-stock-2026-04              # "prepared 2026-04-10, expires 2026-05-10"
-overrides:
-  # ...
-```
-
-This makes environmental dependency **explicit and computable**. The spec of "our DCFDA-adding centrifuge step is cold because the fuge is in the fridge" is a lab-state reference, not a comment.
-
-### 9.4 The cascade
-
-When a lab-state record is superseded (e.g., the fuge is moved out of the walk-in), the compiler:
-
-1. Walks all `active`-status records with a `lab_state_ref` to the superseded record.
-2. Emits a **cascade diagnostic** on each dependent local-protocol: "one of your lab-state assumptions just changed; review and re-compile or re-author before using this local-protocol again."
-3. Emits a further cascade diagnostic on any `draft` or `ready` planned-run that points at an affected local-protocol.
+1. Walks `active` records with a `lab_state_ref` to the superseded record.
+2. Emits a cascade diagnostic on each dependent local-protocol: "one of your lab-state assumptions just changed; re-compile or re-author before using this again."
+3. Emits a further cascade diagnostic on any `draft`/`ready` planned-run that points at an affected local-protocol.
 4. Does **not** mutate any of these records. The biologist authors new versions.
 
-The cascade mechanism is the same walker used for retraction cascade in 40 §7.2. Phase 1 delivers lab-state cascade; the retraction cascade general case is Phase 2.
+This reuses the retraction-cascade walker from 40 §7.2. Phase 1 delivers lab-state cascade as the prototype of the general cascade mechanism.
 
-### 9.5 Deviations from lab-state
+### 10.6 Mid-run lab-state changes
 
-If a run executes and during execution the lab-state differs from what the local-protocol assumed (e.g., the fuge has been moved out of the fridge and nobody updated the lab-state record), the result is:
+If during execution lab-state differs from what the local-protocol assumed (e.g., the fuge was moved and nobody updated the record), the result is an `environmental` deviation on the run, a new lab-state record with `supersedes` recording the correction, and cascade diagnostics on other affected protocols.
 
-- An `environmental` deviation on the run, authored post-hoc when the mismatch is noticed.
-- A new lab-state record with `supersedes` recording the correction.
-- A cascade diagnostic on any other local-protocol or planned-run affected.
+### 10.7 What lab-state is not
 
-This is how the lifecycle stays honest about the world even when someone forgets to update lab-state proactively.
+- Not scheduling. "Is Alice using the fuge at 2pm?" is out of scope (10 §3).
+- Not a context. Contexts (30) describe subject state derived from events. Lab-state is the lab's own state, not derived from events.
 
-### 9.6 What lab-state is not
+## 11. Compile-time derived artifacts
 
-- Lab-state is not `execution-environment` (the existing robot/workcell descriptor). `execution-environment` is a **static** declarative hardware-and-deck configuration for robot execution. Lab-state is **time-varying** facts. They may overlap (both mention equipment) but their roles differ: execution-environment configures the robot; lab-state records what the lab is like.
-- Lab-state is not scheduling. Whether Alice is using the centrifuge at 2pm is scheduling (out of scope, 10 §3). Whether the centrifuge is mechanically in the fridge is lab-state.
-- Lab-state is not a context. Contexts (30) describe the computed state of a subject at a timepoint from the event graph. Lab-state is the standing state of the lab itself, not derived from events.
+`execution-plan` and `robot-plan` are **not biologist-facing lifecycle stages**. They are compile-time artifacts generated downstream of `planned-run` to target a specific execution backend.
 
-## 10. Planning and ambiguity resolution UX
+| Artifact | Generated from | Role |
+|---|---|---|
+| `execution-plan` (`protocolLayer: "execution-ready"`) | planned-run's `event-graph` + a specific `execution-environment` | Physical placements, tool-bindings, tip/channelization/batching strategy. Platform-family-generic. |
+| `robot-plan` | `execution-plan` | Per-platform lowered artifact (deckSlots, pipettes, executionSteps). Platform-specific (Opentrons, Integra, pylabrobot). Non-FAIR, may be cached. |
 
-Biology workflows are ambiguous at every lifecycle stage. This section names the UX commitment for how the compiler surfaces and resolves that ambiguity — specifically for the authoring flows this spec owns (local-protocol authoring, planned-run binding, executed-run recording).
+Analogy: a C compiler produces `.o` then `.exe`. The biologist authors C; doesn't author `.o`. Same here. Preserve both kinds as-is.
 
-### 10.1 Chatbox as the primary mode
+Both are generated by existing services (`server/src/execution/compilers/`, `server/src/execution/adapters/`). No schema changes.
 
-The biologist resolves compiler diagnostics primarily through a **chatbox-style dialogue** with the AI assistant (80), which reads the current compiler diagnostics and proposes candidate resolutions in compiler-native form (edit-intents). The biologist confirms, and the compiler applies the edit.
+## 12. Planning and ambiguity UX
 
-This is the general UX commitment for ambiguity resolution across the suite (10 §2.5). 50 specifically binds it to:
+Ambiguity resolution at lifecycle compile points (role-binding, material-substitution, lab-state-cascade) follows the general UX commitment in 10 §2.5:
 
-- Role binding at planned-run compile ("which DCFDA stock? we have three; one expires in 2 weeks").
-- Ambiguous verb mapping at executed-run ingestion ("the robot log has a step whose verb cannot be matched; candidate verbs are `transfer` or `add_material` — which?").
-- Lab-state cascade resolution ("your local-protocol depends on LST-eppendorf-fuge-location, which just changed; do you want to re-compile or author a new version?").
+- **Chatbox primary** for open-ended or biology-judgment resolutions.
+- **Clickable quick-fix** for enumerable single-select cases.
 
-### 10.2 Clickable quick-fixes for simple cases
+The data carrier is the existing `protocolCompilation.remediationOptions[]` on planned-run. No schema work needed for the compiler output. UI delivery of chatbox is Phase 2; quick-fixes are Phase 1.
 
-For simple cases — single-select-from-candidates, obvious parameter bumps, drop-in substitutions — the compiler's diagnostic carries a `remediation_options[]` array, each entry renderable as a clickable button. The biologist clicks; the edit-intent is applied; the chatbox is not entered.
-
-The existing `protocolCompilation.remediationOptions` shape on `planned-run.schema.yaml` is the data carrier. 50 confirms it is the right carrier.
-
-### 10.3 When chatbox beats quick-fix and vice versa
-
-Quick-fix when:
-- The candidate set is small and enumerable.
-- The choice does not require biology judgment (e.g., "the newer of two equivalent stocks").
-- No downstream context-role or assertion is at stake.
-
-Chatbox when:
-- The candidate set is open or unbounded.
-- The choice involves biology judgment (e.g., "the DCFDA on hand is 6 months old; is that acceptable for this assay or should I call a new vial").
-- Resolution may require introducing a new record (a new lab-state, a new substitution).
-
-The compiler emits both forms where applicable and lets the UI decide which to surface first. Phase 1 surfaces quick-fixes inline with diagnostics; chatbox is a Phase 2 UX but the underlying compiler output supports it.
-
-## 11. The ROS workflow in the lifecycle
+## 13. The ROS workflow in the lifecycle
 
 For the canonical ROS positive control workflow (10 §4):
 
-**HLP** — `HLP-ros-positive-control-cccp-v1`, authored once (from the Thermo DCFDA kit protocol, extracted via 80). Declares roles: `target_cell_line`, `positive_inhibitor`, `vehicle_solvent`, `redox_sensitive_dye`, `plate_reader`, `microplate_labware`. Steps: create → seed → incubate → add-inhibitor → add-vehicle → incubate → add-dye → incubate → read.
+**Global protocol** — `PRT-ros-positive-control-cccp-v1` (`protocolLayer: "universal"`), extracted from the Thermo DCFDA kit PDF via existing ingestion (80). Declares abstract roles: `target_cell_line`, `positive_inhibitor`, `vehicle_solvent`, `redox_sensitive_dye`, `plate_reader`, `microplate_labware`. Steps: create → seed → incubate → add-inhibitor → add-vehicle → incubate → add-dye → incubate → read. `source.type: vendor`, `source.ref: DOC-thermo-dcfda-kit`.
 
-**Local-protocol** — `LPR-ros-hepg2-spectramax-v3`:
-- `inherits_from: HLP-ros-positive-control-cccp-v1`.
-- `lab_state_refs`: SpectraMax filter cube, standard HepG2 growth conditions, DCFDA stock location.
-- `overrides.bindings`: HepG2 → our `MI-HEPG2-P47`; vehicle_solvent → `MSP-DMSO-Ultra`; redox_sensitive_dye → `MSP-DCFDA-ThermoA123`; plate_reader → `INS-SPECTRAMAX-7`; microplate_labware → `LWD-greiner-655087`.
-- `overrides.parameters`: seed count 1×10⁵ cells/mL, incubation 24h + 30min + 30min, CCCP 1 µM, DCFDA 10 µM, read ex485/em535.
+**Local protocol** — `LPR-ros-hepg2-spectramax-v1`:
+- `inherits_from: PRT-ros-positive-control-cccp-v1`.
+- `lab_state_refs`: `LST-spectramax-filter-cube`, `LST-dcfda-stock-location`.
+- `overrides.substitutions`: `target_cell_line` → `MI-HEPG2-P47`; `vehicle_solvent` → `MSP-DMSO-Ultra`; `redox_sensitive_dye` → `MSP-DCFDA-ThermoA123`; `plate_reader` → `INS-SPECTRAMAX-7`; `microplate_labware` → `LWD-greiner-655087`.
+- `overrides.parameters`: seed 1×10⁵ cells/mL, incubations 24h + 30min + 30min, CCCP 1 µM, DCFDA 10 µM, read ex485/em535.
+- Structural-correspondence pass against global protocol: ✓.
 
-**Planned-run** — `PLR-ros-run-2026-04-20`:
-- `sourceRef: LPR-ros-hepg2-spectramax-v3`.
-- Bindings to concrete instances: plate `LWI-plate-2026-04-20-001`, operator `PRS-0001`, CCCP aliquot `ALQ-CCCP-10mM-004`, DCFDA aliquot `ALQ-DCFDA-1mM-017`.
+**Planned run** — `PLR-ros-run-2026-04-17`:
+- `localProtocolRef: LPR-ros-hepg2-spectramax-v1`.
+- `sourceType: local-protocol`.
+- Bindings: plate `LWI-plate-2026-04-17-001`, operator `PRS-angel`, CCCP aliquot `ALQ-CCCP-10mM-004`, DCFDA aliquot `ALQ-DCFDA-1mM-017`.
 - Context-role bindings: CCCP wells → `CR-positive-control-for-ros`, vehicle wells → `CR-vehicle-control-for-ros`.
-- Compile result `ready`. Capability pass confirms SpectraMax-7 supports `read` on greiner-655087 at ex485/em535.
+- Existing `ExecutionCapabilitiesService` confirms SpectraMax-7 supports `read` on greiner-655087 at ex485/em535: `protocolCompilation.status = ready`.
 
-**Executed-run** — `EXR-ros-run-2026-04-20-001`:
-- `planned_run_ref: PLR-ros-run-2026-04-20`.
-- Event graph materializes EVT-001…EVT-008 per 20 §9.
-- Post-hoc: operator recorded that EVT-007 (second incubation) ran 32 minutes instead of 30. A `DEV-...` record is authored: `kind: operator`, `severity: minor`, reason: "incubator door was briefly opened".
+**Execution** — operator executes:
+- `execution-run` `EXR-001` tracks the operational envelope; points at `EG-001` (the materialized event-graph) via `materializedEventGraphId`.
+- Event-graph EG-001 holds EVT-001…EVT-008 per 20 §9; each event carries `actualizes` edge to the corresponding planned event.
+- `studies/run` `RUN-042` (under experiment `EXP-ros`) carries `methodEventGraphId: EG-001`, registering this as a study-session of the ROS assay.
 
-**Assertions produced** — per 40 §9, `ASN-ROS-001` compares CCCP and vehicle contexts; the deviation does not change its outcome because severity is `minor`.
+**Angel's real run** — centrifuge step ran 08:34→08:39 on 2026-04-17 (hypothetically, given Angel's usual schedule). The second incubation ran 32 minutes instead of 30 because the incubator door was briefly opened. `execution-deviation` `DEV-001` recorded: `deviationType: operator, severity: minor, reason: "incubator door opened briefly; ambient exposure ~30s"`. Assertions from 40 §9 use the observed context diffs; deviation severity `minor` means no downstream flag.
 
-Every kind this spec introduces is exercised end-to-end in this workflow. If any is dead weight in the ROS trace, the scope is wrong.
+Every kind in this spec is exercised end-to-end in this workflow.
 
-## 12. Phase 1 scope for the lifecycle
+## 14. Phase 1 scope and migration
 
-Phase 1 delivers, in depth:
+### 14.1 In-scope deltas
 
-- `high-level-protocol` schema + ingestion path (shared with 80).
-- `local-protocol` schema + inheritance + substitution-validation pass.
-- `planned-run` schema extensions (structural correspondence, capability matching).
-- `executed-run` semantic role established (shape may reuse `execution-run` schema with canonical-FAIR fields added).
-- `deviation` schema extensions (severity, environmental kind).
-- `lab-state` new kind + cascade mechanism for local-protocols.
-- Structural correspondence pass at local-protocol-compile and run-plan-compile.
-- Capability-matching pass.
+1. **New kind `local-protocol`**: schema, lint, ui (`schema/workflow/local-protocol.{schema,lint,ui}.yaml`).
+2. **New kind `lab-state`**: schema, lint, ui (`schema/core/lab-state.{schema,lint,ui}.yaml` — placed in `core/` because it is cross-cutting), plus registry directory `schema/registry/lab-state-attributes/`.
+3. **`protocol` extension**: add `source` field.
+4. **`planned-run` extensions**: add `localProtocolRef`; extend `sourceType` enum with `local-protocol`; `protocolCompilation` becomes view onto local-protocol.
+5. **`execution-deviation` extensions**: add required `severity`; extend `deviationType` enum with `environmental`.
+6. **`execution-environment` extension**: add `lab_state_refs[]`.
+7. **ProtocolCompiler refactor**: emit persistable `local-protocol` records; `planned-run.protocolCompilation` becomes a view.
+8. **Structural-correspondence pass** in the compiler, run at local-protocol-compile and at run-plan-compile.
+9. **Lab-state cascade walker**: reuse retraction-cascade mechanism from 40 §7.2.
 
-Phase 1 defers:
+### 14.2 Out of scope in Phase 1
 
-- Rich WYSIWYG HLP editor (biologists edit YAML / focused forms).
-- Local-protocol ↔ HLP structural diff UI (record shape supports it; UI later).
-- Bench-side real-time executed-run logging app.
-- Full chatbox UX (compiler output supports it; UI later).
-- Lab-state inventory UI (records authored in YAML).
-- Cascade of retraction through the general graph (lab-state cascade is the Phase 1 prototype; general cascade is Phase 2).
+- Rich WYSIWYG global-protocol editor.
+- Local-protocol ↔ global-protocol diff UI (record shape supports it; UI later).
+- Bench-side real-time event-logging app.
+- Chatbox UX (compiler output supports it; UI later).
+- Lab-state inventory UI.
+- General retraction cascade (lab-state cascade is the Phase 1 prototype).
+- Carryover/contamination in transfers (10 §3 non-goal).
 
-## 13. Relationship to existing code
+### 14.3 Migration of existing planned-runs
 
-### 13.1 Preserved
+No committed planned-run records exist today. The migration is code-and-schema only: ship the new local-protocol kind, refactor the compiler, update the planned-run schema. No data migration required.
 
-- `schema/workflow/protocol.schema.yaml` is the HLP schema (with `protocolLayer: "universal"`); no structural deletion, only additions (source-type field, clarification of role semantics).
-- `schema/workflow/planned-run.schema.yaml` is preserved; `protocolLayer: "lab"` now unambiguously indicates "instance-bound plan downstream of a local-protocol."
-- `schema/workflow/execution-run.schema.yaml` is preserved for operational tracking; its relationship to the canonical `executed-run` role is a Phase 1 schema-evolution task.
-- `schema/workflow/execution-deviation.schema.yaml` is preserved; additions are `severity` (required) and `environmental` in the `deviationType` enum.
-- `schema/workflow/equipment-capability.schema.yaml` is the authoritative source for capability matching.
-- `schema/workflow/execution-environment.schema.yaml` is preserved for its robot/workcell role and is **not** replaced by lab-state.
+## 15. Summary of deltas
 
-### 13.2 Added
+| Action | Target | What |
+|---|---|---|
+| Preserve | `protocol.schema.yaml` | Existing shape authoritative for global layer |
+| Extend | `protocol.schema.yaml` | `source: {type, ref}` field |
+| **Add** | `local-protocol.schema.yaml` | New kind for lab layer (§5) |
+| Preserve | `planned-run.schema.yaml` | Existing bindings / capability / state / compilation shape |
+| Extend | `planned-run.schema.yaml` | `localProtocolRef` required; `sourceType` enum `+local-protocol`; `protocolCompilation` becomes view |
+| Preserve | `execution-run.schema.yaml` | Operational envelope role |
+| Preserve | `event-graph.schema.yaml` | Canonical truth of what happened |
+| Preserve | `studies/run.schema.yaml` | Study-session header |
+| Preserve | `execution-deviation.schema.yaml` | Existing shape |
+| Extend | `execution-deviation.schema.yaml` | `severity` required; `environmental` in enum |
+| Preserve | `execution-observation.schema.yaml`, `execution-remediation-decision.schema.yaml`, `execution-incident.schema.yaml` | Existing roles |
+| **Add** | `lab-state.schema.yaml` | New kind (§10) |
+| Extend | `execution-environment.schema.yaml` | `lab_state_refs[]` |
+| Preserve | `execution-plan.schema.yaml`, `robot-plan.schema.yaml` | Compile-time artifacts |
+| Refactor | `server/src/compiler/protocol/ProtocolCompiler.ts` | Emit local-protocol records; structural-correspondence pass |
 
-- New record kind `local-protocol` with `schema/workflow/local-protocol.schema.yaml`, `.lint.yaml`, `.ui.yaml`.
-- New record kind `lab-state` with `schema/core/lab-state.schema.yaml` (core because it is a cross-cutting first-class kind), plus a registry of `(subject_type, attribute)` definitions at `schema/registry/lab-state-attributes/`.
-- If needed, a new record kind `executed-run` distinct from `execution-run`, or an extension of `execution-run` with canonical-FAIR fields.
-
-### 13.3 Extended
-
-- `planned-run.schema.yaml`: structural-correspondence diagnostics added to `protocolCompilation.diagnostics`; capability-matching diagnostics added with `subject: equipment` entries.
-- `execution-deviation.schema.yaml`: `severity` required; `environmental` in enum.
-- `protocol.schema.yaml`: `source` field documenting origin (`vendor` / `literature` / `internal` / `derived`).
-
-### 13.4 Deprecated
-
-Nothing is deprecated by this spec. The existing `execution-incident`, `execution-observation`, `execution-remediation-decision`, and `execution-worker-state` kinds remain in their operational-tracking role. Their relationship to the `deviation` kind is: operational records are runtime-local, `deviation` is the canonical post-run statement. A deviation may cite operational records as evidence.
+Five rows do real new work. The rest is confirmation that what exists is correct.
 
 ---
 
-## Appendix A. The lifecycle as a data flow
+## Appendix. What this spec does *not* decide
 
-```
-  publications / vendor PDFs        ingestion (80)
-            │                             │
-            ▼                             ▼
-       HLP candidate   ←──────────── extraction-draft
-            │                             ▲
-            │  human review                │  (AI proposal,
-            ▼                              │   biologist review)
-     high-level-protocol                   │
-     (protocolLayer: universal)            │
-            │                              │
-            │  biologist authors           │
-            ▼                              │
-       local-protocol                      │
-       (inherits_from: HLP,                │
-        lab_state_refs: [...])             │
-            │                              │
-            │  biologist binds             │
-            ▼                              │
-        planned-run                        │
-        (capability-matched,               │
-         compile-checked)                  │
-            │                              │
-            │  operator executes           │
-            ▼                              │
-        executed-run                       │
-        (event graph materialized)         │
-            │                              │
-            │                              │
-            ▼                              │
-       deviations (per event) ─────────────┘
-            │
-            ▼
-       assertions (40) grounded in contexts (30) derived from the executed event graph
-```
-
-Everything in this spec is in service of making this pipeline computable end to end, with append-only provenance at every stage.
-
-## Appendix B. What this spec does *not* decide
-
-The following are deliberately left to other specs:
-
-- **How compile pipelines are declared** — 60 §compile pipelines.
-- **How AI proposes candidate HLPs and binding sets** — 80 §extraction and mention resolution.
-- **How derivation models feed context recomputation during run re-plays** — 70 §model pinning, 30 §10.
-- **How context-roles are verified against planned-run bindings** — 40 §4.4 plus the predicate DSL in 40 §4.3.
-- **The Schema Triplet mechanics for the new records** — follows the existing project convention.
-
-Cross-reference when drafting or reviewing.
+- **How compile pipelines are declared as YAML** — 60.
+- **How AI proposes candidate records at any layer** — 80.
+- **How derivation models feed context re-computation** — 70.
+- **How context-roles are verified against planned-run bindings** — 40 §4.4.
+- **The Schema Triplet mechanics for the new kinds** — follows existing project convention.

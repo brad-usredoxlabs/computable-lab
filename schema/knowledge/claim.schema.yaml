@@ -31,3 +31,27 @@ properties:
 
   object:
     $ref: "./datatypes/ref.schema.yaml"
+
+  status:
+    type: string
+    enum: [active, retracted]
+    default: active
+    description: "Lifecycle state. Retracted records remain for provenance but are excluded from active queries (compiler-specs/40 §7)."
+
+  retraction:
+    type: object
+    additionalProperties: false
+    description: "Details of retraction. Present only when status == retracted."
+    properties:
+      reason:
+        type: string
+        description: "Why this record was retracted."
+      retracted_at:
+        type: string
+        format: date-time
+      retracted_by:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Operator who retracted."
+      superseded_by:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Replacement record id, if any."

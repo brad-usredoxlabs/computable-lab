@@ -1,0 +1,68 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/context-snapshot.schema.yaml"
+title: "ContextSnapshot"
+description: >
+  A frozen capture of a context's state at a specific timepoint. One of the six
+  promotion targets (compiler-specs/30-context.md §12). Context-snapshot is the
+  only promotion target that accepts partial source contexts.
+
+type: object
+unevaluatedProperties: false
+
+required: [kind, id, source_context_ref, content_hash]
+
+properties:
+  kind:
+    const: "context-snapshot"
+
+  id:
+    type: string
+    pattern: "^CTX-SNAP-[A-Za-z0-9_-]+$"
+    description: "Stable identifier (e.g., CTX-SNAP-ROS-0001)."
+
+  source_context_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "The context that was frozen."
+
+  source_event_graph_ref:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "The event graph that produced the source context (preparation provenance)."
+
+  content_hash:
+    type: string
+    description: "Locked content hash of the source context at promotion time (compiler-specs/30 §12.6)."
+
+  completeness_at_promotion:
+    type: string
+    enum: [complete, partial]
+    description: "Records whether the source context was complete when frozen."
+
+  version:
+    type: integer
+    minimum: 1
+    default: 1
+
+  supersedes:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Prior snapshot id this one replaces (append-only versioning)."
+
+  snapshot:
+    type: object
+    additionalProperties: true
+    description: "Frozen copy of the source context fields (contents, observed, properties, etc.)."
+
+  promoted_at:
+    type: string
+    format: date-time
+
+  promoted_by:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Operator who requested the promotion."
+
+  notes:
+    type: string
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

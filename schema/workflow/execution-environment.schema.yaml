@@ -160,6 +160,17 @@ properties:
             version:
               type: string
 
+  lab_state_refs:
+    type: array
+    description: >
+      References to lab-state records (LST-*) this execution-environment
+      depends on (equipment mounts, zone temperatures, etc.). When a
+      referenced lab-state is superseded, the lab-state cascade walker
+      (50 §10.5) emits diagnostics on this environment.
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+    uniqueItems: true
+
   constraints:
     type: object
     additionalProperties: false

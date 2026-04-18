@@ -1,0 +1,34 @@
+kind: derivation-model
+id: DM-ideal-mixing
+name: "Ideal mixing"
+version: 1
+description: "Given a destination context with existing contents and an inbound transfer, compute each component's new concentration as (mass_before + mass_in) / (volume_before + volume_in). Assumes perfect mixing and no volume change on mixing."
+assumptions:
+  - "Perfect mixing: final concentration is uniform throughout the mixture."
+  - "No volume change on mixing: total volume = sum of input volumes."
+  - "No carryover from tips or walls."
+inputs:
+  - name: destination
+    type: context
+    description: "The destination context prior to transfer."
+  - name: inbound
+    type: context
+    description: "The source contribution (already scaled to the transferred volume)."
+output:
+  name: mixed
+  type: context
+  description: "Destination context after ideal mixing."
+steps:
+  - op: sum
+    lhs: destination.total_volume.value
+    rhs: inbound.total_volume.value
+    into: mixed.total_volume.value
+  - op: union_components
+    lhs: destination.contents
+    rhs: inbound.contents
+    into: mixed.contents
+    note: "For each component present in either input, new_mass = destination.mass + inbound.mass."
+  - op: divide
+    lhs: mixed.contents[*].mass
+    rhs: mixed.total_volume.value
+    into: mixed.contents[*].concentration

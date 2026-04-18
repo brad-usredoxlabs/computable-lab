@@ -48,6 +48,20 @@ properties:
     description: "Workflow state (draft, in_review, approved, effective, superseded, archived, accepted, deprecated)."
     enum: [draft, in_review, approved, effective, superseded, archived, accepted, deprecated]
 
+  source:
+    type: object
+    additionalProperties: false
+    description: "Provenance of this protocol — where the recipe originated."
+    required: [type]
+    properties:
+      type:
+        type: string
+        enum: [vendor, literature, internal, derived]
+        description: "vendor = vendor kit PDF; literature = publication; internal = lab-authored; derived = promoted from an event-graph."
+      ref:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Optional pointer to the source record (publication-ref, document-ref, or event-graph-ref)."
+
   tags:
     type: array
     items: { type: string }

@@ -1,0 +1,50 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/context-role.schema.yaml"
+title: "ContextRole"
+description: >
+  A named semantic role a context can play (e.g., positive-control-for-ros).
+  Prerequisites are structural checks expressed in the predicate DSL
+  (compiler-specs/40-knowledge.md §4). A context-role record is declarative:
+  verification is performed by a separate engine.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [kind, id, name, prerequisites]
+
+properties:
+  kind:
+    const: "context-role"
+
+  id:
+    type: string
+    pattern: '^CR-[A-Za-z0-9_-]+$'
+    description: "Stable identifier (e.g., CR-positive-control-for-ros)."
+
+  name:
+    type: string
+    description: "Human-readable role label."
+
+  description:
+    type: string
+
+  applicable_domains:
+    type: array
+    items:
+      type: string
+    description: "Scientific domains where this role is meaningful (e.g., ['ros-assay', 'cytotoxicity'])."
+
+  prerequisites:
+    type: array
+    minItems: 1
+    description: "Predicate-DSL clauses a context must satisfy to play this role (compiler-specs/40 §4)."
+    items:
+      type: object
+      additionalProperties: true
+
+  expected_outcome:
+    type: object
+    additionalProperties: true
+    description: "Declarative signature expected when the role is played correctly (e.g., direction: increased, relative_to: vehicle_control)."

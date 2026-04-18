@@ -97,14 +97,57 @@ properties:
       Additional computed properties.
       Examples: temperature, pH, confluence, viability, etc.
 
+  # Derivation pinning
+  derivation_versions:
+    type: object
+    additionalProperties:
+      type: integer
+      minimum: 1
+    description: "Map of derivation-model id -> version pinned when this context was computed (compiler-specs/30 §10)."
+
+  # Completeness tracking
+  completeness:
+    type: string
+    enum: [complete, partial]
+    default: complete
+    description: "Whether all inputs to this context's computation were present (compiler-specs/30 §6)."
+
+  missing:
+    type: array
+    items:
+      type: string
+    description: "When completeness is 'partial', list the gaps (missing material composition, missing model version, etc.)."
+
+  # Layer provenance
+  layer_provenance:
+    type: object
+    additionalProperties: false
+    description: "Which layer produced each field in this context (compiler-specs/30 §4)."
+    properties:
+      event_derived:
+        type: array
+        items: { type: string }
+      model_derived:
+        type: array
+        items: { type: string }
+      observed:
+        type: array
+        items: { type: string }
+
+  # Observed fields
+  observed:
+    type: object
+    additionalProperties: true
+    description: "Observed fields populated from instruments or expert judgment. Values may be plain scalars or {value, assertion_ref} for judgments (compiler-specs/30 §11, compiler-specs/40 §8)."
+
   # Legacy WellContext compatibility fields
   plate_ref:
     $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
-    description: "(Legacy) Reference to plate record. Use subject_ref instead."
+    description: "DEPRECATED (use subject_ref): (Legacy) Reference to plate record. Use subject_ref instead."
 
   well_id:
     type: string
-    description: "(Legacy) Well identifier like A1. Use subject_ref instead."
+    description: "DEPRECATED (use subject_ref): (Legacy) Well identifier like A1. Use subject_ref instead."
 
   notes:
     type: string

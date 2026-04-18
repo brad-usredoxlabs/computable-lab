@@ -1,0 +1,71 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/registry/compile-pipeline.schema.yaml"
+title: "CompilePipeline"
+description: >
+  Data-driven compile pipeline definition (compiler-specs/60-compiler.md).
+  A pipeline declares an ordered list of passes that a compiler entrypoint
+  runs. Each pass belongs to a pass family (parse, normalize, disambiguate,
+  validate, derive_context, expand, project). Passes may declare depends_on
+  (a list of prior pass ids) and a when condition that gates execution.
+
+type: object
+unevaluatedProperties: false
+
+required: [pipelineId, entrypoint, passes]
+
+properties:
+  pipelineId:
+    type: string
+    pattern: '^[a-z][a-z0-9-]+$'
+    description: "Stable identifier (e.g., protocol-compile, run-plan-compile)."
+
+  entrypoint:
+    type: string
+    enum:
+      - protocol-compile
+      - local-protocol-compile
+      - run-plan-compile
+      - promotion-compile
+      - extraction-compile
+      - ingestion-compile
+    description: "The compiler entrypoint this pipeline services."
+
+  description:
+    type: string
+
+  passes:
+    type: array
+    minItems: 1
+    description: "Ordered list of passes. Each pass has an id, a family, and optional guards."
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, family]
+      properties:
+        id:
+          type: string
+          pattern: '^[a-z][a-z0-9_-]+$'
+          description: "Pass id, unique within this pipeline."
+        family:
+          type: string
+          enum:
+            - parse
+            - normalize
+            - disambiguate
+            - validate
+            - derive_context
+            - expand
+            - project
+        description:
+          type: string
+        depends_on:
+          type: array
+          items:
+            type: string
+          uniqueItems: true
+          description: "Ids of prior passes that must succeed before this one runs."
+        when:
+          type: string
+          description: >
+            Optional gating condition. Free-form string today (e.g., 'input.has_unstructured_source').
+            Evaluation semantics are defined per entrypoint by the compiler.

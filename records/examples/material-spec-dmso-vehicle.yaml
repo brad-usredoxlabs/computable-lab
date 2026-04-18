@@ -1,0 +1,20 @@
+# Material spec for DMSO (Dimethyl Sulfoxide)
+# Used as vehicle/solvent control in ROS assays
+
+kind: material-spec
+id: MAT-SPEC-DMSO
+name: "Dimethyl sulfoxide"
+material_ref:
+  kind: ontology
+  namespace: CHEBI
+  id: "CHEBI:28262"
+  label: dimethyl sulfoxide
+
+material_class: solvent-vehicle
+
+formulation:
+  notes: "Vehicle control for ROS induction assays"
+
+tags:
+  - solvent-vehicle
+  - dmsO

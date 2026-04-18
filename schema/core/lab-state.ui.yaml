@@ -1,0 +1,63 @@
+# UI specification for LabState records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/lab-state.schema.yaml"
+
+display:
+  titleField: "$.attribute"
+  icon: "lab-state"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.recordId"
+      widget: "text"
+      label: "Record ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Subject"
+    fields:
+    - path: "$.subject_type"
+      widget: "select"
+      label: "Subject type"
+      required: true
+    - path: "$.subject_ref"
+      widget: "text"
+      label: "Subject reference"
+    - path: "$.attribute"
+      widget: "text"
+      label: "Attribute"
+      required: true
+  - title: "Value and validity"
+    fields:
+    - path: "$.value"
+      widget: "yaml"
+      label: "Value"
+      required: true
+    - path: "$.valid_from"
+      widget: "datetime"
+      label: "Valid from"
+      required: true
+    - path: "$.valid_until"
+      widget: "datetime"
+      label: "Valid until"
+  - title: "Provenance"
+    fields:
+    - path: "$.asserted_by"
+      widget: "text"
+      label: "Asserted by"
+      required: true
+    - path: "$.evidence_ref"
+      widget: "text"
+      label: "Evidence"
+    - path: "$.supersedes"
+      widget: "text"
+      label: "Supersedes"
+    - path: "$.status"
+      widget: "select"
+      label: "Status"

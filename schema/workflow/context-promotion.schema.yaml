@@ -30,7 +30,14 @@ properties:
 
   output_kind:
     type: string
-    enum: [ material-lot, plate-snapshot, library-bundle ]
+    enum:
+      - material-spec
+      - material-instance
+      - aliquot
+      - plate-layout-template
+      - assay-definition
+      - context-snapshot
+    description: "Target kind for this promotion (compiler-specs/30-context.md §12.2)."
 
   output_ref:
     $ref: "./datatypes/ref.schema.yaml"
@@ -46,3 +53,22 @@ properties:
     type: array
     items: { type: string }
     uniqueItems: true
+
+  source_content_hash:
+    type: string
+    description: "Locked content hash of the source context at promotion time (compiler-specs/30 §12.6). Source drift is diagnostic, not retroactively updating."
+
+  version:
+    type: integer
+    minimum: 1
+    default: 1
+    description: "Append-only version number within a supersedes chain."
+
+  supersedes:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Prior context-promotion this one replaces. Old promotions remain; assertions grounded in them stay valid."
+
+  selection:
+    type: object
+    additionalProperties: true
+    description: "The ephemeral or stored selection/collection used as promotion input (compiler-specs/30 §12.3). Shape varies by target kind."

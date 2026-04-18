@@ -1,6 +1,8 @@
 import { OperationalAdmissibilityService } from '../../authorization/OperationalAdmissibilityService.js';
 import { EquipmentCapabilityService } from '../../capabilities/EquipmentCapabilityService.js';
 import { PolicyProfileService } from '../../policy/PolicyProfileService.js';
+import { buildLocalProtocol } from './LocalProtocolBuilder.js';
+import type { LocalProtocolPayload } from './LocalProtocolBuilder.js';
 import type {
   ActivePolicyScope,
   ApprovalAuthority,
@@ -115,6 +117,7 @@ export interface ProtocolCompilerResult {
   remediationOptions: ProtocolCompilerRemediation[];
   steps: CompiledProtocolStep[];
   activePolicy: ResolvedPolicyProfile;
+  localProtocol: LocalProtocolPayload;
 }
 
 export interface ProtocolCompilerContext {
@@ -332,6 +335,9 @@ export class ProtocolCompiler {
     const { byId: verbsById, byCanonical: verbsByCanonical } = await this.resolveVerbDefinitions();
     const protocol = asProtocolPayload(input.protocolEnvelope);
     const protocolSteps = Array.isArray(protocol.steps) ? protocol.steps as ProtocolStepPayload[] : [];
+
+    // Build localProtocol from the compiled steps (will be populated after the loop)
+    let localProtocol: LocalProtocolPayload | undefined;
 
     for (const [index, step] of protocolSteps.entries()) {
       const stepId = stepIdFor(step, index);
@@ -601,6 +607,28 @@ export class ProtocolCompiler {
       });
     }
 
+    // Build localProtocol before returning
+    // Map CompiledProtocolStep to the format expected by buildLocalProtocol
+    const mappedSteps = steps.map((step) => {
+      const mapped: { stepId: string; equipmentRef?: { kind: 'record'; id: string; type: string } } = {
+        stepId: step.stepId,
+      };
+      if (step.equipmentRef) {
+        mapped.equipmentRef = {
+          kind: 'record',
+          id: step.equipmentRef.id,
+          type: step.equipmentRef.type ?? 'equipment',
+        };
+      }
+      return mapped;
+    });
+    localProtocol = buildLocalProtocol({
+      globalProtocolRecordId: protocol.recordId as string,
+      globalProtocolTitle: protocol.title as string,
+      compiledSteps: mappedSteps,
+      status: 'draft',
+    });
+
     return {
       status: steps.some((step) => step.disposition === 'blocked') ? 'blocked' : 'ready',
       sourceLayer: 'universal',
@@ -609,6 +637,7 @@ export class ProtocolCompiler {
       remediationOptions,
       steps,
       activePolicy,
+      localProtocol,
     };
   }
 }

@@ -23,6 +23,7 @@ required:
 - rationale
 - recordedAt
 - activePolicy
+- severity
 
 properties:
   kind:
@@ -42,7 +43,17 @@ properties:
 
   deviationType:
     type: string
-    enum: [ remediation, operator, runtime ]
+    enum: [ remediation, operator, runtime, environmental ]
+
+  severity:
+    type: string
+    enum: [ minor, significant, major ]
+    description: >
+      Biologist-relevance axis — does this change what the data means?
+      minor: within declared tolerance.
+      significant: outside tolerance but run remains analyzable.
+      major: invalidates the run or flags downstream assertions as unreliable.
+      Distinct from execution-incident.severity (ops urgency).
 
   status:
     type: string
