@@ -175,4 +175,8 @@ export interface RecordStoreConfig {
   author?: string;
   /** Default commit email */
   email?: string;
+  /** Absolute path to local seed records directory (e.g. /app/records/seed).
+   *  When set, list() merges built-in seed records that don't exist in the
+   *  connected lab repo. */
+  seedDir?: string;
 }

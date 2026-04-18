@@ -244,6 +244,10 @@ $defs:
         - serial_dilution
         - macro_program
         - other
+        - create_container
+        - aliquot
+        - seal
+        - unseal
         description: "Type of the event."
       at:
         type: string

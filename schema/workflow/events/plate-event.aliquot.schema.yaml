@@ -1,0 +1,43 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/events/plate-event.aliquot.schema.yaml"
+title: "PlateEventAliquotDetails"
+description: "Aliquot event — deliberate split of a master preparation into N long-term stock aliquots. Distinct from N transfers (compiler-specs/20 §4.3)."
+type: object
+additionalProperties: false
+required: [source, output_count, volume_per_aliquot]
+
+properties:
+  source:
+    $ref: "../../datatypes/ref.schema.yaml"
+    description: "Master material-instance being split."
+  output_count:
+    type: integer
+    minimum: 1
+    description: "Number of aliquot tubes produced."
+  volume_per_aliquot:
+    type: object
+    additionalProperties: false
+    required: [value, unit]
+    properties:
+      value:
+        type: number
+        exclusiveMinimum: 0
+      unit:
+        type: string
+  storage_ref:
+    $ref: "../../datatypes/ref.schema.yaml"
+    description: "Storage condition (e.g., -80C freezer slot)."
+  label_pattern:
+    type: string
+    description: "Optional label template for generated ALQ-* ids."
+  family:
+    type: string
+    enum: [material-movement, state-transformation, lifecycle, measurement, composition]
+    default: material-movement
+  preconditions:
+    type: array
+    items:
+      type: object
+      additionalProperties: true
+  notes:
+    type: string

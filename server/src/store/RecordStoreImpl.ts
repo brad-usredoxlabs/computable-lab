@@ -33,6 +33,8 @@ import {
   generatePath,
   parseRecordPath,
 } from '../repo/PathConvention.js';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * Default configuration.
@@ -41,6 +43,7 @@ const DEFAULT_CONFIG: Required<RecordStoreConfig> = {
   baseDir: 'records',
   author: 'record-store',
   email: 'store@computable-lab.com',
+  seedDir: '',
 };
 
 /**
@@ -189,22 +192,57 @@ export class RecordStoreImpl implements RecordStore {
   }
   
   /**
+   * Read seed record envelopes from a local directory.
+   * Only returns records whose recordId is NOT already in `existing`.
+   */
+  private listSeedRecords(dir: string, existing: Set<string>): RecordEnvelope[] {
+    const results: RecordEnvelope[] = [];
+    let entries: string[];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return results; // directory doesn't exist for this kind
+    }
+    for (const name of entries) {
+      if (!name.endsWith('.yaml') && !name.endsWith('.yml')) continue;
+      try {
+        const fullPath = join(dir, name);
+        const content = readFileSync(fullPath, 'utf-8');
+        const parsed = parseRecord(content, fullPath);
+        if (!parsed.success || !parsed.envelope) continue;
+        if (existing.has(parsed.envelope.recordId)) continue;
+        results.push({
+          ...parsed.envelope,
+          meta: {
+            ...parsed.envelope.meta,
+            path: fullPath,
+            commitSha: 'seed',
+          },
+        });
+      } catch {
+        // skip malformed seed files
+      }
+    }
+    return results;
+  }
+
+  /**
    * List records.
    */
   async list(filter?: RecordFilter): Promise<RecordEnvelope[]> {
     // Determine search directory
-    const searchDir = filter?.kind 
+    const searchDir = filter?.kind
       ? `${this.config.baseDir}/${filter.kind}`
       : this.config.baseDir;
-    
+
     const files = await this.repo.listFiles({
       directory: searchDir,
       pattern: '*.yaml',
       recursive: !filter?.kind, // Recursive only if no kind filter
     });
-    
+
     const envelopes: RecordEnvelope[] = [];
-    
+
     for (const filePath of files) {
       // Apply prefix filter if specified
       if (filter?.idPrefix) {
@@ -213,18 +251,18 @@ export class RecordStoreImpl implements RecordStore {
           continue;
         }
       }
-      
+
       const file = await this.repo.getFile(filePath);
       if (!file) continue;
-      
+
       const result = parseRecord(file.content, filePath);
       if (!result.success || !result.envelope) continue;
-      
+
       // Apply schema filter if specified
       if (filter?.schemaId && result.envelope.schemaId !== filter.schemaId) {
         continue;
       }
-      
+
       envelopes.push({
         ...result.envelope,
         meta: {
@@ -233,19 +271,31 @@ export class RecordStoreImpl implements RecordStore {
           commitSha: file.sha,
         },
       });
-      
+
       // Apply offset
       if (filter?.offset && envelopes.length <= filter.offset) {
         envelopes.shift();
         continue;
       }
-      
+
       // Apply limit
       if (filter?.limit && envelopes.length >= filter.limit) {
         break;
       }
     }
-    
+
+    // Merge built-in seed records that don't exist in the connected repo.
+    if (this.config.seedDir && filter?.kind) {
+      const seedKindDir = join(this.config.seedDir, filter.kind);
+      const existing = new Set(envelopes.map((e) => e.recordId));
+      const seedEnvelopes = this.listSeedRecords(seedKindDir, existing);
+      for (const env of seedEnvelopes) {
+        if (filter.idPrefix && !env.recordId.startsWith(filter.idPrefix)) continue;
+        if (filter.schemaId && env.schemaId !== filter.schemaId) continue;
+        envelopes.push(env);
+      }
+    }
+
     return envelopes;
   }
   

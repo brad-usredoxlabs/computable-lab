@@ -1,0 +1,25 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/events/plate-event.create-container.schema.yaml"
+title: "PlateEventCreateContainerDetails"
+type: object
+additionalProperties: false
+required: [labwareInstanceId, labware_definition_ref]
+
+properties:
+  labwareInstanceId:
+    $ref: "../../datatypes/ref.schema.yaml"
+    description: "Instance id of the container being brought into existence."
+  labware_definition_ref:
+    $ref: "../../datatypes/ref.schema.yaml"
+    description: "Labware definition this instance realizes."
+  family:
+    type: string
+    enum: [material-movement, state-transformation, lifecycle, measurement, composition]
+    default: lifecycle
+  preconditions:
+    type: array
+    items:
+      type: object
+      additionalProperties: true
+  notes:
+    type: string

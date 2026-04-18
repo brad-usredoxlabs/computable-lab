@@ -22,6 +22,7 @@ import { createRepoAdapter, isGitRepoAdapter } from './repo/createRepoAdapter.js
 import { createLocalRepoAdapter } from './repo/LocalRepoAdapter.js';
 import type { RepoAdapter } from './repo/types.js';
 import { RecordStoreImpl, createRecordStore } from './store/RecordStoreImpl.js';
+import { resolveSeedRecordsDir } from './index/seedRecordsDir.js';
 import { loadConfig, getDefaultRepository } from './config/loader.js';
 import { DEFAULT_CONFIG as DEFAULT_APP_CONFIG, type AppConfig, type RepositoryConfig, resolveAiProfile } from './config/types.js';
 import {
@@ -284,10 +285,12 @@ export async function initializeApp(
   const recordsDir = repoConfig?.records?.directory || opts.recordsDir;
 
   // Initialize record store (use resolved identity for git commits)
+  const seedDir = resolveSeedRecordsDir();
   const store = createRecordStore(repoAdapter, validator, lintEngine, {
     baseDir: recordsDir,
     author: identity?.username ?? 'record-store',
     email: identity?.email ?? 'store@computable-lab.com',
+    ...(seedDir ? { seedDir } : {}),
   });
   
   // Initialize index manager

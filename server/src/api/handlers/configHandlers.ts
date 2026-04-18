@@ -260,6 +260,14 @@ export class ConfigHandlers {
       } else {
         updated.ai = patch.ai as unknown as AIConfig;
       }
+
+      // If the user edited inference settings directly (not via profile
+      // activation), clear activeProfile so the top-level config is used
+      // on next startup instead of the stale profile pointer.
+      const patchedInference = (patch.ai as Record<string, unknown>).inference;
+      if (patchedInference && updated.ai) {
+        delete (updated.ai as Record<string, unknown>).activeProfile;
+      }
     }
 
     if (patch.lab !== undefined) {

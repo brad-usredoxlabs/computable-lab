@@ -26,3 +26,16 @@ properties:
 
   notes:
     type: string
+
+  family:
+    type: string
+    enum: [material-movement, state-transformation, lifecycle, measurement, composition]
+    description: "Event family per compiler-specs/20-event-graph-ir.md §3."
+    default: state-transformation
+
+  preconditions:
+    type: array
+    description: "Reserved: predicate-DSL objects checked at plan-compile time (compiler-specs/20-event-graph-ir.md §6). Not validated in v1."
+    items:
+      type: object
+      additionalProperties: true

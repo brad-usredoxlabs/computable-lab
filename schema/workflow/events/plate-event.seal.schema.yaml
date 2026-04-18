@@ -1,0 +1,24 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/events/plate-event.seal.schema.yaml"
+title: "PlateEventSealDetails"
+type: object
+additionalProperties: false
+required: [labwareInstanceId]
+
+properties:
+  labwareInstanceId:
+    $ref: "../../datatypes/ref.schema.yaml"
+  foil_type:
+    type: string
+    description: "e.g., aluminum, breathable, heat-seal."
+  family:
+    type: string
+    enum: [material-movement, state-transformation, lifecycle, measurement, composition]
+    default: lifecycle
+  preconditions:
+    type: array
+    items:
+      type: object
+      additionalProperties: true
+  notes:
+    type: string
