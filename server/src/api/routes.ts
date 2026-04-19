@@ -35,6 +35,7 @@ import type { ChemistryHandlers } from './handlers/ChemistryHandlers.js';
 import type { IngestionHandlers } from './handlers/IngestionHandlers.js';
 import type { IngestionAIHandlers } from './handlers/IngestionAIHandlers.js';
 import type { AiIngestionHandlers } from './handlers/AiIngestionHandlers.js';
+import type { ExtractHandlers } from './handlers/ExtractHandlers.js';
 import type { MaterialAIHandlers } from './handlers/MaterialAIHandlers.js';
 import type { SemanticsHandlers } from './handlers/SemanticsHandlers.js';
 import type { RunWorkspaceHandlers } from './handlers/RunWorkspaceHandlers.js';
@@ -78,6 +79,7 @@ export interface RouteOptions {
   ingestionHandlers?: IngestionHandlers;
   ingestionAIHandlers?: IngestionAIHandlers;
   aiIngestionHandlers?: AiIngestionHandlers;
+  extractHandlers?: ExtractHandlers;
   materialAIHandlers?: MaterialAIHandlers;
   semanticsHandlers?: SemanticsHandlers;
   runWorkspaceHandlers?: RunWorkspaceHandlers;
@@ -431,6 +433,15 @@ export function registerRoutes(
     fastify.post('/ingestion/jobs/:id/bundles/:bundleId/approve', ingestionHandlers.approveBundle.bind(ingestionHandlers));
     fastify.post('/ingestion/jobs/:id/bundles/:bundleId/publish', ingestionHandlers.publishBundle.bind(ingestionHandlers));
     fastify.post('/ingestion/jobs/:id/extraction-spec', ingestionHandlers.attachExtractionSpec.bind(ingestionHandlers));
+  }
+
+  // ============================================================================
+  // Extract Routes (optional - requires extractHandlers)
+  // ============================================================================
+
+  const { extractHandlers } = options;
+  if (extractHandlers) {
+    fastify.post('/extract', extractHandlers.extract.bind(extractHandlers));
   }
 
   // ============================================================================

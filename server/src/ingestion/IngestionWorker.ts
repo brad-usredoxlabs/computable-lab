@@ -1,9 +1,7 @@
 import type { RecordEnvelope, RecordStore } from '../store/types.js';
 import { ArtifactBlobStore } from './ArtifactBlobStore.js';
 import { extractVendorFormulationHtml } from './adapters/vendorFormulationHtml.js';
-import { runExtractionSpec } from './adapters/specDrivenExtractor.js';
 import { buildVendorFormulationBundle } from './pipelines/vendorFormulationPipeline.js';
-import { buildAiAssistedBundle } from './pipelines/aiAssistedPipeline.js';
 import { publishCaymanLibraryBundle } from './publishers/CaymanLibraryPublisher.js';
 import { publishVendorFormulationBundle } from './publishers/VendorFormulationPublisher.js';
 import { buildIngestionIssueEnvelope, createRecordRef } from './records.js';
@@ -18,9 +16,19 @@ import {
   type IngestionJobPayload,
   type IngestionPublishResult,
 } from './types.js';
-import { findMatchingSpec } from './extractorLibrary.js';
-import { MaterialMatchService } from './matching/MaterialMatchService.js';
-import { OntologyMatchService } from './matching/OntologyMatchService.js';
+import { ExtractionRunnerService } from '../extract/ExtractionRunnerService.js';
+
+function resolveTargetKindFromArtifact(artifact: RecordEnvelope<IngestionArtifactPayload>): string {
+  // adapter_kind is typically on the job, but may be stored in the artifact's file_ref
+  // For now, default to 'material-spec' unless we have explicit adapter_kind hints
+  const fileRef = artifact.payload.file_ref;
+  if (fileRef && typeof fileRef === 'object') {
+    const refAsRecord = fileRef as Record<string, unknown>;
+    const adapterKind = refAsRecord.adapter_kind;
+    if (adapterKind === 'protocol_pdf' || adapterKind === 'protocol_html') return 'protocol';
+  }
+  return 'material-spec';   // default
+}
 
 function asJobEnvelope(envelope: RecordEnvelope | null): RecordEnvelope<IngestionJobPayload> | null {
   return envelope?.schemaId === INGESTION_SCHEMA_IDS.job ? envelope as RecordEnvelope<IngestionJobPayload> : null;
@@ -37,10 +45,33 @@ function refId(value: unknown): string | undefined {
     : undefined;
 }
 
-export class IngestionWorkerShell {
+function storeErrorDetail(
+  result: {
+    error?: string | undefined;
+    validation?: { errors?: Array<{ path: string; message: string }> | undefined } | undefined;
+    lint?: { violations?: Array<{ path?: string | undefined; message: string; severity: string }> | undefined } | undefined;
+  },
+  fallback: string,
+): string {
+  const parts: string[] = [];
+  if (result.validation?.errors?.length) {
+    parts.push(`validation: ${result.validation.errors.map((e) => `${e.path}: ${e.message}`).join('; ')}`);
+  }
+  if (result.lint?.violations?.length) {
+    const errs = result.lint.violations.filter((v) => v.severity === 'error');
+    if (errs.length > 0) {
+      parts.push(`lint: ${errs.map((v) => `${v.path ?? '/'}: ${v.message}`).join('; ')}`);
+    }
+  }
+  if (parts.length > 0) return `${fallback} — ${parts.join(' | ')}`;
+  return result.error ? `${fallback}: ${result.error}` : fallback;
+}
+
+export class IngestionWorker {
   constructor(
     private readonly store: RecordStore,
     private readonly blobStore: ArtifactBlobStore,
+    private readonly extractionRunner: ExtractionRunnerService,
   ) {}
 
   private async resolveStoredContentBase64(
@@ -79,7 +110,7 @@ export class IngestionWorkerShell {
       skipLint: true,
     });
     if (!result.success || !result.envelope) {
-      throw new Error(result.error ?? `Failed to update ingestion job ${job.recordId}`);
+      throw new Error(storeErrorDetail(result, `Failed to update ingestion job ${job.recordId}`));
     }
     return result.envelope as RecordEnvelope<IngestionJobPayload>;
   }
@@ -196,100 +227,71 @@ export class IngestionWorkerShell {
       bundle: RecordEnvelope<IngestionBundlePayload>;
       candidates: Array<RecordEnvelope<IngestionCandidatePayload>>;
       issues: Array<RecordEnvelope<IngestionIssuePayload>>;
-    };
-    let metrics: Record<string, number>;
+    } = { bundle: {} as RecordEnvelope<IngestionBundlePayload>, candidates: [], issues: [] };
+    let metrics: Record<string, number> = {};
 
     if (running.payload.source_kind === 'ai_assisted') {
-      // AI-assisted extraction flow:
-      // 1. Check extractor library first for a matching spec
-      // 2. If no match, use the extraction spec from the artifact's extractionSpec field
-      // 3. Run the spec-driven extractor
-      // 4. Build candidates and issues
-
+      // AI-assisted extraction flow - always use extractionRunner
       const persistedBase64 = await this.resolveStoredContentBase64(artifact, source);
       if (!persistedBase64) {
         throw new Error('AI-assisted ingestion requires source.contentBase64.');
       }
 
       const sourceFileName = String(source?.fileName ?? (artifact.payload.file_ref as Record<string, unknown> | undefined)?.file_name ?? 'unknown');
+      const fileContent = Buffer.from(persistedBase64, 'base64').toString('utf8');
       
-      // Step 1: Try to find a matching spec from the extractor library
-      let extractionSpec: Record<string, unknown> | null = null;
-      const libraryDir = process.env.CL_EXTRACTOR_LIBRARY_DIR ?? `${process.cwd()}/specs/extractors`;
-      
-      try {
-        // Decode base64 to get text preview (first 4000 chars)
-        const fileContent = Buffer.from(persistedBase64, 'base64').toString('utf8');
-        const contentPreview = fileContent.slice(0, 4000);
-        
-        const libraryMatch = await findMatchingSpec(sourceFileName, contentPreview, libraryDir);
-        if (libraryMatch) {
-          extractionSpec = libraryMatch.spec;
-        }
-      } catch (err) {
-        // Library scan failed, will fall back to artifact's extractionSpec
-        console.warn(`Extractor library scan failed: ${err instanceof Error ? err.message : String(err)}`);
+      const draftBody = await this.extractionRunner.run({
+        target_kind: resolveTargetKindFromArtifact(artifact),
+        text: fileContent,
+        source: {
+          kind: 'file',
+          id: artifact.recordId,
+          locator: sourceFileName,
+        },
+      });
+
+      // Persist the extraction-draft record
+      const draftEnvelope: RecordEnvelope<Record<string, unknown>> = {
+        recordId: draftBody.recordId,
+        schemaId: 'https://computable-lab.com/schema/computable-lab/extraction-draft.schema.yaml',
+        payload: draftBody as unknown as Record<string, unknown>,
+      };
+      const draftResult = await this.store.create({
+        envelope: draftEnvelope,
+        message: `Persist extraction-draft ${draftBody.recordId}`,
+        skipLint: true,
+      });
+      if (!draftResult.success) {
+        throw new Error(storeErrorDetail(draftResult, 'Failed to persist extraction-draft'));
       }
-
-      // Step 2: If no library match, use the extraction spec from the artifact
-      if (!extractionSpec && artifact.payload.extractionSpec) {
-        extractionSpec = artifact.payload.extractionSpec as Record<string, unknown>;
-      }
-
-      if (!extractionSpec) {
-        throw new Error('No extraction spec found: neither in library nor on artifact. Run AI analysis first or add a spec to specs/extractors/.');
-      }
-
-      // Step 3: Run the spec-driven extractor
-      const fileContent = Buffer.from(persistedBase64, 'base64');
-      const fileType = artifact.payload.media_type || 'text/plain';
-      
-      const extraction = await runExtractionSpec(extractionSpec, fileContent, fileType);
-
-      // Step 4: Update artifact with extraction results
-      const artifactUpdate = await this.store.update({
+      // Record the draft link on the artifact's text_extract metadata
+      const artifactUpdateResult = await this.store.update({
         envelope: {
           ...artifact,
           payload: {
             ...artifact.payload,
-            sha256: artifact.payload.sha256 ?? extraction.totalRows > 0 ? 'extracted' : undefined,
             text_extract: {
+              ...(artifact.payload.text_extract as Record<string, unknown> ?? {}),
               extracted_at: new Date().toISOString(),
-              method: 'spec_driven_extraction',
-              excerpt: `Extracted ${extraction.totalRows} rows with ${extraction.totalIssues} issues`,
+              method: 'extraction_pipeline',
+              draft_record_id: draftBody.recordId,
             },
           },
         },
-        message: `Attach AI-assisted extraction to artifact ${artifact.recordId}`,
+        message: `Attach extraction-draft reference to artifact ${artifact.recordId}`,
         skipLint: true,
       });
-      if (!artifactUpdate.success || !artifactUpdate.envelope) {
-        throw new Error(artifactUpdate.error ?? 'Failed to update ingestion artifact');
+      if (!artifactUpdateResult.success || !artifactUpdateResult.envelope) {
+        throw new Error(storeErrorDetail(artifactUpdateResult, 'Failed to update ingestion artifact'));
       }
-      artifactPayload = artifactUpdate.envelope.payload as IngestionArtifactPayload;
-
-      // Step 5: Build the bundle using the AI-assisted pipeline
-      const materialMatchService = new MaterialMatchService(this.store);
-      const ontologyMatchService = new OntologyMatchService();
-      
-      pipeline = await buildAiAssistedBundle(
-        extraction,
-        extractionSpec,
-        materialMatchService,
-        materialMatchService,
-        ontologyMatchService,
-        jobId,
-        currentJob.payload,
-        artifactPayload,
-      );
-
-      metrics = {
-        rows_extracted: extraction.totalRows,
-        issues_found: extraction.totalIssues,
-        candidates_created: pipeline.candidates.length,
-        issues_open: pipeline.issues.length,
-        issues_blocking: pipeline.issues.filter((issue) => issue.payload.severity === 'error').length,
-      };
+      const updatedArtifact = artifactUpdateResult.envelope as RecordEnvelope<IngestionArtifactPayload>;
+      artifactPayload = updatedArtifact.payload;
+      // Short-circuit: skip the legacy bundle/candidate path. Mark the job
+      // 'awaiting_review' and return. The dispatch block below (beyond the
+      // ai_assisted branch) must NOT run for this case.
+      pipeline = { bundle: draftEnvelope as unknown as typeof pipeline.bundle, candidates: [], issues: [] };
+      metrics = { rows_extracted: 0, issues_found: 0, candidates_created: draftBody.candidates.length, issues_open: 0, issues_blocking: 0 };
+      // Continue to the common finalization block at end of ai_assisted branch.
     } else if (running.payload.source_kind === 'vendor_plate_map_pdf' || running.payload.source_kind === 'vendor_plate_map_spreadsheet') {
       const persistedBase64 = await this.resolveStoredContentBase64(artifact, source);
       const extraction = await extractVendorFormulationHtml({
@@ -327,7 +329,7 @@ export class IngestionWorkerShell {
         skipLint: true,
       });
       if (!artifactUpdate.success || !artifactUpdate.envelope) {
-        throw new Error(artifactUpdate.error ?? 'Failed to update ingestion artifact');
+        throw new Error(storeErrorDetail(artifactUpdate, 'Failed to update ingestion artifact'));
       }
       artifactPayload = artifactUpdate.envelope.payload as IngestionArtifactPayload;
 
@@ -368,14 +370,14 @@ export class IngestionWorkerShell {
       message: `Create ingestion bundle ${pipeline.bundle.recordId}`,
       skipLint: true,
     });
-    if (!bundleCreate.success) throw new Error(bundleCreate.error ?? `Failed to create bundle ${pipeline.bundle.recordId}`);
+    if (!bundleCreate.success) throw new Error(storeErrorDetail(bundleCreate, `Failed to create bundle ${pipeline.bundle.recordId}`));
     for (const candidate of pipeline.candidates) {
       const candidateCreate = await this.store.create({
         envelope: candidate,
         message: `Create ingestion candidate ${candidate.recordId}`,
         skipLint: true,
       });
-      if (!candidateCreate.success) throw new Error(candidateCreate.error ?? `Failed to create candidate ${candidate.recordId}`);
+      if (!candidateCreate.success) throw new Error(storeErrorDetail(candidateCreate, `Failed to create candidate ${candidate.recordId}`));
     }
     for (const issue of pipeline.issues) {
       const issueCreate = await this.store.create({
@@ -383,7 +385,7 @@ export class IngestionWorkerShell {
         message: `Create ingestion issue ${issue.recordId}`,
         skipLint: true,
       });
-      if (!issueCreate.success) throw new Error(issueCreate.error ?? `Failed to create issue ${issue.recordId}`);
+      if (!issueCreate.success) throw new Error(storeErrorDetail(issueCreate, `Failed to create issue ${issue.recordId}`));
     }
 
     const bundleWithRefs = await this.store.update({
@@ -399,7 +401,7 @@ export class IngestionWorkerShell {
       skipLint: true,
     });
     if (!bundleWithRefs.success || !bundleWithRefs.envelope) {
-      throw new Error(bundleWithRefs.error ?? `Failed to update bundle ${pipeline.bundle.recordId} with refs`);
+      throw new Error(storeErrorDetail(bundleWithRefs, `Failed to update bundle ${pipeline.bundle.recordId} with refs`));
     }
     const persistedBundle = bundleWithRefs.envelope as RecordEnvelope<IngestionBundlePayload>;
 

@@ -1,7 +1,28 @@
 import type { RecordEnvelope, RecordStore } from '../store/types.js';
 import { ArtifactBlobStore } from './ArtifactBlobStore.js';
 import { buildIngestionArtifactEnvelope, buildIngestionJobEnvelope, createRecordRef, createSourceRef } from './records.js';
-import { IngestionWorkerShell } from './IngestionWorker.js';
+import { IngestionWorker } from './IngestionWorker.js';
+import { ExtractionRunnerService } from '../extract/ExtractionRunnerService.js';
+import type { ExtractorAdapter, ExtractionRequest, ExtractionResult } from '../extract/ExtractorAdapter.js';
+import type { ResolutionCandidate } from '../extract/MentionResolver.js';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+/**
+ * Fake ExtractorAdapter for ingestion service.
+ * In production, this would be replaced with a real extractor.
+ */
+class FakeExtractorAdapter implements ExtractorAdapter {
+  async extract(_req: ExtractionRequest): Promise<ExtractionResult> {
+    return {
+      candidates: [],
+      diagnostics: [],
+    };
+  }
+}
 import {
   INGESTION_SCHEMA_IDS,
   type CreateIngestionArtifactInput,
@@ -19,10 +40,19 @@ import {
 function resultError(result: {
   error?: string | undefined;
   validation?: { errors?: Array<{ path: string; message: string }> | undefined } | undefined;
+  lint?: { violations?: Array<{ path?: string | undefined; message: string; severity: string }> | undefined } | undefined;
 }): string {
+  const parts: string[] = [];
   if (result.validation?.errors?.length) {
-    return result.validation.errors.map((item) => `${item.path}: ${item.message}`).join('; ');
+    parts.push(`validation: ${result.validation.errors.map((item) => `${item.path}: ${item.message}`).join('; ')}`);
   }
+  if (result.lint?.violations?.length) {
+    const errors = result.lint.violations.filter((v) => v.severity === 'error');
+    if (errors.length > 0) {
+      parts.push(`lint: ${errors.map((item) => `${item.path ?? '/'}: ${item.message}`).join('; ')}`);
+    }
+  }
+  if (parts.length > 0) return parts.join(' | ');
   return result.error ?? 'Operation failed';
 }
 
@@ -68,13 +98,24 @@ function blockingIssueCount(issues: Array<RecordEnvelope<IngestionIssuePayload>>
 }
 
 export class RecordBackedIngestionService {
-  readonly worker: IngestionWorkerShell;
+  readonly worker: IngestionWorker;
 
   constructor(
     private readonly store: RecordStore,
     private readonly blobStore: ArtifactBlobStore,
   ) {
-    this.worker = new IngestionWorkerShell(store, blobStore);
+    const fakeExtractor = new FakeExtractorAdapter();
+    const extractorFactory = (_targetKind: string): ExtractorAdapter => fakeExtractor;
+    const candidatesByKind = new Map<string, readonly ResolutionCandidate[]>();
+    const pipelinePath = join(__dirname, '../../../schema/registry/compile-pipelines/extraction-compile.yaml');
+    
+    const extractionRunner = new ExtractionRunnerService({
+      extractorFactory,
+      candidatesByKind,
+      pipelinePath,
+      recordIdPrefix: 'XDR-run-',
+    });
+    this.worker = new IngestionWorker(store, blobStore, extractionRunner);
   }
 
   async createJob(input: CreateIngestionJobInput): Promise<IngestionJobDetail> {

@@ -6,7 +6,7 @@
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import type { AgentOrchestrator, AgentResult } from '../../ai/types.js';
+import type { InferenceClient } from '../../ai/types.js';
 import type { RecordStore } from '../../store/types.js';
 import { extractPdfLayoutText } from '../../ingestion/pdf/TableExtractionService.js';
 
@@ -214,45 +214,88 @@ Respond with ONLY the JSON object, no markdown fencing.`;
 }
 
 /**
- * Parse AI response defensively.
+ * Strip Qwen-style <think>...</think> reasoning blocks.
+ */
+function stripThinkTags(input: string): string {
+  return input.replace(/<think\b[^>]*>[\s\S]*?<\/think>/gi, '').trim();
+}
+
+/**
+ * Extract the first balanced JSON object from a string, ignoring braces
+ * inside string literals. Returns null if no balanced {...} is found.
+ */
+function extractFirstJsonObject(input: string): string | null {
+  const start = input.indexOf('{');
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < input.length; i++) {
+    const ch = input[i];
+    if (inString) {
+      if (escape) { escape = false; continue; }
+      if (ch === '\\') { escape = true; continue; }
+      if (ch === '"') { inString = false; }
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === '{') { depth++; continue; }
+    if (ch === '}') {
+      depth--;
+      if (depth === 0) return input.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+/**
+ * Parse AI response defensively. Handles <think> reasoning tags, markdown
+ * fencing, and preamble/trailing text by extracting the first balanced JSON
+ * object from the response.
  */
 function parseAIResponse(content: string): { analysis: FileAnalysis; draftSpec: DraftExtractionSpec; questions: string[]; confidence: number } | null {
-  // Strip markdown fencing if present
-  let cleaned = content.trim();
-  const fenceMatch = cleaned.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
+  let cleaned = stripThinkTags(content).trim();
+
+  const fenceMatch = cleaned.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
   if (fenceMatch?.[1]) {
     cleaned = fenceMatch[1].trim();
   }
 
-  try {
-    const parsed = JSON.parse(cleaned) as Record<string, unknown>;
-    
-    // Validate required fields
-    if (!parsed.analysis || typeof parsed.analysis !== 'object') {
-      return null;
-    }
-    
-    const analysis = parsed.analysis as FileAnalysis;
-    const draftSpec = parsed.draftSpec as DraftExtractionSpec | undefined;
-    const questions = Array.isArray(parsed.questions) ? parsed.questions : [];
-    const confidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0.5;
+  const candidates: string[] = [];
+  candidates.push(cleaned);
+  const extracted = extractFirstJsonObject(cleaned);
+  if (extracted && extracted !== cleaned) candidates.push(extracted);
 
-    return {
-      analysis,
-      draftSpec: draftSpec || { targets: [] },
-      questions,
-      confidence,
-    };
-  } catch {
-    return null;
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate) as Record<string, unknown>;
+      if (!parsed.analysis || typeof parsed.analysis !== 'object') continue;
+
+      const analysis = parsed.analysis as FileAnalysis;
+      const draftSpec = parsed.draftSpec as DraftExtractionSpec | undefined;
+      const questions = Array.isArray(parsed.questions) ? parsed.questions : [];
+      const confidence = typeof parsed.confidence === 'number' ? parsed.confidence : 0.5;
+
+      return {
+        analysis,
+        draftSpec: draftSpec || { targets: [] },
+        questions,
+        confidence,
+      };
+    } catch {
+      continue;
+    }
   }
+
+  return null;
 }
 
 /**
  * Create AI ingestion handlers.
  */
 export function createAiIngestionHandlers(
-  orchestrator: AgentOrchestrator | undefined,
+  inferenceClient: InferenceClient | undefined,
+  model: string | undefined,
   _store: RecordStore,
 ): AiIngestionHandlers {
   return {
@@ -301,7 +344,7 @@ export function createAiIngestionHandlers(
       }
 
       // Check if AI is configured
-      if (!orchestrator) {
+      if (!inferenceClient || !model) {
         reply.status(503);
         return {
           success: false,
@@ -328,26 +371,30 @@ export function createAiIngestionHandlers(
       // Build prompt for AI
       const systemPrompt = buildAnalysisPrompt(fileType, fileContent.length, fileContent, prompt);
 
-      // Call AI with timeout using Promise.race
+      // Call AI directly — no tools, we only need a JSON response.
       let result: string;
       try {
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('AI analysis timed out')), 5 * 60 * 1000); // 5 minute timeout
+          setTimeout(() => reject(new Error('AI analysis timed out')), 5 * 60 * 1000);
         });
 
-        const aiPromise = orchestrator.run({
-          prompt: systemPrompt,
-          context: {
-            labwares: [],
-            eventSummary: '',
-            vocabPackId: 'general',
-            availableVerbs: [],
-          },
-          surface: 'ingestion',
+        const completionPromise = inferenceClient.complete({
+          model,
+          messages: [
+            { role: 'system', content: 'You are a precise JSON generator. Output ONLY a single valid JSON object. No reasoning, no commentary, no markdown fences, no prose. Start your response with `{` and end with `}`.' },
+            { role: 'user', content: `${systemPrompt}\n\n/no_think\n\nRespond with ONLY the JSON object. Do not write a "Thinking Process" section. Do not write any text before or after the JSON. Begin your response with \`{\`.` },
+          ],
+          temperature: 0,
+          max_tokens: 8192,
+          response_format: { type: 'json_object' },
         });
 
-        const response = await Promise.race([aiPromise, timeoutPromise]) as AgentResult;
-        result = response.notes?.[0] ?? response.error ?? JSON.stringify(response);
+        const response = await Promise.race([completionPromise, timeoutPromise]);
+        const content = response.choices[0]?.message?.content;
+        if (typeof content !== 'string' || content.length === 0) {
+          throw new Error('AI response contained no content');
+        }
+        result = content;
       } catch (err) {
         request.log.error(err, 'AI analysis failed');
         reply.status(502);
@@ -360,11 +407,11 @@ export function createAiIngestionHandlers(
       // Parse AI response
       const parsed = parseAIResponse(result);
       if (!parsed) {
-        request.log.error({ response: result.slice(0, 500) }, 'Failed to parse AI response as JSON');
+        request.log.error({ response: result }, 'Failed to parse AI response as JSON');
         reply.status(422);
         return {
           success: false,
-          error: 'Failed to parse AI response. The AI did not return valid JSON.',
+          error: `Failed to parse AI response. The AI did not return valid JSON.\n\nFull AI response (${result.length} chars):\n${result}`,
         };
       }
 

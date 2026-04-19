@@ -216,7 +216,7 @@ export function IngestionUploadModal({ open, onClose, onCreated }: Props) {
     try {
       const request: CreateIngestionJobRequest = {
         ...(name.trim() ? { name: name.trim() } : {}),
-        sourceKind: 'other',
+        sourceKind: 'ai_assisted',
         adapterKind: 'ai_assisted',
         ontologyPreferences,
         source: {
@@ -228,19 +228,7 @@ export function IngestionUploadModal({ open, onClose, onCreated }: Props) {
         },
       }
       const created = await apiClient.createIngestionJob(request)
-      try {
-        await apiClient.createRecord(
-          'https://computable-lab.com/schema/computable-lab/extraction-spec.schema.yaml',
-          {
-            id: `${created.job.recordId}-spec`,
-            job_ref: { kind: 'record', id: created.job.recordId, type: 'ingestion-job' },
-            spec,
-            source_intent: aiIntent,
-          },
-        )
-      } catch (specErr) {
-        console.warn('Failed to attach extraction spec:', specErr)
-      }
+      await apiClient.attachIngestionExtractionSpec(created.job.recordId, spec as unknown as Record<string, unknown>)
       await apiClient.runIngestionJob(created.job.recordId, {})
       onCreated({ createdJobId: created.job.recordId, autoRun: true })
       reset()

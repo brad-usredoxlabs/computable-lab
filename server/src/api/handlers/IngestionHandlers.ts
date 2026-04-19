@@ -216,8 +216,9 @@ export function createIngestionHandlers(store: RecordStore, blobStore: ArtifactB
         });
 
         if (!updateResult.success || !updateResult.envelope) {
-          reply.status(500);
-          return { error: 'INTERNAL_ERROR', message: updateResult.error ?? 'Failed to update artifact' };
+          reply.status(400);
+          const details = updateResult.validation?.errors?.map((e) => `${e.path}: ${e.message}`).join('; ');
+          return { error: 'BAD_REQUEST', message: `Failed to update artifact: ${details ?? updateResult.error ?? 'unknown'}` };
         }
 
         // Update the job source_kind to ai_assisted
@@ -234,8 +235,9 @@ export function createIngestionHandlers(store: RecordStore, blobStore: ArtifactB
         });
 
         if (!jobUpdateResult.success || !jobUpdateResult.envelope) {
-          reply.status(500);
-          return { error: 'INTERNAL_ERROR', message: jobUpdateResult.error ?? 'Failed to update job' };
+          reply.status(400);
+          const details = jobUpdateResult.validation?.errors?.map((e) => `${e.path}: ${e.message}`).join('; ');
+          return { error: 'BAD_REQUEST', message: `Failed to update job: ${details ?? jobUpdateResult.error ?? 'unknown'}` };
         }
 
         return { success: true, job: jobUpdateResult.envelope.payload };

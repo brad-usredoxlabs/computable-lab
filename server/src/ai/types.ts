@@ -43,6 +43,9 @@ export interface CompletionRequest {
   tool_choice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
   temperature?: number;
   max_tokens?: number;
+  response_format?:
+    | { type: 'json_object' }
+    | { type: 'json_schema'; json_schema: { name: string; schema: Record<string, unknown>; strict?: boolean } };
 }
 
 export interface CompletionResponse {

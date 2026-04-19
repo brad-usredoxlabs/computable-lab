@@ -5,9 +5,14 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    testTimeout: 10000,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
+    },
+    // Enable node:test format
+    deps: {
+      interopDefault: true,
     },
   },
 });

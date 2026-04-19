@@ -63,9 +63,24 @@ kill_by_pattern "$BACKEND_DIR.*src/server.ts"
 kill_by_pattern "$BACKEND_DIR.*dist/server.js"
 kill_by_pattern "$FRONTEND_DIR.*vite"
 
+# Also catch stray tsx --watch / node server processes started from any cwd
+# (e.g. `npm run dev -w server` in a random terminal leaves these running).
+kill_by_pattern "tsx.*src/server\.ts"
+kill_by_pattern "node.*dist/server\.js"
+
 # Stop whatever still holds expected ports.
 kill_by_port "$BACKEND_PORT"
 kill_by_port "$FRONTEND_PORT"
+
+# Give the OS a moment to release file handles before removing locks.
+sleep 1
+
+# Remove stale git locks in the workspace cache. Concurrent server instances
+# (or a crashed write) can leave these behind and block every subsequent write.
+WORKSPACE_ROOT="${CL_WORKSPACE_ROOT:-/tmp/cl-workspaces}"
+if [[ -d "$WORKSPACE_ROOT" ]]; then
+  find "$WORKSPACE_ROOT" -type f \( -name 'index.lock' -o -name 'HEAD.lock' -o -name 'packed-refs.lock' -o -name 'config.lock' \) -print -delete 2>/dev/null || true
+fi
 
 # Start backend (APP_BASE_PATH points to monorepo root so schema/ and records/ resolve).
 (

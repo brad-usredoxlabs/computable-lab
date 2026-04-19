@@ -3,11 +3,13 @@ export type IngestionSourceKind =
   | 'vendor_formulation_html'
   | 'vendor_plate_map_spreadsheet'
   | 'vendor_catalog_page'
+  | 'vendor_protocol_pdf'
   | 'instrument_plate_reader'
   | 'instrument_qpcr'
   | 'instrument_gc_ms'
   | 'instrument_gc_fid'
   | 'instrument_fluorescence_microscopy'
+  | 'ai_assisted'
   | 'other'
 
 export type IngestionJobStage = 'collect' | 'extract' | 'normalize' | 'match' | 'review' | 'publish'

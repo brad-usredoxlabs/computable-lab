@@ -1678,6 +1678,13 @@ export const apiClient = {
     })
   },
 
+  async attachIngestionExtractionSpec(jobId: string, extractionSpec: Record<string, unknown>): Promise<{ success: true; job: unknown }> {
+    return request<{ success: true; job: unknown }>(`/ingestion/jobs/${encodeURIComponent(jobId)}/extraction-spec`, {
+      method: 'POST',
+      body: JSON.stringify({ extractionSpec }),
+    })
+  },
+
   async approveIngestionBundle(jobId: string, bundleId: string): Promise<IngestionJobDetail> {
     return request<IngestionJobDetail>(`/ingestion/jobs/${encodeURIComponent(jobId)}/bundles/${encodeURIComponent(bundleId)}/approve`, {
       method: 'POST',

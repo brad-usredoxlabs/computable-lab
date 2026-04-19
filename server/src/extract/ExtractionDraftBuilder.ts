@@ -7,6 +7,7 @@
 
 import type { ExtractionCandidate } from './ExtractorAdapter.js';
 import type { AmbiguitySpan } from './MentionResolver.js';
+import type { PassDiagnostic } from '../compiler/pipeline/types.js';
 
 /**
  * Arguments for building an extraction draft.
@@ -16,6 +17,8 @@ export interface BuildExtractionDraftArgs {
   source_artifact: { kind: 'file' | 'publication' | 'freetext'; id: string; locator?: string };
   candidates: ExtractionCandidate[];
   ambiguity_spans_by_candidate?: AmbiguitySpan[][];   // index-aligned with candidates
+  diagnostics?: PassDiagnostic[];
+  extractor_profile?: string;
   now?: () => Date;
 }
 
@@ -29,6 +32,8 @@ export interface ExtractionDraftBody {
   status: 'pending_review';
   candidates: Array<ExtractionCandidate & { ambiguity_spans?: AmbiguitySpan[] }>;
   created_at: string;                                 // ISO
+  diagnostics?: PassDiagnostic[];
+  extractor_profile?: string;
 }
 
 /**
@@ -71,7 +76,7 @@ export function buildExtractionDraft(args: BuildExtractionDraftArgs): Extraction
   const nowFn = args.now ?? (() => new Date());
   const createdAt = nowFn().toISOString();
 
-  return {
+  const body: ExtractionDraftBody = {
     kind: 'extraction-draft',
     recordId: args.recordId,
     source_artifact: args.source_artifact,
@@ -79,4 +84,9 @@ export function buildExtractionDraft(args: BuildExtractionDraftArgs): Extraction
     candidates: candidatesWithSpans,
     created_at: createdAt
   };
+
+  if (args.diagnostics && args.diagnostics.length > 0) body.diagnostics = args.diagnostics;
+  if (args.extractor_profile) body.extractor_profile = args.extractor_profile;
+
+  return body;
 }

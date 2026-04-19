@@ -480,6 +480,8 @@ export function IngestionPage() {
         .error-banner {
           border: 1px solid #ffc9c9; background: #fff5f5; color: #c92a2a;
           border-radius: 10px; padding: 0.6rem 0.8rem; font-size: 0.85rem;
+          max-height: 360px; overflow: auto; white-space: pre-wrap;
+          word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         }
 
         @media (max-width: 1100px) {

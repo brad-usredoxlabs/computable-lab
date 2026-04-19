@@ -437,7 +437,7 @@ export async function createServer(
   let knowledgeAIHandlersImpl: ReturnType<typeof createKnowledgeAIHandlers> | undefined;
   let ingestionAIHandlersImpl = createIngestionAIHandlers(undefined, ctx.store);
   let materialAIHandlersImpl = createMaterialAIHandlers(undefined, ctx.store);
-  let aiIngestionHandlersImpl = createAiIngestionHandlers(undefined, ctx.store);
+  let aiIngestionHandlersImpl = createAiIngestionHandlers(undefined, undefined, ctx.store);
   let aiRecordDraftHandlersImpl: ReturnType<typeof createAiRecordDraftHandlers> | undefined;
   let currentOrchestrator: import('./ai/types.js').AgentOrchestrator | undefined;
   let aiInfo: {
@@ -453,7 +453,7 @@ export async function createServer(
     knowledgeAIHandlersImpl = undefined;
     ingestionAIHandlersImpl = createIngestionAIHandlers(undefined, ctx.store);
     materialAIHandlersImpl = createMaterialAIHandlers(undefined, ctx.store);
-    aiIngestionHandlersImpl = createAiIngestionHandlers(undefined, ctx.store);
+    aiIngestionHandlersImpl = createAiIngestionHandlers(undefined, undefined, ctx.store);
     aiRecordDraftHandlersImpl = undefined;
     currentOrchestrator = undefined;
     aiInfo = undefined;
@@ -508,7 +508,7 @@ export async function createServer(
       aiHandlersImpl = createAIHandlers(orchestrator);
       ingestionAIHandlersImpl = createIngestionAIHandlers(orchestrator, ctx.store);
       materialAIHandlersImpl = createMaterialAIHandlers(orchestrator, ctx.store);
-      aiIngestionHandlersImpl = createAiIngestionHandlers(orchestrator, ctx.store);
+      aiIngestionHandlersImpl = createAiIngestionHandlers(inferenceClient, inferenceConfig.model, ctx.store);
       aiRecordDraftHandlersImpl = createAiRecordDraftHandlers(
         ctx.schemaRegistry,
         ctx.uiSpecLoader,

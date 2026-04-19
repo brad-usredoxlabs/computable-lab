@@ -71,9 +71,43 @@ properties:
               reason:
                 type: string
 
+        evidence_span:
+          type: string
+          maxLength: 400
+          description: "Literal text slice from the source artifact that evidences this candidate."
+
+        uncertainty:
+          type: string
+          enum: [low, medium, high, unresolved, inferred]
+          description: "Reviewer-facing uncertainty bucket. Distinct from numeric confidence."
+
   status:
     type: string
     enum: [pending_review, partially_promoted, rejected, promoted]
 
   notes:
     type: string
+
+  diagnostics:
+    type: array
+    description: "Pass-level diagnostics folded up from extractor + pipeline. Informational; does not gate review."
+    items:
+      type: object
+      additionalProperties: false
+      required: [severity, code, message]
+      properties:
+        severity:
+          type: string
+          enum: [error, warning, info]
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+        pass_id:
+          type: string
+
+  extractor_profile:
+    type: string
+    description: "Identifier of the extractor profile/model that produced this draft (e.g., 'qwen3.5-122b-int4')."

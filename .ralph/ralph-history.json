@@ -1,0 +1,27 @@
+{
+  "iterations": [
+    {
+      "iteration": 1,
+      "startedAt": "2026-04-19T17:29:18.166Z",
+      "endedAt": "2026-04-19T17:29:27.315Z",
+      "durationMs": 7527,
+      "agent": "claude-code",
+      "model": "",
+      "toolsUsed": {},
+      "filesModified": [
+        ".ralph/",
+        "server/src/extract/adapters/",
+        "server/src/extract/transforms/"
+      ],
+      "exitCode": 1,
+      "completionDetected": false,
+      "errors": []
+    }
+  ],
+  "totalDurationMs": 7527,
+  "struggleIndicators": {
+    "repeatedErrors": {},
+    "noProgressIterations": 0,
+    "shortIterations": 1
+  }
+}

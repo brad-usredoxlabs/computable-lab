@@ -16,6 +16,8 @@ export interface ExtractionCandidate {
     path: string;                 // JSON-path into draft; matches extraction-draft schema (spec-035)
     reason: string;               // e.g., "material name matched 3 records"
   }>;
+  evidence_span?: string;         // verbatim text slice from source proving the claim
+  uncertainty?: 'low' | 'medium' | 'high' | 'unresolved' | 'inferred'; // reviewer-facing uncertainty bucket
 }
 
 /**
@@ -26,6 +28,7 @@ export interface ExtractionRequest {
   hint?: {
     target_kinds?: string[];      // restrict candidates to these kinds
     source_ref?: { kind: 'record'; id: string; type: string };
+    sourceKind?: string;          // hints about the source format (e.g., 'vendor_formulation_json', 'vendor_formulation_html')
   };
 }
 

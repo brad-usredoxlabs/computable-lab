@@ -46,6 +46,16 @@ describe('ExtractionPromptLoader', () => {
         expect(result.metadata.description).toContain('material mentions');
         expect(result.body.length).toBeGreaterThan(100);
       });
+
+      it('loads context.md with correct metadata', () => {
+        const result = loadExtractionPrompt('context');
+        
+        expect(result.metadata.target_kind).toBe('context');
+        expect(result.metadata.version).toBe('1.0.0');
+        expect(result.metadata.description).toContain('experiment-context');
+        expect(result.body.length).toBeGreaterThan(100);
+        expect(result.path).toContain('context.md');
+      });
     });
 
     describe('unknown kind', () => {
