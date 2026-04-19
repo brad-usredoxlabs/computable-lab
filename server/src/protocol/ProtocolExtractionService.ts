@@ -177,11 +177,11 @@ export class ProtocolExtractionService {
    * Build a protocol body from an event graph payload.
    * This is the core logic that was previously in saveFromEventGraph.
    */
-  private buildProtocolBody(payload: EventGraphPayload, sourceEnvelope: RecordEnvelope, input: { title?: string; tags?: string[] }): {
+  private async buildProtocolBody(payload: EventGraphPayload, sourceEnvelope: RecordEnvelope, input: { title?: string; tags?: string[] }): Promise<{
     protocolBody: Record<string, unknown>;
     recordId: string;
-  } {
-    const recordId = this.nextProtocolId();
+  }> {
+    const recordId = await this.nextProtocolId();
     const eventGraphName = typeof payload.name === 'string' && payload.name.trim().length > 0 ? payload.name.trim() : sourceEnvelope.recordId;
     const protocolTitle = typeof input.title === 'string' && input.title.trim().length > 0
       ? input.title.trim()
@@ -420,7 +420,7 @@ export class ProtocolExtractionService {
     }
 
     // Build the protocol body (same logic as before, but don't persist it)
-    const { protocolBody, recordId: protocolRecordId } = this.buildProtocolBody(payload, sourceEnvelope, input);
+    const { protocolBody } = await this.buildProtocolBody(payload, sourceEnvelope, input);
 
     // Generate extraction-draft recordId
     const draftRecordId = await this.nextExtractionDraftId();
@@ -457,11 +457,11 @@ export class ProtocolExtractionService {
 
     if (!createResult.success || !createResult.envelope) {
       if (createResult.validation && !createResult.validation.valid) {
-        const validationErrors = createResult.validation.errors?.map(e => `${e.path}: ${e.message}`).join('; ') ?? 'unknown validation error';
+        const validationErrors = createResult.validation.errors?.map((e: { path: string; message: string }) => `${e.path}: ${e.message}`).join('; ') ?? 'unknown validation error';
         throw new ProtocolExtractionError('VALIDATION_ERROR', `Extraction-draft validation failed: ${validationErrors}`, 422);
       }
       if (createResult.lint && !createResult.lint.valid) {
-        const lintErrors = createResult.lint.errors?.map(e => `${e.path}: ${e.message}`).join('; ') ?? 'unknown lint error';
+        const lintErrors = createResult.lint.violations?.map((v: { path?: string; message: string }) => `${v.path ?? '/'}: ${v.message}`).join('; ') ?? 'unknown lint error';
         throw new ProtocolExtractionError('LINT_ERROR', `Extraction-draft lint failed: ${lintErrors}`, 422);
       }
       throw new ProtocolExtractionError('CREATE_FAILED', createResult.error ?? 'Failed to create extraction-draft', 400);
@@ -509,6 +509,9 @@ export class ProtocolExtractionService {
     }
 
     const candidate = draft.candidates[candidateIndex];
+    if (!candidate) {
+      throw new ProtocolExtractionError('BAD_REQUEST', `Candidate at index ${candidateIndex} not found for draft ${draftId}`, 400);
+    }
     if (candidate.target_kind !== 'protocol') {
       throw new ProtocolExtractionError('BAD_REQUEST', `Candidate ${candidateIndex} has target_kind '${candidate.target_kind}', expected 'protocol'`, 400);
     }
@@ -599,13 +602,20 @@ export class ProtocolExtractionService {
     const newStatus: 'promoted' | 'partially_promoted' = 
       candidateIndex === draft.candidates.length - 1 ? 'promoted' : 'partially_promoted';
 
+    // Update the draft payload with new status
+    const updatedDraft: ProtocolExtractionDraft = {
+      ...draft,
+      status: newStatus,
+      notes: draft.notes ? `${draft.notes}\n\nPromoted at ${new Date().toISOString()}: ${canonicalRecord.recordId}` : `Promoted at ${new Date().toISOString()}: ${canonicalRecord.recordId}`,
+    };
+
+    const updatedEnvelope: RecordEnvelope = {
+      ...draftEnvelope,
+      payload: updatedDraft,
+    };
+
     const updateResult = await this.ctx.store.update({
-      recordId: draftId,
-      patch: {
-        status: newStatus,
-        promoted_at: new Date().toISOString(),
-        promoted_canonical_id: canonicalRecord.recordId,
-      },
+      envelope: updatedEnvelope,
       message: `Update extraction-draft ${draftId} status to ${newStatus}`,
     });
 

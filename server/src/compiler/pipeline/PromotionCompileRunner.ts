@@ -7,6 +7,7 @@
  */
 
 import { runPipeline, type PipelineSpec, type WhenEvaluator } from './PipelineRunner.js';
+import type { PipelineState } from './types.js';
 import { loadPipeline } from './PipelineLoader.js';
 import { PassRegistry } from './PassRegistry.js';
 import {
@@ -14,11 +15,9 @@ import {
   createResolveTargetSchemaPass,
   createProjectExtractionPromotionPass,
 } from './passes/PromotionExtractionPasses.js';
-import { createDeriveContextPass } from './passes/DeriveContextPass.js';
 import { createClassifyPromotionInputPass } from './passes/ClassifyPromotionInputPass.js';
 import { createSchemaValidateDraftPass } from './passes/SchemaValidateDraftPass.js';
 import { createValidateContextSourcePass, createProjectContextPromotionPass } from './passes/ContextPromotionPasses.js';
-import type { Pass } from './types.js';
 
 /**
  * Arguments for running a promotion compile.
@@ -82,7 +81,7 @@ export async function runPromotionCompile(args: PromotionCompileRunArgs): Promis
   registry.register(createValidateContextSourcePass());
   registry.register(createProjectContextPromotionPass({
     recordIdPrefix: 'XCP-',
-    now: args.now,
+    ...(args.now ? { now: args.now } : {}),
   }));
 
   // Register extraction branch passes
@@ -95,7 +94,7 @@ export async function runPromotionCompile(args: PromotionCompileRunArgs): Promis
   // Register the project_extraction_promotion pass with the given prefix
   registry.register(createProjectExtractionPromotionPass({
     recordIdPrefix: args.recordIdPrefix ?? 'XPR-',
-    now: args.now,
+    ...(args.now ? { now: args.now } : {}),
   }));
 
   // Load the pipeline spec
@@ -124,7 +123,7 @@ export async function runPromotionCompile(args: PromotionCompileRunArgs): Promis
     const match = condition.match(/^meta\.(\w+)\s*==\s*['"](\w+)['"]$/);
     if (match) {
       const [, key, expectedValue] = match;
-      const actualValue = state.meta[key];
+      const actualValue = state.meta[key as keyof typeof state.meta];
       return actualValue === expectedValue;
     }
     
@@ -159,7 +158,7 @@ export async function runPromotionCompile(args: PromotionCompileRunArgs): Promis
   const passStatuses = result.pass_statuses.map(s => ({
     pass_id: s.pass_id,
     status: s.status,
-    reason: s.reason,
+    ...(s.reason !== undefined ? { reason: s.reason } : {}),
   }));
 
   return {
