@@ -1,0 +1,30 @@
+kind: derivation-model
+id: DM-beer-lambert-concentration
+name: "Beer-Lambert concentration"
+version: 1
+description: >
+  Compute concentration from absorbance: c = A / (ε·ℓ). Assumes
+  absorbance is in the linear regime and the species has a known
+  molar absorptivity ε.
+assumptions:
+  - "Absorbance is within the linear regime."
+  - "Single absorbing species."
+inputs:
+  - name: absorbance
+    type: number
+  - name: molar_absorptivity
+    type: quantity
+  - name: path_length
+    type: quantity
+output:
+  name: concentration
+  type: concentration
+steps:
+  - op: multiply
+    lhs: molar_absorptivity
+    rhs: path_length
+    into: eps_l
+  - op: divide
+    lhs: absorbance
+    rhs: eps_l
+    into: concentration

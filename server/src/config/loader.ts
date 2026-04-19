@@ -22,8 +22,21 @@ import type {
   ExecutionConfig,
   LabConfig,
   IntegrationsConfig,
+  ExtractorProfileConfig,
 } from './types.js';
 import { DEFAULT_CONFIG, DEFAULT_REPO_CONFIG } from './types.js';
+
+/**
+ * Default extractor profile configuration.
+ */
+export const DEFAULT_EXTRACTOR_CONFIG: ExtractorProfileConfig = {
+  enabled: false,
+  provider: 'openai-compatible',
+  baseUrl: 'http://thunderbeast:8889/v1',
+  model: 'Qwen/Qwen3.5-9B-Instruct',
+  temperature: 0.0,
+  max_tokens: 2048,
+};
 
 /**
  * Config loading options.
@@ -262,6 +275,44 @@ function validateAIConfig(config: unknown, path = 'ai'): asserts config is AICon
       `${path}.inference.provider`,
       inference.provider,
     );
+  }
+
+  // Validate extractor profile if present
+  const extractor = c.extractor as Record<string, unknown> | undefined;
+  if (extractor !== undefined) {
+    if (!extractor || typeof extractor !== 'object') {
+      throw new ConfigValidationError('extractor must be an object', `${path}.extractor`, extractor);
+    }
+    const e = extractor as Record<string, unknown>;
+    if (e.enabled !== undefined && typeof e.enabled !== 'boolean') {
+      throw new ConfigValidationError('extractor.enabled must be a boolean', `${path}.extractor.enabled`, e.enabled);
+    }
+    if (
+      e.provider !== undefined &&
+      e.provider !== 'openai' &&
+      e.provider !== 'openai-compatible'
+    ) {
+      throw new ConfigValidationError(
+        'extractor.provider must be one of: openai, openai-compatible',
+        `${path}.extractor.provider`,
+        e.provider,
+      );
+    }
+    if (e.baseUrl !== undefined && typeof e.baseUrl !== 'string') {
+      throw new ConfigValidationError('extractor.baseUrl must be a string', `${path}.extractor.baseUrl`, e.baseUrl);
+    }
+    if (e.apiKey !== undefined && typeof e.apiKey !== 'string') {
+      throw new ConfigValidationError('extractor.apiKey must be a string', `${path}.extractor.apiKey`, e.apiKey);
+    }
+    if (e.model !== undefined && typeof e.model !== 'string') {
+      throw new ConfigValidationError('extractor.model must be a string', `${path}.extractor.model`, e.model);
+    }
+    if (e.temperature !== undefined && typeof e.temperature !== 'number') {
+      throw new ConfigValidationError('extractor.temperature must be a number', `${path}.extractor.temperature`, e.temperature);
+    }
+    if (e.max_tokens !== undefined && typeof e.max_tokens !== 'number') {
+      throw new ConfigValidationError('extractor.max_tokens must be a number', `${path}.extractor.max_tokens`, e.max_tokens);
+    }
   }
 
   // Normalize: agent block is optional in config.yaml but the type contract
@@ -516,6 +567,16 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<AppCo
 
   // Pass through AI config if present
   if (partialConfig.ai !== undefined) {
+    // Apply extractor defaults if ai section exists
+    if (partialConfig.ai.extractor === undefined || partialConfig.ai.extractor === null) {
+      partialConfig.ai.extractor = DEFAULT_EXTRACTOR_CONFIG;
+    } else {
+      // Merge user-provided extractor config with defaults
+      partialConfig.ai.extractor = deepMerge(
+        DEFAULT_EXTRACTOR_CONFIG,
+        partialConfig.ai.extractor as Partial<ExtractorProfileConfig>
+      );
+    }
     config.ai = partialConfig.ai;
   }
 

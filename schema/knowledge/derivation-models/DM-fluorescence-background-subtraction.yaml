@@ -1,0 +1,25 @@
+kind: derivation-model
+id: DM-fluorescence-background-subtraction
+name: "Fluorescence background subtraction"
+version: 1
+description: >
+  Per-well background subtraction: corrected = sample - blank. Both
+  readings must share units (dimensionless 'AU'/'RFU'). The output is
+  consumed as a model-derived WELL-CONTEXT field — projection passes
+  read it, they do not compute it (see 70-derivation-models.md §9.4).
+assumptions:
+  - "Sample and blank readings share the same detector gain and timestamp."
+  - "Blank is a valid negative control (no signal expected)."
+inputs:
+  - name: sample_fluorescence
+    type: quantity
+  - name: blank_fluorescence
+    type: quantity
+output:
+  name: corrected_fluorescence
+  type: quantity
+steps:
+  - op: subtract
+    lhs: sample_fluorescence
+    rhs: blank_fluorescence
+    into: corrected_fluorescence

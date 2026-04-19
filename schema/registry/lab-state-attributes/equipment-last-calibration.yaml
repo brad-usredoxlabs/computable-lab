@@ -1,0 +1,25 @@
+attributeVersion: 1
+subject_type: equipment
+attribute: last_calibration
+description: "Timestamp and summary of the most recent calibration for an instrument."
+value_schema:
+  type: object
+  additionalProperties: false
+  required: [iso_datetime]
+  properties:
+    iso_datetime:
+      type: string
+      format: date-time
+    operator_ref:
+      type: object
+      additionalProperties: false
+      required: [kind, id, type]
+      properties:
+        kind: { const: "record" }
+        id: { type: string }
+        type: { const: "operator" }
+    result:
+      type: string
+      enum: [pass, fail, partial]
+    notes:
+      type: string

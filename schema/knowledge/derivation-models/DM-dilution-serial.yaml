@@ -1,0 +1,28 @@
+kind: derivation-model
+id: DM-dilution-serial
+name: "Serial dilution (K=2 steps)"
+version: 1
+description: >
+  Apply a constant dilution factor K times. Canonical seed ships K=2 as
+  a straight-line step list; generalization to dynamic K is deferred.
+  factor is a dimensionless Quantity.
+assumptions:
+  - "factor is dimensionless."
+  - "No carryover between dilution stages."
+inputs:
+  - name: stock_concentration
+    type: concentration
+  - name: factor
+    type: number
+output:
+  name: final_concentration
+  type: concentration
+steps:
+  - op: divide
+    lhs: stock_concentration
+    rhs: factor
+    into: step_1
+  - op: divide
+    lhs: step_1
+    rhs: factor
+    into: final_concentration

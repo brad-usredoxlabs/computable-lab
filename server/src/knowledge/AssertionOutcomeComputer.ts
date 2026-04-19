@@ -24,7 +24,7 @@ export interface ComputedOutcome {
 }
 
 /**
- * Assertion-like object that can be evaluated for outcome direction.
+ * Assertion-like object that can be evaluated.
  */
 export interface AssertionLike {
   kind: 'assertion';
@@ -38,12 +38,12 @@ export interface AssertionLike {
  * 
  * Measure lookup rules:
  * - "total_volume" -> diff.total_volume?.delta (number or null)
- * - "observed.<key>" -> compute Number(to) - Number(from) from diff.observed?.[key]
- * - "properties.<key>" -> compute Number(to) - Number(from) from diff.properties?.[key]
+ * - "observed.<key>" -> diff.observed?.[key]: compute Number(to) - Number(from) if both coerce to finite numbers; else null
+ * - "properties.<key>" -> same rule against diff.properties
  * 
  * @param diff - The context diff structure
- * @param measure - The measure path (e.g., "total_volume", "observed.od600")
- * @returns The numeric delta, or null if not computable
+ * @param measure - The measure path (e.g., "total_volume", "observed.od600", "properties.pH")
+ * @returns The numeric delta or null if not computable
  */
 function extractDelta(diff: ReturnType<typeof diffContexts>, measure: string): number | null {
   if (measure === 'total_volume') {
@@ -54,32 +54,32 @@ function extractDelta(diff: ReturnType<typeof diffContexts>, measure: string): n
   // Handle observed.<key>
   if (measure.startsWith('observed.')) {
     const key = measure.slice('observed.'.length);
-    const obs = diff.observed;
-    if (!obs || !(key in obs)) {
-      return null;
-    }
-    const entry = obs[key] as any;
-    const fromVal = Number((entry['from'] as any) ?? NaN);
-    const toVal = Number((entry['to'] as any) ?? NaN);
+    const obsEntry = diff.observed?.[key];
+    if (!obsEntry) return null;
+    
+    const fromVal = obsEntry.from !== undefined ? Number(obsEntry.from) : NaN;
+    const toVal = obsEntry.to !== undefined ? Number(obsEntry.to) : NaN;
+    
     if (!Number.isFinite(fromVal) || !Number.isFinite(toVal)) {
       return null;
     }
+    
     return toVal - fromVal;
   }
 
   // Handle properties.<key>
   if (measure.startsWith('properties.')) {
     const key = measure.slice('properties.'.length);
-    const props = diff.properties;
-    if (!props || !(key in props)) {
-      return null;
-    }
-    const entry = props[key] as any;
-    const fromVal = Number((entry['from'] as any) ?? NaN);
-    const toVal = Number((entry['to'] as any) ?? NaN);
+    const propEntry = diff.properties?.[key];
+    if (!propEntry) return null;
+    
+    const fromVal = propEntry.from !== undefined ? Number(propEntry.from) : NaN;
+    const toVal = propEntry.to !== undefined ? Number(propEntry.to) : NaN;
+    
     if (!Number.isFinite(fromVal) || !Number.isFinite(toVal)) {
       return null;
     }
+    
     return toVal - fromVal;
   }
 
@@ -88,19 +88,19 @@ function extractDelta(diff: ReturnType<typeof diffContexts>, measure: string): n
 }
 
 /**
- * Compute the outcome direction for an assertion by diffing its referenced contexts.
+ * Compute the outcome direction for an assertion based on context diffs.
  * 
  * @param assertion - The assertion to evaluate
  * @param contextsByRef - Map of context references to context objects
- * @param measure - The measure to compute the delta for (e.g., "total_volume", "observed.od600")
- * @returns ComputedOutcome with direction and optional deltas
+ * @param measure - The measure key to compare (e.g., "total_volume", "observed.od600")
+ * @returns ComputedOutcome with direction and deltas
  */
 export function computeAssertionOutcome(
   assertion: AssertionLike,
   contextsByRef: ReadonlyMap<string, Context>,
   measure: string,
 ): ComputedOutcome {
-  // Handle single_context and global scopes - cannot compute direction
+  // Handle single_context and global scopes
   if (assertion.scope === 'single_context' || assertion.scope === 'global') {
     return {
       direction: 'unknown',
@@ -109,25 +109,38 @@ export function computeAssertionOutcome(
     };
   }
 
-  // Handle comparison scope - requires exactly 2 contexts
+  // Handle comparison scope
   if (assertion.scope === 'comparison') {
     const refs = assertion.context_refs ?? [];
+    
     if (refs.length !== 2) {
       return {
         direction: 'unknown',
         measure,
-        reason: `comparison scope requires exactly 2 context references, got ${refs.length}`,
+        reason: `comparison scope requires exactly 2 context refs, got ${refs.length}`,
       };
     }
 
-    const contextA = contextsByRef.get(refs[0].id);
-    const contextB = contextsByRef.get(refs[1].id);
+    const refA = refs[0];
+    const refB = refs[1];
+    
+    // Type guard for refs
+    if (!refA || !refB) {
+      return {
+        direction: 'unknown',
+        measure,
+        reason: 'comparison scope requires exactly 2 context refs',
+      };
+    }
+
+    const contextA = contextsByRef.get(refA.id);
+    const contextB = contextsByRef.get(refB.id);
 
     if (!contextA) {
       return {
         direction: 'unknown',
         measure,
-        reason: `missing context: ${refs[0].id}`,
+        reason: `missing context: ${refA.id}`,
       };
     }
 
@@ -135,7 +148,7 @@ export function computeAssertionOutcome(
       return {
         direction: 'unknown',
         measure,
-        reason: `missing context: ${refs[1].id}`,
+        reason: `missing context: ${refB.id}`,
       };
     }
 
@@ -166,14 +179,15 @@ export function computeAssertionOutcome(
     };
   }
 
-  // Handle series scope - requires at least 2 contexts
+  // Handle series scope
   if (assertion.scope === 'series') {
     const refs = assertion.context_refs ?? [];
+    
     if (refs.length < 2) {
       return {
         direction: 'unknown',
         measure,
-        reason: `series scope requires at least 2 context references, got ${refs.length}`,
+        reason: `series scope requires at least 2 context refs, got ${refs.length}`,
       };
     }
 
@@ -196,8 +210,15 @@ export function computeAssertionOutcome(
     for (let i = 0; i < contexts.length - 1; i++) {
       const ctxA = contexts[i];
       const ctxB = contexts[i + 1];
-      // Type assertion safe because we validated all contexts exist above
-      const diff = diffContexts(ctxA as Context, ctxB as Context);
+      // Type guard to ensure ctxA and ctxB are defined
+      if (!ctxA || !ctxB) {
+        return {
+          direction: 'unknown',
+          measure,
+          reason: `unexpected missing context at index ${i}`,
+        };
+      }
+      const diff = diffContexts(ctxA, ctxB);
       const delta = extractDelta(diff, measure);
 
       if (delta === null || !Number.isFinite(delta)) {
@@ -211,12 +232,12 @@ export function computeAssertionOutcome(
       deltas.push(delta);
     }
 
-    // Determine overall direction based on delta signs
+    // Determine overall direction
+    let direction: OutcomeDirection;
     const allPositive = deltas.every(d => d > 0);
     const allNegative = deltas.every(d => d < 0);
     const allZero = deltas.every(d => d === 0);
 
-    let direction: OutcomeDirection;
     if (allPositive) {
       direction = 'increased';
     } else if (allNegative) {

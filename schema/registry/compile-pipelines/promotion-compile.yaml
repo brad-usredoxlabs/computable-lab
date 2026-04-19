@@ -1,0 +1,38 @@
+pipelineId: promotion-compile
+entrypoint: promotion-compile
+description: >
+  Promote a value into a canonical record. Input shape determines the
+  branch: context snapshot → context-promotion audit; extraction-draft
+  candidate → extraction-promotion audit.
+passes:
+  - id: classify_promotion_input
+    family: parse
+    description: Inspect input shape to determine promotion branch (context vs extraction)
+
+  - id: validate_context_source
+    family: validate
+    description: Validate context source for context-promotion branch
+    when: meta.branch == 'context'
+
+  - id: validate_extraction_candidate
+    family: validate
+    description: Validate extraction candidate for extraction-promotion branch
+    when: meta.branch == 'extraction'
+
+  - id: resolve_target_schema
+    family: disambiguate
+    description: Resolve the target schema for the promotion
+
+  - id: schema_validate_draft
+    family: validate
+    description: Schema validate the draft record
+
+  - id: project_context_promotion
+    family: project
+    description: Project context-promotion audit record (context branch terminal)
+    when: meta.branch == 'context'
+
+  - id: project_extraction_promotion
+    family: project
+    description: Project extraction-promotion audit record (extraction branch terminal)
+    when: meta.branch == 'extraction'

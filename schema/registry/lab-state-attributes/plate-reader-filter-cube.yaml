@@ -1,0 +1,24 @@
+attributeVersion: 1
+subject_type: equipment
+attribute: filter_cube_config
+description: "Installed filter cube on a fluorescence plate reader (excitation/emission pair and dichroic)."
+value_schema:
+  type: object
+  additionalProperties: false
+  required: [excitation_nm, emission_nm]
+  properties:
+    excitation_nm:
+      type: number
+      minimum: 200
+      maximum: 1000
+    emission_nm:
+      type: number
+      minimum: 200
+      maximum: 1000
+    dichroic_nm:
+      type: number
+      minimum: 200
+      maximum: 1000
+    cube_id:
+      type: string
+      description: "Manufacturer part number or lab-local identifier."

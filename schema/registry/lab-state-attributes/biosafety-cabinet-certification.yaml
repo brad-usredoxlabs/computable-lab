@@ -1,0 +1,17 @@
+attributeVersion: 1
+subject_type: equipment
+attribute: biosafety_certification
+description: "Most recent biosafety-cabinet annual certification status."
+value_schema:
+  type: object
+  additionalProperties: false
+  required: [certified_through_iso]
+  properties:
+    certified_through_iso:
+      type: string
+      format: date-time
+    certifier:
+      type: string
+      description: "Name or organization that performed the certification."
+    cert_id:
+      type: string

@@ -1,0 +1,47 @@
+kind: derivation-model
+id: DM-ideal-mixing-concentration
+name: "Ideal mixing (2-aliquot concentration)"
+version: 1
+description: >
+  Two-aliquot conservation of moles: final_concentration =
+  (volume_a*concentration_a + volume_b*concentration_b) /
+  (volume_a + volume_b). Assumes perfect mixing and no volume change on
+  mixing. Generalization to N aliquots requires array-valued operators
+  and is deferred to Phase 2.
+assumptions:
+  - "Perfect mixing: final concentration is uniform."
+  - "No volume change on mixing."
+  - "No loss to tips or walls."
+inputs:
+  - name: volume_a
+    type: volume
+  - name: concentration_a
+    type: concentration
+  - name: volume_b
+    type: volume
+  - name: concentration_b
+    type: concentration
+output:
+  name: final_concentration
+  type: concentration
+steps:
+  - op: multiply
+    lhs: volume_a
+    rhs: concentration_a
+    into: moles_a
+  - op: multiply
+    lhs: volume_b
+    rhs: concentration_b
+    into: moles_b
+  - op: sum
+    lhs: moles_a
+    rhs: moles_b
+    into: total_moles
+  - op: sum
+    lhs: volume_a
+    rhs: volume_b
+    into: total_volume
+  - op: divide
+    lhs: total_moles
+    rhs: total_volume
+    into: final_concentration

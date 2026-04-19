@@ -1,0 +1,19 @@
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/workflow/extraction-promotion.schema.yaml"
+kind: extraction-promotion
+display:
+  title_template: "Extraction promotion {{recordId}} → {{output_ref.id}}"
+  subtitle_template: "{{output_kind}} · {{status}}"
+  read_only: true
+  fields:
+    - { path: recordId,            label: Record ID }
+    - { path: kind,                label: Kind }
+    - { path: source_draft_ref.id, label: Draft }
+    - { path: candidate_path,      label: Candidate }
+    - { path: source_artifact_ref, label: Source artifact }
+    - { path: source_content_hash, label: Content hash }
+    - { path: output_kind,         label: Output kind }
+    - { path: output_ref.id,       label: Output record }
+    - { path: promoted_by.id,      label: Promoted by }
+    - { path: promoted_at,         label: Promoted at }
+    - { path: status,              label: Status }

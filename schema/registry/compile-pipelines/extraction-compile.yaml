@@ -1,45 +1,51 @@
 # Extraction compile pipeline (compiler-specs/60 §3, 80).
 # Deterministic wrapper around the AI extractor. Produces an extraction-draft
-# record (see schema/workflow/extraction-draft.schema.yaml). Not yet dispatched
-# by the compiler — kept as documentation of intended structure.
+# record (see schema/workflow/extraction-draft.schema.yaml).
+#
+# Phase-1 semantics per compiler-specs/80-ai-pre-compiler.md:
+#   - §3.3: candidates carry lenient structural validation ONLY.
+#     Authoritative schema validation happens at promotion time
+#     (promotion-compile extraction branch, spec-064).
+#   - §7: confidence is not a promotion gate; it is audit metadata.
+#
+# Previously-declared passes 'candidate_schema_validation',
+# 'confidence_threshold_filter', and 'load_source_artifact' have been
+# removed. Source loading is caller-provided text; validation is
+# deferred to promotion-time; confidence is not filtered here.
 
 pipelineId: extraction-compile
 entrypoint: extraction-compile
 description: >
-  Compiles an unstructured source artifact into an extraction-draft record
-  containing candidate canonical records. Humans review the draft and
-  promote individual candidates via promotion-compile.
-
+  Compile source text into an extraction-draft (XDR-*) record. Phase-1
+  semantics per compiler-specs/80-ai-pre-compiler.md:
+    - §3.3: candidates carry lenient structural validation ONLY.
+      Authoritative schema validation happens at promotion time
+      (promotion-compile extraction branch, spec-064).
+    - §7: confidence is not a promotion gate; it is audit metadata.
+  Previously-declared passes 'candidate_schema_validation',
+  'confidence_threshold_filter', and 'load_source_artifact' have been
+  removed. Source loading is caller-provided text; validation is
+  deferred to promotion-time; confidence is not filtered here.
 passes:
-  - id: load_source_artifact
-    family: parse
-    description: "Load the source artifact (PDF text, prose, user freetext) and associated metadata."
-
-  - id: ai_extract_candidates
+  - id: extractor_run
     family: parse
     description: >
-      Invoke the configured AI model (Qwen3.5 local by default, per 80) to
-      emit structured candidate records with confidence and ambiguity spans.
-    depends_on: [load_source_artifact]
+      Invoke the configured extractor adapter (spec-055) to emit
+      ExtractionResult: candidates with target_kind, draft body, and
+      optional ambiguity spans.
 
-  - id: mention_resolution
+  - id: mention_resolve
     family: disambiguate
     description: >
-      Resolve mentions to canonical entities: materials (ChEBI-backed),
-      equipment, labware classes, protocols, claims, contexts.
-    depends_on: [ai_extract_candidates]
+      Resolve mentions in each candidate's draft via the deterministic
+      resolver (spec-057 + spec-075). Unresolved mentions become
+      ambiguity_spans.
+    depends_on: [extractor_run]
 
-  - id: candidate_schema_validation
-    family: validate
-    description: "Validate each candidate against its target record kind's JSON Schema; demote invalid candidates to 'needs revision' on the draft."
-    depends_on: [mention_resolution]
-
-  - id: confidence_threshold_filter
-    family: normalize
-    description: "Apply configured confidence thresholds; demote low-confidence candidates to ambiguity_spans."
-    depends_on: [candidate_schema_validation]
-
-  - id: project_extraction_draft
+  - id: draft_assemble
     family: project
-    description: "Assemble the extraction-draft record (status: pending_review) with source_artifact, candidates, and ambiguity spans."
-    depends_on: [confidence_threshold_filter]
+    description: >
+      Assemble the extraction-draft record body with status
+      'pending_review', folding per-candidate ambiguity_spans onto
+      each candidate.
+    depends_on: [mention_resolve]

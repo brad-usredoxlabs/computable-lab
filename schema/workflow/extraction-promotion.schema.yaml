@@ -1,0 +1,108 @@
+$id: https://computable-lab.com/schema/computable-lab/workflow/extraction-promotion.schema.yaml
+$schema: https://json-schema.org/draft/2020-12/schema
+title: ExtractionPromotion
+description: >
+  Audit record linking an extraction-draft candidate to a canonical
+  record it was promoted into. Distinct from context-promotion.
+
+type: object
+unevaluatedProperties: false
+
+required:
+  - kind
+  - recordId
+  - source_draft_ref
+  - candidate_path
+  - source_artifact_ref
+  - source_content_hash
+  - output_kind
+  - output_ref
+  - promoted_at
+  - version
+  - status
+
+properties:
+  kind:
+    const: extraction-promotion
+
+  recordId:
+    type: string
+    pattern: ^XPR-[A-Za-z0-9._-]+$
+    description: "Extraction promotion record id (XPR-*)."
+
+  source_draft_ref:
+    type: object
+    description: "Reference to the extraction-draft record being promoted."
+    required: [kind, id, type]
+    properties:
+      kind:
+        const: record
+      id:
+        type: string
+        pattern: ^XDR-
+      type:
+        const: extraction-draft
+
+  candidate_path:
+    type: string
+    description: "JSON-path-like string into source_draft_ref's candidates[] (e.g. 'candidates[0]')."
+
+  source_artifact_ref:
+    type: object
+    description: "Reference to the source artifact (file, publication, or freetext)."
+    required: [kind, id]
+    properties:
+      kind:
+        type: string
+        enum: [file, publication, freetext]
+      id:
+        type: string
+      locator:
+        type: string
+        description: "Optional sub-locator (page, section, line range)."
+
+  source_content_hash:
+    type: string
+    pattern: ^[0-9a-f]{64}$
+    description: "Locked content hash of the source artifact at promotion time."
+
+  output_kind:
+    type: string
+    description: "Target record kind for the promoted output."
+
+  output_ref:
+    type: object
+    description: "Reference to the canonical record created by promotion."
+    required: [kind, id, type]
+    properties:
+      kind:
+        const: record
+      id:
+        type: string
+      type:
+        type: string
+
+  promoted_by:
+    type: object
+    description: "Optional operator reference for manual promotions."
+    required: [kind, id]
+    properties:
+      kind:
+        const: operator
+      id:
+        type: string
+
+  promoted_at:
+    type: string
+    format: date-time
+    description: "ISO-8601 timestamp of when the promotion occurred."
+
+  version:
+    type: integer
+    const: 1
+    description: "Phase-1 version number."
+
+  status:
+    type: string
+    enum: [active, retracted]
+    description: "Current status of the promotion record."

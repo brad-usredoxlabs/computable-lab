@@ -1,0 +1,39 @@
+kind: derivation-model
+id: DM-ambient-temperature-stock-decay
+name: "Ambient-temperature stock decay (linear short-window)"
+version: 1
+description: >
+  Phase-1 linear-in-duration approximation:
+    decay_fraction = rate_per_hour * duration_hours;
+    loss = initial_concentration * decay_fraction;
+    final_concentration = initial_concentration - loss.
+  rate_per_hour is a tabulated decay rate keyed by ambient temperature.
+  Proper first-order c(t) = c0 * exp(-k*t) requires an 'exp' operator,
+  which is deferred to a later phase.
+assumptions:
+  - "Linear approximation holds for short windows (few hours, decay fraction < ~0.1)."
+  - "No loss mechanisms other than ambient decay."
+inputs:
+  - name: initial_concentration
+    type: concentration
+  - name: duration_hours
+    type: quantity
+output:
+  name: final_concentration
+  type: concentration
+steps:
+  - op: lookup_constant
+    id: "ambient_decay_rate_per_hour_25C"
+    into: rate_per_hour
+  - op: multiply
+    lhs: rate_per_hour
+    rhs: duration_hours
+    into: decay_fraction
+  - op: multiply
+    lhs: initial_concentration
+    rhs: decay_fraction
+    into: loss
+  - op: subtract
+    lhs: initial_concentration
+    rhs: loss
+    into: final_concentration

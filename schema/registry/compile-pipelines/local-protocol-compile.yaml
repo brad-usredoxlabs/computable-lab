@@ -1,0 +1,41 @@
+# Local-protocol compile pipeline (compiler-specs/60 §5).
+# Compiles a local-protocol record: resolve mentions, expand local
+# customizations over the referenced canonical protocol, and project a
+# local-expanded-protocol output.
+
+pipelineId: local-protocol-compile
+entrypoint: local-protocol-compile
+description: >
+  Compile a local-protocol record: resolve mentions, expand local
+  customizations over the referenced canonical protocol, and project a
+  local-expanded-protocol output.
+
+passes:
+  - id: parse_local_protocol
+    family: parse
+    description: "Parse the inbound local-protocol record; extract the protocol payload and local customizations."
+
+  - id: normalize_local_protocol
+    family: normalize
+    description: "Normalize the local-protocol structure; resolve field aliases and defaults."
+    depends_on: [parse_local_protocol]
+
+  - id: resolve_protocol_ref
+    family: disambiguate
+    description: "Resolve the canonical protocol reference; fetch the base protocol definition."
+    depends_on: [normalize_local_protocol]
+
+  - id: validate_local_protocol
+    family: validate
+    description: "Validate the local-protocol against its schema; check for required fields and constraints."
+    depends_on: [resolve_protocol_ref]
+
+  - id: expand_local_customizations
+    family: expand
+    description: "Expand local customizations over the canonical protocol; merge overrides and extensions."
+    depends_on: [validate_local_protocol]
+
+  - id: project_local_expanded_protocol
+    family: project
+    description: "Project the final local-expanded-protocol output ready for downstream planning."
+    depends_on: [expand_local_customizations]

@@ -1,0 +1,36 @@
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/workflow/extraction-promotion.schema.yaml"
+rules:
+  - id: xpr-recordid-pattern
+    severity: error
+    path: recordId
+    check: regex
+    value: ^XPR-
+    message: extraction-promotion.recordId must start with XPR-
+
+  - id: xpr-hash-64
+    severity: error
+    path: source_content_hash
+    check: regex
+    value: ^[0-9a-f]{64}$
+    message: source_content_hash must be a 64-char hex SHA-256
+
+  - id: xpr-promoted-at-iso
+    severity: error
+    path: promoted_at
+    check: iso-datetime
+    message: promoted_at must be ISO-8601
+
+  - id: xpr-version-1
+    severity: error
+    path: version
+    check: eq
+    value: 1
+    message: Phase-1 extraction-promotion records must have version 1
+
+  - id: xpr-status-enum
+    severity: error
+    path: status
+    check: enum
+    value: [active, retracted]
+    message: status must be active or retracted

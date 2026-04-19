@@ -62,6 +62,13 @@ export class GitRepoAdapter implements RepoAdapter {
   private git: SimpleGit | null = null;
   private lastPull: Date | null = null;
   private initialized = false;
+  private writeQueue: Promise<unknown> = Promise.resolve();
+
+  private withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.writeQueue.then(fn, fn);
+    this.writeQueue = next.catch(() => undefined);
+    return next;
+  }
   
   constructor(adapterConfig: GitRepoAdapterConfig) {
     this.config = adapterConfig.repoConfig;
@@ -374,9 +381,10 @@ export class GitRepoAdapter implements RepoAdapter {
    * Create a new file.
    */
   async createFile(options: CreateFileOptions): Promise<FileOperationResult> {
+    return this.withWriteLock(async () => {
     const { path, content, message } = options;
     const fullPath = this.resolvePath(path);
-    
+
     try {
       const git = await this.ensureInitialized();
       
@@ -426,15 +434,17 @@ export class GitRepoAdapter implements RepoAdapter {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+    });
   }
-  
+
   /**
    * Update an existing file.
    */
   async updateFile(options: UpdateFileOptions): Promise<FileOperationResult> {
+    return this.withWriteLock(async () => {
     const { path, content, message, sha } = options;
     const fullPath = this.resolvePath(path);
-    
+
     try {
       const git = await this.ensureInitialized();
       
@@ -490,15 +500,17 @@ export class GitRepoAdapter implements RepoAdapter {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+    });
   }
-  
+
   /**
    * Delete a file.
    */
   async deleteFile(options: DeleteFileOptions): Promise<FileOperationResult> {
+    return this.withWriteLock(async () => {
     const { path, message, sha } = options;
     const fullPath = this.resolvePath(path);
-    
+
     try {
       const git = await this.ensureInitialized();
       
@@ -552,8 +564,9 @@ export class GitRepoAdapter implements RepoAdapter {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+    });
   }
-  
+
   /**
    * Get file history from git log.
    */
@@ -595,8 +608,9 @@ export class GitRepoAdapter implements RepoAdapter {
     message: string;
     push?: boolean;
   }): Promise<FileOperationResult> {
+    return this.withWriteLock(async () => {
     const { files, message, push = this.config.sync.autoPush } = options;
-    
+
     try {
       const git = await this.ensureInitialized();
       
@@ -661,8 +675,9 @@ export class GitRepoAdapter implements RepoAdapter {
         error: err instanceof Error ? err.message : String(err),
       };
     }
+    });
   }
-  
+
   /**
    * Initialize an empty repository (when remote has no commits).
    * Creates a local git repo and sets up the remote.

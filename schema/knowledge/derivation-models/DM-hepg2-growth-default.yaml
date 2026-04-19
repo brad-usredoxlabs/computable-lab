@@ -1,0 +1,29 @@
+kind: derivation-model
+id: DM-hepg2-growth-default
+name: "HepG2 default growth (duration-keyed growth factor)"
+version: 1
+description: >
+  Phase-1 approximation: final_count = initial_count * growth_factor,
+  where growth_factor is looked up from a constants table by a
+  duration key (e.g. "hepg2_default_growth_factor_24h"). Replaces the
+  exponential N(t) = N0 * 2^(t/tau) with a tabulated piecewise factor,
+  which requires only the 'lookup_constant' and 'multiply' ops.
+assumptions:
+  - "Growth is well-approximated by a tabulated factor at the queried duration."
+  - "Cells are in log phase."
+inputs:
+  - name: initial_count
+    type: number
+output:
+  name: final_count
+  type: number
+steps:
+  # Phase-1 decision: embed the constant key literal in the step.
+  # The lookup_constant operator reads step.id directly as the constant key.
+  - op: lookup_constant
+    id: "hepg2_default_growth_factor_24h"
+    into: growth_factor
+  - op: multiply
+    lhs: initial_count
+    rhs: growth_factor
+    into: final_count

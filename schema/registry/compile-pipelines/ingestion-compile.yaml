@@ -1,0 +1,40 @@
+# Ingestion compile pipeline (compiler-specs/60 §3, 80).
+# Ingest a PDF (or other unstructured source) and produce an extraction-draft
+# by chunking and running the extractor over each chunk.
+#
+# Pipeline flow:
+#   PDF bytes → pdf_text_extract → chunk_text → extractor_run → mention_resolve → draft_assemble
+#
+# This pipeline is designed for vendor PDFs and literature excerpts that enter
+# the compiler as buffers. It uses spec-060's PDF adapter and spec-058's
+# extraction passes, with a chunker in between.
+
+pipelineId: ingestion-compile
+entrypoint: ingestion-compile
+description: >
+  Ingest a PDF (or other unstructured source) and produce an extraction-draft
+  by chunking and running the extractor over each chunk.
+passes:
+  - id: pdf_text_extract
+    family: parse
+    description: "Extract text and page_count from the input buffer."
+
+  - id: chunk_text
+    family: normalize
+    description: "Split extracted text into <=2000-char chunks at paragraph boundaries."
+    depends_on: [pdf_text_extract]
+
+  - id: extractor_run
+    family: parse
+    description: "Run the extractor adapter on each chunk; concatenate candidates."
+    depends_on: [chunk_text]
+
+  - id: mention_resolve
+    family: disambiguate
+    description: "Resolve mentions in each candidate's draft deterministically."
+    depends_on: [extractor_run]
+
+  - id: draft_assemble
+    family: project
+    description: "Assemble the extraction-draft record."
+    depends_on: [mention_resolve]

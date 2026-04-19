@@ -1,0 +1,20 @@
+kind: lab-state
+recordId: LST-spectramax-cube-dcfda-v1
+subject_type: equipment
+subject_ref:
+  kind: record
+  id: EQP-spectramax-m5
+  type: equipment
+attribute: filter_cube_config
+value:
+  excitation_nm: 485
+  emission_nm: 535
+  dichroic_nm: 510
+  cube_id: DCFDA-GFP
+valid_from: "2026-04-15T00:00:00Z"
+asserted_by:
+  kind: record
+  id: OP-lab-manager
+  type: operator
+status: active
+notes: "Installed for ROS positive-control assay (DCFDA readout)."

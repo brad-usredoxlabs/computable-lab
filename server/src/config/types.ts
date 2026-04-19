@@ -70,6 +70,19 @@ export interface AIProfile {
 }
 
 /**
+ * Extractor profile configuration for AI-powered extraction.
+ */
+export interface ExtractorProfileConfig {
+  enabled: boolean;
+  provider: 'openai' | 'openai-compatible';
+  baseUrl: string;
+  apiKey?: string;
+  model: string;
+  temperature: number;
+  max_tokens: number;
+}
+
+/**
  * AI agent orchestrator configuration.
  *
  * The active profile is resolved as:
@@ -83,6 +96,8 @@ export interface AIConfig {
   profiles?: Record<string, AIProfile>;
   inference: InferenceConfig;
   agent: AgentConfig;
+  /** Optional extractor profile for AI-powered extraction. */
+  extractor?: ExtractorProfileConfig;
 }
 
 /**

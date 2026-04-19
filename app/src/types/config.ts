@@ -94,11 +94,22 @@ export interface AgentConfig {
   systemPromptPath?: string
 }
 
+export interface ExtractorProfileConfig {
+  enabled: boolean
+  provider: 'openai' | 'openai-compatible'
+  baseUrl: string
+  apiKey?: string
+  model: string
+  temperature: number
+  max_tokens: number
+}
+
 export interface AIConfig {
   activeProfile?: string
   profiles?: Record<string, { inference: InferenceConfig; agent: AgentConfig }>
   inference: InferenceConfig
   agent: AgentConfig
+  extractor?: ExtractorProfileConfig
 }
 
 export interface LabConfig {

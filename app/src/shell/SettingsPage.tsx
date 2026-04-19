@@ -20,6 +20,7 @@ import {
   SyncSection,
   JsonLdSection,
   AiSettingsSection,
+  ExtractorSettingsSection,
   LabMaterialTrackingSection,
   WebSearchSettingsSection,
 } from './settings'
@@ -222,6 +223,15 @@ export function SettingsPage() {
           onEditChange={setEditingSection}
           onSave={handleSave}
           onTest={testAiConfig}
+          saving={saving}
+        />
+
+        {/* ---- Editable: Extractor Settings ---- */}
+        <ExtractorSettingsSection
+          extractor={config?.ai?.extractor ?? null}
+          editingSection={editingSection}
+          onEditChange={setEditingSection}
+          onSave={handleSave}
           saving={saving}
         />
 
