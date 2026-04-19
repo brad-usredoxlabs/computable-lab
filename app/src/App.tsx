@@ -8,6 +8,7 @@ import { RecordViewer } from './editor/RecordViewer'
 import { RawRecordEditor } from './editor/RawRecordEditor'
 import { SettingsPage } from './shell/SettingsPage'
 import { IngestionPage } from './ingestion/IngestionPage'
+import { ExtractionReviewPage } from './extraction/ExtractionReviewPage'
 
 const LabwareEventEditor = lazy(async () => import('./graph/LabwareEventEditor').then((module) => ({ default: module.LabwareEventEditor })))
 const RunWorkspacePage = lazy(async () => import('./graph/RunWorkspacePage').then((module) => ({ default: module.RunWorkspacePage })))
@@ -77,6 +78,9 @@ export function App() {
 
             {/* Labware Test Page - for testing LabwarePicker */}
             <Route path="labware-test" element={<DeferredRoute><LabwareTestPage /></DeferredRoute>} />
+
+            {/* Extraction Review */}
+            <Route path="extraction/review/:recordId" element={<ExtractionReviewPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
