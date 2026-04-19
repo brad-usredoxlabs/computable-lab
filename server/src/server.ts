@@ -77,9 +77,11 @@ import { createRunDraftHandlers } from './api/handlers/RunDraftHandlers.js';
 import { createRelatedRecordsHandlers } from './api/handlers/RelatedRecordsHandlers.js';
 import { createAiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandlers.js';
 import { createReadinessHandlers } from './api/handlers/ReadinessHandlers.js';
+import { createExtractHandlers } from './api/handlers/ExtractHandlers.js';
 import type { AIHandlers } from './api/handlers/AIHandlers.js';
 import type { KnowledgeAIHandlers } from './api/handlers/KnowledgeAIHandlers.js';
 import type { AiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandlers.js';
+import type { ExtractHandlers } from './api/handlers/ExtractHandlers.js';
 import { loadPlatformRegistry } from './platform-registry/YamlPlatformRegistryLoader.js';
 import type { PlatformRegistry } from './platform-registry/PlatformRegistry.js';
 import { ArtifactBlobStore } from './ingestion/ArtifactBlobStore.js';
@@ -642,6 +644,17 @@ export async function createServer(
   );
   const readinessHandlers = createReadinessHandlers(ctx);
 
+  // Create extract handlers
+  const extractHandlers: ExtractHandlers = createExtractHandlers(
+    // Note: For now, we pass a placeholder runner since ExtractionRunnerService
+    // is not yet wired up for the promote/reject actions. The promote/reject
+    // handlers use the store, schemaRegistry, and validator directly.
+    {} as unknown as import('./extract/ExtractionRunnerService.js').ExtractionRunnerService,
+    ctx.store,
+    ctx.schemaRegistry,
+    ctx.validator,
+  );
+
   // Register API routes with /api prefix
   await fastify.register(async (instance) => {
     const routeOpts: import('./api/routes.js').RouteOptions = {
@@ -684,6 +697,7 @@ export async function createServer(
     routeOpts.aiIngestionHandlers = aiIngestionHandlersImpl;
     routeOpts.materialAIHandlers = materialAIHandlersImpl;
     routeOpts.aiRecordDraftHandlers = aiRecordDraftHandlers;
+    routeOpts.extractHandlers = extractHandlers;
     if (aiInfo) routeOpts.aiInfo = aiInfo;
     routeOpts.getAiInfo = () => aiInfo;
     routeOpts.configHandlers = configHandlers;

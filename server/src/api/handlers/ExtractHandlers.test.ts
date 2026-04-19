@@ -3,6 +3,9 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { createExtractHandlers, type ExtractHandlers } from './ExtractHandlers.js';
 import type { ExtractionRunnerService } from '../../extract/ExtractionRunnerService.js';
 import type { ExtractionDraftBody } from '../../extract/ExtractionDraftBuilder.js';
+import type { RecordStore } from '../../store/types.js';
+import type { SchemaRegistry } from '../../schema/SchemaRegistry.js';
+import type { AjvValidator } from '../../validation/AjvValidator.js';
 
 describe('ExtractHandlers', () => {
   it('should return the draft body when runner.run() succeeds', async () => {
@@ -21,7 +24,7 @@ describe('ExtractHandlers', () => {
     } as unknown as ExtractionRunnerService;
 
     // Create handlers
-    const handlers: ExtractHandlers = createExtractHandlers(mockRunner);
+    const handlers: ExtractHandlers = createExtractHandlers(mockRunner, {} as RecordStore, {} as SchemaRegistry, {} as AjvValidator);
 
     // Create mock request and reply
     const mockRequest = {
@@ -52,7 +55,7 @@ describe('ExtractHandlers', () => {
       run: vi.fn(),
     } as unknown as ExtractionRunnerService;
 
-    const handlers: ExtractHandlers = createExtractHandlers(mockRunner);
+    const handlers: ExtractHandlers = createExtractHandlers(mockRunner, {} as RecordStore, {} as SchemaRegistry, {} as AjvValidator);
 
     const mockRequest = {
       body: {
@@ -78,7 +81,7 @@ describe('ExtractHandlers', () => {
       run: vi.fn(),
     } as unknown as ExtractionRunnerService;
 
-    const handlers: ExtractHandlers = createExtractHandlers(mockRunner);
+    const handlers: ExtractHandlers = createExtractHandlers(mockRunner, {} as RecordStore, {} as SchemaRegistry, {} as AjvValidator);
 
     const mockRequest = {
       body: {
@@ -113,7 +116,7 @@ describe('ExtractHandlers', () => {
       run: vi.fn().mockResolvedValue(mockDraftBody),
     } as unknown as ExtractionRunnerService;
 
-    const handlers: ExtractHandlers = createExtractHandlers(mockRunner);
+    const handlers: ExtractHandlers = createExtractHandlers(mockRunner, {} as RecordStore, {} as SchemaRegistry, {} as AjvValidator);
 
     const mockRequest = {
       body: {
@@ -150,7 +153,7 @@ describe('ExtractHandlers', () => {
       run: vi.fn().mockResolvedValue(mockDraftBody),
     } as unknown as ExtractionRunnerService;
 
-    const handlers: ExtractHandlers = createExtractHandlers(mockRunner);
+    const handlers: ExtractHandlers = createExtractHandlers(mockRunner, {} as RecordStore, {} as SchemaRegistry, {} as AjvValidator);
 
     const mockRequest = {
       body: {
@@ -171,5 +174,157 @@ describe('ExtractHandlers', () => {
         hint: { target_kind: 'equipment', extraField: 'value' },
       })
     );
+  });
+});
+
+describe('ExtractHandlers - promoteCandidate', () => {
+  it('should reject invalid draft id format', async () => {
+    const mockRunner = {} as ExtractionRunnerService;
+    const mockStore = {} as RecordStore;
+    const mockSchemaRegistry = {} as SchemaRegistry;
+    const mockValidator = {} as AjvValidator;
+    const handlers: ExtractHandlers = createExtractHandlers(mockRunner, mockStore, mockSchemaRegistry, mockValidator);
+
+    const mockRequest = {
+      params: { id: 'INVALID-ID', i: '0' },
+    } as unknown as FastifyRequest<{ Params: { id: string; i: string } }>;
+
+    const mockReply = {
+      code: vi.fn().mockReturnThis(),
+    } as unknown as FastifyReply;
+
+    const result = await handlers.promoteCandidate(mockRequest, mockReply);
+
+    expect(mockReply.code).toHaveBeenCalledWith(400);
+    expect(result).toEqual({
+      error: 'INVALID_INPUT',
+      message: expect.stringContaining('Invalid extraction-draft id format'),
+    });
+  });
+
+  it('should reject invalid candidate index', async () => {
+    const mockRunner = {} as ExtractionRunnerService;
+    const mockStore = {} as RecordStore;
+    const mockSchemaRegistry = {} as SchemaRegistry;
+    const mockValidator = {} as AjvValidator;
+    const handlers: ExtractHandlers = createExtractHandlers(mockRunner, mockStore, mockSchemaRegistry, mockValidator);
+
+    const mockRequest = {
+      params: { id: 'XDR-test-001', i: 'abc' },
+    } as unknown as FastifyRequest<{ Params: { id: string; i: string } }>;
+
+    const mockReply = {
+      code: vi.fn().mockReturnThis(),
+    } as unknown as FastifyReply;
+
+    const result = await handlers.promoteCandidate(mockRequest, mockReply);
+
+    expect(mockReply.code).toHaveBeenCalledWith(400);
+    expect(result).toEqual({
+      error: 'INVALID_INPUT',
+      message: expect.stringContaining('Invalid candidate index'),
+    });
+  });
+
+  it('should return 404 when draft not found', async () => {
+    const mockRunner = {} as ExtractionRunnerService;
+    const mockStore: RecordStore = {
+      get: vi.fn().mockResolvedValue(null),
+    } as unknown as RecordStore;
+    const mockSchemaRegistry = {} as SchemaRegistry;
+    const mockValidator = {} as AjvValidator;
+    const handlers: ExtractHandlers = createExtractHandlers(mockRunner, mockStore, mockSchemaRegistry, mockValidator);
+
+    const mockRequest = {
+      params: { id: 'XDR-test-001', i: '0' },
+    } as unknown as FastifyRequest<{ Params: { id: string; i: string } }>;
+
+    const mockReply = {
+      code: vi.fn().mockReturnThis(),
+    } as unknown as FastifyReply;
+
+    const result = await handlers.promoteCandidate(mockRequest, mockReply);
+
+    expect(mockReply.code).toHaveBeenCalledWith(404);
+    expect(result).toEqual({
+      error: 'NOT_FOUND',
+      message: 'Extraction draft not found',
+    });
+  });
+});
+
+describe('ExtractHandlers - rejectCandidate', () => {
+  it('should reject invalid draft id format', async () => {
+    const mockRunner = {} as ExtractionRunnerService;
+    const mockStore = {} as RecordStore;
+    const mockSchemaRegistry = {} as SchemaRegistry;
+    const mockValidator = {} as AjvValidator;
+    const handlers: ExtractHandlers = createExtractHandlers(mockRunner, mockStore, mockSchemaRegistry, mockValidator);
+
+    const mockRequest = {
+      params: { id: 'INVALID-ID', i: '0' },
+    } as unknown as FastifyRequest<{ Params: { id: string; i: string } }>;
+
+    const mockReply = {
+      code: vi.fn().mockReturnThis(),
+    } as unknown as FastifyReply;
+
+    const result = await handlers.rejectCandidate(mockRequest, mockReply);
+
+    expect(mockReply.code).toHaveBeenCalledWith(400);
+    expect(result).toEqual({
+      error: 'INVALID_INPUT',
+      message: expect.stringContaining('Invalid extraction-draft id format'),
+    });
+  });
+
+  it('should reject invalid candidate index', async () => {
+    const mockRunner = {} as ExtractionRunnerService;
+    const mockStore = {} as RecordStore;
+    const mockSchemaRegistry = {} as SchemaRegistry;
+    const mockValidator = {} as AjvValidator;
+    const handlers: ExtractHandlers = createExtractHandlers(mockRunner, mockStore, mockSchemaRegistry, mockValidator);
+
+    const mockRequest = {
+      params: { id: 'XDR-test-001', i: 'abc' },
+    } as unknown as FastifyRequest<{ Params: { id: string; i: string } }>;
+
+    const mockReply = {
+      code: vi.fn().mockReturnThis(),
+    } as unknown as FastifyReply;
+
+    const result = await handlers.rejectCandidate(mockRequest, mockReply);
+
+    expect(mockReply.code).toHaveBeenCalledWith(400);
+    expect(result).toEqual({
+      error: 'INVALID_INPUT',
+      message: expect.stringContaining('Invalid candidate index'),
+    });
+  });
+
+  it('should return 404 when draft not found', async () => {
+    const mockRunner = {} as ExtractionRunnerService;
+    const mockStore: RecordStore = {
+      get: vi.fn().mockResolvedValue(null),
+    } as unknown as RecordStore;
+    const mockSchemaRegistry = {} as SchemaRegistry;
+    const mockValidator = {} as AjvValidator;
+    const handlers: ExtractHandlers = createExtractHandlers(mockRunner, mockStore, mockSchemaRegistry, mockValidator);
+
+    const mockRequest = {
+      params: { id: 'XDR-test-001', i: '0' },
+    } as unknown as FastifyRequest<{ Params: { id: string; i: string } }>;
+
+    const mockReply = {
+      code: vi.fn().mockReturnThis(),
+    } as unknown as FastifyReply;
+
+    const result = await handlers.rejectCandidate(mockRequest, mockReply);
+
+    expect(mockReply.code).toHaveBeenCalledWith(404);
+    expect(result).toEqual({
+      error: 'NOT_FOUND',
+      message: 'Extraction draft not found',
+    });
   });
 });

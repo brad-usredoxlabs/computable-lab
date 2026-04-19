@@ -131,11 +131,13 @@ export function createProjectExtractionPromotionPass(params: {
     family: 'project',
     run(args: PassRunArgs): PassResult {
       const { state, pass_id } = args;
-      const validatedDraft = state.outputs.get('schema_validate_draft');
-      const candidate = state.outputs.get('validate_extraction_candidate') as
+      // Get the validated draft from schema_validate_draft or from the candidate
+      const validatedDraft = state.outputs.get('schema_validate_draft') as unknown;
+      const candidate = (state.outputs.get('validate_extraction_candidate') ?? state.input?.candidate) as
         | { target_kind?: string; draft?: unknown; confidence?: number }
         | undefined;
-      const sourceDraftId = state.input?.source_draft_id as string | undefined;
+      // Get source draft id from input (either draft_record_id or source_draft_id)
+      const sourceDraftId = (state.input?.draft_record_id ?? state.input?.source_draft_id) as string | undefined;
 
       if (!validatedDraft || !candidate || !sourceDraftId) {
         return {
@@ -143,7 +145,7 @@ export function createProjectExtractionPromotionPass(params: {
           diagnostics: [{
             severity: 'error',
             code: 'MISSING_PROMOTION_INPUTS',
-            message: 'project_extraction_promotion requires schema_validate_draft, candidate, and source_draft_id',
+            message: 'project_extraction_promotion requires schema_validate_draft output, candidate, and draft_record_id/source_draft_id',
             pass_id,
           }],
         };

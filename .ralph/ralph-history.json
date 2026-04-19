@@ -2,26 +2,29 @@
   "iterations": [
     {
       "iteration": 1,
-      "startedAt": "2026-04-19T18:06:03.092Z",
-      "endedAt": "2026-04-19T18:22:39.715Z",
-      "durationMs": 995251,
+      "startedAt": "2026-04-19T19:19:43.093Z",
+      "endedAt": "2026-04-19T19:46:11.338Z",
+      "durationMs": 1586831,
       "agent": "codex",
       "model": "",
       "toolsUsed": {},
       "filesModified": [
-        "app/package.json",
-        "package.json",
-        "app/src/extraction/",
-        "app/src/test/",
-        "vitest.config.ts",
-        "vitest.workspace.ts"
+        "server/src/api/ProtocolExtractionApi.test.ts",
+        "server/src/api/handlers/ProtocolHandlers.ts",
+        "server/src/api/routes.ts",
+        "server/src/compiler/pipeline/passes/PromotionExtractionPasses.ts",
+        "server/src/mcp/tools/protocolTools.ts",
+        "server/src/protocol/ProtocolExtractionService.ts",
+        "server/src/compiler/pipeline/PromotionCompileRunner.ts",
+        "server/src/compiler/pipeline/passes/ContextPromotionPasses.ts",
+        "server/src/compiler/pipeline/passes/SchemaValidateDraftPass.ts"
       ],
       "exitCode": 0,
       "completionDetected": false,
       "errors": []
     }
   ],
-  "totalDurationMs": 995251,
+  "totalDurationMs": 1586831,
   "struggleIndicators": {
     "repeatedErrors": {},
     "noProgressIterations": 0,

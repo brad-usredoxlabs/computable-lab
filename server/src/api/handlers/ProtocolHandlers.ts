@@ -78,6 +78,9 @@ export function createProtocolHandlers(ctx: AppContext) {
     /**
      * POST /protocols/from-event-graph
      * Save an event graph as a protocol record.
+     * 
+     * @deprecated Use POST /extraction/protocols/draft + POST /extraction/protocols/promote instead.
+     * This method is kept for backward compatibility.
      */
     async saveFromEventGraph(
       request: FastifyRequest<{
@@ -97,6 +100,91 @@ export function createProtocolHandlers(ctx: AppContext) {
         });
         reply.status(201);
         return { success: true, recordId: saved.recordId };
+      } catch (err) {
+        if (err instanceof ProtocolExtractionError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
+     * POST /extraction/protocols/draft
+     * Extract a protocol from an event graph and persist it as an extraction-draft.
+     * Returns the draft recordId for subsequent review and promotion.
+     */
+    async extractProtocolDraft(
+      request: FastifyRequest<{
+        Body: {
+          eventGraphId: string;
+          title?: string;
+          tags?: string[];
+        };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: boolean; draftId?: string; candidateCount?: number } | ApiError> {
+      try {
+        const { recordId, draft } = await extraction.extractDraftFromEventGraph({
+          eventGraphId: request.body.eventGraphId,
+          ...(request.body.title !== undefined ? { title: request.body.title } : {}),
+          ...(request.body.tags !== undefined ? { tags: request.body.tags } : {}),
+        });
+        reply.status(201);
+        return { 
+          success: true, 
+          draftId: recordId,
+          candidateCount: draft.candidates.length,
+        };
+      } catch (err) {
+        if (err instanceof ProtocolExtractionError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
+     * POST /extraction/protocols/:draftId/promote
+     * Promote a candidate from an extraction-draft to a canonical protocol record.
+     * Creates both the canonical protocol and an extraction-promotion audit record.
+     */
+    async promoteProtocolDraft(
+      request: FastifyRequest<{
+        Params: { draftId: string };
+        Body: {
+          candidateIndex?: number;
+        };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ 
+      success: boolean; 
+      canonicalRecordId?: string; 
+      auditRecordId?: string;
+      draftStatus?: string;
+    } | ApiError> {
+      try {
+        const candidateIndex = request.body.candidateIndex ?? 0;
+        const { canonicalRecordId, auditRecordId, draftStatus } = await extraction.promoteDraft(
+          request.params.draftId,
+          candidateIndex,
+        );
+        reply.status(201);
+        return {
+          success: true,
+          canonicalRecordId,
+          auditRecordId,
+          draftStatus,
+        };
       } catch (err) {
         if (err instanceof ProtocolExtractionError) {
           reply.status(err.statusCode);

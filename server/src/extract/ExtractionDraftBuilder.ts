@@ -23,17 +23,35 @@ export interface BuildExtractionDraftArgs {
 }
 
 /**
+ * A candidate in an extraction draft with optional status tracking.
+ */
+export interface ExtractionDraftCandidate extends ExtractionCandidate {
+  ambiguity_spans?: AmbiguitySpan[];
+  status?: 'promoted' | 'rejected';
+  evidence_span?: string;
+  uncertainty?: string;
+}
+
+/**
  * The body of an extraction-draft record.
  */
 export interface ExtractionDraftBody {
   kind: 'extraction-draft';
   recordId: string;
   source_artifact: BuildExtractionDraftArgs['source_artifact'];
-  status: 'pending_review';
-  candidates: Array<ExtractionCandidate & { ambiguity_spans?: AmbiguitySpan[] }>;
+  status: 'pending_review' | 'partially_promoted' | 'rejected' | 'promoted';
+  candidates: ExtractionDraftCandidate[];
   created_at: string;                                 // ISO
   diagnostics?: PassDiagnostic[];
   extractor_profile?: string;
+  notes?: string;
+}
+
+/**
+ * Full extraction draft record type (for use in handlers).
+ */
+export interface ExtractionDraft extends ExtractionDraftBody {
+  // Same as ExtractionDraftBody but may be extended in the future
 }
 
 /**

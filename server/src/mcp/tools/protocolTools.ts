@@ -16,10 +16,10 @@ export function registerProtocolTools(server: McpServer, ctx: AppContext, regist
   const orchestrator = new ExecutionOrchestrator(ctx);
   const extraction = new ProtocolExtractionService(ctx);
 
-  // protocol_save_from_event_graph — Save event graph as protocol
+  // protocol_save_from_event_graph — Save event graph as protocol (legacy, keeps backward compatibility)
   dualRegister(server, registry,
     'protocol_save_from_event_graph',
-    'Save an event graph as a reusable protocol record.',
+    'Save an event graph as a reusable protocol record. This is a legacy tool that combines extraction and promotion in one step.',
     {
       eventGraphId: z.string().describe('ID of the event graph to save as protocol'),
       title: z.string().optional().describe('Optional title for the new protocol'),
@@ -33,6 +33,65 @@ export function registerProtocolTools(server: McpServer, ctx: AppContext, regist
           ...(args.tags !== undefined ? { tags: args.tags } : {}),
         });
         return jsonResult({ success: true, recordId: saved.recordId });
+      } catch (err) {
+        if (err instanceof ProtocolExtractionError) {
+          return errorResult(`${err.code}: ${err.message}`);
+        }
+        return errorResult(`Tool error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  );
+
+  // protocol_extract_draft — Extract a protocol from an event graph as an extraction-draft
+  dualRegister(server, registry,
+    'protocol_extract_draft',
+    'Extract a protocol from an event graph and persist it as an extraction-draft. Returns the draft recordId for subsequent review and promotion.',
+    {
+      eventGraphId: z.string().describe('ID of the event graph to extract from'),
+      title: z.string().optional().describe('Optional title for the protocol'),
+      tags: z.array(z.string()).optional().describe('Optional tags'),
+    },
+    async (args) => {
+      try {
+        const { recordId, draft } = await extraction.extractDraftFromEventGraph({
+          eventGraphId: args.eventGraphId,
+          ...(args.title !== undefined ? { title: args.title } : {}),
+          ...(args.tags !== undefined ? { tags: args.tags } : {}),
+        });
+        return jsonResult({ 
+          success: true, 
+          draftId: recordId,
+          candidateCount: draft.candidates.length,
+        });
+      } catch (err) {
+        if (err instanceof ProtocolExtractionError) {
+          return errorResult(`${err.code}: ${err.message}`);
+        }
+        return errorResult(`Tool error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  );
+
+  // protocol_promote_draft — Promote an extraction-draft candidate to a canonical protocol
+  dualRegister(server, registry,
+    'protocol_promote_draft',
+    'Promote a candidate from an extraction-draft to a canonical protocol record. Creates both the canonical protocol and an extraction-promotion audit record.',
+    {
+      draftId: z.string().describe('RecordId of the extraction-draft to promote'),
+      candidateIndex: z.number().int().min(0).optional().default(0).describe('Index of the candidate to promote (0-based, default: 0)'),
+    },
+    async (args) => {
+      try {
+        const { canonicalRecordId, auditRecordId, draftStatus } = await extraction.promoteDraft(
+          args.draftId,
+          args.candidateIndex,
+        );
+        return jsonResult({
+          success: true,
+          canonicalRecordId,
+          auditRecordId,
+          draftStatus,
+        });
       } catch (err) {
         if (err instanceof ProtocolExtractionError) {
           return errorResult(`${err.code}: ${err.message}`);

@@ -13,6 +13,7 @@ interface Candidate {
   evidence_span?: string;
   ambiguity_spans?: AmbiguitySpan[];
   draft: Record<string, unknown>;
+  status?: 'promoted' | 'rejected';
 }
 
 interface ExtractionDraft {
@@ -31,6 +32,7 @@ export function ExtractionReviewPage(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [actionInProgress, setActionInProgress] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,7 +41,7 @@ export function ExtractionReviewPage(): JSX.Element {
       setLoading(false);
       return;
     }
-    fetch(`/records/${recordId}`)
+    fetch(`/api/records/${recordId}`)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
       .then(data => { if (!cancelled) { setRecord(data as ExtractionDraft); setLoading(false); } })
       .catch(err => { if (!cancelled) { setError(err.message); setLoading(false); } });
@@ -58,6 +60,61 @@ export function ExtractionReviewPage(): JSX.Element {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [openIndex]);
+
+  const promote = async (index: number) => {
+    if (!recordId || actionInProgress !== null) return;
+    setActionInProgress(index);
+    try {
+      const response = await fetch(`/api/extraction/drafts/${recordId}/candidates/${index}/promote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (response.ok) {
+        const result = await response.json();
+        // Optimistically update local state
+        setRecord(prev => {
+          if (!prev) return null;
+          const updatedCandidates = [...prev.candidates];
+          updatedCandidates[index] = { ...updatedCandidates[index], status: 'promoted' as const };
+          return { ...prev, candidates: updatedCandidates };
+        });
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        alert(`Promote failed: ${errorData.message || response.statusText}`);
+      }
+    } catch (err) {
+      alert(`Promote failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  const reject = async (index: number) => {
+    if (!recordId || actionInProgress !== null) return;
+    setActionInProgress(index);
+    try {
+      const response = await fetch(`/api/extraction/drafts/${recordId}/candidates/${index}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (response.ok) {
+        // Optimistically update local state
+        setRecord(prev => {
+          if (!prev) return null;
+          const updatedCandidates = [...prev.candidates];
+          updatedCandidates[index] = { ...updatedCandidates[index], status: 'rejected' as const };
+          return { ...prev, candidates: updatedCandidates };
+        });
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        alert(`Reject failed: ${errorData.message || response.statusText}`);
+      }
+    } catch (err) {
+      alert(`Reject failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setActionInProgress(null);
+    }
+  };
 
   if (loading) return <div>Loading extraction draft...</div>;
   if (error) return <div role="alert">Failed to load: {error}</div>;
@@ -81,7 +138,7 @@ export function ExtractionReviewPage(): JSX.Element {
         <h2>Candidates ({record.candidates.length})</h2>
         <table role="table">
           <thead>
-            <tr><th>#</th><th>Kind</th><th>Name</th><th>Confidence</th><th>Uncertainty</th><th>Evidence</th></tr>
+            <tr><th>#</th><th>Kind</th><th>Name</th><th>Confidence</th><th>Uncertainty</th><th>Evidence</th><th>Status</th></tr>
           </thead>
           <tbody>
             {record.candidates.map((c, i) => (
@@ -97,6 +154,11 @@ export function ExtractionReviewPage(): JSX.Element {
                 <td>{c.confidence?.toFixed(2) ?? '—'}</td>
                 <td>{c.uncertainty ?? '—'}</td>
                 <td>{c.evidence_span ?? '—'}</td>
+                <td>
+                  {c.status === 'promoted' && <span style={{ color: 'green' }}>promoted</span>}
+                  {c.status === 'rejected' && <span style={{ color: 'red' }}>rejected</span>}
+                  {!c.status && <span>—</span>}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -114,6 +176,23 @@ export function ExtractionReviewPage(): JSX.Element {
           <ul>{(openCandidate.ambiguity_spans ?? []).map((s, i) => <li key={i}>{s.path}: {s.reason}</li>)}</ul>
           <h4>Draft</h4>
           <pre>{JSON.stringify(openCandidate.draft, null, 2)}</pre>
+          <h4>Actions</h4>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+            <button
+              onClick={() => promote(openIndex)}
+              disabled={openCandidate.status === 'promoted' || openCandidate.status === 'rejected' || actionInProgress !== null}
+              style={{ padding: '4px 8px', cursor: (openCandidate.status === 'promoted' || openCandidate.status === 'rejected' || actionInProgress !== null) ? 'not-allowed' : 'pointer' }}
+            >
+              Promote
+            </button>
+            <button
+              onClick={() => reject(openIndex)}
+              disabled={openCandidate.status === 'promoted' || openCandidate.status === 'rejected' || actionInProgress !== null}
+              style={{ padding: '4px 8px', cursor: (openCandidate.status === 'promoted' || openCandidate.status === 'rejected' || actionInProgress !== null) ? 'not-allowed' : 'pointer' }}
+            >
+              Reject
+            </button>
+          </div>
         </aside>
       )}
     </div>

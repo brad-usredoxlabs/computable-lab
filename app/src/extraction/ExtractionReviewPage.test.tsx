@@ -1,14 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { ExtractionReviewPage } from './ExtractionReviewPage'
 
 describe('ExtractionReviewPage', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
   afterEach(() => {
+    cleanup()
     vi.restoreAllMocks()
   })
 
@@ -288,5 +285,164 @@ describe('ExtractionReviewPage', () => {
     })
 
     unmount()
+  })
+
+  it('shows Promote and Reject buttons in the drawer', async () => {
+    const mockData = {
+      recordId: 'XDR-test-004',
+      kind: 'extraction-draft',
+      source_artifact: {
+        kind: 'pdf',
+        id: 'PDF-999',
+      },
+      candidates: [
+        {
+          target_kind: 'protocol',
+          confidence: 0.90,
+          draft: { display_name: 'Test Protocol' }
+        }
+      ],
+      status: 'pending-review'
+    }
+
+    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockData
+    } as Response)
+
+    const { container } = render(
+      <MemoryRouter initialEntries={['/extraction/review/XDR-test-004']}>
+        <Routes>
+          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Extraction Review: XDR-test-004')).toBeInTheDocument()
+    })
+
+    // Click the first row to open drawer
+    const rows = container.querySelectorAll('tbody tr')
+    fireEvent.click(rows[0])
+
+    // Wait for drawer to appear
+    await waitFor(() => {
+      expect(container.querySelector('[role="complementary"]')).toBeInTheDocument()
+    })
+
+    // Check for Promote and Reject buttons
+    expect(screen.getByText('Promote')).toBeInTheDocument()
+    expect(screen.getByText('Reject')).toBeInTheDocument()
+  })
+
+  it('calls promote API and updates candidate status on success', async () => {
+    const mockData = {
+      recordId: 'XDR-test-005',
+      kind: 'extraction-draft',
+      source_artifact: { kind: 'freetext', id: 'test' },
+      candidates: [
+        {
+          target_kind: 'protocol',
+          confidence: 0.90,
+          draft: { display_name: 'Test Protocol' }
+        }
+      ],
+      status: 'pending-review'
+    }
+
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => mockData })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, recordId: 'CAN-protocol-123' }) });
+
+    vi.spyOn(global, 'fetch').mockImplementation(mockFetch as unknown as typeof fetch)
+
+    const { container } = render(
+      <MemoryRouter initialEntries={['/extraction/review/XDR-test-005']}>
+        <Routes>
+          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Extraction Review: XDR-test-005')).toBeInTheDocument()
+    })
+
+    // Click the first row to open drawer
+    const rows = container.querySelectorAll('tbody tr')
+    fireEvent.click(rows[0])
+
+    // Wait for drawer to appear
+    await waitFor(() => {
+      expect(container.querySelector('[role="complementary"]')).toBeInTheDocument()
+    })
+
+    // Click Promote button
+    const promoteButton = screen.getByText('Promote')
+    fireEvent.click(promoteButton)
+
+    // Verify API call was made
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/extraction/drafts/XDR-test-005/candidates/0/promote',
+        expect.objectContaining({ method: 'POST' })
+      )
+    })
+  })
+
+  it('calls reject API and updates candidate status on success', async () => {
+    const mockData = {
+      recordId: 'XDR-test-006',
+      kind: 'extraction-draft',
+      source_artifact: { kind: 'freetext', id: 'test' },
+      candidates: [
+        {
+          target_kind: 'protocol',
+          confidence: 0.90,
+          draft: { display_name: 'Test Protocol' }
+        }
+      ],
+      status: 'pending-review'
+    }
+
+    const mockFetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => mockData })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) });
+
+    vi.spyOn(global, 'fetch').mockImplementation(mockFetch as unknown as typeof fetch)
+
+    const { container } = render(
+      <MemoryRouter initialEntries={['/extraction/review/XDR-test-006']}>
+        <Routes>
+          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
+        </Routes>
+      </MemoryRouter>
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText('Extraction Review: XDR-test-006')).toBeInTheDocument()
+    })
+
+    // Click the first row to open drawer
+    const rows = container.querySelectorAll('tbody tr')
+    fireEvent.click(rows[0])
+
+    // Wait for drawer to appear
+    await waitFor(() => {
+      expect(container.querySelector('[role="complementary"]')).toBeInTheDocument()
+    })
+
+    // Click Reject button
+    const rejectButton = screen.getByText('Reject')
+    fireEvent.click(rejectButton)
+
+    // Verify API call was made
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/extraction/drafts/XDR-test-006/candidates/0/reject',
+        expect.objectContaining({ method: 'POST' })
+      )
+    })
   })
 })

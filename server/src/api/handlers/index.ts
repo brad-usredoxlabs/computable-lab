@@ -35,3 +35,4 @@ export * from './RunWorkspaceHandlers.js';
 export * from './RunDraftHandlers.js';
 export * from './RelatedRecordsHandlers.js';
 export * from './AiRecordDraftHandlers.js';
+export * from './ExtractHandlers.js';

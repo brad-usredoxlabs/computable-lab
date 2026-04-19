@@ -9,6 +9,7 @@ import { RawRecordEditor } from './editor/RawRecordEditor'
 import { SettingsPage } from './shell/SettingsPage'
 import { IngestionPage } from './ingestion/IngestionPage'
 import { ExtractionReviewPage } from './extraction/ExtractionReviewPage'
+import { ExtractionDraftsListPage } from './extraction/ExtractionDraftsListPage'
 
 const LabwareEventEditor = lazy(async () => import('./graph/LabwareEventEditor').then((module) => ({ default: module.LabwareEventEditor })))
 const RunWorkspacePage = lazy(async () => import('./graph/RunWorkspacePage').then((module) => ({ default: module.RunWorkspacePage })))
@@ -79,6 +80,9 @@ export function App() {
             {/* Labware Test Page - for testing LabwarePicker */}
             <Route path="labware-test" element={<DeferredRoute><LabwareTestPage /></DeferredRoute>} />
 
+            {/* Extraction Drafts List */}
+            <Route path="extraction" element={<ExtractionDraftsListPage />} />
+            
             {/* Extraction Review */}
             <Route path="extraction/review/:recordId" element={<ExtractionReviewPage />} />
           </Route>

@@ -63,6 +63,62 @@ properties:
         kind: { type: string }
 `;
 
+const extractionDraftSchema = `
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/extraction-draft.schema.yaml"
+type: object
+required: [kind, recordId, source_artifact, candidates, status]
+properties:
+  kind: { const: "extraction-draft" }
+  recordId: { type: string, pattern: '^XDR-[A-Za-z0-9_-]+$' }
+  source_artifact:
+    type: object
+    required: [kind, id]
+    properties:
+      kind: { type: string, enum: [file, publication, freetext] }
+      id: { type: string }
+      locator: { type: string }
+  candidates:
+    type: array
+    items:
+      type: object
+      required: [target_kind, draft, confidence]
+      properties:
+        target_kind: { type: string }
+        draft: { type: object }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        evidence_span: { type: string, maxLength: 400 }
+        uncertainty: { type: string, enum: [low, medium, high, unresolved, inferred] }
+  status: { type: string, enum: [pending_review, partially_promoted, rejected, promoted] }
+  notes: { type: string }
+  diagnostics:
+    type: array
+    items:
+      type: object
+      required: [severity, code, message]
+      properties:
+        severity: { type: string, enum: [error, warning, info] }
+        code: { type: string }
+        message: { type: string }
+        details: { type: object }
+        pass_id: { type: string }
+  extractor_profile: { type: string }
+`;
+
+const extractionPromotionSchema = `
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/extraction-promotion.schema.yaml"
+type: object
+required: [kind, recordId, source_draft_id, target_kind, target_record, created_at]
+properties:
+  kind: { const: "extraction-promotion" }
+  recordId: { type: string }
+  source_draft_id: { type: string }
+  target_kind: { type: string }
+  target_record: { type: object }
+  created_at: { type: string, format: date-time }
+`;
+
 describe('Protocol Extraction API', () => {
   let app: FastifyInstance;
   let ctx: AppContext;
@@ -71,8 +127,11 @@ describe('Protocol Extraction API', () => {
   beforeAll(async () => {
     await mkdir(resolve(testDir, 'schema'), { recursive: true });
     await mkdir(resolve(testDir, 'records'), { recursive: true });
+    await mkdir(resolve(testDir, 'schema/workflow'), { recursive: true });
     await writeFile(resolve(testDir, 'schema/event-graph.schema.yaml'), eventGraphSchema);
     await writeFile(resolve(testDir, 'schema/protocol.schema.yaml'), protocolSchema);
+    await writeFile(resolve(testDir, 'schema/workflow/extraction-draft.schema.yaml'), extractionDraftSchema);
+    await writeFile(resolve(testDir, 'schema/workflow/extraction-promotion.schema.yaml'), extractionPromotionSchema);
 
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
@@ -153,6 +212,8 @@ describe('Protocol Extraction API', () => {
         tags: ['generated'],
       },
     });
+    console.log('Response status:', response.statusCode);
+    console.log('Response body:', response.payload);
     expect(response.statusCode).toBe(201);
     const body = JSON.parse(response.payload);
     expect(body.success).toBe(true);

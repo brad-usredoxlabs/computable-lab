@@ -442,6 +442,8 @@ export function registerRoutes(
   const { extractHandlers } = options;
   if (extractHandlers) {
     fastify.post('/extract', extractHandlers.extract.bind(extractHandlers));
+    fastify.post('/extraction/drafts/:id/candidates/:i/promote', extractHandlers.promoteCandidate.bind(extractHandlers));
+    fastify.post('/extraction/drafts/:id/candidates/:i/reject', extractHandlers.rejectCandidate.bind(extractHandlers));
   }
 
   // ============================================================================
@@ -505,7 +507,13 @@ export function registerRoutes(
   const { protocolHandlers } = options;
 
   if (protocolHandlers) {
+    // Legacy endpoint - keeps backward compatibility
     fastify.post('/protocols/from-event-graph', protocolHandlers.saveFromEventGraph.bind(protocolHandlers));
+    
+    // New extraction-draft flow endpoints
+    fastify.post('/extraction/protocols/draft', protocolHandlers.extractProtocolDraft.bind(protocolHandlers));
+    fastify.post('/extraction/protocols/:draftId/promote', protocolHandlers.promoteProtocolDraft.bind(protocolHandlers));
+    
     fastify.post('/protocols/import', protocolHandlers.importProtocolPdf.bind(protocolHandlers));
     fastify.post('/protocols/materials/compile', protocolHandlers.compileMaterialIntents.bind(protocolHandlers));
     fastify.post('/protocols/lab-review', protocolHandlers.reviewLabProtocol.bind(protocolHandlers));
