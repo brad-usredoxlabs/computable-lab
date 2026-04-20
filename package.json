@@ -11,6 +11,7 @@
     "test:app": "npm run test -w app",
     "test:unit": "pnpm --filter app exec vitest run",
     "test:spec-029": "pnpm --filter app exec vitest run src/extraction/ExtractionReviewPage.test.tsx",
-    "vitest": "pnpm --filter app exec vitest"
+    "vitest": "npx vitest",
+"vitest:server": "pnpm --filter server exec vitest"
   }
 }

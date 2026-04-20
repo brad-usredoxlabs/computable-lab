@@ -23,6 +23,19 @@ import { getEventSummary } from '../../types/events'
 import { getLabwareDefaultOrientation, isTipRackType, type Labware } from '../../types/labware'
 import type { PreviewEventState } from '../../shared/hooks/useAiChat'
 import { getWellCenterSvg } from '../lib/labwareView'
+import { GhostLabwarePane } from './GhostLabwarePane'
+
+/**
+ * GhostLabware type for proposed labware additions from AI chat.
+ * Used to display pending labware that will be added when accepted.
+ */
+export interface GhostLabware {
+  recordId: string;                // from AiLabwareAddition.recordId
+  reason?: string;                 // e.g. 'proposed from prompt'
+  labwareType?: string;            // 'plate' | 'reservoir' | ...
+  format?: { rows: number; cols: number; wellCount?: number };
+  title?: string;                  // human-readable name
+}
 
 interface DualLabwarePaneProps {
   /** Active editor mode */
@@ -59,6 +72,8 @@ interface DualLabwarePaneProps {
   sourceTooltipMeta?: Map<WellId, { biology?: string[]; readouts?: string[]; results?: string[] }>
   /** Optional target pane semantic tooltip metadata */
   targetTooltipMeta?: Map<WellId, { biology?: string[]; readouts?: string[]; results?: string[] }>
+  /** Ghost labwares (proposed additions from AI chat) */
+  ghostLabwares?: GhostLabware[]
 }
 
 /**
@@ -117,6 +132,7 @@ export function DualLabwarePane({
   targetWellContentsOverride,
   sourceTooltipMeta,
   targetTooltipMeta,
+  ghostLabwares = [],
 }: DualLabwarePaneProps) {
   const {
     state,
@@ -663,6 +679,11 @@ export function DualLabwarePane({
           />
         </div>
       )}
+
+      {/* Ghost Labware Pane (stub - spec-045 will add real rendering) */}
+      {ghostLabwares && ghostLabwares.length > 0 ? (
+        <GhostLabwarePane ghostLabwares={ghostLabwares} />
+      ) : null}
 
       <style>{`
         .dual-labware-pane {

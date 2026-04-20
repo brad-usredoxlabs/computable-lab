@@ -8,6 +8,7 @@ import type {
   EditorContext,
   AgentEvent,
   ConversationHistoryMessage,
+  FileAttachment,
 } from '../../ai/types.js';
 import { extractFileContent, type UploadedFile, type ExtractedFile } from '../../ai/FileContentExtractor.js';
 
@@ -15,6 +16,7 @@ export interface DraftEventsBody {
   prompt: string;
   context: EditorContext;
   history?: ConversationHistoryMessage[];
+  attachments?: FileAttachment[];
 }
 
 export type AiSurface =
@@ -56,7 +58,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
       request: FastifyRequest<{ Body: DraftEventsBody }>,
       reply: FastifyReply,
     ) {
-      const { prompt, context, history } = request.body;
+      const { prompt, context, history, attachments } = request.body;
 
       if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
         reply.status(400);
@@ -68,6 +70,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
           prompt,
           context,
           ...(history ? { history } : {}),
+          ...(attachments ? { attachments } : {}),
         });
         return result;
       } catch (err) {
@@ -84,7 +87,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
       request: FastifyRequest<{ Body: DraftEventsBody }>,
       reply: FastifyReply,
     ) {
-      const { prompt, context, history } = request.body;
+      const { prompt, context, history, attachments } = request.body;
       const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '*';
 
       reply.raw.writeHead(200, {
@@ -106,6 +109,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
           prompt,
           context,
           ...(history ? { history } : {}),
+          ...(attachments ? { attachments } : {}),
           onEvent: sendEvent,
         });
 
@@ -131,7 +135,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
       let surface: string;
       let context: Record<string, unknown>;
       let history: ConversationHistoryMessage[] | undefined;
-      let fileAttachments: ExtractedFile[] = [];
+      let fileAttachments: FileAttachment[] = [];
 
       if (contentType.includes('multipart/form-data')) {
         // Parse multipart form data
@@ -162,8 +166,12 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
         context = fields['context'] ? JSON.parse(fields['context']) : {};
         history = fields['history'] ? JSON.parse(fields['history']) : undefined;
 
-        // Extract content from uploaded files
-        fileAttachments = files.map((f) => extractFileContent(f));
+        // Convert to FileAttachment[] for the pipeline (do NOT extract content for inlining)
+        fileAttachments = files.map((f) => ({
+          name: f.originalName,
+          mime_type: f.mimeType,
+          content: f.buffer,
+        }));
       } else {
         // Standard JSON body
         const body = request.body;
@@ -206,10 +214,9 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
         ...context,
       };
 
-      // Inject file attachments into context if present
-      if (fileAttachments.length > 0) {
-        (editorContext as unknown as Record<string, unknown>)['fileAttachments'] = fileAttachments;
-      }
+      // NOTE: File attachments are passed directly to orchestrator.run(),
+      // NOT inlined into the LLM messages. The extract_entities pass
+      // is the sole consumer of attachment content.
 
       try {
         sendEvent({ type: 'status', message: `Processing ${surface} request...` });
@@ -219,6 +226,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
           context: editorContext,
           surface: surface as AiSurface,
           ...(history ? { history } : {}),
+          ...(fileAttachments.length > 0 ? { attachments: fileAttachments } : {}),
           onEvent: sendEvent,
         });
 

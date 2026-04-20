@@ -18,11 +18,12 @@ import type {
   ResolveMentionDeps,
   AgentSummary,
   TurnStats,
+  PlateEventProposal,
 } from './types.js';
 import { buildSystemPrompt, buildSurfaceAwarePrompt } from './systemPrompt.js';
 import { resolveMentionsForPrompt, buildResolvedContextMessage } from './resolveMentions.js';
-import { parseIntent } from './compiler/parseIntent.js';
-import { compileToEvents } from './compiler/compileToEvents.js';
+import { runChatbotCompile } from './runChatbotCompile.js';
+import type { PlateEventPrimitive } from '../compiler/biology/BiologyVerbExpander.js';
 
 /**
  * Parse the agent's final text response into an AgentResult.
@@ -150,12 +151,17 @@ function summarizeConversationHistory(history: ChatMessage[]): string | null {
 /**
  * Create an agent orchestrator.
  */
+export interface AgentOrchestratorDeps extends ResolveMentionDeps {
+  extractionService?: import('../extract/ExtractionRunnerService.js').ExtractionRunnerService;
+  llmClient?: import('./runChatbotCompile.js').LlmClient;
+}
+
 export function createAgentOrchestrator(
   inferenceClient: InferenceClient,
   toolBridge: ToolBridge,
   inferenceConfig: InferenceConfig,
   agentConfig: AgentConfig,
-  deps: ResolveMentionDeps = {},
+  deps: AgentOrchestratorDeps = {},
 ): AgentOrchestrator {
   const {
     maxTurns = 15,
@@ -172,12 +178,12 @@ export function createAgentOrchestrator(
 
   return {
     async run(request: AgentRequest): Promise<AgentResult> {
-      const { prompt, context, history, surface, toolFilter, onEvent } = request;
+      const { prompt, context, history, surface, toolFilter, onEvent, attachments } = request;
       const tid = traceId();
       const t0 = Date.now();
       const surfaceName = surface ?? 'default';
       const model = inferenceConfig.model;
-      console.log(`[agent ${tid}] start surface=${surfaceName} model=${model} promptLen=${prompt.length} historyLen=${Array.isArray(history) ? history.length : 0}`);
+      console.log(`[agent ${tid}] start surface=${surfaceName} model=${model} promptLen=${prompt.length} historyLen=${Array.isArray(history) ? history.length : 0} attachments=${attachments?.length ?? 0}`);
 
       // Instrumentation tracking
       const turnStats: TurnStats[] = [];
@@ -198,16 +204,36 @@ export function createAgentOrchestrator(
       resolvedMentionsCount = resolvedMentions.length;
       const resolvedContextMessage = buildResolvedContextMessage(resolvedMentions);
       
-      // Compiler bypass: try to compile intent directly without LLM
-      const intent = parseIntent(prompt, resolvedMentions);
-      const compileDeps: { searchLabwareByHint?: (hint: string) => Promise<Array<{ recordId: string; title: string }>> } = {};
-      if (deps.searchLabwareByHint) {
-        compileDeps.searchLabwareByHint = deps.searchLabwareByHint;
-      }
-      const compileResult = await compileToEvents(intent, resolvedMentions, compileDeps);
-      if (compileResult.bypass) {
-        // Emit summary with bypass flag
+      // New: route through chatbot-compile pipeline
+      const compileResult = await runChatbotCompile({
+        prompt,
+        ...(attachments ? { attachments } : {}),
+        deps: {
+          extractionService: deps.extractionService!,
+          llmClient: deps.llmClient!,
+          searchLabwareByHint: deps.searchLabwareByHint!,
+        },
+        ...(inferenceConfig.model ? { model: inferenceConfig.model } : {}),
+      });
+      if (compileResult.events.length > 0) {
+        // Pipeline produced concrete events — return them without invoking the LLM loop.
         const elapsed = Date.now() - t0;
+        // Convert PlateEventPrimitive[] to PlateEventProposal[]
+        const events: PlateEventProposal[] = compileResult.events.map((prim) => ({
+          eventId: prim.eventId,
+          event_type: prim.event_type,
+          verb: prim.event_type, // Use event_type as verb for primitives
+          vocabPackId: 'general',
+          details: prim.details,
+          ...(prim.labwareId ? { labwareId: prim.labwareId } : {}),
+          ...(prim.t_offset ? { t_offset: prim.t_offset } : {}),
+          provenance: {
+            actor: 'ai-agent',
+            timestamp: new Date().toISOString(),
+            method: 'pipeline',
+            actionGroupId: 'chatbot-compile',
+          },
+        }));
         const summary: AgentSummary = {
           traceId: tid,
           surface: surfaceName,
@@ -223,15 +249,16 @@ export function createAgentOrchestrator(
             totalTokens: 0,
           },
           resolvedMentions: resolvedMentionsCount,
-          bypass: 'compiler',
+          bypass: 'compiler-pipeline',
         };
         logAgentSummary(tid, summary);
-        console.log(`[agent ${tid}] compiler bypass: success, events=${compileResult.events.length}`);
+        console.log(`[agent ${tid}] chatbot-compile pipeline bypass: success, events=${events.length}`);
         const result: AgentResult = {
           success: true,
-          events: compileResult.events,
-          notes: compileResult.notes,
-          unresolvedRefs: [],
+          events,
+          ...(compileResult.labwareAdditions.length > 0 ? { labwareAdditions: compileResult.labwareAdditions } : {}),
+          unresolvedRefs: compileResult.unresolvedRefs,
+          ...(compileResult.clarification ? { clarification: compileResult.clarification } : {}),
           usage: {
             promptTokens: 0,
             completionTokens: 0,
@@ -240,16 +267,10 @@ export function createAgentOrchestrator(
             toolCalls: 0,
           },
         };
-        if (compileResult.labwareAdditions && compileResult.labwareAdditions.length > 0) {
-          result.labwareAdditions = compileResult.labwareAdditions.map((a) => ({
-            recordId: a.recordId,
-            ...(a.reason ? { reason: a.reason } : {}),
-          }));
-        }
         return result;
       } else {
-        // Compiler skipped - log debug info and continue to LLM path
-        console.log(`[agent ${tid}] compiler skipped: ${compileResult.reason}`);
+        // Pipeline produced no events - fall through to LLM loop
+        console.log(`[agent ${tid}] pipeline produced no events; falling through to LLM loop`);
       }
       
       const messages: ChatMessage[] = [

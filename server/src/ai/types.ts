@@ -122,6 +122,17 @@ export interface AgentRequest {
   toolFilter?: readonly string[];
   /** Optional callback for streaming intermediate events. */
   onEvent?: (event: AgentEvent) => void;
+  /** Optional file attachments to be processed by the pipeline. */
+  attachments?: FileAttachment[];
+}
+
+/**
+ * A file attachment to be processed by the extraction pipeline.
+ */
+export interface FileAttachment {
+  name: string;
+  mime_type: string;
+  content: string | Buffer;
 }
 
 export interface ConversationHistoryMessage {

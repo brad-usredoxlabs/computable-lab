@@ -216,6 +216,20 @@ function clearPersistedLabwareEditorDraft(storageKey: string | null | undefined)
   }
 }
 
+/**
+ * Convert aiChat.previewLabwareAdditions to GhostLabware[] for DualLabwarePane.
+ * This is a minimal conversion - later specs can enrich with labwareType/format/title.
+ */
+function toGhostLabwares(
+  additions: Array<{ recordId: string; reason?: string }> | undefined
+): { recordId: string; reason?: string }[] {
+  if (!additions || additions.length === 0) return []
+  return additions.map((a) => ({
+    recordId: a.recordId,
+    ...(a.reason ? { reason: a.reason } : {}),
+  }))
+}
+
 function extractDraftSnapshot(draft: SerializedLabwareEditorDraft): LabwareEditorDraftSnapshot {
   return {
     editorState: draft.editorState,
@@ -4391,6 +4405,7 @@ function LabwareEventEditorContent({
                 getRotateDisabledReason={getRotateDisabledReason}
                 sourceTooltipMeta={sourceTooltipMeta}
                 targetTooltipMeta={targetTooltipMeta}
+                ghostLabwares={toGhostLabwares(aiChat.previewLabwareAdditions)}
               />
             </div>
           )}
@@ -4607,6 +4622,7 @@ function LabwareEventEditorContent({
                 targetWellContentsOverride={biologyTargetWellContents}
                 sourceTooltipMeta={sourceTooltipMeta}
                 targetTooltipMeta={targetTooltipMeta}
+                ghostLabwares={toGhostLabwares(aiChat.previewLabwareAdditions)}
               />
             </div>
           )}
@@ -4639,6 +4655,7 @@ function LabwareEventEditorContent({
                 targetWellContentsOverride={biologyTargetWellContents}
                 sourceTooltipMeta={sourceTooltipMeta}
                 targetTooltipMeta={targetTooltipMeta}
+                ghostLabwares={toGhostLabwares(aiChat.previewLabwareAdditions)}
               />
             </div>
           )}
@@ -4671,6 +4688,7 @@ function LabwareEventEditorContent({
                 targetWellContentsOverride={resultsTargetWellContents}
                 sourceTooltipMeta={sourceTooltipMeta}
                 targetTooltipMeta={targetTooltipMeta}
+                ghostLabwares={toGhostLabwares(aiChat.previewLabwareAdditions)}
               />
             </div>
           )}

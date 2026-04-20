@@ -20,6 +20,7 @@ const VALID_ENTRYPOINTS = [
   'promotion-compile',
   'extraction-compile',
   'ingestion-compile',
+  'chatbot-compile',
 ] as const;
 
 type Entrypoint = (typeof VALID_ENTRYPOINTS)[number];

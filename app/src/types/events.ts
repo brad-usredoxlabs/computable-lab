@@ -19,6 +19,7 @@ export type EventType =
   | 'wash'
   | 'incubate'
   | 'read'
+  | 'centrifuge'
   | 'harvest'
   | 'macro_program'
   | 'serial_dilution'
@@ -35,6 +36,7 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   wash: 'Wash',
   incubate: 'Incubate',
   read: 'Read',
+  centrifuge: 'Centrifuge',
   harvest: 'Harvest',
   macro_program: '⚙ Macro Program',
   serial_dilution: '⚙ Serial Dilution',
@@ -52,6 +54,7 @@ export const EVENT_TYPE_ICONS: Record<EventType, string> = {
   wash: '🚿',
   incubate: '🌡️',
   read: '📊',
+  centrifuge: '🔄',
   harvest: '🧪',
   macro_program: '🧩',
   serial_dilution: '⚙️',
@@ -549,6 +552,12 @@ export function getEventSummary(event: PlateEvent): string {
     case 'read': {
       const d = event.details as ReadDetails
       return `Read ${d.assay_ref || ''} ${wellStr}`.trim()
+    }
+    case 'centrifuge': {
+      const d = event.details as { rpm?: number; duration?: string; temperature?: number }
+      const rpmStr = d.rpm ? `at ${d.rpm} rpm` : ''
+      const durStr = d.duration ? `${d.duration}` : ''
+      return `Centrifuge ${rpmStr} ${durStr} ${wellStr}`.trim()
     }
     case 'harvest': {
       const d = event.details as HarvestDetails

@@ -292,3 +292,117 @@ describe('ContextEngine — read', () => {
     ).toThrow(/readout/);
   });
 });
+
+describe('ContextEngine — centrifuge', () => {
+  it('populates properties.centrifugations and last_centrifugation', () => {
+    const engine = new ContextEngine();
+    const graph: EventGraph = {
+      id: 'EG-CENT-1',
+      events: [
+        { event_type: 'create_container', details: {} },
+        {
+          event_type: 'add_material',
+          details: { volume: { value: 100, unit: 'uL' } },
+        },
+        {
+          event_type: 'centrifuge',
+          details: {
+            rpm: 3000,
+            duration: 'PT10M',
+            temperature: 4,
+          },
+        },
+      ],
+    };
+    const ctx = engine.computeContext(
+      { kind: 'record', id: 'LI-1', type: 'labware-instance' },
+      graph,
+    );
+    
+    const props = ctx.properties as { 
+      centrifugations: unknown[]; 
+      last_centrifugation: unknown;
+      incubations?: unknown[];
+    };
+    
+    expect(Array.isArray(props.centrifugations)).toBe(true);
+    expect(props.centrifugations).toHaveLength(1);
+    expect(props.last_centrifugation).toBeDefined();
+    expect(props.last_centrifugation).toMatchObject({
+      rpm: 3000,
+      duration: 'PT10M',
+      temperature: 4,
+    });
+    
+    // Verify properties is event_derived
+    const lp = (ctx as unknown as { layer_provenance: { event_derived: string[] } }).layer_provenance;
+    expect(lp.event_derived).toContain('properties');
+  });
+
+  it('centrifuge does not modify contents or total_volume', () => {
+    const engine = new ContextEngine();
+    const graph: EventGraph = {
+      id: 'EG-CENT-2',
+      events: [
+        { event_type: 'create_container', details: {} },
+        {
+          event_type: 'add_material',
+          details: { volume: { value: 100, unit: 'uL' } },
+        },
+        {
+          event_type: 'centrifuge',
+          details: { rpm: 3000, duration: 'PT10M' },
+        },
+      ],
+    };
+    const ctx = engine.computeContext(
+      { kind: 'record', id: 'LI-1', type: 'labware-instance' },
+      graph,
+    );
+    
+    expect(ctx.contents).toHaveLength(1);
+    expect(ctx.total_volume).toEqual({ value: 100, unit: 'uL' });
+  });
+
+  it('incubate + centrifuge + read sequence populates both last_incubation and last_centrifugation', () => {
+    const engine = new ContextEngine();
+    const graph: EventGraph = {
+      id: 'EG-CENT-3',
+      events: [
+        { event_type: 'create_container', details: {} },
+        {
+          event_type: 'add_material',
+          details: { volume: { value: 100, unit: 'uL' } },
+        },
+        {
+          event_type: 'incubate',
+          details: { duration: 'PT1H', temperature: 37 },
+        },
+        {
+          event_type: 'centrifuge',
+          details: { rpm: 4000, duration: 'PT15M' },
+        },
+        {
+          event_type: 'read',
+          details: { readout: 'od-600', value: 0.8 },
+        },
+      ],
+    };
+    const ctx = engine.computeContext(
+      { kind: 'record', id: 'LI-1', type: 'labware-instance' },
+      graph,
+    );
+    
+    const props = ctx.properties as { 
+      incubations: unknown[];
+      last_incubation: unknown;
+      centrifugations: unknown[];
+      last_centrifugation: unknown;
+    };
+    
+    expect(props.incubations).toHaveLength(1);
+    expect(props.last_incubation).toMatchObject({ duration: 'PT1H', temperature: 37 });
+    expect(props.centrifugations).toHaveLength(1);
+    expect(props.last_centrifugation).toMatchObject({ rpm: 4000, duration: 'PT15M' });
+  });
+});

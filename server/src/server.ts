@@ -78,6 +78,7 @@ import { createRelatedRecordsHandlers } from './api/handlers/RelatedRecordsHandl
 import { createAiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandlers.js';
 import { createReadinessHandlers } from './api/handlers/ReadinessHandlers.js';
 import { createExtractHandlers } from './api/handlers/ExtractHandlers.js';
+import { ExtractionRunnerService } from './extract/ExtractionRunnerService.js';
 import type { AIHandlers } from './api/handlers/AIHandlers.js';
 import type { KnowledgeAIHandlers } from './api/handlers/KnowledgeAIHandlers.js';
 import type { AiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandlers.js';
@@ -487,6 +488,17 @@ export async function createServer(
       const inferenceClient = createInferenceClient(inferenceConfig);
       const toolBridge = createToolBridge(toolRegistry);
       
+      // Create ExtractionRunnerService for the chatbot-compile pipeline
+      // Note: This is a minimal setup - the actual extractor factory and other deps
+      // would need to be wired up from the full extraction infrastructure
+      const extractionService = new ExtractionRunnerService({
+        extractorFactory: (_targetKind: string) => {
+          // Placeholder - in production this would return a real ExtractorAdapter
+          throw new Error('ExtractionRunnerService extractorFactory not fully wired up');
+        },
+        pipelinePath: '../../../schema/registry/compile-pipelines/extraction-compile.yaml',
+      } as any);
+      
       // Placeholder deps - stub functions that return null
       // A follow-up spec will wire real fetchers
       const placeholderDeps = {
@@ -497,6 +509,8 @@ export async function createServer(
         fetchProtocol: async (_id: string) => null,
         fetchGraphComponent: async (_id: string) => null,
         searchLabwareByHint: createLabwareLookup(ctx.store),
+        extractionService,
+        llmClient: inferenceClient,
       };
       
       const orchestrator = createAgentOrchestrator(

@@ -1,0 +1,26 @@
+pipelineId: chatbot-compile
+entrypoint: chatbot-compile
+description: >
+  Compile a chatbot prompt (+ optional file attachments) from the event-graph
+  editor into proposed PlateEvent primitives and labware additions. Used by
+  AgentOrchestrator to produce a preview bundle that downstream UI can
+  render in the side-by-side labware panes.
+passes:
+  - id: extract_entities
+    family: parse
+    description: Run ExtractionRunnerService against prompt text and file attachments; emit structured entities (labware hints, material refs, operators, dates, volumes).
+
+  - id: ai_precompile
+    family: expand
+    depends_on: [extract_entities]
+    description: LLM-backed pass that turns prompt + extracted entities into candidate events, candidate labwares, and unresolved refs.
+
+  - id: expand_biology_verbs
+    family: expand
+    depends_on: [ai_precompile]
+    description: Expand high-level biology verbs (seed, incubate, harvest, etc.) in candidate events into compositions of primitive event types that ContextEngine already handles.
+
+  - id: resolve_labware
+    family: disambiguate
+    depends_on: [ai_precompile]
+    description: Resolve labware hints to existing labware-instance records via searchLabwareByHint; emit AiLabwareAddition entries for unmatched hints.

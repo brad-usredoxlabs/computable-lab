@@ -41,6 +41,7 @@ export class ContextEngine {
     this.handlers['incubate'] = this.handleIncubate.bind(this);
     this.handlers['mix'] = this.handleMix.bind(this);
     this.handlers['read'] = this.handleRead.bind(this);
+    this.handlers['centrifuge'] = this.handleCentrifuge.bind(this);
   }
 
   /**
@@ -252,6 +253,29 @@ export class ContextEngine {
 
     if (!draft.layer_provenance.observed.includes(d.readout)) {
       draft.layer_provenance.observed.push(d.readout);
+    }
+  }
+
+  private handleCentrifuge(draft: ContextDraft, event: EventGraphEvent): void {
+    const d = event.details as {
+      rpm?: number;
+      rcf?: number;
+      duration?: string;
+      temperature?: number;
+    };
+    const entry = {
+      ...(typeof d.rpm === 'number' ? { rpm: d.rpm } : {}),
+      ...(typeof d.rcf === 'number' ? { rcf: d.rcf } : {}),
+      ...(typeof d.duration === 'string' ? { duration: d.duration } : {}),
+      ...(typeof d.temperature === 'number' ? { temperature: d.temperature } : {}),
+    };
+    if (!Array.isArray(draft.properties.centrifugations)) {
+      draft.properties.centrifugations = [];
+    }
+    (draft.properties.centrifugations as unknown[]).push(entry);
+    draft.properties.last_centrifugation = entry;
+    if (!draft.layer_provenance.event_derived.includes('properties')) {
+      draft.layer_provenance.event_derived.push('properties');
     }
   }
 
