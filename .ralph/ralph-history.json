@@ -2,26 +2,9 @@
   "iterations": [
     {
       "iteration": 1,
-      "startedAt": "2026-04-22T02:14:44.593Z",
-      "endedAt": "2026-04-22T02:14:51.746Z",
-      "durationMs": 5388,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [
-        ".ralph/"
-      ],
-      "exitCode": 1,
-      "completionDetected": false,
-      "errors": [
-        "API error: API error 404: {\"error\":{\"message\":\"The model `Qwen/Qwen3.6-35B-3BA-FP8` does not exist.\",\"type\":\"NotFoundError\",\"param\":\"model\",\"code\":404}}"
-      ]
-    },
-    {
-      "iteration": 2,
-      "startedAt": "2026-04-22T02:14:54.438Z",
-      "endedAt": "2026-04-22T02:15:01.141Z",
-      "durationMs": 5210,
+      "startedAt": "2026-04-22T02:18:42.468Z",
+      "endedAt": "2026-04-22T02:18:49.686Z",
+      "durationMs": 5420,
       "agent": "codex",
       "model": "",
       "toolsUsed": {},
@@ -29,136 +12,16 @@
       "exitCode": 1,
       "completionDetected": false,
       "errors": [
-        "API error: API error 404: {\"error\":{\"message\":\"The model `Qwen/Qwen3.6-35B-3BA-FP8` does not exist.\",\"type\":\"NotFoundError\",\"param\":\"model\",\"code\":404}}"
-      ]
-    },
-    {
-      "iteration": 3,
-      "startedAt": "2026-04-22T02:15:03.676Z",
-      "endedAt": "2026-04-22T02:15:09.893Z",
-      "durationMs": 4700,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 1,
-      "completionDetected": false,
-      "errors": [
-        "API error: API error 404: {\"error\":{\"message\":\"The model `Qwen/Qwen3.6-35B-3BA-FP8` does not exist.\",\"type\":\"NotFoundError\",\"param\":\"model\",\"code\":404}}"
-      ]
-    },
-    {
-      "iteration": 4,
-      "startedAt": "2026-04-22T02:15:12.443Z",
-      "endedAt": "2026-04-22T02:15:18.670Z",
-      "durationMs": 4732,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 1,
-      "completionDetected": false,
-      "errors": [
-        "API error: API error 404: {\"error\":{\"message\":\"The model `Qwen/Qwen3.6-35B-3BA-FP8` does not exist.\",\"type\":\"NotFoundError\",\"param\":\"model\",\"code\":404}}"
-      ]
-    },
-    {
-      "iteration": 5,
-      "startedAt": "2026-04-22T02:15:21.207Z",
-      "endedAt": "2026-04-22T02:15:27.519Z",
-      "durationMs": 4799,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 1,
-      "completionDetected": false,
-      "errors": [
-        "API error: API error 404: {\"error\":{\"message\":\"The model `Qwen/Qwen3.6-35B-3BA-FP8` does not exist.\",\"type\":\"NotFoundError\",\"param\":\"model\",\"code\":404}}"
-      ]
-    },
-    {
-      "iteration": 6,
-      "startedAt": "2026-04-22T02:15:30.056Z",
-      "endedAt": "2026-04-22T02:15:36.267Z",
-      "durationMs": 4701,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 1,
-      "completionDetected": false,
-      "errors": [
-        "API error: API error 404: {\"error\":{\"message\":\"The model `Qwen/Qwen3.6-35B-3BA-FP8` does not exist.\",\"type\":\"NotFoundError\",\"param\":\"model\",\"code\":404}}"
-      ]
-    },
-    {
-      "iteration": 7,
-      "startedAt": "2026-04-22T02:15:38.798Z",
-      "endedAt": "2026-04-22T02:15:45.014Z",
-      "durationMs": 4721,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 1,
-      "completionDetected": false,
-      "errors": [
-        "API error: API error 404: {\"error\":{\"message\":\"The model `Qwen/Qwen3.6-35B-3BA-FP8` does not exist.\",\"type\":\"NotFoundError\",\"param\":\"model\",\"code\":404}}"
-      ]
-    },
-    {
-      "iteration": 8,
-      "startedAt": "2026-04-22T02:15:47.559Z",
-      "endedAt": "2026-04-22T02:15:53.781Z",
-      "durationMs": 4717,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 1,
-      "completionDetected": false,
-      "errors": [
-        "API error: API error 404: {\"error\":{\"message\":\"The model `Qwen/Qwen3.6-35B-3BA-FP8` does not exist.\",\"type\":\"NotFoundError\",\"param\":\"model\",\"code\":404}}"
-      ]
-    },
-    {
-      "iteration": 9,
-      "startedAt": "2026-04-22T02:15:56.347Z",
-      "endedAt": "2026-04-22T02:16:02.660Z",
-      "durationMs": 4821,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 1,
-      "completionDetected": false,
-      "errors": [
-        "API error: API error 404: {\"error\":{\"message\":\"The model `Qwen/Qwen3.6-35B-3BA-FP8` does not exist.\",\"type\":\"NotFoundError\",\"param\":\"model\",\"code\":404}}"
-      ]
-    },
-    {
-      "iteration": 10,
-      "startedAt": "2026-04-22T02:16:05.201Z",
-      "endedAt": "2026-04-22T02:16:11.498Z",
-      "durationMs": 4755,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 1,
-      "completionDetected": false,
-      "errors": [
-        "API error: API error 404: {\"error\":{\"message\":\"The model `Qwen/Qwen3.6-35B-3BA-FP8` does not exist.\",\"type\":\"NotFoundError\",\"param\":\"model\",\"code\":404}}"
+        "API error: API error 400: {\"error\":{\"message\":\"\\\"auto\\\" tool choice requires --enable-auto-tool-choice and --tool-call-parser to be set\",\"type\":\"BadRequestError\",\"param\":null,\"code\":400}}"
       ]
     }
   ],
-  "totalDurationMs": 48544,
+  "totalDurationMs": 5420,
   "struggleIndicators": {
     "repeatedErrors": {
-      "API error: API error 404: {\"error\":{\"message\":\"The model `Qwen/Qwen3.6-35B-3BA-FP8` does not exist.\"": 10
+      "API error: API error 400: {\"error\":{\"message\":\"\\\"auto\\\" tool choice requires --enable-auto-tool-choi": 1
     },
-    "noProgressIterations": 9,
-    "shortIterations": 10
+    "noProgressIterations": 1,
+    "shortIterations": 1
   }
 }
