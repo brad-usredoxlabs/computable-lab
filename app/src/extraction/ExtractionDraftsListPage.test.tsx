@@ -291,17 +291,21 @@ describe('ExtractionDraftsListPage', () => {
 
   it('shows error message when upload fails', async () => {
     const originalFetch = global.fetch;
-    const uploadFetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 400,
-      json: async () => ({ error: { message: 'contentBase64 required' } }),
+    const uploadFetch = vi.fn().mockImplementation(async (url: string, _init?: RequestInit) => {
+      if (url === '/api/extract/upload') {
+        return {
+          ok: false,
+          status: 400,
+          json: async () => ({ error: { message: 'contentBase64 required' } }),
+        };
+      }
+      // For the initial records fetch, return success
+      return {
+        ok: true,
+        json: async () => ({ records: mockDrafts, total: 3 }),
+      };
     });
     global.fetch = uploadFetch;
-
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ records: mockDrafts, total: 3 }),
-    });
 
     const { unmount } = render(
       <MemoryRouter>
