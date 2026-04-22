@@ -51,12 +51,29 @@
       "exitCode": 1,
       "completionDetected": false,
       "errors": []
+    },
+    {
+      "iteration": 5,
+      "startedAt": "2026-04-22T02:51:53.980Z",
+      "endedAt": "2026-04-22T02:52:00.203Z",
+      "durationMs": 4705,
+      "agent": "codex",
+      "model": "",
+      "toolsUsed": {},
+      "filesModified": [],
+      "exitCode": 1,
+      "completionDetected": false,
+      "errors": [
+        "API error: Connection error: [Errno 111] Connection refused"
+      ]
     }
   ],
-  "totalDurationMs": 679498,
+  "totalDurationMs": 684203,
   "struggleIndicators": {
-    "repeatedErrors": {},
-    "noProgressIterations": 4,
-    "shortIterations": 0
+    "repeatedErrors": {
+      "API error: Connection error: [Errno 111] Connection refused": 1
+    },
+    "noProgressIterations": 5,
+    "shortIterations": 1
   }
 }
