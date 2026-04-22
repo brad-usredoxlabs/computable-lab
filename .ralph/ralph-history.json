@@ -2,153 +2,29 @@
   "iterations": [
     {
       "iteration": 1,
-      "startedAt": "2026-04-22T02:40:18.267Z",
-      "endedAt": "2026-04-22T02:43:46.052Z",
-      "durationMs": 206271,
+      "startedAt": "2026-04-22T03:24:45.139Z",
+      "endedAt": "2026-04-22T03:46:35.478Z",
+      "durationMs": 1308795,
       "agent": "codex",
       "model": "",
       "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 0,
-      "completionDetected": false,
-      "errors": []
-    },
-    {
-      "iteration": 2,
-      "startedAt": "2026-04-22T02:43:48.594Z",
-      "endedAt": "2026-04-22T02:47:12.085Z",
-      "durationMs": 201990,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 0,
-      "completionDetected": false,
-      "errors": []
-    },
-    {
-      "iteration": 3,
-      "startedAt": "2026-04-22T02:47:14.633Z",
-      "endedAt": "2026-04-22T02:50:33.944Z",
-      "durationMs": 197793,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 0,
-      "completionDetected": false,
-      "errors": []
-    },
-    {
-      "iteration": 4,
-      "startedAt": "2026-04-22T02:50:36.499Z",
-      "endedAt": "2026-04-22T02:51:51.453Z",
-      "durationMs": 73444,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
+      "filesModified": [
+        "app/src/extraction/ExtractionDraftsListPage.test.tsx",
+        "app/src/extraction/ExtractionDraftsListPage.tsx",
+        "app/src/test/setup.ts",
+        "server/src/api/handlers/ExtractHandlers.test.ts",
+        "server/src/api/handlers/ExtractHandlers.ts",
+        "server/src/api/routes.ts"
+      ],
       "exitCode": 1,
       "completionDetected": false,
       "errors": []
-    },
-    {
-      "iteration": 5,
-      "startedAt": "2026-04-22T02:51:53.980Z",
-      "endedAt": "2026-04-22T02:52:00.203Z",
-      "durationMs": 4705,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 1,
-      "completionDetected": false,
-      "errors": [
-        "API error: Connection error: [Errno 111] Connection refused"
-      ]
-    },
-    {
-      "iteration": 6,
-      "startedAt": "2026-04-22T02:52:02.751Z",
-      "endedAt": "2026-04-22T02:52:08.981Z",
-      "durationMs": 4728,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 1,
-      "completionDetected": false,
-      "errors": [
-        "API error: Connection error: [Errno 111] Connection refused"
-      ]
-    },
-    {
-      "iteration": 7,
-      "startedAt": "2026-04-22T02:52:11.522Z",
-      "endedAt": "2026-04-22T02:52:17.725Z",
-      "durationMs": 4695,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 1,
-      "completionDetected": false,
-      "errors": [
-        "API error: Connection error: [Errno 111] Connection refused"
-      ]
-    },
-    {
-      "iteration": 8,
-      "startedAt": "2026-04-22T02:52:20.245Z",
-      "endedAt": "2026-04-22T02:52:31.572Z",
-      "durationMs": 9809,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 1,
-      "completionDetected": false,
-      "errors": [
-        "API error: Connection error: [Errno 111] Connection refused"
-      ]
-    },
-    {
-      "iteration": 9,
-      "startedAt": "2026-04-22T02:52:34.120Z",
-      "endedAt": "2026-04-22T02:52:40.339Z",
-      "durationMs": 4703,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 1,
-      "completionDetected": false,
-      "errors": [
-        "API error: Connection error: [Errno 111] Connection refused"
-      ]
-    },
-    {
-      "iteration": 10,
-      "startedAt": "2026-04-22T02:52:42.894Z",
-      "endedAt": "2026-04-22T02:52:49.109Z",
-      "durationMs": 4694,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
-      "exitCode": 1,
-      "completionDetected": false,
-      "errors": [
-        "API error: Connection error: [Errno 111] Connection refused"
-      ]
     }
   ],
-  "totalDurationMs": 712832,
+  "totalDurationMs": 1308795,
   "struggleIndicators": {
-    "repeatedErrors": {
-      "API error: Connection error: [Errno 111] Connection refused": 6
-    },
-    "noProgressIterations": 10,
-    "shortIterations": 6
+    "repeatedErrors": {},
+    "noProgressIterations": 0,
+    "shortIterations": 0
   }
 }

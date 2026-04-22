@@ -79,6 +79,10 @@ import { createAiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandler
 import { createReadinessHandlers } from './api/handlers/ReadinessHandlers.js';
 import { createExtractHandlers } from './api/handlers/ExtractHandlers.js';
 import { ExtractionRunnerService } from './extract/ExtractionRunnerService.js';
+import { ExtractionMetrics } from './extract/ExtractionMetrics.js';
+import { OpenAICompatibleExtractor } from './extract/OpenAICompatibleExtractor.js';
+import { MentionCandidatePopulator } from './extract/MentionCandidatePopulator.js';
+import { findMatchingLibraryExtractor } from './extract/LibraryExtractorMatcher.js';
 import type { AIHandlers } from './api/handlers/AIHandlers.js';
 import type { KnowledgeAIHandlers } from './api/handlers/KnowledgeAIHandlers.js';
 import type { AiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandlers.js';
@@ -89,6 +93,28 @@ import { ArtifactBlobStore } from './ingestion/ArtifactBlobStore.js';
 import { LifecycleEngine, loadLifecyclesFromDir } from './lifecycle/index.js';
 import { PolicyBundleService } from './policy/PolicyBundleService.js';
 import { createLabwareLookup } from './ai/compiler/labwareLookup.js';
+import type { ExtractorAdapter } from './extract/ExtractorAdapter.js';
+
+/**
+ * Null extractor that returns empty results with a diagnostic.
+ * Used when the extractor profile is missing or disabled.
+ */
+function nullExtractor(reason: string): ExtractorAdapter {
+  return {
+    async extract() {
+      return {
+        candidates: [],
+        diagnostics: [
+          {
+            severity: 'error',
+            code: 'CONFIG_MISSING',
+            message: reason,
+          },
+        ],
+      };
+    },
+  };
+}
 
 /**
  * Default server configuration.
@@ -116,6 +142,7 @@ export interface AppContext {
   uiSpecLoader: UISpecLoader;
   workspaceRoot: string;
   recordsDir: string;
+  schemaDir: string;
   appConfig?: AppConfig | undefined;
   configPath?: string | undefined;
   predicateRegistry?: PredicateRegistry | undefined;
@@ -335,6 +362,7 @@ export async function initializeApp(
     uiSpecLoader,
     workspaceRoot,
     recordsDir,
+    schemaDir,
     appConfig,
     configPath,
     predicateRegistry,
@@ -396,10 +424,6 @@ export async function createServer(
   const vendorSearchHandlers = createVendorSearchHandlers();
   const vendorDocumentHandlers = createVendorDocumentHandlers(ctx.store);
   const chemistryHandlers = createChemistryHandlers();
-  const ingestionHandlers = createIngestionHandlers(
-    ctx.store,
-    new ArtifactBlobStore(ctx.workspaceRoot, join(ctx.recordsDir, '.ingestion-artifacts')),
-  );
   const tagHandlers = createTagHandlers(ctx.store);
   const materialPrepHandlers = createMaterialPrepHandlers(ctx.store, ctx.indexManager);
   const materialLifecycleHandlers = createMaterialLifecycleHandlers(ctx.store, ctx.indexManager);
@@ -409,6 +433,34 @@ export async function createServer(
   const platformHandlers = createPlatformHandlers(ctx.platformRegistry);
   const labSettingsHandlers = createLabSettingsHandlers(ctx.appConfig, ctx.policyBundleService);
   const uiHandlers = createUIHandlers(ctx.uiSpecLoader, ctx.store, ctx.schemaRegistry);
+
+  // Build extraction infrastructure: extractor factory, populator, runner
+  const extractorProfile = ctx.appConfig?.ai?.extractor;
+  const extractorFactory = (targetKind: string): ExtractorAdapter => {
+    if (!extractorProfile || !extractorProfile.enabled) {
+      return nullExtractor('extractor profile missing or disabled');
+    }
+    return new OpenAICompatibleExtractor({
+      config: extractorProfile,
+    });
+  };
+  const populator = new MentionCandidatePopulator({ store: ctx.store });
+  const metrics = new ExtractionMetrics();
+  const runner = new ExtractionRunnerService({
+    extractorFactory,
+    populator,
+    pipelinePath: join(ctx.schemaDir, 'registry/compile-pipelines/extraction-compile.yaml'),
+    libraryMatcher: (fileName, content) =>
+      findMatchingLibraryExtractor({ fileName, contentPreview: content }),
+    metrics,
+  });
+  const extractHandlers = createExtractHandlers(runner, ctx.store, ctx.schemaRegistry, ctx.validator, metrics);
+
+  const ingestionHandlers = createIngestionHandlers(
+    ctx.store,
+    new ArtifactBlobStore(ctx.workspaceRoot, join(ctx.recordsDir, '.ingestion-artifacts')),
+    runner,
+  );
 
   // Create meta handlers
   const repoConfig = ctx.appConfig ? getDefaultRepository(ctx.appConfig) ?? undefined : undefined;
@@ -657,17 +709,6 @@ export async function createServer(
     ctx.schemaRegistry,
   );
   const readinessHandlers = createReadinessHandlers(ctx);
-
-  // Create extract handlers
-  const extractHandlers: ExtractHandlers = createExtractHandlers(
-    // Note: For now, we pass a placeholder runner since ExtractionRunnerService
-    // is not yet wired up for the promote/reject actions. The promote/reject
-    // handlers use the store, schemaRegistry, and validator directly.
-    {} as unknown as import('./extract/ExtractionRunnerService.js').ExtractionRunnerService,
-    ctx.store,
-    ctx.schemaRegistry,
-    ctx.validator,
-  );
 
   // Register API routes with /api prefix
   await fastify.register(async (instance) => {

@@ -103,19 +103,25 @@ export class RecordBackedIngestionService {
   constructor(
     private readonly store: RecordStore,
     private readonly blobStore: ArtifactBlobStore,
+    extractionRunner?: ExtractionRunnerService,
   ) {
-    const fakeExtractor = new FakeExtractorAdapter();
-    const extractorFactory = (_targetKind: string): ExtractorAdapter => fakeExtractor;
-    const candidatesByKind = new Map<string, readonly ResolutionCandidate[]>();
-    const pipelinePath = join(__dirname, '../../../schema/registry/compile-pipelines/extraction-compile.yaml');
-    
-    const extractionRunner = new ExtractionRunnerService({
-      extractorFactory,
-      candidatesByKind,
-      pipelinePath,
-      recordIdPrefix: 'XDR-run-',
-    });
-    this.worker = new IngestionWorker(store, blobStore, extractionRunner);
+    let runner: ExtractionRunnerService;
+    if (extractionRunner) {
+      runner = extractionRunner;
+    } else {
+      const fakeExtractor = new FakeExtractorAdapter();
+      const extractorFactory = (_targetKind: string): ExtractorAdapter => fakeExtractor;
+      const candidatesByKind = new Map<string, readonly ResolutionCandidate[]>();
+      const pipelinePath = join(__dirname, '../../../schema/registry/compile-pipelines/extraction-compile.yaml');
+      
+      runner = new ExtractionRunnerService({
+        extractorFactory,
+        candidatesByKind,
+        pipelinePath,
+        recordIdPrefix: 'XDR-run-',
+      });
+    }
+    this.worker = new IngestionWorker(store, blobStore, runner);
   }
 
   async createJob(input: CreateIngestionJobInput): Promise<IngestionJobDetail> {
@@ -302,6 +308,10 @@ export class RecordBackedIngestionService {
   }
 }
 
-export function createIngestionService(store: RecordStore, blobStore: ArtifactBlobStore): RecordBackedIngestionService {
-  return new RecordBackedIngestionService(store, blobStore);
+export function createIngestionService(
+  store: RecordStore,
+  blobStore: ArtifactBlobStore,
+  extractionRunner?: ExtractionRunnerService,
+): RecordBackedIngestionService {
+  return new RecordBackedIngestionService(store, blobStore, extractionRunner);
 }

@@ -13,6 +13,7 @@ import type { ResolutionCandidate } from './MentionResolver.js';
 import type { ExtractionDraftBody } from './ExtractionDraftBuilder.js';
 import { runExtractionPipeline } from '../compiler/pipeline/extractionPipelineRun.js';
 import { MentionCandidatePopulator } from './MentionCandidatePopulator.js';
+import type { ExtractionMetrics } from './ExtractionMetrics.js';
 
 /**
  * Arguments for running the extraction service.
@@ -49,6 +50,7 @@ export interface ExtractionRunnerServiceDeps {
   recordIdPrefix?: string;           // default 'XDR-run-'
   libraryMatcher?: (fileName: string, contentPreview: string) => Promise<ExtractorAdapter | null>;
   logger?: ExtractionLogger;
+  metrics?: ExtractionMetrics;
 }
 
 /**
@@ -122,6 +124,13 @@ export class ExtractionRunnerService {
       // Emit extraction_finish event
       const duration_ms = Date.now() - startTime;
       const draftBody = draftAssembleOutput as ExtractionDraftBody;
+      
+      // Record metrics if a metrics instance is provided
+      if (this.deps.metrics) {
+        const diagnosticCodes = result.diagnostics?.map(d => d.code).filter(Boolean) ?? [];
+        this.deps.metrics.recordRun(duration_ms, draftBody.candidates.length, diagnosticCodes);
+      }
+      
       this.logger.info({
         event: 'extraction_finish',
         target_kind: req.target_kind,

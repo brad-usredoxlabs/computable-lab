@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 interface ExtractionDraft {
@@ -30,8 +30,11 @@ export function ExtractionDraftsListPage(): JSX.Element {
   const [drafts, setDrafts] = useState<ExtractionDraft[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +70,43 @@ export function ExtractionDraftsListPage(): JSX.Element {
     return d.status === statusFilter;
   });
 
+  const handleUpload = async () => {
+    const file = fileInputRef.current?.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setUploadError(null);
+
+    try {
+      const base64 = await readFileAsBase64(file);
+      const response = await fetch('/api/extract/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target_kind: 'protocol',
+          fileName: file.name,
+          contentBase64: base64,
+        }),
+      });
+
+      if (!response.ok) {
+        const errBody = await response.json().catch(() => ({}));
+        const msg = (errBody as { error?: { message?: string }; message?: string }).error?.message
+          || (errBody as { message?: string }).message
+          || `HTTP ${response.status}`;
+        throw new Error(msg);
+      }
+
+      const data = await response.json() as { recordId: string };
+      navigate(`/extraction/review/${data.recordId}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Upload failed';
+      setUploadError(msg);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   if (loading) {
     return <div>Loading extraction drafts...</div>;
   }
@@ -82,6 +122,40 @@ export function ExtractionDraftsListPage(): JSX.Element {
   return (
     <div className="extraction-drafts-list">
       <h1>Extraction Drafts</h1>
+
+      <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf"
+          style={{ display: 'none' }}
+          id="pdf-upload-input"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              handleUpload();
+            }
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          style={{
+            padding: '6px 12px',
+            backgroundColor: uploading ? '#ccc' : '#007bff',
+            color: 'white',
+            borderRadius: '4px',
+            border: 'none',
+            cursor: uploading ? 'not-allowed' : 'pointer',
+          }}
+        >
+          Upload PDF
+        </button>
+        {uploadError && (
+          <span style={{ color: 'red', fontSize: '0.9rem' }}>{uploadError}</span>
+        )}
+      </div>
 
       <div style={{ marginBottom: '1rem' }}>
         <label htmlFor="status-filter">Status: </label>
@@ -153,4 +227,18 @@ export function ExtractionDraftsListPage(): JSX.Element {
       )}
     </div>
   );
+}
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Strip the data:...;base64, prefix
+      const commaIndex = result.indexOf(',');
+      resolve(commaIndex !== -1 ? result.slice(commaIndex + 1) : result);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }

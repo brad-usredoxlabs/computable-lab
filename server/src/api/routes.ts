@@ -442,6 +442,8 @@ export function registerRoutes(
   const { extractHandlers } = options;
   if (extractHandlers) {
     fastify.post('/extract', extractHandlers.extract.bind(extractHandlers));
+    fastify.post('/extract/upload', extractHandlers.upload.bind(extractHandlers));
+    fastify.get('/extract/metrics', extractHandlers.getMetrics.bind(extractHandlers));
     fastify.post('/extraction/drafts/:id/candidates/:i/promote', extractHandlers.promoteCandidate.bind(extractHandlers));
     fastify.post('/extraction/drafts/:id/candidates/:i/reject', extractHandlers.rejectCandidate.bind(extractHandlers));
   }

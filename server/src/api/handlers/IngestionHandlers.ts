@@ -3,6 +3,7 @@ import type { ApiError } from '../types.js';
 import type { RecordStore, RecordEnvelope } from '../../store/types.js';
 import { ArtifactBlobStore } from '../../ingestion/ArtifactBlobStore.js';
 import { createIngestionService } from '../../ingestion/IngestionService.js';
+import { ExtractionRunnerService } from '../../extract/ExtractionRunnerService.js';
 import { INGESTION_SCHEMA_IDS, type IngestionArtifactPayload, type IngestionJobPayload } from '../../ingestion/types.js';
 import type {
   CreateIngestionArtifactInput,
@@ -75,8 +76,12 @@ export interface IngestionHandlers {
   attachExtractionSpec(request: FastifyRequest<{ Params: { id: string }; Body: ExtractionSpecBody }>, reply: FastifyReply): Promise<{ success: true; job: unknown } | ApiError>;
 }
 
-export function createIngestionHandlers(store: RecordStore, blobStore: ArtifactBlobStore): IngestionHandlers {
-  const service = createIngestionService(store, blobStore);
+export function createIngestionHandlers(
+  store: RecordStore,
+  blobStore: ArtifactBlobStore,
+  extractionRunner?: ExtractionRunnerService,
+): IngestionHandlers {
+  const service = createIngestionService(store, blobStore, extractionRunner);
 
   return {
     async listJobs() {

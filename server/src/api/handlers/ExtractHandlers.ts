@@ -5,8 +5,10 @@ import type { ExtractionDraftBody, ExtractionDraft, ExtractionDraftCandidate } f
 import type { RecordStore } from '../../store/types.js';
 import type { SchemaRegistry } from '../../schema/SchemaRegistry.js';
 import type { AjvValidator } from '../../validation/AjvValidator.js';
+import type { MetricsSnapshot } from '../../extract/ExtractionMetrics.js';
 import { promoteCandidate as promoteCandidateLogic, type PromoteCandidateArgs } from '../../extract/CandidatePromoter.js';
 import type { RecordEnvelope } from '../../types/RecordEnvelope.js';
+import { extractPdfText } from '../../extract/PdfTextAdapter.js';
 
 type ExtractBody = {
   target_kind?: unknown;
@@ -20,6 +22,10 @@ export interface ExtractHandlers {
     request: FastifyRequest<{ Body: ExtractBody }>,
     reply: FastifyReply,
   ): Promise<ExtractionDraftBody | ApiError>;
+  upload(
+    request: FastifyRequest<{ Body: UploadBody }>,
+    reply: FastifyReply,
+  ): Promise<{ recordId: string } | ApiError>;
   promoteCandidate(
     request: FastifyRequest<{ Params: { id: string; i: string } }>,
     reply: FastifyReply,
@@ -28,13 +34,24 @@ export interface ExtractHandlers {
     request: FastifyRequest<{ Params: { id: string; i: string } }>,
     reply: FastifyReply,
   ): Promise<{ success: boolean; recordId?: string; error?: string } | ApiError>;
+  getMetrics(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<MetricsSnapshot | ApiError>;
 }
+
+type UploadBody = {
+  target_kind?: unknown;
+  fileName?: unknown;
+  contentBase64?: unknown;
+};
 
 export function createExtractHandlers(
   runner: ExtractionRunnerService,
   store: RecordStore,
   schemaRegistry: SchemaRegistry,
   validator: AjvValidator,
+  metrics?: { snapshot: () => MetricsSnapshot },
 ): ExtractHandlers {
   return {
     async extract(request, reply) {
@@ -50,6 +67,46 @@ export function createExtractHandlers(
         : { kind: 'freetext' as const, id: `ad-hoc-${new Date().toISOString()}` };
       const args: RunExtractionServiceArgs = buildArgs(target_kind, text, source, body.hint);
       return runner.run(args);
+    },
+
+    async upload(request, reply) {
+      const body = request.body ?? {};
+      const target_kind = typeof body.target_kind === 'string' ? body.target_kind.trim() : 'protocol';
+      const fileName = typeof body.fileName === 'string' ? body.fileName : 'upload.pdf';
+      const b64 = typeof body.contentBase64 === 'string' ? body.contentBase64 : '';
+
+      if (!b64) {
+        reply.code(400);
+        return { error: 'NO_CONTENT', message: 'contentBase64 required' };
+      }
+
+      const buffer = Buffer.from(b64, 'base64');
+      const pdf = await extractPdfText(buffer);
+
+      if (pdf.diagnostics.some(d => d.severity === 'error')) {
+        reply.code(422);
+        return { error: 'PDF_PARSE_FAILED', message: pdf.diagnostics[0].message };
+      }
+
+      const draftBody = await runner.run({
+        target_kind,
+        text: pdf.text,
+        source: { kind: 'file' as const, id: `upload-${Date.now()}`, locator: fileName },
+        fileName,
+      });
+
+      // Persist the draft so it shows up in the list
+      await store.create({
+        envelope: {
+          recordId: draftBody.recordId,
+          kind: draftBody.kind,
+          payload: draftBody as unknown as Record<string, unknown>,
+        } as RecordEnvelope,
+        message: `Persist extraction-draft ${draftBody.recordId} from upload ${fileName}`,
+        skipLint: true,
+      });
+
+      return { recordId: draftBody.recordId };
     },
 
     async promoteCandidate(request, reply) {
@@ -285,6 +342,14 @@ export function createExtractHandlers(
       }
 
       return { success: true };
+    },
+
+    async getMetrics(_request, reply) {
+      if (!metrics) {
+        reply.code(503);
+        return { error: 'METRICS_UNAVAILABLE', message: 'Metrics collector not configured' };
+      }
+      return metrics.snapshot();
     },
   };
 }

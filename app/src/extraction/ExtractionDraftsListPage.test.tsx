@@ -42,6 +42,7 @@ describe('ExtractionDraftsListPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    global.fetch = mockFetch;
   });
 
   afterEach(() => {
@@ -211,6 +212,119 @@ describe('ExtractionDraftsListPage', () => {
       expect(screen.getByText('No extraction drafts found.')).toBeInTheDocument();
     });
 
+    unmount();
+  });
+
+  it('renders the Upload PDF button', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ records: mockDrafts, total: 3 }),
+    });
+
+    const { unmount } = render(
+      <MemoryRouter>
+        <ExtractionDraftsListPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Upload PDF')).toBeInTheDocument();
+    });
+
+    unmount();
+  });
+
+  it('calls /api/extract/upload with correct body on file selection and navigates on success', async () => {
+    const originalFetch = global.fetch;
+    const uploadFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ recordId: 'XDR-new-upload' }),
+    });
+    global.fetch = uploadFetch;
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ records: mockDrafts, total: 3 }),
+    });
+
+    const { unmount } = render(
+      <MemoryRouter initialEntries={['/extraction']}>
+        <Routes>
+          <Route path="/extraction" element={<ExtractionDraftsListPage />} />
+          <Route path="/extraction/review/:recordId" element={<div data-testid="review-page">Review Page</div>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Upload PDF')).toBeInTheDocument();
+    });
+
+    // Create a mock PDF file
+    const pdfContent = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]); // %PDF-1.4
+    const mockFile = new File([pdfContent], 'test.pdf', { type: 'application/pdf' });
+
+    // Simulate file selection via the hidden file input
+    const fileInput = document.getElementById('pdf-upload-input') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [mockFile] } });
+
+    // Wait for the upload fetch to be called
+    await waitFor(() => {
+      expect(uploadFetch).toHaveBeenCalledWith(
+        '/api/extract/upload',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: expect.stringContaining('test.pdf'),
+        })
+      );
+    });
+
+    // Check that navigation happened
+    await waitFor(() => {
+      expect(screen.getByTestId('review-page')).toBeInTheDocument();
+    });
+
+    global.fetch = originalFetch;
+    unmount();
+  });
+
+  it('shows error message when upload fails', async () => {
+    const originalFetch = global.fetch;
+    const uploadFetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: { message: 'contentBase64 required' } }),
+    });
+    global.fetch = uploadFetch;
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ records: mockDrafts, total: 3 }),
+    });
+
+    const { unmount } = render(
+      <MemoryRouter>
+        <ExtractionDraftsListPage />
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Upload PDF')).toBeInTheDocument();
+    });
+
+    // Create a mock PDF file
+    const pdfContent = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]);
+    const mockFile = new File([pdfContent], 'test.pdf', { type: 'application/pdf' });
+
+    const fileInput = document.getElementById('pdf-upload-input') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [mockFile] } });
+
+    await waitFor(() => {
+      expect(screen.getByText('contentBase64 required')).toBeInTheDocument();
+    });
+
+    global.fetch = originalFetch;
     unmount();
   });
 });
