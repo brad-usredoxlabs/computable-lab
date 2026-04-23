@@ -539,20 +539,11 @@ export async function createServer(
     try {
       const inferenceClient = createInferenceClient(inferenceConfig);
       const toolBridge = createToolBridge(toolRegistry);
-      
-      // Create ExtractionRunnerService for the chatbot-compile pipeline
-      // Note: This is a minimal setup - the actual extractor factory and other deps
-      // would need to be wired up from the full extraction infrastructure
-      const extractionService = new ExtractionRunnerService({
-        extractorFactory: (_targetKind: string) => {
-          // Placeholder - in production this would return a real ExtractorAdapter
-          throw new Error('ExtractionRunnerService extractorFactory not fully wired up');
-        },
-        pipelinePath: '../../../schema/registry/compile-pipelines/extraction-compile.yaml',
-      } as any);
-      
-      // Placeholder deps - stub functions that return null
-      // A follow-up spec will wire real fetchers
+
+      // Reuse the fully-wired extraction runner built above (populator + real
+      // extractorFactory + library matcher). The earlier stub here crashed
+      // AI runtime init because ExtractionRunnerService's guard requires
+      // either candidatesByKind or a populator.
       const placeholderDeps = {
         fetchMaterialSpec: async (_id: string) => null,
         fetchAliquot: async (_id: string) => null,
@@ -561,7 +552,7 @@ export async function createServer(
         fetchProtocol: async (_id: string) => null,
         fetchGraphComponent: async (_id: string) => null,
         searchLabwareByHint: createLabwareLookup(ctx.store),
-        extractionService,
+        extractionService: runner,
         llmClient: inferenceClient,
       };
       

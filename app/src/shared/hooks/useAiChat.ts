@@ -567,10 +567,18 @@ function buildAssistantContent(events: AiStreamEvent[]): string {
         )
         break
       case 'done':
+        if (ev.result.error) {
+          parts.push(`Error: ${ev.result.error}`)
+        }
         if ((ev.result.notes ?? []).length) {
           parts.push((ev.result.notes ?? []).join('\n'))
         }
-        if ((ev.result.events ?? []).length === 0) {
+        if ((ev.result.clarificationNeeded ?? '').trim().length > 0 && modelText.length === 0) {
+          // Plain-text answer that didn't come through as streaming chunks
+          // (e.g. doc-discussion turn). Surface it as the message body.
+          modelText = ev.result.clarificationNeeded ?? ''
+        }
+        if (!ev.result.error && (ev.result.events ?? []).length === 0 && modelText.length === 0) {
           parts.push('No events generated.')
         }
         break

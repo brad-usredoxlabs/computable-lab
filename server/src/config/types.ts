@@ -128,6 +128,12 @@ export interface InferenceConfig {
   maxTokens?: number;
   /** Temperature for generation (default 0.1) */
   temperature?: number;
+  /**
+   * When false, disables chain-of-thought / "thinking" output on models that
+   * support it (e.g. Qwen3 via vLLM's `chat_template_kwargs.enable_thinking`).
+   * Default undefined = leave the model at its server-side default.
+   */
+  enableThinking?: boolean;
 }
 
 /**

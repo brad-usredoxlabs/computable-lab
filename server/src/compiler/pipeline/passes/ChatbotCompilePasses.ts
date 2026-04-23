@@ -9,6 +9,7 @@ import type { Pass, PassRunArgs, PassResult, PassDiagnostic } from '../types.js'
 import type { ExtractionRunnerService, RunExtractionServiceArgs } from '../../../extract/ExtractionRunnerService.js';
 import type { ExtractionDraftBody } from '../../../extract/ExtractionDraftBuilder.js';
 import type { ChatMessage, CompletionRequest } from '../../../ai/types.js';
+import { decodeAttachmentText } from '../../../extract/decodeAttachment.js';
 
 /**
  * An entity extracted from a prompt or attachment.
@@ -137,16 +138,34 @@ export function createExtractEntitiesPass(
           targetKind = 'material'; // Default for HTML
         }
 
-        // Convert content to string if it's a Buffer
-        const contentText = typeof att.content === 'string' 
-          ? att.content 
-          : Buffer.isBuffer(att.content) 
-            ? att.content.toString('utf-8')
-            : String(att.content);
+        // Decode the attachment using the right adapter for its file type.
+        // Critical for PDFs / XLSX — raw utf-8 toString on a binary buffer
+        // produces gibberish and causes the extractor to find nothing.
+        const decoded = await decodeAttachmentText(att.name, att.mime_type, att.content);
+        for (const d of decoded.diagnostics) {
+          diagnostics.push({
+            severity: d.severity === 'error' ? 'error' : 'warning',
+            code: d.code,
+            message: d.message,
+            pass_id,
+            details: { attachment_name: att.name },
+          });
+        }
+
+        if (decoded.text.length === 0) {
+          diagnostics.push({
+            severity: 'warning',
+            code: 'attachment_empty_text',
+            message: `No text could be extracted from ${att.name}; skipping.`,
+            pass_id,
+            details: { attachment_name: att.name },
+          });
+          continue;
+        }
 
         const runRequest: RunExtractionServiceArgs = {
           target_kind: targetKind,
-          text: contentText,
+          text: decoded.text,
           source: {
             kind: 'file',
             id: att.name,

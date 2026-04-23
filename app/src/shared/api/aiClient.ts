@@ -168,8 +168,10 @@ export async function* streamAssist(
 
   let response: Response
 
-  if (files && files.length > 0 && surface !== 'event-editor') {
-    // Multipart form-data for file uploads
+  if (files && files.length > 0) {
+    // Multipart form-data for file uploads — works for every surface
+    // including event-editor. Previously event-editor silently dropped
+    // files here; the server-side handler has matching multipart parsing.
     const formData = new FormData()
     formData.append('prompt', prompt)
     formData.append('surface', surface)

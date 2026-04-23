@@ -23,6 +23,7 @@ import type {
 import { buildSystemPrompt, buildSurfaceAwarePrompt } from './systemPrompt.js';
 import { resolveMentionsForPrompt, buildResolvedContextMessage } from './resolveMentions.js';
 import { runChatbotCompile } from './runChatbotCompile.js';
+import { decodeAttachmentText } from '../extract/decodeAttachment.js';
 import type { PlateEventPrimitive } from '../compiler/biology/BiologyVerbExpander.js';
 
 /**
@@ -272,27 +273,84 @@ export function createAgentOrchestrator(
         // Pipeline produced no events - fall through to LLM loop
         console.log(`[agent ${tid}] pipeline produced no events; falling through to LLM loop`);
       }
-      
+
+      // Decode attachments into plain text so the fallthrough LLM loop can
+      // actually see the document. Without this, the pipeline consumed the
+      // attachments inside extract_entities/ai_precompile and then discarded
+      // them, leaving the agent to flail with no context when the pipeline
+      // returned empty. Generous per-attachment cap keeps the context from
+      // blowing up on large manuals; truncation is announced in the message
+      // so the model can ask for the rest if it matters.
+      const ATTACHMENT_CHAR_CAP = 80_000; // ~20K tokens per file at a typical ratio
+      const attachmentMessages: ChatMessage[] = [];
+      for (const att of attachments ?? []) {
+        try {
+          const decoded = await decodeAttachmentText(att.name, att.mime_type, att.content);
+          if (decoded.text.length === 0) {
+            console.warn(`[agent ${tid}] attachment ${att.name} decoded to empty text; skipping`);
+            continue;
+          }
+          const truncated = decoded.text.length > ATTACHMENT_CHAR_CAP;
+          const body = truncated
+            ? `${decoded.text.slice(0, ATTACHMENT_CHAR_CAP)}\n\n[...truncated: ${decoded.text.length - ATTACHMENT_CHAR_CAP} more characters not shown]`
+            : decoded.text;
+          attachmentMessages.push({
+            role: 'system',
+            content: `[Attached file: ${att.name} (${att.mime_type || 'unknown type'})]\n\n${body}`,
+          });
+        } catch (err) {
+          console.warn(`[agent ${tid}] failed to decode attachment ${att.name}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      if (attachmentMessages.length > 0) {
+        const totalChars = attachmentMessages.reduce((n, m) => n + (typeof m.content === 'string' ? m.content.length : 0), 0);
+        console.log(`[agent ${tid}] injected ${attachmentMessages.length} attachment(s) into LLM context, totalChars=${totalChars}`);
+        onEvent?.({ type: 'status', message: `Reading ${attachmentMessages.length} attachment(s)…` });
+      }
+
+      // If the compile pipeline produced no events AND the user attached a
+      // document, treat this as a document-discussion turn, not event
+      // authoring. Use a lighter system prompt with no tools so the model
+      // answers in plain text instead of thrashing against the event-graph
+      // system prompt's "return structured JSON or tool-call" directive.
+      const isDocDiscussionTurn = attachmentMessages.length > 0;
+      const effectiveSystemPrompt = isDocDiscussionTurn
+        ? 'You are a helpful laboratory assistant. The user has uploaded one or more documents whose full text appears in earlier system messages. Read them and answer the user\'s question directly, in clear prose. Use markdown for structure when helpful (numbered steps, headings, tables). Be specific and cite values from the document.'
+        : systemPrompt;
+
+      // Qwen3 chat template rejects multiple consecutive system messages
+      // with "System message must be at the beginning." Fold all system
+      // content into a single message before user/assistant turns.
+      const systemSections: string[] = [effectiveSystemPrompt];
+      for (const m of attachmentMessages) {
+        if (typeof m.content === 'string' && m.content.length > 0) systemSections.push(m.content);
+      }
+      if (resolvedContextMessage) systemSections.push(resolvedContextMessage);
+      if (historySummary) systemSections.push(historySummary);
+
       const messages: ChatMessage[] = [
-        { role: 'system', content: systemPrompt },
-        ...(resolvedContextMessage ? [{ role: 'system' as const, content: resolvedContextMessage }] : []),
-        ...(historySummary ? [{ role: 'system' as const, content: historySummary }] : []),
+        { role: 'system', content: systemSections.join('\n\n---\n\n') },
         ...historyMessages,
         { role: 'user', content: prompt },
       ];
 
       const allToolDefs = toolBridge.getToolDefinitions();
-      const toolDefs = toolFilter
-        ? allToolDefs.filter((d) => toolFilter.includes(d.function.name))
-        : allToolDefs;
+      const toolDefs = isDocDiscussionTurn
+        ? []
+        : toolFilter
+          ? allToolDefs.filter((d) => toolFilter.includes(d.function.name))
+          : allToolDefs;
+      const effectiveMaxTurns = isDocDiscussionTurn ? 1 : maxTurns;
       const totalUsage = { promptTokens: 0, completionTokens: 0 };
-      console.log(`[agent ${tid}] tools=${toolDefs.length}${toolFilter ? ` (filtered from ${allToolDefs.length})` : ''}`);
+      console.log(`[agent ${tid}] tools=${toolDefs.length}${toolFilter ? ` (filtered from ${allToolDefs.length})` : ''} docDiscussion=${isDocDiscussionTurn} maxTurns=${effectiveMaxTurns}`);
 
       // 2. Agent loop
-      for (let turn = 0; turn < maxTurns; turn++) {
+      for (let turn = 0; turn < effectiveMaxTurns; turn++) {
         const turnStart = Date.now();
         const turnToolStats: Array<{ name: string; durationMs: number; success: boolean }> = [];
-        onEvent?.({ type: 'status', message: `Turn ${turn + 1}...` });
+        const promptSize = messages.reduce((n, m) => n + (typeof m.content === 'string' ? m.content.length : 0), 0);
+        console.log(`[agent ${tid}] turn ${turn + 1} starting, promptChars=${promptSize}, docDiscussion=${isDocDiscussionTurn}`);
+        onEvent?.({ type: 'status', message: isDocDiscussionTurn ? `Generating summary… (${Math.round(promptSize / 1024)} KB context)` : `Turn ${turn + 1}...` });
 
         let response: import('./types.js').CompletionResponse;
         try {
@@ -466,12 +524,30 @@ export function createAgentOrchestrator(
 
         // 3. If no tool calls, the agent is done
         if (choice.finish_reason === 'stop' || !assistantMsg.tool_calls?.length) {
-          const result = parseAgentFinalResponse(
-            assistantMsg.content,
-            totalUsage,
-            turn + 1,
-            totalToolCalls,
-          );
+          // On a document-discussion turn the answer is plain text by
+          // design. Don't route it through parseAgentFinalResponse, which
+          // would demote prose to clarificationNeeded=false-success.
+          const docDiscussionContent = typeof assistantMsg.content === 'string' ? assistantMsg.content : '';
+          const docUsage = {
+            ...totalUsage,
+            totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+            turns: turn + 1,
+            toolCalls: totalToolCalls,
+          };
+          const result: AgentResult = isDocDiscussionTurn
+            ? docDiscussionContent.trim().length > 0
+              ? { success: true, clarificationNeeded: docDiscussionContent, events: [], usage: docUsage }
+              : {
+                  success: false,
+                  error: `Model returned an empty response (finish_reason=${choice.finish_reason ?? 'unknown'}). Try shortening the document or asking a more specific question.`,
+                  usage: docUsage,
+                }
+            : parseAgentFinalResponse(
+                assistantMsg.content,
+                totalUsage,
+                turn + 1,
+                totalToolCalls,
+              );
           const elapsed = Date.now() - t0;
           
           // Record final turn stats

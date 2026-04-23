@@ -46,6 +46,11 @@ export interface CompletionRequest {
   response_format?:
     | { type: 'json_object' }
     | { type: 'json_schema'; json_schema: { name: string; schema: Record<string, unknown>; strict?: boolean } };
+  /**
+   * Forwarded verbatim to vLLM / OpenAI-compatible endpoints that support
+   * chat-template kwargs (e.g. `{ enable_thinking: false }` on Qwen3).
+   */
+  chat_template_kwargs?: Record<string, unknown>;
 }
 
 export interface CompletionResponse {

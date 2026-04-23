@@ -87,8 +87,47 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
       request: FastifyRequest<{ Body: DraftEventsBody }>,
       reply: FastifyReply,
     ) {
-      const { prompt, context, history, attachments } = request.body;
       const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '*';
+      const contentType = request.headers['content-type'] ?? '';
+
+      let prompt: string;
+      let context: EditorContext;
+      let history: ConversationHistoryMessage[] | undefined;
+      let attachments: FileAttachment[] | undefined;
+
+      if (contentType.includes('multipart/form-data')) {
+        // Parse multipart form-data so the event-editor surface can send
+        // file uploads the same way other surfaces do.
+        const parts = request.parts();
+        const fields: Record<string, string> = {};
+        const files: UploadedFile[] = [];
+        for await (const part of parts) {
+          if (part.type === 'field') {
+            fields[part.fieldname] = part.value as string;
+          } else if (part.type === 'file') {
+            const chunks: Buffer[] = [];
+            for await (const chunk of part.file) chunks.push(chunk);
+            files.push({
+              originalName: part.filename ?? 'unknown',
+              mimeType: part.mimetype ?? 'application/octet-stream',
+              sizeBytes: Buffer.concat(chunks).length,
+              buffer: Buffer.concat(chunks),
+            });
+          }
+        }
+        prompt = fields['prompt'] ?? '';
+        context = fields['context'] ? JSON.parse(fields['context']) as EditorContext : ({} as EditorContext);
+        history = fields['history'] ? JSON.parse(fields['history']) as ConversationHistoryMessage[] : undefined;
+        attachments = files.length > 0
+          ? files.map((f) => ({ name: f.originalName, mime_type: f.mimeType, content: f.buffer }))
+          : undefined;
+      } else {
+        const body = request.body;
+        prompt = body.prompt;
+        context = body.context;
+        history = body.history;
+        attachments = body.attachments;
+      }
 
       reply.raw.writeHead(200, {
         'Content-Type': 'text/event-stream',

@@ -86,6 +86,8 @@ export interface InferenceConfig {
   timeoutMs?: number
   maxTokens?: number
   temperature?: number
+  /** When false, disables Qwen3-style thinking via `chat_template_kwargs.enable_thinking`. */
+  enableThinking?: boolean
 }
 
 export interface AgentConfig {

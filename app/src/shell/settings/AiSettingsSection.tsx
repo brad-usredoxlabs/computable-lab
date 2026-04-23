@@ -7,7 +7,7 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import { EditableSection, type SectionId } from './EditableSection'
-import { EditRow, SecretRow, SecretDisplay, InfoRow, resolveSecret, SelectRow } from './EditRow'
+import { EditRow, SecretRow, SecretDisplay, InfoRow, resolveSecret, SelectRow, CheckboxRow } from './EditRow'
 import type { AIConfig, AiRuntimeStatus, AiConnectionTestResponse, InferenceConfig } from '../../types/config'
 import { REDACTED } from '../../types/config'
 import { apiClient } from '../../shared/api/client'
@@ -53,6 +53,7 @@ function buildAiPatch(
   timeoutMs: string,
   maxTokens: string,
   temperature: string,
+  disableThinking: boolean,
   maxTurns: string,
   maxToolCalls: string,
 ) {
@@ -66,6 +67,7 @@ function buildAiPatch(
         timeoutMs: parseInt(timeoutMs, 10) || 120000,
         maxTokens: parseInt(maxTokens, 10) || 4096,
         temperature: parseFloat(temperature) || 0.1,
+        enableThinking: disableThinking ? false : undefined,
       },
       agent: {
         maxTurns: parseInt(maxTurns, 10) || 15,
@@ -98,6 +100,7 @@ export function AiSettingsSection({ ai, aiStatus, editingSection, onEditChange, 
   const [timeoutMs, setTimeoutMs] = useState(String(ai?.inference.timeoutMs ?? 120000))
   const [maxTokens, setMaxTokens] = useState(String(ai?.inference.maxTokens ?? 4096))
   const [temperature, setTemperature] = useState(String(ai?.inference.temperature ?? 0.1))
+  const [disableThinking, setDisableThinking] = useState(ai?.inference.enableThinking === false)
 
   // Agent fields
   const [maxTurns, setMaxTurns] = useState(String(ai?.agent?.maxTurns ?? 15))
@@ -138,6 +141,7 @@ export function AiSettingsSection({ ai, aiStatus, editingSection, onEditChange, 
     setTimeoutMs(String(ai?.inference.timeoutMs ?? 120000))
     setMaxTokens(String(ai?.inference.maxTokens ?? 4096))
     setTemperature(String(ai?.inference.temperature ?? 0.1))
+    setDisableThinking(ai?.inference.enableThinking === false)
     setMaxTurns(String(ai?.agent?.maxTurns ?? 15))
     setMaxToolCalls(String(ai?.agent?.maxToolCallsPerTurn ?? 5))
     setModelOptions([])
@@ -230,6 +234,7 @@ export function AiSettingsSection({ ai, aiStatus, editingSection, onEditChange, 
         timeoutMs,
         maxTokens,
         temperature,
+        disableThinking,
         maxTurns,
         maxToolCalls,
       ),
@@ -242,7 +247,7 @@ export function AiSettingsSection({ ai, aiStatus, editingSection, onEditChange, 
     }
     await refreshProfiles()
     return { ok: true, restartRequired: result.restartRequired }
-  }, [onSave, provider, baseUrl, model, customModel, apiKey, timeoutMs, maxTokens, temperature, maxTurns, maxToolCalls, testConnection, refreshProfiles])
+  }, [onSave, provider, baseUrl, model, customModel, apiKey, timeoutMs, maxTokens, temperature, disableThinking, maxTurns, maxToolCalls, testConnection, refreshProfiles])
 
   const handleSave = useCallback(async () => {
     await saveValidated()
@@ -286,6 +291,7 @@ export function AiSettingsSection({ ai, aiStatus, editingSection, onEditChange, 
           timeoutMs: parseInt(timeoutMs, 10) || 120000,
           maxTokens: parseInt(maxTokens, 10) || 4096,
           temperature: parseFloat(temperature) || 0.1,
+          ...(disableThinking ? { enableThinking: false } : {}),
         },
         agent: {
           maxTurns: parseInt(maxTurns, 10) || 15,
@@ -298,7 +304,7 @@ export function AiSettingsSection({ ai, aiStatus, editingSection, onEditChange, 
     } catch (err) {
       setFeedback({ type: 'error', message: err instanceof Error ? err.message : 'Failed to save profile' })
     }
-  }, [profileName, provider, baseUrl, model, customModel, apiKey, timeoutMs, maxTokens, temperature, maxTurns, maxToolCalls, refreshProfiles])
+  }, [profileName, provider, baseUrl, model, customModel, apiKey, timeoutMs, maxTokens, temperature, disableThinking, maxTurns, maxToolCalls, refreshProfiles])
 
   const handleActivateProfile = useCallback(async (name: string) => {
     setSwitchingProfile(true)
@@ -429,6 +435,7 @@ export function AiSettingsSection({ ai, aiStatus, editingSection, onEditChange, 
       <EditRow label="Timeout (ms)" value={timeoutMs} onChange={setTimeoutMs} type="number" />
       <EditRow label="Max Tokens" value={maxTokens} onChange={setMaxTokens} type="number" />
       <EditRow label="Temperature" value={temperature} onChange={setTemperature} type="number" />
+      <CheckboxRow label="Disable thinking" checked={disableThinking} onChange={setDisableThinking} />
       <EditRow label="Max Turns" value={maxTurns} onChange={setMaxTurns} type="number" />
       <EditRow label="Max Tool Calls" value={maxToolCalls} onChange={setMaxToolCalls} type="number" />
       <div style={{ borderTop: '1px solid #e9ecef', marginTop: '0.75rem', paddingTop: '0.75rem' }}>
@@ -572,6 +579,7 @@ export function AiSettingsSection({ ai, aiStatus, editingSection, onEditChange, 
             <InfoRow label="Timeout" value={`${ai.inference.timeoutMs ?? 120000}ms`} />
             <InfoRow label="Max Tokens" value={ai.inference.maxTokens ?? 4096} />
             <InfoRow label="Temperature" value={ai.inference.temperature ?? 0.1} />
+            <InfoRow label="Thinking" value={ai.inference.enableThinking === false ? 'Disabled' : 'Enabled (default)'} />
             <InfoRow label="Max Turns" value={ai?.agent?.maxTurns ?? 15} />
             <InfoRow label="Max Tool Calls" value={ai?.agent?.maxToolCallsPerTurn ?? 5} />
           </>

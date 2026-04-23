@@ -17,7 +17,7 @@ import type {
  * Create an inference client for the given config.
  */
 export function createInferenceClient(config: InferenceConfig): InferenceClient {
-  const { apiKey, timeoutMs = 120_000 } = config;
+  const { apiKey, timeoutMs = 120_000, enableThinking } = config;
   const baseUrl = normalizeBaseUrl(config.baseUrl);
 
   // Build common headers
@@ -32,12 +32,21 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
   // (gpt-4o, gpt-5.x, o-series require max_completion_tokens).
   // Most OpenAI-compatible providers accept both, but OpenAI rejects max_tokens
   // on newer models. Send max_completion_tokens universally for compatibility.
+  //
+  // When config.enableThinking === false, merge `enable_thinking: false` into
+  // chat_template_kwargs. Request-level values win on key collision so callers
+  // can still opt back in per-call if needed.
   function normalizeRequest(req: CompletionRequest): Record<string, unknown> {
-    const { max_tokens, ...rest } = req;
-    if (max_tokens != null) {
-      return { ...rest, max_completion_tokens: max_tokens };
-    }
-    return rest;
+    const { max_tokens, chat_template_kwargs, ...rest } = req;
+    const mergedKwargs =
+      enableThinking === false
+        ? { enable_thinking: false, ...(chat_template_kwargs ?? {}) }
+        : chat_template_kwargs;
+    return {
+      ...rest,
+      ...(max_tokens != null ? { max_completion_tokens: max_tokens } : {}),
+      ...(mergedKwargs ? { chat_template_kwargs: mergedKwargs } : {}),
+    };
   }
 
   return {
@@ -77,7 +86,7 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
         const res = await fetch(`${baseUrl}/chat/completions`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ ...normalizeRequest(request), stream: true }),
+          body: JSON.stringify({ ...normalizeRequest(request), stream: true, stream_options: { include_usage: true } }),
           signal: controller.signal,
         });
 
