@@ -1,21 +1,39 @@
 name: prompt-01-mint-samples
 description: >
-  96 anonymous fecal donor samples in Zymo DNA/RNA shield minted into
-  a 96-well deepwell plate on the target deck slot. Exercises
+  96 anonymous fecal donor samples in Zymo DNA/RNA shield minted
+  into a 96-well deepwell plate on the target deck slot. Exercises
   material minting fanout and labware placement.
 input:
   prompt: |
     Place a 96-well deepwell plate on the target destination and add
     fecal samples in Zymo DNA/RNA shield to all 96 wells. The samples
-    are from anonymous donors and can simply be numbered -96.
+    are from anonymous donors and can simply be numbered 1-96.
 mocked_ai_precompile_output:
   candidateEvents: []
   candidateLabwares:
-    - hint: "96-well deepwell plate"
+    - hint: "96-well-deepwell-plate"
       reason: "explicit placement on target destination"
+      deckSlot: "target"
   unresolvedRefs: []
+  mintMaterials:
+    - template: "fecal-sample"
+      count: 96
+      namingPattern: "FS_{n}"
+      placementLabwareHint: "96-well-deepwell-plate"
+      wellSpread: "all"
+      properties:
+        preservation: "Zymo DNA/RNA shield"
+        donor: "anonymous"
 expected:
   outcome: complete
   terminalArtifacts:
-    events: []
-    gaps: []
+    events:
+      - event_type: create_container
+        details:
+          labwareType: "96-well-deepwell-plate"
+          slot: "auto"
+    deckLayoutPlan:
+      pinned:
+        - slot: "target"
+          labwareHint: "96-well-deepwell-plate"
+      unassigned: []

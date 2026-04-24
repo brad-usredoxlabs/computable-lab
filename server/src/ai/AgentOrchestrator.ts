@@ -23,6 +23,7 @@ import type {
 import { buildSystemPrompt, buildSurfaceAwarePrompt } from './systemPrompt.js';
 import { resolveMentionsForPrompt, buildResolvedContextMessage } from './resolveMentions.js';
 import { runChatbotCompile } from './runChatbotCompile.js';
+import { getDefaultLabStateCache } from '../compiler/state/LabStateCache.js';
 import { decodeAttachmentText } from '../extract/decodeAttachment.js';
 import type { PlateEventPrimitive } from '../compiler/biology/BiologyVerbExpander.js';
 
@@ -213,6 +214,7 @@ export function createAgentOrchestrator(
           extractionService: deps.extractionService!,
           llmClient: deps.llmClient!,
           searchLabwareByHint: deps.searchLabwareByHint!,
+          labStateCache: getDefaultLabStateCache(),
         },
         ...(inferenceConfig.model ? { model: inferenceConfig.model } : {}),
       });

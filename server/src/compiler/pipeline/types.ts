@@ -15,7 +15,8 @@ export type PassFamily =
   | 'validate'
   | 'derive_context'
   | 'expand'
-  | 'project';
+  | 'project'
+  | 'emit';
 
 /**
  * A diagnostic message emitted by a pass during execution.

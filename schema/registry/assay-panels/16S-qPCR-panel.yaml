@@ -1,0 +1,31 @@
+id: 16S-qPCR-panel
+name: 16S gut microbiome qPCR panel
+description: >
+  qPCR panel for gut microbiome species quantification. Each
+  'quad' in a stamped 384-well plate has 4 wells: A1 is 16S
+  total bacteria positive control; A2, B1, B2 are multiplex
+  species wells. Species in A2/B1/B2 are quantified relative
+  to the 16S result in A1 of the same quad.
+panelConstraints:
+  edgeExclusion: false
+channelMaps:
+  A2:
+    FAM: F.prausnitzii
+    CY5: R.bromii
+    VIC: E.rectale
+    ABY: P.copri
+  B1:
+    FAM: speciesB1_FAM_placeholder
+    CY5: speciesB1_CY5_placeholder
+    VIC: speciesB1_VIC_placeholder
+    ABY: speciesB1_ABY_placeholder
+  B2:
+    FAM: speciesB2_FAM_placeholder
+    CY5: speciesB2_CY5_placeholder
+    VIC: speciesB2_VIC_placeholder
+    ABY: speciesB2_ABY_placeholder
+analysisRules:
+  - kind: normalize_to
+    params:
+      reference_well: A1
+      reference_target: 16S

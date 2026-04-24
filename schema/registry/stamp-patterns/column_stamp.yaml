@@ -1,0 +1,12 @@
+id: column_stamp
+name: Column stamp
+description: >
+  Stamp a single column of a plate. Input is 1 column (N rows);
+  output is 1 column in a destination plate. Simple 1:1 mapping.
+inputTopology:
+  rows: 8
+  cols: 1
+outputTopology:
+  rows: 8
+  cols: 1
+perPositionFields: []

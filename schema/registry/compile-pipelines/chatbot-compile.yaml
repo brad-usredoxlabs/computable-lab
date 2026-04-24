@@ -15,6 +15,11 @@ passes:
     depends_on: [extract_entities]
     description: LLM-backed pass that turns prompt + extracted entities into candidate events, candidate labwares, and unresolved refs.
 
+  - id: mint_materials
+    family: expand
+    depends_on: [ai_precompile]
+    description: Expand mintMaterials directives into create_container + add_material events.
+
   - id: expand_biology_verbs
     family: expand
     depends_on: [ai_precompile]
@@ -24,3 +29,23 @@ passes:
     family: disambiguate
     depends_on: [ai_precompile]
     description: Resolve labware hints to existing labware-instance records via searchLabwareByHint; emit AiLabwareAddition entries for unmatched hints.
+
+  - id: resolve_references
+    family: disambiguate
+    depends_on: [ai_precompile]
+    description: Resolve named references (protocol, assay, pattern, compound-class) against their registries.
+
+  - id: resolve_prior_labware_references
+    family: disambiguate
+    depends_on: [ai_precompile]
+    description: Resolve priorLabwareRefs against the priorLabState snapshot.
+
+  - id: expand_protocol
+    family: expand
+    depends_on: [resolve_references]
+    description: Unroll resolved protocol refs into primitive events using step graph + parameter bindings.
+
+  - id: lab_state
+    family: emit
+    depends_on: [expand_biology_verbs]
+    description: Fold expanded events over prior lab-state snapshot and emit labStateDelta.

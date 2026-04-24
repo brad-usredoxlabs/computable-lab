@@ -265,7 +265,25 @@ export const transfectExpander: BiologyVerbExpander = {
   },
 };
 
-// Register all 13 expanders at module import time
+/**
+ * create_container: single create_container event.
+ */
+export const createContainerExpander: BiologyVerbExpander = {
+  verb: 'create_container',
+  expand(input) {
+    const { params } = input;
+    return [{
+      eventId: makeEventId('create_container'),
+      event_type: 'create_container',
+      details: {
+        slot: params.slot as string | undefined ?? 'target',
+        labwareType: params.labwareType as string | undefined ?? params.labware_type as string | undefined ?? '96-well-plate',
+      },
+    }];
+  },
+};
+
+// Register all expanders at module import time
 registerVerbExpander(seedExpander);
 registerVerbExpander(incubateExpander);
 registerVerbExpander(mixExpander);
@@ -279,3 +297,4 @@ registerVerbExpander(blockExpander);
 registerVerbExpander(quenchExpander);
 registerVerbExpander(labelExpander);
 registerVerbExpander(transfectExpander);
+registerVerbExpander(createContainerExpander);

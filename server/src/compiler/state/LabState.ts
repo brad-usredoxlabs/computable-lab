@@ -114,12 +114,16 @@ function applyCreateContainer(
     return snapshot;
   }
 
-  const instanceId = `LWI-${snapshot.mintCounter + 1}`;
+  // Use explicit instanceId from event details if provided, otherwise auto-generate
+  const explicitInstanceId = details.instanceId as string | undefined;
+  const instanceId = explicitInstanceId ?? `LWI-${snapshot.mintCounter + 1}`;
 
   const newSnapshot = cloneSnapshot(snapshot);
 
-  // Update mintCounter
-  newSnapshot.mintCounter += 1;
+  // Update mintCounter (only when auto-generating)
+  if (!explicitInstanceId) {
+    newSnapshot.mintCounter += 1;
+  }
 
   // Add labware instance
   newSnapshot.labware[instanceId] = {

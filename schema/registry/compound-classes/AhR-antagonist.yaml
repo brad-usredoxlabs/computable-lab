@@ -1,0 +1,8 @@
+id: AhR-antagonist
+name: AhR antagonist
+description: Aryl hydrocarbon receptor antagonists.
+candidates:
+  - compoundId: CH-223191
+    name: CH-223191
+  - compoundId: SR1
+    name: StemRegenin 1

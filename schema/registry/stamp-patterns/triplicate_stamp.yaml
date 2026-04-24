@@ -1,0 +1,12 @@
+id: triplicate_stamp
+name: Triplicate stamp
+description: >
+  Source column of 8 rows is stamped 3 times into 3 adjacent
+  columns of the destination (same treatment applied to 3 columns).
+inputTopology:
+  rows: 8
+  cols: 1
+outputTopology:
+  rows: 8
+  cols: 3
+perPositionFields: []

@@ -16,6 +16,9 @@ import {
   createLabwareResolvePass,
   type CreateLabwareResolvePassDeps,
   type LabwareResolveOutput,
+  createMintMaterialsPass,
+  type MintMaterialsDirective,
+  type MintMaterialsPassOutput,
 } from './ChatbotCompilePasses.js';
 import type { PipelineState } from '../types.js';
 import type { CompletionRequest } from '../../../ai/types.js';
@@ -700,5 +703,133 @@ describe('createLabwareResolvePass', () => {
     expect(output.labwareAdditions).toHaveLength(1); // Only the valid hint
     expect(mockSearchLabwareByHint).toHaveBeenCalledTimes(1);
     expect(mockSearchLabwareByHint).toHaveBeenCalledWith('valid plate');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createMintMaterialsPass tests
+// ---------------------------------------------------------------------------
+
+describe('createMintMaterialsPass', () => {
+  it('empty mintMaterials produces empty events', () => {
+    const pass = createMintMaterialsPass();
+
+    const mockState: PipelineState = {
+      input: {},
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['ai_precompile', { mintMaterials: [] }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'mint_materials',
+      state: mockState,
+    });
+
+    const syncResult = result as { ok: boolean; output: MintMaterialsPassOutput };
+    expect(syncResult.ok).toBe(true);
+    expect(syncResult.output.events).toHaveLength(0);
+  });
+
+  it('no mintMaterials field produces empty events', () => {
+    const pass = createMintMaterialsPass();
+
+    const mockState: PipelineState = {
+      input: {},
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['ai_precompile', {}],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'mint_materials',
+      state: mockState,
+    });
+
+    const syncResult = result as { ok: boolean; output: MintMaterialsPassOutput };
+    expect(syncResult.ok).toBe(true);
+    expect(syncResult.output.events).toHaveLength(0);
+  });
+
+  it('96 samples minted produces 1 create_container + 96 add_material events', () => {
+    const pass = createMintMaterialsPass();
+
+    const directive: MintMaterialsDirective = {
+      template: 'fecal-sample',
+      count: 96,
+      namingPattern: 'FS_{n}',
+      placementLabwareHint: '96-well-deepwell-plate',
+      wellSpread: 'all',
+    };
+
+    const mockState: PipelineState = {
+      input: {},
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['ai_precompile', { mintMaterials: [directive] }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'mint_materials',
+      state: mockState,
+    });
+
+    const syncResult = result as { ok: boolean; output: MintMaterialsPassOutput };
+    expect(syncResult.ok).toBe(true);
+    const events = syncResult.output.events;
+    expect(events).toHaveLength(97); // 1 create_container + 96 add_material
+
+    // Verify create_container
+    const createContainerEvents = events.filter(
+      (e) => (e as { event_type: string }).event_type === 'create_container',
+    );
+    expect(createContainerEvents).toHaveLength(1);
+    expect(createContainerEvents[0].event_type).toBe('create_container');
+    expect(createContainerEvents[0].details).toMatchObject({
+      labwareType: '96-well-deepwell-plate',
+    });
+
+    // Verify add_material events
+    const addMaterialEvents = events.filter(
+      (e) => (e as { event_type: string }).event_type === 'add_material',
+    );
+    expect(addMaterialEvents).toHaveLength(96);
+
+    // Verify materialIds are FS_1 through FS_96
+    const materialIds = addMaterialEvents.map(
+      (e) => (e as { details: { material: { materialId: string } } }).details.material.materialId,
+    );
+    for (let i = 1; i <= 96; i++) {
+      expect(materialIds).toContain(`FS_${i}`);
+    }
+
+    // Verify destination wells cover A1..H12
+    const wells = new Set(
+      addMaterialEvents.map(
+        (e) => (e as { details: { well: string } }).details.well,
+      ),
+    );
+    const expectedWells = new Set<string>();
+    for (let row = 0; row < 8; row++) {
+      for (let col = 1; col <= 12; col++) {
+        expectedWells.add(`${String.fromCharCode(65 + row)}${col}`);
+      }
+    }
+    expect(wells).toEqual(expectedWells);
+  });
+
+  it('pass id is mint_materials and family is expand', () => {
+    const pass = createMintMaterialsPass();
+    expect(pass.id).toBe('mint_materials');
+    expect(pass.family).toBe('expand');
   });
 });

@@ -1,0 +1,6 @@
+id: PPARa-antagonist
+name: PPARa antagonist
+description: Peroxisome proliferator-activated receptor alpha antagonists.
+candidates:
+  - compoundId: GW6471
+    name: GW6471

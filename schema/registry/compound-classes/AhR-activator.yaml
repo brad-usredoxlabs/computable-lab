@@ -1,0 +1,13 @@
+id: AhR-activator
+name: AhR activator
+description: Aryl hydrocarbon receptor agonists.
+candidates:
+  - compoundId: TCDD
+    name: 2,3,7,8-Tetrachlorodibenzo-p-dioxin
+    notes: Potent AhR agonist; handling restricted.
+  - compoundId: FICZ
+    name: 6-Formylindolo[3,2-b]carbazole
+  - compoundId: ITE
+    name: 2-(1'H-indole-3'-carbonyl)-thiazole-4-carboxylic acid methyl ester
+  - compoundId: L-kynurenine
+    name: L-Kynurenine

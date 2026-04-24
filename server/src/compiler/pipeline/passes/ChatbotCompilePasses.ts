@@ -10,6 +10,13 @@ import type { ExtractionRunnerService, RunExtractionServiceArgs } from '../../..
 import type { ExtractionDraftBody } from '../../../extract/ExtractionDraftBuilder.js';
 import type { ChatMessage, CompletionRequest } from '../../../ai/types.js';
 import { decodeAttachmentText } from '../../../extract/decodeAttachment.js';
+import type { RegistryLoader } from '../../../registry/RegistryLoader.js';
+import type { ProtocolSpec } from '../../../registry/ProtocolSpecRegistry.js';
+import type { AssaySpec } from '../../../registry/AssaySpecRegistry.js';
+import type { StampPatternSpec } from '../../../registry/StampPatternRegistry.js';
+import type { CompoundClass } from '../../../registry/CompoundClassRegistry.js';
+import type { LabStateSnapshot } from '../../../compiler/state/LabState.js';
+import { applyEventToLabState, emptyLabState } from '../../../compiler/state/LabState.js';
 
 /**
  * An entity extracted from a prompt or attachment.
@@ -220,13 +227,55 @@ export interface LlmClient {
 }
 
 /**
+ * A directive to mint new material records at once.
+ */
+export interface MintMaterialsDirective {
+  template: string;                          // e.g. 'fecal-sample'
+  count: number;                             // e.g. 96
+  namingPattern: string;                     // e.g. 'FS_{n}' where {n} is 1..count
+  placementLabwareHint?: string;             // e.g. '96-well-deepwell-plate'
+  wellSpread?: 'all' | 'first-row' | 'explicit';  // default 'all'
+  wellList?: string[];                       // when wellSpread === 'explicit'
+  properties?: Record<string, unknown>;
+}
+
+/**
+ * A candidate labware hint from ai_precompile.
+ */
+export interface CandidateLabware {
+  hint: string;
+  reason?: string;
+  deckSlot?: string;   // e.g. 'target', 'C1', 'D1'
+}
+
+/**
+ * A reference to a labware that already exists in the lab (from a prior turn).
+ */
+export interface PriorLabwareRef {
+  hint: string;           // original user text, e.g. "96-well deepwell plate of fecal samples"
+  kindHint?: string;      // e.g. '96-well deepwell plate'
+  contentHint?: string;   // e.g. 'fecal samples', 'binding buffer'
+}
+
+/**
+ * A labware addition patch produced by resolve_labware.
+ */
+export interface AiLabwareAdditionPatch {
+  recordId: string;
+  reason: string;
+  deckSlot?: string;   // carried through from candidateLabwares
+}
+
+/**
  * Output shape for the ai_precompile pass.
  */
 export interface AiPrecompileOutput {
   candidateEvents: Array<{ verb: string; [key: string]: unknown }>;
-  candidateLabwares: Array<{ hint: string; reason?: string }>;
+  candidateLabwares: CandidateLabware[];
   unresolvedRefs: Array<{ kind: string; label: string; reason: string }>;
   clarification?: string;
+  mintMaterials?: MintMaterialsDirective[];
+  priorLabwareRefs?: PriorLabwareRef[];   // references to labware that already exists
 }
 
 /**
@@ -240,9 +289,10 @@ Your job: emit a STRICT JSON object of this shape and NOTHING ELSE (no prose, no
 
 {
   "candidateEvents": [{"verb": "seed" | "incubate" | "harvest" | "aliquot" | "wash" | "elute" | "resuspend" | "pellet" | "dilute" | "mix" | "stain" | "fix" | "permeabilize" | "block" | "quench" | "count" | "passage" | "freeze" | "thaw" | "spin" | "label" | "transfect" | "add_material" | "transfer" | "read", ...params per verb}],
-  "candidateLabwares": [{"hint": "<labware description>", "reason": "<why user needs this>"}],
+  "candidateLabwares": [{"hint": "<labware description>", "reason": "<why user needs this>", "deckSlot": "<optional deck position>"}],
   "unresolvedRefs": [{"kind": "material"|"labware"|"operator"|"other", "label": "<raw text>", "reason": "<why unresolved>"}],
-  "clarification": "<optional clarifying question for the user if the intent is ambiguous>"
+  "clarification": "<optional clarifying question for the user if the intent is ambiguous>",
+  "priorLabwareRefs": [{"hint": "<original user text>", "kindHint": "<labware type in words>", "contentHint": "<materials inside, if mentioned>"}]
 }
 
 Rules:
@@ -251,7 +301,26 @@ Rules:
 - If a material is referenced but unclear (e.g. "HeLa cells"), add it to unresolvedRefs.
 - Volumes, concentrations, counts: include as params on the relevant event.
 - If the prompt is too ambiguous to emit events at all, return empty arrays and set clarification.
-- Output MUST be valid JSON.`;
+- Output MUST be valid JSON.
+
+When the user specifies a deck slot for a labware (e.g. "on the target destination", "at position C1"), include deckSlot on that candidateLabwares entry. Slot strings are free-form — typical values are 'target', 'source', 'A1'..'D4', or user-supplied labels.
+
+When the user asks to mint a number of new material records at
+once (e.g. "add 96 fecal samples numbered 1-96"), add an entry
+to mintMaterials instead of emitting 96 separate add_material
+events. Required fields: template (kind tag), count (integer),
+namingPattern (string with {n} placeholder where n is 1..count).
+Optional: placementLabwareHint (use if they specify a destination
+labware), wellSpread ('all' fills every well left-to-right,
+top-to-bottom; 'first-row' fills only the first row; 'explicit'
+uses wellList), properties (extra metadata per material).
+
+When the user references a labware that already exists in the lab
+(e.g. "we already have a 96-well deepwell plate of fecal samples",
+"that PCR plate we made", "use that plate"), add an entry to
+priorLabwareRefs instead of treating it as a new candidateLabware.
+Include kindHint (labware type in words, e.g. "96-well deepwell plate")
+and contentHint (materials inside, if mentioned, e.g. "fecal samples").`;
 
 /**
  * Dependencies for creating the ai_precompile pass.
@@ -306,6 +375,8 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
         candidateLabwares: Array.isArray(parsed.candidateLabwares) ? parsed.candidateLabwares : [],
         unresolvedRefs: Array.isArray(parsed.unresolvedRefs) ? parsed.unresolvedRefs : [],
         ...(typeof parsed.clarification === 'string' ? { clarification: parsed.clarification } : {}),
+        ...(Array.isArray(parsed.mintMaterials) ? { mintMaterials: parsed.mintMaterials } : {}),
+        ...(Array.isArray(parsed.priorLabwareRefs) ? { priorLabwareRefs: parsed.priorLabwareRefs } : {}),
       };
       return { ok: true, output };
     },
@@ -319,6 +390,139 @@ import { getExpander, type PlateEventPrimitive } from '../../biology/BiologyVerb
 import '../../biology/verbs/simpleVerbs.js';
 import '../../biology/verbs/compoundVerbs.js';
 import '../../biology/verbs/centrifugeVerbs.js';
+
+// ---------------------------------------------------------------------------
+// resolve_prior_labware_references pass
+// ---------------------------------------------------------------------------
+
+/**
+ * A labware reference that was successfully resolved against a prior snapshot.
+ */
+export interface ResolvedLabwareRef {
+  hint: string;
+  matched: { instanceId: string; labwareType: string };
+}
+
+/**
+ * A labware reference that could not be resolved.
+ */
+export interface UnresolvedLabwareRef {
+  hint: string;
+  reason: string;
+}
+
+/**
+ * Output shape for the resolve_prior_labware_references pass.
+ */
+export interface ResolvePriorLabwareReferencesOutput {
+  resolvedLabwareRefs: ResolvedLabwareRef[];
+  unresolved: UnresolvedLabwareRef[];
+}
+
+/**
+ * Simple heuristic: match a PriorLabwareRef against labware in a snapshot.
+ * Uses kindHint (labwareType substring/token overlap) and contentHint
+ * (material kind substring) to find the best match.
+ */
+function findLabwareByHints(
+  snapshot: LabStateSnapshot,
+  ref: PriorLabwareRef,
+): { instanceId: string; labwareType: string } | undefined {
+  for (const instance of Object.values(snapshot.labware)) {
+    // Match by labwareType substring (case-insensitive) against kindHint.
+    if (ref.kindHint) {
+      const normalizedKindHint = ref.kindHint.toLowerCase().replace(/[\s-]/g, '');
+      const normalizedType = instance.labwareType.toLowerCase().replace(/[\s-]/g, '');
+      if (normalizedType.includes(normalizedKindHint)) {
+        // Strong substring match — also check contentHint if present
+        if (ref.contentHint) {
+          const materials = Object.values(instance.wells).flat();
+          const firstWord = ref.contentHint!.toLowerCase().split(/\s+/)[0];
+          const anyMatch = materials.some(
+            m => (m.kind ?? '').toLowerCase().includes(firstWord),
+          );
+          if (anyMatch) {
+            return { instanceId: instance.instanceId, labwareType: instance.labwareType };
+          }
+        } else {
+          return { instanceId: instance.instanceId, labwareType: instance.labwareType };
+        }
+      } else {
+        // Fallback: split on non-alpha and check token overlap.
+        const wantTokens = ref.kindHint.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+        const haveTokens = instance.labwareType.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+        const overlap = wantTokens.filter(t => haveTokens.includes(t)).length;
+        if (overlap >= 2) {
+          // Token overlap sufficient — also check contentHint if present
+          if (ref.contentHint) {
+            const materials = Object.values(instance.wells).flat();
+            const firstWord = ref.contentHint!.toLowerCase().split(/\s+/)[0];
+            const anyMatch = materials.some(
+              m => (m.kind ?? '').toLowerCase().includes(firstWord),
+            );
+            if (anyMatch) {
+              return { instanceId: instance.instanceId, labwareType: instance.labwareType };
+            }
+          } else {
+            return { instanceId: instance.instanceId, labwareType: instance.labwareType };
+          }
+        }
+      }
+    }
+    // If no kindHint, try contentHint only.
+    if (ref.contentHint) {
+      const materials = Object.values(instance.wells).flat();
+      const firstWord = ref.contentHint.toLowerCase().split(/\s+/)[0];
+      const anyMatch = materials.some(
+        m => (m.kind ?? '').toLowerCase().includes(firstWord),
+      );
+      if (anyMatch) {
+        return { instanceId: instance.instanceId, labwareType: instance.labwareType };
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Creates the resolve_prior_labware_references pass that resolves
+ * priorLabwareRefs against the prior lab-state snapshot.
+ *
+ * This pass:
+ * - Reads priorLabwareRefs from state.outputs.get('ai_precompile')
+ * - Reads prior labState from state.input.labState
+ * - For each ref, tries to match against labware in the snapshot
+ * - Emits resolvedLabwareRefs[] for matches, unresolved[] for gaps
+ */
+export function createResolvePriorLabwareReferencesPass(): Pass {
+  return {
+    id: 'resolve_prior_labware_references',
+    family: 'disambiguate' as const,
+    run({ pass_id, state }: PassRunArgs): PassResult {
+      const ai = state.outputs.get('ai_precompile') as
+        { priorLabwareRefs?: PriorLabwareRef[] } | undefined;
+      const refs = ai?.priorLabwareRefs ?? [];
+      const prior = (state.input as { labState?: LabStateSnapshot }).labState
+        ?? emptyLabState();
+      const resolved: ResolvedLabwareRef[] = [];
+      const gaps: UnresolvedLabwareRef[] = [];
+
+      for (const ref of refs) {
+        const match = findLabwareByHints(prior, ref);
+        if (match) {
+          resolved.push({ hint: ref.hint, matched: match });
+        } else {
+          gaps.push({ hint: ref.hint, reason: 'no matching labware in prior snapshot' });
+        }
+      }
+
+      return {
+        ok: true,
+        output: { resolvedLabwareRefs: resolved, unresolved: gaps } satisfies ResolvePriorLabwareReferencesOutput,
+      };
+    },
+  };
+}
 
 /**
  * Creates the expand_biology_verbs pass that lowers high-level biology verbs
@@ -362,12 +566,339 @@ export function createExpandBiologyVerbsPass(): Pass {
   };
 }
 
+// ---------------------------------------------------------------------------
+// resolve_references pass
+// ---------------------------------------------------------------------------
+
 /**
- * A proposed labware addition that couldn't be resolved to an existing instance.
+ * A reference that was successfully resolved against a registry.
  */
-export interface AiLabwareAdditionPatch {
-  recordId: string;
-  reason?: string;
+export interface ResolvedReference {
+  kind: string;
+  label: string;
+  resolvedId: string;
+  resolvedName?: string;
+}
+
+/**
+ * A reference that could not be resolved.
+ */
+export interface UnresolvedReference {
+  kind: string;
+  label: string;
+  reason: string;
+  candidates?: unknown[];
+}
+
+/**
+ * Output shape for the resolve_references pass.
+ */
+export interface ResolveReferencesOutput {
+  resolvedRefs: ResolvedReference[];
+  unresolvableRefs: UnresolvedReference[];
+}
+
+/**
+ * Dependencies for creating the resolve_references pass.
+ */
+export interface CreateResolveReferencesPassDeps {
+  protocolRegistry: RegistryLoader<ProtocolSpec>;
+  assayRegistry: RegistryLoader<AssaySpec>;
+  stampPatternRegistry: RegistryLoader<StampPatternSpec>;
+  compoundClassRegistry: RegistryLoader<CompoundClass>;
+}
+
+/**
+ * Simple fuzzy match: case-insensitive, strips non-alphanumeric chars,
+ * returns true if either string contains the other.
+ */
+function fuzzyMatch(haystack: string, needle: string): boolean {
+  const h = haystack.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const n = needle.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  return h.includes(n) || n.includes(h);
+}
+
+/**
+ * Creates the resolve_references pass that dispatches unresolved refs
+ * from ai_precompile to the appropriate registry for lookup.
+ *
+ * This pass:
+ * - Reads unresolvedRefs from state.outputs.get('ai_precompile')
+ * - Dispatches each ref by kind to the correct registry
+ * - Returns resolvedRefs[] and unresolvableRefs[]
+ * - For compound-class with >1 candidates, emits a gap (not auto-pick)
+ */
+export function createResolveReferencesPass(
+  deps: CreateResolveReferencesPassDeps,
+): Pass {
+  return {
+    id: 'resolve_references',
+    family: 'disambiguate' as const,
+    run({ pass_id, state }: PassRunArgs): PassResult {
+      const ai = state.outputs.get('ai_precompile') as
+        { unresolvedRefs?: Array<{ kind: string; label: string; reason: string }> } | undefined;
+      const refs = ai?.unresolvedRefs ?? [];
+      const resolved: ResolvedReference[] = [];
+      const unresolvable: UnresolvedReference[] = [];
+
+      for (const ref of refs) {
+        switch (ref.kind) {
+          case 'protocol': {
+            const found = deps.protocolRegistry.list().find(
+              p => fuzzyMatch(p.name, ref.label) || p.id === ref.label,
+            );
+            if (found) {
+              resolved.push({
+                kind: ref.kind,
+                label: ref.label,
+                resolvedId: found.id,
+                resolvedName: found.name,
+              });
+            } else {
+              unresolvable.push({ ...ref, reason: 'no matching protocol-spec' });
+            }
+            break;
+          }
+          case 'assay': {
+            const found = deps.assayRegistry.list().find(
+              a => fuzzyMatch(a.name, ref.label) || a.id === ref.label,
+            );
+            if (found) {
+              resolved.push({
+                kind: ref.kind,
+                label: ref.label,
+                resolvedId: found.id,
+                resolvedName: found.name,
+              });
+            } else {
+              unresolvable.push({ ...ref, reason: 'no matching assay-spec' });
+            }
+            break;
+          }
+          case 'pattern': {
+            const found =
+              deps.stampPatternRegistry.get(ref.label) ??
+              deps.stampPatternRegistry.list().find(
+                p => fuzzyMatch(p.name, ref.label),
+              );
+            if (found) {
+              resolved.push({
+                kind: ref.kind,
+                label: ref.label,
+                resolvedId: found.id,
+                resolvedName: found.name,
+              });
+            } else {
+              unresolvable.push({ ...ref, reason: 'no matching stamp-pattern' });
+            }
+            break;
+          }
+          case 'compound-class': {
+            const found = deps.compoundClassRegistry.list().find(
+              c => fuzzyMatch(c.name, ref.label) || c.id === ref.label,
+            );
+            if (!found) {
+              unresolvable.push({ ...ref, reason: 'no matching compound-class' });
+              break;
+            }
+            if (found.candidates.length === 1) {
+              resolved.push({
+                kind: ref.kind,
+                label: ref.label,
+                resolvedId: found.candidates[0].compoundId,
+                resolvedName: found.candidates[0].name,
+              });
+            } else {
+              unresolvable.push({
+                ...ref,
+                reason: `compound-class has ${found.candidates.length} candidates; pick one`,
+                candidates: found.candidates,
+              });
+            }
+            break;
+          }
+          default:
+            // labware, material, other — not handled here (spec-014 for labware)
+            unresolvable.push({
+              ...ref,
+              reason: `kind ${ref.kind} not handled by resolve_references`,
+            });
+        }
+      }
+
+      return {
+        ok: true,
+        output: { resolvedRefs: resolved, unresolvableRefs: unresolvable } satisfies ResolveReferencesOutput,
+      };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// expand_protocol pass
+// ---------------------------------------------------------------------------
+
+/**
+ * Output shape for the expand_protocol pass.
+ */
+export interface ExpandProtocolOutput {
+  events: PlateEventPrimitive[];
+  stepsExpanded: number;
+}
+
+/**
+ * Dependencies for creating the expand_protocol pass.
+ */
+export interface CreateExpandProtocolPassDeps {
+  protocolRegistry: RegistryLoader<ProtocolSpec>;
+}
+
+/**
+ * Creates the expand_protocol pass that unrolls resolved protocol-specs
+ * into primitive PlateEventPrimitive events.
+ *
+ * This pass:
+ * - Reads resolvedRefs from state.outputs.get('resolve_references')
+ * - Filters for kind === 'protocol'
+ * - For each resolved protocol, looks up the spec from the registry
+ * - Finds the matching run_protocol invocation in ai_precompile's candidateEvents
+ * - Substitutes {{key}} placeholders in step params from invocation bindings
+ * - Emits one PlateEventPrimitive per step with the mapped event_type
+ * - Unresolved placeholders produce warning diagnostics (not errors)
+ */
+export function createExpandProtocolPass(
+  deps: CreateExpandProtocolPassDeps,
+): Pass {
+  return {
+    id: 'expand_protocol',
+    family: 'expand' as const,
+    run({ pass_id, state }: PassRunArgs): PassResult {
+      const resolvedRefs = (
+        state.outputs.get('resolve_references') as
+          { resolvedRefs?: ResolvedReference[] } | undefined
+      )?.resolvedRefs ?? [];
+      const protocolRefs = resolvedRefs.filter(r => r.kind === 'protocol');
+
+      const ai = state.outputs.get('ai_precompile') as
+        { candidateEvents?: Array<{ verb: string; [k: string]: unknown }> } | undefined;
+      const candidateEvents = ai?.candidateEvents ?? [];
+
+      const emitted: PlateEventPrimitive[] = [];
+      const diagnostics: PassDiagnostic[] = [];
+      let stepsExpanded = 0;
+
+      for (const ref of protocolRefs) {
+        const spec = deps.protocolRegistry.get(ref.resolvedId);
+        if (!spec) {
+          diagnostics.push({
+            severity: 'warning',
+            code: 'protocol_not_found',
+            message: `Protocol ${ref.resolvedId} resolved but not findable`,
+            pass_id,
+          });
+          continue;
+        }
+
+        // Find the run_protocol invocation in candidateEvents that refers to this ref
+        const invocation = candidateEvents.find(
+          e =>
+            e.verb === 'run_protocol' &&
+            (e.protocolRef === ref.label || e.protocolRef === ref.resolvedId),
+        );
+        const bindings = (invocation?.bindings as Record<string, string> | undefined) ?? {};
+
+        for (const step of spec.steps) {
+          const substituted = substituteParams(
+            step.params,
+            bindings,
+            diagnostics,
+            pass_id,
+          );
+          emitted.push({
+            eventId: `pe_proto_${ref.resolvedId}_${step.step}`,
+            event_type: mapProtocolVerbToEventType(step.verb),
+            details: {
+              protocolStepNumber: step.step,
+              protocolId: ref.resolvedId,
+              ...substituted,
+            },
+          });
+          stepsExpanded++;
+        }
+      }
+
+      return { ok: true, output: { events: emitted, stepsExpanded }, diagnostics };
+    },
+  };
+}
+
+/**
+ * Substitute {{key}} placeholders in step params with values from bindings.
+ * Unresolved placeholders produce a warning diagnostic and are set to null.
+ */
+function substituteParams(
+  params: Record<string, unknown>,
+  bindings: Record<string, string>,
+  diagnostics: PassDiagnostic[],
+  pass_id: string,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (typeof v !== 'string') {
+      out[k] = v;
+      continue;
+    }
+    const match = v.match(/^\{\{([^}]+)\}\}$/);
+    if (!match) {
+      out[k] = v;
+      continue;
+    }
+    const key = match[1].trim();
+    // Try exact key first, then fall back to the last segment after '.'
+    const resolved =
+      bindings[key] ?? bindings[key.split('.').pop() ?? ''];
+    if (resolved === undefined) {
+      diagnostics.push({
+        severity: 'warning',
+        code: 'unresolved_placeholder',
+        message: `Unresolved placeholder: {{${key}}}`,
+        pass_id,
+      });
+      out[k] = null;
+    } else {
+      out[k] = resolved;
+    }
+  }
+  return out;
+}
+
+/**
+ * Map a protocol step verb to a PlateEventPrimitive event_type.
+ * Falls back to 'transfer' for unmapped verbs.
+ */
+function mapProtocolVerbToEventType(
+  verb: string,
+): PlateEventPrimitive['event_type'] {
+  switch (verb) {
+    case 'add_material':
+      return 'add_material';
+    case 'transfer':
+    case 'aliquot':
+    case 'wash':
+    case 'elute':
+      return 'transfer';
+    case 'mix':
+      return 'mix';
+    case 'incubate':
+      return 'incubate';
+    case 'read':
+      return 'read';
+    case 'spin':
+    case 'pellet':
+      return 'centrifuge';
+    default:
+      return 'transfer'; // fallback
+  }
 }
 
 /**
@@ -403,6 +934,7 @@ export interface CreateLabwareResolvePassDeps {
  *   (a) if one match → adds to resolvedLabwares with {hint, recordId, title}
  *   (b) if >1 matches → adds to resolvedLabwares with the top match AND emits an 'ambiguous_labware_hint' info diagnostic
  *   (c) if zero matches → emits an AiLabwareAddition {recordId: hint, reason: 'proposed from prompt'} in labwareAdditions
+ * - Carries deckSlot from candidateLabwares through to labwareAdditions
  * - Output shape: { labwareAdditions, resolvedLabwares }
  */
 export function createLabwareResolvePass(
@@ -412,7 +944,7 @@ export function createLabwareResolvePass(
     id: 'resolve_labware',
     family: 'disambiguate' as const,
     async run({ pass_id, state }: PassRunArgs): Promise<PassResult> {
-      const ai = state.outputs.get('ai_precompile') as { candidateLabwares?: Array<{ hint: string; reason?: string }> } | undefined;
+      const ai = state.outputs.get('ai_precompile') as { candidateLabwares?: CandidateLabware[] } | undefined;
       const candidates = ai?.candidateLabwares ?? [];
       const labwareAdditions: AiLabwareAdditionPatch[] = [];
       const resolvedLabwares: ResolvedLabware[] = [];
@@ -429,6 +961,7 @@ export function createLabwareResolvePass(
           labwareAdditions.push({
             recordId: hint,
             ...(cand.reason ? { reason: cand.reason } : { reason: 'proposed from prompt' }),
+            ...(cand.deckSlot ? { deckSlot: cand.deckSlot } : {}),
           });
         } else if (matches.length === 1) {
           // One match: resolve directly
@@ -455,6 +988,147 @@ export function createLabwareResolvePass(
         output: { labwareAdditions, resolvedLabwares } satisfies LabwareResolveOutput,
         diagnostics,
       };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// lab_state pass
+// ---------------------------------------------------------------------------
+
+/**
+ * Output shape for the lab_state pass.
+ */
+export interface LabStatePassOutput {
+  events: PlateEventPrimitive[];
+  snapshotAfter: LabStateSnapshot;
+}
+
+/**
+ * Creates the lab_state pass that folds expanded events over the prior
+ * lab-state snapshot and emits the updated state.
+ *
+ * This pass:
+ * - Reads prior labState from state.input.labState (defaults to emptyLabState)
+ * - Reads events from state.outputs.get('mint_materials') and state.outputs.get('expand_biology_verbs')
+ * - Folds each event over the prior snapshot via applyEventToLabState
+ * - Increments turnIndex by 1
+ * - Returns { events, snapshotAfter }
+ */
+export function createLabStatePass(): Pass {
+  return {
+    id: 'lab_state',
+    family: 'emit' as const,
+    run({ state }: PassRunArgs): PassResult {
+      const prior = (state.input as { labState?: LabStateSnapshot }).labState
+        ?? emptyLabState();
+      const mintOutput = state.outputs.get('mint_materials') as
+        { events?: PlateEventPrimitive[] } | undefined;
+      const expandOutput = state.outputs.get('expand_biology_verbs') as
+        { events?: PlateEventPrimitive[] } | undefined;
+      const events = [
+        ...(mintOutput?.events ?? []),
+        ...(expandOutput?.events ?? []),
+      ];
+      let snapshot: LabStateSnapshot = { ...prior, turnIndex: prior.turnIndex + 1 };
+      for (const event of events) {
+        snapshot = applyEventToLabState(snapshot, event);
+      }
+      return { ok: true, output: { events, snapshotAfter: snapshot } };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// mint_materials pass
+// ---------------------------------------------------------------------------
+
+/**
+ * Output shape for the mint_materials pass.
+ */
+export interface MintMaterialsPassOutput {
+  events: PlateEventPrimitive[];
+}
+
+/**
+ * Generate a well address for a 96-well plate (rows A-H × cols 1-12).
+ * Fills left-to-right, top-to-bottom.
+ */
+function wellAddressForIndex(index: number): string {
+  const row = String.fromCharCode(65 + Math.floor(index / 12)); // A=65
+  const col = (index % 12) + 1;
+  return `${row}${col}`;
+}
+
+/**
+ * Creates the mint_materials pass that expands mintMaterials directives
+ * into create_container + add_material events.
+ *
+ * This pass:
+ * - Reads mintMaterials from state.outputs.get('ai_precompile')
+ * - For each directive with a placementLabwareHint, emits one create_container
+ * - For each material to mint, emits one add_material with generated materialId
+ * - Deduplicates create_container by placementLabwareHint
+ */
+export function createMintMaterialsPass(): Pass {
+  return {
+    id: 'mint_materials',
+    family: 'expand' as const,
+    run({ pass_id, state }: PassRunArgs): PassResult {
+      const ai = state.outputs.get('ai_precompile') as
+        { mintMaterials?: MintMaterialsDirective[] } | undefined;
+      const directives = ai?.mintMaterials ?? [];
+      const events: PlateEventPrimitive[] = [];
+      const createdHints = new Set<string>();
+
+      for (const d of directives) {
+        // 1. Emit create_container if placementLabwareHint present and not yet created
+        if (d.placementLabwareHint && !createdHints.has(d.placementLabwareHint)) {
+          createdHints.add(d.placementLabwareHint);
+          events.push({
+            eventId: `evt-mint-container-${d.placementLabwareHint}`,
+            event_type: 'create_container',
+            details: {
+              labwareType: d.placementLabwareHint,
+              slot: 'auto',
+              instanceId: d.placementLabwareHint,
+            },
+          });
+        }
+
+        // 2. For n = 1..count: compute materialId, destination well, emit add_material
+        const count = Math.max(0, d.count);
+        for (let n = 1; n <= count; n++) {
+          const materialId = d.namingPattern.replace('{n}', String(n));
+          let well: string;
+
+          if (d.wellSpread === 'first-row') {
+            // First row: A1..L1 (12 wells)
+            well = wellAddressForIndex(n - 1);
+          } else if (d.wellSpread === 'explicit' && d.wellList && d.wellList.length > 0) {
+            well = d.wellList[n - 1] ?? wellAddressForIndex(n - 1);
+          } else {
+            // Default: 'all' — fills every well left-to-right, top-to-bottom
+            well = wellAddressForIndex(n - 1);
+          }
+
+          events.push({
+            eventId: `evt-mint-${d.template}-${n}`,
+            event_type: 'add_material',
+            details: {
+              labwareInstanceId: d.placementLabwareHint ?? 'auto',
+              well,
+              material: {
+                materialId,
+                kind: d.template,
+                ...(d.properties ? { properties: d.properties } : {}),
+              },
+            },
+          });
+        }
+      }
+
+      return { ok: true, output: { events } satisfies MintMaterialsPassOutput };
     },
   };
 }

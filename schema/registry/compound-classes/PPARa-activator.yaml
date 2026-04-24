@@ -1,0 +1,10 @@
+id: PPARa-activator
+name: PPARa activator
+description: Peroxisome proliferator-activated receptor alpha agonists.
+candidates:
+  - compoundId: clofibrate
+    name: Clofibrate
+  - compoundId: WY-14643
+    name: WY-14643 (Pirinixic acid)
+  - compoundId: fenofibrate
+    name: Fenofibrate

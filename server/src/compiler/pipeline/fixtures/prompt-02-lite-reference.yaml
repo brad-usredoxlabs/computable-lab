@@ -1,0 +1,27 @@
+name: prompt-02-lite-reference
+description: >
+  Minimal cross-turn fixture: a prior lab-state snapshot contains a
+  96-well deepwell plate of fecal samples.  The user says "use that
+  plate, add 10 uL binding buffer to A1".  ai_precompile emits a
+  priorLabwareRef that should resolve against the prior snapshot.
+input:
+  prompt: |
+    Use that plate, add 10 uL binding buffer to A1.
+  conversationId: cross-turn-test
+mocked_ai_precompile_output:
+  candidateEvents: []
+  candidateLabwares: []
+  unresolvedRefs: []
+  priorLabwareRefs:
+    - hint: "96-well deepwell plate of fecal samples"
+      kindHint: "96-well deepwell plate"
+      contentHint: "fecal samples"
+  mintMaterials: []
+expected:
+  outcome: complete
+  terminalArtifacts:
+    resolvedLabwareRefs:
+      - hint: "96-well deepwell plate of fecal samples"
+        matched:
+          instanceId: "plate-001"
+          labwareType: "96-well-deepwell-plate"

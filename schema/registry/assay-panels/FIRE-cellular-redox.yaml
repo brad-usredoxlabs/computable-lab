@@ -1,0 +1,28 @@
+id: FIRE-cellular-redox
+name: FIRE cellular redox assay
+description: >
+  96-well cellular redox assay. Outer wells excluded from the
+  assay due to evaporation / edge effects. Cells plated in the
+  interior (B2-G11).
+panelConstraints:
+  edgeExclusion: true
+  cellRegion:
+    rows: B-G
+    cols: 2-11
+analysisRules:
+  - kind: viability_readout
+    params:
+      instrument: plate-reader
+  - kind: gene_expression
+    params:
+      instrument: qPCR
+  - kind: fatty_acid_composition
+    params:
+      instrument: GC-FID
+  - kind: metabolomics
+    params:
+      instrument: GC-MS
+  - kind: imaging
+    params:
+      instrument: imaging-scope
+      target: C112-resazurin-ER-localization

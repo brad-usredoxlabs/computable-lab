@@ -1,0 +1,42 @@
+id: test-wash-protocol
+name: Test Wash Protocol (minimal)
+description: >
+  Minimal 3-step wash protocol used as a test fixture for the
+  protocol expansion pass. NOT a real lab protocol.
+steps:
+  - step: 1
+    verb: add_material
+    params:
+      targetLabwareRef: primary_plate
+      well: all
+      materialKind: wash-buffer
+      volumeUl: 200
+  - step: 2
+    verb: mix
+    params:
+      targetLabwareRef: primary_plate
+      well: all
+      cycles: 3
+  - step: 3
+    verb: aliquot
+    params:
+      fromLabwareRef: primary_plate
+      toLabwareRef: waste
+      well: all
+      volumeUl: 200
+requirements:
+  pipettes:
+    - pipetteType: 8ch-1000uL
+      minVolumeUl: 50
+      maxVolumeUl: 1000
+  reagents:
+    - kind: wash-buffer
+      totalVolumeUl: just_enough
+  labware:
+    - 96-well-deepwell-plate
+    - waste-reservoir
+layoutHints:
+  - role: primary_plate
+    slotHint: target
+  - role: waste
+    slotHint: waste

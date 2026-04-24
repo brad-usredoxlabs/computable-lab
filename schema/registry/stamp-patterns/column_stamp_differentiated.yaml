@@ -1,0 +1,13 @@
+id: column_stamp_differentiated
+name: Column stamp with per-column differentiation
+description: >
+  Each column of the destination receives a different treatment.
+  The source is a reservoir whose wells map 1:1 to destination columns.
+inputTopology:
+  rows: 1
+  cols: 12
+outputTopology:
+  rows: 8
+  cols: 12
+perPositionFields:
+  - perturbant

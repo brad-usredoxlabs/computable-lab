@@ -1,0 +1,15 @@
+id: quadrant_stamp
+name: Quadrant stamp (96 -> 384)
+description: >
+  96-well plate stamped into 4 quadrants of a 384-well plate.
+  Each source well A1 maps to a 2x2 block in the destination
+  (A1 -> {A1, A2, B1, B2}; A2 -> {A3, A4, B3, B4}; etc.).
+inputTopology:
+  rows: 8
+  cols: 12
+outputTopology:
+  rows: 16
+  cols: 24
+perPositionFields:
+  - assay
+  - channelMap

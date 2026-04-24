@@ -88,6 +88,7 @@ function validatePass(pass: unknown, index: number): PipelinePassSpec {
     'derive_context',
     'expand',
     'project',
+    'emit',
   ];
   if (!validFamilies.includes(family as PassFamily)) {
     throw new Error(`Pass "${id}" family "${family}" is not valid. Must be one of: ${validFamilies.join(', ')}`);

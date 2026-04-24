@@ -1,7 +1,7 @@
 /**
  * Tests for chatbot-compile.yaml pipeline specification.
  *
- * Verifies the 4-pass chatbot-compile pipeline structure.
+ * Verifies the 8-pass chatbot-compile pipeline structure.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -31,25 +31,43 @@ describe('chatbot-compile.yaml', () => {
       expect(spec.entrypoint).toBe('chatbot-compile');
     });
 
-    it('has exactly 4 passes', () => {
+    it('has exactly 8 passes', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
-      expect(spec.passes.length).toBe(4);
+      expect(spec.passes.length).toBe(8);
     });
   });
 
   describe('Pass ids are correct', () => {
-    it('pass ids are extract_entities, ai_precompile, expand_biology_verbs, resolve_labware in order', () => {
+    it('pass ids are in correct order', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const passIds = spec.passes.map((p) => p.id);
-      expect(passIds).toEqual(['extract_entities', 'ai_precompile', 'expand_biology_verbs', 'resolve_labware']);
+      expect(passIds).toEqual([
+        'extract_entities',
+        'ai_precompile',
+        'mint_materials',
+        'expand_biology_verbs',
+        'resolve_labware',
+        'resolve_references',
+        'expand_protocol',
+        'lab_state',
+      ]);
     });
   });
 
   describe('Families are correct', () => {
-    it('families are parse, expand, expand, disambiguate in order', () => {
+    it('families are in correct order', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const families = spec.passes.map((p) => p.family);
-      expect(families).toEqual(['parse', 'expand', 'expand', 'disambiguate']);
+      expect(families).toEqual([
+        'parse',
+        'expand',
+        'expand',
+        'expand',
+        'disambiguate',
+        'disambiguate',
+        'expand',
+        'emit',
+      ]);
     });
   });
 
@@ -75,6 +93,13 @@ describe('chatbot-compile.yaml', () => {
       expect(expandBiologyVerbs?.depends_on).toEqual(['ai_precompile']);
     });
 
+    it('mint_materials depends on ai_precompile', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const mintMaterials = spec.passes.find((p) => p.id === 'mint_materials');
+      expect(mintMaterials).toBeDefined();
+      expect(mintMaterials?.depends_on).toEqual(['ai_precompile']);
+    });
+
     it('resolve_labware depends on ai_precompile', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const resolveLabware = spec.passes.find((p) => p.id === 'resolve_labware');
@@ -94,22 +119,36 @@ describe('chatbot-compile.yaml', () => {
     it('ai_precompile has description', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const aiPrecompile = spec.passes.find((p) => p.id === 'ai_precompile');
-      expect(aiPrecompile?.description).toBeDefined();
+      expect(aiPrecompile).toBeDefined();
       expect(aiPrecompile?.description).toContain('LLM-backed');
     });
 
     it('expand_biology_verbs has description', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const expandBiologyVerbs = spec.passes.find((p) => p.id === 'expand_biology_verbs');
-      expect(expandBiologyVerbs?.description).toBeDefined();
+      expect(expandBiologyVerbs).toBeDefined();
       expect(expandBiologyVerbs?.description).toContain('biology verbs');
     });
 
     it('resolve_labware has description', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const resolveLabware = spec.passes.find((p) => p.id === 'resolve_labware');
-      expect(resolveLabware?.description).toBeDefined();
+      expect(resolveLabware).toBeDefined();
       expect(resolveLabware?.description).toContain('searchLabwareByHint');
+    });
+
+    it('lab_state has description', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const labState = spec.passes.find((p) => p.id === 'lab_state');
+      expect(labState).toBeDefined();
+      expect(labState?.description).toContain('lab-state snapshot');
+    });
+
+    it('mint_materials has description', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const mintMaterials = spec.passes.find((p) => p.id === 'mint_materials');
+      expect(mintMaterials).toBeDefined();
+      expect(mintMaterials?.description).toContain('create_container');
     });
   });
 });
