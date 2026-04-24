@@ -189,8 +189,8 @@ export async function runPipeline(
 
     // Check when-condition
     if (passSpec.when !== undefined && passSpec.when !== null && passSpec.when.trim() !== '') {
-      const shouldRun = whenEvaluator(passSpec.when, state);
-      if (!shouldRun) {
+      const runPass = whenEvaluator(passSpec.when, state);
+      if (!runPass) {
         const statusEntry: PassStatusEntry = {
           pass_id: passId,
           status: 'skipped',

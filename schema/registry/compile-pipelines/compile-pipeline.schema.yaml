@@ -28,6 +28,7 @@ properties:
       - promotion-compile
       - extraction-compile
       - ingestion-compile
+      - chatbot-compile
     description: "The compiler entrypoint this pipeline services."
 
   description:

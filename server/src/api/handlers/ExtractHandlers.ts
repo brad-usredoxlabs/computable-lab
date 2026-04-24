@@ -96,12 +96,13 @@ export function createExtractHandlers(
       });
 
       // Persist the draft so it shows up in the list
+      const envelope: RecordEnvelope = {
+        recordId: draftBody.recordId,
+        schemaId: 'https://computable-lab.com/schema/computable-lab/workflow/extraction-draft.schema.yaml',
+        payload: draftBody as unknown as Record<string, unknown>,
+      };
       await store.create({
-        envelope: {
-          recordId: draftBody.recordId,
-          kind: draftBody.kind,
-          payload: draftBody as unknown as Record<string, unknown>,
-        } as RecordEnvelope,
+        envelope,
         message: `Persist extraction-draft ${draftBody.recordId} from upload ${fileName}`,
         skipLint: true,
       });
@@ -156,11 +157,26 @@ export function createExtractHandlers(
       const targetRecordId = `CAN-${candidate.target_kind}-${Date.now()}`;
       const promotionRecordId = `XPR-${targetRecordId}-v1`;
 
-      // Build schema id map
+      // Build schema id map by extracting kind from schema properties
       const targetSchemaIdByKind = new Map<string, string>();
-      for (const schema of schemaRegistry.list()) {
-        if (schema.schema.$id && schema.schema.kind) {
-          targetSchemaIdByKind.set(schema.schema.kind, schema.schema.$id);
+      for (const schema of schemaRegistry.getAll()) {
+        if (!schema.schema.$id) continue;
+        
+        // Try to extract kind from schema properties
+        let kind: string | undefined;
+        const props = schema.schema.properties as Record<string, unknown> | undefined;
+        if (props?.kind) {
+          const kindDef = props.kind as Record<string, unknown>;
+          if (typeof kindDef.const === 'string') {
+            kind = kindDef.const;
+          } else if (Array.isArray(kindDef.enum)) {
+            // If kind is an enum, use the first value
+            kind = kindDef.enum[0] as string;
+          }
+        }
+        
+        if (kind) {
+          targetSchemaIdByKind.set(kind, schema.schema.$id);
         }
       }
 

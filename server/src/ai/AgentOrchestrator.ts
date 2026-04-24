@@ -216,9 +216,22 @@ export function createAgentOrchestrator(
         },
         ...(inferenceConfig.model ? { model: inferenceConfig.model } : {}),
       });
-      if (compileResult.events.length > 0) {
-        // Pipeline produced concrete events — return them without invoking the LLM loop.
+      // Outcome-based forwarding: decide whether to short-circuit the LLM
+      // fallback based on compileResult.outcome and terminalArtifacts, not
+      // on compileResult.events.length alone.
+      const hasArtifacts =
+        compileResult.terminalArtifacts.events.length > 0 ||
+        compileResult.terminalArtifacts.gaps.length > 0;
+
+      const shouldShortCircuit =
+        compileResult.outcome === 'complete' ||
+        (compileResult.outcome === 'gap' && hasArtifacts);
+
+      if (shouldShortCircuit) {
+        // Pipeline produced concrete events or gaps — return them without
+        // invoking the LLM loop.
         const elapsed = Date.now() - t0;
+
         // Convert PlateEventPrimitive[] to PlateEventProposal[]
         const events: PlateEventProposal[] = compileResult.events.map((prim) => ({
           eventId: prim.eventId,
@@ -235,6 +248,27 @@ export function createAgentOrchestrator(
             actionGroupId: 'chatbot-compile',
           },
         }));
+
+        // Wire terminalArtifacts.gaps into the response fields the UI consumes.
+        const unresolvedRefs = [...(compileResult.unresolvedRefs ?? [])];
+        let clarification: string | undefined = compileResult.clarification;
+        for (const gap of compileResult.terminalArtifacts.gaps) {
+          if (gap.kind === 'unresolved_ref') {
+            unresolvedRefs.push({
+              label: gap.message,
+              reason: (gap.details as Record<string, unknown>)?.reason ?? 'unresolved',
+            });
+          } else if (gap.kind === 'clarification') {
+            clarification = gap.message; // last one wins
+          } else {
+            // 'other' — wrap into unresolvedRefs with a synthetic kind tag
+            unresolvedRefs.push({
+              label: gap.message,
+              reason: `other: ${gap.message}`,
+            });
+          }
+        }
+
         const summary: AgentSummary = {
           traceId: tid,
           surface: surfaceName,
@@ -253,13 +287,13 @@ export function createAgentOrchestrator(
           bypass: 'compiler-pipeline',
         };
         logAgentSummary(tid, summary);
-        console.log(`[agent ${tid}] chatbot-compile pipeline bypass: success, events=${events.length}`);
+        console.log(`[agent ${tid}] chatbot-compile pipeline bypass: success, events=${events.length}, gaps=${compileResult.terminalArtifacts.gaps.length}`);
         const result: AgentResult = {
           success: true,
           events,
           ...(compileResult.labwareAdditions.length > 0 ? { labwareAdditions: compileResult.labwareAdditions } : {}),
-          unresolvedRefs: compileResult.unresolvedRefs,
-          ...(compileResult.clarification ? { clarification: compileResult.clarification } : {}),
+          unresolvedRefs: unresolvedRefs.length > 0 ? unresolvedRefs : undefined,
+          ...(clarification ? { clarification: { prompt: clarification, entityType: 'general', options: [] } } : {}),
           usage: {
             promptTokens: 0,
             completionTokens: 0,
@@ -270,8 +304,9 @@ export function createAgentOrchestrator(
         };
         return result;
       } else {
-        // Pipeline produced no events - fall through to LLM loop
-        console.log(`[agent ${tid}] pipeline produced no events; falling through to LLM loop`);
+        // Pipeline produced no events and no gaps (or outcome is 'error') —
+        // fall through to LLM fallback loop.
+        console.log(`[agent ${tid}] outcome=${compileResult.outcome}, hasArtifacts=${hasArtifacts}; falling through to LLM loop`);
       }
 
       // Decode attachments into plain text so the fallthrough LLM loop can

@@ -1,0 +1,34 @@
+name: prompt-02-zymo-magbead
+description: >
+  Instantiate Zymo DNA MagBead prep protocol against concrete deck
+  with user-pinned equipment slots, hybrid deck layout, "just enough"
+  buffer volumes, and tip-rack computation.
+input:
+  prompt: |
+    Take this Zymo DNA MagBead prep protocol. We already have a
+    96-well deepwell plate of fecal samples. This is going to run
+    on an opentrons robot using an 8-channel 1000uL pipette. We
+    need to add just enough binding buffer, binding beads, wash 1
+    buffer and wash 2 buffer to a 12-well reservoir. There is a
+    magblock and heater shaker on the deck at positions C1 and D1,
+    respectively. Figure out how many racks of pipette tips we
+    need. We are going to elute the samples into 100uL of DNAse-free
+    water that will be loaded into well 2 of the 12-well reservoir,
+    then transfer the eluted samples into a 96-well conical
+    bottomoed PCR plate.
+mocked_ai_precompile_output:
+  candidateEvents: []
+  candidateLabwares:
+    - hint: "12-well reservoir"
+      reason: "explicitly mentioned as buffer source"
+    - hint: "96-well conical bottomed PCR plate"
+      reason: "elution destination"
+  unresolvedRefs:
+    - kind: other
+      label: "Zymo DNA MagBead prep protocol"
+      reason: "Protocol reference — awaiting protocol-spec registry (spec-018)"
+expected:
+  outcome: gap
+  terminalArtifacts:
+    events: []
+    gaps: []

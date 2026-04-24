@@ -22,6 +22,11 @@ import {
 import type { ExtractionRunnerService } from '../extract/ExtractionRunnerService.js';
 import type { PlateEventPrimitive } from '../compiler/biology/BiologyVerbExpander.js';
 import type { PassDiagnostic } from '../compiler/pipeline/types.js';
+import type {
+  TerminalArtifacts,
+  CompileOutcome,
+  Gap,
+} from '../compiler/pipeline/CompileContracts.js';
 import * as path from 'node:path';
 
 export interface RunChatbotCompileArgs {
@@ -41,6 +46,8 @@ export interface RunChatbotCompileResult {
   unresolvedRefs: AiPrecompileOutput['unresolvedRefs'];
   clarification?: string;
   diagnostics: PassDiagnostic[];
+  terminalArtifacts: TerminalArtifacts;
+  outcome: CompileOutcome;
 }
 
 const PIPELINE_YAML_PATH = path.resolve(
@@ -68,11 +75,38 @@ export async function runChatbotCompile(
   const verbs = (result.outputs.get('expand_biology_verbs') ?? { events: [] }) as { events: PlateEventPrimitive[] };
   const labware = (result.outputs.get('resolve_labware') ?? { labwareAdditions: [], resolvedLabwares: [] }) as LabwareResolveOutput;
 
+  const events = verbs.events ?? [];
+  const unresolvedRefs = ai.unresolvedRefs ?? [];
+  const clarification = typeof ai.clarification === 'string' ? ai.clarification : undefined;
+  const diagnostics = result.diagnostics;
+
+  // Build terminalArtifacts.gaps from unresolvedRefs + clarification
+  const gaps: Gap[] = unresolvedRefs.map((ref) => ({
+    kind: 'unresolved_ref' as const,
+    message: `${ref.label} (${ref.reason})`,
+    details: { ...ref },
+  }));
+  if (clarification) {
+    gaps.push({ kind: 'clarification' as const, message: clarification });
+  }
+
+  // Compute outcome
+  let outcome: CompileOutcome;
+  if (diagnostics.some((d) => d.severity === 'error')) {
+    outcome = 'error';
+  } else if (events.length === 0 && gaps.length > 0) {
+    outcome = 'gap';
+  } else {
+    outcome = 'complete';
+  }
+
   return {
-    events: verbs.events ?? [],
+    events,
     labwareAdditions: labware.labwareAdditions ?? [],
-    unresolvedRefs: ai.unresolvedRefs ?? [],
-    ...(typeof ai.clarification === 'string' ? { clarification: ai.clarification } : {}),
-    diagnostics: result.diagnostics,
+    unresolvedRefs,
+    ...(clarification ? { clarification } : {}),
+    diagnostics,
+    terminalArtifacts: { events, gaps },
+    outcome,
   };
 }

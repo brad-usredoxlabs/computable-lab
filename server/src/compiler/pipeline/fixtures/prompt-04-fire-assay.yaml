@@ -1,0 +1,52 @@
+name: prompt-04-fire-assay
+description: >
+  FIRE cellular redox assay with edge exclusion, triplicate
+  columns, mid-compile plate reorientation (landscape -> portrait),
+  pipette swap (8-channel -> 12-channel), compound-class
+  resolution (AhR activator), and five downstream compile-jobs.
+input:
+  prompt: |
+    We are going to run a FIRE assay. The FIRE assay is a cellular
+    redox assay run in a 96-well plate with the outer wells left
+    out of the assay due to evaporation/edge effects. Cells are
+    plated in wells B2-G11. The assay is done in triplicate wells,
+    so B2-B4 have the same compounds added. There is a 12-well
+    reservoir which is pre-loaded with 00X compounds - well 1:
+    normal media; well 2: normal media plus AhR inhibitor; well 3:
+    normal media plus PPARa inhibitor. Wells 1, 2 and 3 of the
+    twelve well reservoir are added at 1% of the 96-well plate
+    volumes in triplicate. So A1 of the twelve well plate is added
+    to wells B2-G4 of the 96-well plate and pipette mixed. This
+    can all be done with an 8-channel pippette, of course. After
+    we mixed this all up, we could turn the 96-well plate into
+    portrait orientation. The righthand side wells of the 12-channel
+    reservoir we fill with compounds. With a 12-channel pipette
+    we are now transferring from one well of the [reservoir] to
+    the 6 columns-with-cells in the 96-well [plate]. Each column
+    gets a different perturbant: a PPARa activator (clofibrate),
+    an AhR activator, a Complex I blocker, A PPARa antagonist
+    (blocker), an AhR antagonist and a control column. We can make
+    as many of these plates as we want and they will be analyzed
+    in: qPCR for gene expression; GC-FID for fatty acid composition;
+    GC-MS for metabolomics; plate reader for viability; Imaging
+    scope for how well C112-resazurin reduction maps to ER
+    localization.
+mocked_ai_precompile_output:
+  candidateEvents: []
+  candidateLabwares:
+    - hint: "96-well plate"
+      reason: "cell plate for FIRE assay"
+    - hint: "12-well reservoir"
+      reason: "reagent source"
+  unresolvedRefs:
+    - kind: other
+      label: "FIRE cellular redox assay"
+      reason: "Assay panel — awaiting assay-spec registry (spec-019)"
+    - kind: other
+      label: "AhR activator (generic)"
+      reason: "Compound class — awaiting compound-class registry (spec-020)"
+expected:
+  outcome: gap
+  terminalArtifacts:
+    events: []
+    gaps: []

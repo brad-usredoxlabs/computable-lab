@@ -1,0 +1,40 @@
+name: prompt-03-quadrant-qpcr
+description: >
+  96 -> 384 quadrant stamp with per-position assay differentiation,
+  QuantStudio 5 run-file generation, 16S normalization analysis
+  rule, cross-turn pipette feasibility failure (1000uL too coarse).
+input:
+  prompt: |
+    That protocol gave us a 96-well PCR plate of samples. The next
+    step in the protocol is to take that 96 well plate and stamp
+    it into quadrants of a 384-well PCR plate that will actually
+    get run on the PCR machine. Well A1 in the 96 well plate will
+    map to wells A1-B2 of the 384 well plate. The assay is for gut
+    microbiomne species. Of each well in each 'quad' of the 384
+    well A1-B2 block corresponding to the 96 well plate, well 'A1'
+    corresponds to the S16 total bacteria positive control. Well
+    A2, B1 and B2 are multiplex, each corresponding to a bacterial
+    species. This will be run on a Thermo QuantStudio 5. In this
+    case, in A2 the fluorescence channel to species mapping is:
+    FAM - F prausnitzii, CY5 - Ruminococcus bromii, VIC =
+    Eubacterium rectale, ABY = Prevotella copri. B1 and B2 also
+    have fluorescence channel-to-species mapping, but ALL of the
+    species in A2, B1 and B2 are quantified relative to the 16S
+    result in well A1 of the stamped 'quad'.
+mocked_ai_precompile_output:
+  candidateEvents: []
+  candidateLabwares:
+    - hint: "384-well PCR plate"
+      reason: "destination for stamped samples"
+  unresolvedRefs:
+    - kind: other
+      label: "gut microbiome 16S qPCR assay panel"
+      reason: "Assay panel reference — awaiting assay-spec registry (spec-019)"
+    - kind: other
+      label: "quadrant_stamp pattern"
+      reason: "Stamp pattern reference — awaiting pattern registry (spec-017)"
+expected:
+  outcome: gap
+  terminalArtifacts:
+    events: []
+    gaps: []

@@ -156,25 +156,21 @@ const cannedAdapter: ExtractorAdapter = {
           evidence_span: 'Add 10 uL DMSO then incubate.',
           uncertainty: 'low',
           draft: {
-            display_name: 'Tiny Protocol',
-            variant_label: null,
-            sections: [
+            kind: 'protocol',
+            recordId: 'PRT-tiny-001',
+            title: 'Tiny Protocol',
+            description: 'A tiny test protocol.',
+            steps: [
               {
-                heading: 'Steps',
-                evidence_span: 'Add 10 uL DMSO then incubate.',
-                steps: [
-                  {
-                    order: 1,
-                    action: 'add',
-                    description: 'Add 10 uL DMSO',
-                    mentions: [],
-                    evidence_span: 'Add 10 uL DMSO',
-                    uncertainty: 'low',
-                  },
-                ],
+                stepId: 'step-1',
+                kind: 'add_material',
+                action: 'add',
+                description: 'Add 10 uL DMSO',
+                evidence_span: 'Add 10 uL DMSO',
+                uncertainty: 'low',
+                mentions: [],
               },
             ],
-            report: { unresolved_refs: [], notes: [] },
           },
           ambiguity_spans: [],
         },
@@ -341,9 +337,6 @@ describe('E2E: PDF upload → extract → draft → promote → canonical + audi
       },
     });
 
-    console.log('Upload status:', uploadRes.statusCode);
-    console.log('Upload body:', uploadRes.payload);
-    console.log('Upload headers:', uploadRes.headers);
     expect(uploadRes.statusCode).toBe(200);
     const uploadBody = JSON.parse(uploadRes.payload) as { recordId: string };
     expect(uploadBody.recordId).toMatch(/^XDR-/);
