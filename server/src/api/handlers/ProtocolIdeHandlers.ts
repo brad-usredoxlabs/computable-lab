@@ -556,6 +556,63 @@ export function createProtocolIdeHandlers(ctx: AppContext) {
         };
       }
     },
+
+    /**
+     * GET /protocol-ide/sessions/:sessionId/event-graph
+     *
+     * Return the event-graph data (events, labwares, deck placements)
+     * for the given session.
+     *
+     * When the session has no projection yet (no `latestEventGraphRef`),
+     * returns `{ success: true, events: [], labwares: [], deckPlacements: [] }`.
+     *
+     * When `latestTerminalArtifacts` is not yet populated (v1 projection
+     * persists only refs), returns empty arrays — no error.
+     */
+    async getEventGraph(
+      request: FastifyRequest<{
+        Params: { sessionId: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: true; events: unknown[]; labwares: unknown[]; deckPlacements: unknown[] } | ApiError> {
+      const { sessionId } = request.params;
+
+      try {
+        const envelope = await sessionService.getSession(sessionId);
+
+        if (!envelope) {
+          reply.status(404);
+          return {
+            error: 'SESSION_NOT_FOUND',
+            message: `Session '${sessionId}' not found`,
+          };
+        }
+
+        const payload = envelope.payload as Record<string, unknown>;
+
+        // No projection yet — return empty arrays
+        if (!payload.latestEventGraphRef) {
+          return { success: true, events: [], labwares: [], deckPlacements: [] };
+        }
+
+        // v1 projection may not persist artifacts — fall through to empty arrays
+        const artifacts = payload.latestTerminalArtifacts as TerminalArtifacts | undefined;
+        const labState = payload.latestLabState as LabStateSnapshot | undefined;
+
+        return {
+          success: true,
+          events: artifacts?.events ?? [],
+          labwares: Object.values(labState?.labware ?? {}),
+          deckPlacements: labState?.deck ?? [],
+        };
+      } catch (err) {
+        reply.status(500);
+        return {
+          error: 'EVENT_GRAPH_FETCH_FAILED',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
   };
 }
 

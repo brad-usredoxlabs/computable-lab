@@ -1,0 +1,27 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-384-well-pcr-plate
+type: labware_definition
+id: 384-well-pcr-plate
+display_name: Generic 384-Well PCR Plate
+source: generic
+specificity: generic
+platform_aliases:
+  - platform: opentrons_ot2
+    alias: plate_384
+  - platform: generic
+    alias: generic/384_well_plate@v1
+topology:
+  addressing: grid
+  rows: 16
+  columns: 24
+  well_pitch_mm: 4.5
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 150
+  min_working_volume_uL: 5
+render_hints:
+  profile: plate

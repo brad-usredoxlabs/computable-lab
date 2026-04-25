@@ -1,0 +1,27 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-24-well-plate
+type: labware_definition
+id: 24-well-plate
+display_name: Generic 24-Well Plate
+source: generic
+specificity: generic
+platform_aliases:
+  - platform: opentrons_ot2
+    alias: plate_24
+  - platform: generic
+    alias: generic/24_well_plate@v1
+topology:
+  addressing: grid
+  rows: 4
+  columns: 6
+  well_pitch_mm: 13.5
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 5000
+  min_working_volume_uL: 50
+render_hints:
+  profile: plate

@@ -1,0 +1,27 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-96-well-plate
+type: labware_definition
+id: 96-well-plate
+display_name: Generic 96-Well Plate
+source: generic
+specificity: generic
+platform_aliases:
+  - platform: opentrons_ot2
+    alias: plate_96
+  - platform: generic
+    alias: generic/96_well_plate@v1
+topology:
+  addressing: grid
+  rows: 8
+  columns: 12
+  well_pitch_mm: 9
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 350
+  min_working_volume_uL: 10
+render_hints:
+  profile: plate

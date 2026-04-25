@@ -80,6 +80,7 @@ import { createAiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandler
 import { createReadinessHandlers } from './api/handlers/ReadinessHandlers.js';
 import { createExtractHandlers } from './api/handlers/ExtractHandlers.js';
 import { createProcurementHandlers } from './api/handlers/ProcurementHandlers.js';
+import { createPromptTemplateHandlers } from './api/handlers/PromptTemplateHandlers.js';
 import { ExtractionRunnerService } from './extract/ExtractionRunnerService.js';
 import { ExtractionMetrics } from './extract/ExtractionMetrics.js';
 import { OpenAICompatibleExtractor } from './extract/OpenAICompatibleExtractor.js';
@@ -705,6 +706,10 @@ export async function createServer(
   const readinessHandlers = createReadinessHandlers(ctx);
   const procurementHandlers = createProcurementHandlers(ctx.store);
 
+  // Prompt-template registry (always available, synchronous load)
+  const { getPromptTemplateRegistry } = await import('./registry/PromptTemplateRegistry.js');
+  const promptTemplateHandlers = createPromptTemplateHandlers(getPromptTemplateRegistry());
+
   // Register API routes with /api prefix
   await fastify.register(async (instance) => {
     const routeOpts: import('./api/routes.js').RouteOptions = {
@@ -739,6 +744,7 @@ export async function createServer(
       biosourceHandlers,
       readinessHandlers,
       procurementHandlers,
+      promptTemplateHandlers,
       schemaCount: () => ctx.schemaRegistry.size,
       ruleCount: () => ctx.lintEngine.ruleCount,
       uiSpecCount: () => ctx.uiSpecLoader.size(),

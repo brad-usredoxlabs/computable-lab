@@ -13,7 +13,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { z, type ZodType } from 'zod';
+import type { ZodType } from 'zod';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -37,6 +37,11 @@ export interface RegistryLoader<Spec extends { id: string }> {
   list(): Spec[];
   /** Look up a single entry by its `id`. */
   get(id: string): Spec | undefined;
+  /**
+   * Look up a single entry by a platform alias.
+   * Searches `platform_aliases[].alias` (if the Spec has that field).
+   */
+  getByAlias(alias: string): Spec | undefined;
   /** Discard the in-memory cache so the next `list()`/`get()` re-reads disk. */
   reload(): void;
 }
@@ -96,6 +101,16 @@ export function createRegistryLoader<Spec extends { id: string }>(
   return {
     list: () => ensureLoaded().slice(),
     get: (id: string) => ensureLoaded().find((s) => s.id === id),
+    getByAlias: (alias: string) =>
+      ensureLoaded().find(
+        (s) =>
+          (s as Record<string, unknown>).platform_aliases &&
+          (s as Record<string, unknown>).platform_aliases !== undefined &&
+          (
+            (s as Record<string, unknown>)
+              .platform_aliases as Array<{ alias: string }>
+          ).some((a) => a.alias === alias),
+      ),
     reload: () => {
       cache = null;
     },

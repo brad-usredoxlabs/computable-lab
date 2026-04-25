@@ -43,6 +43,7 @@ import type {
   ComponentSuggestionResponse,
 } from '../../types/componentGraph'
 import type { CompositionEntryValue, ConcentrationValue } from '../../types/material'
+import type { DeckSummary, ToolsSummary, ReagentsSummary, BudgetSummary } from '../../protocol-ide/overlaySummaries.types'
 import { ApiError, NetworkError } from './errors'
 import { API_BASE } from './base'
 
@@ -2573,56 +2574,45 @@ export const apiClient = {
     sessionId: string,
   ): Promise<{
     success: true
-    deck: {
-      summary: string
-      slotsInUse: number
-      totalSlots: number
-      labware: Array<{
-        slot: string
-        labwareType: string
-        instanceId?: string
-        orientation?: 'landscape' | 'portrait'
-        evidenceLinks: Array<{ nodeId: string; label: string; kind: string }>
-      }>
-      pinnedSlots: Array<{ slot: string; labwareHint: string }>
-      autoFilledSlots: Array<{ slot: string; labwareHint: string; reason: string }>
-      conflicts: Array<{ slot: string; candidates: string[] }>
-      evidenceLinks: Array<{ nodeId: string; label: string; kind: string }>
-    } | null
-    tools: {
-      summary: string
-      pipettes: Array<{ type: string; channels: number; mountSide?: string; evidenceLinks: Array<{ nodeId: string; label: string; kind: string }> }>
-      tipRacks: Array<{ pipetteType: string; rackCount: number }>
-      evidenceLinks: Array<{ nodeId: string; label: string; kind: string }>
-    } | null
-    reagents: {
-      summary: string
-      reagentCount: number
-      reagents: Array<{
-        kind: string
-        totalVolumeUl: number
-        wellCount: number
-        concentration?: string
-        unit: string
-        evidenceLinks: Array<{ nodeId: string; label: string; kind: string }>
-      }>
-      evidenceLinks: Array<{ nodeId: string; label: string; kind: string }>
-    } | null
-    budget: {
-      summary: string
-      totalCost?: number
-      currency: string
-      lines: Array<{
-        description: string
-        category: string
-        estimatedCost?: number
-        currency: string
-        evidenceLinks: Array<{ nodeId: string; label: string; kind: string }>
-      }>
-      evidenceLinks: Array<{ nodeId: string; label: string; kind: string }>
-    } | null
+    deck: DeckSummary | null
+    tools: ToolsSummary | null
+    reagents: ReagentsSummary | null
+    budget: BudgetSummary | null
   }> {
     return request(`/protocol-ide/sessions/${encodeURIComponent(sessionId)}/overlay-summaries`)
+  },
+
+  /**
+   * Get event-graph data (events, labwares, deck placements) for a session.
+   * Calls GET /protocol-ide/sessions/:sessionId/event-graph
+   */
+  async getProtocolIdeEventGraph(
+    sessionId: string,
+  ): Promise<{
+    success: true
+    events: unknown[]
+    labwares: unknown[]
+    deckPlacements: unknown[]
+  }> {
+    return request(`/protocol-ide/sessions/${encodeURIComponent(sessionId)}/event-graph`)
+  },
+
+  // === Prompt Template API ===
+
+  /**
+   * Get a prompt template by id.
+   * Calls GET /prompt-templates/:id
+   */
+  async getPromptTemplate(id: string): Promise<{
+    success: true
+    id: string
+    prompt_kind: string
+    description: string
+    content_format: 'markdown' | 'plain'
+    content: string
+    variables: Array<{ name: string; type: string; description: string }>
+  }> {
+    return request(`/prompt-templates/${encodeURIComponent(id)}`)
   },
 }
 

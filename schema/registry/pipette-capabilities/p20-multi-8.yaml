@@ -1,0 +1,15 @@
+kind: pipette-capability
+recordId: pipette-capability/p20-multi-8
+type: pipette_capability
+id: p20-multi-8
+display_name: P20 Multi 8-channel
+tool_type: pipette
+channels_supported: [1, 8]
+spacing_mode: fixed
+fixed_spacing_mm: 9
+volume_families:
+  - name: low
+    volume_min_uL: 1
+    volume_max_uL: 20
+    feasibility_floor_uL: 1
+platform: opentrons_ot2

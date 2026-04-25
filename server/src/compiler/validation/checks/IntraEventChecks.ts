@@ -10,18 +10,21 @@
 
 import { registerValidationCheck } from '../ValidationCheck.js';
 import type { ValidationFinding } from '../ValidationReport.js';
+import { getLabwareDefinitionRegistry } from '../../../registry/LabwareDefinitionRegistry.js';
 
 // ---------------------------------------------------------------------------
-// Labware geometry map
+// Labware geometry helper
 // ---------------------------------------------------------------------------
 
-const LABWARE_WELLS: Record<string, { rows: number; cols: number }> = {
-  '96-well-plate': { rows: 8, cols: 12 },
-  '96-well-deepwell-plate': { rows: 8, cols: 12 },
-  '96-well-conical-pcr-plate': { rows: 8, cols: 12 },
-  '384-well-pcr-plate': { rows: 16, cols: 24 },
-  '12-well-reservoir': { rows: 1, cols: 12 },
-};
+const labwareRegistry = getLabwareDefinitionRegistry();
+
+function getLabwareGeometry(labwareType: string): { rows: number; cols: number } | null {
+  const spec = labwareRegistry.get(labwareType) ?? labwareRegistry.getByAlias(labwareType);
+  if (!spec?.topology) return null;
+  const { rows, columns } = spec.topology;
+  if (typeof rows !== 'number' || typeof columns !== 'number' || rows <= 0 || columns <= 0) return null;
+  return { rows, cols: columns };
+}
 
 // ---------------------------------------------------------------------------
 // pipette-volume-cap
@@ -75,7 +78,7 @@ registerValidationCheck({
         (d?.from && typeof d.from === 'object' && (d.from as any).labwareType) ||
         (d?.labwareType as string | undefined);
       if (!labwareType) continue;
-      const geom = LABWARE_WELLS[labwareType];
+      const geom = getLabwareGeometry(labwareType);
       if (!geom) continue;
       for (const w of wells) {
         if (!isValidWell(w, geom)) {

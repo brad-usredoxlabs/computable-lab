@@ -58,6 +58,7 @@ export interface PipetteCapabilityRecord {
     name: string;
     volume_min_uL: number;
     volume_max_uL: number;
+    feasibility_floor_uL?: number;
     spacing_min_mm?: number;
     spacing_max_mm?: number;
   }>;

@@ -44,6 +44,7 @@ import type { RelatedRecordsHandlers } from './handlers/RelatedRecordsHandlers.j
 import type { AiRecordDraftHandlers } from './handlers/AiRecordDraftHandlers.js';
 import type { ReadinessHandlers } from './handlers/ReadinessHandlers.js';
 import type { ProcurementHandlers } from './handlers/ProcurementHandlers.js';
+import type { PromptTemplateHandlers } from './handlers/PromptTemplateHandlers.js';
 import type { ProtocolIdeHandlers } from './handlers/ProtocolIdeHandlers.js';
 import type { HealthResponse } from './types.js';
 
@@ -90,6 +91,7 @@ export interface RouteOptions {
   aiRecordDraftHandlers?: AiRecordDraftHandlers;
   readinessHandlers?: ReadinessHandlers;
   procurementHandlers?: ProcurementHandlers;
+  promptTemplateHandlers?: PromptTemplateHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -552,6 +554,7 @@ export function registerRoutes(
     fastify.post('/protocol-ide/sessions/:sessionId/export-issue-cards', protocolIdeHandlers.exportIssueCards.bind(protocolIdeHandlers));
     fastify.get('/protocol-ide/sessions/:sessionId/can-export', protocolIdeHandlers.canExport.bind(protocolIdeHandlers));
     fastify.get('/protocol-ide/sessions/:sessionId/overlay-summaries', protocolIdeHandlers.getOverlaySummaries.bind(protocolIdeHandlers));
+    fastify.get('/protocol-ide/sessions/:sessionId/event-graph', protocolIdeHandlers.getEventGraph.bind(protocolIdeHandlers));
   }
 
   // ============================================================================
@@ -716,5 +719,15 @@ export function registerRoutes(
 
   if (procurementHandlers) {
     fastify.post('/planned-runs/:id/procurement/draft', procurementHandlers.generateProcurementDraft.bind(procurementHandlers));
+  }
+
+  // ============================================================================
+  // Prompt Template Routes (optional - requires promptTemplateHandlers)
+  // ============================================================================
+
+  const { promptTemplateHandlers } = options;
+
+  if (promptTemplateHandlers) {
+    fastify.get('/prompt-templates/:id', promptTemplateHandlers.getPromptTemplate.bind(promptTemplateHandlers));
   }
 }

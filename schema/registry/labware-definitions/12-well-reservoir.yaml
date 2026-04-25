@@ -1,0 +1,27 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-12-well-reservoir
+type: labware_definition
+id: 12-well-reservoir
+display_name: Generic 12-Well Reservoir
+source: generic
+specificity: generic
+platform_aliases:
+  - platform: opentrons_ot2
+    alias: reservoir_12
+  - platform: generic
+    alias: generic/reservoir_12@v1
+topology:
+  addressing: grid
+  rows: 1
+  columns: 12
+  well_pitch_mm: 9
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 25000
+  min_working_volume_uL: 500
+render_hints:
+  profile: reservoir

@@ -2,13 +2,14 @@
  * Tests for PanelConstraintChecks.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
   getValidationChecks,
 } from '../ValidationCheck.js';
 import type { ValidationContext } from '../ValidationCheck.js';
 import type { TerminalArtifacts } from '../../pipeline/CompileContracts.js';
 import type { LabStateSnapshot } from '../../state/LabState.js';
+import { getAssaySpecRegistry } from '../../../registry/AssaySpecRegistry.js';
 
 // Side-effect import registers checks on module load
 import './PanelConstraintChecks.js';
@@ -65,7 +66,7 @@ describe('assay-edge-exclusion', () => {
     expect(findings).toHaveLength(0);
   });
 
-  it('returns empty findings when resolved assay is not FIRE', () => {
+  it('returns empty findings when resolved assay has no edgeExclusion', () => {
     const check = findCheck()!;
     const ctx = makeContext(
       [
@@ -150,6 +151,61 @@ describe('assay-edge-exclusion', () => {
     expect(findings).toHaveLength(1);
     expect(findings[0]!.affectedIds).toEqual(['e1', 'e2', 'e3', 'e4', 'e5', 'e6']);
   });
+
+  it('triggers edge exclusion for MOCK-edge-only assay (stubbed registry)', () => {
+    const check = findCheck()!;
+    // Stub the registry to return a custom assay spec with edgeExclusion
+    const registry = getAssaySpecRegistry();
+    const originalGet = registry.get.bind(registry);
+    registry.get = (id: string) => {
+      if (id === 'MOCK-edge-only') {
+        return {
+          id: 'MOCK-edge-only',
+          name: 'Mock edge-only assay',
+          description: 'Test assay',
+          panelConstraints: { edgeExclusion: true },
+        } as any;
+      }
+      return originalGet(id);
+    };
+
+    try {
+      const ctx = makeContext(
+        [
+          { eventId: 'e1', event_type: 'add_material', details: { well: 'A1' } },
+          { eventId: 'e2', event_type: 'add_material', details: { well: 'B2' } },
+        ],
+        [{ kind: 'assay', label: 'mock', resolvedId: 'MOCK-edge-only' }],
+      );
+      const findings = check.run(ctx);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]!.severity).toBe('error');
+      expect(findings[0]!.message).toContain('1 events target edge wells');
+      expect(findings[0]!.affectedIds).toEqual(['e1']);
+    } finally {
+      registry.get = originalGet;
+    }
+  });
+
+  it('produces no findings when assay spec is missing from registry', () => {
+    const check = findCheck()!;
+    const registry = getAssaySpecRegistry();
+    const originalGet = registry.get.bind(registry);
+    registry.get = () => undefined;
+
+    try {
+      const ctx = makeContext(
+        [
+          { eventId: 'e1', event_type: 'add_material', details: { well: 'A1' } },
+        ],
+        [{ kind: 'assay', label: 'ghost', resolvedId: 'nonexistent-assay' }],
+      );
+      const findings = check.run(ctx);
+      expect(findings).toHaveLength(0);
+    } finally {
+      registry.get = originalGet;
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -178,7 +234,7 @@ describe('assay-cell-region', () => {
     expect(findings).toHaveLength(0);
   });
 
-  it('returns empty findings when resolved assay is not FIRE-cellular-redox', () => {
+  it('returns empty findings when resolved assay has no cellRegion', () => {
     const check = findCheck()!;
     const ctx = makeContext(
       [

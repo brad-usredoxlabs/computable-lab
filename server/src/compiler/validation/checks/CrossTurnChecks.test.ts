@@ -197,4 +197,52 @@ describe('pipette-feasibility-cross-turn', () => {
       floor: 5,
     });
   });
+
+  it('uses feasibility_floor_uL from registry when available', async () => {
+    // Stub the registry to return a spec with feasibility_floor_uL: 2
+    const { getPipetteCapabilityRegistry } = await import(
+      '../../../registry/PipetteCapabilityRegistry.js'
+    );
+    const originalGet = getPipetteCapabilityRegistry().get;
+    const stubbedSpec = {
+      id: 'custom-pipette',
+      display_name: 'Custom Pipette',
+      tool_type: 'pipette' as const,
+      channels_supported: [1],
+      volume_families: [
+        { name: 'mid', volume_min_uL: 10, volume_max_uL: 100, feasibility_floor_uL: 2 },
+      ],
+      kind: 'pipette-capability' as const,
+      recordId: 'pipette-capability/custom',
+      type: 'pipette_capability' as const,
+    };
+    getPipetteCapabilityRegistry().get = (id: string) =>
+      id === 'custom-pipette' ? stubbedSpec : undefined;
+
+    try {
+      const check = findCheck()!;
+      // custom-pipette: registry says floor = 2 uL
+      // volume 1 uL < 2 → error
+      const ctx = makeContext(
+        [
+          {
+            eventId: 'evt-1',
+            event_type: 'transfer',
+            details: { volumeUl: 1 },
+          },
+        ],
+        [{ mountSide: 'left', pipetteType: 'custom-pipette', maxVolumeUl: 100 }],
+      );
+      const findings = check.run(ctx);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]!.details).toEqual({
+        pipette: 'custom-pipette',
+        affectedCount: 1,
+        floor: 2,
+      });
+    } finally {
+      // Restore original
+      getPipetteCapabilityRegistry().get = originalGet;
+    }
+  });
 });

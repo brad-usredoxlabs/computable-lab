@@ -2,13 +2,14 @@
  * Tests for IntraEventChecks.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import {
   getValidationChecks,
 } from '../ValidationCheck.js';
 import type { ValidationContext } from '../ValidationCheck.js';
 import type { TerminalArtifacts } from '../../pipeline/CompileContracts.js';
 import type { LabStateSnapshot } from '../../state/LabState.js';
+import { getLabwareDefinitionRegistry } from '../../../registry/LabwareDefinitionRegistry.js';
 
 // Side-effect import registers checks on module load
 import './IntraEventChecks.js';
@@ -295,5 +296,32 @@ describe('well-address-valid', () => {
     ]);
     const findings = check.run(ctx);
     expect(findings).toHaveLength(0);
+  });
+
+  it('24-well-plate (4×6) rejects E1 as out-of-bounds', () => {
+    // Ensure the 24-well-plate YAML is loaded in the registry
+    const registry = getLabwareDefinitionRegistry();
+    registry.reload();
+    const entry = registry.get('24-well-plate');
+    expect(entry).toBeDefined();
+    expect(entry!.topology.rows).toBe(4);
+    expect(entry!.topology.columns).toBe(6);
+
+    const check = findCheck()!;
+    const ctx = makeContext([
+      {
+        eventId: 'evt-1',
+        event_type: 'add_material',
+        details: {
+          labwareType: '24-well-plate',
+          well: 'E1',
+        },
+      },
+    ]);
+    const findings = check.run(ctx);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.severity).toBe('error');
+    expect(findings[0]!.message).toContain('E1');
+    expect(findings[0]!.message).toContain('24-well-plate');
   });
 });

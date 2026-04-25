@@ -34,7 +34,7 @@ import {
   type EventGraphData,
 } from './ProtocolIdeGraphReviewSurface'
 import { useState, useEffect } from 'react'
-import { apiClient } from '../../shared/api/client'
+import { apiClient } from '../shared/api/client'
 import type {
   DeckSummary,
   ToolsSummary,
@@ -204,6 +204,8 @@ function budgetSummaryToBudgetCostSummary(
  * In v1 the ref exists but the actual events would be fetched from
  * the event-graph cache (spec-070). We produce a stub so the surface
  * renders the canvas.
+ *
+ * @deprecated Use fetchedGraph state in EventGraphSurface instead.
  */
 function buildEventGraphData(
   session: ProtocolIdeSession
@@ -228,13 +230,15 @@ function EventGraphSurface({ session }: { session: ProtocolIdeSession }): JSX.El
     budget: BudgetSummary | null
   } | null>(null)
 
+  const [eventGraphData, setEventGraphData] = useState<EventGraphData | null>(null)
+
   // Fetch overlay summaries when the session has a projection
   useEffect(() => {
     const ref = session.latestEventGraphRef
     if (!ref || !ref.id) return
 
     apiClient
-      .getProtocolIdeOverlaySummaries(ref.id)
+      .getProtocolIdeOverlaySummaries(session.recordId)
       .then((res) => {
         setOverlaySummaries({
           deck: res.deck,
@@ -248,12 +252,31 @@ function EventGraphSurface({ session }: { session: ProtocolIdeSession }): JSX.El
       })
   }, [session.latestEventGraphRef])
 
+  // Fetch event-graph data when the session has a projection
+  useEffect(() => {
+    const ref = session.latestEventGraphRef
+    if (!ref || !ref.id) return
+
+    apiClient
+      .getProtocolIdeEventGraph(session.recordId)
+      .then((res) => {
+        setEventGraphData({
+          events: res.events as EventGraphData['events'],
+          labwares: res.labwares as EventGraphData['labwares'],
+          deckPlacements: res.deckPlacements as EventGraphData['deckPlacements'],
+        })
+      })
+      .catch(() => {
+        // Network error — graph data stays null, no console error
+      })
+  }, [session.latestEventGraphRef])
+
   const issueCards = sessionIssueCardsToIssueCardRefs(session)
   const deckLabwareSummary = deckSummaryToDeckLabwareSummary(overlaySummaries?.deck ?? null)
   const toolsInstrumentsSummary = toolsSummaryToToolsInstrumentsSummary(overlaySummaries?.tools ?? null)
   const reagentsConcentrationsSummary = reagentsSummaryToReagentsConcentrationsSummary(overlaySummaries?.reagents ?? null)
   const budgetCostSummary = budgetSummaryToBudgetCostSummary(overlaySummaries?.budget ?? null)
-  const eventGraphData = buildEventGraphData(session)
+  const graphData = eventGraphData ?? buildEventGraphData(session)
 
   const handleIssueCardClick = (card: IssueCardRef) => {
     console.log('Issue card clicked:', card)
@@ -266,7 +289,7 @@ function EventGraphSurface({ session }: { session: ProtocolIdeSession }): JSX.El
   return (
     <ProtocolIdeGraphReviewSurface
       session={session}
-      eventGraphData={eventGraphData}
+      eventGraphData={graphData}
       deckLabwareSummary={deckLabwareSummary}
       toolsInstrumentsSummary={toolsInstrumentsSummary}
       reagentsConcentrationsSummary={reagentsConcentrationsSummary}

@@ -3,13 +3,14 @@
  *
  * - assay-edge-exclusion: errors if any event targets an excluded edge
  *   well (row A/H or col 1/12 on a 96-well) when the resolved assay
- *   declares edgeExclusion (heuristic: assay id starts with 'FIRE').
+ *   declares `panelConstraints.edgeExclusion: true` in its YAML spec.
  * - assay-cell-region: warns if events are outside the declared
- *   cellRegion (heuristic: FIRE-cellular-redox → B2-G11).
+ *   `panelConstraints.cellRegion` (rows/cols) in the assay YAML spec.
  */
 
 import { registerValidationCheck } from '../ValidationCheck.js';
 import type { ValidationFinding } from '../ValidationReport.js';
+import { getAssaySpecRegistry } from '../../../registry/AssaySpecRegistry.js';
 
 // ---------------------------------------------------------------------------
 // Edge-well exclusion set for 96-well plates
@@ -27,6 +28,41 @@ for (const r of ['B', 'C', 'D', 'E', 'F', 'G']) {
 }
 
 // ---------------------------------------------------------------------------
+// Cell-region parser
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a cellRegion spec like `{ rows: 'B-G', cols: '2-11' }` into
+ * a usable shape.  Returns `null` if either field is missing or malformed.
+ */
+function parseCellRegion(
+  region: { rows?: string; cols?: string },
+): { rows: Set<string>; cols: { min: number; max: number } } | null {
+  const { rows, cols } = region;
+  if (!rows || !cols) return null;
+
+  // Parse rows: 'A-Z' range → Set of single-letter row names
+  const rowMatch = rows.match(/^([A-Z])-([A-Z])$/);
+  if (!rowMatch) return null;
+  const rowStart = rowMatch[1]!.charCodeAt(0);
+  const rowEnd = rowMatch[2]!.charCodeAt(0);
+  if (rowEnd < rowStart) return null;
+  const rowSet = new Set<string>();
+  for (let code = rowStart; code <= rowEnd; code++) {
+    rowSet.add(String.fromCharCode(code));
+  }
+
+  // Parse cols: '1-12' range → { min, max }
+  const colMatch = cols.match(/^(\d+)-(\d+)$/);
+  if (!colMatch) return null;
+  const colMin = Number(colMatch[1]);
+  const colMax = Number(colMatch[2]);
+  if (colMax < colMin) return null;
+
+  return { rows: rowSet, cols: { min: colMin, max: colMax } };
+}
+
+// ---------------------------------------------------------------------------
 // assay-edge-exclusion
 // ---------------------------------------------------------------------------
 
@@ -39,24 +75,28 @@ registerValidationCheck({
     const assayRefs = resolved.filter((r) => r.kind === 'assay');
     if (assayRefs.length === 0) return findings;
 
-    // Heuristic: edgeExclusion applies when the assay id starts with 'FIRE'.
-    const edgeExcluded = assayRefs.some((r) => r.resolvedId.startsWith('FIRE'));
-    if (!edgeExcluded) return findings;
-
+    const registry = getAssaySpecRegistry();
     const events = artifacts.events ?? [];
-    const violations = events.filter((e) => {
-      const well = (e.details as { well?: string }).well;
-      return well && EXCLUDED_WELLS_96.has(well);
-    });
-    if (violations.length === 0) return findings;
 
-    findings.push({
-      severity: 'error',
-      category: 'panel-constraint',
-      message: `${violations.length} events target edge wells on a FIRE-assay plate (edges excluded).`,
-      suggestion: 'Move events to the interior (rows B-G, cols 2-11).',
-      affectedIds: violations.map((v) => v.eventId),
-    });
+    for (const assayRef of assayRefs) {
+      const spec = registry.get(assayRef.resolvedId);
+      if (!spec?.panelConstraints?.edgeExclusion) continue;
+
+      const assayName = spec.name ?? assayRef.resolvedId;
+      const violations = events.filter((e) => {
+        const well = (e.details as { well?: string }).well;
+        return well && EXCLUDED_WELLS_96.has(well);
+      });
+      if (violations.length === 0) continue;
+
+      findings.push({
+        severity: 'error',
+        category: 'panel-constraint',
+        message: `${violations.length} events target edge wells on a ${assayName} plate (edges excluded).`,
+        suggestion: 'Move events to the interior (rows B-G, cols 2-11).',
+        affectedIds: violations.map((v) => v.eventId),
+      });
+    }
 
     return findings;
   },
@@ -73,29 +113,39 @@ registerValidationCheck({
     const findings: ValidationFinding[] = [];
     const resolved = artifacts.resolvedRefs ?? [];
     const assayRefs = resolved.filter((r) => r.kind === 'assay');
-    const isFIRE = assayRefs.some((r) => r.resolvedId === 'FIRE-cellular-redox');
-    if (!isFIRE) return findings;
+    if (assayRefs.length === 0) return findings;
 
+    const registry = getAssaySpecRegistry();
     const events = artifacts.events ?? [];
-    const inRegion = (well?: string): boolean => {
-      if (!well) return true;
-      const m = well.match(/^([A-Z])(\d+)$/);
-      if (!m) return true;
-      const row = m[1];
-      const col = Number(m[2]);
-      return 'BCDEFG'.includes(row) && col >= 2 && col <= 11;
-    };
 
-    const outside = events.filter(
-      (e) => !inRegion((e.details as { well?: string }).well),
-    );
-    if (outside.length > 0) {
-      findings.push({
-        severity: 'warning',
-        category: 'panel-constraint',
-        message: `${outside.length} events are outside the FIRE cellRegion (B2-G11).`,
-        affectedIds: outside.map((v) => v.eventId),
+    for (const assayRef of assayRefs) {
+      const spec = registry.get(assayRef.resolvedId);
+      if (!spec?.panelConstraints?.cellRegion) continue;
+
+      const region = parseCellRegion(spec.panelConstraints.cellRegion);
+      if (!region) continue;
+
+      const assayName = spec.name ?? assayRef.resolvedId;
+      const outside = events.filter((e) => {
+        const well = (e.details as { well?: string }).well;
+        if (!well) return false;
+        const m = well!.match(/^([A-Z])(\d+)$/);
+        if (!m) return false;
+        const row = m[1]!;
+        const col = Number(m[2]);
+        return (
+          !region.rows.has(row) || col < region.cols.min || col > region.cols.max
+        );
       });
+
+      if (outside.length > 0) {
+        findings.push({
+          severity: 'warning',
+          category: 'panel-constraint',
+          message: `${outside.length} events are outside the ${assayName} cellRegion.`,
+          affectedIds: outside.map((v) => v.eventId),
+        });
+      }
     }
 
     return findings;

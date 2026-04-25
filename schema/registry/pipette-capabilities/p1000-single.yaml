@@ -1,0 +1,15 @@
+kind: pipette-capability
+recordId: pipette-capability/p1000-single
+type: pipette_capability
+id: p1000-single
+display_name: P1000 Single
+tool_type: pipette
+channels_supported: [1]
+spacing_mode: fixed
+fixed_spacing_mm: 4.5
+volume_families:
+  - name: high
+    volume_min_uL: 100
+    volume_max_uL: 1000
+    feasibility_floor_uL: 100
+platform: opentrons_ot2

@@ -37,3 +37,4 @@ export * from './RelatedRecordsHandlers.js';
 export * from './AiRecordDraftHandlers.js';
 export * from './ExtractHandlers.js';
 export * from './ProcurementHandlers.js';
+export * from './PromptTemplateHandlers.js';
