@@ -1,0 +1,112 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/budget.schema.yaml"
+title: "Budget"
+description: >
+  A procurement budget that holds selected line items (with resolved vendor-offer
+  prices) and computed totals. This is the authoring surface for budget decisions.
+  Volatile quote data lives on vendor-offer; the budget selects and aggregates.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- title
+- sourceType
+- sourceRef
+- state
+
+properties:
+  kind:
+    const: "budget"
+
+  recordId:
+    type: string
+    description: "Stable local identifier (e.g., BUD-000001)."
+
+  title:
+    type: string
+
+  sourceType:
+    type: string
+    enum: [ procurement-manifest, manual ]
+    description: "What drove the generation of this budget."
+
+  sourceRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Reference to the source (e.g., procurement-manifest)."
+
+  state:
+    type: string
+    enum: [ draft, reviewing, approved, rejected, fulfilled ]
+    description: "Budget lifecycle state."
+
+  currency:
+    type: string
+    description: "ISO 4217 currency code for all line items."
+    default: "USD"
+
+  lines:
+    type: array
+    description: "Selected line items with resolved pricing."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ lineId, vendorOfferRef, quantity, unitPrice ]
+      properties:
+        lineId:
+          type: string
+          description: "Stable line identifier within the budget."
+        vendorOfferRef:
+          $ref: "./datatypes/ref.schema.yaml"
+          description: "Reference to the selected vendor-offer."
+        quantity:
+          type: object
+          additionalProperties: false
+          required: [ value, unit ]
+          properties:
+            value:
+              type: number
+              minimum: 0
+            unit:
+              type: string
+        unitPrice:
+          type: number
+          minimum: 0
+          description: "Price per unit from the vendor-offer."
+        totalPrice:
+          type: number
+          minimum: 0
+          description: "Computed total (quantity * unitPrice)."
+        notes:
+          type: string
+        approved:
+          type: boolean
+          default: false
+          description: "Whether this line is approved for procurement."
+
+  summary:
+    type: object
+    additionalProperties: false
+    properties:
+      lineCount:
+        type: integer
+        minimum: 0
+      approvedLineCount:
+        type: integer
+        minimum: 0
+      grandTotal:
+        type: number
+        minimum: 0
+        description: "Sum of all approved line totals."
+
+  notes:
+    type: string
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

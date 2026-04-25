@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseDeclaredConcentrationText } from './VendorSearchHandlers.js';
+import { parseDeclaredConcentrationText, parseVendorIds, VALID_VENDOR_IDS } from './VendorSearchHandlers.js';
 
 describe('VendorSearchHandlers', () => {
   it('parses declared concentration from vendor text', () => {
@@ -26,5 +26,62 @@ describe('VendorSearchHandlers', () => {
 
   it('returns null when no supported concentration is present', () => {
     expect(parseDeclaredConcentrationText('Dimethyl sulfoxide, molecular biology grade')).toBeNull();
+  });
+
+  describe('parseVendorIds', () => {
+    it('accepts all six vendor ids', () => {
+      const result = parseVendorIds('thermo,sigma,fisher,vwr,cayman,thomas');
+      expect(result).toEqual(['thermo', 'sigma', 'fisher', 'vwr', 'cayman', 'thomas']);
+    });
+
+    it('accepts a subset of vendor ids', () => {
+      const result = parseVendorIds('fisher,vwr');
+      expect(result).toEqual(['fisher', 'vwr']);
+    });
+
+    it('filters out unknown vendor ids', () => {
+      const result = parseVendorIds('thermo,unknown,sigma,bad');
+      expect(result).toEqual(['thermo', 'sigma']);
+    });
+
+    it('handles case-insensitive input', () => {
+      const result = parseVendorIds('Thermo,SIGMA,Fisher');
+      expect(result).toEqual(['thermo', 'sigma', 'fisher']);
+    });
+
+    it('returns empty array for empty string', () => {
+      const result = parseVendorIds('');
+      expect(result).toEqual([]);
+    });
+
+    it('trims whitespace around vendor ids', () => {
+      const result = parseVendorIds(' thermo , sigma ');
+      expect(result).toEqual(['thermo', 'sigma']);
+    });
+
+    it('deduplicates vendor ids', () => {
+      const result = parseVendorIds('thermo,thermo,sigma');
+      expect(result).toEqual(['thermo', 'sigma']);
+    });
+  });
+
+  describe('VALID_VENDOR_IDS', () => {
+    it('contains exactly six vendor ids', () => {
+      expect(VALID_VENDOR_IDS).toHaveLength(6);
+    });
+
+    it('includes all required vendors', () => {
+      expect(VALID_VENDOR_IDS).toContain('thermo');
+      expect(VALID_VENDOR_IDS).toContain('sigma');
+      expect(VALID_VENDOR_IDS).toContain('fisher');
+      expect(VALID_VENDOR_IDS).toContain('vwr');
+      expect(VALID_VENDOR_IDS).toContain('cayman');
+      expect(VALID_VENDOR_IDS).toContain('thomas');
+    });
+
+    it('does not contain unknown vendors', () => {
+      expect(VALID_VENDOR_IDS).not.toContain('atcc');
+      expect(VALID_VENDOR_IDS).not.toContain('other');
+    });
   });
 });

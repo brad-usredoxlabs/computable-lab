@@ -846,8 +846,10 @@ export interface MaterialLineageResponse {
   }
 }
 
+export type VendorName = 'thermo' | 'sigma' | 'fisher' | 'vwr' | 'cayman' | 'thomas'
+
 export interface VendorSearchResult {
-  vendor: 'thermo' | 'sigma'
+  vendor: VendorName
   name: string
   catalogNumber: string
   productUrl?: string
@@ -861,7 +863,7 @@ export interface VendorSearchResult {
 export interface VendorSearchResponse {
   items: VendorSearchResult[]
   vendors: Array<{
-    vendor: 'thermo' | 'sigma'
+    vendor: VendorName
     success: boolean
     error?: string
   }>
@@ -1281,7 +1283,7 @@ export const apiClient = {
 
   async searchVendorProducts(params: {
     q: string
-    vendors?: Array<'thermo' | 'sigma'>
+    vendors?: VendorName[]
     limit?: number
   }): Promise<VendorSearchResponse> {
     const qs = new URLSearchParams({ q: params.q })

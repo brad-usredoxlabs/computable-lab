@@ -1,0 +1,109 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/procurement-manifest.schema.yaml"
+title: "ProcurementManifest"
+description: >
+  A derived procurement manifest that captures requirement lines generated from
+  planned-run bindings, event-graph material needs, or manual authoring. Each
+  line references a vendor-product and carries a requested quantity. The manifest
+  is the input to vendor-search / quote collection; volatile quote data lives on
+  vendor-offer, not here.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- title
+- sourceType
+- sourceRef
+- state
+
+properties:
+  kind:
+    const: "procurement-manifest"
+
+  recordId:
+    type: string
+    description: "Stable local identifier (e.g., PMF-000001)."
+
+  title:
+    type: string
+
+  sourceType:
+    type: string
+    enum: [ planned-run, event-graph, manual ]
+    description: "What drove the generation of this manifest."
+
+  sourceRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Reference to the source that generated this manifest."
+
+  state:
+    type: string
+    enum: [ draft, requesting, collecting, ready, stale, fulfilled ]
+    description: "Lifecycle state of the manifest."
+
+  lines:
+    type: array
+    description: "Derived requirement lines."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ lineId, materialRef, quantity ]
+      properties:
+        lineId:
+          type: string
+          description: "Stable line identifier within the manifest."
+        materialRef:
+          $ref: "./datatypes/ref.schema.yaml"
+          description: "Canonical material concept this line covers."
+        vendorProductRef:
+          $ref: "./datatypes/ref.schema.yaml"
+          description: "Optional: pre-selected vendor-product for this line."
+        quantity:
+          type: object
+          additionalProperties: false
+          required: [ value, unit ]
+          properties:
+            value:
+              type: number
+              minimum: 0
+            unit:
+              type: string
+        notes:
+          type: string
+        priority:
+          type: string
+          enum: [ critical, high, medium, low ]
+          default: medium
+        quoteStatus:
+          type: string
+          enum: [ not_requested, collecting, ready, stale ]
+          default: not_requested
+        quoteRef:
+          $ref: "./datatypes/ref.schema.yaml"
+          description: "Optional: reference to a vendor-offer once collected."
+
+  vendorSearchScope:
+    type: object
+    additionalProperties: false
+    properties:
+      vendors:
+        type: array
+        items:
+          type: string
+          enum: [ fisher-scientific, vwr, cayman-chemical, thomas-scientific ]
+      searchTerms:
+        type: array
+        items: { type: string }
+
+  notes:
+    type: string
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

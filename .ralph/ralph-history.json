@@ -2,66 +2,26 @@
   "iterations": [
     {
       "iteration": 1,
-      "startedAt": "2026-04-25T03:18:55.481Z",
-      "endedAt": "2026-04-25T03:23:14.733Z",
-      "durationMs": 257436,
+      "startedAt": "2026-04-25T04:07:07.040Z",
+      "endedAt": "2026-04-25T04:17:29.615Z",
+      "durationMs": 620768,
       "agent": "codex",
       "model": "",
       "toolsUsed": {},
       "filesModified": [
-        "server/src/compiler/pipeline/fixtures/prompt-04-fire-assay.yaml"
+        "schema/ingestion/ingestion-candidate-bundle.schema.yaml",
+        "schema/ingestion/ingestion-candidate.schema.yaml",
+        "server/src/ingestion/IngestionWorker.ts",
+        "server/src/ingestion/types.ts",
+        "server/src/ingestion/adapters/vendorCatalogPage.test.ts",
+        "server/src/ingestion/adapters/vendorCatalogPage.ts"
       ],
       "exitCode": 1,
-      "completionDetected": false,
-      "errors": [
-        "API error: API error 400: {\"error\":{\"message\":\"This model's maximum context length is 262144 tokens. However, you requested 16384 output tokens and your prompt contains at least 245761 input tokens, f"
-      ]
-    },
-    {
-      "iteration": 2,
-      "startedAt": "2026-04-25T03:23:17.631Z",
-      "endedAt": "2026-04-25T03:33:41.959Z",
-      "durationMs": 622517,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [
-        "server/src/compiler/pipeline/fixtures/Prompt04Debug.test.ts",
-        "server/src/compiler/pipeline/fixtures/Prompt04DeepDebug.test.ts",
-        "server/src/compiler/pipeline/fixtures/Prompt04Green.test.ts"
-      ],
-      "exitCode": 1,
-      "completionDetected": false,
-      "errors": []
-    },
-    {
-      "iteration": 3,
-      "startedAt": "2026-04-25T03:33:44.828Z",
-      "endedAt": "2026-04-25T03:46:37.734Z",
-      "durationMs": 770572,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [
-        "schema/registry/compile-pipelines/chatbot-compile.yaml",
-        "server/src/ai/runChatbotCompile.ts",
-        "server/src/compiler/biology/verbs/simpleVerbs.ts",
-        "server/src/compiler/pipeline/fixtures/FixtureRunner.ts",
-        "server/src/compiler/pipeline/fixtures/PatternExpandersDebug.test.ts",
-        "server/src/compiler/pipeline/fixtures/Prompt04Debug2.test.ts",
-        "server/src/compiler/pipeline/fixtures/Prompt04Debug3.test.ts",
-        "server/src/compiler/pipeline/fixtures/Prompt04Debug4.test.ts",
-        "server/src/compiler/pipeline/fixtures/Prompt04Debug5.test.ts",
-        "server/src/compiler/pipeline/fixtures/Prompt04Debug6.test.ts",
-        "server/src/compiler/pipeline/fixtures/Prompt04Debug7.test.ts",
-        "server/src/compiler/pipeline/fixtures/Prompt04Debug8.test.ts"
-      ],
-      "exitCode": 0,
       "completionDetected": false,
       "errors": []
     }
   ],
-  "totalDurationMs": 1650525,
+  "totalDurationMs": 620768,
   "struggleIndicators": {
     "repeatedErrors": {},
     "noProgressIterations": 0,

@@ -1,0 +1,92 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/vendor-offer.schema.yaml"
+title: "VendorOffer"
+description: >
+  A volatile quote snapshot from a vendor. Holds price, currency, package size,
+  availability, and captured-at metadata. This is the volatile layer — the
+  canonical vendor-product schema stays price-free. Each vendor-offer is linked
+  to a vendor-product and a procurement-manifest line.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- vendorProductRef
+- vendor
+- price
+- currency
+- captured_at
+
+properties:
+  kind:
+    const: "vendor-offer"
+
+  recordId:
+    type: string
+    description: "Stable local identifier (e.g., VOF-000001)."
+
+  vendorProductRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "The vendor-product this quote is for."
+
+  vendor:
+    type: string
+    description: "Vendor name (e.g., Fisher Scientific, Cayman Chemical)."
+
+  catalog_number:
+    type: string
+    description: "Vendor's catalog number for this product."
+
+  price:
+    type: number
+    minimum: 0
+    description: "Unit price from the vendor quote."
+
+  currency:
+    type: string
+    description: "ISO 4217 currency code (e.g., USD, EUR)."
+
+  package_size:
+    type: string
+    description: "Package size / quantity for the quoted price."
+
+  url:
+    type: string
+    format: uri
+    description: "URL to the vendor product page or quote."
+
+  availability:
+    type: string
+    enum: [ in_stock, backorder, discontinued, unknown ]
+    default: unknown
+
+  lead_time_days:
+    type: integer
+    minimum: 0
+    description: "Estimated lead time in days."
+
+  captured_at:
+    type: string
+    format: date-time
+    description: "When this quote was captured."
+
+  expires_at:
+    type: string
+    format: date-time
+    description: "Optional: when this quote expires."
+
+  manifestLineRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Optional: reference to the procurement-manifest line this quote satisfies."
+
+  notes:
+    type: string
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

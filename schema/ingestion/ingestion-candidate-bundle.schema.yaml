@@ -23,7 +23,7 @@ properties:
     type: string
   bundle_type:
     type: string
-    enum: [ screening_library, formulation_family, vendor_product_batch, other ]
+    enum: [ screening_library, formulation_family, vendor_product_batch, vendor_offer_batch, other ]
   summary:
     type: string
   status:

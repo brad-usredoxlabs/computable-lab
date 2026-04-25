@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { OntologyRef, RecordRef } from '../../shared/ref'
-import { apiClient, type VendorSearchResult } from '../../shared/api/client'
+import { apiClient, type VendorSearchResult, type VendorName } from '../../shared/api/client'
 import {
   CONCENTRATION_UNITS,
   MATERIAL_SCHEMA_ID,
@@ -15,6 +15,17 @@ import {
   type VendorDocumentValue,
   withInferredConcentrationBasis,
 } from '../../types/material'
+
+const VENDOR_DISPLAY_NAMES: Record<VendorName, string> = {
+  thermo: 'Thermo Fisher',
+  sigma: 'Sigma-Aldrich',
+  fisher: 'Fisher Scientific',
+  vwr: 'VWR',
+  cayman: 'Cayman Chemical',
+  thomas: 'Thomas Scientific',
+}
+
+const VENDOR_SEARCH_VENDORS: VendorName[] = ['thermo', 'sigma', 'fisher', 'vwr', 'cayman', 'thomas']
 
 interface VendorProductBuilderModalProps {
   isOpen: boolean
@@ -84,7 +95,7 @@ function fileNameFromUrl(url: string): string {
 export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initialSearchResult = null, onSave }: VendorProductBuilderModalProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<VendorSearchResult[]>([])
-  const [searchStatus, setSearchStatus] = useState<Array<{ vendor: 'thermo' | 'sigma'; success: boolean; error?: string }>>([])
+  const [searchStatus, setSearchStatus] = useState<Array<{ vendor: VendorName; success: boolean; error?: string }>>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [vendor, setVendor] = useState('')
@@ -116,7 +127,7 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
     setSearchStatus([])
     setSearchLoading(false)
     setSearchError(null)
-    setVendor(initialSearchResult?.vendor === 'thermo' ? 'Thermo Fisher' : initialSearchResult?.vendor === 'sigma' ? 'Sigma-Aldrich' : '')
+    setVendor(initialSearchResult ? VENDOR_DISPLAY_NAMES[initialSearchResult.vendor] : '')
     setCatalogNumber(initialSearchResult?.catalogNumber || '')
     setName(initialSearchResult?.name || ontologyRef?.label || '')
     setGrade(initialSearchResult?.grade || '')
@@ -183,7 +194,7 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
       setSearchLoading(true)
       setSearchError(null)
       try {
-        const response = await apiClient.searchVendorProducts({ q: searchQuery.trim(), vendors: ['thermo', 'sigma'], limit: 10 })
+        const response = await apiClient.searchVendorProducts({ q: searchQuery.trim(), vendors: ['thermo', 'sigma', 'fisher', 'vwr', 'cayman', 'thomas'], limit: 10 })
         if (cancelled) return
         setSearchResults(response.items)
         setSearchStatus(response.vendors)
@@ -207,7 +218,7 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
   const activeRef = ontologyRef
 
   function applySearchResult(result: VendorSearchResult) {
-    setVendor(result.vendor === 'thermo' ? 'Thermo Fisher' : 'Sigma-Aldrich')
+    setVendor(VENDOR_DISPLAY_NAMES[result.vendor])
     setCatalogNumber(result.catalogNumber)
     setName(result.name)
     setGrade(result.grade || '')
@@ -368,7 +379,7 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
           <div>
             <h2 className="text-base font-semibold text-gray-900 leading-tight">Add Vendor Product</h2>
-            <p className="text-xs text-gray-500 mt-1">Search Thermo and Sigma for a product{activeRef ? ` linked to ${activeRef.label}` : ''}, then save a local vendor reagent record.</p>
+            <p className="text-xs text-gray-500 mt-1">Search Thermo, Sigma, Fisher, VWR, Cayman Chemical, and Thomas Scientific for a product{activeRef ? ` linked to ${activeRef.label}` : ''}, then save a local vendor reagent record.</p>
           </div>
           <button type="button" onClick={onClose} className="btn btn-secondary">Close</button>
         </div>
@@ -379,7 +390,7 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
                 <span>Search vendor catalogs</span>
                 <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="DMSO, Clofibrate, PBS..." />
               </label>
-              {searchLoading && <div className="text-xs text-gray-500">Searching Thermo and Sigma…</div>}
+              {searchLoading && <div className="text-xs text-gray-500">Searching vendor catalogs…</div>}
               {searchError && <div className="px-3 py-2 rounded border border-red-200 bg-red-50 text-red-700 text-xs">{searchError}</div>}
               {searchStatus.length > 0 && (
                 <div className="flex flex-wrap gap-2 text-[11px]">
@@ -404,8 +415,8 @@ export function VendorProductBuilderModal({ isOpen, onClose, ontologyRef, initia
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="font-semibold text-slate-900">{result.name}</div>
-                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${result.vendor === 'thermo' ? 'bg-red-50 text-red-700' : 'bg-blue-50 text-blue-700'}`}>
-                        {result.vendor === 'thermo' ? 'Thermo' : 'Sigma'}
+                      <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${result.vendor === 'thermo' ? 'bg-red-50 text-red-700' : result.vendor === 'sigma' ? 'bg-blue-50 text-blue-700' : result.vendor === 'fisher' ? 'bg-purple-50 text-purple-700' : result.vendor === 'vwr' ? 'bg-orange-50 text-orange-700' : result.vendor === 'cayman' ? 'bg-teal-50 text-teal-700' : 'bg-indigo-50 text-indigo-700'}`}>
+                        {VENDOR_DISPLAY_NAMES[result.vendor]}
                       </span>
                     </div>
                     <div className="text-xs text-slate-600 mt-1">Catalog: {result.catalogNumber}</div>

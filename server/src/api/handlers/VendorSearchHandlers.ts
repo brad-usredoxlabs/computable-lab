@@ -2,8 +2,10 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiError } from '../types.js';
 import { parseConcentration, type Concentration } from '../../materials/concentration.js';
 
+export type VendorName = 'thermo' | 'sigma' | 'fisher' | 'vwr' | 'cayman' | 'thomas';
+
 export interface VendorSearchResultItem {
-  vendor: 'thermo' | 'sigma';
+  vendor: VendorName;
   name: string;
   catalogNumber: string;
   productUrl?: string;
@@ -17,18 +19,30 @@ export interface VendorSearchResultItem {
 export interface VendorSearchResponse {
   items: VendorSearchResultItem[];
   vendors: Array<{
-    vendor: 'thermo' | 'sigma';
+    vendor: VendorName;
     success: boolean;
     error?: string;
   }>;
 }
 
-type VendorName = 'thermo' | 'sigma';
 type VendorStatus = VendorSearchResponse['vendors'][number];
 
 const VENDOR_TIMEOUT_MS = 8_000;
 const BROWSER_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36';
 const DECLARED_CONCENTRATION_PATTERN = /(\d+(?:\.\d+)?)\s*(µM|uM|mM|nM|pM|fM|M|mg\s*\/\s*mL|ug\s*\/\s*mL|ng\s*\/\s*mL|g\s*\/\s*L|U\s*\/\s*mL|U\s*\/\s*uL|cells\s*\/\s*mL|cells\s*\/\s*uL|%\s*v\s*\/\s*v|%\s*w\s*\/\s*v)\b/i;
+
+const VALID_VENDOR_IDS: readonly VendorName[] = ['thermo', 'sigma', 'fisher', 'vwr', 'cayman', 'thomas'];
+
+export { VALID_VENDOR_IDS };
+
+export function parseVendorIds(raw: string): VendorName[] {
+  return Array.from(new Set(
+    raw
+      .split(',')
+      .map((entry) => entry.trim().toLowerCase())
+      .filter((entry): entry is VendorName => VALID_VENDOR_IDS.includes(entry as VendorName))
+  ));
+}
 
 function canonicalConcentrationUnit(unit: string): string {
   const trimmed = unit.replace(/\s+/g, '').replace('µ', 'u');
@@ -194,6 +208,151 @@ async function searchSigma(query: string, limit: number): Promise<VendorSearchRe
   return items;
 }
 
+async function searchFisher(query: string, limit: number): Promise<VendorSearchResultItem[]> {
+  const encoded = encodeURIComponent(query);
+  const url = `https://www.fishersciential.com/shop/products?q=${encoded}&page=1&pageSize=${Math.max(1, Math.min(limit, 24))}`;
+  const res = await fetchWithTimeout(url);
+  if (!res.ok) throw new Error(`Fisher returned HTTP ${res.status}`);
+  const html = await res.text();
+  const items: VendorSearchResultItem[] = [];
+  const seen = new Set<string>();
+
+  const anchorPattern = /<a[^>]+href="([^"]*\/shop\/products\/[^"#?]+)"[^>]*>(.*?)<\/a>/gis;
+  for (const match of html.matchAll(anchorPattern)) {
+    const href = match[1] ? String(match[1]) : '';
+    const rawLabel = match[2] ? String(match[2]) : '';
+    const name = stripHtml(rawLabel);
+    if (!href || !name) continue;
+    const productUrl = href.startsWith('http') ? href : `https://www.fishersciential.com${href}`;
+    const pathParts = href.split('/').filter(Boolean);
+    const catalogNumber = (pathParts[pathParts.length - 1] || '').toUpperCase();
+    if (!catalogNumber) continue;
+    const dedupeKey = `${catalogNumber}::${name}`.toLowerCase();
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    items.push(withDeclaredConcentration({
+      vendor: 'fisher',
+      name,
+      catalogNumber,
+      productUrl,
+    }));
+    if (items.length >= limit) break;
+  }
+
+  return items;
+}
+
+async function searchVwr(query: string, limit: number): Promise<VendorSearchResultItem[]> {
+  const encoded = encodeURIComponent(query);
+  const url = `https://www.vwr.com/search?q=${encoded}&page=1&pageSize=${Math.max(1, Math.min(limit, 24))}`;
+  const res = await fetchWithTimeout(url);
+  if (!res.ok) throw new Error(`VWR returned HTTP ${res.status}`);
+  const html = await res.text();
+  const items: VendorSearchResultItem[] = [];
+  const seen = new Set<string>();
+
+  const anchorPattern = /<a[^>]+href="([^"]*\/product\/[^"#?]+)"[^>]*>(.*?)<\/a>/gis;
+  for (const match of html.matchAll(anchorPattern)) {
+    const href = match[1] ? String(match[1]) : '';
+    const rawLabel = match[2] ? String(match[2]) : '';
+    const name = stripHtml(rawLabel);
+    if (!href || !name) continue;
+    const productUrl = href.startsWith('http') ? href : `https://www.vwr.com${href}`;
+    const pathParts = href.split('/').filter(Boolean);
+    const catalogNumber = (pathParts[pathParts.length - 1] || '').toUpperCase();
+    if (!catalogNumber) continue;
+    const dedupeKey = `${catalogNumber}::${name}`.toLowerCase();
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    items.push(withDeclaredConcentration({
+      vendor: 'vwr',
+      name,
+      catalogNumber,
+      productUrl,
+    }));
+    if (items.length >= limit) break;
+  }
+
+  return items;
+}
+
+async function searchCayman(query: string, limit: number): Promise<VendorSearchResultItem[]> {
+  const encoded = encodeURIComponent(query);
+  const url = `https://caymanchem.com/search?search=${encoded}&page=1&pageSize=${Math.max(1, Math.min(limit, 24))}`;
+  const res = await fetchWithTimeout(url);
+  if (!res.ok) throw new Error(`Cayman Chemical returned HTTP ${res.status}`);
+  const html = await res.text();
+  const items: VendorSearchResultItem[] = [];
+  const seen = new Set<string>();
+
+  const anchorPattern = /<a[^>]+href="([^"]*\/product\/[^"#?]+)"[^>]*>(.*?)<\/a>/gis;
+  for (const match of html.matchAll(anchorPattern)) {
+    const href = match[1] ? String(match[1]) : '';
+    const rawLabel = match[2] ? String(match[2]) : '';
+    const name = stripHtml(rawLabel);
+    if (!href || !name) continue;
+    const productUrl = href.startsWith('http') ? href : `https://caymanchem.com${href}`;
+    const pathParts = href.split('/').filter(Boolean);
+    const catalogNumber = (pathParts[pathParts.length - 1] || '').toUpperCase();
+    if (!catalogNumber) continue;
+    const dedupeKey = `${catalogNumber}::${name}`.toLowerCase();
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    items.push(withDeclaredConcentration({
+      vendor: 'cayman',
+      name,
+      catalogNumber,
+      productUrl,
+    }));
+    if (items.length >= limit) break;
+  }
+
+  return items;
+}
+
+async function searchThomas(query: string, limit: number): Promise<VendorSearchResultItem[]> {
+  const encoded = encodeURIComponent(query);
+  const url = `https://www.thomasscientific.com/search?search=${encoded}&page=1&pageSize=${Math.max(1, Math.min(limit, 24))}`;
+  const res = await fetchWithTimeout(url);
+  if (!res.ok) throw new Error(`Thomas Scientific returned HTTP ${res.status}`);
+  const html = await res.text();
+  const items: VendorSearchResultItem[] = [];
+  const seen = new Set<string>();
+
+  const anchorPattern = /<a[^>]+href="([^"]*\/product\/[^"#?]+)"[^>]*>(.*?)<\/a>/gis;
+  for (const match of html.matchAll(anchorPattern)) {
+    const href = match[1] ? String(match[1]) : '';
+    const rawLabel = match[2] ? String(match[2]) : '';
+    const name = stripHtml(rawLabel);
+    if (!href || !name) continue;
+    const productUrl = href.startsWith('http') ? href : `https://www.thomasscientific.com${href}`;
+    const pathParts = href.split('/').filter(Boolean);
+    const catalogNumber = (pathParts[pathParts.length - 1] || '').toUpperCase();
+    if (!catalogNumber) continue;
+    const dedupeKey = `${catalogNumber}::${name}`.toLowerCase();
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    items.push(withDeclaredConcentration({
+      vendor: 'thomas',
+      name,
+      catalogNumber,
+      productUrl,
+    }));
+    if (items.length >= limit) break;
+  }
+
+  return items;
+}
+
+const VENDOR_SEARCH_MAP: Record<VendorName, (query: string, limit: number) => Promise<VendorSearchResultItem[]>> = {
+  thermo: searchThermo,
+  sigma: searchSigma,
+  fisher: searchFisher,
+  vwr: searchVwr,
+  cayman: searchCayman,
+  thomas: searchThomas,
+};
+
 export function createVendorSearchHandlers() {
   return {
     async searchVendors(
@@ -215,18 +374,13 @@ export function createVendorSearchHandlers() {
         };
       }
 
-      const requestedVendors = (request.query.vendors || 'thermo,sigma')
-        .split(',')
-        .map((entry) => entry.trim().toLowerCase())
-        .filter((entry): entry is VendorName => entry === 'thermo' || entry === 'sigma');
-      const vendors: VendorName[] = requestedVendors.length > 0 ? Array.from(new Set(requestedVendors)) : ['thermo', 'sigma'];
+      const requestedVendors = parseVendorIds(request.query.vendors || '');
+      const vendors: VendorName[] = requestedVendors.length > 0 ? Array.from(new Set(requestedVendors)) : [...VALID_VENDOR_IDS];
       const limit = Math.min(Math.max(Number(request.query.limit) || 10, 1), 25);
 
       const results: Array<VendorStatus & { items: VendorSearchResultItem[] }> = await Promise.all(vendors.map(async (vendor) => {
         try {
-          const items = vendor === 'thermo'
-            ? await searchThermo(q, limit)
-            : await searchSigma(q, limit);
+          const items = await VENDOR_SEARCH_MAP[vendor](q, limit);
           return {
             vendor,
             success: true as const,

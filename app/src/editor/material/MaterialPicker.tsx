@@ -14,7 +14,7 @@ import type { Ref, OntologyRef, RecordRef } from '../../shared/ref'
 import { olsResultToRef } from '../../shared/api/olsClient'
 import { apiClient } from '../../shared/api/client'
 import { useMaterialSearch } from '../hooks/useMaterialSearch'
-import type { MaterialSearchItem, MaterialSmartSearchResult, VendorSearchResult } from '../../shared/api/client'
+import type { MaterialSearchItem, MaterialSmartSearchResult, VendorSearchResult, VendorName } from '../../shared/api/client'
 import { formatConcentration } from '../../types/material'
 import { MaterialBuilderModal } from './MaterialBuilderModal'
 import { MaterialIntentModal } from './MaterialIntentModal'
@@ -22,6 +22,17 @@ import { VendorProductBuilderModal } from './VendorProductBuilderModal'
 import { MaterialInstanceBuilderModal } from './MaterialInstanceBuilderModal'
 import { BiologicalMaterialBuilderModal } from './BiologicalMaterialBuilderModal'
 import { DerivedMaterialBuilderModal } from './DerivedMaterialBuilderModal'
+
+const VENDOR_DISPLAY_NAMES: Record<VendorName, string> = {
+  thermo: 'Thermo Fisher',
+  sigma: 'Sigma-Aldrich',
+  fisher: 'Fisher Scientific',
+  vwr: 'VWR',
+  cayman: 'Cayman Chemical',
+  thomas: 'Thomas Scientific',
+}
+
+const VENDOR_SEARCH_VENDORS: VendorName[] = ['thermo', 'sigma', 'fisher', 'vwr', 'cayman', 'thomas']
 
 export interface MaterialPickerProps {
   value?: Ref | null
@@ -303,7 +314,7 @@ export function MaterialPicker({
     const timer = setTimeout(async () => {
       setLiveVendorLoading(true)
       try {
-        const response = await apiClient.searchVendorProducts({ q: query.trim(), vendors: ['thermo', 'sigma'], limit: Math.min(maxResults, 6) })
+        const response = await apiClient.searchVendorProducts({ q: query.trim(), vendors: ['thermo', 'sigma', 'fisher', 'vwr', 'cayman', 'thomas'], limit: Math.min(maxResults, 6) })
         if (!cancelled) setLiveVendorResults(response.items)
       } catch {
         if (!cancelled) setLiveVendorResults([])
@@ -669,7 +680,7 @@ export function MaterialPicker({
               {liveVendorLoading && liveVendorResults.length === 0 ? (
                 <div style={{ padding: '10px 12px', color: '#047857', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <SpinnerIcon size={14} />
-                  Searching Thermo and Sigma...
+                  Searching vendor catalogs...
                 </div>
               ) : liveVendorResults.map((result, index) => {
                 const combinedIndex = visibleLocalResults.length + index
@@ -694,14 +705,14 @@ export function MaterialPicker({
                       <span style={{
                         padding: '1px 6px',
                         borderRadius: '999px',
-                        backgroundColor: result.vendor === 'thermo' ? '#fef2f2' : '#eff6ff',
-                        color: result.vendor === 'thermo' ? '#b91c1c' : '#1d4ed8',
+                        backgroundColor: result.vendor === 'thermo' ? '#fef2f2' : result.vendor === 'sigma' ? '#eff6ff' : result.vendor === 'fisher' ? '#f5f3ff' : result.vendor === 'vwr' ? '#fff7ed' : result.vendor === 'cayman' ? '#f0fdfa' : '#eef2ff',
+                        color: result.vendor === 'thermo' ? '#b91c1c' : result.vendor === 'sigma' ? '#1d4ed8' : result.vendor === 'fisher' ? '#7c3aed' : result.vendor === 'vwr' ? '#c2410c' : result.vendor === 'cayman' ? '#0f766e' : '#4338ca',
                         fontSize: '0.62rem',
                         fontWeight: 700,
                         textTransform: 'uppercase',
                         letterSpacing: '0.04em',
                       }}>
-                        {result.vendor}
+                        {VENDOR_DISPLAY_NAMES[result.vendor]}
                       </span>
                     </div>
                     <div style={{ fontSize: '0.7rem', color: '#475569', marginTop: '1px' }}>

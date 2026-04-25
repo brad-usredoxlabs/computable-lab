@@ -332,3 +332,111 @@ export interface WidgetRegistry {
   /** Check if a widget is registered */
   has(name: string): boolean;
 }
+
+/**
+ * Block kinds for the editor/document layout.
+ */
+export type EditorBlockKind = 'section' | 'paragraph' | 'repeater' | 'table';
+
+/**
+ * Suggestion provider kinds for editor slots.
+ */
+export type SuggestionProviderKind =
+  | 'local-records'
+  | 'local-vocab'
+  | 'ontology'
+  | 'vendor-search'
+  | 'compiler';
+
+/**
+ * A block in the editor/document layout.
+ */
+export interface EditorBlock {
+  /** Stable block identifier */
+  id: string;
+  /** Block kind */
+  kind: EditorBlockKind;
+  /** Display label */
+  label?: string;
+  /** Help text / description */
+  help?: string;
+  /** Whether the block is collapsible */
+  collapsible?: boolean;
+  /** Whether the block starts collapsed */
+  collapsed?: boolean;
+  /** For repeater/table: the path to the array field */
+  path?: string;
+  /** For table: column definitions */
+  columns?: EditorTableColumn[];
+  /** Visibility condition */
+  visible?: VisibilityCondition;
+}
+
+/**
+ * Column definition for a table block.
+ */
+export interface EditorTableColumn {
+  /** Path to the field */
+  path: string;
+  /** Column header label */
+  label: string;
+  /** Column width */
+  width?: string | number;
+  /** Widget type for editing */
+  widget?: WidgetType | string;
+}
+
+/**
+ * A slot in the editor/document layout.
+ */
+export interface EditorSlot {
+  /** Stable slot identifier */
+  id: string;
+  /** JSONPath to the field in the payload */
+  path: string;
+  /** Display label */
+  label: string;
+  /** Widget type to render */
+  widget: WidgetType | string;
+  /** Help text / description */
+  help?: string;
+  /** Whether the slot is required */
+  required?: boolean;
+  /** Suggestion providers available for this slot */
+  suggestionProviders?: SuggestionProviderKind[];
+  /** Visibility condition */
+  visible?: VisibilityCondition;
+}
+
+/**
+ * Editor configuration for document-style surfaces.
+ * Additive to form, list, and detail configs.
+ */
+export interface EditorConfig {
+  /** Editor mode — 'document' for document-style layout */
+  mode: 'document';
+  /** Ordered blocks in the document */
+  blocks: EditorBlock[];
+  /** Slots that can be placed inside blocks */
+  slots: EditorSlot[];
+}
+
+/**
+ * Complete UI specification for a schema.
+ */
+export interface UISpec {
+  /** UI spec version */
+  uiVersion: number;
+  /** Associated schema ID */
+  schemaId: string;
+  /** Form configuration */
+  form?: FormConfig;
+  /** List view configuration */
+  list?: ListConfig;
+  /** Detail view configuration */
+  detail?: DetailConfig;
+  /** Custom CSS class for styling */
+  className?: string;
+  /** Editor configuration for document-style surfaces (additive) */
+  editor?: EditorConfig;
+}

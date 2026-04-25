@@ -23,7 +23,7 @@ properties:
     $ref: "./datatypes/ref.schema.yaml"
   candidate_type:
     type: string
-    enum: [ material, vendor_product, formulation, recipe, plate_layout, labware_instance, well_assignment ]
+    enum: [ material, vendor_product, vendor_offer, formulation, recipe, plate_layout, labware_instance, well_assignment ]
   title:
     type: string
   status:

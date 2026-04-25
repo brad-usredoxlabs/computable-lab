@@ -1,10 +1,11 @@
 import type { RecordEnvelope, RecordStore } from '../store/types.js';
 import { ArtifactBlobStore } from './ArtifactBlobStore.js';
 import { extractVendorFormulationHtml } from './adapters/vendorFormulationHtml.js';
+import { extractVendorCatalogPage } from './adapters/vendorCatalogPage.js';
 import { buildVendorFormulationBundle } from './pipelines/vendorFormulationPipeline.js';
 import { publishCaymanLibraryBundle } from './publishers/CaymanLibraryPublisher.js';
 import { publishVendorFormulationBundle } from './publishers/VendorFormulationPublisher.js';
-import { buildIngestionIssueEnvelope, createRecordRef } from './records.js';
+import { buildIngestionIssueEnvelope, buildIngestionBundleEnvelope, buildIngestionCandidateEnvelope, createRecordRef } from './records.js';
 import {
   INGESTION_SCHEMA_IDS,
   type CreateIngestionArtifactInput,
@@ -154,6 +155,7 @@ export class IngestionWorker {
       running.payload.source_kind !== 'vendor_plate_map_pdf'
       && running.payload.source_kind !== 'vendor_formulation_html'
       && running.payload.source_kind !== 'vendor_plate_map_spreadsheet'
+      && running.payload.source_kind !== 'vendor_catalog_page'
     ) {
       // B4: Instrument and vendor_protocol_pdf source kinds have stub parsers — create an info issue
       // so the user knows extraction is not yet automated for this source kind.
@@ -344,6 +346,106 @@ export class IngestionWorker {
         materials_detected: Number(pipeline.bundle.payload.metrics?.materials_detected ?? 0),
         issues_open: pipeline.issues.length,
         issues_blocking: pipeline.issues.filter((issue) => issue.payload.severity === 'error').length,
+      };
+    } else if (running.payload.source_kind === 'vendor_catalog_page') {
+      // Vendor catalog page extraction — parse HTML for vendor-offer candidates
+      const persistedBase64 = await this.resolveStoredContentBase64(artifact, source);
+      const extraction = await extractVendorCatalogPage({
+        ...(persistedBase64 ? { contentBase64: persistedBase64 } : {}),
+        ...(source?.sourceUrl ? { sourceUrl: source.sourceUrl } : {}),
+        ...(!source?.sourceUrl && artifact.payload.source_url ? { sourceUrl: artifact.payload.source_url } : {}),
+      });
+
+      const artifactUpdate = await this.store.update({
+        envelope: {
+          ...artifact,
+          payload: {
+            ...artifact.payload,
+            sha256: artifact.payload.sha256 ?? extraction.sha256,
+            text_extract: {
+              extracted_at: new Date().toISOString(),
+              method: 'vendor_catalog_page_parser',
+              excerpt: extraction.htmlExcerpt,
+            },
+            html_extract: {
+              extracted_at: new Date().toISOString(),
+              method: 'vendor_catalog_page_parser',
+              title: extraction.title,
+              offer_count: extraction.offers.length,
+              vendor: extraction.vendor,
+            },
+            ...(extraction.sourceUrl ? {
+              fetch_metadata: {
+                fetched_at: new Date().toISOString(),
+                final_url: extraction.sourceUrl,
+              },
+            } : {}),
+          },
+        },
+        message: `Attach vendor catalog page extraction to artifact ${artifact.recordId}`,
+        skipLint: true,
+      });
+      if (!artifactUpdate.success || !artifactUpdate.envelope) {
+        throw new Error(storeErrorDetail(artifactUpdate, 'Failed to update ingestion artifact'));
+      }
+      artifactPayload = artifactUpdate.envelope.payload as IngestionArtifactPayload;
+
+      // Build a vendor_offer_batch bundle with vendor_offer candidates
+      const bundleEnvelope = buildIngestionBundleEnvelope({
+        job: currentJob.payload,
+        title: `Vendor catalog page: ${extraction.title}`,
+        bundleType: 'vendor_offer_batch',
+        summary: `Extracted ${extraction.offers.length} vendor offer(s) from catalog page.`,
+        metrics: {
+          offers_extracted: extraction.offers.length,
+          issues_open: extraction.issues.length,
+        },
+      });
+
+      const candidates: Array<RecordEnvelope<IngestionCandidatePayload>> = [];
+      const issues: Array<RecordEnvelope<IngestionIssuePayload>> = [];
+
+      for (const offer of extraction.offers) {
+        const candidateEnvelope = buildIngestionCandidateEnvelope({
+          job: currentJob.payload,
+          bundle: bundleEnvelope.payload,
+          candidateType: 'vendor_offer',
+          title: offer.productTitle,
+          payload: {
+            vendor: offer.vendor,
+            catalogNumber: offer.catalogNumber,
+            productUrl: offer.productUrl,
+            packageSize: offer.packageSize,
+            price: offer.price,
+            currency: offer.currency,
+            summary: offer.summary,
+          },
+          confidence: offer.catalogNumber && offer.price ? 0.8 : 0.4,
+          proposedRecordKind: 'vendor_product',
+          proposedSchemaId: INGESTION_SCHEMA_IDS.candidate,
+        });
+        candidates.push(candidateEnvelope);
+      }
+
+      // Convert adapter issues to ingestion issues
+      for (const issue of extraction.issues) {
+        const issueEnvelope = buildIngestionIssueEnvelope({
+          job: currentJob.payload,
+          bundle: bundleEnvelope.payload,
+          severity: issue.severity === 'error' ? 'error' : 'warning',
+          issueType: 'missing_vendor_identifier',
+          title: issue.title,
+          detail: issue.detail,
+          suggestedAction: 'Review the catalog page manually and fill in the missing field.',
+        });
+        issues.push(issueEnvelope);
+      }
+
+      pipeline = { bundle: bundleEnvelope, candidates, issues };
+      metrics = {
+        offers_extracted: extraction.offers.length,
+        issues_open: extraction.issues.length,
+        issues_blocking: extraction.issues.filter((i) => i.severity === 'error').length,
       };
     } else {
       // Fallback for any other source kinds - just mark as ready for review

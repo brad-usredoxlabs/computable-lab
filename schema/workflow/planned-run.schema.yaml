@@ -202,6 +202,27 @@ properties:
     items: { type: string }
     uniqueItems: true
 
+  procurement:
+    type: object
+    additionalProperties: false
+    description: "Narrow procurement anchor — references only, no embedded budgets."
+    properties:
+      manifestRef:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Reference to the linked procurement-manifest."
+      budgetRef:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Reference to the linked budget."
+      quoteStatus:
+        type: string
+        enum: [ not_requested, collecting, ready, stale ]
+        default: not_requested
+        description: "Current quote collection status."
+      lastQuotedAt:
+        type: string
+        format: date-time
+        description: "Timestamp of the most recent quote collection."
+
 $defs:
   LabwareBinding:
     type: object

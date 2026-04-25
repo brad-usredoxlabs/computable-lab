@@ -90,7 +90,7 @@ export interface IngestionBundlePayload {
   id: string;
   job_ref: Record<string, unknown>;
   title: string;
-  bundle_type: 'screening_library' | 'formulation_family' | 'vendor_product_batch' | 'other';
+  bundle_type: 'screening_library' | 'formulation_family' | 'vendor_product_batch' | 'vendor_offer_batch' | 'other';
   status: 'draft' | 'in_review' | 'approved' | 'partially_approved' | 'rejected' | 'published';
   summary?: string | undefined;
   candidate_refs?: Array<Record<string, unknown>> | undefined;
@@ -105,7 +105,7 @@ export interface IngestionCandidatePayload {
   id: string;
   job_ref: Record<string, unknown>;
   bundle_ref?: Record<string, unknown> | undefined;
-  candidate_type: 'material' | 'vendor_product' | 'formulation' | 'recipe' | 'plate_layout' | 'labware_instance' | 'well_assignment';
+  candidate_type: 'material' | 'vendor_product' | 'vendor_offer' | 'formulation' | 'recipe' | 'plate_layout' | 'labware_instance' | 'well_assignment';
   title: string;
   status: 'draft' | 'needs_review' | 'approved' | 'rejected' | 'published';
   source_refs?: Array<Record<string, unknown>> | undefined;
