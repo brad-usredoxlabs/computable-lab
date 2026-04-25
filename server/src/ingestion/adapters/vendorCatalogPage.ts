@@ -157,8 +157,9 @@ function extractPriceFromText(text: string): { price: number; currency: string |
 
 function extractCatalogNumber(text: string): string | undefined {
   // Common patterns: "Cat. No. XXX-XXXX", "Catalog # XXX", "Product No. XXX", "SKU: XXX"
+  // \b ensures we don't match inside words like "Scientific" → "ion"
   const patterns = [
-    /(?:cat(?:\.?\s*no\.?)?|catalog\s*(?:number|#)|product\s*no\.?|sku)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-_.]{2,20})/gi,
+    /\b(?:cat(?:\.?\s*no\.?)?|catalog\s*(?:number|#)|product\s*no\.?|sku)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-_.]{2,20})\b/gi,
   ];
   for (const pattern of patterns) {
     const match = pattern.exec(text);
