@@ -81,10 +81,12 @@ export async function runFixture(
       mime_type: a.mimeType,
       content: a.content,
     })),
+    conversationId: fixture.input.conversationId,
     deps: {
       extractionService: buildTestExtractionService(),
       llmClient,
       searchLabwareByHint: opts?.deps?.searchLabwareByHint ?? buildTestSearchLabwareByHint(),
+      ...(opts?.deps?.labStateCache ? { labStateCache: opts.deps.labStateCache } : {}),
     },
   };
 

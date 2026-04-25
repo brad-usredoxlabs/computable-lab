@@ -13,10 +13,13 @@ import {
   createAiPrecompilePass,
   createExpandBiologyVerbsPass,
   createMintMaterialsPass,
+  createApplyDirectivesPass,
   createLabwareResolvePass,
   createResolveReferencesPass,
   createResolvePriorLabwareReferencesPass,
   createExpandProtocolPass,
+  createExpandPatternsPass,
+  createResolveRolesPass,
   createLabStatePass,
   type FileAttachment,
   type LlmClient,
@@ -28,6 +31,9 @@ import {
   type ExpandProtocolOutput,
   type LabStatePassOutput,
   type MintMaterialsPassOutput,
+  type ApplyDirectivesPassOutput,
+  type ExpandPatternsOutput,
+  type ResolveRolesOutput,
 } from '../compiler/pipeline/passes/ChatbotCompilePasses.js';
 import type { ExtractionRunnerService } from '../extract/ExtractionRunnerService.js';
 import type { PlateEventPrimitive } from '../compiler/biology/BiologyVerbExpander.js';
@@ -41,12 +47,14 @@ import type {
 } from '../compiler/pipeline/CompileContracts.js';
 import type { LabStateSnapshot } from '../compiler/state/LabState.js';
 import { emptyLabState } from '../compiler/state/LabState.js';
+import type { DirectiveNode } from '../compiler/directives/Directive.js';
 import type { LabStateCache } from '../compiler/state/LabStateCache.js';
 import { getProtocolSpecRegistry } from '../registry/ProtocolSpecRegistry.js';
 import { getAssaySpecRegistry } from '../registry/AssaySpecRegistry.js';
 import { getStampPatternRegistry } from '../registry/StampPatternRegistry.js';
 import { getCompoundClassRegistry } from '../registry/CompoundClassRegistry.js';
 import * as path from 'node:path';
+import '../compiler/patterns/index.js'; // registers all pattern expanders
 
 export interface RunChatbotCompileArgs {
   prompt: string;
@@ -93,6 +101,7 @@ export async function runChatbotCompile(
   registry.register(createExtractEntitiesPass({ extractionService: args.deps.extractionService }));
   registry.register(createAiPrecompilePass({ llmClient: args.deps.llmClient, ...(args.model ? { model: args.model } : {}) }));
   registry.register(createMintMaterialsPass());
+  registry.register(createApplyDirectivesPass());
   registry.register(createExpandBiologyVerbsPass());
   registry.register(createLabwareResolvePass({ searchLabwareByHint: args.deps.searchLabwareByHint }));
   registry.register(createResolveReferencesPass({
@@ -105,6 +114,10 @@ export async function runChatbotCompile(
   registry.register(createExpandProtocolPass({
     protocolRegistry: getProtocolSpecRegistry(),
   }));
+  registry.register(createExpandPatternsPass({
+    stampPatternRegistry: getStampPatternRegistry(),
+  }));
+  registry.register(createResolveRolesPass());
   registry.register(createLabStatePass());
 
   const spec = loadPipeline(PIPELINE_YAML_PATH);
@@ -117,15 +130,19 @@ export async function runChatbotCompile(
   // Extract outputs from each pass; all are optional (pass may have been skipped or empty)
   const ai = (result.outputs.get('ai_precompile') ?? {}) as Partial<AiPrecompileOutput>;
   const mintOutput = (result.outputs.get('mint_materials') ?? { events: [] }) as MintMaterialsPassOutput;
+  const applyDirOutput = (result.outputs.get('apply_directives') ?? { directives: [] }) as ApplyDirectivesPassOutput;
+  const patterns = (result.outputs.get('expand_patterns') ?? { events: [] }) as ExpandPatternsOutput;
   const verbs = (result.outputs.get('expand_biology_verbs') ?? { events: [] }) as { events: PlateEventPrimitive[] };
+  const resolvedRoles = (result.outputs.get('resolve_roles') ?? { events: [] }) as ResolveRolesOutput;
   const labware = (result.outputs.get('resolve_labware') ?? { labwareAdditions: [], resolvedLabwares: [] }) as LabwareResolveOutput;
   const resolveRefs = (result.outputs.get('resolve_references') ?? { resolvedRefs: [], unresolvableRefs: [] }) as ResolveReferencesOutput;
   const priorLabware = (result.outputs.get('resolve_prior_labware_references') ?? { resolvedLabwareRefs: [], unresolved: [] }) as ResolvePriorLabwareReferencesOutput;
   const protocolEvents = (result.outputs.get('expand_protocol') ?? { events: [], stepsExpanded: 0 }) as ExpandProtocolOutput;
   const labStateOutput = (result.outputs.get('lab_state') ?? { events: [], snapshotAfter: emptyLabState() }) as LabStatePassOutput;
 
-  // Merge events: mint events first (setup), then biology verbs, then protocol-expanded events
-  const events = [...(mintOutput.events ?? []), ...(verbs.events ?? []), ...(protocolEvents.events ?? [])];
+  // Merge events: use resolve_roles output as the definitive event list
+  // (it aggregates mint, patterns, verbs, protocol and resolves roles)
+  const events = resolvedRoles.events ?? [];
   const unresolvedRefs = ai.unresolvedRefs ?? [];
   const clarification = typeof ai.clarification === 'string' ? ai.clarification : undefined;
   const diagnostics = result.diagnostics;
@@ -170,6 +187,7 @@ export async function runChatbotCompile(
   // Build terminalArtifacts
   const terminalArtifacts: TerminalArtifacts = {
     events,
+    directives: applyDirOutput.directives ?? [],
     gaps,
     resolvedRefs: resolveRefs.resolvedRefs,
     labStateDelta: {

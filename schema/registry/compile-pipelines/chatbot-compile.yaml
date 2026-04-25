@@ -20,9 +20,14 @@ passes:
     depends_on: [ai_precompile]
     description: Expand mintMaterials directives into create_container + add_material events.
 
-  - id: expand_biology_verbs
+  - id: apply_directives
     family: expand
     depends_on: [ai_precompile]
+    description: Turn ai_precompile.directives entries into DirectiveNode[] with generated directiveIds.
+
+  - id: expand_biology_verbs
+    family: expand
+    depends_on: [ai_precompile, resolve_prior_labware_references]
     description: Expand high-level biology verbs (seed, incubate, harvest, etc.) in candidate events into compositions of primitive event types that ContextEngine already handles.
 
   - id: resolve_labware
@@ -45,7 +50,22 @@ passes:
     depends_on: [resolve_references]
     description: Unroll resolved protocol refs into primitive events using step graph + parameter bindings.
 
+  - id: expand_patterns
+    family: expand
+    depends_on: [ai_precompile]
+    description: Dispatch patternEvents to registered pattern expanders.
+
+  - id: resolve_roles
+    family: expand
+    depends_on: [expand_patterns, expand_protocol, mint_materials, apply_directives]
+    description: Map role coordinates to concrete well addresses under current orientation.
+
+  - id: compute_volumes
+    family: expand
+    depends_on: [resolve_roles]
+    description: Resolve 'just_enough', percent-of, and placeholder volumes to concrete uL.
+
   - id: lab_state
     family: emit
-    depends_on: [expand_biology_verbs]
-    description: Fold expanded events over prior lab-state snapshot and emit labStateDelta.
+    depends_on: [resolve_roles, apply_directives]
+    description: Fold directives then expanded events over prior lab-state snapshot and emit labStateDelta.

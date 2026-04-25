@@ -266,6 +266,53 @@ export const transfectExpander: BiologyVerbExpander = {
 };
 
 /**
+ * add_material: single add_material event.
+ * Supports params: labware_id, well, material (object with kind/materialId/volumeUl),
+ * or legacy params: labware, material (string), wells (array).
+ */
+export const addMaterialExpander: BiologyVerbExpander = {
+  verb: 'add_material',
+  expand(input) {
+    const { params } = input;
+    const labwareId = (params.labware_id ?? params.labware) as string | undefined;
+    const well = params.well as string | undefined;
+    const material = params.material as Record<string, unknown> | string | undefined;
+    const wells = params.wells as string[] | undefined;
+
+    const events: PlateEventPrimitive[] = [];
+
+    if (wells && Array.isArray(wells)) {
+      // Legacy shape: material is a string, wells is an array
+      for (const w of wells) {
+        events.push({
+          eventId: makeEventId('add_material'),
+          event_type: 'add_material',
+          details: {
+            material: typeof material === 'string' ? material : undefined,
+            ...(typeof material === 'object' && material !== null ? material : {}),
+          },
+          labwareId,
+        });
+      }
+    } else {
+      // Modern shape: single event with well and material object
+      events.push({
+        eventId: makeEventId('add_material'),
+        event_type: 'add_material',
+        details: {
+          ...(well ? { well } : {}),
+          ...(typeof material === 'object' && material !== null ? material : {}),
+          ...(typeof material === 'string' ? { material } : {}),
+        },
+        labwareId,
+      });
+    }
+
+    return events;
+  },
+};
+
+/**
  * create_container: single create_container event.
  */
 export const createContainerExpander: BiologyVerbExpander = {
@@ -297,4 +344,5 @@ registerVerbExpander(blockExpander);
 registerVerbExpander(quenchExpander);
 registerVerbExpander(labelExpander);
 registerVerbExpander(transfectExpander);
+registerVerbExpander(addMaterialExpander);
 registerVerbExpander(createContainerExpander);

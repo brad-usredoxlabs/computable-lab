@@ -1,0 +1,28 @@
+name: prompt-01b-use-prior-plate
+description: >
+  Cross-turn test: a second prompt after prompt-01 that references
+  the 96-well deepwell plate minted in the first compile, and adds
+  10uL of buffer to well A1.
+input:
+  prompt: |
+    Use the 96-well deepwell plate of fecal samples we made before.
+    Add 10uL of binding buffer to well A1.
+  conversationId: cross-turn-demo
+mocked_ai_precompile_output:
+  candidateEvents:
+    - verb: add_material
+      targetLabwareRef: "prior"
+      well: "A1"
+      material:
+        kind: binding-buffer
+        volumeUl: 10
+  candidateLabwares: []
+  unresolvedRefs: []
+  priorLabwareRefs:
+    - hint: "96-well deepwell plate of fecal samples we made before"
+      kindHint: "96-well deepwell plate"
+      contentHint: "fecal samples"
+expected:
+  outcome: complete
+  terminalArtifacts:
+    gaps: []

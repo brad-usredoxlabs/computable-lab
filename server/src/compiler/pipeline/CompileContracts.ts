@@ -7,6 +7,7 @@
  */
 
 import type { PlateEventPrimitive } from '../biology/BiologyVerbExpander.js';
+import type { DirectiveNode } from '../directives/Directive.js';
 import type { PassDiagnostic } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -107,6 +108,7 @@ export interface DeckLayoutPlan {
 
 export interface TerminalArtifacts {
   events: PlateEventPrimitive[];
+  directives: DirectiveNode[];   // NEW - required, default []
   gaps: Gap[];
   resolvedRefs?: ResolvedReference[];
   labStateDelta?: LabStateDelta;

@@ -19,6 +19,9 @@ import {
   createMintMaterialsPass,
   type MintMaterialsDirective,
   type MintMaterialsPassOutput,
+  createApplyDirectivesPass,
+  type ApplyDirectivesPassOutput,
+  createLabStatePass,
 } from './ChatbotCompilePasses.js';
 import type { PipelineState } from '../types.js';
 import type { CompletionRequest } from '../../../ai/types.js';
@@ -338,6 +341,229 @@ describe('createAiPrecompilePass', () => {
     expect(output.candidateEvents).toHaveLength(1);
     expect(output.candidateEvents[0]).toMatchObject({ verb: 'transfer', volume: '100uL' });
     expect(mockLlmClient.complete).toHaveBeenCalledTimes(1);
+  });
+
+  it('directives round-trip: mock LLM emits a reorient_labware directive', async () => {
+    const expectedOutput: AiPrecompileOutput = {
+      candidateEvents: [],
+      candidateLabwares: [],
+      unresolvedRefs: [],
+      directives: [
+        { kind: 'reorient_labware', params: { labwareHint: '96-well plate', orientation: 'portrait' } },
+      ],
+    };
+
+    const mockLlmClient = {
+      complete: vi.fn().mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(expectedOutput) } }],
+      }),
+    } as unknown as LlmClient;
+
+    const deps: CreateAiPrecompilePassDeps = {
+      llmClient: mockLlmClient,
+    };
+
+    const pass = createAiPrecompilePass(deps);
+
+    const mockState: PipelineState = {
+      input: { prompt: 'turn the plate to portrait', attachments: [] },
+      context: {},
+      meta: {},
+      outputs: new Map(),
+      diagnostics: [],
+    };
+
+    const result = await pass.run({
+      pass_id: 'ai_precompile',
+      state: mockState,
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as AiPrecompileOutput;
+    expect(output.directives).toHaveLength(1);
+    expect(output.directives![0].kind).toBe('reorient_labware');
+    expect(output.directives![0].params).toMatchObject({
+      labwareHint: '96-well plate',
+      orientation: 'portrait',
+    });
+  });
+
+  it('downstreamCompileJobs round-trip: mock LLM emits two jobs', async () => {
+    const expectedOutput: AiPrecompileOutput = {
+      candidateEvents: [],
+      candidateLabwares: [],
+      unresolvedRefs: [],
+      downstreamCompileJobs: [
+        { kind: 'qPCR', description: 'quantitative PCR analysis' },
+        { kind: 'GC-MS', description: 'gas chromatography-mass spectrometry' },
+      ],
+    };
+
+    const mockLlmClient = {
+      complete: vi.fn().mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(expectedOutput) } }],
+      }),
+    } as unknown as LlmClient;
+
+    const deps: CreateAiPrecompilePassDeps = {
+      llmClient: mockLlmClient,
+    };
+
+    const pass = createAiPrecompilePass(deps);
+
+    const mockState: PipelineState = {
+      input: { prompt: 'run qPCR and GC-MS', attachments: [] },
+      context: {},
+      meta: {},
+      outputs: new Map(),
+      diagnostics: [],
+    };
+
+    const result = await pass.run({
+      pass_id: 'ai_precompile',
+      state: mockState,
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as AiPrecompileOutput;
+    expect(output.downstreamCompileJobs).toHaveLength(2);
+    expect(output.downstreamCompileJobs![0].kind).toBe('qPCR');
+    expect(output.downstreamCompileJobs![1].kind).toBe('GC-MS');
+  });
+
+  it('patternEvents round-trip: mock LLM emits one quadrant_stamp', async () => {
+    const expectedOutput: AiPrecompileOutput = {
+      candidateEvents: [],
+      candidateLabwares: [],
+      unresolvedRefs: [],
+      patternEvents: [
+        {
+          pattern: 'quadrant_stamp',
+          fromLabwareHint: '96-well plate',
+          toLabwareHint: '384-well plate',
+          startCol: 1,
+          startRow: 'A',
+          count: 4,
+        },
+      ],
+    };
+
+    const mockLlmClient = {
+      complete: vi.fn().mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(expectedOutput) } }],
+      }),
+    } as unknown as LlmClient;
+
+    const deps: CreateAiPrecompilePassDeps = {
+      llmClient: mockLlmClient,
+    };
+
+    const pass = createAiPrecompilePass(deps);
+
+    const mockState: PipelineState = {
+      input: { prompt: 'stamp 96-well into quadrants of a 384-well', attachments: [] },
+      context: {},
+      meta: {},
+      outputs: new Map(),
+      diagnostics: [],
+    };
+
+    const result = await pass.run({
+      pass_id: 'ai_precompile',
+      state: mockState,
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as AiPrecompileOutput;
+    expect(output.patternEvents).toHaveLength(1);
+    expect(output.patternEvents![0].pattern).toBe('quadrant_stamp');
+    expect(output.patternEvents![0].fromLabwareHint).toBe('96-well plate');
+    expect(output.patternEvents![0].toLabwareHint).toBe('384-well plate');
+  });
+
+  it('regression detected: mock LLM emits dense physical-well enumeration', async () => {
+    const expectedOutput: AiPrecompileOutput = {
+      candidateEvents: [{ verb: 'add_material', wells: ['B2', 'B3', 'B4', 'B5'] }],
+      candidateLabwares: [],
+      unresolvedRefs: [],
+    };
+
+    const mockLlmClient = {
+      complete: vi.fn().mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(expectedOutput) } }],
+      }),
+    } as unknown as LlmClient;
+
+    const deps: CreateAiPrecompilePassDeps = {
+      llmClient: mockLlmClient,
+    };
+
+    const pass = createAiPrecompilePass(deps);
+
+    const mockState: PipelineState = {
+      input: { prompt: 'add material to B2 B3 B4 B5', attachments: [] },
+      context: {},
+      meta: {},
+      outputs: new Map(),
+      diagnostics: [],
+    };
+
+    const result = await pass.run({
+      pass_id: 'ai_precompile',
+      state: mockState,
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as AiPrecompileOutput;
+    expect(output.candidateEvents).toHaveLength(1);
+    expect(output.candidateEvents[0]).toMatchObject({ verb: 'add_material', wells: ['B2', 'B3', 'B4', 'B5'] });
+    expect(result.diagnostics).toBeDefined();
+    expect(result.diagnostics!.length).toBe(1);
+    expect(result.diagnostics![0]).toMatchObject({
+      pass_id: 'ai_precompile',
+      severity: 'warning',
+      code: 'ai_precompile_role_regression',
+    });
+    expect((result.diagnostics![0] as { message: string }).message).toContain('1 events');
+  });
+
+  it('role preferred: mock LLM emits role coordinate — no warning', async () => {
+    const expectedOutput: AiPrecompileOutput = {
+      candidateEvents: [{ verb: 'add_material', role: 'cell_region' }],
+      candidateLabwares: [],
+      unresolvedRefs: [],
+    };
+
+    const mockLlmClient = {
+      complete: vi.fn().mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(expectedOutput) } }],
+      }),
+    } as unknown as LlmClient;
+
+    const deps: CreateAiPrecompilePassDeps = {
+      llmClient: mockLlmClient,
+    };
+
+    const pass = createAiPrecompilePass(deps);
+
+    const mockState: PipelineState = {
+      input: { prompt: 'add material to cell region', attachments: [] },
+      context: {},
+      meta: {},
+      outputs: new Map(),
+      diagnostics: [],
+    };
+
+    const result = await pass.run({
+      pass_id: 'ai_precompile',
+      state: mockState,
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as AiPrecompileOutput;
+    expect(output.candidateEvents).toHaveLength(1);
+    expect(output.candidateEvents[0]).toMatchObject({ verb: 'add_material', role: 'cell_region' });
+    expect(result.diagnostics).toBeUndefined();
   });
 });
 
@@ -831,5 +1057,477 @@ describe('createMintMaterialsPass', () => {
     const pass = createMintMaterialsPass();
     expect(pass.id).toBe('mint_materials');
     expect(pass.family).toBe('expand');
+  });
+
+  // -----------------------------------------------------------------------
+  // spec-030: Generalized mint_materials tests
+  // -----------------------------------------------------------------------
+
+  it('two directives produce combined events from both', () => {
+    const pass = createMintMaterialsPass();
+
+    const directiveA: MintMaterialsDirective = {
+      template: 'fecal-sample',
+      count: 8,
+      namingPattern: 'FS_{n}',
+      placementLabwareHint: '96-well-deepwell-plate',
+      wellSpread: 'all',
+    };
+    const directiveB: MintMaterialsDirective = {
+      template: 'buffer',
+      count: 8,
+      namingPattern: 'BF_{n}',
+      placementLabwareHint: '96-well-deepwell-plate',
+      wellSpread: 'all',
+    };
+
+    const mockState: PipelineState = {
+      input: {},
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['ai_precompile', { mintMaterials: [directiveA, directiveB] }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'mint_materials',
+      state: mockState,
+    });
+
+    const syncResult = result as { ok: boolean; output: MintMaterialsPassOutput };
+    expect(syncResult.ok).toBe(true);
+    const events = syncResult.output.events;
+
+    // 1 create_container (deduplicated by hint) + 8 + 8 add_material = 17
+    expect(events).toHaveLength(17);
+
+    const createContainers = events.filter(
+      (e) => (e as { event_type: string }).event_type === 'create_container',
+    );
+    expect(createContainers).toHaveLength(1);
+
+    const addMaterials = events.filter(
+      (e) => (e as { event_type: string }).event_type === 'add_material',
+    );
+    expect(addMaterials).toHaveLength(16);
+
+    // Verify materialIds from both directives
+    const materialIds = addMaterials.map(
+      (e) => (e as { details: { material: { materialId: string } } }).details.material.materialId,
+    );
+    for (let i = 1; i <= 8; i++) {
+      expect(materialIds).toContain(`FS_${i}`);
+      expect(materialIds).toContain(`BF_${i}`);
+    }
+  });
+
+  it('reusing existing labware produces zero create_container events', () => {
+    const pass = createMintMaterialsPass();
+
+    const directive: MintMaterialsDirective = {
+      template: 'fecal-sample',
+      count: 8,
+      namingPattern: 'FS_{n}',
+      placementLabwareHint: '96-well-deepwell-plate',
+      wellSpread: 'all',
+    };
+
+    // Prior labState already has a 96-well-deepwell-plate named 'plate-1'
+    const mockState: PipelineState = {
+      input: {
+        labState: {
+          deck: [{ slot: 'target', labwareInstanceId: 'plate-1' }],
+          mountedPipettes: [],
+          labware: {
+            'plate-1': {
+              instanceId: 'plate-1',
+              labwareType: '96-well-deepwell-plate',
+              slot: 'target',
+              orientation: 'landscape',
+              wells: {},
+            },
+          },
+          reservoirs: {},
+          mintCounter: 0,
+          turnIndex: 0,
+        },
+      },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['ai_precompile', { mintMaterials: [directive] }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'mint_materials',
+      state: mockState,
+    });
+
+    const syncResult = result as { ok: boolean; output: MintMaterialsPassOutput };
+    expect(syncResult.ok).toBe(true);
+    const events = syncResult.output.events;
+
+    // Zero create_container — labware already exists
+    const createContainers = events.filter(
+      (e) => (e as { event_type: string }).event_type === 'create_container',
+    );
+    expect(createContainers).toHaveLength(0);
+
+    // 8 add_material events targeting the existing instance
+    const addMaterials = events.filter(
+      (e) => (e as { event_type: string }).event_type === 'add_material',
+    );
+    expect(addMaterials).toHaveLength(8);
+
+    // Verify all add_material events target 'plate-1'
+    for (const e of addMaterials) {
+      expect((e as { details: { labwareInstanceId: string } }).details.labwareInstanceId).toBe('plate-1');
+    }
+  });
+
+  it('wellSpread explicit with wellList places into exact wells', () => {
+    const pass = createMintMaterialsPass();
+
+    const directive: MintMaterialsDirective = {
+      template: 'reagent',
+      count: 3,
+      namingPattern: 'RG_{n}',
+      placementLabwareHint: '96-well-plate',
+      wellSpread: 'explicit',
+      wellList: ['A1', 'B5', 'G12'],
+    };
+
+    const mockState: PipelineState = {
+      input: {},
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['ai_precompile', { mintMaterials: [directive] }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'mint_materials',
+      state: mockState,
+    });
+
+    const syncResult = result as { ok: boolean; output: MintMaterialsPassOutput };
+    expect(syncResult.ok).toBe(true);
+    const events = syncResult.output.events;
+
+    // 1 create_container + 3 add_material = 4
+    expect(events).toHaveLength(4);
+
+    const addMaterials = events.filter(
+      (e) => (e as { event_type: string }).event_type === 'add_material',
+    );
+    expect(addMaterials).toHaveLength(3);
+
+    // Verify exact well placement
+    const wells = addMaterials.map(
+      (e) => (e as { details: { well: string } }).details.well,
+    );
+    expect(wells).toEqual(['A1', 'B5', 'G12']);
+
+    // Verify materialIds
+    const materialIds = addMaterials.map(
+      (e) => (e as { details: { material: { materialId: string } } }).details.material.materialId,
+    );
+    expect(materialIds).toEqual(['RG_1', 'RG_2', 'RG_3']);
+  });
+
+  it('name collision appends suffix and emits warning diagnostic', () => {
+    const pass = createMintMaterialsPass();
+
+    const directive: MintMaterialsDirective = {
+      template: 'fecal-sample',
+      count: 96,
+      namingPattern: 'FS_{n}',
+      placementLabwareHint: '96-well-deepwell-plate',
+      wellSpread: 'all',
+    };
+
+    // Prior labState has materialId='FS_1' in well A1
+    const mockState: PipelineState = {
+      input: {
+        labState: {
+          deck: [{ slot: 'target', labwareInstanceId: 'plate-1' }],
+          mountedPipettes: [],
+          labware: {
+            'plate-1': {
+              instanceId: 'plate-1',
+              labwareType: '96-well-deepwell-plate',
+              slot: 'target',
+              orientation: 'landscape',
+              wells: {
+                A1: [
+                  { materialId: 'FS_1', kind: 'fecal-sample' },
+                ],
+              },
+            },
+          },
+          reservoirs: {},
+          mintCounter: 0,
+          turnIndex: 0,
+        },
+      },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['ai_precompile', { mintMaterials: [directive] }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'mint_materials',
+      state: mockState,
+    });
+
+    const syncResult = result as {
+      ok: boolean;
+      output: MintMaterialsPassOutput;
+      diagnostics: PassDiagnostic[] | undefined;
+    };
+    expect(syncResult.ok).toBe(true);
+
+    // First emitted event should use disambiguated name
+    const addMaterials = syncResult.output.events.filter(
+      (e) => (e as { event_type: string }).event_type === 'add_material',
+    );
+    expect(addMaterials).toHaveLength(96);
+
+    // First materialId should be FS_1_2 (since FS_1 already exists)
+    const firstMaterialId = (addMaterials[0] as { details: { material: { materialId: string } } }).details.material.materialId;
+    expect(firstMaterialId).toBe('FS_1_2');
+
+    // Should have a warning diagnostic
+    expect(syncResult.diagnostics).toBeDefined();
+    expect(syncResult.diagnostics!.length).toBeGreaterThanOrEqual(1);
+    const collisionDiag = syncResult.diagnostics!.find(
+      d => d.code === 'mint_materials_name_collision',
+    );
+    expect(collisionDiag).toBeDefined();
+    expect(collisionDiag!.severity).toBe('warning');
+    expect(collisionDiag!.pass_id).toBe('mint_materials');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createApplyDirectivesPass tests
+// ---------------------------------------------------------------------------
+
+describe('createApplyDirectivesPass', () => {
+  it('input directive [{kind: reorient_labware}] produces 1 DirectiveNode with generated id', () => {
+    const pass = createApplyDirectivesPass();
+
+    const mockState: PipelineState = {
+      input: {},
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['ai_precompile', {
+          directives: [
+            { kind: 'reorient_labware', params: { labwareHint: '96-well plate', orientation: 'portrait' } },
+          ],
+        }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'apply_directives',
+      state: mockState,
+    });
+
+    const syncResult = result as { ok: boolean; output: ApplyDirectivesPassOutput };
+    expect(syncResult.ok).toBe(true);
+    expect(syncResult.output.directives).toHaveLength(1);
+    expect(syncResult.output.directives[0]).toMatchObject({
+      directiveId: 'dir_1',
+      kind: 'reorient_labware',
+      params: { labwareHint: '96-well plate', orientation: 'portrait' },
+    });
+  });
+
+  it('multiple directives produce multiple DirectiveNodes with sequential ids', () => {
+    const pass = createApplyDirectivesPass();
+
+    const mockState: PipelineState = {
+      input: {},
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['ai_precompile', {
+          directives: [
+            { kind: 'reorient_labware', params: { labwareInstanceId: 'plate-1', orientation: 'portrait' } },
+            { kind: 'mount_pipette', params: { mountSide: 'left', pipetteType: 'p1000Single' } },
+          ],
+        }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'apply_directives',
+      state: mockState,
+    });
+
+    const syncResult = result as { ok: boolean; output: ApplyDirectivesPassOutput };
+    expect(syncResult.ok).toBe(true);
+    expect(syncResult.output.directives).toHaveLength(2);
+    expect(syncResult.output.directives[0]!.directiveId).toBe('dir_1');
+    expect(syncResult.output.directives[1]!.directiveId).toBe('dir_2');
+  });
+
+  it('empty directives produces empty array', () => {
+    const pass = createApplyDirectivesPass();
+
+    const mockState: PipelineState = {
+      input: {},
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['ai_precompile', { directives: [] }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'apply_directives',
+      state: mockState,
+    });
+
+    const syncResult = result as { ok: boolean; output: ApplyDirectivesPassOutput };
+    expect(syncResult.ok).toBe(true);
+    expect(syncResult.output.directives).toHaveLength(0);
+  });
+
+  it('no directives field produces empty array', () => {
+    const pass = createApplyDirectivesPass();
+
+    const mockState: PipelineState = {
+      input: {},
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['ai_precompile', {}],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'apply_directives',
+      state: mockState,
+    });
+
+    const syncResult = result as { ok: boolean; output: ApplyDirectivesPassOutput };
+    expect(syncResult.ok).toBe(true);
+    expect(syncResult.output.directives).toHaveLength(0);
+  });
+
+  it('pass id is apply_directives and family is expand', () => {
+    const pass = createApplyDirectivesPass();
+    expect(pass.id).toBe('apply_directives');
+    expect(pass.family).toBe('expand');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// lab_state pass — fold order tests
+// ---------------------------------------------------------------------------
+
+describe('createLabStatePass — fold order', () => {
+  it('reorients labware then places materials according to new orientation', () => {
+    const pass = createLabStatePass();
+
+    const mockState: PipelineState = {
+      input: {
+        labState: {
+          deck: [],
+          mountedPipettes: [],
+          labware: {
+            'plate-1': {
+              instanceId: 'plate-1',
+              labwareType: '96-well-plate',
+              slot: 'A1',
+              orientation: 'landscape',
+              wells: {},
+            },
+          },
+          reservoirs: {},
+          mintCounter: 0,
+          turnIndex: 0,
+        },
+      },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['mint_materials', { events: [] }],
+        ['expand_biology_verbs', { events: [] }],
+        ['apply_directives', {
+          directives: [
+            {
+              directiveId: 'dir_1',
+              kind: 'reorient_labware',
+              params: { labwareInstanceId: 'plate-1', orientation: 'portrait' },
+            },
+          ],
+        }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'lab_state',
+      state: mockState,
+    });
+
+    const syncResult = result as { ok: boolean; output: { events: unknown[]; snapshotAfter: unknown } };
+    expect(syncResult.ok).toBe(true);
+    const output = syncResult.output as { snapshotAfter: { labware: Record<string, { orientation: string }> } };
+    // After folding directives, orientation should be 'portrait'
+    expect(output.snapshotAfter.labware['plate-1'].orientation).toBe('portrait');
+    // turnIndex should be incremented
+    expect(output.snapshotAfter.turnIndex).toBe(1);
+  });
+
+  it('empty directives and events produces snapshot with incremented turnIndex', () => {
+    const pass = createLabStatePass();
+
+    const mockState: PipelineState = {
+      input: {
+        labState: {
+          deck: [],
+          mountedPipettes: [],
+          labware: {},
+          reservoirs: {},
+          mintCounter: 0,
+          turnIndex: 0,
+        },
+      },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['mint_materials', { events: [] }],
+        ['expand_biology_verbs', { events: [] }],
+        ['apply_directives', { directives: [] }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'lab_state',
+      state: mockState,
+    });
+
+    const syncResult = result as { ok: boolean; output: { snapshotAfter: { turnIndex: number } } };
+    expect(syncResult.ok).toBe(true);
+    expect(syncResult.output.snapshotAfter.turnIndex).toBe(1);
   });
 });

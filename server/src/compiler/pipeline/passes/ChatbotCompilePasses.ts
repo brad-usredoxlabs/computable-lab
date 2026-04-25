@@ -17,6 +17,7 @@ import type { StampPatternSpec } from '../../../registry/StampPatternRegistry.js
 import type { CompoundClass } from '../../../registry/CompoundClassRegistry.js';
 import type { LabStateSnapshot } from '../../../compiler/state/LabState.js';
 import { applyEventToLabState, emptyLabState } from '../../../compiler/state/LabState.js';
+import { applyDirectiveToLabState, type DirectiveNode } from '../../../compiler/directives/Directive.js';
 
 /**
  * An entity extracted from a prompt or attachment.
@@ -258,6 +259,36 @@ export interface PriorLabwareRef {
 }
 
 /**
+ * A state-change directive emitted by ai_precompile (non-liquid-handling).
+ */
+export interface Directive {
+  kind: 'reorient_labware' | 'mount_pipette' | 'swap_pipette';
+  params: Record<string, unknown>;
+}
+
+/**
+ * A declared future compile job (e.g. downstream analysis).
+ */
+export interface DownstreamCompileJob {
+  kind: string;             // e.g. 'qPCR', 'GC-FID', 'GC-MS', 'plate-reader', 'imaging'
+  description?: string;
+  params?: Record<string, unknown>;
+}
+
+/**
+ * A named stamp / fanout / triplicate pattern invocation.
+ */
+export interface PatternEvent {
+  pattern: string;          // id from stamp-pattern registry
+  fromLabwareHint?: string;
+  toLabwareHint?: string;
+  startCol?: number;
+  startRow?: string;
+  count?: number;
+  perPosition?: Record<string, unknown>;  // keyed by position index or label
+}
+
+/**
  * A labware addition patch produced by resolve_labware.
  */
 export interface AiLabwareAdditionPatch {
@@ -276,6 +307,9 @@ export interface AiPrecompileOutput {
   clarification?: string;
   mintMaterials?: MintMaterialsDirective[];
   priorLabwareRefs?: PriorLabwareRef[];   // references to labware that already exists
+  directives?: Directive[];                   // state-change nodes (reorient, mount, swap)
+  downstreamCompileJobs?: DownstreamCompileJob[];  // declared future compile targets
+  patternEvents?: PatternEvent[];             // named stamp pattern invocations
 }
 
 /**
@@ -320,7 +354,64 @@ When the user references a labware that already exists in the lab
 "that PCR plate we made", "use that plate"), add an entry to
 priorLabwareRefs instead of treating it as a new candidateLabware.
 Include kindHint (labware type in words, e.g. "96-well deepwell plate")
-and contentHint (materials inside, if mentioned, e.g. "fecal samples").`;
+and contentHint (materials inside, if mentioned, e.g. "fecal samples").
+
+State-change operations that are not liquid handling go in
+directives. Emit {kind: 'reorient_labware', params: {labwareHint,
+orientation: 'portrait'|'landscape'}} when the user says 'turn the
+plate to portrait'. Emit {kind: 'mount_pipette', params:
+{mountSide, pipetteType}} for pipette mounts. Emit {kind:
+'swap_pipette', params: {from, to}} for mid-compile swaps.
+
+When the user declares future analyses (e.g. 'we'll analyze by
+qPCR, GC-FID, imaging'), add one entry per downstream readout to
+downstreamCompileJobs. Do NOT expand them in the current compile.
+
+When the user describes a stamp or replicate pattern (e.g. 'stamp
+96-well into quadrants of a 384-well', 'triplicate wells'), emit a
+patternEvent with the pattern id (from the stamp-pattern registry)
+instead of enumerating individual wells.
+
+Prefer role-based coordinates to physical well enumeration. When a
+group of wells shares a semantic role, emit {role: '<role-name>'}
+on the event instead of {wells: [B2, B3, ..., G11]}. Canonical roles
+you may use: 'cell_region' (interior cells on a plate), 'control_well',
+'positive_control', 'negative_control', 'treatment:<label>',
+'perturbant_col_<N>', 'triplicate_<label>'. The compiler maps roles
+to physical wells using the current plate orientation and assay panel
+— you do not need to know the mapping. Emit physical well addresses
+ONLY when the user specifies them explicitly and no role applies.
+`;
+
+/**
+ * Zod schema for validating ai_precompile LLM output.
+ * Malformed fields produce a warning diagnostic; the pass never throws.
+ * Note: z.record() is broken in zod v4 in vitest, so we use z.any() instead.
+ */
+function createAiPrecompileOutputSchema() {
+  const { z } = require('zod') as typeof import('zod');
+  return z.object({
+    candidateEvents: z.array(z.any()).default([]),
+    candidateLabwares: z.array(z.any()).default([]),
+    unresolvedRefs: z.array(z.any()).default([]),
+    clarification: z.string().optional(),
+    mintMaterials: z.array(z.any()).optional(),
+    priorLabwareRefs: z.array(z.any()).optional(),
+    directives: z
+      .array(z.object({ kind: z.string(), params: z.any() }))
+      .optional(),
+    downstreamCompileJobs: z
+      .array(
+        z.object({
+          kind: z.string(),
+          description: z.string().optional(),
+          params: z.any().optional(),
+        }),
+      )
+      .optional(),
+    patternEvents: z.array(z.any()).optional(),
+  });
+}
 
 /**
  * Dependencies for creating the ai_precompile pass.
@@ -369,7 +460,23 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
           }],
         };
       }
-      // Normalize: ensure all three arrays exist
+      // Validate against zod schema; emit warning on mismatch, never throw.
+      let validated: unknown;
+      try {
+        validated = createAiPrecompileOutputSchema().parse(parsed);
+      } catch {
+        return {
+          ok: true,
+          output: { candidateEvents: [], candidateLabwares: [], unresolvedRefs: [] } satisfies AiPrecompileOutput,
+          diagnostics: [{
+            severity: 'warning',
+            code: 'ai_precompile_shape_mismatch',
+            message: 'ai_precompile output shape mismatch',
+            pass_id,
+          }],
+        };
+      }
+      // Normalize: ensure all three arrays exist; carry through validated fields
       const output: AiPrecompileOutput = {
         candidateEvents: Array.isArray(parsed.candidateEvents) ? parsed.candidateEvents : [],
         candidateLabwares: Array.isArray(parsed.candidateLabwares) ? parsed.candidateLabwares : [],
@@ -377,8 +484,32 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
         ...(typeof parsed.clarification === 'string' ? { clarification: parsed.clarification } : {}),
         ...(Array.isArray(parsed.mintMaterials) ? { mintMaterials: parsed.mintMaterials } : {}),
         ...(Array.isArray(parsed.priorLabwareRefs) ? { priorLabwareRefs: parsed.priorLabwareRefs } : {}),
+        ...(Array.isArray(parsed.directives) ? { directives: parsed.directives } : {}),
+        ...(Array.isArray(parsed.downstreamCompileJobs) ? { downstreamCompileJobs: parsed.downstreamCompileJobs } : {}),
+        ...(Array.isArray(parsed.patternEvents) ? { patternEvents: parsed.patternEvents } : {}),
       };
-      return { ok: true, output };
+
+      // Lint: flag dense physical-well enumeration (regression from role-based coords).
+      // Skip events that already use role coordinates — only warn when wells are listed
+      // without a role field present.
+      const enumerationWarnings: PassDiagnostic[] = [];
+      let regressionCount = 0;
+      for (const event of output.candidateEvents) {
+        const wells = (event as { wells?: string[] }).wells;
+        if (Array.isArray(wells) && wells.length > 3 && !('role' in event)) {
+          regressionCount++;
+        }
+      }
+      if (regressionCount > 0) {
+        enumerationWarnings.push({
+          severity: 'warning',
+          code: 'ai_precompile_role_regression',
+          message: `LLM emitted ${regressionCount} events with dense physical-well enumeration. Prefer role coordinates.`,
+          pass_id,
+        });
+      }
+
+      return { ok: true, output, ...(enumerationWarnings.length > 0 ? { diagnostics: enumerationWarnings } : {}) };
     },
   };
 }
@@ -390,6 +521,19 @@ import { getExpander, type PlateEventPrimitive } from '../../biology/BiologyVerb
 import '../../biology/verbs/simpleVerbs.js';
 import '../../biology/verbs/compoundVerbs.js';
 import '../../biology/verbs/centrifugeVerbs.js';
+
+/**
+ * Import the role resolver.
+ */
+import { defaultRoleResolver, type RoleResolutionContext } from '../../roles/RoleResolver.js';
+
+/**
+ * Import the pattern expander registry.
+ */
+import {
+  getPatternExpander,
+  type PatternExpanderContext,
+} from '../../patterns/PatternExpanders.js';
 
 // ---------------------------------------------------------------------------
 // resolve_prior_labware_references pass
@@ -533,6 +677,9 @@ export function createResolvePriorLabwareReferencesPass(): Pass {
  * - Looks up expanders for each verb
  * - Concatenates expanded PlateEventPrimitive[] into output { events }
  * - Unknown verbs produce a warning diagnostic code='unknown_biology_verb' and are skipped
+ * - Handles targetLabwareRef: 'prior' sentinel by resolving against
+ *   resolve_prior_labware_references output and passing the resolved
+ *   instanceId as labware_id to the expander
  */
 export function createExpandBiologyVerbsPass(): Pass {
   return {
@@ -543,9 +690,32 @@ export function createExpandBiologyVerbsPass(): Pass {
       const candidateEvents = ai?.candidateEvents ?? [];
       const events: PlateEventPrimitive[] = [];
       const diagnostics: PassDiagnostic[] = [];
-      
+
+      // Look up resolved prior labware refs (for targetLabwareRef: 'prior' sentinel)
+      const priorLabwareOutput = state.outputs.get('resolve_prior_labware_references') as
+        { resolvedLabwareRefs?: Array<{ hint: string; matched: { instanceId: string; labwareType: string } }> } | undefined;
+      const resolvedPriorRefs = priorLabwareOutput?.resolvedLabwareRefs ?? [];
+
       for (const cand of candidateEvents) {
         const { verb, ...params } = cand;
+
+        // Handle targetLabwareRef: 'prior' sentinel — resolve against prior labware refs
+        if ((params.targetLabwareRef as string | undefined) === 'prior') {
+          const firstResolved = resolvedPriorRefs[0];
+          if (firstResolved) {
+            // Pass the resolved instanceId as labware_id to the expander
+            (params as Record<string, unknown>).labware_id = firstResolved.matched.instanceId;
+          } else {
+            // No resolved ref available — emit with null labwareInstanceId and flag in gaps
+            diagnostics.push({
+              severity: 'warning' as const,
+              code: 'prior_labware_not_resolved',
+              message: `targetLabwareRef 'prior' resolved to no labware; emitting event with null labwareId.`,
+              pass_id,
+            });
+          }
+        }
+
         const expander = getExpander(verb);
         if (!expander) {
           diagnostics.push({
@@ -560,7 +730,7 @@ export function createExpandBiologyVerbsPass(): Pass {
         const expanded = expander.expand({ verb, params });
         for (const e of expanded) events.push(e);
       }
-      
+
       return { ok: true, output: { events }, diagnostics };
     },
   };
@@ -1010,8 +1180,10 @@ export interface LabStatePassOutput {
  *
  * This pass:
  * - Reads prior labState from state.input.labState (defaults to emptyLabState)
- * - Reads events from state.outputs.get('mint_materials') and state.outputs.get('expand_biology_verbs')
- * - Folds each event over the prior snapshot via applyEventToLabState
+ * - Reads directives from state.outputs.get('apply_directives')
+ * - Reads events from state.outputs.get('resolve_roles') (which aggregates
+ *   mint_materials, expand_patterns, expand_biology_verbs, expand_protocol)
+ * - Folds directives FIRST, then events, via applyDirectiveToLabState / applyEventToLabState
  * - Increments turnIndex by 1
  * - Returns { events, snapshotAfter }
  */
@@ -1022,15 +1194,17 @@ export function createLabStatePass(): Pass {
     run({ state }: PassRunArgs): PassResult {
       const prior = (state.input as { labState?: LabStateSnapshot }).labState
         ?? emptyLabState();
-      const mintOutput = state.outputs.get('mint_materials') as
+      // resolve_roles aggregates all expanded events (mint, patterns, verbs, protocol)
+      const resolvedRolesOutput = state.outputs.get('resolve_roles') as
         { events?: PlateEventPrimitive[] } | undefined;
-      const expandOutput = state.outputs.get('expand_biology_verbs') as
-        { events?: PlateEventPrimitive[] } | undefined;
-      const events = [
-        ...(mintOutput?.events ?? []),
-        ...(expandOutput?.events ?? []),
-      ];
+      const events = resolvedRolesOutput?.events ?? [];
+
+      // Fold directives FIRST, then events (events depend on post-directive state)
       let snapshot: LabStateSnapshot = { ...prior, turnIndex: prior.turnIndex + 1 };
+      const directives = (state.outputs.get('apply_directives') as { directives?: DirectiveNode[] } | undefined)?.directives ?? [];
+      for (const d of directives) {
+        snapshot = applyDirectiveToLabState(snapshot, d);
+      }
       for (const event of events) {
         snapshot = applyEventToLabState(snapshot, event);
       }
@@ -1051,6 +1225,49 @@ export interface MintMaterialsPassOutput {
 }
 
 /**
+ * Output shape for the apply_directives pass.
+ */
+export interface ApplyDirectivesPassOutput {
+  directives: DirectiveNode[];
+}
+
+/**
+ * Creates the apply_directives pass that turns ai_precompile.directives
+ * entries into DirectiveNode[] with generated directiveIds.
+ *
+ * This pass:
+ * - Reads directives from state.outputs.get('ai_precompile')
+ * - For each directive, generates a directiveId (dir_<counter>)
+ * - Emits { directives: DirectiveNode[] }
+ */
+export function createApplyDirectivesPass(): Pass {
+  return {
+    id: 'apply_directives',
+    family: 'expand' as const,
+    run({ pass_id, state }: PassRunArgs): PassResult {
+      const ai = state.outputs.get('ai_precompile') as
+        { directives?: Directive[] } | undefined;
+      const rawDirectives = ai?.directives ?? [];
+      const directives: DirectiveNode[] = [];
+
+      for (let i = 0; i < rawDirectives.length; i++) {
+        const raw = rawDirectives[i]!;
+        directives.push({
+          directiveId: `dir_${i + 1}`,
+          kind: raw.kind,
+          params: raw.params ?? {},
+        });
+      }
+
+      return {
+        ok: true,
+        output: { directives } satisfies ApplyDirectivesPassOutput,
+      };
+    },
+  };
+}
+
+/**
  * Generate a well address for a 96-well plate (rows A-H × cols 1-12).
  * Fills left-to-right, top-to-bottom.
  */
@@ -1061,14 +1278,83 @@ function wellAddressForIndex(index: number): string {
 }
 
 /**
+ * Collect all existing materialIds from labState for collision detection.
+ */
+function collectExistingMaterialIds(labState: LabStateSnapshot): Set<string> {
+  const ids = new Set<string>();
+  for (const instance of Object.values(labState.labware)) {
+    for (const materials of Object.values(instance.wells)) {
+      for (const m of materials) {
+        ids.add(m.materialId);
+      }
+    }
+  }
+  return ids;
+}
+
+/**
+ * Resolve the placement labware for a mint directive.
+ * Priority order:
+ * 1. resolve_prior_labware_references (by labwareType match)
+ * 2. resolve_labware pass output (resolvedLabwares)
+ * 3. labState direct lookup (by labwareType match)
+ * 4. Otherwise return undefined (will create new container)
+ */
+function resolvePlacementLabware(
+  directive: MintMaterialsDirective,
+  state: PipelineState,
+): { instanceId: string; labwareType: string } | undefined {
+  const hint = directive.placementLabwareHint;
+  if (!hint) return undefined;
+
+  // 1. Check resolve_prior_labware_references output
+  const priorLabwareOutput = state.outputs.get('resolve_prior_labware_references') as
+    { resolvedLabwareRefs?: Array<{ hint: string; matched: { instanceId: string; labwareType: string } }> } | undefined;
+  const priorRefs = priorLabwareOutput?.resolvedLabwareRefs ?? [];
+  for (const ref of priorRefs) {
+    if (ref.matched.labwareType === hint) {
+      return ref.matched;
+    }
+  }
+
+  // 2. Check resolve_labware pass output
+  const labwareResolveOutput = state.outputs.get('resolve_labware') as
+    { resolvedLabwares?: Array<{ hint: string; recordId: string; title?: string }> } | undefined;
+  const resolvedLabwares = labwareResolveOutput?.resolvedLabwares ?? [];
+  for (const rl of resolvedLabwares) {
+    if (rl.hint === hint) {
+      return { instanceId: rl.recordId, labwareType: hint };
+    }
+  }
+
+  // 3. Check labState directly for existing labware of this type
+  const labState = (state.input as { labState?: LabStateSnapshot }).labState ?? emptyLabState();
+  for (const instance of Object.values(labState.labware)) {
+    if (instance.labwareType === hint) {
+      return { instanceId: instance.instanceId, labwareType: hint };
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * Creates the mint_materials pass that expands mintMaterials directives
  * into create_container + add_material events.
  *
  * This pass:
  * - Reads mintMaterials from state.outputs.get('ai_precompile')
- * - For each directive with a placementLabwareHint, emits one create_container
+ * - Iterates ALL directives (not just the first)
+ * - For each directive with a placementLabwareHint:
+ *   - Resolves against resolve_prior_labware_references, then resolve_labware
+ *   - If an existing labware instance is found, reuses it (no create_container)
+ *   - Otherwise emits one create_container
  * - For each material to mint, emits one add_material with generated materialId
- * - Deduplicates create_container by placementLabwareHint
+ * - Name collision check: if materialId already exists in labState, appends _2, _3, etc.
+ *   and emits a warning diagnostic with code 'mint_materials_name_collision'
+ * - wellSpread: 'explicit' uses directive.wellList verbatim
+ * - wellSpread: 'first-row' fills A1..L1 (12 wells)
+ * - wellSpread: 'all' (default) fills every well left-to-right, top-to-bottom
  */
 export function createMintMaterialsPass(): Pass {
   return {
@@ -1079,33 +1365,80 @@ export function createMintMaterialsPass(): Pass {
         { mintMaterials?: MintMaterialsDirective[] } | undefined;
       const directives = ai?.mintMaterials ?? [];
       const events: PlateEventPrimitive[] = [];
+      const diagnostics: PassDiagnostic[] = [];
       const createdHints = new Set<string>();
 
+      // Collect existing materialIds from labState for collision detection
+      const labState = (state.input as { labState?: LabStateSnapshot }).labState
+        ?? emptyLabState();
+      const existingMaterialIds = collectExistingMaterialIds(labState);
+
+      // Track used disambiguation suffixes per naming pattern
+      const usedMaterialIds = new Set<string>(existingMaterialIds);
+
       for (const d of directives) {
-        // 1. Emit create_container if placementLabwareHint present and not yet created
+        // 1. Resolve placement labware
+        const resolvedLabware = resolvePlacementLabware(d, state);
+        const labwareInstanceId = resolvedLabware?.instanceId ?? d.placementLabwareHint ?? 'auto';
+        const labwareType = resolvedLabware?.labwareType ?? d.placementLabwareHint ?? '96-well-plate';
+
+        // 2. Emit create_container only if labware doesn't already exist in labState
         if (d.placementLabwareHint && !createdHints.has(d.placementLabwareHint)) {
-          createdHints.add(d.placementLabwareHint);
-          events.push({
-            eventId: `evt-mint-container-${d.placementLabwareHint}`,
-            event_type: 'create_container',
-            details: {
-              labwareType: d.placementLabwareHint,
-              slot: 'auto',
-              instanceId: d.placementLabwareHint,
-            },
-          });
+          // Check if this labware already exists in labState
+          const alreadyExists = Object.values(labState.labware).some(
+            inst => inst.labwareType === d.placementLabwareHint,
+          );
+
+          if (!alreadyExists) {
+            createdHints.add(d.placementLabwareHint);
+            events.push({
+              eventId: `evt-mint-container-${d.placementLabwareHint}`,
+              event_type: 'create_container',
+              details: {
+                labwareType,
+                slot: 'auto',
+                instanceId: labwareInstanceId,
+              },
+            });
+          }
+          // If already exists, skip create_container — reuse existing instance
         }
 
-        // 2. For n = 1..count: compute materialId, destination well, emit add_material
+        // 3. For n = 1..count: compute materialId, destination well, emit add_material
         const count = Math.max(0, d.count);
         for (let n = 1; n <= count; n++) {
-          const materialId = d.namingPattern.replace('{n}', String(n));
+          let materialId = d.namingPattern.replace('{n}', String(n));
+
+          // Name collision check: if materialId already exists, append suffix
+          let suffix = 2;
+          while (usedMaterialIds.has(materialId)) {
+            materialId = `${d.namingPattern.replace('{n}', String(n))}_${suffix}`;
+            suffix++;
+          }
+          usedMaterialIds.add(materialId);
+
+          // Emit warning diagnostic on collision
+          if (suffix > 2) {
+            diagnostics.push({
+              severity: 'warning',
+              code: 'mint_materials_name_collision',
+              message: `MaterialId '${materialId}' collides with existing material; disambiguated to '${materialId}'`,
+              pass_id,
+              details: {
+                originalPattern: d.namingPattern,
+                n,
+                template: d.template,
+              },
+            });
+          }
+
           let well: string;
 
           if (d.wellSpread === 'first-row') {
             // First row: A1..L1 (12 wells)
             well = wellAddressForIndex(n - 1);
           } else if (d.wellSpread === 'explicit' && d.wellList && d.wellList.length > 0) {
+            // Explicit well list: use wellList verbatim
             well = d.wellList[n - 1] ?? wellAddressForIndex(n - 1);
           } else {
             // Default: 'all' — fills every well left-to-right, top-to-bottom
@@ -1116,7 +1449,7 @@ export function createMintMaterialsPass(): Pass {
             eventId: `evt-mint-${d.template}-${n}`,
             event_type: 'add_material',
             details: {
-              labwareInstanceId: d.placementLabwareHint ?? 'auto',
+              labwareInstanceId,
               well,
               material: {
                 materialId,
@@ -1128,7 +1461,346 @@ export function createMintMaterialsPass(): Pass {
         }
       }
 
-      return { ok: true, output: { events } satisfies MintMaterialsPassOutput };
+      return { ok: true, output: { events } satisfies MintMaterialsPassOutput, diagnostics };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// expand_patterns pass
+// ---------------------------------------------------------------------------
+
+/**
+ * Output shape for the expand_patterns pass.
+ */
+export interface ExpandPatternsOutput {
+  events: PlateEventPrimitive[];
+}
+
+/**
+ * Dependencies for creating the expand_patterns pass.
+ */
+export interface CreateExpandPatternsPassDeps {
+  stampPatternRegistry: RegistryLoader<StampPatternSpec>;
+}
+
+/**
+ * Creates the expand_patterns pass that dispatches patternEvents from
+ * ai_precompile to registered pattern expanders.
+ *
+ * This pass:
+ * - Reads patternEvents from state.outputs.get('ai_precompile')
+ * - For each PatternEvent, looks up the stamp-pattern spec from the registry
+ * - Looks up the registered expander by pattern id
+ * - Invokes the expander, collecting emitted events
+ * - Missing expander → warning diagnostic, no events emitted for that entry
+ * - Output: { events: PlateEventPrimitive[] }
+ */
+export function createExpandPatternsPass(
+  deps: CreateExpandPatternsPassDeps,
+): Pass {
+  return {
+    id: 'expand_patterns',
+    family: 'expand' as const,
+    run({ pass_id, state }: PassRunArgs): PassResult {
+      const ai = state.outputs.get('ai_precompile') as
+        { patternEvents?: PatternEvent[] } | undefined;
+      const patternEvents = ai?.patternEvents ?? [];
+      const labState = (state.input as { labState?: LabStateSnapshot }).labState
+        ?? emptyLabState();
+      const emitted: PlateEventPrimitive[] = [];
+      const diagnostics: PassDiagnostic[] = [];
+
+      for (const pe of patternEvents) {
+        const spec = deps.stampPatternRegistry.get(pe.pattern);
+        if (!spec) {
+          diagnostics.push({
+            severity: 'warning',
+            code: 'unknown_pattern',
+            message: `Unknown stamp pattern: ${pe.pattern}`,
+            pass_id,
+          });
+          continue;
+        }
+        const expander = getPatternExpander(pe.pattern);
+        if (!expander) {
+          diagnostics.push({
+            severity: 'warning',
+            code: 'missing_expander',
+            message: `No expander registered for pattern: ${pe.pattern}`,
+            pass_id,
+          });
+          continue;
+        }
+        const events = expander.expand(pe, spec, { labState });
+        emitted.push(...events);
+      }
+
+      return { ok: true, output: { events: emitted }, diagnostics };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// resolve_roles pass
+// ---------------------------------------------------------------------------
+
+/**
+ * Output shape for the resolve_roles pass.
+ */
+export interface ResolveRolesOutput {
+  events: PlateEventPrimitive[];
+}
+
+/**
+ * Collect all events from upstream passes that may contain role fields.
+ * This includes events from mint_materials, expand_patterns, expand_biology_verbs,
+ * and expand_protocol passes.
+ */
+function collectEventsToResolve(state: PipelineState): PlateEventPrimitive[] {
+  const mintOutput = state.outputs.get('mint_materials') as
+    { events?: PlateEventPrimitive[] } | undefined;
+  const patternsOutput = state.outputs.get('expand_patterns') as
+    { events?: PlateEventPrimitive[] } | undefined;
+  const verbsOutput = state.outputs.get('expand_biology_verbs') as
+    { events?: PlateEventPrimitive[] } | undefined;
+  const protocolOutput = state.outputs.get('expand_protocol') as
+    { events?: PlateEventPrimitive[] } | undefined;
+
+  return [
+    ...(mintOutput?.events ?? []),
+    ...(patternsOutput?.events ?? []),
+    ...(verbsOutput?.events ?? []),
+    ...(protocolOutput?.events ?? []),
+  ];
+}
+
+/**
+ * Find the labware type for an event from the labState.
+ * Falls back to '96-well-plate' if no labware info is available.
+ */
+function findLabwareTypeForEvent(
+  event: PlateEventPrimitive,
+  labState: LabStateSnapshot,
+): string {
+  const details = event.details as Record<string, unknown> | undefined;
+  const labwareInstanceId = details?.labwareInstanceId as string | undefined;
+  if (labwareInstanceId && labState.labware[labwareInstanceId]) {
+    return labState.labware[labwareInstanceId]!.labwareType;
+  }
+  // Default to 96-well-plate for role resolution
+  return '96-well-plate';
+}
+
+/**
+ * Find the orientation for an event from the labState.
+ * Falls back to 'landscape' if no labware info is available.
+ */
+function findOrientationForEvent(
+  event: PlateEventPrimitive,
+  labState: LabStateSnapshot,
+): 'landscape' | 'portrait' {
+  const details = event.details as Record<string, unknown> | undefined;
+  const labwareInstanceId = details?.labwareInstanceId as string | undefined;
+  if (labwareInstanceId && labState.labware[labwareInstanceId]) {
+    return labState.labware[labwareInstanceId]!.orientation;
+  }
+  return 'landscape';
+}
+
+/**
+ * Creates the resolve_roles pass that maps role-based coordinates
+ * to physical well addresses under the current labware orientation.
+ *
+ * This pass:
+ * - Collects events from mint_materials, expand_patterns, expand_biology_verbs, expand_protocol
+ * - For each event with a role field in details, resolves the role to concrete wells
+ * - Events without a role pass through unchanged
+ * - Events with a role are expanded into N concrete events (one per well)
+ * - Original role event is removed; new events get regenerated IDs
+ * - Uses the current labware orientation from labState
+ * - Uses assay-spec panelConstraints if an assay is tagged
+ * - Falls back to the default role library for common roles
+ */
+export function createResolveRolesPass(): Pass {
+  return {
+    id: 'resolve_roles',
+    family: 'expand' as const,
+    run({ pass_id, state }: PassRunArgs): PassResult {
+      const events = collectEventsToResolve(state);
+      const labState = (state.input as { labState?: LabStateSnapshot }).labState
+        ?? emptyLabState();
+
+      // Look up resolved assay refs for panelConstraints
+      const resolvedRefs = (
+        state.outputs.get('resolve_references') as
+          { resolvedRefs?: ResolvedReference[] } | undefined
+      )?.resolvedRefs ?? [];
+      const assayRefs = resolvedRefs.filter(r => r.kind === 'assay');
+      const assaySpec = assayRefs.length > 0
+        ? (assayRefs[0] as { resolvedId: string; resolvedName?: string })
+        : undefined;
+
+      const out: PlateEventPrimitive[] = [];
+      let counter = 0;
+
+      for (const ev of events) {
+        const details = ev.details as Record<string, unknown> | undefined;
+        const role = details?.role as string | undefined;
+
+        if (!role) {
+          // No role — pass through unchanged
+          out.push(ev);
+          continue;
+        }
+
+        // Resolve the role to concrete well addresses
+        const labwareType = findLabwareTypeForEvent(ev, labState);
+        const orientation = findOrientationForEvent(ev, labState);
+
+        const ctx: RoleResolutionContext = {
+          orientation,
+          labwareType,
+          assay: assaySpec ? { id: assayRefs[0]!.resolvedId } : undefined,
+          args: details as Record<string, unknown>,
+        };
+
+        const wells = defaultRoleResolver(role, ctx);
+
+        if (wells.length === 0) {
+          // Unknown role — pass through unchanged with a warning
+          out.push(ev);
+          continue;
+        }
+
+        // Expand into one event per well
+        for (const well of wells) {
+          out.push({
+            ...ev,
+            eventId: `${ev.eventId}_r${counter++}`,
+            details: {
+              ...ev.details,
+              well,
+              role: undefined,
+            } as Record<string, unknown>,
+          });
+        }
+      }
+
+      return { ok: true, output: { events: out } satisfies ResolveRolesOutput };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// compute_volumes pass
+// ---------------------------------------------------------------------------
+
+/**
+ * Output shape for the compute_volumes pass.
+ */
+export interface ComputeVolumesPassOutput {
+  events: PlateEventPrimitive[];
+}
+
+/**
+ * Import the volume resolver.
+ */
+import {
+  isVolumePlaceholder,
+  resolveVolumePlaceholder,
+  type VolumePlaceholder,
+} from '../../math/VolumeResolver.js';
+
+/**
+ * Creates the compute_volumes pass that resolves placeholder volumes
+ * ('just_enough', { percent, of }, 'COMPUTED', etc.) to concrete uL values.
+ *
+ * This pass:
+ * - Reads events from state.outputs.get('resolve_roles')
+ * - For each event with a placeholder volumeUl, invokes the resolver
+ * - Replaces the placeholder with the concrete value, or surfaces a gap
+ * - Pass never throws — unresolvable placeholders produce warning diagnostics
+ */
+export function createComputeVolumesPass(): Pass {
+  return {
+    id: 'compute_volumes',
+    family: 'expand' as const,
+    run({ pass_id, state }: PassRunArgs): PassResult {
+      const resolvedRolesOutput = state.outputs.get('resolve_roles') as
+        { events?: PlateEventPrimitive[] } | undefined;
+      const events = resolvedRolesOutput?.events ?? [];
+      const labState = (state.input as { labState?: LabStateSnapshot }).labState
+        ?? emptyLabState();
+
+      const resolved: PlateEventPrimitive[] = [];
+      const diagnostics: PassDiagnostic[] = [];
+
+      for (const ev of events) {
+        const details = ev.details as Record<string, unknown>;
+        const rawVolume = details.volumeUl;
+
+        // Skip events that already have a concrete numeric volume
+        if (typeof rawVolume === 'number' && !Number.isNaN(rawVolume)) {
+          resolved.push(ev);
+          continue;
+        }
+
+        // Skip events without a volumeUl field at all
+        if (rawVolume === undefined) {
+          resolved.push(ev);
+          continue;
+        }
+
+        // Check if this is a volume placeholder
+        if (!isVolumePlaceholder(rawVolume)) {
+          resolved.push(ev);
+          continue;
+        }
+
+        // Determine the reagent kind from the event
+        const material = details.material as { kind?: string } | undefined;
+        const reagentKind = material?.kind ?? 'unknown';
+
+        // Resolve the placeholder
+        const result = resolveVolumePlaceholder(
+          rawVolume as VolumePlaceholder,
+          reagentKind,
+          events,
+          labState,
+        );
+
+        if (result.resolvedUl !== null) {
+          // Replace the placeholder with the concrete value
+          resolved.push({
+            ...ev,
+            details: {
+              ...details,
+              volumeUl: result.resolvedUl,
+            },
+          });
+        } else {
+          // Unresolvable — surface as a gap diagnostic, pass through event
+          diagnostics.push({
+            severity: 'warning',
+            code: 'unresolvable_volume',
+            message: result.gap ?? `Unresolvable volume for event ${ev.eventId}`,
+            pass_id,
+            details: {
+              eventId: ev.eventId,
+              placeholder: String(rawVolume),
+              reagentKind,
+            },
+          });
+          resolved.push(ev);
+        }
+      }
+
+      return {
+        ok: true,
+        output: { events: resolved } satisfies ComputeVolumesPassOutput,
+        diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
+      };
     },
   };
 }
