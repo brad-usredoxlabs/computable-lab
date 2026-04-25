@@ -14,6 +14,7 @@
 import type { RecordStore, StoreResult } from '../store/types.js';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import type { IssueCard } from './ProtocolIdeIssueCardService.js';
+import { renderPromptTemplate } from '../registry/PromptTemplateRegistry.js';
 
 // ---------------------------------------------------------------------------
 // Export types
@@ -101,11 +102,6 @@ function generateDraftId(): string {
   return `draft-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/**
- * Build the markdown for a single spec draft from an issue card.
- *
- * Each draft is a small, focused spec — not a monolithic report.
- */
 function buildSpecDraftMarkdown(
   card: IssueCard,
   priority: number,
@@ -113,85 +109,41 @@ function buildSpecDraftMarkdown(
   sourcePdfUrl?: string,
   latestDirectiveText?: string,
 ): string {
-  const lines: string[] = [];
+  const evidence_block =
+    card.evidenceCitations && card.evidenceCitations.length > 0
+      ? '## Evidence Citations\n\n' +
+        card.evidenceCitations
+          .map(
+            (c) =>
+              `- **${c.sourceRef}**${c.page ? ` (page ${c.page})` : ''}${c.snippet ? ` — "${c.snippet}"` : ''}`,
+          )
+          .join('\n')
+      : '';
 
-  // Front matter
-  lines.push(`---`);
-  lines.push(`id: spec-${String(priority).padStart(3, '0')}-ralph-export`);
-  lines.push(`title: "${card.title}"`);
-  lines.push(`priority: ${priority}`);
-  lines.push(`depends_on: []`);
-  lines.push(`---`);
-  lines.push('');
+  const graph_anchor_block = card.graphAnchor
+    ? '## Graph Anchor\n\n' +
+      `- Node ID: ${card.graphAnchor.nodeId}` +
+      (card.graphAnchor.label ? `\n- Label: ${card.graphAnchor.label}` : '')
+    : '';
 
-  // Title section
-  lines.push(`# ${card.title}`);
-  lines.push('');
+  const requested_changes_block = card.suggestedChange
+    ? `## Requested Compiler Changes\n\n${card.suggestedChange}`
+    : '';
 
-  // Source context
-  lines.push(`## Source Context`);
-  lines.push('');
-  if (sourcePdfUrl) {
-    lines.push(`- Source PDF: ${sourcePdfUrl}`);
-  }
-  lines.push(`- Session: ${sessionId}`);
-  if (latestDirectiveText) {
-    lines.push(`- Latest directive: ${latestDirectiveText}`);
-  }
-  lines.push('');
-
-  // Issue card origin
-  lines.push(`## Issue Origin`);
-  lines.push('');
-  lines.push(`- Origin: ${card.origin}`);
-  lines.push(`- Card ID: ${card.id}`);
-  lines.push('');
-
-  // Body / description
-  lines.push(`## Description`);
-  lines.push('');
-  lines.push(card.body);
-  lines.push('');
-
-  // Evidence citations
-  if (card.evidenceCitations && card.evidenceCitations.length > 0) {
-    lines.push(`## Evidence Citations`);
-    lines.push('');
-    for (const citation of card.evidenceCitations) {
-      lines.push(`- **${citation.sourceRef}**${citation.page ? ` (page ${citation.page})` : ''}${citation.snippet ? ` — "${citation.snippet}"` : ''}`);
-    }
-    lines.push('');
-  }
-
-  // Graph anchor (if present)
-  if (card.graphAnchor) {
-    lines.push(`## Graph Anchor`);
-    lines.push('');
-    lines.push(`- Node ID: ${card.graphAnchor.nodeId}`);
-    if (card.graphAnchor.label) {
-      lines.push(`- Label: ${card.graphAnchor.label}`);
-    }
-    lines.push('');
-  }
-
-  // Requested compiler changes
-  if (card.suggestedChange) {
-    lines.push(`## Requested Compiler Changes`);
-    lines.push('');
-    lines.push(card.suggestedChange);
-    lines.push('');
-  }
-
-  // Acceptance criteria (derived from the card)
-  lines.push('## Acceptance Criteria');
-  lines.push('');
-  lines.push('- [ ] Address the issue described above');
-  lines.push('- [ ] Include evidence citations in the implementation');
-  lines.push('- [ ] Pass `pnpm tsc --noEmit`');
-  lines.push('- [ ] Pass `pnpm vitest run` for related tests');
-  lines.push('');
-
-  return lines.join('\n');
+  return renderPromptTemplate('protocol-ide.ralph-export.spec', {
+    section_id: `spec-${String(priority).padStart(3, '0')}-ralph-export`,
+    section_title: card.title,
+    priority,
+    source_pdf_url: sourcePdfUrl ?? '',
+    session_id: sessionId,
+    latest_directive: latestDirectiveText ?? '',
+    origin: card.origin,
+    card_id: card.id,
+    description: card.body,
+    evidence_block,
+    graph_anchor_block,
+    requested_changes_block,
+  });
 }
 
 // ---------------------------------------------------------------------------

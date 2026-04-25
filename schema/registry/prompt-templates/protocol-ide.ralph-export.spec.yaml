@@ -1,0 +1,52 @@
+kind: prompt-template
+id: protocol-ide.ralph-export.spec
+prompt_kind: ralph_export.spec_draft
+description: Markdown spec-draft template emitted by Protocol IDE export-issue-cards
+content_format: markdown
+variables:
+  - { name: section_id, type: string, description: 'Spec id like spec-001-ralph-export' }
+  - { name: section_title, type: string, description: 'Card title' }
+  - { name: priority, type: number, description: 'Sequential priority within the bundle' }
+  - { name: source_pdf_url, type: string, description: 'Source PDF URL or empty' }
+  - { name: session_id, type: string, description: 'Protocol IDE session id' }
+  - { name: latest_directive, type: string, description: 'Latest directive text or empty' }
+  - { name: origin, type: string, description: 'Issue origin: user|system|mixed' }
+  - { name: card_id, type: string, description: 'Issue card id' }
+  - { name: description, type: string, description: 'Card body' }
+  - { name: evidence_block, type: string, description: 'Pre-rendered evidence section (with heading) or empty' }
+  - { name: graph_anchor_block, type: string, description: 'Pre-rendered graph-anchor section (with heading) or empty when no anchor' }
+  - { name: requested_changes_block, type: string, description: 'Pre-rendered requested-changes section (with heading) or empty' }
+content: |
+  ---
+  id: {{section_id}}
+  title: "{{section_title}}"
+  priority: {{priority}}
+  depends_on: []
+  ---
+
+  # {{section_title}}
+
+  ## Source Context
+
+  - Source PDF: {{source_pdf_url}}
+  - Session: {{session_id}}
+  - Latest directive: {{latest_directive}}
+
+  ## Issue Origin
+
+  - Origin: {{origin}}
+  - Card ID: {{card_id}}
+
+  ## Description
+
+  {{description}}
+
+  {{evidence_block}}
+  {{graph_anchor_block}}
+  {{requested_changes_block}}
+  ## Acceptance Criteria
+
+  - [ ] Address the issue described above
+  - [ ] Include evidence citations in the implementation
+  - [ ] Pass `pnpm tsc --noEmit`
+  - [ ] Pass `pnpm vitest run` for related tests
