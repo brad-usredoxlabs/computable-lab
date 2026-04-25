@@ -16,13 +16,28 @@
       "errors": [
         "API error: API error 400: {\"error\":{\"message\":\"This model's maximum context length is 262144 tokens. However, you requested 16384 output tokens and your prompt contains at least 245761 input tokens, f"
       ]
+    },
+    {
+      "iteration": 2,
+      "startedAt": "2026-04-25T03:23:17.631Z",
+      "endedAt": "2026-04-25T03:33:41.959Z",
+      "durationMs": 622517,
+      "agent": "codex",
+      "model": "",
+      "toolsUsed": {},
+      "filesModified": [
+        "server/src/compiler/pipeline/fixtures/Prompt04Debug.test.ts",
+        "server/src/compiler/pipeline/fixtures/Prompt04DeepDebug.test.ts",
+        "server/src/compiler/pipeline/fixtures/Prompt04Green.test.ts"
+      ],
+      "exitCode": 1,
+      "completionDetected": false,
+      "errors": []
     }
   ],
-  "totalDurationMs": 257436,
+  "totalDurationMs": 879953,
   "struggleIndicators": {
-    "repeatedErrors": {
-      "API error: API error 400: {\"error\":{\"message\":\"This model's maximum context length is 262144 tokens.": 1
-    },
+    "repeatedErrors": {},
     "noProgressIterations": 0,
     "shortIterations": 0
   }
