@@ -2,32 +2,15 @@
   "iterations": [
     {
       "iteration": 1,
-      "startedAt": "2026-04-25T03:00:36.515Z",
-      "endedAt": "2026-04-25T03:13:22.500Z",
-      "durationMs": 764188,
+      "startedAt": "2026-04-25T03:18:55.481Z",
+      "endedAt": "2026-04-25T03:23:14.733Z",
+      "durationMs": 257436,
       "agent": "codex",
       "model": "",
       "toolsUsed": {},
       "filesModified": [
-        "schema/registry/compile-pipelines/chatbot-compile.yaml",
-        "server/src/compiler/patterns/stamps/QuadrantStampExpander.ts",
-        "server/src/compiler/pipeline/fixtures/prompt-03-quadrant-qpcr.yaml",
-        "server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts",
-        "server/src/compiler/pipeline/fixtures/Prompt03Green.test.ts"
+        "server/src/compiler/pipeline/fixtures/prompt-04-fire-assay.yaml"
       ],
-      "exitCode": 0,
-      "completionDetected": false,
-      "errors": []
-    },
-    {
-      "iteration": 2,
-      "startedAt": "2026-04-25T03:13:25.344Z",
-      "endedAt": "2026-04-25T03:17:03.667Z",
-      "durationMs": 216527,
-      "agent": "codex",
-      "model": "",
-      "toolsUsed": {},
-      "filesModified": [],
       "exitCode": 1,
       "completionDetected": false,
       "errors": [
@@ -35,12 +18,12 @@
       ]
     }
   ],
-  "totalDurationMs": 980715,
+  "totalDurationMs": 257436,
   "struggleIndicators": {
     "repeatedErrors": {
       "API error: API error 400: {\"error\":{\"message\":\"This model's maximum context length is 262144 tokens.": 1
     },
-    "noProgressIterations": 1,
+    "noProgressIterations": 0,
     "shortIterations": 0
   }
 }

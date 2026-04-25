@@ -32,21 +32,54 @@ input:
     scope for how well C112-resazurin reduction maps to ER
     localization.
 mocked_ai_precompile_output:
-  candidateEvents: []
+  candidateEvents:
+    - verb: add_material
+      role: cell_region
+      materialKind: media-with-AhR-inhibitor
+      volumeUl: { percent: 1, of: 96-well-plate }
   candidateLabwares:
-    - hint: "96-well plate"
-      reason: "cell plate for FIRE assay"
-    - hint: "12-well reservoir"
-      reason: "reagent source"
+    - hint: "96-well-plate"
+      deckSlot: "target_cells"
+    - hint: "12-well-reservoir"
+      deckSlot: "reservoir_slot"
   unresolvedRefs:
-    - kind: other
+    - kind: assay
       label: "FIRE cellular redox assay"
-      reason: "Assay panel — awaiting assay-spec registry (spec-019)"
-    - kind: other
-      label: "AhR activator (generic)"
-      reason: "Compound class — awaiting compound-class registry (spec-020)"
+      reason: "assay panel reference"
+    - kind: compound-class
+      label: "AhR activator"
+      reason: "functional-class compound reference"
+  patternEvents:
+    - pattern: triplicate_stamp
+      fromLabwareHint: "12-well-reservoir"
+      toLabwareHint: "96-well-plate"
+      startCol: 2
+      perPosition: { volumeUl: 2 }
+    - pattern: column_stamp_differentiated
+      fromLabwareHint: "12-well-reservoir"
+      toLabwareHint: "96-well-plate"
+      perPosition:
+        col_7:  { perturbant: clofibrate,        volumeUl: 2 }
+        col_8:  { perturbant: AhR-activator,     volumeUl: 2 }
+        col_9:  { perturbant: Complex-I-blocker, volumeUl: 2 }
+        col_10: { perturbant: PPARa-antagonist,  volumeUl: 2 }
+        col_11: { perturbant: AhR-antagonist,    volumeUl: 2 }
+        col_12: { perturbant: control,           volumeUl: 2 }
+  directives:
+    - kind: mount_pipette
+      params: { mountSide: left, pipetteType: 8ch-200uL }
+    - kind: reorient_labware
+      params: { labwareHint: "96-well-plate", orientation: portrait }
+    - kind: swap_pipette
+      params: { from: left, to: 12ch-200uL }
+  downstreamCompileJobs:
+    - { kind: qPCR,          description: "gene expression readout" }
+    - { kind: GC-FID,        description: "fatty acid composition" }
+    - { kind: GC-MS,         description: "metabolomics" }
+    - { kind: plate-reader,  description: "viability via resazurin" }
+    - { kind: imaging,       description: "C112-resazurin ER localization" }
 expected:
   outcome: gap
   terminalArtifacts:
-    events: []
+    directives: []
     gaps: []
