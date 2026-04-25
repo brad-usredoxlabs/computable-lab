@@ -2187,8 +2187,15 @@ export function createValidatePass(): Pass {
     id: 'validate',
     family: 'validate' as const,
     run({ state }: PassRunArgs): PassResult {
-      const artifacts = (state.input as { terminalArtifacts?: unknown }).terminalArtifacts
-        ?? {};
+      // Read events from resolve_roles output (the definitive event list)
+      const resolvedRolesOutput = state.outputs.get('resolve_roles') as
+        { events?: PlateEventPrimitive[] } | undefined;
+      const events = resolvedRolesOutput?.events ?? [];
+      const artifacts = {
+        events,
+        directives: [],
+        gaps: [],
+      };
       const priorLabState = (state.input as { labState?: LabStateSnapshot }).labState
         ?? emptyLabState();
 

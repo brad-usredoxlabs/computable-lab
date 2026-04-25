@@ -22,19 +22,34 @@ input:
     species in A2, B1 and B2 are quantified relative to the 16S
     result in well A1 of the stamped 'quad'.
 mocked_ai_precompile_output:
-  candidateEvents: []
+  candidateEvents:
+    - verb: read
+      instrument: QuantStudio-5
+      assayId: 16S-qPCR-panel
   candidateLabwares:
     - hint: "384-well PCR plate"
       reason: "destination for stamped samples"
   unresolvedRefs:
-    - kind: other
-      label: "gut microbiome 16S qPCR assay panel"
-      reason: "Assay panel reference — awaiting assay-spec registry (spec-019)"
-    - kind: other
-      label: "quadrant_stamp pattern"
-      reason: "Stamp pattern reference — awaiting pattern registry (spec-017)"
+    - kind: assay
+      label: "gut microbiome 16S qPCR panel"
+      reason: "Assay panel reference"
+  priorLabwareRefs:
+    - hint: "96-well PCR plate of samples"
+      kindHint: "96-well-conical-pcr-plate"
+  patternEvents:
+    - pattern: quadrant_stamp
+      fromLabwareHint: "96-well-conical-pcr-plate"
+      toLabwareHint: "384-well-pcr-plate"
+      perPosition:
+        A1: { assay: "16S-positive-control", channel: FAM }
+        A2: { assay: "species-multiplex-A2" }
+        B1: { assay: "species-multiplex-B1" }
+        B2: { assay: "species-multiplex-B2" }
+      volumeUl: 2
 expected:
-  outcome: gap
+  outcome: error
   terminalArtifacts:
-    events: []
-    gaps: []
+    validationReport:
+      findings:
+        - severity: error
+          category: cross-turn

@@ -63,7 +63,7 @@ passes:
 
   - id: resolve_roles
     family: expand
-    depends_on: [mint_materials, expand_protocol]
+    depends_on: [expand_protocol, expand_patterns, expand_biology_verbs]
     description: Map role coordinates to concrete well addresses under current orientation.
 
   - id: compute_volumes
