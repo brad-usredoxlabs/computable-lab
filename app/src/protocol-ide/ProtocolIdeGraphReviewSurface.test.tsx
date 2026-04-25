@@ -152,29 +152,29 @@ function makeEventGraphData(): EventGraphData {
   }
 }
 
-function renderSurface(
-  session?: ProtocolIdeSession,
-  opts?: {
-    eventGraphData?: EventGraphData | null
-    deckLabwareSummary?: DeckLabwareSummary | null
-    toolsInstrumentsSummary?: ToolsInstrumentsSummary | null
-    reagentsConcentrationsSummary?: ReagentsConcentrationsSummary | null
-    budgetCostSummary?: BudgetCostSummary | null
-    issueCards?: IssueCardRef[]
-  }
-) {
+function renderSurface(opts?: {
+  session?: ProtocolIdeSession
+  eventGraphData?: EventGraphData | null
+  deckLabwareSummary?: DeckLabwareSummary | null
+  toolsInstrumentsSummary?: ToolsInstrumentsSummary | null
+  reagentsConcentrationsSummary?: ReagentsConcentrationsSummary | null
+  budgetCostSummary?: BudgetCostSummary | null
+  issueCards?: IssueCardRef[]
+  onIssueCardClick?: (card: IssueCardRef) => void
+  onEvidenceClick?: (evidenceRefId: string) => void
+}) {
   return render(
     <MemoryRouter>
       <ProtocolIdeGraphReviewSurface
-        session={session ?? makeSession()}
+        session={opts?.session ?? makeSession()}
         eventGraphData={opts?.eventGraphData}
         deckLabwareSummary={opts?.deckLabwareSummary}
         toolsInstrumentsSummary={opts?.toolsInstrumentsSummary}
         reagentsConcentrationsSummary={opts?.reagentsConcentrationsSummary}
         budgetCostSummary={opts?.budgetCostSummary}
         issueCards={opts?.issueCards}
-        onIssueCardClick={vi.fn()}
-        onEvidenceClick={vi.fn()}
+        onIssueCardClick={opts?.onIssueCardClick ?? vi.fn()}
+        onEvidenceClick={opts?.onEvidenceClick ?? vi.fn()}
       />
     </MemoryRouter>
   )
@@ -421,6 +421,7 @@ describe('ProtocolIdeGraphReviewSurface — issue-overlay rendering', () => {
     const mockOnEvidenceClick = vi.fn()
     renderSurface({
       issueCards: makeIssueCards(),
+      onEvidenceClick: mockOnEvidenceClick,
     })
     const evidenceLink = screen.getByTestId('evidence-link-evidence-001')
     fireEvent.click(evidenceLink)
@@ -431,6 +432,7 @@ describe('ProtocolIdeGraphReviewSurface — issue-overlay rendering', () => {
     const mockOnIssueCardClick = vi.fn()
     renderSurface({
       issueCards: makeIssueCards(),
+      onIssueCardClick: mockOnIssueCardClick,
     })
     const badge = screen.getByTestId('issue-badge-PIC-001')
     fireEvent.click(badge)
