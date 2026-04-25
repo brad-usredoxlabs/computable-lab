@@ -29,7 +29,7 @@ passes:
 
   - id: expand_biology_verbs
     family: expand
-    depends_on: [ai_precompile, resolve_prior_labware_references]
+    depends_on: [ai_precompile]
     when: outputs.ai_precompile.candidateEvents
     description: Expand high-level biology verbs (seed, incubate, harvest, etc.) in candidate events into compositions of primitive event types that ContextEngine already handles.
 
@@ -63,7 +63,7 @@ passes:
 
   - id: resolve_roles
     family: expand
-    depends_on: [expand_protocol, expand_patterns, expand_biology_verbs]
+    depends_on: [expand_protocol, expand_patterns]
     description: Map role coordinates to concrete well addresses under current orientation.
 
   - id: compute_volumes

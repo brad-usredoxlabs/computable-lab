@@ -311,6 +311,7 @@ export const readExpander: BiologyVerbExpander = {
  * add_material: single add_material event.
  * Supports params: labware_id, well, material (object with kind/materialId/volumeUl),
  * or legacy params: labware, material (string), wells (array).
+ * Also supports materialKind as a top-level param for role-based events.
  */
 export const addMaterialExpander: BiologyVerbExpander = {
   verb: 'add_material',
@@ -320,6 +321,7 @@ export const addMaterialExpander: BiologyVerbExpander = {
     const well = params.well as string | undefined;
     const material = params.material as Record<string, unknown> | string | undefined;
     const wells = params.wells as string[] | undefined;
+    const materialKind = params.materialKind as string | undefined;
 
     const events: PlateEventPrimitive[] = [];
 
@@ -332,6 +334,7 @@ export const addMaterialExpander: BiologyVerbExpander = {
           details: {
             material: typeof material === 'string' ? material : undefined,
             ...(typeof material === 'object' && material !== null ? material : {}),
+            ...(materialKind ? { materialKind } : {}),
           },
           labwareId,
         });
@@ -345,6 +348,7 @@ export const addMaterialExpander: BiologyVerbExpander = {
           ...(well ? { well } : {}),
           ...(typeof material === 'object' && material !== null ? material : {}),
           ...(typeof material === 'string' ? { material } : {}),
+          ...(materialKind ? { materialKind } : {}),
         },
         labwareId,
       });

@@ -15,6 +15,9 @@ import type { ExtractionRunnerService, RunExtractionServiceArgs } from '../../..
 import type { ExtractionDraftBody } from '../../../extract/ExtractionDraftBuilder.js';
 import type { FileAttachment } from '../../../ai/types.js';
 
+// Ensure pattern expanders are registered (side-effect import)
+import '../../../compiler/patterns/index.js';
+
 // ---------------------------------------------------------------------------
 // buildTestDeps — minimal stubs for non-LLM dependencies
 // ---------------------------------------------------------------------------

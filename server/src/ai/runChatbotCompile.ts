@@ -199,7 +199,7 @@ export async function runChatbotCompile(
   let outcome: CompileOutcome;
   if (diagnostics.some((d) => d.severity === 'error')) {
     outcome = 'error';
-  } else if (events.length === 0 && gaps.length > 0) {
+  } else if (gaps.length > 0) {
     outcome = 'gap';
   } else {
     outcome = 'complete';
