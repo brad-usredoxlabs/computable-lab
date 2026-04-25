@@ -218,10 +218,15 @@ describe('CreateNodeModal', () => {
 
     renderModal('study')
 
-    // Should show loading spinner
+    // Should show loading spinner with text
     await waitFor(() => {
       const loadingText = document.querySelector('span')
-      expect(loadingText?.textContent).toContain('Loading form...')
+      // Find the span that contains "Loading form..."
+      const spans = document.querySelectorAll('span')
+      const loadingSpan = Array.from(spans).find(
+        (s) => s.textContent?.includes('Loading form...'),
+      )
+      expect(loadingSpan).toBeInTheDocument()
     })
   })
 

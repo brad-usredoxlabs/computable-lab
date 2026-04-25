@@ -1,17 +1,20 @@
 /**
  * RecordPreviewPanel — Right pane showing preview of selected record.
- * 
+ *
  * Displays record metadata, content summary, and action buttons.
+ * Uses a compact TapTab read-only surface for schema-backed records
+ * (replacing the legacy SectionedForm path).
  */
 
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useBrowser } from '../../shared/context/BrowserContext'
 import { apiClient } from '../../shared/api/client'
-import { SectionedForm } from '../../shared/forms/SectionedForm'
+import { ProjectionTapTabEditor, buildProjectionDocument } from '../../editor/taptab/TapTabEditor'
 import type { IndexEntry } from '../../types/tree'
 import type { RecordEnvelope } from '../../types/kernel'
-import type { UISpec } from '../../types/uiSpec'
+import type { UISpec, EditorProjectionResponse } from '../../types/uiSpec'
+import type { JSONContent } from '../../editor/taptab/documentMapper'
 
 // Simple cn utility
 const cn = (...classes: (string | boolean | undefined | null)[]): string =>
@@ -144,21 +147,140 @@ function LoadingState() {
   )
 }
 
+// ── Compact TapTab read surface ──────────────────────────────────────
+
+/**
+ * Compact read-only TapTab projection surface.
+ * Renders a disabled ProjectionTapTabEditor in a tight container
+ * suitable for the browser preview panel.
+ */
+function CompactTapTabSurface({
+  blocks,
+  slots,
+  data,
+}: {
+  blocks: Array<{ id: string; kind: string; label?: string; help?: string; slotIds?: string[] }>
+  slots: Array<{
+    id: string
+    path: string
+    label: string
+    widget: string
+    help?: string
+    required?: boolean
+    readOnly?: boolean
+    suggestionProviders?: string[]
+    options?: Array<{ value: string; label: string }>
+    properties?: Array<{ name: string; widget: string; label: string; help?: string; required?: boolean }>
+  }>
+  data: Record<string, unknown>
+}) {
+  return (
+    <div className="compact-taptab-surface">
+      <ProjectionTapTabEditor
+        blocks={blocks}
+        slots={slots}
+        data={data}
+        disabled
+      />
+    </div>
+  )
+}
+
+/**
+ * Compact read-only TapTab surface built from UISpec (legacy path).
+ * Falls back to raw JSON when no sections are available.
+ */
+function CompactTapTabLegacySurface({
+  uiSpec,
+  data,
+}: {
+  uiSpec: UISpec
+  data: Record<string, unknown>
+}) {
+  const document = buildProjectionDocument(
+    uiSpec.form?.sections?.map((section, idx) => ({
+      id: `section-${idx}`,
+      kind: 'section',
+      label: section.title || '',
+      slotIds: section.fields.map((f, fi) => `slot-${idx}-${fi}`),
+    })) ?? [],
+    uiSpec.form?.sections?.flatMap((section, idx) =>
+      section.fields.map((field, fi) => ({
+        id: `slot-${idx}-${fi}`,
+        path: field.path,
+        label: field.label || field.path,
+        widget: field.widget,
+        help: field.help,
+        required: field.required ?? false,
+        readOnly: field.readOnly ?? field.readonly ?? false,
+        options: field.options?.map(opt => ({ value: String(opt.value), label: opt.label })),
+      }))
+    ) ?? [],
+    data,
+  )
+
+  // If the document has no sections, fall back to JSON
+  if (document.content.length === 0) {
+    return null
+  }
+
+  return (
+    <div className="compact-taptab-surface">
+      <div className="taptab-editor-container">
+        <div className="taptab-editor-prose" contentEditable={false} suppressContentEditableWarning>
+          {document.content.map((section) => {
+            if (section.type !== 'section' || !section.content) return null
+            return (
+              <div key={section.attrs?.id || `section`} className="taptab-section">
+                {section.content.map((node) => {
+                  if (node.type === 'sectionHeading') {
+                    const text = node.content?.[0]?.text
+                    return text ? (
+                      <h4 key={node.type} className="taptab-section-heading">{text}</h4>
+                    ) : null
+                  }
+                  if (node.type === 'fieldRow' && node.attrs) {
+                    const attrs = node.attrs as Record<string, unknown>
+                    return (
+                      <div
+                        key={attrs.path as string}
+                        className="taptab-field-row"
+                        data-read-only="true"
+                      >
+                        <span className="taptab-field-label">{attrs.label as string}</span>
+                        <span className="taptab-field-value">
+                          {attrs.value != null && attrs.value !== '' ? String(attrs.value) : '—'}
+                        </span>
+                      </div>
+                    )
+                  }
+                  return null
+                })}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /**
  * Main preview panel component.
  */
 export function RecordPreviewPanel({ className }: RecordPreviewPanelProps) {
   const navigate = useNavigate()
-  const { 
-    selectedRecordId, 
-    setSelectedRecordId, 
-    studies, 
-    fileToRun
+  const {
+    selectedRecordId,
+    setSelectedRecordId,
+    studies,
+    fileToRun,
   } = useBrowser()
-  
+
   const [record, setRecord] = useState<Record<string, unknown> | null>(null)
   const [indexEntry, setIndexEntry] = useState<IndexEntry | null>(null)
   const [uiSpec, setUiSpec] = useState<UISpec | null>(null)
+  const [projection, setProjection] = useState<EditorProjectionResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showFileDialog, setShowFileDialog] = useState(false)
@@ -171,6 +293,7 @@ export function RecordPreviewPanel({ className }: RecordPreviewPanelProps) {
       setRecord(null)
       setIndexEntry(null)
       setUiSpec(null)
+      setProjection(null)
       setError(null)
       return
     }
@@ -203,6 +326,13 @@ export function RecordPreviewPanel({ className }: RecordPreviewPanelProps) {
           } catch {
             setUiSpec(null)
           }
+          // Fetch editor projection for TapTab read surface
+          try {
+            const proj = await apiClient.getRecordEditorProjection(data.recordId)
+            setProjection(proj)
+          } catch {
+            setProjection(null)
+          }
         }
       })
       .catch((err: Error) => {
@@ -219,7 +349,7 @@ export function RecordPreviewPanel({ className }: RecordPreviewPanelProps) {
 
     const schemaName = indexEntry.schemaId.toLowerCase()
     const kind = indexEntry.kind?.toLowerCase()
-    
+
     if (schemaName.includes('event-graph') || kind === 'event-graph') {
       // Open in labware editor with query param
       navigate(`/labware-editor?id=${encodeURIComponent(indexEntry.recordId)}`)
@@ -238,7 +368,7 @@ export function RecordPreviewPanel({ className }: RecordPreviewPanelProps) {
   // Handle filing to run
   const handleFile = async () => {
     if (!indexEntry || !selectedRunId) return
-    
+
     setFiling(true)
     try {
       const success = await fileToRun(indexEntry.recordId, selectedRunId)
@@ -297,6 +427,45 @@ export function RecordPreviewPanel({ className }: RecordPreviewPanelProps) {
   }
 
   const isInbox = indexEntry.status === 'inbox'
+  const payload = (record as Record<string, unknown>)?.payload as Record<string, unknown>
+
+  // Determine which preview surface to render
+  const renderPreviewContent = () => {
+    // Primary path: projection-backed TapTab surface
+    if (projection && projection.blocks.length > 0 && projection.slots.length > 0) {
+      return (
+        <CompactTapTabSurface
+          blocks={projection.blocks}
+          slots={projection.slots}
+          data={payload}
+        />
+      )
+    }
+
+    // Secondary path: UISpec-backed TapTab surface (legacy)
+    if (uiSpec?.form?.sections?.length) {
+      return (
+        <CompactTapTabLegacySurface
+          uiSpec={uiSpec}
+          data={payload}
+        />
+      )
+    }
+
+    // Fallback: raw JSON (only when no projection or UISpec available)
+    if (record) {
+      return (
+        <div className="text-xs font-mono bg-gray-50 p-3 rounded overflow-x-auto">
+          <pre className="whitespace-pre-wrap break-words">
+            {JSON.stringify(payload, null, 2)?.slice(0, 1000)}
+            {JSON.stringify(payload)?.length > 1000 && '...'}
+          </pre>
+        </div>
+      )
+    }
+
+    return null
+  }
 
   return (
     <div className={cn('bg-white flex flex-col h-full', className)}>
@@ -367,21 +536,7 @@ export function RecordPreviewPanel({ className }: RecordPreviewPanelProps) {
 
       {/* Content preview (scrollable) */}
       <div className="flex-1 overflow-y-auto p-4">
-        {record && uiSpec?.form?.sections?.length ? (
-          <SectionedForm
-            uiSpec={uiSpec}
-            formData={(record as Record<string, unknown>).payload as Record<string, unknown>}
-            readOnly
-            compact
-          />
-        ) : record ? (
-          <div className="text-xs font-mono bg-gray-50 p-3 rounded overflow-x-auto">
-            <pre className="whitespace-pre-wrap break-words">
-              {JSON.stringify((record as Record<string, unknown>).payload, null, 2)?.slice(0, 1000)}
-              {JSON.stringify((record as Record<string, unknown>).payload)?.length > 1000 && '...'}
-            </pre>
-          </div>
-        ) : null}
+        {renderPreviewContent()}
       </div>
 
       {/* Actions */}

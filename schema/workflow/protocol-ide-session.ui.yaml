@@ -1,0 +1,141 @@
+# UI specification for ProtocolIdeSession records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/workflow/protocol-ide-session.schema.yaml"
+
+display:
+  titleField: "$.title"
+  subtitleField: "$.status"
+  icon: "ide-session"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.recordId"
+      widget: "text"
+      label: "Session ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Source Selection"
+    fields:
+    - path: "$.sourceMode"
+      widget: "select"
+      label: "Source Mode"
+      required: true
+    - path: "$.vendor"
+      widget: "text"
+      label: "Vendor"
+    - path: "$.title"
+      widget: "text"
+      label: "Source Title"
+      required: true
+    - path: "$.pdfUrl"
+      widget: "url"
+      label: "PDF URL"
+    - path: "$.landingUrl"
+      widget: "url"
+      label: "Landing URL"
+    - path: "$.uploadedAssetRef"
+      widget: "file-ref"
+      label: "Uploaded File"
+  - title: "Source References"
+    fields:
+    - path: "$.vendorDocumentRef"
+      widget: "ref"
+      label: "Vendor Document"
+      refKind: "ingestion-artifact"
+    - path: "$.ingestionJobRef"
+      widget: "ref"
+      label: "Ingestion Job"
+      refKind: "ingestion-job"
+    - path: "$.protocolImportRef"
+      widget: "ref"
+      label: "Protocol Import"
+      refKind: "extraction-draft"
+    - path: "$.extractedTextRef"
+      widget: "ref"
+      label: "Extracted Text"
+    - path: "$.evidenceRefs"
+      widget: "reflist"
+      label: "Evidence References"
+  - title: "Latest Directive"
+    fields:
+    - path: "$.latestDirectiveText"
+      widget: "textarea"
+      label: "Latest Directive"
+      required: true
+  - title: "Latest Projection"
+    fields:
+    - path: "$.latestProtocolRef"
+      widget: "ref"
+      label: "Latest Protocol"
+      refKind: "protocol"
+    - path: "$.latestEventGraphRef"
+      widget: "ref"
+      label: "Latest Event Graph"
+      refKind: "event-graph"
+    - path: "$.latestEventGraphCacheKey"
+      widget: "text"
+      label: "Event Graph Cache Key"
+  - title: "Overlay Summaries"
+    fields:
+    - path: "$.latestDeckSummaryRef"
+      widget: "ref"
+      label: "Deck Summary"
+    - path: "$.latestToolsSummaryRef"
+      widget: "ref"
+      label: "Tools Summary"
+    - path: "$.latestReagentsSummaryRef"
+      widget: "ref"
+      label: "Reagents Summary"
+    - path: "$.latestBudgetSummaryRef"
+      widget: "ref"
+      label: "Budget Summary"
+  - title: "Issues"
+    fields:
+    - path: "$.rollingIssueSummary"
+      widget: "markdown"
+      label: "Rolling Issue Summary"
+      readonly: true
+    - path: "$.issueCardRefs"
+      widget: "reflist"
+      label: "Issue Cards"
+  - title: "Export"
+    fields:
+    - path: "$.lastExportAt"
+      widget: "datetime"
+      label: "Last Exported At"
+      readonly: true
+    - path: "$.lastExportBundleRef"
+      widget: "ref"
+      label: "Export Bundle"
+  - title: "Status"
+    fields:
+    - path: "$.status"
+      widget: "select"
+      label: "Status"
+      required: true
+  - title: "Notes"
+    fields:
+    - path: "$.notes"
+      widget: "textarea"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.recordId"
+    label: "Session ID"
+    width: "140px"
+  - path: "$.title"
+    label: "Source Title"
+  - path: "$.status"
+    label: "Status"
+    width: "120px"
+  - path: "$.sourceMode"
+    label: "Source Mode"
+    width: "120px"

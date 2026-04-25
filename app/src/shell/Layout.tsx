@@ -20,6 +20,7 @@ export function Layout() {
           <Link to="/component-library" className="nav-link">Component Library</Link>
           <Link to="/literature" className="nav-link">Literature</Link>
           <Link to="/ingestion" className="nav-link">Ingestion</Link>
+          <Link to="/protocol-ide" className="nav-link">Protocol IDE</Link>
           <Link to="/settings" className="nav-link">Settings</Link>
           <div className="nav-spacer" />
           <RepoStatusBadge status={repoStatus} loading={loading} error={error} />

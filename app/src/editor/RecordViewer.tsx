@@ -4,7 +4,7 @@ import { stringify } from 'yaml'
 import { apiClient } from '../shared/api/client'
 import { ApiError, NetworkError } from '../shared/api/errors'
 import { DiagnosticsPanel } from './DiagnosticsPanel'
-import { SectionedForm } from '../shared/forms/SectionedForm'
+import { ProjectionTapTabEditor } from './taptab/TapTabEditor'
 import type { RecordEnvelope, ValidationResult, LintResult } from '../types/kernel'
 import type { UISpec } from '../types/uiSpec'
 
@@ -19,6 +19,24 @@ export function RecordViewer() {
   const [data, setData] = useState<RecordWithDiagnostics | null>(null)
   const [uiSpec, setUiSpec] = useState<UISpec | null>(null)
   const [schema, setSchema] = useState<Record<string, unknown> | null>(null)
+  const [blocks, setBlocks] = useState<
+    Array<{ id: string; kind: string; label?: string; help?: string; slotIds?: string[] }>
+  >([])
+  const [slots, setSlots] = useState<
+    Array<{
+      id: string
+      path: string
+      label: string
+      widget: string
+      help?: string
+      required?: boolean
+      readOnly?: boolean
+      suggestionProviders?: string[]
+      options?: Array<{ value: string; label: string }>
+      properties?: Array<{ name: string; widget: string; label: string; help?: string; required?: boolean }>
+    }>
+  >([])
+  const [projectionError, setProjectionError] = useState<Error | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
 
@@ -27,24 +45,43 @@ export function RecordViewer() {
 
     setLoading(true)
     setError(null)
+    setProjectionError(null)
     try {
       // Try combined endpoint first for efficiency
       try {
         const combined = await apiClient.getRecordWithUI(recordId)
-        setData({ record: combined.record as unknown as RecordEnvelope })
-        setUiSpec(combined.uiSpec)
-        setSchema(combined.schema)
+        if (!combined.record) {
+          setData(null)
+        } else {
+          setData({ record: combined.record as unknown as RecordEnvelope })
+          setUiSpec(combined.uiSpec)
+          setSchema(combined.schema)
+        }
       } catch {
         // Fallback: fetch record separately
         const record = await apiClient.getRecord(recordId)
-        setData({ record })
-        // Try to get UISpec
-        try {
-          const spec = await apiClient.getUiSpec(record.schemaId)
-          setUiSpec(spec)
-        } catch {
-          setUiSpec(null)
+        if (!record) {
+          setData(null)
+        } else {
+          setData({ record })
+          // Try to get UISpec
+          try {
+            const spec = await apiClient.getUiSpec(record.schemaId)
+            setUiSpec(spec)
+          } catch {
+            setUiSpec(null)
+          }
         }
+      }
+
+      // Try to load editor projection for the TapTab read surface
+      try {
+        const projection = await apiClient.getRecordEditorProjection(recordId)
+        setBlocks(projection.blocks)
+        setSlots(projection.slots)
+      } catch {
+        // Projection unavailable — will fall back to structured payload
+        setProjectionError(new Error('Projection unavailable'))
       }
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Unknown error'))
@@ -88,7 +125,7 @@ export function RecordViewer() {
   }
 
   const { record, validation, lint } = data
-  const hasSectionedView = Boolean(uiSpec?.form?.sections?.length)
+  const hasProjection = blocks.length > 0 && slots.length > 0
 
   return (
     <div className="record-viewer">
@@ -140,19 +177,26 @@ export function RecordViewer() {
 
       <section className="record-data">
         <h2>Payload</h2>
-        {hasSectionedView ? (
+        {hasProjection ? (
           <div className="p-4 bg-white rounded border border-gray-200">
-            <SectionedForm
-              uiSpec={uiSpec!}
-              schema={schema}
-              formData={record.payload}
-              readOnly
+            <ProjectionTapTabEditor
+              blocks={blocks}
+              slots={slots}
+              data={record.payload}
+              disabled
             />
           </div>
         ) : (
-          <pre className="data-display">
-            <code>{stringify(record.payload)}</code>
-          </pre>
+          <div className="p-4 bg-white rounded border border-gray-200">
+            {projectionError && (
+              <p className="text-sm text-gray-500 mb-2">
+                Projection unavailable — showing structured payload
+              </p>
+            )}
+            <pre className="data-display">
+              <code>{stringify(record.payload)}</code>
+            </pre>
+          </div>
         )}
       </section>
 

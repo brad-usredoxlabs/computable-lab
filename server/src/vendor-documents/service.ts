@@ -8,6 +8,8 @@ import type { RecordStore } from '../store/types.js';
 import { createEnvelope } from '../types/RecordEnvelope.js';
 import { parseConcentration, type Concentration } from '../materials/concentration.js';
 import { extractVendorFormulationHtml } from '../ingestion/adapters/vendorFormulationHtml.js';
+import type { ProtocolIdeDocumentResult, ProtocolIdeVendorId } from './protocolIdeVendors.js';
+import { PROTOCOL_IDE_VENDORS, isCuratedVendor } from './protocolIdeVendors.js';
 
 const execFileAsync = promisify(execFile);
 const SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml';
@@ -438,4 +440,68 @@ export async function attachVendorDocumentExtraction(
     throw new Error(validationDetails || lintDetails || result.error || `Failed to update vendor product ${vendorProductId}`);
   }
   return extraction;
+}
+
+// ---------------------------------------------------------------------------
+// Document-oriented search result shaping for Protocol IDE
+// ---------------------------------------------------------------------------
+
+/**
+ * Shape a vendor search result item into a Protocol IDE document result.
+ * Only curated vendors are accepted; non-curated vendors are silently dropped.
+ */
+export function shapeDocumentResult(
+  vendor: string,
+  name: string,
+  productUrl?: string,
+  description?: string,
+): ProtocolIdeDocumentResult | null {
+  if (!isCuratedVendor(vendor)) {
+    return null;
+  }
+
+  const snippet = description ? excerpt(description) : undefined;
+  const documentType = inferDocumentType(name, description);
+
+  return {
+    vendor,
+    title: name,
+    pdfUrl: productUrl,
+    landingUrl: productUrl ?? '',
+    snippet,
+    documentType,
+    sessionIdHint: `${vendor}::${name}`,
+  };
+}
+
+/**
+ * Infer a document type from the title and description text.
+ */
+function inferDocumentType(title: string, description?: string): ProtocolIdeDocumentResult['documentType'] {
+  const combined = `${title} ${description ?? ''}`.toLowerCase();
+  if (/application note|app note|application_note/i.test(combined)) return 'application_note';
+  if (/white paper|whitepaper|white_paper/i.test(combined)) return 'white_paper';
+  if (/protocol|extraction|assay|workflow|procedure/i.test(combined)) return 'protocol';
+  if (/manual|guide|how-to|howto|instruction/i.test(combined)) return 'manual';
+  return 'other';
+}
+
+/**
+ * Filter vendor search results to only include curated vendors and shape
+ * them into Protocol IDE document results.
+ */
+export function filterAndShapeDocumentResults(
+  vendor: string,
+  name: string,
+  productUrl?: string,
+  description?: string,
+): ProtocolIdeDocumentResult | null {
+  return shapeDocumentResult(vendor, name, productUrl, description);
+}
+
+/**
+ * Return the curated vendor list for Protocol IDE discovery.
+ */
+export function getCuratedProtocolIdeVendors(): readonly ProtocolIdeVendorId[] {
+  return PROTOCOL_IDE_VENDORS;
 }

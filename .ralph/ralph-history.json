@@ -2,24 +2,21 @@
   "iterations": [
     {
       "iteration": 1,
-      "startedAt": "2026-04-25T08:15:33.465Z",
-      "endedAt": "2026-04-25T08:56:27.240Z",
-      "durationMs": 2451951,
+      "startedAt": "2026-04-25T11:34:19.897Z",
+      "endedAt": "2026-04-25T11:48:58.434Z",
+      "durationMs": 876660,
       "agent": "codex",
       "model": "",
       "toolsUsed": {},
       "filesModified": [
-        "app/src/knowledge/browser/CreateNodeModal.tsx",
-        "app/src/editor/taptab/widgets/",
-        "app/src/knowledge/browser/CreateNodeModal.test.tsx",
-        "server/src/procurement/"
+        "app/src/protocol-ide/"
       ],
-      "exitCode": 0,
+      "exitCode": 1,
       "completionDetected": false,
       "errors": []
     }
   ],
-  "totalDurationMs": 2451951,
+  "totalDurationMs": 876660,
   "struggleIndicators": {
     "repeatedErrors": {},
     "noProgressIterations": 0,

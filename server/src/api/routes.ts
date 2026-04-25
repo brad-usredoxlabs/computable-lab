@@ -361,6 +361,7 @@ export function registerRoutes(
 
   if (vendorSearchHandlers) {
     fastify.get('/vendors/search', vendorSearchHandlers.searchVendors.bind(vendorSearchHandlers));
+    fastify.get('/vendors/protocol-ide/documents', vendorSearchHandlers.searchProtocolIdeDocuments.bind(vendorSearchHandlers));
   }
 
   const { vendorDocumentHandlers } = options;

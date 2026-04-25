@@ -1,0 +1,83 @@
+# UI specification for ProtocolIdeIssueCard records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/workflow/protocol-ide-issue-card.schema.yaml"
+
+display:
+  titleField: "$.title"
+  subtitleField: "$.origin"
+  icon: "issue-card"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.recordId"
+      widget: "text"
+      label: "Card ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Session"
+    fields:
+    - path: "$.sessionRef"
+      widget: "ref"
+      label: "Session"
+      refKind: "protocol-ide-session"
+      required: true
+  - title: "Issue Details"
+    fields:
+    - path: "$.origin"
+      widget: "select"
+      label: "Origin"
+      required: true
+    - path: "$.title"
+      widget: "text"
+      label: "Title"
+      required: true
+    - path: "$.body"
+      widget: "textarea"
+      label: "Body"
+      required: true
+  - title: "Evidence"
+    fields:
+    - path: "$.evidenceCitations"
+      widget: "array"
+      label: "Evidence Citations"
+  - title: "Graph Anchor"
+    fields:
+    - path: "$.graphAnchor"
+      widget: "text"
+      label: "Graph Anchor"
+      help: "Optional identifier for a node or edge in the event-graph."
+  - title: "Export"
+    fields:
+    - path: "$.exportedAt"
+      widget: "datetime"
+      label: "Exported At"
+      readonly: true
+    - path: "$.exportBundleRef"
+      widget: "ref"
+      label: "Export Bundle"
+  - title: "Notes"
+    fields:
+    - path: "$.notes"
+      widget: "textarea"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.recordId"
+    label: "Card ID"
+    width: "120px"
+  - path: "$.title"
+    label: "Title"
+  - path: "$.origin"
+    label: "Origin"
+    width: "80px"
+  - path: "$.sessionRef"
+    label: "Session"
+    width: "140px"

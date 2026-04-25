@@ -1,5 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
+import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor';
 
 interface AmbiguitySpan {
   path: string;
@@ -25,6 +26,151 @@ interface ExtractionDraft {
   diagnostics?: Array<{ severity: string; code: string; message: string }>;
   extractor_profile?: string;
 }
+
+// ── Projection helpers for extraction candidates ─────────────────────
+
+/**
+ * Well-known target kinds that get a structured TapTab projection.
+ */
+const KNOWN_TARGET_KINDS = new Set([
+  'protocol',
+  'equipment',
+  'labware',
+  'material',
+  'assay',
+  'plate',
+  'run',
+  'study',
+  'experiment',
+  'context',
+  'event-graph',
+]);
+
+/**
+ * Build a minimal EditorProjection blocks/slots for a candidate draft
+ * based on its target_kind.  Returns null when the kind is unknown so
+ * the caller can fall back to a structured JSON display.
+ */
+function buildCandidateProjection(
+  targetKind: string,
+  draft: Record<string, unknown>
+): { blocks: Array<{ id: string; kind: string; label?: string; slotIds?: string[] }>; slots: Array<{ id: string; path: string; label: string; widget: string; readOnly?: boolean }> } | null {
+  if (!KNOWN_TARGET_KINDS.has(targetKind)) {
+    return null;
+  }
+
+  const kindLabel = targetKind.charAt(0).toUpperCase() + targetKind.slice(1);
+
+  // Build slots from draft keys (flat projection)
+  const slots: Array<{ id: string; path: string; label: string; widget: string; readOnly?: boolean }> = [];
+  const slotIds: string[] = [];
+
+  for (const [key, value] of Object.entries(draft)) {
+    const slotId = `slot-${key}`;
+    slotIds.push(slotId);
+    const widget = Array.isArray(value) ? 'array' : typeof value === 'object' ? 'object' : 'readonly';
+    slots.push({
+      id: slotId,
+      path: key,
+      label: key,
+      widget,
+      readOnly: true,
+    });
+  }
+
+  // If no slots were built (empty draft), create a placeholder
+  if (slots.length === 0) {
+    slots.push({
+      id: 'slot-empty',
+      path: '_empty',
+      label: 'Empty draft',
+      widget: 'readonly',
+      readOnly: true,
+    });
+    slotIds.push('slot-empty');
+  }
+
+  return {
+    blocks: [
+      {
+        id: 'section-draft',
+        kind: 'section',
+        label: `${kindLabel} Draft`,
+        slotIds,
+      },
+    ],
+    slots,
+  };
+}
+
+// ── Structured fallback for unsupported candidates ───────────────────
+
+/**
+ * Render a structured fallback for candidates whose target_kind is not
+ * in the known set.  Shows the draft payload in a readable key-value
+ * layout rather than raw JSON.
+ */
+function CandidateDraftFallback({ draft }: { draft: Record<string, unknown> }): JSX.Element {
+  return (
+    <div className="candidate-draft-fallback">
+      <h4>Draft</h4>
+      <div className="structured-fallback">
+        {Object.keys(draft).length === 0 ? (
+          <p className="text-gray-500 italic">Empty draft payload</p>
+        ) : (
+          <dl className="fallback-dl">
+            {Object.entries(draft).map(([key, value]) => (
+              <div key={key} className="fallback-field">
+                <dt className="fallback-label">{key}</dt>
+                <dd className="fallback-value">
+                  {typeof value === 'object' && value !== null ? (
+                    <pre className="fallback-value-pre">{JSON.stringify(value, null, 2)}</pre>
+                  ) : (
+                    <span>{String(value)}</span>
+                  )}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── TapTab read surface for candidate detail ─────────────────────────
+
+/**
+ * Read-only TapTab surface for a candidate draft.
+ * Uses ProjectionTapTabEditor with disabled=true.
+ */
+function CandidateTapTabSurface({
+  targetKind,
+  draft,
+}: {
+  targetKind: string;
+  draft: Record<string, unknown>;
+}): JSX.Element {
+  const projection = buildCandidateProjection(targetKind, draft);
+
+  if (!projection) {
+    // Unsupported target_kind — show structured fallback
+    return <CandidateDraftFallback draft={draft} />;
+  }
+
+  return (
+    <div className="candidate-taptab-surface">
+      <ProjectionTapTabEditor
+        blocks={projection.blocks}
+        slots={projection.slots}
+        data={draft}
+        disabled
+      />
+    </div>
+  );
+}
+
+// ── Main page component ──────────────────────────────────────────────
 
 export function ExtractionReviewPage(): JSX.Element {
   const { recordId } = useParams<{ recordId: string }>();
@@ -174,8 +320,7 @@ export function ExtractionReviewPage(): JSX.Element {
           <blockquote>{openCandidate.evidence_span ?? '—'}</blockquote>
           <h4>Ambiguity spans</h4>
           <ul>{(openCandidate.ambiguity_spans ?? []).map((s, i) => <li key={i}>{s.path}: {s.reason}</li>)}</ul>
-          <h4>Draft</h4>
-          <pre>{JSON.stringify(openCandidate.draft, null, 2)}</pre>
+          <CandidateTapTabSurface targetKind={openCandidate.target_kind} draft={openCandidate.draft} />
           <h4>Actions</h4>
           <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
             <button

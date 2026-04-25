@@ -1,0 +1,187 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/protocol-ide-session.schema.yaml"
+title: "ProtocolIdeSession"
+description: >
+  Mutable latest-state workspace record for one Protocol IDE source PDF and
+  its current compiler state.  This is a thin orchestration handle — it stores
+  refs to extracted text, projected protocols, event-graph payloads, overlay
+  summaries, and issue cards rather than embedding full documents inline.
+  The session is updated in-place as the user iterates; it does NOT model
+  immutable run history, branching, or compare timelines.
+
+type: object
+additionalProperties: false
+
+required:
+- kind
+- recordId
+- sourceMode
+- status
+
+properties:
+  kind:
+    const: "protocol-ide-session"
+
+  recordId:
+    type: string
+    pattern: '^PIS-[A-Za-z0-9_-]+$'
+    description: "Protocol IDE session record id (PIS-*)."
+
+  # ── Source selection snapshot (one source per session) ──────────────
+  sourceMode:
+    type: string
+    enum: [ vendor_search, pdf_url, upload, directive ]
+    description: >
+      How the source was selected.  "vendor_search" means the user picked a
+      vendor-product page; "pdf_url" means a direct URL was pasted;
+      "upload" means a file was uploaded; "directive" means the session was
+      bootstrapped from a free-text directive without a PDF.
+
+  vendor:
+    type: string
+    description: >
+      Vendor name when sourceMode is vendor_search (e.g., "Cayman Chemical").
+
+  title:
+    type: string
+    description: >
+      Human-readable title of the selected source (e.g., vendor product name).
+
+  pdfUrl:
+    type: string
+    format: uri
+    description: >
+      Direct URL to the source PDF.  Populated when sourceMode is pdf_url or
+      vendor_search.
+
+  landingUrl:
+    type: string
+    format: uri
+    description: >
+      Landing page URL (e.g., vendor product page).  Populated when
+      sourceMode is vendor_search.
+
+  uploadedAssetRef:
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/file-ref.schema.yaml"
+    description: >
+      File reference when sourceMode is upload.
+
+  # ── Current source refs ─────────────────────────────────────────────
+  vendorDocumentRef:
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
+    description: >
+      Reference to the ingestion-artifact that holds the parsed source PDF.
+
+  ingestionJobRef:
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
+    description: >
+      Reference to the ingestion-job that produced the source artifact.
+
+  protocolImportRef:
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
+    description: >
+      Reference to the extraction-draft or promoted protocol produced from
+      this source.
+
+  extractedTextRef:
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
+    description: >
+      Reference to a document containing the extracted text from the source PDF.
+
+  evidenceRefs:
+    type: array
+    description: >
+      References to evidence snippets extracted from the source.
+    items:
+      $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
+
+  # ── Latest directive ────────────────────────────────────────────────
+  latestDirectiveText:
+    type: string
+    description: >
+      The most recent user directive text that drove the last compilation
+      cycle.  Updated on every user interaction.
+
+  # ── Latest projection refs / snapshots ──────────────────────────────
+  latestProtocolRef:
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
+    description: >
+      Reference to the latest projected protocol (local-protocol or protocol).
+
+  latestEventGraphRef:
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
+    description: >
+      Reference to the latest event-graph payload produced by compilation.
+
+  latestEventGraphCacheKey:
+    type: string
+    description: >
+      Cache key for the latest event-graph payload when not stored as a
+      separate record.
+
+  # ── Latest overlay summaries ────────────────────────────────────────
+  latestDeckSummaryRef:
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
+    description: >
+      Reference to the latest deck overlay summary record.
+
+  latestToolsSummaryRef:
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
+    description: >
+      Reference to the latest tools overlay summary record.
+
+  latestReagentsSummaryRef:
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
+    description: >
+      Reference to the latest reagents overlay summary record.
+
+  latestBudgetSummaryRef:
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
+    description: >
+      Reference to the latest budget overlay summary record.
+
+  # ── Rolling issue summary ───────────────────────────────────────────
+  rollingIssueSummary:
+    type: string
+    description: >
+      System-managed rolling summary of all current issue cards for this
+      session.  Updated automatically when issue cards are added or resolved.
+
+  # ── Current issue cards ─────────────────────────────────────────────
+  issueCardRefs:
+    type: array
+    description: >
+      References to the current issue cards for this session.
+    items:
+      $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
+
+  # ── Last export metadata ────────────────────────────────────────────
+  lastExportAt:
+    type: string
+    format: date-time
+    description: >
+      ISO 8601 timestamp of the last successful export to Ralph.
+
+  lastExportBundleRef:
+    $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
+    description: >
+      Reference to the export bundle produced by the last export.
+
+  # ── Status ──────────────────────────────────────────────────────────
+  status:
+    type: string
+    enum: [ draft, importing, projecting, reviewing, ready, exported, failed ]
+    description: >
+      Developer-oriented status reflecting the current stage of the session.
+      - draft: session created, no source selected yet.
+      - importing: source PDF is being ingested / extracted.
+      - projecting: protocol projection / compilation is running.
+      - reviewing: user is reviewing the projected protocol and overlays.
+      - ready: session is ready for export or further iteration.
+      - exported: session was exported to Ralph.
+      - failed: an unrecoverable error occurred.
+
+  notes:
+    type: string
+    description: >
+      Free-form developer notes about the session.

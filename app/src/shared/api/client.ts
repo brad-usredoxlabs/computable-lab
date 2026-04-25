@@ -2528,6 +2528,38 @@ export const apiClient = {
       { method: 'POST' },
     )
   },
+  /**
+   * Bootstrap a Protocol IDE session from an intake request.
+   *
+   * Accepts a validated intake payload (directiveText + exactly one source mode)
+   * and creates a new protocol-ide-session record.
+   *
+   * Returns shell-ready session metadata for the IDE shell to route to.
+   */
+  async createProtocolIdeSession(payload: {
+    directiveText: string
+    source:
+      | { sourceKind: 'vendor_document'; vendor: string; title: string; landingUrl: string; pdfUrl?: string; snippet?: string; documentType?: string; sessionIdHint?: string }
+      | { sourceKind: 'pasted_url'; url: string }
+      | { sourceKind: 'uploaded_pdf'; uploadId: string; fileName: string; mediaType: string }
+  }): Promise<{
+    success: true
+    sessionId: string
+    status: string
+    sourceSummary: string
+    latestDirectiveText: string
+    sourceEvidenceRef: null
+    graphReviewRef: null
+    issueCardsRef: null
+  } | {
+    error: string
+    message: string
+  }> {
+    return request('/protocol-ide/sessions', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
 }
 
 /**

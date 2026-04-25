@@ -20,6 +20,7 @@ const ComponentLibraryPage = lazy(async () => import('./knowledge/ComponentLibra
 const FormulationsPage = lazy(async () => import('./editor/FormulationsPage').then((module) => ({ default: module.FormulationsPage })))
 const MaterialsPage = lazy(async () => import('./editor/MaterialsPage').then((module) => ({ default: module.MaterialsPage })))
 const LabwareTestPage = lazy(async () => import('./pages/LabwareTestPage').then((module) => ({ default: module.default })))
+const ProtocolIdePage = lazy(async () => import('./protocol-ide/ProtocolIdePage').then((module) => ({ default: module.ProtocolIdePage })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -85,6 +86,10 @@ export function App() {
             
             {/* Extraction Review */}
             <Route path="extraction/review/:recordId" element={<ExtractionReviewPage />} />
+
+            {/* Protocol IDE */}
+            <Route path="protocol-ide" element={<DeferredRoute><ProtocolIdePage /></DeferredRoute>} />
+            <Route path="protocol-ide/:sessionId" element={<DeferredRoute><ProtocolIdePage /></DeferredRoute>} />
           </Route>
         </Routes>
       </BrowserRouter>

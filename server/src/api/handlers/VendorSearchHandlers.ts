@@ -1,6 +1,9 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiError } from '../types.js';
 import { parseConcentration, type Concentration } from '../../materials/concentration.js';
+import type { ProtocolIdeDocumentResult, ProtocolIdeVendorId } from '../../vendor-documents/protocolIdeVendors.js';
+import { PROTOCOL_IDE_VENDORS, isCuratedVendor } from '../../vendor-documents/protocolIdeVendors.js';
+import { shapeDocumentResult } from '../../vendor-documents/service.js';
 
 export type VendorName = 'thermo' | 'sigma' | 'fisher' | 'vwr' | 'cayman' | 'thomas';
 
@@ -18,6 +21,15 @@ export interface VendorSearchResultItem {
 
 export interface VendorSearchResponse {
   items: VendorSearchResultItem[];
+  vendors: Array<{
+    vendor: VendorName;
+    success: boolean;
+    error?: string;
+  }>;
+}
+
+export interface ProtocolIdeDocumentSearchResponse {
+  items: ProtocolIdeDocumentResult[];
   vendors: Array<{
     vendor: VendorName;
     success: boolean;
@@ -397,6 +409,94 @@ export function createVendorSearchHandlers() {
       }));
 
       const items = results.flatMap((entry) => entry.items).slice(0, limit * vendors.length);
+      const vendorStatuses: VendorSearchResponse['vendors'] = results.map((entry) => ({
+        vendor: entry.vendor,
+        success: entry.success,
+        ...(entry.error ? { error: entry.error } : {}),
+      }));
+
+      return {
+        items,
+        vendors: vendorStatuses,
+      };
+    },
+
+    /**
+     * Protocol IDE–specific document search.
+     *
+     * Returns only document-oriented results from the curated vendor allowlist.
+     * Each result includes vendor, title, pdfUrl, landingUrl, snippet, and
+     * documentType for a clean developer-facing picker.
+     */
+    async searchProtocolIdeDocuments(
+      request: FastifyRequest<{
+        Querystring: {
+          q?: string;
+          vendors?: string;
+          limit?: string;
+        };
+      }>,
+      reply: FastifyReply,
+    ): Promise<ProtocolIdeDocumentSearchResponse | ApiError> {
+      const q = (request.query.q || '').trim();
+      if (q.length < 2) {
+        reply.status(400);
+        return {
+          error: 'BAD_REQUEST',
+          message: 'Query parameter "q" must be at least 2 characters.',
+        };
+      }
+
+      const requestedVendors = parseVendorIds(request.query.vendors || '');
+      const vendors: VendorName[] = requestedVendors.length > 0 ? Array.from(new Set(requestedVendors)) : [...VALID_VENDOR_IDS];
+      const limit = Math.min(Math.max(Number(request.query.limit) || 10, 1), 25);
+
+      // Only search curated vendors for Protocol IDE
+      const curatedVendors = vendors.filter((v): v is VendorName => isCuratedVendor(v));
+      if (curatedVendors.length === 0) {
+        return { items: [], vendors: [] };
+      }
+
+      const results: Array<VendorStatus & { items: VendorSearchResultItem[] }> = await Promise.all(
+        curatedVendors.map(async (vendor) => {
+          try {
+            const items = await VENDOR_SEARCH_MAP[vendor](q, limit);
+            return {
+              vendor,
+              success: true as const,
+              items,
+            };
+          } catch (err) {
+            return {
+              vendor,
+              success: false as const,
+              items: [] as VendorSearchResultItem[],
+              error: err instanceof Error ? err.message : String(err),
+            };
+          }
+        }),
+      );
+
+      // Shape results into Protocol IDE document results
+      const items: ProtocolIdeDocumentResult[] = [];
+      const seen = new Set<string>();
+      for (const entry of results) {
+        for (const item of entry.items) {
+          const shaped = shapeDocumentResult(
+            item.vendor,
+            item.name,
+            item.productUrl,
+            item.description,
+          );
+          if (shaped && !seen.has(shaped.sessionIdHint ?? '')) {
+            seen.add(shaped.sessionIdHint ?? '');
+            items.push(shaped);
+          }
+          if (items.length >= limit) break;
+        }
+        if (items.length >= limit) break;
+      }
+
       const vendorStatuses: VendorSearchResponse['vendors'] = results.map((entry) => ({
         vendor: entry.vendor,
         success: entry.success,
