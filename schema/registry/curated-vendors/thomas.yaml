@@ -1,0 +1,7 @@
+kind: curated-vendor
+id: thomas
+display_name: Thomas Scientific
+landing_url: https://www.thomassci.com/
+document_search_paths:
+  - /resources/
+enabled: true

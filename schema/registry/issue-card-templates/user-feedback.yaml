@@ -1,0 +1,6 @@
+kind: issue-card-template
+id: user-feedback
+category: user
+title_template: 'User feedback: {{snippet}}'
+body_template: '{{full_body}}'
+suggested_change_template: 'User-requested issue: {{title}}. {{body}} — Consider adding a compiler pass or directive to address this.'

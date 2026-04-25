@@ -555,6 +555,7 @@ export function registerRoutes(
     fastify.get('/protocol-ide/sessions/:sessionId/can-export', protocolIdeHandlers.canExport.bind(protocolIdeHandlers));
     fastify.get('/protocol-ide/sessions/:sessionId/overlay-summaries', protocolIdeHandlers.getOverlaySummaries.bind(protocolIdeHandlers));
     fastify.get('/protocol-ide/sessions/:sessionId/event-graph', protocolIdeHandlers.getEventGraph.bind(protocolIdeHandlers));
+    fastify.get('/protocol-ide/curated-vendors', protocolIdeHandlers.getCuratedVendors.bind(protocolIdeHandlers));
   }
 
   // ============================================================================

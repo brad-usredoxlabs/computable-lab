@@ -1,0 +1,7 @@
+kind: issue-card-template
+id: system-budget
+category: system
+subcategory: budget
+title_template: 'Budget issue: {{issue_short}}'
+body_template: '{{issue_full}}'
+suggested_change_template: 'System-detected issue: {{title}}. {{body}} — Consider adding a compiler pass or directive to address this.'

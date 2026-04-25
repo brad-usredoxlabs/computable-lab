@@ -1,0 +1,7 @@
+kind: curated-vendor
+id: vwr
+display_name: VWR
+landing_url: https://www.vwr.com/
+document_search_paths:
+  - /documents/
+enabled: true

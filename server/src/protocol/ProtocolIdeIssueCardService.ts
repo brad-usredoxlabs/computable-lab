@@ -14,7 +14,7 @@
  * - Dropping evidence from diagnostics
  */
 
-import type { RecordStore, StoreResult } from '../store/types.js';
+import type { RecordStore } from '../store/types.js';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import type {
   FeedbackComment,
@@ -25,8 +25,8 @@ import type {
   ToolsSummary,
   ReagentsSummary,
   BudgetSummary,
-  EvidenceLink,
 } from './ProtocolIdeOverlaySummaryService.js';
+import { renderIssueCardTemplate } from '../registry/IssueCardTemplateRegistry.js';
 
 // ---------------------------------------------------------------------------
 // Issue-card types
@@ -316,24 +316,6 @@ function buildEvidenceCitationsFromDiagnostics(
   return citations;
 }
 
-/**
- * Generate a suggested compiler-change language from a card's content.
- */
-function buildSuggestedChange(
-  title: string,
-  body: string,
-  origin: IssueCardOrigin,
-): string {
-  const originPrefix =
-    origin === 'user'
-      ? 'User-requested'
-      : origin === 'system'
-        ? 'System-detected'
-        : 'User-and-system';
-
-  return `${originPrefix} issue: ${title}. ${body} — Consider adding a compiler pass or directive to address this.`;
-}
-
 // ---------------------------------------------------------------------------
 // Card generation logic
 // ---------------------------------------------------------------------------
@@ -352,20 +334,22 @@ function generateUserCards(
       continue;
     }
 
-    const title = `User feedback: ${comment.body.slice(0, 80)}${comment.body.length > 80 ? '…' : ''}`;
-    const body = comment.body;
-    const evidenceCitations = buildEvidenceCitationsFromComment(comment);
+    const snippet = comment.body.slice(0, 80) + (comment.body.length > 80 ? '…' : '');
+    const rendered = renderIssueCardTemplate('user-feedback', {
+      snippet,
+      full_body: comment.body,
+    });
 
     cards.push({
       id: generateIssueCardId(),
-      title,
-      body,
+      title: rendered.title,
+      body: rendered.body,
       origin: 'user',
-      evidenceCitations,
+      evidenceCitations: buildEvidenceCitationsFromComment(comment),
       graphAnchor: comment.graphAnchor
         ? { nodeId: comment.graphAnchor.nodeId, label: comment.graphAnchor.label }
         : undefined,
-      suggestedChange: buildSuggestedChange(title, body, 'user'),
+      suggestedChange: rendered.suggestedChange,
       generatedAt: new Date().toISOString(),
     });
   }
@@ -380,67 +364,76 @@ function generateSystemCards(
   diagnostics: CompactDiagnostics,
 ): IssueCard[] {
   const cards: IssueCard[] = [];
+  const evidenceCitations = buildEvidenceCitationsFromDiagnostics(diagnostics);
 
   // Deck issues
   for (const issue of diagnostics.deckIssues) {
-    const title = `Deck layout issue: ${issue.slice(0, 80)}`;
-    const evidenceCitations = buildEvidenceCitationsFromDiagnostics(diagnostics);
+    const rendered = renderIssueCardTemplate('system-deck', {
+      issue_short: issue.slice(0, 80),
+      issue_full: issue,
+    });
 
     cards.push({
       id: generateIssueCardId(),
-      title,
-      body: issue,
+      title: rendered.title,
+      body: rendered.body,
       origin: 'system',
       evidenceCitations,
-      suggestedChange: buildSuggestedChange(title, issue, 'system'),
+      suggestedChange: rendered.suggestedChange,
       generatedAt: new Date().toISOString(),
     });
   }
 
   // Tool issues
   for (const issue of diagnostics.toolIssues) {
-    const title = `Tool/instrument issue: ${issue.slice(0, 80)}`;
-    const evidenceCitations = buildEvidenceCitationsFromDiagnostics(diagnostics);
+    const rendered = renderIssueCardTemplate('system-tool', {
+      issue_short: issue.slice(0, 80),
+      issue_full: issue,
+    });
 
     cards.push({
       id: generateIssueCardId(),
-      title,
-      body: issue,
+      title: rendered.title,
+      body: rendered.body,
       origin: 'system',
       evidenceCitations,
-      suggestedChange: buildSuggestedChange(title, issue, 'system'),
+      suggestedChange: rendered.suggestedChange,
       generatedAt: new Date().toISOString(),
     });
   }
 
   // Reagent issues
   for (const issue of diagnostics.reagentIssues) {
-    const title = `Reagent issue: ${issue.slice(0, 80)}`;
-    const evidenceCitations = buildEvidenceCitationsFromDiagnostics(diagnostics);
+    const rendered = renderIssueCardTemplate('system-reagent', {
+      issue_short: issue.slice(0, 80),
+      issue_full: issue,
+    });
 
     cards.push({
       id: generateIssueCardId(),
-      title,
-      body: issue,
+      title: rendered.title,
+      body: rendered.body,
       origin: 'system',
       evidenceCitations,
-      suggestedChange: buildSuggestedChange(title, issue, 'system'),
+      suggestedChange: rendered.suggestedChange,
       generatedAt: new Date().toISOString(),
     });
   }
 
   // Budget issues
   for (const issue of diagnostics.budgetIssues) {
-    const title = `Budget issue: ${issue.slice(0, 80)}`;
-    const evidenceCitations = buildEvidenceCitationsFromDiagnostics(diagnostics);
+    const rendered = renderIssueCardTemplate('system-budget', {
+      issue_short: issue.slice(0, 80),
+      issue_full: issue,
+    });
 
     cards.push({
       id: generateIssueCardId(),
-      title,
-      body: issue,
+      title: rendered.title,
+      body: rendered.body,
       origin: 'system',
       evidenceCitations,
-      suggestedChange: buildSuggestedChange(title, issue, 'system'),
+      suggestedChange: rendered.suggestedChange,
       generatedAt: new Date().toISOString(),
     });
   }
@@ -476,18 +469,22 @@ function generateMixedCards(
     return cards;
   }
 
-  // Create one mixed card that combines the rolling summary with diagnostics
-  const title = `Mixed: Rolling feedback + system diagnostics (${allIssues.length} issue(s))`;
-  const body = `Rolling summary (${rollingSummary.commentCount} comment(s)): ${rollingSummary.summary}\n\nSystem diagnostics:\n${allIssues.map((i) => `- ${i}`).join('\n')}`;
+  const summaryHead = `Rolling feedback + system diagnostics (${allIssues.length} issue(s))`;
+  const summaryFull = `Rolling summary (${rollingSummary.commentCount} comment(s)): ${rollingSummary.summary}\n\nSystem diagnostics:\n${allIssues.map((i) => `- ${i}`).join('\n')}`;
   const evidenceCitations = buildEvidenceCitationsFromDiagnostics(diagnostics);
+
+  const rendered = renderIssueCardTemplate('mixed-rolling-summary', {
+    summary_head: summaryHead,
+    summary_full: summaryFull,
+  });
 
   cards.push({
     id: generateIssueCardId(),
-    title,
-    body,
+    title: rendered.title,
+    body: rendered.body,
     origin: 'mixed',
     evidenceCitations,
-    suggestedChange: buildSuggestedChange(title, body, 'mixed'),
+    suggestedChange: rendered.suggestedChange,
     generatedAt: new Date().toISOString(),
   });
 

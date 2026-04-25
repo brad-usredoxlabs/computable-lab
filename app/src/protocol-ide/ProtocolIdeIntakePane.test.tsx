@@ -38,6 +38,14 @@ function renderIntakePane(props: Partial<Parameters<typeof ProtocolIdeIntakePane
       onVendorSelect={mockOnVendorSelect}
       onUrlPaste={mockOnUrlPaste}
       onFileUpload={mockOnFileUpload}
+      curatedVendors={[
+        { vendor: 'fisher', label: 'Fisher Scientific' },
+        { vendor: 'vwr', label: 'VWR' },
+        { vendor: 'cayman', label: 'Cayman Chemical' },
+        { vendor: 'thomas', label: 'Thomas Scientific' },
+        { vendor: 'thermo', label: 'Thermo Fisher' },
+        { vendor: 'sigma', label: 'Sigma-Aldrich' },
+      ]}
       {...props}
     />
   )

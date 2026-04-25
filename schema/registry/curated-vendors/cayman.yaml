@@ -1,0 +1,7 @@
+kind: curated-vendor
+id: cayman
+display_name: Cayman Chemical
+landing_url: https://www.caymanchem.com/
+document_search_paths:
+  - /technical-resources/
+enabled: true

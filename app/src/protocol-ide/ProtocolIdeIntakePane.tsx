@@ -78,8 +78,8 @@ export interface ProtocolIdeIntakePaneProps extends IntakeCallbacks {
   searchResults?: CuratedDocumentResult[]
   /** Whether search is in progress */
   isSearching?: boolean
-  /** Curated vendor list for display */
-  curatedVendors?: Array<{ vendor: string; label: string }>
+  /** Curated vendor list for display (required — no default) */
+  curatedVendors: Array<{ vendor: string; label: string }>
 }
 
 // ---------------------------------------------------------------------------
@@ -96,17 +96,8 @@ const SOURCE_MODES: Array<{
 ]
 
 // ---------------------------------------------------------------------------
-// Curated vendor config
+// Curated vendor config — now provided as a prop from the API.
 // ---------------------------------------------------------------------------
-
-const CURATED_VENDORS: Array<{ vendor: string; label: string }> = [
-  { vendor: 'fisher', label: 'Fisher Scientific' },
-  { vendor: 'vwr', label: 'VWR' },
-  { vendor: 'cayman', label: 'Cayman Chemical' },
-  { vendor: 'thomas', label: 'Thomas Scientific' },
-  { vendor: 'thermo', label: 'Thermo Fisher' },
-  { vendor: 'sigma', label: 'Sigma-Aldrich' },
-]
 
 // ---------------------------------------------------------------------------
 // Vendor search results (seed data for the UI)
@@ -158,7 +149,7 @@ export function ProtocolIdeIntakePane({
   error = null,
   searchResults = SEED_SEARCH_RESULTS,
   isSearching = false,
-  curatedVendors = CURATED_VENDORS,
+  curatedVendors,
   onSubmit,
   onVendorSelect,
   onUrlPaste,

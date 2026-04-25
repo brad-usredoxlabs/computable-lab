@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiError } from '../types.js';
 import { parseConcentration, type Concentration } from '../../materials/concentration.js';
 import type { ProtocolIdeDocumentResult, ProtocolIdeVendorId } from '../../vendor-documents/protocolIdeVendors.js';
-import { PROTOCOL_IDE_VENDORS, isCuratedVendor } from '../../vendor-documents/protocolIdeVendors.js';
+import { isCuratedVendor } from '../../vendor-documents/protocolIdeVendors.js';
 import { shapeDocumentResult } from '../../vendor-documents/service.js';
 
 export type VendorName = 'thermo' | 'sigma' | 'fisher' | 'vwr' | 'cayman' | 'thomas';

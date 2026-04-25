@@ -42,6 +42,7 @@ import {
 } from '../../protocol/ProtocolIdeOverlaySummaryService.js';
 import type { TerminalArtifacts } from '../../compiler/pipeline/CompileContracts.js';
 import type { LabStateSnapshot } from '../../compiler/state/LabState.js';
+import { getCuratedVendorRegistry } from '../../registry/CuratedVendorRegistry.js';
 
 // ---------------------------------------------------------------------------
 // Request / Response types
@@ -609,6 +610,33 @@ export function createProtocolIdeHandlers(ctx: AppContext) {
         reply.status(500);
         return {
           error: 'EVENT_GRAPH_FETCH_FAILED',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
+     * GET /protocol-ide/curated-vendors
+     *
+     * Return the list of enabled curated vendors.
+     *
+     * Returns `{ success: true, vendors: Array<{ vendor: string, label: string }> }`.
+     */
+    async getCuratedVendors(
+      _request: FastifyRequest,
+      reply: FastifyReply,
+    ): Promise<{ success: true; vendors: Array<{ vendor: string; label: string }> } | ApiError> {
+      try {
+        const vendors = getCuratedVendorRegistry().list();
+        reply.status(200);
+        return {
+          success: true,
+          vendors: vendors.map((v: { id: string; display_name: string }) => ({ vendor: v.id, label: v.display_name })),
+        };
+      } catch (err) {
+        reply.status(500);
+        return {
+          error: 'CURATED_VENDORS_FETCH_FAILED',
           message: err instanceof Error ? err.message : String(err),
         };
       }

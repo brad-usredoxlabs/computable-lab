@@ -1,0 +1,7 @@
+kind: curated-vendor
+id: sigma
+display_name: Sigma-Aldrich
+landing_url: https://www.sigmaaldrich.com/
+document_search_paths:
+  - /technical-documents/
+enabled: true

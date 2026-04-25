@@ -1,0 +1,7 @@
+kind: curated-vendor
+id: fisher
+display_name: Fisher Scientific
+landing_url: https://www.fishersci.com/
+document_search_paths:
+  - /technical-resources/
+enabled: true

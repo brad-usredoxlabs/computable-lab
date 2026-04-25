@@ -9,7 +9,8 @@ import { createEnvelope } from '../types/RecordEnvelope.js';
 import { parseConcentration, type Concentration } from '../materials/concentration.js';
 import { extractVendorFormulationHtml } from '../ingestion/adapters/vendorFormulationHtml.js';
 import type { ProtocolIdeDocumentResult, ProtocolIdeVendorId } from './protocolIdeVendors.js';
-import { PROTOCOL_IDE_VENDORS, isCuratedVendor } from './protocolIdeVendors.js';
+import { isCuratedVendor } from './protocolIdeVendors.js';
+import { getCuratedVendorRegistry } from '../registry/CuratedVendorRegistry.js';
 
 const execFileAsync = promisify(execFile);
 const SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml';
@@ -503,5 +504,5 @@ export function filterAndShapeDocumentResults(
  * Return the curated vendor list for Protocol IDE discovery.
  */
 export function getCuratedProtocolIdeVendors(): readonly ProtocolIdeVendorId[] {
-  return PROTOCOL_IDE_VENDORS;
+  return getCuratedVendorRegistry().list().map(v => v.id as ProtocolIdeVendorId);
 }

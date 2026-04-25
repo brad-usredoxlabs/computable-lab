@@ -1,0 +1,6 @@
+kind: issue-card-template
+id: mixed-rolling-summary
+category: mixed
+title_template: 'Mixed: {{summary_head}}'
+body_template: '{{summary_full}}'
+suggested_change_template: 'User-and-system issue: {{title}}. {{body}} — Consider adding a compiler pass or directive to address this.'

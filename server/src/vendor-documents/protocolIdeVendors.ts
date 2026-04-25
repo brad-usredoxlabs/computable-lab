@@ -4,7 +4,13 @@
  * This allowlist restricts vendor search to document- and PDF-oriented
  * results rather than generic product catalog search.  The list is
  * intentionally scoped in v1 and easy to extend later.
+ *
+ * Runtime vendor membership is backed by the YAML registry
+ * (schema/registry/curated-vendors/).  The `ProtocolIdeVendorId` type
+ * remains a string union for compile-time autocomplete.
  */
+
+import { getCuratedVendorRegistry } from '../registry/CuratedVendorRegistry.js';
 
 // ---------------------------------------------------------------------------
 // Vendor identifiers used by the Protocol IDE discovery layer.
@@ -17,20 +23,6 @@ export type ProtocolIdeVendorId =
   | 'vwr'
   | 'cayman'
   | 'thomas';
-
-// ---------------------------------------------------------------------------
-// Curated vendor list – only these vendors are searched for Protocol IDE
-// document discovery.
-// ---------------------------------------------------------------------------
-
-export const PROTOCOL_IDE_VENDORS: readonly ProtocolIdeVendorId[] = [
-  'thermo',
-  'sigma',
-  'fisher',
-  'vwr',
-  'cayman',
-  'thomas',
-] as const;
 
 // ---------------------------------------------------------------------------
 // Document-oriented result shape for Protocol IDE picker.
@@ -58,7 +50,7 @@ export type ProtocolIdeDocumentResult = {
 // ---------------------------------------------------------------------------
 
 export function isCuratedVendor(vendor: string): vendor is ProtocolIdeVendorId {
-  return PROTOCOL_IDE_VENDORS.includes(vendor as ProtocolIdeVendorId);
+  return getCuratedVendorRegistry().get(vendor) !== undefined;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,7 @@
+kind: curated-vendor
+id: thermo
+display_name: Thermo Fisher
+landing_url: https://www.thermofisher.com/
+document_search_paths:
+  - /resources/
+enabled: true

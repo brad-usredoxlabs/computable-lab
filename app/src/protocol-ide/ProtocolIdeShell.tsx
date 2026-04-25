@@ -72,6 +72,38 @@ function IntakePane({
   error?: string | null
   isLoading?: boolean
 }): JSX.Element {
+  const [curatedVendors, setCuratedVendors] = useState<
+    Array<{ vendor: string; label: string }>
+  >([])
+  const [vendorsLoading, setVendorsLoading] = useState(true)
+
+  useEffect(() => {
+    apiClient
+      .listCuratedVendors()
+      .then(vendors => {
+        setCuratedVendors(vendors)
+      })
+      .catch(() => {
+        // Network error — vendors stay empty, no console error
+      })
+      .finally(() => {
+        setVendorsLoading(false)
+      })
+  }, [])
+
+  if (vendorsLoading) {
+    return (
+      <ProtocolIdeIntakePane
+        onSubmit={onSubmit ?? (() => {})}
+        error={error ?? null}
+        isLoading={isLoading ?? false}
+        title="Protocol IDE Intake"
+        description="Choose a source document and write a directive to begin building a protocol."
+        curatedVendors={[]}
+      />
+    )
+  }
+
   return (
     <ProtocolIdeIntakePane
       onSubmit={onSubmit ?? (() => {})}
@@ -79,6 +111,7 @@ function IntakePane({
       isLoading={isLoading ?? false}
       title="Protocol IDE Intake"
       description="Choose a source document and write a directive to begin building a protocol."
+      curatedVendors={curatedVendors}
     />
   )
 }

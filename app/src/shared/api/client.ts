@@ -2597,6 +2597,15 @@ export const apiClient = {
     return request(`/protocol-ide/sessions/${encodeURIComponent(sessionId)}/event-graph`)
   },
 
+  /**
+   * List enabled curated vendors.
+   * Calls GET /protocol-ide/curated-vendors
+   */
+  async listCuratedVendors(): Promise<Array<{ vendor: string; label: string }>> {
+    const response = await request<{ success: true; vendors: Array<{ vendor: string; label: string }> }>('/protocol-ide/curated-vendors')
+    return response.vendors
+  },
+
   // === Prompt Template API ===
 
   /**
