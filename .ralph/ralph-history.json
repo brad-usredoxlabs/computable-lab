@@ -2,27 +2,26 @@
   "iterations": [
     {
       "iteration": 1,
-      "startedAt": "2026-04-25T00:35:56.282Z",
-      "endedAt": "2026-04-25T00:46:05.299Z",
-      "durationMs": 607257,
+      "startedAt": "2026-04-25T02:12:20.031Z",
+      "endedAt": "2026-04-25T02:28:58.850Z",
+      "durationMs": 997067,
       "agent": "codex",
       "model": "",
       "toolsUsed": {},
       "filesModified": [
         "schema/registry/compile-pipelines/chatbot-compile.yaml",
-        "server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts",
-        "server/src/compiler/directives/",
-        "server/src/compiler/math/",
-        "server/src/compiler/patterns/",
-        "server/src/compiler/pipeline/passes/ComputeVolumes.test.ts",
-        "server/src/compiler/roles/"
+        "server/src/compiler/pipeline/PipelineRunner.ts",
+        "server/src/compiler/pipeline/chatbotCompilePipelineLoad.test.ts",
+        "server/src/compiler/artifacts/",
+        "server/src/compiler/pipeline/PipelineWhenEvaluation.test.ts",
+        "server/src/compiler/validation/"
       ],
-      "exitCode": 1,
+      "exitCode": 0,
       "completionDetected": false,
       "errors": []
     }
   ],
-  "totalDurationMs": 607257,
+  "totalDurationMs": 997067,
   "struggleIndicators": {
     "repeatedErrors": {},
     "noProgressIterations": 0,

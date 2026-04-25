@@ -150,7 +150,7 @@ describe('createComputeVolumesPass', () => {
     const sourceEvent = output.events.find(e => e.eventId === 'evt-source');
     expect(sourceEvent).toBeDefined();
     // 50 + 50 = 100, * 1.15 = 115
-    expect(sourceEvent!.details.volumeUl).toBe(115);
+    expect(sourceEvent!.details.volumeUl).toBeCloseTo(115);
   });
 
   it('percent-of resolves to concrete uL', () => {

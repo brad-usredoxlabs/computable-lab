@@ -63,14 +63,60 @@ export interface WhenEvaluator {
 }
 
 /**
- * Default when evaluator: returns true only if condition is empty/undefined.
- * Real conditions need a custom evaluator that can interpret the condition string.
+ * Resolve a dotted path through a record.
+ * Returns the value at the path, or undefined if any segment is missing.
  */
-export const DEFAULT_WHEN_EVALUATOR: WhenEvaluator = (condition: string, _state: PipelineState): boolean => {
-  if (condition === undefined || condition === null || condition.trim() === '') {
-    return true;
+function resolveDottedPath(obj: unknown, parts: string[]): unknown {
+  let v: unknown = obj;
+  for (const p of parts) {
+    if (v === undefined || v === null || typeof v !== 'object') return undefined;
+    v = (v as Record<string, unknown>)[p];
   }
-  return false;
+  return v;
+}
+
+/**
+ * Evaluate a truthy/non-empty check on a value.
+ * - undefined/null → false
+ * - Array → truthy if length > 0
+ * - Object → truthy if has own keys
+ * - Boolean, number, string → Boolean(v)
+ */
+function isTruthy(v: unknown): boolean {
+  if (v === undefined || v === null) return false;
+  if (Array.isArray(v)) return v.length > 0;
+  if (typeof v === 'object') return Object.keys(v as object).length > 0;
+  return Boolean(v);
+}
+
+/**
+ * Default when evaluator: resolves dotted paths through state.outputs
+ * and checks truthiness.
+ *
+ * Supports paths like:
+ *   'outputs.ai_precompile.directives' → state.outputs.get('ai_precompile')?.directives
+ *   'outputs.resolve_references.resolvedRefs' → state.outputs.get('resolve_references')?.resolvedRefs
+ *   'input.labState' → state.input.labState
+ */
+export const DEFAULT_WHEN_EVALUATOR: WhenEvaluator = (condition: string, state: PipelineState): boolean => {
+  const parts = condition.split('.');
+  if (parts.length === 0) return true;
+
+  let v: unknown;
+  if (parts[0] === 'outputs' && parts.length >= 2) {
+    // Resolve through state.outputs map
+    const passId = parts[1];
+    v = state.outputs.get(passId);
+    for (let i = 2; i < parts.length; i++) {
+      if (v === undefined || v === null || typeof v !== 'object') return false;
+      v = (v as Record<string, unknown>)[parts[i]];
+    }
+  } else {
+    // Walk state directly (e.g. 'input.labState')
+    v = resolveDottedPath(state, parts);
+  }
+
+  return isTruthy(v);
 };
 
 /**
@@ -191,6 +237,12 @@ export async function runPipeline(
     if (passSpec.when !== undefined && passSpec.when !== null && passSpec.when.trim() !== '') {
       const runPass = whenEvaluator(passSpec.when, state);
       if (!runPass) {
+        diagnostics.push({
+          severity: 'info',
+          code: 'pass_skipped_by_when',
+          message: `Pass '${passId}' skipped: when condition '${passSpec.when}' evaluated to false`,
+          pass_id: passId,
+        });
         const statusEntry: PassStatusEntry = {
           pass_id: passId,
           status: 'skipped',

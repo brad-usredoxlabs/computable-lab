@@ -140,7 +140,7 @@ describe('resolveJustEnough', () => {
     expect(resolveJustEnough('reagent', events, 1.0)).toBe(100);
   });
 
-  it('handles events without volumeUl (treats as 0)', () => {
+  it('returns null when downstream events have no concrete volumes', () => {
     const events: PlateEventPrimitive[] = [
       {
         eventId: 'evt-1',
@@ -152,7 +152,7 @@ describe('resolveJustEnough', () => {
         },
       },
     ];
-    expect(resolveJustEnough('reagent', events)).toBe(0);
+    expect(resolveJustEnough('reagent', events)).toBeNull();
   });
 });
 

@@ -36,4 +36,5 @@ expected:
       pinned:
         - slot: "target"
           labwareHint: "96-well-deepwell-plate"
-      unassigned: []
+      autoFilled: []
+      conflicts: []

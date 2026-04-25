@@ -303,6 +303,8 @@ export interface AgentResult {
     turns: number;
     toolCalls: number;
   };
+  /** Suggested follow-up compile jobs from the pipeline (spec-039). */
+  downstreamQueue?: Array<{ kind: string; description?: string; params?: Record<string, unknown> }>;
 }
 
 export interface PlateEventProposal {

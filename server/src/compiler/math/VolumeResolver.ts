@@ -121,11 +121,20 @@ export function resolveJustEnough(
   );
   if (downstream.length === 0) return null;
 
-  const sum = downstream.reduce(
-    (acc, e) =>
-      acc + Number((e.details as { volumeUl?: number }).volumeUl ?? 0),
-    0,
-  );
+  // Sum only concrete numeric volumes; skip placeholder volumes
+  // (e.g. 'just_enough' on the source-side transfer event itself).
+  const sum = downstream.reduce((acc, e) => {
+    const raw = (e.details as { volumeUl?: unknown }).volumeUl;
+    const numeric = typeof raw === 'number' && !Number.isNaN(raw) ? raw : 0;
+    return acc + numeric;
+  }, 0);
+
+  // If the sum is NaN (shouldn't happen after the filter above, but be safe),
+  // treat as 0.
+  if (Number.isNaN(sum)) return null;
+  // If the sum is 0, there are no concrete downstream volumes to justify
+  // a 'just_enough' resolution — return null so the pass can surface a gap.
+  if (sum === 0) return null;
   return sum * deadVolumeMultiplier;
 }
 

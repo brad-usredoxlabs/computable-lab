@@ -6,6 +6,7 @@
  */
 
 import { registerVerbExpander, makeEventId, type BiologyVerbExpander, type PlateEventPrimitive, type VerbInput } from '../BiologyVerbExpander.js';
+import { getAssaySpecRegistry } from '../../../registry/AssaySpecRegistry.js';
 
 /**
  * Shared helper for verbs that do add_material + incubate.
@@ -266,6 +267,47 @@ export const transfectExpander: BiologyVerbExpander = {
 };
 
 /**
+ * read: single read event with instrument metadata.
+ * When an assayId is provided, looks up the assay-spec to populate
+ * channelMap and analysisRules from the resolved assay definition.
+ */
+export const readExpander: BiologyVerbExpander = {
+  verb: 'read',
+  expand(input) {
+    const { params } = input;
+    const instrument = params.instrument as string | undefined;
+    const assayId = params.assayId as string | undefined;
+    const well = params.well as string | undefined;
+
+    const details: Record<string, unknown> = {
+      ...(instrument ? { instrument } : {}),
+      ...(well ? { well } : {}),
+    };
+
+    // Optional: resolve assay-spec to populate channelMap and analysisRules
+    if (assayId) {
+      const assaySpec = getAssaySpecRegistry().get(assayId);
+      if (assaySpec) {
+        if (assaySpec.channelMaps) {
+          details.channelMap = assaySpec.channelMaps;
+        }
+        if (assaySpec.analysisRules) {
+          details.analysisRules = assaySpec.analysisRules;
+        }
+      }
+      // If assay-spec not found, emit read with just instrument (non-fatal)
+    }
+
+    return [{
+      eventId: makeEventId('read'),
+      event_type: 'read',
+      details,
+      labwareId: params.labware_id as string | undefined,
+    }];
+  },
+};
+
+/**
  * add_material: single add_material event.
  * Supports params: labware_id, well, material (object with kind/materialId/volumeUl),
  * or legacy params: labware, material (string), wells (array).
@@ -346,3 +388,4 @@ registerVerbExpander(labelExpander);
 registerVerbExpander(transfectExpander);
 registerVerbExpander(addMaterialExpander);
 registerVerbExpander(createContainerExpander);
+registerVerbExpander(readExpander);

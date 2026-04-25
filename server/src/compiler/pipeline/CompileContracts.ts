@@ -9,6 +9,8 @@
 import type { PlateEventPrimitive } from '../biology/BiologyVerbExpander.js';
 import type { DirectiveNode } from '../directives/Directive.js';
 import type { PassDiagnostic } from './types.js';
+import type { ValidationReport } from '../validation/ValidationReport.js';
+import type { DownstreamCompileJob } from './passes/ChatbotCompilePasses.js';
 
 // ---------------------------------------------------------------------------
 // LabStateSnapshot — re-exported from the canonical state module
@@ -16,6 +18,9 @@ import type { PassDiagnostic } from './types.js';
 
 import type { LabStateSnapshot } from '../state/LabState.js';
 export type { LabStateSnapshot };
+
+import type { InstrumentRunFile } from '../artifacts/InstrumentRunFile.js';
+export type { InstrumentRunFile };
 
 // ---------------------------------------------------------------------------
 // ConversationHistoryMessage
@@ -96,24 +101,59 @@ export interface LabStateDelta {
 }
 
 /**
- * Minimal TerminalArtifacts.  Phase K (spec-040) extends this with
- * directives, resourceManifest, deckLayoutPlan, instrumentRunFiles,
- * analysisRules, labStateDelta, downstreamQueue, validationReport,
- * unresolvedGaps.  Do NOT add those fields here.
+ * Full deck layout plan produced by resolve_labware + plan_deck_layout passes.
+ * Includes user-pinned slots, auto-filled slots, and any slot conflicts.
  */
 export interface DeckLayoutPlan {
   pinned: Array<{ slot: string; labwareHint: string }>;
-  unassigned: string[];   // labware hints without deckSlot (yet)
+  autoFilled: Array<{ slot: string; labwareHint: string; reason: string }>;
+  conflicts: Array<{ slot: string; candidates: string[] }>;
 }
 
+/**
+ * Resource manifest emitted by the compute_resources pass.
+ * Summarises tip-rack needs, reservoir loads, and consumable labware.
+ */
+export interface ResourceManifest {
+  tipRacks: Array<{ pipetteType: string; rackCount: number }>;
+  reservoirLoads: Array<{
+    reservoirRef: string;
+    well: string;
+    reagentKind: string;
+    volumeUl: number;
+  }>;
+  consumables: string[];
+}
+
+/**
+ * Canonical output bundle of a chatbot-compile run.  All fields
+ * except `events`, `directives`, and `gaps` are optional because
+ * many compiles do not exercise every pass.  See individual
+ * owning-spec references for where each field is produced.
+ */
 export interface TerminalArtifacts {
+  /** Pipetting + incubation primitives. Spec-001. */
   events: PlateEventPrimitive[];
-  directives: DirectiveNode[];   // NEW - required, default []
+  /** State-change nodes (reorient, pipette mount/swap). Spec-024. */
+  directives: DirectiveNode[];
+  /** Actionable surface for ambiguity, unresolved refs, etc. Spec-001. */
   gaps: Gap[];
-  resolvedRefs?: ResolvedReference[];
+  /** Events folded into the post-compile LabStateSnapshot. Spec-009. */
   labStateDelta?: LabStateDelta;
-  deckLayoutPlan?: DeckLayoutPlan;   // NEW - stub from spec-012
-  resolvedLabwareRefs?: ResolvedLabwareRef[];   // NEW - spec-014
+  /** Full deck layout (user pins + auto-fill + conflicts). Specs 012, 033. */
+  deckLayoutPlan?: DeckLayoutPlan;
+  /** Named references resolved against registries. Spec-023. */
+  resolvedRefs?: ResolvedReference[];
+  /** Prior-labware refs resolved against cached labState. Spec-014. */
+  resolvedLabwareRefs?: ResolvedLabwareRef[];
+  /** Tip racks, reservoir loads, consumables. Spec-032. */
+  resourceManifest?: ResourceManifest;
+  /** Per-instrument run-file artifacts. Spec-038. */
+  instrumentRunFiles?: InstrumentRunFile[];
+  /** Future compile targets declared by the user. Spec-039. */
+  downstreamQueue?: DownstreamCompileJob[];
+  /** Aggregated validation findings. Spec-034. */
+  validationReport?: ValidationReport;
 }
 
 // ---------------------------------------------------------------------------

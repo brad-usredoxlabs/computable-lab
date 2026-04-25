@@ -18,46 +18,54 @@ passes:
   - id: mint_materials
     family: expand
     depends_on: [ai_precompile]
+    when: outputs.ai_precompile.mintMaterials
     description: Expand mintMaterials directives into create_container + add_material events.
 
   - id: apply_directives
     family: expand
     depends_on: [ai_precompile]
+    when: outputs.ai_precompile.directives
     description: Turn ai_precompile.directives entries into DirectiveNode[] with generated directiveIds.
 
   - id: expand_biology_verbs
     family: expand
     depends_on: [ai_precompile, resolve_prior_labware_references]
+    when: outputs.ai_precompile.candidateEvents
     description: Expand high-level biology verbs (seed, incubate, harvest, etc.) in candidate events into compositions of primitive event types that ContextEngine already handles.
 
   - id: resolve_labware
     family: disambiguate
     depends_on: [ai_precompile]
+    when: outputs.ai_precompile.candidateLabwares
     description: Resolve labware hints to existing labware-instance records via searchLabwareByHint; emit AiLabwareAddition entries for unmatched hints.
 
   - id: resolve_references
     family: disambiguate
     depends_on: [ai_precompile]
+    when: outputs.ai_precompile.unresolvedRefs
     description: Resolve named references (protocol, assay, pattern, compound-class) against their registries.
 
   - id: resolve_prior_labware_references
     family: disambiguate
     depends_on: [ai_precompile]
+    when: outputs.ai_precompile.priorLabwareRefs
     description: Resolve priorLabwareRefs against the priorLabState snapshot.
 
   - id: expand_protocol
     family: expand
     depends_on: [resolve_references]
+    when: outputs.resolve_references.resolvedRefs
     description: Unroll resolved protocol refs into primitive events using step graph + parameter bindings.
 
   - id: expand_patterns
     family: expand
     depends_on: [ai_precompile]
+    when: outputs.ai_precompile.patternEvents
     description: Dispatch patternEvents to registered pattern expanders.
 
   - id: resolve_roles
     family: expand
-    depends_on: [expand_patterns, expand_protocol, mint_materials, apply_directives]
+    depends_on: [mint_materials]
     description: Map role coordinates to concrete well addresses under current orientation.
 
   - id: compute_volumes
@@ -65,7 +73,33 @@ passes:
     depends_on: [resolve_roles]
     description: Resolve 'just_enough', percent-of, and placeholder volumes to concrete uL.
 
+  - id: compute_resources
+    family: emit
+    depends_on: [compute_volumes]
+    description: Emit resource manifest (tip racks, reservoir loads, consumables).
+
+  - id: plan_deck_layout
+    family: emit
+    depends_on: [compute_resources]
+    description: Full deck layout plan with pinned slots, auto-filled remainder, and conflicts.
+
+  - id: validate
+    family: validate
+    depends_on: [plan_deck_layout]
+    description: Aggregate findings from all registered validation checks.
+
+  - id: emit_instrument_run_files
+    family: emit
+    depends_on: [resolve_roles]
+    description: Generate InstrumentRunFile artifacts for each read-event instrument group.
+
+  - id: emit_downstream_queue
+    family: emit
+    depends_on: [ai_precompile]
+    when: outputs.ai_precompile.downstreamCompileJobs
+    description: Copy downstreamCompileJobs from ai_precompile into the terminal queue.
+
   - id: lab_state
     family: emit
-    depends_on: [resolve_roles, apply_directives]
+    depends_on: [resolve_roles]
     description: Fold directives then expanded events over prior lab-state snapshot and emit labStateDelta.

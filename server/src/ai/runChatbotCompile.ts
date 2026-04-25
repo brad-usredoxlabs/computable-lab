@@ -21,6 +21,12 @@ import {
   createExpandPatternsPass,
   createResolveRolesPass,
   createLabStatePass,
+  createComputeVolumesPass,
+  createComputeResourcesPass,
+  createPlanDeckLayoutPass,
+  createValidatePass,
+  createEmitInstrumentRunFilesPass,
+  createEmitDownstreamQueuePass,
   type FileAttachment,
   type LlmClient,
   type AiPrecompileOutput,
@@ -34,6 +40,11 @@ import {
   type ApplyDirectivesPassOutput,
   type ExpandPatternsOutput,
   type ResolveRolesOutput,
+  type ComputeResourcesPassOutput,
+  type PlanDeckLayoutOutput,
+  type ValidatePassOutput,
+  type EmitInstrumentRunFilesOutput,
+  type EmitDownstreamQueueOutput,
 } from '../compiler/pipeline/passes/ChatbotCompilePasses.js';
 import type { ExtractionRunnerService } from '../extract/ExtractionRunnerService.js';
 import type { PlateEventPrimitive } from '../compiler/biology/BiologyVerbExpander.js';
@@ -45,6 +56,7 @@ import type {
   DeckLayoutPlan,
   ResolvedLabwareRef,
 } from '../compiler/pipeline/CompileContracts.js';
+import type { InstrumentRunFile } from '../compiler/artifacts/InstrumentRunFile.js';
 import type { LabStateSnapshot } from '../compiler/state/LabState.js';
 import { emptyLabState } from '../compiler/state/LabState.js';
 import type { DirectiveNode } from '../compiler/directives/Directive.js';
@@ -55,6 +67,8 @@ import { getStampPatternRegistry } from '../registry/StampPatternRegistry.js';
 import { getCompoundClassRegistry } from '../registry/CompoundClassRegistry.js';
 import * as path from 'node:path';
 import '../compiler/patterns/index.js'; // registers all pattern expanders
+import '../compiler/validation/checks/index.js'; // registers validation checks (specs 035-036)
+import '../compiler/artifacts/QuantStudioEmitter.js'; // registers QuantStudio instrument emitter (spec-038)
 
 export interface RunChatbotCompileArgs {
   prompt: string;
@@ -119,6 +133,12 @@ export async function runChatbotCompile(
   }));
   registry.register(createResolveRolesPass());
   registry.register(createLabStatePass());
+  registry.register(createComputeVolumesPass());
+  registry.register(createComputeResourcesPass());
+  registry.register(createPlanDeckLayoutPass());
+  registry.register(createValidatePass());
+  registry.register(createEmitInstrumentRunFilesPass());
+  registry.register(createEmitDownstreamQueuePass());
 
   const spec = loadPipeline(PIPELINE_YAML_PATH);
   const result = await runPipeline(spec, registry, {
@@ -139,6 +159,7 @@ export async function runChatbotCompile(
   const priorLabware = (result.outputs.get('resolve_prior_labware_references') ?? { resolvedLabwareRefs: [], unresolved: [] }) as ResolvePriorLabwareReferencesOutput;
   const protocolEvents = (result.outputs.get('expand_protocol') ?? { events: [], stepsExpanded: 0 }) as ExpandProtocolOutput;
   const labStateOutput = (result.outputs.get('lab_state') ?? { events: [], snapshotAfter: emptyLabState() }) as LabStatePassOutput;
+  const computeResourcesOutput = (result.outputs.get('compute_resources') ?? { resourceManifest: { tipRacks: [], reservoirLoads: [], consumables: [] } }) as ComputeResourcesPassOutput;
 
   // Merge events: use resolve_roles output as the definitive event list
   // (it aggregates mint, patterns, verbs, protocol and resolves roles)
@@ -184,6 +205,13 @@ export async function runChatbotCompile(
     outcome = 'complete';
   }
 
+  // Check validationReport for error findings (spec-034)
+  const validateOutput = (result.outputs.get('validate') ?? { validationReport: { findings: [] } }) as ValidatePassOutput;
+  const validationReport = validateOutput.validationReport;
+  if (validationReport.findings.some((f: { severity: string }) => f.severity === 'error')) {
+    outcome = 'error';
+  }
+
   // Build terminalArtifacts
   const terminalArtifacts: TerminalArtifacts = {
     events,
@@ -197,16 +225,28 @@ export async function runChatbotCompile(
     resolvedLabwareRefs: priorLabware.resolvedLabwareRefs as ResolvedLabwareRef[] | undefined,
   };
 
-  // Populate deckLayoutPlan from resolve_labware output (spec-012)
-  const deckLayoutPlan: DeckLayoutPlan = { pinned: [], unassigned: [] };
-  for (const patch of labware.labwareAdditions ?? []) {
-    if (patch.deckSlot) {
-      deckLayoutPlan.pinned.push({ slot: patch.deckSlot, labwareHint: patch.recordId });
-    } else {
-      deckLayoutPlan.unassigned.push(patch.recordId);
-    }
-  }
+  // Build deckLayoutPlan from plan_deck_layout pass output (spec-033)
+  const planDeckLayoutOutput = (result.outputs.get('plan_deck_layout') ?? { pinned: [], autoFilled: [], conflicts: [] }) as PlanDeckLayoutOutput;
+  const deckLayoutPlan: DeckLayoutPlan = {
+    pinned: planDeckLayoutOutput.pinned,
+    autoFilled: planDeckLayoutOutput.autoFilled,
+    conflicts: planDeckLayoutOutput.conflicts,
+  };
   terminalArtifacts.deckLayoutPlan = deckLayoutPlan;
+
+  // Populate resourceManifest from compute_resources pass (spec-032)
+  terminalArtifacts.resourceManifest = computeResourcesOutput.resourceManifest;
+
+  // Populate validationReport from validate pass (spec-034)
+  terminalArtifacts.validationReport = validationReport;
+
+  // Populate instrumentRunFiles from emit_instrument_run_files pass (spec-038)
+  const emitInstrumentRunFilesOutput = (result.outputs.get('emit_instrument_run_files') ?? { instrumentRunFiles: [] }) as EmitInstrumentRunFilesOutput;
+  terminalArtifacts.instrumentRunFiles = emitInstrumentRunFilesOutput.instrumentRunFiles;
+
+  // Populate downstreamQueue from emit_downstream_queue pass (spec-039)
+  const emitDownstreamQueueOutput = (result.outputs.get('emit_downstream_queue') ?? { downstreamQueue: [] }) as EmitDownstreamQueueOutput;
+  terminalArtifacts.downstreamQueue = emitDownstreamQueueOutput.downstreamQueue;
 
   // Persist snapshotAfter to cache if conversationId and cache are present
   if (convId && cache) {

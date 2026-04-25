@@ -296,6 +296,7 @@ export function createAgentOrchestrator(
           ...(compileResult.labwareAdditions.length > 0 ? { labwareAdditions: compileResult.labwareAdditions } : {}),
           unresolvedRefs: unresolvedRefs.length > 0 ? unresolvedRefs : undefined,
           ...(clarification ? { clarification: { prompt: clarification, entityType: 'general', options: [] } } : {}),
+          ...(compileResult.terminalArtifacts.downstreamQueue?.length ? { downstreamQueue: compileResult.terminalArtifacts.downstreamQueue } : {}),
           usage: {
             promptTokens: 0,
             completionTokens: 0,

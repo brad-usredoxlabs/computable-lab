@@ -6,6 +6,7 @@
  */
 
 import type { Pass, PassRunArgs, PassResult, PassDiagnostic } from '../types.js';
+import type { ResourceManifest } from '../CompileContracts.js';
 import type { ExtractionRunnerService, RunExtractionServiceArgs } from '../../../extract/ExtractionRunnerService.js';
 import type { ExtractionDraftBody } from '../../../extract/ExtractionDraftBuilder.js';
 import type { ChatMessage, CompletionRequest } from '../../../ai/types.js';
@@ -18,6 +19,7 @@ import type { CompoundClass } from '../../../registry/CompoundClassRegistry.js';
 import type { LabStateSnapshot } from '../../../compiler/state/LabState.js';
 import { applyEventToLabState, emptyLabState } from '../../../compiler/state/LabState.js';
 import { applyDirectiveToLabState, type DirectiveNode } from '../../../compiler/directives/Directive.js';
+import { getValidationChecks } from '../../../compiler/validation/ValidationCheck.js';
 
 /**
  * An entity extracted from a prompt or attachment.
@@ -1801,6 +1803,524 @@ export function createComputeVolumesPass(): Pass {
         output: { events: resolved } satisfies ComputeVolumesPassOutput,
         diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
       };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// compute_resources pass
+// ---------------------------------------------------------------------------
+
+/**
+ * Output shape for the compute_resources pass.
+ */
+export interface ComputeResourcesPassOutput {
+  resourceManifest: ResourceManifest;
+}
+
+/**
+ * Pipetting event types that consume a tip.
+ */
+/**
+ * Pipetting event types that consume a tip.
+ * Only liquid-handling operations — excludes spin, pellet, freeze, thaw,
+ * label, count, passage which do not use pipette tips.
+ */
+const PIPETTING_EVENT_TYPES: ReadonlySet<string> = new Set([
+  'transfer',
+  'add_material',
+  'mix',
+  'aliquot',
+  'wash',
+  'elute',
+  'resuspend',
+  'dilute',
+  'stain',
+  'fix',
+  'permeabilize',
+  'block',
+  'quench',
+  'transfect',
+]);
+
+/**
+ * Channels per pipette type.
+ */
+const CHANNELS_PER_TYPE: Readonly<Record<string, number>> = {
+  'p1000-single': 1,
+  'p1000-multi': 8,
+  'p300-single': 1,
+  'p300-multi': 8,
+  'p200-single': 1,
+  'p200-multi': 8,
+  'p20-single': 1,
+  'p20-multi': 8,
+  'p10-single': 1,
+  'p10-multi': 8,
+  'p1000-12ch': 12,
+  'p300-12ch': 12,
+  'p200-12ch': 12,
+  'p20-12ch': 12,
+};
+
+/**
+ * Default channel count when pipette type is unknown.
+ */
+const DEFAULT_CHANNELS = 1;
+
+/**
+ * Tips per rack (standard 96-tip rack).
+ */
+const TIPS_PER_RACK = 96;
+
+/**
+ * Creates the compute_resources pass that walks the final event list
+ * and emits a ResourceManifest with tip-rack counts, reservoir loads,
+ * and consumable labware.
+ *
+ * This pass:
+ * - Reads events from state.outputs.get('compute_volumes')
+ * - Reads labState from state.input.labState
+ * - Reads deckLayoutPlan from state.outputs.get('lab_state') (labStateDelta)
+ *   to determine which labware is already "pinned"
+ * - For each pipetting event, increments tip counter per pipetteType
+ * - For each transfer from a reservoir, aggregates volume by reservoir+well+reagentKind
+ * - Consumables: labware instances not in deckLayoutPlan.pinned
+ * - Output: { resourceManifest }
+ */
+export function createComputeResourcesPass(): Pass {
+  return {
+    id: 'compute_resources',
+    family: 'emit' as const,
+    run({ pass_id, state }: PassRunArgs): PassResult {
+      const computeVolumesOutput = state.outputs.get('compute_volumes') as
+        { events?: PlateEventPrimitive[] } | undefined;
+      const events = computeVolumesOutput?.events ?? [];
+      const labState = (state.input as { labState?: LabStateSnapshot }).labState
+        ?? emptyLabState();
+
+      // 1. Tip counting: walk pipetting events, count tips per pipetteType
+      const tipCounts = new Map<string, number>(); // pipetteType → total tips used
+
+      for (const ev of events) {
+        if (!PIPETTING_EVENT_TYPES.has(ev.event_type)) {
+          continue;
+        }
+
+        const details = ev.details as Record<string, unknown> | undefined;
+        const pipetteType = (details?.pipetteType as string)
+          ?? (details?.pipette as string)
+          ?? 'unknown';
+
+        // Each pipetting operation consumes exactly 1 tip.
+        // The pipetteType determines which rack type to use, not the tip count.
+        tipCounts.set(pipetteType, (tipCounts.get(pipetteType) ?? 0) + 1);
+      }
+
+      // Convert tip counts to rack counts (ceil(total / 96))
+      const tipRacks: Array<{ pipetteType: string; rackCount: number }> = [];
+      for (const [pipetteType, totalTips] of tipCounts) {
+        const rackCount = Math.ceil(totalTips / TIPS_PER_RACK);
+        tipRacks.push({ pipetteType, rackCount });
+      }
+
+      // 2. Reservoir loads: aggregate volumes from transfer events where source is a reservoir
+      const reservoirLoads = new Map<string, { well: string; reagentKind: string; volumeUl: number }>();
+
+      for (const ev of events) {
+        if (ev.event_type !== 'transfer') {
+          continue;
+        }
+
+        const details = ev.details as Record<string, unknown> | undefined;
+        const from = details?.from as Record<string, unknown> | undefined;
+        const fromLabwareId = from?.labwareInstanceId as string | undefined;
+
+        // Check if source is a reservoir
+        if (!fromLabwareId || !(fromLabwareId in labState.reservoirs)) {
+          continue;
+        }
+
+        const fromWell = from.well as string | undefined;
+        const volumeUl = typeof details?.volumeUl === 'number' ? details.volumeUl : 0;
+        const material = details?.material as { kind?: string } | undefined;
+        const reagentKind = material?.kind ?? 'unknown';
+
+        if (!fromWell || volumeUl <= 0) {
+          continue;
+        }
+
+        const key = `${fromLabwareId}::${fromWell}::${reagentKind}`;
+        const existing = reservoirLoads.get(key);
+        if (existing) {
+          existing.volumeUl += volumeUl;
+        } else {
+          reservoirLoads.set(key, {
+            reservoirRef: fromLabwareId,
+            well: fromWell,
+            reagentKind,
+            volumeUl,
+          });
+        }
+      }
+
+      const reservoirLoadsArray = Array.from(reservoirLoads.values());
+
+      // 3. Consumables: labware instances not already declared in deckLayoutPlan.pinned
+      // Read deckLayoutPlan from lab_state pass output (labStateDelta)
+      const labStateOutput = state.outputs.get('lab_state') as
+        { events?: PlateEventPrimitive[]; snapshotAfter?: LabStateSnapshot } | undefined;
+      const snapshotAfter = labStateOutput?.snapshotAfter;
+
+      // Also check the lab_stateDelta output for deckLayoutPlan
+      const deckLayoutPlan = (state.outputs.get('lab_state') as
+        { deckLayoutPlan?: { pinned: Array<{ slot: string; labwareHint: string }> } } | undefined
+      )?.deckLayoutPlan;
+
+      // Collect pinned labware hints
+      const pinnedHints = new Set<string>();
+      if (deckLayoutPlan?.pinned) {
+        for (const pin of deckLayoutPlan.pinned) {
+          pinnedHints.add(pin.labwareHint);
+        }
+      }
+
+      // Also check labStateDelta for deckLayoutPlan
+      const labStateDelta = (state.outputs.get('lab_state') as
+        { labStateDelta?: { deckLayoutPlan?: { pinned: Array<{ slot: string; labwareHint: string }> } } } | undefined
+      )?.labStateDelta;
+      if (labStateDelta?.deckLayoutPlan?.pinned) {
+        for (const pin of labStateDelta.deckLayoutPlan.pinned) {
+          pinnedHints.add(pin.labwareHint);
+        }
+      }
+
+      // Collect labware types not in pinned hints
+      const consumables = new Set<string>();
+      for (const instance of Object.values(labState.labware)) {
+        // Check if this labware's type is in the pinned hints
+        let isPinned = false;
+        for (const hint of pinnedHints) {
+          if (instance.labwareType.includes(hint) || hint.includes(instance.labwareType)) {
+            isPinned = true;
+            break;
+          }
+        }
+        if (!isPinned) {
+          consumables.add(instance.labwareType);
+        }
+      }
+
+      const consumablesArray = Array.from(consumables);
+
+      return {
+        ok: true,
+        output: {
+          resourceManifest: {
+            tipRacks,
+            reservoirLoads: reservoirLoadsArray,
+            consumables: consumablesArray,
+          },
+        } satisfies ComputeResourcesPassOutput,
+      };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// plan_deck_layout pass
+// ---------------------------------------------------------------------------
+
+/**
+ * Opentrons-style 4×4 deck slot grid (A1–D4).
+ */
+const OT_DECK_SLOTS = [
+  'A1','A2','A3','A4',
+  'B1','B2','B3','B4',
+  'C1','C2','C3','C4',
+  'D1','D2','D3','D4',
+] as const;
+
+/**
+ * Output shape for the plan_deck_layout pass.
+ */
+export interface PlanDeckLayoutOutput {
+  pinned: Array<{ slot: string; labwareHint: string }>;
+  autoFilled: Array<{ slot: string; labwareHint: string; reason: string }>;
+  conflicts: Array<{ slot: string; candidates: string[] }>;
+}
+
+/**
+ * Creates the plan_deck_layout pass that assembles a full deck layout plan.
+ *
+ * This pass:
+ * - Reads labwareAdditions from resolve_labware (which carries deckSlot hints)
+ * - Reads tipRacks from resourceManifest (compute_resources output)
+ * - Assembles pinned: one per unique deckSlot hint (first-wins on conflict)
+ * - Detects conflicts: two hints for the same slot → record conflict, keep first
+ * - Auto-fills remaining labware + tipRacks into first available OT_DECK_SLOTS
+ * - Output: { pinned, autoFilled, conflicts }
+ */
+export function createPlanDeckLayoutPass(): Pass {
+  return {
+    id: 'plan_deck_layout',
+    family: 'emit' as const,
+    run({ pass_id, state }: PassRunArgs): PassResult {
+      // 1. Read labware additions from resolve_labware
+      const labwareOutput = state.outputs.get('resolve_labware') as
+        { labwareAdditions?: AiLabwareAdditionPatch[] } | undefined;
+      const labwareAdditions = labwareOutput?.labwareAdditions ?? [];
+
+      // 2. Read tipRacks from resourceManifest (compute_resources output)
+      const computeResourcesOutput = state.outputs.get('compute_resources') as
+        { resourceManifest?: { tipRacks: Array<{ pipetteType: string; rackCount: number }> } } | undefined;
+      const tipRacks = computeResourcesOutput?.resourceManifest?.tipRacks ?? [];
+
+      // 3. Build pinned list from deckSlot hints (first-wins on conflict)
+      const pinned: Array<{ slot: string; labwareHint: string }> = [];
+      const conflicts: Array<{ slot: string; candidates: string[] }> = [];
+      const pinnedSlots = new Set<string>();
+      const pinnedLabwareHints = new Set<string>();
+
+      for (const patch of labwareAdditions) {
+        const slot = patch.deckSlot;
+        if (!slot) continue;
+        if (pinnedSlots.has(slot)) {
+          // Conflict: another labware already pinned here
+          const existing = pinned.find(p => p.slot === slot);
+          if (existing) {
+            const conflictEntry = conflicts.find(c => c.slot === slot);
+            if (conflictEntry) {
+              conflictEntry.candidates.push(patch.recordId);
+            } else {
+              conflicts.push({ slot, candidates: [existing.labwareHint, patch.recordId] });
+            }
+          }
+        } else {
+          pinnedSlots.add(slot);
+          pinned.push({ slot, labwareHint: patch.recordId });
+          pinnedLabwareHints.add(patch.recordId);
+        }
+      }
+
+      // 4. Collect remaining labware hints (no deckSlot)
+      const remainingLabware = labwareAdditions
+        .filter(p => !p.deckSlot)
+        .map(p => p.recordId);
+
+      // 5. Auto-fill: remaining labware + tipRacks into first available slots
+      const autoFilled: Array<{ slot: string; labwareHint: string; reason: string }> = [];
+      const usedSlots = new Set(pinnedSlots);
+
+      // Helper: find first available slot
+      const nextAvailableSlot = (): string | undefined => {
+        for (const slot of OT_DECK_SLOTS) {
+          if (!usedSlots.has(slot)) {
+            usedSlots.add(slot);
+            return slot;
+          }
+        }
+        return undefined;
+      };
+
+      // Auto-fill remaining labware
+      for (const hint of remainingLabware) {
+        const slot = nextAvailableSlot();
+        if (slot) {
+          autoFilled.push({ slot, labwareHint: hint, reason: 'autoFill' });
+        }
+      }
+
+      // Auto-fill tipRacks
+      for (const tipRack of tipRacks) {
+        const slot = nextAvailableSlot();
+        if (slot) {
+          autoFilled.push({ slot, labwareHint: tipRack.pipetteType, reason: 'tipRack' });
+        }
+      }
+
+      return {
+        ok: true,
+        output: { pinned, autoFilled, conflicts } satisfies PlanDeckLayoutOutput,
+      };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// validate pass
+// ---------------------------------------------------------------------------
+
+/**
+ * Output shape for the validate pass.
+ */
+export interface ValidatePassOutput {
+  validationReport: { findings: unknown[] };
+}
+
+/**
+ * Creates the validate pass that aggregates findings from all
+ * registered ValidationChecks into a ValidationReport.
+ *
+ * This pass:
+ * - Reads TerminalArtifacts from the pipeline state (assembled from
+ *   upstream pass outputs)
+ * - Reads priorLabState from state.input.labState
+ * - Invokes every registered ValidationCheck
+ * - Aggregates all findings into a ValidationReport
+ * - Returns { validationReport: { findings } }
+ */
+export function createValidatePass(): Pass {
+  return {
+    id: 'validate',
+    family: 'validate' as const,
+    run({ state }: PassRunArgs): PassResult {
+      const artifacts = (state.input as { terminalArtifacts?: unknown }).terminalArtifacts
+        ?? {};
+      const priorLabState = (state.input as { labState?: LabStateSnapshot }).labState
+        ?? emptyLabState();
+
+      const findings: unknown[] = [];
+      for (const check of getValidationChecks()) {
+        findings.push(...check.run({ artifacts, priorLabState }));
+      }
+
+      return {
+        ok: true,
+        output: { validationReport: { findings } } satisfies ValidatePassOutput,
+      };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// emit_instrument_run_files pass
+// ---------------------------------------------------------------------------
+
+import {
+  getInstrumentEmitter,
+  type InstrumentRunFile,
+} from '../../artifacts/InstrumentRunFile.js';
+
+/**
+ * Output shape for the emit_instrument_run_files pass.
+ */
+export interface EmitInstrumentRunFilesOutput {
+  instrumentRunFiles: InstrumentRunFile[];
+}
+
+/**
+ * Creates the emit_instrument_run_files pass that generates
+ * InstrumentRunFile artifacts for each read-event instrument group.
+ *
+ * This pass:
+ * - Reads all events from resolve_roles output
+ * - Groups read events by details.instrument
+ * - For each instrument with a registered emitter, invokes it
+ * - Unregistered instruments emit a warning diagnostic + skipped run file
+ * - Output: { instrumentRunFiles: InstrumentRunFile[] }
+ */
+export function createEmitInstrumentRunFilesPass(): Pass {
+  return {
+    id: 'emit_instrument_run_files',
+    family: 'emit' as const,
+    run({ pass_id, state }: PassRunArgs): PassResult {
+      // Collect all events from upstream passes
+      const resolvedRolesOutput = state.outputs.get('resolve_roles') as
+        { events?: PlateEventPrimitive[] } | undefined;
+      const allEvents = resolvedRolesOutput?.events ?? [];
+
+      // Read resolved refs for emitter context
+      const resolveRefsOutput = state.outputs.get('resolve_references') as
+        { resolvedRefs?: ResolvedReference[] } | undefined;
+      const resolvedRefs = resolveRefsOutput?.resolvedRefs ?? [];
+
+      // Group read events by instrument
+      const instrumentGroups = new Map<string, PlateEventPrimitive[]>();
+      for (const event of allEvents) {
+        if (event.event_type === 'read') {
+          const instrument = (event.details as { instrument?: string }).instrument;
+          if (instrument) {
+            const group = instrumentGroups.get(instrument) ?? [];
+            group.push(event);
+            instrumentGroups.set(instrument, group);
+          }
+        }
+      }
+
+      const instrumentRunFiles: InstrumentRunFile[] = [];
+      const diagnostics: PassDiagnostic[] = [];
+
+      for (const [instrument, events] of instrumentGroups) {
+        const emitter = getInstrumentEmitter(instrument);
+        if (!emitter) {
+          // Unregistered instrument: emit warning + skipped run file
+          diagnostics.push({
+            severity: 'warning',
+            code: 'unregistered_instrument',
+            message: `No emitter registered for instrument '${instrument}'; skipping run-file generation.`,
+            pass_id,
+            details: { instrument },
+          });
+          instrumentRunFiles.push({
+            instrument,
+            wells: [],
+          });
+          continue;
+        }
+        try {
+          const runFile = emitter(events, resolvedRefs);
+          instrumentRunFiles.push(runFile);
+        } catch (err) {
+          diagnostics.push({
+            severity: 'error',
+            code: 'emitter_failure',
+            message: `Emitter for instrument '${instrument}' threw: ${err instanceof Error ? err.message : String(err)}`,
+            pass_id,
+            details: { instrument },
+          });
+        }
+      }
+
+      return {
+        ok: true,
+        output: { instrumentRunFiles } satisfies EmitInstrumentRunFilesOutput,
+        diagnostics,
+      };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// emit_downstream_queue pass
+// ---------------------------------------------------------------------------
+
+/**
+ * Output shape for the emit_downstream_queue pass.
+ */
+export interface EmitDownstreamQueueOutput {
+  downstreamQueue: DownstreamCompileJob[];
+}
+
+/**
+ * Creates the emit_downstream_queue pass that reads
+ * ai_precompile.downstreamCompileJobs and passes them through
+ * to its output as downstreamQueue.
+ *
+ * This pass:
+ * - Reads downstreamCompileJobs from state.outputs.get('ai_precompile')
+ * - Passes them through verbatim as downstreamQueue
+ * - Returns { downstreamQueue: DownstreamCompileJob[] }
+ */
+export function createEmitDownstreamQueuePass(): Pass {
+  return {
+    id: 'emit_downstream_queue',
+    family: 'emit' as const,
+    run({ state }: PassRunArgs): PassResult {
+      const ai = state.outputs.get('ai_precompile') as
+        { downstreamCompileJobs?: DownstreamCompileJob[] } | undefined;
+      const queue = ai?.downstreamCompileJobs ?? [];
+      return { ok: true, output: { downstreamQueue: queue } satisfies EmitDownstreamQueueOutput };
     },
   };
 }
