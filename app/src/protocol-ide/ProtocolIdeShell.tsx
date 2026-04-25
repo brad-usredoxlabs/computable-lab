@@ -25,6 +25,15 @@ import { ProtocolIdeIntakePane } from './ProtocolIdeIntakePane'
 import type { IntakePayload } from './ProtocolIdeIntakePane'
 import { ProtocolIdeSourcePane } from './ProtocolIdeSourcePane'
 import type { EvidenceCitation } from './ProtocolIdeSourcePane'
+import {
+  ProtocolIdeGraphReviewSurface,
+  type IssueCardRef,
+  type DeckLabwareSummary,
+  type ToolsInstrumentsSummary,
+  type ReagentsConcentrationsSummary,
+  type BudgetCostSummary,
+  type EventGraphData,
+} from './ProtocolIdeGraphReviewSurface'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -89,30 +98,112 @@ function SourcePane({ session }: { session: ProtocolIdeSession }): JSX.Element {
 }
 
 // ---------------------------------------------------------------------------
+// Data conversion helpers — session refs → typed summary objects
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert session issueCardRefs[] into IssueCardRef[] for the review surface.
+ * In v1 we only have the refs; the full card data would come from a later spec.
+ * We produce minimal IssueCardRef entries so the surface can render badges.
+ */
+function sessionIssueCardsToIssueCardRefs(
+  session: ProtocolIdeSession
+): IssueCardRef[] {
+  if (!session.issueCardRefs?.length) return []
+  return session.issueCardRefs.map((ref, i) => ({
+    id: ref.id,
+    title: ref.label ?? `Issue ${i + 1}`,
+    severity: 'info' as const,
+    evidenceRefId: ref.id,
+  }))
+}
+
+/**
+ * Build a minimal DeckLabwareSummary from session overlay refs.
+ * In v1 the refs exist but the actual summary data would be fetched
+ * from the overlay-summary service (spec-071). We produce a stub
+ * so the surface renders the panel.
+ */
+function buildDeckLabwareSummary(
+  session: ProtocolIdeSession
+): DeckLabwareSummary | null {
+  if (!session.latestDeckSummaryRef) return null
+  return {
+    labwares: [],
+    placements: [],
+  }
+}
+
+function buildToolsInstrumentsSummary(
+  session: ProtocolIdeSession
+): ToolsInstrumentsSummary | null {
+  if (!session.latestToolsSummaryRef) return null
+  return { tools: [] }
+}
+
+function buildReagentsConcentrationsSummary(
+  session: ProtocolIdeSession
+): ReagentsConcentrationsSummary | null {
+  if (!session.latestReagentsSummaryRef) return null
+  return { reagents: [] }
+}
+
+function buildBudgetCostSummary(
+  session: ProtocolIdeSession
+): BudgetCostSummary | null {
+  if (!session.latestBudgetSummaryRef) return null
+  return { lineCount: 0, approvedLineCount: 0, grandTotal: 0 }
+}
+
+/**
+ * Build EventGraphData from session event-graph ref.
+ * In v1 the ref exists but the actual events would be fetched from
+ * the event-graph cache (spec-070). We produce a stub so the surface
+ * renders the canvas.
+ */
+function buildEventGraphData(
+  session: ProtocolIdeSession
+): EventGraphData | null {
+  if (!session.latestEventGraphRef) return null
+  return {
+    events: [],
+    labwares: [],
+    deckPlacements: [],
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Event-graph review surface (center — primary)
 // ---------------------------------------------------------------------------
 
 function EventGraphSurface({ session }: { session: ProtocolIdeSession }): JSX.Element {
+  const issueCards = sessionIssueCardsToIssueCardRefs(session)
+  const deckLabwareSummary = buildDeckLabwareSummary(session)
+  const toolsInstrumentsSummary = buildToolsInstrumentsSummary(session)
+  const reagentsConcentrationsSummary = buildReagentsConcentrationsSummary(session)
+  const budgetCostSummary = buildBudgetCostSummary(session)
+  const eventGraphData = buildEventGraphData(session)
+
+  const handleIssueCardClick = (card: IssueCardRef) => {
+    console.log('Issue card clicked:', card)
+  }
+
+  const handleEvidenceClick = (evidenceRefId: string) => {
+    console.log('Evidence clicked:', evidenceRefId)
+  }
+
   return (
-    <main className="protocol-ide-graph-surface" role="main" aria-label="Event-graph review surface">
-      <div className="protocol-ide-graph-header">
-        <h1 className="protocol-ide-graph-title">
-          Event-Graph Review — {session.recordId}
-        </h1>
-        <span
-          className="protocol-ide-status-badge"
-          data-testid="protocol-ide-status-badge"
-        >
-          {session.status}
-        </span>
-      </div>
-      <div className="protocol-ide-graph-body" data-testid="protocol-ide-graph-body">
-        <p className="protocol-ide-graph-placeholder">
-          Event-graph content will be rendered here once a session has been
-          projected. Select a session or create a new one to begin.
-        </p>
-      </div>
-    </main>
+    <ProtocolIdeGraphReviewSurface
+      session={session}
+      eventGraphData={eventGraphData}
+      deckLabwareSummary={deckLabwareSummary}
+      toolsInstrumentsSummary={toolsInstrumentsSummary}
+      reagentsConcentrationsSummary={reagentsConcentrationsSummary}
+      budgetCostSummary={budgetCostSummary}
+      issueCards={issueCards}
+      onIssueCardClick={handleIssueCardClick}
+      onEvidenceClick={handleEvidenceClick}
+    />
   )
 }
 
