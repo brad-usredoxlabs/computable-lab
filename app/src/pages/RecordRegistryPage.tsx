@@ -1,12 +1,12 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { RecordSearchCombobox } from '../components/registry/RecordSearchCombobox';
 import { CsvImportModal } from '../components/registry/CsvImportModal';
-import { TapTabEditor, serializeDocument, isDirty } from '../editor/taptab';
+import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor';
 import type { TapTabEditorHandle } from '../editor/taptab/types';
-import type { UISpec } from '../types/uiSpec';
-import type { JsonSchema } from '../types/kernel';
+import type { EditorProjectionResponse } from '../types/uiSpec';
 import { apiClient } from '../shared/api/client';
 import { RelatedRecordsCard } from '../components/registry/RelatedRecordsCard';
+import { DocumentShell, DocumentShellHeader } from '../editor/taptab/DocumentShell';
 
 const REGISTRY_TABS = [
   { id: 'people', label: 'People', kinds: ['person'] },
@@ -31,44 +31,70 @@ export default function RecordRegistryPage() {
   const [activeTab, setActiveTab] = useState<TabId>('people');
   const [records, setRecords] = useState<RecordData[]>([]);
   const [loading, setLoading] = useState(false);
-  const [uiSpecs, setUiSpecs] = useState<Map<string, UISpec>>(new Map());
-  const [schemas, setSchemas] = useState<Map<string, JsonSchema>>(new Map());
   const [selectedRecord, setSelectedRecord] = useState<RecordData | null>(null);
-  const [selectedUiSpec, setSelectedUiSpec] = useState<UISpec | null>(null);
-  const [selectedSchema, setSelectedSchema] = useState<JsonSchema | null>(null);
   const [editorMode, setEditorMode] = useState<'edit' | 'create'>('edit');
   const [csvModalOpen, setCsvModalOpen] = useState(false);
 
-  // Editor state for inline TapTabEditor
+  // Editor state for inline ProjectionTapTabEditor
   const taptabRef = useRef<TapTabEditorHandle>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
 
+  // Projection state for the selected record
+  const [projection, setProjection] = useState<EditorProjectionResponse | null>(null);
+  const [projectionLoading, setProjectionLoading] = useState(false);
+
   useEffect(() => {
-    async function loadUiSpecs() {
-      const uiSpecList = await apiClient.getAllUiSpecs();
-      const specMap = new Map<string, UISpec>();
-      const schemaMap = new Map<string, JsonSchema>();
-      const promises = uiSpecList.map(async ({ schemaId, spec }) => {
-        try {
-          // The list endpoint may not include the full spec — fetch individually if missing
-          if (spec) {
-            specMap.set(schemaId, spec);
-          } else {
-            const detail = await apiClient.getUiSpec(schemaId);
-            if (detail) specMap.set(schemaId, detail);
-          }
-          const schemaInfo = await apiClient.getSchema(schemaId);
-          if (schemaInfo.schema) schemaMap.set(schemaId, schemaInfo.schema);
-        } catch {}
-      });
-      await Promise.all(promises);
-      setUiSpecs(specMap);
-      setSchemas(schemaMap);
+    async function refreshRecords() {
+      const tab = REGISTRY_TABS.find(t => t.id === activeTab);
+      if (!tab) return;
+      setLoading(true);
+      try {
+        const promises = tab.kinds.map(kind => apiClient.listRecordsByKind(kind, 100));
+        const results = await Promise.all(promises);
+        const allRecords: RecordData[] = [];
+        for (const { records } of results) allRecords.push(...records);
+        allRecords.sort((a, b) => a.recordId.localeCompare(b.recordId));
+        setRecords(allRecords);
+      } catch {
+        setRecords([]);
+      } finally {
+        setLoading(false);
+      }
     }
-    loadUiSpecs();
-  }, []);
+    refreshRecords();
+    setSelectedRecord(null);
+    setProjection(null);
+    setDirty(false);
+  }, [activeTab]);
+
+  const handleSelectRecord = (record: { recordId: string; payload: Record<string, unknown> }) => {
+    const recordData: RecordData = {
+      recordId: record.recordId,
+      schemaId: (record.payload as { schemaId?: string }).schemaId || '',
+      payload: record.payload,
+    };
+    setSelectedRecord(recordData);
+    setEditorMode('edit');
+    setDirty(false);
+
+    // Load editor projection for the selected record
+    loadProjectionForRecord(recordData);
+  };
+
+  const handleCreateRecord = (schemaId: string) => {
+    setSelectedRecord({ recordId: '', schemaId, payload: {} });
+    setEditorMode('create');
+    setDirty(false);
+
+    // Load draft editor projection for create mode
+    loadDraftProjection(schemaId);
+  };
+
+  const handleSaved = async () => {
+    await refreshRecords();
+  };
 
   async function refreshRecords() {
     const tab = REGISTRY_TABS.find(t => t.id === activeTab);
@@ -88,33 +114,31 @@ export default function RecordRegistryPage() {
     }
   }
 
-  useEffect(() => {
-    refreshRecords();
-    setSelectedRecord(null);
-    setSelectedUiSpec(null);
-    setSelectedSchema(null);
-    setDirty(false);
-  }, [activeTab]);
-
-
-
-
-
-  const handleSelectRecord = (record: { recordId: string; payload: Record<string, unknown> }) => {
-    const recordData: RecordData = {
-      recordId: record.recordId,
-      schemaId: (record.payload as { schemaId?: string }).schemaId || '',
-      payload: record.payload,
-    };
-    setSelectedRecord(recordData);
-    setSelectedUiSpec(uiSpecs.get(recordData.schemaId) || null);
-    setSelectedSchema(schemas.get(recordData.schemaId) || null);
-    setEditorMode('edit');
-    setDirty(false);
+  const loadProjectionForRecord = async (recordData: RecordData) => {
+    if (!recordData.recordId) return;
+    setProjectionLoading(true);
+    try {
+      const proj = await apiClient.getRecordEditorProjection(recordData.recordId);
+      setProjection(proj);
+    } catch (err) {
+      console.warn('Editor projection unavailable; falling back.', err);
+      setProjection(null);
+    } finally {
+      setProjectionLoading(false);
+    }
   };
 
-  const handleSaved = async () => {
-    await refreshRecords();
+  const loadDraftProjection = async (schemaId: string) => {
+    setProjectionLoading(true);
+    try {
+      const proj = await apiClient.getEditorDraftProjection(schemaId);
+      setProjection(proj);
+    } catch (err) {
+      console.warn('Editor draft projection unavailable; falling back.', err);
+      setProjection(null);
+    } finally {
+      setProjectionLoading(false);
+    }
   };
 
   const handleSave = async () => {
@@ -126,7 +150,10 @@ export default function RecordRegistryPage() {
     setError(null);
 
     try {
-      const serialized = serializeDocument(editor.getJSON(), selectedRecord.payload);
+      // Serialize from the TipTap editor JSON
+      const docJson = editor.getJSON();
+      const serialized = docJson as Record<string, unknown>;
+
       if (editorMode === 'create') {
         await apiClient.createRecord(selectedRecord.schemaId, serialized);
       } else {
@@ -134,8 +161,7 @@ export default function RecordRegistryPage() {
       }
       handleSaved();
       setSelectedRecord(null);
-      setSelectedUiSpec(null);
-      setSelectedSchema(null);
+      setProjection(null);
       setDirty(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Save failed');
@@ -146,46 +172,22 @@ export default function RecordRegistryPage() {
 
   const handleCancel = () => {
     setSelectedRecord(null);
-    setSelectedUiSpec(null);
-    setSelectedSchema(null);
+    setProjection(null);
     setDirty(false);
     setError(null);
   };
 
+  // Event-driven dirty tracking via TapTabEditor callback — no polling
+  const handleSerializedChange = useCallback((_payload: Record<string, unknown>, isDirtyFlag: boolean) => {
+    setDirty(isDirtyFlag);
+  }, []);
+
   const activeTabConfig = REGISTRY_TABS.find(t => t.id === activeTab)!;
 
-  const activeTabSchemaId = useMemo(() => {
-    for (const schemaId of uiSpecs.keys()) {
-      if (activeTabConfig.kinds.some(kind => schemaId.endsWith(`/${kind}.schema.yaml`) || schemaId.endsWith(`/${kind}.schema.json`))) return schemaId;
-    }
-    return activeTabConfig.kinds[0];
-  }, [uiSpecs, activeTabConfig]);
-
-  const activeTabFields = useMemo(() => {
-    const uiSpec = uiSpecs.get(activeTabSchemaId);
-    if (!uiSpec?.form?.sections) return [];
-    return uiSpec.form.sections.flatMap(s =>
-      s.fields.filter(f => !f.hidden && !f.readOnly && !f.readonly)
-        .map(f => ({ path: f.path, label: f.label || f.path, required: f.required }))
-    );
-  }, [uiSpecs, activeTabSchemaId]);
-
-  // Dirty state tracking interval
-  useEffect(() => {
-    if (!selectedRecord || !selectedUiSpec) return;
-
-    const interval = setInterval(() => {
-      const editor = taptabRef.current?.getEditor();
-      if (!editor) return;
-
-      const currentPayload = serializeDocument(editor.getJSON(), selectedRecord.payload);
-      setDirty(isDirty(selectedRecord.payload, currentPayload));
-    }, 500);
-
-    return () => clearInterval(interval);
-  }, [selectedRecord, selectedUiSpec]);
-
   const title = editorMode === 'create' ? 'New Record' : (selectedRecord ? selectedRecord.recordId : 'New Record');
+
+  // Determine if we have projection data to render
+  const hasProjection = projection !== null && projection.blocks && projection.slots;
 
   return (
     <div className="flex h-[calc(100vh-4rem)]">
@@ -211,19 +213,14 @@ export default function RecordRegistryPage() {
         <div className="p-2 border-b border-gray-100">
           <RecordSearchCombobox
             kinds={activeTabConfig.kinds as unknown as string[]}
-            schemaId={activeTabSchemaId}
+            schemaId=""
             placeholder={`Search ${activeTabConfig.label.toLowerCase()}...`}
             onSelect={(record) => {
               if (record.isNew) {
-                setSelectedRecord({ recordId: '', schemaId: record.schemaId, payload: record.payload });
-                setEditorMode('create');
+                handleCreateRecord(record.schemaId);
               } else {
-                // Load full record for editing
                 handleSelectRecord({ recordId: record.recordId, payload: record.payload });
               }
-              // Load uiSpec and schema for TapTab
-              setSelectedUiSpec(uiSpecs.get(record.schemaId) || null);
-              setSelectedSchema(schemas.get(record.schemaId) || null);
             }}
           />
         </div>
@@ -263,71 +260,80 @@ export default function RecordRegistryPage() {
         </div>
       </div>
 
-      {/* Right Panel - Editor */}
-      <div className="flex-1 flex flex-col bg-white">
-        {selectedRecord && selectedUiSpec && selectedSchema ? (
-          <>
-            {/* Header with title */}
-            <div className="border-b border-gray-200 p-4">
-              <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-            </div>
-            {/* TapTab Editor */}
-            <div className="flex-1 overflow-y-auto p-4">
-              <TapTabEditor
+      {/* Right Panel - DocumentShell Editor */}
+      {selectedRecord ? (
+        <DocumentShell
+          topBar={
+            <DocumentShellHeader
+              title={title}
+              actions={
+                <>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving || !dirty}
+                    className="bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
+                  >
+                    {saving ? 'Saving...' : 'Save'}
+                  </button>
+                  <button
+                    onClick={handleCancel}
+                    className="border border-gray-300 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  {dirty && !saving && (
+                    <span className="w-2 h-2 rounded-full bg-orange-400" title="Unsaved changes" />
+                  )}
+                  {error && <span className="text-red-500 text-xs">{error}</span>}
+                </>
+              }
+            />
+          }
+          rail={
+            selectedRecord.recordId && editorMode !== 'create' ? (
+              <div className="border-t border-gray-100 p-4">
+                <RelatedRecordsCard
+                  recordId={selectedRecord.recordId}
+                  onNavigate={(id) => {
+                    window.open(`/records/${encodeURIComponent(id)}`, '_blank')
+                  }}
+                />
+              </div>
+            ) : undefined
+          }
+        >
+          <div className="flex-1 overflow-y-auto p-4">
+            {hasProjection ? (
+              <ProjectionTapTabEditor
                 ref={taptabRef}
+                blocks={projection.blocks}
+                slots={projection.slots}
                 data={selectedRecord.payload}
-                uiSpec={selectedUiSpec}
-                schema={selectedSchema}
                 disabled={saving}
+                onUpdate={handleSerializedChange}
               />
-              {selectedRecord.recordId && editorMode !== 'create' && (
-                <div className="border-t border-gray-100 p-4 mt-4">
-                  <RelatedRecordsCard
-                    recordId={selectedRecord.recordId}
-                    onNavigate={(id) => {
-                      window.open(`/records/${encodeURIComponent(id)}`, '_blank')
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-            {/* Save/Cancel Bar */}
-            <div className="border-t border-gray-200 p-4 flex items-center gap-3 bg-white">
-              <button
-                onClick={handleSave}
-                disabled={saving || !dirty}
-                className="bg-blue-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-600 disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-              <button
-                onClick={handleCancel}
-                className="border border-gray-300 text-gray-700 px-4 py-2 rounded text-sm font-medium hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              {dirty && !saving && (
-                <span className="w-2 h-2 rounded-full bg-orange-400" title="Unsaved changes" />
-              )}
-              {error && <span className="text-red-500 text-xs">{error}</span>}
-            </div>
-          </>
-        ) : (
-          /* Placeholder when no record selected */
-          <div className="flex-1 flex items-center justify-center text-gray-500">
-            <div className="text-center">
-              <p className="text-lg">Select a record to edit</p>
-              <p className="text-sm mt-2">Or search for a record using the combobox above</p>
-            </div>
+            ) : (
+              <p className="text-gray-500">
+                {projectionLoading ? 'Loading editor...' : 'Editor not available for this record'}
+              </p>
+            )}
           </div>
-        )}
-      </div>
+        </DocumentShell>
+      ) : (
+        /* Placeholder when no record selected */
+        <div className="flex-1 flex items-center justify-center text-gray-500">
+          <div className="text-center">
+            <p className="text-lg">Select a record to edit</p>
+            <p className="text-sm mt-2">Or search for a record using the combobox above</p>
+          </div>
+        </div>
+      )}
 
       <CsvImportModal
         open={csvModalOpen}
         onClose={() => setCsvModalOpen(false)}
-        schemaId={activeTabSchemaId}
-        fields={activeTabFields}
+        schemaId=""
+        fields={[]}
         onComplete={() => {
           setCsvModalOpen(false);
           refreshRecords();

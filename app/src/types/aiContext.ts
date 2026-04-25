@@ -8,7 +8,7 @@
 export type AiSurface =
   | 'event-editor'
   | 'run-workspace'
-  | `run-workspace:${'overview' | 'plan' | 'biology' | 'readouts' | 'results' | 'claims'}`
+  | `run-workspace:${'overview' | 'plan' | 'biology' | 'readouts' | 'results' | 'claims' | 'budget'}`
   | 'materials'
   | 'formulations'
   | 'ingestion'

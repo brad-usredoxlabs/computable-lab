@@ -43,6 +43,7 @@ import type { RunDraftHandlers } from './handlers/RunDraftHandlers.js';
 import type { RelatedRecordsHandlers } from './handlers/RelatedRecordsHandlers.js';
 import type { AiRecordDraftHandlers } from './handlers/AiRecordDraftHandlers.js';
 import type { ReadinessHandlers } from './handlers/ReadinessHandlers.js';
+import type { ProcurementHandlers } from './handlers/ProcurementHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -86,6 +87,7 @@ export interface RouteOptions {
   runDraftHandlers?: RunDraftHandlers;
   aiRecordDraftHandlers?: AiRecordDraftHandlers;
   readinessHandlers?: ReadinessHandlers;
+  procurementHandlers?: ProcurementHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -218,6 +220,15 @@ export function registerRoutes(
     
     // Get record with UI spec (for rendering)
     fastify.get('/ui/record/:recordId', uiHandlers.getRecordWithUI.bind(uiHandlers));
+    
+    // Get editor projection for a record
+    fastify.get('/ui/record/:recordId/editor', uiHandlers.getRecordEditorProjection.bind(uiHandlers));
+
+    // Get a draft editor projection for create mode (POST /ui/schema/:schemaId/editor-draft)
+    fastify.post('/ui/schema/:schemaId/editor-draft', uiHandlers.getEditorDraftProjection.bind(uiHandlers));
+
+    // Get editor slot suggestions for a record
+    fastify.post('/ui/record/:recordId/editor/suggestions', uiHandlers.getRecordEditorSlotSuggestions.bind(uiHandlers));
   }
   
   // ============================================================================
@@ -675,5 +686,15 @@ export function registerRoutes(
 
   if (readinessHandlers) {
     fastify.get('/execution/readiness', readinessHandlers.getReadinessReport.bind(readinessHandlers));
+  }
+
+  // ============================================================================
+  // Procurement Routes (optional - requires procurementHandlers)
+  // ============================================================================
+
+  const { procurementHandlers } = options;
+
+  if (procurementHandlers) {
+    fastify.post('/planned-runs/:id/procurement/draft', procurementHandlers.generateProcurementDraft.bind(procurementHandlers));
   }
 }

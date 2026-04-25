@@ -15,6 +15,7 @@ export interface RunWorkspaceSummary {
     readouts: string
     results: string
     claims: string
+    budget: string
   }
 }
 
@@ -34,6 +35,7 @@ function summarizeCounts(workspace: RunWorkspaceResponse | null) {
       readouts: 'No readouts yet',
       results: 'No result jobs yet',
       claims: 'No claims yet',
+      budget: 'No budget yet',
     }
   }
   const assignmentCount = Object.values(workspace.wellRoleAssignmentsByContext).flat().length
@@ -42,8 +44,9 @@ function summarizeCounts(workspace: RunWorkspaceResponse | null) {
     plan: workspace.eventGraph ? `${workspace.eventGraph.payload.labwares?.length || 0} labwares` : 'No event graph',
     biology: `${workspace.wellGroups.length} groups · ${assignmentCount} role assignments`,
     readouts: `${visibleReadoutContexts.length} contexts`,
-      results: `${workspace.measurements.length} measurements`,
-      claims: `${workspace.claims.length} claims · ${workspace.evidence.length} evidence · ${workspace.assertions.length} assertions`,
+    results: `${workspace.measurements.length} measurements`,
+    claims: `${workspace.claims.length} claims · ${workspace.evidence.length} evidence · ${workspace.assertions.length} assertions`,
+    budget: 'Budget tab',
   }
 }
 

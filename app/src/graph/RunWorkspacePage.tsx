@@ -17,8 +17,9 @@ import { RunWorkspaceNav } from './run-workspace/RunWorkspaceNav'
 import { RunWorkspaceRightRail } from './run-workspace/RunWorkspaceRightRail'
 import { RunWorkspaceShell } from './run-workspace/RunWorkspaceShell'
 import { useRunWorkspace } from './hooks/useRunWorkspace'
+import { RunBudgetTab } from './run-workspace/RunBudgetTab'
 
-type WorkspaceTab = 'overview' | 'plan' | 'biology' | 'readouts' | 'results' | 'claims'
+type WorkspaceTab = 'overview' | 'plan' | 'biology' | 'readouts' | 'results' | 'claims' | 'budget'
 
 export function RunWorkspacePage() {
   const { runId } = useParams<{ runId: string }>()
@@ -94,7 +95,9 @@ export function RunWorkspacePage() {
               ? <RunReadoutsTab summary={summary} runId={resolvedRunId} chat={aiChat} />
             : activeTab === 'results'
               ? <RunResultsTab summary={summary} runId={resolvedRunId} chat={aiChat} interpretation={interpretation} assembly={assembly} workspace={workspace} />
-              : <RunClaimsTab workspace={workspace} onRefresh={refresh} onExportAnalysis={handleExportAnalysis} exportingAnalysis={exportingAnalysis} runId={resolvedRunId} chat={aiChat} assembly={assembly} />
+              : activeTab === 'claims'
+                ? <RunClaimsTab workspace={workspace} onRefresh={refresh} onExportAnalysis={handleExportAnalysis} exportingAnalysis={exportingAnalysis} runId={resolvedRunId} chat={aiChat} assembly={assembly} />
+                : <RunBudgetTab runId={resolvedRunId} />
 
   return (
     <div>

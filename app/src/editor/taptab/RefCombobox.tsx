@@ -1,11 +1,30 @@
 import { useState, useRef, useEffect, KeyboardEvent, MouseEvent } from 'react';
 import { useTagSuggestions } from '../../shared/hooks/useTagSuggestions';
 import { useOLSSearch } from '../../shared/hooks/useOLSSearch';
+import type { StructuredValue } from '../../shared/forms/suggestionPlan';
 
 export interface RefComboboxProps {
   value: string;
   refKind: string; // Used as the vocab domain for local search
-  onSelect: (value: string, source: 'local' | 'ontology', termData?: { label: string; iri: string; definition?: string; synonyms?: string[]; ontology?: string }) => void;
+  /** Optional suggestion plan from the projection (sources, ontologies, field). */
+  suggestionPlan?: {
+    sources: string[];
+    ontologies: string[];
+    searchField: 'keywords' | 'tags';
+    isRef: boolean;
+    isCombobox: boolean;
+  };
+  onSelect: (
+    value: string,
+    source: 'local' | 'ontology',
+    termData?: {
+      label: string;
+      iri: string;
+      definition?: string;
+      synonyms?: string[];
+      ontology?: string;
+    } & { __structured__?: StructuredValue }
+  ) => void;
   onCancel: () => void;
 }
 
@@ -31,25 +50,36 @@ interface DropdownItem {
   group?: 'local' | 'ontology'; // Only for headers
 }
 
-export function RefCombobox({ value, refKind, onSelect, onCancel }: RefComboboxProps) {
+export function RefCombobox({
+  value,
+  refKind,
+  suggestionPlan,
+  onSelect,
+  onCancel,
+}: RefComboboxProps) {
   const [query, setQuery] = useState(value);
   const [highlightIndex, setHighlightIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
-  // Get local tag suggestions
+  // Extract suggestion plan values (fall back to defaults)
+  const sources = suggestionPlan?.sources ?? ['local'];
+  const ontologies = suggestionPlan?.ontologies ?? (refKind ? [refKind] : []);
+  const searchField = suggestionPlan?.searchField ?? 'tags';
+  const useOls = sources.includes('ols');
+
+  // Get local tag suggestions — use the searchField from the plan
   const { suggestions: localResults, loading: localLoading } = useTagSuggestions({
     query,
-    field: 'keywords',
+    field: searchField,
     enabled: query.length >= 1,
   });
 
-  // Get ontology search results
-  // refKind can be used to filter ontologies (e.g., 'cl' for cell ontology)
+  // Get ontology search results — restricted to configured ontologies
   const { results: ontologyResults, loading: ontologyLoading } = useOLSSearch({
     query,
-    ontologies: refKind ? [refKind] : [],
-    enabled: query.length >= 2,
+    ontologies: useOls ? ontologies : [],
+    enabled: useOls && query.length >= 2,
     debounceMs: 400,
   });
 
@@ -110,8 +140,8 @@ export function RefCombobox({ value, refKind, onSelect, onCancel }: RefComboboxP
   // Scroll highlighted item into view
   useEffect(() => {
     if (highlightIndex >= 0 && highlightIndex < dropdownItems.length && listRef.current) {
-      const highlightedItem = listRef.current.children[highlightIndex] as HTMLElement;
-      if (highlightedItem) {
+      const highlightedItem = listRef.current.children[highlightIndex] as HTMLElement | undefined;
+      if (highlightedItem?.scrollIntoView) {
         highlightedItem.scrollIntoView({ block: 'nearest' });
       }
     }
@@ -165,9 +195,31 @@ export function RefCombobox({ value, refKind, onSelect, onCancel }: RefComboboxP
           onSelect(result.value, 'ontology', {
             label: result.label,
             iri: result.iri || '',
+            definition: result.definition,
+            synonyms: result.synonyms,
+            ontology: result.ontology,
+            __structured__: {
+              value: result.value,
+              source: 'ols',
+              metadata: {
+                iri: result.iri,
+                ontology: result.ontology,
+                definition: result.definition,
+              },
+            },
           });
         } else {
-          onSelect(result.value, 'local');
+          onSelect(result.value, 'local', {
+            label: result.label,
+            __structured__: {
+              value: result.value,
+              source: 'local',
+              metadata: {
+                searchField,
+                sources,
+              },
+            },
+          });
         }
       }
     } else if (e.key === 'Escape') {
@@ -180,8 +232,38 @@ export function RefCombobox({ value, refKind, onSelect, onCancel }: RefComboboxP
     setQuery(e.target.value);
   };
 
-  const handleOptionSelect = (resultValue: string, resultType: 'local' | 'ontology', termData?: { label: string; iri: string; definition?: string; synonyms?: string[]; ontology?: string }) => {
-    onSelect(resultValue, resultType, termData);
+  const handleOptionSelect = (
+    resultValue: string,
+    resultType: 'local' | 'ontology',
+    termData?: {
+      label: string;
+      iri: string;
+      definition?: string;
+      synonyms?: string[];
+      ontology?: string;
+    }
+  ) => {
+    const structuredValue: StructuredValue | undefined =
+      resultType === 'ontology'
+        ? {
+            value: resultValue,
+            source: 'ols',
+            metadata: {
+              iri: termData?.iri,
+              ontology: termData?.ontology,
+              definition: termData?.definition,
+            },
+          }
+        : {
+            value: resultValue,
+            source: 'local',
+            metadata: { searchField, sources },
+          };
+
+    onSelect(resultValue, resultType, {
+      ...termData,
+      __structured__: structuredValue,
+    });
   };
 
   const handleMouseDown = (e: MouseEvent<HTMLLIElement>) => {

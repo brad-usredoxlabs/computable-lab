@@ -1,10 +1,23 @@
 import { useState, useRef, useEffect, KeyboardEvent, MouseEvent } from 'react';
 import { apiClient } from '../../shared/api/client';
+import type { StructuredValue } from '../../shared/forms/suggestionPlan';
 
 export interface RecordRefPickerProps {
   value: string;
   refKind: string;
-  onSelect: (value: string, recordId: string) => void;
+  /** Optional suggestion plan from the projection. */
+  suggestionPlan?: {
+    sources: string[];
+    ontologies: string[];
+    searchField: 'keywords' | 'tags';
+    isRef: boolean;
+    isCombobox: boolean;
+  };
+  onSelect: (
+    value: string,
+    recordId: string,
+    structuredValue?: StructuredValue
+  ) => void;
   onCancel: () => void;
 }
 
@@ -14,7 +27,13 @@ interface SearchResult {
   kind: string;
 }
 
-export function RecordRefPicker({ value, refKind, onSelect, onCancel }: RecordRefPickerProps) {
+export function RecordRefPicker({
+  value,
+  refKind,
+  suggestionPlan,
+  onSelect,
+  onCancel,
+}: RecordRefPickerProps) {
   const [query, setQuery] = useState(value);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -58,7 +77,19 @@ export function RecordRefPicker({ value, refKind, onSelect, onCancel }: RecordRe
     else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightIndex((p) => Math.max(p - 1, 0)); }
     else if (e.key === 'Enter') {
       e.preventDefault();
-      if (highlightIndex >= 0 && highlightIndex < results.length) onSelect(results[highlightIndex].title, results[highlightIndex].recordId);
+      if (highlightIndex >= 0 && highlightIndex < results.length) {
+        const selected = results[highlightIndex];
+        // Commit structured value with provenance
+        const structuredValue: StructuredValue = {
+          value: selected.title,
+          source: 'local-records',
+          metadata: {
+            recordId: selected.recordId,
+            kind: selected.kind,
+          },
+        };
+        onSelect(selected.title, selected.recordId, structuredValue);
+      }
     } else if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
   };
 
@@ -84,7 +115,14 @@ export function RecordRefPicker({ value, refKind, onSelect, onCancel }: RecordRe
             <li
               key={r.recordId}
               className={`result-item ${i === highlightIndex ? 'highlighted' : ''}`}
-              onClick={() => onSelect(r.title, r.recordId)}
+              onClick={() => {
+                const structuredValue: StructuredValue = {
+                  value: r.title,
+                  source: 'local-records',
+                  metadata: { recordId: r.recordId, kind: r.kind },
+                };
+                onSelect(r.title, r.recordId, structuredValue);
+              }}
               onMouseDown={handleMouseDown}
             >
               <span className="result-label">{r.title}</span>

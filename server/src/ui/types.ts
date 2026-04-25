@@ -84,6 +84,8 @@ export interface FieldHint {
   order?: number;
   /** Column span for grid layout */
   colSpan?: number;
+  /** Whether the field should be hidden from rendering */
+  hidden?: boolean;
 }
 
 /**
@@ -406,6 +408,16 @@ export interface EditorSlot {
   suggestionProviders?: SuggestionProviderKind[];
   /** Visibility condition */
   visible?: VisibilityCondition;
+  /** Options for select/radio/multiselect */
+  options?: FieldOption[];
+  /** For ref widgets: the target record kind */
+  refKind?: string;
+  /** For array widgets: item configuration */
+  items?: FieldHint;
+  /** For object widgets: nested field hints */
+  fields?: FieldHint[];
+  /** Additional widget-specific props (sources, ontologies, field, etc.) */
+  props?: Record<string, unknown>;
 }
 
 /**
@@ -419,6 +431,113 @@ export interface EditorConfig {
   blocks: EditorBlock[];
   /** Slots that can be placed inside blocks */
   slots: EditorSlot[];
+}
+
+// ============================================================================
+// EditorProjection types — server-side projection response
+// ============================================================================
+
+/**
+ * Diagnostic severity levels for projection diagnostics.
+ */
+export type DiagnosticSeverity = 'info' | 'warning' | 'error';
+
+/**
+ * A diagnostic emitted during projection (non-fatal, deterministic).
+ */
+export interface EditorDiagnostic {
+  /** Stable diagnostic identifier */
+  code: string;
+  /** Human-readable message */
+  message: string;
+  /** Severity level */
+  severity: DiagnosticSeverity;
+  /** Optional path in the record payload this diagnostic refers to */
+  path?: string;
+}
+
+/**
+ * A block emitted by the EditorProjection service.
+ * Mirrors EditorBlock but with projection-specific fields.
+ */
+export interface ProjectionBlock {
+  /** Stable block identifier */
+  id: string;
+  /** Block kind */
+  kind: EditorBlockKind;
+  /** Display label */
+  label?: string;
+  /** Help text / description */
+  help?: string;
+  /** Whether the block is collapsible */
+  collapsible?: boolean;
+  /** Whether the block starts collapsed */
+  collapsed?: boolean;
+  /** For repeater/table: the path to the array field */
+  path?: string;
+  /** For table: column definitions */
+  columns?: EditorTableColumn[];
+  /** Visibility condition */
+  visible?: VisibilityCondition;
+  /** Slots that belong to this block (by slot id) */
+  slotIds?: string[];
+}
+
+/**
+ * A slot emitted by the EditorProjection service.
+ * Mirrors EditorSlot but with projection-specific fields.
+ */
+export interface ProjectionSlot {
+  /** Stable slot identifier */
+  id: string;
+  /** JSONPath to the field in the payload */
+  path: string;
+  /** Display label */
+  label: string;
+  /** Widget type to render */
+  widget: WidgetType | string;
+  /** Help text / description */
+  help?: string;
+  /** Placeholder text */
+  placeholder?: string;
+  /** Whether the slot is required */
+  required?: boolean;
+  /** Whether the slot is read-only */
+  readOnly?: boolean;
+  /** Default value (if not in payload) */
+  defaultValue?: unknown;
+  /** Suggestion providers available for this slot */
+  suggestionProviders?: SuggestionProviderKind[];
+  /** Visibility condition */
+  visible?: VisibilityCondition;
+  /** Options for select/radio/multiselect */
+  options?: FieldOption[];
+  /** For ref widgets: the target record kind */
+  refKind?: string;
+  /** For array widgets: item configuration */
+  items?: FieldHint;
+  /** For object widgets: nested field hints */
+  fields?: FieldHint[];
+  /** Additional widget-specific props */
+  props?: Record<string, unknown>;
+}
+
+/**
+ * Response shape from GET /ui/record/:recordId/editor.
+ */
+export interface EditorProjectionResponse {
+  /** The schema ID of the record */
+  schemaId: string;
+  /** The record ID */
+  recordId: string;
+  /** Display title derived from the record */
+  title: string;
+  /** Document blocks */
+  blocks: ProjectionBlock[];
+  /** Document slots */
+  slots: ProjectionSlot[];
+  /** Non-fatal diagnostics */
+  diagnostics: EditorDiagnostic[];
 }
 
 /**

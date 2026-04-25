@@ -78,6 +78,7 @@ import { createRelatedRecordsHandlers } from './api/handlers/RelatedRecordsHandl
 import { createAiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandlers.js';
 import { createReadinessHandlers } from './api/handlers/ReadinessHandlers.js';
 import { createExtractHandlers } from './api/handlers/ExtractHandlers.js';
+import { createProcurementHandlers } from './api/handlers/ProcurementHandlers.js';
 import { ExtractionRunnerService } from './extract/ExtractionRunnerService.js';
 import { ExtractionMetrics } from './extract/ExtractionMetrics.js';
 import { OpenAICompatibleExtractor } from './extract/OpenAICompatibleExtractor.js';
@@ -700,6 +701,7 @@ export async function createServer(
     ctx.schemaRegistry,
   );
   const readinessHandlers = createReadinessHandlers(ctx);
+  const procurementHandlers = createProcurementHandlers(ctx.store);
 
   // Register API routes with /api prefix
   await fastify.register(async (instance) => {
@@ -733,6 +735,7 @@ export async function createServer(
       measurementHandlers,
       biosourceHandlers,
       readinessHandlers,
+      procurementHandlers,
       schemaCount: () => ctx.schemaRegistry.size,
       ruleCount: () => ctx.lintEngine.ruleCount,
       uiSpecCount: () => ctx.uiSpecLoader.size(),

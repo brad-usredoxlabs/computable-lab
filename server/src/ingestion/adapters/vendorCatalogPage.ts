@@ -157,13 +157,25 @@ function extractPriceFromText(text: string): { price: number; currency: string |
 
 function extractCatalogNumber(text: string): string | undefined {
   // Common patterns: "Cat. No. XXX-XXXX", "Catalog # XXX", "Product No. XXX", "SKU: XXX"
-  // \b ensures we don't match inside words like "Scientific" → "ion"
+  // Require a non-alphanumeric separator after the keyword to avoid matching inside words
   const patterns = [
-    /\b(?:cat(?:\.?\s*no\.?)?|catalog\s*(?:number|#)|product\s*no\.?|sku)\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-_.]{2,20})\b/gi,
+    // "Cat. No. XXX" or "Cat No XXX" - keyword followed by space/punctuation then number
+    /\bcat(?:\.?\s*no\.?)?\s+[:\-]?\s*([A-Z0-9][A-Z0-9\-_.]{2,20})\b/gi,
+    // "Catalog # XXX" or "Catalog: XXX"
+    /\bcatalog\s+#?\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-_.]{2,20})\b/gi,
+    // "Product No. XXX"
+    /\bproduct\s+no\.?\s*[:\-]?\s*([A-Z0-9][A-Z0-9\-_.]{2,20})\b/gi,
+    // "SKU: XXX"
+    /\bsku\s+[:\-]?\s*([A-Z0-9][A-Z0-9\-_.]{2,20})\b/gi,
   ];
   for (const pattern of patterns) {
     const match = pattern.exec(text);
-    if (match) return match[1].trim();
+    if (match) {
+      const captured = match[1] ? match[1].trim() : match[0].trim();
+      // Skip if the captured value is too short (likely a false match)
+      if (captured.length < 3) continue;
+      return captured;
+    }
   }
   return undefined;
 }
@@ -246,15 +258,43 @@ function extractProductTitle(html: string, text: string): string {
 // ---------------------------------------------------------------------------
 
 function extractPackageSize(text: string): string | undefined {
-  // Patterns: "100 mg", "500 mL", "1 x 100 mL", "100EA", "100 Each"
-  // Pattern 1: Look for "pack size", "qty", "quantity" followed by a value
-  const p1 = /(?:pack(?:age)?\s*(?:size)?|qty|quantity)\s*[:\-]?\s*([^\s,;]+)/i;
-  // Pattern 2: Look for a number followed by a unit
-  const p2 = /(\d+(?:\.\d+)?)\s*(mg|g|ml|l|kg|μg|ng|μl|nl|mm|cm|in|ft|yd|km|mi|mol|mM|μM|nM|pM|fM|%|units?|U|IU|CFU|cells?|spores?|pfu?|cc|oz|lb|tons?)/i;
-  for (const pattern of [p1, p2]) {
-    const match = pattern.exec(text);
-    if (match) return match[0].trim();
+  // Priority order:
+  // 1. "Package Size: X" — capture everything after the label
+  // 2. "Pack of N" — explicit pack quantity
+  // 3. "N plates per case" — quantity with unit and context
+  // 4. "N unit" — number followed by a unit (last resort)
+
+  // Pattern 1: "Package Size: X" — capture the full value after the label
+  const p1 = /(?:package\s*size|pack(?:age)?\s*size)\s*[:\-]?\s*(.+?)(?:\n|$)/i;
+  const m1 = p1.exec(text);
+  if (m1) {
+    const val = m1[1].trim();
+    if (val && val.length > 0 && !/^(of|a|an|the|per|each)$/i.test(val)) {
+      return val;
+    }
   }
+
+  // Pattern 2: "Pack of N" — explicit pack quantity
+  const p2 = /pack\s+of\s+(\d+)/i;
+  const m2 = p2.exec(text);
+  if (m2) {
+    return m2[1];
+  }
+
+  // Pattern 3: "N plates per case" — quantity with unit and context
+  const p3 = /(\d+)\s+(?:plates?|vials?|bottles?|units?|cases?|boxes?|bags?|tubes?|flasks?|wells?)\s+per\s+(?:case|box|pack|bag)/i;
+  const m3 = p3.exec(text);
+  if (m3) {
+    return `${m3[1]} ${m3[0].match(/plates?|vials?|bottles?|units?|cases?|boxes?|bags?|tubes?|flasks?|wells?/i)?.[0]}`;
+  }
+
+  // Pattern 4: "N unit" — number followed by a unit (last resort)
+  const p4 = /(\d+(?:\.\d+)?)\s*(mg|g|ml|l|kg|μg|ng|μl|nl|mm|cm|in|ft|yd|km|mi|mol|mM|μM|nM|pM|fM|%|units?|U|IU|CFU|cells?|spores?|pfu?|cc|oz|lb|tons?)/i;
+  const m4 = p4.exec(text);
+  if (m4) {
+    return `${m4[1]} ${m4[2]}`;
+  }
+
   return undefined;
 }
 

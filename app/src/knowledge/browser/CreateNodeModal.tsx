@@ -1,14 +1,16 @@
 /**
  * CreateNodeModal — Modal for creating new study/experiment/run nodes.
- * Now renders a schema-driven SectionedForm when a UISpec is available.
+ * Renders a projection-backed TapTab create surface when a UISpec exists,
+ * falling back to a minimal title+description form otherwise.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useBrowser } from '../../shared/context/BrowserContext'
 import { apiClient } from '../../shared/api/client'
-import { SectionedForm } from '../../shared/forms/SectionedForm'
-import type { UISpec } from '../../types/uiSpec'
-import type { JsonSchema } from '../../types/kernel'
+import { ProjectionTapTabEditor } from '../../editor/taptab/TapTabEditor'
+import { serializeDocument, isDirty } from '../../editor/taptab/recordSerializer'
+import type { EditorProjectionResponse } from '../../types/uiSpec'
+import type { TapTabEditorHandle } from '../../editor/taptab'
 
 const cn = (...classes: (string | boolean | undefined | null)[]): string =>
   classes.filter(Boolean).join(' ')
@@ -48,6 +50,11 @@ function generateRecordId(nodeType: CreateNodeType, title: string): string {
   return `${prefix}_0001__${slug}`
 }
 
+/** Derive shortSlug from a title string. */
+function generateShortSlug(title: string): string {
+  return title.trim().toLowerCase().replace(/\s+/g, '-').substring(0, 30)
+}
+
 export function CreateNodeModal({
   isOpen,
   onClose,
@@ -56,20 +63,24 @@ export function CreateNodeModal({
   experimentId,
 }: CreateNodeModalProps) {
   const { refresh } = useBrowser()
-  const [uiSpec, setUiSpec] = useState<UISpec | null>(null)
-  const [schema, setSchema] = useState<JsonSchema | null>(null)
+  const [projection, setProjection] = useState<EditorProjectionResponse | null>(null)
+  const [projectionError, setProjectionError] = useState<string | null>(null)
   const [formData, setFormData] = useState<Record<string, unknown>>({})
+  const [originalData, setOriginalData] = useState<Record<string, unknown>>({})
+  const [isDirtyState, setIsDirtyState] = useState(false)
   const [loadingSpec, setLoadingSpec] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [submitErrors, setSubmitErrors] = useState<Map<string, string[]>>(new Map())
 
-  // Load UISpec and schema when modal opens
+  const taptabEditorRef = useRef<TapTabEditorHandle | null>(null)
+
+  // Load draft editor projection when modal opens
   useEffect(() => {
     if (!isOpen) return
 
     setError(null)
-    setSubmitErrors(new Map())
+    setProjection(null)
+    setProjectionError(null)
 
     const schemaId = SCHEMA_IDS[nodeType]
 
@@ -90,18 +101,22 @@ export function CreateNodeModal({
       initial.status = 'planned'
     }
     setFormData(initial)
+    setOriginalData(structuredClone(initial))
 
-    // Fetch UISpec + schema
+    // Fetch draft editor projection
     setLoadingSpec(true)
-    Promise.all([
-      apiClient.getUiSpec(schemaId).catch(() => null),
-      apiClient.getSchema(schemaId).catch(() => null),
-    ]).then(([spec, schemaInfo]) => {
-      setUiSpec(spec)
-      setSchema(schemaInfo?.schema || null)
-    }).finally(() => {
-      setLoadingSpec(false)
-    })
+    apiClient
+      .getEditorDraftProjection(schemaId)
+      .then((proj) => {
+        setProjection(proj)
+      })
+      .catch((err) => {
+        console.warn('Editor draft projection unavailable; falling back.', err)
+        setProjectionError(err instanceof Error ? err.message : 'Draft projection fetch failed')
+      })
+      .finally(() => {
+        setLoadingSpec(false)
+      })
   }, [isOpen, nodeType, studyId, experimentId])
 
   // Handle escape key
@@ -113,25 +128,35 @@ export function CreateNodeModal({
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [isOpen, onClose])
 
-  // Derive recordId from title as user types
-  const handleFormChange = (next: Record<string, unknown>) => {
-    // Auto-generate recordId and shortSlug from title
-    if (next.title && typeof next.title === 'string' && next.title !== formData.title) {
-      const title = next.title as string
-      next.recordId = generateRecordId(nodeType, title)
-      next.shortSlug = title.trim().toLowerCase().replace(/\s+/g, '-').substring(0, 30)
-    }
-    setFormData(next)
-    // Clear errors when user edits
-    if (submitErrors.size > 0) setSubmitErrors(new Map())
-  }
+  // Derive recordId and shortSlug from title as user types
+  const handleFormChange = useCallback(
+    (next: Record<string, unknown>) => {
+      // Auto-generate recordId and shortSlug from title
+      if (next.title && typeof next.title === 'string' && next.title !== formData.title) {
+        const title = next.title as string
+        next.recordId = generateRecordId(nodeType, title)
+        next.shortSlug = generateShortSlug(title)
+      }
+      setFormData(next)
+    },
+    [formData.title, nodeType],
+  )
+
+  // Track dirty state from TapTab editor
+  const handleEditorUpdate = useCallback(
+    (serialized: Record<string, unknown>, dirty: boolean) => {
+      handleFormChange(serialized)
+      setIsDirtyState(dirty)
+    },
+    [handleFormChange],
+  )
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     // Validate required: title
     if (!formData.title || !(formData.title as string).trim()) {
-      setSubmitErrors(new Map([['title', ['Title is required']]]))
+      setError('Title is required')
       return
     }
 
@@ -139,7 +164,21 @@ export function CreateNodeModal({
     setError(null)
 
     try {
-      await apiClient.createRecord(SCHEMA_IDS[nodeType], formData)
+      // Serialize from TapTab editor if available, otherwise use formData directly
+      let payload: Record<string, unknown>
+      if (taptabEditorRef.current) {
+        const editor = taptabEditorRef.current.getEditor()
+        if (editor) {
+          const docJson = editor.getJSON()
+          payload = serializeDocument(docJson, formData)
+        } else {
+          payload = formData
+        }
+      } else {
+        payload = formData
+      }
+
+      await apiClient.createRecord(SCHEMA_IDS[nodeType], payload)
       await refresh()
       onClose()
     } catch (err) {
@@ -151,7 +190,7 @@ export function CreateNodeModal({
 
   if (!isOpen) return null
 
-  const hasSectionedForm = Boolean(uiSpec?.form?.sections?.length) && !loadingSpec
+  const useProjectionTapTab = projection !== null && !loadingSpec
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -186,18 +225,26 @@ export function CreateNodeModal({
                 <div className="animate-spin w-6 h-6 border-2 border-gray-300 border-t-blue-500 rounded-full mr-3" />
                 <span className="text-sm">Loading form...</span>
               </div>
-            ) : hasSectionedForm ? (
-              <SectionedForm
-                uiSpec={uiSpec!}
-                schema={schema as Record<string, unknown> | null}
-                formData={formData}
-                onChange={handleFormChange}
-                disabled={isSubmitting}
-                errors={submitErrors}
-              />
+            ) : useProjectionTapTab && projection ? (
+              /* Projection-backed TapTab create surface */
+              <div className="taptab-editor-container">
+                <ProjectionTapTabEditor
+                  ref={taptabEditorRef as any}
+                  blocks={projection.blocks}
+                  slots={projection.slots}
+                  data={formData}
+                  disabled={isSubmitting}
+                  onUpdate={handleEditorUpdate}
+                />
+              </div>
             ) : (
-              /* Fallback: bare-bones title + description */
+              /* Fallback: explicit error or bare-bones title + description */
               <div className="space-y-4">
+                {projectionError && (
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded text-yellow-700 text-sm">
+                    <strong>Projection unavailable:</strong> {projectionError}
+                  </div>
+                )}
                 <div>
                   <label htmlFor="node-title" className="block text-sm font-medium text-gray-700 mb-1">
                     Title <span className="text-red-500">*</span>
@@ -248,7 +295,7 @@ export function CreateNodeModal({
                 'px-4 py-2 text-sm font-medium rounded',
                 isSubmitting
                   ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  : 'bg-blue-500 text-white hover:bg-blue-600'
+                  : 'bg-blue-500 text-white hover:bg-blue-600',
               )}
             >
               {isSubmitting ? 'Creating...' : `Create ${NODE_LABELS[nodeType]}`}

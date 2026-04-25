@@ -1,43 +1,217 @@
 /**
- * CSS styles for the TapTab editor.
+ * CSS styles for the TapTab editor — document-first layout.
+ *
+ * Sections and fields read as inline document structure rather than
+ * boxed HTML-form cards.  The shell provides a narrow top control bar,
+ * a primary paper-like editing column, and an optional secondary rail.
  */
 
-.taptab-editor-container {
-  width: 100%;
-  max-width: 100%;
-  padding: 1rem;
-  background-color: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
+/* ── CSS variables for the document shell ──────────────────────── */
+
+:root {
+  --shell-topbar-height: 3.5rem;
+  --shell-column-max: 720px;
+  --shell-rail-width: 320px;
+  --shell-paper-bg: #ffffff;
+  --shell-paper-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shell-rail-bg: #f9fafb;
+  --shell-border: #e5e7eb;
+  --shell-text-primary: #111827;
+  --shell-text-secondary: #6b7280;
+  --shell-text-muted: #9ca3af;
+  --shell-accent: #2563eb;
+  --shell-accent-hover: #1d4ed8;
+  --shell-danger: #ef4444;
+  --shell-warning: #f59e0b;
+}
+
+/* ── DocumentShell outer wrapper ───────────────────────────────── */
+
+.document-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
+/* ── Narrow top control bar ────────────────────────────────────── */
+
+.document-shell__topbar {
+  flex-shrink: 0;
+  min-height: var(--shell-topbar-height);
+  padding: 0.5rem 1rem;
+  border-bottom: 1px solid var(--shell-border);
+  background-color: var(--shell-paper-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+/* ── Body: column + optional rail ──────────────────────────────── */
+
+.document-shell__body {
+  flex: 1 1 auto;
+  display: flex;
+  gap: 1.5rem;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Primary document column — paper-like */
+
+.document-shell__column {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 1.5rem 1rem;
+  background-color: #f3f4f6;
+}
+
+/* Secondary diagnostics / related-record rail */
+
+.document-shell__rail {
+  flex: 0 0 var(--shell-rail-width);
+  overflow-y: auto;
+  background-color: var(--shell-rail-bg);
+  border-left: 1px solid var(--shell-border);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* On narrow viewports the rail drops below the column */
+
+@media (max-width: 768px) {
+  .document-shell__body {
+    flex-direction: column;
+  }
+
+  .document-shell__column {
+    padding: 1rem;
+  }
+
+  .document-shell__rail--below,
+  .document-shell__rail {
+    flex: none;
+    border-left: none;
+    border-top: 1px solid var(--shell-border);
+  }
+}
+
+/* ── DocumentShellHeader ───────────────────────────────────────── */
+
+.document-shell-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.document-shell-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--shell-text-primary);
+  line-height: 1.4;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.document-shell-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* ── Breadcrumbs ───────────────────────────────────────────────── */
+
+.document-shell-breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--shell-text-secondary);
+  flex-wrap: wrap;
+}
+
+.document-shell-breadcrumb-link {
+  color: var(--shell-accent);
+  text-decoration: none;
+}
+
+.document-shell-breadcrumb-link:hover {
+  text-decoration: underline;
+}
+
+.document-shell-breadcrumb-current {
+  color: var(--shell-text-primary);
+  font-weight: 500;
+}
+
+.document-shell-breadcrumb-sep {
+  color: var(--shell-text-muted);
+  user-select: none;
+}
+
+/* ── DocumentShellRail ─────────────────────────────────────────── */
+
+.document-shell-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.document-shell-rail-title {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--shell-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.document-shell-rail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* ── TapTab section — inline document structure ────────────────── */
+
 .taptab-section {
   margin-bottom: 1.5rem;
-  padding: 1rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.375rem;
-  background-color: #f9fafb;
+  padding: 0;
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
 }
 
 .taptab-section-heading {
-  margin: 0 0 1rem 0;
-  padding-bottom: 0.5rem;
-  font-size: 1.125rem;
+  margin: 0 0 0.75rem 0;
+  padding-bottom: 0.375rem;
+  font-size: 1rem;
   font-weight: 600;
-  color: #111827;
-  border-bottom: 1px solid #e5e7eb;
+  color: var(--shell-text-primary);
+  border-bottom: 1px solid var(--shell-border);
 }
+
+/* ── TapTab field row — inline, no boxed cards ─────────────────── */
 
 .taptab-field-row {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  margin-bottom: 0.75rem;
-  padding: 0.5rem;
-  background-color: #ffffff;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.25rem;
+  gap: 0.125rem;
+  margin-bottom: 0.5rem;
+  padding: 0.25rem 0;
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
 }
 
 .taptab-field-row:last-child {
@@ -45,41 +219,51 @@
 }
 
 .taptab-field-label {
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   font-weight: 500;
-  color: #374151;
+  color: var(--shell-text-secondary);
 }
 
 .taptab-field-value {
   font-size: 0.875rem;
-  color: #111827;
-  border-bottom: 1px solid #d1d5db;
-  padding: 0 2px;
+  color: var(--shell-text-primary);
+  border-bottom: 1px solid transparent;
+  padding: 0.125rem 0;
   min-width: 50px;
   display: inline-block;
+  transition: border-color 0.15s ease;
+}
+
+.taptab-field-value:hover {
+  border-bottom-color: var(--shell-border);
 }
 
 .taptab-field-value:empty::before {
   content: '—';
-  color: #9ca3af;
+  color: var(--shell-text-muted);
 }
 
 /* Read-only field styling */
 .taptab-field-row[data-read-only="true"] {
-  background-color: #f3f4f6;
+  background-color: transparent;
+}
+
+.taptab-field-row[data-read-only="true"] .taptab-field-value {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* Required field indicator */
 .taptab-field-label[data-required="true"]::after {
   content: ' *';
-  color: #ef4444;
+  color: var(--shell-danger);
 }
 
 /* Help text styling */
 .taptab-field-help {
   font-size: 0.75rem;
-  color: #6b7280;
-  margin-top: 0.25rem;
+  color: var(--shell-text-secondary);
+  margin-top: 0.125rem;
 }
 
 /* Inline input for editing mode */
@@ -88,15 +272,9 @@
   outline: none;
   background: transparent;
   font: inherit;
-  border-bottom: 1.5px solid #2563eb;
-  padding: 0 2px;
+  border-bottom: 1.5px solid var(--shell-accent);
+  padding: 0.125rem 0;
   width: 100%;
-}
-
-/* Read-only field styling - reduced opacity and default cursor */
-.taptab-field-row.readonly .taptab-field-value {
-  opacity: 0.6;
-  cursor: default;
 }
 
 /* Loading state */
@@ -105,7 +283,116 @@
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  color: #6b7280;
+  color: var(--shell-text-secondary);
+}
+
+/* ── Editor container (paper-like surface) ─────────────────────── */
+
+.taptab-editor-container {
+  width: 100%;
+  max-width: var(--shell-column-max);
+  margin: 0 auto;
+  padding: 0;
+  background-color: var(--shell-paper-bg);
+  border: none;
+  border-radius: 0;
+  box-shadow: var(--shell-paper-shadow);
+  font-family: inherit;
+}
+
+/* ── Editor mode toggle (Document / YAML) ──────────────────────── */
+
+.editor-mode-toggle {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.mode-btn {
+  padding: 0.25rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid var(--shell-border);
+  border-radius: 0.25rem;
+  background: var(--shell-paper-bg);
+  color: var(--shell-text-secondary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.mode-btn:hover {
+  background: #f3f4f6;
+  color: var(--shell-text-primary);
+}
+
+.mode-btn--active {
+  background: var(--shell-accent);
+  color: #ffffff;
+  border-color: var(--shell-accent);
+}
+
+.mode-btn--active:hover {
+  background: var(--shell-accent-hover);
+}
+
+/* ── Diagnostics panel ─────────────────────────────────────────── */
+
+.editor-diagnostics {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--shell-border);
+}
+
+.editor-diagnostics h2 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--shell-text-secondary);
+}
+
+/* ── Save / action bar at bottom ───────────────────────────────── */
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dirty-indicator {
+  color: var(--shell-warning);
+  font-size: 0.875rem;
+}
+
+/* ── Error / warning banners ───────────────────────────────────── */
+
+.parse-error,
+.save-error,
+.projection-fallback {
+  padding: 0.5rem 0.75rem;
+  margin: 0.5rem 0;
+  border-radius: 0.25rem;
+  font-size: 0.8125rem;
+}
+
+.parse-error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.save-error {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.projection-fallback {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 /* EnumCombobox styles */

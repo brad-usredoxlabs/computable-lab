@@ -1,9 +1,9 @@
-type RunWorkspaceTab = 'overview' | 'plan' | 'biology' | 'readouts' | 'results' | 'claims'
+type RunWorkspaceTab = 'overview' | 'plan' | 'biology' | 'readouts' | 'results' | 'claims' | 'budget'
 
 interface RunWorkspaceNavProps {
   activeTab: RunWorkspaceTab
   onTabChange: (tab: RunWorkspaceTab) => void
-  counts: Record<'plan' | 'biology' | 'readouts' | 'results' | 'claims', string>
+  counts: Record<'plan' | 'biology' | 'readouts' | 'results' | 'claims' | 'budget', string>
 }
 
 const TAB_LABELS = {
@@ -13,6 +13,7 @@ const TAB_LABELS = {
   readouts: 'Readouts',
   results: 'Results',
   claims: 'Claims',
+  budget: 'Budget',
 } as const
 
 export function RunWorkspaceNav({ activeTab, onTabChange, counts }: RunWorkspaceNavProps) {

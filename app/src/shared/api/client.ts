@@ -11,7 +11,7 @@ import type {
   SchemasResponse,
   WriteResponse,
 } from '../../types/kernel'
-import type { UISpec, UISpecResponse, RecordWithUIResponse } from '../../types/uiSpec'
+import type { UISpec, UISpecResponse, RecordWithUIResponse, EditorProjectionResponse } from '../../types/uiSpec'
 import type { PlatformManifest } from '../../types/platformRegistry'
 import type {
   ConfigResponse,
@@ -1063,6 +1063,62 @@ export const apiClient = {
   async getAllUiSpecs(): Promise<Array<{ schemaId: string; spec: UISpec }>> {
     const response = await request<{ specs: Array<{ schemaId: string; spec: UISpec }> }>('/ui/specs')
     return response.specs
+  },
+
+  /**
+   * Get an editor projection for a record.
+   * Calls GET /ui/record/:recordId/editor and returns the typed projection
+   * with blocks, slots, and diagnostics for TapTab consumption.
+   */
+  async getRecordEditorProjection(recordId: string): Promise<EditorProjectionResponse> {
+    return request<EditorProjectionResponse>(`/ui/record/${encodeURIComponent(recordId)}/editor`)
+  },
+
+  /**
+   * Get a draft editor projection for create mode.
+   * Calls POST /ui/schema/:schemaId/editor-draft and returns the typed projection
+   * with blocks, slots, and diagnostics for TapTab consumption.
+   * Uses an empty payload as the draft base.
+   */
+  async getEditorDraftProjection(schemaId: string): Promise<EditorProjectionResponse> {
+    return request<EditorProjectionResponse>(`/ui/schema/${encodeURIComponent(schemaId)}/editor-draft`, {
+      method: 'POST',
+    })
+  },
+
+  /**
+   * Get typed suggestions for an editor slot.
+   * Calls POST /ui/record/:recordId/editor/suggestions with slotId, query, and limit.
+   * Returns ranked suggestion items with provenance from the slot's declared providers.
+   */
+  async getRecordEditorSlotSuggestions(
+    recordId: string,
+    slotId: string,
+    query?: string,
+    limit?: number
+  ): Promise<{
+    recordId: string
+    slotId: string
+    items: Array<{
+      source: string
+      label: string
+      value?: string
+      payload?: Record<string, unknown>
+      subtitle?: string
+      url?: string
+      recordId?: string
+      metadata?: Record<string, unknown>
+    }>
+    providerStatus: Array<{
+      provider: string
+      success: boolean
+      error?: string
+    }>
+  }> {
+    return request(`/ui/record/${encodeURIComponent(recordId)}/editor/suggestions`, {
+      method: 'POST',
+      body: JSON.stringify({ slotId, query, limit }),
+    })
   },
 
   /**
@@ -2451,6 +2507,26 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify({ query, kinds }),
     })
+  },
+
+  // === Procurement API ===
+
+  /**
+   * Generate a procurement manifest and draft budget for a planned run.
+   * POSTs to /planned-runs/:id/procurement/draft
+   */
+  async generateProcurementDraft(plannedRunId: string): Promise<{
+    success: boolean
+    manifestId: string
+    budgetId: string
+    manifestRef: { kind: string; id: string; type: string }
+    budgetRef: { kind: string; id: string; type: string }
+    lineCount: number
+  }> {
+    return request(
+      `/planned-runs/${encodeURIComponent(plannedRunId)}/procurement/draft`,
+      { method: 'POST' },
+    )
   },
 }
 

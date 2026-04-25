@@ -35,7 +35,18 @@ function FieldRowView({ node, updateAttributes }: NodeViewProps) {
   return (
     <NodeViewWrapper className={`taptab-field-row ${attrs.readOnly ? 'readonly' : ''}`} data-read-only={attrs.readOnly}>
       <span className="taptab-field-label" data-required={attrs.required}>{attrs.label}</span>
-      <WidgetRenderer widget={attrs.widget} value={attrs.value} readOnly={attrs.readOnly || false} options={attrs.options} refKind={attrs.refKind} onCommit={(v) => updateAttributes({ value: v })} onRefSelect={handleRefSelect} onCancel={() => {}} />
+      <WidgetRenderer
+        widget={attrs.widget}
+        value={attrs.value}
+        readOnly={attrs.readOnly || false}
+        options={attrs.options}
+        refKind={attrs.refKind}
+        onCommit={(v) => updateAttributes({ value: v })}
+        onRefSelect={handleRefSelect}
+        onCancel={() => {}}
+        objectProperties={attrs.objectConfig?.properties}
+        multiselectOptions={attrs.multiselectConfig?.options}
+      />
       {attrs.help && <span className="taptab-field-help">{attrs.help}</span>}
       {sidebarOpen && sidebarTerm && <OntologySidebar term={sidebarTerm} onAddToVocab={handleAddToVocab} onClose={handleSidebarClose} open={sidebarOpen} />}
     </NodeViewWrapper>
@@ -45,7 +56,21 @@ function FieldRowView({ node, updateAttributes }: NodeViewProps) {
 export const FieldRow = Node.create({
   name: 'fieldRow', group: 'block', atom: true,
   addAttributes() {
-    return { path: { default: '' }, widget: { default: 'text' }, label: { default: '' }, value: { default: null }, readOnly: { default: false }, required: { default: false }, options: { default: null }, refKind: { default: null }, help: { default: null } };
+    return {
+      path: { default: '' },
+      widget: { default: 'text' },
+      label: { default: '' },
+      value: { default: null },
+      readOnly: { default: false },
+      required: { default: false },
+      options: { default: null },
+      refKind: { default: null },
+      help: { default: null },
+      arraySchema: { default: null },
+      objectConfig: { default: null },
+      reflistConfig: { default: null },
+      multiselectConfig: { default: null },
+    };
   },
   parseHTML() { return [{ tag: 'div[data-type="taptab-field-row"]' }]; },
   renderHTML({ HTMLAttributes }) { return ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'taptab-field-row', class: 'taptab-field-row' })]; },

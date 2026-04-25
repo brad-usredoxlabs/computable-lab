@@ -33,11 +33,18 @@ export interface LabwareInstance {
   wells: Record<string, MaterialRecord[]>;
 }
 
+export interface MaterialEconomics {
+  currency: string;
+  amountPerUl: number;
+  sourceOfferRef?: Record<string, unknown>;
+}
+
 export interface MaterialRecord {
   materialId: string;
   kind?: string;
   volumeUl?: number;
   properties?: Record<string, unknown>;
+  economics?: MaterialEconomics;
 }
 
 export interface ReservoirContents {
@@ -86,11 +93,13 @@ function buildMaterialRecord(
   kind: string | undefined,
   volumeUl: number | undefined,
   properties: Record<string, unknown> | undefined,
+  economics: MaterialEconomics | undefined,
 ): MaterialRecord {
   const record: MaterialRecord = { materialId };
   if (kind !== undefined) record.kind = kind;
   if (volumeUl !== undefined) record.volumeUl = volumeUl;
   if (properties !== undefined) record.properties = properties;
+  if (economics !== undefined) record.economics = economics;
   return record;
 }
 
@@ -189,6 +198,7 @@ function applyAddMaterial(
     material.kind as string | undefined,
     material.volumeUl as number | undefined,
     material.properties as Record<string, unknown> | undefined,
+    material.economics as MaterialEconomics | undefined,
   );
 
   existingWells.push(newRecord);
@@ -254,6 +264,7 @@ function applyTransfer(
   let sourceMaterialId: string | undefined;
   let sourceKind: string | undefined;
   let sourceProperties: Record<string, unknown> | undefined;
+  let sourceEconomics: MaterialEconomics | undefined;
 
   let remaining = requested;
   while (remaining > 0 && srcMaterials.length > 0) {
@@ -276,6 +287,7 @@ function applyTransfer(
     sourceMaterialId = top.materialId;
     sourceKind = top.kind;
     sourceProperties = top.properties;
+    sourceEconomics = top.economics;
 
     // If the top material is fully consumed, remove it
     if (top.volumeUl === 0) {
@@ -297,6 +309,7 @@ function applyTransfer(
       sourceKind,
       transferred,
       sourceProperties,
+      sourceEconomics,
     ));
   }
 

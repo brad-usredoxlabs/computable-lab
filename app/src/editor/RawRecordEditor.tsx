@@ -9,6 +9,7 @@ import { ApiError, NetworkError } from '../shared/api/errors'
 import { DiagnosticsPanel } from './DiagnosticsPanel'
 import { SchemaRecordForm } from './forms/SchemaRecordForm'
 import { TapTabEditor, serializeDocument, isDirty } from './taptab'
+import { ProjectionTapTabEditor } from './taptab/TapTabEditor'
 import type { TapTabEditorHandle } from './taptab'
 import type {
   RecordEnvelope,
@@ -18,6 +19,8 @@ import type {
   JsonSchema,
 } from '../types/kernel'
 import type { UISpec } from '../types/uiSpec'
+import type { EditorProjectionResponse } from '../types/uiSpec'
+import { DocumentShell, DocumentShellHeader, DocumentShellRail } from './taptab/DocumentShell'
 
 interface ParseResult {
   valid: boolean
@@ -126,7 +129,8 @@ export function RawRecordEditor() {
   const [schema, setSchema] = useState<SchemaInfo | null>(null)
   const [uiSpec, setUiSpec] = useState<UISpec | null>(null)
   const [formData, setFormData] = useState<Record<string, unknown>>({})
-  const [editorMode, setEditorMode] = useState<'form' | 'yaml'>('form')
+  /** Editor mode: 'document' (TapTab projection-backed) | 'yaml' */
+  const [editorMode, setEditorMode] = useState<'document' | 'yaml'>('document')
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -134,6 +138,10 @@ export function RawRecordEditor() {
   const [parseResult, setParseResult] = useState<ParseResult>({ valid: true, data: {} })
   const [validation, setValidation] = useState<ValidationResult | undefined>()
   const [lint, setLint] = useState<LintResult | undefined>()
+
+  // Projection data for document mode
+  const [projection, setProjection] = useState<EditorProjectionResponse | null>(null)
+  const [projectionError, setProjectionError] = useState<string | null>(null)
 
   const editorRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -162,6 +170,8 @@ export function RawRecordEditor() {
     const loadData = async () => {
       setLoading(true)
       setError(null)
+      setProjection(null)
+      setProjectionError(null)
 
       try {
         if (isEditMode && recordId) {
@@ -174,6 +184,15 @@ export function RawRecordEditor() {
           const schemaData = await apiClient.getSchema(data.schemaId)
           setSchema(schemaData)
           await loadUiSpec(data.schemaId)
+
+          // Load editor projection for document mode
+          try {
+            const proj = await apiClient.getRecordEditorProjection(recordId)
+            setProjection(proj)
+          } catch (err) {
+            console.warn('Editor projection unavailable; falling back.', err)
+            setProjectionError(err instanceof Error ? err.message : 'Projection fetch failed')
+          }
         } else if (schemaId) {
           const schemaData = await apiClient.getSchema(schemaId)
           setSchema(schemaData)
@@ -183,6 +202,15 @@ export function RawRecordEditor() {
           setFormData(initialPayload)
           setOriginalData(structuredClone(initialPayload))
           setParseResult({ valid: true, data: initialPayload })
+
+          // Load draft editor projection for create mode
+          try {
+            const proj = await apiClient.getEditorDraftProjection(schemaId)
+            setProjection(proj)
+          } catch (err) {
+            console.warn('Editor draft projection unavailable; falling back.', err)
+            setProjectionError(err instanceof Error ? err.message : 'Draft projection fetch failed')
+          }
         }
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Unknown error'))
@@ -194,11 +222,12 @@ export function RawRecordEditor() {
     loadData()
   }, [isEditMode, recordId, schemaId, loadUiSpec])
 
+  // If no schema form and no projection after loading completes, default to YAML
   useEffect(() => {
-    if (!hasSchemaForm) {
+    if (!hasSchemaForm && !projection && !loading) {
       setEditorMode('yaml')
     }
-  }, [hasSchemaForm])
+  }, [hasSchemaForm, projection, loading])
 
   // Initialize CodeMirror editor only in YAML mode
   useEffect(() => {
@@ -269,7 +298,7 @@ export function RawRecordEditor() {
     }
   }, [editorMode, loading, record, schemaDefinition, activeSchemaId])
 
-  // Keep YAML editor content in sync when switching from form mode.
+  // Keep YAML editor content in sync when switching from document mode.
   useEffect(() => {
     if (editorMode !== 'yaml' || !viewRef.current) return
     setCodeMirrorContent(viewRef.current, stringify(formData))
@@ -278,7 +307,7 @@ export function RawRecordEditor() {
 
   // Check dirty state for TapTab editor
   useEffect(() => {
-    if (editorMode === 'form' && uiSpec && taptabEditorRef.current) {
+    if (editorMode === 'document' && taptabEditorRef.current) {
       const editor = taptabEditorRef.current.getEditor()
       if (editor) {
         const docJson = editor.getJSON()
@@ -286,7 +315,7 @@ export function RawRecordEditor() {
         setIsDirtyState(isDirty(originalData, serialized))
       }
     }
-  }, [editorMode, uiSpec, originalData])
+  }, [editorMode, originalData])
 
   const handleSave = useCallback(async () => {
     let payload: Record<string, unknown> | undefined
@@ -294,7 +323,7 @@ export function RawRecordEditor() {
     if (editorMode === 'yaml') {
       if (!parseResult.valid) return
       payload = parseResult.data
-    } else if (editorMode === 'form' && uiSpec && taptabEditorRef.current) {
+    } else if (editorMode === 'document' && taptabEditorRef.current) {
       // Use TapTab editor for serialization
       const editor = taptabEditorRef.current.getEditor()
       if (editor) {
@@ -302,7 +331,8 @@ export function RawRecordEditor() {
         payload = serializeDocument(docJson, formData)
         setIsDirtyState(false)
       }
-    } else if (editorMode === 'form') {
+    } else if (editorMode === 'document') {
+      // Fallback: use formData directly if no TapTab editor ref
       payload = formData
     }
 
@@ -332,7 +362,7 @@ export function RawRecordEditor() {
     } finally {
       setSaving(false)
     }
-  }, [editorMode, formData, parseResult, uiSpec, isEditMode, recordId, activeSchemaId, navigate])
+  }, [editorMode, formData, parseResult, isEditMode, recordId, activeSchemaId, navigate])
 
   const handleCancel = useCallback(() => {
     if (isEditMode && recordId) {
@@ -344,20 +374,20 @@ export function RawRecordEditor() {
     }
   }, [isEditMode, recordId, activeSchemaId, navigate])
 
-  const handleModeChange = useCallback((nextMode: 'form' | 'yaml') => {
-    if (nextMode === 'form' && !parseResult.valid) return
+  const handleModeChange = useCallback((nextMode: 'document' | 'yaml') => {
+    if (nextMode === 'yaml' && !parseResult.valid) return
 
-    if (nextMode === 'form' && parseResult.data) {
+    if (nextMode === 'document' && parseResult.data) {
       setFormData(parseResult.data)
     }
 
     setEditorMode(nextMode)
   }, [parseResult])
 
-  // Determine if TapTab should be used (form mode with uiSpec available)
-  const useTapTab = editorMode === 'form' && uiSpec !== null && hasSchemaForm
+  // Determine if projection-backed TapTab should be used (document mode with projection available)
+  const useProjectionTapTab = editorMode === 'document' && projection !== null
 
-  const canSave = editorMode === 'form'
+  const canSave = editorMode === 'document'
     ? !saving
     : !saving && parseResult.valid && Boolean(parseResult.data)
 
@@ -396,74 +426,54 @@ export function RawRecordEditor() {
   }
 
   return (
-    <div className="raw-record-editor">
-      <header className="editor-header">
-        <div className="breadcrumb">
-          <Link to="/schemas">Schemas</Link>
-          <span className="breadcrumb-separator">/</span>
-          {record ? (
+    <DocumentShell
+      topBar={
+        <DocumentShellHeader
+          breadcrumbs={
+            isEditMode && record
+              ? [
+                  { label: 'Schemas', href: '/schemas' },
+                  { label: record.schemaId, href: `/schemas/${encodeURIComponent(record.schemaId)}/records` },
+                  { label: record.recordId, href: `/records/${encodeURIComponent(record.recordId)}` },
+                  { label: 'Edit' },
+                ]
+              : activeSchemaId
+                ? [
+                    { label: 'Schemas', href: '/schemas' },
+                    { label: activeSchemaId, href: `/schemas/${encodeURIComponent(activeSchemaId)}/records` },
+                    { label: 'New Record' },
+                  ]
+                : undefined
+          }
+          title={isEditMode ? 'Edit Record' : 'New Record'}
+          actions={
             <>
-              <Link to={`/schemas/${encodeURIComponent(record.schemaId)}/records`}>
-                {record.schemaId}
-              </Link>
-              <span className="breadcrumb-separator">/</span>
-              <Link to={`/records/${encodeURIComponent(record.recordId)}`}>
-                {record.recordId}
-              </Link>
-              <span className="breadcrumb-separator">/</span>
-              <span>Edit</span>
+              <button
+                onClick={handleSave}
+                disabled={!canSave}
+                className="btn btn-primary"
+              >
+                {saving ? 'Saving...' : 'Save'}
+              </button>
+              {isDirtyState && !saving && (
+                <span className="dirty-indicator" title="Unsaved changes">
+                  ●
+                </span>
+              )}
+              <button onClick={handleCancel} className="btn btn-secondary">
+                Cancel
+              </button>
             </>
-          ) : activeSchemaId ? (
-            <>
-              <Link to={`/schemas/${encodeURIComponent(activeSchemaId)}/records`}>
-                {activeSchemaId}
-              </Link>
-              <span className="breadcrumb-separator">/</span>
-              <span>New Record</span>
-            </>
-          ) : null}
-        </div>
-        <h1>{isEditMode ? 'Edit Record' : 'New Record'}</h1>
-      </header>
-
-      <div className="editor-actions">
-        <button
-          onClick={handleSave}
-          disabled={!canSave}
-          className="btn btn-primary"
-        >
-          {saving ? 'Saving...' : 'Save'}
-        </button>
-        {isDirtyState && !saving && (
-          <span className="dirty-indicator" title="Unsaved changes">
-            ●
-          </span>
-        )}
-        <button onClick={handleCancel} className="btn btn-secondary">
-          Cancel
-        </button>
-      </div>
-
-      {hasSchemaForm && (
-        <div className="editor-mode-toggle" role="tablist" aria-label="Editor mode">
-          <button
-            type="button"
-            className={`mode-btn ${editorMode === 'form' ? 'mode-btn--active' : ''}`}
-            onClick={() => handleModeChange('form')}
-            disabled={editorMode === 'yaml' && !parseResult.valid}
-          >
-            Form
-          </button>
-          <button
-            type="button"
-            className={`mode-btn ${editorMode === 'yaml' ? 'mode-btn--active' : ''}`}
-            onClick={() => handleModeChange('yaml')}
-          >
-            YAML
-          </button>
-        </div>
-      )}
-
+          }
+        />
+      }
+      rail={
+        <DocumentShellRail title="Diagnostics">
+          <DiagnosticsPanel validation={validation} lint={lint} />
+        </DocumentShellRail>
+      }
+    >
+      {/* Error / warning banners inside the document column */}
       {editorMode === 'yaml' && !parseResult.valid && (
         <div className="parse-error">
           <strong>Parse Error:</strong> {parseResult.error}
@@ -476,19 +486,55 @@ export function RawRecordEditor() {
         </div>
       )}
 
-      {useTapTab && uiSpec && (
+      {/* Projection failure banner */}
+      {editorMode === 'document' && projectionError && !projection && (
+        <div className="projection-fallback">
+          <strong>Projection unavailable:</strong> {projectionError}
+          <button
+            className="btn btn-secondary"
+            onClick={() => setEditorMode('yaml')}
+          >
+            Switch to YAML
+          </button>
+        </div>
+      )}
+
+      {/* Mode toggle */}
+      {hasSchemaForm && (
+        <div className="editor-mode-toggle" role="tablist" aria-label="Editor mode">
+          <button
+            type="button"
+            className={`mode-btn ${editorMode === 'document' ? 'mode-btn--active' : ''}`}
+            onClick={() => handleModeChange('document')}
+            disabled={editorMode === 'yaml' && !parseResult.valid}
+          >
+            Document
+          </button>
+          <button
+            type="button"
+            className={`mode-btn ${editorMode === 'yaml' ? 'mode-btn--active' : ''}`}
+            onClick={() => handleModeChange('yaml')}
+          >
+            YAML
+          </button>
+        </div>
+      )}
+
+      {/* Projection-backed TapTab editor (document mode with projection) */}
+      {useProjectionTapTab && projection && (
         <div className="editor-container editor-container--taptab">
-          <TapTabEditor
-            ref={taptabEditorRef}
+          <ProjectionTapTabEditor
+            ref={taptabEditorRef as any}
+            blocks={projection.blocks}
+            slots={projection.slots}
             data={formData}
-            uiSpec={uiSpec}
-            schema={schema?.schema ?? {}}
             disabled={saving}
           />
         </div>
       )}
 
-      {editorMode === 'form' && !useTapTab && schemaDefinition && (
+      {/* Legacy SchemaRecordForm — only shown when no projection available and user switches to document mode */}
+      {editorMode === 'document' && !useProjectionTapTab && !projectionError && schemaDefinition && (
         <div className="editor-container editor-container--form">
           <SchemaRecordForm
             schema={schemaDefinition}
@@ -500,16 +546,12 @@ export function RawRecordEditor() {
         </div>
       )}
 
+      {/* YAML editor */}
       {editorMode === 'yaml' && (
         <div className="editor-container">
           <div ref={editorRef} className="codemirror-wrapper" />
         </div>
       )}
-
-      <section className="editor-diagnostics">
-        <h2>Diagnostics</h2>
-        <DiagnosticsPanel validation={validation} lint={lint} />
-      </section>
-    </div>
+    </DocumentShell>
   )
 }

@@ -1,6 +1,14 @@
 /**
  * Record serializer for converting TipTap document JSON back to record format.
  * Extracts fieldRow path/value pairs and reconstructs the record using setValueAtPath.
+ *
+ * Supports composite widget types:
+ * - array: values are arrays of primitives or objects
+ * - object: values are nested objects
+ * - reflist: values are arrays of structured reference entries
+ * - multiselect: values are arrays of strings
+ * - datetime: values are ISO date/datetime strings
+ * - readonly: values are any type, rendered non-editable
  */
 
 import type { JSONContent } from '@tiptap/core';
@@ -41,6 +49,12 @@ function extractFieldRows(nodes: JSONContent[], result: Record<string, unknown>)
  * Serializes a TipTap document JSON back into a record object.
  * Walks the doc tree, extracts each FieldRow's path and value,
  * and reconstructs the record using setValueAtPath.
+ *
+ * Handles composite widget types:
+ * - array: preserves array structure (not collapsed to JSON string)
+ * - object: preserves nested object structure
+ * - reflist: preserves structured reference entries
+ * - multiselect: preserves array of selected values
  *
  * @param doc - The TipTap document JSON (type: 'doc')
  * @param baseRecord - The original record to clone and modify

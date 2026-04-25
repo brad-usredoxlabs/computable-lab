@@ -212,3 +212,228 @@ describe('immutability', () => {
     expect(result.deck).toHaveLength(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Test: economics — add material with unit cost
+// ---------------------------------------------------------------------------
+
+describe('economics — add_material', () => {
+  it('seeds economics when material payload includes it', () => {
+    const snapshot = emptyLabState();
+
+    const createEvent: PlateEventPrimitive = {
+      eventId: 'evt-create-eco-1',
+      event_type: 'create_container',
+      details: {
+        slot: 'D',
+        labwareType: '96-well-plate',
+      },
+    };
+    const withPlate = applyEventToLabState(snapshot, createEvent);
+    const instanceId = withPlate.deck[0].labwareInstanceId!;
+
+    const addEvent: PlateEventPrimitive = {
+      eventId: 'evt-add-eco-1',
+      event_type: 'add_material',
+      details: {
+        labwareInstanceId: instanceId,
+        well: 'B1',
+        material: {
+          materialId: 'mat-enzyme',
+          kind: 'enzyme',
+          volumeUl: 100,
+          economics: {
+            currency: 'USD',
+            amountPerUl: 0.05,
+          },
+        },
+      },
+    };
+
+    const result = applyEventToLabState(withPlate, addEvent);
+    const wellMaterials = result.labware[instanceId].wells['B1'];
+
+    expect(wellMaterials).toHaveLength(1);
+    expect(wellMaterials![0].materialId).toBe('mat-enzyme');
+    expect(wellMaterials![0].volumeUl).toBe(100);
+    expect(wellMaterials![0].economics).toEqual({
+      currency: 'USD',
+      amountPerUl: 0.05,
+    });
+  });
+
+  it('works without economics — backwards compatible', () => {
+    const snapshot = emptyLabState();
+
+    const createEvent: PlateEventPrimitive = {
+      eventId: 'evt-create-eco-2',
+      event_type: 'create_container',
+      details: {
+        slot: 'E',
+        labwareType: '96-well-plate',
+      },
+    };
+    const withPlate = applyEventToLabState(snapshot, createEvent);
+    const instanceId = withPlate.deck[0].labwareInstanceId!;
+
+    const addEvent: PlateEventPrimitive = {
+      eventId: 'evt-add-eco-2',
+      event_type: 'add_material',
+      details: {
+        labwareInstanceId: instanceId,
+        well: 'C1',
+        material: {
+          materialId: 'mat-buffer',
+          kind: 'binding-buffer',
+          volumeUl: 200,
+        },
+      },
+    };
+
+    const result = applyEventToLabState(withPlate, addEvent);
+    const wellMaterials = result.labware[instanceId].wells['C1'];
+
+    expect(wellMaterials).toHaveLength(1);
+    expect(wellMaterials![0].materialId).toBe('mat-buffer');
+    expect(wellMaterials![0].volumeUl).toBe(200);
+    expect(wellMaterials![0].economics).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test: economics — transfer preserves unit cost
+// ---------------------------------------------------------------------------
+
+describe('economics — transfer', () => {
+  it('preserves amountPerUl on both source and destination after transfer', () => {
+    const snapshot = emptyLabState();
+
+    const createEvent: PlateEventPrimitive = {
+      eventId: 'evt-create-eco-3',
+      event_type: 'create_container',
+      details: {
+        slot: 'F',
+        labwareType: '96-well-plate',
+      },
+    };
+    const withPlate = applyEventToLabState(snapshot, createEvent);
+    const instanceId = withPlate.deck[0].labwareInstanceId!;
+
+    // Add 100 uL at $0.05/uL
+    const addEvent: PlateEventPrimitive = {
+      eventId: 'evt-add-eco-3',
+      event_type: 'add_material',
+      details: {
+        labwareInstanceId: instanceId,
+        well: 'D1',
+        material: {
+          materialId: 'mat-reagent',
+          kind: 'reagent',
+          volumeUl: 100,
+          economics: {
+            currency: 'USD',
+            amountPerUl: 0.05,
+          },
+        },
+      },
+    };
+    const withMaterial = applyEventToLabState(withPlate, addEvent);
+
+    // Transfer 20 uL to E1
+    const transferEvent: PlateEventPrimitive = {
+      eventId: 'evt-xfer-eco-1',
+      event_type: 'transfer',
+      details: {
+        from: {
+          labwareInstanceId: instanceId,
+          well: 'D1',
+        },
+        to: {
+          labwareInstanceId: instanceId,
+          well: 'E1',
+        },
+        volumeUl: 20,
+      },
+    };
+
+    const result = applyEventToLabState(withMaterial, transferEvent);
+
+    // Source: 80 uL remaining, same unit cost
+    const srcMaterials = result.labware[instanceId].wells['D1'];
+    expect(srcMaterials).toHaveLength(1);
+    expect(srcMaterials![0].volumeUl).toBe(80);
+    expect(srcMaterials![0].economics).toEqual({
+      currency: 'USD',
+      amountPerUl: 0.05,
+    });
+    // Extended cost = 80 * 0.05 = 4.00
+    expect(srcMaterials![0].volumeUl! * srcMaterials![0].economics!.amountPerUl).toBe(4.0);
+
+    // Destination: 20 uL, same unit cost
+    const dstMaterials = result.labware[instanceId].wells['E1'];
+    expect(dstMaterials).toHaveLength(1);
+    expect(dstMaterials![0].volumeUl).toBe(20);
+    expect(dstMaterials![0].economics).toEqual({
+      currency: 'USD',
+      amountPerUl: 0.05,
+    });
+    // Extended cost = 20 * 0.05 = 1.00
+    expect(dstMaterials![0].volumeUl! * dstMaterials![0].economics!.amountPerUl).toBe(1.0);
+  });
+
+  it('transfer without economics on source leaves destination without economics', () => {
+    const snapshot = emptyLabState();
+
+    const createEvent: PlateEventPrimitive = {
+      eventId: 'evt-create-eco-4',
+      event_type: 'create_container',
+      details: {
+        slot: 'G',
+        labwareType: '96-well-plate',
+      },
+    };
+    const withPlate = applyEventToLabState(snapshot, createEvent);
+    const instanceId = withPlate.deck[0].labwareInstanceId!;
+
+    const addEvent: PlateEventPrimitive = {
+      eventId: 'evt-add-eco-4',
+      event_type: 'add_material',
+      details: {
+        labwareInstanceId: instanceId,
+        well: 'F1',
+        material: {
+          materialId: 'mat-no-eco',
+          kind: 'buffer',
+          volumeUl: 50,
+        },
+      },
+    };
+    const withMaterial = applyEventToLabState(withPlate, addEvent);
+
+    const transferEvent: PlateEventPrimitive = {
+      eventId: 'evt-xfer-eco-2',
+      event_type: 'transfer',
+      details: {
+        from: {
+          labwareInstanceId: instanceId,
+          well: 'F1',
+        },
+        to: {
+          labwareInstanceId: instanceId,
+          well: 'G1',
+        },
+        volumeUl: 25,
+      },
+    };
+
+    const result = applyEventToLabState(withMaterial, transferEvent);
+
+    const srcMaterials = result.labware[instanceId].wells['F1'];
+    expect(srcMaterials![0].volumeUl).toBe(25);
+    expect(srcMaterials![0].economics).toBeUndefined();
+
+    const dstMaterials = result.labware[instanceId].wells['G1'];
+    expect(dstMaterials![0].volumeUl).toBe(25);
+    expect(dstMaterials![0].economics).toBeUndefined();
+  });
+});
