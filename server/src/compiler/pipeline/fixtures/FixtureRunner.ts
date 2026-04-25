@@ -69,7 +69,10 @@ function buildMockLlmClient(mockedOutput: AiPrecompileOutput): LlmClient {
 
 export async function runFixture(
   fixture: Fixture,
-  opts?: { deps?: Partial<RunChatbotCompileArgs['deps']> },
+  opts?: {
+    deps?: Partial<RunChatbotCompileArgs['deps']>;
+    conversationId?: string;
+  },
 ): Promise<FixtureResult> {
   const llmClient: LlmClient =
     opts?.deps?.llmClient ?? buildMockLlmClient(fixture.mocked_ai_precompile_output);
@@ -81,7 +84,7 @@ export async function runFixture(
       mime_type: a.mimeType,
       content: a.content,
     })),
-    conversationId: fixture.input.conversationId,
+    conversationId: opts?.conversationId ?? fixture.input.conversationId,
     deps: {
       extractionService: buildTestExtractionService(),
       llmClient,

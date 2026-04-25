@@ -2,8 +2,7 @@
  * Tests for ExtractionPasses.
  */
 
-import { describe, it } from 'node:test';
-import assert from 'node:assert';
+import { describe, it, expect } from 'vitest';
 import { createExtractorRunPass, createMentionResolvePass, createDraftAssemblePass } from './ExtractionPasses.js';
 import type { ExtractorAdapter, ExtractionRequest, ExtractionResult } from '../../../extract/ExtractorAdapter.js';
 import type { ResolutionCandidate } from '../../../extract/MentionResolver.js';
@@ -39,12 +38,12 @@ describe('createExtractorRunPass', () => {
 
     const result = await pass.run({ pass_id: 'extractor_run', state: mockState });
 
-    assert.strictEqual(result.ok, true);
-    assert.ok(result.output);
+    expect(result.ok).toBe(true);
+    expect(result.output).toBeDefined();
     const output = result.output as ExtractionResult;
-    assert.strictEqual(output.candidates.length, 1);
-    assert.strictEqual(output.candidates[0]!.target_kind, 'material-spec');
-    assert.deepStrictEqual(output.candidates[0]!.draft, { name: 'H2O2', volume: 100 });
+    expect(output.candidates.length).toBe(1);
+    expect(output.candidates[0]!.target_kind).toBe('material-spec');
+    expect(output.candidates[0]!.draft).toEqual({ name: 'H2O2', volume: 100 });
   });
 
   it('returns ok=false when zero candidates AND error-severity diagnostic', async () => {
@@ -75,10 +74,10 @@ describe('createExtractorRunPass', () => {
 
     const result = await pass.run({ pass_id: 'extractor_run', state: mockState });
 
-    assert.strictEqual(result.ok, false);
-    assert.ok(result.diagnostics);
-    assert.strictEqual(result.diagnostics.length, 1);
-    assert.strictEqual(result.diagnostics[0]!.severity, 'error');
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toBeDefined();
+    expect(result.diagnostics!.length).toBe(1);
+    expect(result.diagnostics![0]!.severity).toBe('error');
   });
 
   it('returns ok=true when zero candidates but no error diagnostics', async () => {
@@ -109,7 +108,7 @@ describe('createExtractorRunPass', () => {
 
     const result = await pass.run({ pass_id: 'extractor_run', state: mockState });
 
-    assert.strictEqual(result.ok, true);
+    expect(result.ok).toBe(true);
   });
 });
 
@@ -152,21 +151,21 @@ describe('createMentionResolvePass', () => {
 
     const result = await pass.run({ pass_id: 'mention_resolve', state: mockState });
 
-    assert.strictEqual(result.ok, true);
-    assert.ok(result.output);
+    expect(result.ok).toBe(true);
+    expect(result.output).toBeDefined();
     const output = result.output as { resolved_candidates: unknown[]; ambiguity_spans_by_candidate: unknown[][] };
-    assert.strictEqual(output.resolved_candidates.length, 1);
+    expect(output.resolved_candidates.length).toBe(1);
     
     const resolvedDraft = (output.resolved_candidates[0] as any).draft;
     // The mention should be resolved to a record ref
-    assert.deepStrictEqual(resolvedDraft.material_ref, {
+    expect(resolvedDraft.material_ref).toEqual({
       kind: 'record',
       id: 'MSP-h2o2',
       type: 'material'
     });
     
     // No ambiguity spans since it resolved cleanly
-    assert.strictEqual(output.ambiguity_spans_by_candidate[0].length, 0);
+    expect(output.ambiguity_spans_by_candidate[0].length).toBe(0);
   });
 
   it('surfaces ambiguity when mention matches 2 records -> ambiguity_spans_by_candidate[0].length === 1', async () => {
@@ -211,16 +210,16 @@ describe('createMentionResolvePass', () => {
 
     const result = await pass.run({ pass_id: 'mention_resolve', state: mockState });
 
-    assert.strictEqual(result.ok, true);
-    assert.ok(result.output);
+    expect(result.ok).toBe(true);
+    expect(result.output).toBeDefined();
     const output = result.output as { resolved_candidates: unknown[]; ambiguity_spans_by_candidate: unknown[][] };
     
     // Should have exactly one ambiguity span
-    assert.strictEqual(output.ambiguity_spans_by_candidate[0].length, 1);
+    expect(output.ambiguity_spans_by_candidate[0].length).toBe(1);
     
     const span = output.ambiguity_spans_by_candidate[0][0] as any;
-    assert.strictEqual(span.path, 'material_ref');
-    assert.ok(span.reason.includes('ambiguous') || span.reason.includes('matched'));
+    expect(span.path).toBe('material_ref');
+    expect(span.reason).toMatch(/ambiguous|matched/i);
   });
 });
 
@@ -280,7 +279,7 @@ describe('createDraftAssemblePass', () => {
       }
     });
 
-    assert.strictEqual(extractorResult.ok, true);
+    expect(extractorResult.ok).toBe(true);
     stateOutputs = new Map(stateOutputs).set('extractor_run', extractorResult.output);
 
     // Run mention_resolve
@@ -295,7 +294,7 @@ describe('createDraftAssemblePass', () => {
       }
     });
 
-    assert.strictEqual(resolveResult.ok, true);
+    expect(resolveResult.ok).toBe(true);
     stateOutputs = new Map(stateOutputs).set('mention_resolve', resolveResult.output);
 
     // Run draft_assemble
@@ -310,14 +309,14 @@ describe('createDraftAssemblePass', () => {
       }
     });
 
-    assert.strictEqual(assembleResult.ok, true);
-    assert.ok(assembleResult.output);
+    expect(assembleResult.ok).toBe(true);
+    expect(assembleResult.output).toBeDefined();
     
     const draft = assembleResult.output as any;
-    assert.strictEqual(draft.kind, 'extraction-draft');
-    assert.strictEqual(draft.status, 'pending_review');
-    assert.ok(draft.recordId.startsWith('XDR-test-'));
-    assert.strictEqual(draft.candidates.length, 1);
-    assert.strictEqual(draft.created_at, '2024-01-15T10:30:00.000Z');
+    expect(draft.kind).toBe('extraction-draft');
+    expect(draft.status).toBe('pending_review');
+    expect(draft.recordId.startsWith('XDR-test-')).toBe(true);
+    expect(draft.candidates.length).toBe(1);
+    expect(draft.created_at).toBe('2024-01-15T10:30:00.000Z');
   });
 });

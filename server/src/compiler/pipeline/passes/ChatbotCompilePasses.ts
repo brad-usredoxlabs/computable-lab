@@ -679,6 +679,8 @@ export function createResolvePriorLabwareReferencesPass(): Pass {
  * - Looks up expanders for each verb
  * - Concatenates expanded PlateEventPrimitive[] into output { events }
  * - Unknown verbs produce a warning diagnostic code='unknown_biology_verb' and are skipped
+ * - Special verbs like 'run_protocol' are passed through unchanged for downstream
+ *   expand_protocol pass to handle
  * - Handles targetLabwareRef: 'prior' sentinel by resolving against
  *   resolve_prior_labware_references output and passing the resolved
  *   instanceId as labware_id to the expander
@@ -700,6 +702,16 @@ export function createExpandBiologyVerbsPass(): Pass {
 
       for (const cand of candidateEvents) {
         const { verb, ...params } = cand;
+
+        // Pass through 'run_protocol' events unchanged — expand_protocol will handle them
+        if (verb === 'run_protocol') {
+          events.push({
+            eventId: `evt_run_protocol_${cand.protocolRef ?? 'unknown'}`,
+            event_type: 'run_protocol',
+            details: { ...params },
+          });
+          continue;
+        }
 
         // Handle targetLabwareRef: 'prior' sentinel — resolve against prior labware refs
         if ((params.targetLabwareRef as string | undefined) === 'prior') {

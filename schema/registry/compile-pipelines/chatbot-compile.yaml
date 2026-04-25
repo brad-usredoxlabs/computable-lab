@@ -42,7 +42,6 @@ passes:
   - id: resolve_references
     family: disambiguate
     depends_on: [ai_precompile]
-    when: outputs.ai_precompile.unresolvedRefs
     description: Resolve named references (protocol, assay, pattern, compound-class) against their registries.
 
   - id: resolve_prior_labware_references
@@ -54,7 +53,6 @@ passes:
   - id: expand_protocol
     family: expand
     depends_on: [resolve_references]
-    when: outputs.resolve_references.resolvedRefs
     description: Unroll resolved protocol refs into primitive events using step graph + parameter bindings.
 
   - id: expand_patterns
@@ -65,7 +63,7 @@ passes:
 
   - id: resolve_roles
     family: expand
-    depends_on: [mint_materials]
+    depends_on: [mint_materials, expand_protocol]
     description: Map role coordinates to concrete well addresses under current orientation.
 
   - id: compute_volumes

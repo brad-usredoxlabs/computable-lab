@@ -15,20 +15,68 @@ input:
     need. We are going to elute the samples into 100uL of DNAse-free
     water that will be loaded into well 2 of the 12-well reservoir,
     then transfer the eluted samples into a 96-well conical
-    bottomoed PCR plate.
+    bottomed PCR plate.
 mocked_ai_precompile_output:
-  candidateEvents: []
+  candidateEvents:
+    - verb: run_protocol
+      protocolRef: zymo-magbead-minimal
+      bindings:
+        primary_plate: prior
+        pcr_plate: new_pcr
   candidateLabwares:
-    - hint: "12-well reservoir"
-      reason: "explicitly mentioned as buffer source"
-    - hint: "96-well conical bottomed PCR plate"
-      reason: "elution destination"
+    - hint: "12-well-reservoir"
+      deckSlot: "B1"
+    - hint: "96-well-conical-pcr-plate"
+    - hint: "magblock-module"
+      deckSlot: "C1"
+    - hint: "heater-shaker-module"
+      deckSlot: "D1"
   unresolvedRefs:
-    - kind: other
-      label: "Zymo DNA MagBead prep protocol"
-      reason: "Protocol reference — awaiting protocol-spec registry (spec-018)"
+    - kind: protocol
+      label: zymo-magbead-minimal
+      reason: protocol reference
+  priorLabwareRefs:
+    - hint: "96-well deepwell plate of fecal samples"
+      kindHint: "96-well-deepwell-plate"
+      contentHint: "fecal samples"
+  mintMaterials:
+    - template: binding-buffer
+      count: 1
+      namingPattern: "binding-buffer-reservoir"
+      placementLabwareHint: "12-well-reservoir"
+      wellSpread: "explicit"
+      wellList: ["A1"]
+    - template: wash-1-buffer
+      count: 1
+      namingPattern: "wash-1-reservoir"
+      placementLabwareHint: "12-well-reservoir"
+      wellSpread: "explicit"
+      wellList: ["A3"]
+    - template: wash-2-buffer
+      count: 1
+      namingPattern: "wash-2-reservoir"
+      placementLabwareHint: "12-well-reservoir"
+      wellSpread: "explicit"
+      wellList: ["A5"]
+    - template: dnase-free-water
+      count: 1
+      namingPattern: "elution-water"
+      placementLabwareHint: "12-well-reservoir"
+      wellSpread: "explicit"
+      wellList: ["A2"]
+  directives:
+    - kind: mount_pipette
+      params:
+        mountSide: left
+        pipetteType: 8ch-1000uL
 expected:
-  outcome: gap
+  outcome: complete
   terminalArtifacts:
-    events: []
-    gaps: []
+    deckLayoutPlan:
+      pinned:
+        - slot: "B1"
+          labwareHint: "12-well-reservoir"
+        - slot: "C1"
+          labwareHint: "magblock-module"
+        - slot: "D1"
+          labwareHint: "heater-shaker-module"

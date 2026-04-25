@@ -1,0 +1,58 @@
+id: zymo-magbead-minimal
+name: Zymo DNA MagBead prep (minimal test version)
+description: >
+  Simplified Zymo MagBead protocol for Prompt 2 regression.
+  Faithful in shape to the real Zymo protocol but not a full
+  implementation — exists to exercise expand_protocol, volume
+  math, and resource computation.
+steps:
+  - step: 1
+    verb: add_material
+    params:
+      targetLabwareRef: "{{labware.primary_plate}}"
+      role: cell_region
+      materialKind: binding-buffer
+      volumeUl: "{{percent.1.of_working}}"
+  - step: 2
+    verb: mix
+    params:
+      targetLabwareRef: "{{labware.primary_plate}}"
+      role: cell_region
+      cycles: 3
+  - step: 3
+    verb: wash
+    params:
+      targetLabwareRef: "{{labware.primary_plate}}"
+      materialKind: wash-1-buffer
+      volumeUl: 400
+  - step: 4
+    verb: wash
+    params:
+      targetLabwareRef: "{{labware.primary_plate}}"
+      materialKind: wash-2-buffer
+      volumeUl: 400
+  - step: 5
+    verb: elute
+    params:
+      targetLabwareRef: "{{labware.primary_plate}}"
+      toLabwareRef: "{{labware.pcr_plate}}"
+      materialKind: dnase-free-water
+      volumeUl: 100
+requirements:
+  pipettes:
+    - pipetteType: 8ch-1000uL
+      minVolumeUl: 50
+      maxVolumeUl: 1000
+  reagents:
+    - kind: binding-buffer
+      totalVolumeUl: just_enough
+    - kind: wash-1-buffer
+      totalVolumeUl: just_enough
+    - kind: wash-2-buffer
+      totalVolumeUl: just_enough
+    - kind: dnase-free-water
+      totalVolumeUl: just_enough
+  labware:
+    - 96-well-deepwell-plate
+    - 12-well-reservoir
+    - 96-well-conical-pcr-plate

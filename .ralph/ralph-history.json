@@ -2,26 +2,27 @@
   "iterations": [
     {
       "iteration": 1,
-      "startedAt": "2026-04-25T02:12:20.031Z",
-      "endedAt": "2026-04-25T02:28:58.850Z",
-      "durationMs": 997067,
+      "startedAt": "2026-04-25T02:36:15.642Z",
+      "endedAt": "2026-04-25T02:55:44.996Z",
+      "durationMs": 1167583,
       "agent": "codex",
       "model": "",
       "toolsUsed": {},
       "filesModified": [
         "schema/registry/compile-pipelines/chatbot-compile.yaml",
-        "server/src/compiler/pipeline/PipelineRunner.ts",
-        "server/src/compiler/pipeline/chatbotCompilePipelineLoad.test.ts",
-        "server/src/compiler/artifacts/",
-        "server/src/compiler/pipeline/PipelineWhenEvaluation.test.ts",
-        "server/src/compiler/validation/"
+        "server/src/compiler/pipeline/fixtures/FixtureRunner.ts",
+        "server/src/compiler/pipeline/fixtures/prompt-02-zymo-magbead.yaml",
+        "server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts",
+        "schema/registry/protocols/zymo-magbead-minimal.yaml",
+        "server/src/compiler/pipeline/fixtures/Prompt02Green.test.ts",
+        "server/src/compiler/pipeline/fixtures/ProtocolRegistry.test.ts"
       ],
       "exitCode": 0,
       "completionDetected": false,
       "errors": []
     }
   ],
-  "totalDurationMs": 997067,
+  "totalDurationMs": 1167583,
   "struggleIndicators": {
     "repeatedErrors": {},
     "noProgressIterations": 0,
