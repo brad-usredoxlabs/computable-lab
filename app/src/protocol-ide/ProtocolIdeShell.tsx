@@ -19,7 +19,6 @@
  *   - loaded session: session exists → source pane, graph surface, action rail
  */
 
-import { useState } from 'react'
 import type { ProtocolIdeSession } from './types'
 import { ProtocolIdeIntakePane } from './ProtocolIdeIntakePane'
 import type { IntakePayload } from './ProtocolIdeIntakePane'
@@ -34,6 +33,14 @@ import {
   type BudgetCostSummary,
   type EventGraphData,
 } from './ProtocolIdeGraphReviewSurface'
+import { useState, useEffect } from 'react'
+import { apiClient } from '../../shared/api/client'
+import type {
+  DeckSummary,
+  ToolsSummary,
+  ReagentsSummary,
+  BudgetSummary,
+} from './overlaySummaries.types'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,7 +50,11 @@ export interface ProtocolIdeShellProps {
   /** When provided, the shell renders in loaded-session mode. */
   session?: ProtocolIdeSession | null
   /** Callback when the user creates a new session (empty intake). */
-  onCreateSession?: () => void
+  onCreateSession?: (payload: IntakePayload) => void
+  /** Error message to display in the intake pane. */
+  submitError?: string | null
+  /** Whether the intake pane is in a loading/disabled state. */
+  isSubmitting?: boolean
   /** Callback when the user navigates away from the Protocol IDE. */
   onNavigateAway?: () => void
 }
@@ -53,19 +64,19 @@ export interface ProtocolIdeShellProps {
 // ---------------------------------------------------------------------------
 
 function IntakePane({
-  onCreateSession,
+  onSubmit,
+  error,
+  isLoading,
 }: {
-  onCreateSession?: () => void
+  onSubmit?: (payload: IntakePayload) => void
+  error?: string | null
+  isLoading?: boolean
 }): JSX.Element {
-  const handleIntakeSubmit = (payload: IntakePayload) => {
-    // For now, delegate to the existing onCreateSession callback.
-    // In a later spec, this will call the session bootstrap API.
-    onCreateSession?.()
-  }
-
   return (
     <ProtocolIdeIntakePane
-      onSubmit={handleIntakeSubmit}
+      onSubmit={onSubmit ?? (() => {})}
+      error={error ?? null}
+      isLoading={isLoading ?? false}
       title="Protocol IDE Intake"
       description="Choose a source document and write a directive to begin building a protocol."
     />
@@ -119,40 +130,73 @@ function sessionIssueCardsToIssueCardRefs(
 }
 
 /**
- * Build a minimal DeckLabwareSummary from session overlay refs.
- * In v1 the refs exist but the actual summary data would be fetched
- * from the overlay-summary service (spec-071). We produce a stub
- * so the surface renders the panel.
+ * Convert server-side DeckSummary to the DeckLabwareSummary shape expected
+ * by ProtocolIdeGraphReviewSurface.
  */
-function buildDeckLabwareSummary(
-  session: ProtocolIdeSession
+function deckSummaryToDeckLabwareSummary(
+  summary: DeckSummary | null
 ): DeckLabwareSummary | null {
-  if (!session.latestDeckSummaryRef) return null
+  if (!summary) return null
   return {
-    labwares: [],
-    placements: [],
+    labwares: summary.labware.map((lw) => ({
+      labwareId: lw.instanceId ?? lw.slot,
+      name: lw.labwareType,
+      labwareType: lw.labwareType,
+      slotId: lw.slot,
+      orientation: lw.orientation,
+    })),
+    placements: summary.labware.map((lw) => ({
+      slotId: lw.slot,
+      labwareId: lw.instanceId ?? lw.slot,
+    })),
   }
 }
 
-function buildToolsInstrumentsSummary(
-  session: ProtocolIdeSession
+/**
+ * Convert server-side ToolsSummary to the ToolsInstrumentsSummary shape.
+ */
+function toolsSummaryToToolsInstrumentsSummary(
+  summary: ToolsSummary | null
 ): ToolsInstrumentsSummary | null {
-  if (!session.latestToolsSummaryRef) return null
-  return { tools: [] }
+  if (!summary) return null
+  return {
+    tools: summary.pipettes.map((p) => ({
+      toolTypeId: p.type,
+      label: p.type,
+      channelCount: p.channels,
+    })),
+  }
 }
 
-function buildReagentsConcentrationsSummary(
-  session: ProtocolIdeSession
+/**
+ * Convert server-side ReagentsSummary to the ReagentsConcentrationsSummary shape.
+ */
+function reagentsSummaryToReagentsConcentrationsSummary(
+  summary: ReagentsSummary | null
 ): ReagentsConcentrationsSummary | null {
-  if (!session.latestReagentsSummaryRef) return null
-  return { reagents: [] }
+  if (!summary) return null
+  return {
+    reagents: summary.reagents.map((r) => ({
+      compoundId: r.kind,
+      label: r.kind,
+      volume: r.totalVolumeUl,
+      unit: r.unit,
+    })),
+  }
 }
 
-function buildBudgetCostSummary(
-  session: ProtocolIdeSession
+/**
+ * Convert server-side BudgetSummary to the BudgetCostSummary shape.
+ */
+function budgetSummaryToBudgetCostSummary(
+  summary: BudgetSummary | null
 ): BudgetCostSummary | null {
-  if (!session.latestBudgetSummaryRef) return null
-  return { lineCount: 0, approvedLineCount: 0, grandTotal: 0 }
+  if (!summary) return null
+  return {
+    lineCount: summary.lines.length,
+    approvedLineCount: 0,
+    grandTotal: Math.round((summary.totalCost ?? 0) * 100) / 100,
+  }
 }
 
 /**
@@ -177,11 +221,38 @@ function buildEventGraphData(
 // ---------------------------------------------------------------------------
 
 function EventGraphSurface({ session }: { session: ProtocolIdeSession }): JSX.Element {
+  const [overlaySummaries, setOverlaySummaries] = useState<{
+    deck: DeckSummary | null
+    tools: ToolsSummary | null
+    reagents: ReagentsSummary | null
+    budget: BudgetSummary | null
+  } | null>(null)
+
+  // Fetch overlay summaries when the session has a projection
+  useEffect(() => {
+    const ref = session.latestEventGraphRef
+    if (!ref || !ref.id) return
+
+    apiClient
+      .getProtocolIdeOverlaySummaries(ref.id)
+      .then((res) => {
+        setOverlaySummaries({
+          deck: res.deck,
+          tools: res.tools,
+          reagents: res.reagents,
+          budget: res.budget,
+        })
+      })
+      .catch(() => {
+        // Network error — summaries stay null, no console error
+      })
+  }, [session.latestEventGraphRef])
+
   const issueCards = sessionIssueCardsToIssueCardRefs(session)
-  const deckLabwareSummary = buildDeckLabwareSummary(session)
-  const toolsInstrumentsSummary = buildToolsInstrumentsSummary(session)
-  const reagentsConcentrationsSummary = buildReagentsConcentrationsSummary(session)
-  const budgetCostSummary = buildBudgetCostSummary(session)
+  const deckLabwareSummary = deckSummaryToDeckLabwareSummary(overlaySummaries?.deck ?? null)
+  const toolsInstrumentsSummary = toolsSummaryToToolsInstrumentsSummary(overlaySummaries?.tools ?? null)
+  const reagentsConcentrationsSummary = reagentsSummaryToReagentsConcentrationsSummary(overlaySummaries?.reagents ?? null)
+  const budgetCostSummary = budgetSummaryToBudgetCostSummary(overlaySummaries?.budget ?? null)
   const eventGraphData = buildEventGraphData(session)
 
   const handleIssueCardClick = (card: IssueCardRef) => {
@@ -275,6 +346,8 @@ function SummaryRail({ session }: { session: ProtocolIdeSession }): JSX.Element 
 export function ProtocolIdeShell({
   session,
   onCreateSession,
+  submitError,
+  isSubmitting,
   onNavigateAway,
 }: ProtocolIdeShellProps): JSX.Element {
   const hasSession = !!session
@@ -313,7 +386,7 @@ export function ProtocolIdeShell({
           {hasSession ? (
             <SourcePane session={session} />
           ) : (
-            <IntakePane onCreateSession={onCreateSession} />
+            <IntakePane onSubmit={onCreateSession} error={submitError} isLoading={isSubmitting} />
           )}
         </div>
 
@@ -407,9 +480,9 @@ export function ProtocolIdeShell({
         }
 
         .protocol-ide-left-pane {
-          width: 280px;
-          min-width: 220px;
-          max-width: 360px;
+          width: 420px;
+          min-width: 360px;
+          max-width: 480px;
           border-right: 1px solid #e9ecef;
           background: #fff;
           overflow-y: auto;
@@ -475,6 +548,188 @@ export function ProtocolIdeShell({
 
         .protocol-ide-intake-hints li {
           margin-bottom: 0.15rem;
+        }
+
+        /* Inner intake pane styling */
+        .protocol-ide-intake-modes {
+          display: flex;
+          gap: 0;
+          border-bottom: 1px solid #dee2e6;
+          margin-bottom: 1rem;
+        }
+
+        .protocol-ide-intake-mode-btn {
+          flex: 1;
+          padding: 0.5rem 0.75rem;
+          background: none;
+          border: none;
+          border-bottom: 2px solid transparent;
+          cursor: pointer;
+          font-size: 0.85rem;
+          color: #495057;
+        }
+
+        .protocol-ide-intake-mode-btn-active {
+          border-bottom: 2px solid #228be6;
+          background: #e7f5ff;
+          color: #1971c2;
+          font-weight: 600;
+        }
+
+        .protocol-ide-intake-panel {
+          padding: 0.5rem 0;
+          margin-bottom: 1rem;
+        }
+
+        .protocol-ide-intake-vendor-identity {
+          font-size: 0.8rem;
+          color: #6c757d;
+          margin-bottom: 0.5rem;
+        }
+
+        .protocol-ide-intake-vendor-tag {
+          display: inline-block;
+          padding: 0.1rem 0.4rem;
+          margin-right: 0.25rem;
+          background: #f1f3f5;
+          border-radius: 3px;
+          font-size: 0.75rem;
+        }
+
+        .protocol-ide-intake-search {
+          display: flex;
+          gap: 0.5rem;
+          margin-bottom: 0.75rem;
+        }
+
+        .protocol-ide-intake-search-input {
+          flex: 1;
+          padding: 0.4rem 0.6rem;
+          border: 1px solid #dee2e6;
+          border-radius: 4px;
+          font-size: 0.85rem;
+        }
+
+        .protocol-ide-intake-vendor-filter {
+          padding: 0.4rem;
+          border: 1px solid #dee2e6;
+          border-radius: 4px;
+          font-size: 0.85rem;
+        }
+
+        .protocol-ide-intake-results {
+          max-height: 260px;
+          overflow-y: auto;
+          border: 1px solid #f1f3f5;
+          border-radius: 4px;
+        }
+
+        .protocol-ide-intake-result-list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+        }
+
+        .protocol-ide-intake-result-item {
+          padding: 0.5rem 0.75rem;
+          cursor: pointer;
+          border-bottom: 1px solid #f1f3f5;
+        }
+
+        .protocol-ide-intake-result-item:hover {
+          background: #f8f9fa;
+        }
+
+        .protocol-ide-intake-result-item-selected {
+          background: #e7f5ff;
+        }
+
+        .protocol-ide-intake-result-header {
+          display: flex;
+          gap: 0.5rem;
+          font-size: 0.7rem;
+          color: #868e96;
+          text-transform: uppercase;
+          margin-bottom: 0.25rem;
+        }
+
+        .protocol-ide-intake-result-title {
+          font-size: 0.85rem;
+          font-weight: 600;
+          color: #212529;
+          margin-bottom: 0.25rem;
+        }
+
+        .protocol-ide-intake-result-snippet {
+          font-size: 0.8rem;
+          color: #495057;
+          line-height: 1.4;
+        }
+
+        .protocol-ide-intake-url-input {
+          width: 100%;
+          padding: 0.5rem;
+          border: 1px solid #dee2e6;
+          border-radius: 4px;
+          font-size: 0.85rem;
+          box-sizing: border-box;
+        }
+
+        .protocol-ide-intake-upload-btn {
+          padding: 0.5rem 1rem;
+          background: #fff;
+          border: 1px dashed #adb5bd;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 0.85rem;
+          color: #495057;
+          width: 100%;
+        }
+
+        .protocol-ide-intake-file-info {
+          margin-top: 0.5rem;
+          font-size: 0.8rem;
+          color: #495057;
+        }
+
+        .protocol-ide-intake-directive {
+          margin-top: 1rem;
+        }
+
+        .protocol-ide-intake-directive-input {
+          width: 100%;
+          padding: 0.5rem;
+          border: 1px solid #dee2e6;
+          border-radius: 4px;
+          font-size: 0.85rem;
+          min-height: 80px;
+          box-sizing: border-box;
+          resize: vertical;
+          font-family: inherit;
+        }
+
+        .protocol-ide-intake-actions {
+          display: flex;
+          gap: 0.5rem;
+          margin-top: 1rem;
+        }
+
+        .protocol-ide-intake-error {
+          padding: 0.5rem 0.75rem;
+          background: #fff5f5;
+          border: 1px solid #ffc9c9;
+          border-radius: 4px;
+          color: #c92a2a;
+          font-size: 0.85rem;
+          margin-bottom: 1rem;
+        }
+
+        .protocol-ide-intake-label {
+          display: block;
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: #495057;
+          margin-bottom: 0.25rem;
         }
 
         /* Source pane — ProtocolIdeSourcePane has its own styles */

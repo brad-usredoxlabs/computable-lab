@@ -58,6 +58,7 @@ import {
 import { createIngestionAIHandlers } from './api/handlers/IngestionAIHandlers.js';
 import { createMaterialAIHandlers } from './api/handlers/MaterialAIHandlers.js';
 import { createAiIngestionHandlers } from './api/handlers/AiIngestionHandlers.js';
+import { createProtocolIdeHandlers } from './api/handlers/ProtocolIdeHandlers.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { createUISpecLoader, loadAllUISpecs, type UISpecLoader } from './ui/UISpecLoader.js';
 import { createUIHandlers } from './api/handlers/UIHandlers.js';
@@ -474,6 +475,7 @@ export async function createServer(
 
   // Create protocol, execution, and measurement handlers
   const protocolHandlers = createProtocolHandlers(ctx);
+  const protocolIdeHandlers = createProtocolIdeHandlers(ctx);
   const componentHandlers = createComponentHandlers(ctx);
   const executionHandlers = createExecutionHandlers(ctx);
   const measurementHandlers = createMeasurementHandlers(ctx);
@@ -730,6 +732,7 @@ export async function createServer(
       labSettingsHandlers,
       metaHandlers,
       protocolHandlers,
+      protocolIdeHandlers,
       componentHandlers,
       executionHandlers,
       measurementHandlers,

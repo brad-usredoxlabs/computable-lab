@@ -49,7 +49,7 @@ export interface IntakePayload {
   source:
     | { sourceKind: 'vendor_document' } & CuratedDocumentResult
     | { sourceKind: 'pasted_url'; url: string }
-    | { sourceKind: 'uploaded_pdf'; uploadId: string; fileName: string; mediaType: string }
+    | { sourceKind: 'uploaded_pdf'; uploadId: string; fileName: string; mediaType: string; contentBase64: string }
 }
 
 /** Callback invoked when the user submits the intake form */
@@ -89,11 +89,10 @@ export interface ProtocolIdeIntakePaneProps extends IntakeCallbacks {
 const SOURCE_MODES: Array<{
   key: ProtocolIdeSourceMode
   label: string
-  icon: string
 }> = [
-  { key: 'vendor_search', label: 'Curated Vendor', icon: '📚' },
-  { key: 'pdf_url', label: 'Paste URL', icon: '🔗' },
-  { key: 'upload', label: 'Upload PDF', icon: '📄' },
+  { key: 'vendor_search', label: 'Curated Vendor' },
+  { key: 'pdf_url', label: 'Paste URL' },
+  { key: 'upload', label: 'Upload PDF' },
 ]
 
 // ---------------------------------------------------------------------------
@@ -213,7 +212,7 @@ export function ProtocolIdeIntakePane({
 
   // Build the intake payload and submit
   const handleSubmit = useCallback(
-    (e: React.FormEvent) => {
+    async (e: React.FormEvent) => {
       e.preventDefault()
 
       if (!directiveText.trim()) {
@@ -249,14 +248,24 @@ export function ProtocolIdeIntakePane({
 
         case 'upload': {
           if (!uploadedFile) return
-          // In a real implementation, this would first upload the file
-          // and get an uploadId back. For now, we use the file name as a placeholder.
-          source = {
-            sourceKind: 'uploaded_pdf',
-            uploadId: `upload-${Date.now()}`,
-            fileName: uploadedFile.name,
-            mediaType: uploadedFile.type || 'application/pdf',
-          }
+          // Read the file as a data URL, strip the prefix, and include base64 bytes
+          const reader = new FileReader()
+          await new Promise<void>((resolve, reject) => {
+            reader.onload = () => {
+              const result = reader.result?.toString() ?? ''
+              const contentBase64 = result.split(',')[1] ?? ''
+              source = {
+                sourceKind: 'uploaded_pdf',
+                uploadId: `upload-${Date.now().toString(36)}`,
+                fileName: uploadedFile.name,
+                mediaType: uploadedFile.type || 'application/pdf',
+                contentBase64,
+              }
+              resolve()
+            }
+            reader.onerror = reject
+            reader.readAsDataURL(uploadedFile)
+          })
           break
         }
 
@@ -327,7 +336,6 @@ export function ProtocolIdeIntakePane({
             data-testid={`protocol-ide-intake-mode-${mode.key}`}
             disabled={isLoading}
           >
-            <span className="protocol-ide-intake-mode-icon">{mode.icon}</span>
             <span className="protocol-ide-intake-mode-label">{mode.label}</span>
           </button>
         ))}

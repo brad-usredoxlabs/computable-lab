@@ -31,6 +31,17 @@ import {
   type ExportIssueCardsResponse,
   type CanExportResponse,
 } from '../../protocol/ProtocolIdeRalphExportService.js';
+import {
+  ProtocolIdeSourceImportService,
+  type SourceImportRequest,
+} from '../../protocol/ProtocolIdeSourceImportService.js';
+import { ProtocolIdeProjectionService } from '../../protocol/ProtocolIdeProjectionService.js';
+import {
+  ProtocolIdeOverlaySummaryService,
+  type OverlaySummaries,
+} from '../../protocol/ProtocolIdeOverlaySummaryService.js';
+import type { TerminalArtifacts } from '../../compiler/pipeline/CompileContracts.js';
+import type { LabStateSnapshot } from '../../compiler/state/LabState.js';
 
 // ---------------------------------------------------------------------------
 // Request / Response types
@@ -46,9 +57,11 @@ export interface ProtocolIdeSessionCreateResponse {
   status: string;
   sourceSummary: string;
   latestDirectiveText: string;
-  sourceEvidenceRef: null;
-  graphReviewRef: null;
+  sourceEvidenceRef: string | null;
+  graphReviewRef: string | null;
   issueCardsRef: null;
+  importWarning?: string;
+  projectionWarning?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -57,9 +70,12 @@ export interface ProtocolIdeSessionCreateResponse {
 
 export function createProtocolIdeHandlers(ctx: AppContext) {
   const sessionService = new ProtocolIdeSessionService(ctx.store);
+  const sourceImportService = new ProtocolIdeSourceImportService(ctx.store);
+  const projectionService = new ProtocolIdeProjectionService(ctx.store);
   const feedbackService = new ProtocolIdeFeedbackService(ctx.store);
   const issueCardService = new ProtocolIdeIssueCardService(ctx.store);
   const exportService = new ProtocolIdeRalphExportService(ctx.store);
+  const overlayService = new ProtocolIdeOverlaySummaryService();
 
   return {
     /**
@@ -120,6 +136,75 @@ export function createProtocolIdeHandlers(ctx: AppContext) {
       try {
         const shell = await sessionService.bootstrapSession(intake);
 
+        // Chain importSource synchronously — wait for it before responding
+        let sourceEvidenceRef: string | null = null;
+        let importWarning: string | undefined
+
+        try {
+          const importReq: SourceImportRequest = {
+            sessionId: shell.sessionId,
+            sourceKind: intake.source.sourceKind,
+          }
+          if (intake.source.sourceKind === 'vendor_document') {
+            importReq.vendor = {
+              vendor: intake.source.vendor as string,
+              title: intake.source.title,
+              landingUrl: intake.source.landingUrl,
+              ...(intake.source.pdfUrl !== undefined && { pdfUrl: intake.source.pdfUrl }),
+              ...(intake.source.snippet !== undefined && { snippet: intake.source.snippet }),
+            }
+          } else if (intake.source.sourceKind === 'pasted_url') {
+            importReq.pastedUrl = intake.source.url
+          } else if (intake.source.sourceKind === 'uploaded_pdf') {
+            importReq.upload = {
+              fileName: intake.source.fileName,
+              mediaType: intake.source.mediaType,
+              contentBase64: intake.source.contentBase64,
+            }
+          }
+          const result = await sourceImportService.importSource(importReq)
+          sourceEvidenceRef = result.protocolImportRef ?? result.vendorDocumentRef ?? null
+        } catch (err) {
+          importWarning = err instanceof Error ? err.message : String(err)
+        }
+
+        // Chain runProjection — only when there is source evidence to project against
+        let graphReviewRef: string | null = null;
+        let projectionWarning: string | undefined
+
+        if (sourceEvidenceRef !== null || intake.source.sourceKind === 'vendor_document') {
+          try {
+            // Read session payload to extract rollingIssueSummary and source refs
+            const sessionEnvelope = await sessionService.getSession(shell.sessionId);
+            const sessionPayload = sessionEnvelope?.payload as Record<string, unknown> | undefined;
+            const rollingIssueSummary = (sessionPayload?.rollingIssueSummary as string) ?? '';
+            const evidenceRefs = (sessionPayload?.evidenceRefs as string[]) ?? [];
+            const evidenceCitations = (sessionPayload?.evidenceCitations as Array<{ evidenceRef: string; description: string; sourceLocation?: string }>) ?? [];
+
+            const sourceRefs: Array<{ recordId: string; label: string; kind: string }> = [];
+            for (const ref of evidenceRefs) {
+              sourceRefs.push({ recordId: ref, label: ref, kind: 'evidence' });
+            }
+            for (const cit of evidenceCitations) {
+              sourceRefs.push({ recordId: cit.evidenceRef, label: cit.description, kind: 'citation' });
+            }
+
+            const projection = await projectionService.executeProjection({
+              sessionRef: shell.sessionId,
+              directiveText: intake.directiveText,
+              rollingIssueSummary,
+              sourceRefs,
+            });
+            if (projection.status === 'success' || projection.status === 'partial') {
+              graphReviewRef = projection.eventGraphData.recordId
+            } else {
+              projectionWarning = `projection status ${projection.status}`
+            }
+          } catch (err) {
+            projectionWarning = err instanceof Error ? err.message : String(err)
+          }
+        }
+
         reply.status(201);
         return {
           success: true,
@@ -127,9 +212,11 @@ export function createProtocolIdeHandlers(ctx: AppContext) {
           status: shell.status,
           sourceSummary: shell.sourceSummary,
           latestDirectiveText: shell.latestDirectiveText,
-          sourceEvidenceRef: shell.sourceEvidenceRef,
-          graphReviewRef: shell.graphReviewRef,
+          sourceEvidenceRef,
+          graphReviewRef,
           issueCardsRef: shell.issueCardsRef,
+          ...(importWarning ? { importWarning } : {}),
+          ...(projectionWarning ? { projectionWarning } : {}),
         };
       } catch (err) {
         reply.status(500);
@@ -408,6 +495,64 @@ export function createProtocolIdeHandlers(ctx: AppContext) {
         return {
           error: 'CAN_EXPORT_CHECK_FAILED',
           message,
+        };
+      }
+    },
+
+    /**
+     * GET /protocol-ide/sessions/:sessionId/overlay-summaries
+     *
+     * Derive and return overlay summaries (deck, tools, reagents, budget)
+     * for the given session.
+     *
+     * When the session has no projected artifacts yet (no
+     * `latestEventGraphRef`), returns `{ success: true, deck: null, tools: null,
+     * reagents: null, budget: null }`.
+     *
+     * When `latestTerminalArtifacts` is not yet populated (v1 projection
+     * persists only refs), also returns null summaries — no error.
+     */
+    async getOverlaySummaries(
+      request: FastifyRequest<{
+        Params: { sessionId: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: true; deck: OverlaySummaries['deck'] | null; tools: OverlaySummaries['tools'] | null; reagents: OverlaySummaries['reagents'] | null; budget: OverlaySummaries['budget'] | null } | ApiError> {
+      const { sessionId } = request.params;
+
+      try {
+        const envelope = await sessionService.getSession(sessionId);
+
+        if (!envelope) {
+          reply.status(404);
+          return {
+            error: 'SESSION_NOT_FOUND',
+            message: `Session '${sessionId}' not found`,
+          };
+        }
+
+        const payload = envelope.payload as Record<string, unknown>;
+
+        // No projection yet — return null summaries
+        if (!payload.latestEventGraphRef) {
+          return { success: true, deck: null, tools: null, reagents: null, budget: null };
+        }
+
+        // v1 projection may not persist artifacts — fall through to null
+        const artifacts = payload.latestTerminalArtifacts as TerminalArtifacts | undefined;
+        if (!artifacts) {
+          return { success: true, deck: null, tools: null, reagents: null, budget: null };
+        }
+
+        const labState = payload.latestLabState as LabStateSnapshot | undefined;
+        const summaries = overlayService.derive(artifacts, labState);
+
+        return { success: true, ...summaries };
+      } catch (err) {
+        reply.status(500);
+        return {
+          error: 'OVERLAY_DERIVE_FAILED',
+          message: err instanceof Error ? err.message : String(err),
         };
       }
     },

@@ -177,6 +177,7 @@ describe('ProtocolIdeHandlers — uploaded_pdf source', () => {
           uploadId: 'upload-abc123',
           fileName: 'protocol.pdf',
           mediaType: 'application/pdf',
+          contentBase64: 'AAAA',
         },
       },
     } as unknown as FastifyRequest<{
@@ -886,6 +887,509 @@ describe('ProtocolIdeHandlers — getIssueCards', () => {
     expect(result).toMatchObject({
       error: 'SESSION_NOT_FOUND',
       message: expect.stringContaining('not found'),
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Import source chaining — success and failure
+// ---------------------------------------------------------------------------
+
+describe('ProtocolIdeHandlers — importSource chaining', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('calls importSource with correct upload fields for uploaded_pdf', async () => {
+    // Mock ProtocolIdeSourceImportService
+    const mockImportSource = vi.fn().mockResolvedValue({
+      sessionId: 'PIS-test',
+      status: 'imported',
+      vendorDocumentRef: null,
+      ingestionJobRef: null,
+      protocolImportRef: 'PROTO-001',
+      extractedTextRef: 'TEXT-001',
+      evidenceRefs: [],
+      evidenceCitations: [],
+      protocolImportState: 'ready',
+      protocolImportConfidence: 0.95,
+    });
+
+    const MockService = vi.fn().mockImplementation(() => ({
+      importSource: mockImportSource,
+    }));
+
+    vi.doMock('../../protocol/ProtocolIdeSourceImportService.js', () => ({
+      ProtocolIdeSourceImportService: MockService,
+    }));
+
+    // Re-import to pick up the mock
+    const { createProtocolIdeHandlers: createHandlers } = await import('./ProtocolIdeHandlers.js');
+
+    const store = makeMockStore();
+    const ctx = makeMockCtx(store);
+    const handlers = createHandlers(ctx);
+
+    const request = {
+      body: {
+        directiveText: 'extract protocol from uploaded PDF',
+        source: {
+          sourceKind: 'uploaded_pdf',
+          uploadId: 'upload-abc123',
+          fileName: 'protocol.pdf',
+          mediaType: 'application/pdf',
+          contentBase64: 'AAAA',
+        },
+      },
+    } as unknown as FastifyRequest<{
+      Body: { directiveText?: string; source?: Record<string, unknown> };
+    }>;
+
+    const reply = makeMockReply();
+    const result = await handlers.createSession(request, reply);
+
+    expect(reply.status).toHaveBeenCalledWith(201);
+    expect(mockImportSource).toHaveBeenCalledTimes(1);
+    expect(mockImportSource).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: expect.stringMatching(/^PIS-/),
+        sourceKind: 'uploaded_pdf',
+        upload: {
+          fileName: 'protocol.pdf',
+          mediaType: 'application/pdf',
+          contentBase64: 'AAAA',
+        },
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      sourceEvidenceRef: 'PROTO-001',
+      graphReviewRef: null,
+      issueCardsRef: null,
+    });
+  });
+
+  it('returns importWarning when importSource throws', async () => {
+    const mockImportSource = vi.fn().mockRejectedValue(new Error('PDF extraction failed'));
+
+    const MockService = vi.fn().mockImplementation(() => ({
+      importSource: mockImportSource,
+    }));
+
+    vi.doMock('../../protocol/ProtocolIdeSourceImportService.js', () => ({
+      ProtocolIdeSourceImportService: MockService,
+    }));
+
+    const { createProtocolIdeHandlers: createHandlers } = await import('./ProtocolIdeHandlers.js');
+
+    const store = makeMockStore();
+    const ctx = makeMockCtx(store);
+    const handlers = createHandlers(ctx);
+
+    const request = {
+      body: {
+        directiveText: 'extract protocol from uploaded PDF',
+        source: {
+          sourceKind: 'uploaded_pdf',
+          uploadId: 'upload-abc123',
+          fileName: 'protocol.pdf',
+          mediaType: 'application/pdf',
+          contentBase64: 'AAAA',
+        },
+      },
+    } as unknown as FastifyRequest<{
+      Body: { directiveText?: string; source?: Record<string, unknown> };
+    }>;
+
+    const reply = makeMockReply();
+    const result = await handlers.createSession(request, reply);
+
+    // Session is still created (201) even though import failed
+    expect(reply.status).toHaveBeenCalledWith(201);
+    expect(mockImportSource).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      success: true,
+      sourceEvidenceRef: null,
+      importWarning: 'PDF extraction failed',
+    });
+  });
+
+  it('returns 409 without calling importSource when session already exists', async () => {
+    const mockImportSource = vi.fn().mockResolvedValue({
+      sessionId: 'PIS-test',
+      status: 'imported',
+      vendorDocumentRef: null,
+      ingestionJobRef: null,
+      protocolImportRef: 'PROTO-001',
+      extractedTextRef: 'TEXT-001',
+      evidenceRefs: [],
+      evidenceCitations: [],
+      protocolImportState: 'ready',
+      protocolImportConfidence: 0.95,
+    });
+
+    const MockService = vi.fn().mockImplementation(() => ({
+      importSource: mockImportSource,
+    }));
+
+    vi.doMock('../../protocol/ProtocolIdeSourceImportService.js', () => ({
+      ProtocolIdeSourceImportService: MockService,
+    }));
+
+    const { createProtocolIdeHandlers: createHandlers } = await import('./ProtocolIdeHandlers.js');
+
+    const mockEnvelope: RecordEnvelope = {
+      kind: 'protocol-ide-session',
+      recordId: 'PIS-existing-001',
+      payload: { status: 'importing' },
+      meta: { createdAt: new Date().toISOString() },
+    };
+    const store = makeMockStore();
+    (store.list as ReturnType<typeof vi.fn>).mockResolvedValue([mockEnvelope]);
+    const ctx = makeMockCtx(store);
+    const handlers = createHandlers(ctx);
+
+    const request = {
+      body: {
+        directiveText: 'extract protocol',
+        source: {
+          sourceKind: 'vendor_document',
+          vendor: 'thermo',
+          title: 'DNA Extraction Protocol v2',
+          landingUrl: 'https://example.com/protocol',
+          sessionIdHint: 'PIS-existing-001',
+        },
+      },
+    } as unknown as FastifyRequest<{
+      Body: { directiveText?: string; source?: Record<string, unknown> };
+    }>;
+
+    const reply = makeMockReply();
+    const result = await handlers.createSession(request, reply);
+
+    expect(reply.status).toHaveBeenCalledWith(409);
+    expect(result).toMatchObject({
+      error: 'SESSION_EXISTS',
+    });
+    // importSource should NOT be called when session already exists
+    expect(mockImportSource).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Projection chaining — success and failure
+// ---------------------------------------------------------------------------
+
+describe('ProtocolIdeHandlers — projection chaining', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('calls executeProjection with correct args on successful import', async () => {
+    const mockImportSource = vi.fn().mockResolvedValue({
+      sessionId: 'PIS-test',
+      status: 'imported',
+      vendorDocumentRef: null,
+      ingestionJobRef: null,
+      protocolImportRef: 'PROTO-001',
+      extractedTextRef: 'TEXT-001',
+      evidenceRefs: [],
+      evidenceCitations: [],
+      protocolImportState: 'ready',
+      protocolImportConfidence: 0.95,
+    });
+
+    const mockExecuteProjection = vi.fn().mockResolvedValue({
+      status: 'success',
+      eventGraphData: {
+        recordId: 'graph-PIS-test',
+        eventCount: 5,
+        description: 'Projection completed.',
+      },
+      projectedProtocolRef: 'proto-PIS-test',
+      projectedRunRef: 'run-PIS-test',
+      evidenceMap: {},
+      overlaySummaries: {},
+      diagnostics: [],
+    });
+
+    const MockImportService = vi.fn().mockImplementation(() => ({
+      importSource: mockImportSource,
+    }));
+
+    const MockProjectionService = vi.fn().mockImplementation(() => ({
+      executeProjection: mockExecuteProjection,
+    }));
+
+    vi.doMock('../../protocol/ProtocolIdeSourceImportService.js', () => ({
+      ProtocolIdeSourceImportService: MockImportService,
+    }));
+
+    vi.doMock('../../protocol/ProtocolIdeProjectionService.js', () => ({
+      ProtocolIdeProjectionService: MockProjectionService,
+    }));
+
+    const { createProtocolIdeHandlers: createHandlers } = await import('./ProtocolIdeHandlers.js');
+
+    const store = makeMockStore();
+    const ctx = makeMockCtx(store);
+    const handlers = createHandlers(ctx);
+
+    const request = {
+      body: {
+        directiveText: 'extract protocol from uploaded PDF',
+        source: {
+          sourceKind: 'uploaded_pdf',
+          uploadId: 'upload-abc123',
+          fileName: 'protocol.pdf',
+          mediaType: 'application/pdf',
+          contentBase64: 'AAAA',
+        },
+      },
+    } as unknown as FastifyRequest<{
+      Body: { directiveText?: string; source?: Record<string, unknown> };
+    }>;
+
+    const reply = makeMockReply();
+    const result = await handlers.createSession(request, reply);
+
+    expect(reply.status).toHaveBeenCalledWith(201);
+    expect(mockImportSource).toHaveBeenCalledTimes(1);
+    expect(mockExecuteProjection).toHaveBeenCalledTimes(1);
+    expect(mockExecuteProjection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionRef: expect.stringMatching(/^PIS-/),
+        directiveText: 'extract protocol from uploaded PDF',
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      sourceEvidenceRef: 'PROTO-001',
+      graphReviewRef: 'graph-PIS-test',
+      issueCardsRef: null,
+    });
+  });
+
+  it('returns projectionWarning when executeProjection throws', async () => {
+    const mockImportSource = vi.fn().mockResolvedValue({
+      sessionId: 'PIS-test',
+      status: 'imported',
+      vendorDocumentRef: null,
+      ingestionJobRef: null,
+      protocolImportRef: 'PROTO-001',
+      extractedTextRef: 'TEXT-001',
+      evidenceRefs: [],
+      evidenceCitations: [],
+      protocolImportState: 'ready',
+      protocolImportConfidence: 0.95,
+    });
+
+    const mockExecuteProjection = vi.fn().mockRejectedValue(new Error('Projection failed'));
+
+    const MockImportService = vi.fn().mockImplementation(() => ({
+      importSource: mockImportSource,
+    }));
+
+    const MockProjectionService = vi.fn().mockImplementation(() => ({
+      executeProjection: mockExecuteProjection,
+    }));
+
+    vi.doMock('../../protocol/ProtocolIdeSourceImportService.js', () => ({
+      ProtocolIdeSourceImportService: MockImportService,
+    }));
+
+    vi.doMock('../../protocol/ProtocolIdeProjectionService.js', () => ({
+      ProtocolIdeProjectionService: MockProjectionService,
+    }));
+
+    const { createProtocolIdeHandlers: createHandlers } = await import('./ProtocolIdeHandlers.js');
+
+    const store = makeMockStore();
+    const ctx = makeMockCtx(store);
+    const handlers = createHandlers(ctx);
+
+    const request = {
+      body: {
+        directiveText: 'extract protocol from uploaded PDF',
+        source: {
+          sourceKind: 'uploaded_pdf',
+          uploadId: 'upload-abc123',
+          fileName: 'protocol.pdf',
+          mediaType: 'application/pdf',
+          contentBase64: 'AAAA',
+        },
+      },
+    } as unknown as FastifyRequest<{
+      Body: { directiveText?: string; source?: Record<string, unknown> };
+    }>;
+
+    const reply = makeMockReply();
+    const result = await handlers.createSession(request, reply);
+
+    // Session is still created (201) even though projection failed
+    expect(reply.status).toHaveBeenCalledWith(201);
+    expect(mockImportSource).toHaveBeenCalledTimes(1);
+    expect(mockExecuteProjection).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      success: true,
+      sourceEvidenceRef: 'PROTO-001',
+      graphReviewRef: null,
+      projectionWarning: 'Projection failed',
+    });
+  });
+
+  it('returns projectionWarning when executeProjection returns failed status', async () => {
+    const mockImportSource = vi.fn().mockResolvedValue({
+      sessionId: 'PIS-test',
+      status: 'imported',
+      vendorDocumentRef: null,
+      ingestionJobRef: null,
+      protocolImportRef: 'PROTO-001',
+      extractedTextRef: 'TEXT-001',
+      evidenceRefs: [],
+      evidenceCitations: [],
+      protocolImportState: 'ready',
+      protocolImportConfidence: 0.95,
+    });
+
+    const mockExecuteProjection = vi.fn().mockResolvedValue({
+      status: 'failed',
+      eventGraphData: {
+        recordId: 'graph-PIS-test',
+        eventCount: 0,
+        description: 'Projection failed.',
+      },
+      projectedProtocolRef: null,
+      projectedRunRef: null,
+      evidenceMap: {},
+      overlaySummaries: {},
+      diagnostics: [],
+    });
+
+    const MockImportService = vi.fn().mockImplementation(() => ({
+      importSource: mockImportSource,
+    }));
+
+    const MockProjectionService = vi.fn().mockImplementation(() => ({
+      executeProjection: mockExecuteProjection,
+    }));
+
+    vi.doMock('../../protocol/ProtocolIdeSourceImportService.js', () => ({
+      ProtocolIdeSourceImportService: MockImportService,
+    }));
+
+    vi.doMock('../../protocol/ProtocolIdeProjectionService.js', () => ({
+      ProtocolIdeProjectionService: MockProjectionService,
+    }));
+
+    const { createProtocolIdeHandlers: createHandlers } = await import('./ProtocolIdeHandlers.js');
+
+    const store = makeMockStore();
+    const ctx = makeMockCtx(store);
+    const handlers = createHandlers(ctx);
+
+    const request = {
+      body: {
+        directiveText: 'extract protocol from uploaded PDF',
+        source: {
+          sourceKind: 'uploaded_pdf',
+          uploadId: 'upload-abc123',
+          fileName: 'protocol.pdf',
+          mediaType: 'application/pdf',
+          contentBase64: 'AAAA',
+        },
+      },
+    } as unknown as FastifyRequest<{
+      Body: { directiveText?: string; source?: Record<string, unknown> };
+    }>;
+
+    const reply = makeMockReply();
+    const result = await handlers.createSession(request, reply);
+
+    expect(reply.status).toHaveBeenCalledWith(201);
+    expect(mockImportSource).toHaveBeenCalledTimes(1);
+    expect(mockExecuteProjection).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      success: true,
+      sourceEvidenceRef: 'PROTO-001',
+      graphReviewRef: null,
+      projectionWarning: 'projection status failed',
+    });
+  });
+
+  it('skips projection when sourceEvidenceRef is null and sourceKind is pasted_url', async () => {
+    const mockImportSource = vi.fn().mockResolvedValue({
+      sessionId: 'PIS-test',
+      status: 'imported',
+      vendorDocumentRef: null,
+      ingestionJobRef: null,
+      protocolImportRef: null,
+      extractedTextRef: null,
+      evidenceRefs: [],
+      evidenceCitations: [],
+      protocolImportState: 'ready',
+      protocolImportConfidence: 0.95,
+    });
+
+    const mockExecuteProjection = vi.fn().mockResolvedValue({
+      status: 'success',
+      eventGraphData: {
+        recordId: 'graph-PIS-test',
+        eventCount: 5,
+        description: 'Projection completed.',
+      },
+      projectedProtocolRef: 'proto-PIS-test',
+      projectedRunRef: 'run-PIS-test',
+      evidenceMap: {},
+      overlaySummaries: {},
+      diagnostics: [],
+    });
+
+    const MockImportService = vi.fn().mockImplementation(() => ({
+      importSource: mockImportSource,
+    }));
+
+    const MockProjectionService = vi.fn().mockImplementation(() => ({
+      executeProjection: mockExecuteProjection,
+    }));
+
+    vi.doMock('../../protocol/ProtocolIdeSourceImportService.js', () => ({
+      ProtocolIdeSourceImportService: MockImportService,
+    }));
+
+    vi.doMock('../../protocol/ProtocolIdeProjectionService.js', () => ({
+      ProtocolIdeProjectionService: MockProjectionService,
+    }));
+
+    const { createProtocolIdeHandlers: createHandlers } = await import('./ProtocolIdeHandlers.js');
+
+    const store = makeMockStore();
+    const ctx = makeMockCtx(store);
+    const handlers = createHandlers(ctx);
+
+    const request = {
+      body: {
+        directiveText: 'extract protocol from URL',
+        source: {
+          sourceKind: 'pasted_url',
+          url: 'https://example.com/protocol.pdf',
+        },
+      },
+    } as unknown as FastifyRequest<{
+      Body: { directiveText?: string; source?: Record<string, unknown> };
+    }>;
+
+    const reply = makeMockReply();
+    const result = await handlers.createSession(request, reply);
+
+    expect(reply.status).toHaveBeenCalledWith(201);
+    expect(mockImportSource).toHaveBeenCalledTimes(1);
+    // executeProjection should NOT be called when sourceEvidenceRef is null and sourceKind is pasted_url
+    expect(mockExecuteProjection).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      success: true,
+      sourceEvidenceRef: null,
+      graphReviewRef: null,
     });
   });
 });

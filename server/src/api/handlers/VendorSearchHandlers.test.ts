@@ -213,6 +213,7 @@ describe('Protocol IDE intake validation', () => {
           uploadId: 'upload-abc123',
           fileName: 'protocol.pdf',
           mediaType: 'application/pdf',
+          contentBase64: 'AAAA',
         },
       };
 
@@ -223,6 +224,25 @@ describe('Protocol IDE intake validation', () => {
         expect(result.request.source.uploadId).toBe('upload-abc123');
         expect(result.request.source.fileName).toBe('protocol.pdf');
         expect(result.request.source.mediaType).toBe('application/pdf');
+        expect(result.request.source.contentBase64).toBe('AAAA');
+      }
+    });
+
+    it('rejects uploaded_pdf with missing contentBase64', () => {
+      const request = {
+        directiveText: 'extract protocol',
+        source: {
+          sourceKind: 'uploaded_pdf',
+          uploadId: 'upload-abc123',
+          fileName: 'protocol.pdf',
+          mediaType: 'application/pdf',
+        },
+      };
+
+      const result = validateIntakeRequest(request);
+      expect(result.valid).toBe(false);
+      if (!result.valid) {
+        expect(result.error).toBe('uploaded_pdf.source.contentBase64 is required.');
       }
     });
 

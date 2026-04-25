@@ -2541,16 +2541,18 @@ export const apiClient = {
     source:
       | { sourceKind: 'vendor_document'; vendor: string; title: string; landingUrl: string; pdfUrl?: string; snippet?: string; documentType?: string; sessionIdHint?: string }
       | { sourceKind: 'pasted_url'; url: string }
-      | { sourceKind: 'uploaded_pdf'; uploadId: string; fileName: string; mediaType: string }
+      | { sourceKind: 'uploaded_pdf'; uploadId: string; fileName: string; mediaType: string; contentBase64: string }
   }): Promise<{
     success: true
     sessionId: string
     status: string
     sourceSummary: string
     latestDirectiveText: string
-    sourceEvidenceRef: null
-    graphReviewRef: null
+    sourceEvidenceRef: string | null
+    graphReviewRef: string | null
     issueCardsRef: null
+    importWarning?: string
+    projectionWarning?: string
   } | {
     error: string
     message: string
@@ -2559,6 +2561,68 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify(payload),
     })
+  },
+
+  /**
+   * Fetch overlay summaries (deck, tools, reagents, budget) for a session.
+   *
+   * Returns null summaries when the session has no projection yet or when
+   * terminal artifacts are not yet persisted.
+   */
+  async getProtocolIdeOverlaySummaries(
+    sessionId: string,
+  ): Promise<{
+    success: true
+    deck: {
+      summary: string
+      slotsInUse: number
+      totalSlots: number
+      labware: Array<{
+        slot: string
+        labwareType: string
+        instanceId?: string
+        orientation?: 'landscape' | 'portrait'
+        evidenceLinks: Array<{ nodeId: string; label: string; kind: string }>
+      }>
+      pinnedSlots: Array<{ slot: string; labwareHint: string }>
+      autoFilledSlots: Array<{ slot: string; labwareHint: string; reason: string }>
+      conflicts: Array<{ slot: string; candidates: string[] }>
+      evidenceLinks: Array<{ nodeId: string; label: string; kind: string }>
+    } | null
+    tools: {
+      summary: string
+      pipettes: Array<{ type: string; channels: number; mountSide?: string; evidenceLinks: Array<{ nodeId: string; label: string; kind: string }> }>
+      tipRacks: Array<{ pipetteType: string; rackCount: number }>
+      evidenceLinks: Array<{ nodeId: string; label: string; kind: string }>
+    } | null
+    reagents: {
+      summary: string
+      reagentCount: number
+      reagents: Array<{
+        kind: string
+        totalVolumeUl: number
+        wellCount: number
+        concentration?: string
+        unit: string
+        evidenceLinks: Array<{ nodeId: string; label: string; kind: string }>
+      }>
+      evidenceLinks: Array<{ nodeId: string; label: string; kind: string }>
+    } | null
+    budget: {
+      summary: string
+      totalCost?: number
+      currency: string
+      lines: Array<{
+        description: string
+        category: string
+        estimatedCost?: number
+        currency: string
+        evidenceLinks: Array<{ nodeId: string; label: string; kind: string }>
+      }>
+      evidenceLinks: Array<{ nodeId: string; label: string; kind: string }>
+    } | null
+  }> {
+    return request(`/protocol-ide/sessions/${encodeURIComponent(sessionId)}/overlay-summaries`)
   },
 }
 

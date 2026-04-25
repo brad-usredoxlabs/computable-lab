@@ -44,6 +44,7 @@ import type { RelatedRecordsHandlers } from './handlers/RelatedRecordsHandlers.j
 import type { AiRecordDraftHandlers } from './handlers/AiRecordDraftHandlers.js';
 import type { ReadinessHandlers } from './handlers/ReadinessHandlers.js';
 import type { ProcurementHandlers } from './handlers/ProcurementHandlers.js';
+import type { ProtocolIdeHandlers } from './handlers/ProtocolIdeHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -64,6 +65,7 @@ export interface RouteOptions {
   configHandlers?: ConfigHandlers;
   metaHandlers?: MetaHandlers;
   protocolHandlers?: ProtocolHandlers;
+  protocolIdeHandlers?: ProtocolIdeHandlers;
   componentHandlers?: ComponentHandlers;
   executionHandlers?: ExecutionHandlers;
   measurementHandlers?: MeasurementHandlers;
@@ -533,6 +535,23 @@ export function registerRoutes(
     fastify.post('/protocols/lab-review', protocolHandlers.reviewLabProtocol.bind(protocolHandlers));
     fastify.get('/protocols/:id/load', protocolHandlers.loadProtocol.bind(protocolHandlers));
     fastify.post('/protocols/:id/bind', protocolHandlers.bindProtocol.bind(protocolHandlers));
+  }
+
+  // ============================================================================
+  // Protocol IDE Routes (optional - requires protocolIdeHandlers)
+  // ============================================================================
+
+  const { protocolIdeHandlers } = options;
+
+  if (protocolIdeHandlers) {
+    fastify.post('/protocol-ide/sessions', protocolIdeHandlers.createSession.bind(protocolIdeHandlers));
+    fastify.post('/protocol-ide/sessions/:sessionId/feedback', protocolIdeHandlers.submitFeedback.bind(protocolIdeHandlers));
+    fastify.get('/protocol-ide/sessions/:sessionId/rolling-summary', protocolIdeHandlers.getRollingSummary.bind(protocolIdeHandlers));
+    fastify.post('/protocol-ide/sessions/:sessionId/generate-issue-cards', protocolIdeHandlers.generateIssueCards.bind(protocolIdeHandlers));
+    fastify.get('/protocol-ide/sessions/:sessionId/issue-cards', protocolIdeHandlers.getIssueCards.bind(protocolIdeHandlers));
+    fastify.post('/protocol-ide/sessions/:sessionId/export-issue-cards', protocolIdeHandlers.exportIssueCards.bind(protocolIdeHandlers));
+    fastify.get('/protocol-ide/sessions/:sessionId/can-export', protocolIdeHandlers.canExport.bind(protocolIdeHandlers));
+    fastify.get('/protocol-ide/sessions/:sessionId/overlay-summaries', protocolIdeHandlers.getOverlaySummaries.bind(protocolIdeHandlers));
   }
 
   // ============================================================================

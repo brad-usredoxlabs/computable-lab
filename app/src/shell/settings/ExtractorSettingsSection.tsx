@@ -7,13 +7,19 @@
 import { useState, useCallback } from 'react'
 import { EditableSection, type SectionId } from './EditableSection'
 import { EditRow, SecretRow, SecretDisplay, resolveSecret, SelectRow, CheckboxRow, InfoRow } from './EditRow'
-import type { ExtractorProfileConfig } from '../../types/config'
+import type { ExtractorProfileConfig, AiConnectionTestResponse } from '../../types/config'
 
 interface Props {
   extractor: ExtractorProfileConfig | null
   editingSection: SectionId | null
   onEditChange: (id: SectionId | null) => void
   onSave: (patch: Record<string, unknown>) => Promise<{ restartRequired?: boolean }>
+  onTest: (req: {
+    provider?: 'openai' | 'openai-compatible'
+    baseUrl: string
+    apiKey?: string
+    model?: string
+  }) => Promise<AiConnectionTestResponse>
   saving: boolean
 }
 
@@ -40,17 +46,20 @@ const FEEDBACK_COLORS = {
   info: { bg: '#e7f5ff', text: '#1864ab', border: '#a5d8ff' },
 }
 
-export function ExtractorSettingsSection({ extractor, editingSection, onEditChange, onSave, saving }: Props) {
+export function ExtractorSettingsSection({ extractor, editingSection, onEditChange, onSave, onTest, saving }: Props) {
   // Extractor fields
   const [enabled, setEnabled] = useState(extractor?.enabled ?? false)
   const [provider, setProvider] = useState<'openai' | 'openai-compatible'>(inferProvider(extractor))
   const [baseUrl, setBaseUrl] = useState(extractor?.baseUrl ?? PROVIDER_DEFAULTS['openai-compatible'].baseUrl)
   const [model, setModel] = useState(extractor?.model ?? '')
+  const [customModel, setCustomModel] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [temperature, setTemperature] = useState(String(extractor?.temperature ?? 0.0))
   const [maxTokens, setMaxTokens] = useState(String(extractor?.max_tokens ?? 2048))
 
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error' | 'restart' | 'info'; message: string } | null>(null)
+  const [testing, setTesting] = useState(false)
+  const [modelOptions, setModelOptions] = useState<string[]>([])
 
   const resetForm = useCallback(() => {
     const inferredProvider = inferProvider(extractor)
@@ -58,9 +67,11 @@ export function ExtractorSettingsSection({ extractor, editingSection, onEditChan
     setProvider(inferredProvider)
     setBaseUrl(extractor?.baseUrl ?? PROVIDER_DEFAULTS[inferredProvider].baseUrl)
     setModel(extractor?.model ?? '')
+    setCustomModel('')
     setApiKey('')
     setTemperature(String(extractor?.temperature ?? 0.0))
     setMaxTokens(String(extractor?.max_tokens ?? 2048))
+    setModelOptions([])
     setFeedback(null)
   }, [extractor])
 
@@ -69,6 +80,48 @@ export function ExtractorSettingsSection({ extractor, editingSection, onEditChan
     setProvider(p)
     setBaseUrl(PROVIDER_DEFAULTS[p].baseUrl)
   }, [])
+
+  const testConnection = useCallback(async () => {
+    if (!baseUrl.trim()) {
+      setFeedback({ type: 'error', message: 'Base URL is required' })
+      return null
+    }
+
+    setTesting(true)
+    setFeedback(null)
+    try {
+      const resolvedModel = (model === '__custom__' ? customModel : model).trim()
+      const result = await onTest({
+        provider,
+        baseUrl: baseUrl.trim(),
+        apiKey: apiKey.trim() || undefined,
+        model: resolvedModel || undefined,
+      })
+
+      setModelOptions(result.models)
+      if (result.models.length > 0) {
+        const current = (model === '__custom__' ? customModel : model).trim()
+        if (!current || !result.models.includes(current)) {
+          setModel(result.models[0])
+        }
+      }
+      if (result.available) {
+        if (resolvedModel && result.modelWarning) {
+          setFeedback({ type: 'info', message: `Connected. ${result.modelWarning}` })
+        } else {
+          setFeedback({ type: 'success', message: `Connected. ${result.models.length} model(s) available.` })
+        }
+      } else {
+        setFeedback({ type: 'error', message: result.error || 'Connection test failed.' })
+      }
+      return result
+    } catch (err) {
+      setFeedback({ type: 'error', message: err instanceof Error ? err.message : 'Connection test failed.' })
+      return null
+    } finally {
+      setTesting(false)
+    }
+  }, [onTest, provider, baseUrl, apiKey, model, customModel])
 
   const handleEdit = useCallback((id: SectionId | null) => {
     if (id === 'extractor') {
@@ -83,7 +136,8 @@ export function ExtractorSettingsSection({ extractor, editingSection, onEditChan
       return { ok: false }
     }
 
-    if (!model.trim()) {
+    const resolvedModel = (model === '__custom__' ? customModel : model).trim()
+    if (!resolvedModel) {
       setFeedback({ type: 'error', message: 'Model is required' })
       return { ok: false }
     }
@@ -108,7 +162,7 @@ export function ExtractorSettingsSection({ extractor, editingSection, onEditChan
             provider,
             baseUrl: baseUrl.trim(),
             apiKey: resolveSecret(apiKey),
-            model: model.trim(),
+            model: resolvedModel,
             temperature: temp,
             max_tokens: tokens,
           },
@@ -122,7 +176,7 @@ export function ExtractorSettingsSection({ extractor, editingSection, onEditChan
       setFeedback({ type: 'success', message: 'Extractor configuration saved and activated.' })
     }
     return { ok: true, restartRequired: result.restartRequired }
-  }, [onSave, enabled, provider, baseUrl, model, apiKey, temperature, maxTokens])
+  }, [onSave, enabled, provider, baseUrl, model, customModel, apiKey, temperature, maxTokens])
 
   const handleSave = useCallback(async () => {
     await saveValidated()
@@ -130,7 +184,7 @@ export function ExtractorSettingsSection({ extractor, editingSection, onEditChan
   }, [saveValidated])
 
   const apiKeyConfigured = extractor?.apiKey !== undefined && extractor?.apiKey !== ''
-  const isBusy = saving
+  const isBusy = saving || testing
 
   // Read mode content
   const readContent = (
@@ -205,7 +259,35 @@ export function ExtractorSettingsSection({ extractor, editingSection, onEditChan
       />
       <EditRow label="Base URL" value={baseUrl} onChange={setBaseUrl} mono placeholder="http://thunderbeast:8889/v1" />
       <SecretRow label="API Key" value={apiKey} onChange={setApiKey} />
-      <EditRow label="Model" value={model} onChange={setModel} mono placeholder="Qwen/Qwen3.5-9B-Instruct" />
+      {modelOptions.length > 0 ? (
+        <SelectRow
+          label="Model"
+          value={model}
+          onChange={setModel}
+          options={[
+            ...(model && model !== '__custom__' && !modelOptions.includes(model)
+              ? [{ value: model, label: `${model} (current)` }]
+              : []),
+            ...modelOptions.map((m) => ({ value: m, label: m })),
+            { value: '__custom__', label: 'Custom model...' },
+          ]}
+        />
+      ) : (
+        <EditRow label="Model" value={model} onChange={setModel} mono placeholder="Qwen/Qwen3.5-9B-Instruct" />
+      )}
+      {model === '__custom__' && (
+        <EditRow label="Custom Model" value={customModel} onChange={setCustomModel} mono placeholder="custom-model-id" />
+      )}
+      <div className="settings-extractor-actions">
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => { void testConnection() }}
+          disabled={isBusy}
+        >
+          {testing ? 'Testing...' : 'Test & Fetch Models'}
+        </button>
+      </div>
       <EditRow
         label="Temperature"
         value={temperature}
@@ -224,17 +306,26 @@ export function ExtractorSettingsSection({ extractor, editingSection, onEditChan
   )
 
   return (
-    <EditableSection
-      id="extractor"
-      title="Extractor Settings"
-      editingSection={editingSection}
-      onEditChange={handleEdit}
-      saving={isBusy}
-      onSave={handleSave}
-      onCancel={resetForm}
-      readContent={readContent}
-      editContent={editContent}
-    />
+    <>
+      <EditableSection
+        id="extractor"
+        title="Extractor Settings"
+        editingSection={editingSection}
+        onEditChange={handleEdit}
+        saving={isBusy}
+        onSave={handleSave}
+        onCancel={resetForm}
+        readContent={readContent}
+        editContent={editContent}
+      />
+      <style>{`
+        .settings-extractor-actions {
+          display: flex;
+          justify-content: flex-end;
+          margin-bottom: 0.5rem;
+        }
+      `}</style>
+    </>
   )
 }
 

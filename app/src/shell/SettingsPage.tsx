@@ -232,6 +232,7 @@ export function SettingsPage() {
           editingSection={editingSection}
           onEditChange={setEditingSection}
           onSave={handleSave}
+          onTest={testAiConfig}
           saving={saving}
         />
 

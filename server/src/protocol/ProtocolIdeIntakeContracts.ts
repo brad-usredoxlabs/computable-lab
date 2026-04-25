@@ -66,6 +66,8 @@ export type UploadedPdfSource = {
   fileName: string;
   /** MIME type of the uploaded file */
   mediaType: string;
+  /** Base64-encoded PDF bytes (stripped of data-URI prefix) */
+  contentBase64: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -181,6 +183,7 @@ export function validateIntakeRequest(
       const uploadId = src['uploadId'];
       const fileName = src['fileName'];
       const mediaType = src['mediaType'];
+      const contentBase64 = src['contentBase64'];
       if (typeof uploadId !== 'string' || uploadId.trim().length === 0) {
         return { valid: false, error: 'uploaded_pdf.source.uploadId is required.' };
       }
@@ -189,6 +192,9 @@ export function validateIntakeRequest(
       }
       if (typeof mediaType !== 'string' || mediaType.trim().length === 0) {
         return { valid: false, error: 'uploaded_pdf.source.mediaType is required.' };
+      }
+      if (typeof contentBase64 !== 'string' || contentBase64.trim().length === 0) {
+        return { valid: false, error: 'uploaded_pdf.source.contentBase64 is required.' };
       }
       return {
         valid: true,
@@ -199,6 +205,7 @@ export function validateIntakeRequest(
             uploadId: uploadId.trim(),
             fileName: fileName.trim(),
             mediaType: mediaType.trim(),
+            contentBase64: contentBase64.trim(),
           },
         },
       };
