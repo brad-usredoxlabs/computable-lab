@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { runPipeline, DEFAULT_WHEN_EVALUATOR, type PipelineSpec, type PassStatus } from './PipelineRunner.js';
+import { runPipeline, DEFAULT_WHEN_EVALUATOR, type PipelineSpec, type PassStatus, type PassProgressEvent } from './PipelineRunner.js';
 import { PassRegistry } from './PassRegistry.js';
 import type { Pass, PassResult, PipelineState, CompilerDiagnosticOutcome } from './types.js';
 
@@ -682,6 +682,136 @@ describe('PipelineRunner', () => {
       
       expect(result.pass_outcomes.get('A')).toBe('needs-missing-fact');
       expect(result.pass_outcomes.get('B')).toBe('auto-resolved');
+    });
+  });
+
+  describe('onPassEvent callback', () => {
+    it('emits pass_started and pass_finished for each executed pass with correct indices', async () => {
+      const events: PassProgressEvent[] = [];
+      const registry = new PassRegistry();
+      const spec: PipelineSpec = {
+        pipelineId: 'test-pipeline',
+        entrypoint: 'main',
+        passes: [
+          { id: 'A', family: 'parse' },
+          { id: 'B', family: 'normalize' },
+          { id: 'C', family: 'validate' },
+        ],
+      };
+
+      registry.register(createSuccessPass('A', { a: 1 }));
+      registry.register(createSuccessPass('B', { b: 2 }));
+      registry.register(createSuccessPass('C', { c: 3 }));
+
+      await runPipeline(spec, registry, {}, DEFAULT_WHEN_EVALUATOR, (event) => {
+        events.push(event);
+      });
+
+      // 3 passes × 2 events each = 6 total
+      expect(events).toHaveLength(6);
+
+      // Verify alternating pattern: started, finished, started, finished, ...
+      expect(events[0]!.type).toBe('pass_started');
+      expect(events[0]!.pass_id).toBe('A');
+      expect(events[0]!.pass_index).toBe(0);
+      expect(events[0]!.total_passes).toBe(3);
+
+      expect(events[1]!.type).toBe('pass_finished');
+      expect(events[1]!.pass_id).toBe('A');
+      expect(events[1]!.pass_index).toBe(0);
+      expect(events[1]!.total_passes).toBe(3);
+      expect(events[1]!.durationMs).toBeGreaterThanOrEqual(0);
+
+      expect(events[2]!.type).toBe('pass_started');
+      expect(events[2]!.pass_id).toBe('B');
+      expect(events[2]!.pass_index).toBe(1);
+
+      expect(events[3]!.type).toBe('pass_finished');
+      expect(events[3]!.pass_id).toBe('B');
+      expect(events[3]!.pass_index).toBe(1);
+
+      expect(events[4]!.type).toBe('pass_started');
+      expect(events[4]!.pass_id).toBe('C');
+      expect(events[4]!.pass_index).toBe(2);
+
+      expect(events[5]!.type).toBe('pass_finished');
+      expect(events[5]!.pass_id).toBe('C');
+      expect(events[5]!.pass_index).toBe(2);
+    });
+
+    it('does not emit events when onPassEvent is not provided', async () => {
+      const registry = new PassRegistry();
+      const spec: PipelineSpec = {
+        pipelineId: 'test-pipeline',
+        entrypoint: 'main',
+        passes: [
+          { id: 'A', family: 'parse' },
+        ],
+      };
+
+      registry.register(createSuccessPass('A', { a: 1 }));
+
+      // No onPassEvent callback — should not throw
+      const result = await runPipeline(spec, registry, {});
+      expect(result.ok).toBe(true);
+    });
+
+    it('skips emission for passes skipped by when-condition', async () => {
+      const events: PassProgressEvent[] = [];
+      const registry = new PassRegistry();
+      const spec: PipelineSpec = {
+        pipelineId: 'test-pipeline',
+        entrypoint: 'main',
+        passes: [
+          { id: 'A', family: 'parse' },
+          { id: 'B', family: 'normalize', when: 'never' },
+          { id: 'C', family: 'validate' },
+        ],
+      };
+
+      registry.register(createSuccessPass('A', { a: 1 }));
+      registry.register(createSuccessPass('B', { b: 2 }));
+      registry.register(createSuccessPass('C', { c: 3 }));
+
+      await runPipeline(spec, registry, {}, DEFAULT_WHEN_EVALUATOR, (event) => {
+        events.push(event);
+      });
+
+      // Only A and C run (B is skipped by when), so 4 events
+      expect(events).toHaveLength(4);
+      expect(events[0]!.pass_id).toBe('A');
+      expect(events[1]!.pass_id).toBe('A');
+      expect(events[2]!.pass_id).toBe('C');
+      expect(events[3]!.pass_id).toBe('C');
+    });
+
+    it('swallows errors from a misbehaving callback without aborting the pipeline', async () => {
+      const registry = new PassRegistry();
+      const spec: PipelineSpec = {
+        pipelineId: 'test-pipeline',
+        entrypoint: 'main',
+        passes: [
+          { id: 'A', family: 'parse' },
+          { id: 'B', family: 'normalize' },
+        ],
+      };
+
+      registry.register(createSuccessPass('A', { a: 1 }));
+      registry.register(createSuccessPass('B', { b: 2 }));
+
+      let callCount = 0;
+      // Callback throws on second call
+      const throwingCallback = () => {
+        callCount++;
+        if (callCount > 1) throw new Error('callback error');
+      };
+
+      const result = await runPipeline(spec, registry, {}, DEFAULT_WHEN_EVALUATOR, throwingCallback);
+
+      // Pipeline should still succeed despite the throwing callback
+      expect(result.ok).toBe(true);
+      expect(result.outputs.get('A')).toEqual({ a: 1 });
+      expect(result.outputs.get('B')).toEqual({ b: 2 });
     });
   });
 });

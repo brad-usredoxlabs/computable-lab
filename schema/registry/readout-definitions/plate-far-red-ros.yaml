@@ -1,0 +1,17 @@
+kind: readout-definition
+id: RDEF-PLATE-FAR_RED-ROS
+name: Far-Red Fluorescence
+instrument_type: plate_reader
+mode: fluorescence
+channel_label: Far Red
+excitation_nm: 640
+emission_nm: 665
+units: RFU
+proxy_ref:
+  kind: ontology
+  id: GO:0006979
+  namespace: GO
+  label: response to oxidative stress
+tags:
+  - ros
+  - plate-reader

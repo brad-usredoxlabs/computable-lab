@@ -1,0 +1,9 @@
+kind: readout-definition
+id: RDEF-QPCR-HEX
+name: qPCR HEX Channel
+instrument_type: qpcr
+mode: ct
+channel_label: HEX
+units: Ct
+tags:
+  - qpcr

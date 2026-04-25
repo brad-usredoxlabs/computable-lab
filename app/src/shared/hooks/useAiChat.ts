@@ -152,8 +152,9 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
       if (isStreaming) return
 
       // Auto-reject existing preview before starting new stream
-      if (previewEvents.length > 0) {
+      if (previewEvents.length > 0 || previewLabwareAdditions.length > 0) {
         setPreviewEvents([])
+        setPreviewLabwareAdditions([])
         setUnresolvedRefs([])
         setMessages((prev) => [
           ...prev,
@@ -285,6 +286,24 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
               )
             )
             break
+          }
+
+          if (event.type === 'pipeline_diagnostics') {
+            const lines = [`Pipeline did not produce events (outcome=${event.outcome}).`]
+            if (event.diagnostics.length === 0) {
+              lines.push('No structured diagnostics available.')
+            } else {
+              for (const d of event.diagnostics) {
+                lines.push(`- ${d.pass_id}.${d.code}: ${d.message}`)
+              }
+            }
+            const sysMsg: ChatMessage = {
+              id: generateMessageId(),
+              role: 'system',
+              content: lines.join('\n'),
+              timestamp: Date.now(),
+            }
+            setMessages((prev) => [...prev, sysMsg])
           }
         }
       } catch (err: unknown) {
@@ -584,6 +603,9 @@ function buildAssistantContent(events: AiStreamEvent[]): string {
         break
       case 'error':
         parts.push(`Error: ${ev.message}`)
+        break
+      case 'pipeline_diagnostics':
+        // Diagnostics are rendered as a separate system message, not appended here.
         break
     }
   }

@@ -1,0 +1,9 @@
+kind: instrument-definition
+id: INSTDEF-GENERIC-GCMS
+name: Generic GC-MS
+instrument_type: gc_ms
+supported_readout_def_refs:
+  - kind: record
+    id: RDEF-GCMS-PEAK_AREA
+    type: readout-definition
+    label: GC-MS Peak Area

@@ -1,0 +1,16 @@
+kind: assay-definition
+id: ASSAY-MMP-PLATE_READER
+name: MMP Assay
+assay_type: mmp
+instrument_type: plate_reader
+readout_def_refs:
+  - kind: record
+    id: RDEF-PLATE-FITC-MMP
+    type: readout-definition
+    label: FITC Fluorescence
+expected_role_types:
+  - positive_control
+  - negative_control
+  - vehicle_control
+  - blank
+  - sample

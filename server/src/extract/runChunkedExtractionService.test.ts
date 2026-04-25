@@ -1,0 +1,362 @@
+/**
+ * Tests for runChunkedExtractionService
+ */
+
+import { describe, it, expect, vi } from 'vitest';
+import { runChunkedExtractionService } from './runChunkedExtractionService.js';
+import type {
+  ExtractionRunnerService,
+  RunExtractionServiceArgs,
+} from './ExtractionRunnerService.js';
+import type { ExtractionDraftBody } from './ExtractionDraftBuilder.js';
+
+describe('runChunkedExtractionService', () => {
+  // -----------------------------------------------------------------------
+  // (a) Below-threshold one-call path
+  // -----------------------------------------------------------------------
+  describe('below-threshold', () => {
+    it('calls service.run once and returns the result unchanged', async () => {
+      const shortText = 'This is a short document that fits in one chunk.';
+      const expectedBody: ExtractionDraftBody = {
+        kind: 'extraction-draft',
+        recordId: 'XDR-test-v1',
+        source_artifact: { kind: 'freetext', id: 'prompt' },
+        status: 'pending_review',
+        candidates: [
+          {
+            target_kind: 'material',
+            draft: { name: 'reservoir' },
+            confidence: 0.85,
+          },
+        ],
+        created_at: '2026-01-01T00:00:00.000Z',
+        diagnostics: [],
+      };
+
+      const fakeService = {
+        run: vi.fn().mockResolvedValue(expectedBody),
+      } as unknown as ExtractionRunnerService;
+
+      const req: RunExtractionServiceArgs = {
+        target_kind: 'material',
+        text: shortText,
+        source: { kind: 'freetext', id: 'prompt' },
+      };
+
+      const result = await runChunkedExtractionService(fakeService, req);
+
+      expect(fakeService.run).toHaveBeenCalledTimes(1);
+      expect(fakeService.run).toHaveBeenCalledWith(req);
+      expect(result).toBe(expectedBody); // same reference — byte-identical
+    });
+
+    it('uses custom thresholdChars option', async () => {
+      const text = 'A'.repeat(15000);
+      const fakeService = {
+        run: vi.fn().mockResolvedValue({
+          kind: 'extraction-draft',
+          recordId: 'XDR-test-v1',
+          source_artifact: { kind: 'freetext', id: 'prompt' },
+          status: 'pending_review',
+          candidates: [],
+          created_at: '2026-01-01T00:00:00.000Z',
+        } as ExtractionDraftBody),
+      } as unknown as ExtractionRunnerService;
+
+      const req: RunExtractionServiceArgs = {
+        target_kind: 'material',
+        text,
+        source: { kind: 'freetext', id: 'prompt' },
+      };
+
+      // With threshold 20000, text (15000) is below → single call
+      const result = await runChunkedExtractionService(fakeService, req, {
+        thresholdChars: 20000,
+      });
+
+      expect(fakeService.run).toHaveBeenCalledTimes(1);
+      expect(result).toBeDefined();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // (b) Above-threshold N-chunk path with dedup retaining highest confidence
+  // -----------------------------------------------------------------------
+  describe('above-threshold', () => {
+    it('chunks above threshold and dedupes candidates by (target_kind, draft) keeping highest confidence', async () => {
+      const longText = 'A'.repeat(20000);
+      let callCount = 0;
+      const fakeService = {
+        run: vi.fn(async (req: RunExtractionServiceArgs) => {
+          const idx = callCount++;
+          return {
+            kind: 'extraction-draft',
+            recordId: 'XDR-test-v1',
+            source_artifact: { kind: 'file', id: 'test.pdf' },
+            status: 'pending_review',
+            candidates: [
+              {
+                target_kind: 'material',
+                draft: { name: 'X' },
+                confidence: 0.5 + idx * 0.1,
+              },
+            ],
+            created_at: '2026-01-01T00:00:00.000Z',
+            diagnostics: [],
+          } as ExtractionDraftBody;
+        }),
+      } as unknown as ExtractionRunnerService;
+
+      const req: RunExtractionServiceArgs = {
+        target_kind: 'material',
+        text: longText,
+        source: { kind: 'file', id: 'test.pdf' },
+      };
+
+      const result = await runChunkedExtractionService(fakeService, req, {
+        chunkOpts: { maxCharsPerChunk: 5000, overlapChars: 0 },
+      });
+
+      // 20000 chars / 5000 per chunk = 4 chunks
+      expect(fakeService.run).toHaveBeenCalledTimes(4);
+
+      // All candidates have the same (target_kind, draft) → deduped to 1
+      expect(result.candidates).toHaveLength(1);
+      // Highest confidence (0.5 + 3*0.1 = 0.8) should be kept
+      expect(result.candidates[0]!.confidence).toBe(0.8);
+    });
+
+    it('merges distinct candidates from different chunks', async () => {
+      const longText = 'A'.repeat(20000);
+      let callCount = 0;
+      const fakeService = {
+        run: vi.fn(async (req: RunExtractionServiceArgs) => {
+          const idx = callCount++;
+          return {
+            kind: 'extraction-draft',
+            recordId: 'XDR-test-v1',
+            source_artifact: { kind: 'file', id: 'test.pdf' },
+            status: 'pending_review',
+            candidates: [
+              {
+                target_kind: idx === 0 ? 'material' : 'protocol',
+                draft: { name: `item_${idx}` },
+                confidence: 0.9,
+              },
+            ],
+            created_at: '2026-01-01T00:00:00.000Z',
+            diagnostics: [],
+          } as ExtractionDraftBody;
+        }),
+      } as unknown as ExtractionRunnerService;
+
+      const req: RunExtractionServiceArgs = {
+        target_kind: 'material',
+        text: longText,
+        source: { kind: 'file', id: 'test.pdf' },
+      };
+
+      const result = await runChunkedExtractionService(fakeService, req, {
+        chunkOpts: { maxCharsPerChunk: 5000, overlapChars: 0 },
+      });
+
+      expect(fakeService.run).toHaveBeenCalledTimes(4);
+      // 4 distinct (target_kind, draft) pairs → 4 candidates
+      expect(result.candidates).toHaveLength(4);
+    });
+
+    it('logs chunked info once when threshold is crossed', async () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const longText = 'A'.repeat(20000);
+      const fakeService = {
+        run: vi.fn().mockResolvedValue({
+          kind: 'extraction-draft',
+          recordId: 'XDR-test-v1',
+          source_artifact: { kind: 'file', id: 'test.pdf' },
+          status: 'pending_review',
+          candidates: [],
+          created_at: '2026-01-01T00:00:00.000Z',
+        } as ExtractionDraftBody),
+      } as unknown as ExtractionRunnerService;
+
+      const req: RunExtractionServiceArgs = {
+        target_kind: 'material',
+        text: longText,
+        source: { kind: 'file', id: 'test.pdf' },
+      };
+
+      await runChunkedExtractionService(fakeService, req);
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '[extract_entities] chunked',
+        expect.objectContaining({ totalChars: 20000 }),
+      );
+      consoleSpy.mockRestore();
+    });
+
+    it('does NOT log when below threshold', async () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const shortText = 'short';
+      const fakeService = {
+        run: vi.fn().mockResolvedValue({
+          kind: 'extraction-draft',
+          recordId: 'XDR-test-v1',
+          source_artifact: { kind: 'freetext', id: 'prompt' },
+          status: 'pending_review',
+          candidates: [],
+          created_at: '2026-01-01T00:00:00.000Z',
+        } as ExtractionDraftBody),
+      } as unknown as ExtractionRunnerService;
+
+      const req: RunExtractionServiceArgs = {
+        target_kind: 'material',
+        text: shortText,
+        source: { kind: 'freetext', id: 'prompt' },
+      };
+
+      await runChunkedExtractionService(fakeService, req);
+
+      expect(consoleSpy).not.toHaveBeenCalledWith(
+        '[extract_entities] chunked',
+        expect.anything(),
+      );
+      consoleSpy.mockRestore();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // (c) One-chunk rejection produces chunk-tagged diagnostic, other chunks merge
+  // -----------------------------------------------------------------------
+  describe('chunk failure resilience', () => {
+    it('one-chunk rejection produces chunk-tagged diagnostic and other chunks still merge', async () => {
+      const longText = 'A'.repeat(20000);
+      let callCount = 0;
+      const fakeService = {
+        run: vi.fn(async (req: RunExtractionServiceArgs) => {
+          callCount++;
+          if (callCount === 2) {
+            throw new Error('simulated timeout on chunk 2');
+          }
+          return {
+            kind: 'extraction-draft',
+            recordId: 'XDR-test-v1',
+            source_artifact: { kind: 'file', id: 'test.pdf' },
+            status: 'pending_review',
+            candidates: [
+              {
+                target_kind: 'material',
+                draft: { name: `item_${callCount}` },
+                confidence: 0.9,
+              },
+            ],
+            created_at: '2026-01-01T00:00:00.000Z',
+            diagnostics: [],
+          } as ExtractionDraftBody;
+        }),
+      } as unknown as ExtractionRunnerService;
+
+      const req: RunExtractionServiceArgs = {
+        target_kind: 'material',
+        text: longText,
+        source: { kind: 'file', id: 'test.pdf' },
+      };
+
+      const result = await runChunkedExtractionService(fakeService, req, {
+        chunkOpts: { maxCharsPerChunk: 5000, overlapChars: 0 },
+      });
+
+      // All 4 chunks were attempted (chunk 2 failed but didn't abort)
+      expect(fakeService.run).toHaveBeenCalledTimes(4);
+
+      // 3 successful chunks → 3 candidates (all distinct drafts)
+      expect(result.candidates).toHaveLength(3);
+
+      // One diagnostic for the failed chunk
+      const failedDiags = result.diagnostics.filter(
+        (d) => d.code === 'chunk_extraction_failed',
+      );
+      expect(failedDiags).toHaveLength(1);
+      expect(failedDiags[0]!.severity).toBe('warning');
+      expect((failedDiags[0]!.details as Record<string, unknown>)?.chunk_index).toBe(1);
+      expect(failedDiags[0]!.message).toBe('simulated timeout on chunk 2');
+    });
+
+    it('all chunks fail → candidates empty, diagnostics has one warning per chunk', async () => {
+      const longText = 'A'.repeat(20000);
+      const fakeService = {
+        run: vi.fn().mockRejectedValue(new Error('always fails')),
+      } as unknown as ExtractionRunnerService;
+
+      const req: RunExtractionServiceArgs = {
+        target_kind: 'material',
+        text: longText,
+        source: { kind: 'file', id: 'test.pdf' },
+      };
+
+      const result = await runChunkedExtractionService(fakeService, req, {
+        chunkOpts: { maxCharsPerChunk: 5000, overlapChars: 0 },
+      });
+
+      expect(fakeService.run).toHaveBeenCalledTimes(4);
+      expect(result.candidates).toHaveLength(0);
+      expect(result.diagnostics).toHaveLength(4);
+      for (const d of result.diagnostics) {
+        expect(d.code).toBe('chunk_extraction_failed');
+        expect(d.severity).toBe('warning');
+      }
+    });
+
+    it('single chunk produced (text just over threshold) still goes through chunked path', async () => {
+      const text = 'A'.repeat(12001); // just over default 12000 threshold
+      const fakeService = {
+        run: vi.fn().mockResolvedValue({
+          kind: 'extraction-draft',
+          recordId: 'XDR-test-v1',
+          source_artifact: { kind: 'file', id: 'test.pdf' },
+          status: 'pending_review',
+          candidates: [
+            { target_kind: 'material', draft: { name: 'X' }, confidence: 0.9 },
+          ],
+          created_at: '2026-01-01T00:00:00.000Z',
+          diagnostics: [],
+        } as ExtractionDraftBody),
+      } as unknown as ExtractionRunnerService;
+
+      const req: RunExtractionServiceArgs = {
+        target_kind: 'material',
+        text,
+        source: { kind: 'file', id: 'test.pdf' },
+      };
+
+      const result = await runChunkedExtractionService(fakeService, req);
+
+      // chunkText with default 8000 maxChars will produce 2 chunks for 12001 chars
+      expect(fakeService.run).toHaveBeenCalledTimes(2);
+      expect(result.candidates).toHaveLength(1);
+    });
+
+    it('empty text returns empty result without crashing', async () => {
+      const fakeService = {
+        run: vi.fn().mockResolvedValue({
+          kind: 'extraction-draft',
+          recordId: 'XDR-test-v1',
+          source_artifact: { kind: 'freetext', id: 'prompt' },
+          status: 'pending_review',
+          candidates: [],
+          created_at: '2026-01-01T00:00:00.000Z',
+        } as ExtractionDraftBody),
+      } as unknown as ExtractionRunnerService;
+
+      const req: RunExtractionServiceArgs = {
+        target_kind: 'material',
+        text: '',
+        source: { kind: 'freetext', id: 'prompt' },
+      };
+
+      const result = await runChunkedExtractionService(fakeService, req);
+
+      expect(fakeService.run).toHaveBeenCalledTimes(1);
+      expect(result.candidates).toHaveLength(0);
+    });
+  });
+});

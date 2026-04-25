@@ -8,6 +8,7 @@
 import type { Pass, PassRunArgs, PassResult, PassDiagnostic } from '../types.js';
 import type { ResourceManifest } from '../CompileContracts.js';
 import type { ExtractionRunnerService, RunExtractionServiceArgs } from '../../../extract/ExtractionRunnerService.js';
+import { runChunkedExtractionService } from '../../../extract/runChunkedExtractionService.js';
 import type { ExtractionDraftBody } from '../../../extract/ExtractionDraftBuilder.js';
 import type { ChatMessage, CompletionRequest } from '../../../ai/types.js';
 import { decodeAttachmentText } from '../../../extract/decodeAttachment.js';
@@ -104,7 +105,7 @@ export function createExtractEntitiesPass(
         };
         
         try {
-          const result: ExtractionDraftBody = await deps.extractionService.run(runRequest);
+          const result: ExtractionDraftBody = await runChunkedExtractionService(deps.extractionService, runRequest);
           
           // Extract candidates from the draft body
           // The ExtractionDraftBody has a candidates array with target_kind and other fields
@@ -186,7 +187,7 @@ export function createExtractEntitiesPass(
         };
 
         try {
-          const result: ExtractionDraftBody = await deps.extractionService.run(runRequest);
+          const result: ExtractionDraftBody = await runChunkedExtractionService(deps.extractionService, runRequest);
           
           for (const cand of result.candidates ?? []) {
             const candidate = cand as Record<string, unknown>;

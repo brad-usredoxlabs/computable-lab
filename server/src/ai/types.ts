@@ -347,7 +347,8 @@ export type AgentEvent =
   | { type: 'text_delta'; delta: string }
   | { type: 'draft'; events: PlateEventProposal[] }
   | { type: 'done'; result: AgentResult }
-  | { type: 'error'; message: string };
+  | { type: 'error'; message: string }
+  | { type: 'pipeline_diagnostics'; outcome: import('../compiler/pipeline/CompileContracts.js').CompileOutcome; diagnostics: Array<{ pass_id: string; code: string; severity: 'info' | 'warning' | 'error'; message: string }> };
 
 // ============================================================================
 // Inference client interface

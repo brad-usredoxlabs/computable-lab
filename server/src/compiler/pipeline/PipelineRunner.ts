@@ -63,6 +63,17 @@ export interface WhenEvaluator {
 }
 
 /**
+ * Event emitted at each pass boundary for external progress tracking.
+ */
+export interface PassProgressEvent {
+  type: 'pass_started' | 'pass_finished';
+  pass_id: string;
+  pass_index: number;
+  total_passes: number;
+  durationMs?: number;
+}
+
+/**
  * Resolve a dotted path through a record.
  * Returns the value at the path, or undefined if any segment is missing.
  */
@@ -160,6 +171,7 @@ export async function runPipeline(
   registry: PassRegistry,
   input: Record<string, unknown>,
   whenEvaluator: WhenEvaluator = DEFAULT_WHEN_EVALUATOR,
+  onPassEvent?: (event: PassProgressEvent) => void,
 ): Promise<PipelineRunResult> {
   const outputs = new Map<string, unknown>();
   const diagnostics: PassDiagnostic[] = [];
@@ -278,6 +290,16 @@ export async function runPipeline(
     }
 
     // Execute the pass
+    const pass_index = sortedPasses.indexOf(passId);
+    const total_passes = sortedPasses.length;
+
+    try {
+      onPassEvent?.({ type: 'pass_started', pass_id: passId, pass_index, total_passes });
+    } catch {
+      /* swallow — callback must not abort the pipeline */
+    }
+
+    const _t0 = Date.now();
     let passResult: PassResult;
     try {
       passResult = await pass.run({ pass_id: passId, state });
@@ -294,6 +316,12 @@ export async function runPipeline(
           },
         ],
       };
+    }
+
+    try {
+      onPassEvent?.({ type: 'pass_finished', pass_id: passId, pass_index, total_passes, durationMs: Date.now() - _t0 });
+    } catch {
+      /* swallow — callback must not abort the pipeline */
     }
 
     // Record status and handle result

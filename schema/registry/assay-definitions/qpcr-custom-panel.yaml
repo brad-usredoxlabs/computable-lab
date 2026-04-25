@@ -1,0 +1,60 @@
+kind: assay-definition
+id: ASSAY-QPCR-CUSTOM_PANEL
+name: qPCR Custom Panel
+assay_type: qpcr_panel
+instrument_type: qpcr
+readout_def_refs:
+  - kind: record
+    id: RDEF-QPCR-FAM
+    type: readout-definition
+    label: qPCR FAM Channel
+  - kind: record
+    id: RDEF-QPCR-HEX
+    type: readout-definition
+    label: qPCR HEX Channel
+  - kind: record
+    id: RDEF-QPCR-CY5
+    type: readout-definition
+    label: qPCR Cy5 Channel
+panel_targets:
+  - name: IL6
+    target_ref:
+      kind: ontology
+      id: NCIT:C49695
+      namespace: NCIT
+      label: IL6 Gene
+    readout_def_ref:
+      kind: record
+      id: RDEF-QPCR-FAM
+      type: readout-definition
+      label: qPCR FAM Channel
+    panel_role: target
+  - name: GAPDH
+    target_ref:
+      kind: ontology
+      id: NCIT:C104412
+      namespace: NCIT
+      label: GAPDH Gene
+    readout_def_ref:
+      kind: record
+      id: RDEF-QPCR-HEX
+      type: readout-definition
+      label: qPCR HEX Channel
+    panel_role: housekeeping
+  - name: ACTB
+    target_ref:
+      kind: ontology
+      id: NCIT:C103969
+      namespace: NCIT
+      label: ACTB Gene
+    readout_def_ref:
+      kind: record
+      id: RDEF-QPCR-CY5
+      type: readout-definition
+      label: qPCR Cy5 Channel
+    panel_role: reference
+expected_role_types:
+  - positive_control
+  - no_template_control
+  - housekeeping_control
+  - sample

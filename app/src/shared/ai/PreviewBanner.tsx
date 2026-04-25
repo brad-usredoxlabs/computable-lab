@@ -60,6 +60,14 @@ export function PreviewBanner({ previewEvents, previewLabwareAdditions = [], pre
           </ul>
         </div>
       )}
+      {previewLabwareAdditions.length > 0 && previewEvents.length === 0 && (
+        <p
+          data-testid="preview-banner-labware-hint"
+          style={{ fontSize: '0.85em', color: '#6c757d', marginTop: '0.5rem' }}
+        >
+          Accept to add to the editor — a translucent placeholder is shown in the labware pane.
+        </p>
+      )}
       {previewEvents.length > 0 && (
         <span className="preview-banner__info">
           {previewEvents.length} event{previewEvents.length !== 1 ? 's' : ''}

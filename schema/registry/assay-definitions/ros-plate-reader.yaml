@@ -1,0 +1,17 @@
+kind: assay-definition
+id: ASSAY-ROS-PLATE_READER
+name: ROS Assay
+assay_type: ros
+instrument_type: plate_reader
+readout_def_refs:
+  - kind: record
+    id: RDEF-PLATE-FAR_RED-ROS
+    type: readout-definition
+    label: Far-Red Fluorescence
+expected_role_types:
+  - positive_control
+  - negative_control
+  - vehicle_control
+  - blank
+  - sample
+notes: Reactive oxygen species readout with far-red fluorescence.

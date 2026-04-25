@@ -6,7 +6,7 @@
  */
 
 import { PassRegistry } from '../compiler/pipeline/PassRegistry.js';
-import { runPipeline } from '../compiler/pipeline/PipelineRunner.js';
+import { runPipeline, type PassProgressEvent } from '../compiler/pipeline/PipelineRunner.js';
 import { loadPipeline } from '../compiler/pipeline/PipelineLoader.js';
 import {
   createExtractEntitiesPass,
@@ -83,6 +83,8 @@ export interface RunChatbotCompileArgs {
   /** Optional conversation identifier used to key the lab-state cache. */
   conversationId?: string;
   model?: string;
+  /** Optional callback invoked at each pass boundary for progress tracking. */
+  onPassEvent?: (event: PassProgressEvent) => void;
 }
 
 export interface RunChatbotCompileResult {
@@ -145,7 +147,7 @@ export async function runChatbotCompile(
     prompt: args.prompt,
     attachments: args.attachments ?? [],
     labState: effectivePrior,
-  });
+  }, undefined, args.onPassEvent);
 
   // Extract outputs from each pass; all are optional (pass may have been skipped or empty)
   const ai = (result.outputs.get('ai_precompile') ?? {}) as Partial<AiPrecompileOutput>;

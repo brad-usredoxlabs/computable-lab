@@ -1,0 +1,17 @@
+kind: instrument-definition
+id: INSTDEF-GENERIC-QPCR
+name: Generic qPCR Instrument
+instrument_type: qpcr
+supported_readout_def_refs:
+  - kind: record
+    id: RDEF-QPCR-FAM
+    type: readout-definition
+    label: qPCR FAM Channel
+  - kind: record
+    id: RDEF-QPCR-HEX
+    type: readout-definition
+    label: qPCR HEX Channel
+  - kind: record
+    id: RDEF-QPCR-CY5
+    type: readout-definition
+    label: qPCR Cy5 Channel

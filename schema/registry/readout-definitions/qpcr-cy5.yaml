@@ -1,0 +1,9 @@
+kind: readout-definition
+id: RDEF-QPCR-CY5
+name: qPCR Cy5 Channel
+instrument_type: qpcr
+mode: ct
+channel_label: Cy5
+units: Ct
+tags:
+  - qpcr

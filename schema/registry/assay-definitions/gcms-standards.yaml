@@ -1,0 +1,16 @@
+kind: assay-definition
+id: ASSAY-GCMS-STANDARDS
+name: GC Standards Panel
+assay_type: metabolomics_gc
+instrument_type: gc_ms
+readout_def_refs:
+  - kind: record
+    id: RDEF-GCMS-PEAK_AREA
+    type: readout-definition
+    label: GC-MS Peak Area
+expected_role_types:
+  - blank
+  - standard
+  - internal_standard
+  - qc_sample
+  - unknown_sample

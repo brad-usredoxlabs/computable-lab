@@ -63,6 +63,17 @@ export interface AiErrorEvent {
   code?: string
 }
 
+export interface AiPipelineDiagnosticsEvent {
+  type: 'pipeline_diagnostics'
+  outcome: string
+  diagnostics: Array<{
+    pass_id: string
+    code: string
+    severity: 'info' | 'warning' | 'error'
+    message: string
+  }>
+}
+
 export type AiStreamEvent =
   | AiStatusEvent
   | AiToolCallEvent
@@ -72,6 +83,7 @@ export type AiStreamEvent =
   | AiDraftEvent
   | AiDoneEvent
   | AiErrorEvent
+  | AiPipelineDiagnosticsEvent
 
 // =============================================================================
 // Agent Result (final output from AI)

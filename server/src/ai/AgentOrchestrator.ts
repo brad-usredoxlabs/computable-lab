@@ -23,9 +23,30 @@ import type {
 import { buildSystemPrompt, buildSurfaceAwarePrompt } from './systemPrompt.js';
 import { resolveMentionsForPrompt, buildResolvedContextMessage } from './resolveMentions.js';
 import { runChatbotCompile } from './runChatbotCompile.js';
+import type { PassProgressEvent } from '../compiler/pipeline/PipelineRunner.js';
 import { getDefaultLabStateCache } from '../compiler/state/LabStateCache.js';
 import { decodeAttachmentText } from '../extract/decodeAttachment.js';
 import type { PlateEventPrimitive } from '../compiler/biology/BiologyVerbExpander.js';
+
+/**
+ * Friendly labels for compile-pipeline pass ids, used to surface
+ * per-pass progress in the chat UI during the silent compile window.
+ */
+const PASS_LABELS: Record<string, string> = {
+  extract_entities: 'Extracting entities from prompt and attachments…',
+  ai_precompile: 'Asking the model to plan candidate events (LLM)…',
+  expand_biology_verbs: 'Expanding biology verbs…',
+  resolve_labware: 'Resolving labware references…',
+  apply_directives: 'Applying directives…',
+  expand_patterns: 'Expanding stamp patterns…',
+  expand_protocol: 'Expanding protocol…',
+  resolve_roles: 'Resolving role-to-well coordinates…',
+  mint_materials: 'Minting new materials…',
+  compute_volumes: 'Computing volumes…',
+  compute_resources: 'Computing tip and reservoir requirements…',
+  plan_deck_layout: 'Planning deck layout…',
+  validate: 'Validating…',
+};
 
 /**
  * Parse the agent's final text response into an AgentResult.
@@ -217,6 +238,15 @@ export function createAgentOrchestrator(
           labStateCache: getDefaultLabStateCache(),
         },
         ...(inferenceConfig.model ? { model: inferenceConfig.model } : {}),
+        onPassEvent: (event: PassProgressEvent) => {
+          if (event.type !== 'pass_started') return;
+          const message = PASS_LABELS[event.pass_id] ?? `Running ${event.pass_id}…`;
+          try {
+            onEvent?.({ type: 'status', message });
+          } catch {
+            /* swallow — streaming must not abort the pipeline */
+          }
+        },
       });
       // Outcome-based forwarding: decide whether to short-circuit the LLM
       // fallback based on compileResult.outcome and terminalArtifacts, not
@@ -309,6 +339,15 @@ export function createAgentOrchestrator(
       } else {
         // Pipeline produced no events and no gaps (or outcome is 'error') —
         // fall through to LLM fallback loop.
+
+        // Emit pipeline diagnostics so the chat UI can surface why the
+        // pipeline fell through (spec-020).
+        const filtered = (compileResult.diagnostics ?? [])
+          .filter(d => d.severity === 'error' || d.severity === 'warning')
+          .slice(0, 6)
+          .map(d => ({ pass_id: d.pass_id, code: d.code, severity: d.severity, message: d.message }));
+        onEvent?.({ type: 'pipeline_diagnostics', outcome: compileResult.outcome, diagnostics: filtered });
+
         console.log(`[agent ${tid}] outcome=${compileResult.outcome}, hasArtifacts=${hasArtifacts}; falling through to LLM loop`);
       }
 

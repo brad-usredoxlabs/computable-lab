@@ -1,0 +1,17 @@
+kind: instrument-definition
+id: INSTDEF-GENERIC-PLATE_READER
+name: Generic Plate Reader
+instrument_type: plate_reader
+supported_readout_def_refs:
+  - kind: record
+    id: RDEF-PLATE-FAR_RED-ROS
+    type: readout-definition
+    label: Far-Red Fluorescence
+  - kind: record
+    id: RDEF-PLATE-FITC-MMP
+    type: readout-definition
+    label: FITC Fluorescence
+  - kind: record
+    id: RDEF-PLATE-ABS450
+    type: readout-definition
+    label: Absorbance 450 nm

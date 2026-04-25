@@ -1,0 +1,9 @@
+kind: readout-definition
+id: RDEF-GCMS-PEAK_AREA
+name: GC-MS Peak Area
+instrument_type: gc_ms
+mode: peak_area
+channel_label: Peak Area
+units: a.u.
+tags:
+  - gc-ms

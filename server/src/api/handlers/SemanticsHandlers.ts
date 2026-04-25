@@ -2,6 +2,9 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AppContext } from '../../server.js';
 import type { ApiError } from '../types.js';
 import type { RecordEnvelope, RecordStore, StoreResult } from '../../store/types.js';
+import { getInstrumentRegistry, type InstrumentDefinition } from '../../registry/InstrumentRegistry.js';
+import { getReadoutDefinitionRegistry, type ReadoutDefinition } from '../../registry/ReadoutDefinitionRegistry.js';
+import { getAssayDefinitionRegistry, type AssayDefinition } from '../../registry/AssayDefinitionRegistry.js';
 
 type RefShape = {
   kind: 'record' | 'ontology';
@@ -12,53 +15,7 @@ type RefShape = {
   uri?: string;
 };
 
-type InstrumentType = 'plate_reader' | 'qpcr' | 'gc_ms' | 'lc_ms' | 'microscopy' | 'other';
 type RoleFamily = 'sample' | 'control' | 'calibration';
-
-type InstrumentDefinition = {
-  kind: 'instrument-definition';
-  id: string;
-  name: string;
-  vendor?: string;
-  model?: string;
-  instrument_type: InstrumentType;
-  supported_readout_def_refs?: RefShape[];
-  tags?: string[];
-};
-
-type ReadoutDefinition = {
-  kind: 'readout-definition';
-  id: string;
-  name: string;
-  instrument_type: InstrumentType;
-  mode: 'fluorescence' | 'absorbance' | 'luminescence' | 'ct' | 'peak_area' | 'image_feature' | 'other';
-  channel_label?: string;
-  excitation_nm?: number;
-  emission_nm?: number;
-  units?: string;
-  proxy_ref?: RefShape;
-  target_ref?: RefShape;
-  tags?: string[];
-};
-
-type AssayDefinition = {
-  kind: 'assay-definition';
-  id: string;
-  name: string;
-  assay_type: string;
-  instrument_type: InstrumentType;
-  readout_def_refs: RefShape[];
-  target_refs?: RefShape[];
-  panel_targets?: Array<{
-    name: string;
-    target_ref?: RefShape;
-    readout_def_ref: RefShape;
-    panel_role: 'target' | 'housekeeping' | 'positive_control' | 'no_template_control' | 'reference' | 'other';
-  }>;
-  expected_role_types?: string[];
-  notes?: string;
-  tags?: string[];
-};
 
 type MeasurementContextBody = {
   name?: string;
@@ -208,200 +165,92 @@ function generatedContextScopeField(roleFamily: RoleFamily): 'control_context' |
   return roleFamily === 'control' ? 'control_context' : 'treated_context';
 }
 
-const READOUTS: ReadoutDefinition[] = [
-  {
-    kind: 'readout-definition',
-    id: 'RDEF-PLATE-FAR_RED-ROS',
-    name: 'Far-Red Fluorescence',
-    instrument_type: 'plate_reader',
-    mode: 'fluorescence',
-    channel_label: 'Far Red',
-    excitation_nm: 640,
-    emission_nm: 665,
-    units: 'RFU',
-    proxy_ref: { kind: 'ontology', id: 'GO:0006979', namespace: 'GO', label: 'response to oxidative stress' },
-    tags: ['ros', 'plate-reader'],
-  },
-  {
-    kind: 'readout-definition',
-    id: 'RDEF-PLATE-FITC-MMP',
-    name: 'FITC Fluorescence',
-    instrument_type: 'plate_reader',
-    mode: 'fluorescence',
-    channel_label: 'FITC',
-    excitation_nm: 485,
-    emission_nm: 535,
-    units: 'RFU',
-    proxy_ref: { kind: 'ontology', id: 'GO:0005747', namespace: 'GO', label: 'mitochondrial membrane' },
-    tags: ['mmp', 'plate-reader'],
-  },
-  {
-    kind: 'readout-definition',
-    id: 'RDEF-PLATE-ABS450',
-    name: 'Absorbance 450 nm',
-    instrument_type: 'plate_reader',
-    mode: 'absorbance',
-    channel_label: 'Abs450',
-    units: 'OD',
-    tags: ['absorbance'],
-  },
-  {
-    kind: 'readout-definition',
-    id: 'RDEF-QPCR-FAM',
-    name: 'qPCR FAM Channel',
-    instrument_type: 'qpcr',
-    mode: 'ct',
-    channel_label: 'FAM',
-    units: 'Ct',
-    tags: ['qpcr'],
-  },
-  {
-    kind: 'readout-definition',
-    id: 'RDEF-QPCR-HEX',
-    name: 'qPCR HEX Channel',
-    instrument_type: 'qpcr',
-    mode: 'ct',
-    channel_label: 'HEX',
-    units: 'Ct',
-    tags: ['qpcr'],
-  },
-  {
-    kind: 'readout-definition',
-    id: 'RDEF-QPCR-CY5',
-    name: 'qPCR Cy5 Channel',
-    instrument_type: 'qpcr',
-    mode: 'ct',
-    channel_label: 'Cy5',
-    units: 'Ct',
-    tags: ['qpcr'],
-  },
-  {
-    kind: 'readout-definition',
-    id: 'RDEF-GCMS-PEAK_AREA',
-    name: 'GC-MS Peak Area',
-    instrument_type: 'gc_ms',
-    mode: 'peak_area',
-    channel_label: 'Peak Area',
-    units: 'a.u.',
-    tags: ['gc-ms'],
-  },
-];
+// ---------------------------------------------------------------------------
+// Seeded definitions sourced from YAML registries
+// ---------------------------------------------------------------------------
 
-const INSTRUMENTS: InstrumentDefinition[] = [
-  {
-    kind: 'instrument-definition',
-    id: 'INSTDEF-GENERIC-PLATE_READER',
-    name: 'Generic Plate Reader',
-    instrument_type: 'plate_reader',
-    supported_readout_def_refs: [
-      toRef('RDEF-PLATE-FAR_RED-ROS', 'readout-definition', 'Far-Red Fluorescence'),
-      toRef('RDEF-PLATE-FITC-MMP', 'readout-definition', 'FITC Fluorescence'),
-      toRef('RDEF-PLATE-ABS450', 'readout-definition', 'Absorbance 450 nm'),
-    ],
-  },
-  {
-    kind: 'instrument-definition',
-    id: 'INSTDEF-GENERIC-QPCR',
-    name: 'Generic qPCR Instrument',
-    instrument_type: 'qpcr',
-    supported_readout_def_refs: [
-      toRef('RDEF-QPCR-FAM', 'readout-definition', 'qPCR FAM Channel'),
-      toRef('RDEF-QPCR-HEX', 'readout-definition', 'qPCR HEX Channel'),
-      toRef('RDEF-QPCR-CY5', 'readout-definition', 'qPCR Cy5 Channel'),
-    ],
-  },
-  {
-    kind: 'instrument-definition',
-    id: 'INSTDEF-GENERIC-GCMS',
-    name: 'Generic GC-MS',
-    instrument_type: 'gc_ms',
-    supported_readout_def_refs: [toRef('RDEF-GCMS-PEAK_AREA', 'readout-definition', 'GC-MS Peak Area')],
-  },
-];
+type SeededDef = { schemaId: string; payload: Record<string, unknown> };
 
-const ASSAYS: AssayDefinition[] = [
-  {
-    kind: 'assay-definition',
-    id: 'ASSAY-ROS-PLATE_READER',
-    name: 'ROS Assay',
-    assay_type: 'ros',
-    instrument_type: 'plate_reader',
-    readout_def_refs: [toRef('RDEF-PLATE-FAR_RED-ROS', 'readout-definition', 'Far-Red Fluorescence')],
-    expected_role_types: ['positive_control', 'negative_control', 'vehicle_control', 'blank', 'sample'],
-    notes: 'Reactive oxygen species readout with far-red fluorescence.',
-  },
-  {
-    kind: 'assay-definition',
-    id: 'ASSAY-MMP-PLATE_READER',
-    name: 'MMP Assay',
-    assay_type: 'mmp',
-    instrument_type: 'plate_reader',
-    readout_def_refs: [toRef('RDEF-PLATE-FITC-MMP', 'readout-definition', 'FITC Fluorescence')],
-    expected_role_types: ['positive_control', 'negative_control', 'vehicle_control', 'blank', 'sample'],
-  },
-  {
-    kind: 'assay-definition',
-    id: 'ASSAY-QPCR-CUSTOM_PANEL',
-    name: 'qPCR Custom Panel',
-    assay_type: 'qpcr_panel',
-    instrument_type: 'qpcr',
-    readout_def_refs: [
-      toRef('RDEF-QPCR-FAM', 'readout-definition', 'qPCR FAM Channel'),
-      toRef('RDEF-QPCR-HEX', 'readout-definition', 'qPCR HEX Channel'),
-      toRef('RDEF-QPCR-CY5', 'readout-definition', 'qPCR Cy5 Channel'),
-    ],
-    panel_targets: [
-      {
-        name: 'IL6',
-        target_ref: { kind: 'ontology', id: 'NCIT:C49695', namespace: 'NCIT', label: 'IL6 Gene' },
-        readout_def_ref: toRef('RDEF-QPCR-FAM', 'readout-definition', 'qPCR FAM Channel'),
-        panel_role: 'target',
-      },
-      {
-        name: 'GAPDH',
-        target_ref: { kind: 'ontology', id: 'NCIT:C104412', namespace: 'NCIT', label: 'GAPDH Gene' },
-        readout_def_ref: toRef('RDEF-QPCR-HEX', 'readout-definition', 'qPCR HEX Channel'),
-        panel_role: 'housekeeping',
-      },
-      {
-        name: 'ACTB',
-        target_ref: { kind: 'ontology', id: 'NCIT:C103969', namespace: 'NCIT', label: 'ACTB Gene' },
-        readout_def_ref: toRef('RDEF-QPCR-CY5', 'readout-definition', 'qPCR Cy5 Channel'),
-        panel_role: 'reference',
-      },
-    ],
-    expected_role_types: ['positive_control', 'no_template_control', 'housekeeping_control', 'sample'],
-  },
-  {
-    kind: 'assay-definition',
-    id: 'ASSAY-GCMS-STANDARDS',
-    name: 'GC Standards Panel',
-    assay_type: 'metabolomics_gc',
-    instrument_type: 'gc_ms',
-    readout_def_refs: [toRef('RDEF-GCMS-PEAK_AREA', 'readout-definition', 'GC-MS Peak Area')],
-    expected_role_types: ['blank', 'standard', 'internal_standard', 'qc_sample', 'unknown_sample'],
-  },
-];
+function buildSeededDefinitions(): SeededDef[] {
+  const definitions: SeededDef[] = [];
 
-const SEEDED_DEFINITIONS = [
-  ...READOUTS.map((payload) => ({ schemaId: SCHEMA_IDS.readoutDefinition, payload })),
-  ...INSTRUMENTS.map((payload) => ({ schemaId: SCHEMA_IDS.instrumentDefinition, payload })),
-  ...ASSAYS.map((payload) => ({ schemaId: SCHEMA_IDS.assayDefinition, payload })),
-] as const;
+  // Readout definitions from registry
+  for (const readout of getReadoutDefinitionRegistry().list()) {
+    definitions.push({
+      schemaId: SCHEMA_IDS.readoutDefinition,
+      payload: {
+        kind: 'readout-definition',
+        id: readout.id,
+        name: readout.name,
+        instrument_type: readout.instrument_type,
+        mode: readout.mode,
+        ...(readout.channel_label ? { channel_label: readout.channel_label } : {}),
+        ...(readout.excitation_nm !== undefined ? { excitation_nm: readout.excitation_nm } : {}),
+        ...(readout.emission_nm !== undefined ? { emission_nm: readout.emission_nm } : {}),
+        ...(readout.units ? { units: readout.units } : {}),
+        ...(readout.proxy_ref ? { proxy_ref: readout.proxy_ref } : {}),
+        ...(readout.target_ref ? { target_ref: readout.target_ref } : {}),
+        ...(readout.tags?.length ? { tags: readout.tags } : {}),
+      },
+    });
+  }
+
+  // Instrument definitions from registry
+  for (const instrument of getInstrumentRegistry().list()) {
+    definitions.push({
+      schemaId: SCHEMA_IDS.instrumentDefinition,
+      payload: {
+        kind: 'instrument-definition',
+        id: instrument.id,
+        name: instrument.name,
+        vendor: instrument.vendor,
+        model: instrument.model,
+        instrument_type: instrument.instrument_type,
+        supported_readout_def_refs: instrument.supported_readout_def_refs,
+        ...(instrument.tags?.length ? { tags: instrument.tags } : {}),
+      },
+    });
+  }
+
+  // Assay definitions from registry
+  for (const assay of getAssayDefinitionRegistry().list()) {
+    definitions.push({
+      schemaId: SCHEMA_IDS.assayDefinition,
+      payload: {
+        kind: 'assay-definition',
+        id: assay.id,
+        name: assay.name,
+        assay_type: assay.assay_type,
+        instrument_type: assay.instrument_type,
+        readout_def_refs: assay.readout_def_refs,
+        ...(assay.target_refs?.length ? { target_refs: assay.target_refs } : {}),
+        ...(assay.panel_targets?.length ? { panel_targets: assay.panel_targets } : {}),
+        ...(assay.expected_role_types?.length ? { expected_role_types: assay.expected_role_types } : {}),
+        ...(assay.notes ? { notes: assay.notes } : {}),
+        ...(assay.tags?.length ? { tags: assay.tags } : {}),
+      },
+    });
+  }
+
+  return definitions;
+}
+
+const SEEDED_DEFINITIONS: readonly SeededDef[] = buildSeededDefinitions();
 
 async function ensureSeedDefinitions(store: RecordStore): Promise<void> {
   for (const definition of SEEDED_DEFINITIONS) {
-    if (await store.exists(definition.payload.id)) continue;
+    const payload = definition.payload as Record<string, unknown> & { id: string; name: string };
+    if (await store.exists(payload.id)) continue;
     await store.create({
       envelope: {
-        recordId: definition.payload.id,
+        recordId: payload.id,
         schemaId: definition.schemaId,
         payload: {
           ...definition.payload,
-          title: definition.payload.name,
+          title: payload.name,
         },
       },
-      message: `Seed semantics definition ${definition.payload.id}`,
+      message: `Seed semantics definition ${payload.id}`,
     });
   }
 }
