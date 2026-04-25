@@ -15,6 +15,7 @@ tmp/
 
 # Runtime
 .run/
+.ralph/
 
 # Environment and config
 .env
