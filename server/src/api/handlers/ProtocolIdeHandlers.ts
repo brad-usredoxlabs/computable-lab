@@ -26,6 +26,11 @@ import {
   type GenerateIssueCardsResponse,
   type GetIssueCardsResponse,
 } from '../../protocol/ProtocolIdeIssueCardService.js';
+import {
+  ProtocolIdeRalphExportService,
+  type ExportIssueCardsResponse,
+  type CanExportResponse,
+} from '../../protocol/ProtocolIdeRalphExportService.js';
 
 // ---------------------------------------------------------------------------
 // Request / Response types
@@ -54,6 +59,7 @@ export function createProtocolIdeHandlers(ctx: AppContext) {
   const sessionService = new ProtocolIdeSessionService(ctx.store);
   const feedbackService = new ProtocolIdeFeedbackService(ctx.store);
   const issueCardService = new ProtocolIdeIssueCardService(ctx.store);
+  const exportService = new ProtocolIdeRalphExportService(ctx.store);
 
   return {
     /**
@@ -307,6 +313,100 @@ export function createProtocolIdeHandlers(ctx: AppContext) {
         reply.status(500);
         return {
           error: 'ISSUE_CARDS_FETCH_FAILED',
+          message,
+        };
+      }
+    },
+
+    /**
+     * POST /protocol-ide/sessions/:sessionId/export-issue-cards
+     *
+     * Export all current issue cards into Ralph-compatible spec drafts.
+     *
+     * This action:
+     * - Reads all current issue cards from the session
+     * - Generates one spec draft per card (multi-spec, not monolithic)
+     * - Each draft carries source context, directive context, evidence citations,
+     *   and requested compiler changes
+     * - Clears the current issue-card set from the session
+     * - Retains only summary export metadata on the session
+     *
+     * Returns the export bundle with all spec drafts.
+     */
+    async exportIssueCards(
+      request: FastifyRequest<{
+        Params: { sessionId: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<ExportIssueCardsResponse | ApiError> {
+      const { sessionId } = request.params;
+
+      try {
+        const result = await exportService.exportIssueCards(sessionId);
+
+        reply.status(200);
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+
+        if (message.includes('not found')) {
+          reply.status(404);
+          return {
+            error: 'SESSION_NOT_FOUND',
+            message,
+          };
+        }
+
+        if (message.includes('No issue cards')) {
+          reply.status(400);
+          return {
+            error: 'NO_ISSUE_CARDS',
+            message,
+          };
+        }
+
+        reply.status(500);
+        return {
+          error: 'EXPORT_FAILED',
+          message,
+        };
+      }
+    },
+
+    /**
+     * GET /protocol-ide/sessions/:sessionId/can-export
+     *
+     * Check whether a session has exportable issue cards.
+     *
+     * Returns whether cards can be exported and how many.
+     */
+    async canExport(
+      request: FastifyRequest<{
+        Params: { sessionId: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<CanExportResponse | ApiError> {
+      const { sessionId } = request.params;
+
+      try {
+        const result = await exportService.canExport(sessionId);
+
+        reply.status(200);
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+
+        if (message.includes('not found')) {
+          reply.status(404);
+          return {
+            error: 'SESSION_NOT_FOUND',
+            message,
+          };
+        }
+
+        reply.status(500);
+        return {
+          error: 'CAN_EXPORT_CHECK_FAILED',
           message,
         };
       }
