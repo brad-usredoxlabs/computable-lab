@@ -110,25 +110,21 @@ function buildSpecDraftMarkdown(
   latestDirectiveText?: string,
 ): string {
   const evidence_block =
-    card.evidenceCitations && card.evidenceCitations.length > 0
-      ? '## Evidence Citations\n\n' +
-        card.evidenceCitations
+    (card.evidenceCitations ?? []).length > 0
+      ? card.evidenceCitations
           .map(
             (c) =>
               `- **${c.sourceRef}**${c.page ? ` (page ${c.page})` : ''}${c.snippet ? ` — "${c.snippet}"` : ''}`,
           )
           .join('\n')
-      : '';
+      : '_No citations_';
 
   const graph_anchor_block = card.graphAnchor
-    ? '## Graph Anchor\n\n' +
-      `- Node ID: ${card.graphAnchor.nodeId}` +
+    ? `## Graph Anchor\n\n- Node ID: ${card.graphAnchor.nodeId}` +
       (card.graphAnchor.label ? `\n- Label: ${card.graphAnchor.label}` : '')
     : '';
 
-  const requested_changes_block = card.suggestedChange
-    ? `## Requested Compiler Changes\n\n${card.suggestedChange}`
-    : '';
+  const requested_changes = card.suggestedChange ? card.suggestedChange : '';
 
   return renderPromptTemplate('protocol-ide.ralph-export.spec', {
     section_id: `spec-${String(priority).padStart(3, '0')}-ralph-export`,
@@ -142,7 +138,7 @@ function buildSpecDraftMarkdown(
     description: card.body,
     evidence_block,
     graph_anchor_block,
-    requested_changes_block,
+    requested_changes,
   });
 }
 

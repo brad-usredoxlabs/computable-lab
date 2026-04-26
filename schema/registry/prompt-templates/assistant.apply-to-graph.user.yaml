@@ -1,0 +1,8 @@
+kind: prompt-template
+id: assistant.apply-to-graph.user
+prompt_kind: assistant.apply_to_graph.user
+description: User-facing prompt template that pre-fills the chat input when a user clicks "Apply to graph" on a doc-discussion message
+content_format: plain
+variables: []
+content: |
+  Apply the protocol you just summarised to the labware graph. Propose the PlateEvents and any labware additions needed (including a 12-well reservoir for reagents and a 96-well deepwell sample plate, if not already present).

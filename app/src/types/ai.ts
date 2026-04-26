@@ -158,6 +158,8 @@ export interface ChatMessage {
   clarification?: AiClarification
   /** Proposed labware additions from the AI */
   labwareAdditions?: AiLabwareAddition[]
+  /** Whether this message is a doc-discussion (prose-only, no events) */
+  docDiscussion?: boolean
 }
 
 export interface AiConversationMessage {

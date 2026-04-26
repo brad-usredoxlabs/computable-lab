@@ -13,9 +13,9 @@ variables:
   - { name: origin, type: string, description: 'Issue origin: user|system|mixed' }
   - { name: card_id, type: string, description: 'Issue card id' }
   - { name: description, type: string, description: 'Card body' }
-  - { name: evidence_block, type: string, description: 'Pre-rendered evidence section (with heading) or empty' }
-  - { name: graph_anchor_block, type: string, description: 'Pre-rendered graph-anchor section (with heading) or empty when no anchor' }
-  - { name: requested_changes_block, type: string, description: 'Pre-rendered requested-changes section (with heading) or empty' }
+  - { name: evidence_block, type: string, description: 'Pre-rendered evidence list (markdown)' }
+  - { name: graph_anchor_block, type: string, description: 'Pre-rendered graph-anchor section (markdown, may be empty)' }
+  - { name: requested_changes, type: string, description: 'Suggested compiler-change description' }
 content: |
   ---
   id: {{section_id}}
@@ -41,9 +41,16 @@ content: |
 
   {{description}}
 
+  ## Evidence Citations
+
   {{evidence_block}}
+
   {{graph_anchor_block}}
-  {{requested_changes_block}}
+
+  ## Requested Compiler Changes
+
+  {{requested_changes}}
+
   ## Acceptance Criteria
 
   - [ ] Address the issue described above

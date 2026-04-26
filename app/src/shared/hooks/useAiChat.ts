@@ -22,6 +22,9 @@ import type {
   AiLabwareAddition,
 } from '../../types/ai'
 
+const FALLBACK_APPLY_TO_GRAPH_TEXT = 'Apply the protocol to the labware graph.'
+let _warnedFallbackOnce = false
+
 function generateMessageId(): string {
   return `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
 }
@@ -54,6 +57,7 @@ export interface UseAiChatReturn {
   previewEventStates: Map<string, PreviewEventState>
   hasPreview: boolean
   unresolvedRefs: OntologyRefProposal[]
+  inputText: string
   sendPrompt: (prompt: string, attachments?: FileAttachment[]) => void
   cancelStream: () => void
   acceptPreview: () => void
@@ -63,6 +67,7 @@ export interface UseAiChatReturn {
   setPreviewEvents: (events: PlateEvent[]) => void
   commitAcceptedPreviewEvents: () => Promise<void>
   clearHistory: () => void
+  applyToGraph: (message: ChatMessage) => void
   aiAvailable: boolean | null
   recheckHealth: () => void
 }
@@ -97,6 +102,10 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
   const [previewEventStates, setPreviewEventStatesMap] = useState<Map<string, PreviewEventState>>(new Map())
   const [unresolvedRefs, setUnresolvedRefs] = useState<OntologyRefProposal[]>([])
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null)
+  const [inputText, setInputText] = useState('')
+
+  // Fetched apply-to-graph template from prompt-templates registry.
+  const [applyToGraphTemplate, setApplyToGraphTemplate] = useState<string | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
 
@@ -143,6 +152,19 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
   useEffect(() => {
     checkHealth()
   }, [checkHealth])
+
+  // Fetch apply-to-graph template from the prompt-templates registry.
+  useEffect(() => {
+    apiClient
+      .getPromptTemplate('assistant.apply-to-graph.user')
+      .then((res) => {
+        if ('error' in res) return
+        setApplyToGraphTemplate(res.content)
+      })
+      .catch(() => {
+        /* swallow */
+      })
+  }, [])
 
   // ------------------------------------------------------------------
   // Send a prompt
@@ -255,6 +277,10 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
                       labwareAdditions: result.labwareAdditions,
                       usage: result.usage,
                       isStreaming: false,
+                      docDiscussion:
+                        (result.events?.length ?? 0) === 0 &&
+                        typeof result.clarificationNeeded === 'string' &&
+                        result.clarificationNeeded.trim().length > 0,
                     }
                   : m
               )
@@ -530,6 +556,21 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
     setUnresolvedRefs([])
   }, [])
 
+  // ------------------------------------------------------------------
+  // Apply a doc-discussion message to the graph (pre-fills chat input)
+  // ------------------------------------------------------------------
+  const applyToGraph = useCallback(
+    (_message: ChatMessage) => {
+      const text = applyToGraphTemplate ?? FALLBACK_APPLY_TO_GRAPH_TEXT
+      if (applyToGraphTemplate === null && !_warnedFallbackOnce) {
+        _warnedFallbackOnce = true
+        console.warn('apply-to-graph template not loaded yet; using fallback text')
+      }
+      setInputText(text)
+    },
+    [applyToGraphTemplate, setInputText],
+  )
+
   return {
     messages,
     isStreaming,
@@ -539,6 +580,7 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
     previewEventStates,
     hasPreview: previewEvents.length > 0,
     unresolvedRefs,
+    inputText,
     sendPrompt,
     cancelStream,
     acceptPreview,
@@ -548,6 +590,7 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
     setPreviewEvents: setPreviewEventsTestOnly,
     commitAcceptedPreviewEvents,
     clearHistory,
+    applyToGraph,
     aiAvailable,
     recheckHealth: checkHealth,
   }

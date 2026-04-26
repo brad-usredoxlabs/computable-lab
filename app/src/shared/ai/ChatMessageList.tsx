@@ -20,9 +20,10 @@ interface ChatMessageListProps {
     optionId: string,
     optionLabel: string,
   ) => void
+  onApplyToGraph?: (message: ChatMessage) => void
 }
 
-export function ChatMessageList({ messages, onPickClarification }: ChatMessageListProps) {
+export function ChatMessageList({ messages, onPickClarification, onApplyToGraph }: ChatMessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom on new messages
@@ -51,6 +52,7 @@ export function ChatMessageList({ messages, onPickClarification }: ChatMessageLi
           key={msg.id}
           message={msg}
           onPickClarification={onPickClarification}
+          onApplyToGraph={onApplyToGraph}
         />
       ))}
       <div ref={bottomRef} />
@@ -198,6 +200,23 @@ function ChatMessageStyles() {
           color: #64748b;
           font-size: 0.72rem;
         }
+
+        .chat-msg__apply-to-graph {
+          margin-top: 0.5rem;
+          padding: 4px 12px;
+          border: 1px solid #7c3aed;
+          border-radius: 4px;
+          background: #f5f3ff;
+          color: #7c3aed;
+          font-size: 0.78rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .chat-msg__apply-to-graph:hover {
+          background: #ede9fe;
+          border-color: #6d28d9;
+        }
       `}</style>
   )
 }
@@ -205,6 +224,7 @@ function ChatMessageStyles() {
 function MessageBubble({
   message,
   onPickClarification,
+  onApplyToGraph,
 }: {
   message: ChatMessage
   onPickClarification?: (
@@ -212,6 +232,7 @@ function MessageBubble({
     optionId: string,
     optionLabel: string,
   ) => void
+  onApplyToGraph?: (message: ChatMessage) => void
 }) {
   const { role, content, streamEvents, events, isStreaming, attachments } = message
   const [lightboxSrc, setLightboxSrc] = useState<{ src: string; alt: string } | null>(null)
@@ -293,6 +314,16 @@ function MessageBubble({
           <div className="chat-msg__event-count">
             {events.length} event{events.length !== 1 ? 's' : ''} proposed
           </div>
+        )}
+        {role === 'assistant' && !isStreaming && message.docDiscussion === true && onApplyToGraph && (
+          <button
+            type="button"
+            className="chat-msg__apply-to-graph"
+            data-testid="chat-msg-apply-to-graph"
+            onClick={() => onApplyToGraph(message)}
+          >
+            Apply to graph
+          </button>
         )}
       </div>
       {streamEvents && streamEvents.length > 0 && (

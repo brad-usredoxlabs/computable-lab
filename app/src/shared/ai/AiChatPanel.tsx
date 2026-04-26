@@ -278,6 +278,7 @@ export function AiChatPanel() {
                 const token = `[[${entityType}:${optionId}|${optionLabel}]]`
                 chat.sendPrompt(`Use ${token} — continue.`)
               }}
+              onApplyToGraph={chat.applyToGraph}
             />
 
             {/* Preview details and accept/reject controls */}
@@ -308,6 +309,7 @@ export function AiChatPanel() {
               onSend={chat.sendPrompt}
               onCancel={chat.cancelStream}
               isStreaming={chat.isStreaming}
+              inputText={chat.inputText}
             />
           </>
         )}
