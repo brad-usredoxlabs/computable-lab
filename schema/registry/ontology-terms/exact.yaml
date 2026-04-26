@@ -1,61 +1,96 @@
 source: exact
 terms:
   - kind: ontology-term
-    id: EXACT:Class_9
-    source: exact
-    label: add
-  - kind: ontology-term
     id: EXACT:Aliquot
     source: exact
     label: aliquot
-    definition: Measure out into small equal samples for experiments
-  - kind: ontology-term
-    id: EXACT:Class_53
-    source: exact
-    label: centrifuge
-  - kind: ontology-term
-    id: EXACT:Count
-    source: exact
-    label: count
-  - kind: ontology-term
-    id: EXACT:Dilute
-    source: exact
-    label: dilute
-  - kind: ontology-term
-    id: EXACT:Fixate
-    source: exact
-    label: fixate
-    definition: Fix in position; attachment with fixative
-  - kind: ontology-term
-    id: EXACT:Freeze
-    source: exact
-    label: freeze
-  - kind: ontology-term
-    id: EXACT:Class_49
-    source: exact
-    label: incubate
-    definition: Maintain specified environmental conditions to promote a chemical reaction or growth of a microorganism
-  - kind: ontology-term
-    id: EXACT:Label
-    source: exact
-    label: label
-  - kind: ontology-term
-    id: EXACT:Measure
-    source: exact
-    label: measure
-  - kind: ontology-term
-    id: EXACT:Class_45
-    source: exact
-    label: mix
-  - kind: ontology-term
-    id: EXACT:Class_57
-    source: exact
-    label: resuspend
+    definition: |-
+      is an experimental action "to measure out (a substance) into small samples of equal size; to divide into aliquot parts, esp. for use as experimental samples"
+      Reference: based on THE OXFORD ENGLISH DICTIONARY (1989) OXFORD UNIVERSITY PRESS, 2 ED.
   - kind: ontology-term
     id: EXACT:Class_38
     source: exact
     label: thaw
+    definition: |-
+      is an experimental action to change a substance from a frozen state to a liquid state 
+      Reference: based on THE OXFORD ENGLISH DICTIONARY (1989) OXFORD UNIVERSITY PRESS, 2 ED.
+  - kind: ontology-term
+    id: EXACT:Class_45
+    source: exact
+    label: mix
+    definition: |-
+      is an experimental action “to put together or combine (two or more substances or things) so that the constituents or particles of each are interspersed or diffused more or less evenly among those of the rest”
+      Reference:based on THE OXFORD ENGLISH DICTIONARY (1989) OXFORD UNIVERSITY PRESS, 2 ED.
+  - kind: ontology-term
+    id: EXACT:Class_49
+    source: exact
+    label: incubate
+    definition: is an experimental action to maintain specified environmental conditions in order to promote a chemical reaction or growth of a microorganism; to cause to develop in an incubator or culture medium
+  - kind: ontology-term
+    id: EXACT:Class_53
+    source: exact
+    label: centrifuge
+    definition: |-
+      is an experimental action “to subject to centrifugal motion; to separate by means of a centrifuge”.
+      Reference: based on THE OXFORD ENGLISH DICTIONARY (1989) OXFORD UNIVERSITY PRESS, 2 ED.
   - kind: ontology-term
     id: EXACT:Class_54
     source: exact
     label: wash
+    definition: |-
+      is an experimental action “to cleanse, remove "the unwanted material” from an entity by affusion of or immersion in” fluid
+      Reference:based on THE OXFORD ENGLISH DICTIONARY (1989) OXFORD UNIVERSITY PRESS, 2 ED.
+  - kind: ontology-term
+    id: EXACT:Class_57
+    source: exact
+    label: resuspend
+    definition: |-
+      is an experimental action to suspend material that have been previously suspended, being made homologies, uniformly distributed
+      Reference: based on THE OXFORD ENGLISH DICTIONARY (1989) OXFORD UNIVERSITY PRESS, 2 ED.
+  - kind: ontology-term
+    id: EXACT:Class_9
+    source: exact
+    label: add
+    definition: |-
+      is an experimental action “to join or unite a component to another so as to increase the number, quantity in the container. The end container is the same for all components”
+      Reference: based on THE OXFORD ENGLISH DICTIONARY (1989) OXFORD UNIVERSITY PRESS, 2 ED.
+  - kind: ontology-term
+    id: EXACT:Count
+    source: exact
+    label: count
+    definition: |-
+      is an experimental action "to add up or check (each unit in a collection) in order to ascertain the sum; enumerate"
+      Reference: based on COLLINS SOFTBACK ENGLISH DICTIONARY, HarperCollins Publishers, Glasgow, 1993.
+  - kind: ontology-term
+    id: EXACT:Dilute
+    source: exact
+    label: dilute
+    definition: |-
+      is an experimental action "to make or become less concentrated, esp by adding water or a thinner; (of a solution, suspension, mixture, etc) having a low concentration or a concentration that has been reduced by admixture"
+      Reference: based on COLLINS SOFTBACK ENGLISH DICTIONARY, HarperCollins Publishers, Glasgow, 1993.
+  - kind: ontology-term
+    id: EXACT:Fixate
+    source: exact
+    label: fixate
+    definition: |-
+      is an experimental action to use a fixative to preserve histological or cytological specimens
+      Reference:based on BIOLOGY ONLINE DICTIONARY http://www.biology-online.org/dictionary/Fixation
+  - kind: ontology-term
+    id: EXACT:Freeze
+    source: exact
+    label: freeze
+    definition: |-
+      is an experimental action "to change (a liquid) into a solid as a result of a reduction in temperature, or (of a liquid) to solidify in this way, esp to convert or be converted into ice" 
+      Reference: based on COLLINS SOFTBACK ENGLISH DICTIONARY, HarperCollins Publishers, Glasgow, 1993.
+  - kind: ontology-term
+    id: EXACT:Label
+    source: exact
+    label: label
+    definition: is an experimental action to mark an entity with a unique identifier or description
+  - kind: ontology-term
+    id: EXACT:Measure
+    source: exact
+    label: measure
+    definition: |-
+      is an experimental action to make a measurement; to moderate, regulate; to make proportional or commensurate; to quantify 
+      Reference: based on COLLINS SOFTBACK ENGLISH DICTIONARY, HarperCollins Publishers, Glasgow, 1993.

@@ -147,6 +147,48 @@ function parseObo(text: string): OboTerm[] {
   return terms;
 }
 
+function parseOwl(xml: string, sourceId: string): OboTerm[] {
+  const prefix = sourceId.toUpperCase();
+  const terms: OboTerm[] = [];
+
+  const classIriRe = /<Declaration>\s*<Class IRI="#([^"]+)"\/>\s*<\/Declaration>/g;
+  const classIds = new Set<string>();
+  let m: RegExpExecArray | null;
+  while ((m = classIriRe.exec(xml)) !== null) classIds.add(m[1]);
+
+  const labelMap = new Map<string, string>();
+  const defMap = new Map<string, string>();
+  const annoRe = /<AnnotationAssertion>([\s\S]*?)<\/AnnotationAssertion>/g;
+  while ((m = annoRe.exec(xml)) !== null) {
+    const block = m[1];
+    const iriMatch = block.match(/<IRI>#([^<]+)<\/IRI>/);
+    const litMatch = block.match(/<Literal[^>]*>([\s\S]*?)<\/Literal>/);
+    if (!iriMatch || !litMatch) continue;
+    const frag = iriMatch[1];
+    const val = litMatch[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&').trim();
+    if (block.includes('rdfs:label')) {
+      labelMap.set(frag, val);
+    } else if (block.includes('#is_definition') || block.includes('rdfs:comment')) {
+      defMap.set(frag, val);
+    }
+  }
+
+  for (const frag of classIds) {
+    const label = labelMap.get(frag) ?? '';
+    const def = defMap.get(frag) ?? '';
+    terms.push({
+      id: `${prefix}:${frag}`,
+      name: label || frag,
+      def,
+      synonyms: [],
+      parents: [],
+      is_obsolete: false,
+    });
+  }
+
+  return terms;
+}
+
 function stripDef(def: string): string {
   let s = def.trim();
   // Strip trailing citation like [PMID:12345] or [] or [Chebi_20001]
@@ -195,15 +237,17 @@ async function main() {
   }
 
   // Decompress if needed
-  let oboText: string;
+  let rawText: string;
   if (source.url.endsWith('.gz')) {
-    oboText = gunzipSync(rawBytes).toString('utf8');
+    rawText = gunzipSync(rawBytes).toString('utf8');
   } else {
-    oboText = rawBytes.toString('utf8');
+    rawText = rawBytes.toString('utf8');
   }
 
-  // Parse OBO
-  const allTerms = parseObo(oboText);
+  // Parse
+  const allTerms = source.format === 'owl'
+    ? parseOwl(rawText, sourceId)
+    : parseObo(rawText);
 
   // Filter to curated subset
   const includeSet = new Set(source.include_ids);

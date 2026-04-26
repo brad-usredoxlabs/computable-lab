@@ -4,9 +4,11 @@ mappings:
     notes: "no canonical mapping"
   - verb: incubate
     exact_id: "EXACT:Class_49"
+    obi_id: "OBI:0000838"
     notes: "Hold sample at controlled conditions for duration"
   - verb: harvest
-    notes: "no canonical mapping"
+    obi_id: "OBI:0000659"
+    notes: "Collect specimen from culture"
   - verb: aliquot
     exact_id: "EXACT:Aliquot"
     obi_id: "OBI:0600018"
@@ -22,7 +24,8 @@ mappings:
     exact_id: "EXACT:Class_57"
     notes: "Re-dissolve pelleted material"
   - verb: pellet
-    notes: "no canonical mapping"
+    obi_id: "OBI:0302886"
+    notes: "Sediment by centrifugation"
   - verb: dilute
     exact_id: "EXACT:Dilute"
     notes: "Reduce concentration by adding solvent"
@@ -35,9 +38,11 @@ mappings:
     notes: "Apply dye for visualization"
   - verb: fix
     exact_id: "EXACT:Fixate"
+    obi_id: "OBI:0600021"
     notes: "Chemically preserve cellular structure"
   - verb: permeabilize
-    notes: "no canonical mapping"
+    obi_id: "OBI:0600033"
+    notes: "Disrupt membrane to allow molecular access"
   - verb: block
     notes: "no canonical mapping"
   - verb: quench
@@ -46,9 +51,11 @@ mappings:
     exact_id: "EXACT:Count"
     notes: "Enumerate cells or particles"
   - verb: passage
-    notes: "no canonical mapping"
+    obi_id: "OBI:0002747"
+    notes: "Subculture and re-seed cells"
   - verb: freeze
     exact_id: "EXACT:Freeze"
+    obi_id: "OBI:0001953"
     notes: "Reduce temperature to preserve material"
   - verb: thaw
     exact_id: "EXACT:Class_38"
@@ -62,12 +69,15 @@ mappings:
     obi_id: "OBI:0600067"
     notes: "Attach detectable marker to target"
   - verb: transfect
-    notes: "no canonical mapping"
+    obi_id: "OBI:0001152"
+    notes: "Introduce nucleic acid into cells"
   - verb: add_material
     exact_id: "EXACT:Class_9"
+    obi_id: "OBI:0000652"
     notes: "Introduce reagent or material"
   - verb: create_container
     notes: "no canonical mapping"
   - verb: read
     exact_id: "EXACT:Measure"
+    obi_id: "OBI:0000070"
     notes: "Acquire measurement from instrument"
