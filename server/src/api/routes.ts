@@ -45,6 +45,8 @@ import type { AiRecordDraftHandlers } from './handlers/AiRecordDraftHandlers.js'
 import type { ReadinessHandlers } from './handlers/ReadinessHandlers.js';
 import type { ProcurementHandlers } from './handlers/ProcurementHandlers.js';
 import type { PromptTemplateHandlers } from './handlers/PromptTemplateHandlers.js';
+import type { OntologyTermHandlers } from './handlers/OntologyTermHandlers.js';
+import type { VerbActionMapHandlers } from './handlers/VerbActionMapHandlers.js';
 import type { ProtocolIdeHandlers } from './handlers/ProtocolIdeHandlers.js';
 import type { HealthResponse } from './types.js';
 
@@ -92,6 +94,8 @@ export interface RouteOptions {
   readinessHandlers?: ReadinessHandlers;
   procurementHandlers?: ProcurementHandlers;
   promptTemplateHandlers?: PromptTemplateHandlers;
+  ontologyTermHandlers?: OntologyTermHandlers;
+  verbActionMapHandlers?: VerbActionMapHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -730,5 +734,25 @@ export function registerRoutes(
 
   if (promptTemplateHandlers) {
     fastify.get('/prompt-templates/:id', promptTemplateHandlers.getPromptTemplate.bind(promptTemplateHandlers));
+  }
+
+  // ============================================================================
+  // Ontology Term Routes (optional - requires ontologyTermHandlers)
+  // ============================================================================
+
+  const { ontologyTermHandlers } = options;
+
+  if (ontologyTermHandlers) {
+    fastify.get('/ontology-terms/lookup', ontologyTermHandlers.getOntologyTerm.bind(ontologyTermHandlers));
+  }
+
+  // ============================================================================
+  // Verb Action Map Routes (optional - requires verbActionMapHandlers)
+  // ============================================================================
+
+  const { verbActionMapHandlers } = options;
+
+  if (verbActionMapHandlers) {
+    fastify.get('/verb-action-map/lookup', verbActionMapHandlers.getVerbActionMapping.bind(verbActionMapHandlers));
   }
 }

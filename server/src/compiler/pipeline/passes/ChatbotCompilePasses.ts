@@ -17,6 +17,8 @@ import type { ProtocolSpec } from '../../../registry/ProtocolSpecRegistry.js';
 import type { AssaySpec } from '../../../registry/AssaySpecRegistry.js';
 import type { StampPatternSpec } from '../../../registry/StampPatternRegistry.js';
 import type { CompoundClass } from '../../../registry/CompoundClassRegistry.js';
+import type { OntologyTerm } from '../../../registry/OntologyTermRegistry.js';
+import { getOntologyTermRegistry } from '../../../registry/OntologyTermRegistry.js';
 import type { LabStateSnapshot } from '../../../compiler/state/LabState.js';
 import { applyEventToLabState, emptyLabState } from '../../../compiler/state/LabState.js';
 import { applyDirectiveToLabState, type DirectiveNode } from '../../../compiler/directives/Directive.js';
@@ -739,6 +741,7 @@ export interface CreateResolveReferencesPassDeps {
   assayRegistry: RegistryLoader<AssaySpec>;
   stampPatternRegistry: RegistryLoader<StampPatternSpec>;
   compoundClassRegistry: RegistryLoader<CompoundClass>;
+  ontologyTermRegistry: ReturnType<typeof getOntologyTermRegistry>;
 }
 
 /**
@@ -773,6 +776,7 @@ export function createResolveReferencesPass(
       const refs = ai?.unresolvedRefs ?? [];
       const resolved: ResolvedReference[] = [];
       const unresolvable: UnresolvedReference[] = [];
+      const diagnostics: PassDiagnostic[] = [];
 
       for (const ref of refs) {
         switch (ref.kind) {
@@ -835,12 +839,34 @@ export function createResolveReferencesPass(
               break;
             }
             if (found.candidates.length === 1) {
-              resolved.push({
+              const resolvedRef: ResolvedReference & { chebiTerms?: OntologyTerm[] } = {
                 kind: ref.kind,
                 label: ref.label,
                 resolvedId: found.candidates[0].compoundId,
                 resolvedName: found.candidates[0].name,
-              });
+              };
+              // Resolve chebi_ids if present
+              if (found.chebi_ids && found.chebi_ids.length > 0) {
+                const chebiTerms: OntologyTerm[] = [];
+                for (const chebiId of found.chebi_ids) {
+                  const term = deps.ontologyTermRegistry.get(chebiId);
+                  if (term) {
+                    chebiTerms.push(term);
+                  } else {
+                    diagnostics.push({
+                      severity: 'warning',
+                      code: 'unknown_chebi_id',
+                      message: `compound-class "${found.id}" references unknown ChEBI id ${chebiId}`,
+                      pass_id,
+                      details: { classId: found.id, chebiId },
+                    });
+                  }
+                }
+                if (chebiTerms.length > 0) {
+                  resolvedRef.chebiTerms = chebiTerms;
+                }
+              }
+              resolved.push(resolvedRef);
             } else {
               unresolvable.push({
                 ...ref,
@@ -862,6 +888,7 @@ export function createResolveReferencesPass(
       return {
         ok: true,
         output: { resolvedRefs: resolved, unresolvableRefs: unresolvable } satisfies ResolveReferencesOutput,
+        diagnostics,
       };
     },
   };
@@ -1572,6 +1599,51 @@ function findOrientationForEvent(
 }
 
 /**
+ * Resolve cell_type_id on a cell_region event against the ontology registry.
+ *
+ * - If cell_type_id is absent: no-op, returns { cellTypeTerm: undefined, diagnostics: [] }
+ * - If cell_type_id resolves to a cell-ontology term: attaches it as cellTypeTerm
+ * - If cell_type_id is unknown or wrong source: emits a warning diagnostic
+ *
+ * This function is called during resolve_roles expansion of cell_region events.
+ */
+function resolveCellTypeLink(
+  cellTypeId: string,
+  ontologyTermRegistry: ReturnType<typeof getOntologyTermRegistry>,
+  pass_id: string,
+): { cellTypeTerm: OntologyTerm | undefined; diagnostics: PassDiagnostic[] } {
+  const diagnostics: PassDiagnostic[] = [];
+  const term = ontologyTermRegistry.get(cellTypeId);
+
+  if (!term) {
+    // Unknown cell_type_id — emit warning, no cellTypeTerm
+    diagnostics.push({
+      severity: 'warning',
+      code: 'unknown_cell_type_id',
+      message: `cell_region references unknown Cell Ontology id ${cellTypeId}; no cellTypeTerm attached`,
+      pass_id,
+      details: { cellTypeId },
+    });
+    return { cellTypeTerm: undefined, diagnostics };
+  }
+
+  if (term.source !== 'cell-ontology') {
+    // Wrong-source ontology term — emit warning, no cellTypeTerm
+    diagnostics.push({
+      severity: 'warning',
+      code: 'unknown_cell_type_id',
+      message: `cell_region cell_type_id ${cellTypeId} resolved to non-cell-ontology term (source: ${term.source}); no cellTypeTerm attached`,
+      pass_id,
+      details: { cellTypeId, actualSource: term.source },
+    });
+    return { cellTypeTerm: undefined, diagnostics };
+  }
+
+  // Happy path: valid cell-ontology term
+  return { cellTypeTerm: term, diagnostics };
+}
+
+/**
  * Creates the resolve_roles pass that maps role-based coordinates
  * to physical well addresses under the current labware orientation.
  *
@@ -1584,6 +1656,8 @@ function findOrientationForEvent(
  * - Uses the current labware orientation from labState
  * - Uses assay-spec panelConstraints if an assay is tagged
  * - Falls back to the default role library for common roles
+ * - For cell_region events with cell_type_id, resolves against the Cell Ontology registry
+ *   and attaches cellTypeTerm on the expanded events (or emits a warning if unknown)
  */
 export function createResolveRolesPass(): Pass {
   return {
@@ -1604,8 +1678,12 @@ export function createResolveRolesPass(): Pass {
         ? (assayRefs[0] as { resolvedId: string; resolvedName?: string })
         : undefined;
 
+      // Get the ontology term registry for cell_type_id resolution
+      const ontologyTermRegistry = getOntologyTermRegistry();
+
       const out: PlateEventPrimitive[] = [];
       let counter = 0;
+      const allDiagnostics: PassDiagnostic[] = [];
 
       for (const ev of events) {
         const details = ev.details as Record<string, unknown> | undefined;
@@ -1636,9 +1714,24 @@ export function createResolveRolesPass(): Pass {
           continue;
         }
 
+        // For cell_region events, resolve cell_type_id against the ontology registry
+        const cellTypeId = details?.cell_type_id as string | undefined;
+        let cellTypeTerm: OntologyTerm | undefined = undefined;
+        if (role === 'cell_region' && cellTypeId) {
+          const { cellTypeTerm: resolvedTerm, diagnostics } = resolveCellTypeLink(
+            cellTypeId,
+            ontologyTermRegistry,
+            pass_id,
+          );
+          cellTypeTerm = resolvedTerm;
+          if (diagnostics.length > 0) {
+            allDiagnostics.push(...diagnostics);
+          }
+        }
+
         // Expand into one event per well
         for (const well of wells) {
-          out.push({
+          const expandedEvent: PlateEventPrimitive = {
             ...ev,
             eventId: `${ev.eventId}_r${counter++}`,
             details: {
@@ -1646,11 +1739,22 @@ export function createResolveRolesPass(): Pass {
               well,
               role: undefined,
             } as Record<string, unknown>,
-          });
+          };
+
+          // Attach cellTypeTerm on expanded events if resolved
+          if (cellTypeTerm) {
+            (expandedEvent.details as Record<string, unknown>).cellTypeTerm = cellTypeTerm;
+          }
+
+          out.push(expandedEvent);
         }
       }
 
-      return { ok: true, output: { events: out } satisfies ResolveRolesOutput };
+      return {
+        ok: true,
+        output: { events: out } satisfies ResolveRolesOutput,
+        ...(allDiagnostics.length > 0 ? { diagnostics: allDiagnostics } : {}),
+      };
     },
   };
 }

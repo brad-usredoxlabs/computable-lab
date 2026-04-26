@@ -88,6 +88,8 @@ export type ProtocolIdeIntakeRequest = {
   directiveText: DirectiveText;
   /** Exactly one source mode */
   source: ProtocolIdeSource;
+  /** Per-request thinking-mode override for LLM calls during session creation */
+  enableThinking?: boolean;
 };
 
 // ---------------------------------------------------------------------------
@@ -158,6 +160,7 @@ export function validateIntakeRequest(
             documentType: typeof src['documentType'] === 'string' ? src['documentType'] : 'other',
             sessionIdHint: typeof src['sessionIdHint'] === 'string' ? src['sessionIdHint'] : undefined,
           },
+          ...(typeof obj['enableThinking'] === 'boolean' ? { enableThinking: obj['enableThinking'] as boolean } : {}),
         },
       };
     }
@@ -175,6 +178,7 @@ export function validateIntakeRequest(
             sourceKind: 'pasted_url',
             url: url.trim(),
           },
+          ...(typeof obj['enableThinking'] === 'boolean' ? { enableThinking: obj['enableThinking'] as boolean } : {}),
         },
       };
     }
@@ -207,6 +211,7 @@ export function validateIntakeRequest(
             mediaType: mediaType.trim(),
             contentBase64: contentBase64.trim(),
           },
+          ...(typeof obj['enableThinking'] === 'boolean' ? { enableThinking: obj['enableThinking'] as boolean } : {}),
         },
       };
     }

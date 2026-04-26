@@ -1,6 +1,9 @@
 id: AhR-activator
 name: AhR activator
 description: Aryl hydrocarbon receptor agonists.
+chebi_ids:
+  - CHEBI:78474
+  - CHEBI:75751
 candidates:
   - compoundId: TCDD
     name: 2,3,7,8-Tetrachlorodibenzo-p-dioxin

@@ -93,6 +93,8 @@ export type SourceImportRequest = {
   };
   /** Optional directive text that guides the session */
   directiveText?: string;
+  /** Per-request thinking-mode override for LLM calls */
+  enableThinking?: boolean;
 };
 
 // ---------------------------------------------------------------------------

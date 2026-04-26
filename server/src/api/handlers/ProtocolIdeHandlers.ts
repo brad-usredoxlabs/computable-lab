@@ -115,6 +115,9 @@ export function createProtocolIdeHandlers(ctx: AppContext) {
 
       const { request: intake } = validation;
 
+      // Extract enableThinking for forwarding to downstream services
+      const enableThinking = intake.enableThinking;
+
       // Check if a session already exists for this source hint
       // (e.g., vendor_document may carry a sessionIdHint)
       if (
@@ -145,6 +148,7 @@ export function createProtocolIdeHandlers(ctx: AppContext) {
           const importReq: SourceImportRequest = {
             sessionId: shell.sessionId,
             sourceKind: intake.source.sourceKind,
+            ...(enableThinking !== undefined ? { enableThinking } : {}),
           }
           if (intake.source.sourceKind === 'vendor_document') {
             importReq.vendor = {
@@ -195,6 +199,7 @@ export function createProtocolIdeHandlers(ctx: AppContext) {
               directiveText: intake.directiveText,
               rollingIssueSummary,
               sourceRefs,
+              ...(enableThinking !== undefined ? { enableThinking } : {}),
             });
             if (projection.status === 'success' || projection.status === 'partial') {
               graphReviewRef = projection.eventGraphData.recordId

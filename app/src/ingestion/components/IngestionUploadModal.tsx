@@ -90,6 +90,14 @@ export function IngestionUploadModal({ open, onClose, onCreated }: Props) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [thinkingMode, setThinkingMode] = useState<boolean>(() => {
+    try { return JSON.parse(localStorage.getItem('ingestion-thinking-mode') ?? 'false') === true } catch { return false }
+  })
+  const updateThinkingMode = (v: boolean) => {
+    setThinkingMode(v)
+    try { localStorage.setItem('ingestion-thinking-mode', JSON.stringify(v)) } catch {}
+  }
+
   const reset = useCallback(() => {
     setName('')
     setSourceKind('vendor_plate_map_pdf')
@@ -229,7 +237,7 @@ export function IngestionUploadModal({ open, onClose, onCreated }: Props) {
       }
       const created = await apiClient.createIngestionJob(request)
       await apiClient.attachIngestionExtractionSpec(created.job.recordId, spec as unknown as Record<string, unknown>)
-      await apiClient.runIngestionJob(created.job.recordId, {})
+      await apiClient.runIngestionJob(created.job.recordId, { enableThinking: thinkingMode ? true : undefined })
       onCreated({ createdJobId: created.job.recordId, autoRun: true })
       reset()
     } catch (err) {
@@ -237,7 +245,7 @@ export function IngestionUploadModal({ open, onClose, onCreated }: Props) {
     } finally {
       setSubmitting(false)
     }
-  }, [selectedFile, name, ontologyPreferences, aiIntent, onCreated, reset])
+  }, [selectedFile, name, ontologyPreferences, aiIntent, thinkingMode, onCreated, reset])
 
   if (!open) return null
 
@@ -332,6 +340,13 @@ export function IngestionUploadModal({ open, onClose, onCreated }: Props) {
               })}
             </div>
           </div>
+
+          {aiAssist && (
+            <label className="iupload-toggle">
+              <input type="checkbox" data-testid="ingestion-thinking-mode-checkbox" checked={thinkingMode} onChange={(e) => updateThinkingMode(e.target.checked)} />
+              <span>Use thinking mode</span>
+            </label>
+          )}
 
           {aiAssist && aiAnalysis && (
             <AiAnalysisPanel

@@ -12,6 +12,7 @@
     "test:unit": "pnpm --filter app exec vitest run",
     "test:spec-029": "pnpm --filter app exec vitest run src/extraction/ExtractionReviewPage.test.tsx",
     "vitest": "npx vitest",
-"vitest:server": "pnpm --filter server exec vitest"
+"vitest:server": "pnpm --filter server exec vitest",
+    "download:ontology": "tsx scripts/download-ontology.ts"
   }
 }

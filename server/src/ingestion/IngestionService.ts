@@ -143,8 +143,8 @@ export class RecordBackedIngestionService {
     return detail;
   }
 
-  async runJob(jobId: string, source?: CreateIngestionArtifactInput): Promise<IngestionJobDetail> {
-    const result = await this.worker.runJob(jobId, source);
+  async runJob(jobId: string, source?: CreateIngestionArtifactInput, enableThinking?: boolean): Promise<IngestionJobDetail> {
+    const result = await this.worker.runJob(jobId, source, enableThinking);
     if (!result) {
       throw new Error(`Ingestion job not found: ${jobId}`);
     }

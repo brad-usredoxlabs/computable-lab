@@ -51,6 +51,12 @@ export interface CompletionRequest {
    * chat-template kwargs (e.g. `{ enable_thinking: false }` on Qwen3).
    */
   chat_template_kwargs?: Record<string, unknown>;
+  /**
+   * Per-request override of construction-time enableThinking.
+   * When set, wins over the client's construction config.
+   * When undefined, construction config is used.
+   */
+  enableThinking?: boolean;
 }
 
 export interface CompletionResponse {
@@ -129,6 +135,8 @@ export interface AgentRequest {
   onEvent?: (event: AgentEvent) => void;
   /** Optional file attachments to be processed by the pipeline. */
   attachments?: FileAttachment[];
+  /** Per-request override to enable thinking mode on the inference client. */
+  enableThinking?: boolean;
 }
 
 /**

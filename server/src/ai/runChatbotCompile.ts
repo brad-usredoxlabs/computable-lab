@@ -65,6 +65,7 @@ import { getProtocolSpecRegistry } from '../registry/ProtocolSpecRegistry.js';
 import { getAssaySpecRegistry } from '../registry/AssaySpecRegistry.js';
 import { getStampPatternRegistry } from '../registry/StampPatternRegistry.js';
 import { getCompoundClassRegistry } from '../registry/CompoundClassRegistry.js';
+import { getOntologyTermRegistry } from '../registry/OntologyTermRegistry.js';
 import * as path from 'node:path';
 import '../compiler/patterns/index.js'; // registers all pattern expanders
 import '../compiler/validation/checks/index.js'; // registers validation checks (specs 035-036)
@@ -125,6 +126,7 @@ export async function runChatbotCompile(
     assayRegistry: getAssaySpecRegistry(),
     stampPatternRegistry: getStampPatternRegistry(),
     compoundClassRegistry: getCompoundClassRegistry(),
+    ontologyTermRegistry: getOntologyTermRegistry(),
   }));
   registry.register(createResolvePriorLabwareReferencesPass());
   registry.register(createExpandProtocolPass({

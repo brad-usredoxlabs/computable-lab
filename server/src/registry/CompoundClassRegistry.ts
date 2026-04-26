@@ -17,6 +17,7 @@ export const CompoundClassSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   candidates: z.array(Candidate).min(1),
+  chebi_ids: z.array(z.string().regex(/^CHEBI:\d+$/)).optional(),
 });
 export type CompoundClass = z.infer<typeof CompoundClassSchema>;
 

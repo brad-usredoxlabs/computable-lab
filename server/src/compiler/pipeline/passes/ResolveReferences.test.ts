@@ -14,6 +14,8 @@ import type { ProtocolSpec } from '../../../registry/ProtocolSpecRegistry.js';
 import type { AssaySpec } from '../../../registry/AssaySpecRegistry.js';
 import type { StampPatternSpec } from '../../../registry/StampPatternRegistry.js';
 import type { CompoundClass } from '../../../registry/CompoundClassRegistry.js';
+import type { OntologyTerm } from '../../../registry/OntologyTermRegistry.js';
+import { getOntologyTermRegistry } from '../../../registry/OntologyTermRegistry.js';
 
 // ---------------------------------------------------------------------------
 // Helpers — build mock registries
@@ -57,6 +59,17 @@ function makeCompoundClassRegistry(
   };
 }
 
+function makeOntologyTermRegistry(
+  terms: OntologyTerm[],
+): ReturnType<typeof getOntologyTermRegistry> {
+  return {
+    list: () => terms.slice(),
+    get: (id: string) => terms.find(t => t.id === id),
+    getBySource: (source: string) => terms.filter(t => t.source === source),
+    reload: () => {},
+  };
+}
+
 function makeMockState(
   unresolvedRefs: Array<{ kind: string; label: string; reason: string }>,
 ): PipelineState {
@@ -84,6 +97,7 @@ describe('createResolveReferencesPass', () => {
       assayRegistry: makeAssayRegistry([]),
       stampPatternRegistry: makeStampPatternRegistry([]),
       compoundClassRegistry: makeCompoundClassRegistry([]),
+      ontologyTermRegistry: makeOntologyTermRegistry([]),
     };
 
     const pass = createResolveReferencesPass(deps);
@@ -114,6 +128,7 @@ describe('createResolveReferencesPass', () => {
       ]),
       stampPatternRegistry: makeStampPatternRegistry([]),
       compoundClassRegistry: makeCompoundClassRegistry([]),
+      ontologyTermRegistry: makeOntologyTermRegistry([]),
     };
 
     const pass = createResolveReferencesPass(deps);
@@ -150,6 +165,7 @@ describe('createResolveReferencesPass', () => {
         },
       ]),
       compoundClassRegistry: makeCompoundClassRegistry([]),
+      ontologyTermRegistry: makeOntologyTermRegistry([]),
     };
 
     const pass = createResolveReferencesPass(deps);
@@ -187,6 +203,7 @@ describe('createResolveReferencesPass', () => {
           ],
         },
       ]),
+      ontologyTermRegistry: makeOntologyTermRegistry([]),
     };
 
     const pass = createResolveReferencesPass(deps);
@@ -225,6 +242,7 @@ describe('createResolveReferencesPass', () => {
           ],
         },
       ]),
+      ontologyTermRegistry: makeOntologyTermRegistry([]),
     };
 
     const pass = createResolveReferencesPass(deps);
@@ -253,6 +271,7 @@ describe('createResolveReferencesPass', () => {
       assayRegistry: makeAssayRegistry([]),
       stampPatternRegistry: makeStampPatternRegistry([]),
       compoundClassRegistry: makeCompoundClassRegistry([]),
+      ontologyTermRegistry: makeOntologyTermRegistry([]),
     };
 
     const pass = createResolveReferencesPass(deps);
@@ -280,6 +299,7 @@ describe('createResolveReferencesPass', () => {
       assayRegistry: makeAssayRegistry([]),
       stampPatternRegistry: makeStampPatternRegistry([]),
       compoundClassRegistry: makeCompoundClassRegistry([]),
+      ontologyTermRegistry: makeOntologyTermRegistry([]),
     };
 
     const pass = createResolveReferencesPass(deps);
@@ -293,6 +313,7 @@ describe('createResolveReferencesPass', () => {
       assayRegistry: makeAssayRegistry([]),
       stampPatternRegistry: makeStampPatternRegistry([]),
       compoundClassRegistry: makeCompoundClassRegistry([]),
+      ontologyTermRegistry: makeOntologyTermRegistry([]),
     };
 
     const pass = createResolveReferencesPass(deps);
@@ -313,6 +334,7 @@ describe('createResolveReferencesPass', () => {
       assayRegistry: makeAssayRegistry([]),
       stampPatternRegistry: makeStampPatternRegistry([]),
       compoundClassRegistry: makeCompoundClassRegistry([]),
+      ontologyTermRegistry: makeOntologyTermRegistry([]),
     };
 
     const pass = createResolveReferencesPass(deps);
@@ -341,6 +363,7 @@ describe('createResolveReferencesPass', () => {
       assayRegistry: makeAssayRegistry([]),
       stampPatternRegistry: makeStampPatternRegistry([]),
       compoundClassRegistry: makeCompoundClassRegistry([]),
+      ontologyTermRegistry: makeOntologyTermRegistry([]),
     };
 
     const pass = createResolveReferencesPass(deps);
@@ -368,6 +391,7 @@ describe('createResolveReferencesPass', () => {
       assayRegistry: makeAssayRegistry([]),
       stampPatternRegistry: makeStampPatternRegistry([]),
       compoundClassRegistry: makeCompoundClassRegistry([]),
+      ontologyTermRegistry: makeOntologyTermRegistry([]),
     };
 
     const pass = createResolveReferencesPass(deps);
@@ -395,6 +419,7 @@ describe('createResolveReferencesPass', () => {
       assayRegistry: makeAssayRegistry([]),
       stampPatternRegistry: makeStampPatternRegistry([]),
       compoundClassRegistry: makeCompoundClassRegistry([]),
+      ontologyTermRegistry: makeOntologyTermRegistry([]),
     };
 
     const pass = createResolveReferencesPass(deps);
@@ -422,6 +447,7 @@ describe('createResolveReferencesPass', () => {
       assayRegistry: makeAssayRegistry([]),
       stampPatternRegistry: makeStampPatternRegistry([]),
       compoundClassRegistry: makeCompoundClassRegistry([]),
+      ontologyTermRegistry: makeOntologyTermRegistry([]),
     };
 
     const pass = createResolveReferencesPass(deps);
@@ -468,6 +494,7 @@ describe('createResolveReferencesPass', () => {
           candidates: [{ compoundId: 'compound-001', name: 'TCDD' }],
         },
       ]),
+      ontologyTermRegistry: makeOntologyTermRegistry([]),
     };
 
     const pass = createResolveReferencesPass(deps);

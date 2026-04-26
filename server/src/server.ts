@@ -54,6 +54,8 @@ import {
   createIngestionHandlers,
   createRunWorkspaceHandlers,
   createRecordSearchHandlers,
+  createOntologyTermHandlers,
+  createVerbActionMapHandlers,
 } from './api/handlers/index.js';
 import { createIngestionAIHandlers } from './api/handlers/IngestionAIHandlers.js';
 import { createMaterialAIHandlers } from './api/handlers/MaterialAIHandlers.js';
@@ -81,6 +83,8 @@ import { createReadinessHandlers } from './api/handlers/ReadinessHandlers.js';
 import { createExtractHandlers } from './api/handlers/ExtractHandlers.js';
 import { createProcurementHandlers } from './api/handlers/ProcurementHandlers.js';
 import { createPromptTemplateHandlers } from './api/handlers/PromptTemplateHandlers.js';
+import { getOntologyTermRegistry } from './registry/OntologyTermRegistry.js';
+import { getVerbActionMap } from './registry/VerbActionMapRegistry.js';
 import { ExtractionRunnerService } from './extract/ExtractionRunnerService.js';
 import { ExtractionMetrics } from './extract/ExtractionMetrics.js';
 import { OpenAICompatibleExtractor } from './extract/OpenAICompatibleExtractor.js';
@@ -710,6 +714,12 @@ export async function createServer(
   const { getPromptTemplateRegistry } = await import('./registry/PromptTemplateRegistry.js');
   const promptTemplateHandlers = createPromptTemplateHandlers(getPromptTemplateRegistry());
 
+  // Ontology-term registry (always available, synchronous load)
+  const ontologyTermHandlers = createOntologyTermHandlers(getOntologyTermRegistry());
+
+  // Verb-action-map registry (always available, synchronous load)
+  const verbActionMapHandlers = createVerbActionMapHandlers(getVerbActionMap());
+
   // Register API routes with /api prefix
   await fastify.register(async (instance) => {
     const routeOpts: import('./api/routes.js').RouteOptions = {
@@ -745,6 +755,8 @@ export async function createServer(
       readinessHandlers,
       procurementHandlers,
       promptTemplateHandlers,
+      ontologyTermHandlers,
+      verbActionMapHandlers,
       schemaCount: () => ctx.schemaRegistry.size,
       ruleCount: () => ctx.lintEngine.ruleCount,
       uiSpecCount: () => ctx.uiSpecLoader.size(),

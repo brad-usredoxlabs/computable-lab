@@ -1,0 +1,22 @@
+source: manual
+terms:
+  - kind: ontology-term
+    id: MANUAL:chebi-example
+    source: manual
+    label: "ChEBI placeholder (replaced when download script runs)"
+    meta: { example_for: chebi }
+  - kind: ontology-term
+    id: MANUAL:cl-example
+    source: manual
+    label: "Cell Ontology placeholder"
+    meta: { example_for: cell-ontology }
+  - kind: ontology-term
+    id: MANUAL:ncbi-tax-example
+    source: manual
+    label: "NCBI Taxon placeholder"
+    meta: { example_for: ncbi-taxon }
+  - kind: ontology-term
+    id: MANUAL:go-example
+    source: manual
+    label: "Gene Ontology placeholder"
+    meta: { example_for: gene-ontology }

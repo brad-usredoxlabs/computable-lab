@@ -1,6 +1,9 @@
 id: PPARa-activator
 name: PPARa activator
 description: Peroxisome proliferator-activated receptor alpha agonists.
+chebi_ids:
+  - CHEBI:15377
+  - CHEBI:16236
 candidates:
   - compoundId: clofibrate
     name: Clofibrate

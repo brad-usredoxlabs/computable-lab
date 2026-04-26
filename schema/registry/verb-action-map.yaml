@@ -1,0 +1,52 @@
+kind: verb-action-map
+mappings:
+  - verb: seed
+    notes: "Introduce cells or organisms into a growth vessel"
+  - verb: incubate
+    notes: "Hold sample at temperature for a defined duration"
+  - verb: harvest
+    notes: "Collect cells or material from a culture"
+  - verb: aliquot
+    notes: "Divide a sample into equal portions"
+  - verb: wash
+    notes: "Remove liquid and replace with buffer"
+  - verb: elute
+    notes: "Release bound material from a column or bead"
+  - verb: resuspend
+    notes: "Redisperse a pellet in liquid"
+  - verb: pellet
+    notes: "Collect material by centrifugation"
+  - verb: dilute
+    notes: "Reduce concentration by adding solvent"
+  - verb: mix
+    notes: "Homogenize contents of a well or tube"
+  - verb: stain
+    notes: "Apply dye or fluorophore to cells or tissue"
+  - verb: fix
+    notes: "Preserve cellular structure with fixative"
+  - verb: permeabilize
+    notes: "Create pores in cell membrane for reagent access"
+  - verb: block
+    notes: "Prevent non-specific binding with blocking buffer"
+  - verb: quench
+    notes: "Stop a reaction by adding a quenching agent"
+  - verb: count
+    notes: "Enumerate cells or particles"
+  - verb: passage
+    notes: "Transfer and subculture cells to fresh media"
+  - verb: freeze
+    notes: "Store cells or samples at sub-zero temperature"
+  - verb: thaw
+    notes: "Warm frozen sample to liquid state"
+  - verb: spin
+    notes: "Centrifuge sample (generic, non-pellet)"
+  - verb: label
+    notes: "Attach a fluorescent or chemical tag to a target"
+  - verb: transfect
+    notes: "Introduce nucleic acids into cells"
+  - verb: add_material
+    notes: "Generic addition of any material to a well or tube"
+  - verb: create_container
+    notes: "Create a new container (e.g. well, tube) for holding material"
+  - verb: read
+    notes: "Measure signal from a plate or well (fluorescence, absorbance, etc.)"

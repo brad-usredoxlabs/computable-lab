@@ -1,0 +1,159 @@
+source: gene-ontology
+terms:
+  - kind: ontology-term
+    id: GO:0003674
+    source: gene-ontology
+    label: molecular_function
+    definition: A molecular process that can be carried out by the action of a single macromolecular machine, usually via direct physical interactions with other molecular entities. Function in this sense denotes an action, or activity, that a gene product (or a complex) performs.
+    synonyms:
+      - molecular function
+  - kind: ontology-term
+    id: GO:0005739
+    source: gene-ontology
+    label: mitochondrion
+    definition: A semiautonomous, self replicating organelle that occurs in varying numbers, shapes, and sizes in the cytoplasm of virtually all eukaryotic cells. It is notably the site of tissue respiration.
+    synonyms:
+      - mitochondria
+    parents:
+      - GO:0043231
+  - kind: ontology-term
+    id: GO:0006091
+    source: gene-ontology
+    label: generation of precursor metabolites and energy
+    definition: The chemical reactions and pathways resulting in the formation of precursor metabolites, substances from which energy is derived, and any process involved in the liberation of energy from these substances.
+    parents:
+      - GO:0008152
+  - kind: ontology-term
+    id: GO:0006096
+    source: gene-ontology
+    label: glycolytic process
+    definition: The chemical reactions and pathways resulting in the breakdown of a carbohydrate into pyruvate, with the concomitant production of a small amount of ATP and the reduction of NAD(P) to NAD(P)H. Glycolysis begins with the metabolism of a carbohydrate to generate products that can enter the pathway and ends with the production of pyruvate. Pyruvate may be converted to acetyl-coenzyme A, ethanol, lactate, or other small molecules.
+    parents:
+      - GO:0006090
+      - GO:0006091
+      - GO:0016052
+      - GO:0019364
+      - GO:0046032
+      - GO:0046034
+      - GO:0046496
+  - kind: ontology-term
+    id: GO:0006119
+    source: gene-ontology
+    label: oxidative phosphorylation
+    definition: The phosphorylation of ADP to ATP that accompanies the oxidation of a metabolite through the operation of the respiratory chain. Oxidation of compounds establishes a proton gradient across the membrane, providing the energy for ATP synthesis.
+    synonyms:
+      - respiratory-chain phosphorylation
+    parents:
+      - GO:0009060
+  - kind: ontology-term
+    id: GO:0006260
+    source: gene-ontology
+    label: DNA replication
+    definition: The cellular metabolic process in which a cell duplicates one or more molecules of DNA. DNA replication begins when specific sequences, known as origins of replication, are recognized and bound by the origin recognition complex, and ends when the original DNA molecule has been completely duplicated and the copies topologically separated. The unit of replication usually corresponds to the genome of the cell, an organelle, or a virus. The template for replication can either be an existing DNA molecule or RNA.
+    parents:
+      - GO:0006259
+  - kind: ontology-term
+    id: GO:0006355
+    source: gene-ontology
+    label: regulation of DNA-templated transcription
+    definition: Any process that modulates the frequency, rate or extent of cellular DNA-templated transcription.
+    synonyms:
+      - regulation of cellular transcription, DNA-dependent
+      - regulation of transcription, DNA-dependent
+      - regulation of transcription, DNA-templated
+    parents:
+      - GO:0010468
+      - GO:2001141
+  - kind: ontology-term
+    id: GO:0006629
+    source: gene-ontology
+    label: lipid metabolic process
+    definition: The chemical reactions and pathways involving lipids, compounds soluble in an organic solvent but not, or sparingly, in an aqueous solvent. Includes fatty acids; neutral fats, other fatty-acid esters, and soaps; long-chain (fatty) alcohols and waxes; sphingoids and other long-chain bases; glycolipids, phospholipids and sphingolipids; and carotenes, polyprenols, sterols, terpenes and other isoprenoids.
+    synonyms:
+      - lipid metabolism
+    parents:
+      - GO:0044238
+  - kind: ontology-term
+    id: GO:0006805
+    source: gene-ontology
+    label: xenobiotic metabolic process
+    definition: The chemical reactions and pathways involving a xenobiotic compound, a compound foreign to the organism exposed to it. It may be synthesized by another organism (like ampicilin) or it can be a synthetic chemical.
+    synonyms:
+      - xenobiotic metabolism
+    parents:
+      - GO:0008152
+  - kind: ontology-term
+    id: GO:0006915
+    source: gene-ontology
+    label: apoptotic process
+    definition: A programmed cell death process which begins when a cell receives an internal (e.g. DNA damage) or external signal (e.g. an extracellular death ligand), and proceeds through a series of biochemical events (signaling pathway phase) which trigger an execution phase. The execution phase is the last step of an apoptotic process, and is typically characterized by rounding-up of the cell, retraction of pseudopodes, reduction of cellular volume (pyknosis), chromatin condensation, nuclear fragmentation (karyorrhexis), plasma membrane blebbing and fragmentation of the cell into apoptotic bodies. When the execution phase is completed, the cell has died.
+    synonyms:
+      - apoptotic cell death
+      - apoptotic programmed cell death
+      - programmed cell death by apoptosis
+    parents:
+      - GO:0012501
+  - kind: ontology-term
+    id: GO:0006974
+    source: gene-ontology
+    label: DNA damage response
+    definition: Any process that results in a change in state or activity of a cell (in terms of movement, secretion, enzyme production, gene expression, etc.) as a result of a stimulus indicating damage to its DNA from environmental insults or errors during metabolism.
+    synonyms:
+      - cellular DNA damage response
+      - cellular response to DNA damage stimulus
+      - response to genotoxic stress
+    parents:
+      - GO:0033554
+  - kind: ontology-term
+    id: GO:0007010
+    source: gene-ontology
+    label: cytoskeleton organization
+    definition: A process that is carried out at the cellular level which results in the assembly, arrangement of constituent parts, or disassembly of cytoskeletal structures.
+    synonyms:
+      - cytoskeleton organisation
+    parents:
+      - GO:0006996
+  - kind: ontology-term
+    id: GO:0007049
+    source: gene-ontology
+    label: cell cycle
+    definition: The progression of biochemical and morphological phases and events that occur in a cell during successive cell replication or nuclear replication events. Canonically, the cell cycle comprises the replication and segregation of genetic material followed by the division of the cell, but in endocycles or syncytial cells nuclear replication or nuclear division may not be followed by cell division.
+    synonyms:
+      - cell-division cycle
+    parents:
+      - GO:0009987
+  - kind: ontology-term
+    id: GO:0007165
+    source: gene-ontology
+    label: signal transduction
+    definition: The cellular process in which a signal is conveyed to trigger a change in the activity or state of a cell. Signal transduction begins with reception of a signal (e.g. a ligand binding to a receptor or receptor activation by a stimulus such as light), or for signal transduction in the absence of ligand, signal-withdrawal or the activity of a constitutively active receptor. Signal transduction ends with regulation of a downstream cellular process, e.g. regulation of transcription or regulation of a metabolic process. Signal transduction covers signaling from receptors located on the surface of the cell and signaling via molecules located within the cell. For signaling between cells, signal transduction is restricted to events at and within the receiving cell.
+    parents:
+      - GO:0009987
+      - GO:0050794
+  - kind: ontology-term
+    id: GO:0008150
+    source: gene-ontology
+    label: biological_process
+    definition: A biological process is the execution of a genetically-encoded biological module or program. It consists of all the steps required to achieve the specific biological objective of the module. A biological process is accomplished by a particular set of molecular functions carried out by specific gene products (or macromolecular complexes), often in a highly regulated manner and in a particular temporal sequence.
+    synonyms:
+      - biological process
+      - physiological process
+  - kind: ontology-term
+    id: GO:0009605
+    source: gene-ontology
+    label: response to external stimulus
+    definition: Any process that results in a change in state or activity of a cell or an organism (in terms of movement, secretion, enzyme production, gene expression, etc.) as a result of an external stimulus.
+    synonyms:
+      - response to environmental stimulus
+    parents:
+      - GO:0050896
+  - kind: ontology-term
+    id: GO:0009987
+    source: gene-ontology
+    label: cellular process
+    definition: Any process that is carried out at the cellular level, but not necessarily restricted to a single cell. For example, cell communication occurs among more than one cell, but occurs at the cellular level.
+    synonyms:
+      - cell physiology
+      - cellular physiological process
+    parents:
+      - GO:0008150

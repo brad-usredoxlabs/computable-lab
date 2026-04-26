@@ -1730,7 +1730,7 @@ export const apiClient = {
     })
   },
 
-  async runIngestionJob(id: string, body: { source?: CreateIngestionJobRequest['source'] }): Promise<IngestionJobDetail> {
+  async runIngestionJob(id: string, body: { source?: CreateIngestionJobRequest['source']; enableThinking?: boolean }): Promise<IngestionJobDetail> {
     return request<IngestionJobDetail>(`/ingestion/jobs/${encodeURIComponent(id)}/run`, {
       method: 'POST',
       body: JSON.stringify(body),
@@ -2543,6 +2543,7 @@ export const apiClient = {
       | { sourceKind: 'vendor_document'; vendor: string; title: string; landingUrl: string; pdfUrl?: string; snippet?: string; documentType?: string; sessionIdHint?: string }
       | { sourceKind: 'pasted_url'; url: string }
       | { sourceKind: 'uploaded_pdf'; uploadId: string; fileName: string; mediaType: string; contentBase64: string }
+    enableThinking?: boolean
   }): Promise<{
     success: true
     sessionId: string
@@ -2622,6 +2623,22 @@ export const apiClient = {
     variables: Array<{ name: string; type: string; description: string }>
   }> {
     return request(`/prompt-templates/${encodeURIComponent(id)}`)
+  },
+
+  /**
+   * Get a single ontology term by id.
+   * Calls GET /ontology-terms/lookup?id=<encoded>
+   */
+  async getOntologyTerm(id: string): Promise<{ success: true; term: { kind: string; id: string; source: string; label: string; definition?: string; synonyms?: string[]; parents?: string[]; meta?: Record<string, unknown> } }> {
+    return request(`/ontology-terms/lookup?id=${encodeURIComponent(id)}`)
+  },
+
+  /**
+   * Get a verb-action mapping by verb name.
+   * Calls GET /verb-action-map/lookup?verb=<encoded>
+   */
+  async getVerbActionMapping(verb: string): Promise<{ success: true; mapping: { verb: string; exact_id?: string; obi_id?: string; notes?: string } }> {
+    return request(`/verb-action-map/lookup?verb=${encodeURIComponent(verb)}`)
   },
 }
 

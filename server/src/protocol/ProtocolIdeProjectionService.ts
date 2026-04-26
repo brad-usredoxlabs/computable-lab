@@ -229,6 +229,9 @@ export class ProtocolIdeProjectionService {
       // Overlay summary toggles
       overlaySummaryToggles: request.overlaySummaryToggles,
 
+      // Per-request thinking-mode override
+      ...(request.enableThinking !== undefined ? { enableThinking: request.enableThinking } : {}),
+
       // Timestamp for provenance
       projectionTimestamp: new Date().toISOString(),
     };

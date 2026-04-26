@@ -1,0 +1,187 @@
+source: chebi
+terms:
+  - kind: ontology-term
+    id: CHEBI:15377
+    source: chebi
+    label: water
+    definition: An oxygen hydride consisting of an oxygen atom that is covalently bonded to two hydrogen atoms
+    parents:
+      - CHEBI:33693
+      - CHEBI:37176
+      - CHEBI:52625
+  - kind: ontology-term
+    id: CHEBI:16236
+    source: chebi
+    label: ethanol
+    definition: A primary alcohol that is ethane in which one of the hydrogens is substituted by a hydroxy group.
+    parents:
+      - CHEBI:134179
+      - CHEBI:15734
+      - CHEBI:23982
+      - CHEBI:50584
+  - kind: ontology-term
+    id: CHEBI:17234
+    source: chebi
+    label: glucose
+    definition: An aldohexose used as a source of energy and metabolic intermediate.
+    parents:
+      - CHEBI:33917
+  - kind: ontology-term
+    id: CHEBI:17790
+    source: chebi
+    label: methanol
+    definition: The primary alcohol that is the simplest aliphatic alcohol, comprising a methyl and an alcohol group.
+    parents:
+      - CHEBI:134179
+      - CHEBI:15734
+      - CHEBI:50584
+      - CHEBI:64708
+  - kind: ontology-term
+    id: CHEBI:17939
+    source: chebi
+    label: puromycin
+    definition: An aminonucleoside antibiotic, derived from the <em>Streptomyces alboniger</em> bacterium, that causes premature chain termination during translation taking place in the ribosome.
+    parents:
+      - CHEBI:26404
+  - kind: ontology-term
+    id: CHEBI:24870
+    source: chebi
+    label: ion
+    definition: A molecular entity having a net electric charge.
+    parents:
+      - CHEBI:23367
+  - kind: ontology-term
+    id: CHEBI:25212
+    source: chebi
+    label: metabolite
+    definition: Any intermediate or product resulting from metabolism. The term 'metabolite' subsumes the classes commonly known as primary and secondary metabolites.
+    parents:
+      - CHEBI:52206
+  - kind: ontology-term
+    id: CHEBI:26710
+    source: chebi
+    label: sodium chloride
+    definition: An inorganic chloride salt having sodium(1+) as the counterion.
+    parents:
+      - CHEBI:36093
+      - CHEBI:38702
+  - kind: ontology-term
+    id: CHEBI:28262
+    source: chebi
+    label: dimethyl sulfoxide
+    definition: A 2-carbon sulfoxide in which the sulfur atom has two methyl substituents.
+    parents:
+      - CHEBI:134179
+      - CHEBI:22063
+  - kind: ontology-term
+    id: CHEBI:28592
+    source: chebi
+    label: ricinoleic acid
+    definition: A (9<i>Z</i>)-12-hydroxyoctadec-9-enoic acid in which the 12-hydroxy group has <i>R</i>-configuration..
+    parents:
+      - CHEBI:85639
+  - kind: ontology-term
+    id: CHEBI:28938
+    source: chebi
+    label: ammonium
+    definition: An onium cation obtained by protonation of ammonia.
+    parents:
+      - CHEBI:35106
+      - CHEBI:50313
+      - CHEBI:60242
+  - kind: ontology-term
+    id: CHEBI:29086
+    source: chebi
+    label: 3-hydroxy-5,9,17-trioxo-4,5:9,10-disecoandrosta-1(10),2-dien-4-oic acid
+    definition: A seco-androstane that is hexahydro-1<em>H</em>-indene-1,5(4<em>H</em>)-dione which is substituted at the 7a position by a methyl group and at the 4 position by a 1-carboxy-1-hydroxy-4-methyl-5-oxohepta-1,3-dien-7-yl group (the <i>S</i>,<i>S</i>,<i>S</i>-diastereoisomer).
+    parents:
+      - CHEBI:26616
+      - CHEBI:33823
+      - CHEBI:35868
+      - CHEBI:35960
+      - CHEBI:52618
+      - CHEBI:79020
+  - kind: ontology-term
+    id: CHEBI:29108
+    source: chebi
+    label: calcium(2+)
+    parents:
+      - CHEBI:30412
+      - CHEBI:39123
+      - CHEBI:60240
+  - kind: ontology-term
+    id: CHEBI:30742
+    source: chebi
+    label: ethylene glycol
+    definition: A 1,2-glycol compound produced via reaction of ethylene oxide with water.
+    parents:
+      - CHEBI:13643
+      - CHEBI:23976
+  - kind: ontology-term
+    id: CHEBI:32300
+    source: chebi
+    label: Voglibose
+    parents:
+      - CHEBI:50860
+  - kind: ontology-term
+    id: CHEBI:33225
+    source: chebi
+    label: isochromane
+    parents:
+      - CHEBI:38762
+  - kind: ontology-term
+    id: CHEBI:33232
+    source: chebi
+    label: application
+    definition: Intended use of the molecular entity or part thereof by humans.
+    parents:
+      - CHEBI:50906
+  - kind: ontology-term
+    id: CHEBI:35341
+    source: chebi
+    label: steroid
+    definition: '"Any of naturally occurring compounds and synthetic analogues, based on the cyclopenta'
+    parents:
+      - CHEBI:18059
+      - CHEBI:51958
+  - kind: ontology-term
+    id: CHEBI:42191
+    source: chebi
+    label: EDTA(4-)
+    definition: A tetracarboxylic acid anion formed by deprotonation of all four carboxy groups in ethylenediaminetetraacetic acid (EDTA).
+    parents:
+      - CHEBI:35754
+  - kind: ontology-term
+    id: CHEBI:42334
+    source: chebi
+    label: 2-[4-(2-hydroxyethyl)piperazin-1-yl]ethanesulfonic acid
+    definition: A HEPES that is ethanesulfonic acid in which one of the methyl hydrogens is replaced by a 4-(2-hydroxyethyl)piperazin-1-yl group. A Good's buffer substance, p<em>K</em><small><sub>a</sub></small> = 7.55 at 20 °C.
+    parents:
+      - CHEBI:33551
+      - CHEBI:46756
+  - kind: ontology-term
+    id: CHEBI:75751
+    source: chebi
+    label: isorhamnetin 3-O-beta-D-galactopyranoside
+    definition: A glycosyloxyflavone that is isorhamnetin substituted at position 3 by a β-<small>D</small>-galactosyl residue.
+    parents:
+      - CHEBI:25401
+      - CHEBI:27116
+      - CHEBI:28034
+      - CHEBI:50018
+      - CHEBI:63367
+  - kind: ontology-term
+    id: CHEBI:78474
+    source: chebi
+    label: O-[S-(3R)-hydroxytetradecanoylpantetheine-4-phosphoryl]serine(1-) residue
+    definition: An <em>O</em>-(<em>S</em>-acylpantetheine-4'-phosphoryl)serine(1−) residue in which the <em>S</em>-acyl group is specified as (3<i>R</i>)-hydroxytetradecanoyl.
+    parents:
+      - CHEBI:76179
+  - kind: ontology-term
+    id: CHEBI:9754
+    source: chebi
+    label: tris
+    definition: A primary amino compound that is <em>tert</em>-butylamine in which one hydrogen attached to each methyl group is replaced by a hydroxy group. A compound widely used as a biological buffer substance in the pH range 7—9; p<em>K</em><small><sub>a</sub></small> = 8.3 at 20 °C; p<em>K</em><small><sub>a</sub></small> = 7.82 at 37 °C.
+    parents:
+      - CHEBI:27136
+      - CHEBI:50994

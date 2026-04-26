@@ -311,6 +311,17 @@ export function AiChatPanel() {
               isStreaming={chat.isStreaming}
               inputText={chat.inputText}
             />
+            <div className="ai-chat-thinking-toggle">
+              <label>
+                <input
+                  type="checkbox"
+                  data-testid="thinking-mode-checkbox"
+                  checked={chat.thinkingMode}
+                  onChange={(e) => chat.setThinkingMode(e.target.checked)}
+                />
+                Use thinking mode
+              </label>
+            </div>
           </>
         )}
       </div>
@@ -463,6 +474,27 @@ export function AiChatPanel() {
         .ai-chat-panel__retry-btn:hover {
           border-color: #339af0;
           color: #339af0;
+        }
+
+        .ai-chat-thinking-toggle {
+          padding: 0.25rem 1rem 0.5rem 1rem;
+          font-size: 0.78rem;
+          color: #64748b;
+        }
+
+        .ai-chat-thinking-toggle label {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          cursor: pointer;
+          user-select: none;
+        }
+
+        .ai-chat-thinking-toggle input[type="checkbox"] {
+          width: 14px;
+          height: 14px;
+          accent-color: #339af0;
+          cursor: pointer;
         }
       `}</style>
 

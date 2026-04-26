@@ -1,0 +1,170 @@
+source: cell-ontology
+terms:
+  - kind: ontology-term
+    id: CL:0000000
+    source: cell-ontology
+    label: cell
+    definition: A material entity of anatomical origin (part of or deriving from an organism) that has as its parts a maximally connected cell compartment surrounded by a plasma membrane.
+    parents:
+      - UBERON:0000061
+  - kind: ontology-term
+    id: CL:0000014
+    source: cell-ontology
+    label: germ line stem cell
+    definition: A stem cell that is the precursor of gametes.
+    synonyms:
+      - germline stem cell
+    parents:
+      - CL:0000034
+      - CL:0000039
+  - kind: ontology-term
+    id: CL:0000031
+    source: cell-ontology
+    label: neuroblast (sensu Vertebrata)
+    definition: A cell that will develop into a neuron often after a migration phase.
+    synonyms:
+      - neuroblast
+    parents:
+      - CL:0000255
+      - CL:0011026
+  - kind: ontology-term
+    id: CL:0000034
+    source: cell-ontology
+    label: stem cell
+    definition: A relatively undifferentiated cell that retains the ability to divide and proliferate throughout life to provide progenitor cells that can differentiate into specialized cells.
+    parents:
+      - CL:0011115
+  - kind: ontology-term
+    id: CL:0000057
+    source: cell-ontology
+    label: fibroblast
+    definition: A connective tissue cell which secretes an extracellular matrix rich in collagen and other macromolecules. Flattened and irregular in outline with branching processes; appear fusiform or spindle-shaped.
+    parents:
+      - CL:0000499
+  - kind: ontology-term
+    id: CL:0000061
+    source: cell-ontology
+    label: cementoblast
+    definition: Skeletogenic cell that produces cementum (a bony substance that covers the root of a tooth), is part of the odontogenic papilla, and develops from a precementoblast cell.
+    synonyms:
+      - cementum secreting cell
+    parents:
+      - CL:0000062
+      - CL:0000151
+  - kind: ontology-term
+    id: CL:0000084
+    source: cell-ontology
+    label: T cell
+    definition: A type of lymphocyte whose defining characteristic is the expression of a T cell receptor complex.
+    synonyms:
+      - T lymphocyte
+      - T-cell
+      - T-lymphocyte
+    parents:
+      - CL:0000542
+  - kind: ontology-term
+    id: CL:0000106
+    source: cell-ontology
+    label: unipolar neuron
+    definition: Neuron with one neurite that extends from the cell body.
+    parents:
+      - CL:2000032
+  - kind: ontology-term
+    id: CL:0000117
+    source: cell-ontology
+    label: CNS neuron (sensu Vertebrata)
+    parents:
+      - CL:2000029
+  - kind: ontology-term
+    id: CL:0000122
+    source: cell-ontology
+    label: stellate neuron
+    definition: A neuron that has dendritic processes radiating from the cell body forming a star-like shape.
+    parents:
+      - CL:2000029
+  - kind: ontology-term
+    id: CL:0000138
+    source: cell-ontology
+    label: chondrocyte
+    definition: A skeletogenic cell that secretes a specialized, avascular, GAG-rich matrix, is embedded in cartilage tissue matrix, retains the ability to divide, and develops from a chondroblast cell.
+    synonyms:
+      - cartilage cell
+    parents:
+      - CL:0000153
+      - CL:0000667
+      - CL:0007001
+  - kind: ontology-term
+    id: CL:0000182
+    source: cell-ontology
+    label: hepatocyte
+    definition: The main structural component of the liver. They are specialized epithelial cells that are organized into interconnected plates called lobules. Majority of cell population of liver, polygonal in shape, arranged in plates or trabeculae between sinusoids; may have single nucleus or binucleated.
+    parents:
+      - BFO:0000002
+      - CL:0000066
+      - CL:0000417
+  - kind: ontology-term
+    id: CL:0000232
+    source: cell-ontology
+    label: erythrocyte
+    definition: A red blood cell. In mammals, mature erythrocytes are biconcave disks containing hemoglobin whose function is to transport oxygen.
+    synonyms:
+      - RBC
+      - red blood cell
+    parents:
+      - CL:0000081
+      - CL:0000329
+      - CL:0000764
+  - kind: ontology-term
+    id: CL:0000235
+    source: cell-ontology
+    label: macrophage
+    definition: A mononuclear phagocyte present in variety of tissues, typically differentiated from monocytes, capable of phagocytosing a variety of extracellular particulate material, including immune complexes, microorganisms, and dead cells.
+    synonyms:
+      - histiocyte
+    parents:
+      - CL:0000113
+      - CL:0000145
+      - CL:0000766
+  - kind: ontology-term
+    id: CL:0000236
+    source: cell-ontology
+    label: B cell
+    definition: A lymphocyte of B lineage that is capable of B cell mediated immunity.
+    synonyms:
+      - B lymphocyte
+      - B-cell
+      - B-lymphocyte
+    parents:
+      - CL:0000945
+  - kind: ontology-term
+    id: CL:0000540
+    source: cell-ontology
+    label: neuron
+    definition: The basic cellular unit of nervous tissue. Each neuron consists of a body, an axon, and dendrites. Their purpose is to receive, conduct, and transmit impulses in the nervous system.
+    synonyms:
+      - nerve cell
+    parents:
+      - CL:0000393
+      - CL:0000404
+      - CL:0002319
+  - kind: ontology-term
+    id: CL:0000624
+    source: cell-ontology
+    label: CD4-positive, alpha-beta T cell
+    definition: A mature alpha-beta T cell that expresses an alpha-beta T cell receptor and the CD4 coreceptor.
+    synonyms:
+      - CD4-positive, alpha-beta T lymphocyte
+      - CD4-positive, alpha-beta T-cell
+      - CD4-positive, alpha-beta T-lymphocyte
+    parents:
+      - CL:0000791
+  - kind: ontology-term
+    id: CL:0002633
+    source: cell-ontology
+    label: respiratory basal cell
+    definition: A basal cell in the respiratory tract.
+    synonyms:
+      - airway basal cell
+      - airway basal stem cell
+    parents:
+      - CL:0000646

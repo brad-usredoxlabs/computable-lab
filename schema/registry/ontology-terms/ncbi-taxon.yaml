@@ -1,0 +1,70 @@
+source: ncbi-taxon
+terms:
+  - kind: ontology-term
+    id: NCBITaxon:1
+    source: ncbi-taxon
+    label: root
+  - kind: ontology-term
+    id: NCBITaxon:10090
+    source: ncbi-taxon
+    label: Mus musculus
+  - kind: ontology-term
+    id: NCBITaxon:10116
+    source: ncbi-taxon
+    label: Rattus norvegicus
+  - kind: ontology-term
+    id: NCBITaxon:1764
+    source: ncbi-taxon
+    label: Mycobacterium avium
+  - kind: ontology-term
+    id: NCBITaxon:2
+    source: ncbi-taxon
+    label: Bacteria
+  - kind: ontology-term
+    id: NCBITaxon:2759
+    source: ncbi-taxon
+    label: Eukaryota
+  - kind: ontology-term
+    id: NCBITaxon:33090
+    source: ncbi-taxon
+    label: Viridiplantae
+  - kind: ontology-term
+    id: NCBITaxon:33154
+    source: ncbi-taxon
+    label: Opisthokonta
+  - kind: ontology-term
+    id: NCBITaxon:3702
+    source: ncbi-taxon
+    label: Arabidopsis thaliana
+  - kind: ontology-term
+    id: NCBITaxon:40674
+    source: ncbi-taxon
+    label: Mammalia
+  - kind: ontology-term
+    id: NCBITaxon:4751
+    source: ncbi-taxon
+    label: Fungi
+  - kind: ontology-term
+    id: NCBITaxon:4932
+    source: ncbi-taxon
+    label: Saccharomyces cerevisiae
+  - kind: ontology-term
+    id: NCBITaxon:6239
+    source: ncbi-taxon
+    label: Caenorhabditis elegans
+  - kind: ontology-term
+    id: NCBITaxon:7227
+    source: ncbi-taxon
+    label: Drosophila melanogaster
+  - kind: ontology-term
+    id: NCBITaxon:7955
+    source: ncbi-taxon
+    label: Danio rerio
+  - kind: ontology-term
+    id: NCBITaxon:83333
+    source: ncbi-taxon
+    label: Escherichia coli K-12
+  - kind: ontology-term
+    id: NCBITaxon:9606
+    source: ncbi-taxon
+    label: Homo sapiens

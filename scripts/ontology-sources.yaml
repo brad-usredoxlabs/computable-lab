@@ -1,0 +1,116 @@
+sources:
+  - id: chebi
+    format: obo
+    url: "https://ftp.ebi.ac.uk/pub/databases/chebi/ontology/chebi_lite.obo.gz"
+    output: schema/registry/ontology-terms/chebi.yaml
+    include_ids:
+      - CHEBI:15377   # water
+      - CHEBI:16236   # ethanol
+      - CHEBI:28262   # DMSO
+      - CHEBI:17790   # methanol
+      - CHEBI:26710   # sodium chloride
+      - CHEBI:17234   # glucose
+      - CHEBI:42191   # EDTA
+      - CHEBI:9754    # Tris
+      - CHEBI:42334   # HEPES
+      - CHEBI:75751   # β-naphthoflavone (AhR agonist)
+      - CHEBI:78474   # TCDD (AhR agonist)
+      - CHEBI:17939   # puromycin
+      - CHEBI:25212   # metabolite (parent class)
+      - CHEBI:35341   # steroid
+      - CHEBI:33232   # functional class (parent)
+      - CHEBI:29086   # acetone
+      - CHEBI:30742   # isopropanol
+      - CHEBI:28938   # formic acid
+      - CHEBI:32300   # acetic acid
+      - CHEBI:24870   # citric acid
+      - CHEBI:28592   # sodium hydroxide
+      - CHEBI:29108   # potassium chloride
+      - CHEBI:33225   # phosphate
+      - CHEBI:24872   # citrate
+      - CHEBI:29070   # ammonium chloride
+
+  - id: cell-ontology
+    format: obo
+    url: "https://purl.obolibrary.org/obo/cl/cl-base.obo"
+    output: schema/registry/ontology-terms/cell-ontology.yaml
+    include_ids:
+      - CL:0000182    # hepatocyte
+      - CL:0002633    # immortalized human hepatocyte (HepG2)
+      - CL:0000084    # T cell
+      - CL:0000236    # B cell
+      - CL:0000235    # macrophage
+      - CL:0000195    # epithelial cell
+      - CL:0000057    # fibroblast
+      - CL:0000540    # neuron
+      - CL:0000034    # stem cell
+      - CL:0000624    # hepatoblast
+      - CL:0000061    # endothelial cell
+      - CL:0000117    # epithelial cell of lung
+      - CL:0000122    # epithelial cell of skin
+      - CL:0000031    # somatic cell
+      - CL:0000000    # cell (root)
+      - CL:0000014    # epithelial cell of kidney
+      - CL:0000106    # epithelial cell of pancreas
+      - CL:0000232    # dendritic cell
+      - CL:0000548    # neuron of peripheral nervous system
+      - CL:0000138    # muscle cell
+
+  - id: ncbi-taxon
+    format: obo
+    url: "https://purl.obolibrary.org/obo/ncbitaxon/subsets/taxslim.obo"
+    output: schema/registry/ontology-terms/ncbi-taxon.yaml
+    include_ids:
+      - NCBITaxon:9606    # Homo sapiens
+      - NCBITaxon:10090   # Mus musculus
+      - NCBITaxon:10116   # Rattus norvegicus
+      - NCBITaxon:4932    # Saccharomyces cerevisiae
+      - NCBITaxon:83333   # Escherichia coli K-12
+      - NCBITaxon:7227    # Drosophila melanogaster
+      - NCBITaxon:7955    # Danio rerio (zebrafish)
+      - NCBITaxon:6239    # Caenorhabditis elegans
+      - NCBITaxon:3702    # Arabidopsis thaliana
+      - NCBITaxon:1    # cellular organisms (root)
+      - NCBITaxon:2759    # Eukaryota
+      - NCBITaxon:2    # Bacteria
+      - NCBITaxon:40674   # Mammalia
+      - NCBITaxon:33154   # Metazoa (animals)
+      - NCBITaxon:4751    # Fungi
+      - NCBITaxon:1764    # Bacteria (high-level)
+      - NCBITaxon:33090   # Viridiplantae (green plants)
+
+  - id: gene-ontology
+    format: obo
+    url: "https://purl.obolibrary.org/obo/go/go-basic.obo"
+    output: schema/registry/ontology-terms/gene-ontology.yaml
+    include_ids:
+      - GO:0006915    # apoptotic process
+      - GO:0007049    # cell cycle
+      - GO:0035518    # AhR signaling pathway
+      - GO:0006805    # xenobiotic metabolic process
+      - GO:0006119    # oxidative phosphorylation
+      - GO:0006629    # lipid metabolic process
+      - GO:0006260    # DNA replication
+      - GO:0005739    # mitochondrion
+      - GO:0006355    # regulation of transcription
+      - GO:0009605    # response to xenobiotic stimulus
+      - GO:0008150    # biological process (root)
+      - GO:0003674    # molecular function (root)
+      - GO:0009987    # cellular process (root)
+      - GO:0006091    # generation of precursor metabolites and energy
+      - GO:0006096    # glycolytic process
+      - GO:0006974    # cellular response to stress
+      - GO:0007165    # signal transduction
+      - GO:0007010    # cytoskeleton organization
+
+  - id: exact
+    format: obo
+    url: "https://purl.obolibrary.org/obo/exact.obo"
+    output: schema/registry/ontology-terms/exact.yaml
+    include_ids: []
+    # EXACT (Experimental ACTions) ontology — maps compiler primitive verbs
+    # to canonical OBO Foundry action classes.
+    # Note: EXACT is not yet published in OBO Foundry, so include_ids is
+    # intentionally empty. The verb-action-map registry (verb-action-map.yaml)
+    # carries the verb→ontology mappings directly, independent of the
+    # downloaded ontology terms.

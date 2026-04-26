@@ -160,6 +160,7 @@ export async function* streamAssist(
   history: AiConversationMessage[] = [],
   signal?: AbortSignal,
   files?: File[],
+  enableThinking?: boolean,
 ): AsyncGenerator<AiStreamEvent> {
   // For event-editor surface, use the existing endpoint for backward compatibility
   const endpoint = surface === 'event-editor'
@@ -177,6 +178,9 @@ export async function* streamAssist(
     formData.append('surface', surface)
     formData.append('context', JSON.stringify(context))
     formData.append('history', JSON.stringify(history))
+    if (enableThinking !== undefined) {
+      formData.append('enableThinking', String(enableThinking))
+    }
     for (const file of files) {
       formData.append('files[]', file)
     }
@@ -187,8 +191,8 @@ export async function* streamAssist(
     })
   } else {
     const body = surface === 'event-editor'
-      ? { prompt, context, history }
-      : { prompt, surface, context, history }
+      ? { prompt, context, history, ...(enableThinking !== undefined ? { enableThinking } : {}) }
+      : { prompt, surface, context, history, ...(enableThinking !== undefined ? { enableThinking } : {}) }
 
     response = await fetch(endpoint, {
       method: 'POST',

@@ -50,6 +50,8 @@ export interface IntakePayload {
     | { sourceKind: 'vendor_document' } & CuratedDocumentResult
     | { sourceKind: 'pasted_url'; url: string }
     | { sourceKind: 'uploaded_pdf'; uploadId: string; fileName: string; mediaType: string; contentBase64: string }
+  /** Per-request thinking-mode override for LLM calls during session creation */
+  enableThinking?: boolean
 }
 
 /** Callback invoked when the user submits the intake form */
@@ -164,6 +166,25 @@ export function ProtocolIdeIntakePane({
   const [searchFilter, setSearchFilter] = useState<string>('all')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Thinking-mode checkbox — persisted to localStorage under its own key
+  const [thinkingMode, setThinkingMode] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('protocol-ide-thinking-mode')
+      return stored === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  const updateThinkingMode = useCallback((value: boolean) => {
+    setThinkingMode(value)
+    try {
+      localStorage.setItem('protocol-ide-thinking-mode', String(value))
+    } catch {
+      // localStorage unavailable — silently ignore
+    }
+  }, [])
+
   // Filter search results based on query and vendor filter
   const filteredResults = searchResults.filter(doc => {
     const matchesQuery =
@@ -267,9 +288,10 @@ export function ProtocolIdeIntakePane({
       onSubmit({
         directiveText: directiveText.trim(),
         source,
+        ...(thinkingMode ? { enableThinking: true } : {}),
       })
     },
-    [activeMode, directiveText, selectedDoc, pastedUrl, uploadedFile, onSubmit],
+    [activeMode, directiveText, selectedDoc, pastedUrl, uploadedFile, onSubmit, thinkingMode],
   )
 
   // Reset the form
@@ -584,6 +606,20 @@ export function ProtocolIdeIntakePane({
             disabled={isLoading}
           />
         </div>
+
+        {/* ── Thinking-mode checkbox ── */}
+        <label
+          className="protocol-ide-intake-label"
+          style={{ marginTop: '0.5rem' }}
+          data-testid="protocol-ide-intake-thinking-label"
+        >
+          <input
+            type="checkbox"
+            data-testid="protocol-ide-thinking-mode-checkbox"
+            checked={thinkingMode}
+            onChange={e => updateThinkingMode(e.target.checked)}
+          /> Use thinking mode
+        </label>
 
         {/* ── Action buttons ── */}
         <div

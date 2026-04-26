@@ -37,9 +37,10 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
   // chat_template_kwargs. Request-level values win on key collision so callers
   // can still opt back in per-call if needed.
   function normalizeRequest(req: CompletionRequest): Record<string, unknown> {
-    const { max_tokens, chat_template_kwargs, ...rest } = req;
+    const { max_tokens, chat_template_kwargs, enableThinking: requestEnableThinking, ...rest } = req;
+    const effectiveEnableThinking = requestEnableThinking ?? enableThinking;
     const mergedKwargs =
-      enableThinking === false
+      effectiveEnableThinking === false
         ? { enable_thinking: false, ...(chat_template_kwargs ?? {}) }
         : chat_template_kwargs;
     return {

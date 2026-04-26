@@ -201,7 +201,7 @@ export function createAgentOrchestrator(
 
   return {
     async run(request: AgentRequest): Promise<AgentResult> {
-      const { prompt, context, history, surface, toolFilter, onEvent, attachments } = request;
+      const { prompt, context, history, surface, toolFilter, onEvent, attachments, enableThinking } = request;
       const tid = traceId();
       const t0 = Date.now();
       const surfaceName = surface ?? 'default';
@@ -436,6 +436,7 @@ export function createAgentOrchestrator(
             messages,
             temperature: inferenceConfig.temperature ?? 0.1,
             max_tokens: inferenceConfig.maxTokens ?? 4096,
+            ...(enableThinking !== undefined ? { enableThinking } : {}),
           };
           if (toolDefs.length > 0) {
             completionReq.tools = toolDefs;

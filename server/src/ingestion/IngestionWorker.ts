@@ -144,7 +144,7 @@ export class IngestionWorker {
     return (result.envelope as RecordEnvelope<IngestionJobPayload> | undefined) ?? null;
   }
 
-  async runJob(jobId: string, source?: CreateIngestionArtifactInput): Promise<RecordEnvelope<IngestionJobPayload> | null> {
+  async runJob(jobId: string, source?: CreateIngestionArtifactInput, enableThinking?: boolean): Promise<RecordEnvelope<IngestionJobPayload> | null> {
     const running = await this.markRunning(jobId);
     if (!running) return null;
 
@@ -250,6 +250,7 @@ export class IngestionWorker {
           id: artifact.recordId,
           locator: sourceFileName,
         },
+        ...(enableThinking !== undefined ? { enableThinking } : {}),
       });
 
       // Persist the extraction-draft record

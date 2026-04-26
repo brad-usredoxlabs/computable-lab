@@ -28,6 +28,7 @@ export interface RunExtractionServiceArgs {
   };
   fileName?: string;                                    // optional, for library matcher
   hint?: { target_kind?: string; [k: string]: unknown };
+  enableThinking?: boolean;                             // per-request thinking-mode override for LLM calls
 }
 
 /**

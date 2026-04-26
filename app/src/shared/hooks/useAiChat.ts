@@ -70,6 +70,8 @@ export interface UseAiChatReturn {
   applyToGraph: (message: ChatMessage) => void
   aiAvailable: boolean | null
   recheckHealth: () => void
+  thinkingMode: boolean
+  setThinkingMode: (value: boolean) => void
 }
 
 /**
@@ -103,6 +105,23 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
   const [unresolvedRefs, setUnresolvedRefs] = useState<OntologyRefProposal[]>([])
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null)
   const [inputText, setInputText] = useState('')
+
+  // Thinking-mode toggle — persisted in localStorage, default off.
+  const [thinkingMode, _setThinkingMode] = useState<boolean>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('ai-assistant-thinking-mode') ?? 'false') === true
+    } catch {
+      return false
+    }
+  })
+  const setThinkingMode = useCallback((v: boolean) => {
+    _setThinkingMode(v)
+    try {
+      localStorage.setItem('ai-assistant-thinking-mode', JSON.stringify(v))
+    } catch {
+      /* ignore quota errors */
+    }
+  }, [])
 
   // Fetched apply-to-graph template from prompt-templates registry.
   const [applyToGraphTemplate, setApplyToGraphTemplate] = useState<string | null>(null)
@@ -238,7 +257,15 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
       const files = attachments?.map((a) => a.file)
 
       try {
-        for await (const event of streamAssist(prompt, ctx.surface, contextPayload, history, controller.signal, files)) {
+        for await (const event of streamAssist(
+          prompt,
+          ctx.surface,
+          contextPayload,
+          history,
+          controller.signal,
+          files,
+          thinkingMode ? true : undefined,
+        )) {
           accumulated.push(event)
 
           const content = buildAssistantContent(accumulated)
@@ -593,6 +620,8 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
     applyToGraph,
     aiAvailable,
     recheckHealth: checkHealth,
+    thinkingMode,
+    setThinkingMode,
   }
 }
 

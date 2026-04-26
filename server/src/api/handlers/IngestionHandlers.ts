@@ -70,7 +70,7 @@ export interface IngestionHandlers {
   getJob(request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply): Promise<IngestionJobDetail | ApiError>;
   createJob(request: FastifyRequest<{ Body: CreateJobBody }>, reply: FastifyReply): Promise<IngestionJobDetail | ApiError>;
   addArtifact(request: FastifyRequest<{ Params: { id: string }; Body: ArtifactBody }>, reply: FastifyReply): Promise<{ success: true; artifact: unknown } | ApiError>;
-  runJob(request: FastifyRequest<{ Params: { id: string }; Body: { source?: ArtifactBody } }>, reply: FastifyReply): Promise<IngestionJobDetail | ApiError>;
+  runJob(request: FastifyRequest<{ Params: { id: string }; Body: { source?: ArtifactBody; enableThinking?: boolean } }>, reply: FastifyReply): Promise<IngestionJobDetail | ApiError>;
   approveBundle(request: FastifyRequest<{ Params: { id: string; bundleId: string } }>, reply: FastifyReply): Promise<IngestionJobDetail | ApiError>;
   publishBundle(request: FastifyRequest<{ Params: { id: string; bundleId: string } }>, reply: FastifyReply): Promise<{ detail: IngestionJobDetail; publishResult: IngestionPublishResult } | ApiError>;
   attachExtractionSpec(request: FastifyRequest<{ Params: { id: string }; Body: ExtractionSpecBody }>, reply: FastifyReply): Promise<{ success: true; job: unknown } | ApiError>;
@@ -144,7 +144,7 @@ export function createIngestionHandlers(
 
     async runJob(request, reply) {
       try {
-        return await service.runJob(request.params.id, parseArtifactInput(request.body?.source));
+        return await service.runJob(request.params.id, parseArtifactInput(request.body?.source), request.body?.enableThinking);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         reply.status(message.includes('not found') ? 404 : 400);

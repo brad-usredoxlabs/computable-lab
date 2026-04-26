@@ -30,3 +30,7 @@ playwright-report/
 server/schema
 server/records
 server/config
+
+# Ontology download cache
+scripts/.ontology-cache/*
+!scripts/.ontology-cache/.gitkeep

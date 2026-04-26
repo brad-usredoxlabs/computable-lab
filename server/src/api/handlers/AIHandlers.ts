@@ -32,6 +32,7 @@ export interface AssistBody {
   surface: AiSurface;
   context: Record<string, unknown>;
   history?: ConversationHistoryMessage[];
+  enableThinking?: boolean;
 }
 
 export interface AIHandlers {
@@ -174,6 +175,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
       let surface: string;
       let context: Record<string, unknown>;
       let history: ConversationHistoryMessage[] | undefined;
+      let enableThinking: boolean | undefined;
       let fileAttachments: FileAttachment[] = [];
 
       if (contentType.includes('multipart/form-data')) {
@@ -204,6 +206,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
         surface = fields['surface'] ?? '';
         context = fields['context'] ? JSON.parse(fields['context']) : {};
         history = fields['history'] ? JSON.parse(fields['history']) : undefined;
+        enableThinking = fields['enableThinking'] === 'true' ? true : undefined;
 
         // Convert to FileAttachment[] for the pipeline (do NOT extract content for inlining)
         fileAttachments = files.map((f) => ({
@@ -218,6 +221,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
         surface = body.surface;
         context = body.context;
         history = body.history;
+        enableThinking = body.enableThinking;
       }
 
       if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
@@ -266,6 +270,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
           surface: surface as AiSurface,
           ...(history ? { history } : {}),
           ...(fileAttachments.length > 0 ? { attachments: fileAttachments } : {}),
+          ...(enableThinking !== undefined ? { enableThinking } : {}),
           onEvent: sendEvent,
         });
 

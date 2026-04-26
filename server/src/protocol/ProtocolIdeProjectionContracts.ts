@@ -79,6 +79,8 @@ export interface ProjectionRequest {
   sourceRefs: SourceRef[];
   /** Toggles for which overlay summaries to include */
   overlaySummaryToggles?: OverlaySummaryToggles;
+  /** Per-request thinking-mode override for LLM calls */
+  enableThinking?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -324,6 +326,7 @@ export function validateProjectionRequest(
             includeBudgetSummary: (toggles as Record<string, unknown>)['includeBudgetSummary'] ?? true,
           }
         : undefined,
+      enableThinking: typeof obj['enableThinking'] === 'boolean' ? (obj['enableThinking'] as boolean) : undefined,
     },
   };
 }

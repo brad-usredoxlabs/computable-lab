@@ -38,3 +38,5 @@ export * from './AiRecordDraftHandlers.js';
 export * from './ExtractHandlers.js';
 export * from './ProcurementHandlers.js';
 export * from './PromptTemplateHandlers.js';
+export * from './OntologyTermHandlers.js';
+export * from './VerbActionMapHandlers.js';
