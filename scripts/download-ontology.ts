@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import https from 'node:https';
+import http from 'node:http';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -67,7 +68,8 @@ if (!sourceId) {
 
 function fetchUrl(url: string, maxRedirects = 5): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    https
+    const mod = url.startsWith('https:') ? https : http;
+    mod
       .get(url, (res) => {
         // Follow redirects (301, 302, 303, 307, 308)
         if ([301, 302, 303, 307, 308].includes(res.statusCode!) && maxRedirects > 0) {
