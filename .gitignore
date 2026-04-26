@@ -34,3 +34,6 @@ server/config
 # Ontology download cache
 scripts/.ontology-cache/*
 !scripts/.ontology-cache/.gitkeep
+
+# Playwright MCP runtime artifacts
+.playwright-mcp/

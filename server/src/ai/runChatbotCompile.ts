@@ -61,6 +61,8 @@ import type { LabStateSnapshot } from '../compiler/state/LabState.js';
 import { emptyLabState } from '../compiler/state/LabState.js';
 import type { DirectiveNode } from '../compiler/directives/Directive.js';
 import type { LabStateCache } from '../compiler/state/LabStateCache.js';
+import { parsePromptMentions, type PromptMention } from './promptMentions.js';
+import type { LabwareSummary } from './types.js';
 import { getProtocolSpecRegistry } from '../registry/ProtocolSpecRegistry.js';
 import { getAssaySpecRegistry } from '../registry/AssaySpecRegistry.js';
 import { getStampPatternRegistry } from '../registry/StampPatternRegistry.js';
@@ -74,6 +76,17 @@ import '../compiler/artifacts/QuantStudioEmitter.js'; // registers QuantStudio i
 export interface RunChatbotCompileArgs {
   prompt: string;
   attachments?: FileAttachment[];
+  /**
+   * Pre-resolved mention tokens parsed client-side. When omitted, the
+   * pipeline parses the prompt server-side using parsePromptMentions so
+   * downstream passes always see the structured mentions.
+   */
+  mentions?: PromptMention[];
+  /**
+   * Snapshot of in-editor labware instances (runtime `lw-…` IDs) so
+   * mention-resolved labware can be honored without a record-store lookup.
+   */
+  editorLabwares?: LabwareSummary[];
   priorLabState?: LabStateSnapshot;
   deps: {
     extractionService: ExtractionRunnerService;
@@ -144,10 +157,18 @@ export async function runChatbotCompile(
   registry.register(createEmitInstrumentRunFilesPass());
   registry.register(createEmitDownstreamQueuePass());
 
+  // Resolve mentions: prefer client-shipped, fall back to a server-side parse
+  // so the precompile pass and labware resolver always see structured tokens.
+  const effectiveMentions: PromptMention[] = args.mentions && args.mentions.length > 0
+    ? args.mentions
+    : parsePromptMentions(args.prompt);
+
   const spec = loadPipeline(PIPELINE_YAML_PATH);
   const result = await runPipeline(spec, registry, {
     prompt: args.prompt,
     attachments: args.attachments ?? [],
+    mentions: effectiveMentions,
+    editorLabwares: args.editorLabwares ?? [],
     labState: effectivePrior,
   }, undefined, args.onPassEvent);
 

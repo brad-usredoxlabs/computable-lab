@@ -8,7 +8,7 @@
  * - Below: Well context panel (selected wells event history)
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { apiClient, type TemplateLabwareBinding, type TemplateOutputArtifact } from '../shared/api/client'
 import {
@@ -19,7 +19,7 @@ import {
   type RunMethodSummaryResponse,
   type TemplateInputResolution,
 } from '../shared/api/treeClient'
-import { LabwareEditorProvider, useLabwareEditor, type LabwareEditorState } from './context/LabwareEditorContext'
+import { useLabwareEditor, type LabwareEditorState } from './context/LabwareEditorContext'
 import { DualLabwarePane } from './labware/DualLabwarePane'
 import { DeckVisualizationPanel, type DeckPlacement } from './labware/DeckVisualizationPanel'
 import { EventRibbon } from './events/ribbon'
@@ -723,6 +723,19 @@ function LabwareEventEditorContent({
   } = useLabwareEditor()
   const navigate = useNavigate()
 
+  // The editor context is hoisted to the app shell so the AI chat panel can
+  // see the current labwares / source / target. Each new editor session is
+  // signaled via this component's `key`, which remounts us. Reset state on
+  // mount and unmount so the chat panel never observes stale state from a
+  // prior session.
+  useLayoutEffect(() => {
+    dispatch({ type: 'RESET_EDITOR' })
+    return () => {
+      dispatch({ type: 'RESET_EDITOR' })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const [selectionActionPanel, setSelectionActionPanel] = useState<null | 'state' | 'prepared-material' | 'plate-snapshot' | 'formulation'>(null)
   const [materialOutputBusy, setMaterialOutputBusy] = useState(false)
   const [materialOutputMode, setMaterialOutputMode] = useState<'prepared-material' | 'biological-material' | 'derived-material'>('derived-material')
@@ -1169,6 +1182,18 @@ function LabwareEventEditorContent({
       globalThis.removeEventListener?.('pagehide', handlePageHide)
     }
   }, [canPersistDraft, draftStorageKey, flushPendingDraftWrite])
+
+  useEffect(() => {
+    // Defend against stale drafts whose deckPlatform no longer exists in the
+    // platform registry. Without this, the deck panel falls back to its
+    // "Platform manifest unavailable" placeholder forever.
+    if (platforms.length === 0) return
+    const isKnownPlatform = Boolean(getPlatformManifest(platforms, deckPlatform))
+    if (!isKnownPlatform) {
+      setDeckPlatform(DEFAULT_EDITOR_PLATFORM)
+      setDeckVariant(defaultVariantForPlatform(platforms, DEFAULT_EDITOR_PLATFORM) || DEFAULT_EDITOR_DECK_VARIANT)
+    }
+  }, [deckPlatform, platforms])
 
   useEffect(() => {
     const fallback = defaultVariantForPlatform(platforms, deckPlatform)
@@ -3981,6 +4006,7 @@ function LabwareEventEditorContent({
         allowedPlatformIds={allowedPlatforms.map((platform) => platform.id)}
         assistPipetteModels={deckPlatform === 'integra_assist' ? ASSIST_PIPETTE_MODELS : undefined}
         onAddLabware={(labwareType: LabwareType, name?: string) => addLabware(labwareType, name)}
+        onAddLabwareFromRecord={addLabwareFromRecord}
         onRemoveLabware={removeLabware}
         getLabwareOrientation={getLabwareOrientation}
         setLabwareOrientation={setLabwareOrientation}
@@ -6073,28 +6099,27 @@ export function LabwareEventEditor() {
         <p>Create and manage events across multiple labwares with side-by-side source/target view.</p>
       </header>
 
-      <LabwareEditorProvider key={editorKey}>
-        <LabwareEventEditorContent 
-          initialEventGraphId={eventGraphId} 
-          runId={runId}
-          studyId={studyId}
-          experimentId={experimentId}
-          fixtureName={fixtureName}
-          planningEnabled={planningEnabled}
-          templateIds={templateIds}
-          forceNew={forceNew}
-          prefillMaterials={prefillMaterials}
-          onMethodNameChange={setMethodDisplayName}
-          draftStorageKey={draftStorageKey}
-          editorMode={editorMode}
-          onEditorModeChange={handleEditorModeChange}
-          drawerOpen={drawerOpen}
-          onDrawerOpenChange={setDrawerOpen}
-          drawerTab={drawerTab}
-          onDrawerTabChange={setDrawerTab}
-          headerTitle={headerTitle}
-        />
-      </LabwareEditorProvider>
+      <LabwareEventEditorContent
+        key={editorKey}
+        initialEventGraphId={eventGraphId}
+        runId={runId}
+        studyId={studyId}
+        experimentId={experimentId}
+        fixtureName={fixtureName}
+        planningEnabled={planningEnabled}
+        templateIds={templateIds}
+        forceNew={forceNew}
+        prefillMaterials={prefillMaterials}
+        onMethodNameChange={setMethodDisplayName}
+        draftStorageKey={draftStorageKey}
+        editorMode={editorMode}
+        onEditorModeChange={handleEditorModeChange}
+        drawerOpen={drawerOpen}
+        onDrawerOpenChange={setDrawerOpen}
+        drawerTab={drawerTab}
+        onDrawerTabChange={setDrawerTab}
+        headerTitle={headerTitle}
+      />
 
       {editorMode === 'plan' && (
       <section className="instructions">

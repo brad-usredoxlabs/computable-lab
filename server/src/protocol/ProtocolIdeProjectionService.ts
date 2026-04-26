@@ -358,17 +358,20 @@ export class ProtocolIdeProjectionService {
     const payload = sessionEnvelope.payload as Record<string, unknown>;
     const now = new Date().toISOString();
 
+    const recordRef = (id: string | null | undefined, type: string) =>
+      id ? { kind: 'record' as const, id, type } : undefined;
+
     const updatedPayload: Record<string, unknown> = {
       ...payload,
       status: SESSION_STATUS_PROJECTED,
       latestDirectiveText: payload.latestDirectiveText ?? '',
-      latestProtocolRef: response.projectedProtocolRef ?? null,
-      latestEventGraphRef: response.eventGraphData.recordId,
+      ...(recordRef(response.projectedProtocolRef, 'protocol') ? { latestProtocolRef: recordRef(response.projectedProtocolRef, 'protocol') } : {}),
+      ...(recordRef(response.eventGraphData.recordId, 'event-graph') ? { latestEventGraphRef: recordRef(response.eventGraphData.recordId, 'event-graph') } : {}),
       latestEventGraphCacheKey: response.eventGraphData.recordId,
-      latestDeckSummaryRef: response.overlaySummaries.deck ? `deck-${sessionId}` : null,
-      latestToolsSummaryRef: response.overlaySummaries.tools ? `tools-${sessionId}` : null,
-      latestReagentsSummaryRef: response.overlaySummaries.reagents ? `reagents-${sessionId}` : null,
-      latestBudgetSummaryRef: response.overlaySummaries.budget ? `budget-${sessionId}` : null,
+      ...(response.overlaySummaries.deck ? { latestDeckSummaryRef: recordRef(`deck-${sessionId}`, 'overlay-summary') } : {}),
+      ...(response.overlaySummaries.tools ? { latestToolsSummaryRef: recordRef(`tools-${sessionId}`, 'overlay-summary') } : {}),
+      ...(response.overlaySummaries.reagents ? { latestReagentsSummaryRef: recordRef(`reagents-${sessionId}`, 'overlay-summary') } : {}),
+      ...(response.overlaySummaries.budget ? { latestBudgetSummaryRef: recordRef(`budget-${sessionId}`, 'overlay-summary') } : {}),
       updatedAt: now,
     };
 

@@ -95,6 +95,32 @@ properties:
     items:
       $ref: "https://computable-lab.com/schema/computable-lab/datatypes/ref.schema.yaml"
 
+  evidenceCitations:
+    type: array
+    description: >
+      Per-evidence citation metadata used by the projection service
+      (description and optional source location for each evidence ref).
+    items:
+      type: object
+      additionalProperties: false
+      required: [evidenceRef, description]
+      properties:
+        evidenceRef:
+          type: string
+          description: Identifier of the evidence record this citation refers to.
+        description:
+          type: string
+          description: Human-readable description of the citation.
+        sourceLocation:
+          type: string
+          description: Optional source location hint (e.g., page number, section).
+
+  sourceSummary:
+    type: string
+    description: >
+      Human-readable summary of the source PDF (e.g., vendor + title or
+      the pasted URL). Used by overlay UIs and downstream pipeline input.
+
   # ── Latest directive ────────────────────────────────────────────────
   latestDirectiveText:
     type: string
@@ -170,16 +196,55 @@ properties:
   # ── Status ──────────────────────────────────────────────────────────
   status:
     type: string
-    enum: [ draft, importing, projecting, reviewing, ready, exported, failed ]
+    enum: [ draft, importing, imported, import_failed, projecting, projected, projection_failed, reviewing, ready, exported, failed ]
     description: >
       Developer-oriented status reflecting the current stage of the session.
       - draft: session created, no source selected yet.
       - importing: source PDF is being ingested / extracted.
+      - imported: source PDF ingest finished successfully.
+      - import_failed: source PDF ingest failed; downstream may still proceed
+        with partial data.
       - projecting: protocol projection / compilation is running.
       - reviewing: user is reviewing the projected protocol and overlays.
       - ready: session is ready for export or further iteration.
       - exported: session was exported to Ralph.
       - failed: an unrecoverable error occurred.
+
+  # ── Import state metadata ───────────────────────────────────────────
+  protocolImportState:
+    description: >
+      Confidence/quality state of the last protocol-import attempt.
+    oneOf:
+      - type: string
+        enum: [ ready, low_confidence, partial ]
+      - type: 'null'
+
+  protocolImportConfidence:
+    description: Aggregate confidence score (0.0 – 1.0) of the last import.
+    oneOf:
+      - type: number
+      - type: 'null'
+
+  lastImportedAt:
+    type: string
+    format: date-time
+    description: ISO 8601 timestamp of the last successful import.
+
+  createdAt:
+    type: string
+    format: date-time
+    description: ISO 8601 timestamp of session creation (mirrors meta.createdAt).
+
+  updatedAt:
+    type: string
+    format: date-time
+    description: ISO 8601 timestamp of the last in-place update.
+
+  latestProjectionDiagnostics:
+    type: array
+    description: Compact diagnostics from the most recent projection attempt.
+    items:
+      type: object
 
   notes:
     type: string

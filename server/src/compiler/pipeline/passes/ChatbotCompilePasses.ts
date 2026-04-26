@@ -385,8 +385,9 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
     async run({ pass_id, state }: PassRunArgs): Promise<PassResult> {
       const prompt = typeof state.input.prompt === 'string' ? state.input.prompt : '';
       const entities = (state.outputs.get('extract_entities') as { entities?: unknown[] } | undefined)?.entities ?? [];
+      const mentions = Array.isArray(state.input.mentions) ? state.input.mentions : [];
       const system = AI_PRECOMPILE_SYSTEM_PROMPT;
-      const user = JSON.stringify({ prompt, entities });
+      const user = JSON.stringify({ prompt, entities, mentions });
       const messages: ChatMessage[] = [
         { role: 'system', content: system },
         { role: 'user', content: user },
@@ -1110,10 +1111,34 @@ export function createLabwareResolvePass(
       const resolvedLabwares: ResolvedLabware[] = [];
       const diagnostics: PassDiagnostic[] = [];
 
+      // Fold mention-resolved labware into resolvedLabwares so downstream
+      // passes can find them without a record-store lookup. Skip the search
+      // for any candidate hint that names a mention id directly.
+      const mentions = Array.isArray(state.input.mentions) ? state.input.mentions as Array<{ type?: string; id?: string; label?: string }> : [];
+      const editorLabwares = Array.isArray(state.input.editorLabwares) ? state.input.editorLabwares as Array<{ labwareId?: string; name?: string }> : [];
+      const editorTitleById = new Map<string, string>();
+      for (const lw of editorLabwares) {
+        if (lw && typeof lw.labwareId === 'string' && typeof lw.name === 'string') {
+          editorTitleById.set(lw.labwareId, lw.name);
+        }
+      }
+      const mentionLabwareIds = new Set<string>();
+      for (const m of mentions) {
+        if (m && m.type === 'labware' && typeof m.id === 'string' && m.id.length > 0) {
+          mentionLabwareIds.add(m.id);
+          const title = editorTitleById.get(m.id) ?? (typeof m.label === 'string' ? m.label : undefined);
+          resolvedLabwares.push({ hint: m.id, recordId: m.id, ...(title ? { title } : {}) });
+        }
+      }
+
       for (const cand of candidates) {
         const hint = cand.hint;
         if (typeof hint !== 'string' || hint.trim().length === 0) continue;
-        
+
+        // Mention-shortcut: the LLM is told not to do this, but if a hint
+        // exactly matches a mention id, honor it without a record-store hit.
+        if (mentionLabwareIds.has(hint)) continue;
+
         const matches = await deps.searchLabwareByHint(hint);
         
         if (matches.length === 0) {

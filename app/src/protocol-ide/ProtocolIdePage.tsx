@@ -30,8 +30,10 @@ async function fetchProtocolIdeSession(
       if (res.status === 404) return null
       throw new Error(`HTTP ${res.status}`)
     }
-    const data = await res.json()
-    return data as ProtocolIdeSession
+    const data = await res.json() as { record?: { payload?: unknown } } | null
+    const payload = data?.record?.payload
+    if (!payload) return null
+    return payload as ProtocolIdeSession
   } catch {
     return null
   }
@@ -50,6 +52,7 @@ export function ProtocolIdePage(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
 
   // Load session when sessionId is present
   useEffect(() => {
@@ -80,20 +83,81 @@ export function ProtocolIdePage(): JSX.Element {
     }
   }, [sessionId])
 
-  // Create a new session from the intake payload
+  // Manual refresh + tab-visible refresh handler.
+  const handleRefresh = async () => {
+    if (!sessionId) return
+    setRefreshing(true)
+    try {
+      const data = await fetchProtocolIdeSession(sessionId)
+      setSession(data)
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  // Poll while the session is in a transient state so the user sees the
+  // import / projection finish without having to manually reload.
+  useEffect(() => {
+    if (!sessionId || !session) return
+    const transient = new Set(['importing', 'projecting'])
+    if (!transient.has(session.status)) return
+    const handle = setInterval(() => {
+      void handleRefresh()
+    }, 4000)
+    return () => clearInterval(handle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, session?.status])
+
+  // Live progress messages streamed from /protocol-ide/sessions/stream during
+  // session creation. Cleared when a new session is loaded.
+  const [progressMessages, setProgressMessages] = useState<Array<{
+    id: string
+    severity: 'info' | 'warning' | 'error'
+    text: string
+  }>>([])
+
+  const pushProgress = (severity: 'info' | 'warning' | 'error', text: string) => {
+    setProgressMessages((prev) => [
+      ...prev,
+      { id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, severity, text },
+    ])
+  }
+
+  // Create a new session from the intake payload — streams per-phase progress
+  // through the chatbot-compile pipeline (extractor + LLM precompile) so the
+  // user sees real-time feedback instead of waiting silently.
   const handleCreateSession = async (payload: IntakePayload) => {
     setSubmitting(true)
     setSubmitError(null)
+    setProgressMessages([])
     try {
-      const result = await apiClient.createProtocolIdeSession(payload)
-      if ('error' in result) {
-        setSubmitError(result.message)
-        setSubmitting(false)
-        return
+      let finalResult: Awaited<ReturnType<typeof apiClient.createProtocolIdeSession>> | null = null
+      for await (const event of apiClient.createProtocolIdeSessionStream(payload)) {
+        if (event.type === 'status') {
+          pushProgress('info', `[${event.phase}] ${event.message}`)
+        } else if (event.type === 'phase_complete') {
+          pushProgress('info', `[${event.phase}] ✓ ${event.detail ?? 'complete'}`)
+        } else if (event.type === 'warning') {
+          pushProgress('warning', `[${event.phase}] ${event.message}`)
+        } else if (event.type === 'pipeline_diagnostics') {
+          for (const diag of event.diagnostics) {
+            pushProgress(diag.severity, `${diag.pass_id}.${diag.code}: ${diag.message}`)
+          }
+        } else if (event.type === 'done') {
+          finalResult = event.result
+        } else if (event.type === 'error') {
+          pushProgress('error', event.message)
+          setSubmitError(event.message)
+        }
       }
-      navigate(`/protocol-ide/${result.sessionId}`)
+      if (finalResult && 'sessionId' in finalResult) {
+        navigate(`/protocol-ide/${finalResult.sessionId}`)
+      } else if (finalResult && 'message' in finalResult) {
+        setSubmitError(finalResult.message)
+      }
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : String(err))
+    } finally {
       setSubmitting(false)
     }
   }
@@ -127,6 +191,9 @@ export function ProtocolIdePage(): JSX.Element {
       submitError={submitError}
       isSubmitting={submitting}
       onNavigateAway={handleNavigateAway}
+      onRefresh={handleRefresh}
+      isRefreshing={refreshing}
+      progressMessages={progressMessages}
     />
   )
 }

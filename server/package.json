@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
-    "dev": "npx tsx --watch src/server.ts",
+    "dev": "APP_BASE_PATH=.. npx tsx --watch src/server.ts",
     "test": "vitest",
     "test:run": "vitest run",
     "lint": "eslint src/",

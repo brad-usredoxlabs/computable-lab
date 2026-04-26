@@ -59,6 +59,12 @@ export interface ProtocolIdeShellProps {
   isSubmitting?: boolean
   /** Callback when the user navigates away from the Protocol IDE. */
   onNavigateAway?: () => void
+  /** Refetch the session record from the server. */
+  onRefresh?: () => void
+  /** Whether a refresh is currently in flight. */
+  isRefreshing?: boolean
+  /** Live progress messages streamed during session creation / rerun. */
+  progressMessages?: Array<{ id: string; severity: 'info' | 'warning' | 'error'; text: string }>
 }
 
 // ---------------------------------------------------------------------------
@@ -466,9 +472,18 @@ export function ProtocolIdeShell({
   submitError,
   isSubmitting,
   onNavigateAway,
+  onRefresh,
+  isRefreshing,
+  progressMessages,
 }: ProtocolIdeShellProps): JSX.Element {
   const hasSession = !!session
   const [versionCounter, setVersionCounter] = useState(0)
+  // Whenever the version bumps (e.g. user clicked Rerun), also refresh the
+  // session record so the user sees status / refs / event count update.
+  useEffect(() => {
+    if (versionCounter > 0) onRefresh?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [versionCounter])
   const [selectedEvidenceRefId, setSelectedEvidenceRefId] = useState<string | null>(null)
 
   const handleCitationClick = (citation: EvidenceCitation) => {
@@ -501,14 +516,57 @@ export function ProtocolIdeShell({
         {hasSession && (
           <div className="protocol-ide-topbar-right">
             <span
+              className={`protocol-ide-session-status protocol-ide-session-status--${session.status}`}
+              data-testid="protocol-ide-session-status"
+              title={`Session status: ${session.status}`}
+            >
+              {session.status}
+            </span>
+            <span
               className="protocol-ide-session-badge"
               data-testid="protocol-ide-session-badge"
             >
               {session.recordId}
             </span>
+            {onRefresh && (
+              <button
+                type="button"
+                className="protocol-ide-refresh-btn"
+                onClick={() => onRefresh()}
+                disabled={isRefreshing}
+                aria-label="Refresh session"
+                data-testid="protocol-ide-refresh"
+              >
+                {isRefreshing ? '…' : '⟳'} Refresh
+              </button>
+            )}
           </div>
         )}
       </header>
+      {hasSession && (session.status === 'importing' || session.status === 'projecting') && (
+        <div
+          className="protocol-ide-status-banner"
+          data-testid="protocol-ide-status-banner"
+          role="status"
+        >
+          {session.status === 'importing'
+            ? 'Importing source PDF — extracting text and building evidence…'
+            : 'Compiling protocol — running the projection pipeline…'}
+          <span className="protocol-ide-status-banner-poll">
+            (auto-refreshing every 4s)
+          </span>
+        </div>
+      )}
+      {hasSession && session.status === 'import_failed' && (
+        <div
+          className="protocol-ide-status-banner protocol-ide-status-banner--error"
+          data-testid="protocol-ide-status-banner"
+          role="alert"
+        >
+          Source import failed. The session is still usable — refine the
+          directive on the right and click Rerun to retry the projection.
+        </div>
+      )}
 
       {/* Three-column IDE layout */}
       <div className="protocol-ide-body" data-testid="protocol-ide-body">
@@ -541,9 +599,25 @@ export function ProtocolIdeShell({
                 <h1 className="protocol-ide-graph-title">Event-Graph Review</h1>
               </div>
               <div className="protocol-ide-graph-body" data-testid="protocol-ide-graph-body">
-                <p className="protocol-ide-graph-placeholder">
-                  Create a session to begin reviewing the event graph.
-                </p>
+                {progressMessages && progressMessages.length > 0 ? (
+                  <div className="protocol-ide-progress-log" data-testid="protocol-ide-progress-log">
+                    <h2 className="protocol-ide-progress-log__title">Compile pipeline progress</h2>
+                    <ol className="protocol-ide-progress-log__list">
+                      {progressMessages.map((m) => (
+                        <li
+                          key={m.id}
+                          className={`protocol-ide-progress-log__item protocol-ide-progress-log__item--${m.severity}`}
+                        >
+                          {m.text}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                ) : (
+                  <p className="protocol-ide-graph-placeholder">
+                    Create a session to begin reviewing the event graph.
+                  </p>
+                )}
               </div>
             </main>
           )}
@@ -611,6 +685,125 @@ export function ProtocolIdeShell({
           border-radius: 4px;
           font-size: 0.8rem;
           font-weight: 500;
+        }
+
+        .protocol-ide-topbar-right {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .protocol-ide-session-status {
+          padding: 0.2rem 0.55rem;
+          border-radius: 999px;
+          font-size: 0.72rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+          background: #e9ecef;
+          color: #495057;
+        }
+        .protocol-ide-session-status--importing,
+        .protocol-ide-session-status--projecting {
+          background: #fff4d6;
+          color: #92400e;
+        }
+        .protocol-ide-session-status--imported,
+        .protocol-ide-session-status--projected,
+        .protocol-ide-session-status--reviewing,
+        .protocol-ide-session-status--ready {
+          background: #d3f9d8;
+          color: #2b8a3e;
+        }
+        .protocol-ide-session-status--import_failed,
+        .protocol-ide-session-status--projection_failed,
+        .protocol-ide-session-status--failed {
+          background: #ffe3e3;
+          color: #c92a2a;
+        }
+        .protocol-ide-session-status--exported {
+          background: #e7f5ff;
+          color: #1971c2;
+        }
+
+        .protocol-ide-refresh-btn {
+          background: #fff;
+          border: 1px solid #ced4da;
+          border-radius: 4px;
+          padding: 0.2rem 0.6rem;
+          cursor: pointer;
+          font-size: 0.8rem;
+          color: #495057;
+        }
+        .protocol-ide-refresh-btn:hover { background: #f1f3f5; }
+        .protocol-ide-refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .protocol-ide-status-banner {
+          padding: 0.5rem 1rem;
+          background: #fff4d6;
+          color: #92400e;
+          font-size: 0.85rem;
+          border-bottom: 1px solid #f7c843;
+          display: flex;
+          gap: 0.5rem;
+          align-items: center;
+        }
+        .protocol-ide-status-banner--error {
+          background: #ffe3e3;
+          color: #c92a2a;
+          border-bottom-color: #fa5252;
+        }
+        .protocol-ide-status-banner-poll {
+          color: #5c4400;
+          font-size: 0.78rem;
+          opacity: 0.85;
+        }
+
+        .protocol-ide-progress-log {
+          padding: 1rem 1.25rem;
+          background: #f8fafc;
+          border: 1px solid #e2e8f0;
+          border-radius: 6px;
+          max-width: 720px;
+          margin: 1rem auto;
+        }
+        .protocol-ide-progress-log__title {
+          font-size: 0.95rem;
+          font-weight: 600;
+          color: #1f2937;
+          margin: 0 0 0.6rem;
+        }
+        .protocol-ide-progress-log__list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 0.3rem;
+        }
+        .protocol-ide-progress-log__item {
+          font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+          font-size: 0.82rem;
+          line-height: 1.4;
+          padding: 0.3rem 0.55rem;
+          border-radius: 4px;
+          background: #ffffff;
+          border-left: 3px solid #94a3b8;
+          color: #1f2937;
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+        .protocol-ide-progress-log__item--info {
+          border-left-color: #60a5fa;
+        }
+        .protocol-ide-progress-log__item--warning {
+          border-left-color: #f59e0b;
+          background: #fffbeb;
+        }
+        .protocol-ide-progress-log__item--error {
+          border-left-color: #ef4444;
+          background: #fef2f2;
+          color: #991b1b;
         }
 
         .protocol-ide-body {

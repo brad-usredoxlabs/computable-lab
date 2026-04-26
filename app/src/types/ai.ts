@@ -63,15 +63,17 @@ export interface AiErrorEvent {
   code?: string
 }
 
+export interface AiPipelineDiagnostic {
+  pass_id: string
+  code: string
+  severity: 'info' | 'warning' | 'error'
+  message: string
+}
+
 export interface AiPipelineDiagnosticsEvent {
   type: 'pipeline_diagnostics'
-  outcome: string
-  diagnostics: Array<{
-    pass_id: string
-    code: string
-    severity: 'info' | 'warning' | 'error'
-    message: string
-  }>
+  outcome: 'complete' | 'gap' | 'error'
+  diagnostics: AiPipelineDiagnostic[]
 }
 
 export type AiStreamEvent =
@@ -81,9 +83,9 @@ export type AiStreamEvent =
   | AiThinkingEvent
   | AiTextDeltaEvent
   | AiDraftEvent
+  | AiPipelineDiagnosticsEvent
   | AiDoneEvent
   | AiErrorEvent
-  | AiPipelineDiagnosticsEvent
 
 // =============================================================================
 // Agent Result (final output from AI)
@@ -158,7 +160,7 @@ export interface ChatMessage {
   clarification?: AiClarification
   /** Proposed labware additions from the AI */
   labwareAdditions?: AiLabwareAddition[]
-  /** Whether this message is a doc-discussion (prose-only, no events) */
+  /** True when this assistant message is a doc-discussion answer (prose only, no events) eligible for "Apply to graph". */
   docDiscussion?: boolean
 }
 

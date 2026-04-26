@@ -258,6 +258,7 @@ export class AjvValidator implements Validator {
    * @param id - The $id of the schema
    */
   hasSchema(id: string): boolean {
+    if (typeof id !== 'string' || id.length === 0) return false;
     return this.ajv.getSchema(id) !== undefined;
   }
   

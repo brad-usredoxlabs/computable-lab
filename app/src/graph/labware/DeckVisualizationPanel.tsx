@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Labware, LabwareType, LabwareRecordPayload } from '../../types/labware'
-import { isTipRackType, LABWARE_TYPE_LABELS } from '../../types/labware'
+import { isTipRackType, LABWARE_TYPE_LABELS, pickEditorLabwareType, getLabwareAllowedOrientations } from '../../types/labware'
 import { getLabwareDefinitionByLegacyType } from '../../types/labwareDefinition'
 import { ToolSelector, type SelectedTool } from '../tools'
 import type { AssistPipetteModel } from '../lib/assistPipetteRegistry'
@@ -32,6 +32,7 @@ interface DeckVisualizationPanelProps {
   allowedToolTypeIds?: string[]
   assistPipetteModels?: AssistPipetteModel[]
   onAddLabware: (labwareType: LabwareType, name?: string) => Labware
+  onAddLabwareFromRecord?: (record: LabwareRecordPayload) => Labware
   onRemoveLabware?: (labwareId: string) => void
   getLabwareOrientation?: (labwareId: string) => 'portrait' | 'landscape'
   setLabwareOrientation?: (labwareId: string, orientation: 'portrait' | 'landscape') => void
@@ -45,28 +46,57 @@ interface DeckVisualizationPanelProps {
   allowedPlatformIds?: string[]
 }
 
+// All labware SVGs draw into a fixed landscape frame (124×64). Portrait is
+// achieved by swapping the viewBox to 64×124 and transposing the visual grid:
+// the long axis (cols in landscape) becomes the vertical axis (rows in
+// portrait). Wells/lanes/tubes get plotted on the swapped axes, so an A1 in
+// the top-left corner of a landscape plate ends up in the top-right corner of
+// the portrait rendering — matching how a physical plate flips on the deck.
+
+type Orientation = 'portrait' | 'landscape'
+
+const FRAME_LONG = 124
+const FRAME_SHORT = 64
+const PADDING = 8
+const INNER_LONG = FRAME_LONG - PADDING * 2
+const INNER_SHORT = FRAME_SHORT - PADDING * 2
+
+function frameDims(orientation: Orientation) {
+  return orientation === 'portrait'
+    ? { w: FRAME_SHORT, h: FRAME_LONG }
+    : { w: FRAME_LONG, h: FRAME_SHORT }
+}
+
 function WellsSvg({
   rows,
   cols,
   isTipRack = false,
+  orientation = 'landscape',
 }: {
   rows: number
   cols: number
   isTipRack?: boolean
+  orientation?: Orientation
 }) {
-  const cellW = 108 / cols
-  const cellH = 48 / rows
+  const isPortrait = orientation === 'portrait'
+  const { w, h } = frameDims(orientation)
+  // In portrait, transpose: original cols become visual rows, original rows
+  // become visual cols (the long edge of the plate is now vertical).
+  const visualRows = isPortrait ? cols : rows
+  const visualCols = isPortrait ? rows : cols
+  const cellW = (isPortrait ? INNER_SHORT : INNER_LONG) / visualCols
+  const cellH = (isPortrait ? INNER_LONG : INNER_SHORT) / visualRows
   const points = []
-  for (let r = 0; r < rows; r += 1) {
-    for (let c = 0; c < cols; c += 1) {
-      const x = 8 + c * cellW + cellW / 2
-      const y = 8 + r * cellH + cellH / 2
+  for (let r = 0; r < visualRows; r += 1) {
+    for (let c = 0; c < visualCols; c += 1) {
+      const x = PADDING + c * cellW + cellW / 2
+      const y = PADDING + r * cellH + cellH / 2
       points.push({ x, y })
     }
   }
   return (
-    <svg viewBox="0 0 124 64" className="lw-svg" aria-hidden>
-      <rect x="1" y="1" width="122" height="62" rx="8" className="lw-svg__frame" />
+    <svg viewBox={`0 0 ${w} ${h}`} className="lw-svg" data-orientation={orientation} aria-hidden>
+      <rect x="1" y="1" width={w - 2} height={h - 2} rx="8" className="lw-svg__frame" />
       {points.map((p, i) => (
         isTipRack ? (
           <path
@@ -82,60 +112,195 @@ function WellsSvg({
   )
 }
 
-function ReservoirSvg() {
+function ReservoirSvg({
+  lanes = 8,
+  orientation = 'landscape',
+}: { lanes?: number; orientation?: Orientation }) {
+  const isPortrait = orientation === 'portrait'
+  const { w, h } = frameDims(orientation)
+  // Lay `lanes` troughs along the long axis. In portrait that long axis is
+  // vertical, so the troughs become horizontal strips.
+  const inner = isPortrait ? INNER_LONG : INNER_LONG
+  const cross = isPortrait ? INNER_SHORT : INNER_SHORT
+  const gap = inner / lanes
+  const laneCross = Math.max(2, gap * 0.72)
+  const laneFill = isPortrait ? cross : INNER_SHORT
   return (
-    <svg viewBox="0 0 124 64" className="lw-svg" aria-hidden>
-      <rect x="1" y="1" width="122" height="62" rx="8" className="lw-svg__frame" />
-      {Array.from({ length: 8 }).map((_, i) => (
-        <rect key={i} x={8 + i * 14} y={12} width={10} height={40} rx={3} className="lw-svg__lane" />
-      ))}
+    <svg viewBox={`0 0 ${w} ${h}`} className="lw-svg" data-orientation={orientation} aria-hidden>
+      <rect x="1" y="1" width={w - 2} height={h - 2} rx="8" className="lw-svg__frame" />
+      {Array.from({ length: lanes }).map((_, i) => {
+        if (isPortrait) {
+          // Lanes stack vertically: rect at y=PADDING + i*gap, full width across.
+          const y = PADDING + i * gap + (gap - laneCross) / 2
+          return (
+            <rect
+              key={i}
+              x={PADDING + (cross - laneFill) / 2 + 4}
+              y={y}
+              width={laneFill - 8}
+              height={laneCross}
+              rx={Math.min(3, laneCross / 2)}
+              className="lw-svg__lane"
+            />
+          )
+        }
+        const x = PADDING + i * gap + (gap - laneCross) / 2
+        return (
+          <rect
+            key={i}
+            x={x}
+            y={PADDING + 4}
+            width={laneCross}
+            height={cross - 8}
+            rx={Math.min(3, laneCross / 2)}
+            className="lw-svg__lane"
+          />
+        )
+      })}
     </svg>
   )
 }
 
-function Reservoir8RowsSvg() {
+function Reservoir8RowsSvg({ orientation = 'landscape' }: { orientation?: Orientation }) {
+  // Reservoir-8 channels: 8 strips that run along the LONG axis and stack
+  // along the SHORT axis. In landscape that's horizontal strips stacked top
+  // to bottom; in portrait the labware rotates 90°, so the same physical
+  // channels become vertical strips stacked left to right.
+  const isPortrait = orientation === 'portrait'
+  const { w, h } = frameDims(orientation)
+  const lanes = 8
+  const gap = INNER_SHORT / lanes
+  const laneThick = Math.max(1.5, gap * 0.7)
+  const channelLong = INNER_LONG - 4
   return (
-    <svg viewBox="0 0 124 64" className="lw-svg" aria-hidden>
-      <rect x="1" y="1" width="122" height="62" rx="8" className="lw-svg__frame" />
-      {Array.from({ length: 8 }).map((_, i) => (
-        <rect key={i} x={10} y={8 + i * 6.5} width={104} height={4.5} rx={2.2} className="lw-svg__lane" />
-      ))}
+    <svg viewBox={`0 0 ${w} ${h}`} className="lw-svg" data-orientation={orientation} aria-hidden>
+      <rect x="1" y="1" width={w - 2} height={h - 2} rx="8" className="lw-svg__frame" />
+      {Array.from({ length: lanes }).map((_, i) => {
+        if (isPortrait) {
+          // Stack along x (horizontal), each channel runs vertically.
+          const x = PADDING + i * gap + (gap - laneThick) / 2
+          return (
+            <rect
+              key={i}
+              x={x}
+              y={PADDING + 2}
+              width={laneThick}
+              height={channelLong}
+              rx={laneThick / 2}
+              className="lw-svg__lane"
+            />
+          )
+        }
+        // Landscape: stack along y (vertical), each channel runs horizontally.
+        const y = PADDING + i * gap + (gap - laneThick) / 2
+        return (
+          <rect
+            key={i}
+            x={PADDING + 2}
+            y={y}
+            width={channelLong}
+            height={laneThick}
+            rx={laneThick / 2}
+            className="lw-svg__lane"
+          />
+        )
+      })}
     </svg>
   )
 }
 
-function TubesSvg() {
+function SingleReservoirSvg({ orientation = 'landscape' }: { orientation?: Orientation }) {
+  const { w, h } = frameDims(orientation)
   return (
-    <svg viewBox="0 0 124 64" className="lw-svg" aria-hidden>
-      <rect x="1" y="1" width="122" height="62" rx="8" className="lw-svg__frame" />
-      {Array.from({ length: 12 }).map((_, i) => (
-        <circle key={i} cx={14 + (i % 6) * 18} cy={20 + Math.floor(i / 6) * 22} r={5} className="lw-svg__tube" />
-      ))}
+    <svg viewBox={`0 0 ${w} ${h}`} className="lw-svg" data-orientation={orientation} aria-hidden>
+      <rect x="1" y="1" width={w - 2} height={h - 2} rx="8" className="lw-svg__frame" />
+      <rect x={PADDING + 2} y={PADDING + 4} width={w - PADDING * 2 - 4} height={h - PADDING * 2 - 8} rx={6} className="lw-svg__lane" />
     </svg>
   )
 }
 
-function GenericLabwareVisual({ labware }: { labware?: Labware }) {
+function TubesSvg({
+  rows,
+  cols,
+  orientation = 'landscape',
+}: { rows?: number; cols?: number; orientation?: Orientation }) {
+  const r = rows ?? 2
+  const c = cols ?? 6
+  const isPortrait = orientation === 'portrait'
+  const { w, h } = frameDims(orientation)
+  const visualRows = isPortrait ? c : r
+  const visualCols = isPortrait ? r : c
+  const cellW = (isPortrait ? INNER_SHORT : INNER_LONG) / visualCols
+  const cellH = (isPortrait ? INNER_LONG : INNER_SHORT) / visualRows
+  const radius = Math.max(2, Math.min(cellW, cellH) / 2.6)
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="lw-svg" data-orientation={orientation} aria-hidden>
+      <rect x="1" y="1" width={w - 2} height={h - 2} rx="8" className="lw-svg__frame" />
+      {Array.from({ length: visualRows }).flatMap((_, ri) =>
+        Array.from({ length: visualCols }).map((_, ci) => (
+          <circle
+            key={`${ri}-${ci}`}
+            cx={PADDING + ci * cellW + cellW / 2}
+            cy={PADDING + ri * cellH + cellH / 2}
+            r={radius}
+            className="lw-svg__tube"
+          />
+        ))
+      )}
+    </svg>
+  )
+}
+
+function SingleTubeSvg({ orientation = 'landscape' }: { orientation?: Orientation }) {
+  const { w, h } = frameDims(orientation)
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="lw-svg" data-orientation={orientation} aria-hidden>
+      <rect x="1" y="1" width={w - 2} height={h - 2} rx="8" className="lw-svg__frame" />
+      <circle cx={w / 2} cy={h / 2} r={Math.min(w, h) / 4} className="lw-svg__tube" />
+    </svg>
+  )
+}
+
+function GenericLabwareVisual({
+  labware,
+  orientation = 'landscape',
+}: { labware?: Labware; orientation?: Orientation }) {
   if (!labware) return <div className="lw-empty">Empty</div>
 
   if (labware.addressing.type === 'grid') {
     const rows = labware.addressing.rows || 8
     const cols = labware.addressing.columns || 12
-    return <WellsSvg rows={rows} cols={cols} isTipRack={isTipRackType(labware.labwareType)} />
+    if (labware.layoutFamily === 'tube' || labware.renderProfile === 'tubeset' || labware.renderProfile === 'tube') {
+      return <TubesSvg rows={rows} cols={cols} orientation={orientation} />
+    }
+    return <WellsSvg rows={rows} cols={cols} isTipRack={isTipRackType(labware.labwareType)} orientation={orientation} />
   }
 
-  if (labware.addressing.type === 'linear' && labware.linearWellStyle === 'channels') {
-    return <Reservoir8RowsSvg />
+  if (labware.addressing.type === 'linear') {
+    // 8-channel reservoirs use a horizontal-strips look; everything else uses
+    // vertical troughs sized to the actual lane count.
+    if (labware.linearWellStyle === 'channels') {
+      return <Reservoir8RowsSvg orientation={orientation} />
+    }
+    const lanes = labware.addressing.linearLabels?.length ?? 8
+    return <ReservoirSvg lanes={lanes} orientation={orientation} />
+  }
+
+  if (labware.addressing.type === 'single') {
+    if (labware.layoutFamily === 'tube' || labware.renderProfile === 'tube') {
+      return <SingleTubeSvg orientation={orientation} />
+    }
+    return <SingleReservoirSvg orientation={orientation} />
   }
 
   if (isTipRackType(labware.labwareType)) {
-    return <WellsSvg rows={8} cols={12} isTipRack />
+    return <WellsSvg rows={8} cols={12} isTipRack orientation={orientation} />
   }
 
-  if (labware.addressing.type === 'linear' || labware.renderProfile === 'reservoir') return <ReservoirSvg />
-  if (labware.renderProfile === 'tube' || labware.renderProfile === 'tubeset') return <TubesSvg />
+  if (labware.renderProfile === 'reservoir') return <ReservoirSvg orientation={orientation} />
+  if (labware.renderProfile === 'tube' || labware.renderProfile === 'tubeset') return <TubesSvg orientation={orientation} />
 
-  return <WellsSvg rows={8} cols={12} />
+  return <WellsSvg rows={8} cols={12} orientation={orientation} />
 }
 
 function moduleEmoji(moduleId?: string): string {
@@ -184,6 +349,7 @@ export function DeckVisualizationPanel({
   allowedToolTypeIds,
   assistPipetteModels,
   onAddLabware,
+  onAddLabwareFromRecord,
   onRemoveLabware,
   getLabwareOrientation,
   setLabwareOrientation,
@@ -200,6 +366,7 @@ export function DeckVisualizationPanel({
   const [draggingLabwareId, setDraggingLabwareId] = useState<string | null>(null)
   const [pendingType, setPendingType] = useState<LabwareType | null>(null)
   const [nameInput, setNameInput] = useState('')
+  const [pendingRecord, setPendingRecord] = useState<LabwareRecordPayload | null>(null)
   const [showLabwarePicker, setShowLabwarePicker] = useState(false)
   const availablePlatforms = useMemo(
     () => (allowedPlatformIds?.length ? platforms.filter((entry) => allowedPlatformIds.includes(entry.id)) : platforms),
@@ -299,34 +466,62 @@ export function DeckVisualizationPanel({
     onRemoveLabware?.(labwareId)
   }
   const handlePickLabwareFromPicker = (record: LabwareRecordPayload) => {
-    // Create labware from the record payload
-    const labwareType = record.labwareType as LabwareType
-    const created = onAddLabware(labwareType, record.name)
-    if (selectedSlotId) {
-      placeLabwareInSlot(selectedSlotId, created.labwareId)
-    }
+    setPendingRecord(record)
+    setNameInput(record.name ?? '')
     setShowLabwarePicker(false)
   }
 
   const submitNamedAdd = () => {
-    if (!pendingType) return
-    const created = onAddLabware(pendingType, nameInput.trim() || undefined)
-    if (selectedSlotId) placeLabwareInSlot(selectedSlotId, created.labwareId)
-    setPendingType(null)
-    setNameInput('')
+    const trimmed = nameInput.trim()
+    if (pendingType) {
+      const created = onAddLabware(pendingType, trimmed || undefined)
+      if (selectedSlotId) placeLabwareInSlot(selectedSlotId, created.labwareId)
+      setPendingType(null)
+      setNameInput('')
+      return
+    }
+    if (pendingRecord) {
+      // Renaming the record must NOT lose the original name's classification
+      // hints (e.g. "12 Well Reservoir") that pickEditorLabwareType reads. Keep
+      // the original name as an alias so the haystack still contains it.
+      const recordWithName: LabwareRecordPayload = trimmed && trimmed !== pendingRecord.name
+        ? {
+            ...pendingRecord,
+            name: trimmed,
+            aliases: [pendingRecord.name, ...(pendingRecord.aliases ?? [])],
+          }
+        : pendingRecord
+      const created = onAddLabwareFromRecord
+        ? onAddLabwareFromRecord(recordWithName)
+        : onAddLabware(pickEditorLabwareType(recordWithName), recordWithName.name)
+      if (selectedSlotId) placeLabwareInSlot(selectedSlotId, created.labwareId)
+      setPendingRecord(null)
+      setNameInput('')
+    }
   }
   const skipName = () => {
-    if (!pendingType) return
-    const created = onAddLabware(pendingType)
-    if (selectedSlotId) placeLabwareInSlot(selectedSlotId, created.labwareId)
-    setPendingType(null)
-    setNameInput('')
+    if (pendingType) {
+      const created = onAddLabware(pendingType)
+      if (selectedSlotId) placeLabwareInSlot(selectedSlotId, created.labwareId)
+      setPendingType(null)
+      setNameInput('')
+      return
+    }
+    if (pendingRecord) {
+      const created = onAddLabwareFromRecord
+        ? onAddLabwareFromRecord(pendingRecord)
+        : onAddLabware(pickEditorLabwareType(pendingRecord), pendingRecord.name)
+      if (selectedSlotId) placeLabwareInSlot(selectedSlotId, created.labwareId)
+      setPendingRecord(null)
+      setNameInput('')
+    }
   }
   const canRotateLabware = (labware?: Labware, slotId?: string): boolean => {
     if (!labware) return false
-    if (labware.addressing.type !== 'grid') return false
     if (labware.orientationPolicy === 'fixed_columns') return false
     if (!getLabwareOrientation || !setLabwareOrientation) return false
+    const allowed = getLabwareAllowedOrientations(labware)
+    if (allowed.length < 2) return false
     const slot = slotId ? profile?.slots.find((candidate) => candidate.id === slotId) : undefined
     if (slot && getDeckSlotLockedOrientation(slot)) return false
     return platform === 'manual' || platform === 'integra_assist'
@@ -354,12 +549,19 @@ export function DeckVisualizationPanel({
   }, [placements, profile, setLabwareOrientation, getLabwareOrientation])
 
   if (!platformManifest || !profile) {
+    const isPlatformsLoading = platforms.length === 0
     return (
       <div className="deck-panel">
         <div className="deck-panel__header">
           <div className="deck-panel__title-wrap">
             <strong>Deck Visualization</strong>
-            <span className="deck-panel__sub">Platform manifest unavailable</span>
+            <span className="deck-panel__sub">
+              {isPlatformsLoading
+                ? 'Loading platform registry…'
+                : !platformManifest
+                  ? `Unknown platform '${platform}' (registry has ${platforms.length} platform${platforms.length === 1 ? '' : 's'})`
+                  : `Unknown deck variant '${variant}' for platform '${platformManifest.id}'`}
+            </span>
           </div>
         </div>
       </div>
@@ -467,16 +669,35 @@ export function DeckVisualizationPanel({
         />
       )}
 
-      {pendingType && (
-        <div className="name-modal-backdrop" onClick={() => setPendingType(null)}>
+      {(pendingType || pendingRecord) && (
+        <div
+          className="name-modal-backdrop"
+          onClick={() => {
+            setPendingType(null)
+            setPendingRecord(null)
+            setNameInput('')
+          }}
+        >
           <div className="name-modal" onClick={(e) => e.stopPropagation()}>
             <h4>Name this labware (optional)</h4>
-            <p>You can skip for a quick anonymous default.</p>
+            <p>You can skip to keep the {pendingRecord ? 'record' : 'default'} name.</p>
             <input
               value={nameInput}
               onChange={(e) => setNameInput(e.target.value)}
-              placeholder={getLabwareDefinitionByLegacyType(pendingType)?.display_name || LABWARE_TYPE_LABELS[pendingType]}
+              placeholder={
+                pendingType
+                  ? (getLabwareDefinitionByLegacyType(pendingType)?.display_name || LABWARE_TYPE_LABELS[pendingType])
+                  : (pendingRecord?.name ?? 'New labware')
+              }
               autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') submitNamedAdd()
+                if (e.key === 'Escape') {
+                  setPendingType(null)
+                  setPendingRecord(null)
+                  setNameInput('')
+                }
+              }}
             />
             <div className="name-modal-actions">
               <button className="btn-skip" onClick={skipName}>Skip</button>
@@ -534,10 +755,30 @@ export function DeckVisualizationPanel({
                           {currentOrientation(labware.labwareId) === 'portrait' ? 'Pt' : 'Ls'}
                         </button>
                       )}
+                      <button
+                        className={currentSourceLabwareId === labware.labwareId ? 'slot-quick__role slot-quick__role--source is-active' : 'slot-quick__role slot-quick__role--source'}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onSetSourceLabware?.(currentSourceLabwareId === labware.labwareId ? null : labware.labwareId)
+                        }}
+                        title={currentSourceLabwareId === labware.labwareId ? `Unset ${labware.name} as source` : `Set ${labware.name} as source`}
+                      >
+                        Src
+                      </button>
+                      <button
+                        className={currentTargetLabwareId === labware.labwareId ? 'slot-quick__role slot-quick__role--target is-active' : 'slot-quick__role slot-quick__role--target'}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onSetTargetLabware?.(currentTargetLabwareId === labware.labwareId ? null : labware.labwareId)
+                        }}
+                        title={currentTargetLabwareId === labware.labwareId ? `Unset ${labware.name} as target` : `Set ${labware.name} as target`}
+                      >
+                        Trgt
+                      </button>
                     </div>
                   </div>
                   {renderRoleBadges(labware.labwareId)}
-                  <GenericLabwareVisual labware={labware} />
+                  <GenericLabwareVisual labware={labware} orientation={currentOrientation(labware.labwareId)} />
                   <div className="virtual-card__module">
                     <span>{benchModule ? `${moduleEmoji(benchModule.id)} ${benchModule.label}` : 'No module'}</span>
                     <select
@@ -632,7 +873,7 @@ export function DeckVisualizationPanel({
                   onDragEnd={() => setDraggingLabwareId(null)}
                 >
                   <div className="deck-slot__canvas-overlay">
-                    <GenericLabwareVisual labware={placedLabware} />
+                    <GenericLabwareVisual labware={placedLabware} orientation={placedLabware ? currentOrientation(placedLabware.labwareId) : 'landscape'} />
                     <div className="deck-slot__canvas-name" title={placedLabware?.name || slot.label || 'Empty'}>
                       {placedLabware?.name || slot.label || 'Empty'}
                     </div>
@@ -897,7 +1138,7 @@ export function DeckVisualizationPanel({
 
         .deck-slot__canvas {
           position: relative;
-          min-height: 88px;
+          min-height: 124px;
           border: 1px solid #cbd5e1;
           border-radius: 8px;
           overflow: hidden;
@@ -961,6 +1202,16 @@ export function DeckVisualizationPanel({
           white-space: nowrap;
         }
         .lw-svg { width: 100%; height: 62px; display: block; }
+        /* Portrait labware: render tall + narrow so a rotated plate visually
+           reads as portrait. Width scales from the height by the swapped
+           aspect ratio (64:124). */
+        .lw-svg[data-orientation="portrait"] {
+          width: auto;
+          height: 100px;
+          max-width: 100%;
+          display: block;
+          margin: 0 auto;
+        }
         .lw-svg__frame { fill: #dbeafe; stroke: #1e40af; stroke-width: 1.2; }
         .lw-svg__well { fill: #1e3a8a; opacity: 0.78; }
         .lw-svg__tip { fill: #7f1d1d; opacity: 0.9; }

@@ -155,6 +155,28 @@ function ChatMessageStyles() {
           font-weight: 600;
         }
 
+        .chat-msg__actions {
+          margin-top: 0.5rem;
+          display: flex;
+          gap: 0.4rem;
+        }
+
+        .chat-msg__apply-btn {
+          font-size: 0.75rem;
+          font-weight: 600;
+          padding: 0.3rem 0.7rem;
+          border-radius: 999px;
+          border: 1px solid #c7d2fe;
+          background: #eef2ff;
+          color: #3730a3;
+          cursor: pointer;
+        }
+
+        .chat-msg__apply-btn:hover {
+          background: #e0e7ff;
+          border-color: #a5b4fc;
+        }
+
         .chat-msg__stream-log {
           max-width: none;
           margin: 0.5rem -1rem 0;

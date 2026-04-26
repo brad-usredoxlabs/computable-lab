@@ -981,6 +981,45 @@ async function request<T>(
   }
 }
 
+// Protocol-IDE session-create payload shared by the JSON + streaming
+// endpoints. Hoisted to top-level so the streaming generator return type
+// doesn't have to self-reference apiClient (which would be circular).
+export type ProtocolIdeSessionCreatePayload = {
+  directiveText: string
+  source:
+    | { sourceKind: 'vendor_document'; vendor: string; title: string; landingUrl: string; pdfUrl?: string; snippet?: string; documentType?: string; sessionIdHint?: string }
+    | { sourceKind: 'pasted_url'; url: string }
+    | { sourceKind: 'uploaded_pdf'; uploadId: string; fileName: string; mediaType: string; contentBase64: string }
+  enableThinking?: boolean
+}
+
+export type ProtocolIdeSessionCreateResult =
+  | {
+      success: true
+      sessionId: string
+      status: string
+      sourceSummary: string
+      latestDirectiveText: string
+      sourceEvidenceRef: string | null
+      graphReviewRef: string | null
+      issueCardsRef: null
+      importWarning?: string
+      projectionWarning?: string
+    }
+  | { error: string; message: string }
+
+export type ProtocolIdeStreamEvent =
+  | { type: 'status'; phase: 'bootstrap' | 'import' | 'compile'; message: string }
+  | { type: 'phase_complete'; phase: 'bootstrap' | 'import' | 'compile'; detail?: string }
+  | { type: 'warning'; phase: 'bootstrap' | 'import' | 'compile'; message: string }
+  | {
+      type: 'pipeline_diagnostics'
+      outcome: string
+      diagnostics: Array<{ pass_id: string; code: string; severity: 'info' | 'warning' | 'error'; message: string }>
+    }
+  | { type: 'done'; result: ProtocolIdeSessionCreateResult }
+  | { type: 'error'; message: string }
+
 /**
  * API client methods for kernel endpoints.
  */
@@ -2537,32 +2576,67 @@ export const apiClient = {
    *
    * Returns shell-ready session metadata for the IDE shell to route to.
    */
-  async createProtocolIdeSession(payload: {
-    directiveText: string
-    source:
-      | { sourceKind: 'vendor_document'; vendor: string; title: string; landingUrl: string; pdfUrl?: string; snippet?: string; documentType?: string; sessionIdHint?: string }
-      | { sourceKind: 'pasted_url'; url: string }
-      | { sourceKind: 'uploaded_pdf'; uploadId: string; fileName: string; mediaType: string; contentBase64: string }
-    enableThinking?: boolean
-  }): Promise<{
-    success: true
-    sessionId: string
-    status: string
-    sourceSummary: string
-    latestDirectiveText: string
-    sourceEvidenceRef: string | null
-    graphReviewRef: string | null
-    issueCardsRef: null
-    importWarning?: string
-    projectionWarning?: string
-  } | {
-    error: string
-    message: string
-  }> {
+  async createProtocolIdeSession(payload: ProtocolIdeSessionCreatePayload): Promise<ProtocolIdeSessionCreateResult> {
     return request('/protocol-ide/sessions', {
       method: 'POST',
       body: JSON.stringify(payload),
     })
+  },
+
+  /**
+   * Create a Protocol IDE session and stream per-phase progress as SSE.
+   * Returns an async generator of progress events; consumers update UI per
+   * event and pick the final 'done' event for navigation.
+   */
+  async *createProtocolIdeSessionStream(
+    payload: ProtocolIdeSessionCreatePayload,
+    signal?: AbortSignal,
+  ): AsyncGenerator<ProtocolIdeStreamEvent> {
+    const response = await fetch(`${API_BASE}/protocol-ide/sessions/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      ...(signal ? { signal } : {}),
+    })
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      yield { type: 'error', message: `Server ${response.status}: ${text || response.statusText}` }
+      return
+    }
+    if (!response.body) {
+      yield { type: 'error', message: 'No response body (streaming not supported)' }
+      return
+    }
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ''
+        for (const part of parts) {
+          const trimmed = part.trim()
+          if (!trimmed.startsWith('data:')) continue
+          const json = trimmed.replace(/^data:\s*/, '')
+          try {
+            yield JSON.parse(json)
+          } catch {
+            // Malformed event — skip
+          }
+        }
+      }
+      if (buffer.trim().startsWith('data:')) {
+        const json = buffer.trim().replace(/^data:\s*/, '')
+        try {
+          yield JSON.parse(json)
+        } catch { /* swallow */ }
+      }
+    } finally {
+      reader.releaseLock()
+    }
   },
 
   /**
