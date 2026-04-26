@@ -1,0 +1,7 @@
+$schema: https://computable-lab.com/schema/computable-lab/phase-template.schema.yaml
+kind: phase-template
+id: PHASE-STAIN
+canonical: stain
+label: Stain
+description: Apply dyes, antibodies, or other labels.
+domain: cell-biology

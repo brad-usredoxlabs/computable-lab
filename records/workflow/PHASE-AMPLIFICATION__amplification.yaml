@@ -1,0 +1,7 @@
+$schema: https://computable-lab.com/schema/computable-lab/phase-template.schema.yaml
+kind: phase-template
+id: PHASE-AMPLIFICATION
+canonical: amplification
+label: Amplification
+description: PCR, qPCR, or isothermal amplification.
+domain: molecular-biology

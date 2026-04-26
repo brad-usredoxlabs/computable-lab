@@ -177,6 +177,14 @@ properties:
         type: { const: "graph-component-instance" }
     uniqueItems: true
 
+  # Declarative phase grouping for protocol steps.
+  phases:
+    type: array
+    description: "Optional phase grouping for protocol steps."
+    items:
+      $ref: "#/$defs/Phase"
+    uniqueItems: true
+
   steps:
     type: array
     minItems: 1
@@ -186,6 +194,34 @@ properties:
       $ref: "#/$defs/ProtocolStep"
 
 $defs:
+  # -------------------------
+  # Phase definitions
+  # -------------------------
+  Phase:
+    type: object
+    additionalProperties: false
+    required: [ id, label, ordinal ]
+    properties:
+      id:
+        type: string
+        pattern: "^[a-z][a-z0-9-]*$"
+        description: "Unique phase identifier within this protocol."
+      label:
+        type: string
+        minLength: 1
+        description: "Human-readable phase label."
+      description:
+        type: string
+        description: "Optional phase description."
+      ordinal:
+        type: integer
+        minimum: 1
+        description: "Display order (1-based, must be contiguous starting at 1)."
+      templateRef:
+        type: string
+        pattern: "^PHASE-[A-Z0-9-]+$"
+        description: "Optional reference to a phase-template record."
+
   # -------------------------
   # Parameter definitions
   # -------------------------
@@ -523,6 +559,12 @@ $defs:
       plannedOffset:
         type: string
         description: "Optional planned ISO-8601 duration from run start (e.g., 'PT15M')."
+
+      # Optional reference to a declared phase
+      phaseId:
+        type: string
+        pattern: "^[a-z][a-z0-9-]*$"
+        description: "Optional reference to a declared phase id."
 
     allOf:
     - oneOf:

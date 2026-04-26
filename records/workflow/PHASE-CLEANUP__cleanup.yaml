@@ -1,0 +1,7 @@
+$schema: https://computable-lab.com/schema/computable-lab/phase-template.schema.yaml
+kind: phase-template
+id: PHASE-CLEANUP
+canonical: cleanup
+label: Cleanup
+description: Post-experiment teardown, waste disposal, equipment reset.
+domain: general

@@ -1,0 +1,52 @@
+# UI specification for PhaseTemplate records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/phase-template.schema.yaml"
+
+display:
+  titleField: "$.label"
+  subtitleField: "$.id"
+  icon: "phase"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "Phase ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.canonical"
+      widget: "text"
+      label: "Canonical Name"
+      readonly: true
+  - title: "Details"
+    fields:
+    - path: "$.label"
+      widget: "text"
+      label: "Label"
+      readonly: true
+    - path: "$.description"
+      widget: "textarea"
+      label: "Description"
+      readonly: true
+    - path: "$.domain"
+      widget: "badge"
+      label: "Domain"
+      readonly: true
+
+list:
+  columns:
+  - path: "$.id"
+    label: "Phase ID"
+    width: "140px"
+  - path: "$.label"
+    label: "Label"
+  - path: "$.domain"
+    label: "Domain"
+    width: "140px"

@@ -1,0 +1,51 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/phase-template.schema.yaml"
+title: "PhaseTemplate"
+description: >
+  Canonical definition of a reusable phase that can be referenced by
+  protocols.  Phases provide stable identity so event-graph node anchors
+  remain consistent across re-compiles.
+
+type: object
+additionalProperties: false
+
+required:
+- kind
+- id
+- canonical
+- label
+- description
+- domain
+
+properties:
+  kind:
+    const: "phase-template"
+
+  id:
+    type: string
+    pattern: '^PHASE-[A-Z0-9-]+$'
+    description: "Phase-template identifier (PHASE-*)."
+
+  canonical:
+    type: string
+    pattern: '^[a-z][a-z0-9-]*$'
+    description: "Lowercase kebab-case canonical name for cross-protocol identity."
+
+  label:
+    type: string
+    minLength: 1
+    description: "Human-readable label for display."
+
+  description:
+    type: string
+    minLength: 1
+    description: "One- to three-sentence description of the phase."
+
+  domain:
+    type: string
+    enum:
+    - cell-biology
+    - biochemistry
+    - molecular-biology
+    - general
+    description: "Scientific domain the phase belongs to."

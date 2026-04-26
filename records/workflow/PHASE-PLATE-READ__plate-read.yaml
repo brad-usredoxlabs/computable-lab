@@ -1,0 +1,7 @@
+$schema: https://computable-lab.com/schema/computable-lab/phase-template.schema.yaml
+kind: phase-template
+id: PHASE-PLATE-READ
+canonical: plate-read
+label: Plate Read
+description: Quantitative readout on a plate reader (absorbance, fluorescence, luminescence).
+domain: general

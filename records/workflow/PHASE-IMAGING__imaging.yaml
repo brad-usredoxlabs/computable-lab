@@ -1,0 +1,7 @@
+$schema: https://computable-lab.com/schema/computable-lab/phase-template.schema.yaml
+kind: phase-template
+id: PHASE-IMAGING
+canonical: imaging
+label: Imaging
+description: Microscopy or other image-based readout.
+domain: cell-biology

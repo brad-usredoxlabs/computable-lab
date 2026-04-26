@@ -1,0 +1,7 @@
+$schema: https://computable-lab.com/schema/computable-lab/phase-template.schema.yaml
+kind: phase-template
+id: PHASE-TREATMENT-INCUBATE
+canonical: treatment-incubate
+label: Treatment Incubation
+description: Hold samples post-treatment for the biological response window.
+domain: cell-biology
