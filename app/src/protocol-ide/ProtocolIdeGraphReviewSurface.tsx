@@ -13,7 +13,7 @@
  * v1 is review-only: no direct graph editing, no mutation of graph structure.
  */
 
-import { useMemo, type ReactNode } from 'react'
+import { type ReactNode } from 'react'
 import type { ProtocolIdeSession } from './types'
 import type { DeckPlacement } from '../graph/labware/DeckVisualizationPanel'
 import type { Labware } from '../types/labware'
@@ -102,6 +102,8 @@ export interface ProtocolIdeGraphReviewSurfaceProps {
   onIssueCardClick?: (card: IssueCardRef) => void
   /** Callback when a user clicks on an evidence citation. */
   onEvidenceClick?: (evidenceRefId: string) => void
+  /** When set, highlights the matching graph node. */
+  highlightedEvidenceRefId?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -545,15 +547,16 @@ function EventGraphCanvas({
   issueCards,
   onIssueCardClick,
   onEvidenceClick,
+  highlightedEvidenceRefId,
 }: {
   eventGraphData?: EventGraphData | null
   issueCards?: IssueCardRef[]
   onIssueCardClick?: (card: IssueCardRef) => void
   onEvidenceClick?: (evidenceRefId: string) => void
+  highlightedEvidenceRefId?: string | null
 }): JSX.Element {
   const events = eventGraphData?.events ?? []
   const labwares = eventGraphData?.labwares ?? []
-  const placements = eventGraphData?.deckPlacements ?? []
 
   return (
     <div
@@ -588,20 +591,28 @@ function EventGraphCanvas({
               </span>
             </div>
             <div className="protocol-ide-event-list" data-testid="event-list">
-              {events.map((event, i) => (
-                <div
-                  key={event.eventId || `event-${i}`}
-                  className="protocol-ide-event-item"
-                  data-testid={`event-item-${i}`}
-                >
-                  <span className="protocol-ide-event-item__type">{event.event_type}</span>
-                  <span className="protocol-ide-event-item__summary">
-                    {event.event_type === 'transfer'
-                      ? `transfer → ${JSON.stringify(event.details?.wells ?? [])}`
-                      : JSON.stringify(event.details ?? {})}
-                  </span>
-                </div>
-              ))}
+              {events.map((event, i) => {
+                const cardForEvent = issueCards?.find(
+                  (c) => c.graphRegionId === event.eventId
+                )
+                const isHighlighted =
+                  highlightedEvidenceRefId !== null &&
+                  cardForEvent?.evidenceRefId === highlightedEvidenceRefId
+                return (
+                  <div
+                    key={event.eventId || `event-${i}`}
+                    className={`protocol-ide-event-item${isHighlighted ? ' protocol-ide-graph-node-highlighted' : ''}`}
+                    data-testid={`event-item-${i}`}
+                  >
+                    <span className="protocol-ide-event-item__type">{event.event_type}</span>
+                    <span className="protocol-ide-event-item__summary">
+                      {event.event_type === 'transfer'
+                        ? `transfer → ${JSON.stringify(event.details?.wells ?? [])}`
+                        : JSON.stringify(event.details ?? {})}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           </>
         ) : (
@@ -735,6 +746,7 @@ export function ProtocolIdeGraphReviewSurface({
   issueCards = [],
   onIssueCardClick,
   onEvidenceClick,
+  highlightedEvidenceRefId,
 }: ProtocolIdeGraphReviewSurfaceProps): JSX.Element {
   const hasIssueCards = issueCards.length > 0
 
@@ -779,6 +791,7 @@ export function ProtocolIdeGraphReviewSurface({
             issueCards={issueCards}
             onIssueCardClick={onIssueCardClick}
             onEvidenceClick={onEvidenceClick}
+            highlightedEvidenceRefId={highlightedEvidenceRefId}
           />
         </div>
 

@@ -506,6 +506,74 @@ export function createProtocolIdeHandlers(ctx: AppContext) {
     },
 
     /**
+     * POST /protocol-ide/sessions/:sessionId/rerun
+     *
+     * Re-run the projection for the given session with an optional new
+     * directive text.  Calls `projectionService.executeProjection` and
+     * persists the result.
+     *
+     * Returns `{ success: true, graphReviewRef: <eventGraphData.recordId> }`.
+     */
+    async rerunSession(
+      request: FastifyRequest<{
+        Params: { sessionId: string };
+        Body: { directiveText?: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: true; graphReviewRef: string | null } | ApiError> {
+      const { sessionId } = request.params;
+      const { directiveText } = request.body;
+
+      try {
+        // Read session to extract rollingIssueSummary and source refs
+        const sessionEnvelope = await sessionService.getSession(sessionId);
+
+        if (!sessionEnvelope) {
+          reply.status(404);
+          return {
+            error: 'SESSION_NOT_FOUND',
+            message: `Session '${sessionId}' not found`,
+          };
+        }
+
+        const payload = sessionEnvelope.payload as Record<string, unknown>;
+        const rollingIssueSummary = (payload.rollingIssueSummary as string) ?? '';
+        const evidenceRefs = (payload.evidenceRefs as string[]) ?? [];
+        const evidenceCitations = (payload.evidenceCitations as Array<{ evidenceRef: string; description: string; sourceLocation?: string }>) ?? [];
+
+        const sourceRefs: Array<{ recordId: string; label: string; kind: string }> = [];
+        for (const ref of evidenceRefs) {
+          sourceRefs.push({ recordId: ref, label: ref, kind: 'evidence' });
+        }
+        for (const cit of evidenceCitations) {
+          sourceRefs.push({ recordId: cit.evidenceRef, label: cit.description, kind: 'citation' });
+        }
+
+        const projection = await projectionService.executeProjection({
+          sessionRef: sessionId,
+          directiveText: directiveText ?? '',
+          rollingIssueSummary,
+          sourceRefs,
+        });
+
+        const graphReviewRef =
+          projection.status === 'success' || projection.status === 'partial'
+            ? projection.eventGraphData.recordId
+            : null;
+
+        reply.status(200);
+        return { success: true, graphReviewRef };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        reply.status(500);
+        return {
+          error: 'RERUN_FAILED',
+          message,
+        };
+      }
+    },
+
+    /**
      * GET /protocol-ide/sessions/:sessionId/overlay-summaries
      *
      * Derive and return overlay summaries (deck, tools, reagents, budget)

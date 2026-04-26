@@ -33,7 +33,9 @@ import {
   type BudgetCostSummary,
   type EventGraphData,
 } from './ProtocolIdeGraphReviewSurface'
-import { useState, useEffect } from 'react'
+import { ProtocolIdeActionRail } from './ProtocolIdeActionRail'
+import { ProtocolIdeExportActions } from './ProtocolIdeExportActions'
+import { useState, useEffect, useCallback } from 'react'
 import { apiClient } from '../shared/api/client'
 import type {
   DeckSummary,
@@ -120,13 +122,15 @@ function IntakePane({
 // Source evidence pane (left) — delegates to ProtocolIdeSourcePane
 // ---------------------------------------------------------------------------
 
-function SourcePane({ session }: { session: ProtocolIdeSession }): JSX.Element {
-  const handleCitationClick = (citation: EvidenceCitation) => {
-    // In a later spec, this will highlight the corresponding graph node
-    // or issue card that references this citation.
-    console.log('Citation clicked:', citation)
-  }
-
+function SourcePane({
+  session,
+  highlightedEvidenceRefId,
+  onCitationClick,
+}: {
+  session: ProtocolIdeSession
+  highlightedEvidenceRefId?: string | null
+  onCitationClick?: (citation: EvidenceCitation) => void
+}): JSX.Element {
   return (
     <ProtocolIdeSourcePane
       session={session}
@@ -136,7 +140,8 @@ function SourcePane({ session }: { session: ProtocolIdeSession }): JSX.Element {
         page: i + 1,
         label: ref.label ?? `Evidence ${i + 1}`,
       })) ?? []}
-      onCitationClick={handleCitationClick}
+      onCitationClick={onCitationClick}
+      highlightedEvidenceRefId={highlightedEvidenceRefId}
     />
   )
 }
@@ -255,7 +260,19 @@ function buildEventGraphData(
 // Event-graph review surface (center — primary)
 // ---------------------------------------------------------------------------
 
-function EventGraphSurface({ session }: { session: ProtocolIdeSession }): JSX.Element {
+function EventGraphSurface({
+  session,
+  versionCounter,
+  highlightedEvidenceRefId,
+  onEvidenceClick,
+  onIssueCardClick,
+}: {
+  session: ProtocolIdeSession
+  versionCounter: number
+  highlightedEvidenceRefId?: string | null
+  onEvidenceClick?: (evidenceRefId: string) => void
+  onIssueCardClick?: (card: IssueCardRef) => void
+}): JSX.Element {
   const [overlaySummaries, setOverlaySummaries] = useState<{
     deck: DeckSummary | null
     tools: ToolsSummary | null
@@ -283,7 +300,7 @@ function EventGraphSurface({ session }: { session: ProtocolIdeSession }): JSX.El
       .catch(() => {
         // Network error — summaries stay null, no console error
       })
-  }, [session.latestEventGraphRef])
+  }, [session.recordId, versionCounter])
 
   // Fetch event-graph data when the session has a projection
   useEffect(() => {
@@ -302,7 +319,7 @@ function EventGraphSurface({ session }: { session: ProtocolIdeSession }): JSX.El
       .catch(() => {
         // Network error — graph data stays null, no console error
       })
-  }, [session.latestEventGraphRef])
+  }, [session.recordId, versionCounter])
 
   const issueCards = sessionIssueCardsToIssueCardRefs(session)
   const deckLabwareSummary = deckSummaryToDeckLabwareSummary(overlaySummaries?.deck ?? null)
@@ -310,14 +327,6 @@ function EventGraphSurface({ session }: { session: ProtocolIdeSession }): JSX.El
   const reagentsConcentrationsSummary = reagentsSummaryToReagentsConcentrationsSummary(overlaySummaries?.reagents ?? null)
   const budgetCostSummary = budgetSummaryToBudgetCostSummary(overlaySummaries?.budget ?? null)
   const graphData = eventGraphData ?? buildEventGraphData(session)
-
-  const handleIssueCardClick = (card: IssueCardRef) => {
-    console.log('Issue card clicked:', card)
-  }
-
-  const handleEvidenceClick = (evidenceRefId: string) => {
-    console.log('Evidence clicked:', evidenceRefId)
-  }
 
   return (
     <ProtocolIdeGraphReviewSurface
@@ -328,8 +337,9 @@ function EventGraphSurface({ session }: { session: ProtocolIdeSession }): JSX.El
       reagentsConcentrationsSummary={reagentsConcentrationsSummary}
       budgetCostSummary={budgetCostSummary}
       issueCards={issueCards}
-      onIssueCardClick={handleIssueCardClick}
-      onEvidenceClick={handleEvidenceClick}
+      onIssueCardClick={onIssueCardClick}
+      onEvidenceClick={onEvidenceClick}
+      highlightedEvidenceRefId={highlightedEvidenceRefId}
     />
   )
 }
@@ -338,60 +348,111 @@ function EventGraphSurface({ session }: { session: ProtocolIdeSession }): JSX.El
 // Summary / Actions rail (right — secondary)
 // ---------------------------------------------------------------------------
 
-function SummaryRail({ session }: { session: ProtocolIdeSession }): JSX.Element {
+function ActionRailPane({
+  session,
+  versionCounter,
+  onVersionIncrement,
+}: {
+  session: ProtocolIdeSession
+  versionCounter: number
+  onVersionIncrement: () => void
+}): JSX.Element {
+  const [directiveText, setDirectiveText] = useState(session.latestDirectiveText ?? '')
+  const [commentText, setCommentText] = useState('')
+  const [issueCards, setIssueCards] = useState<IssueCardRef[]>([])
+  const [rollingSummary, setRollingSummary] = useState<string | null>(null)
+  const [isRerunning, setIsRerunning] = useState(false)
+
+  // Fetch issue cards when the session changes
+  useEffect(() => {
+    apiClient
+      .getProtocolIdeIssueCards(session.recordId)
+      .then((res) => {
+        setIssueCards(
+          res.cards.map((c) => ({
+            id: c.id,
+            title: c.title,
+            severity: 'info' as const,
+            evidenceRefId: c.evidenceCitations?.[0]?.evidenceRef ?? '',
+          })),
+        )
+      })
+      .catch(() => {
+        // Network error — cards stay empty, no console error
+      })
+  }, [session.recordId, versionCounter])
+
+  // Fetch rolling summary when the session changes
+  useEffect(() => {
+    apiClient
+      .getProtocolIdeRollingSummary(session.recordId)
+      .then((res) => {
+        setRollingSummary(res.summary)
+      })
+      .catch(() => {
+        // Network error — summary stays null, no console error
+      })
+  }, [session.recordId, versionCounter])
+
+  // Sync directiveText when session directive changes
+  useEffect(() => {
+    setDirectiveText(session.latestDirectiveText ?? '')
+  }, [session.latestDirectiveText, versionCounter])
+
+  const handleDirectiveChange = useCallback((text: string) => {
+    setDirectiveText(text)
+  }, [])
+
+  const handleCommentChange = useCallback((text: string) => {
+    setCommentText(text)
+  }, [])
+
+  const handleSubmitFeedback = useCallback(async () => {
+    if (!commentText.trim()) return
+    try {
+      await apiClient.submitProtocolIdeFeedback(session.recordId, {
+        text: commentText.trim(),
+        anchor: { type: 'none' },
+      })
+      setCommentText('')
+    } catch {
+      // Feedback submission fails — surface but do NOT clear input state
+    }
+  }, [commentText, session.recordId])
+
+  const handleRerun = useCallback(async () => {
+    setIsRerunning(true)
+    try {
+      await apiClient.rerunProtocolIdeSession(session.recordId, {
+        directiveText: directiveText.trim(),
+      })
+      onVersionIncrement()
+    } catch {
+      // Rerun fails — surface as a banner, do NOT increment versionCounter
+    } finally {
+      setIsRerunning(false)
+    }
+  }, [directiveText, session.recordId, onVersionIncrement])
+
   return (
-    <aside className="protocol-ide-summary-rail" role="complementary" aria-label="Summary and actions">
-      <h2 className="protocol-ide-rail-title">Summary &amp; Actions</h2>
-
-      <section className="protocol-ide-rail-section">
-        <h3>Overlays</h3>
-        <ul className="protocol-ide-overlay-list">
-          <li data-testid="overlay-deck">Deck layout</li>
-          <li data-testid="overlay-tools">Tools</li>
-          <li data-testid="overlay-reagents">Reagents</li>
-          <li data-testid="overlay-budget">Budget</li>
-        </ul>
-      </section>
-
-      <section className="protocol-ide-rail-section">
-        <h3>Actions</h3>
-        <div className="protocol-ide-action-buttons">
-          <button
-            className="protocol-ide-btn protocol-ide-btn-secondary"
-            data-testid="protocol-ide-rerun"
-          >
-            Rerun
-          </button>
-          <button
-            className="protocol-ide-btn protocol-ide-btn-secondary"
-            data-testid="protocol-ide-export"
-          >
-            Export to Ralph
-          </button>
-          <button
-            className="protocol-ide-btn protocol-ide-btn-secondary"
-            data-testid="protocol-ide-feedback"
-          >
-            Add Feedback
-          </button>
-        </div>
-      </section>
-
-      {session.issueCardRefs && session.issueCardRefs.length > 0 && (
-        <section className="protocol-ide-rail-section">
-          <h3>
-            Issue Cards ({session.issueCardRefs.length})
-          </h3>
-          <ul className="protocol-ide-issue-list">
-            {session.issueCardRefs.map((ref, i) => (
-              <li key={i} data-testid={`issue-card-${i}`}>
-                {ref.id}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </aside>
+    <>
+      <ProtocolIdeActionRail
+        session={session}
+        directiveText={directiveText}
+        onDirectiveChange={handleDirectiveChange}
+        commentText={commentText}
+        onCommentChange={handleCommentChange}
+        onSubmitComment={handleSubmitFeedback}
+        onRerun={handleRerun}
+        isRerunning={isRerunning}
+        rollingIssueSummary={rollingSummary}
+        issueCards={issueCards}
+      />
+      <ProtocolIdeExportActions
+        sessionId={session.recordId}
+        issueCardCount={issueCards.length}
+      />
+    </>
   )
 }
 
@@ -407,6 +468,20 @@ export function ProtocolIdeShell({
   onNavigateAway,
 }: ProtocolIdeShellProps): JSX.Element {
   const hasSession = !!session
+  const [versionCounter, setVersionCounter] = useState(0)
+  const [selectedEvidenceRefId, setSelectedEvidenceRefId] = useState<string | null>(null)
+
+  const handleCitationClick = (citation: EvidenceCitation) => {
+    setSelectedEvidenceRefId(citation.id)
+  }
+
+  const handleEvidenceClick = (evidenceRefId: string) => {
+    setSelectedEvidenceRefId(evidenceRefId)
+  }
+
+  const handleIssueCardClick = (card: IssueCardRef) => {
+    setSelectedEvidenceRefId(card.evidenceRefId ?? null)
+  }
 
   return (
     <div className="protocol-ide-shell" data-testid="protocol-ide-shell">
@@ -440,7 +515,11 @@ export function ProtocolIdeShell({
         {/* Left: intake or source pane */}
         <div className="protocol-ide-left-pane" data-testid="protocol-ide-left-pane">
           {hasSession ? (
-            <SourcePane session={session} />
+            <SourcePane
+              session={session}
+              highlightedEvidenceRefId={selectedEvidenceRefId}
+              onCitationClick={handleCitationClick}
+            />
           ) : (
             <IntakePane onSubmit={onCreateSession} error={submitError} isLoading={isSubmitting} />
           )}
@@ -449,7 +528,13 @@ export function ProtocolIdeShell({
         {/* Center: event-graph review surface (primary) */}
         <div className="protocol-ide-center-pane" data-testid="protocol-ide-center-pane">
           {hasSession ? (
-            <EventGraphSurface session={session} />
+            <EventGraphSurface
+              session={session}
+              versionCounter={versionCounter}
+              highlightedEvidenceRefId={selectedEvidenceRefId}
+              onEvidenceClick={handleEvidenceClick}
+              onIssueCardClick={handleIssueCardClick}
+            />
           ) : (
             <main className="protocol-ide-graph-surface" role="main" aria-label="Event-graph review surface">
               <div className="protocol-ide-graph-header">
@@ -467,7 +552,7 @@ export function ProtocolIdeShell({
         {/* Right: summary / actions rail (secondary) */}
         {hasSession && (
           <div className="protocol-ide-right-pane" data-testid="protocol-ide-right-pane">
-            <SummaryRail session={session} />
+            <ActionRailPane session={session} versionCounter={versionCounter} onVersionIncrement={() => setVersionCounter((v) => v + 1)} />
           </div>
         )}
       </div>
@@ -921,6 +1006,16 @@ export function ProtocolIdeShell({
 
         .protocol-ide-btn-secondary:hover {
           background: #f1f3f5;
+        }
+
+        /* Citation / graph highlight */
+        .protocol-ide-source-citation-highlighted {
+          background: #e7f5ff !important;
+          border-color: #228be6 !important;
+        }
+
+        .protocol-ide-graph-node-highlighted {
+          box-shadow: 0 0 0 2px #228be6;
         }
       `}</style>
     </div>

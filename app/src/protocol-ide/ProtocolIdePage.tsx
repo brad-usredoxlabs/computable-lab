@@ -8,8 +8,10 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { apiClient } from '../shared/api/client'
 import { ProtocolIdeShell } from './ProtocolIdeShell'
 import type { ProtocolIdeSession } from './types'
+import type { IntakePayload } from './ProtocolIdeIntakePane'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -46,6 +48,8 @@ export function ProtocolIdePage(): JSX.Element {
   const [session, setSession] = useState<ProtocolIdeSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   // Load session when sessionId is present
   useEffect(() => {
@@ -76,11 +80,22 @@ export function ProtocolIdePage(): JSX.Element {
     }
   }, [sessionId])
 
-  // Create a new session (placeholder — actual creation will be wired later)
-  const handleCreateSession = () => {
-    // For now, just show a placeholder; the intake pane will be expanded
-    // in subsequent specs to support vendor search, PDF URL, upload, etc.
-    alert('Session creation will be implemented in a future spec.')
+  // Create a new session from the intake payload
+  const handleCreateSession = async (payload: IntakePayload) => {
+    setSubmitting(true)
+    setSubmitError(null)
+    try {
+      const result = await apiClient.createProtocolIdeSession(payload)
+      if ('error' in result) {
+        setSubmitError(result.message)
+        setSubmitting(false)
+        return
+      }
+      navigate(`/protocol-ide/${result.sessionId}`)
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : String(err))
+      setSubmitting(false)
+    }
   }
 
   // Navigate away from the Protocol IDE
@@ -109,6 +124,8 @@ export function ProtocolIdePage(): JSX.Element {
     <ProtocolIdeShell
       session={session}
       onCreateSession={handleCreateSession}
+      submitError={submitError}
+      isSubmitting={submitting}
       onNavigateAway={handleNavigateAway}
     />
   )

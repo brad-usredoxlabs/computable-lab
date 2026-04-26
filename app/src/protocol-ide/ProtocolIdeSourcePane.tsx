@@ -22,7 +22,7 @@
  *   └─────────────────────────────────────────────────────────────┘
  */
 
-import { useState } from 'react'
+import { useEffect, useRef, type Ref } from 'react'
 import type { ProtocolIdeSession } from './types'
 import type { IngestionArtifactRecord, IngestionIssueRecord } from '../../types/ingestion'
 
@@ -97,6 +97,8 @@ export interface ProtocolIdeSourcePaneProps {
   isLoading?: boolean
   /** Error message to display */
   error?: string | null
+  /** When set, highlights the matching citation and scrolls it into view */
+  highlightedEvidenceRefId?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -428,9 +430,13 @@ function ProvenanceSection({
 function CitationsSection({
   citations,
   onCitationClick,
+  highlightedEvidenceRefId,
+  listRef,
 }: {
   citations: EvidenceCitation[]
   onCitationClick?: (citation: EvidenceCitation) => void
+  highlightedEvidenceRefId?: string | null
+  listRef?: Ref<HTMLUListElement>
 }): JSX.Element | null {
   if (citations.length === 0) {
     return null
@@ -444,35 +450,44 @@ function CitationsSection({
       <h3 className="source-pane-citations-title">
         Evidence Citations ({citations.length})
       </h3>
-      <ul className="source-pane-citation-list">
-        {citations.map((c) => (
-          <li
-            key={c.id}
-            className="source-pane-citation-item"
-            data-testid={`source-pane-citation-${c.id}`}
-          >
-            <button
-              type="button"
-              className="source-pane-citation-link"
-              onClick={() => onCitationClick?.(c)}
-              data-testid={`source-pane-citation-link-${c.id}`}
+      <ul
+        className="source-pane-citation-list"
+        ref={listRef}
+      >
+        {citations.map((c) => {
+          const isHighlighted =
+            highlightedEvidenceRefId !== null &&
+            (c.id === highlightedEvidenceRefId || c.artifactId === highlightedEvidenceRefId)
+          return (
+            <li
+              key={c.id}
+              className={`source-pane-citation-item${isHighlighted ? ' source-pane-citation-highlighted' : ''}`}
+              data-testid={`source-pane-citation-${c.id}`}
+              data-citation-id={c.id}
             >
-              <span className="source-pane-citation-label">
-                {c.label ?? `Citation ${c.id}`}
-              </span>
-              {c.page != null && (
-                <span className="source-pane-citation-page">
-                  p.{c.page}
+              <button
+                type="button"
+                className="source-pane-citation-link"
+                onClick={() => onCitationClick?.(c)}
+                data-testid={`source-pane-citation-link-${c.id}`}
+              >
+                <span className="source-pane-citation-label">
+                  {c.label ?? `Citation ${c.id}`}
                 </span>
-              )}
-              {c.snippet && (
-                <span className="source-pane-citation-snippet">
-                  "{truncate(c.snippet, 80)}"
-                </span>
-              )}
-            </button>
-          </li>
-        ))}
+                {c.page != null && (
+                  <span className="source-pane-citation-page">
+                    p.{c.page}
+                  </span>
+                )}
+                {c.snippet && (
+                  <span className="source-pane-citation-snippet">
+                    "{truncate(c.snippet, 80)}"
+                  </span>
+                )}
+              </button>
+            </li>
+          )
+        })}
       </ul>
     </section>
   )
@@ -549,8 +564,22 @@ export function ProtocolIdeSourcePane({
   onCitationClick,
   isLoading = false,
   error = null,
+  highlightedEvidenceRefId,
 }: ProtocolIdeSourcePaneProps): JSX.Element {
   const evidenceModel = buildEvidenceModel(session, artifacts, citations)
+
+  const citationsRef = useRef<HTMLUListElement>(null)
+
+  // Scroll the highlighted citation into view when the prop changes
+  useEffect(() => {
+    if (!highlightedEvidenceRefId || !citationsRef.current) return
+    const el = citationsRef.current.querySelector(
+      `[data-citation-id="${highlightedEvidenceRefId}"]`,
+    )
+    if (el) {
+      el.scrollIntoView({ block: 'nearest' })
+    }
+  }, [highlightedEvidenceRefId])
 
   return (
     <aside
@@ -599,6 +628,8 @@ export function ProtocolIdeSourcePane({
       <CitationsSection
         citations={evidenceModel.citations}
         onCitationClick={onCitationClick}
+        highlightedEvidenceRefId={highlightedEvidenceRefId}
+        listRef={citationsRef}
       />
 
       {/* Trace / Diagnostics — secondary */}
@@ -822,6 +853,11 @@ export function ProtocolIdeSourcePane({
 
         .source-pane-citation-item {
           margin-bottom: 0.25rem;
+        }
+
+        .source-pane-citation-highlighted {
+          background: #e7f5ff !important;
+          border-color: #228be6 !important;
         }
 
         .source-pane-citation-link {

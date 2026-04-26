@@ -2607,6 +2607,66 @@ export const apiClient = {
     return response.vendors
   },
 
+  /**
+   * Re-run the projection for a Protocol IDE session.
+   * Calls POST /protocol-ide/sessions/:id/rerun
+   */
+  async rerunProtocolIdeSession(
+    sessionId: string,
+    body: { directiveText?: string },
+  ): Promise<{ success: true; graphReviewRef: string | null }> {
+    return request(`/protocol-ide/sessions/${encodeURIComponent(sessionId)}/rerun`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  /**
+   * Submit a feedback comment for a Protocol IDE session.
+   * Calls POST /protocol-ide/sessions/:id/feedback
+   */
+  async submitProtocolIdeFeedback(
+    sessionId: string,
+    body: { text: string; anchor?: { type: string; nodeId?: string; citationId?: string; label?: string } },
+  ): Promise<{ success: true; commentId: string; rollingSummary: string }> {
+    return request(`/protocol-ide/sessions/${encodeURIComponent(sessionId)}/feedback`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  /**
+   * Generate issue cards for a Protocol IDE session.
+   * Calls POST /protocol-ide/sessions/:id/generate-issue-cards
+   */
+  async generateProtocolIdeIssueCards(
+    sessionId: string,
+  ): Promise<{ success: true; cards: Array<{ id: string; title: string; body: string; origin: string; evidenceCitations: Array<{ evidenceRef: string; description: string; sourceLocation?: string }> }> }> {
+    return request(`/protocol-ide/sessions/${encodeURIComponent(sessionId)}/generate-issue-cards`, {
+      method: 'POST',
+    })
+  },
+
+  /**
+   * Get the rolling issue summary for a Protocol IDE session.
+   * Calls GET /protocol-ide/sessions/:id/rolling-summary
+   */
+  async getProtocolIdeRollingSummary(
+    sessionId: string,
+  ): Promise<{ success: true; summary: string; updatedAt: string; commentCount: number }> {
+    return request(`/protocol-ide/sessions/${encodeURIComponent(sessionId)}/rolling-summary`)
+  },
+
+  /**
+   * Get issue cards for a Protocol IDE session.
+   * Calls GET /protocol-ide/sessions/:id/issue-cards
+   */
+  async getProtocolIdeIssueCards(
+    sessionId: string,
+  ): Promise<{ success: true; cards: Array<{ id: string; title: string; body: string; origin: string; evidenceCitations: Array<{ evidenceRef: string; description: string; sourceLocation?: string }> }> }> {
+    return request(`/protocol-ide/sessions/${encodeURIComponent(sessionId)}/issue-cards`)
+  },
+
   // === Prompt Template API ===
 
   /**

@@ -551,6 +551,7 @@ export function registerRoutes(
 
   if (protocolIdeHandlers) {
     fastify.post('/protocol-ide/sessions', protocolIdeHandlers.createSession.bind(protocolIdeHandlers));
+    fastify.post('/protocol-ide/sessions/:sessionId/rerun', protocolIdeHandlers.rerunSession.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/:sessionId/feedback', protocolIdeHandlers.submitFeedback.bind(protocolIdeHandlers));
     fastify.get('/protocol-ide/sessions/:sessionId/rolling-summary', protocolIdeHandlers.getRollingSummary.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/:sessionId/generate-issue-cards', protocolIdeHandlers.generateIssueCards.bind(protocolIdeHandlers));
