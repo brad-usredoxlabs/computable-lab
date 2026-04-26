@@ -1,52 +1,73 @@
 kind: verb-action-map
 mappings:
   - verb: seed
-    notes: "Introduce cells or organisms into a growth vessel"
+    notes: "no canonical mapping"
   - verb: incubate
-    notes: "Hold sample at temperature for a defined duration"
+    exact_id: "EXACT:Class_49"
+    notes: "Hold sample at controlled conditions for duration"
   - verb: harvest
-    notes: "Collect cells or material from a culture"
+    notes: "no canonical mapping"
   - verb: aliquot
-    notes: "Divide a sample into equal portions"
+    exact_id: "EXACT:Aliquot"
+    obi_id: "OBI:0600018"
+    notes: "Partition material into equal portions"
   - verb: wash
-    notes: "Remove liquid and replace with buffer"
+    exact_id: "EXACT:Class_54"
+    obi_id: "OBI:0302888"
+    notes: "Remove contaminants by solution cycles"
   - verb: elute
-    notes: "Release bound material from a column or bead"
+    obi_id: "OBI:0302905"
+    notes: "Extract material from adsorbent with solvent"
   - verb: resuspend
-    notes: "Redisperse a pellet in liquid"
+    exact_id: "EXACT:Class_57"
+    notes: "Re-dissolve pelleted material"
   - verb: pellet
-    notes: "Collect material by centrifugation"
+    notes: "no canonical mapping"
   - verb: dilute
+    exact_id: "EXACT:Dilute"
     notes: "Reduce concentration by adding solvent"
   - verb: mix
-    notes: "Homogenize contents of a well or tube"
+    exact_id: "EXACT:Class_45"
+    obi_id: "OBI:0000652"
+    notes: "Combine or homogenize materials"
   - verb: stain
-    notes: "Apply dye or fluorophore to cells or tissue"
+    obi_id: "OBI:0302887"
+    notes: "Apply dye for visualization"
   - verb: fix
-    notes: "Preserve cellular structure with fixative"
+    exact_id: "EXACT:Fixate"
+    notes: "Chemically preserve cellular structure"
   - verb: permeabilize
-    notes: "Create pores in cell membrane for reagent access"
+    notes: "no canonical mapping"
   - verb: block
-    notes: "Prevent non-specific binding with blocking buffer"
+    notes: "no canonical mapping"
   - verb: quench
-    notes: "Stop a reaction by adding a quenching agent"
+    notes: "no canonical mapping"
   - verb: count
+    exact_id: "EXACT:Count"
     notes: "Enumerate cells or particles"
   - verb: passage
-    notes: "Transfer and subculture cells to fresh media"
+    notes: "no canonical mapping"
   - verb: freeze
-    notes: "Store cells or samples at sub-zero temperature"
+    exact_id: "EXACT:Freeze"
+    notes: "Reduce temperature to preserve material"
   - verb: thaw
-    notes: "Warm frozen sample to liquid state"
+    exact_id: "EXACT:Class_38"
+    notes: "Raise temperature of frozen material"
   - verb: spin
-    notes: "Centrifuge sample (generic, non-pellet)"
+    exact_id: "EXACT:Class_53"
+    obi_id: "OBI:0302886"
+    notes: "Apply centrifugal force to separate components"
   - verb: label
-    notes: "Attach a fluorescent or chemical tag to a target"
+    exact_id: "EXACT:Label"
+    obi_id: "OBI:0600067"
+    notes: "Attach detectable marker to target"
   - verb: transfect
-    notes: "Introduce nucleic acids into cells"
+    notes: "no canonical mapping"
   - verb: add_material
-    notes: "Generic addition of any material to a well or tube"
+    exact_id: "EXACT:Class_9"
+    notes: "Introduce reagent or material"
   - verb: create_container
-    notes: "Create a new container (e.g. well, tube) for holding material"
+    notes: "no canonical mapping"
   - verb: read
-    notes: "Measure signal from a plate or well (fluorescence, absorbance, etc.)"
+    exact_id: "EXACT:Measure"
+    notes: "Acquire measurement from instrument"

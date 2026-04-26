@@ -107,10 +107,23 @@ sources:
     format: obo
     url: "https://purl.obolibrary.org/obo/exact.obo"
     output: schema/registry/ontology-terms/exact.yaml
-    include_ids: []
-    # EXACT (Experimental ACTions) ontology — maps compiler primitive verbs
-    # to canonical OBO Foundry action classes.
-    # Note: EXACT is not yet published in OBO Foundry, so include_ids is
-    # intentionally empty. The verb-action-map registry (verb-action-map.yaml)
-    # carries the verb→ontology mappings directly, independent of the
-    # downloaded ontology terms.
+    # EXACT (Experimental ACTions) ontology — the canonical purl.obolibrary.org
+    # OBO URL currently 404s (the ontology was never published to OBO Foundry
+    # in OBO format). The authoritative source is EXACT2.owl at
+    # https://github.com/larisa-soldatova/EXACT . Terms below were verified
+    # against that OWL file; IDs are OWL fragment IRIs, not OBO-style CURIEs.
+    include_ids:
+      - Class_49    # incubate
+      - Class_45    # mix
+      - Class_54    # wash
+      - Aliquot     # aliquot
+      - Class_57    # resuspend
+      - Dilute      # dilute
+      - Count       # count
+      - Fixate      # fixate (maps to compiler verb "fix")
+      - Label       # label
+      - Freeze      # freeze
+      - Class_38    # thaw
+      - Class_53    # centrifuge (maps to compiler verb "spin")
+      - Class_9     # add (maps to compiler verb "add_material")
+      - Measure     # measure (maps to compiler verb "read")

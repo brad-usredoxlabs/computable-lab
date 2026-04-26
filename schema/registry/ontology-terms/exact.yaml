@@ -1,2 +1,61 @@
 source: exact
-terms: []
+terms:
+  - kind: ontology-term
+    id: EXACT:Class_9
+    source: exact
+    label: add
+  - kind: ontology-term
+    id: EXACT:Aliquot
+    source: exact
+    label: aliquot
+    definition: Measure out into small equal samples for experiments
+  - kind: ontology-term
+    id: EXACT:Class_53
+    source: exact
+    label: centrifuge
+  - kind: ontology-term
+    id: EXACT:Count
+    source: exact
+    label: count
+  - kind: ontology-term
+    id: EXACT:Dilute
+    source: exact
+    label: dilute
+  - kind: ontology-term
+    id: EXACT:Fixate
+    source: exact
+    label: fixate
+    definition: Fix in position; attachment with fixative
+  - kind: ontology-term
+    id: EXACT:Freeze
+    source: exact
+    label: freeze
+  - kind: ontology-term
+    id: EXACT:Class_49
+    source: exact
+    label: incubate
+    definition: Maintain specified environmental conditions to promote a chemical reaction or growth of a microorganism
+  - kind: ontology-term
+    id: EXACT:Label
+    source: exact
+    label: label
+  - kind: ontology-term
+    id: EXACT:Measure
+    source: exact
+    label: measure
+  - kind: ontology-term
+    id: EXACT:Class_45
+    source: exact
+    label: mix
+  - kind: ontology-term
+    id: EXACT:Class_57
+    source: exact
+    label: resuspend
+  - kind: ontology-term
+    id: EXACT:Class_38
+    source: exact
+    label: thaw
+  - kind: ontology-term
+    id: EXACT:Class_54
+    source: exact
+    label: wash
