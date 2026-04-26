@@ -228,6 +228,7 @@ function evalEquals(pred: EqualsPredicate, data: unknown): PredicateResult {
 
 /**
  * Evaluate an 'in' predicate.
+ * Supports both static `values` and dynamic `valuesPath` (with [*] wildcard).
  */
 function evalIn(pred: InPredicate, data: unknown): PredicateResult {
   const value = getPath(data, pred.path);
@@ -240,14 +241,38 @@ function evalIn(pred: InPredicate, data: unknown): PredicateResult {
     };
   }
   
+  // Determine the allowed set: use valuesPath if present, otherwise static values
+  let allowedSet: Array<string | number | boolean>;
+  
+  if (pred.valuesPath !== undefined) {
+    // Resolve the values path to get an array of values (supports [*] wildcard)
+    const valuesArray = getPath(data, pred.valuesPath);
+    if (!Array.isArray(valuesArray)) {
+      return {
+        result: false,
+        path: pred.path,
+        reason: `Path '${pred.valuesPath}' does not resolve to an array`,
+      };
+    }
+    allowedSet = valuesArray.map(v => String(v));
+  } else if (pred.values !== undefined) {
+    allowedSet = pred.values;
+  } else {
+    return {
+      result: false,
+      path: pred.path,
+      reason: `In predicate requires either 'values' or 'valuesPath'`,
+    };
+  }
+  
   // Check if value is in the allowed set
-  const result = pred.values.includes(value as string | number | boolean);
+  const result = allowedSet.includes(value as string | number | boolean);
   return {
     result,
     path: pred.path,
     reason: result
       ? `Value '${value}' is in allowed set`
-      : `Value '${value}' is not in allowed set [${pred.values.join(', ')}]`,
+      : `Value '${value}' is not in allowed set [${allowedSet.join(', ')}]`,
   };
 }
 

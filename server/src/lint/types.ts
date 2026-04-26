@@ -76,11 +76,15 @@ export interface EqualsPredicate extends BasePredicate {
 
 /**
  * In predicate - checks if a path value is in a set of allowed values.
+ * Supports either a static `values` array or a `valuesPath` that resolves
+ * to an array of values at runtime (for cross-array relational checks).
  */
 export interface InPredicate extends BasePredicate {
   op: 'in';
   path: string;
-  values: Array<string | number | boolean>;
+  values?: Array<string | number | boolean>;
+  /** Optional path to an array of allowed values (e.g., 'phases[*].id'). */
+  valuesPath?: string;
 }
 
 /**

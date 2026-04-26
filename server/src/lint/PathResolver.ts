@@ -27,10 +27,17 @@ export interface PathResolutionResult {
 /**
  * Parse a JSONPath-like string into segments.
  * 
+ * Supports a simplified subset of JSONPath:
+ * - `$.foo` or `foo` — access property 'foo' from root
+ * - `$.foo.bar` or `foo.bar` — nested property access
+ * - `$[0]` or `[0]` — array index access
+ * - `$.foo[0].bar` — combined property and array access
+ * - `$.foo[*].bar` — wildcard array access (extract all values)
+ * 
  * @param path - Path string (e.g., "$.foo.bar[0].baz" or "foo.bar")
  * @returns Array of path segments
  */
-export function parsePath(path: string): Array<string | number> {
+export function parsePath(path: string): Array<string | number | '*'> {
   // Normalize: remove leading $. if present
   let normalized = path.trim();
   if (normalized.startsWith('$.')) {
@@ -44,7 +51,7 @@ export function parsePath(path: string): Array<string | number> {
     return [];
   }
   
-  const segments: Array<string | number> = [];
+  const segments: Array<string | number | '*'> = [];
   let current = '';
   let i = 0;
   
@@ -73,8 +80,10 @@ export function parsePath(path: string): Array<string | number> {
       
       const content = normalized.slice(i + 1, closeIdx);
       
-      // Check if it's a number (array index) or string (property)
-      if (/^\d+$/.test(content)) {
+      // Check for wildcard
+      if (content === '*') {
+        segments.push('*');
+      } else if (/^\d+$/.test(content)) {
         segments.push(parseInt(content, 10));
       } else {
         // Remove quotes if present
@@ -110,13 +119,38 @@ export function parsePath(path: string): Array<string | number> {
  */
 export function resolvePath(
   data: unknown, 
-  path: string | Array<string | number>
+  path: string | Array<string | number | '*'>
 ): PathResolutionResult {
   const segments = typeof path === 'string' ? parsePath(path) : path;
   
   // Empty path returns the root
   if (segments.length === 0) {
     return { found: true, value: data };
+  }
+  
+  // Handle wildcard segment: collect all values from remaining path
+  const wildcardIdx = segments.indexOf('*');
+  if (wildcardIdx !== -1) {
+    const beforeWildcard = segments.slice(0, wildcardIdx);
+    const afterWildcard = segments.slice(wildcardIdx + 1);
+    
+    // First resolve the path before the wildcard
+    const beforeResult = resolvePath(data, beforeWildcard);
+    if (!beforeResult.found || !Array.isArray(beforeResult.value)) {
+      return { found: false, value: undefined };
+    }
+    
+    // Collect values from each array element through the remaining path
+    const values: unknown[] = [];
+    for (const item of beforeResult.value) {
+      if (item === null || item === undefined) continue;
+      const itemResult = resolvePath(item, afterWildcard);
+      if (itemResult.found) {
+        values.push(itemResult.value);
+      }
+    }
+    
+    return { found: true, value: values };
   }
   
   let current: unknown = data;
