@@ -18,8 +18,8 @@ const RefShape = z.object({
 export const AssayDefinitionSchema = z.object({
   kind: z.literal('assay-definition'),
   id: z.string().regex(/^ASSAY-[A-Za-z0-9_-]+$/),
-  name: z.string().minLength(1),
-  assay_type: z.string().minLength(1),
+  name: z.string().min(1),
+  assay_type: z.string().min(1),
   instrument_type: z.enum(['plate_reader', 'qpcr', 'gc_ms', 'lc_ms', 'microscopy', 'other']),
   readout_def_refs: z.array(RefShape).min(1),
   target_refs: z.array(RefShape).optional(),

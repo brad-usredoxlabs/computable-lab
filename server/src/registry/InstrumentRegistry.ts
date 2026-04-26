@@ -18,7 +18,7 @@ const RefShape = z.object({
 export const InstrumentDefinitionSchema = z.object({
   kind: z.literal('instrument-definition'),
   id: z.string().regex(/^INSTDEF-[A-Za-z0-9_-]+$/),
-  name: z.string().minLength(1),
+  name: z.string().min(1),
   vendor: z.string().optional(),
   model: z.string().optional(),
   instrument_type: z.enum(['plate_reader', 'qpcr', 'gc_ms', 'lc_ms', 'microscopy', 'other']),

@@ -18,7 +18,7 @@ const RefShape = z.object({
 export const ReadoutDefinitionSchema = z.object({
   kind: z.literal('readout-definition'),
   id: z.string().regex(/^RDEF-[A-Za-z0-9_-]+$/),
-  name: z.string().minLength(1),
+  name: z.string().min(1),
   instrument_type: z.enum(['plate_reader', 'qpcr', 'gc_ms', 'lc_ms', 'microscopy', 'other']),
   mode: z.enum(['fluorescence', 'absorbance', 'luminescence', 'ct', 'peak_area', 'image_feature', 'other']),
   channel_label: z.string().optional(),

@@ -1,0 +1,10 @@
+kind: measurement-panel
+id: MP-QPCR-CUSTOM-PANEL
+name: qPCR Custom Panel
+readout_refs:
+  - RDEF-QPCR-FAM
+  - RDEF-QPCR-HEX
+  - RDEF-QPCR-CY5
+notes: >
+  Custom qPCR panel for IL6, GAPDH, and ACTB targets.
+  Uses FAM, HEX, and Cy5 channels respectively.

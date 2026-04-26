@@ -5,6 +5,7 @@ import type { RecordEnvelope, RecordStore, StoreResult } from '../../store/types
 import { getInstrumentRegistry, type InstrumentDefinition } from '../../registry/InstrumentRegistry.js';
 import { getReadoutDefinitionRegistry, type ReadoutDefinition } from '../../registry/ReadoutDefinitionRegistry.js';
 import { getAssayDefinitionRegistry, type AssayDefinition } from '../../registry/AssayDefinitionRegistry.js';
+import { getMeasurementPanelRegistry } from '../../registry/MeasurementPanelRegistry.js';
 
 type RefShape = {
   kind: 'record' | 'ontology';
@@ -228,6 +229,20 @@ function buildSeededDefinitions(): SeededDef[] {
         ...(assay.expected_role_types?.length ? { expected_role_types: assay.expected_role_types } : {}),
         ...(assay.notes ? { notes: assay.notes } : {}),
         ...(assay.tags?.length ? { tags: assay.tags } : {}),
+      },
+    });
+  }
+
+  // Measurement panels from registry
+  for (const panel of getMeasurementPanelRegistry().list()) {
+    definitions.push({
+      schemaId: SCHEMA_IDS.assayDefinition,
+      payload: {
+        kind: 'measurement-panel',
+        id: panel.id,
+        name: panel.name,
+        readout_refs: panel.readout_refs,
+        ...(panel.notes ? { notes: panel.notes } : {}),
       },
     });
   }
