@@ -4,3 +4,10 @@ id: VERB-STORE
 canonical: store
 label: Store
 domain: manual
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true
+  - name: locationRole
+    derivedFrom: { input: locationId, fn: passthrough }
+    required: true

@@ -4,3 +4,10 @@ id: VERB-FILTER
 canonical: filter
 label: Filter
 domain: sample_prep
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: source, fn: labware_role }
+    required: true
+  - name: substance
+    derivedFrom: { input: formulation, fn: active_ingredients }
+    required: false

@@ -1,0 +1,7 @@
+$schema: https://computable-lab.com/schema/computable-lab/registry/derivation.schema.yaml
+kind: derivation
+id: DRV-PROGRAM-ID
+canonical: program_id
+description: For verbs with named programs (thermal cycling). Returns canonical program id; specific time/temp parameters within the program are not identity.
+inputType: program
+returnType: string

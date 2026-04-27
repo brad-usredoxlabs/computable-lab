@@ -4,3 +4,7 @@ id: VERB-MIX
 canonical: mix
 label: Mix
 domain: sample_prep
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true

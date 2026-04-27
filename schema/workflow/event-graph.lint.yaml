@@ -1,0 +1,30 @@
+# Lint rules for EventGraph records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml"
+
+# Intended cross-event rules (pending DSL support):
+#
+#   semantic-key-unique
+#     When semanticKey is present on an event, it must be unique within
+#     the parent event-graph. Severity: warning. Cannot be expressed in
+#     the current scalar DSL; enforced at compute time by the
+#     SemanticKeyBuilder (spec-015) and verified in
+#     EventGraphSemanticKeySchema.test.ts via an inline helper.
+
+rules:
+- id: semantic-key-requires-components
+  title: "semantic-key-requires-components"
+  description: "When semanticKey is present, semanticKeyComponents must also be present."
+  severity: warning
+  scope: record
+  assert:
+    op: any
+    predicates:
+    - predicate: not
+      args:
+      - predicate: exists
+        args: ["semanticKey"]
+    - predicate: exists
+      args: ["semanticKeyComponents"]
+  message:
+    template: "Event has semanticKey but missing semanticKeyComponents"

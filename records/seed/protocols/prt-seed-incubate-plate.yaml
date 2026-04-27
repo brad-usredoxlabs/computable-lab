@@ -16,8 +16,14 @@ roles:
         - lbw-seed-plate-96-flat
   materialRoles: []
 parameters: []
+phases:
+  - id: incubate
+    label: Plate Incubation
+    ordinal: 1
+    templateRef: PHASE-TREATMENT-INCUBATE
 steps:
   - stepId: step-1
+    phaseId: incubate
     kind: incubate
     label: Incubate plate at 37°C
     target:

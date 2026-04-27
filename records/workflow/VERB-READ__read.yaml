@@ -4,3 +4,10 @@ id: VERB-READ
 canonical: read
 label: Read
 domain: analytical_readout
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true
+  - name: readModality
+    derivedFrom: { input: modality, fn: modality }
+    required: true

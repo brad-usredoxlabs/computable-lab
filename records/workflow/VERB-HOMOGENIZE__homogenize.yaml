@@ -4,3 +4,7 @@ id: VERB-HOMOGENIZE
 canonical: homogenize
 label: Homogenize
 domain: sample_prep
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true

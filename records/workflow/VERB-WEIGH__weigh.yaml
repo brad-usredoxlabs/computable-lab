@@ -4,3 +4,10 @@ id: VERB-WEIGH
 canonical: weigh
 label: Weigh
 domain: analytical_readout
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true
+  - name: substance
+    derivedFrom: { input: substanceRef, fn: active_ingredients }
+    required: false

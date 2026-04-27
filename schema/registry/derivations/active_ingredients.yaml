@@ -1,0 +1,7 @@
+$schema: https://computable-lab.com/schema/computable-lab/registry/derivation.schema.yaml
+kind: derivation
+id: DRV-ACTIVE-INGREDIENTS
+canonical: active_ingredients
+description: Walks the formulation graph and returns the sorted multiset of active substance IDs joined with `+`. Stops at any node that has its own record id (named materials are treated as single substances). Excludes solvents. For pure-vehicle formulations returns `vehicle:<solvent_id>`.
+inputType: formulation
+returnType: string-multiset

@@ -4,3 +4,10 @@ id: VERB-DILUTE
 canonical: dilute
 label: Dilute
 domain: liquid_handling
+semanticInputs:
+  - name: substance
+    derivedFrom: { input: formulation, fn: active_ingredients }
+    required: true
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true

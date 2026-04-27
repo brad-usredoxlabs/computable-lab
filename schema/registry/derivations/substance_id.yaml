@@ -1,0 +1,7 @@
+$schema: https://computable-lab.com/schema/computable-lab/registry/derivation.schema.yaml
+kind: derivation
+id: DRV-SUBSTANCE-ID
+canonical: substance_id
+description: Pass-through for verbs that take a substance reference directly without formulation wrapping.
+inputType: substance
+returnType: string

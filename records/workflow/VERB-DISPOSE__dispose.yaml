@@ -4,3 +4,7 @@ id: VERB-DISPOSE
 canonical: dispose
 label: Dispose
 domain: manual
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true

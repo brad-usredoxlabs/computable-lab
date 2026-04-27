@@ -26,8 +26,14 @@ roles:
       allowedMaterialIds:
         - chemical
 parameters: []
+phases:
+  - id: prep
+    label: Buffer Preparation
+    ordinal: 1
+    templateRef: PHASE-PREPARATION
 steps:
   - stepId: step-1
+    phaseId: prep
     kind: add_material
     label: Add base buffer to 50 mL position (A4)
     target:
@@ -40,6 +46,7 @@ steps:
       materialRole: base_buffer
     volume_uL: 40000
   - stepId: step-2
+    phaseId: prep
     kind: add_material
     label: Add additive to A4
     target:
@@ -52,6 +59,7 @@ steps:
       materialRole: additive
     volume_uL: 1000
   - stepId: step-3
+    phaseId: prep
     kind: mix
     label: Mix by inversion
     target:

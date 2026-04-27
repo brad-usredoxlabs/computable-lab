@@ -1,0 +1,57 @@
+# UI specification for Derivation records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/registry/derivation.schema.yaml"
+
+display:
+  titleField: "$.canonical"
+  icon: "derivation"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.id"
+      widget: "text"
+      label: "Derivation ID"
+      readonly: true
+    - path: "$.canonical"
+      widget: "text"
+      label: "Canonical Name"
+  - title: "Body"
+    fields:
+    - path: "$.description"
+      widget: "textarea"
+      label: "Description"
+  - title: "Types"
+    fields:
+    - path: "$.inputType"
+      widget: "select"
+      label: "Input Type"
+      options:
+      - formulation
+      - labware-instance
+      - program
+      - substance
+      - string
+    - path: "$.returnType"
+      widget: "select"
+      label: "Return Type"
+      options:
+      - string
+      - string-multiset
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "160px"
+  - path: "$.canonical"
+    label: "Canonical"
+  - path: "$.description"
+    label: "Description"

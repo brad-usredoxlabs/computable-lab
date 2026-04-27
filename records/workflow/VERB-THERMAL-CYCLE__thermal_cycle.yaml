@@ -4,3 +4,10 @@ id: VERB-THERMAL-CYCLE
 canonical: thermal_cycle
 label: Thermal Cycle
 domain: thermal
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true
+  - name: program
+    derivedFrom: { input: programRef, fn: program_id }
+    required: true

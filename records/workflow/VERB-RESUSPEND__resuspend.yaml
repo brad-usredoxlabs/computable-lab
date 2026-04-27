@@ -4,6 +4,10 @@ id: VERB-RESUSPEND
 canonical: resuspend
 label: Resuspend
 domain: sample_prep
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true
 broaderVerbRefs:
   - kind: record
     type: verb-definition

@@ -28,8 +28,14 @@ roles:
       allowedMaterialIds:
         - buffer
 parameters: []
+phases:
+  - id: prep
+    label: Dilution Preparation
+    ordinal: 1
+    templateRef: PHASE-PREPARATION
 steps:
   - stepId: step-1
+    phaseId: prep
     kind: add_material
     label: Add diluent to destination plate wells B1-B10
     target:
@@ -51,6 +57,7 @@ steps:
       materialRole: diluent
     volume_uL: 180
   - stepId: step-2
+    phaseId: prep
     kind: transfer
     label: Transfer stock to first dilution well
     source:
@@ -67,6 +74,7 @@ steps:
           - B1
     volume_uL: 20
   - stepId: step-3
+    phaseId: prep
     kind: transfer
     label: Serial transfer from B1 to B2
     source:
@@ -83,6 +91,7 @@ steps:
           - B2
     volume_uL: 20
   - stepId: step-4
+    phaseId: prep
     kind: transfer
     label: Serial transfer from B2 to B3
     source:
@@ -99,6 +108,7 @@ steps:
           - B3
     volume_uL: 20
   - stepId: step-5
+    phaseId: prep
     kind: transfer
     label: Serial transfer from B3 to B4
     source:
@@ -115,6 +125,7 @@ steps:
           - B4
     volume_uL: 20
   - stepId: step-6
+    phaseId: prep
     kind: transfer
     label: Serial transfer from B4 to B5
     source:
@@ -131,6 +142,7 @@ steps:
           - B5
     volume_uL: 20
   - stepId: step-7
+    phaseId: prep
     kind: transfer
     label: Serial transfer from B5 to B6
     source:
@@ -147,6 +159,7 @@ steps:
           - B6
     volume_uL: 20
   - stepId: step-8
+    phaseId: prep
     kind: transfer
     label: Serial transfer from B6 to B7
     source:
@@ -163,6 +176,7 @@ steps:
           - B7
     volume_uL: 20
   - stepId: step-9
+    phaseId: prep
     kind: transfer
     label: Serial transfer from B7 to B8
     source:
@@ -179,6 +193,7 @@ steps:
           - B8
     volume_uL: 20
   - stepId: step-10
+    phaseId: prep
     kind: transfer
     label: Serial transfer from B8 to B9
     source:
@@ -195,6 +210,7 @@ steps:
           - B9
     volume_uL: 20
   - stepId: step-11
+    phaseId: prep
     kind: transfer
     label: Serial transfer from B9 to B10
     source:

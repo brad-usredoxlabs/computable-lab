@@ -4,3 +4,10 @@ id: VERB-IMAGE
 canonical: image
 label: Image
 domain: analytical_readout
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true
+  - name: imagingMode
+    derivedFrom: { input: mode, fn: modality }
+    required: true

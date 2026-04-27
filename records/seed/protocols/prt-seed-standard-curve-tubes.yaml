@@ -26,8 +26,14 @@ roles:
       allowedMaterialIds:
         - buffer
 parameters: []
+phases:
+  - id: prep
+    label: Standard Curve Preparation
+    ordinal: 1
+    templateRef: PHASE-PREPARATION
 steps:
   - stepId: step-1
+    phaseId: prep
     kind: add_material
     label: Add buffer to positions A1-A4
     target:
@@ -43,6 +49,7 @@ steps:
       materialRole: buffer
     volume_uL: 900
   - stepId: step-2
+    phaseId: prep
     kind: add_material
     label: Add stock to A1
     target:
@@ -55,6 +62,7 @@ steps:
       materialRole: standard_stock
     volume_uL: 100
   - stepId: step-3
+    phaseId: prep
     kind: transfer
     label: Transfer from A1 to A2
     source:
@@ -71,6 +79,7 @@ steps:
           - A2
     volume_uL: 100
   - stepId: step-4
+    phaseId: prep
     kind: transfer
     label: Transfer from A2 to A3
     source:
@@ -87,6 +96,7 @@ steps:
           - A3
     volume_uL: 100
   - stepId: step-5
+    phaseId: prep
     kind: transfer
     label: Transfer from A3 to A4
     source:

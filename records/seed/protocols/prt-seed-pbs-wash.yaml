@@ -20,8 +20,14 @@ roles:
       allowedMaterialIds:
         - pbs_buffer
 parameters: []
+phases:
+  - id: wash
+    label: PBS Wash
+    ordinal: 1
+    templateRef: PHASE-WASH
 steps:
   - stepId: step-1
+    phaseId: wash
     kind: add_material
     label: Add PBS to all wells
     target:
@@ -32,12 +38,14 @@ steps:
       materialRole: wash_buffer
     volume_uL: 200
   - stepId: step-2
+    phaseId: wash
     kind: incubate
     label: Incubate
     target:
       labwareRole: plate
     duration_min: 2
   - stepId: step-3
+    phaseId: wash
     kind: wash
     label: Aspirate contents
     target:

@@ -4,6 +4,13 @@ id: VERB-PELLET
 canonical: pellet
 label: Pellet
 domain: sample_prep
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true
+  - name: substance
+    derivedFrom: { input: substanceRef, fn: active_ingredients }
+    required: false
 broaderVerbRefs:
   - kind: record
     type: verb-definition

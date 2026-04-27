@@ -4,3 +4,10 @@ id: VERB-DISPENSE
 canonical: dispense
 label: Dispense
 domain: liquid_handling
+semanticInputs:
+  - name: substance
+    derivedFrom: { input: formulation, fn: active_ingredients }
+    required: false
+  - name: destRole
+    derivedFrom: { input: destination, fn: labware_role }
+    required: true

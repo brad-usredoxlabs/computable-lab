@@ -56,3 +56,33 @@ properties:
 
   notes:
     type: string
+
+  semanticInputs:
+    type: array
+    description: >
+      Identity-defining inputs on a verb invocation. The SemanticKeyBuilder
+      runs each derivedFrom.fn over the named input field and uses the
+      results to compose the verb's contribution to the event semantic key.
+    items:
+      type: object
+      additionalProperties: false
+      required: [name, derivedFrom, required]
+      properties:
+        name:
+          type: string
+          pattern: "^[a-zA-Z][a-zA-Z0-9]*$"
+          description: identity component name (e.g. substance, sourceRole)
+        derivedFrom:
+          type: object
+          additionalProperties: false
+          required: [input, fn]
+          properties:
+            input:
+              type: string
+              description: name of the field on the verb invocation
+            fn:
+              type: string
+              pattern: "^[a-z][a-z_]*$"
+              description: name of a registered derivation function (snake_case)
+        required:
+          type: boolean

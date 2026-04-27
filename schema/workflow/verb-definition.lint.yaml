@@ -1,0 +1,34 @@
+# Lint rules for VerbDefinition records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/verb-definition.schema.yaml"
+
+# Intended cross-array rules (pending DSL support):
+#
+#   semantic-input-name-unique-within-verb
+#     When semanticInputs is present, every semanticInputs[].name value
+#     must be unique within the verb. Severity: error. Cannot be
+#     expressed in the current scalar DSL; enforced in the
+#     VerbDefinitionSemanticInputs.test.ts helper and at compute time
+#     by the SemanticKeyBuilder (spec-015).
+
+rules:
+- id: id-format
+  description: "id must exist and match the VERB-* pattern."
+  severity: error
+  assert:
+    op: all
+    rules:
+    - predicate: exists
+      args: ["id"]
+    - predicate: regex
+      args: ["id", "^VERB-[A-Z0-9][A-Z0-9_-]*$"]
+- id: canonical-required
+  description: "canonical must exist and be non-empty."
+  severity: error
+  assert:
+    op: all
+    rules:
+    - predicate: exists
+      args: ["canonical"]
+    - predicate: nonEmpty
+      args: ["canonical"]

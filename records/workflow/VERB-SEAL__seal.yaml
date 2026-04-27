@@ -4,3 +4,7 @@ id: VERB-SEAL
 canonical: seal
 label: Seal
 domain: manual
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true

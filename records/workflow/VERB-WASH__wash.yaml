@@ -4,3 +4,7 @@ id: VERB-WASH
 canonical: wash
 label: Wash
 domain: liquid_handling
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true

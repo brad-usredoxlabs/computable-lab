@@ -4,3 +4,7 @@ id: VERB-LYSE
 canonical: lyse
 label: Lyse
 domain: sample_prep
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true

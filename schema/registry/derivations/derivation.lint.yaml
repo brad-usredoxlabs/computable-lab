@@ -1,0 +1,62 @@
+# Lint rules for Derivation records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/registry/derivation.schema.yaml"
+
+# Intended cross-record rules (pending DSL support):
+#
+#   canonical-unique-across-records:
+#     description: "canonical must be unique across all loaded derivation records."
+#     severity: error
+#     assert:
+#       op: all
+#       rules:
+#       - predicate: exists
+#         args: ["canonical"]
+#       - predicate: regex
+#         args: ["canonical", "^[a-z][a-z_]*$"]
+#     note: >
+#       Cannot be expressed in the current scalar DSL (no cross-record
+#       uniqueness).  Enforced at compute time and in the test file
+#       (server/src/schema/DerivationSchemas.test.ts).
+#
+rules:
+- id: id-format
+  description: "id must exist and match the DRV-* pattern."
+  severity: error
+  assert:
+    op: all
+    rules:
+    - predicate: exists
+      args: ["id"]
+    - predicate: regex
+      args: ["id", "^DRV-[A-Z0-9-]+$"]
+- id: canonical-format
+  description: "canonical must exist and be snake_case."
+  severity: error
+  assert:
+    op: all
+    rules:
+    - predicate: exists
+      args: ["canonical"]
+    - predicate: regex
+      args: ["canonical", "^[a-z][a-z_]*$"]
+- id: inputType-allowed
+  description: "inputType must be one of the five allowed values."
+  severity: error
+  assert:
+    op: all
+    rules:
+    - predicate: exists
+      args: ["inputType"]
+    - predicate: in
+      args: ["inputType", ["formulation", "labware-instance", "program", "substance", "string"]]
+- id: returnType-allowed
+  description: "returnType must be one of the two allowed values."
+  severity: error
+  assert:
+    op: all
+    rules:
+    - predicate: exists
+      args: ["returnType"]
+    - predicate: in
+      args: ["returnType", ["string", "string-multiset"]]

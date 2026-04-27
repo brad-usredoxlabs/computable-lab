@@ -293,6 +293,34 @@ $defs:
               type: string
               format: date-time
 
+      semanticKey:
+        type: string
+        pattern: '^EVT-[a-z0-9-]+$'
+        description: "Deterministic identity slug for this event, derived from semanticKeyComponents."
+
+      semanticKeyComponents:
+        type: object
+        additionalProperties: false
+        required: [ verb, identity, phaseId, ordinal ]
+        properties:
+          verb:
+            type: string
+            description: "Canonical verb name (lowercase)."
+          identity:
+            type: object
+            description: "Keyed by semanticInputs[].name from the verb declaration; values may be a string or sorted multiset."
+            additionalProperties:
+              oneOf:
+                - { type: string }
+                - { type: array, items: { type: string } }
+          phaseId:
+            type: string
+            description: "Id of the phase this event belongs to."
+          ordinal:
+            type: integer
+            minimum: 1
+            description: "1-based ordinal among events within the same phase that share the same (verb, identity) tuple."
+
   Labware:
     type: object
     description: "A labware (plate, tube rack, reservoir, etc.) used in the event graph."

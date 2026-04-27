@@ -4,3 +4,7 @@ id: VERB-CENTRIFUGE
 canonical: centrifuge
 label: Centrifuge
 domain: sample_prep
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true

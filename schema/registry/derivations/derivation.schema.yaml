@@ -1,0 +1,55 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/registry/derivation.schema.yaml"
+title: "Derivation"
+description: >
+  Named derivation function record.  A derivation is a pure function that
+  extracts identity components from verb invocation inputs (e.g.,
+  active_ingredients(formulation) returns the sorted multiset of active
+  substances).
+
+type: object
+additionalProperties: false
+
+required:
+- kind
+- id
+- canonical
+- description
+- inputType
+- returnType
+
+properties:
+  kind:
+    const: "derivation"
+
+  id:
+    type: string
+    pattern: '^DRV-[A-Z0-9-]+$'
+    description: "Derivation identifier (DRV-*)."
+
+  canonical:
+    type: string
+    pattern: '^[a-z][a-z_]*$'
+    description: "Lowercase snake_case canonical name for cross-record identity."
+
+  description:
+    type: string
+    minLength: 1
+    description: "One- to three-sentence description of the derivation."
+
+  inputType:
+    type: string
+    enum:
+    - formulation
+    - labware-instance
+    - program
+    - substance
+    - string
+    description: "The kind of input this derivation function accepts."
+
+  returnType:
+    type: string
+    enum:
+    - string
+    - string-multiset
+    description: "The kind of value this derivation function returns."

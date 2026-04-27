@@ -4,3 +4,7 @@ id: VERB-UNSEAL
 canonical: unseal
 label: Unseal
 domain: manual
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true

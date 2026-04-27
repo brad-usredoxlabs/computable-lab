@@ -4,3 +4,7 @@ id: VERB-SONICATE
 canonical: sonicate
 label: Sonicate
 domain: sample_prep
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true

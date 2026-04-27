@@ -4,3 +4,7 @@ id: VERB-LABEL
 canonical: label
 label: Label
 domain: manual
+semanticInputs:
+  - name: targetRole
+    derivedFrom: { input: target, fn: labware_role }
+    required: true

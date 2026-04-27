@@ -4,3 +4,10 @@ id: VERB-ASPIRATE
 canonical: aspirate
 label: Aspirate
 domain: liquid_handling
+semanticInputs:
+  - name: substance
+    derivedFrom: { input: formulation, fn: active_ingredients }
+    required: false
+  - name: sourceRole
+    derivedFrom: { input: source, fn: labware_role }
+    required: true

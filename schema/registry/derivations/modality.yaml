@@ -1,0 +1,7 @@
+$schema: https://computable-lab.com/schema/computable-lab/registry/derivation.schema.yaml
+kind: derivation
+id: DRV-MODALITY
+canonical: modality
+description: For verbs with a modality field (read, image, measure). Returns the raw modality value (e.g. `absorbance`, `fluorescence`, `brightfield`).
+inputType: string
+returnType: string
