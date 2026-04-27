@@ -535,7 +535,6 @@ $defs:
   # -------------------------
   ProtocolStep:
     type: object
-    additionalProperties: false
     required: [ stepId, kind ]
     properties:
       stepId:
@@ -582,7 +581,7 @@ $defs:
   # -------------------------
   StepAddMaterial:
     type: object
-    additionalProperties: false
+    
     required: [ kind, target, wells, material, volume_uL ]
     properties:
       kind: { const: "add_material" }
@@ -609,7 +608,7 @@ $defs:
 
   StepTransfer:
     type: object
-    additionalProperties: false
+    
     required: [ kind, source, target, volume_uL ]
     properties:
       kind: { const: "transfer" }
@@ -636,7 +635,7 @@ $defs:
 
   StepMix:
     type: object
-    additionalProperties: false
+    
     required: [ kind, target, wells ]
     properties:
       kind: { const: "mix" }
@@ -652,7 +651,7 @@ $defs:
 
   StepWash:
     type: object
-    additionalProperties: false
+    
     required: [ kind, target, wells, cycles ]
     properties:
       kind: { const: "wash" }
@@ -668,7 +667,7 @@ $defs:
 
   StepIncubate:
     type: object
-    additionalProperties: false
+    
     required: [ kind, target, duration_min ]
     properties:
       kind: { const: "incubate" }
@@ -686,7 +685,7 @@ $defs:
 
   StepRead:
     type: object
-    additionalProperties: false
+    
     required: [ kind, target, modality ]
     properties:
       kind: { const: "read" }
@@ -715,7 +714,7 @@ $defs:
 
   StepHarvest:
     type: object
-    additionalProperties: false
+    
     required: [ kind, source, wells ]
     properties:
       kind: { const: "harvest" }
@@ -736,7 +735,7 @@ $defs:
 
   StepOther:
     type: object
-    additionalProperties: false
+    
     required: [ kind, description ]
     properties:
       kind: { const: "other" }

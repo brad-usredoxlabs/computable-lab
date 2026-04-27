@@ -32,6 +32,12 @@ form:
     - path: "$.description"
       widget: "markdown"
       label: "Description"
+  - title: "Phases"
+    collapsible: true
+    fields:
+    - path: "$.phases"
+      widget: "array"
+      label: "Phases"
   - title: "Protocol Steps"
     collapsible: true
     fields:

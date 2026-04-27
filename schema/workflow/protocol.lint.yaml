@@ -24,6 +24,24 @@ schemaId: "https://computable-lab.com/schema/computable-lab/protocol.schema.yaml
 #     set so runs know which material-derivation flavor to emit.
 #     Severity: warning.
 #
+#   phase-id-unique
+#     Within a single protocol, all phases[].id values must be unique.
+#     Severity: error.
+#
+#   phase-ordinals-contiguous
+#     When phases has N items, the set of phases[*].ordinal values must
+#     equal {1, 2, ..., N} exactly. No gaps, no duplicates.
+#     Severity: error.
+#
+#   step-phase-id-resolves
+#     If steps[].phaseId is present, it must equal one of the protocol's
+#     declared phases[*].id values. Severity: error.
+#
+#   phase-template-ref-format
+#     If phases[].templateRef is present, it must match the pattern
+#     ^PHASE-[A-Z0-9-]+$. (Cross-record existence of the referenced
+#     phase-template is a separate concern.) Severity: error.
+#
 # These rules require quantification over arrays and path-to-path comparison,
 # which the current predicate DSL (exists/nonEmpty/regex/equals/in/all/any/not)
 # does not yet support. Track DSL extension separately; do not hard-code these
