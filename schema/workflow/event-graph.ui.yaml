@@ -1,0 +1,66 @@
+# UI specification for Event Graph records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml"
+
+display:
+  titleField: "$.name"
+  subtitleField: "$.id"
+  icon: "event-graph"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "Record ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+  - title: "Basic Information"
+    fields:
+    - path: "$.name"
+      widget: "text"
+      label: "Name"
+    - path: "$.description"
+      widget: "textarea"
+      label: "Description"
+  - title: "Events"
+    collapsible: true
+    fields:
+    - path: "$.events"
+      widget: "array"
+      label: "Events"
+  - title: "Labwares"
+    collapsible: true
+    fields:
+    - path: "$.labwares"
+      widget: "array"
+      label: "Labwares"
+  - title: "Debug"
+    collapsible: true
+    description: "Semantic key information for this event graph."
+    fields:
+    - path: "$.events[*].semanticKey"
+      widget: "text"
+      label: "Event Semantic Keys"
+      description: "Semantic key for each event (if present)."
+    - path: "$.events[*].semanticKeyComponents"
+      widget: "object"
+      label: "Event Semantic Key Components"
+      description: "Components used to derive each event's semantic key."
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "140px"
+  - path: "$.name"
+    label: "Name"
+  - path: "$.status"
+    label: "Status"
+    width: "100px"

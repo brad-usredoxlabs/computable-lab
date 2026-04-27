@@ -21,16 +21,19 @@ import type { ProjectionRequest } from './ProtocolIdeProjectionContracts.js';
 // ---------------------------------------------------------------------------
 
 function makeMockStore(
-  getResponse: RecordEnvelope | null = null,
+  records: Map<string, RecordEnvelope> = new Map(),
   updateResult: { success: boolean; error?: string } = { success: true },
 ): RecordStore {
   return {
-    get: vi.fn().mockResolvedValue(getResponse),
+    get: vi.fn(async (recordId: string) => records.get(recordId) ?? null),
     getByPath: vi.fn().mockResolvedValue(null),
     getWithValidation: vi.fn().mockResolvedValue({ success: true }),
     list: vi.fn().mockResolvedValue([]),
     create: vi.fn().mockResolvedValue({ success: true }),
-    update: vi.fn().mockResolvedValue(updateResult),
+    update: vi.fn(async ({ envelope }: { envelope: RecordEnvelope; message: string }) => {
+      records.set(envelope.recordId, envelope as RecordEnvelope);
+      return updateResult;
+    }),
     delete: vi.fn().mockResolvedValue({ success: true }),
     validate: vi.fn().mockResolvedValue({ valid: true }),
     lint: vi.fn().mockResolvedValue({ valid: true }),
@@ -86,6 +89,39 @@ function makeValidRequest(overrides?: Partial<ProjectionRequest>): ProjectionReq
   };
 }
 
+/**
+ * Build a mock store pre-populated with session + extracted text record.
+ */
+function makeMockStoreWithSession(session: RecordEnvelope): RecordStore {
+  const records = new Map<string, RecordEnvelope>();
+  records.set(session.recordId, session);
+  // Add extracted text record so composePipelineInput can load it
+  records.set('TEXT-001', {
+    recordId: 'TEXT-001',
+    kind: 'extracted-text',
+    payload: {
+      kind: 'extracted-text',
+      content: 'Step 1: Add 50 uL of buffer to wells B2-B4.',
+    },
+  });
+  return makeMockStore(records);
+}
+
+/**
+ * Create a pass factory that echoes input through the pipeline.
+ * This is used by tests that need to verify pipeline behavior
+ * without running the real pass chain.
+ */
+function makeEchoPassFactory(): (id: string, family: string) => Pass {
+  return (id, family) => ({
+    id,
+    family: family as Pass['family'],
+    run(args: { state: { input: Record<string, unknown> } }) {
+      return { ok: true, output: { pass_id: id } };
+    },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // (a) Successful rerun
 // ---------------------------------------------------------------------------
@@ -93,8 +129,10 @@ function makeValidRequest(overrides?: Partial<ProjectionRequest>): ProjectionReq
 describe('ProtocolIdeProjectionService — successful rerun', () => {
   it('executes a projection and returns a success response', async () => {
     const session = makeMockSession();
-    const store = makeMockStore(session);
-    const service = new ProtocolIdeProjectionService(store);
+    const store = makeMockStoreWithSession(session);
+    const service = new ProtocolIdeProjectionService(store, {} as any, {
+      passFactory: makeEchoPassFactory(),
+    });
 
     const request = makeValidRequest();
     const result = await service.executeProjection(request);
@@ -113,8 +151,10 @@ describe('ProtocolIdeProjectionService — successful rerun', () => {
 
   it('updates the session in place with latest projection data', async () => {
     const session = makeMockSession();
-    const store = makeMockStore(session);
-    const service = new ProtocolIdeProjectionService(store);
+    const store = makeMockStoreWithSession(session);
+    const service = new ProtocolIdeProjectionService(store, {} as any, {
+      passFactory: makeEchoPassFactory(),
+    });
 
     const request = makeValidRequest();
     await service.executeProjection(request);
@@ -137,8 +177,10 @@ describe('ProtocolIdeProjectionService — successful rerun', () => {
 
   it('respects overlay summary toggles — omits disabled summaries', async () => {
     const session = makeMockSession();
-    const store = makeMockStore(session);
-    const service = new ProtocolIdeProjectionService(store);
+    const store = makeMockStoreWithSession(session);
+    const service = new ProtocolIdeProjectionService(store, {} as any, {
+      passFactory: makeEchoPassFactory(),
+    });
 
     const request = makeValidRequest({
       overlaySummaryToggles: {
@@ -158,8 +200,10 @@ describe('ProtocolIdeProjectionService — successful rerun', () => {
 
   it('uses minimal toggles (all true) when no toggles provided', async () => {
     const session = makeMockSession();
-    const store = makeMockStore(session);
-    const service = new ProtocolIdeProjectionService(store);
+    const store = makeMockStoreWithSession(session);
+    const service = new ProtocolIdeProjectionService(store, {} as any, {
+      passFactory: makeEchoPassFactory(),
+    });
 
     const request = makeValidRequest({
       overlaySummaryToggles: undefined,
@@ -180,8 +224,10 @@ describe('ProtocolIdeProjectionService — successful rerun', () => {
 describe('ProtocolIdeProjectionService — in-place session updates', () => {
   it('updates updatedAt timestamp on success', async () => {
     const session = makeMockSession();
-    const store = makeMockStore(session);
-    const service = new ProtocolIdeProjectionService(store);
+    const store = makeMockStoreWithSession(session);
+    const service = new ProtocolIdeProjectionService(store, {} as any, {
+      passFactory: makeEchoPassFactory(),
+    });
 
     const request = makeValidRequest();
     await service.executeProjection(request);
@@ -198,8 +244,10 @@ describe('ProtocolIdeProjectionService — in-place session updates', () => {
 
   it('persists the latestEventGraphRef on success', async () => {
     const session = makeMockSession();
-    const store = makeMockStore(session);
-    const service = new ProtocolIdeProjectionService(store);
+    const store = makeMockStoreWithSession(session);
+    const service = new ProtocolIdeProjectionService(store, {} as any, {
+      passFactory: makeEchoPassFactory(),
+    });
 
     const request = makeValidRequest();
     await service.executeProjection(request);
@@ -213,8 +261,10 @@ describe('ProtocolIdeProjectionService — in-place session updates', () => {
 
   it('persists all summary refs when toggles are enabled', async () => {
     const session = makeMockSession();
-    const store = makeMockStore(session);
-    const service = new ProtocolIdeProjectionService(store);
+    const store = makeMockStoreWithSession(session);
+    const service = new ProtocolIdeProjectionService(store, {} as any, {
+      passFactory: makeEchoPassFactory(),
+    });
 
     const request = makeValidRequest({
       overlaySummaryToggles: {
@@ -244,8 +294,8 @@ describe('ProtocolIdeProjectionService — in-place session updates', () => {
 describe('ProtocolIdeProjectionService — graceful failure', () => {
   it('returns a failed response when pipeline throws', async () => {
     const session = makeMockSession();
-    const store = makeMockStore(session);
-    const service = new ProtocolIdeProjectionService(store, {
+    const store = makeMockStoreWithSession(session);
+    const service = new ProtocolIdeProjectionService(store, {} as any, {
       passFactory: () => {
         throw new Error('Pipeline pass failed');
       },
@@ -265,8 +315,8 @@ describe('ProtocolIdeProjectionService — graceful failure', () => {
 
   it('persists failure diagnostics to the session', async () => {
     const session = makeMockSession();
-    const store = makeMockStore(session);
-    const service = new ProtocolIdeProjectionService(store, {
+    const store = makeMockStoreWithSession(session);
+    const service = new ProtocolIdeProjectionService(store, {} as any, {
       passFactory: () => {
         throw new Error('Pipeline pass failed');
       },
@@ -290,8 +340,8 @@ describe('ProtocolIdeProjectionService — graceful failure', () => {
 
   it('keeps the session routable after failure', async () => {
     const session = makeMockSession();
-    const store = makeMockStore(session);
-    const service = new ProtocolIdeProjectionService(store, {
+    const store = makeMockStoreWithSession(session);
+    const service = new ProtocolIdeProjectionService(store, {} as any, {
       passFactory: () => {
         throw new Error('Pipeline pass failed');
       },
@@ -313,8 +363,8 @@ describe('ProtocolIdeProjectionService — graceful failure', () => {
       extractedTextRef: 'TEXT-001',
       evidenceRefs: ['cite-001'],
     });
-    const store = makeMockStore(session);
-    const service = new ProtocolIdeProjectionService(store, {
+    const store = makeMockStoreWithSession(session);
+    const service = new ProtocolIdeProjectionService(store, {} as any, {
       passFactory: () => {
         throw new Error('Pipeline pass failed');
       },
@@ -340,8 +390,8 @@ describe('ProtocolIdeProjectionService — graceful failure', () => {
 
 describe('ProtocolIdeProjectionService — session not found', () => {
   it('returns a failed response when session does not exist', async () => {
-    const store = makeMockStore(null);
-    const service = new ProtocolIdeProjectionService(store);
+    const store = makeMockStore(new Map());
+    const service = new ProtocolIdeProjectionService(store, {} as any);
 
     const request = makeValidRequest({ sessionRef: 'PIS-nonexistent' });
     const result = await service.executeProjection(request);
@@ -361,13 +411,15 @@ describe('ProtocolIdeProjectionService — session not found', () => {
 
 describe('ProtocolIdeProjectionService — wrong record kind', () => {
   it('returns a failed response when the record is not a protocol-ide-session', async () => {
-    const store = makeMockStore({
-      kind: 'some-other-kind',
-      recordId: 'PIS-test-001',
-      payload: { kind: 'some-other-kind' },
-      meta: { createdAt: new Date().toISOString() },
-    });
-    const service = new ProtocolIdeProjectionService(store);
+    const store = makeMockStore(new Map([
+      ['PIS-test-001', {
+        kind: 'some-other-kind',
+        recordId: 'PIS-test-001',
+        payload: { kind: 'some-other-kind' },
+        meta: { createdAt: new Date().toISOString() },
+      }],
+    ]));
+    const service = new ProtocolIdeProjectionService(store, {} as any);
 
     const request = makeValidRequest();
     const result = await service.executeProjection(request);
@@ -384,15 +436,15 @@ describe('ProtocolIdeProjectionService — wrong record kind', () => {
 describe('ProtocolIdeProjectionService — rolling issue summary', () => {
   it('includes the rolling issue summary in the pipeline input', async () => {
     const session = makeMockSession();
-    const store = makeMockStore(session);
+    const store = makeMockStoreWithSession(session);
 
     let capturedInput: Record<string, unknown> | undefined;
-    const service = new ProtocolIdeProjectionService(store, {
+    const service = new ProtocolIdeProjectionService(store, {} as any, {
       passFactory: (id, family) => ({
         id,
         family: family as Pass['family'],
         run(args: { state: { input: Record<string, unknown> } }) {
-          if (id === 'parse_local_protocol') {
+          if (id === 'protocol_extract') {
             capturedInput = args.state.input;
           }
           return { ok: true, output: { pass_id: id } };
@@ -417,15 +469,15 @@ describe('ProtocolIdeProjectionService — rolling issue summary', () => {
 describe('ProtocolIdeProjectionService — directive text threading', () => {
   it('threads the directive text through the pipeline input', async () => {
     const session = makeMockSession();
-    const store = makeMockStore(session);
+    const store = makeMockStoreWithSession(session);
 
     let capturedInput: Record<string, unknown> | undefined;
-    const service = new ProtocolIdeProjectionService(store, {
+    const service = new ProtocolIdeProjectionService(store, {} as any, {
       passFactory: (id, family) => ({
         id,
         family: family as Pass['family'],
         run(args: { state: { input: Record<string, unknown> } }) {
-          if (id === 'parse_local_protocol') {
+          if (id === 'protocol_extract') {
             capturedInput = args.state.input;
           }
           return { ok: true, output: { pass_id: id } };
@@ -450,15 +502,18 @@ describe('ProtocolIdeProjectionService — directive text threading', () => {
 describe('ProtocolIdeProjectionService — latest-state invariant', () => {
   it('always reads the latest session state (no branching)', async () => {
     const session = makeMockSession();
-    const store = makeMockStore(session);
-    const service = new ProtocolIdeProjectionService(store);
+    const store = makeMockStoreWithSession(session);
+    const service = new ProtocolIdeProjectionService(store, {} as any, {
+      passFactory: makeEchoPassFactory(),
+    });
 
     const request = makeValidRequest();
     await service.executeProjection(request);
 
-    // Should only call get once with the sessionRef
-    expect(store.get).toHaveBeenCalledTimes(1);
+    // Should call get twice: once for session, once for extracted text
+    expect(store.get).toHaveBeenCalledTimes(2);
     expect(store.get).toHaveBeenCalledWith('PIS-test-001');
+    expect(store.get).toHaveBeenCalledWith('TEXT-001');
   });
 });
 
@@ -469,8 +524,10 @@ describe('ProtocolIdeProjectionService — latest-state invariant', () => {
 describe('ProtocolIdeProjectionService — evidence map', () => {
   it('builds evidence map from source refs', async () => {
     const session = makeMockSession();
-    const store = makeMockStore(session);
-    const service = new ProtocolIdeProjectionService(store);
+    const store = makeMockStoreWithSession(session);
+    const service = new ProtocolIdeProjectionService(store, {} as any, {
+      passFactory: makeEchoPassFactory(),
+    });
 
     const request = makeValidRequest({
       sourceRefs: [
@@ -494,10 +551,10 @@ describe('ProtocolIdeProjectionService — evidence map', () => {
 describe('ProtocolIdeProjectionService — pipeline diagnostics', () => {
   it('converts pipeline diagnostics to compact format', async () => {
     const session = makeMockSession();
-    const store = makeMockStore(session);
+    const store = makeMockStoreWithSession(session);
 
     // Create a pass that emits diagnostics
-    const service = new ProtocolIdeProjectionService(store, {
+    const service = new ProtocolIdeProjectionService(store, {} as any, {
       passFactory: (id, family) => ({
         id,
         family: family as Pass['family'],
@@ -521,7 +578,7 @@ describe('ProtocolIdeProjectionService — pipeline diagnostics', () => {
     const request = makeValidRequest();
     const result = await service.executeProjection(request);
 
-    expect(result.diagnostics).toHaveLength(6); // 6 passes, each emits one warning
+    expect(result.diagnostics).toHaveLength(8); // 8 passes, each emits one warning
     for (const diag of result.diagnostics) {
       expect(diag.severity).toBe('warning');
       expect(diag.title).toBe('WELL_COUNT_MISMATCH');

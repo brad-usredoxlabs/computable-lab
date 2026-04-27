@@ -1,0 +1,77 @@
+# Lint rules for ProtocolIdeSession records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/workflow/protocol-ide-session.schema.yaml"
+
+rules:
+- id: comment-has-anchor
+  title: "comment-has-anchor"
+  description: >
+    Every feedback comment must have at least one anchor.
+    Comments without anchors are unactionable and should be rejected.
+  severity: error
+  scope: record
+  assert:
+    op: all
+    predicates:
+    - predicate: nonEmpty
+      args: ["feedbackComments"]
+    - predicate: all
+      args:
+      - predicate: nonEmpty
+        args: ["feedbackComments[*].anchors"]
+  message:
+    template: "Every feedback comment must have at least one anchor"
+
+- id: node-anchor-key-format
+  title: "node-anchor-key-format"
+  description: >
+    When an anchor's kind is 'node', its semanticKey must match the
+    stable event-graph key pattern ^EVT-[a-z0-9-]+$.
+  severity: error
+  scope: record
+  assert:
+    op: all
+    predicates:
+    - predicate: nonEmpty
+      args: ["feedbackComments"]
+    - predicate: all
+      args:
+      - predicate: any
+        predicates:
+        - predicate: not
+          args:
+          - predicate: exists
+            args: ["feedbackComments[*].anchors[*].kind"]
+        - predicate: equals
+          args:
+            path: "feedbackComments[*].anchors[*].kind"
+            value: "node"
+        - predicate: regex
+          args:
+            path: "feedbackComments[*].anchors[*].semanticKey"
+            pattern: '^EVT-[a-z0-9-]+$'
+  message:
+    template: "Node anchor semanticKey must match ^EVT-[a-z0-9-]+$"
+
+- id: source-backup-recommended
+  title: "source-backup-recommended"
+  description: >
+    When a comment has only node anchors (no source anchor), surface a
+    warning recommending a source citation as backup.
+    NOTE: The lint engine cannot determine the comment's origin from the
+    record alone. This rule is a no-op scaffold for now. The actual signal
+    will come from a future spec that tracks whether the comment was
+    originally created from a source citation.
+  severity: warning
+  scope: record
+  assert:
+    op: all
+    predicates:
+    - predicate: nonEmpty
+      args: ["feedbackComments"]
+    - predicate: all
+      args:
+      - predicate: exists
+        args: ["feedbackComments[*].id"]
+  message:
+    template: "TODO: surface warning when a node-only comment lacks a source anchor (origin signal pending future spec)"

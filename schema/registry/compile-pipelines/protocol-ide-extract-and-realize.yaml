@@ -1,0 +1,49 @@
+# Protocol IDE extract-and-realize pipeline.
+# End-to-end: PDF text → extraction → lab-context → realize → expand → events.
+
+pipelineId: protocol-ide-extract-and-realize
+entrypoint: protocol-ide-extract-and-realize
+description: >
+  Protocol IDE end-to-end pipeline. Extracts protocol candidates from a PDF
+  via runChunkedExtractionService, resolves lab context from defaults +
+  directive-driven LLM override, realizes the chosen variant into a
+  local-protocol, then expands and emits events with semantic keys.
+
+passes:
+  - id: protocol_extract
+    family: parse
+    description: Extract protocol candidates from input text via the protocol extractor prompt.
+
+  - id: lab_context_resolve
+    family: normalize
+    description: Resolve lab context from defaults + LLM directive override.
+
+  - id: protocol_realize
+    family: expand
+    depends_on: [protocol_extract, lab_context_resolve]
+    description: Promote selected variant to a protocol record and build local-protocol.
+
+  - id: resolve_protocol_ref
+    family: disambiguate
+    depends_on: [protocol_realize]
+    description: Load the canonical protocol referenced by the local-protocol's inherits_from.
+
+  - id: validate_local_protocol
+    family: validate
+    depends_on: [resolve_protocol_ref]
+    description: Ajv-validate the local-protocol payload.
+
+  - id: expand_local_customizations
+    family: expand
+    depends_on: [validate_local_protocol]
+    description: Merge customizations onto the canonical protocol.
+
+  - id: project_local_expanded_protocol
+    family: project
+    depends_on: [expand_local_customizations]
+    description: Emit the final expanded protocol structure.
+
+  - id: events_emit
+    family: project
+    depends_on: [project_local_expanded_protocol]
+    description: Produce event-graph events with semanticKey populated via SemanticKeyBuilder.

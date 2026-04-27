@@ -154,7 +154,13 @@ describe('createExtractEntitiesPass', () => {
   it('extraction diagnostics are forwarded to pass diagnostics', async () => {
     const mockExtractionService = {
       run: vi.fn().mockResolvedValue({
-        candidates: [],
+        candidates: [
+          {
+            target_kind: 'material',
+            draft: { name: 'reservoir', type: 'liquid-handling' },
+            confidence: 0.3, // low confidence
+          },
+        ],
         diagnostics: [
           {
             severity: 'warning',

@@ -157,7 +157,7 @@ describe('ProtocolIdeActionRail — freeform comment submission', () => {
     expect(mockOnSubmitComment).toHaveBeenCalledTimes(1)
     const submittedComment = mockOnSubmitComment.mock.calls[0][0]
     expect(submittedComment.text).toBe('Need to add a wash step')
-    expect(submittedComment.anchor.type).toBe('none')
+    expect(submittedComment.anchors).toEqual([])
     expect(submittedComment.id).toMatch(/^fc-/)
     expect(submittedComment.createdAt).toBeDefined()
   })
@@ -243,9 +243,9 @@ describe('ProtocolIdeActionRail — anchored comment submission', () => {
     expect(mockOnSubmitComment).toHaveBeenCalledTimes(1)
     const submittedComment = mockOnSubmitComment.mock.calls[0][0]
     expect(submittedComment.text).toBe('This step is missing a wash')
-    expect(submittedComment.anchor.type).toBe('graphNode')
-    expect(submittedComment.anchor.nodeId).toBe('PIC-002')
-    expect(submittedComment.anchor.label).toBe('Pipette too coarse')
+    expect(submittedComment.anchors).toHaveLength(1)
+    expect(submittedComment.anchors[0].kind).toBe('node')
+    expect(submittedComment.anchors[0].semanticKey).toBe('PIC-002')
   })
 
   it('defaults to "No anchor" when the anchor selector is opened', () => {

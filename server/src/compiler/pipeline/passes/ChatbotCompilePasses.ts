@@ -418,6 +418,9 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
       try {
         validated = createAiPrecompileOutputSchema().parse(parsed);
       } catch {
+        // spec-019: log raw LLM response on shape mismatch for debugging
+        const truncated = raw.slice(0, 4000);
+        console.warn(`[ai_precompile_shape_mismatch] ${truncated}`);
         return {
           ok: true,
           output: { candidateEvents: [], candidateLabwares: [], unresolvedRefs: [] } satisfies AiPrecompileOutput,

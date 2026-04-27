@@ -185,3 +185,76 @@ properties:
     type: string
     description: >
       Free-form developer notes about the session.
+
+  # ── User feedback comments ──────────────────────────────────────────
+  feedbackComments:
+    type: array
+    description: >
+      User feedback comments anchored to events, source citations, or phases.
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, body, anchors, submittedAt]
+      properties:
+        id:
+          type: string
+          description: stable identifier for this comment (caller-assigned)
+        body:
+          type: string
+          description: free-text comment body (markdown allowed)
+        anchors:
+          type: array
+          minItems: 1
+          description: >
+            One or more anchors. The first entry is the primary (drives the
+            badge label and click-to-jump behavior). Additional entries are
+            auxiliary context.
+          items:
+            oneOf:
+              - type: object
+                additionalProperties: false
+                required: [kind, semanticKey, snapshot]
+                properties:
+                  kind: { const: node }
+                  semanticKey:
+                    type: string
+                    pattern: '^EVT-[a-z0-9-]+$'
+                  instanceId:
+                    type: string
+                    description: advisory; the instance id at comment time, not authoritative
+                  snapshot:
+                    type: object
+                    description: full serialized node payload at comment time
+                    additionalProperties: true
+              - type: object
+                additionalProperties: false
+                required: [kind, documentRef, page]
+                properties:
+                  kind: { const: source }
+                  documentRef:
+                    type: string
+                    description: identifier of the source document (e.g. vendor PDF id)
+                  page:
+                    type: integer
+                    minimum: 1
+                  region:
+                    type: object
+                    additionalProperties: false
+                    properties:
+                      x: { type: number }
+                      y: { type: number }
+                      width: { type: number }
+                      height: { type: number }
+              - type: object
+                additionalProperties: false
+                required: [kind, phaseId]
+                properties:
+                  kind: { const: phase }
+                  phaseId:
+                    type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        submittedAt:
+          type: string
+          format: date-time

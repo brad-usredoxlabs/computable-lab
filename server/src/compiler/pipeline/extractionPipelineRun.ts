@@ -22,6 +22,10 @@ export interface RunExtractionPipelineArgs {
   source_artifact: { kind: 'file' | 'publication' | 'freetext'; id: string; locator?: string };
   text: string;
   recordIdPrefix?: string;
+  /** Optional target kinds the extractor should look for. */
+  target_kinds?: string[];
+  /** Optional hint object passed through to downstream passes. */
+  hint?: Record<string, unknown>;
 }
 
 /**
@@ -49,6 +53,11 @@ export async function runExtractionPipeline(args: RunExtractionPipelineArgs) {
   // Load the pipeline specification
   const spec = loadPipeline(args.pipelinePath);
   
-  // Run the pipeline
-  return runPipeline(spec, registry, { text: args.text });
+  // Run the pipeline — pass target_kinds and hint through to state so downstream
+  // passes can read them (spec-019: hint pass-through).
+  return runPipeline(spec, registry, {
+    text: args.text,
+    ...(args.target_kinds !== undefined && { target_kinds: args.target_kinds }),
+    ...(args.hint !== undefined && { hint: args.hint }),
+  });
 }

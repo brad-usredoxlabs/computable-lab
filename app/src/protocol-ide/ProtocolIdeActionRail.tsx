@@ -32,25 +32,12 @@
 
 import { useState, useCallback, useRef } from 'react'
 import type { ProtocolIdeSession } from './types'
-import type { IssueCardRef } from './ProtocolIdeGraphReviewSurface'
+import type { IssueCardRef, CommentAnchor, FeedbackComment } from './ProtocolIdeGraphReviewSurface'
+import { FeedbackCommentForm } from './FeedbackCommentForm'
 
 // ---------------------------------------------------------------------------
-// Types
+// Types (re-exported from ProtocolIdeGraphReviewSurface)
 // ---------------------------------------------------------------------------
-
-/** Anchor target for a feedback comment. */
-export type CommentAnchorTarget =
-  | { type: 'none' }
-  | { type: 'graphNode'; nodeId: string; label: string }
-  | { type: 'evidenceCitation'; citationId: string; label: string }
-
-/** A feedback comment submitted by the user. */
-export interface FeedbackComment {
-  id: string
-  text: string
-  anchor: CommentAnchorTarget
-  createdAt: string
-}
 
 /** Props for the action rail. */
 export interface ProtocolIdeActionRailProps {
@@ -108,111 +95,6 @@ function DirectiveEditor({
         placeholder="Describe what you want the protocol to do…"
         aria-label="Protocol directive"
       />
-    </section>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Feedback comment form (manages anchor state internally)
-// ---------------------------------------------------------------------------
-
-function FeedbackCommentForm({
-  text,
-  onChange,
-  onAnchorSelect,
-  onSubmit,
-  issueCards,
-}: {
-  text: string
-  onChange: (text: string) => void
-  /** Called when the user selects an anchor target. */
-  onAnchorSelect: (target: CommentAnchorTarget) => void
-  /** Called when the user submits the comment. */
-  onSubmit: () => void
-  issueCards?: IssueCardRef[]
-}): JSX.Element {
-  const [showAnchor, setShowAnchor] = useState(false)
-  const [anchorTarget, setAnchorTarget] = useState<CommentAnchorTarget>({ type: 'none' })
-
-  const handleToggleAnchor = useCallback(() => {
-    setShowAnchor((prev) => {
-      const next = !prev
-      if (next) {
-        // When opening anchor selector, default to 'none'
-        setAnchorTarget({ type: 'none' })
-        onAnchorSelect({ type: 'none' })
-      }
-      return next
-    })
-  }, [onAnchorSelect])
-
-  const handleSelectAnchor = useCallback(
-    (target: CommentAnchorTarget) => {
-      setAnchorTarget(target)
-      onAnchorSelect(target)
-    },
-    [onAnchorSelect],
-  )
-
-  return (
-    <section className="action-rail-section" data-testid="action-rail-feedback">
-      <h3 className="action-rail-section-title">Feedback Comment</h3>
-      <textarea
-        className="action-rail-comment-input"
-        data-testid="action-rail-comment-input"
-        value={text}
-        onChange={(e) => onChange(e.target.value)}
-        rows={3}
-        placeholder="What needs to change? (optional)"
-        aria-label="Feedback comment"
-      />
-
-      {/* Anchor toggle */}
-      <div className="action-rail-anchor-toggle" data-testid="action-rail-anchor-toggle">
-        <button
-          type="button"
-          className="action-rail-anchor-btn"
-          data-testid="action-rail-anchor-toggle-btn"
-          onClick={handleToggleAnchor}
-          aria-expanded={showAnchor}
-        >
-          {showAnchor ? '▲' : '▼'} Anchor to context
-        </button>
-      </div>
-
-      {/* Anchor target selector */}
-      {showAnchor && (
-        <div className="action-rail-anchor-selector" data-testid="action-rail-anchor-selector">
-          <button
-            type="button"
-            className={`action-rail-anchor-option ${anchorTarget.type === 'none' ? 'active' : ''}`}
-            data-testid="action-rail-anchor-none"
-            onClick={() => handleSelectAnchor({ type: 'none' })}
-          >
-            No anchor (freeform)
-          </button>
-          {issueCards &&
-            issueCards.map((card) => (
-              <button
-                key={card.id}
-                type="button"
-                className={`action-rail-anchor-option ${
-                  anchorTarget.type === 'graphNode' && anchorTarget.nodeId === card.id ? 'active' : ''
-                }`}
-                data-testid={`action-rail-anchor-issue-${card.id}`}
-                onClick={() =>
-                  handleSelectAnchor({
-                    type: 'graphNode',
-                    nodeId: card.id,
-                    label: card.title,
-                  })
-                }
-              >
-                {card.title}
-              </button>
-            ))}
-        </div>
-      )}
     </section>
   )
 }
@@ -292,12 +174,12 @@ export function ProtocolIdeActionRail({
   rollingIssueSummary,
   issueCards = [],
 }: ProtocolIdeActionRailProps): JSX.Element {
-  // Use a ref to track the current anchor state from the form
-  const anchorRef = useRef<CommentAnchorTarget>({ type: 'none' })
+  // Use a ref to track the current anchor array from the form
+  const anchorsRef = useRef<CommentAnchor[]>([])
 
-  // Expose a setter that the form can call to update the anchor
-  const handleAnchorSelect = useCallback((target: CommentAnchorTarget) => {
-    anchorRef.current = target
+  // Expose a setter that the form can call to update the anchors
+  const handleAnchorsChange = useCallback((newAnchors: CommentAnchor[]) => {
+    anchorsRef.current = newAnchors
   }, [])
 
   const handleCommentSubmit = useCallback(() => {
@@ -305,7 +187,7 @@ export function ProtocolIdeActionRail({
     const comment: FeedbackComment = {
       id: generateCommentId(),
       text: commentText.trim(),
-      anchor: anchorRef.current,
+      anchors: anchorsRef.current,
       createdAt: new Date().toISOString(),
     }
     onSubmitComment(comment)
@@ -330,7 +212,7 @@ export function ProtocolIdeActionRail({
       <FeedbackCommentForm
         text={commentText}
         onChange={onCommentChange}
-        onAnchorSelect={handleAnchorSelect}
+        onAnchorsChange={handleAnchorsChange}
         onSubmit={handleCommentSubmit}
         issueCards={issueCards}
       />

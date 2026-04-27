@@ -215,9 +215,9 @@ describe('MaterialCompilerService', () => {
     });
 
     expect(result.resolved.analyte.resolution).toBe('new-record');
-    expect(result.resolved.analyte.recordId).toBe('MAT-FENOFIBRATE');
-    expect(result.createdRecordIds).toContain('MAT-FENOFIBRATE');
-    expect(await store.get('MAT-FENOFIBRATE')).not.toBeNull();
+    expect(result.resolved.analyte.recordId).toBe('MAT-fenofibrate');
+    expect(result.createdRecordIds).toContain('MAT-fenofibrate');
+    expect(await store.get('MAT-fenofibrate')).not.toBeNull();
   });
 
   it('creates a missing formulation when exact semantic layers exist', async () => {

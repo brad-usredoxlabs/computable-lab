@@ -2627,7 +2627,14 @@ export const apiClient = {
    */
   async submitProtocolIdeFeedback(
     sessionId: string,
-    body: { text: string; anchor?: { type: string; nodeId?: string; citationId?: string; label?: string } },
+    body: {
+      text: string
+      anchors: Array<
+        | { kind: 'node'; semanticKey: string; instanceId?: string; snapshot?: Record<string, unknown> }
+        | { kind: 'source'; documentRef: string; page: number; region?: { x: number; y: number; width: number; height: number } }
+        | { kind: 'phase'; phaseId: string }
+      >
+    },
   ): Promise<{ success: true; commentId: string; rollingSummary: string }> {
     return request(`/protocol-ide/sessions/${encodeURIComponent(sessionId)}/feedback`, {
       method: 'POST',

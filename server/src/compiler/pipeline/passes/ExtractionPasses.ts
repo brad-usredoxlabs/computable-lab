@@ -58,6 +58,13 @@ export function createExtractorRunPass(extractor: ExtractorAdapter): Pass {
       // Call the extractor
       const result: ExtractionResult = await extractor.extract(extractionRequest);
 
+      // spec-019: log raw LLM response when zero candidates from non-empty chunk
+      if (result.candidates.length === 0 && text.length > 0) {
+        // The ExtractionResult doesn't carry the raw LLM response directly,
+        // but we log the diagnostic info so the cause is visible in logs.
+        console.warn(`[extractor_run_empty_candidates] chunk_len=${text.length} diagnostics=${JSON.stringify(result.diagnostics)}`);
+      }
+
       // Fold extractor diagnostics into pass diagnostics
       const passDiagnostics: PassDiagnostic[] = result.diagnostics.map(d => ({
         severity: d.severity,

@@ -116,6 +116,8 @@ export class ExtractionRunnerService {
         source_artifact: req.source,
         text: req.text,
         recordIdPrefix: this.deps.recordIdPrefix ?? 'XDR-run-',
+        target_kinds: [req.target_kind],
+        hint: req.hint,
       });
       const draftAssembleOutput = result.outputs.get('draft_assemble');
       if (!draftAssembleOutput) {

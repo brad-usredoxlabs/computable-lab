@@ -3,7 +3,7 @@
  * summaries for Protocol IDE sessions.
  *
  * This service is responsible for:
- * - Accepting freeform feedback comments with optional graph/source anchors
+ * - Accepting freeform feedback comments with optional anchors[]
  * - Attaching unanchored comments to the current session iteration
  * - Maintaining a system-managed rolling issue summary
  * - Making the rolling summary available to future reruns
@@ -22,26 +22,13 @@ import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 // ---------------------------------------------------------------------------
 
 /**
- * Anchor pointing to a node in the event-graph.
+ * Discriminated union of anchor kinds.
+ * Mirrors the schema from spec-016.
  */
-export interface GraphAnchor {
-  /** The event-graph node ID (e.g. "add_material-001") */
-  nodeId: string;
-  /** Optional label describing what the anchor refers to */
-  label?: string;
-}
-
-/**
- * Anchor pointing to a source document snippet.
- */
-export interface SourceAnchor {
-  /** Source document reference (e.g. vendor document ID, PDF URL) */
-  sourceRef: string;
-  /** Optional snippet or excerpt from the source */
-  snippet?: string;
-  /** Optional page or line number */
-  page?: number;
-}
+export type Anchor =
+  | { kind: 'node'; semanticKey: string; instanceId?: string; snapshot: Record<string, unknown> }
+  | { kind: 'source'; documentRef: string; page: number; region?: { x: number; y: number; width: number; height: number } }
+  | { kind: 'phase'; phaseId: string };
 
 /**
  * Severity levels for feedback comments.
@@ -57,10 +44,8 @@ export interface FeedbackComment {
   id: string;
   /** Freeform comment body */
   body: string;
-  /** Optional graph anchor */
-  graphAnchor?: GraphAnchor;
-  /** Optional source anchor */
-  sourceAnchor?: SourceAnchor;
+  /** Anchor array (replaces the old graphAnchor/sourceAnchor fields) */
+  anchors: Anchor[];
   /** Optional severity/importance */
   severity?: FeedbackSeverity;
   /** ISO 8601 timestamp of submission */
@@ -85,15 +70,22 @@ export interface RollingIssueSummary {
 // ---------------------------------------------------------------------------
 
 /**
+ * Caller-supplied anchor (snapshot is optional for node anchors;
+ * the service fills it in from the event graph).
+ */
+type CallerAnchor =
+  | { kind: 'node'; semanticKey: string; instanceId?: string; snapshot?: Record<string, unknown> }
+  | { kind: 'source'; documentRef: string; page: number; region?: { x: number; y: number; width: number; height: number } }
+  | { kind: 'phase'; phaseId: string };
+
+/**
  * Request body for submitting feedback.
  */
 export interface SubmitFeedbackRequest {
   /** Freeform comment body (required) */
   body: string;
-  /** Optional graph anchor */
-  graphAnchor?: GraphAnchor;
-  /** Optional source anchor */
-  sourceAnchor?: SourceAnchor;
+  /** Anchor array (required — must contain at least one anchor) */
+  anchors: CallerAnchor[];
   /** Optional severity */
   severity?: FeedbackSeverity;
 }
@@ -127,6 +119,27 @@ function generateFeedbackId(): string {
 }
 
 /**
+ * Build a short anchor description for inclusion in the rolling summary.
+ */
+function buildAnchorInfo(comment: FeedbackComment): string {
+  const parts: string[] = [];
+  for (const anchor of comment.anchors) {
+    switch (anchor.kind) {
+      case 'node':
+        parts.push(`[${anchor.semanticKey}]`);
+        break;
+      case 'source':
+        parts.push(`[${anchor.documentRef}:p${anchor.page}]`);
+        break;
+      case 'phase':
+        parts.push(`[phase:${anchor.phaseId}]`);
+        break;
+    }
+  }
+  return parts.join(' ');
+}
+
+/**
  * Build a rolling issue summary from a list of feedback comments.
  *
  * The summary is a simple concatenation of comment bodies with severity
@@ -144,7 +157,8 @@ function buildRollingSummary(comments: FeedbackComment[]): RollingIssueSummary {
   const lines = comments.map((c) => {
     const severityTag = c.severity ? `[${c.severity}] ` : '';
     const anchorInfo = buildAnchorInfo(c);
-    return `${severityTag}${c.body}${anchorInfo}`;
+    const anchorSuffix = anchorInfo ? ` ${anchorInfo}` : '';
+    return `${severityTag}${c.body}${anchorSuffix}`;
   });
 
   return {
@@ -155,29 +169,8 @@ function buildRollingSummary(comments: FeedbackComment[]): RollingIssueSummary {
 }
 
 /**
- * Build a short anchor description for inclusion in the rolling summary.
- */
-function buildAnchorInfo(comment: FeedbackComment): string {
-  const parts: string[] = [];
-  if (comment.graphAnchor) {
-    parts.push(
-      ` [graph:${comment.graphAnchor.nodeId}${
-        comment.graphAnchor.label ? ` (${comment.graphAnchor.label})` : ''
-      }]`,
-    );
-  }
-  if (comment.sourceAnchor) {
-    parts.push(
-      ` [source:${comment.sourceAnchor.sourceRef}${
-        comment.sourceAnchor.page ? ` p.${comment.sourceAnchor.page}` : ''
-      }]`,
-    );
-  }
-  return parts.join('');
-}
-
-/**
  * Extract feedback comments from a session envelope's payload.
+ * Skips entries that lack the new anchors[] field (malformed).
  */
 function extractCommentsFromEnvelope(
   envelope: RecordEnvelope,
@@ -187,7 +180,19 @@ function extractCommentsFromEnvelope(
   if (!Array.isArray(raw)) {
     return [];
   }
-  return raw as unknown as FeedbackComment[];
+  const comments: FeedbackComment[] = [];
+  for (const item of raw) {
+    if (
+      item === null ||
+      typeof item !== 'object' ||
+      !Array.isArray((item as Record<string, unknown>).anchors)
+    ) {
+      console.warn('Skipping malformed feedback comment (missing anchors[])');
+      continue;
+    }
+    comments.push(item as unknown as FeedbackComment);
+  }
+  return comments;
 }
 
 /**
@@ -211,6 +216,51 @@ function extractRollingSummaryFromEnvelope(
   };
 }
 
+/**
+ * Look up an event-graph snapshot by semanticKey.
+ *
+ * Reads the session's `latestEventGraphRef`, fetches that event-graph record,
+ * and finds the event whose `semanticKey` matches the requested key.
+ * Returns the event's payload as the snapshot, or null if not found.
+ */
+async function lookupEventGraphSnapshot(
+  store: RecordStore,
+  sessionId: string,
+  semanticKey: string,
+): Promise<Record<string, unknown> | null> {
+  // Fetch the session to get latestEventGraphRef
+  const sessionEnvelope = await store.get(sessionId);
+  if (!sessionEnvelope) {
+    return null;
+  }
+  const sessionPayload = sessionEnvelope.payload as Record<string, unknown>;
+  const eventGraphRef = sessionPayload.latestEventGraphRef as string | undefined;
+  if (!eventGraphRef) {
+    return null;
+  }
+
+  // Fetch the event-graph record
+  const graphEnvelope = await store.get(eventGraphRef);
+  if (!graphEnvelope) {
+    return null;
+  }
+
+  const graphPayload = graphEnvelope.payload as Record<string, unknown>;
+  const events = graphPayload.events as Array<{ semanticKey?: string; payload?: Record<string, unknown> }> | undefined;
+  if (!Array.isArray(events)) {
+    return null;
+  }
+
+  // Find the event matching the semanticKey
+  for (const event of events) {
+    if (event.semanticKey === semanticKey) {
+      return event.payload ?? null;
+    }
+  }
+
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -221,9 +271,12 @@ export class ProtocolIdeFeedbackService {
   /**
    * Submit a feedback comment for the given session.
    *
-   * - If the comment has a graph or source anchor, it is retained with that anchor.
-   * - If the comment has no anchor, it attaches to the session iteration as a whole.
+   * - If the comment has anchors, they are retained with that anchor data.
+   * - If the comment has no anchors, it attaches to the session iteration as a whole.
    * - The rolling issue summary is recomputed and persisted.
+   *
+   * For node anchors without a snapshot, the service looks up the snapshot
+   * from the session's latestEventGraphRef event-graph payload.
    *
    * @param sessionId — the Protocol IDE session ID
    * @param request — the feedback submission request
@@ -238,6 +291,11 @@ export class ProtocolIdeFeedbackService {
       throw new Error('Feedback body must be a non-empty string');
     }
 
+    // Validate anchors — must be non-empty
+    if (!request.anchors || request.anchors.length === 0) {
+      throw new Error('Feedback must include at least one anchor');
+    }
+
     // Fetch the current session
     const envelope = await this.store.get(sessionId);
     if (!envelope) {
@@ -247,12 +305,57 @@ export class ProtocolIdeFeedbackService {
     // Extract existing comments
     const existingComments = extractCommentsFromEnvelope(envelope);
 
+    // Build the anchors array, filling in snapshots for node anchors
+    const anchors: Anchor[] = [];
+    for (const callerAnchor of request.anchors) {
+        if (callerAnchor.kind === 'node') {
+          if (callerAnchor.snapshot) {
+            // Caller supplied snapshot — use it directly
+            anchors.push({
+              kind: 'node',
+              semanticKey: callerAnchor.semanticKey,
+              instanceId: callerAnchor.instanceId,
+              snapshot: callerAnchor.snapshot,
+            });
+          } else {
+            // Look up snapshot from event graph
+            const snapshot = await lookupEventGraphSnapshot(
+              this.store,
+              sessionId,
+              callerAnchor.semanticKey,
+            );
+            if (snapshot === null) {
+              throw new Error(
+                `no event-graph node found for semanticKey ${callerAnchor.semanticKey}`,
+              );
+            }
+            anchors.push({
+              kind: 'node',
+              semanticKey: callerAnchor.semanticKey,
+              instanceId: callerAnchor.instanceId,
+              snapshot,
+            });
+          }
+        } else if (callerAnchor.kind === 'source') {
+          anchors.push({
+            kind: 'source',
+            documentRef: callerAnchor.documentRef,
+            page: callerAnchor.page,
+            region: callerAnchor.region,
+          });
+        } else if (callerAnchor.kind === 'phase') {
+          anchors.push({
+            kind: 'phase',
+            phaseId: callerAnchor.phaseId,
+          });
+        }
+    }
+
     // Create the new comment
     const newComment: FeedbackComment = {
       id: generateFeedbackId(),
       body: request.body.trim(),
-      graphAnchor: request.graphAnchor,
-      sourceAnchor: request.sourceAnchor,
+      anchors,
       severity: request.severity,
       submittedAt: new Date().toISOString(),
     };

@@ -45,7 +45,7 @@ const SESSION_STATUS_PROJECTION_FAILED = 'projection_failed' as const;
 
 const PIPELINE_PATH = path.join(
   __dirname,
-  '../../../schema/registry/compile-pipelines/local-protocol-compile.yaml',
+  '../../../schema/registry/compile-pipelines/protocol-ide-extract-and-realize.yaml',
 );
 
 // ---------------------------------------------------------------------------
@@ -85,11 +85,10 @@ function buildFailureDiagnostic(error: unknown): CompactDiagnostic {
 //
 // These passes echo the input through the pipeline so that the projection
 // service can exercise the full pipeline wiring without requiring real
-// pass implementations.  In production, the Protocol IDE shell would
-// supply the real pass registry.
+// pass implementations.  Used only in tests.
 // ---------------------------------------------------------------------------
 
-function createEchoPass(id: string, family: string): Pass {
+export function createEchoPass(id: string, family: string): Pass {
   return {
     id,
     family: family as Pass['family'],
@@ -109,14 +108,54 @@ function createEchoPass(id: string, family: string): Pass {
 // Service
 // ---------------------------------------------------------------------------
 
+/**
+ * Dependencies required by the real pass chain.
+ */
+export interface ProtocolIdeProjectionServiceDeps {
+  /** Record store for reading/writing records */
+  recordStore: RecordStore;
+  /** Chunked extraction service */
+  runChunkedExtraction: (
+    req: { target_kind: string; text: string; source: { kind: string; id: string } },
+  ) => Promise<{ candidates: unknown[]; diagnostics?: unknown[] }>;
+  /** Promotion compile runner */
+  runPromotionCompile: (args: {
+    pipelinePath: string;
+    candidate: { target_kind: string; draft: unknown; confidence: number };
+    source_draft_id: string;
+    recordIdPrefix?: string;
+  }) => Promise<{ ok: boolean; canonicalRecord?: unknown; diagnostics: Array<{ severity: string; code: string; message: string; pass_id?: string }> }>;
+  /** LLM client for lab-context resolve */
+  llmClient: {
+    complete: (args: { prompt: string; maxTokens?: number }) => Promise<string>;
+  };
+  /** Ajv validator for local-protocol validation */
+  ajvValidator: {
+    validate: (payload: unknown, schemaId: string) => { valid: boolean; errors: Array<{ path: string; message: string }> };
+  };
+  /** Build semantic key function */
+  buildSemanticKey: (args: {
+    verb: { canonical: string; semanticInputs?: Array<{ name: string; derivedFrom: { input: string; fn: string }; required: boolean }>; };
+    resolvedInputs: Record<string, unknown>;
+    phaseId: string;
+    ordinal: number;
+    derivations: Record<string, unknown>;
+  }) => { ok: boolean; result?: { semanticKey: string; semanticKeyComponents: Record<string, unknown> }; reason?: string };
+  /** Derivations map */
+  derivations: Record<string, unknown>;
+  /** Load verb definition by canonical name */
+  loadVerbDefinition: (canonical: string) => Promise<{ canonical: string; semanticInputs?: Array<{ name: string; derivedFrom: { input: string; fn: string }; required: boolean }> } | null>;
+}
+
 export interface ProtocolIdeProjectionServiceOptions {
   /** Optional custom pass factory for testing */
-  passFactory?: (id: string, family: string) => Pass;
+  passFactory?: (id: string, family: string) => Pass | Promise<Pass>;
 }
 
 export class ProtocolIdeProjectionService {
   constructor(
     private store: RecordStore,
+    private deps: ProtocolIdeProjectionServiceDeps,
     private options: ProtocolIdeProjectionServiceOptions = {},
   ) {}
 
@@ -170,13 +209,13 @@ export class ProtocolIdeProjectionService {
     });
 
     // 3. Compose pipeline input
-    const pipelineInput = this.composePipelineInput(sessionEnvelope, request);
+    const pipelineInput = await this.composePipelineInput(sessionEnvelope, request);
 
     // 4. Run the pipeline
     let pipelineResult: Awaited<ReturnType<typeof runLocalProtocolPipeline>>;
     try {
-      const passFactory = this.options.passFactory ?? createEchoPass;
-      const passes = this.buildStubPasses();
+      const passFactory = this.options.passFactory ?? this.buildRealPasses.bind(this);
+      const passes = await this.buildPasses(passFactory);
       pipelineResult = await runLocalProtocolPipeline({
         pipelinePath: PIPELINE_PATH,
         passes,
@@ -200,11 +239,22 @@ export class ProtocolIdeProjectionService {
   /**
    * Compose pipeline input from session state and projection request.
    */
-  private composePipelineInput(
+  private async composePipelineInput(
     sessionEnvelope: RecordEnvelope,
     request: ProjectionRequest,
-  ): Record<string, unknown> {
+  ): Promise<Record<string, unknown>> {
     const payload = sessionEnvelope.payload as Record<string, unknown>;
+
+    // Load extracted text from the extractedTextRef record
+    let text = '';
+    const extractedTextRef = payload.extractedTextRef as string | undefined;
+    if (extractedTextRef) {
+      const textEnvelope = await this.store.get(extractedTextRef);
+      if (textEnvelope && textEnvelope.payload) {
+        const textPayload = textEnvelope.payload as Record<string, unknown>;
+        text = (textPayload.content as string) ?? (textPayload.text as string) ?? '';
+      }
+    }
 
     return {
       // Source workspace refs from the session
@@ -234,25 +284,98 @@ export class ProtocolIdeProjectionService {
 
       // Timestamp for provenance
       projectionTimestamp: new Date().toISOString(),
+
+      // Text content for protocol_extract
+      text,
     };
   }
 
   /**
-   * Build a set of stub passes for the local-protocol pipeline.
-   * These echo input through the pipeline for projection purposes.
+   * Build the real pass chain for the protocol-ide-extract-and-realize pipeline.
    */
-  private buildStubPasses(): Pass[] {
-    const passFactory = this.options.passFactory ?? createEchoPass;
+  private async buildRealPasses(id: string, family: string): Promise<Pass> {
+    // Import pass factories dynamically
+    switch (id) {
+      case 'protocol_extract': {
+        const { createProtocolExtractPass } = await import('../compiler/pipeline/passes/ProtocolExtractPass.js');
+        return createProtocolExtractPass({
+          runChunkedExtraction: this.deps.runChunkedExtraction,
+          recordStore: this.deps.recordStore,
+          onChunkProgress: (event) => {
+            // NOTE: No existing SSE/streaming wire exists for the Protocol IDE.
+            // This callback logs progress to the server console.
+            // A dedicated streaming wire (e.g. Server-Sent Events) should be
+            // built in a follow-on spec to surface per-chunk progress to the
+            // Protocol IDE frontend.
+            console.log('[protocol_extract_progress]', event);
+          },
+        });
+      }
+      case 'lab_context_resolve': {
+        const { createLabContextResolvePass } = await import('../compiler/pipeline/passes/LabContextResolvePass.js');
+        return createLabContextResolvePass({
+          llmClient: this.deps.llmClient,
+        });
+      }
+      case 'protocol_realize': {
+        const { createProtocolRealizePass } = await import('../compiler/pipeline/passes/ProtocolRealizePass.js');
+        return createProtocolRealizePass({
+          recordStore: this.deps.recordStore,
+          runPromotionCompile: this.deps.runPromotionCompile,
+        });
+      }
+      case 'resolve_protocol_ref': {
+        const { createResolveProtocolRefPass } = await import('../compiler/pipeline/passes/LocalProtocolPasses.js');
+        return createResolveProtocolRefPass({
+          recordStore: this.deps.recordStore,
+        });
+      }
+      case 'validate_local_protocol': {
+        const { createValidateLocalProtocolPass } = await import('../compiler/pipeline/passes/LocalProtocolPasses.js');
+        return createValidateLocalProtocolPass({
+          ajvValidator: this.deps.ajvValidator,
+        });
+      }
+      case 'expand_local_customizations': {
+        const { createExpandLocalCustomizationsPass } = await import('../compiler/pipeline/passes/LocalProtocolPasses.js');
+        return createExpandLocalCustomizationsPass({});
+      }
+      case 'project_local_expanded_protocol': {
+        const { createProjectLocalExpandedProtocolPass } = await import('../compiler/pipeline/passes/LocalProtocolPasses.js');
+        return createProjectLocalExpandedProtocolPass({});
+      }
+      case 'events_emit': {
+        const { createEventsEmitPass } = await import('../compiler/pipeline/passes/EventsEmitPass.js');
+        return createEventsEmitPass({
+          recordStore: this.deps.recordStore,
+          buildSemanticKey: this.deps.buildSemanticKey,
+          derivations: this.deps.derivations,
+          loadVerbDefinition: this.deps.loadVerbDefinition,
+        });
+      }
+      default:
+        // Fallback to echo pass for unknown pass ids
+        return createEchoPass(id, family);
+    }
+  }
+
+  /**
+   * Build a set of passes using the provided factory.
+   */
+  private async buildPasses(passFactory: (id: string, family: string) => Promise<Pass>): Promise<Pass[]> {
     const passIds = [
-      'parse_local_protocol',
-      'normalize_local_protocol',
+      'protocol_extract',
+      'lab_context_resolve',
+      'protocol_realize',
       'resolve_protocol_ref',
       'validate_local_protocol',
       'expand_local_customizations',
       'project_local_expanded_protocol',
+      'events_emit',
     ];
-    const families = ['parse', 'normalize', 'disambiguate', 'validate', 'expand', 'project'];
-    return passIds.map((id, i) => passFactory(id, families[i]));
+    const families = ['parse', 'normalize', 'expand', 'disambiguate', 'validate', 'expand', 'project', 'project'];
+    const promises = passIds.map((id, i) => passFactory(id, families[i]));
+    return Promise.all(promises);
   }
 
   /**

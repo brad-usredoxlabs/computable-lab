@@ -105,13 +105,13 @@ function canonicalName(value: string): string {
   return value.trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
-function slugify(value: string): string {
+export function slugify(value: string): string {
   return value
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, '-')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .replace(/-{2,}/g, '-')
-    .slice(0, 48) || 'UNKNOWN';
+    .slice(0, 128) || 'unknown';
 }
 
 function resolveMaterialPolicy(

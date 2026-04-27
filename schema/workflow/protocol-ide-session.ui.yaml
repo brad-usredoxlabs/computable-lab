@@ -125,6 +125,15 @@ form:
     - path: "$.notes"
       widget: "textarea"
       label: "Notes"
+  - title: "Feedback Comments"
+    fields:
+    - path: "$.feedbackComments"
+      widget: "feedback-comments"
+      label: "Comments"
+      description: >
+        User feedback comments anchored to events, source citations, or phases.
+        Each comment shows its body and primary anchor as a badge; auxiliary
+        anchors render as small icons.
 
 list:
   columns:

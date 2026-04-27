@@ -43,6 +43,14 @@ import {
 import type { TerminalArtifacts } from '../../compiler/pipeline/CompileContracts.js';
 import type { LabStateSnapshot } from '../../compiler/state/LabState.js';
 import { getCuratedVendorRegistry } from '../../registry/CuratedVendorRegistry.js';
+import { runPromotionCompile } from '../../compiler/pipeline/PromotionCompileRunner.js';
+import { buildSemanticKey } from '../../protocol/SemanticKeyBuilder.js';
+import { derivations } from '../../protocol/derivations/index.js';
+import { OpenAICompatibleExtractor } from '../../extract/OpenAICompatibleExtractor.js';
+import { ExtractionRunnerService } from '../../extract/ExtractionRunnerService.js';
+import { MentionCandidatePopulator } from '../../extract/MentionCandidatePopulator.js';
+import { findMatchingLibraryExtractor } from '../../extract/LibraryExtractorMatcher.js';
+import { ExtractionMetrics } from '../../extract/ExtractionMetrics.js';
 
 // ---------------------------------------------------------------------------
 // Request / Response types
@@ -72,7 +80,91 @@ export interface ProtocolIdeSessionCreateResponse {
 export function createProtocolIdeHandlers(ctx: AppContext) {
   const sessionService = new ProtocolIdeSessionService(ctx.store);
   const sourceImportService = new ProtocolIdeSourceImportService(ctx.store);
-  const projectionService = new ProtocolIdeProjectionService(ctx.store);
+
+  // Build deps for the real pass chain
+  const extractorProfile = ctx.appConfig?.ai?.extractor;
+  const extractorFactory = (targetKind: string) => {
+    if (!extractorProfile || !extractorProfile.enabled) {
+      return {
+        async extract() {
+          return {
+            candidates: [],
+            diagnostics: [{ severity: 'error', code: 'CONFIG_MISSING', message: 'extractor profile missing or disabled' }],
+          };
+        },
+      };
+    }
+    return new OpenAICompatibleExtractor({ config: extractorProfile });
+  };
+  const populator = new MentionCandidatePopulator({ store: ctx.store });
+  const metrics = new ExtractionMetrics();
+  const extractionRunner = new ExtractionRunnerService({
+    extractorFactory,
+    populator,
+    pipelinePath: ctx.schemaDir
+      ? `${ctx.schemaDir}/registry/compile-pipelines/extraction-compile.yaml`
+      : 'schema/registry/compile-pipelines/extraction-compile.yaml',
+    libraryMatcher: (fileName, content) =>
+      findMatchingLibraryExtractor({ fileName, contentPreview: content }),
+    metrics,
+  });
+
+  // LLM client for lab-context resolve
+  const aiConfig = ctx.appConfig?.ai;
+  const inferenceConfig = aiConfig?.inference;
+  const llmClient = inferenceConfig?.baseUrl
+    ? {
+        complete: async (args: { prompt: string; maxTokens?: number }) => {
+          const response = await fetch(inferenceConfig.baseUrl!, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(inferenceConfig.apiKey ? { Authorization: `Bearer ${inferenceConfig.apiKey}` } : {}),
+            },
+            body: JSON.stringify({
+              model: inferenceConfig.model,
+              messages: [{ role: 'user', content: args.prompt }],
+              max_tokens: args.maxTokens ?? 500,
+            }),
+          });
+          const data = await response.json();
+          return data.choices?.[0]?.message?.content ?? '';
+        },
+      }
+    : {
+        complete: async () => '',
+      };
+
+  // loadVerbDefinition wrapper
+  const loadVerbDefinition = async (canonical: string) => {
+    const env = await ctx.store.get('VERB-' + canonical.toUpperCase());
+    return (env?.payload as { canonical: string; semanticInputs?: Array<{ name: string; derivedFrom: { input: string; fn: string }; required: boolean }> } | null) ?? null;
+  };
+
+  const projectionDeps = {
+    recordStore: ctx.store,
+    runChunkedExtraction: async (
+      req: { target_kind: string; text: string; source: { kind: string; id: string } },
+    ) => {
+      const result = await extractionRunner.run({
+        target_kind: req.target_kind,
+        text: req.text,
+        source: req.source,
+      });
+      return {
+        candidates: result.candidates ?? [],
+        diagnostics: result.diagnostics,
+      };
+    },
+    runPromotionCompile,
+    llmClient,
+    ajvValidator: ctx.validator,
+    buildSemanticKey,
+    derivations,
+    loadVerbDefinition,
+  };
+
+  const projectionService = new ProtocolIdeProjectionService(ctx.store, projectionDeps);
   const feedbackService = new ProtocolIdeFeedbackService(ctx.store);
   const issueCardService = new ProtocolIdeIssueCardService(ctx.store);
   const exportService = new ProtocolIdeRalphExportService(ctx.store);
