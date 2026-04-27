@@ -122,9 +122,10 @@ export class OpenAICompatibleExtractor implements ExtractorAdapter {
 
     // Parse response
     let json: unknown;
+    let rawText: string;
     try {
-      const text = await response.text();
-      json = JSON.parse(text);
+      rawText = await response.text();
+      json = JSON.parse(rawText);
     } catch (parseError) {
       return {
         candidates: [],
@@ -140,7 +141,7 @@ export class OpenAICompatibleExtractor implements ExtractorAdapter {
     }
 
     // Extract candidates from response
-    return this.processResponse(json);
+    return this.processResponse(json, rawText);
   }
 
   private buildSystemMessage(): string {
@@ -166,10 +167,20 @@ export class OpenAICompatibleExtractor implements ExtractorAdapter {
       }
     }
     
+    // spec-027: append validation-error block on retry
+    const prevError = req.hint && (req.hint as Record<string, unknown>)['prev_validation_error'];
+    if (typeof prevError === 'string' && prevError.length > 0) {
+      userMessage +=
+        '\n\n---\n' +
+        'Your previous response failed schema validation with the following errors:\n' +
+        prevError +
+        '\n\nReturn valid JSON matching the expected schema. Do not include explanatory prose.';
+    }
+    
     return userMessage;
   }
 
-  private processResponse(json: unknown): ExtractionResult {
+  private processResponse(json: unknown, rawText: string): ExtractionResult {
     const diagnostics: ExtractionDiagnostic[] = [];
     const candidates: ExtractionCandidate[] = [];
 
@@ -181,7 +192,8 @@ export class OpenAICompatibleExtractor implements ExtractorAdapter {
           {
             severity: 'error',
             code: 'extractor_parse_error',
-            message: 'Extractor response is not a valid JSON object'
+            message: 'Extractor response is not a valid JSON object',
+            details: { rawResponse: rawText.slice(0, 4000) }
           }
         ]
       };
@@ -197,7 +209,8 @@ export class OpenAICompatibleExtractor implements ExtractorAdapter {
           {
             severity: 'error',
             code: 'extractor_parse_error',
-            message: 'Extractor response missing choices array'
+            message: 'Extractor response missing choices array',
+            details: { rawResponse: rawText.slice(0, 4000) }
           }
         ]
       };
@@ -219,7 +232,8 @@ export class OpenAICompatibleExtractor implements ExtractorAdapter {
           {
             severity: 'error',
             code: 'extractor_parse_error',
-            message: 'Extractor response missing message in choice'
+            message: 'Extractor response missing message in choice',
+            details: { rawResponse: rawText.slice(0, 4000) }
           }
         ]
       };
@@ -233,7 +247,8 @@ export class OpenAICompatibleExtractor implements ExtractorAdapter {
           {
             severity: 'error',
             code: 'extractor_parse_error',
-            message: 'Extractor response missing content in message'
+            message: 'Extractor response missing content in message',
+            details: { rawResponse: rawText.slice(0, 4000) }
           }
         ]
       };
@@ -247,7 +262,8 @@ export class OpenAICompatibleExtractor implements ExtractorAdapter {
           {
             severity: 'error',
             code: 'extractor_parse_error',
-            message: 'Extractor response content is not a string'
+            message: 'Extractor response content is not a string',
+            details: { rawResponse: rawText.slice(0, 4000) }
           }
         ]
       };
@@ -258,6 +274,9 @@ export class OpenAICompatibleExtractor implements ExtractorAdapter {
     try {
       parsedContent = JSON.parse(content);
     } catch (parseError) {
+      const existingDetails: Record<string, unknown> = parseError instanceof Error
+        ? { parse_error: parseError.message }
+        : {};
       return {
         candidates: [],
         diagnostics: [
@@ -265,7 +284,7 @@ export class OpenAICompatibleExtractor implements ExtractorAdapter {
             severity: 'error',
             code: 'extractor_parse_error',
             message: 'Failed to parse extractor content as JSON',
-            details: parseError instanceof Error ? parseError.message : String(parseError)
+            details: { ...existingDetails, rawResponse: rawText.slice(0, 4000) }
           }
         ]
       };
@@ -279,7 +298,8 @@ export class OpenAICompatibleExtractor implements ExtractorAdapter {
           {
             severity: 'error',
             code: 'extractor_parse_error',
-            message: 'Extractor content missing candidates array'
+            message: 'Extractor content missing candidates array',
+            details: { rawResponse: rawText.slice(0, 4000) }
           }
         ]
       };
@@ -293,7 +313,8 @@ export class OpenAICompatibleExtractor implements ExtractorAdapter {
           {
             severity: 'error',
             code: 'extractor_parse_error',
-            message: 'Extractor candidates is not an array'
+            message: 'Extractor candidates is not an array',
+            details: { rawResponse: rawText.slice(0, 4000) }
           }
         ]
       };
@@ -308,7 +329,8 @@ export class OpenAICompatibleExtractor implements ExtractorAdapter {
         diagnostics.push({
           severity: 'warning',
           code: 'candidate_malformed',
-          message: validation.error || 'Candidate validation failed'
+          message: validation.error || 'Candidate validation failed',
+          details: { rawResponse: rawText.slice(0, 4000) }
         });
       }
     }

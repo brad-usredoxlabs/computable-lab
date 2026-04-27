@@ -36,6 +36,7 @@ import {
 } from './ProtocolIdeGraphReviewSurface'
 import { ProtocolIdeActionRail } from './ProtocolIdeActionRail'
 import { ProtocolIdeExportActions } from './ProtocolIdeExportActions'
+import { ProtocolIdeLabContextPanel } from './ProtocolIdeLabContextPanel'
 import { useState, useEffect, useCallback } from 'react'
 import { apiClient } from '../shared/api/client'
 import type {
@@ -435,6 +436,20 @@ function ActionRailPane({
     }
   }, [directiveText, session.recordId, onVersionIncrement])
 
+  // Handle lab context override — stores override then triggers rerun
+  const handleLabContextOverride = useCallback(async (overrides: { labwareKind?: string; plateCount?: number; sampleCount?: number }) => {
+    try {
+      await apiClient.setProtocolIdeLabContextOverride(session.recordId, overrides)
+      // Trigger a rerun to apply the override
+      await apiClient.rerunProtocolIdeSession(session.recordId, {
+        directiveText: directiveText.trim(),
+      })
+      onVersionIncrement()
+    } catch {
+      // Override fails — surface but do NOT clear input state
+    }
+  }, [session.recordId, directiveText, onVersionIncrement])
+
   return (
     <>
       <ProtocolIdeActionRail
@@ -453,6 +468,12 @@ function ActionRailPane({
         sessionId={session.recordId}
         issueCardCount={issueCards.length}
       />
+      {session.labContext && (
+        <ProtocolIdeLabContextPanel
+          labContext={session.labContext}
+          onOverride={handleLabContextOverride}
+        />
+      )}
     </>
   )
 }

@@ -3,9 +3,11 @@
  * optional LLM-driven directive overrides.
  *
  * Sources of lab context (in priority order):
- * 1. Smart defaults (96-well-plate, 1 plate, 96 samples, no equipment overrides)
+ * 1. Manual user input (manualLabContextOverrides from session) — highest precedence
  * 2. LLM directive override (when directiveText is non-empty)
- * 3. Manual user input (handled by spec-028 frontend panel, not in scope)
+ * 3. Smart defaults (96-well-plate, 1 plate, 96 samples, no equipment overrides)
+ *
+ * Precedence: manual > directive > default
  *
  * The LLM call is intentionally narrow: it returns ONLY override fields,
  * not full context. This makes it cheap, structured, and easy to validate.
@@ -30,6 +32,8 @@ export interface CreateLabContextResolvePassDeps {
     complete: (args: { prompt: string; maxTokens?: number }) => Promise<string>;
   };
   defaults?: Partial<LabContext>; // override defaults for testing
+  /** Manual overrides from session (highest precedence: manual > directive > default) */
+  manualOverrides?: Partial<LabContext>;
 }
 
 // ---------------------------------------------------------------------------
@@ -158,6 +162,15 @@ export function createLabContextResolvePass(
     ...(deps.defaults ?? {}),
   };
 
+  // Apply manual overrides on top of defaults (manual > default)
+  const manualBase: LabContext = {
+    labwareKind: deps.manualOverrides?.labwareKind ?? defaults.labwareKind,
+    plateCount: deps.manualOverrides?.plateCount ?? defaults.plateCount,
+    sampleCount: deps.manualOverrides?.sampleCount ?? defaults.sampleCount,
+    equipmentOverrides:
+      deps.manualOverrides?.equipmentOverrides ?? defaults.equipmentOverrides,
+  };
+
   return {
     id: 'lab_context_resolve',
     family: 'normalize',
@@ -166,16 +179,16 @@ export function createLabContextResolvePass(
         args.state.input['directiveText'] as string | undefined
       )?.trim();
 
-      // Empty directive → return smart defaults immediately
+      // Empty directive → return manual overrides (or defaults if none) immediately
       if (!directiveText) {
         return {
           ok: true,
-          output: { labContext: defaults },
+          output: { labContext: manualBase },
           diagnostics: [],
         };
       }
 
-      const prompt = buildOverridePrompt(defaults, directiveText);
+      const prompt = buildOverridePrompt(manualBase, directiveText);
 
       // First attempt
       let rawResponse = await deps.llmClient.complete({
@@ -199,7 +212,7 @@ export function createLabContextResolvePass(
         parsed = OverrideSchema.safeParse(extractJson(rawResponse));
       }
 
-      // Both attempts failed → fall through to defaults with warning
+      // Both attempts failed → fall through to manual base with warning
       if (!parsed.success) {
         // Log raw response under [lab_context_resolve_shape_mismatch] prefix
         console.log(
@@ -208,21 +221,23 @@ export function createLabContextResolvePass(
 
         return {
           ok: true,
-          output: { labContext: defaults },
+          output: { labContext: manualBase },
           diagnostics: [
             {
               severity: 'warning',
               code: 'lab_context_resolve_llm_failed',
               message:
-                'LLM override extraction failed twice; using smart defaults',
+                'LLM override extraction failed twice; using manual overrides (or smart defaults)',
               pass_id: 'lab_context_resolve',
             },
           ],
         };
       }
 
-      // Merge overrides onto defaults
-      const resolved = mergeOverrides(defaults, parsed.data);
+      // Merge directive overrides onto defaults first, then apply manual on top
+      // to enforce manual > directive > default precedence
+      const directiveResult = mergeOverrides(defaults, parsed.data);
+      const resolved = mergeOverrides(directiveResult, deps.manualOverrides ?? {});
       return {
         ok: true,
         output: { labContext: resolved },

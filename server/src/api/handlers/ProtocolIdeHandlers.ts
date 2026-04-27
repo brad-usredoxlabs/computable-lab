@@ -13,6 +13,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { AppContext } from '../../server.js';
 import type { ApiError } from '../types.js';
+import type { RecordEnvelope } from '../../store/types.js';
 import { ProtocolIdeSessionService } from '../../protocol/ProtocolIdeSessionService.js';
 import { validateIntakeRequest } from '../../protocol/ProtocolIdeIntakeContracts.js';
 import {
@@ -803,6 +804,190 @@ export function createProtocolIdeHandlers(ctx: AppContext) {
         return {
           error: 'CURATED_VENDORS_FETCH_FAILED',
           message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
+     * POST /protocol-ide/sessions/:sessionId/lab-context-override
+     *
+     * Store manual lab context overrides on the session record.
+     * These overrides take precedence over directive-driven overrides,
+     * which take precedence over smart defaults.
+     *
+     * Body: { labwareKind?: string, plateCount?: number, sampleCount?: number }
+     *
+     * Returns `{ success: true }`.
+     */
+    async setProtocolIdeLabContextOverride(
+      request: FastifyRequest<{
+        Params: { sessionId: string };
+        Body: { labwareKind?: string; plateCount?: number; sampleCount?: number };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: true } | ApiError> {
+      const { sessionId } = request.params;
+      const { labwareKind, plateCount, sampleCount } = request.body;
+
+      try {
+        const envelope = await sessionService.getSession(sessionId);
+
+        if (!envelope) {
+          reply.status(404);
+          return {
+            error: 'SESSION_NOT_FOUND',
+            message: `Session '${sessionId}' not found`,
+          };
+        }
+
+        const payload = envelope.payload as Record<string, unknown>;
+        const now = new Date().toISOString();
+
+        // Merge with existing overrides
+        const existingOverrides = (payload.manualLabContextOverrides as Record<string, unknown>) ?? {};
+        const updatedOverrides: Record<string, unknown> = { ...existingOverrides };
+
+        if (labwareKind !== undefined) {
+          updatedOverrides.labwareKind = labwareKind;
+        }
+        if (plateCount !== undefined) {
+          updatedOverrides.plateCount = plateCount;
+        }
+        if (sampleCount !== undefined) {
+          updatedOverrides.sampleCount = sampleCount;
+        }
+
+        const updatedPayload: Record<string, unknown> = {
+          ...payload,
+          manualLabContextOverrides: updatedOverrides,
+          updatedAt: now,
+        };
+
+        const updatedEnvelope: RecordEnvelope = {
+          ...envelope,
+          payload: updatedPayload,
+          meta: {
+            ...envelope.meta,
+            updatedAt: now,
+          },
+        };
+
+        await ctx.store.update({
+          envelope: updatedEnvelope,
+          message: `Update session ${sessionId} with lab context overrides`,
+          skipLint: true,
+        });
+
+        reply.status(200);
+        return { success: true };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        reply.status(500);
+        return {
+          error: 'LAB_CONTEXT_OVERRIDE_FAILED',
+          message,
+        };
+      }
+    },
+
+    /**
+     * POST /protocol-ide/sessions/:sessionId/select-variant
+     *
+     * Select an extraction variant during the candidate-review step.
+     *
+     * Body: { variantIndex: number }
+     *
+     * Validates that the index is within range of the current
+     * extraction-draft's candidate count.  Sets session.selectedVariantIndex
+     * and returns success.  The frontend then triggers a rerun which
+     * proceeds past the pause.
+     *
+     * Returns `{ success: true }`.
+     */
+    async selectVariant(
+      request: FastifyRequest<{
+        Params: { sessionId: string };
+        Body: { variantIndex: number };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: true } | ApiError> {
+      const { sessionId } = request.params;
+      const { variantIndex } = request.body;
+
+      try {
+        const envelope = await sessionService.getSession(sessionId);
+
+        if (!envelope) {
+          reply.status(404);
+          return {
+            error: 'SESSION_NOT_FOUND',
+            message: `Session '${sessionId}' not found`,
+          };
+        }
+
+        const payload = envelope.payload as Record<string, unknown>;
+
+        // Validate: only allow selection when in awaiting_variant_selection status
+        const currentStatus = payload.status as string | undefined;
+        if (currentStatus !== 'awaiting_variant_selection') {
+          reply.status(400);
+          return {
+            error: 'NOT_IN_VARIANT_SELECTION',
+            message: `Session is not in awaiting_variant_selection status (current: ${currentStatus})`,
+          };
+        }
+
+        // Validate index is non-negative
+        if (!Number.isInteger(variantIndex) || variantIndex < 0) {
+          reply.status(400);
+          return {
+            error: 'INVALID_VARIANT_INDEX',
+            message: 'variantIndex must be a non-negative integer',
+          };
+        }
+
+        // Validate index is within range of candidates
+        const candidates = payload.candidates as Array<Record<string, unknown>> | undefined;
+        const candidateCount = candidates?.length ?? 0;
+        if (variantIndex >= candidateCount) {
+          reply.status(400);
+          return {
+            error: 'VARIANT_INDEX_OUT_OF_RANGE',
+            message: `variantIndex ${variantIndex} is out of range (candidate count: ${candidateCount})`,
+          };
+        }
+
+        const now = new Date().toISOString();
+
+        const updatedPayload: Record<string, unknown> = {
+          ...payload,
+          selectedVariantIndex: variantIndex,
+          updatedAt: now,
+        };
+
+        const updatedEnvelope: RecordEnvelope = {
+          ...envelope,
+          payload: updatedPayload,
+          meta: {
+            ...envelope.meta,
+            updatedAt: now,
+          },
+        };
+
+        await ctx.store.update({
+          envelope: updatedEnvelope,
+          message: `Update session ${sessionId} with selectedVariantIndex=${variantIndex}`,
+          skipLint: true,
+        });
+
+        reply.status(200);
+        return { success: true };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        reply.status(500);
+        return {
+          error: 'VARIANT_SELECTION_FAILED',
+          message,
         };
       }
     },

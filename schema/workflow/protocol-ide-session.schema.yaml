@@ -170,7 +170,7 @@ properties:
   # ── Status ──────────────────────────────────────────────────────────
   status:
     type: string
-    enum: [ draft, importing, projecting, reviewing, ready, exported, failed ]
+    enum: [ draft, importing, projecting, reviewing, ready, exported, failed, awaiting_variant_selection ]
     description: >
       Developer-oriented status reflecting the current stage of the session.
       - draft: session created, no source selected yet.
@@ -180,6 +180,7 @@ properties:
       - ready: session is ready for export or further iteration.
       - exported: session was exported to Ralph.
       - failed: an unrecoverable error occurred.
+      - awaiting_variant_selection: multiple extraction variants found; user must select one.
 
   notes:
     type: string
@@ -258,3 +259,37 @@ properties:
         submittedAt:
           type: string
           format: date-time
+
+  # ── Manual lab context overrides (spec-028) ─────────────────────────
+  manualLabContextOverrides:
+    type: object
+    description: >
+      User-set overrides for lab context values.  These take precedence over
+      directive-driven overrides, which take precedence over smart defaults.
+      Precedence: manual > directive > default.
+    additionalProperties: false
+    properties:
+      labwareKind:
+        type: string
+        description: >
+          User-set labware kind override (e.g. '384-well-plate').
+      plateCount:
+        type: integer
+        minimum: 1
+        description: >
+          User-set plate count override.
+      sampleCount:
+        type: integer
+        minimum: 1
+        description: >
+          User-set sample count override.
+
+  # ── Extraction variant selection (spec-029) ─────────────────────────
+  selectedVariantIndex:
+    type: integer
+    minimum: 0
+    description: >
+      Zero-based index of the extraction variant selected by the user
+      during the candidate-review step.  When set, protocol_realize uses
+      this index instead of auto-picking the first candidate.  Cleared
+      when a new projection is started.

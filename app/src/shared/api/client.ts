@@ -2707,6 +2707,22 @@ export const apiClient = {
   async getVerbActionMapping(verb: string): Promise<{ success: true; mapping: { verb: string; exact_id?: string; obi_id?: string; notes?: string } }> {
     return request(`/verb-action-map/lookup?verb=${encodeURIComponent(verb)}`)
   },
+
+  // === Protocol IDE Lab Context (spec-028) ===
+
+  /**
+   * Set manual lab context overrides for a session.
+   * Calls POST /protocol-ide/sessions/:sessionId/lab-context-override
+   */
+  async setProtocolIdeLabContextOverride(
+    sessionId: string,
+    overrides: { labwareKind?: string; plateCount?: number; sampleCount?: number },
+  ): Promise<{ success: true }> {
+    return request(`/protocol-ide/sessions/${encodeURIComponent(sessionId)}/lab-context-override`, {
+      method: 'POST',
+      body: JSON.stringify(overrides),
+    })
+  },
 }
 
 /**

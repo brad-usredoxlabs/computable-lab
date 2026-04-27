@@ -552,6 +552,7 @@ export function registerRoutes(
   if (protocolIdeHandlers) {
     fastify.post('/protocol-ide/sessions', protocolIdeHandlers.createSession.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/:sessionId/rerun', protocolIdeHandlers.rerunSession.bind(protocolIdeHandlers));
+    fastify.post('/protocol-ide/sessions/:sessionId/select-variant', protocolIdeHandlers.selectVariant.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/:sessionId/feedback', protocolIdeHandlers.submitFeedback.bind(protocolIdeHandlers));
     fastify.get('/protocol-ide/sessions/:sessionId/rolling-summary', protocolIdeHandlers.getRollingSummary.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/:sessionId/generate-issue-cards', protocolIdeHandlers.generateIssueCards.bind(protocolIdeHandlers));
@@ -561,6 +562,7 @@ export function registerRoutes(
     fastify.get('/protocol-ide/sessions/:sessionId/overlay-summaries', protocolIdeHandlers.getOverlaySummaries.bind(protocolIdeHandlers));
     fastify.get('/protocol-ide/sessions/:sessionId/event-graph', protocolIdeHandlers.getEventGraph.bind(protocolIdeHandlers));
     fastify.get('/protocol-ide/curated-vendors', protocolIdeHandlers.getCuratedVendors.bind(protocolIdeHandlers));
+    fastify.post('/protocol-ide/sessions/:sessionId/lab-context-override', protocolIdeHandlers.setProtocolIdeLabContextOverride.bind(protocolIdeHandlers));
   }
 
   // ============================================================================

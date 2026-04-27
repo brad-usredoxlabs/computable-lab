@@ -22,6 +22,7 @@ import type {
   ProjectionResponse,
   CompactDiagnostic,
   EvidenceMap,
+  LabContextProjection,
 } from './ProtocolIdeProjectionContracts.js';
 import { validateProjectionRequest } from './ProtocolIdeProjectionContracts.js';
 import { runLocalProtocolPipeline } from '../compiler/pipeline/localProtocolPipelineRun.js';
@@ -38,6 +39,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SESSION_STATUS_PROJECTING = 'projecting' as const;
 const SESSION_STATUS_PROJECTED = 'projected' as const;
 const SESSION_STATUS_PROJECTION_FAILED = 'projection_failed' as const;
+const SESSION_STATUS_AWAITING_VARIANT_SELECTION = 'awaiting_variant_selection' as const;
 
 // ---------------------------------------------------------------------------
 // Pipeline path
@@ -153,6 +155,11 @@ export interface ProtocolIdeProjectionServiceOptions {
 }
 
 export class ProtocolIdeProjectionService {
+  /**
+   * Cached session envelope for use by buildRealPasses (avoids closure issues).
+   */
+  private currentSessionEnvelope: RecordEnvelope | null = null;
+
   constructor(
     private store: RecordStore,
     private deps: ProtocolIdeProjectionServiceDeps,
@@ -214,6 +221,8 @@ export class ProtocolIdeProjectionService {
     // 4. Run the pipeline
     let pipelineResult: Awaited<ReturnType<typeof runLocalProtocolPipeline>>;
     try {
+      // Cache session envelope for use by buildRealPasses
+      this.currentSessionEnvelope = sessionEnvelope;
       const passFactory = this.options.passFactory ?? this.buildRealPasses.bind(this);
       const passes = await this.buildPasses(passFactory);
       pipelineResult = await runLocalProtocolPipeline({
@@ -229,6 +238,16 @@ export class ProtocolIdeProjectionService {
 
     // 5. Build the response
     const response = this.buildProjectionResponse(request, pipelineResult);
+
+    // Handle variant-selection pause: persist session and return early
+    if (response.status === 'awaiting_variant_selection') {
+      await this.persistAwaitingVariantSelectionSession(
+        request.sessionRef,
+        sessionEnvelope,
+        response,
+      );
+      return response;
+    }
 
     // 6. Update session in place with latest projection data
     await this.persistSuccessSession(request.sessionRef, sessionEnvelope, response);
@@ -313,8 +332,19 @@ export class ProtocolIdeProjectionService {
       }
       case 'lab_context_resolve': {
         const { createLabContextResolvePass } = await import('../compiler/pipeline/passes/LabContextResolvePass.js');
+        // Extract manual overrides from cached session envelope
+        const sessionPayload = this.currentSessionEnvelope?.payload as Record<string, unknown> | undefined;
+        const manualOverrides = sessionPayload?.manualLabContextOverrides as Record<string, unknown> | undefined;
         return createLabContextResolvePass({
           llmClient: this.deps.llmClient,
+          manualOverrides: manualOverrides
+            ? {
+                labwareKind: manualOverrides.labwareKind as string | undefined,
+                plateCount: manualOverrides.plateCount as number | undefined,
+                sampleCount: manualOverrides.sampleCount as number | undefined,
+                equipmentOverrides: undefined,
+              }
+            : undefined,
         });
       }
       case 'protocol_realize': {
@@ -379,12 +409,64 @@ export class ProtocolIdeProjectionService {
   }
 
   /**
+   * Resolve the provenance source for a single lab context field.
+   *
+   * Precedence: manual > directive > default
+   * - 'manual' if the field was overridden in manualLabContextOverrides
+   * - 'directive' if directiveText is non-empty (LLM may have changed it)
+   * - 'default' otherwise
+   */
+  private resolveSource(
+    resolvedValue: string | number,
+    directiveText: string | undefined,
+    manualOverrides: Record<string, unknown> | undefined,
+    field: string,
+  ): 'default' | 'directive' | 'manual' {
+    // Check manual overrides first (highest precedence)
+    if (manualOverrides && field in manualOverrides) {
+      return 'manual';
+    }
+    // Check if directive was non-empty (LLM may have changed it)
+    if (directiveText && directiveText.trim().length > 0) {
+      return 'directive';
+    }
+    return 'default';
+  }
+
+  /**
    * Build a ProjectionResponse from pipeline results.
    */
   private buildProjectionResponse(
     request: ProjectionRequest,
     pipelineResult: Awaited<ReturnType<typeof runLocalProtocolPipeline>>,
   ): ProjectionResponse {
+    const diagnostics = diagnosticsToCompact(pipelineResult.diagnostics);
+
+    // Check for variant-selection signal from protocol_realize
+    const realizeAwaiting = pipelineResult.diagnostics.find(
+      (d) => d.code === 'protocol_realize_awaiting_variant_selection',
+    );
+
+    if (realizeAwaiting) {
+      // The pipeline paused for variant selection.
+      // We'll persist the session status and return the special response.
+      // The caller (executeProjection) handles the actual persistence.
+      return {
+        status: 'awaiting_variant_selection',
+        eventGraphData: {
+          recordId: `graph-${request.sessionRef}`,
+          eventCount: 0,
+          description: 'Awaiting variant selection.',
+        },
+        evidenceMap: {},
+        overlaySummaries: {},
+        diagnostics,
+        awaitingVariantSelection: {
+          extractionDraftRef: `draft-${request.sessionRef}`,
+          variants: [],
+        },
+      };
+    }
     const diagnostics = diagnosticsToCompact(pipelineResult.diagnostics);
 
     // Build evidence map from source refs
@@ -431,6 +513,49 @@ export class ProtocolIdeProjectionService {
       };
     }
 
+    // Extract labContext from pipeline outputs if available
+    const labContextOutput = pipelineResult.outputs.get('lab_context_resolve') as
+      | { labContext: { labwareKind: string; plateCount: number; sampleCount: number } }
+      | undefined;
+
+    let labContext: LabContextProjection | undefined;
+    if (labContextOutput?.labContext) {
+      const lc = labContextOutput.labContext;
+      // Determine provenance per field: manual > directive > default
+      const directiveText = request.directiveText?.trim();
+      // Read manual overrides from the cached session envelope
+      const manualOverrides = this.currentSessionEnvelope?.payload?.manualLabContextOverrides as
+        | Record<string, unknown>
+        | undefined;
+
+      const source: LabContextProjection['source'] = {
+        labwareKind: this.resolveSource(
+          lc.labwareKind,
+          directiveText,
+          manualOverrides,
+          'labwareKind',
+        ),
+        plateCount: this.resolveSource(
+          lc.plateCount,
+          directiveText,
+          manualOverrides,
+          'plateCount',
+        ),
+        sampleCount: this.resolveSource(
+          lc.sampleCount,
+          directiveText,
+          manualOverrides,
+          'sampleCount',
+        ),
+      };
+      labContext = {
+        labwareKind: lc.labwareKind,
+        plateCount: lc.plateCount,
+        sampleCount: lc.sampleCount,
+        source,
+      };
+    }
+
     const status = pipelineResult.ok ? 'success' : 'partial';
 
     return {
@@ -447,6 +572,7 @@ export class ProtocolIdeProjectionService {
       evidenceMap,
       overlaySummaries,
       diagnostics,
+      ...(labContext ? { labContext } : {}),
     };
   }
 
@@ -492,6 +618,7 @@ export class ProtocolIdeProjectionService {
       latestToolsSummaryRef: response.overlaySummaries.tools ? `tools-${sessionId}` : null,
       latestReagentsSummaryRef: response.overlaySummaries.reagents ? `reagents-${sessionId}` : null,
       latestBudgetSummaryRef: response.overlaySummaries.budget ? `budget-${sessionId}` : null,
+      labContext: response.labContext ?? null,
       updatedAt: now,
     };
 
@@ -542,6 +669,50 @@ export class ProtocolIdeProjectionService {
     await this.store.update({
       envelope: updatedEnvelope,
       message: `Update session ${sessionId} with projection failure diagnostics`,
+      skipLint: true,
+    });
+  }
+
+  /**
+   * Persist a variant-selection pause to the session in place.
+   * Sets session status to awaiting_variant_selection and stores
+   * the extraction-draft ref and variant summaries.
+   */
+  private async persistAwaitingVariantSelectionSession(
+    sessionId: string,
+    sessionEnvelope: RecordEnvelope,
+    response: ProjectionResponse,
+  ): Promise<void> {
+    const payload = sessionEnvelope.payload as Record<string, unknown>;
+    const now = new Date().toISOString();
+
+    const updatedPayload: Record<string, unknown> = {
+      ...payload,
+      status: SESSION_STATUS_AWAITING_VARIANT_SELECTION,
+      latestDirectiveText: payload.latestDirectiveText ?? '',
+      latestProtocolRef: response.projectedProtocolRef ?? null,
+      latestEventGraphRef: response.eventGraphData.recordId,
+      latestEventGraphCacheKey: response.eventGraphData.recordId,
+      latestDeckSummaryRef: response.overlaySummaries.deck ? `deck-${sessionId}` : null,
+      latestToolsSummaryRef: response.overlaySummaries.tools ? `tools-${sessionId}` : null,
+      latestReagentsSummaryRef: response.overlaySummaries.reagents ? `reagents-${sessionId}` : null,
+      latestBudgetSummaryRef: response.overlaySummaries.budget ? `budget-${sessionId}` : null,
+      labContext: response.labContext ?? null,
+      updatedAt: now,
+    };
+
+    const updatedEnvelope: RecordEnvelope = {
+      ...sessionEnvelope,
+      payload: updatedPayload,
+      meta: {
+        ...sessionEnvelope.meta,
+        updatedAt: now,
+      },
+    };
+
+    await this.store.update({
+      envelope: updatedEnvelope,
+      message: `Update session ${sessionId} to awaiting_variant_selection`,
       skipLint: true,
     });
   }

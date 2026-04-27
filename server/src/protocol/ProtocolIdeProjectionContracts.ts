@@ -173,6 +173,59 @@ export interface CompactDiagnostic {
 }
 
 // ---------------------------------------------------------------------------
+// Lab context — resolved from defaults, directive, or manual overrides
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-field provenance for a resolved lab context value.
+ */
+export type LabContextSource = 'default' | 'directive' | 'manual';
+
+/**
+ * Resolved lab context exposed by the projection pipeline.
+ * Produced by lab_context_resolve pass; enriched with provenance by the
+ * projection service.
+ */
+export interface LabContextProjection {
+  /** Kind of labware (e.g. '96-well-plate', '384-well-plate') */
+  labwareKind: string;
+  /** Number of plates */
+  plateCount: number;
+  /** Number of samples */
+  sampleCount: number;
+  /** Per-field provenance: where each value came from */
+  source: {
+    labwareKind: LabContextSource;
+    plateCount: LabContextSource;
+    sampleCount: LabContextSource;
+  };
+}
+
+/**
+ * A variant summary exposed during the candidate-review step.
+ */
+export interface VariantSummary {
+  /** Zero-based index of this variant in the extraction-draft candidates */
+  index: number;
+  /** Human-readable display name for the variant */
+  displayName: string;
+  /** Variant label (e.g. 'cell culture', 'plant matter') or null */
+  variantLabel: string | null;
+  /** Number of sections in this variant's extraction draft */
+  sectionCount: number;
+}
+
+/**
+ * Payload returned when the pipeline pauses for variant selection.
+ */
+export interface AwaitingVariantSelection {
+  /** Reference to the extraction-draft record holding the candidates */
+  extractionDraftRef: string;
+  /** List of candidate variants for the user to choose from */
+  variants: VariantSummary[];
+}
+
+// ---------------------------------------------------------------------------
 // ProjectionResponse — the rerun response payload
 // ---------------------------------------------------------------------------
 
@@ -186,11 +239,12 @@ export interface CompactDiagnostic {
  *   - `evidenceMap` — per-node evidence for graph nodes and overlays
  *   - `overlaySummaries` — deck, tools, reagents, budget summary slots
  *   - `diagnostics` — compact diagnostics for issue-card generation
+ *   - `labContext` — resolved lab context with provenance (optional)
  *   - `status` — latest-state status of the projection
  */
 export interface ProjectionResponse {
   /** Latest-state status of the projection */
-  status: 'success' | 'partial' | 'failed';
+  status: 'success' | 'partial' | 'failed' | 'awaiting_variant_selection';
   /** Latest event-graph payload or ref */
   eventGraphData: {
     /** Stable record identifier for the event graph */
@@ -215,6 +269,10 @@ export interface ProjectionResponse {
   };
   /** Compact diagnostics for behind-the-scenes issue generation */
   diagnostics: CompactDiagnostic[];
+  /** Resolved lab context with provenance (optional — present when lab_context_resolve ran) */
+  labContext?: LabContextProjection;
+  /** Present when the pipeline paused for variant selection (spec-029) */
+  awaitingVariantSelection?: AwaitingVariantSelection;
 }
 
 // ---------------------------------------------------------------------------
@@ -347,8 +405,8 @@ export function validateProjectionResponse(
 
   // status is required
   const status = obj['status'];
-  if (status !== 'success' && status !== 'partial' && status !== 'failed') {
-    return { valid: false, error: 'status must be one of: success, partial, failed.' };
+  if (status !== 'success' && status !== 'partial' && status !== 'failed' && status !== 'awaiting_variant_selection') {
+    return { valid: false, error: 'status must be one of: success, partial, failed, awaiting_variant_selection.' };
   }
 
   // eventGraphData is required
@@ -384,6 +442,42 @@ export function validateProjectionResponse(
     }
   }
 
+  // labContext is optional but must be an object with the correct shape if present
+  const labContext = obj['labContext'];
+  let lc: Record<string, unknown> | undefined;
+  let src: Record<string, unknown> | undefined;
+  if (labContext !== undefined && labContext !== null) {
+    if (typeof labContext !== 'object' || Array.isArray(labContext)) {
+      return { valid: false, error: 'labContext must be an object.' };
+    }
+    lc = labContext as Record<string, unknown>;
+    // labwareKind is required
+    if (typeof lc['labwareKind'] !== 'string') {
+      return { valid: false, error: 'labContext.labwareKind is required and must be a string.' };
+    }
+    // plateCount is required and must be a number
+    if (typeof lc['plateCount'] !== 'number') {
+      return { valid: false, error: 'labContext.plateCount is required and must be a number.' };
+    }
+    // sampleCount is required and must be a number
+    if (typeof lc['sampleCount'] !== 'number') {
+      return { valid: false, error: 'labContext.sampleCount is required and must be a number.' };
+    }
+    // source is required and must be an object
+    const source = lc['source'];
+    if (source === null || typeof source !== 'object' || Array.isArray(source)) {
+      return { valid: false, error: 'labContext.source is required and must be an object.' };
+    }
+    src = source as Record<string, unknown>;
+    const sourceKeys = ['labwareKind', 'plateCount', 'sampleCount'];
+    const validSources = ['default', 'directive', 'manual'];
+    for (const key of sourceKeys) {
+      if (!(key in src) || !validSources.includes(src[key] as string)) {
+        return { valid: false, error: `labContext.source.${key} must be one of: ${validSources.join(', ')}.` };
+      }
+    }
+  }
+
   // ── Reject forbidden fields ──────────────────────────────────────────
   const forbiddenKeys = ['runHistory', 'branchSelection', 'compareView', 'branchBase', 'timeline'];
   for (const key of forbiddenKeys) {
@@ -398,7 +492,7 @@ export function validateProjectionResponse(
   return {
     valid: true,
     response: {
-      status: status as 'success' | 'partial' | 'failed',
+      status: status as 'success' | 'partial' | 'failed' | 'awaiting_variant_selection',
       eventGraphData: {
         recordId: (egd['recordId'] as string).trim(),
         eventCount: egd['eventCount'] as number,
@@ -409,6 +503,24 @@ export function validateProjectionResponse(
       evidenceMap: evidenceMap as EvidenceMap,
       overlaySummaries: overlaySummaries as ProjectionResponse['overlaySummaries'] ?? {},
       diagnostics: diagnostics as CompactDiagnostic[],
+      labContext: labContext !== undefined && labContext !== null
+        ? {
+            labwareKind: (lc['labwareKind'] as string).trim(),
+            plateCount: lc['plateCount'] as number,
+            sampleCount: lc['sampleCount'] as number,
+            source: {
+              labwareKind: (src['labwareKind'] as 'default' | 'directive' | 'manual'),
+              plateCount: (src['plateCount'] as 'default' | 'directive' | 'manual'),
+              sampleCount: (src['sampleCount'] as 'default' | 'directive' | 'manual'),
+            },
+          }
+        : undefined,
+      awaitingVariantSelection: obj['awaitingVariantSelection'] !== undefined && obj['awaitingVariantSelection'] !== null
+        ? {
+            extractionDraftRef: (obj['awaitingVariantSelection'] as Record<string, unknown>)['extractionDraftRef'] as string,
+            variants: (obj['awaitingVariantSelection'] as Record<string, unknown>)['variants'] as VariantSummary[],
+          }
+        : undefined,
     },
   };
 }

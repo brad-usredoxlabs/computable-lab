@@ -4,6 +4,7 @@
  * Spec: spec-055-extractor-adapter-interface-and-qwen-impl
  */
 
+import { describe, it, expect, vi } from 'vitest';
 import { OpenAICompatibleExtractor } from './OpenAICompatibleExtractor.js';
 import type { ExtractorProfileConfig } from '../config/types.js';
 
@@ -741,6 +742,68 @@ describe('OpenAICompatibleExtractor', () => {
 
       expect(result.candidates).toEqual([]);
       expect(result.diagnostics).toEqual([]);
+    });
+  });
+
+  describe('validation-repair (spec-027)', () => {
+    it('appends prev_validation_error block to the user message on retry', async () => {
+      let capturedBody: { messages: Array<{ role: string; content: string }> } | null = null;
+      const fakeFetch = vi.fn(async (_url: string, init?: RequestInit) => {
+        capturedBody = JSON.parse((init?.body as string) ?? '{}');
+        return new Response(
+          JSON.stringify({
+            choices: [{ message: { content: JSON.stringify({ candidates: [] }) } }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      });
+      const extractor = new OpenAICompatibleExtractor({
+        config: {
+          enabled: true,
+          provider: 'openai-compatible',
+          baseUrl: 'http://x',
+          model: 'm',
+          temperature: 0,
+          max_tokens: 100,
+        } as ExtractorProfileConfig,
+        fetchImpl: fakeFetch as unknown as typeof fetch,
+      });
+
+      await extractor.extract({
+        text: 'sample input',
+        hint: { prev_validation_error: 'Expected number, got string at .candidates[0].confidence' },
+      });
+
+      const userMsg = capturedBody!.messages.find((m) => m.role === 'user')!.content;
+      expect(userMsg).toContain('Your previous response failed schema validation');
+      expect(userMsg).toContain('Expected number, got string');
+    });
+
+    it('surfaces rawResponse in candidate_malformed diagnostic details', async () => {
+      const rawText = JSON.stringify({
+        choices: [{ message: { content: JSON.stringify({ candidates: [{ target_kind: 'x' /* missing draft */ }] }) } }],
+      });
+      const fakeFetch = vi.fn(
+        async () => new Response(rawText, { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      );
+      const extractor = new OpenAICompatibleExtractor({
+        config: {
+          enabled: true,
+          provider: 'openai-compatible',
+          baseUrl: 'http://x',
+          model: 'm',
+          temperature: 0,
+          max_tokens: 100,
+        } as ExtractorProfileConfig,
+        fetchImpl: fakeFetch as unknown as typeof fetch,
+      });
+
+      const result = await extractor.extract({ text: 'sample' });
+      const malformed = result.diagnostics.find((d) => d.code === 'candidate_malformed');
+      expect(malformed).toBeDefined();
+      const details = malformed!.details as Record<string, unknown> | undefined;
+      expect(typeof details?.rawResponse).toBe('string');
+      expect((details!.rawResponse as string).length).toBeGreaterThan(0);
     });
   });
 });

@@ -1,0 +1,61 @@
+/**
+ * Styles for ProtocolIdeLabContextPanel
+ */
+
+.lab-context-panel {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 12px;
+  background: #fafafa;
+}
+
+.lab-context-panel-title {
+  margin: 0 0 10px 0;
+  font-size: 0.85em;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.lab-context-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lab-context-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lab-context-label {
+  font-size: 0.8em;
+  color: #6b7280;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.lab-context-input {
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 0.85em;
+  background: #fff;
+  min-width: 0;
+}
+
+.lab-context-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.lab-context-source-badge {
+  flex-shrink: 0;
+  font-size: 0.75em;
+  font-weight: 500;
+}

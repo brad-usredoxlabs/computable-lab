@@ -42,6 +42,7 @@ export type ProtocolIdeStatus =
   | 'ready'
   | 'exported'
   | 'failed'
+  | 'awaiting_variant_selection'
 
 export interface ProtocolIdeSession {
   kind: 'protocol-ide-session'
@@ -92,4 +93,21 @@ export interface ProtocolIdeSession {
 
   // Free-form notes
   notes?: string
+
+  // ── Lab context (spec-028) ──────────────────────────────────────────
+  /** Resolved lab context with provenance, from latest projection */
+  labContext?: {
+    labwareKind: string
+    plateCount: number
+    sampleCount: number
+    source: {
+      labwareKind: 'default' | 'directive' | 'manual'
+      plateCount: 'default' | 'directive' | 'manual'
+      sampleCount: 'default' | 'directive' | 'manual'
+    }
+  }
+
+  // ── Extraction variant selection (spec-029) ─────────────────────────
+  /** Zero-based index of the extraction variant selected by the user. */
+  selectedVariantIndex?: number
 }

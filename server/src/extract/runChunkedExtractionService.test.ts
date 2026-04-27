@@ -532,5 +532,95 @@ describe('runChunkedExtractionService', () => {
       expect(fakeService.run).toHaveBeenCalledTimes(9);
       expect(result.retryBudgetRemaining).toBe(0);
     });
+
+    it('threads validation error into hint.prev_validation_error on retry', async () => {
+      const calls: Array<{ hintHasPrev: boolean; prevValue?: unknown }> = [];
+      const fakeService = {
+        run: vi.fn(async (req: RunExtractionServiceArgs) => {
+          const hint = req.hint ?? {};
+          const prev = (hint as Record<string, unknown>)['prev_validation_error'];
+          calls.push({ hintHasPrev: typeof prev === 'string', prevValue: prev });
+          // Fail first attempt with a parse-error diagnostic; succeed on retry.
+          if (calls.length === 1) {
+            return {
+              kind: 'extraction-draft',
+              recordId: 'XDR-test-v1',
+              source_artifact: { kind: 'freetext', id: 'p' },
+              status: 'pending_review',
+              candidates: [],
+              created_at: '2026-01-01T00:00:00.000Z',
+              diagnostics: [
+                {
+                  severity: 'error',
+                  code: 'extractor_parse_error',
+                  message: 'Bad JSON shape',
+                  details: { rawResponse: 'broken { ' },
+                },
+              ],
+            } as ExtractionDraftBody;
+          }
+          return {
+            kind: 'extraction-draft',
+            recordId: 'XDR-test-v1',
+            source_artifact: { kind: 'freetext', id: 'p' },
+            status: 'pending_review',
+            candidates: [{ target_kind: 'material', draft: { name: 'Y' }, confidence: 1 }],
+            created_at: '2026-01-01T00:00:00.000Z',
+          } as ExtractionDraftBody;
+        }),
+      } as unknown as ExtractionRunnerService;
+
+      await runChunkedExtractionService(fakeService, {
+        target_kind: 'material',
+        text: 'short',
+        source: { kind: 'freetext', id: 'p' },
+      });
+
+      expect(calls.length).toBe(2);
+      expect(calls[0]!.hintHasPrev).toBe(false);
+      expect(calls[1]!.hintHasPrev).toBe(true);
+      expect(calls[1]!.prevValue).toContain('Bad JSON shape');
+    });
+
+    it('surfaces last_raw_response in chunk failure diagnostic on exhaustion', async () => {
+      const fakeService = {
+        run: vi.fn().mockResolvedValue({
+          kind: 'extraction-draft',
+          recordId: 'XDR-test-v1',
+          source_artifact: { kind: 'freetext', id: 'p' },
+          status: 'pending_review',
+          candidates: [],
+          created_at: '2026-01-01T00:00:00.000Z',
+          diagnostics: [
+            {
+              severity: 'error',
+              code: 'extractor_parse_error',
+              message: 'malformed',
+              details: { rawResponse: 'RAW_RESPONSE_PAYLOAD' },
+            },
+          ],
+        } as ExtractionDraftBody),
+      } as unknown as ExtractionRunnerService;
+
+      // Force chunked path so a chunk-level failure diagnostic is emitted
+      const longText = 'A'.repeat(20000);
+      const result = await runChunkedExtractionService(
+        fakeService,
+        { target_kind: 'material', text: longText, source: { kind: 'file', id: 't.pdf' } },
+        { chunkOpts: { maxCharsPerChunk: 5000, overlapChars: 0 }, retryBudget: 0 },
+      );
+
+      // With retryBudget=0, attempt 1 still runs but no retries; the chunk
+      // exhausts on attempt 1 with zero candidates and emits the diagnostic.
+      // (Note: budget=0 means attempt 2's check `<=0 && attempt>1` breaks.)
+      // The chunk-failure path returns extractor_repair_exhausted.
+      expect(
+        result.diagnostics?.some(
+          (d) =>
+            d.code === 'extractor_repair_exhausted' &&
+            (d.details as Record<string, unknown>)?.last_raw_response === 'RAW_RESPONSE_PAYLOAD',
+        ),
+      ).toBe(true);
+    });
   });
 });

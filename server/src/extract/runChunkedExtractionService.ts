@@ -188,37 +188,57 @@ async function runWithRetry(
 ): Promise<ExtractionDraftBody> {
   const MAX_ATTEMPTS = 3;
   let lastError: string | null = null;
+  let lastRawResponse: string | null = null;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    // Check budget before each attempt
     if (retryBudget.remaining <= 0 && attempt > 1) {
       console.warn(
         `[extractor_run_repair_budget_exhausted] chunkIndex=${chunkIndex}`,
       );
-      // Fall through to return whatever we have
       break;
     }
 
-    const result = await service.run(request);
+    // Build the request for this attempt. On retries, include the prior
+    // validation error in the hint so the adapter can append it to the
+    // user message.
+    const attemptRequest: RunExtractionServiceArgs =
+      attempt > 1 && lastError
+        ? {
+            ...request,
+            hint: { ...(request.hint ?? {}), prev_validation_error: lastError },
+          }
+        : request;
 
-    // If we got candidates, success — no retry needed
+    const result = await service.run(attemptRequest);
+
     if (result.candidates && result.candidates.length > 0) {
       return result;
     }
 
-    // Zero candidates — this is a validation failure; retry with error appended
+    // Capture validation error + raw response from result diagnostics.
+    // Failure signals: any diagnostic with code extractor_parse_error,
+    // candidate_malformed, or extractor_repair_exhausted; otherwise fall
+    // back to a generic "zero candidates" message so existing behavior
+    // (zero-candidate retry) is preserved.
+    const failureDiag = (result.diagnostics ?? []).find((d) =>
+      d.code === 'extractor_parse_error' ||
+      d.code === 'candidate_malformed' ||
+      d.code === 'extractor_repair_exhausted',
+    );
+    lastError = failureDiag?.message ?? `Zero candidates returned on attempt ${attempt}`;
+    const failDetails = failureDiag?.details as Record<string, unknown> | undefined;
+    if (failDetails && typeof failDetails['rawResponse'] === 'string') {
+      lastRawResponse = failDetails['rawResponse'] as string;
+    }
+
     if (attempt < MAX_ATTEMPTS) {
       console.warn(
         `[extractor_run_repair_attempt_${attempt}] chunkIndex=${chunkIndex}`,
       );
-      // Don't decrement below 0
       retryBudget.remaining = Math.max(0, retryBudget.remaining - 1);
     }
-
-    lastError = `Zero candidates returned on attempt ${attempt}`;
   }
 
-  // All attempts exhausted — return the last result (zero candidates)
   console.warn(
     `[extractor_run_repair_exhausted] chunkIndex=${chunkIndex} lastError=${lastError ?? 'unknown'}`,
   );
@@ -236,7 +256,11 @@ async function runWithRetry(
         code: 'extractor_repair_exhausted',
         message: `Extraction failed after ${MAX_ATTEMPTS} attempts for chunk ${chunkIndex}`,
         pass_id: 'protocol_extract',
-        details: { chunk_index: chunkIndex, last_error: lastError },
+        details: {
+          chunk_index: chunkIndex,
+          last_error: lastError,
+          last_raw_response: lastRawResponse,
+        },
       },
     ],
   };
