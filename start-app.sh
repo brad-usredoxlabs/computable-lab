@@ -34,7 +34,7 @@ kill_by_port() {
   local port="$1"
   if command -v lsof >/dev/null 2>&1; then
     local pids
-    pids="$(lsof -ti tcp:"$port" 2>/dev/null || true)"
+    pids="$(lsof -ti tcp:"$port" -sTCP:LISTEN 2>/dev/null || true)"
     if [[ -n "$pids" ]]; then
       while IFS= read -r pid; do
         [[ -n "$pid" ]] && kill_pid_if_running "$pid"

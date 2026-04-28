@@ -228,9 +228,13 @@ export function createAgentOrchestrator(
       const resolvedContextMessage = buildResolvedContextMessage(resolvedMentions);
       
       // New: route through chatbot-compile pipeline
+      const ctxMentions = Array.isArray(context?.mentions) ? context.mentions : undefined;
+      const ctxLabwares = Array.isArray(context?.labwares) ? context.labwares : undefined;
       const compileResult = await runChatbotCompile({
         prompt,
         ...(attachments ? { attachments } : {}),
+        ...(ctxMentions ? { mentions: ctxMentions } : {}),
+        ...(ctxLabwares ? { editorLabwares: ctxLabwares } : {}),
         deps: {
           extractionService: deps.extractionService!,
           llmClient: deps.llmClient!,

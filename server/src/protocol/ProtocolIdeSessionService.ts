@@ -73,6 +73,10 @@ function buildSessionEnvelope(
   const source = request.source;
   const sourceMode = intakeSourceKindToSessionSourceMode(source.sourceKind);
 
+  // Only include fields the schema knows about, and only when they have
+  // meaningful values. The schema uses additionalProperties:false and
+  // expects refs / URIs to be objects/strings — never null — so pending
+  // fields are simply omitted and added later by import/projection steps.
   const payload: Record<string, unknown> = {
     kind: 'protocol-ide-session',
     recordId: sessionId,
@@ -80,32 +84,18 @@ function buildSessionEnvelope(
     status: SESSION_STATUS_IMPORTING,
     latestDirectiveText: request.directiveText,
     sourceSummary: buildSourceSummary(source),
-    // Empty/pending refs — populated by later import/projection steps
-    vendorDocumentRef: null,
-    ingestionJobRef: null,
-    protocolImportRef: null,
-    extractedTextRef: null,
     evidenceRefs: [],
-    latestProtocolRef: null,
-    latestEventGraphRef: null,
-    latestEventGraphCacheKey: null,
-    latestDeckSummaryRef: null,
-    latestToolsSummaryRef: null,
-    latestReagentsSummaryRef: null,
-    latestBudgetSummaryRef: null,
     rollingIssueSummary: '',
     issueCardRefs: [],
-    lastExportAt: null,
-    lastExportBundleRef: null,
     notes: `Session bootstrapped from ${source.sourceKind} source.`,
   };
 
-  // Populate source-specific fields
+  // Populate source-specific fields (only when present)
   switch (source.sourceKind) {
     case 'vendor_document':
       payload.vendor = source.vendor;
       payload.title = source.title;
-      payload.pdfUrl = source.pdfUrl ?? null;
+      if (source.pdfUrl) payload.pdfUrl = source.pdfUrl;
       payload.landingUrl = source.landingUrl;
       break;
     case 'pasted_url':
@@ -116,16 +106,16 @@ function buildSessionEnvelope(
         file_name: source.fileName,
         media_type: source.mediaType,
         size_bytes: 0, // will be set by upload service
-        source_url: null,
       };
       break;
   }
 
   return {
-    kind: 'protocol-ide-session',
+    schemaId: PROTOCOL_IDE_SESSION_SCHEMA_ID,
     recordId: sessionId,
     payload,
     meta: {
+      kind: 'protocol-ide-session',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },

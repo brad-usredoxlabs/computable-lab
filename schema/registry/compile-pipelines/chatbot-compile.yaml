@@ -75,8 +75,8 @@ passes:
 
   - id: resolve_roles
     family: expand
-    depends_on: [expand_protocol, expand_patterns]
-    description: Map role coordinates to concrete well addresses under current orientation.
+    depends_on: [expand_protocol]
+    description: Map role coordinates to concrete well addresses under current orientation. Reads events from expand_biology_verbs / expand_patterns / mint_materials / expand_protocol via state.outputs (those passes are conditional, so they cannot be hard dependencies — depending on a `when`-skipped pass would cascade-skip resolve_roles).
 
   - id: compute_volumes
     family: expand

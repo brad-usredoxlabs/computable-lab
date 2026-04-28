@@ -649,6 +649,12 @@ export function createLabware(labwareType: LabwareType, name?: string): Labware 
   }
 
   const config = LABWARE_CONFIGS[labwareType]
+  if (!config) {
+    throw new Error(
+      `createLabware: unknown labwareType "${labwareType}". ` +
+      `Use labwareRecordToEditorLabware() for persisted records.`,
+    )
+  }
   return {
     labwareId: generateLabwareId(),
     name: name || LABWARE_TYPE_LABELS[labwareType],
@@ -753,7 +759,7 @@ export function getLabwareDefaultOrientation(labware: Labware): 'portrait' | 'la
   if (definition) {
     return getDefinitionDefaultOrientation(definition)
   }
-  if (labware.addressing.type === 'grid') return 'landscape'
+  if (labware.addressing?.type === 'grid') return 'landscape'
   if (labware.linearWellStyle === 'trough') return 'landscape'
   return 'portrait'
 }
@@ -870,6 +876,7 @@ export interface LabwareRecordPayload {
     url?: string
   }
   tags?: string[]
+  aliases?: string[]
 }
 
 /**
@@ -893,17 +900,28 @@ export function labwareRecordToEditorLabware(
   }
 }
 
-function pickEditorLabwareType(record: LabwareRecordPayload): LabwareType {
+export function pickEditorLabwareType(record: LabwareRecordPayload): LabwareType {
   const format = record.format ?? {}
   const rows = format.rows
   const cols = format.cols
   const wellCount = format.wellCount ?? (rows && cols ? rows * cols : undefined)
   const kind = (record.labwareType ?? '').toLowerCase()
+  const tagBlob = (record.tags ?? []).join(' ').toLowerCase()
+  const nameBlob = (record.name ?? '').toLowerCase()
+  const aliasBlob = (record.aliases ?? []).join(' ').toLowerCase()
+  const haystack = `${kind} ${tagBlob} ${nameBlob} ${aliasBlob}`
+
+  // Pull a "<n> well/channel/position" count out of the haystack as a fallback
+  // for records whose `format` field is missing (e.g. a search hit that
+  // couldn't load full payload).
+  const countMatch = haystack.match(/(\d+)\s*[-\s]?\s*(?:well|channel|chan|position)/)
+  const namedCount = countMatch ? Number(countMatch[1]) : undefined
 
   // Reservoirs
-  if (kind.includes('reservoir')) {
-    if (cols === 12) return 'reservoir_12'
-    if (cols === 8) return 'reservoir_8'
+  if (kind.includes('reservoir') || haystack.includes('reservoir')) {
+    if (cols === 12 || namedCount === 12) return 'reservoir_12'
+    if (cols === 8 || namedCount === 8) return 'reservoir_8'
+    if (cols === 1 || namedCount === 1) return 'reservoir_1'
     return 'reservoir_1'
   }
 
@@ -920,10 +938,10 @@ function pickEditorLabwareType(record: LabwareRecordPayload): LabwareType {
     return 'tube'
   }
 
-  // Plates
-  if (wellCount === 384) return 'plate_384'
-  if (wellCount === 96 && kind.includes('deep')) return 'deepwell_96'
-  if (wellCount === 96) return 'plate_96'
+  // Plates — prefer explicit wellCount, then fall back to name/tag hints.
+  if (wellCount === 384 || namedCount === 384 || haystack.includes('384')) return 'plate_384'
+  if ((wellCount === 96 && kind.includes('deep')) || haystack.includes('deep-well') || haystack.includes('deepwell') || haystack.includes('deep well')) return 'deepwell_96'
+  if (wellCount === 96 || namedCount === 96 || haystack.includes('96-well') || haystack.includes('96 well')) return 'plate_96'
 
   return 'plate_96'
 }

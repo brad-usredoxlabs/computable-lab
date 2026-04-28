@@ -376,6 +376,52 @@ export const createContainerExpander: BiologyVerbExpander = {
   },
 };
 
+/**
+ * transfer: single transfer event.
+ *
+ * Lowers a high-level "transfer N uL of {source} to {wells} in {labware}" verb
+ * into a primitive `transfer` event. Source can be a labware (when the user
+ * specifies a source plate) or a material reference (when the user pulls from
+ * an aliquot/tube/material mention) — the event details capture whichever was
+ * supplied.
+ */
+export const transferExpander: BiologyVerbExpander = {
+  verb: 'transfer',
+  expand(input) {
+    const { params } = input;
+
+    const targetLabware =
+      (params.labware_id ?? params.target_labware_id ?? params.destination_labware ?? params.labware) as string | undefined;
+    const sourceLabware =
+      (params.source_labware_id ?? params.source_labware) as string | undefined;
+    const targetWell = params.well as string | undefined;
+    const targetWells = (params.wells ?? params.target_wells) as string[] | undefined;
+    const sourceWell = params.source_well as string | undefined;
+    const sourceWells = params.source_wells as string[] | undefined;
+    const volume_uL = (params.volume_uL ?? params.volume_ul) as number | undefined;
+    const volume = params.volume as { value: number; unit: string } | undefined;
+    const materialRef = (params.material_ref ?? params.source_material_ref) as
+      | { kind?: string; id?: string } | string | undefined;
+
+    return [{
+      eventId: makeEventId('transfer'),
+      event_type: 'transfer',
+      details: {
+        ...(sourceLabware ? { source_labware: sourceLabware } : {}),
+        ...(targetLabware ? { destination_labware: targetLabware } : {}),
+        ...(sourceWell ? { source_well: sourceWell } : {}),
+        ...(sourceWells ? { source_wells: sourceWells } : {}),
+        ...(targetWell ? { well: targetWell } : {}),
+        ...(targetWells ? { wells: targetWells } : {}),
+        ...(typeof volume_uL === 'number' ? { volume: { value: volume_uL, unit: 'uL' } } : {}),
+        ...(volume && typeof volume === 'object' ? { volume } : {}),
+        ...(materialRef ? { source_material_ref: materialRef } : {}),
+      },
+      ...(targetLabware ? { labwareId: targetLabware } : {}),
+    }];
+  },
+};
+
 // Register all expanders at module import time
 registerVerbExpander(seedExpander);
 registerVerbExpander(incubateExpander);
@@ -393,3 +439,4 @@ registerVerbExpander(transfectExpander);
 registerVerbExpander(addMaterialExpander);
 registerVerbExpander(createContainerExpander);
 registerVerbExpander(readExpander);
+registerVerbExpander(transferExpander);

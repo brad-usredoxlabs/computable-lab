@@ -20,12 +20,18 @@ export interface Ref {
 // File ref (minimal — matches the datatypes/file-ref.schema.yaml shape)
 // ---------------------------------------------------------------------------
 
+/**
+ * Mirrors schema/core/datatypes/file-ref.schema.yaml.
+ * Schema uses snake_case so the persisted payload does too.
+ */
 export interface FileRef {
-  kind: 'file'
-  id: string
-  fileName?: string
-  mimeType?: string
-  size?: number
+  file_name: string
+  media_type: string
+  source_url?: string
+  size_bytes?: number
+  sha256?: string
+  stored_path?: string
+  page_count?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -37,7 +43,11 @@ export type ProtocolIdeSourceMode = 'vendor_search' | 'pdf_url' | 'upload' | 'di
 export type ProtocolIdeStatus =
   | 'draft'
   | 'importing'
+  | 'imported'
+  | 'import_failed'
   | 'projecting'
+  | 'projected'
+  | 'projection_failed'
   | 'reviewing'
   | 'ready'
   | 'exported'

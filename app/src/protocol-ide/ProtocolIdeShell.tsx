@@ -68,6 +68,13 @@ export interface ProtocolIdeShellProps {
   awaitingVariantSelection?: AwaitingVariantSelection | null
   /** Callback when the user selects a variant. */
   onSelectVariant?: (variantIndex: number) => Promise<void>
+  /** Refetch the session record from the server. */
+  onRefresh?: () => void
+  /** Whether a refresh is currently in flight. */
+  isRefreshing?: boolean
+  /** Live progress messages streamed during session creation / rerun. */
+  progressMessages?: Array<{ id: string; severity: 'info' | 'warning' | 'error'; text: string }>
+
 }
 
 // ---------------------------------------------------------------------------
@@ -534,9 +541,18 @@ export function ProtocolIdeShell({
   onNavigateAway,
   awaitingVariantSelection,
   onSelectVariant,
+  onRefresh,
+  isRefreshing,
+  progressMessages,
 }: ProtocolIdeShellProps): JSX.Element {
   const hasSession = !!session
   const [versionCounter, setVersionCounter] = useState(0)
+  // Whenever the version bumps (e.g. user clicked Rerun), also refresh the
+  // session record so the user sees status / refs / event count update.
+  useEffect(() => {
+    if (versionCounter > 0) onRefresh?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [versionCounter])
   const [selectedEvidenceRefId, setSelectedEvidenceRefId] = useState<string | null>(null)
 
   const handleCitationClick = (citation: EvidenceCitation) => {
@@ -569,14 +585,57 @@ export function ProtocolIdeShell({
         {hasSession && (
           <div className="protocol-ide-topbar-right">
             <span
+              className={`protocol-ide-session-status protocol-ide-session-status--${session.status}`}
+              data-testid="protocol-ide-session-status"
+              title={`Session status: ${session.status}`}
+            >
+              {session.status}
+            </span>
+            <span
               className="protocol-ide-session-badge"
               data-testid="protocol-ide-session-badge"
             >
               {session.recordId}
             </span>
+            {onRefresh && (
+              <button
+                type="button"
+                className="protocol-ide-refresh-btn"
+                onClick={() => onRefresh()}
+                disabled={isRefreshing}
+                aria-label="Refresh session"
+                data-testid="protocol-ide-refresh"
+              >
+                {isRefreshing ? '…' : '⟳'} Refresh
+              </button>
+            )}
           </div>
         )}
       </header>
+      {hasSession && (session.status === 'importing' || session.status === 'projecting') && (
+        <div
+          className="protocol-ide-status-banner"
+          data-testid="protocol-ide-status-banner"
+          role="status"
+        >
+          {session.status === 'importing'
+            ? 'Importing source PDF — extracting text and building evidence…'
+            : 'Compiling protocol — running the projection pipeline…'}
+          <span className="protocol-ide-status-banner-poll">
+            (auto-refreshing every 4s)
+          </span>
+        </div>
+      )}
+      {hasSession && session.status === 'import_failed' && (
+        <div
+          className="protocol-ide-status-banner protocol-ide-status-banner--error"
+          data-testid="protocol-ide-status-banner"
+          role="alert"
+        >
+          Source import failed. The session is still usable — refine the
+          directive on the right and click Rerun to retry the projection.
+        </div>
+      )}
 
       {/* Three-column IDE layout */}
       <div className="protocol-ide-body" data-testid="protocol-ide-body">
@@ -616,9 +675,25 @@ export function ProtocolIdeShell({
                 <h1 className="protocol-ide-graph-title">Event-Graph Review</h1>
               </div>
               <div className="protocol-ide-graph-body" data-testid="protocol-ide-graph-body">
-                <p className="protocol-ide-graph-placeholder">
-                  Create a session to begin reviewing the event graph.
-                </p>
+                {progressMessages && progressMessages.length > 0 ? (
+                  <div className="protocol-ide-progress-log" data-testid="protocol-ide-progress-log">
+                    <h2 className="protocol-ide-progress-log__title">Compile pipeline progress</h2>
+                    <ol className="protocol-ide-progress-log__list">
+                      {progressMessages.map((m) => (
+                        <li
+                          key={m.id}
+                          className={`protocol-ide-progress-log__item protocol-ide-progress-log__item--${m.severity}`}
+                        >
+                          {m.text}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                ) : (
+                  <p className="protocol-ide-graph-placeholder">
+                    Create a session to begin reviewing the event graph.
+                  </p>
+                )}
               </div>
             </main>
           )}

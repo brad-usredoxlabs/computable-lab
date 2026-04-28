@@ -3,6 +3,7 @@ import { useServerMeta } from '../shared/hooks/useServerMeta'
 import { RepoStatusBadge } from './settings/RepoStatusBadge'
 import { AiPanelProvider } from '../shared/context/AiPanelContext'
 import { AiChatPanel } from '../shared/ai/AiChatPanel'
+import { LabwareEditorProvider } from '../graph/context/LabwareEditorContext'
 
 export function Layout() {
   const { repoStatus, loading, error } = useServerMeta({ pollInterval: 60000 })
@@ -28,10 +29,12 @@ export function Layout() {
       </header>
       <main className="main">
         <AiPanelProvider>
-          <div className="main-content-area">
-            <Outlet />
-          </div>
-          <AiChatPanel />
+          <LabwareEditorProvider>
+            <div className="main-content-area">
+              <Outlet />
+            </div>
+            <AiChatPanel />
+          </LabwareEditorProvider>
         </AiPanelProvider>
       </main>
 

@@ -481,7 +481,15 @@ export async function createServer(
 
   // Create protocol, execution, and measurement handlers
   const protocolHandlers = createProtocolHandlers(ctx);
-  const protocolIdeHandlers = createProtocolIdeHandlers(ctx);
+  // The streaming protocol-ide endpoint needs the AI runtime (extractor +
+  // LLM client) which is initialized later. Pass a holder that gets filled
+  // in by initializeAiRuntime; until then, the streaming endpoint reports
+  // "AI runtime not initialized" instead of crashing.
+  const protocolIdeAiDeps: { current: { extractionService: unknown; llmClient: unknown; model?: string } | undefined } = { current: undefined };
+  const protocolIdeHandlers = createProtocolIdeHandlers(
+    ctx,
+    protocolIdeAiDeps as Parameters<typeof createProtocolIdeHandlers>[1],
+  );
   const plannedRunHandlers = createPlannedRunHandlers(ctx);
   const componentHandlers = createComponentHandlers(ctx);
   const executionHandlers = createExecutionHandlers(ctx);
@@ -521,6 +529,7 @@ export async function createServer(
     aiIngestionHandlersImpl = createAiIngestionHandlers(undefined, undefined, ctx.store);
     aiRecordDraftHandlersImpl = undefined;
     currentOrchestrator = undefined;
+    protocolIdeAiDeps.current = undefined;
     aiInfo = undefined;
 
     const aiConfig = appConfig?.ai;
@@ -578,6 +587,12 @@ export async function createServer(
       ingestionAIHandlersImpl = createIngestionAIHandlers(orchestrator, ctx.store);
       materialAIHandlersImpl = createMaterialAIHandlers(orchestrator, ctx.store);
       aiIngestionHandlersImpl = createAiIngestionHandlers(inferenceClient, inferenceConfig.model, ctx.store);
+      // Make the AI runtime available to the protocol-ide streaming endpoint.
+      protocolIdeAiDeps.current = {
+        extractionService: runner,
+        llmClient: inferenceClient,
+        ...(inferenceConfig.model ? { model: inferenceConfig.model } : {}),
+      };
       aiRecordDraftHandlersImpl = createAiRecordDraftHandlers(
         ctx.schemaRegistry,
         ctx.uiSpecLoader,

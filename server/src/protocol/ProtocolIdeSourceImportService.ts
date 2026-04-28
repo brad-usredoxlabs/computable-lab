@@ -29,7 +29,7 @@ import { createHash } from 'node:crypto';
 // Optional PDF extraction override for testing
 // ---------------------------------------------------------------------------
 
-type PdfExtractor = (buffer: Buffer, fileName: string) => Promise<PdfPageText[]>;
+type PdfExtractor = (buffer: Buffer, fileName: string) => Promise<{ pages: PdfPageText[]; sha256: string }>;
 
 // ---------------------------------------------------------------------------
 // Session status constants
@@ -182,25 +182,32 @@ function buildEvidenceCitations(
 // Session update helpers
 // ---------------------------------------------------------------------------
 
-function updateSessionInPlace(
+async function updateSessionInPlace(
   store: RecordStore,
   sessionEnvelope: RecordEnvelope,
   result: SourceImportResult,
-): StoreResult {
+): Promise<StoreResult> {
   const payload = sessionEnvelope.payload as Record<string, unknown>;
   const now = new Date().toISOString();
+
+  // The session schema declares ref fields as ref-objects; the service
+  // historically passed bare ID strings which silently failed validation.
+  // Wrap each ID into the canonical record-ref shape, and drop fields that
+  // weren't populated rather than persisting nulls.
+  const recordRef = (id: string | null | undefined, type: string) =>
+    id ? { kind: 'record' as const, id, type } : undefined;
 
   const updatedPayload: Record<string, unknown> = {
     ...payload,
     status: result.status === 'imported' ? SESSION_STATUS_IMPORTED : SESSION_STATUS_IMPORT_FAILED,
-    vendorDocumentRef: result.vendorDocumentRef,
-    ingestionJobRef: result.ingestionJobRef,
-    protocolImportRef: result.protocolImportRef,
-    extractedTextRef: result.extractedTextRef,
-    evidenceRefs: result.evidenceRefs,
-    evidenceCitations: result.evidenceCitations,
-    protocolImportState: result.protocolImportState,
-    protocolImportConfidence: result.protocolImportConfidence,
+    ...(recordRef(result.vendorDocumentRef, 'vendor-document') ? { vendorDocumentRef: recordRef(result.vendorDocumentRef, 'vendor-document') } : {}),
+    ...(recordRef(result.ingestionJobRef, 'ingestion-job') ? { ingestionJobRef: recordRef(result.ingestionJobRef, 'ingestion-job') } : {}),
+    ...(recordRef(result.protocolImportRef, 'protocol-import') ? { protocolImportRef: recordRef(result.protocolImportRef, 'protocol-import') } : {}),
+    ...(recordRef(result.extractedTextRef, 'document') ? { extractedTextRef: recordRef(result.extractedTextRef, 'document') } : {}),
+    evidenceRefs: (result.evidenceRefs ?? []).map((id) => ({ kind: 'record' as const, id, type: 'evidence' })),
+    ...(result.evidenceCitations ? { evidenceCitations: result.evidenceCitations } : {}),
+    ...(result.protocolImportState ? { protocolImportState: result.protocolImportState } : {}),
+    ...(typeof result.protocolImportConfidence === 'number' ? { protocolImportConfidence: result.protocolImportConfidence } : {}),
     lastImportedAt: now,
     updatedAt: now,
   };
@@ -339,8 +346,12 @@ export class ProtocolIdeSourceImportService {
           },
           {
             extractPdfText: async (buf: Buffer, name: string) => {
-              const pages = await this.pdfExtractor(buf, name);
-              return { pages, sha256: createHash('sha256').update(buf).digest('hex') };
+              // pdfExtractor returns {pages, sha256} — pass through directly so
+              // the inner extract() call in ProtocolImportService gets the
+              // canonical shape (the previous code double-wrapped pages,
+              // producing {pages: {pages: [...], sha256: '...'}, sha256} which
+              // crashed pages.flatMap downstream).
+              return this.pdfExtractor(buf, name);
             },
           },
         );
@@ -350,8 +361,8 @@ export class ProtocolIdeSourceImportService {
         protocolImportConfidence = importResponse.extraction.confidenceScore ?? null;
 
         // 5. Build evidence citations from extracted pages
-        const pages = await this.pdfExtractor(pdfBuffer, fileName);
-        evidenceCitations = buildEvidenceCitations(pages, []);
+        const extracted = await this.pdfExtractor(pdfBuffer, fileName);
+        evidenceCitations = buildEvidenceCitations(extracted.pages, []);
 
         // Create extracted text ref (a synthetic ref pointing to the evidence)
         extractedTextRef = `TEXT-${request.sessionId}-${Date.now().toString(36)}`;
@@ -394,10 +405,15 @@ export class ProtocolIdeSourceImportService {
     };
 
     // 8. Update session in place
-    const updateResult = updateSessionInPlace(this.store, sessionEnvelope, result);
+    const updateResult = await updateSessionInPlace(this.store, sessionEnvelope, result);
     if (!updateResult.success) {
       // Log but don't throw — the import itself succeeded
-      console.warn(`Failed to update session ${request.sessionId}: ${updateResult.error ?? 'unknown error'}`);
+      console.warn(
+        `Failed to update session ${request.sessionId}: ${updateResult.error ?? 'unknown error'}`,
+        updateResult.validation
+          ? `validation=${JSON.stringify(updateResult.validation.errors)}`
+          : '',
+      );
     }
 
     return result;

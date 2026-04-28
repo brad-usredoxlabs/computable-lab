@@ -52,10 +52,47 @@ import { ExtractionRunnerService } from '../../extract/ExtractionRunnerService.j
 import { MentionCandidatePopulator } from '../../extract/MentionCandidatePopulator.js';
 import { findMatchingLibraryExtractor } from '../../extract/LibraryExtractorMatcher.js';
 import { ExtractionMetrics } from '../../extract/ExtractionMetrics.js';
+import { runChatbotCompile } from '../../ai/runChatbotCompile.js';
+import type { LlmClient } from '../../compiler/pipeline/passes/ChatbotCompilePasses.js';
+import { createLabwareLookup } from '../../ai/compiler/labwareLookup.js';
+
+// ---------------------------------------------------------------------------
+// AI runtime deps (set after AI runtime initializes; nullable until then)
+// ---------------------------------------------------------------------------
+
+/**
+ * Mutable holder so the streaming endpoint can pick up the AI runtime
+ * (extractor + LLM client) once `initializeAiRuntime` has finished. Mirrors
+ * the pattern other AI-dependent handlers use.
+ */
+export interface ProtocolIdeAiDepsHolder {
+  current: {
+    extractionService: ExtractionRunnerService;
+    llmClient: LlmClient;
+    model?: string;
+  } | undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Request / Response types
 // ---------------------------------------------------------------------------
+
+/**
+ * SSE event shape streamed from POST /protocol-ide/sessions/stream.
+ * Phases: bootstrap → import → compile → done. Mirrors the AiStreamEvent
+ * shape so the labware-editor chat-message renderer can consume it.
+ */
+export type ProtocolIdeStreamEvent =
+  | { type: 'status'; phase: 'bootstrap' | 'import' | 'compile'; message: string }
+  | { type: 'phase_complete'; phase: 'bootstrap' | 'import' | 'compile'; detail?: string }
+  | { type: 'warning'; phase: 'bootstrap' | 'import' | 'compile'; message: string }
+  | {
+      type: 'pipeline_diagnostics';
+      outcome: import('../../compiler/pipeline/CompileContracts.js').CompileOutcome;
+      diagnostics: Array<{ pass_id: string; code: string; severity: 'info' | 'warning' | 'error'; message: string }>;
+    }
+  | { type: 'done'; result: ProtocolIdeSessionCreateResponse }
+  | { type: 'error'; message: string };
 
 /**
  * Response shape returned by the session creation endpoint.
@@ -78,7 +115,10 @@ export interface ProtocolIdeSessionCreateResponse {
 // Handler factory
 // ---------------------------------------------------------------------------
 
-export function createProtocolIdeHandlers(ctx: AppContext) {
+export function createProtocolIdeHandlers(
+  ctx: AppContext,
+  aiDeps?: ProtocolIdeAiDepsHolder,
+) {
   const sessionService = new ProtocolIdeSessionService(ctx.store);
   const sourceImportService = new ProtocolIdeSourceImportService(ctx.store);
 
@@ -323,6 +363,202 @@ export function createProtocolIdeHandlers(ctx: AppContext) {
           error: 'SESSION_CREATE_FAILED',
           message: err instanceof Error ? err.message : String(err),
         };
+      }
+    },
+
+    /**
+     * POST /protocol-ide/sessions/stream
+     *
+     * Same shape as createSession but streams progress as Server-Sent Events.
+     * Routes the user's PDF + directive through the same chatbot-compile
+     * pipeline the AI chat panel uses (extractor for the PDF, inference model
+     * for the precompile pass), so the user sees real-time per-pass progress
+     * instead of waiting silently.
+     */
+    async createSessionStream(
+      request: FastifyRequest,
+      reply: FastifyReply,
+    ): Promise<void> {
+      const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '*';
+      const validation = validateIntakeRequest(request.body);
+      if (!validation.valid) {
+        reply.status(400);
+        await reply.send({ error: 'INVALID_INTAKE', message: validation.error });
+        return;
+      }
+      const intake = validation.request;
+
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': origin,
+        'Vary': 'Origin',
+      });
+      const sendEvent = (event: ProtocolIdeStreamEvent) => {
+        try {
+          reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+        } catch {
+          /* client disconnected — swallow */
+        }
+      };
+
+      try {
+        // 1. Bootstrap session record (fast, deterministic).
+        sendEvent({ type: 'status', phase: 'bootstrap', message: 'Creating session record…' });
+        const shell = await sessionService.bootstrapSession(intake);
+        sendEvent({ type: 'phase_complete', phase: 'bootstrap', detail: shell.sessionId });
+
+        // 2. Import source PDF (text extraction, evidence build).
+        sendEvent({ type: 'status', phase: 'import', message: 'Importing source PDF (extracting text and evidence)…' });
+        let sourceEvidenceRef: string | null = null;
+        let importWarning: string | undefined;
+        let pdfBuffer: Buffer | undefined;
+        let pdfFileName: string | undefined;
+        let pdfMediaType: string | undefined;
+        try {
+          const importReq: SourceImportRequest = {
+            sessionId: shell.sessionId,
+            sourceKind: intake.source.sourceKind,
+            ...(intake.enableThinking !== undefined ? { enableThinking: intake.enableThinking } : {}),
+          };
+          if (intake.source.sourceKind === 'vendor_document') {
+            importReq.vendor = {
+              vendor: intake.source.vendor as string,
+              title: intake.source.title,
+              landingUrl: intake.source.landingUrl,
+              ...(intake.source.pdfUrl !== undefined && { pdfUrl: intake.source.pdfUrl }),
+              ...(intake.source.snippet !== undefined && { snippet: intake.source.snippet }),
+            };
+          } else if (intake.source.sourceKind === 'pasted_url') {
+            importReq.pastedUrl = intake.source.url;
+          } else if (intake.source.sourceKind === 'uploaded_pdf') {
+            importReq.upload = {
+              fileName: intake.source.fileName,
+              mediaType: intake.source.mediaType,
+              contentBase64: intake.source.contentBase64,
+            };
+            try {
+              pdfBuffer = Buffer.from(intake.source.contentBase64, 'base64');
+              pdfFileName = intake.source.fileName;
+              pdfMediaType = intake.source.mediaType;
+            } catch {
+              /* leave undefined; chatbot-compile will run without an attachment */
+            }
+          }
+          const result = await sourceImportService.importSource(importReq);
+          sourceEvidenceRef = result.protocolImportRef ?? result.vendorDocumentRef ?? null;
+          sendEvent({
+            type: 'phase_complete',
+            phase: 'import',
+            detail: `${result.evidenceRefs?.length ?? 0} evidence snippets`,
+          });
+        } catch (err) {
+          importWarning = err instanceof Error ? err.message : String(err);
+          sendEvent({ type: 'warning', phase: 'import', message: importWarning });
+        }
+
+        // 3. Compile via chatbot-compile (replaces the stubbed projection).
+        sendEvent({ type: 'status', phase: 'compile', message: 'Compiling via chatbot-compile pipeline…' });
+        const deps = aiDeps?.current;
+        let graphReviewRef: string | null = null;
+        let projectionWarning: string | undefined;
+        let eventCount = 0;
+
+        if (!deps) {
+          projectionWarning = 'AI runtime not initialized — skipping compile pipeline.';
+          sendEvent({ type: 'warning', phase: 'compile', message: projectionWarning });
+        } else {
+          try {
+            const compileResult = await runChatbotCompile({
+              prompt: intake.directiveText,
+              ...(pdfBuffer && pdfFileName && pdfMediaType
+                ? { attachments: [{ name: pdfFileName, mime_type: pdfMediaType, content: pdfBuffer }] }
+                : {}),
+              deps: {
+                extractionService: deps.extractionService,
+                llmClient: deps.llmClient,
+                searchLabwareByHint: createLabwareLookup(ctx.store),
+              },
+              ...(deps.model ? { model: deps.model } : {}),
+              onPassEvent: (event) => {
+                if (event.type !== 'pass_started') return;
+                sendEvent({ type: 'status', phase: 'compile', message: `Running ${event.pass_id}…` });
+              },
+            });
+
+            eventCount = compileResult.events.length;
+            const errorCount = compileResult.diagnostics.filter((d) => d.severity === 'error').length;
+            const warnCount = compileResult.diagnostics.filter((d) => d.severity === 'warning').length;
+            sendEvent({
+              type: 'phase_complete',
+              phase: 'compile',
+              detail: `outcome=${compileResult.outcome}, events=${eventCount}, errors=${errorCount}, warnings=${warnCount}`,
+            });
+
+            // Surface diagnostics as a chat-panel-compatible event so the same
+            // renderer used in the labware editor works here.
+            if (errorCount > 0 || warnCount > 0) {
+              sendEvent({
+                type: 'pipeline_diagnostics',
+                outcome: compileResult.outcome,
+                diagnostics: compileResult.diagnostics
+                  .filter((d) => d.severity === 'error' || d.severity === 'warning')
+                  .slice(0, 10)
+                  .map((d) => ({
+                    pass_id: d.pass_id,
+                    code: d.code,
+                    severity: d.severity,
+                    message: d.message,
+                  })),
+              });
+            }
+
+            // Persist results onto the session record.
+            graphReviewRef = `graph-${shell.sessionId}`;
+            const sessionEnv = await sessionService.getSession(shell.sessionId);
+            if (sessionEnv) {
+              const payload = sessionEnv.payload as Record<string, unknown>;
+              const now = new Date().toISOString();
+              const updatedPayload: Record<string, unknown> = {
+                ...payload,
+                status: compileResult.outcome === 'error' ? 'projection_failed' : 'projected',
+                latestEventGraphCacheKey: graphReviewRef,
+                latestEventGraphRef: { kind: 'record', id: graphReviewRef, type: 'event-graph' },
+                updatedAt: now,
+              };
+              await ctx.store.update({
+                envelope: { ...sessionEnv, payload: updatedPayload, meta: { ...sessionEnv.meta, updatedAt: now } },
+                message: `Update session ${shell.sessionId} with compile result`,
+                skipLint: true,
+              });
+            }
+          } catch (err) {
+            projectionWarning = err instanceof Error ? err.message : String(err);
+            sendEvent({ type: 'warning', phase: 'compile', message: projectionWarning });
+          }
+        }
+
+        const result: ProtocolIdeSessionCreateResponse = {
+          success: true,
+          sessionId: shell.sessionId,
+          status: shell.status,
+          sourceSummary: shell.sourceSummary,
+          latestDirectiveText: shell.latestDirectiveText,
+          sourceEvidenceRef,
+          graphReviewRef,
+          issueCardsRef: shell.issueCardsRef,
+          ...(importWarning ? { importWarning } : {}),
+          ...(projectionWarning ? { projectionWarning } : {}),
+        };
+        sendEvent({ type: 'done', result });
+      } catch (err) {
+        sendEvent({
+          type: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        reply.raw.end();
       }
     },
 

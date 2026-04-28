@@ -278,6 +278,22 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
             )
           )
 
+          if (event.type === 'pipeline_diagnostics') {
+            const lines = event.diagnostics
+              .map((d) => `- ${d.pass_id}.${d.code} (${d.severity}): ${d.message}`)
+              .join('\n')
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: generateMessageId(),
+                role: 'system',
+                content: `Pipeline did not produce events (outcome=${event.outcome}).\n${lines}`,
+                timestamp: Date.now(),
+              },
+            ])
+            continue
+          }
+
           if (event.type === 'done') {
             const result = event.result
             setPreviewEvents(result.events ?? [])
@@ -339,24 +355,6 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
               )
             )
             break
-          }
-
-          if (event.type === 'pipeline_diagnostics') {
-            const lines = [`Pipeline did not produce events (outcome=${event.outcome}).`]
-            if (event.diagnostics.length === 0) {
-              lines.push('No structured diagnostics available.')
-            } else {
-              for (const d of event.diagnostics) {
-                lines.push(`- ${d.pass_id}.${d.code}: ${d.message}`)
-              }
-            }
-            const sysMsg: ChatMessage = {
-              id: generateMessageId(),
-              role: 'system',
-              content: lines.join('\n'),
-              timestamp: Date.now(),
-            }
-            setMessages((prev) => [...prev, sysMsg])
           }
         }
       } catch (err: unknown) {

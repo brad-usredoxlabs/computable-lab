@@ -553,6 +553,7 @@ export function registerRoutes(
 
   if (protocolIdeHandlers) {
     fastify.post('/protocol-ide/sessions', protocolIdeHandlers.createSession.bind(protocolIdeHandlers));
+    fastify.post('/protocol-ide/sessions/stream', protocolIdeHandlers.createSessionStream.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/:sessionId/rerun', protocolIdeHandlers.rerunSession.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/:sessionId/select-variant', protocolIdeHandlers.selectVariant.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/:sessionId/feedback', protocolIdeHandlers.submitFeedback.bind(protocolIdeHandlers));

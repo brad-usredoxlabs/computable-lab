@@ -236,7 +236,76 @@ function ArtifactPreview({
     )
   }
 
-  // No artifact or PDF URL — show session-level info
+  // No ingestion artifact and no live PDF URL — fall back to whatever the
+  // session itself recorded (uploaded asset metadata, vendor info, or just
+  // the source summary). This shows the user the file/URL/title they picked
+  // even when the import pipeline didn't produce a fetchable artifact.
+  const upload = session.uploadedAssetRef
+  if (upload?.file_name) {
+    return (
+      <section className="source-pane-preview" data-testid="source-pane-preview">
+        <h3 className="source-pane-preview-title">Source Preview</h3>
+        <div className="source-pane-preview-container" data-testid="source-pane-preview-container">
+          <dl className="source-pane-preview-meta">
+            <dt>File</dt>
+            <dd data-testid="source-pane-preview-filename">{upload.file_name}</dd>
+            {upload.media_type && (
+              <>
+                <dt>Media type</dt>
+                <dd data-testid="source-pane-preview-mimetype">{upload.media_type}</dd>
+              </>
+            )}
+            {typeof upload.size_bytes === 'number' && upload.size_bytes > 0 && (
+              <>
+                <dt>Size</dt>
+                <dd data-testid="source-pane-preview-size">{formatBytes(upload.size_bytes)}</dd>
+              </>
+            )}
+          </dl>
+          <p className="source-pane-preview-note">
+            The uploaded PDF is being processed. Extracted text and provenance
+            will appear here once import completes.
+          </p>
+        </div>
+      </section>
+    )
+  }
+
+  if (session.title || session.vendor || session.landingUrl) {
+    return (
+      <section className="source-pane-preview" data-testid="source-pane-preview">
+        <h3 className="source-pane-preview-title">Source Preview</h3>
+        <div className="source-pane-preview-container" data-testid="source-pane-preview-container">
+          <dl className="source-pane-preview-meta">
+            {session.title && (
+              <>
+                <dt>Title</dt>
+                <dd data-testid="source-pane-preview-title-meta">{session.title}</dd>
+              </>
+            )}
+            {session.vendor && (
+              <>
+                <dt>Vendor</dt>
+                <dd data-testid="source-pane-preview-vendor">{session.vendor}</dd>
+              </>
+            )}
+            {session.landingUrl && (
+              <>
+                <dt>Landing</dt>
+                <dd>
+                  <a href={session.landingUrl} target="_blank" rel="noopener noreferrer">
+                    {session.landingUrl} ↗
+                  </a>
+                </dd>
+              </>
+            )}
+          </dl>
+        </div>
+      </section>
+    )
+  }
+
+  // Truly nothing — empty intake state.
   return (
     <section
       className="source-pane-preview"
