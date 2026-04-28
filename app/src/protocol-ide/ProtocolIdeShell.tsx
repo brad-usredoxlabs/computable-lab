@@ -37,7 +37,10 @@ import {
 import { ProtocolIdeActionRail } from './ProtocolIdeActionRail'
 import { ProtocolIdeExportActions } from './ProtocolIdeExportActions'
 import { ProtocolIdeLabContextPanel } from './ProtocolIdeLabContextPanel'
+import { ProtocolIdeCandidateReviewPanel } from './ProtocolIdeCandidateReviewPanel'
+import type { AwaitingVariantSelection } from './ProtocolIdeCandidateReviewPanel'
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { apiClient } from '../shared/api/client'
 import type {
   DeckSummary,
@@ -61,6 +64,10 @@ export interface ProtocolIdeShellProps {
   isSubmitting?: boolean
   /** Callback when the user navigates away from the Protocol IDE. */
   onNavigateAway?: () => void
+  /** When present, the shell renders the candidate-review panel instead of the event-graph surface. */
+  awaitingVariantSelection?: AwaitingVariantSelection | null
+  /** Callback when the user selects a variant. */
+  onSelectVariant?: (variantIndex: number) => Promise<void>
 }
 
 // ---------------------------------------------------------------------------
@@ -364,6 +371,8 @@ function ActionRailPane({
   const [issueCards, setIssueCards] = useState<IssueCardRef[]>([])
   const [rollingSummary, setRollingSummary] = useState<string | null>(null)
   const [isRerunning, setIsRerunning] = useState(false)
+  const [planError, setPlanError] = useState<string | null>(null)
+  const navigate = useNavigate()
 
   // Fetch issue cards when the session changes
   useEffect(() => {
@@ -450,6 +459,25 @@ function ActionRailPane({
     }
   }, [session.recordId, directiveText, onVersionIncrement])
 
+  // Plan execution handler (spec-034)
+  // Uses session.latestProtocolRef which points to the local-protocol record
+  // produced by the protocol_realize pass (spec-022).
+  const handlePlanExecution = useCallback(async () => {
+    if (!session.latestProtocolRef) return
+    setPlanError(null)
+    try {
+      const result = await apiClient.createPlannedRunFromLocalProtocol(
+        session.latestProtocolRef.id,
+      )
+      navigate(`/runs/${encodeURIComponent(result.plannedRunId)}/editor`)
+    } catch (err) {
+      setPlanError(err instanceof Error ? err.message : String(err))
+    }
+  }, [session.latestProtocolRef, navigate])
+
+  const isPlanExecutionDisabled =
+    !session.latestProtocolRef || session.status === 'projecting'
+
   return (
     <>
       <ProtocolIdeActionRail
@@ -468,6 +496,22 @@ function ActionRailPane({
         sessionId={session.recordId}
         issueCardCount={issueCards.length}
       />
+      {/* Plan execution button (spec-034) */}
+      <div className="action-rail-section" data-testid="protocol-ide-plan-execution-section">
+        <button
+          data-testid="protocol-ide-plan-execution-btn"
+          onClick={handlePlanExecution}
+          disabled={isPlanExecutionDisabled}
+          aria-label="Create planned run and navigate to event editor"
+        >
+          Plan execution
+        </button>
+        {planError && (
+          <div data-testid="protocol-ide-plan-error" className="error">
+            {planError}
+          </div>
+        )}
+      </div>
       {session.labContext && (
         <ProtocolIdeLabContextPanel
           labContext={session.labContext}
@@ -488,6 +532,8 @@ export function ProtocolIdeShell({
   submitError,
   isSubmitting,
   onNavigateAway,
+  awaitingVariantSelection,
+  onSelectVariant,
 }: ProtocolIdeShellProps): JSX.Element {
   const hasSession = !!session
   const [versionCounter, setVersionCounter] = useState(0)
@@ -550,13 +596,20 @@ export function ProtocolIdeShell({
         {/* Center: event-graph review surface (primary) */}
         <div className="protocol-ide-center-pane" data-testid="protocol-ide-center-pane">
           {hasSession ? (
-            <EventGraphSurface
-              session={session}
-              versionCounter={versionCounter}
-              highlightedEvidenceRefId={selectedEvidenceRefId}
-              onEvidenceClick={handleEvidenceClick}
-              onIssueCardClick={handleIssueCardClick}
-            />
+            awaitingVariantSelection ? (
+              <ProtocolIdeCandidateReviewPanel
+                awaitingVariantSelection={awaitingVariantSelection}
+                onSelectVariant={onSelectVariant ?? (() => Promise.resolve())}
+              />
+            ) : (
+              <EventGraphSurface
+                session={session}
+                versionCounter={versionCounter}
+                highlightedEvidenceRefId={selectedEvidenceRefId}
+                onEvidenceClick={handleEvidenceClick}
+                onIssueCardClick={handleIssueCardClick}
+              />
+            )
           ) : (
             <main className="protocol-ide-graph-surface" role="main" aria-label="Event-graph review surface">
               <div className="protocol-ide-graph-header">

@@ -10,10 +10,22 @@ passes:
     family: parse
     description: Run ExtractionRunnerService against prompt text and file attachments; emit structured entities (labware hints, material refs, operators, dates, volumes).
 
+  - id: deterministic_precompile
+    family: parse
+    depends_on: []
+    description: Deterministic clause-level precompile using verb-action-map and registries. Produces candidateEvents directly; only residual clauses go to ai_precompile.
+
   - id: ai_precompile
     family: expand
-    depends_on: [extract_entities]
-    description: LLM-backed pass that turns prompt + extracted entities into candidate events, candidate labwares, and unresolved refs.
+    depends_on: [extract_entities, deterministic_precompile]
+    description: >
+      LLM-backed pass that turns prompt + extracted entities into candidate events,
+      candidate labwares, and unresolved refs.
+      spec-046: Gating on deterministic completeness is handled internally by the pass
+      (not via when: clause) because DEFAULT_WHEN_EVALUATOR only supports simple dot-paths.
+      When deterministic completeness >= 0.9 with no residuals, the pass returns early
+      without calling the LLM. Otherwise it proceeds with the LLM call, including the
+      deterministic plan as context in the user message.
 
   - id: mint_materials
     family: expand

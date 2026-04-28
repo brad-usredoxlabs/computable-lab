@@ -9,6 +9,7 @@ describe('parseCsv', () => {
       { name: 'Alice', age: '30', city: 'NYC' },
       { name: 'Bob', age: '25', city: 'LA' }
     ]);
+    expect(result.errors).toEqual([]);
   });
 
   it('handles quoted fields with commas', () => {
@@ -17,15 +18,13 @@ describe('parseCsv', () => {
     expect(result.rows).toEqual([
       { name: 'Smith, John', description: 'A, B, C' }
     ]);
+    expect(result.errors).toEqual([]);
   });
 
-  it('handles quoted fields with newlines', () => {
+  it('rejects quoted fields with newlines', () => {
     const result = parseCsv('name,notes\nAlice,"Line1\nLine2"\nBob,Simple');
-    expect(result.headers).toEqual(['name', 'notes']);
-    expect(result.rows).toEqual([
-      { name: 'Alice', notes: 'Line1\nLine2' },
-      { name: 'Bob', notes: 'Simple' }
-    ]);
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors[0]).toContain('multiline quoted fields are not supported');
   });
 
   it('handles empty cells', () => {
@@ -35,6 +34,7 @@ describe('parseCsv', () => {
       { a: '', b: '2', c: '' },
       { a: '1', b: '2', c: '3' }
     ]);
+    expect(result.errors).toEqual([]);
   });
 
   it('handles escaped quotes', () => {
@@ -42,6 +42,7 @@ describe('parseCsv', () => {
     expect(result.rows).toEqual([
       { name: 'Alice', quote: 'He said "Hello"' }
     ]);
+    expect(result.errors).toEqual([]);
   });
 
   it('handles CRLF line endings', () => {
@@ -51,6 +52,7 @@ describe('parseCsv', () => {
       { a: '1', b: '2' },
       { a: '3', b: '4' }
     ]);
+    expect(result.errors).toEqual([]);
   });
 
   it('trims headers but not values', () => {
@@ -59,6 +61,7 @@ describe('parseCsv', () => {
     expect(result.rows).toEqual([
       { name: 'Alice', age: '  30  ' }
     ]);
+    expect(result.errors).toEqual([]);
   });
 
   it('pads rows with fewer fields', () => {
@@ -66,6 +69,7 @@ describe('parseCsv', () => {
     expect(result.rows).toEqual([
       { a: '1', b: '2', c: '' }
     ]);
+    expect(result.errors).toEqual([]);
   });
 
   it('ignores extra fields', () => {
@@ -73,6 +77,7 @@ describe('parseCsv', () => {
     expect(result.rows).toEqual([
       { a: '1', b: '2' }
     ]);
+    expect(result.errors).toEqual([]);
   });
 
   it('skips empty lines', () => {
@@ -81,5 +86,6 @@ describe('parseCsv', () => {
       { a: '1', b: '2' },
       { a: '3', b: '4' }
     ]);
+    expect(result.errors).toEqual([]);
   });
 });

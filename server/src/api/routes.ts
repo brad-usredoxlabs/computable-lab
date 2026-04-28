@@ -48,6 +48,7 @@ import type { PromptTemplateHandlers } from './handlers/PromptTemplateHandlers.j
 import type { OntologyTermHandlers } from './handlers/OntologyTermHandlers.js';
 import type { VerbActionMapHandlers } from './handlers/VerbActionMapHandlers.js';
 import type { ProtocolIdeHandlers } from './handlers/ProtocolIdeHandlers.js';
+import type { PlannedRunHandlers } from './handlers/PlannedRunHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -69,6 +70,7 @@ export interface RouteOptions {
   metaHandlers?: MetaHandlers;
   protocolHandlers?: ProtocolHandlers;
   protocolIdeHandlers?: ProtocolIdeHandlers;
+  plannedRunHandlers?: PlannedRunHandlers;
   componentHandlers?: ComponentHandlers;
   executionHandlers?: ExecutionHandlers;
   measurementHandlers?: MeasurementHandlers;
@@ -563,6 +565,19 @@ export function registerRoutes(
     fastify.get('/protocol-ide/sessions/:sessionId/event-graph', protocolIdeHandlers.getEventGraph.bind(protocolIdeHandlers));
     fastify.get('/protocol-ide/curated-vendors', protocolIdeHandlers.getCuratedVendors.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/:sessionId/lab-context-override', protocolIdeHandlers.setProtocolIdeLabContextOverride.bind(protocolIdeHandlers));
+  }
+
+  // ============================================================================
+  // Planned Run Routes (optional - requires plannedRunHandlers)
+  // ============================================================================
+
+  const { plannedRunHandlers } = options;
+
+  if (plannedRunHandlers) {
+    fastify.post('/runs/from-local-protocol', plannedRunHandlers.createFromLocalProtocol.bind(plannedRunHandlers));
+    fastify.post('/runs/:id/bindings', plannedRunHandlers.updateBindings.bind(plannedRunHandlers));
+    fastify.post('/runs/:id/sample-map', plannedRunHandlers.setSampleMap.bind(plannedRunHandlers));
+    fastify.post('/runs/:id/compile', plannedRunHandlers.compileRunPlan.bind(plannedRunHandlers));
   }
 
   // ============================================================================

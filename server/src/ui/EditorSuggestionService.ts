@@ -25,6 +25,30 @@ import type { RequirementLine, ProcurementManifest } from '../procurement/Procur
 import { createEditorProjectionService } from './EditorProjectionService.js';
 
 // ============================================================================
+// Fetch timeout helper
+// ============================================================================
+
+const DEFAULT_FETCH_TIMEOUT_MS = (() => {
+  const raw = process.env['EDITOR_SUGGESTION_FETCH_TIMEOUT_MS'];
+  const parsed = raw ? Number.parseInt(raw, 10) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 2000;
+})();
+
+export async function fetchWithTimeout(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs: number = DEFAULT_FETCH_TIMEOUT_MS,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ============================================================================
 // Domain types
 // ============================================================================
 
@@ -114,7 +138,7 @@ async function resolveLocalRecords(
   for (const schemaId of schemaIds) {
     try {
       const encodedSchemaId = encodeURIComponent(schemaId);
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `http://localhost:3000/records?schemaId=${encodedSchemaId}&limit=${limit * 2}`
       );
       if (!response.ok) continue;
@@ -306,7 +330,7 @@ export async function resolveOntology(
       url += `&ontologies=${encodeURIComponent(ontologies.join(','))}`;
     }
 
-    const response = await fetch(url);
+    const response = await fetchWithTimeout(url);
     if (!response.ok) return items;
     const data = await response.json() as { results?: Array<{ id: string; label: string; namespace: string }> };
     for (const term of data.results ?? []) {
@@ -340,7 +364,7 @@ export async function resolveVendorSearch(
   const items: SuggestionItem[] = [];
 
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `http://localhost:3000/vendors/search?q=${encodeURIComponent(query)}&limit=${limit}`
     );
     if (!response.ok) return items;

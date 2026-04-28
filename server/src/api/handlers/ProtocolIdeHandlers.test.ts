@@ -1314,3 +1314,171 @@ describe('ProtocolIdeHandlers — projection chaining', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Variant selection — select-variant endpoint
+// ---------------------------------------------------------------------------
+
+describe('ProtocolIdeHandlers — selectVariant', () => {
+  it('sets selectedVariantIndex and returns success when in awaiting_variant_selection status', async () => {
+    const mockEnvelope: RecordEnvelope = {
+      kind: 'protocol-ide-session',
+      recordId: 'PIS-001',
+      payload: {
+        kind: 'protocol-ide-session',
+        status: 'awaiting_variant_selection',
+        candidates: [
+          { displayName: 'Cell culture variant' },
+          { displayName: 'Plant matter variant' },
+        ],
+      },
+      meta: { createdAt: new Date().toISOString() },
+    };
+    const store = makeFeedbackMockStore(mockEnvelope, { success: true });
+    const ctx = makeMockCtx(store);
+    const handlers = createProtocolIdeHandlers(ctx);
+
+    const request = {
+      params: { sessionId: 'PIS-001' },
+      body: { variantIndex: 1 },
+    } as unknown as FastifyRequest<{
+      Params: { sessionId: string };
+      Body: { variantIndex: number };
+    }>;
+
+    const reply = makeMockReply();
+    const result = await handlers.selectVariant(request, reply);
+
+    expect(reply.status).toHaveBeenCalledWith(200);
+    expect(result).toMatchObject({ success: true });
+    // Verify the store was updated with selectedVariantIndex
+    expect(store.update).toHaveBeenCalledTimes(1);
+    const updatedPayload = (store.update as ReturnType<typeof vi.fn>).mock.calls[0][0].envelope.payload;
+    expect(updatedPayload.selectedVariantIndex).toBe(1);
+  });
+
+  it('returns 404 when session is not found', async () => {
+    const store = makeFeedbackMockStore(null, { success: true });
+    const ctx = makeMockCtx(store);
+    const handlers = createProtocolIdeHandlers(ctx);
+
+    const request = {
+      params: { sessionId: 'PIS-nonexistent' },
+      body: { variantIndex: 0 },
+    } as unknown as FastifyRequest<{
+      Params: { sessionId: string };
+      Body: { variantIndex: number };
+    }>;
+
+    const reply = makeMockReply();
+    const result = await handlers.selectVariant(request, reply);
+
+    expect(reply.status).toHaveBeenCalledWith(404);
+    expect(result).toMatchObject({
+      error: 'SESSION_NOT_FOUND',
+      message: expect.stringContaining('not found'),
+    });
+  });
+
+  it('returns 400 when session is not in awaiting_variant_selection status', async () => {
+    const mockEnvelope: RecordEnvelope = {
+      kind: 'protocol-ide-session',
+      recordId: 'PIS-001',
+      payload: {
+        kind: 'protocol-ide-session',
+        status: 'reviewing',
+      },
+      meta: { createdAt: new Date().toISOString() },
+    };
+    const store = makeFeedbackMockStore(mockEnvelope, { success: true });
+    const ctx = makeMockCtx(store);
+    const handlers = createProtocolIdeHandlers(ctx);
+
+    const request = {
+      params: { sessionId: 'PIS-001' },
+      body: { variantIndex: 0 },
+    } as unknown as FastifyRequest<{
+      Params: { sessionId: string };
+      Body: { variantIndex: number };
+    }>;
+
+    const reply = makeMockReply();
+    const result = await handlers.selectVariant(request, reply);
+
+    expect(reply.status).toHaveBeenCalledWith(400);
+    expect(result).toMatchObject({
+      error: 'NOT_IN_VARIANT_SELECTION',
+      message: expect.stringContaining('awaiting_variant_selection'),
+    });
+  });
+
+  it('returns 400 when variantIndex is out of range', async () => {
+    const mockEnvelope: RecordEnvelope = {
+      kind: 'protocol-ide-session',
+      recordId: 'PIS-001',
+      payload: {
+        kind: 'protocol-ide-session',
+        status: 'awaiting_variant_selection',
+        candidates: [
+          { displayName: 'Variant 1' },
+        ],
+      },
+      meta: { createdAt: new Date().toISOString() },
+    };
+    const store = makeFeedbackMockStore(mockEnvelope, { success: true });
+    const ctx = makeMockCtx(store);
+    const handlers = createProtocolIdeHandlers(ctx);
+
+    const request = {
+      params: { sessionId: 'PIS-001' },
+      body: { variantIndex: 5 },
+    } as unknown as FastifyRequest<{
+      Params: { sessionId: string };
+      Body: { variantIndex: number };
+    }>;
+
+    const reply = makeMockReply();
+    const result = await handlers.selectVariant(request, reply);
+
+    expect(reply.status).toHaveBeenCalledWith(400);
+    expect(result).toMatchObject({
+      error: 'VARIANT_INDEX_OUT_OF_RANGE',
+      message: expect.stringContaining('out of range'),
+    });
+  });
+
+  it('returns 400 when variantIndex is negative', async () => {
+    const mockEnvelope: RecordEnvelope = {
+      kind: 'protocol-ide-session',
+      recordId: 'PIS-001',
+      payload: {
+        kind: 'protocol-ide-session',
+        status: 'awaiting_variant_selection',
+        candidates: [
+          { displayName: 'Variant 1' },
+        ],
+      },
+      meta: { createdAt: new Date().toISOString() },
+    };
+    const store = makeFeedbackMockStore(mockEnvelope, { success: true });
+    const ctx = makeMockCtx(store);
+    const handlers = createProtocolIdeHandlers(ctx);
+
+    const request = {
+      params: { sessionId: 'PIS-001' },
+      body: { variantIndex: -1 },
+    } as unknown as FastifyRequest<{
+      Params: { sessionId: string };
+      Body: { variantIndex: number };
+    }>;
+
+    const reply = makeMockReply();
+    const result = await handlers.selectVariant(request, reply);
+
+    expect(reply.status).toHaveBeenCalledWith(400);
+    expect(result).toMatchObject({
+      error: 'INVALID_VARIANT_INDEX',
+      message: expect.stringContaining('non-negative'),
+    });
+  });
+});

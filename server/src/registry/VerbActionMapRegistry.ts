@@ -2,7 +2,8 @@
  * VerbActionMapRegistry — single-file YAML reader for verb→ontology mappings.
  *
  * Loads `schema/registry/verb-action-map.yaml` once at construction, validates
- * with Zod, and exposes a singleton accessor with `lookup(verb)` and `list()`.
+ * with Zod, and exposes a singleton accessor with `lookup(verb)`, `list()`, and
+ * `findVerbForToken(token)`.
  *
  * This is NOT an aggregate-file registry — it reads exactly one YAML document.
  */
@@ -25,6 +26,7 @@ export const VerbMappingSchema = z.object({
   exact_id: z.string().optional(),
   obi_id: z.string().optional(),
   notes: z.string().optional(),
+  synonyms: z.array(z.string()).optional(),
 });
 
 export type VerbMapping = z.infer<typeof VerbMappingSchema>;
@@ -100,5 +102,32 @@ export class VerbActionMapRegistry {
    */
   size(): number {
     return this.mappings.length;
+  }
+
+  /**
+   * Find a verb mapping by token (canonical verb name or synonym).
+   * Case-insensitive matching. Returns the first match or undefined.
+   */
+  findVerbForToken(token: string): { verb: string; exact_id?: string; obi_id?: string; source: 'canonical' | 'synonym' } | undefined {
+    const lower = token.toLowerCase();
+    for (const entry of this.mappings) {
+      if (entry.verb.toLowerCase() === lower) {
+        return {
+          verb: entry.verb,
+          ...(entry.exact_id !== undefined && { exact_id: entry.exact_id }),
+          ...(entry.obi_id !== undefined && { obi_id: entry.obi_id }),
+          source: 'canonical' as const,
+        };
+      }
+      if (entry.synonyms?.some((s) => s.toLowerCase() === lower)) {
+        return {
+          verb: entry.verb,
+          ...(entry.exact_id !== undefined && { exact_id: entry.exact_id }),
+          ...(entry.obi_id !== undefined && { obi_id: entry.obi_id }),
+          source: 'synonym' as const,
+        };
+      }
+    }
+    return undefined;
   }
 }

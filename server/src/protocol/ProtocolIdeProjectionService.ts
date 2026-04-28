@@ -23,6 +23,7 @@ import type {
   CompactDiagnostic,
   EvidenceMap,
   LabContextProjection,
+  VariantSummary,
 } from './ProtocolIdeProjectionContracts.js';
 import { validateProjectionRequest } from './ProtocolIdeProjectionContracts.js';
 import { runLocalProtocolPipeline } from '../compiler/pipeline/localProtocolPipelineRun.js';
@@ -301,6 +302,9 @@ export class ProtocolIdeProjectionService {
       // Per-request thinking-mode override
       ...(request.enableThinking !== undefined ? { enableThinking: request.enableThinking } : {}),
 
+      // Variant selection index (set by selectVariant handler, read by protocol_realize)
+      ...(payload.selectedVariantIndex !== undefined ? { selectedVariantIndex: payload.selectedVariantIndex } : {}),
+
       // Timestamp for provenance
       projectionTimestamp: new Date().toISOString(),
 
@@ -451,6 +455,25 @@ export class ProtocolIdeProjectionService {
       // The pipeline paused for variant selection.
       // We'll persist the session status and return the special response.
       // The caller (executeProjection) handles the actual persistence.
+      // Build variant summaries from the extraction-draft candidates.
+      const extractOutput = pipelineResult.outputs.get('protocol_extract') as
+        | { extractionDraftRef: string; candidates: unknown[] }
+        | undefined;
+      const candidates = extractOutput?.candidates as
+        | Array<Record<string, unknown>>
+        | undefined;
+      const variantSummaries: VariantSummary[] = candidates
+        ? candidates.map((c, i) => {
+            const draft = (c.draft ?? {}) as Record<string, unknown>;
+            return {
+              index: i,
+              displayName: (draft.display_name as string) ?? (draft.title as string) ?? `Variant ${i + 1}`,
+              variantLabel: (draft.variant_label as string) ?? null,
+              sectionCount: (draft.sections as number) ?? 0,
+            };
+          })
+        : [];
+
       return {
         status: 'awaiting_variant_selection',
         eventGraphData: {
@@ -462,12 +485,11 @@ export class ProtocolIdeProjectionService {
         overlaySummaries: {},
         diagnostics,
         awaitingVariantSelection: {
-          extractionDraftRef: `draft-${request.sessionRef}`,
-          variants: [],
+          extractionDraftRef: extractOutput?.extractionDraftRef ?? `draft-${request.sessionRef}`,
+          variants: variantSummaries,
         },
       };
     }
-    const diagnostics = diagnosticsToCompact(pipelineResult.diagnostics);
 
     // Build evidence map from source refs
     const evidenceMap: EvidenceMap = {};

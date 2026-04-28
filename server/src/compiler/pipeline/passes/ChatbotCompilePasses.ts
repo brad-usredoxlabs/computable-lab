@@ -377,6 +377,11 @@ export interface CreateAiPrecompilePassDeps {
 /**
  * Creates the ai_precompile pass that asks an LLM to reason over prompt + entities
  * and emit a structured proposal of candidate events, labwares, and unresolved references.
+ *
+ * spec-046: Gated on deterministic_precompile output. If deterministic completeness >= 0.9
+ * and no residual clauses, returns the deterministic plan directly (no LLM call).
+ * Otherwise, includes the deterministic plan in the user message for context and merges
+ * LLM results with deterministic candidateEvents (deterministic first, LLM second).
  */
 export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
   return {
@@ -385,8 +390,55 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
     async run({ pass_id, state }: PassRunArgs): Promise<PassResult> {
       const prompt = typeof state.input.prompt === 'string' ? state.input.prompt : '';
       const entities = (state.outputs.get('extract_entities') as { entities?: unknown[] } | undefined)?.entities ?? [];
+
+      // Read deterministic_precompile output (may be absent if pass not in pipeline)
+      const detOutput = state.outputs.get('deterministic_precompile') as
+        { candidateEvents?: unknown[]; candidateLabwares?: unknown[]; unresolvedRefs?: unknown[];
+          residualClauses?: unknown[]; deterministicCompleteness?: number } | undefined;
+
+      // spec-046: Gate on deterministic completeness
+      const hasResiduals = Array.isArray(detOutput?.residualClauses) && detOutput.residualClauses.length > 0;
+      const completeness = typeof detOutput?.deterministicCompleteness === 'number'
+        ? detOutput.deterministicCompleteness : 0;
+      const detComplete = !hasResiduals && completeness >= 0.9;
+
+      if (detComplete && detOutput) {
+        // High completeness, no residuals — return deterministic plan directly, NO LLM call
+        const detCandidateEvents = Array.isArray(detOutput.candidateEvents)
+          ? (detOutput.candidateEvents as Array<{ verb: string; [key: string]: unknown }>)
+          : [];
+        const detCandidateLabwares = Array.isArray(detOutput.candidateLabwares)
+          ? (detOutput.candidateLabwares as CandidateLabware[])
+          : [];
+        const detUnresolvedRefs = Array.isArray(detOutput.unresolvedRefs)
+          ? (detOutput.unresolvedRefs as Array<{ kind: string; label: string; reason: string }>)
+          : [];
+
+        return {
+          ok: true,
+          output: {
+            candidateEvents: detCandidateEvents,
+            candidateLabwares: detCandidateLabwares,
+            unresolvedRefs: detUnresolvedRefs,
+          } satisfies AiPrecompileOutput,
+        };
+      }
+
+      // Either no deterministic output, or incomplete — proceed with LLM call
+      // Build user message with deterministic context if available
+      const detContext = detOutput
+        ? {
+            deterministic: {
+              candidateEvents: Array.isArray(detOutput.candidateEvents) ? detOutput.candidateEvents : [],
+              candidateLabwares: Array.isArray(detOutput.candidateLabwares) ? detOutput.candidateLabwares : [],
+              unresolvedRefs: Array.isArray(detOutput.unresolvedRefs) ? detOutput.unresolvedRefs : [],
+              residualClauses: Array.isArray(detOutput.residualClauses) ? detOutput.residualClauses : [],
+            },
+          }
+        : {};
+
       const system = AI_PRECOMPILE_SYSTEM_PROMPT;
-      const user = JSON.stringify({ prompt, entities });
+      const user = JSON.stringify({ prompt, entities, ...detContext });
       const messages: ChatMessage[] = [
         { role: 'system', content: system },
         { role: 'user', content: user },
@@ -414,9 +466,8 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
         };
       }
       // Validate against zod schema; emit warning on mismatch, never throw.
-      let validated: unknown;
       try {
-        validated = createAiPrecompileOutputSchema().parse(parsed);
+        createAiPrecompileOutputSchema().parse(parsed);
       } catch {
         // spec-019: log raw LLM response on shape mismatch for debugging
         const truncated = raw.slice(0, 4000);
@@ -433,7 +484,7 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
         };
       }
       // Normalize: ensure all three arrays exist; carry through validated fields
-      const output: AiPrecompileOutput = {
+      const llmOutput: AiPrecompileOutput = {
         candidateEvents: Array.isArray(parsed.candidateEvents) ? parsed.candidateEvents : [],
         candidateLabwares: Array.isArray(parsed.candidateLabwares) ? parsed.candidateLabwares : [],
         unresolvedRefs: Array.isArray(parsed.unresolvedRefs) ? parsed.unresolvedRefs : [],
@@ -445,12 +496,29 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
         ...(Array.isArray(parsed.patternEvents) ? { patternEvents: parsed.patternEvents } : {}),
       };
 
+      // Merge deterministic events (deterministic first, LLM second)
+      if (detOutput && Array.isArray(detOutput.candidateEvents) && detOutput.candidateEvents.length > 0) {
+        const detEvents = detOutput.candidateEvents as Array<{ verb: string; [key: string]: unknown }>;
+        llmOutput.candidateEvents = [...detEvents, ...llmOutput.candidateEvents];
+      }
+
+      // Union candidateLabwares (dedupe by hint)
+      if (detOutput && Array.isArray(detOutput.candidateLabwares) && detOutput.candidateLabwares.length > 0) {
+        const detLabwares = detOutput.candidateLabwares as CandidateLabware[];
+        const existingHints = new Set(llmOutput.candidateLabwares.map((l: { hint: string }) => l.hint));
+        for (const lw of detLabwares) {
+          if (!existingHints.has(lw.hint)) {
+            llmOutput.candidateLabwares.push(lw);
+          }
+        }
+      }
+
       // Lint: flag dense physical-well enumeration (regression from role-based coords).
       // Skip events that already use role coordinates — only warn when wells are listed
       // without a role field present.
       const enumerationWarnings: PassDiagnostic[] = [];
       let regressionCount = 0;
-      for (const event of output.candidateEvents) {
+      for (const event of llmOutput.candidateEvents) {
         const wells = (event as { wells?: string[] }).wells;
         if (Array.isArray(wells) && wells.length > 3 && !('role' in event)) {
           regressionCount++;
@@ -465,7 +533,7 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
         });
       }
 
-      return { ok: true, output, ...(enumerationWarnings.length > 0 ? { diagnostics: enumerationWarnings } : {}) };
+      return { ok: true, output: llmOutput, ...(enumerationWarnings.length > 0 ? { diagnostics: enumerationWarnings } : {}) };
     },
   };
 }

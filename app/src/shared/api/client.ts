@@ -2723,6 +2723,107 @@ export const apiClient = {
       body: JSON.stringify(overrides),
     })
   },
+
+  /**
+   * Select an extraction variant during the candidate-review step.
+   * Calls POST /protocol-ide/sessions/:sessionId/select-variant
+   * @returns { success: true }
+   */
+  async selectProtocolIdeVariant(
+    sessionId: string,
+    variantIndex: number,
+  ): Promise<{ success: true }> {
+    return request(`/protocol-ide/sessions/${encodeURIComponent(sessionId)}/select-variant`, {
+      method: 'POST',
+      body: JSON.stringify({ variantIndex }),
+    })
+  },
+
+  // === Plan execution (spec-034) ===
+
+  /**
+   * Create a planned-run draft from a local-protocol.
+   * Calls POST /runs/from-local-protocol
+   * @returns { plannedRunId, state }
+   */
+  async createPlannedRunFromLocalProtocol(
+    localProtocolRef: string,
+    options?: { title?: string },
+  ): Promise<{ plannedRunId: string; state: string }> {
+    return request('/runs/from-local-protocol', {
+      method: 'POST',
+      body: JSON.stringify({ localProtocolRef, ...(options ?? {}) }),
+    })
+  },
+
+  // === Binding mode (spec-035) ===
+
+  /**
+   * Update bindings on a planned-run.
+   * Calls POST /runs/:id/bindings
+   * @param plannedRunId - The planned-run record ID
+   * @param bindings - Labware, material, and deck platform bindings
+   */
+  async updatePlannedRunBindings(
+    plannedRunId: string,
+    bindings: {
+      labware?: Array<{ roleId: string; labwareInstanceRef: string }>
+      materials?: Array<{ roleId: string; materialInstanceRef: string }>
+      deckPlatformId?: string
+    },
+  ): Promise<{ success: true }> {
+    return request(`/runs/${encodeURIComponent(plannedRunId)}/bindings`, {
+      method: 'POST',
+      body: JSON.stringify(bindings),
+    })
+  },
+
+  // === Sample Map API ===
+
+  /**
+   * Set the sample-map (well-to-sample-label binding) on a planned-run.
+   * Calls POST /runs/:id/sample-map
+   *
+   * @param plannedRunId - The planned-run record ID
+   * @param body - Either { mode: 'implicit' } or { mode: 'csv'; entries: [{ wellId, sampleLabel }] }
+   * @returns { success, mode, entryCount } on success
+   */
+  async setPlannedRunSampleMap(
+    plannedRunId: string,
+    body:
+      | { mode: 'implicit' }
+      | { mode: 'csv'; entries: Array<{ wellId: string; sampleLabel: string }> },
+  ): Promise<{ success: true; mode: string; entryCount: number }> {
+    return request(`/runs/${encodeURIComponent(plannedRunId)}/sample-map`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  // === Compile API ===
+
+  /**
+   * Compile a planned-run: run the run-plan-compile pipeline.
+   * Calls POST /runs/:id/compile
+   *
+   * @param plannedRunId - The planned-run record ID
+   * @returns { status, diagnostics, eventGraphRef } on success
+   */
+  async compileRunPlan(plannedRunId: string): Promise<{
+    status: string
+    diagnostics: Array<{
+      severity: string
+      code: string
+      message: string
+      pass_id: string
+      details?: Record<string, unknown>
+    }>
+    eventGraphRef?: string
+  }> {
+    return request(`/runs/${encodeURIComponent(plannedRunId)}/compile`, {
+      method: 'POST',
+    })
+  },
 }
 
 /**

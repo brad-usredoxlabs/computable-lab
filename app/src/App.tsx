@@ -21,6 +21,7 @@ const FormulationsPage = lazy(async () => import('./editor/FormulationsPage').th
 const MaterialsPage = lazy(async () => import('./editor/MaterialsPage').then((module) => ({ default: module.MaterialsPage })))
 const LabwareTestPage = lazy(async () => import('./pages/LabwareTestPage').then((module) => ({ default: module.default })))
 const ProtocolIdePage = lazy(async () => import('./protocol-ide/ProtocolIdePage').then((module) => ({ default: module.ProtocolIdePage })))
+const RunEditorRouter = lazy(async () => import('./graph/RunEditorRouter').then((module) => ({ default: module.RunEditorRouter })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -53,7 +54,7 @@ export function App() {
             {/* Multi-Labware Event Editor */}
             <Route path="labware-editor" element={<DeferredRoute><LabwareEventEditor /></DeferredRoute>} />
             <Route path="runs/:runId" element={<DeferredRoute><RunWorkspacePage /></DeferredRoute>} />
-            <Route path="runs/:runId/editor" element={<DeferredRoute><LabwareEventEditor /></DeferredRoute>} />
+            <Route path="runs/:runId/editor" element={<DeferredRoute><RunEditorRouter /></DeferredRoute>} />
             <Route path="runs/:runId/editor/:mode" element={<DeferredRoute><LabwareEventEditor /></DeferredRoute>} />
             
             {/* Settings */}

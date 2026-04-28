@@ -380,6 +380,13 @@ export async function runPipeline(
         // Store the full output object under state.outputs
         outputs.set(passId, passResult.output);
       }
+
+      // Write secondary outputs (passthrough pattern for gated passes)
+      if (passResult.secondaryOutputs) {
+        for (const [key, value] of Object.entries(passResult.secondaryOutputs)) {
+          outputs.set(key, value);
+        }
+      }
     } else {
       const statusEntry: PassStatusEntry = { pass_id: passId, status: 'failed' };
       if (passResult.outcome) {

@@ -2,82 +2,107 @@ kind: verb-action-map
 mappings:
   - verb: seed
     notes: "no canonical mapping"
+    synonyms: [plant, inoculate]
   - verb: incubate
     exact_id: "EXACT:Class_49"
     obi_id: "OBI:0000838"
     notes: "Hold sample at controlled conditions for duration"
+    synonyms: [hold, rest, sit]
   - verb: harvest
     obi_id: "OBI:0000659"
     notes: "Collect specimen from culture"
+    synonyms: [collect, pick]
   - verb: aliquot
     exact_id: "EXACT:Aliquot"
     obi_id: "OBI:0600018"
     notes: "Partition material into equal portions"
+    synonyms: [partition, split]
   - verb: wash
     exact_id: "EXACT:Class_54"
     obi_id: "OBI:0302888"
     notes: "Remove contaminants by solution cycles"
+    synonyms: [rinse]
   - verb: elute
     obi_id: "OBI:0302905"
     notes: "Extract material from adsorbent with solvent"
+    synonyms: [extract]
   - verb: resuspend
     exact_id: "EXACT:Class_57"
     notes: "Re-dissolve pelleted material"
+    synonyms: [redissolve]
   - verb: pellet
     obi_id: "OBI:0302886"
     notes: "Sediment by centrifugation"
+    synonyms: [sediment]
   - verb: dilute
     exact_id: "EXACT:Dilute"
     notes: "Reduce concentration by adding solvent"
+    synonyms: [thin]
   - verb: mix
     exact_id: "EXACT:Class_45"
     obi_id: "OBI:0000652"
     notes: "Combine or homogenize materials"
+    synonyms: [combine, blend, vortex]
   - verb: stain
     obi_id: "OBI:0302887"
     notes: "Apply dye for visualization"
+    synonyms: [dye]
   - verb: fix
     exact_id: "EXACT:Fixate"
     obi_id: "OBI:0600021"
     notes: "Chemically preserve cellular structure"
+    synonyms: [fixate, preserve]
   - verb: permeabilize
     obi_id: "OBI:0600033"
     notes: "Disrupt membrane to allow molecular access"
+    synonyms: [permeable]
   - verb: block
     notes: "no canonical mapping"
+    synonyms: [blocking]
   - verb: quench
     notes: "no canonical mapping"
+    synonyms: [stop, halt]
   - verb: count
     exact_id: "EXACT:Count"
     notes: "Enumerate cells or particles"
+    synonyms: [enumerate, tally]
   - verb: passage
     obi_id: "OBI:0002747"
     notes: "Subculture and re-seed cells"
+    synonyms: [subculture]
   - verb: freeze
     exact_id: "EXACT:Freeze"
     obi_id: "OBI:0001953"
     notes: "Reduce temperature to preserve material"
+    synonyms: [chill, cryopreserve]
   - verb: thaw
     exact_id: "EXACT:Class_38"
     notes: "Raise temperature of frozen material"
+    synonyms: [warm]
   - verb: spin
     exact_id: "EXACT:Class_53"
     obi_id: "OBI:0302886"
     notes: "Apply centrifugal force to separate components"
+    synonyms: [centrifuge]
   - verb: label
     exact_id: "EXACT:Label"
     obi_id: "OBI:0600067"
     notes: "Attach detectable marker to target"
+    synonyms: [tag]
   - verb: transfect
     obi_id: "OBI:0001152"
     notes: "Introduce nucleic acid into cells"
+    synonyms: [transduce]
   - verb: add_material
     exact_id: "EXACT:Class_9"
     obi_id: "OBI:0000652"
     notes: "Introduce reagent or material"
+    synonyms: [add, dispense, deliver]
   - verb: create_container
     notes: "no canonical mapping"
+    synonyms: [make, build]
   - verb: read
     exact_id: "EXACT:Measure"
     obi_id: "OBI:0000070"
     notes: "Acquire measurement from instrument"
+    synonyms: [measure, scan]

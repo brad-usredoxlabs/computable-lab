@@ -202,6 +202,28 @@ properties:
     items: { type: string }
     uniqueItems: true
 
+  sampleMap:
+    type: array
+    description: >
+      Optional explicit well-to-sample-label map. When absent, samples
+      are bound implicitly by well order (A1=sample 1, B1=sample 2, ...).
+    items:
+      type: object
+      additionalProperties: false
+      required: [wellId, sampleLabel]
+      properties:
+        wellId:
+          type: string
+          description: Plate well identifier (e.g. A1, H12).
+        sampleLabel:
+          type: string
+          minLength: 1
+          description: User-supplied label for the sample in this well.
+
+  deckPlatformId:
+    type: string
+    description: "Optional: the deck platform identifier (e.g., 'manual', 'integra_assist', 'opentrons_ot2', 'opentrons_flex'). Additive optional field for spec-035."
+
   procurement:
     type: object
     additionalProperties: false

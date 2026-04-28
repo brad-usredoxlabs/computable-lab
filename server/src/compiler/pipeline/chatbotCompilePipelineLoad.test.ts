@@ -31,9 +31,9 @@ describe('chatbot-compile.yaml', () => {
       expect(spec.entrypoint).toBe('chatbot-compile');
     });
 
-    it('has exactly 18 passes', () => {
+    it('has exactly 19 passes', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
-      expect(spec.passes.length).toBe(18);
+      expect(spec.passes.length).toBe(19);
     });
   });
 
@@ -43,6 +43,7 @@ describe('chatbot-compile.yaml', () => {
       const passIds = spec.passes.map((p) => p.id);
       expect(passIds).toEqual([
         'extract_entities',
+        'deterministic_precompile',
         'ai_precompile',
         'mint_materials',
         'apply_directives',
@@ -69,6 +70,7 @@ describe('chatbot-compile.yaml', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const families = spec.passes.map((p) => p.family);
       expect(families).toEqual([
+        'parse',
         'parse',
         'expand',
         'expand',
@@ -99,11 +101,19 @@ describe('chatbot-compile.yaml', () => {
       expect(extractEntities?.depends_on).toBeUndefined();
     });
 
-    it('ai_precompile depends on extract_entities', () => {
+    it('deterministic_precompile has no dependencies', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const detPrecompile = spec.passes.find((p) => p.id === 'deterministic_precompile');
+      expect(detPrecompile).toBeDefined();
+      expect(detPrecompile?.depends_on).toEqual([]);
+      expect(detPrecompile?.family).toBe('parse');
+    });
+
+    it('ai_precompile depends on extract_entities and deterministic_precompile', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const aiPrecompile = spec.passes.find((p) => p.id === 'ai_precompile');
       expect(aiPrecompile).toBeDefined();
-      expect(aiPrecompile?.depends_on).toEqual(['extract_entities']);
+      expect(aiPrecompile?.depends_on).toEqual(['extract_entities', 'deterministic_precompile']);
     });
 
     it('expand_biology_verbs depends on ai_precompile and resolve_prior_labware_references', () => {
@@ -227,7 +237,7 @@ describe('chatbot-compile.yaml', () => {
       expect(extractEntities?.when).toBeUndefined();
     });
 
-    it('ai_precompile has no when clause', () => {
+    it('ai_precompile has no when clause (gating is internal to the pass, spec-046)', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const aiPrecompile = spec.passes.find((p) => p.id === 'ai_precompile');
       expect(aiPrecompile).toBeDefined();

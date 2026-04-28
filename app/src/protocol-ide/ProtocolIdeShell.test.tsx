@@ -17,6 +17,7 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { ProtocolIdeShell } from './ProtocolIdeShell'
 import type { ProtocolIdeSession } from './types'
+import type { AwaitingVariantSelection } from './ProtocolIdeCandidateReviewPanel'
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -29,13 +30,18 @@ const mockOnNavigateAway = vi.fn()
 // Helpers
 // ---------------------------------------------------------------------------
 
-function renderShell(session?: ProtocolIdeSession | null) {
+function renderShell(
+  session?: ProtocolIdeSession | null,
+  awaitingVariantSelection?: AwaitingVariantSelection | null,
+) {
   return render(
     <MemoryRouter>
       <ProtocolIdeShell
         session={session ?? null}
         onCreateSession={mockOnCreateSession}
         onNavigateAway={mockOnNavigateAway}
+        awaitingVariantSelection={awaitingVariantSelection}
+        onSelectVariant={async () => {}}
       />
     </MemoryRouter>
   )
@@ -259,5 +265,61 @@ describe('ProtocolIdeShell — loaded session state', () => {
   it('does NOT call onCreateSession in loaded state', () => {
     renderShell(makeSession())
     expect(mockOnCreateSession).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests — awaiting variant selection state
+// ---------------------------------------------------------------------------
+
+describe('ProtocolIdeShell — awaiting variant selection', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('renders the candidate review panel when awaitingVariantSelection is provided', () => {
+    const awaitingVariantSelection = {
+      extractionDraftRef: 'draft-PIS-001',
+      variants: [
+        { index: 0, displayName: 'Cell culture', variantLabel: 'cell culture', sectionCount: 3 },
+        { index: 1, displayName: 'Plant matter', variantLabel: 'plant matter', sectionCount: 4 },
+      ],
+    }
+
+    renderShell(makeSession(), awaitingVariantSelection)
+    expect(screen.getByTestId('protocol-ide-candidate-review')).toBeTruthy()
+  })
+
+  it('renders variant cards with correct data', () => {
+    const awaitingVariantSelection = {
+      extractionDraftRef: 'draft-PIS-001',
+      variants: [
+        { index: 0, displayName: 'Cell culture', variantLabel: 'cell culture', sectionCount: 3 },
+      ],
+    }
+
+    renderShell(makeSession(), awaitingVariantSelection)
+    expect(screen.getByTestId('variant-card-0')).toBeTruthy()
+    expect(screen.getByText('Cell culture')).toBeTruthy()
+    expect(screen.getByText('cell culture')).toBeTruthy()
+    expect(screen.getByText('3 sections')).toBeTruthy()
+    expect(screen.getByTestId('variant-select-0')).toBeTruthy()
+  })
+
+  it('does NOT render the event-graph surface when awaitingVariantSelection is provided', () => {
+    const awaitingVariantSelection = {
+      extractionDraftRef: 'draft-PIS-001',
+      variants: [
+        { index: 0, displayName: 'Cell culture', variantLabel: 'cell culture', sectionCount: 3 },
+      ],
+    }
+
+    renderShell(makeSession(), awaitingVariantSelection)
+    // The event-graph surface should not be rendered
+    expect(screen.queryByTestId('protocol-ide-status-badge')).toBeNull()
   })
 })

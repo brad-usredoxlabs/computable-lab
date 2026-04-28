@@ -9,8 +9,10 @@
  *
  * Output: { protocolRef, localProtocolRef, selectedVariantLabel? }
  *
- * Variant-picker UX is deferred to spec-029. This pass auto-picks the
- * first variant and emits an info diagnostic so the UX layer can detect it.
+ * Variant-picker UX (spec-029): when candidates.length > 1 and
+ * selectedVariantIndex is not set on the pipeline input, emits
+ * protocol_realize_awaiting_variant_selection to pause the pipeline.
+ * When selectedVariantIndex IS set, uses that index instead of auto-picking.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -198,25 +200,62 @@ export function createProtocolRealizePass(
       }
 
       // ------------------------------------------------------------------
-      // 3. Select a variant (auto-pick first)
+      // 3. Select a variant
       // ------------------------------------------------------------------
-      const selectedCandidate = candidates[0] as Record<string, unknown>;
+      // Read selectedVariantIndex from pipeline input (set by selectVariant
+      // handler via session.selectedVariantIndex, passed through
+      // composePipelineInput).
+      const selectedVariantIndex = (args.state.input as Record<string, unknown>)
+        .selectedVariantIndex as number | undefined;
+
+      let selectedCandidate: Record<string, unknown>;
+      let awaitingVariantSelection = false;
+
+      if (candidates.length > 1 && selectedVariantIndex === undefined) {
+        // Multi-candidate case without a selection — emit pause signal
+        awaitingVariantSelection = true;
+        diagnostics.push({
+          severity: 'info',
+          code: 'protocol_realize_awaiting_variant_selection',
+          message: `extraction-draft has ${candidates.length} variants; awaiting user selection via selectedVariantIndex.`,
+          pass_id: 'protocol_realize',
+        });
+        // Pick first candidate as a placeholder (will not be used since
+        // the pipeline will be paused before promotion).
+        selectedCandidate = candidates[0] as Record<string, unknown>;
+      } else if (selectedVariantIndex !== undefined && selectedVariantIndex >= 0 && selectedVariantIndex < candidates.length) {
+        // User has selected a specific variant
+        selectedCandidate = candidates[selectedVariantIndex] as Record<string, unknown>;
+      } else {
+        // Single candidate or out-of-range index — auto-pick first
+        selectedCandidate = candidates[0] as Record<string, unknown>;
+        if (candidates.length > 1) {
+          diagnostics.push({
+            severity: 'info',
+            code: 'protocol_realize_multivariant_auto_pick',
+            message: `extraction-draft has ${candidates.length} variants; auto-picked first.`,
+            pass_id: 'protocol_realize',
+          });
+        }
+      }
+
       const draftObj = selectedCandidate.draft as Record<string, unknown> | undefined;
       const selectedVariantLabel =
         (draftObj?.variant_label as string | undefined) ?? null;
 
-      if (candidates.length > 1) {
-        diagnostics.push({
-          severity: 'info',
-          code: 'protocol_realize_multivariant_auto_pick',
-          message: `extraction-draft has ${candidates.length} variants; auto-picked first ('${selectedVariantLabel}'). Variant selection UX is deferred.`,
-          pass_id: 'protocol_realize',
-        });
-      }
-
       // ------------------------------------------------------------------
       // 4. Promote the selected candidate to a protocol record
       // ------------------------------------------------------------------
+      // If awaiting variant selection, skip promotion — the pipeline will
+      // be paused by the projection service after detecting the diagnostic.
+      if (awaitingVariantSelection) {
+        return {
+          ok: true,
+          output: {},
+          diagnostics,
+        };
+      }
+
       const promotionResult = await deps.runPromotionCompile({
         pipelinePath:
           'schema/registry/compile-pipelines/promotion-compile.yaml',
