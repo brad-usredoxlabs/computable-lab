@@ -16,7 +16,7 @@
  * - Projection failures do NOT destroy the source workspace.
  */
 
-import type { RecordStore, StoreResult, RecordEnvelope } from '../store/types.js';
+import type { RecordStore, RecordEnvelope } from '../store/types.js';
 import type {
   ProjectionRequest,
   ProjectionResponse,
@@ -25,9 +25,8 @@ import type {
   LabContextProjection,
   VariantSummary,
 } from './ProtocolIdeProjectionContracts.js';
-import { validateProjectionRequest } from './ProtocolIdeProjectionContracts.js';
 import { runLocalProtocolPipeline } from '../compiler/pipeline/localProtocolPipelineRun.js';
-import type { Pass } from '../compiler/pipeline/types.js';
+import type { Pass, PassRunArgs, PassResult } from '../compiler/pipeline/types.js';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -66,7 +65,7 @@ function diagnosticsToCompact(
     severity: d.severity as CompactDiagnostic['severity'],
     title: d.code,
     detail: d.message,
-    suggestedAction: d.severity === 'error' ? 'Review the diagnostic and adjust the directive.' : undefined,
+    ...(d.severity === 'error' ? { suggestedAction: 'Review the diagnostic and adjust the directive.' } : {}),
   }));
 }
 
@@ -95,7 +94,7 @@ export function createEchoPass(id: string, family: string): Pass {
   return {
     id,
     family: family as Pass['family'],
-    run(args: { pass_id: string; state: { input: Record<string, unknown>; context: Record<string, unknown>; meta: Record<string, unknown>; outputs: Map<string, unknown>; diagnostics: Array<{ severity: string; code: string; message: string; pass_id: string }> } }) {
+    run(args: PassRunArgs): PassResult {
       return {
         ok: true,
         output: {
@@ -119,7 +118,7 @@ export interface ProtocolIdeProjectionServiceDeps {
   recordStore: RecordStore;
   /** Chunked extraction service */
   runChunkedExtraction: (
-    req: { target_kind: string; text: string; source: { kind: string; id: string } },
+    req: { target_kind: string; text: string; source: { kind: 'file' | 'publication' | 'freetext'; id: string; locator?: string } },
   ) => Promise<{ candidates: unknown[]; diagnostics?: unknown[] }>;
   /** Promotion compile runner */
   runPromotionCompile: (args: {
@@ -136,16 +135,10 @@ export interface ProtocolIdeProjectionServiceDeps {
   ajvValidator: {
     validate: (payload: unknown, schemaId: string) => { valid: boolean; errors: Array<{ path: string; message: string }> };
   };
-  /** Build semantic key function */
-  buildSemanticKey: (args: {
-    verb: { canonical: string; semanticInputs?: Array<{ name: string; derivedFrom: { input: string; fn: string }; required: boolean }>; };
-    resolvedInputs: Record<string, unknown>;
-    phaseId: string;
-    ordinal: number;
-    derivations: Record<string, unknown>;
-  }) => { ok: boolean; result?: { semanticKey: string; semanticKeyComponents: Record<string, unknown> }; reason?: string };
-  /** Derivations map */
-  derivations: Record<string, unknown>;
+  /** Build semantic key function (typed as unknown to decouple from the SemanticKeyBuilder; adapters cast at the pass boundary) */
+  buildSemanticKey: unknown;
+  /** Derivations map (typed as unknown to keep deps decoupled from the derivation registry; the pass adapter casts as needed) */
+  derivations: unknown;
   /** Load verb definition by canonical name */
   loadVerbDefinition: (canonical: string) => Promise<{ canonical: string; semanticInputs?: Array<{ name: string; derivedFrom: { input: string; fn: string }; required: boolean }> } | null>;
 }
@@ -322,7 +315,10 @@ export class ProtocolIdeProjectionService {
       case 'protocol_extract': {
         const { createProtocolExtractPass } = await import('../compiler/pipeline/passes/ProtocolExtractPass.js');
         return createProtocolExtractPass({
-          runChunkedExtraction: this.deps.runChunkedExtraction,
+          // Deps interface declares the simple wrapper shape; the pass calls it
+          // through the runChunkedExtractionService signature. The handler-side
+          // closure adapts at runtime.
+          runChunkedExtraction: this.deps.runChunkedExtraction as unknown as Parameters<typeof createProtocolExtractPass>[0]['runChunkedExtraction'],
           recordStore: this.deps.recordStore,
           onChunkProgress: (event) => {
             // NOTE: No existing SSE/streaming wire exists for the Protocol IDE.
@@ -341,21 +337,22 @@ export class ProtocolIdeProjectionService {
         const manualOverrides = sessionPayload?.manualLabContextOverrides as Record<string, unknown> | undefined;
         return createLabContextResolvePass({
           llmClient: this.deps.llmClient,
-          manualOverrides: manualOverrides
+          ...(manualOverrides
             ? {
-                labwareKind: manualOverrides.labwareKind as string | undefined,
-                plateCount: manualOverrides.plateCount as number | undefined,
-                sampleCount: manualOverrides.sampleCount as number | undefined,
-                equipmentOverrides: undefined,
+                manualOverrides: {
+                  ...(manualOverrides.labwareKind !== undefined ? { labwareKind: manualOverrides.labwareKind as string } : {}),
+                  ...(manualOverrides.plateCount !== undefined ? { plateCount: manualOverrides.plateCount as number } : {}),
+                  ...(manualOverrides.sampleCount !== undefined ? { sampleCount: manualOverrides.sampleCount as number } : {}),
+                },
               }
-            : undefined,
+            : {}),
         });
       }
       case 'protocol_realize': {
         const { createProtocolRealizePass } = await import('../compiler/pipeline/passes/ProtocolRealizePass.js');
         return createProtocolRealizePass({
           recordStore: this.deps.recordStore,
-          runPromotionCompile: this.deps.runPromotionCompile,
+          runPromotionCompile: this.deps.runPromotionCompile as unknown as Parameters<typeof createProtocolRealizePass>[0]['runPromotionCompile'],
         });
       }
       case 'resolve_protocol_ref': {
@@ -367,7 +364,7 @@ export class ProtocolIdeProjectionService {
       case 'validate_local_protocol': {
         const { createValidateLocalProtocolPass } = await import('../compiler/pipeline/passes/LocalProtocolPasses.js');
         return createValidateLocalProtocolPass({
-          ajvValidator: this.deps.ajvValidator,
+          ajvValidator: this.deps.ajvValidator as unknown as Parameters<typeof createValidateLocalProtocolPass>[0]['ajvValidator'],
         });
       }
       case 'expand_local_customizations': {
@@ -385,7 +382,7 @@ export class ProtocolIdeProjectionService {
           buildSemanticKey: this.deps.buildSemanticKey,
           derivations: this.deps.derivations,
           loadVerbDefinition: this.deps.loadVerbDefinition,
-        });
+        } as unknown as Parameters<typeof createEventsEmitPass>[0]);
       }
       default:
         // Fallback to echo pass for unknown pass ids
@@ -396,7 +393,7 @@ export class ProtocolIdeProjectionService {
   /**
    * Build a set of passes using the provided factory.
    */
-  private async buildPasses(passFactory: (id: string, family: string) => Promise<Pass>): Promise<Pass[]> {
+  private async buildPasses(passFactory: (id: string, family: string) => Pass | Promise<Pass>): Promise<Pass[]> {
     const passIds = [
       'protocol_extract',
       'lab_context_resolve',
@@ -408,7 +405,7 @@ export class ProtocolIdeProjectionService {
       'events_emit',
     ];
     const families = ['parse', 'normalize', 'expand', 'disambiguate', 'validate', 'expand', 'project', 'project'];
-    const promises = passIds.map((id, i) => passFactory(id, families[i]));
+    const promises = passIds.map((id, i) => passFactory(id, families[i]!));
     return Promise.all(promises);
   }
 
@@ -421,7 +418,7 @@ export class ProtocolIdeProjectionService {
    * - 'default' otherwise
    */
   private resolveSource(
-    resolvedValue: string | number,
+    _resolvedValue: string | number,
     directiveText: string | undefined,
     manualOverrides: Record<string, unknown> | undefined,
     field: string,
@@ -546,7 +543,7 @@ export class ProtocolIdeProjectionService {
       // Determine provenance per field: manual > directive > default
       const directiveText = request.directiveText?.trim();
       // Read manual overrides from the cached session envelope
-      const manualOverrides = this.currentSessionEnvelope?.payload?.manualLabContextOverrides as
+      const manualOverrides = (this.currentSessionEnvelope?.payload as Record<string, unknown> | undefined)?.manualLabContextOverrides as
         | Record<string, unknown>
         | undefined;
 

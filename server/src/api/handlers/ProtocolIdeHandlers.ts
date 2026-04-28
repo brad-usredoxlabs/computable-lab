@@ -48,6 +48,7 @@ import { runPromotionCompile } from '../../compiler/pipeline/PromotionCompileRun
 import { buildSemanticKey } from '../../protocol/SemanticKeyBuilder.js';
 import { derivations } from '../../protocol/derivations/index.js';
 import { OpenAICompatibleExtractor } from '../../extract/OpenAICompatibleExtractor.js';
+import type { ExtractorAdapter } from '../../extract/ExtractorAdapter.js';
 import { ExtractionRunnerService } from '../../extract/ExtractionRunnerService.js';
 import { MentionCandidatePopulator } from '../../extract/MentionCandidatePopulator.js';
 import { findMatchingLibraryExtractor } from '../../extract/LibraryExtractorMatcher.js';
@@ -124,7 +125,7 @@ export function createProtocolIdeHandlers(
 
   // Build deps for the real pass chain
   const extractorProfile = ctx.appConfig?.ai?.extractor;
-  const extractorFactory = (targetKind: string) => {
+  const extractorFactory: (_targetKind: string) => ExtractorAdapter = (_targetKind) => {
     if (!extractorProfile || !extractorProfile.enabled) {
       return {
         async extract() {
@@ -133,7 +134,7 @@ export function createProtocolIdeHandlers(
             diagnostics: [{ severity: 'error', code: 'CONFIG_MISSING', message: 'extractor profile missing or disabled' }],
           };
         },
-      };
+      } as ExtractorAdapter;
     }
     return new OpenAICompatibleExtractor({ config: extractorProfile });
   };
@@ -168,7 +169,7 @@ export function createProtocolIdeHandlers(
               max_tokens: args.maxTokens ?? 500,
             }),
           });
-          const data = await response.json();
+          const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
           return data.choices?.[0]?.message?.content ?? '';
         },
       }
@@ -185,7 +186,7 @@ export function createProtocolIdeHandlers(
   const projectionDeps = {
     recordStore: ctx.store,
     runChunkedExtraction: async (
-      req: { target_kind: string; text: string; source: { kind: string; id: string } },
+      req: { target_kind: string; text: string; source: { kind: 'file' | 'publication' | 'freetext'; id: string; locator?: string } },
     ) => {
       const result = await extractionRunner.run({
         target_kind: req.target_kind,
@@ -194,7 +195,7 @@ export function createProtocolIdeHandlers(
       });
       return {
         candidates: result.candidates ?? [],
-        diagnostics: result.diagnostics,
+        ...(result.diagnostics ? { diagnostics: result.diagnostics } : {}),
       };
     },
     runPromotionCompile,

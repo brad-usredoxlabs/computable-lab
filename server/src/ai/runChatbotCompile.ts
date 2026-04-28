@@ -34,11 +34,8 @@ import {
   type AiLabwareAdditionPatch,
   type ResolveReferencesOutput,
   type ResolvePriorLabwareReferencesOutput,
-  type ExpandProtocolOutput,
   type LabStatePassOutput,
-  type MintMaterialsPassOutput,
   type ApplyDirectivesPassOutput,
-  type ExpandPatternsOutput,
   type ResolveRolesOutput,
   type ComputeResourcesPassOutput,
   type PlanDeckLayoutOutput,
@@ -56,10 +53,8 @@ import type {
   DeckLayoutPlan,
   ResolvedLabwareRef,
 } from '../compiler/pipeline/CompileContracts.js';
-import type { InstrumentRunFile } from '../compiler/artifacts/InstrumentRunFile.js';
 import type { LabStateSnapshot } from '../compiler/state/LabState.js';
 import { emptyLabState } from '../compiler/state/LabState.js';
-import type { DirectiveNode } from '../compiler/directives/Directive.js';
 import type { LabStateCache } from '../compiler/state/LabStateCache.js';
 import { parsePromptMentions, type PromptMention } from './promptMentions.js';
 import type { LabwareSummary } from './types.js';
@@ -174,15 +169,11 @@ export async function runChatbotCompile(
 
   // Extract outputs from each pass; all are optional (pass may have been skipped or empty)
   const ai = (result.outputs.get('ai_precompile') ?? {}) as Partial<AiPrecompileOutput>;
-  const mintOutput = (result.outputs.get('mint_materials') ?? { events: [] }) as MintMaterialsPassOutput;
   const applyDirOutput = (result.outputs.get('apply_directives') ?? { directives: [] }) as ApplyDirectivesPassOutput;
-  const patterns = (result.outputs.get('expand_patterns') ?? { events: [] }) as ExpandPatternsOutput;
-  const verbs = (result.outputs.get('expand_biology_verbs') ?? { events: [] }) as { events: PlateEventPrimitive[] };
   const resolvedRoles = (result.outputs.get('resolve_roles') ?? { events: [] }) as ResolveRolesOutput;
   const labware = (result.outputs.get('resolve_labware') ?? { labwareAdditions: [], resolvedLabwares: [] }) as LabwareResolveOutput;
   const resolveRefs = (result.outputs.get('resolve_references') ?? { resolvedRefs: [], unresolvableRefs: [] }) as ResolveReferencesOutput;
   const priorLabware = (result.outputs.get('resolve_prior_labware_references') ?? { resolvedLabwareRefs: [], unresolved: [] }) as ResolvePriorLabwareReferencesOutput;
-  const protocolEvents = (result.outputs.get('expand_protocol') ?? { events: [], stepsExpanded: 0 }) as ExpandProtocolOutput;
   const labStateOutput = (result.outputs.get('lab_state') ?? { events: [], snapshotAfter: emptyLabState() }) as LabStatePassOutput;
   const computeResourcesOutput = (result.outputs.get('compute_resources') ?? { resourceManifest: { tipRacks: [], reservoirLoads: [], consumables: [] } }) as ComputeResourcesPassOutput;
 
@@ -233,21 +224,25 @@ export async function runChatbotCompile(
   // Check validationReport for error findings (spec-034)
   const validateOutput = (result.outputs.get('validate') ?? { validationReport: { findings: [] } }) as ValidatePassOutput;
   const validationReport = validateOutput.validationReport;
-  if (validationReport.findings.some((f: { severity: string }) => f.severity === 'error')) {
+  const findings = validationReport.findings as Array<{ severity: string }>;
+  if (findings.some((f) => f.severity === 'error')) {
     outcome = 'error';
   }
 
   // Build terminalArtifacts
+  const labStateDelta = {
+    events: labStateOutput.events,
+    snapshotAfter: labStateOutput.snapshotAfter,
+  };
   const terminalArtifacts: TerminalArtifacts = {
     events,
     directives: applyDirOutput.directives ?? [],
     gaps,
     resolvedRefs: resolveRefs.resolvedRefs,
-    labStateDelta: {
-      events: labStateOutput.events,
-      snapshotAfter: labStateOutput.snapshotAfter,
-    },
-    resolvedLabwareRefs: priorLabware.resolvedLabwareRefs as ResolvedLabwareRef[] | undefined,
+    labStateDelta,
+    ...(priorLabware.resolvedLabwareRefs
+      ? { resolvedLabwareRefs: priorLabware.resolvedLabwareRefs as ResolvedLabwareRef[] }
+      : {}),
   };
 
   // Build deckLayoutPlan from plan_deck_layout pass output (spec-033)
@@ -263,7 +258,7 @@ export async function runChatbotCompile(
   terminalArtifacts.resourceManifest = computeResourcesOutput.resourceManifest;
 
   // Populate validationReport from validate pass (spec-034)
-  terminalArtifacts.validationReport = validationReport;
+  terminalArtifacts.validationReport = validationReport as NonNullable<TerminalArtifacts['validationReport']>;
 
   // Populate instrumentRunFiles from emit_instrument_run_files pass (spec-038)
   const emitInstrumentRunFilesOutput = (result.outputs.get('emit_instrument_run_files') ?? { instrumentRunFiles: [] }) as EmitInstrumentRunFilesOutput;
@@ -275,7 +270,7 @@ export async function runChatbotCompile(
 
   // Persist snapshotAfter to cache if conversationId and cache are present
   if (convId && cache) {
-    cache.put(convId, terminalArtifacts.labStateDelta.snapshotAfter);
+    cache.put(convId, labStateDelta.snapshotAfter);
   }
 
   return {

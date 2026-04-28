@@ -26,7 +26,6 @@ import { runChatbotCompile } from './runChatbotCompile.js';
 import type { PassProgressEvent } from '../compiler/pipeline/PipelineRunner.js';
 import { getDefaultLabStateCache } from '../compiler/state/LabStateCache.js';
 import { decodeAttachmentText } from '../extract/decodeAttachment.js';
-import type { PlateEventPrimitive } from '../compiler/biology/BiologyVerbExpander.js';
 
 /**
  * Friendly labels for compile-pipeline pass ids, used to surface
@@ -176,7 +175,7 @@ function summarizeConversationHistory(history: ChatMessage[]): string | null {
  */
 export interface AgentOrchestratorDeps extends ResolveMentionDeps {
   extractionService?: import('../extract/ExtractionRunnerService.js').ExtractionRunnerService;
-  llmClient?: import('./runChatbotCompile.js').LlmClient;
+  llmClient?: import('../compiler/pipeline/passes/ChatbotCompilePasses.js').LlmClient;
 }
 
 export function createAgentOrchestrator(
@@ -269,7 +268,7 @@ export function createAgentOrchestrator(
         const elapsed = Date.now() - t0;
 
         // Convert PlateEventPrimitive[] to PlateEventProposal[]
-        const events: PlateEventProposal[] = compileResult.events.map((prim) => ({
+        const events = compileResult.events.map((prim) => ({
           eventId: prim.eventId,
           event_type: prim.event_type,
           verb: prim.event_type, // Use event_type as verb for primitives
@@ -283,22 +282,25 @@ export function createAgentOrchestrator(
             method: 'pipeline',
             actionGroupId: 'chatbot-compile',
           },
-        }));
+        })) as unknown as PlateEventProposal[];
 
         // Wire terminalArtifacts.gaps into the response fields the UI consumes.
         const unresolvedRefs = [...(compileResult.unresolvedRefs ?? [])];
         let clarification: string | undefined = compileResult.clarification;
         for (const gap of compileResult.terminalArtifacts.gaps) {
           if (gap.kind === 'unresolved_ref') {
+            const rawReason = (gap.details as Record<string, unknown> | undefined)?.reason;
             unresolvedRefs.push({
+              kind: 'other',
               label: gap.message,
-              reason: (gap.details as Record<string, unknown>)?.reason ?? 'unresolved',
+              reason: typeof rawReason === 'string' ? rawReason : 'unresolved',
             });
           } else if (gap.kind === 'clarification') {
             clarification = gap.message; // last one wins
           } else {
             // 'other' — wrap into unresolvedRefs with a synthetic kind tag
             unresolvedRefs.push({
+              kind: 'other',
               label: gap.message,
               reason: `other: ${gap.message}`,
             });
@@ -320,7 +322,7 @@ export function createAgentOrchestrator(
             totalTokens: 0,
           },
           resolvedMentions: resolvedMentionsCount,
-          bypass: 'compiler-pipeline',
+          bypass: 'compiler',
         };
         logAgentSummary(tid, summary);
         console.log(`[agent ${tid}] chatbot-compile pipeline bypass: success, events=${events.length}, gaps=${compileResult.terminalArtifacts.gaps.length}`);
@@ -328,7 +330,7 @@ export function createAgentOrchestrator(
           success: true,
           events,
           ...(compileResult.labwareAdditions.length > 0 ? { labwareAdditions: compileResult.labwareAdditions } : {}),
-          unresolvedRefs: unresolvedRefs.length > 0 ? unresolvedRefs : undefined,
+          ...(unresolvedRefs.length > 0 ? { unresolvedRefs: unresolvedRefs as unknown as NonNullable<AgentResult['unresolvedRefs']> } : {}),
           ...(clarification ? { clarification: { prompt: clarification, entityType: 'general', options: [] } } : {}),
           ...(compileResult.terminalArtifacts.downstreamQueue?.length ? { downstreamQueue: compileResult.terminalArtifacts.downstreamQueue } : {}),
           usage: {

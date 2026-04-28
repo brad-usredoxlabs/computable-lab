@@ -94,7 +94,6 @@ import { findMatchingLibraryExtractor } from './extract/LibraryExtractorMatcher.
 import type { AIHandlers } from './api/handlers/AIHandlers.js';
 import type { KnowledgeAIHandlers } from './api/handlers/KnowledgeAIHandlers.js';
 import type { AiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandlers.js';
-import type { ExtractHandlers } from './api/handlers/ExtractHandlers.js';
 import { loadPlatformRegistry } from './platform-registry/YamlPlatformRegistryLoader.js';
 import type { PlatformRegistry } from './platform-registry/PlatformRegistry.js';
 import { ArtifactBlobStore } from './ingestion/ArtifactBlobStore.js';
@@ -444,7 +443,7 @@ export async function createServer(
 
   // Build extraction infrastructure: extractor factory, populator, runner
   const extractorProfile = ctx.appConfig?.ai?.extractor;
-  const extractorFactory = (targetKind: string): ExtractorAdapter => {
+  const extractorFactory = (_targetKind: string): ExtractorAdapter => {
     if (!extractorProfile || !extractorProfile.enabled) {
       return nullExtractor('extractor profile missing or disabled');
     }
