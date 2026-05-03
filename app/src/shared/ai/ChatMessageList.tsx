@@ -28,7 +28,10 @@ export function ChatMessageList({ messages, onPickClarification, onApplyToGraph 
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const bottomEl = bottomRef.current
+    if (typeof bottomEl?.scrollIntoView === 'function') {
+      bottomEl.scrollIntoView({ behavior: 'auto' })
+    }
   }, [messages])
 
   if (messages.length === 0) {
@@ -155,6 +158,37 @@ function ChatMessageStyles() {
           font-weight: 600;
         }
 
+        .chat-msg__scale-plan {
+          margin-top: 0.45rem;
+          padding: 0.45rem 0.55rem;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          background: #f8fafc;
+          color: #334155;
+          font-size: 0.74rem;
+          line-height: 1.35;
+        }
+
+        .chat-msg__scale-plan-title {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.5rem;
+          font-weight: 700;
+        }
+
+        .chat-msg__scale-plan-status {
+          text-transform: uppercase;
+          font-size: 0.66rem;
+          letter-spacing: 0.04em;
+          color: #475569;
+        }
+
+        .chat-msg__scale-plan-detail {
+          margin-top: 0.2rem;
+          color: #64748b;
+        }
+
         .chat-msg__actions {
           margin-top: 0.5rem;
           display: flex;
@@ -181,6 +215,52 @@ function ChatMessageStyles() {
           max-width: none;
           margin: 0.5rem -1rem 0;
           padding: 0 1rem;
+        }
+
+        .chat-msg__running {
+          margin-top: 0.5rem;
+          display: flex;
+          align-items: center;
+          gap: 0.55rem;
+          padding: 0.55rem 0.7rem;
+          border: 1px solid #ddd6fe;
+          border-radius: 6px;
+          background: #faf5ff;
+          color: #4c1d95;
+          font-size: 0.78rem;
+          line-height: 1.35;
+        }
+
+        .chat-msg__running-spinner {
+          width: 14px;
+          height: 14px;
+          flex: 0 0 auto;
+          border: 2px solid #ddd6fe;
+          border-top-color: #7c3aed;
+          border-radius: 50%;
+          animation: chat-msg-running-spin 0.8s linear infinite;
+        }
+
+        .chat-msg__running-text {
+          display: flex;
+          flex-direction: column;
+          gap: 0.1rem;
+          min-width: 0;
+        }
+
+        .chat-msg__running-title {
+          font-weight: 700;
+        }
+
+        .chat-msg__running-detail {
+          color: #6d28d9;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        @keyframes chat-msg-running-spin {
+          to { transform: rotate(360deg); }
         }
 
         .chat-msg__clarification {
@@ -241,6 +321,39 @@ function ChatMessageStyles() {
         }
       `}</style>
   )
+}
+
+function latestRunningStatus(events?: ChatMessage['streamEvents']): string {
+  if (!events || events.length === 0) return 'Starting compiler pipeline...'
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i]
+    if (event?.type === 'status' && event.message.trim().length > 0) {
+      return event.message
+    }
+    if ((event?.type === 'tool_call' || event?.type === 'tool_result') && event.toolName) {
+      return event.toolName
+    }
+  }
+  return 'Compiler pipeline is still running...'
+}
+
+function RunningStatus({ streamEvents }: { streamEvents?: ChatMessage['streamEvents'] }) {
+  return (
+    <div className="chat-msg__running" role="status" aria-live="polite">
+      <span className="chat-msg__running-spinner" aria-hidden />
+      <span className="chat-msg__running-text">
+        <span className="chat-msg__running-title">Prompt received. Working...</span>
+        <span className="chat-msg__running-detail">{latestRunningStatus(streamEvents)}</span>
+      </span>
+    </div>
+  )
+}
+
+function formatScaleLevel(level: string): string {
+  if (level === 'manual_tubes') return 'Manual tubes'
+  if (level === 'bench_plate_multichannel') return 'Bench multichannel'
+  if (level === 'robot_deck') return 'Robot deck'
+  return level
 }
 
 function MessageBubble({
@@ -307,6 +420,7 @@ function MessageBubble({
       <div className="chat-msg__inner">
         <span className="chat-msg__label chat-msg__label--ai">AI</span>
         <p className="chat-msg__content">{content}</p>
+        {isStreaming && <RunningStatus streamEvents={streamEvents} />}
         {message.clarification && message.clarification.options.length > 0 && (
           <ol className="chat-msg__clarification">
             {message.clarification.options.map((opt, idx) => (
@@ -335,6 +449,29 @@ function MessageBubble({
         {events && events.length > 0 && !isStreaming && (
           <div className="chat-msg__event-count">
             {events.length} event{events.length !== 1 ? 's' : ''} proposed
+          </div>
+        )}
+        {message.executionScalePlan && !isStreaming && (
+          <div className="chat-msg__scale-plan">
+            <div className="chat-msg__scale-plan-title">
+              <span>
+                {formatScaleLevel(message.executionScalePlan.sourceLevel)}
+                {' -> '}
+                {formatScaleLevel(message.executionScalePlan.targetLevel)}
+              </span>
+              <span className="chat-msg__scale-plan-status">{message.executionScalePlan.status}</span>
+            </div>
+            <div className="chat-msg__scale-plan-detail">
+              {message.executionScalePlan.sampleLayout?.sampleCount
+                ? `${message.executionScalePlan.sampleLayout.sampleCount} samples`
+                : 'Sample layout pending'}
+              {message.executionScalePlan.pipettingStrategy
+                ? ` · ${message.executionScalePlan.pipettingStrategy.channels}-channel ${message.executionScalePlan.pipettingStrategy.pipetteMode === 'multi_channel_parallel' ? 'parallel' : 'single'} pipetting`
+                : ''}
+              {message.executionScalePlan.blockers.length > 0
+                ? ` · ${message.executionScalePlan.blockers.length} blocker${message.executionScalePlan.blockers.length !== 1 ? 's' : ''}`
+                : ''}
+            </div>
           </div>
         )}
         {role === 'assistant' && !isStreaming && message.docDiscussion === true && onApplyToGraph && (

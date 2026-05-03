@@ -112,6 +112,62 @@ export interface AiClarification {
 export interface AiLabwareAddition {
   recordId: string
   reason?: string
+  deckSlot?: string
+}
+
+export type ExecutionScaleLevel =
+  | 'manual_tubes'
+  | 'bench_plate_multichannel'
+  | 'robot_deck'
+
+export type ExecutionScalePlanStatus = 'ready' | 'blocked'
+
+export type ExecutionScaleLabwareKind =
+  | 'tube'
+  | 'tube_rack'
+  | '2_well_reservoir'
+  | '8_well_reservoir'
+  | '12_well_reservoir'
+  | '96_well_plate'
+  | '384_well_plate'
+
+export interface ExecutionScalePlan {
+  kind: 'execution-scale-plan'
+  recordId: string
+  sourceRef?: Record<string, unknown>
+  profileRef?: string
+  sourceLevel: ExecutionScaleLevel
+  targetLevel: ExecutionScaleLevel
+  status: ExecutionScalePlanStatus
+  sampleLayout?: {
+    labwareRole: string
+    labwareKind: Extract<ExecutionScaleLabwareKind, 'tube_rack' | '96_well_plate' | '384_well_plate'>
+    labwareDefinition?: string
+    sampleCount?: number
+    wellGroups: Array<{ groupId: string; wells: string[] }>
+  }
+  reagentLayout: Array<{
+    materialRole: string
+    sourceLabwareRole: string
+    sourceLabwareKind: Extract<ExecutionScaleLabwareKind, 'tube' | '2_well_reservoir' | '8_well_reservoir' | '12_well_reservoir'>
+    sourceLabwareDefinition?: string
+    sourceWells: string[]
+    reason: string
+  }>
+  pipettingStrategy?: {
+    pipetteMode: 'single_channel' | 'multi_channel_parallel'
+    channels: 1 | 8 | 12
+    laneStrategy: 'sequential_lanes' | 'parallel_lanes'
+    channelization: 'single_channel' | 'multi_channel_prefer' | 'multi_channel_force'
+    batching: 'none' | 'group_by_source' | 'group_by_destination' | 'multi_dispense_prefer'
+  }
+  deckBinding?: {
+    platform: 'manual' | 'integra_assist' | 'opentrons_ot2' | 'opentrons_flex'
+    requiredLabwareDefinitions: string[]
+    requiredTools: string[]
+  }
+  assumptions: string[]
+  blockers: Array<{ code: string; message: string; requiredInput?: string }>
 }
 
 export interface AiAgentResult {
@@ -123,6 +179,7 @@ export interface AiAgentResult {
   clarification?: AiClarification
   error?: string
   labwareAdditions?: AiLabwareAddition[]
+  executionScalePlan?: ExecutionScalePlan
   usage?: {
     inputTokens?: number
     outputTokens?: number
@@ -160,6 +217,8 @@ export interface ChatMessage {
   clarification?: AiClarification
   /** Proposed labware additions from the AI */
   labwareAdditions?: AiLabwareAddition[]
+  /** Deterministic execution scaling handoff from the compiler */
+  executionScalePlan?: ExecutionScalePlan
   /** True when this assistant message is a doc-discussion answer (prose only, no events) eligible for "Apply to graph". */
   docDiscussion?: boolean
 }

@@ -5,6 +5,8 @@
  * agent request/response shapes, and streaming event types.
  */
 
+import type { ExecutionScalePlan } from '../compiler/pipeline/CompileContracts.js';
+
 // ============================================================================
 // OpenAI-compatible inference types
 // ============================================================================
@@ -313,6 +315,8 @@ export interface AgentResult {
   };
   /** Suggested follow-up compile jobs from the pipeline (spec-039). */
   downstreamQueue?: Array<{ kind: string; description?: string; params?: Record<string, unknown> }>;
+  /** Deterministic execution scaling handoff for bench/robot lowering. */
+  executionScalePlan?: ExecutionScalePlan;
 }
 
 export interface PlateEventProposal {

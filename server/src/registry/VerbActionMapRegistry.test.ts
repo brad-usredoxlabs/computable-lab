@@ -6,9 +6,9 @@ import { describe, it, expect } from 'vitest';
 import { getVerbActionMap, type VerbMapping } from './VerbActionMapRegistry.js';
 
 describe('VerbActionMapRegistry', () => {
-  it('loads and size matches the file (25 verbs)', () => {
+  it('loads and size matches the file (26 verbs)', () => {
     const registry = getVerbActionMap();
-    expect(registry.size()).toBe(25);
+    expect(registry.size()).toBe(26);
   });
 
   it('lookup("incubate") returns a mapping with at least one of exact_id or obi_id', () => {
@@ -218,18 +218,18 @@ describe('VerbActionMapRegistry', () => {
     expect(mapping).toBeUndefined();
   });
 
-  it('list() returns all 25 mappings', () => {
+  it('list() returns all 26 mappings', () => {
     const registry = getVerbActionMap();
     const all = registry.list();
-    expect(all.length).toBe(25);
-    // Verify all verbs are present — matches the 25 registered verb expanders
+    expect(all.length).toBe(26);
+    // Verify all verbs are present — matches the registered verb expanders
     const verbs = all.map((m) => m.verb);
     const expectedVerbs = [
       'seed', 'incubate', 'harvest', 'aliquot', 'wash', 'elute',
       'resuspend', 'pellet', 'dilute', 'mix', 'stain', 'fix',
       'permeabilize', 'block', 'quench', 'count', 'passage',
       'freeze', 'thaw', 'spin', 'label', 'transfect',
-      'add_material', 'create_container', 'read',
+      'add_material', 'create_container', 'read', 'transfer',
     ];
     for (const v of expectedVerbs) {
       expect(verbs).toContain(v);

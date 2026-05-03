@@ -87,13 +87,19 @@ describe('ai_precompile gating (spec-046)', () => {
   // ---------------------------------------------------------------------------
   // Case (b): deterministic completeness 0.5 with residualClauses → LLM called
   // ---------------------------------------------------------------------------
-  it('low completeness + residuals → LLM IS called with deterministic key in user message', async () => {
+  it('low completeness + residuals → LLM is called for supplemental output only', async () => {
     const llmResponse: AiPrecompileOutput = {
       candidateEvents: [
         { verb: 'incubate', temperature_celsius: 37, duration_seconds: 3600 },
       ],
-      candidateLabwares: [],
+      candidateLabwares: [
+        { hint: 'LLM-invented plate', reason: 'should be ignored when deterministic has core artifacts' },
+      ],
       unresolvedRefs: [],
+      directives: [
+        { kind: 'mount_pipette', params: { mountSide: 'left', pipetteType: 'p300_single' } },
+      ],
+      clarification: 'Should incubation be a separate timed protocol step?',
     };
 
     const mockLlmClient = {
@@ -164,16 +170,20 @@ describe('ai_precompile gating (spec-046)', () => {
     expect(parsedUser.deterministic.candidateEvents).toHaveLength(4);
     expect(parsedUser.deterministic.residualClauses).toHaveLength(1);
 
-    // Merged output: deterministic events first, then LLM events
+    // Deterministic core artifacts are retained; LLM semantic events/labware are suppressed.
     expect(result.ok).toBe(true);
     expect(result.output).toBeDefined();
     const output = result.output as AiPrecompileOutput;
-    expect(output.candidateEvents).toHaveLength(5); // 4 deterministic + 1 LLM
-    // First 4 should be deterministic
+    expect(output.candidateEvents).toHaveLength(4);
     expect(output.candidateEvents[0]).toMatchObject({ verb: 'add_labware', hint: 'a' });
     expect(output.candidateEvents[3]).toMatchObject({ verb: 'transfer', volume_uL: 5 });
-    // Last one should be LLM
-    expect(output.candidateEvents[4]).toMatchObject({ verb: 'incubate', temperature_celsius: 37 });
+    expect(output.candidateEvents).not.toContainEqual(expect.objectContaining({ verb: 'incubate' }));
+    expect(output.candidateLabwares).toHaveLength(3);
+    expect(output.candidateLabwares).not.toContainEqual(expect.objectContaining({ hint: 'LLM-invented plate' }));
+    expect(output.directives).toEqual([
+      { kind: 'mount_pipette', params: { mountSide: 'left', pipetteType: 'p300_single' } },
+    ]);
+    expect(output.clarification).toBe('Should incubation be a separate timed protocol step?');
   });
 
   // ---------------------------------------------------------------------------
@@ -279,7 +289,7 @@ describe('ai_precompile gating (spec-046)', () => {
   // ---------------------------------------------------------------------------
   // Case (e): completeness 0.89, no residuals → LLM IS called (just below threshold)
   // ---------------------------------------------------------------------------
-  it('completeness 0.89 + no residuals → LLM IS called (just below threshold)', async () => {
+  it('completeness 0.89 + no residuals → LLM IS called but semantic events stay deterministic', async () => {
     const llmResponse: AiPrecompileOutput = {
       candidateEvents: [{ verb: 'llm_event' }],
       candidateLabwares: [],
@@ -323,8 +333,54 @@ describe('ai_precompile gating (spec-046)', () => {
     expect(mockLlmClient.complete).toHaveBeenCalledTimes(1);
     expect(result.ok).toBe(true);
     const output = result.output as AiPrecompileOutput;
-    expect(output.candidateEvents).toHaveLength(2); // 1 deterministic + 1 LLM
+    expect(output.candidateEvents).toHaveLength(1);
     expect(output.candidateEvents[0]).toMatchObject({ verb: 'det_event' });
-    expect(output.candidateEvents[1]).toMatchObject({ verb: 'llm_event' });
+    expect(output.candidateEvents).not.toContainEqual(expect.objectContaining({ verb: 'llm_event' }));
+  });
+
+  // ---------------------------------------------------------------------------
+  // Case (f): deterministic output without core artifacts → legacy LLM fallback
+  // ---------------------------------------------------------------------------
+  it('deterministic output without core artifacts still accepts legacy LLM candidate events', async () => {
+    const llmResponse: AiPrecompileOutput = {
+      candidateEvents: [{ verb: 'read', instrument: 'plate-reader' }],
+      candidateLabwares: [{ hint: 'reader plate', reason: 'legacy fallback' }],
+      unresolvedRefs: [],
+    };
+
+    const mockLlmClient = {
+      complete: vi.fn().mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(llmResponse) } }],
+      }),
+    } as unknown as LlmClient;
+
+    const pass = createAiPrecompilePass({ llmClient: mockLlmClient });
+    const mockState: PipelineState = {
+      input: { prompt: 'read on the plate reader', attachments: [] },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['extract_entities', { entities: [] }],
+        ['deterministic_precompile', {
+          candidateEvents: [],
+          candidateLabwares: [],
+          unresolvedRefs: [],
+          residualClauses: [{ text: 'read on the plate reader', reason: 'no_supported_verb' }],
+          deterministicCompleteness: 0,
+        }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = await pass.run({
+      pass_id: 'ai_precompile',
+      state: mockState,
+    });
+
+    expect(mockLlmClient.complete).toHaveBeenCalledTimes(1);
+    expect(result.ok).toBe(true);
+    const output = result.output as AiPrecompileOutput;
+    expect(output.candidateEvents).toEqual([{ verb: 'read', instrument: 'plate-reader' }]);
+    expect(output.candidateLabwares).toEqual([{ hint: 'reader plate', reason: 'legacy fallback' }]);
   });
 });

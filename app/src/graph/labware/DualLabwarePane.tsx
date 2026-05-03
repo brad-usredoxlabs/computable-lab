@@ -23,19 +23,6 @@ import { getEventSummary } from '../../types/events'
 import { getLabwareDefaultOrientation, isTipRackType, type Labware } from '../../types/labware'
 import type { PreviewEventState } from '../../shared/hooks/useAiChat'
 import { getWellCenterSvg } from '../lib/labwareView'
-import { GhostLabwarePane } from './GhostLabwarePane'
-
-/**
- * GhostLabware type for proposed labware additions from AI chat.
- * Used to display pending labware that will be added when accepted.
- */
-export interface GhostLabware {
-  recordId: string;                // from AiLabwareAddition.recordId
-  reason?: string;                 // e.g. 'proposed from prompt'
-  labwareType?: string;            // 'plate' | 'reservoir' | ...
-  format?: { rows: number; cols: number; wellCount?: number };
-  title?: string;                  // human-readable name
-}
 
 interface DualLabwarePaneProps {
   /** Active editor mode */
@@ -52,6 +39,12 @@ interface DualLabwarePaneProps {
   previewEvents?: PlateEvent[]
   /** Per-event preview state for filtering rejected events */
   previewEventStates?: Map<string, PreviewEventState>
+  /** AI preview labware additions rendered through the normal panes */
+  previewLabwares?: Labware[]
+  /** Source labware id to use when the source is only present in preview */
+  previewSourceLabwareId?: string
+  /** Target labware id to use when the target is only present in preview */
+  previewTargetLabwareId?: string
   /** Callback to set preview event state */
   setPreviewEventState?: (eventId: string, state: PreviewEventState) => void
   /** Lock tiprack orientation to landscape */
@@ -72,8 +65,6 @@ interface DualLabwarePaneProps {
   sourceTooltipMeta?: Map<WellId, { biology?: string[]; readouts?: string[]; results?: string[] }>
   /** Optional target pane semantic tooltip metadata */
   targetTooltipMeta?: Map<WellId, { biology?: string[]; readouts?: string[]; results?: string[] }>
-  /** Ghost labwares (proposed additions from AI chat) */
-  ghostLabwares?: GhostLabware[]
 }
 
 /**
@@ -122,6 +113,9 @@ export function DualLabwarePane({
   onValidation,
   previewEvents = [],
   previewEventStates,
+  previewLabwares = [],
+  previewSourceLabwareId,
+  previewTargetLabwareId,
   setPreviewEventState,
   lockLandscapeTipracks = false,
   canRotateLabware,
@@ -132,12 +126,11 @@ export function DualLabwarePane({
   targetWellContentsOverride,
   sourceTooltipMeta,
   targetTooltipMeta,
-  ghostLabwares = [],
 }: DualLabwarePaneProps) {
   const {
     state,
-    sourceLabware,
-    targetLabware,
+    sourceLabware: committedSourceLabware,
+    targetLabware: committedTargetLabware,
     sourceSelection,
     targetSelection,
     selectWells,
@@ -157,6 +150,29 @@ export function DualLabwarePane({
   // Hover state for preview event badges
   const [hoveredPreviewEventId, setHoveredPreviewEventId] = useState<string | null>(null)
 
+  const displayLabwares = useMemo(() => {
+    if (previewLabwares.length === 0) return state.labwares
+    const next = new Map(state.labwares)
+    for (const labware of previewLabwares) {
+      if (!next.has(labware.labwareId)) {
+        next.set(labware.labwareId, labware)
+      }
+    }
+    return next
+  }, [previewLabwares, state.labwares])
+
+  const sourceLabware = committedSourceLabware
+    ?? (previewSourceLabwareId ? displayLabwares.get(previewSourceLabwareId) ?? null : null)
+  const targetLabware = committedTargetLabware
+    ?? (previewTargetLabwareId ? displayLabwares.get(previewTargetLabwareId) ?? null : null)
+  const sourceIsCommitted = !sourceLabware || state.labwares.has(sourceLabware.labwareId)
+  const targetIsCommitted = !targetLabware || state.labwares.has(targetLabware.labwareId)
+
+  const visiblePreviewEvents = useMemo(
+    () => previewEvents.filter((event) => (previewEventStates?.get(event.eventId) ?? 'pending') !== 'rejected'),
+    [previewEvents, previewEventStates]
+  )
+
   // Compute highlighted wells from hovered preview event
   const hoverHighlightedWells = useMemo(() => {
     if (!hoveredPreviewEventId) return new Set<WellId>()
@@ -167,8 +183,8 @@ export function DualLabwarePane({
 
   const sourceOrientation = sourceLabware ? getLabwareOrientation(sourceLabware.labwareId) : 'landscape'
   const targetOrientation = targetLabware ? getLabwareOrientation(targetLabware.labwareId) : 'landscape'
-  const sourceCanRotate = sourceLabware ? canRotateLabware?.(sourceLabware.labwareId) ?? true : false
-  const targetCanRotate = targetLabware ? canRotateLabware?.(targetLabware.labwareId) ?? true : false
+  const sourceCanRotate = sourceLabware && sourceIsCommitted ? canRotateLabware?.(sourceLabware.labwareId) ?? true : false
+  const targetCanRotate = targetLabware && targetIsCommitted ? canRotateLabware?.(targetLabware.labwareId) ?? true : false
   const sourceRotateDisabledReason = sourceLabware ? getRotateDisabledReason?.(sourceLabware.labwareId) ?? null : null
   const targetRotateDisabledReason = targetLabware ? getRotateDisabledReason?.(targetLabware.labwareId) ?? null : null
 
@@ -205,10 +221,15 @@ export function DualLabwarePane({
     return events.slice(0, clamped)
   }, [events, playbackPosition])
 
+  const displayEvents = useMemo(
+    () => [...appliedEvents, ...visiblePreviewEvents],
+    [appliedEvents, visiblePreviewEvents]
+  )
+
   // Compute labware states for tooltip content
   const computedStates = useMemo(
-    () => computeLabwareStates(appliedEvents, state.labwares),
-    [appliedEvents, state.labwares]
+    () => computeLabwareStates(displayEvents, displayLabwares),
+    [displayEvents, displayLabwares]
   )
 
   // Helper to check if an event affects a given labware
@@ -270,7 +291,7 @@ export function DualLabwarePane({
     const contents = new Map<WellId, { color?: string }>()
     if (!sourceLabware) return contents
 
-    appliedEvents.forEach((event) => {
+    displayEvents.forEach((event) => {
       const details = event.details as Record<string, unknown>
       const eventLabwareId = details.labwareId as string
       const normalized = normalizeTransferDetails(event.details as TransferDetails)
@@ -302,7 +323,7 @@ export function DualLabwarePane({
     })
 
     return contents
-  }, [appliedEvents, sourceLabware])
+  }, [displayEvents, sourceLabware])
 
   const effectiveSourceWellContents = sourceWellContentsOverride ?? sourceWellContents
   const sourceHasActivity = sourceWellContents.size > 0
@@ -312,7 +333,7 @@ export function DualLabwarePane({
     const contents = new Map<WellId, { color?: string }>()
     if (!targetLabware) return contents
 
-    appliedEvents.forEach((event) => {
+    displayEvents.forEach((event) => {
       const details = event.details as Record<string, unknown>
       const eventLabwareId = details.labwareId as string
       const normalized = normalizeTransferDetails(event.details as TransferDetails)
@@ -333,7 +354,7 @@ export function DualLabwarePane({
       }
       if (event.event_type === 'macro_program' && program?.kind === 'quadrant_replicate' && program.params.targetLabwareId === targetLabware.labwareId) {
         const targets = sourceLabware
-          ? computeLabwareStates([event], state.labwares).get(targetLabware.labwareId)
+          ? computeLabwareStates([event], displayLabwares).get(targetLabware.labwareId)
           : undefined
         if (targets) {
           for (const wellId of targets.keys()) {
@@ -349,7 +370,7 @@ export function DualLabwarePane({
     })
 
     return contents
-  }, [appliedEvents, targetLabware])
+  }, [displayEvents, displayLabwares, sourceLabware, targetLabware])
 
   const effectiveTargetWellContents = targetWellContentsOverride ?? targetWellContents
   const targetHasActivity = targetWellContents.size > 0
@@ -357,12 +378,7 @@ export function DualLabwarePane({
   // Calculate preview well contents for source labware
   const sourcePreviewWells = useMemo(() => {
     const contents = new Map<WellId, { color?: string }>()
-    if (!sourceLabware || previewEvents.length === 0) return contents
-
-    // Filter out rejected events
-    const visiblePreviewEvents = previewEvents.filter(
-      (e) => (previewEventStates?.get(e.eventId) ?? 'pending') !== 'rejected',
-    )
+    if (!sourceLabware || visiblePreviewEvents.length === 0) return contents
 
     visiblePreviewEvents.forEach((event) => {
       const details = event.details as Record<string, unknown>
@@ -381,17 +397,12 @@ export function DualLabwarePane({
       }
     })
     return contents
-  }, [previewEvents, previewEventStates, sourceLabware])
+  }, [sourceLabware, visiblePreviewEvents])
 
   // Calculate preview well contents for target labware
   const targetPreviewWells = useMemo(() => {
     const contents = new Map<WellId, { color?: string }>()
-    if (!targetLabware || previewEvents.length === 0) return contents
-
-    // Filter out rejected events
-    const visiblePreviewEvents = previewEvents.filter(
-      (e) => (previewEventStates?.get(e.eventId) ?? 'pending') !== 'rejected',
-    )
+    if (!targetLabware || visiblePreviewEvents.length === 0) return contents
 
     visiblePreviewEvents.forEach((event) => {
       const details = event.details as Record<string, unknown>
@@ -410,26 +421,26 @@ export function DualLabwarePane({
       }
     })
     return contents
-  }, [previewEvents, previewEventStates, targetLabware])
+  }, [targetLabware, visiblePreviewEvents])
 
   // Handlers for source pane
   const handleSourceSelectWells = useCallback(
     (wells: WellId[], mode: 'replace' | 'add' | 'toggle') => {
-      if (sourceLabware) {
+      if (sourceLabware && sourceIsCommitted) {
         selectWells(sourceLabware.labwareId, wells, mode)
       }
     },
-    [sourceLabware, selectWells]
+    [sourceIsCommitted, sourceLabware, selectWells]
   )
 
   // Handlers for target pane
   const handleTargetSelectWells = useCallback(
     (wells: WellId[], mode: 'replace' | 'add' | 'toggle') => {
-      if (targetLabware) {
+      if (targetLabware && targetIsCommitted) {
         selectWells(targetLabware.labwareId, wells, mode)
       }
     },
-    [targetLabware, selectWells]
+    [targetIsCommitted, targetLabware, selectWells]
   )
 
   // Calculate canvas dimensions based on labware type
@@ -483,8 +494,8 @@ export function DualLabwarePane({
     [state.events, state.selectedEventId]
   )
   const focusedEventTargets = useMemo(
-    () => (focusedEvent ? getEventFocusTargets(focusedEvent, state.labwares) : []),
-    [focusedEvent, state.labwares]
+    () => (focusedEvent ? getEventFocusTargets(focusedEvent, displayLabwares) : []),
+    [displayLabwares, focusedEvent]
   )
   const sourceFocusedCount = useMemo(() => {
     if (!sourceLabware) return 0
@@ -509,7 +520,7 @@ export function DualLabwarePane({
             </span>
           )}
           <div className="pane-header-spacer" />
-          {sourceLabware && sourceLabware.addressing.type === 'grid' && sourceLabware.orientationPolicy !== 'fixed_columns' && !(lockLandscapeTipracks && isTipRackType(sourceLabware.labwareType)) && (
+          {sourceLabware && sourceIsCommitted && sourceLabware.addressing.type === 'grid' && sourceLabware.orientationPolicy !== 'fixed_columns' && !(lockLandscapeTipracks && isTipRackType(sourceLabware.labwareType)) && (
             <button
               className="rotate-btn"
               onClick={handleRotateSource}
@@ -593,7 +604,7 @@ export function DualLabwarePane({
             </span>
           )}
           <div className="pane-header-spacer" />
-          {targetLabware && targetLabware.addressing.type === 'grid' && targetLabware.orientationPolicy !== 'fixed_columns' && !(lockLandscapeTipracks && isTipRackType(targetLabware.labwareType)) && (
+          {targetLabware && targetIsCommitted && targetLabware.addressing.type === 'grid' && targetLabware.orientationPolicy !== 'fixed_columns' && !(lockLandscapeTipracks && isTipRackType(targetLabware.labwareType)) && (
             <button
               className="rotate-btn"
               onClick={handleRotateTarget}
@@ -667,7 +678,7 @@ export function DualLabwarePane({
           <WellTooltip
             wellId={hoveredWell.wellId}
             labwareId={hoveredWell.labwareId}
-            events={events}
+            events={displayEvents}
             computedStates={computedStates}
             semanticInfo={
               hoveredWell.labwareId === sourceLabware?.labwareId
@@ -679,11 +690,6 @@ export function DualLabwarePane({
           />
         </div>
       )}
-
-      {/* Ghost Labware Pane (stub - spec-045 will add real rendering) */}
-      {ghostLabwares && ghostLabwares.length > 0 ? (
-        <GhostLabwarePane ghostLabwares={ghostLabwares} />
-      ) : null}
 
       <style>{`
         .dual-labware-pane {

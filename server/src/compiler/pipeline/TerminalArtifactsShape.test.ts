@@ -13,6 +13,7 @@ import type {
   LabStateDelta,
   DeckLayoutPlan,
   ResourceManifest,
+  ExecutionScalePlan,
   ValidationReport,
 } from './CompileContracts.js';
 import type { LabStateSnapshot } from '../state/LabState.js';
@@ -20,6 +21,21 @@ import type { LabStateSnapshot } from '../state/LabState.js';
 describe('TerminalArtifacts canonical shape', () => {
   it('accepts every field populated', () => {
     const emptyLabState = {} as LabStateSnapshot;
+    const executionScalePlan: ExecutionScalePlan = {
+      kind: 'execution-scale-plan',
+      recordId: 'execution-scale-plan/robot_deck',
+      sourceLevel: 'manual_tubes',
+      targetLevel: 'robot_deck',
+      status: 'blocked',
+      reagentLayout: [],
+      deckBinding: {
+        platform: 'integra_assist',
+        requiredLabwareDefinitions: ['lbw-def-opentrons-nest-96-wellplate-200ul-flat-v1'],
+        requiredTools: ['pipette_8ch_fixed'],
+      },
+      assumptions: [],
+      blockers: [{ code: 'missing_sample_count', message: 'Sample count is required for plate scaling.', requiredInput: 'sampleCount' }],
+    };
 
     const ta: TerminalArtifacts = {
       events: [],
@@ -38,6 +54,7 @@ describe('TerminalArtifacts canonical shape', () => {
         reservoirLoads: [{ reservoirRef: 'reservoir-1', well: 'A1', reagentKind: 'buffer', volumeUl: 500 }],
         consumables: ['tip-rack-p300'],
       },
+      executionScalePlan,
       instrumentRunFiles: [],
       downstreamQueue: [{ kind: 'qPCR', description: 'run qPCR on plate' }],
       validationReport: { findings: [] },
@@ -51,6 +68,7 @@ describe('TerminalArtifacts canonical shape', () => {
     expect(ta.resolvedRefs).toBeDefined();
     expect(ta.resolvedLabwareRefs).toBeDefined();
     expect(ta.resourceManifest).toBeDefined();
+    expect(ta.executionScalePlan).toBeDefined();
     expect(ta.instrumentRunFiles).toBeDefined();
     expect(ta.downstreamQueue).toBeDefined();
     expect(ta.validationReport).toBeDefined();

@@ -12,7 +12,7 @@ schemaId: "https://computable-lab.com/schema/computable-lab/verb-definition.sche
 #     by the SemanticKeyBuilder (spec-015).
 
 rules:
-- id: id-format
+- id: verb-id-format
   description: "id must exist and match the VERB-* pattern."
   severity: error
   assert:

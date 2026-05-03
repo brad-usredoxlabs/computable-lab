@@ -14,6 +14,7 @@ import type {
   CompileResult,
   TerminalArtifacts,
   CompileOutcome,
+  ExecutionScalePlan,
   Gap,
 } from './CompileContracts.js';
 import type { ExtractionRunnerService, RunExtractionServiceArgs } from '../../extract/ExtractionRunnerService.js';
@@ -71,6 +72,50 @@ describe('CompileContracts types', () => {
     expect(outcomes).toContain('complete');
     expect(outcomes).toContain('gap');
     expect(outcomes).toContain('error');
+  });
+
+  it('ExecutionScalePlan supports bench plate multichannel planning', () => {
+    const plan: ExecutionScalePlan = {
+      kind: 'execution-scale-plan',
+      recordId: 'execution-scale-plan/bench_plate_multichannel',
+      sourceLevel: 'manual_tubes',
+      targetLevel: 'bench_plate_multichannel',
+      status: 'ready',
+      sampleLayout: {
+        labwareRole: 'sample_plate',
+        labwareKind: '96_well_plate',
+        sampleCount: 96,
+        wellGroups: [{ groupId: 'samples', wells: ['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1'] }],
+      },
+      reagentLayout: [
+        {
+          materialRole: 'buffer',
+          sourceLabwareRole: 'reagent_reservoir',
+          sourceLabwareKind: '12_well_reservoir',
+          sourceWells: ['1'],
+          reason: 'shared reagent across sample wells',
+        },
+      ],
+      pipettingStrategy: {
+        pipetteMode: 'multi_channel_parallel',
+        channels: 8,
+        laneStrategy: 'parallel_lanes',
+        channelization: 'multi_channel_prefer',
+        batching: 'group_by_source',
+      },
+      assumptions: ['samples map down 96-well plate columns'],
+      blockers: [],
+    };
+
+    const ta: TerminalArtifacts = {
+      events: [],
+      directives: [],
+      gaps: [],
+      executionScalePlan: plan,
+    };
+
+    expect(ta.executionScalePlan?.targetLevel).toBe('bench_plate_multichannel');
+    expect(ta.executionScalePlan?.pipettingStrategy?.channels).toBe(8);
   });
 });
 

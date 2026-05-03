@@ -33,7 +33,8 @@ import { decodeAttachmentText } from '../extract/decodeAttachment.js';
  */
 const PASS_LABELS: Record<string, string> = {
   extract_entities: 'Extracting entities from prompt and attachments…',
-  ai_precompile: 'Asking the model to plan candidate events (LLM)…',
+  tag_prompt: 'Tagging prompt clauses…',
+  ai_precompile: 'Checking deterministic plan; using LLM only if needed…',
   expand_biology_verbs: 'Expanding biology verbs…',
   resolve_labware: 'Resolving labware references…',
   apply_directives: 'Applying directives…',
@@ -43,6 +44,7 @@ const PASS_LABELS: Record<string, string> = {
   mint_materials: 'Minting new materials…',
   compute_volumes: 'Computing volumes…',
   compute_resources: 'Computing tip and reservoir requirements…',
+  derive_execution_scale_plan: 'Deriving execution scale plan…',
   plan_deck_layout: 'Planning deck layout…',
   validate: 'Validating…',
 };
@@ -259,8 +261,10 @@ export function createAgentOrchestrator(
         compileResult.terminalArtifacts.gaps.length > 0;
 
       const shouldShortCircuit =
-        compileResult.outcome === 'complete' ||
-        (compileResult.outcome === 'gap' && hasArtifacts);
+        hasArtifacts && (
+          compileResult.outcome === 'complete' ||
+          compileResult.outcome === 'gap'
+        );
 
       if (shouldShortCircuit) {
         // Pipeline produced concrete events or gaps — return them without
@@ -333,6 +337,7 @@ export function createAgentOrchestrator(
           ...(unresolvedRefs.length > 0 ? { unresolvedRefs: unresolvedRefs as unknown as NonNullable<AgentResult['unresolvedRefs']> } : {}),
           ...(clarification ? { clarification: { prompt: clarification, entityType: 'general', options: [] } } : {}),
           ...(compileResult.terminalArtifacts.downstreamQueue?.length ? { downstreamQueue: compileResult.terminalArtifacts.downstreamQueue } : {}),
+          ...(compileResult.terminalArtifacts.executionScalePlan ? { executionScalePlan: compileResult.terminalArtifacts.executionScalePlan } : {}),
           usage: {
             promptTokens: 0,
             completionTokens: 0,

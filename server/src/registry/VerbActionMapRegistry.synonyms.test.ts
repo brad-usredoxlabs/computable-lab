@@ -34,9 +34,9 @@ describe('VerbActionMapRegistry — findVerbForToken', () => {
     expect(result).toBeUndefined();
   });
 
-  it('every one of the 25 canonical verbs has at least 1 synonym in the seed', () => {
+  it('every one of the 26 canonical verbs has at least 1 synonym in the seed', () => {
     const allMappings = registry.list();
-    expect(allMappings.length).toBe(25);
+    expect(allMappings.length).toBe(26);
     for (const m of allMappings) {
       expect(m.synonyms).toBeDefined();
       expect(Array.isArray(m.synonyms)).toBe(true);

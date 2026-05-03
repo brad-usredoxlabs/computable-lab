@@ -1,0 +1,48 @@
+$schema: https://computable-lab.com/schema/computable-lab/execution-scale-profile.schema.yaml
+kind: execution-scale-profile
+recordId: execution-scale-profile/bench-96-multichannel
+type: execution_scale_profile
+id: bench-96-multichannel
+display_name: Bench 96-Well Multichannel
+sourceLevel: manual_tubes
+targetLevel: bench_plate_multichannel
+priority: 100
+matching:
+  prompt_cues:
+    - scale
+    - scaled
+    - high-throughput
+    - high throughput
+    - "96"
+    - 96-well
+    - plate
+    - reservoir
+    - multichannel
+    - multi-channel
+    - 8-channel
+sampleLayout:
+  labwareRole: sample_plate
+  labwareKind: 96_well_plate
+  labwareDefinition: lbw-def-generic-96-well-plate
+  defaultWellOrder: column_major
+reagentSource:
+  sourceLabwareRole: reagent_reservoir
+  sourceLabwareKind: 12_well_reservoir
+  labwareDefinition: lbw-def-generic-12-well-reservoir
+  defaultSourceWells:
+    - "1"
+pipetting:
+  pipetteMode: multi_channel_parallel
+  channels: 8
+  laneStrategy: parallel_lanes
+  channelization: multi_channel_prefer
+  batching: group_by_source
+  maxVolumeUl: 20
+  requiredTools:
+    - pipette-capability/p20-multi-8
+assumptions:
+  - Manual tube operations preserve biological intent when lifted to 96-well plate wells and shared reagent reservoirs.
+  - Samples are mapped down plate columns unless an explicit sample map is provided.
+notes: >
+  Default bench scale-out profile for hand-operated 8-channel pipetting from
+  a 12-well reservoir into a 96-well plate.

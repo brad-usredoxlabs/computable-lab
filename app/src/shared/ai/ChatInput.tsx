@@ -124,6 +124,7 @@ function formatMentionPreview(option: ReturnType<typeof parsePromptMentions>[num
 
 export function ChatInput({ onSend, onCancel, isStreaming, disabled, inputText }: ChatInputProps) {
   const [value, setValue] = useState('')
+  const [isSubmittingLocal, setIsSubmittingLocal] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -151,8 +152,20 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, inputText }
   const [protocolOptions, setProtocolOptions] = useState<SuggestionOption[]>([])
   const [protocolLoading, setProtocolLoading] = useState(false)
 
-  // Use inputText as the controlled value when provided (from applyToGraph)
-  const controlledValue = inputText ?? value
+  // One-shot pre-fill from parent (e.g. applyToGraph). Sync into local
+  // state when the prop changes; the textarea is otherwise driven by `value`.
+  useEffect(() => {
+    if (inputText && inputText !== value) {
+      setValue(inputText)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputText])
+
+  useEffect(() => {
+    if (!isStreaming) {
+      setIsSubmittingLocal(false)
+    }
+  }, [isStreaming])
 
   const selectionOptions = useMemo<SuggestionOption[]>(() => {
     if (!slashMatch || (slashMatch.kind !== 'source' && slashMatch.kind !== 'target')) return []
@@ -187,22 +200,22 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, inputText }
         ? protocolOptions
         : selectionOptions
 
-  const mentionMatches = useMemo(() => parsePromptMentionMatches(controlledValue), [controlledValue])
+  const mentionMatches = useMemo(() => parsePromptMentionMatches(value), [value])
   const mentionsPreview = useMemo(() => mentionMatches.map((entry) => entry.mention), [mentionMatches])
 
   const updateSlashMatch = useCallback(() => {
     const el = textareaRef.current
     if (!el) return
     const cursor = el.selectionStart ?? 0
-    const next = detectSlashCommand(controlledValue, cursor)
+    const next = detectSlashCommand(value, cursor)
     setSlashMatch(next)
     setDropdownOpen(Boolean(next))
     setFocusedIndex(0)
-  }, [controlledValue])
+  }, [value])
 
   useEffect(() => {
     requestAnimationFrame(() => updateSlashMatch())
-  }, [controlledValue, updateSlashMatch])
+  }, [value, updateSlashMatch])
 
   useEffect(() => {
     if (!slashMatch || slashMatch.kind !== 'material') {
@@ -457,8 +470,8 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, inputText }
   const insertOption = useCallback((option: SuggestionOption) => {
     if (!slashMatch || !option.insertText || option.disabled) return
     const insertText = option.insertText
-    const before = controlledValue.slice(0, slashMatch.start)
-    const after = controlledValue.slice(slashMatch.end)
+    const before = value.slice(0, slashMatch.start)
+    const after = value.slice(slashMatch.end)
     const suffix = after.startsWith(' ') || after.length === 0 ? '' : ' '
     const nextValue = `${before}${insertText}${suffix}${after}`
     setValue(nextValue)
@@ -474,7 +487,7 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, inputText }
       el.style.height = 'auto'
       el.style.height = `${Math.min(el.scrollHeight, 120)}px`
     })
-  }, [slashMatch, controlledValue])
+  }, [slashMatch, value])
 
   const slashKind = slashMatch?.kind
   const showDropdown = dropdownOpen && Boolean(slashMatch) && (
@@ -540,11 +553,12 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, inputText }
 
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
-      const hasContent = controlledValue.trim() || pastedBlock || attachments.length > 0
-      if (hasContent && !isStreaming && !disabled) {
+      const hasContent = value.trim() || pastedBlock || attachments.length > 0
+      if (hasContent && !isStreaming && !isSubmittingLocal && !disabled) {
         const parts: string[] = []
-        if (controlledValue.trim()) parts.push(controlledValue.trim())
+        if (value.trim()) parts.push(value.trim())
         if (pastedBlock) parts.push(`---pasted-content---\n${pastedBlock}\n---end-pasted-content---`)
+        setIsSubmittingLocal(true)
         onSend(parts.join('\n\n'), attachments.length > 0 ? attachments : undefined)
         setValue('')
         setPastedBlock(null)
@@ -554,18 +568,19 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, inputText }
         if (textareaRef.current) textareaRef.current.style.height = 'auto'
       }
     }
-  }, [slashMatch, showDropdown, options, focusedIndex, insertOption, controlledValue, isStreaming, disabled, onSend, pastedBlock, attachments])
+  }, [slashMatch, showDropdown, options, focusedIndex, insertOption, value, isStreaming, isSubmittingLocal, disabled, onSend, pastedBlock, attachments])
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setValue(e.target.value)
   }, [])
 
   const handleSendClick = useCallback(() => {
-    const hasContent = controlledValue.trim() || pastedBlock || attachments.length > 0
-    if (hasContent && !isStreaming && !disabled) {
+    const hasContent = value.trim() || pastedBlock || attachments.length > 0
+    if (hasContent && !isStreaming && !isSubmittingLocal && !disabled) {
       const parts: string[] = []
-      if (controlledValue.trim()) parts.push(controlledValue.trim())
+      if (value.trim()) parts.push(value.trim())
       if (pastedBlock) parts.push(`---pasted-content---\n${pastedBlock}\n---end-pasted-content---`)
+      setIsSubmittingLocal(true)
       onSend(parts.join('\n\n'), attachments.length > 0 ? attachments : undefined)
       setValue('')
       setPastedBlock(null)
@@ -574,7 +589,7 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, inputText }
       setSlashMatch(null)
       if (textareaRef.current) textareaRef.current.style.height = 'auto'
     }
-  }, [controlledValue, isStreaming, disabled, onSend, pastedBlock, attachments])
+  }, [value, isStreaming, isSubmittingLocal, disabled, onSend, pastedBlock, attachments])
 
   const handleInput = useCallback(() => {
     const el = textareaRef.current
@@ -621,8 +636,8 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, inputText }
   const removeMentionAt = useCallback((index: number) => {
     const match = mentionMatches[index]
     if (!match) return
-    const before = controlledValue.slice(0, match.start)
-    const after = controlledValue.slice(match.end)
+    const before = value.slice(0, match.start)
+    const after = value.slice(match.end)
     const nextValue = `${before}${after}`.replace(/\s{2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trimStart()
     setValue(nextValue)
     requestAnimationFrame(() => {
@@ -634,7 +649,7 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, inputText }
       el.style.height = 'auto'
       el.style.height = `${Math.min(el.scrollHeight, 120)}px`
     })
-  }, [mentionMatches, controlledValue])
+  }, [mentionMatches, value])
 
   const focusMentionAt = useCallback((index: number) => {
     const match = mentionMatches[index]
@@ -767,7 +782,7 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, inputText }
         />
         <textarea
           ref={textareaRef}
-          value={controlledValue}
+          value={value}
           onChange={handleChange}
           onInput={handleInput}
           onKeyDown={handleKeyDown}
@@ -808,21 +823,26 @@ export function ChatInput({ onSend, onCancel, isStreaming, disabled, inputText }
           <button
             onClick={handleSendClick}
             type="button"
-            disabled={!(controlledValue.trim() || pastedBlock || attachments.length > 0) || disabled}
+            disabled={!(value.trim() || pastedBlock || attachments.length > 0) || disabled || isSubmittingLocal}
             style={{
               padding: '0.6rem 0.9rem',
               borderRadius: '8px',
               border: 'none',
-              background: '#2563eb',
+              background: isSubmittingLocal ? '#64748b' : '#2563eb',
               color: 'white',
-              cursor: !(controlledValue.trim() || pastedBlock || attachments.length > 0) || disabled ? 'not-allowed' : 'pointer',
-              opacity: !(controlledValue.trim() || pastedBlock || attachments.length > 0) || disabled ? 0.6 : 1,
+              cursor: !(value.trim() || pastedBlock || attachments.length > 0) || disabled || isSubmittingLocal ? 'not-allowed' : 'pointer',
+              opacity: !(value.trim() || pastedBlock || attachments.length > 0) || disabled ? 0.6 : 1,
             }}
           >
-            Send
+            {isSubmittingLocal ? 'Submitting...' : 'Send'}
           </button>
         )}
       </div>
+      {isSubmittingLocal && !isStreaming && (
+        <div style={{ marginTop: '0.35rem', fontSize: '0.75rem', color: '#475569' }}>
+          Prompt submitted...
+        </div>
+      )}
       <div style={{ marginTop: '0.35rem', fontSize: '0.75rem', color: '#64748b' }}>{commandHint}</div>
       {pastedBlock && (
         <PastedBlockToken

@@ -88,6 +88,8 @@ interface EventRibbonProps {
   vocabPackId?: string
   /** Timeline playback position (number of events applied) */
   onPlaybackPositionChange?: (position: number) => void
+  /** Event ids staged by AI preview rather than committed to the graph */
+  draftEventIds?: Set<string>
   /** Optional material refs surfaced as quick-pick inputs for add-material events */
   prefillMaterials?: Ref[]
 }
@@ -1346,6 +1348,7 @@ export function EventRibbon({
   targetMaxVolumeUL,
   vocabPackId = 'liquid-handling/v1',
   onPlaybackPositionChange,
+  draftEventIds,
   prefillMaterials = [],
 }: EventRibbonProps) {
   // Get first verb from vocab pack for default
@@ -1826,6 +1829,7 @@ export function EventRibbon({
         onAddEvent={() => {}} // No-op, not using + button
         onDeleteEvent={onDeleteEvent}
         onPlaybackPositionChange={onPlaybackPositionChange}
+        draftEventIds={draftEventIds}
       />
 
       {/* Always-visible form */}

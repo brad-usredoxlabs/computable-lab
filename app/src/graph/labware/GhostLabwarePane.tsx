@@ -6,7 +6,14 @@
  */
 
 import type { FC } from 'react'
-import type { GhostLabware } from './DualLabwarePane'
+
+interface GhostLabware {
+  recordId: string
+  reason?: string
+  labwareType?: string
+  format?: { rows: number; cols: number; wellCount?: number }
+  title?: string
+}
 
 interface GhostLabwarePaneProps {
   ghostLabwares: GhostLabware[]

@@ -1,0 +1,53 @@
+$schema: https://computable-lab.com/schema/computable-lab/execution-scale-profile.schema.yaml
+kind: execution-scale-profile
+recordId: execution-scale-profile/robot-assist-plus-96
+type: execution_scale_profile
+id: robot-assist-plus-96
+display_name: INTEGRA ASSIST PLUS 96-Well
+sourceLevel: manual_tubes
+targetLevel: robot_deck
+priority: 120
+matching:
+  prompt_cues:
+    - assist
+    - assist plus
+    - robot
+    - deck
+    - 2-well reservoir
+    - 96-well
+  platforms:
+    - integra_assist
+sampleLayout:
+  labwareRole: sample_plate
+  labwareKind: 96_well_plate
+  labwareDefinition: lbw-def-generic-96-well-plate
+  defaultWellOrder: column_major
+reagentSource:
+  sourceLabwareRole: reagent_reservoir
+  sourceLabwareKind: 2_well_reservoir
+  defaultSourceWells:
+    - "1"
+pipetting:
+  pipetteMode: multi_channel_parallel
+  channels: 8
+  laneStrategy: parallel_lanes
+  channelization: multi_channel_prefer
+  batching: group_by_source
+  maxVolumeUl: 20
+  requiredTools:
+    - pipette-capability/p20-multi-8
+deckBinding:
+  platform: integra_assist
+  requiredLabwareDefinitions:
+    - lbw-def-generic-96-well-plate
+  requiredTools:
+    - pipette-capability/p20-multi-8
+defaultBlockers:
+  - code: missing_2_well_reservoir_definition
+    message: INTEGRA ASSIST PLUS scaling requested a 2-well reservoir, but no 2-well reservoir labware definition is registered.
+    requiredInput: labware-definition:2_well_reservoir
+assumptions:
+  - ASSIST PLUS lowering uses the same plate and lane semantics as bench multichannel planning, then binds them to deck-compatible labware and tool profiles.
+notes: >
+  Robot profile is intentionally blocked until the 2-well reservoir definition
+  is added as YAML data.

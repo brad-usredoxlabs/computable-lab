@@ -70,7 +70,7 @@ export function PreviewBanner({ previewEvents, previewLabwareAdditions = [], pre
       )}
       {previewEvents.length > 0 && (
         <span className="preview-banner__info">
-          {previewEvents.length} event{previewEvents.length !== 1 ? 's' : ''}
+          Preview staged on editor · {previewEvents.length} event{previewEvents.length !== 1 ? 's' : ''}
           {wellCount > 0 && ` · ${wellCount} well${wellCount !== 1 ? 's' : ''}`}
           {unresolvedCount != null && unresolvedCount > 0 && (
             <span className="preview-banner__unresolved">
@@ -87,13 +87,15 @@ export function PreviewBanner({ previewEvents, previewLabwareAdditions = [], pre
         >
           Reject
         </button>
-        <button
-          className="preview-banner__btn preview-banner__btn--commit"
-          onClick={onCommitAccepted}
-          disabled={acceptedCount === 0 || isAccepting || !onCommitAccepted}
-        >
-          Commit Accepted ({acceptedCount})
-        </button>
+        {acceptedCount > 0 && onCommitAccepted && (
+          <button
+            className="preview-banner__btn preview-banner__btn--commit"
+            onClick={onCommitAccepted}
+            disabled={isAccepting}
+          >
+            Commit Accepted ({acceptedCount})
+          </button>
+        )}
         <button
           className="preview-banner__btn preview-banner__btn--accept"
           onClick={onAccept}

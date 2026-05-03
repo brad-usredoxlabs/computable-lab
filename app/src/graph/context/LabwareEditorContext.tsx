@@ -313,6 +313,9 @@ function editorReducer(state: LabwareEditorState, action: LabwareEditorAction): 
 
     // === Event actions ===
     case 'ADD_EVENT': {
+      if (state.events.some((event) => event.eventId === action.event.eventId)) {
+        return state
+      }
       return {
         ...state,
         events: [...state.events, action.event],

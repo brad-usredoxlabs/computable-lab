@@ -39,6 +39,12 @@ const MENTION_PATTERN = /\[\[(material|material-spec|aliquot|labware|selection|p
  */
 export function parsePromptMentionMatches(prompt: string): ParsedPromptMention[] {
   const mentions: ParsedPromptMention[] = [];
+  // Reset lastIndex — the module-scoped regex carries state from the previous
+  // call when the `g` flag is set, which silently returns 0 matches when this
+  // function is invoked twice in the same request (e.g. once in
+  // runChatbotCompile to build effectiveMentions and again inside the
+  // deterministic_precompile pass to build the placeholder map).
+  MENTION_PATTERN.lastIndex = 0;
   let match: RegExpExecArray | null;
 
   while ((match = MENTION_PATTERN.exec(prompt)) !== null) {

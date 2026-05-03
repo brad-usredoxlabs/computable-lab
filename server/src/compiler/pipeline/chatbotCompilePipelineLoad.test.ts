@@ -31,9 +31,9 @@ describe('chatbot-compile.yaml', () => {
       expect(spec.entrypoint).toBe('chatbot-compile');
     });
 
-    it('has exactly 19 passes', () => {
+    it('has exactly 21 passes', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
-      expect(spec.passes.length).toBe(19);
+      expect(spec.passes.length).toBe(21);
     });
   });
 
@@ -43,6 +43,7 @@ describe('chatbot-compile.yaml', () => {
       const passIds = spec.passes.map((p) => p.id);
       expect(passIds).toEqual([
         'extract_entities',
+        'tag_prompt',
         'deterministic_precompile',
         'ai_precompile',
         'mint_materials',
@@ -56,6 +57,7 @@ describe('chatbot-compile.yaml', () => {
         'resolve_roles',
         'compute_volumes',
         'compute_resources',
+        'derive_execution_scale_plan',
         'plan_deck_layout',
         'validate',
         'emit_instrument_run_files',
@@ -72,6 +74,7 @@ describe('chatbot-compile.yaml', () => {
       expect(families).toEqual([
         'parse',
         'parse',
+        'parse',
         'expand',
         'expand',
         'expand',
@@ -83,6 +86,7 @@ describe('chatbot-compile.yaml', () => {
         'expand',
         'expand',
         'expand',
+        'emit',
         'emit',
         'emit',
         'validate',
@@ -109,6 +113,14 @@ describe('chatbot-compile.yaml', () => {
       expect(detPrecompile?.family).toBe('parse');
     });
 
+    it('tag_prompt has no dependencies', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const tagPrompt = spec.passes.find((p) => p.id === 'tag_prompt');
+      expect(tagPrompt).toBeDefined();
+      expect(tagPrompt?.depends_on).toEqual([]);
+      expect(tagPrompt?.family).toBe('parse');
+    });
+
     it('ai_precompile depends on extract_entities and deterministic_precompile', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const aiPrecompile = spec.passes.find((p) => p.id === 'ai_precompile');
@@ -116,11 +128,11 @@ describe('chatbot-compile.yaml', () => {
       expect(aiPrecompile?.depends_on).toEqual(['extract_entities', 'deterministic_precompile']);
     });
 
-    it('expand_biology_verbs depends on ai_precompile and resolve_prior_labware_references', () => {
+    it('expand_biology_verbs depends on ai_precompile', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const expandBiologyVerbs = spec.passes.find((p) => p.id === 'expand_biology_verbs');
       expect(expandBiologyVerbs).toBeDefined();
-      expect(expandBiologyVerbs?.depends_on).toEqual(['ai_precompile', 'resolve_prior_labware_references']);
+      expect(expandBiologyVerbs?.depends_on).toEqual(['ai_precompile']);
     });
 
     it('mint_materials depends on ai_precompile', () => {
@@ -151,11 +163,11 @@ describe('chatbot-compile.yaml', () => {
       expect(expandProtocol?.depends_on).toEqual(['resolve_references']);
     });
 
-    it('resolve_roles depends on mint_materials', () => {
+    it('resolve_roles depends on expand_protocol', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const resolveRoles = spec.passes.find((p) => p.id === 'resolve_roles');
       expect(resolveRoles).toBeDefined();
-      expect(resolveRoles?.depends_on).toEqual(['mint_materials']);
+      expect(resolveRoles?.depends_on).toEqual(['expand_protocol']);
     });
 
     it('lab_state depends on resolve_roles', () => {
@@ -163,6 +175,13 @@ describe('chatbot-compile.yaml', () => {
       const labState = spec.passes.find((p) => p.id === 'lab_state');
       expect(labState).toBeDefined();
       expect(labState?.depends_on).toEqual(['resolve_roles']);
+    });
+
+    it('derive_execution_scale_plan depends on compute_resources', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const scalePlan = spec.passes.find((p) => p.id === 'derive_execution_scale_plan');
+      expect(scalePlan).toBeDefined();
+      expect(scalePlan?.depends_on).toEqual(['compute_resources']);
     });
   });
 
@@ -195,11 +214,11 @@ describe('chatbot-compile.yaml', () => {
       expect(resolveLabware?.when).toBe('outputs.ai_precompile.candidateLabwares');
     });
 
-    it('resolve_references has when clause for unresolvedRefs', () => {
+    it('resolve_references has no when clause', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const resolveRefs = spec.passes.find((p) => p.id === 'resolve_references');
       expect(resolveRefs).toBeDefined();
-      expect(resolveRefs?.when).toBe('outputs.ai_precompile.unresolvedRefs');
+      expect(resolveRefs?.when).toBeUndefined();
     });
 
     it('resolve_prior_labware_references has when clause for priorLabwareRefs', () => {
@@ -209,11 +228,11 @@ describe('chatbot-compile.yaml', () => {
       expect(resolvePrior?.when).toBe('outputs.ai_precompile.priorLabwareRefs');
     });
 
-    it('expand_protocol has when clause for resolvedRefs', () => {
+    it('expand_protocol has no when clause', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const expandProtocol = spec.passes.find((p) => p.id === 'expand_protocol');
       expect(expandProtocol).toBeDefined();
-      expect(expandProtocol?.when).toBe('outputs.resolve_references.resolvedRefs');
+      expect(expandProtocol?.when).toBeUndefined();
     });
 
     it('expand_patterns has when clause for patternEvents', () => {
@@ -235,6 +254,13 @@ describe('chatbot-compile.yaml', () => {
       const extractEntities = spec.passes.find((p) => p.id === 'extract_entities');
       expect(extractEntities).toBeDefined();
       expect(extractEntities?.when).toBeUndefined();
+    });
+
+    it('tag_prompt has no when clause', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const tagPrompt = spec.passes.find((p) => p.id === 'tag_prompt');
+      expect(tagPrompt).toBeDefined();
+      expect(tagPrompt?.when).toBeUndefined();
     });
 
     it('ai_precompile has no when clause (gating is internal to the pass, spec-046)', () => {
@@ -263,6 +289,13 @@ describe('chatbot-compile.yaml', () => {
       const computeResources = spec.passes.find((p) => p.id === 'compute_resources');
       expect(computeResources).toBeDefined();
       expect(computeResources?.when).toBeUndefined();
+    });
+
+    it('derive_execution_scale_plan has no when clause', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const scalePlan = spec.passes.find((p) => p.id === 'derive_execution_scale_plan');
+      expect(scalePlan).toBeDefined();
+      expect(scalePlan?.when).toBeUndefined();
     });
 
     it('plan_deck_layout has no when clause', () => {
@@ -307,6 +340,13 @@ describe('chatbot-compile.yaml', () => {
       const aiPrecompile = spec.passes.find((p) => p.id === 'ai_precompile');
       expect(aiPrecompile).toBeDefined();
       expect(aiPrecompile?.description).toContain('LLM-backed');
+    });
+
+    it('tag_prompt has description', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const tagPrompt = spec.passes.find((p) => p.id === 'tag_prompt');
+      expect(tagPrompt).toBeDefined();
+      expect(tagPrompt?.description).toContain('Shadow-mode');
     });
 
     it('expand_biology_verbs has description', () => {

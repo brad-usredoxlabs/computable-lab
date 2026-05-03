@@ -7,12 +7,15 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { flushSync } from 'react-dom'
 import { streamAssist, getAiHealth } from '../api/aiClient'
 import { apiClient } from '../api/client'
 import { parsePromptMentions } from '../lib/aiPromptMentions'
 import type { PlateEvent } from '../../types/events'
 import type { RecordRef } from '../../types/ref'
 import type { AiContext, FileAttachment } from '../../types/aiContext'
+import { labwareDefinitionRecordToPayload, type LabwareRecordPayload } from '../../types/labware'
+import { getLabwareDefinitionById } from '../../types/labwareDefinition'
 import type {
   ChatMessage,
   AiStreamEvent,
@@ -20,6 +23,7 @@ import type {
   OntologyRefProposal,
   AiConversationMessage,
   AiLabwareAddition,
+  PromptMention,
 } from '../../types/ai'
 
 const FALLBACK_APPLY_TO_GRAPH_TEXT = 'Apply the protocol to the labware graph.'
@@ -29,8 +33,56 @@ function generateMessageId(): string {
   return `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`
 }
 
+function labwareRecordFallbackPayload(recordId: string): LabwareRecordPayload {
+  const label = recordId
+    .replace(/^lbw-/, '')
+    .replace(/^def:/, '')
+    .replace(/[/:@_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const haystack = `${recordId} ${label}`.toLowerCase()
+  const format = haystack.includes('384')
+    ? { rows: 16, cols: 24, wellCount: 384 }
+    : haystack.includes('reservoir') && haystack.includes('12')
+      ? { rows: 1, cols: 12, wellCount: 12 }
+      : haystack.includes('reservoir') && haystack.includes('8')
+        ? { rows: 1, cols: 8, wellCount: 8 }
+        : haystack.includes('tube')
+          ? { rows: 1, cols: 1, wellCount: 1 }
+          : { rows: 8, cols: 12, wellCount: 96 }
+  const labwareType = haystack.includes('reservoir')
+    ? 'reservoir'
+    : haystack.includes('deep')
+      ? 'deepwell'
+      : haystack.includes('tube')
+        ? 'tube'
+        : 'plate'
+
+  return {
+    kind: 'labware',
+    recordId,
+    name: label || recordId,
+    labwareType,
+    format,
+  }
+}
+
+async function resolveLabwareAdditionPayload(addition: AiLabwareAddition): Promise<LabwareRecordPayload> {
+  const definitionPayload = labwareDefinitionRecordToPayload(addition.recordId)
+  if (definitionPayload) return definitionPayload
+  try {
+    const record = await apiClient.getRecord(addition.recordId)
+    if (record?.payload) return record.payload as unknown as LabwareRecordPayload
+  } catch {
+    // Seed/local labware ids are valid editor labware refs even when they are
+    // not backed by /api/records.
+  }
+  return labwareRecordFallbackPayload(addition.recordId)
+}
+
 const MAX_HISTORY_MESSAGES = 20
 const MAX_HISTORY_CONTENT_CHARS = 8_000
+type LinearWellTemplate = { count: number; axis: 'x' | 'y' }
 
 function buildConversationHistory(messages: ChatMessage[]): AiConversationMessage[] {
   return messages
@@ -84,7 +136,7 @@ export type AcceptEventHandler = (event: PlateEvent) => void
 /**
  * Callback for adding labware from a record.
  */
-export type AddLabwareFromRecordHandler = (record: Record<string, unknown>) => void
+export type AddLabwareFromRecordHandler = (record: Record<string, unknown>, addition?: AiLabwareAddition) => void
 
 interface UseAiChatOptions {
   /** Page-level AI context — determines surface and context payload. */
@@ -127,6 +179,7 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
   const [applyToGraphTemplate, setApplyToGraphTemplate] = useState<string | null>(null)
 
   const abortRef = useRef<AbortController | null>(null)
+  const isAcceptingRef = useRef(false)
 
   // Session-level cache: ontology CURIE → RecordRef from previous material creation.
   const resolvedCache = useRef<Map<string, RecordRef>>(new Map())
@@ -174,6 +227,7 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
 
   // Fetch apply-to-graph template from the prompt-templates registry.
   useEffect(() => {
+    if (typeof apiClient.getPromptTemplate !== 'function') return
     apiClient
       .getPromptTemplate('assistant.apply-to-graph.user')
       .then((res) => {
@@ -226,33 +280,40 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
       }
 
       const assistantId = generateMessageId()
+      const initialStatus = 'Prompt received. Starting compiler pipeline...'
       const assistantMsg: ChatMessage = {
         id: assistantId,
         role: 'assistant',
-        content: 'Connecting to assistant…',
+        content: initialStatus,
         timestamp: Date.now(),
-        streamEvents: [],
+        streamEvents: [{ type: 'status', message: initialStatus }],
         isStreaming: true,
       }
 
-      setMessages((prev) => [...prev, userMsg, assistantMsg])
-      setIsStreaming(true)
+      flushSync(() => {
+        setMessages((prev) => [...prev, userMsg, assistantMsg])
+        setIsStreaming(true)
+      })
 
       const controller = new AbortController()
       abortRef.current = controller
 
+      await waitForNextPaint()
+
       const ctx = aiContextRef.current
       const contextPayload: Record<string, unknown> = { ...ctx.surfaceContext }
+      let promptMentions: PromptMention[] = []
       // Inject mentions for event-editor surface
       if (ctx.surface === 'event-editor') {
-        contextPayload.mentions = parsePromptMentions(prompt)
+        promptMentions = parsePromptMentions(prompt)
+        contextPayload.mentions = promptMentions
       }
       if (ctx.editorMode) {
         contextPayload.editorMode = ctx.editorMode
       }
 
       const history = buildConversationHistory(messages)
-      const accumulated: AiStreamEvent[] = []
+      const accumulated: AiStreamEvent[] = [{ type: 'status', message: initialStatus }]
 
       const files = attachments?.map((a) => a.file)
 
@@ -296,11 +357,16 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
 
           if (event.type === 'done') {
             const result = event.result
-            setPreviewEvents(result.events ?? [])
+            const normalizedPreviewEvents = normalizePreviewEvents(
+              result.events ?? [],
+              promptMentions,
+              result.labwareAdditions ?? [],
+            )
+            setPreviewEvents(normalizedPreviewEvents)
             setPreviewLabwareAdditions(result.labwareAdditions ?? [])
             // Initialize preview event states to 'pending' for all new events
             const nextStates = new Map<string, PreviewEventState>()
-            ;(result.events ?? []).forEach((e: PlateEvent) => {
+            normalizedPreviewEvents.forEach((e: PlateEvent) => {
               nextStates.set(e.eventId, 'pending')
             })
             setPreviewEventStatesMap(nextStates)
@@ -315,9 +381,10 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
                       ...m,
                       content: result.clarification?.prompt ?? result.clarificationNeeded ?? content,
                       streamEvents: [...accumulated],
-                      events: result.events ?? [],
+                      events: normalizedPreviewEvents,
                       clarification: result.clarification,
                       labwareAdditions: result.labwareAdditions,
+                      executionScalePlan: result.executionScalePlan,
                       usage: result.usage,
                       isStreaming: false,
                       docDiscussion:
@@ -398,32 +465,27 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
   // Accept preview events → add to editor (applies cached resolutions)
   // ------------------------------------------------------------------
   const acceptPreview = useCallback(async () => {
-    if (isAccepting) return
+    if (isAcceptingRef.current) return
+    isAcceptingRef.current = true
     setIsAccepting(true)
+    const eventsToAccept = previewEvents
+    const labwareAdditionsToApply = previewLabwareAdditions
+    flushSync(() => {
+      setPreviewEvents([])
+      setPreviewLabwareAdditions([])
+      setPreviewEventStatesMap(new Map())
+      setUnresolvedRefs([])
+    })
     try {
       // Track labware-addition outcomes for the summary message.
-      const totalLabwareAttempts = previewLabwareAdditions.length
+      const totalLabwareAttempts = labwareAdditionsToApply.length
       let labwareFailures = 0
 
       // Apply AI-proposed labware additions FIRST so events can reference them.
-      for (const addition of previewLabwareAdditions) {
+      for (const addition of labwareAdditionsToApply) {
         try {
-          // Fetch the full record by ID using the apiClient.
-          const record = await apiClient.getRecord(addition.recordId)
-          if (record && record.payload) {
-            addLabwareFromRecordRef.current?.(record.payload as Record<string, unknown>)
-          } else {
-            labwareFailures++
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: generateMessageId(),
-                role: 'system',
-                content: `Error: Skipped labware addition — ${addition.recordId} not found locally.`,
-                timestamp: Date.now(),
-              },
-            ])
-          }
+          const payload = await resolveLabwareAdditionPayload(addition)
+          addLabwareFromRecordRef.current?.(payload as unknown as Record<string, unknown>, addition)
         } catch (err) {
           labwareFailures++
           setMessages((prev) => [
@@ -441,13 +503,13 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
       const cache = resolvedCache.current
       const handler = onAcceptEventRef.current
       if (handler) {
-        for (const event of previewEvents) {
+        for (const event of eventsToAccept) {
           handler(cache.size > 0 ? rewriteEventRefs(event, cache) : event)
         }
       }
 
       // Compute the final summary message based on outcomes.
-      const eventCount = previewEvents.length
+      const eventCount = eventsToAccept.length
       let summary: string
       if (totalLabwareAttempts > 0 && labwareFailures === totalLabwareAttempts && eventCount === 0) {
         summary = `Accept failed — all ${totalLabwareAttempts} labware addition${totalLabwareAttempts !== 1 ? 's' : ''} could not be added.`
@@ -457,8 +519,6 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
         summary = `Accepted ${eventCount} event${eventCount !== 1 ? 's' : ''}.`
       }
 
-      setPreviewEvents([])
-      setPreviewLabwareAdditions([])
       setMessages((prev) => [
         ...prev,
         {
@@ -469,36 +529,50 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
         },
       ])
     } finally {
+      isAcceptingRef.current = false
       setIsAccepting(false)
     }
-  }, [previewEvents, previewLabwareAdditions, isAccepting])
+  }, [previewEvents, previewLabwareAdditions])
 
   // ------------------------------------------------------------------
   // Accept preview events with resolved material refs
   // ------------------------------------------------------------------
   const acceptPreviewWithResolutions = useCallback(
     (resolutions: Map<string, RecordRef>) => {
-      for (const [key, value] of resolutions) {
-        resolvedCache.current.set(key, value)
-      }
-      const combined = resolvedCache.current
-      const handler = onAcceptEventRef.current
-      if (handler) {
-        for (const event of previewEvents) {
-          handler(rewriteEventRefs(event, combined))
+      if (isAcceptingRef.current) return
+      isAcceptingRef.current = true
+      setIsAccepting(true)
+      try {
+        const eventsToAccept = previewEvents
+        flushSync(() => {
+          setPreviewEvents([])
+          setPreviewLabwareAdditions([])
+          setPreviewEventStatesMap(new Map())
+          setUnresolvedRefs([])
+        })
+        for (const [key, value] of resolutions) {
+          resolvedCache.current.set(key, value)
         }
+        const combined = resolvedCache.current
+        const handler = onAcceptEventRef.current
+        if (handler) {
+          for (const event of eventsToAccept) {
+            handler(rewriteEventRefs(event, combined))
+          }
+        }
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: generateMessageId(),
+            role: 'system',
+            content: `Accepted ${eventsToAccept.length} event${eventsToAccept.length !== 1 ? 's' : ''} (resolved ${resolutions.size} material${resolutions.size !== 1 ? 's' : ''}).`,
+            timestamp: Date.now(),
+          },
+        ])
+      } finally {
+        isAcceptingRef.current = false
+        setIsAccepting(false)
       }
-      setPreviewEvents([])
-      setUnresolvedRefs([])
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: generateMessageId(),
-          role: 'system',
-          content: `Accepted ${previewEvents.length} event${previewEvents.length !== 1 ? 's' : ''} (resolved ${resolutions.size} material${resolutions.size !== 1 ? 's' : ''}).`,
-          timestamp: Date.now(),
-        },
-      ])
     },
     [previewEvents]
   )
@@ -527,48 +601,56 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
   // Commit accepted preview events
   // ------------------------------------------------------------------
   const commitAcceptedPreviewEvents = useCallback(async () => {
+    if (isAcceptingRef.current) return
+    isAcceptingRef.current = true
+    setIsAccepting(true)
     const toApply = previewEvents.filter(
       (e) => previewEventStates.get(e.eventId) === 'accepted',
     )
+    const labwareAdditionsToApply = previewLabwareAdditions
+    flushSync(() => {
+      setPreviewEvents([])
+      setPreviewLabwareAdditions([])
+      setPreviewEventStatesMap(new Map())
+      setUnresolvedRefs([])
+    })
 
-    // Apply labware additions first (same as acceptPreview)
-    if (previewLabwareAdditions.length > 0) {
-      for (const addition of previewLabwareAdditions) {
-        try {
-          const record = await apiClient.getRecord(addition.recordId)
-          if (record && record.payload) {
-            addLabwareFromRecordRef.current?.(record.payload as Record<string, unknown>)
+    try {
+      // Apply labware additions first (same as acceptPreview)
+      if (labwareAdditionsToApply.length > 0) {
+        for (const addition of labwareAdditionsToApply) {
+          try {
+            const payload = await resolveLabwareAdditionPayload(addition)
+            addLabwareFromRecordRef.current?.(payload as unknown as Record<string, unknown>, addition)
+          } catch {
+            // Silently skip labware additions that fail during commit
           }
-        } catch {
-          // Silently skip labware additions that fail during commit
         }
       }
-    }
 
-    // Apply accepted events
-    const handler = onAcceptEventRef.current
-    if (handler) {
-      for (const event of toApply) {
-        handler(event)
+      // Apply accepted events
+      const handler = onAcceptEventRef.current
+      if (handler) {
+        for (const event of toApply) {
+          handler(event)
+        }
       }
+
+      // Add system message
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `sys-${Date.now()}`,
+          role: 'system',
+          content: `Committed ${toApply.length} event${toApply.length === 1 ? '' : 's'}.`,
+          timestamp: Date.now(),
+          isStreaming: false,
+        },
+      ])
+    } finally {
+      isAcceptingRef.current = false
+      setIsAccepting(false)
     }
-
-    // Clear all preview state
-    setPreviewEvents([])
-    setPreviewLabwareAdditions([])
-    setPreviewEventStatesMap(new Map())
-
-    // Add system message
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `sys-${Date.now()}`,
-        role: 'system',
-        content: `Committed ${toApply.length} event${toApply.length === 1 ? '' : 's'}.`,
-        timestamp: Date.now(),
-        isStreaming: false,
-      },
-    ])
   }, [previewEvents, previewEventStates, previewLabwareAdditions])
 
   // ------------------------------------------------------------------
@@ -578,6 +660,7 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
     setMessages([])
     setPreviewEvents([])
     setPreviewLabwareAdditions([])
+    setPreviewEventStatesMap(new Map())
     setUnresolvedRefs([])
   }, [])
 
@@ -686,6 +769,222 @@ function buildAssistantContent(events: AiStreamEvent[]): string {
   if (parts.length > 0) sections.push(parts.join('\n'))
 
   return sections.join('\n\n') || 'Thinking...'
+}
+
+function normalizePreviewEvents(
+  events: PlateEvent[],
+  mentions: PromptMention[] = [],
+  labwareAdditions: AiLabwareAddition[] = [],
+): PlateEvent[] {
+  const materialMentionsById = new Map(
+    mentions
+      .filter((mention): mention is PromptMention & { type: 'material'; id: string; label?: string; entityKind?: string } => (
+        mention.type === 'material' && typeof mention.id === 'string'
+      ))
+      .map((mention) => [mention.id, mention])
+  )
+  const linearLabwareTemplates = buildLinearLabwareTemplateMap(labwareAdditions, events)
+
+  return events.map((event) => {
+    const details = { ...(event.details as Record<string, unknown>) }
+    const topLevelLabwareId = stringField((event as { labwareId?: unknown }).labwareId)
+    if (topLevelLabwareId && typeof details.labwareId !== 'string') {
+      details.labwareId = topLevelLabwareId
+    }
+
+    if (event.event_type === 'transfer' || event.event_type === 'multi_dispense') {
+      const sourceLabware = stringField(details.source_labware) ?? stringField(details.source_labwareId)
+      const destLabware = stringField(details.destination_labware)
+        ?? stringField(details.dest_labware)
+        ?? stringField(details.dest_labwareId)
+      const sourceWells = normalizeWellsForLabware(
+        arrayField(details.source_wells) ?? singleWellArray(details.source_well),
+        sourceLabware,
+        linearLabwareTemplates,
+      )
+      const destWells = normalizeWellsForLabware(
+        arrayField(details.dest_wells)
+          ?? arrayField(details.wells)
+          ?? singleWellArray(details.destination_well)
+          ?? singleWellArray(details.dest_well),
+        destLabware,
+        linearLabwareTemplates,
+      )
+
+      if (sourceLabware) details.source_labwareId = sourceLabware
+      if (destLabware) details.dest_labwareId = destLabware
+      if (sourceWells) details.source_wells = sourceWells
+      if (destWells) details.dest_wells = destWells
+      if (sourceLabware || sourceWells) {
+        details.source = {
+          ...(details.source && typeof details.source === 'object' ? details.source : {}),
+          ...(sourceLabware ? { labwareInstanceId: sourceLabware } : {}),
+          ...(sourceWells ? { wells: sourceWells } : {}),
+        }
+      }
+      if (destLabware || destWells) {
+        details.target = {
+          ...(details.target && typeof details.target === 'object' ? details.target : {}),
+          ...(destLabware ? { labwareInstanceId: destLabware } : {}),
+          ...(destWells ? { wells: destWells } : {}),
+        }
+      }
+    }
+
+    if (event.event_type === 'add_material') {
+      const labwareId = stringField(details.labwareId)
+      const well = normalizeWellsForLabware(
+        singleWellArray(details.well) ?? arrayField(details.wells),
+        labwareId,
+        linearLabwareTemplates,
+      )
+      if (well && !Array.isArray(details.wells)) {
+        details.wells = well
+      } else if (well) {
+        details.wells = well
+      }
+      const volumeUl = typeof details.volume_uL === 'number' ? details.volume_uL : undefined
+      if (volumeUl != null && !details.volume) {
+        details.volume = { value: volumeUl, unit: 'uL' }
+      }
+      const recordId = stringField(details.recordId)
+        ?? stringField((details.material as { recordId?: unknown } | undefined)?.recordId)
+      if (recordId && !details.material_ref && !details.material_spec_ref && !details.aliquot_ref && !details.material_instance_ref) {
+        const kind = stringField(details.kind)
+          ?? stringField((details.material as { kind?: unknown } | undefined)?.kind)
+          ?? materialMentionsById.get(recordId)?.entityKind
+          ?? 'material'
+        const label = stringField(details.label)
+          ?? stringField(details.name)
+          ?? stringField((details.material as { label?: unknown; name?: unknown } | undefined)?.label)
+          ?? stringField((details.material as { label?: unknown; name?: unknown } | undefined)?.name)
+          ?? materialMentionsById.get(recordId)?.label
+          ?? recordId
+        const ref = {
+          kind: 'record',
+          id: recordId,
+          type: kind === 'aliquot'
+            ? 'aliquot'
+            : kind === 'material-spec'
+              ? 'material-spec'
+              : kind === 'material-instance'
+                ? 'material-instance'
+                : 'material',
+          label,
+        }
+        if (ref.type === 'aliquot') details.aliquot_ref = ref
+        else if (ref.type === 'material-spec') details.material_spec_ref = ref
+        else if (ref.type === 'material-instance') details.material_instance_ref = ref
+        else details.material_ref = ref
+      }
+    }
+
+    return {
+      ...event,
+      details,
+    }
+  })
+}
+
+function buildLinearLabwareTemplateMap(additions: AiLabwareAddition[], events: PlateEvent[]): Map<string, LinearWellTemplate> {
+  const templates = new Map<string, LinearWellTemplate>()
+  for (const addition of additions) {
+    const template = getLinearWellTemplate(addition.recordId)
+    if (template) templates.set(addition.recordId, template)
+  }
+  for (const event of events) {
+    const details = event.details as Record<string, unknown>
+    const candidates = [
+      stringField(details.labwareId),
+      stringField((event as { labwareId?: unknown }).labwareId),
+      stringField(details.source_labware),
+      stringField(details.source_labwareId),
+      stringField(details.destination_labware),
+      stringField(details.dest_labware),
+      stringField(details.dest_labwareId),
+      stringField((details.source as { labwareInstanceId?: unknown } | undefined)?.labwareInstanceId),
+      stringField((details.target as { labwareInstanceId?: unknown } | undefined)?.labwareInstanceId),
+    ]
+    for (const id of candidates) {
+      if (id && !templates.has(id)) {
+        const template = getLinearWellTemplate(id)
+        if (template) templates.set(id, template)
+      }
+    }
+  }
+  return templates
+}
+
+function getLinearWellTemplate(recordId: string): LinearWellTemplate | null {
+  const definition = getLabwareDefinitionById(recordId.startsWith('def:') ? recordId.slice(4) : recordId)
+  if (definition?.topology.addressing === 'linear') {
+    return {
+      count: Math.max(1, definition.topology.linear_count || 1),
+      axis: definition.topology.linear_axis || 'x',
+    }
+  }
+  const payload = labwareDefinitionRecordToPayload(recordId)
+  const labwareType = (payload?.labwareType ?? '').toLowerCase()
+  if (labwareType === 'reservoir_12') return { count: 12, axis: 'x' }
+  if (labwareType === 'reservoir_8') return { count: 8, axis: 'y' }
+  const haystack = `${recordId} ${payload?.name ?? ''}`.toLowerCase()
+  if (!haystack.includes('reservoir')) return null
+  if (haystack.includes('12')) return { count: 12, axis: 'x' }
+  if (haystack.includes('8')) return { count: 8, axis: 'y' }
+  return null
+}
+
+function normalizeWellsForLabware(
+  wells: string[] | undefined,
+  labwareId: string | undefined,
+  linearLabwareTemplates: Map<string, LinearWellTemplate>,
+): string[] | undefined {
+  const template = labwareId ? linearLabwareTemplates.get(labwareId) : undefined
+  if (!wells || !template) return wells
+  return wells.map((well) => normalizeLinearWellAlias(well, template))
+}
+
+function normalizeLinearWellAlias(well: string, template: LinearWellTemplate): string {
+  const numeric = /^([1-9]\d*)$/.exec(well)
+  if (numeric) {
+    const index = Number(numeric[1])
+    return index >= 1 && index <= template.count ? String(index) : well
+  }
+  const grid = /^([A-Z])([1-9]\d*)$/i.exec(well)
+  if (!grid) return well
+  const row = grid[1].toUpperCase().charCodeAt(0) - 64
+  const column = Number(grid[2])
+  const index = template.axis === 'x'
+    ? row === 1 ? column : null
+    : column === 1 ? row : null
+  return index != null && index >= 1 && index <= template.count ? String(index) : well
+}
+
+function stringField(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function arrayField(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const out = value.filter((item): item is string => typeof item === 'string' && item.length > 0)
+  return out.length > 0 ? out : undefined
+}
+
+function singleWellArray(value: unknown): string[] | undefined {
+  const well = stringField(value)
+  return well ? [well] : undefined
+}
+
+function waitForNextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof globalThis.requestAnimationFrame === 'function') {
+      globalThis.requestAnimationFrame(() => {
+        setTimeout(resolve, 0)
+      })
+      return
+    }
+    setTimeout(resolve, 0)
+  })
 }
 
 /**

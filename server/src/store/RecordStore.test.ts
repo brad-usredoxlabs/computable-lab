@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -347,6 +347,49 @@ describe('RecordStoreImpl', () => {
       expect(result).not.toBeNull();
       expect(result?.recordId).toBe('STU-003');
       expect((result?.payload as Record<string, unknown>).title).toBe('Fetch Test');
+    });
+
+    it('gets seed records by id when they are not present in the connected repo', async () => {
+      const seedDir = join(testDir, 'seed-records');
+      await mkdir(join(seedDir, 'labware'), { recursive: true });
+      await writeFile(join(seedDir, 'labware', 'lbw-seed-plate-96-flat.yaml'), `
+recordId: lbw-seed-plate-96-flat
+$schema: https://test.com/test.schema.yaml
+kind: labware
+title: Generic 96 Well Plate, Flat Bottom (seed)
+`);
+
+      store = createRecordStore(repo, validator, lintEngine, { seedDir });
+
+      const result = await store.get('lbw-seed-plate-96-flat');
+
+      expect(result).not.toBeNull();
+      expect(result?.recordId).toBe('lbw-seed-plate-96-flat');
+      expect((result?.payload as Record<string, unknown>).title).toBe('Generic 96 Well Plate, Flat Bottom (seed)');
+      expect(result?.meta?.path).toContain('seed-records');
+      expect(result?.meta?.commitSha).toBe('seed');
+    });
+
+    it('validates seed records through getWithValidation', async () => {
+      const seedDir = join(testDir, 'seed-records');
+      await mkdir(join(seedDir, 'labware'), { recursive: true });
+      await writeFile(join(seedDir, 'labware', 'lbw-seed-plate-96-flat.yaml'), `
+recordId: lbw-seed-plate-96-flat
+$schema: https://test.com/test.schema.yaml
+kind: labware
+title: Generic 96 Well Plate, Flat Bottom (seed)
+`);
+
+      store = createRecordStore(repo, validator, lintEngine, { seedDir });
+
+      const result = await store.getWithValidation({
+        recordId: 'lbw-seed-plate-96-flat',
+        validate: true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.envelope?.recordId).toBe('lbw-seed-plate-96-flat');
+      expect(result.validation).toBeDefined();
     });
   });
   

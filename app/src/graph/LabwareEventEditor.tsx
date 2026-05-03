@@ -43,7 +43,15 @@ import { getEventSummary, normalizeTransferDetails, withCanonicalTransferDetails
 import type { WellId } from '../types/plate'
 import type { MacroProgram } from '../types/macroProgram'
 import type { Labware, LabwareType, LabwareRecordPayload } from '../types/labware'
-import { getLabwareDefaultOrientation, getLabwareWellIds, isTipRackType, normalizeLabwareWithDefinition } from '../types/labware'
+import {
+  getLabwareDefaultOrientation,
+  getLabwareWellIds,
+  isTipRackType,
+  labwareDefinitionRecordToPayload,
+  labwareRecordToEditorLabware,
+  normalizeLabwareWithDefinition,
+} from '../types/labware'
+import type { AiLabwareAddition } from '../types/ai'
 import type { LabwareOrientation } from './labware/LabwareCanvas'
 import { flatSelection, infoMessage, validResult, warningMessage, type SelectionExpansion } from './tools'
 import { createGridViewTransform, getCanonicalPitchMm, resolveEffectiveLinearAxisForLabware, resolveOrientationForLabware } from './lib/labwareView'
@@ -216,18 +224,95 @@ function clearPersistedLabwareEditorDraft(storageKey: string | null | undefined)
   }
 }
 
-/**
- * Convert aiChat.previewLabwareAdditions to GhostLabware[] for DualLabwarePane.
- * This is a minimal conversion - later specs can enrich with labwareType/format/title.
- */
-function toGhostLabwares(
-  additions: Array<{ recordId: string; reason?: string }> | undefined
-): { recordId: string; reason?: string }[] {
+function labwareRecordFallbackPayload(recordId: string): LabwareRecordPayload {
+  const label = recordId
+    .replace(/^lbw-/, '')
+    .replace(/^def:/, '')
+    .replace(/[/:@_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const haystack = `${recordId} ${label}`.toLowerCase()
+  const format = haystack.includes('384')
+    ? { rows: 16, cols: 24, wellCount: 384 }
+    : haystack.includes('reservoir') && haystack.includes('12')
+      ? { rows: 1, cols: 12, wellCount: 12 }
+      : haystack.includes('reservoir') && haystack.includes('8')
+        ? { rows: 1, cols: 8, wellCount: 8 }
+        : haystack.includes('tube')
+          ? { rows: 1, cols: 1, wellCount: 1 }
+          : { rows: 8, cols: 12, wellCount: 96 }
+  const labwareType = haystack.includes('reservoir')
+    ? 'reservoir'
+    : haystack.includes('deep')
+      ? 'deepwell'
+      : haystack.includes('tube')
+        ? 'tube'
+        : 'plate'
+
+  return {
+    kind: 'labware',
+    recordId,
+    name: label || recordId,
+    labwareType,
+    format,
+  }
+}
+
+function aiLabwareAdditionToDraftLabware(addition: AiLabwareAddition): Labware {
+  const payload = labwareDefinitionRecordToPayload(addition.recordId)
+    ?? labwareRecordFallbackPayload(addition.recordId)
+  return labwareRecordToEditorLabware(payload)
+}
+
+function toDraftPreviewLabwares(
+  additions: AiLabwareAddition[] | undefined
+): Labware[] {
   if (!additions || additions.length === 0) return []
-  return additions.map((a) => ({
-    recordId: a.recordId,
-    ...(a.reason ? { reason: a.reason } : {}),
-  }))
+  const byId = new Map<string, Labware>()
+  for (const addition of additions) {
+    if (!byId.has(addition.recordId)) {
+      byId.set(addition.recordId, aiLabwareAdditionToDraftLabware(addition))
+    }
+  }
+  return Array.from(byId.values())
+}
+
+function getEventSourceLabwareId(event: PlateEvent): string | null {
+  const normalized = normalizeTransferDetails(event.details as TransferDetails)
+  if (normalized.sourceLabwareId) return normalized.sourceLabwareId
+  const details = event.details as Record<string, unknown>
+  const source = details.source as { labwareInstanceId?: string } | undefined
+  return source?.labwareInstanceId || null
+}
+
+function getEventTargetLabwareId(event: PlateEvent): string | null {
+  const normalized = normalizeTransferDetails(event.details as TransferDetails)
+  if (normalized.destLabwareId) return normalized.destLabwareId
+  const details = event.details as Record<string, unknown>
+  const target = details.target as { labwareInstanceId?: string } | undefined
+  return target?.labwareInstanceId || null
+}
+
+function inferPreviewLabwareIdForRole(
+  role: 'source' | 'target',
+  additions: AiLabwareAddition[],
+  events: PlateEvent[],
+  previewLabwareIds: Set<string>,
+): string | null {
+  const explicit = additions.find((addition) => addition.deckSlot === role && previewLabwareIds.has(addition.recordId))
+  if (explicit) return explicit.recordId
+  for (const event of events) {
+    const id = role === 'source' ? getEventSourceLabwareId(event) : getEventTargetLabwareId(event)
+    if (id && previewLabwareIds.has(id)) return id
+  }
+  if (role === 'target' && previewLabwareIds.size === 1) {
+    for (const event of events) {
+      const details = event.details as Record<string, unknown>
+      const labwareId = typeof details.labwareId === 'string' ? details.labwareId : null
+      if (event.event_type === 'add_material' && labwareId && previewLabwareIds.has(labwareId)) return labwareId
+    }
+  }
+  return null
 }
 
 function extractDraftSnapshot(draft: SerializedLabwareEditorDraft): LabwareEditorDraftSnapshot {
@@ -926,11 +1011,70 @@ function LabwareEventEditorContent({
   const aiChat = useAiChat({
     aiContext: labwareAiContext,
     onAcceptEvent: addEvent,
-    onAddLabwareFromRecord: (record) => {
-      addLabwareFromRecord(record as unknown as LabwareRecordPayload);
+    onAddLabwareFromRecord: (record, addition) => {
+      const labware = addLabwareFromRecord(record as unknown as LabwareRecordPayload)
+      if (addition?.deckSlot === 'source') {
+        setSourceLabware(labware.labwareId)
+      } else if (addition?.deckSlot === 'target') {
+        setTargetLabware(labware.labwareId)
+      }
     },
   })
   useRegisterAiChat(aiChat)
+
+  const committedEventIds = useMemo(
+    () => new Set(state.events.map((event) => event.eventId)),
+    [state.events]
+  )
+  const visibleAiPreviewEvents = useMemo(
+    () => aiChat.previewEvents.filter((event) => (
+      !committedEventIds.has(event.eventId)
+      && (aiChat.previewEventStates.get(event.eventId) ?? 'pending') !== 'rejected'
+    )),
+    [aiChat.previewEventStates, aiChat.previewEvents, committedEventIds]
+  )
+  const draftPreviewLabwares = useMemo(
+    () => toDraftPreviewLabwares(aiChat.previewLabwareAdditions),
+    [aiChat.previewLabwareAdditions]
+  )
+  const draftPreviewLabwareIds = useMemo(
+    () => new Set(draftPreviewLabwares.map((labware) => labware.labwareId)),
+    [draftPreviewLabwares]
+  )
+  const draftPreviewLabwareById = useMemo(
+    () => new Map(draftPreviewLabwares.map((labware) => [labware.labwareId, labware] as const)),
+    [draftPreviewLabwares]
+  )
+  const previewSourceLabwareId = useMemo(
+    () => sourceLabware?.labwareId
+      ?? inferPreviewLabwareIdForRole('source', aiChat.previewLabwareAdditions, visibleAiPreviewEvents, draftPreviewLabwareIds),
+    [aiChat.previewLabwareAdditions, draftPreviewLabwareIds, sourceLabware?.labwareId, visibleAiPreviewEvents]
+  )
+  const previewTargetLabwareId = useMemo(
+    () => targetLabware?.labwareId
+      ?? inferPreviewLabwareIdForRole('target', aiChat.previewLabwareAdditions, visibleAiPreviewEvents, draftPreviewLabwareIds),
+    [aiChat.previewLabwareAdditions, draftPreviewLabwareIds, targetLabware?.labwareId, visibleAiPreviewEvents]
+  )
+  const draftSourceLabware = sourceLabware
+    ?? (previewSourceLabwareId ? draftPreviewLabwareById.get(previewSourceLabwareId) ?? null : null)
+  const draftTargetLabware = targetLabware
+    ?? (previewTargetLabwareId ? draftPreviewLabwareById.get(previewTargetLabwareId) ?? null : null)
+  const draftDisplayLabwares = useMemo(() => {
+    if (draftPreviewLabwares.length === 0) return Array.from(state.labwares.values())
+    const byId = new Map(state.labwares)
+    for (const labware of draftPreviewLabwares) {
+      if (!byId.has(labware.labwareId)) byId.set(labware.labwareId, labware)
+    }
+    return Array.from(byId.values())
+  }, [draftPreviewLabwares, state.labwares])
+  const draftTimelineEvents = useMemo(
+    () => [...state.events, ...visibleAiPreviewEvents],
+    [state.events, visibleAiPreviewEvents]
+  )
+  const draftEventIds = useMemo(
+    () => new Set(visibleAiPreviewEvents.map((event) => event.eventId)),
+    [visibleAiPreviewEvents]
+  )
 
   // Test-only hooks for e2e testing of preview event badges
   // Exposed on window only in dev/test builds
@@ -3321,6 +3465,7 @@ function LabwareEventEditorContent({
   const biologyMode = useBiologyMode({
     sourceLabwareId: biologyLabwareId ?? undefined,
     targetLabwareId: targetLabware?.labwareId,
+    enabled: editorMode === 'biology',
   })
   const biologySelectedWells = useMemo(() => {
     if (sourceLabware?.labwareId === biologyLabwareId) {
@@ -3998,7 +4143,7 @@ function LabwareEventEditorContent({
         platform={deckPlatform}
         variant={deckVariant}
         platforms={platforms}
-        labwares={Array.from(state.labwares.values())}
+        labwares={draftDisplayLabwares}
         placements={deckPlacements}
         selectedTool={selectedTool}
         onToolChange={setSelectedTool}
@@ -4034,8 +4179,8 @@ function LabwareEventEditorContent({
         onChangePlacement={handleChangeDeckPlacement}
         onSetSourceLabware={setSourceLabware}
         onSetTargetLabware={setTargetLabware}
-        currentSourceLabwareId={sourceLabware?.labwareId || null}
-        currentTargetLabwareId={targetLabware?.labwareId || null}
+        currentSourceLabwareId={draftSourceLabware?.labwareId || null}
+        currentTargetLabwareId={draftTargetLabware?.labwareId || null}
         onDownloadXml={planningEnabled ? handleDownloadXmlFromDeck : undefined}
         downloadXmlDisabled={executionBusy || executionCompilerFamily !== 'assist_plus'}
         downloadXmlBusy={executionBusy}
@@ -4379,7 +4524,7 @@ function LabwareEventEditorContent({
           ribbon={(
             <div className="labware-event-editor-v2__ribbon">
               <EventRibbon
-                events={state.events}
+                events={draftTimelineEvents}
                 selectedEventId={state.selectedEventId}
                 editingEventId={state.editingEventId}
                 onSelectEvent={handleSelectEvent}
@@ -4391,26 +4536,27 @@ function LabwareEventEditorContent({
                 targetSelectionCount={targetSelectionCount}
                 getSourceWells={getSourceWells}
                 getTargetWells={getTargetWells}
-                sourceLabwareId={sourceLabware?.labwareId}
-                sourceLabwareRows={sourceLabware?.addressing.rows || sourceLabware?.addressing.rowLabels?.length}
+                sourceLabwareId={draftSourceLabware?.labwareId}
+                sourceLabwareRows={draftSourceLabware?.addressing.rows || draftSourceLabware?.addressing.rowLabels?.length}
                 sourceLabwareCols={
-                  sourceLabware?.addressing.columns
-                  || sourceLabware?.addressing.columnLabels?.length
-                  || sourceLabware?.addressing.linearLabels?.length
+                  draftSourceLabware?.addressing.columns
+                  || draftSourceLabware?.addressing.columnLabels?.length
+                  || draftSourceLabware?.addressing.linearLabels?.length
                 }
-                targetLabwareId={targetLabware?.labwareId}
-                targetLabwareRows={targetLabware?.addressing.rows || targetLabware?.addressing.rowLabels?.length}
+                targetLabwareId={draftTargetLabware?.labwareId}
+                targetLabwareRows={draftTargetLabware?.addressing.rows || draftTargetLabware?.addressing.rowLabels?.length}
                 targetLabwareCols={
-                  targetLabware?.addressing.columns
-                  || targetLabware?.addressing.columnLabels?.length
-                  || targetLabware?.addressing.linearLabels?.length
+                  draftTargetLabware?.addressing.columns
+                  || draftTargetLabware?.addressing.columnLabels?.length
+                  || draftTargetLabware?.addressing.linearLabels?.length
                 }
-                sourceOrientation={sourceLabware ? getLabwareOrientation(sourceLabware.labwareId) : undefined}
-                targetOrientation={targetLabware ? getLabwareOrientation(targetLabware.labwareId) : undefined}
-                sourceMaxVolumeUL={sourceLabware?.geometry.maxVolume_uL}
-                targetMaxVolumeUL={targetLabware?.geometry.maxVolume_uL}
+                sourceOrientation={draftSourceLabware ? getLabwareOrientation(draftSourceLabware.labwareId) : undefined}
+                targetOrientation={draftTargetLabware ? getLabwareOrientation(draftTargetLabware.labwareId) : undefined}
+                sourceMaxVolumeUL={draftSourceLabware?.geometry.maxVolume_uL}
+                targetMaxVolumeUL={draftTargetLabware?.geometry.maxVolume_uL}
                 vocabPackId={selectedVocabPackId}
                 onPlaybackPositionChange={setPlaybackPosition}
+                draftEventIds={draftEventIds}
                 prefillMaterials={prefillMaterials}
               />
             </div>
@@ -4424,6 +4570,9 @@ function LabwareEventEditorContent({
                 toolExpander={sessionAwareExpander}
                 previewEvents={aiChat.previewEvents}
                 previewEventStates={aiChat.previewEventStates}
+                previewLabwares={draftPreviewLabwares}
+                previewSourceLabwareId={previewSourceLabwareId ?? undefined}
+                previewTargetLabwareId={previewTargetLabwareId ?? undefined}
                 setPreviewEventState={aiChat.setPreviewEventState}
                 onValidation={handleToolSessionValidation}
                 lockLandscapeTipracks={executionTargetPlatform === 'opentrons_ot2' || executionTargetPlatform === 'opentrons_flex'}
@@ -4431,7 +4580,6 @@ function LabwareEventEditorContent({
                 getRotateDisabledReason={getRotateDisabledReason}
                 sourceTooltipMeta={sourceTooltipMeta}
                 targetTooltipMeta={targetTooltipMeta}
-                ghostLabwares={toGhostLabwares(aiChat.previewLabwareAdditions)}
               />
             </div>
           )}
@@ -4637,6 +4785,9 @@ function LabwareEventEditorContent({
                 toolExpander={sessionAwareExpander}
                 previewEvents={aiChat.previewEvents}
                 previewEventStates={aiChat.previewEventStates}
+                previewLabwares={draftPreviewLabwares}
+                previewSourceLabwareId={previewSourceLabwareId ?? undefined}
+                previewTargetLabwareId={previewTargetLabwareId ?? undefined}
                 setPreviewEventState={aiChat.setPreviewEventState}
                 onValidation={handleToolSessionValidation}
                 lockLandscapeTipracks={executionTargetPlatform === 'opentrons_ot2' || executionTargetPlatform === 'opentrons_flex'}
@@ -4648,7 +4799,6 @@ function LabwareEventEditorContent({
                 targetWellContentsOverride={biologyTargetWellContents}
                 sourceTooltipMeta={sourceTooltipMeta}
                 targetTooltipMeta={targetTooltipMeta}
-                ghostLabwares={toGhostLabwares(aiChat.previewLabwareAdditions)}
               />
             </div>
           )}
@@ -4670,6 +4820,9 @@ function LabwareEventEditorContent({
                 toolExpander={sessionAwareExpander}
                 previewEvents={aiChat.previewEvents}
                 previewEventStates={aiChat.previewEventStates}
+                previewLabwares={draftPreviewLabwares}
+                previewSourceLabwareId={previewSourceLabwareId ?? undefined}
+                previewTargetLabwareId={previewTargetLabwareId ?? undefined}
                 setPreviewEventState={aiChat.setPreviewEventState}
                 onValidation={handleToolSessionValidation}
                 lockLandscapeTipracks={executionTargetPlatform === 'opentrons_ot2' || executionTargetPlatform === 'opentrons_flex'}
@@ -4681,7 +4834,6 @@ function LabwareEventEditorContent({
                 targetWellContentsOverride={biologyTargetWellContents}
                 sourceTooltipMeta={sourceTooltipMeta}
                 targetTooltipMeta={targetTooltipMeta}
-                ghostLabwares={toGhostLabwares(aiChat.previewLabwareAdditions)}
               />
             </div>
           )}
@@ -4703,6 +4855,9 @@ function LabwareEventEditorContent({
                 toolExpander={sessionAwareExpander}
                 previewEvents={aiChat.previewEvents}
                 previewEventStates={aiChat.previewEventStates}
+                previewLabwares={draftPreviewLabwares}
+                previewSourceLabwareId={previewSourceLabwareId ?? undefined}
+                previewTargetLabwareId={previewTargetLabwareId ?? undefined}
                 setPreviewEventState={aiChat.setPreviewEventState}
                 onValidation={handleToolSessionValidation}
                 lockLandscapeTipracks={executionTargetPlatform === 'opentrons_ot2' || executionTargetPlatform === 'opentrons_flex'}
@@ -4714,7 +4869,6 @@ function LabwareEventEditorContent({
                 targetWellContentsOverride={resultsTargetWellContents}
                 sourceTooltipMeta={sourceTooltipMeta}
                 targetTooltipMeta={targetTooltipMeta}
-                ghostLabwares={toGhostLabwares(aiChat.previewLabwareAdditions)}
               />
             </div>
           )}

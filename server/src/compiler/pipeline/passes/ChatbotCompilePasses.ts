@@ -5,8 +5,13 @@
  * starting with the extract_entities pass that runs extraction on prompts and attachments.
  */
 
-import type { Pass, PassRunArgs, PassResult, PassDiagnostic } from '../types.js';
-import type { ResourceManifest } from '../CompileContracts.js';
+import type { Pass, PassRunArgs, PassResult, PassDiagnostic, PipelineState } from '../types.js';
+import type {
+  ExecutionScaleLabwareKind,
+  ExecutionScalePlan,
+  ExecutionScalePlatform,
+  ResourceManifest,
+} from '../CompileContracts.js';
 import type { ExtractionRunnerService, RunExtractionServiceArgs } from '../../../extract/ExtractionRunnerService.js';
 import { runChunkedExtractionService } from '../../../extract/runChunkedExtractionService.js';
 import type { ExtractionDraftBody } from '../../../extract/ExtractionDraftBuilder.js';
@@ -24,6 +29,10 @@ import { applyEventToLabState, emptyLabState } from '../../../compiler/state/Lab
 import { applyDirectiveToLabState, type DirectiveNode } from '../../../compiler/directives/Directive.js';
 import { getValidationChecks } from '../../../compiler/validation/ValidationCheck.js';
 import { renderPromptTemplate } from '../../../registry/PromptTemplateRegistry.js';
+import {
+  getExecutionScaleProfileRegistry,
+  type ExecutionScaleProfileRecord,
+} from '../../../registry/ExecutionScaleProfileRegistry.js';
 
 /**
  * An entity extracted from a prompt or attachment.
@@ -73,8 +82,22 @@ export function createExtractEntitiesPass(
       const attachments = Array.isArray(state.input.attachments)
         ? (state.input.attachments as FileAttachment[])
         : [];
+      const mentions = Array.isArray(state.input.mentions) ? state.input.mentions : [];
       const entities: ExtractedEntity[] = [];
       const diagnostics: PassDiagnostic[] = [];
+
+      if (attachments.length === 0 && mentions.length > 0) {
+        return {
+          ok: true,
+          output: { entities },
+          diagnostics: [{
+            severity: 'info',
+            code: 'extract_entities_skipped_for_resolved_mentions',
+            message: 'Resolved prompt mentions are present and no attachments were provided; skipping freetext entity extraction.',
+            pass_id,
+          }],
+        };
+      }
 
       // Helper to convert extraction diagnostics to pass diagnostics
       const convertDiagnostic = (
@@ -128,11 +151,20 @@ export function createExtractEntitiesPass(
             }
           }
         } catch (error) {
-          // Log the error but don't fail the pass - just add a diagnostic
+          // Log the error but don't fail the pass - just add a diagnostic.
+          // The freetext extractor produces "draft_assemble pass produced no
+          // output" when its underlying LLM extractor is disabled in config
+          // (ai.extractor.enabled=false). That's a configured no-op, not a
+          // real failure, so emit it as info instead of error so the overall
+          // pipeline outcome doesn't get marked failed.
+          const message = error instanceof Error ? error.message : String(error);
+          const isExtractorDisabled = message.includes('draft_assemble pass produced no output');
           diagnostics.push({
-            severity: 'error',
-            code: 'EXTRACTION_ERROR',
-            message: `Failed to extract from prompt: ${error instanceof Error ? error.message : String(error)}`,
+            severity: isExtractorDisabled ? 'info' : 'error',
+            code: isExtractorDisabled ? 'EXTRACTION_DISABLED' : 'EXTRACTION_ERROR',
+            message: isExtractorDisabled
+              ? 'Freetext extractor is disabled — skipping prompt entity extraction'
+              : `Failed to extract from prompt: ${message}`,
             pass_id,
             details: { source: 'prompt' },
           });
@@ -209,10 +241,14 @@ export function createExtractEntitiesPass(
             }
           }
         } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          const isExtractorDisabled = message.includes('draft_assemble pass produced no output');
           diagnostics.push({
-            severity: 'error',
-            code: 'EXTRACTION_ERROR',
-            message: `Failed to extract from attachment ${att.name}: ${error instanceof Error ? error.message : String(error)}`,
+            severity: isExtractorDisabled ? 'info' : 'error',
+            code: isExtractorDisabled ? 'EXTRACTION_DISABLED' : 'EXTRACTION_ERROR',
+            message: isExtractorDisabled
+              ? `Freetext extractor disabled — skipping attachment ${att.name}`
+              : `Failed to extract from attachment ${att.name}: ${message}`,
             pass_id,
             details: { attachment_name: att.name },
           });
@@ -376,12 +412,16 @@ export interface CreateAiPrecompilePassDeps {
 
 /**
  * Creates the ai_precompile pass that asks an LLM to reason over prompt + entities
- * and emit a structured proposal of candidate events, labwares, and unresolved references.
+ * and emit supplemental compile directives.
  *
  * spec-046: Gated on deterministic_precompile output. If deterministic completeness >= 0.9
  * and no residual clauses, returns the deterministic plan directly (no LLM call).
- * Otherwise, includes the deterministic plan in the user message for context and merges
- * LLM results with deterministic candidateEvents (deterministic first, LLM second).
+ * Otherwise, includes the deterministic plan in the user message for context. Once
+ * deterministic_precompile has emitted core artifacts, ai_precompile no longer
+ * contributes candidateEvents/candidateLabwares; it only contributes supplemental
+ * outputs such as mintMaterials, directives, patternEvents, downstream jobs, and
+ * clarification. When deterministic_precompile is absent or emitted no core artifacts,
+ * legacy LLM candidateEvents/candidateLabwares remain accepted as a fallback.
  */
 export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
   return {
@@ -396,6 +436,16 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
       const detOutput = state.outputs.get('deterministic_precompile') as
         { candidateEvents?: unknown[]; candidateLabwares?: unknown[]; unresolvedRefs?: unknown[];
           residualClauses?: unknown[]; deterministicCompleteness?: number } | undefined;
+      const detCandidateEvents = Array.isArray(detOutput?.candidateEvents)
+        ? (detOutput.candidateEvents as Array<{ verb: string; [key: string]: unknown }>)
+        : [];
+      const detCandidateLabwares = Array.isArray(detOutput?.candidateLabwares)
+        ? (detOutput.candidateLabwares as CandidateLabware[])
+        : [];
+      const detUnresolvedRefs = Array.isArray(detOutput?.unresolvedRefs)
+        ? (detOutput.unresolvedRefs as Array<{ kind: string; label: string; reason: string }>)
+        : [];
+      const deterministicHasCoreArtifacts = detCandidateEvents.length > 0 || detCandidateLabwares.length > 0;
 
       // spec-046: Gate on deterministic completeness
       const hasResiduals = Array.isArray(detOutput?.residualClauses) && detOutput.residualClauses.length > 0;
@@ -405,16 +455,6 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
 
       if (detComplete && detOutput) {
         // High completeness, no residuals — return deterministic plan directly, NO LLM call
-        const detCandidateEvents = Array.isArray(detOutput.candidateEvents)
-          ? (detOutput.candidateEvents as Array<{ verb: string; [key: string]: unknown }>)
-          : [];
-        const detCandidateLabwares = Array.isArray(detOutput.candidateLabwares)
-          ? (detOutput.candidateLabwares as CandidateLabware[])
-          : [];
-        const detUnresolvedRefs = Array.isArray(detOutput.unresolvedRefs)
-          ? (detOutput.unresolvedRefs as Array<{ kind: string; label: string; reason: string }>)
-          : [];
-
         return {
           ok: true,
           output: {
@@ -456,7 +496,11 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
       } catch (err) {
         return {
           ok: true,
-          output: { candidateEvents: [], candidateLabwares: [], unresolvedRefs: [] } satisfies AiPrecompileOutput,
+          output: {
+            candidateEvents: detCandidateEvents,
+            candidateLabwares: detCandidateLabwares,
+            unresolvedRefs: detUnresolvedRefs,
+          } satisfies AiPrecompileOutput,
           diagnostics: [{
             severity: 'warning',
             code: 'ai_precompile_parse_error',
@@ -475,7 +519,11 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
         console.warn(`[ai_precompile_shape_mismatch] ${truncated}`);
         return {
           ok: true,
-          output: { candidateEvents: [], candidateLabwares: [], unresolvedRefs: [] } satisfies AiPrecompileOutput,
+          output: {
+            candidateEvents: detCandidateEvents,
+            candidateLabwares: detCandidateLabwares,
+            unresolvedRefs: detUnresolvedRefs,
+          } satisfies AiPrecompileOutput,
           diagnostics: [{
             severity: 'warning',
             code: 'ai_precompile_shape_mismatch',
@@ -486,8 +534,12 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
       }
       // Normalize: ensure all three arrays exist; carry through validated fields
       const llmOutput: AiPrecompileOutput = {
-        candidateEvents: Array.isArray(parsed.candidateEvents) ? parsed.candidateEvents : [],
-        candidateLabwares: Array.isArray(parsed.candidateLabwares) ? parsed.candidateLabwares : [],
+        candidateEvents: deterministicHasCoreArtifacts
+          ? []
+          : (Array.isArray(parsed.candidateEvents) ? parsed.candidateEvents : []),
+        candidateLabwares: deterministicHasCoreArtifacts
+          ? []
+          : (Array.isArray(parsed.candidateLabwares) ? parsed.candidateLabwares : []),
         unresolvedRefs: Array.isArray(parsed.unresolvedRefs) ? parsed.unresolvedRefs : [],
         ...(typeof parsed.clarification === 'string' ? { clarification: parsed.clarification } : {}),
         ...(Array.isArray(parsed.mintMaterials) ? { mintMaterials: parsed.mintMaterials } : {}),
@@ -497,19 +549,27 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
         ...(Array.isArray(parsed.patternEvents) ? { patternEvents: parsed.patternEvents } : {}),
       };
 
-      // Merge deterministic events (deterministic first, LLM second)
-      if (detOutput && Array.isArray(detOutput.candidateEvents) && detOutput.candidateEvents.length > 0) {
-        const detEvents = detOutput.candidateEvents as Array<{ verb: string; [key: string]: unknown }>;
-        llmOutput.candidateEvents = [...detEvents, ...llmOutput.candidateEvents];
+      if (detCandidateEvents.length > 0) {
+        llmOutput.candidateEvents = [...detCandidateEvents, ...llmOutput.candidateEvents];
       }
 
       // Union candidateLabwares (dedupe by hint)
-      if (detOutput && Array.isArray(detOutput.candidateLabwares) && detOutput.candidateLabwares.length > 0) {
-        const detLabwares = detOutput.candidateLabwares as CandidateLabware[];
+      if (detCandidateLabwares.length > 0) {
         const existingHints = new Set(llmOutput.candidateLabwares.map((l: { hint: string }) => l.hint));
-        for (const lw of detLabwares) {
+        for (const lw of detCandidateLabwares) {
           if (!existingHints.has(lw.hint)) {
             llmOutput.candidateLabwares.push(lw);
+          }
+        }
+      }
+      if (detUnresolvedRefs.length > 0) {
+        const existingRefs = new Set(
+          llmOutput.unresolvedRefs.map((ref) => `${ref.kind}\u0000${ref.label}\u0000${ref.reason}`),
+        );
+        for (const ref of detUnresolvedRefs) {
+          const key = `${ref.kind}\u0000${ref.label}\u0000${ref.reason}`;
+          if (!existingRefs.has(key)) {
+            llmOutput.unresolvedRefs.push(ref);
           }
         }
       }
@@ -1182,9 +1242,11 @@ export function createLabwareResolvePass(
       const resolvedLabwares: ResolvedLabware[] = [];
       const diagnostics: PassDiagnostic[] = [];
 
-      // Fold mention-resolved labware into resolvedLabwares so downstream
-      // passes can find them without a record-store lookup. Skip the search
-      // for any candidate hint that names a mention id directly.
+      // Fold runtime/editor mention-resolved labware into resolvedLabwares so
+      // downstream passes can find them without a record-store lookup. Labware
+      // records/definitions mentioned as `lbw-...` or `def:...` are still
+      // allowed to flow through candidateLabwares so the UI can propose placing
+      // them on the deck.
       const mentions = Array.isArray(state.input.mentions) ? state.input.mentions as Array<{ type?: string; id?: string; label?: string }> : [];
       const editorLabwares = Array.isArray(state.input.editorLabwares) ? state.input.editorLabwares as Array<{ labwareId?: string; name?: string }> : [];
       const editorTitleById = new Map<string, string>();
@@ -1193,10 +1255,10 @@ export function createLabwareResolvePass(
           editorTitleById.set(lw.labwareId, lw.name);
         }
       }
-      const mentionLabwareIds = new Set<string>();
+      const runtimeMentionLabwareIds = new Set<string>();
       for (const m of mentions) {
-        if (m && m.type === 'labware' && typeof m.id === 'string' && m.id.length > 0) {
-          mentionLabwareIds.add(m.id);
+        if (m && m.type === 'labware' && typeof m.id === 'string' && m.id.startsWith('lw-')) {
+          runtimeMentionLabwareIds.add(m.id);
           const title = editorTitleById.get(m.id) ?? (typeof m.label === 'string' ? m.label : undefined);
           resolvedLabwares.push({ hint: m.id, recordId: m.id, ...(title ? { title } : {}) });
         }
@@ -1208,7 +1270,7 @@ export function createLabwareResolvePass(
 
         // Mention-shortcut: the LLM is told not to do this, but if a hint
         // exactly matches a mention id, honor it without a record-store hit.
-        if (mentionLabwareIds.has(hint)) continue;
+        if (runtimeMentionLabwareIds.has(hint)) continue;
 
         const matches = await deps.searchLabwareByHint(hint);
         
@@ -2183,6 +2245,478 @@ export function createComputeResourcesPass(): Pass {
             consumables: consumablesArray,
           },
         } satisfies ComputeResourcesPassOutput,
+      };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// derive_execution_scale_plan pass
+// ---------------------------------------------------------------------------
+
+export interface DeriveExecutionScalePlanOutput {
+  executionScalePlan?: ExecutionScalePlan;
+}
+
+const EXECUTION_SCALE_PROMPT_CUES = [
+  'scale',
+  'scaled',
+  'high-throughput',
+  'high throughput',
+  '96',
+  '384',
+  'plate',
+  'reservoir',
+  'multi-channel',
+  'multichannel',
+  '8-channel',
+  '12-channel',
+  'robot',
+  'deck',
+  'opentrons',
+  'assist plus',
+  'tube',
+  'tubes',
+] as const;
+
+const WELL_RE = /^[A-P](?:[1-9]|1[0-9]|2[0-4])$/;
+
+function includesAny(haystack: string, needles: readonly string[]): boolean {
+  return needles.some((needle) => haystack.includes(needle));
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.filter((value) => value.trim().length > 0)));
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function normalizeWell(value: unknown): string | undefined {
+  const raw = asString(value)?.toUpperCase();
+  return raw && WELL_RE.test(raw) ? raw : undefined;
+}
+
+function collectWellsFromValue(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return uniqueStrings(value.flatMap((item) => collectWellsFromValue(item)));
+  }
+  const well = normalizeWell(value);
+  return well ? [well] : [];
+}
+
+function collectDestinationWells(events: PlateEventPrimitive[]): string[] {
+  const wells: string[] = [];
+
+  for (const event of events) {
+    const details = event.details as Record<string, unknown>;
+    wells.push(...collectWellsFromValue(details.well));
+    wells.push(...collectWellsFromValue(details.wells));
+
+    const to = details.to as Record<string, unknown> | undefined;
+    wells.push(...collectWellsFromValue(to?.well));
+    wells.push(...collectWellsFromValue(to?.wells));
+
+    const target = details.target as Record<string, unknown> | undefined;
+    wells.push(...collectWellsFromValue(target?.well));
+    wells.push(...collectWellsFromValue(target?.wells));
+  }
+
+  return uniqueStrings(wells);
+}
+
+function parseSampleCount(prompt: string): number | undefined {
+  const match = prompt.match(/\b(\d{1,4})\s+(?:samples?|specimens?|isolates?|conditions?|replicates?|tubes?)\b/i);
+  if (!match?.[1]) return undefined;
+  const count = Number.parseInt(match[1], 10);
+  return Number.isFinite(count) && count > 0 ? count : undefined;
+}
+
+function generatePlateWells(count: number, labwareKind: Extract<ExecutionScaleLabwareKind, '96_well_plate' | '384_well_plate'>): string[] {
+  const rows = labwareKind === '384_well_plate'
+    ? 'ABCDEFGHIJKLMNOP'.split('')
+    : 'ABCDEFGH'.split('');
+  const columns = labwareKind === '384_well_plate' ? 24 : 12;
+  const wells: string[] = [];
+
+  for (let col = 1; col <= columns && wells.length < count; col++) {
+    for (const row of rows) {
+      if (wells.length >= count) break;
+      wells.push(`${row}${col}`);
+    }
+  }
+
+  return wells;
+}
+
+function inferTargetLevel(promptLower: string): ExecutionScalePlan['targetLevel'] | undefined {
+  if (includesAny(promptLower, ['robot', 'deck', 'opentrons', 'assist plus', 'assist+'])) {
+    return 'robot_deck';
+  }
+  if (includesAny(promptLower, ['scale', 'scaled', 'high-throughput', 'high throughput', '96', '384', 'plate', 'reservoir', 'multi-channel', 'multichannel', '8-channel', '12-channel'])) {
+    return 'bench_plate_multichannel';
+  }
+  if (includesAny(promptLower, ['tube', 'tubes', 'tube rack', 'tuberack'])) {
+    return 'manual_tubes';
+  }
+  return undefined;
+}
+
+function inferSourceLevel(promptLower: string): ExecutionScalePlan['sourceLevel'] {
+  if (includesAny(promptLower, ['manual', 'hand', 'tube', 'tubes', 'tube rack', 'tuberack'])) {
+    return 'manual_tubes';
+  }
+  if (includesAny(promptLower, ['robot', 'deck', 'opentrons', 'assist plus', 'assist+'])) {
+    return 'robot_deck';
+  }
+  if (includesAny(promptLower, ['96', '384', 'plate', 'reservoir', 'multi-channel', 'multichannel'])) {
+    return 'bench_plate_multichannel';
+  }
+  return 'manual_tubes';
+}
+
+function inferPlatform(promptLower: string): ExecutionScalePlatform {
+  if (promptLower.includes('assist')) return 'integra_assist';
+  if (promptLower.includes('flex')) return 'opentrons_flex';
+  if (promptLower.includes('opentrons')) return 'opentrons_ot2';
+  return 'manual';
+}
+
+function inferSampleLabwareKind(promptLower: string): Extract<ExecutionScaleLabwareKind, 'tube_rack' | '96_well_plate' | '384_well_plate'> {
+  if (promptLower.includes('384')) return '384_well_plate';
+  if (includesAny(promptLower, ['tube', 'tubes', 'tube rack', 'tuberack']) && !includesAny(promptLower, ['96', '384', 'plate'])) {
+    return 'tube_rack';
+  }
+  return '96_well_plate';
+}
+
+function inferReservoirKind(promptLower: string): Extract<ExecutionScaleLabwareKind, 'tube' | '2_well_reservoir' | '8_well_reservoir' | '12_well_reservoir'> {
+  if (includesAny(promptLower, ['12-well reservoir', '12 well reservoir', '12-channel reservoir'])) return '12_well_reservoir';
+  if (includesAny(promptLower, ['8-well reservoir', '8 well reservoir'])) return '8_well_reservoir';
+  if (/\b2[- ]well reservoir\b/.test(promptLower) || includesAny(promptLower, ['assist plus', 'assist+'])) return '2_well_reservoir';
+  if (includesAny(promptLower, ['reservoir', '96', '384', 'plate', 'multi-channel', 'multichannel'])) return '12_well_reservoir';
+  return 'tube';
+}
+
+function collectReagentRoles(events: PlateEventPrimitive[], resourceManifest?: ResourceManifest): ExecutionScalePlan['reagentLayout'] {
+  const roles: ExecutionScalePlan['reagentLayout'] = [];
+
+  for (const load of resourceManifest?.reservoirLoads ?? []) {
+    roles.push({
+      materialRole: load.reagentKind,
+      sourceLabwareRole: load.reservoirRef,
+      sourceLabwareKind: '12_well_reservoir',
+      sourceWells: [load.well],
+      reason: 'resource manifest computed this reagent load from transfer events',
+    });
+  }
+
+  for (const event of events) {
+    if (event.event_type !== 'add_material' && event.event_type !== 'transfer') continue;
+    const details = event.details as Record<string, unknown>;
+    const material = details.material as { kind?: string; label?: string } | undefined;
+    const materialRole =
+      asString(details.materialRole)
+      ?? asString(details.recordId)
+      ?? asString(material?.kind)
+      ?? asString(material?.label)
+      ?? (event.event_type === 'transfer' ? 'transfer_reagent' : undefined);
+    if (!materialRole) continue;
+
+    const sourceWell =
+      normalizeWell(details.source_well)
+      ?? normalizeWell((details.from as Record<string, unknown> | undefined)?.well)
+      ?? normalizeWell(details.well)
+      ?? '1';
+
+    roles.push({
+      materialRole,
+      sourceLabwareRole: asString(details.source_labware) ?? 'reagent_source',
+      sourceLabwareKind: '12_well_reservoir',
+      sourceWells: [sourceWell],
+      reason: 'inferred from liquid-handling events without creating material instances',
+    });
+  }
+
+  const seen = new Set<string>();
+  return roles.filter((role) => {
+    const key = `${role.materialRole}:${role.sourceLabwareRole}:${role.sourceWells.join(',')}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function maxTransferVolumeUl(events: PlateEventPrimitive[]): number | undefined {
+  let max: number | undefined;
+  for (const event of events) {
+    if (event.event_type !== 'transfer') continue;
+    const details = event.details as Record<string, unknown>;
+    const numericVolume =
+      typeof details.volumeUl === 'number'
+        ? details.volumeUl
+        : typeof details.volume_uL === 'number'
+          ? details.volume_uL
+          : undefined;
+    const structuredVolume = details.volume as { value?: unknown; unit?: unknown } | undefined;
+    const structuredUl = typeof structuredVolume?.value === 'number'
+      && String(structuredVolume.unit ?? '').toLowerCase() === 'ul'
+      ? structuredVolume.value
+      : undefined;
+    const candidate = numericVolume ?? structuredUl;
+    if (candidate === undefined) continue;
+    max = max === undefined ? candidate : Math.max(max, candidate);
+  }
+  return max;
+}
+
+function labwareDefinitionFor(kind: ExecutionScaleLabwareKind): string | undefined {
+  if (kind === '96_well_plate') return 'lbw-def-generic-96-well-plate';
+  if (kind === '384_well_plate') return 'lbw-def-generic-384-well-pcr-plate';
+  if (kind === '12_well_reservoir') return 'lbw-def-generic-12-well-reservoir';
+  return undefined;
+}
+
+function cueScore(promptLower: string, profile: ExecutionScaleProfileRecord): number {
+  return profile.matching.prompt_cues.reduce(
+    (score, cue) => score + (promptLower.includes(cue.toLowerCase()) ? 1 : 0),
+    0,
+  );
+}
+
+function selectExecutionScaleProfile(
+  promptLower: string,
+  sourceLevel: ExecutionScalePlan['sourceLevel'],
+  targetLevel: ExecutionScalePlan['targetLevel'],
+  platform: ExecutionScalePlatform,
+): ExecutionScaleProfileRecord | undefined {
+  const profiles = getExecutionScaleProfileRegistry().list()
+    .filter((profile) => profile.targetLevel === targetLevel)
+    .filter((profile) => profile.sourceLevel === sourceLevel || profile.sourceLevel === 'manual_tubes')
+    .filter((profile) => !profile.matching.platforms || profile.matching.platforms.includes(platform));
+
+  let best: { profile: ExecutionScaleProfileRecord; score: number } | undefined;
+  for (const profile of profiles) {
+    const score = cueScore(promptLower, profile);
+    if (score === 0 && targetLevel !== profile.targetLevel) continue;
+    if (!best || score > best.score || (score === best.score && profile.priority > best.profile.priority)) {
+      best = { profile, score };
+    }
+  }
+
+  return best?.profile ?? profiles.sort((a, b) => b.priority - a.priority)[0];
+}
+
+/**
+ * Derive a deterministic execution scaling plan from the compiled event graph.
+ *
+ * This pass creates an execution handoff only when the prompt contains explicit
+ * scaling/execution cues. It records missing sample counts, labware definitions,
+ * or tool capabilities as blockers instead of inventing run-specific instances.
+ */
+export function createDeriveExecutionScalePlanPass(): Pass {
+  return {
+    id: 'derive_execution_scale_plan',
+    family: 'emit' as const,
+    run({ pass_id, state }: PassRunArgs): PassResult {
+      const prompt = typeof state.input.prompt === 'string' ? state.input.prompt : '';
+      const promptLower = prompt.toLowerCase();
+      const shouldPlan = includesAny(promptLower, EXECUTION_SCALE_PROMPT_CUES);
+
+      if (!shouldPlan) {
+        return { ok: true, output: {} satisfies DeriveExecutionScalePlanOutput };
+      }
+
+      const events = ((state.outputs.get('compute_volumes') as { events?: PlateEventPrimitive[] } | undefined)?.events)
+        ?? ((state.outputs.get('resolve_roles') as { events?: PlateEventPrimitive[] } | undefined)?.events)
+        ?? [];
+      const resourceManifest = (state.outputs.get('compute_resources') as { resourceManifest?: ResourceManifest } | undefined)?.resourceManifest;
+
+      const sourceLevel = inferSourceLevel(promptLower);
+      const targetLevel = inferTargetLevel(promptLower) ?? (
+        sourceLevel === 'manual_tubes' ? 'bench_plate_multichannel' : sourceLevel
+      );
+      const platform = inferPlatform(promptLower);
+      const profile = selectExecutionScaleProfile(promptLower, sourceLevel, targetLevel, platform);
+      const explicitMultichannel = includesAny(promptLower, ['multi-channel pipette', 'multichannel pipette', '8-channel pipette', '12-channel pipette']);
+      const explicitScaleOut = includesAny(promptLower, ['scale', 'scaled', 'high-throughput', 'high throughput']);
+      const sampleLabwareKind = targetLevel === 'manual_tubes'
+        ? 'tube_rack'
+        : (profile?.sampleLayout.labwareKind ?? inferSampleLabwareKind(promptLower));
+      const explicitSampleCount = parseSampleCount(prompt);
+      const eventWells = collectDestinationWells(events);
+      const generatedWells = eventWells.length === 0 && explicitSampleCount && sampleLabwareKind !== 'tube_rack'
+        ? generatePlateWells(explicitSampleCount, sampleLabwareKind)
+        : [];
+      const sampleWells = eventWells.length > 0 ? eventWells : generatedWells;
+      const sampleCount = explicitSampleCount
+        ?? (sampleWells.length > 0 ? sampleWells.length : undefined)
+        ?? (!explicitScaleOut && events.length > 0 ? 1 : undefined);
+      const blockers: ExecutionScalePlan['blockers'] = [];
+      const assumptions: string[] = [];
+      for (const blocker of profile?.defaultBlockers ?? []) {
+        blockers.push({
+          code: blocker.code,
+          message: blocker.message,
+          ...(blocker.requiredInput ? { requiredInput: blocker.requiredInput } : {}),
+        });
+      }
+
+      if (!sampleCount) {
+        blockers.push({
+          code: 'missing_sample_count',
+          message: 'Sample count or target wells are required to scale a manual protocol into a plate layout.',
+          requiredInput: 'sampleCount',
+        });
+      }
+
+      const plateCapacity = sampleLabwareKind === '384_well_plate' ? 384 : sampleLabwareKind === '96_well_plate' ? 96 : undefined;
+      if (plateCapacity && sampleCount && sampleCount > plateCapacity) {
+        blockers.push({
+          code: 'sample_count_exceeds_plate_capacity',
+          message: `${sampleCount} samples exceed ${sampleLabwareKind} capacity.`,
+          requiredInput: 'larger plate layout or batching strategy',
+        });
+      }
+
+      const profileReagentDefinition = profile?.reagentSource.labwareDefinition;
+      const reagentLayout = collectReagentRoles(events, resourceManifest).map((role) => ({
+        ...role,
+        sourceLabwareKind: profile?.reagentSource.sourceLabwareKind ?? inferReservoirKind(promptLower),
+        ...(profileReagentDefinition ? { sourceLabwareDefinition: profileReagentDefinition } : {}),
+      }));
+
+      if (reagentLayout.length === 0 && includesAny(promptLower, ['reagent', 'buffer', 'media', 'medium', 'dmso', 'solution', 'clofibrate'])) {
+        reagentLayout.push({
+          materialRole: 'reagent',
+          sourceLabwareRole: profile?.reagentSource.sourceLabwareRole ?? 'reagent_source',
+          sourceLabwareKind: profile?.reagentSource.sourceLabwareKind ?? inferReservoirKind(promptLower),
+          ...(profile?.reagentSource.labwareDefinition ? { sourceLabwareDefinition: profile.reagentSource.labwareDefinition } : {}),
+          sourceWells: profile?.reagentSource.defaultSourceWells ?? ['1'],
+          reason: 'prompt mentions reagents but compiled events did not identify concrete reagent roles',
+        });
+        assumptions.push('Reagent source role is provisional until material roles are resolved.');
+      }
+
+      const maxVolume = maxTransferVolumeUl(events);
+      const requestedChannels = profile?.pipetting.channels ?? (promptLower.includes('12-channel pipette') ? 12 : 8);
+      const shouldUseMulti =
+        targetLevel !== 'manual_tubes'
+        && (explicitMultichannel || (explicitScaleOut && (sampleCount ?? 0) >= 8));
+      const channels = shouldUseMulti ? requestedChannels : 1;
+      const maxProfileVolume = profile?.pipetting.maxVolumeUl ?? 20;
+
+      if (channels > 1 && maxVolume !== undefined && maxVolume > maxProfileVolume) {
+        blockers.push({
+          code: 'missing_multichannel_volume_capability',
+          message: `No registered multichannel pipette capability covers ${maxVolume} uL transfers for profile ${profile?.id ?? 'default'}; add a compatible multichannel tool or lower the transfer volume.`,
+          requiredInput: 'pipette-capability',
+        });
+      }
+
+      if (
+        targetLevel === 'robot_deck'
+        && (profile?.reagentSource.sourceLabwareKind ?? inferReservoirKind(promptLower)) === '2_well_reservoir'
+        && !profile?.reagentSource.labwareDefinition
+        && !blockers.some((blocker) => blocker.code === 'missing_2_well_reservoir_definition')
+      ) {
+        blockers.push({
+          code: 'missing_2_well_reservoir_definition',
+          message: 'INTEGRA ASSIST PLUS scaling requested a 2-well reservoir, but no 2-well reservoir labware definition is registered.',
+          requiredInput: 'labware-definition:2_well_reservoir',
+        });
+      }
+
+      const sampleLabwareDefinition = profile?.sampleLayout.labwareDefinition ?? labwareDefinitionFor(sampleLabwareKind);
+      const reagentDefinitions = uniqueStrings(reagentLayout
+        .map((role) => {
+          if (role.sourceLabwareKind === profile?.reagentSource.sourceLabwareKind) {
+            return profile.reagentSource.labwareDefinition;
+          }
+          return labwareDefinitionFor(role.sourceLabwareKind);
+        })
+        .filter((value): value is string => Boolean(value)));
+
+      if (!sampleLabwareDefinition && sampleLabwareKind !== 'tube_rack') {
+        blockers.push({
+          code: 'missing_sample_labware_definition',
+          message: `No registered labware definition is mapped for ${sampleLabwareKind}.`,
+          requiredInput: `labware-definition:${sampleLabwareKind}`,
+        });
+      }
+
+      if (sampleWells.length > 0 && eventWells.length === 0) {
+        assumptions.push('Samples are mapped down plate columns in row order.');
+      }
+      if (sourceLevel === 'manual_tubes' && targetLevel !== 'manual_tubes') {
+        assumptions.push('Manual tube operations preserve biological intent when lifted to plate wells and shared reagent reservoirs.');
+      }
+      assumptions.push(...(profile?.assumptions ?? []));
+
+      const plan: ExecutionScalePlan = {
+        kind: 'execution-scale-plan',
+        recordId: `execution-scale-plan/${targetLevel}`,
+        ...(profile ? { profileRef: profile.recordId } : {}),
+        sourceLevel,
+        targetLevel,
+        status: blockers.length > 0 ? 'blocked' : 'ready',
+        ...(sampleCount || sampleWells.length > 0
+          ? {
+              sampleLayout: {
+                labwareRole: profile?.sampleLayout.labwareRole ?? (targetLevel === 'manual_tubes' ? 'sample_tube_rack' : 'sample_plate'),
+                labwareKind: sampleLabwareKind,
+                ...(sampleLabwareDefinition ? { labwareDefinition: sampleLabwareDefinition } : {}),
+                ...(sampleCount ? { sampleCount } : {}),
+                wellGroups: sampleWells.length > 0 ? [{ groupId: 'samples', wells: sampleWells }] : [],
+              },
+            }
+          : {}),
+        reagentLayout,
+        ...(events.length > 0 || shouldUseMulti
+          ? {
+              pipettingStrategy: {
+                pipetteMode: channels > 1 ? profile?.pipetting.pipetteMode ?? 'multi_channel_parallel' : 'single_channel',
+                channels,
+                laneStrategy: channels > 1 ? profile?.pipetting.laneStrategy ?? 'parallel_lanes' : 'sequential_lanes',
+                channelization: channels > 1 ? profile?.pipetting.channelization ?? 'multi_channel_prefer' : 'single_channel',
+                batching: channels > 1 ? profile?.pipetting.batching ?? 'group_by_source' : 'none',
+              },
+            }
+          : {}),
+        ...(targetLevel === 'robot_deck'
+          ? {
+              deckBinding: {
+                platform: profile?.deckBinding?.platform ?? platform,
+                requiredLabwareDefinitions: uniqueStrings([
+                  ...(profile?.deckBinding?.requiredLabwareDefinitions ?? []),
+                  ...(sampleLabwareDefinition ? [sampleLabwareDefinition] : []),
+                  ...reagentDefinitions,
+                ]),
+                requiredTools: uniqueStrings([
+                  ...(profile?.deckBinding?.requiredTools ?? []),
+                  ...(profile?.pipetting.requiredTools ?? []),
+                  ...(channels > 1 ? ['pipette-capability/p20-multi-8'] : ['pipette-capability/p1000-single']),
+                ]),
+              },
+            }
+          : {}),
+        assumptions,
+        blockers,
+      };
+
+      return {
+        ok: true,
+        output: { executionScalePlan: plan } satisfies DeriveExecutionScalePlanOutput,
+        diagnostics: [{
+          severity: plan.status === 'blocked' ? 'warning' : 'info',
+          code: plan.status === 'blocked' ? 'execution_scale_plan_blocked' : 'execution_scale_plan_ready',
+          message: plan.status === 'blocked'
+            ? `Execution scaling plan has ${plan.blockers.length} blocker(s).`
+            : `Execution scaling plan is ready for ${plan.targetLevel}.`,
+          pass_id,
+          details: { sourceLevel: plan.sourceLevel, targetLevel: plan.targetLevel, profileId: profile?.id, blockers: plan.blockers },
+        }],
       };
     },
   };

@@ -1,0 +1,51 @@
+$schema: https://computable-lab.com/schema/computable-lab/execution-scale-profile.schema.yaml
+kind: execution-scale-profile
+recordId: execution-scale-profile/robot-opentrons-ot2-96
+type: execution_scale_profile
+id: robot-opentrons-ot2-96
+display_name: Opentrons OT-2 96-Well
+sourceLevel: manual_tubes
+targetLevel: robot_deck
+priority: 110
+matching:
+  prompt_cues:
+    - opentrons
+    - ot-2
+    - ot2
+    - robot
+    - deck
+    - 96-well
+  platforms:
+    - opentrons_ot2
+sampleLayout:
+  labwareRole: sample_plate
+  labwareKind: 96_well_plate
+  labwareDefinition: lbw-def-generic-96-well-plate
+  defaultWellOrder: column_major
+reagentSource:
+  sourceLabwareRole: reagent_reservoir
+  sourceLabwareKind: 12_well_reservoir
+  labwareDefinition: lbw-def-generic-12-well-reservoir
+  defaultSourceWells:
+    - "1"
+pipetting:
+  pipetteMode: multi_channel_parallel
+  channels: 8
+  laneStrategy: parallel_lanes
+  channelization: multi_channel_prefer
+  batching: group_by_source
+  maxVolumeUl: 20
+  requiredTools:
+    - pipette-capability/p20-multi-8
+deckBinding:
+  platform: opentrons_ot2
+  requiredLabwareDefinitions:
+    - lbw-def-generic-96-well-plate
+    - lbw-def-generic-12-well-reservoir
+  requiredTools:
+    - pipette-capability/p20-multi-8
+assumptions:
+  - OT-2 lowering uses Opentrons-compatible 96-well plate and 12-well reservoir definitions.
+notes: >
+  Robot profile for an OT-2 deck using currently registered generic labware
+  definitions.

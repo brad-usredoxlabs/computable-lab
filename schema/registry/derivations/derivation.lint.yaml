@@ -20,7 +20,7 @@ schemaId: "https://computable-lab.com/schema/computable-lab/registry/derivation.
 #       (server/src/schema/DerivationSchemas.test.ts).
 #
 rules:
-- id: id-format
+- id: derivation-id-format
   description: "id must exist and match the DRV-* pattern."
   severity: error
   assert:

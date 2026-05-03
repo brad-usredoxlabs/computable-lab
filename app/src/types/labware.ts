@@ -879,6 +879,29 @@ export interface LabwareRecordPayload {
   aliases?: string[]
 }
 
+function normalizeDefinitionRecordId(recordId: string): string {
+  return recordId.startsWith('def:') ? recordId.slice(4) : recordId
+}
+
+export function labwareDefinitionRecordToPayload(recordId: string): LabwareRecordPayload | null {
+  const definition = getLabwareDefinitionById(normalizeDefinitionRecordId(recordId))
+  if (!definition) return null
+  return {
+    kind: 'labware',
+    recordId,
+    name: definition.display_name,
+    labwareType: definition.legacy_labware_types[0],
+    format: {
+      rows: definition.topology.rows,
+      cols: definition.topology.columns ?? definition.topology.linear_count,
+      wellCount: definition.topology.addressing === 'grid'
+        ? (definition.topology.rows ?? 1) * (definition.topology.columns ?? 1)
+        : definition.topology.linear_count,
+    },
+    aliases: definition.platform_aliases?.map((alias) => alias.alias),
+  }
+}
+
 /**
  * Map a persisted labware record (from the record store) into the in-memory
  * editor Labware shape. The editor's reducer uses a small fixed union of
@@ -894,6 +917,7 @@ export function labwareRecordToEditorLabware(
   const base = createLabware(editorType, record.name)
   return {
     ...base,
+    labwareId: record.recordId,
     // Store the source recordId so the editor knows this labware came
     // from a persisted record rather than a manual click.
     sourceRecordId: record.recordId,

@@ -27,6 +27,7 @@ export function formatProtocolMentionToken(entityKind: 'protocol' | 'graph-compo
 
 export function parsePromptMentionMatches(prompt: string): ParsedPromptMention[] {
   const mentions: ParsedPromptMention[] = []
+  MENTION_PATTERN.lastIndex = 0
   let match: RegExpExecArray | null
   while ((match = MENTION_PATTERN.exec(prompt)) !== null) {
     const kind = match[1]

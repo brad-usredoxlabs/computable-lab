@@ -75,12 +75,12 @@ function makeMockDeps(overrides?: Partial<DeterministicPrecompileDeps>): Determi
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeState(prompt: string) {
+function makeState(prompt: string, outputs = new Map<string, unknown>(), input: Record<string, unknown> = {}) {
   return {
-    input: { prompt },
+    input: { prompt, ...input },
     context: {},
     meta: {},
-    outputs: new Map(),
+    outputs,
     diagnostics: [],
   };
 }
@@ -191,5 +191,302 @@ describe('DeterministicPrecompilePass', () => {
     expect(output.unresolvedRefs).toHaveLength(0);
     expect(output.residualClauses).toHaveLength(0);
     expect(output.deterministicCompleteness).toBe(1.0);
+  });
+
+  it('uses valid tag_prompt output to resolve tagged noun phrases', async () => {
+    const prompt = 'Add 100uL to the 12-well reservoir';
+    const outputs = new Map<string, unknown>([
+      ['tag_prompt', {
+        tags: [
+          { kind: 'verb', text: 'Add', span: [0, 3] },
+          { kind: 'quantity', text: '100uL', span: [4, 9] },
+          { kind: 'noun_phrase', text: '12-well reservoir', span: [17, 34] },
+        ],
+      }],
+    ]);
+    const tagDeps = {
+      ...makeMockDeps(),
+      labwareDefinitionRegistry: {
+        findByName: (n: string) => n === '12-well reservoir'
+          ? {
+              recordId: 'labware-12-reservoir',
+              registryMatch: {
+                distance: 0,
+                matchedKey: '12-well-reservoir',
+                matchKind: 'normalized',
+              },
+            }
+          : undefined,
+      },
+    };
+    const tagPass = createDeterministicPrecompilePass(tagDeps);
+
+    const result = await tagPass.run({
+      pass_id: 'deterministic_precompile',
+      state: makeState(prompt, outputs),
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as any;
+    expect(output.compileIr.source).toBe('tag_prompt');
+    expect(output.candidateEvents).toEqual([
+      expect.objectContaining({
+        verb: 'add_material',
+        volume_uL: 100,
+        labware_id: 'labware-12-reservoir',
+      }),
+    ]);
+    expect(output.candidateLabwares).toEqual([
+      { hint: '12-well reservoir', reason: 'mentioned in tagged action' },
+    ]);
+    expect(output.residualClauses).toEqual([]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'deterministic_precompile_tag_path',
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'fuzzy_registry_match',
+        details: expect.objectContaining({
+          phrase: '12-well reservoir',
+          matchedKey: '12-well-reservoir',
+        }),
+      }),
+    );
+    expect(result.secondaryOutputs?.ai_precompile).toMatchObject({
+      candidateEvents: expect.any(Array),
+      candidateLabwares: expect.any(Array),
+      unresolvedRefs: [],
+    });
+  });
+
+  it('falls back to raw-prompt mode when tag_prompt output has invalid spans', async () => {
+    const outputs = new Map<string, unknown>([
+      ['tag_prompt', {
+        tags: [
+          { kind: 'verb', text: 'Add', span: [1, 4] },
+        ],
+      }],
+    ]);
+
+    const result = await pass.run({
+      pass_id: 'deterministic_precompile',
+      state: makeState('add reservoir', outputs),
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as any;
+    expect(output.compileIr.source).toBe('raw_prompt');
+    expect(output.candidateEvents).toHaveLength(1);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'tag_prompt_invalid_for_deterministic_precompile',
+      }),
+    );
+  });
+
+  it('assembles the target chatbot prompt into labware additions, add-material, transfer, and material gap', async () => {
+    const prompt = 'Add a 12-well reservoir to the source destination and 96-well plate to the target location. Add 12000uL of 1uM clofibrate to well A1 of the reservoir and then use an 8-channel pipette to transfer 100uL to each well in column 1 of the 96-well plate.';
+    const tag = (kind: string, text: string, candidateKinds?: string[]) => {
+      const span: [number, number] = [prompt.indexOf(text), prompt.indexOf(text) + text.length];
+      return { kind, text, span, ...(candidateKinds ? { candidateKinds } : {}) };
+    };
+    const second = (kind: string, text: string, candidateKinds?: string[]) => {
+      const first = prompt.indexOf(text);
+      const start = prompt.indexOf(text, first + text.length);
+      const span: [number, number] = [start, start + text.length];
+      return { kind, text, span, ...(candidateKinds ? { candidateKinds } : {}) };
+    };
+    const outputs = new Map<string, unknown>([
+      ['tag_prompt', {
+        tags: [
+          tag('verb', 'Add'),
+          tag('noun_phrase', '12-well reservoir', ['labware']),
+          tag('slot_ref', 'source destination'),
+          tag('noun_phrase', '96-well plate', ['labware']),
+          tag('slot_ref', 'target location'),
+          second('verb', 'Add'),
+          tag('quantity', '12000uL'),
+          tag('concentration', '1uM'),
+          tag('noun_phrase', 'clofibrate', ['material']),
+          tag('well_address', 'A1'),
+          second('back_reference', 'reservoir'),
+          tag('instrument', '8-channel pipette'),
+          tag('verb', 'transfer'),
+          tag('quantity', '100uL'),
+          tag('well_region', 'column 1'),
+          second('noun_phrase', '96-well plate', ['labware']),
+        ],
+      }],
+    ]);
+    const targetDeps = {
+      ...makeMockDeps(),
+      labwareDefinitionRegistry: {
+        findByName: (n: string) => {
+          if (n === '12-well reservoir' || n === 'reservoir') {
+            return { recordId: 'labware-12-reservoir' };
+          }
+          if (n === '96-well plate') {
+            return { recordId: 'labware-96-plate' };
+          }
+          return undefined;
+        },
+      },
+    };
+    const targetPass = createDeterministicPrecompilePass(targetDeps);
+
+    const result = await targetPass.run({
+      pass_id: 'deterministic_precompile',
+      state: makeState(prompt, outputs),
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as any;
+    expect(output.compileIr.source).toBe('tag_prompt');
+    expect(output.candidateLabwares).toEqual([
+      { hint: '12-well reservoir', reason: 'mentioned in tagged action', deckSlot: 'source' },
+      { hint: '96-well plate', reason: 'mentioned in tagged action', deckSlot: 'target' },
+    ]);
+    expect(output.candidateEvents).toEqual([
+      expect.objectContaining({
+        verb: 'add_material',
+        volume_uL: 12000,
+        concentration_uM: 1,
+        labware_id: 'labware-12-reservoir',
+        well: 'A1',
+        material: expect.objectContaining({
+          name: 'clofibrate',
+          volume_uL: 12000,
+          concentration_uM: 1,
+        }),
+      }),
+      expect.objectContaining({
+        verb: 'transfer',
+        volume_uL: 100,
+        source_labware_id: 'labware-12-reservoir',
+        target_labware_id: 'labware-96-plate',
+        target_wells: ['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1'],
+      }),
+    ]);
+    expect(output.unresolvedRefs).toEqual([
+      { kind: 'material', label: 'clofibrate', reason: 'unresolved tagged material' },
+    ]);
+    expect(output.residualClauses).toEqual([]);
+  });
+
+  it('compiles the resolved-mention reservoir-to-plate prompt through the raw deterministic path', async () => {
+    const prompt = 'Put a [[labware:def:opentrons/nest_12_reservoir_22ml@v1|12-Channel Reservoir]] in the source location and a [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]] in the target location. Then add 1000uL of [[aliquot:ALQ-PR9-TEST-CLO-001|Clofibrate stock tube]] to well A1 of the 12-well reservoir and use a 100uL pipette to transfer 50uL of it to well A1 of the 96-well plate.';
+    const targetPass = createDeterministicPrecompilePass(makeMockDeps());
+
+    const result = await targetPass.run({
+      pass_id: 'deterministic_precompile',
+      state: makeState(prompt),
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as any;
+    expect(output.compileIr.source).toBe('raw_prompt');
+    expect(output.residualClauses).toEqual([]);
+    expect(output.deterministicCompleteness).toBe(1);
+    expect(output.candidateLabwares).toEqual([
+      {
+        hint: 'def:opentrons/nest_12_reservoir_22ml@v1',
+        reason: 'resolved labware mention',
+        deckSlot: 'source',
+      },
+      {
+        hint: 'lbw-seed-plate-96-flat',
+        reason: 'resolved labware mention',
+        deckSlot: 'target',
+      },
+    ]);
+    expect(output.candidateEvents).toEqual([
+      expect.objectContaining({
+        verb: 'add_material',
+        volume_uL: 1000,
+        labware_id: 'def:opentrons/nest_12_reservoir_22ml@v1',
+        well: 'A1',
+        material: expect.objectContaining({
+          recordId: 'ALQ-PR9-TEST-CLO-001',
+          kind: 'aliquot',
+          volume_uL: 1000,
+        }),
+      }),
+      expect.objectContaining({
+        verb: 'transfer',
+        volume_uL: 50,
+        source_labware_id: 'def:opentrons/nest_12_reservoir_22ml@v1',
+        source_well: 'A1',
+        target_labware_id: 'lbw-seed-plate-96-flat',
+        target_wells: ['A1'],
+      }),
+    ]);
+  });
+
+  it('uses structured input mentions when prompt text contains labels instead of raw mention tokens', async () => {
+    const prompt = 'Put a 12-Channel Reservoir in the source location and a Generic 96 Well Plate, Flat Bottom (seed) in the target location. Then add 1000uL of Clofibrate stock tube to well A1 of the 12-well reservoir and use a 100uL pipette to transfer 50uL of it to well A1 of the 96-well plate.';
+    const targetPass = createDeterministicPrecompilePass(makeMockDeps());
+
+    const result = await targetPass.run({
+      pass_id: 'deterministic_precompile',
+      state: makeState(prompt, new Map(), {
+        mentions: [
+          {
+            type: 'labware',
+            id: 'def:opentrons/nest_12_reservoir_22ml@v1',
+            label: '12-Channel Reservoir',
+          },
+          {
+            type: 'labware',
+            id: 'lbw-seed-plate-96-flat',
+            label: 'Generic 96 Well Plate, Flat Bottom (seed)',
+          },
+          {
+            type: 'material',
+            entityKind: 'aliquot',
+            id: 'ALQ-PR9-TEST-CLO-001',
+            label: 'Clofibrate stock tube',
+          },
+        ],
+      }),
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as any;
+    expect(output.residualClauses).toEqual([]);
+    expect(output.deterministicCompleteness).toBe(1);
+    expect(output.candidateLabwares).toEqual([
+      {
+        hint: 'def:opentrons/nest_12_reservoir_22ml@v1',
+        reason: 'resolved labware mention',
+        deckSlot: 'source',
+      },
+      {
+        hint: 'lbw-seed-plate-96-flat',
+        reason: 'resolved labware mention',
+        deckSlot: 'target',
+      },
+    ]);
+    expect(output.candidateEvents).toEqual([
+      expect.objectContaining({
+        verb: 'add_material',
+        labware_id: 'def:opentrons/nest_12_reservoir_22ml@v1',
+        well: 'A1',
+        material: expect.objectContaining({
+          recordId: 'ALQ-PR9-TEST-CLO-001',
+          kind: 'aliquot',
+          volume_uL: 1000,
+        }),
+      }),
+      expect.objectContaining({
+        verb: 'transfer',
+        volume_uL: 50,
+        source_labware_id: 'def:opentrons/nest_12_reservoir_22ml@v1',
+        source_well: 'A1',
+        target_labware_id: 'lbw-seed-plate-96-flat',
+        target_wells: ['A1'],
+      }),
+    ]);
   });
 });

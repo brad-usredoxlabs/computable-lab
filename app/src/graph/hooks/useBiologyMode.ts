@@ -67,8 +67,9 @@ export interface UseBiologyModeResult {
 export function useBiologyMode(args: {
   sourceLabwareId?: string
   targetLabwareId?: string
+  enabled?: boolean
 }): UseBiologyModeResult {
-  const { sourceLabwareId, targetLabwareId } = args
+  const { sourceLabwareId, targetLabwareId, enabled = true } = args
   const [contexts, setContexts] = useState<MeasurementContextRecord[]>([])
   const [wellGroups, setWellGroups] = useState<WellGroupRecord[]>([])
   const [assignmentsByContext, setAssignmentsByContext] = useState<Record<string, WellRoleAssignmentRecord[]>>({})
@@ -78,7 +79,7 @@ export function useBiologyMode(args: {
   const creatingContextRef = useRef(false)
 
   const refresh = useCallback(async () => {
-    if (!sourceLabwareId) {
+    if (!enabled || !sourceLabwareId) {
       setContexts([])
       setWellGroups([])
       setAssignmentsByContext({})
@@ -145,7 +146,7 @@ export function useBiologyMode(args: {
     } finally {
       setLoading(false)
     }
-  }, [sourceLabwareId])
+  }, [enabled, sourceLabwareId])
 
   useEffect(() => {
     void refresh()

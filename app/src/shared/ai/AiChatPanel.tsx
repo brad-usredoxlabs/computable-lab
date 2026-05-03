@@ -12,7 +12,6 @@ import { createPortal } from 'react-dom'
 import { ChatMessageList } from './ChatMessageList'
 import { ChatInput } from './ChatInput'
 import { PreviewBanner } from './PreviewBanner'
-import { PreviewEventList } from './PreviewEventList'
 import { MaterialBuilderModal } from '../../editor/material/MaterialBuilderModal'
 import { useAiPanel } from '../context/AiPanelContext'
 import type { RecordRef } from '../../types/ref'
@@ -294,13 +293,6 @@ export function AiChatPanel() {
                   onCommitAccepted={chat.commitAcceptedPreviewEvents}
                   isAccepting={chat.isAccepting}
                 />
-                {chat.previewEvents.length > 0 && (
-                  <PreviewEventList
-                    previewEvents={chat.previewEvents}
-                    previewEventStates={chat.previewEventStates}
-                    setPreviewEventState={chat.setPreviewEventState}
-                  />
-                )}
               </>
             )}
 

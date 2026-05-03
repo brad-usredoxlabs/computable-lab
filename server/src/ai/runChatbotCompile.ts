@@ -23,6 +23,7 @@ import {
   createLabStatePass,
   createComputeVolumesPass,
   createComputeResourcesPass,
+  createDeriveExecutionScalePlanPass,
   createPlanDeckLayoutPass,
   createValidatePass,
   createEmitInstrumentRunFilesPass,
@@ -38,11 +39,14 @@ import {
   type ApplyDirectivesPassOutput,
   type ResolveRolesOutput,
   type ComputeResourcesPassOutput,
+  type DeriveExecutionScalePlanOutput,
   type PlanDeckLayoutOutput,
   type ValidatePassOutput,
   type EmitInstrumentRunFilesOutput,
   type EmitDownstreamQueueOutput,
 } from '../compiler/pipeline/passes/ChatbotCompilePasses.js';
+import { createDeterministicPrecompilePass } from '../compiler/pipeline/passes/DeterministicPrecompilePass.js';
+import { createTagPromptPass } from '../compiler/precompile/PromptTagger.js';
 import type { ExtractionRunnerService } from '../extract/ExtractionRunnerService.js';
 import type { PlateEventPrimitive } from '../compiler/biology/BiologyVerbExpander.js';
 import type { PassDiagnostic } from '../compiler/pipeline/types.js';
@@ -63,6 +67,9 @@ import { getAssaySpecRegistry } from '../registry/AssaySpecRegistry.js';
 import { getStampPatternRegistry } from '../registry/StampPatternRegistry.js';
 import { getCompoundClassRegistry } from '../registry/CompoundClassRegistry.js';
 import { getOntologyTermRegistry } from '../registry/OntologyTermRegistry.js';
+import { getVerbActionMap } from '../registry/VerbActionMapRegistry.js';
+import { getLabwareDefinitionRegistry } from '../registry/LabwareDefinitionRegistry.js';
+import { fuzzyFindByName } from '../registry/fuzzyMatch.js';
 import * as path from 'node:path';
 import '../compiler/patterns/index.js'; // registers all pattern expanders
 import '../compiler/validation/checks/index.js'; // registers validation checks (specs 035-036)
@@ -111,6 +118,13 @@ const PIPELINE_YAML_PATH = path.resolve(
   '../../../schema/registry/compile-pipelines/chatbot-compile.yaml',
 );
 
+function normalizePromptForCompile(prompt: string): string {
+  return prompt
+    .replace(/^[ \t]*---pasted-content---[ \t]*\r?\n?/gim, '')
+    .replace(/\r?\n?[ \t]*---end-pasted-content---[ \t]*$/gim, '')
+    .trim();
+}
+
 export async function runChatbotCompile(
   args: RunChatbotCompileArgs,
 ): Promise<RunChatbotCompileResult> {
@@ -121,9 +135,65 @@ export async function runChatbotCompile(
     args.priorLabState
     ?? (convId && cache ? cache.get(convId) : undefined)
     ?? emptyLabState();
+  const compilePrompt = normalizePromptForCompile(args.prompt);
 
   const registry = new PassRegistry();
   registry.register(createExtractEntitiesPass({ extractionService: args.deps.extractionService }));
+  registry.register(createTagPromptPass({ llmClient: args.deps.llmClient, ...(args.model ? { model: args.model } : {}) }));
+  registry.register(createDeterministicPrecompilePass({
+    verbActionMapRegistry: getVerbActionMap(),
+    labwareDefinitionRegistry: {
+      findByName: (n) => {
+        const hit = fuzzyFindByName({
+          entries: getLabwareDefinitionRegistry().list(),
+          query: n,
+          getKeys: (d) => [
+            d.id,
+            d.display_name,
+            ...(d.platform_aliases?.map((alias) => alias.alias) ?? []),
+          ],
+        });
+        return hit
+          ? {
+              recordId: hit.match.recordId,
+              registryMatch: {
+                distance: hit.distance,
+                matchedKey: hit.matchedKey,
+                matchKind: hit.matchKind,
+              },
+            }
+          : undefined;
+      },
+    },
+    compoundClassRegistry: {
+      findByName: (n) => {
+        const hit = fuzzyFindByName({
+          entries: getCompoundClassRegistry().list(),
+          query: n,
+          getKeys: (c) => [c.id, c.name],
+        });
+        return hit
+          ? {
+              recordId: hit.match.id,
+              registryMatch: {
+                distance: hit.distance,
+                matchedKey: hit.matchedKey,
+                matchKind: hit.matchKind,
+              },
+            }
+          : undefined;
+      },
+    },
+    ontologyTermRegistry: {
+      searchLabel: (q) => {
+        const needle = q.toLowerCase();
+        return getOntologyTermRegistry().list()
+          .filter((t) => t.label.toLowerCase().includes(needle))
+          .map((t) => ({ id: t.id, label: t.label, source: t.source }));
+      },
+    },
+    labwareInstanceLookup: args.deps.searchLabwareByHint,
+  }));
   registry.register(createAiPrecompilePass({ llmClient: args.deps.llmClient, ...(args.model ? { model: args.model } : {}) }));
   registry.register(createMintMaterialsPass());
   registry.register(createApplyDirectivesPass());
@@ -147,6 +217,7 @@ export async function runChatbotCompile(
   registry.register(createLabStatePass());
   registry.register(createComputeVolumesPass());
   registry.register(createComputeResourcesPass());
+  registry.register(createDeriveExecutionScalePlanPass());
   registry.register(createPlanDeckLayoutPass());
   registry.register(createValidatePass());
   registry.register(createEmitInstrumentRunFilesPass());
@@ -156,11 +227,11 @@ export async function runChatbotCompile(
   // so the precompile pass and labware resolver always see structured tokens.
   const effectiveMentions: PromptMention[] = args.mentions && args.mentions.length > 0
     ? args.mentions
-    : parsePromptMentions(args.prompt);
+    : parsePromptMentions(compilePrompt);
 
   const spec = loadPipeline(PIPELINE_YAML_PATH);
   const result = await runPipeline(spec, registry, {
-    prompt: args.prompt,
+    prompt: compilePrompt,
     attachments: args.attachments ?? [],
     mentions: effectiveMentions,
     editorLabwares: args.editorLabwares ?? [],
@@ -176,6 +247,7 @@ export async function runChatbotCompile(
   const priorLabware = (result.outputs.get('resolve_prior_labware_references') ?? { resolvedLabwareRefs: [], unresolved: [] }) as ResolvePriorLabwareReferencesOutput;
   const labStateOutput = (result.outputs.get('lab_state') ?? { events: [], snapshotAfter: emptyLabState() }) as LabStatePassOutput;
   const computeResourcesOutput = (result.outputs.get('compute_resources') ?? { resourceManifest: { tipRacks: [], reservoirLoads: [], consumables: [] } }) as ComputeResourcesPassOutput;
+  const executionScaleOutput = (result.outputs.get('derive_execution_scale_plan') ?? {}) as DeriveExecutionScalePlanOutput;
 
   // Merge events: use resolve_roles output as the definitive event list
   // (it aggregates mint, patterns, verbs, protocol and resolves roles)
@@ -208,6 +280,14 @@ export async function runChatbotCompile(
       kind: 'unresolved_ref' as const,
       message: `${ref.hint} (${ref.reason})`,
       details: { ...ref },
+    });
+  }
+
+  for (const blocker of executionScaleOutput.executionScalePlan?.blockers ?? []) {
+    gaps.push({
+      kind: 'clarification' as const,
+      message: blocker.message,
+      details: { ...blocker, source: 'executionScalePlan' },
     });
   }
 
@@ -256,6 +336,11 @@ export async function runChatbotCompile(
 
   // Populate resourceManifest from compute_resources pass (spec-032)
   terminalArtifacts.resourceManifest = computeResourcesOutput.resourceManifest;
+
+  // Populate executionScalePlan from derive_execution_scale_plan pass.
+  if (executionScaleOutput.executionScalePlan) {
+    terminalArtifacts.executionScalePlan = executionScaleOutput.executionScalePlan;
+  }
 
   // Populate validationReport from validate pass (spec-034)
   terminalArtifacts.validationReport = validationReport as NonNullable<TerminalArtifacts['validationReport']>;

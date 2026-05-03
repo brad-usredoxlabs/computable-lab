@@ -125,6 +125,123 @@ export interface ResourceManifest {
   consumables: string[];
 }
 
+// ---------------------------------------------------------------------------
+// ExecutionScalePlan
+// ---------------------------------------------------------------------------
+
+/**
+ * ExecutionScaleLevel describes the execution shape for a protocol without
+ * changing its biological meaning.
+ *
+ * - manual_tubes: source protocol is carried out by hand in tubes/tube racks.
+ * - bench_plate_multichannel: protocol is adapted to plates/reservoirs with
+ *   manual multichannel pipetting.
+ * - robot_deck: the plate/reservoir plan is bound to a robot deck platform.
+ */
+export type ExecutionScaleLevel =
+  | 'manual_tubes'
+  | 'bench_plate_multichannel'
+  | 'robot_deck';
+
+export type ExecutionScalePlanStatus = 'ready' | 'blocked';
+
+export type ExecutionScaleLabwareKind =
+  | 'tube'
+  | 'tube_rack'
+  | '2_well_reservoir'
+  | '8_well_reservoir'
+  | '12_well_reservoir'
+  | '96_well_plate'
+  | '384_well_plate';
+
+export type ExecutionScalePlatform =
+  | 'manual'
+  | 'integra_assist'
+  | 'opentrons_ot2'
+  | 'opentrons_flex';
+
+export type ExecutionScalePipetteMode =
+  | 'single_channel'
+  | 'multi_channel_parallel';
+
+export type ExecutionScaleLaneStrategy =
+  | 'sequential_lanes'
+  | 'parallel_lanes';
+
+export type ExecutionScaleChannelization =
+  | 'single_channel'
+  | 'multi_channel_prefer'
+  | 'multi_channel_force';
+
+export type ExecutionScaleBatching =
+  | 'none'
+  | 'group_by_source'
+  | 'group_by_destination'
+  | 'multi_dispense_prefer';
+
+export interface ExecutionScaleWellGroup {
+  groupId: string;
+  wells: string[];
+}
+
+export interface ExecutionScaleSampleLayout {
+  labwareRole: string;
+  labwareKind: Extract<ExecutionScaleLabwareKind, 'tube_rack' | '96_well_plate' | '384_well_plate'>;
+  labwareDefinition?: string;
+  sampleCount?: number;
+  wellGroups: ExecutionScaleWellGroup[];
+}
+
+export interface ExecutionScaleReagentLayout {
+  materialRole: string;
+  sourceLabwareRole: string;
+  sourceLabwareKind: Extract<ExecutionScaleLabwareKind, 'tube' | '2_well_reservoir' | '8_well_reservoir' | '12_well_reservoir'>;
+  sourceLabwareDefinition?: string;
+  sourceWells: string[];
+  reason: string;
+}
+
+export interface ExecutionScalePipettingStrategy {
+  pipetteMode: ExecutionScalePipetteMode;
+  channels: 1 | 8 | 12;
+  laneStrategy: ExecutionScaleLaneStrategy;
+  channelization: ExecutionScaleChannelization;
+  batching: ExecutionScaleBatching;
+}
+
+export interface ExecutionScaleDeckBinding {
+  platform: ExecutionScalePlatform;
+  requiredLabwareDefinitions: string[];
+  requiredTools: string[];
+}
+
+export interface ExecutionScaleBlocker {
+  code: string;
+  message: string;
+  requiredInput?: string;
+}
+
+/**
+ * ExecutionScalePlan is the deterministic handoff between semantic protocol
+ * understanding and execution-specific lowering. It may describe a ready plan
+ * or a blocked plan with missing context, but it must not invent new biology.
+ */
+export interface ExecutionScalePlan {
+  kind: 'execution-scale-plan';
+  recordId: string;
+  sourceRef?: Record<string, unknown>;
+  profileRef?: string;
+  sourceLevel: ExecutionScaleLevel;
+  targetLevel: ExecutionScaleLevel;
+  status: ExecutionScalePlanStatus;
+  sampleLayout?: ExecutionScaleSampleLayout;
+  reagentLayout: ExecutionScaleReagentLayout[];
+  pipettingStrategy?: ExecutionScalePipettingStrategy;
+  deckBinding?: ExecutionScaleDeckBinding;
+  assumptions: string[];
+  blockers: ExecutionScaleBlocker[];
+}
+
 /**
  * Canonical output bundle of a chatbot-compile run.  All fields
  * except `events`, `directives`, and `gaps` are optional because
@@ -148,6 +265,8 @@ export interface TerminalArtifacts {
   resolvedLabwareRefs?: ResolvedLabwareRef[];
   /** Tip racks, reservoir loads, consumables. Spec-032. */
   resourceManifest?: ResourceManifest;
+  /** Execution scaling plan from semantic protocol to bench/robot shape. */
+  executionScalePlan?: ExecutionScalePlan;
   /** Per-instrument run-file artifacts. Spec-038. */
   instrumentRunFiles?: InstrumentRunFile[];
   /** Future compile targets declared by the user. Spec-039. */

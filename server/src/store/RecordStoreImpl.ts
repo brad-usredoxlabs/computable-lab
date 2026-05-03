@@ -33,7 +33,7 @@ import {
   generatePath,
   parseRecordPath,
 } from '../repo/PathConvention.js';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
@@ -57,6 +57,7 @@ export class RecordStoreImpl implements RecordStore {
   
   // Cache: recordId -> { path, sha }
   private readonly pathCache: Map<string, { path: string; sha: string }> = new Map();
+  private readonly seedPathCache: Map<string, string> = new Map();
   
   constructor(
     repo: RepoAdapter,
@@ -107,6 +108,76 @@ export class RecordStoreImpl implements RecordStore {
     
     return null;
   }
+
+  private findSeedRecordPath(recordId: string): string | null {
+    if (!this.config.seedDir) return null;
+    const cached = this.seedPathCache.get(recordId);
+    if (cached) {
+      try {
+        if (statSync(cached).isFile()) return cached;
+      } catch {
+        this.seedPathCache.delete(recordId);
+      }
+    }
+
+    const stack = [this.config.seedDir];
+    while (stack.length > 0) {
+      const dir = stack.pop()!;
+      let entries: string[];
+      try {
+        entries = readdirSync(dir);
+      } catch {
+        continue;
+      }
+
+      for (const name of entries) {
+        const fullPath = join(dir, name);
+        let isDirectory = false;
+        let isFile = false;
+        try {
+          const stat = statSync(fullPath);
+          isDirectory = stat.isDirectory();
+          isFile = stat.isFile();
+        } catch {
+          continue;
+        }
+        if (isDirectory) {
+          stack.push(fullPath);
+          continue;
+        }
+        if (!isFile || (!name.endsWith('.yaml') && !name.endsWith('.yml'))) continue;
+        try {
+          const parsed = parseRecord(readFileSync(fullPath, 'utf-8'), fullPath);
+          if (parsed.success && parsed.envelope?.recordId === recordId) {
+            this.seedPathCache.set(recordId, fullPath);
+            return fullPath;
+          }
+        } catch {
+          // Skip malformed seed files.
+        }
+      }
+    }
+    return null;
+  }
+
+  private getSeedRecord(recordId: string): RecordEnvelope | null {
+    const seedPath = this.findSeedRecordPath(recordId);
+    if (!seedPath) return null;
+    try {
+      const parsed = parseRecord(readFileSync(seedPath, 'utf-8'), seedPath);
+      if (!parsed.success || !parsed.envelope) return null;
+      return {
+        ...parsed.envelope,
+        meta: {
+          ...parsed.envelope.meta,
+          path: seedPath,
+          commitSha: 'seed',
+        },
+      };
+    } catch {
+      return null;
+    }
+  }
   
   /**
    * Get a record by ID.
@@ -114,7 +185,7 @@ export class RecordStoreImpl implements RecordStore {
   async get(recordId: string): Promise<RecordEnvelope | null> {
     const entry = await this.findRecordPath(recordId);
     if (!entry) {
-      return null;
+      return this.getSeedRecord(recordId);
     }
 
     const file = await this.repo.getFile(entry.path);
@@ -619,6 +690,7 @@ export class RecordStoreImpl implements RecordStore {
    */
   clearCache(): void {
     this.pathCache.clear();
+    this.seedPathCache.clear();
   }
 }
 

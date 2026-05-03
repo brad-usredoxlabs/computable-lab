@@ -148,6 +148,49 @@ describe('ai_precompile shape mismatch logging', () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
+  it('does NOT log when supplemental-only JSON omits compatibility arrays', async () => {
+    const supplementalOnly = {
+      clarification: 'Which readout should be compiled next?',
+      downstreamCompileJobs: [
+        { kind: 'qPCR', description: 'quantitative PCR analysis' },
+      ],
+    };
+
+    const mockLlmClient = {
+      complete: vi.fn().mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(supplementalOnly) } }],
+      }),
+    } as unknown as LlmClient;
+
+    const deps: CreateAiPrecompilePassDeps = {
+      llmClient: mockLlmClient,
+    };
+
+    const pass = createAiPrecompilePass(deps);
+
+    const mockState: PipelineState = {
+      input: { prompt: 'later run qPCR', attachments: [] },
+      context: {},
+      meta: {},
+      outputs: new Map(),
+      diagnostics: [],
+    };
+
+    const result = await pass.run({
+      pass_id: 'ai_precompile',
+      state: mockState,
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as AiPrecompileOutput;
+    expect(output.candidateEvents).toEqual([]);
+    expect(output.candidateLabwares).toEqual([]);
+    expect(output.unresolvedRefs).toEqual([]);
+    expect(output.clarification).toBe('Which readout should be compiled next?');
+    expect(output.downstreamCompileJobs).toHaveLength(1);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
   it('does NOT log on invalid JSON (parse error) — only on zod shape mismatch', async () => {
     // This is a JSON parse error, not a zod shape mismatch
     // The parse error path returns early before zod validation

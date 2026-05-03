@@ -1,0 +1,162 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/execution-scale-profile.schema.yaml"
+title: "ExecutionScaleProfile"
+description: >
+  Registry-backed policy for adapting a protocol between execution scales.
+  Profiles are durable YAML data so the compiler can avoid hardcoding bench,
+  labware, pipetting, and robot deck preferences in TypeScript.
+
+type: object
+additionalProperties: false
+
+required:
+- kind
+- recordId
+- type
+- id
+- display_name
+- sourceLevel
+- targetLevel
+- matching
+- sampleLayout
+- reagentSource
+- pipetting
+- assumptions
+
+properties:
+  kind:
+    const: "execution-scale-profile"
+
+  recordId:
+    type: string
+    pattern: "^execution-scale-profile/[a-z0-9][a-z0-9-]*$"
+
+  type:
+    const: "execution_scale_profile"
+
+  id:
+    type: string
+    pattern: "^[a-z0-9][a-z0-9-]*$"
+
+  display_name:
+    type: string
+
+  sourceLevel:
+    $ref: "#/$defs/ExecutionScaleLevel"
+
+  targetLevel:
+    $ref: "#/$defs/ExecutionScaleLevel"
+
+  priority:
+    type: integer
+    minimum: 0
+    default: 100
+
+  matching:
+    type: object
+    additionalProperties: false
+    required: [prompt_cues]
+    properties:
+      prompt_cues:
+        type: array
+        items:
+          type: string
+      platforms:
+        type: array
+        items:
+          enum: [manual, integra_assist, opentrons_ot2, opentrons_flex]
+
+  sampleLayout:
+    type: object
+    additionalProperties: false
+    required: [labwareKind, labwareRole]
+    properties:
+      labwareRole:
+        type: string
+      labwareKind:
+        enum: [tube_rack, 96_well_plate, 384_well_plate]
+      labwareDefinition:
+        type: string
+      defaultWellOrder:
+        enum: [column_major, row_major]
+
+  reagentSource:
+    type: object
+    additionalProperties: false
+    required: [sourceLabwareKind, sourceLabwareRole]
+    properties:
+      sourceLabwareRole:
+        type: string
+      sourceLabwareKind:
+        enum: [tube, 2_well_reservoir, 8_well_reservoir, 12_well_reservoir]
+      labwareDefinition:
+        type: string
+      defaultSourceWells:
+        type: array
+        items:
+          type: string
+
+  pipetting:
+    type: object
+    additionalProperties: false
+    required: [pipetteMode, channels, laneStrategy, channelization, batching]
+    properties:
+      pipetteMode:
+        enum: [single_channel, multi_channel_parallel]
+      channels:
+        enum: [1, 8, 12]
+      laneStrategy:
+        enum: [sequential_lanes, parallel_lanes]
+      channelization:
+        enum: [single_channel, multi_channel_prefer, multi_channel_force]
+      batching:
+        enum: [none, group_by_source, group_by_destination, multi_dispense_prefer]
+      maxVolumeUl:
+        type: number
+        exclusiveMinimum: 0
+      requiredTools:
+        type: array
+        items:
+          type: string
+
+  deckBinding:
+    type: object
+    additionalProperties: false
+    required: [platform]
+    properties:
+      platform:
+        enum: [manual, integra_assist, opentrons_ot2, opentrons_flex]
+      requiredLabwareDefinitions:
+        type: array
+        items:
+          type: string
+      requiredTools:
+        type: array
+        items:
+          type: string
+
+  defaultBlockers:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        requiredInput:
+          type: string
+
+  assumptions:
+    type: array
+    items:
+      type: string
+
+  notes:
+    type: string
+
+$defs:
+  ExecutionScaleLevel:
+    enum: [manual_tubes, bench_plate_multichannel, robot_deck]

@@ -21,6 +21,7 @@ import {
   createLabStatePass,
   createComputeVolumesPass,
   createComputeResourcesPass,
+  createDeriveExecutionScalePlanPass,
   createPlanDeckLayoutPass,
   createValidatePass,
   createEmitInstrumentRunFilesPass,
@@ -90,6 +91,7 @@ describe('Prompt 04 - deep debug', () => {
     registry.register(createLabStatePass());
     registry.register(createComputeVolumesPass());
     registry.register(createComputeResourcesPass());
+    registry.register(createDeriveExecutionScalePlanPass());
     registry.register(createPlanDeckLayoutPass());
     registry.register(createValidatePass());
     registry.register(createEmitInstrumentRunFilesPass());

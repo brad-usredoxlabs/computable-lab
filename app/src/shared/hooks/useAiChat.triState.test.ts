@@ -149,4 +149,64 @@ describe('useAiChat tri-state preview', () => {
     // This is handled in the stream handler within the hook.
     // The test verifies that setPreviewEventState works correctly.
   })
+
+  it('acceptPreview clears preview events and preview event states after committing', async () => {
+    const event = {
+      eventId: 'evt-add_material-70cs8l4i',
+      event_type: 'add_material',
+      details: { wells: ['A1'] },
+    } as any
+    const { result } = renderHook(() =>
+      useAiChat({
+        aiContext: mockAiContext,
+        onAcceptEvent: mockOnAcceptEvent,
+        onAddLabwareFromRecord: mockOnAddLabwareFromRecord,
+      })
+    )
+
+    act(() => {
+      result.current.setPreviewEvents([event])
+      result.current.setPreviewEventState(event.eventId, 'accepted')
+    })
+
+    expect(result.current.previewEvents).toHaveLength(1)
+    expect(result.current.previewEventStates.get(event.eventId)).toBe('accepted')
+
+    await act(async () => {
+      await result.current.acceptPreview()
+    })
+
+    expect(mockOnAcceptEvent).toHaveBeenCalledWith(event)
+    expect(result.current.previewEvents).toEqual([])
+    expect(result.current.previewEventStates.size).toBe(0)
+  })
+
+  it('acceptPreview is idempotent while an accept is already in progress', async () => {
+    const event = {
+      eventId: 'evt-transfer-4ipwahep',
+      event_type: 'transfer',
+      details: { source_wells: ['A1'], dest_wells: ['A1'] },
+    } as any
+    const { result } = renderHook(() =>
+      useAiChat({
+        aiContext: mockAiContext,
+        onAcceptEvent: mockOnAcceptEvent,
+        onAddLabwareFromRecord: mockOnAddLabwareFromRecord,
+      })
+    )
+
+    act(() => {
+      result.current.setPreviewEvents([event])
+    })
+
+    await act(async () => {
+      await Promise.all([
+        result.current.acceptPreview(),
+        result.current.acceptPreview(),
+      ])
+    })
+
+    expect(mockOnAcceptEvent).toHaveBeenCalledTimes(1)
+    expect(mockOnAcceptEvent).toHaveBeenCalledWith(event)
+  })
 })

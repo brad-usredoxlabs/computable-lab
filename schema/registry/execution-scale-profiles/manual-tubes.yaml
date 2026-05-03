@@ -1,0 +1,37 @@
+$schema: https://computable-lab.com/schema/computable-lab/execution-scale-profile.schema.yaml
+kind: execution-scale-profile
+recordId: execution-scale-profile/manual-tubes
+type: execution_scale_profile
+id: manual-tubes
+display_name: Manual Tube Protocol
+sourceLevel: manual_tubes
+targetLevel: manual_tubes
+priority: 10
+matching:
+  prompt_cues:
+    - manual
+    - hand
+    - tube
+    - tubes
+    - tube rack
+sampleLayout:
+  labwareRole: sample_tube_rack
+  labwareKind: tube_rack
+reagentSource:
+  sourceLabwareRole: reagent_tube
+  sourceLabwareKind: tube
+  defaultSourceWells:
+    - "1"
+pipetting:
+  pipetteMode: single_channel
+  channels: 1
+  laneStrategy: sequential_lanes
+  channelization: single_channel
+  batching: none
+  requiredTools:
+    - pipette-capability/p1000-single
+assumptions:
+  - Manual tube execution uses single-channel pipetting unless a multichannel adaptation is requested.
+notes: >
+  Planning-only profile for preserving source tube semantics before plate or
+  robot lowering.

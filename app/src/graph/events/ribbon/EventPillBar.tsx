@@ -16,6 +16,8 @@ interface EventPillBarProps {
   onDeleteEvent?: (eventId: string) => void
   /** Called with the "playback position" - number of events to apply (0 = none, events.length = all) */
   onPlaybackPositionChange?: (position: number) => void
+  /** Event ids staged by AI preview rather than committed to the graph */
+  draftEventIds?: Set<string>
 }
 
 /**
@@ -65,24 +67,34 @@ export function EventPillBar({
   onAddEvent,
   onDeleteEvent,
   onPlaybackPositionChange,
+  draftEventIds,
 }: EventPillBarProps) {
+  const timelineEvents = useMemo(() => {
+    const seen = new Set<string>()
+    return events.filter((event) => {
+      if (seen.has(event.eventId)) return false
+      seen.add(event.eventId)
+      return true
+    })
+  }, [events])
+
   // Playback position: 0 = no events applied, N = first N events applied
-  const [playbackPosition, setPlaybackPosition] = useState(events.length)
+  const [playbackPosition, setPlaybackPosition] = useState(timelineEvents.length)
   const [isPlaying, setIsPlaying] = useState(false)
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   
   // Sync playback position with event count
   useEffect(() => {
-    setPlaybackPosition(events.length)
-  }, [events.length])
+    setPlaybackPosition(timelineEvents.length)
+  }, [timelineEvents.length])
 
   useEffect(() => {
     if (selectedEventId == null) return
-    const selectedIndex = events.findIndex((event) => event.eventId === selectedEventId)
+    const selectedIndex = timelineEvents.findIndex((event) => event.eventId === selectedEventId)
     if (selectedIndex >= 0) {
       setPlaybackPosition(selectedIndex + 1)
     }
-  }, [events, selectedEventId])
+  }, [timelineEvents, selectedEventId])
   
   // Notify parent of position changes
   useEffect(() => {
@@ -94,9 +106,9 @@ export function EventPillBar({
     if (isPlaying) {
       playIntervalRef.current = setInterval(() => {
         setPlaybackPosition((pos) => {
-          if (pos >= events.length) {
+          if (pos >= timelineEvents.length) {
             setIsPlaying(false)
-            return events.length
+            return timelineEvents.length
           }
           return pos + 1
         })
@@ -112,7 +124,7 @@ export function EventPillBar({
         clearInterval(playIntervalRef.current)
       }
     }
-  }, [isPlaying, events.length])
+  }, [isPlaying, timelineEvents.length])
 
   const handleSliderChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const newPos = parseInt(e.target.value)
@@ -120,36 +132,36 @@ export function EventPillBar({
     setIsPlaying(false)
     
     // Select the event at this position (or null if at 0)
-    if (newPos > 0 && newPos <= events.length) {
-      onSelectEvent(events[newPos - 1].eventId)
+    if (newPos > 0 && newPos <= timelineEvents.length) {
+      onSelectEvent(timelineEvents[newPos - 1].eventId)
     } else {
       onSelectEvent(null)
     }
-  }, [events, onSelectEvent])
+  }, [timelineEvents, onSelectEvent])
 
   const handleStepBack = useCallback(() => {
     setIsPlaying(false)
     setPlaybackPosition((pos) => {
       const newPos = Math.max(0, pos - 1)
       if (newPos > 0) {
-        onSelectEvent(events[newPos - 1].eventId)
+        onSelectEvent(timelineEvents[newPos - 1].eventId)
       } else {
         onSelectEvent(null)
       }
       return newPos
     })
-  }, [events, onSelectEvent])
+  }, [timelineEvents, onSelectEvent])
 
   const handleStepForward = useCallback(() => {
     setIsPlaying(false)
     setPlaybackPosition((pos) => {
-      const newPos = Math.min(events.length, pos + 1)
+      const newPos = Math.min(timelineEvents.length, pos + 1)
       if (newPos > 0) {
-        onSelectEvent(events[newPos - 1].eventId)
+        onSelectEvent(timelineEvents[newPos - 1].eventId)
       }
       return newPos
     })
-  }, [events, onSelectEvent])
+  }, [timelineEvents, onSelectEvent])
 
   const handleRewind = useCallback(() => {
     setIsPlaying(false)
@@ -158,43 +170,43 @@ export function EventPillBar({
   }, [onSelectEvent])
 
   const handlePlayPause = useCallback(() => {
-    if (playbackPosition >= events.length) {
+    if (playbackPosition >= timelineEvents.length) {
       // At end, restart from beginning
       setPlaybackPosition(0)
       setIsPlaying(true)
     } else {
       setIsPlaying(!isPlaying)
     }
-  }, [isPlaying, playbackPosition, events.length])
+  }, [isPlaying, playbackPosition, timelineEvents.length])
 
   const handleFastForward = useCallback(() => {
     setIsPlaying(false)
-    setPlaybackPosition(events.length)
-    if (events.length > 0) {
-      onSelectEvent(events[events.length - 1].eventId)
+    setPlaybackPosition(timelineEvents.length)
+    if (timelineEvents.length > 0) {
+      onSelectEvent(timelineEvents[timelineEvents.length - 1].eventId)
     }
-  }, [events, onSelectEvent])
+  }, [timelineEvents, onSelectEvent])
 
   // Get current event info
-  const currentEvent = playbackPosition > 0 ? events[playbackPosition - 1] : null
+  const currentEvent = playbackPosition > 0 ? timelineEvents[playbackPosition - 1] : null
   const currentEventLabel = currentEvent 
     ? `${EVENT_TYPE_ICONS[currentEvent.event_type]} ${EVENT_TYPE_LABELS[currentEvent.event_type]}`
     : 'Start'
   const focusedEvent = useMemo(
-    () => events.find((event) => event.eventId === selectedEventId) || null,
-    [events, selectedEventId]
+    () => timelineEvents.find((event) => event.eventId === selectedEventId) || null,
+    [timelineEvents, selectedEventId]
   )
   const focusedEventSummary = focusedEvent ? getEventSummary(focusedEvent) : null
   const focusedEventIndex = focusedEvent
-    ? events.findIndex((event) => event.eventId === focusedEvent.eventId)
+    ? timelineEvents.findIndex((event) => event.eventId === focusedEvent.eventId)
     : -1
 
   // Handle click on tick mark
   const handleTickClick = useCallback((index: number) => {
     setIsPlaying(false)
     setPlaybackPosition(index + 1)
-    onSelectEvent(events[index].eventId)
-  }, [events, onSelectEvent])
+    onSelectEvent(timelineEvents[index].eventId)
+  }, [timelineEvents, onSelectEvent])
 
   return (
     <div className="event-timeline-scrubber">
@@ -204,7 +216,7 @@ export function EventPillBar({
           className="scrubber-btn" 
           onClick={handleRewind} 
           title="Rewind to start"
-          disabled={events.length === 0}
+          disabled={timelineEvents.length === 0}
         >
           ⏮
         </button>
@@ -220,7 +232,7 @@ export function EventPillBar({
           className="scrubber-btn scrubber-btn--play" 
           onClick={handlePlayPause} 
           title={isPlaying ? 'Pause' : 'Play'}
-          disabled={events.length === 0}
+          disabled={timelineEvents.length === 0}
         >
           {isPlaying ? '⏸' : '▶'}
         </button>
@@ -228,7 +240,7 @@ export function EventPillBar({
           className="scrubber-btn" 
           onClick={handleStepForward} 
           title="Step forward"
-          disabled={playbackPosition >= events.length}
+          disabled={playbackPosition >= timelineEvents.length}
         >
           ⏩
         </button>
@@ -236,7 +248,7 @@ export function EventPillBar({
           className="scrubber-btn" 
           onClick={handleFastForward} 
           title="Jump to end"
-          disabled={events.length === 0}
+          disabled={timelineEvents.length === 0}
         >
           ⏭
         </button>
@@ -244,31 +256,34 @@ export function EventPillBar({
 
       {/* Timeline slider */}
       <div className="scrubber-timeline">
-        {events.length > 0 ? (
+        {timelineEvents.length > 0 ? (
           <>
             <input
               type="range"
               min="0"
-              max={events.length}
+              max={timelineEvents.length}
               value={playbackPosition}
               onChange={handleSliderChange}
               className="scrubber-slider"
             />
             <div className="scrubber-ticks">
-              {events.map((event, index) => (
-                <div
-                  key={event.eventId}
-                  className={`scrubber-tick ${index < playbackPosition ? 'scrubber-tick--active' : ''} ${
-                    selectedEventId === event.eventId ? 'scrubber-tick--selected' : ''
-                  }`}
-                  style={{ 
-                    left: `${((index + 1) / (events.length + 1)) * 100}%`,
-                    backgroundColor: index < playbackPosition ? EVENT_TYPE_COLORS[event.event_type] : undefined
-                  }}
-                  onClick={() => handleTickClick(index)}
-                  title={`${index + 1}. ${EVENT_TYPE_LABELS[event.event_type]}`}
-                />
-              ))}
+              {timelineEvents.map((event, index) => {
+                const isDraft = draftEventIds?.has(event.eventId) ?? false
+                return (
+                  <div
+                    key={event.eventId}
+                    className={`scrubber-tick ${index < playbackPosition ? 'scrubber-tick--active' : ''} ${
+                      selectedEventId === event.eventId ? 'scrubber-tick--selected' : ''
+                    } ${isDraft ? 'scrubber-tick--draft' : ''}`}
+                    style={{ 
+                      left: `${((index + 1) / (timelineEvents.length + 1)) * 100}%`,
+                      backgroundColor: index < playbackPosition ? EVENT_TYPE_COLORS[event.event_type] : undefined
+                    }}
+                    onClick={() => handleTickClick(index)}
+                    title={`${index + 1}. ${isDraft ? 'Draft - ' : ''}${EVENT_TYPE_LABELS[event.event_type]}`}
+                  />
+                )
+              })}
             </div>
           </>
         ) : (
@@ -279,7 +294,7 @@ export function EventPillBar({
       {/* Current position info */}
       <div className="scrubber-info">
         <span className="scrubber-position">
-          {playbackPosition}/{events.length}
+          {playbackPosition}/{timelineEvents.length}
         </span>
         <span className="scrubber-current" title={currentEvent?.notes || ''}>
           {currentEventLabel}
@@ -428,6 +443,18 @@ export function EventPillBar({
         .scrubber-tick--selected {
           box-shadow: 0 0 0 3px rgba(51, 154, 240, 0.5);
           transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        .scrubber-tick--draft {
+          width: 10px;
+          height: 10px;
+          border: 2px dashed #9c36b5;
+          background: #f3d9fa;
+          box-shadow: 0 0 0 3px rgba(190, 75, 219, 0.16);
+        }
+
+        .scrubber-tick--draft.scrubber-tick--active {
+          box-shadow: 0 0 0 3px rgba(190, 75, 219, 0.28);
         }
 
         .scrubber-empty {

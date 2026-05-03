@@ -106,3 +106,7 @@ mappings:
     obi_id: "OBI:0000070"
     notes: "Acquire measurement from instrument"
     synonyms: [measure, scan]
+  - verb: transfer
+    obi_id: "OBI:0000293"
+    notes: "Move liquid from source to destination wells"
+    synonyms: [move]

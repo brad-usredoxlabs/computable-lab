@@ -1,39 +1,29 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createAgentOrchestrator } from './AgentOrchestrator.js';
-import type { CompletionRequest, CompletionResponse, InferenceClient, ToolBridge, AgentEvent } from './types.js';
+import type { CompletionRequest, InferenceClient, ToolBridge, AgentEvent } from './types.js';
 import * as runChatbotCompileModule from './runChatbotCompile.js';
 
 describe('createAgentOrchestrator', () => {
   it('includes prior user and assistant turns before the current prompt', async () => {
     let capturedMessages: CompletionRequest['messages'] = [];
-    const complete = vi.fn(async (request: CompletionRequest): Promise<CompletionResponse> => {
+    const completeStream = vi.fn(async function* (request: CompletionRequest) {
       capturedMessages = request.messages.map((message) => ({
         ...message,
         ...(message.tool_calls ? { tool_calls: [...message.tool_calls] } : {}),
       }));
-      return {
+      yield {
         id: 'resp-1',
-        choices: [
-          {
-            index: 0,
-            finish_reason: 'stop',
-            message: {
-              role: 'assistant',
-              content: 'Need source well.',
-            },
-          },
-        ],
-        usage: {
-          prompt_tokens: 10,
-          completion_tokens: 5,
-          total_tokens: 15,
-        },
+        choices: [{
+          index: 0,
+          delta: { role: 'assistant', content: '{"events":[],"notes":[]}' },
+          finish_reason: 'stop',
+        }],
       };
     });
 
     const inferenceClient: InferenceClient = {
-      complete,
-      completeStream: vi.fn(),
+      complete: vi.fn(),
+      completeStream,
     };
     const toolBridge: ToolBridge = {
       getToolDefinitions: () => [],
@@ -60,9 +50,8 @@ describe('createAgentOrchestrator', () => {
       },
     });
 
-    expect(complete).toHaveBeenCalledTimes(1);
+    expect(completeStream).toHaveBeenCalledTimes(1);
     expect(capturedMessages.map((message) => ({ role: message.role, content: message.content }))).toEqual([
-      { role: 'system', content: expect.any(String) },
       {
         role: 'system',
         content: expect.stringContaining('Recent conversation context:\n1. User: Transfer 10 uL of clofibrate to B2.'),
@@ -274,6 +263,66 @@ describe('createAgentOrchestrator', () => {
 
       const diagEvents = events.filter(e => e.type === 'pipeline_diagnostics');
       expect(diagEvents).toHaveLength(0);
+    });
+
+    it('does not short-circuit a complete compiler result with no artifacts', async () => {
+      const events: AgentEvent[] = [];
+      const onEvent = vi.fn((e: AgentEvent) => events.push(e));
+
+      vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+        events: [],
+        labwareAdditions: [],
+        unresolvedRefs: [],
+        diagnostics: [],
+        terminalArtifacts: {
+          events: [],
+          directives: [],
+          gaps: [],
+        },
+        outcome: 'complete',
+      });
+
+      const inferenceClient: InferenceClient = {
+        complete: vi.fn(),
+        completeStream: vi.fn(async function* () {
+          yield {
+            id: 'resp-1',
+            choices: [{
+              index: 0,
+              delta: { role: 'assistant', content: '{"events":[],"notes":["fallback"]}' },
+              finish_reason: 'stop',
+            }],
+          };
+        }),
+      };
+      const toolBridge: ToolBridge = {
+        getToolDefinitions: () => [],
+        executeTool: vi.fn(),
+      };
+      const orchestrator = createAgentOrchestrator(
+        inferenceClient,
+        toolBridge,
+        { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+        { maxTurns: 2 },
+      );
+
+      const result = await orchestrator.run({
+        prompt: 'Transfer 10 uL from A1 to B1.',
+        onEvent,
+        context: {
+          labwares: [],
+          eventSummary: 'No events yet.',
+          vocabPackId: 'liquid-handling/v1',
+          availableVerbs: ['transfer'],
+        },
+      });
+
+      expect(inferenceClient.completeStream).toHaveBeenCalledTimes(1);
+      expect(result.success).toBe(true);
+      expect(result.notes).toEqual(['fallback']);
+      const diagEvents = events.filter(e => e.type === 'pipeline_diagnostics');
+      expect(diagEvents).toHaveLength(1);
+      expect(diagEvents[0]!.outcome).toBe('complete');
     });
 
     it('handles undefined diagnostics gracefully', async () => {

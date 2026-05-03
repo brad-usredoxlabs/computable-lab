@@ -1,0 +1,250 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/vendor-protocol-candidate.schema.yaml"
+title: "VendorProtocolCandidate"
+description: >
+  Reviewable intermediate representation extracted from a vendor protocol
+  document. This is document truth plus provenance, not a final executable
+  protocol or event graph.
+
+type: object
+additionalProperties: false
+required: [kind, source, title, sections, materials, equipment, labware, steps, tables, notes, outputs, diagnostics]
+
+properties:
+  kind:
+    const: "vendor-protocol-candidate"
+
+  source:
+    type: object
+    additionalProperties: false
+    required: [documentId, filename, pageCount]
+    properties:
+      documentId: { type: string }
+      filename: { type: string }
+      vendor: { type: string }
+      title: { type: string }
+      version: { type: string }
+      pageCount:
+        type: integer
+        minimum: 0
+
+  title:
+    type: string
+    minLength: 1
+
+  scope:
+    type: string
+
+  sections:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, kind, title, provenance]
+      properties:
+        id: { type: string }
+        kind:
+          type: string
+          enum: [cover, table_of_contents, product_contents, specifications, product_description, protocol, appendix, troubleshooting, ordering_information, workflow, notes, guarantee, other]
+        title: { type: string }
+        provenance:
+          $ref: "#/$defs/Provenance"
+
+  materials:
+    type: array
+    items:
+      $ref: "#/$defs/ExtractedItem"
+
+  equipment:
+    type: array
+    items:
+      $ref: "#/$defs/ExtractedItem"
+
+  labware:
+    type: array
+    items:
+      $ref: "#/$defs/ExtractedItem"
+
+  steps:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, stepNumber, sourceText, actions, conditions, materials, labware, equipment, notes, branches, provenance, confidence]
+      properties:
+        id: { type: string }
+        stepNumber:
+          type: integer
+          minimum: 1
+        substep: { type: string }
+        sourceText: { type: string }
+        actions:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/$defs/Action"
+        conditions:
+          type: object
+          additionalProperties: false
+          properties:
+            volumes:
+              type: array
+              items: { $ref: "#/$defs/Quantity" }
+            durations:
+              type: array
+              items: { $ref: "#/$defs/Quantity" }
+            temperatures:
+              type: array
+              items: { $ref: "#/$defs/Quantity" }
+            speeds:
+              type: array
+              items: { $ref: "#/$defs/Quantity" }
+        materials:
+          type: array
+          items: { type: string }
+        labware:
+          type: array
+          items: { type: string }
+        equipment:
+          type: array
+          items: { type: string }
+        notes:
+          type: array
+          items: { type: string }
+        branches:
+          type: array
+          items: { type: string }
+        provenance:
+          $ref: "#/$defs/Provenance"
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        uncertainty:
+          $ref: "#/$defs/Uncertainty"
+
+  tables:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [id, title, headers, rows, sourceText, provenance]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        headers:
+          type: array
+          items: { type: string }
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: { type: string }
+        sourceText: { type: string }
+        provenance:
+          $ref: "#/$defs/Provenance"
+
+  notes:
+    type: array
+    items:
+      $ref: "#/$defs/ExtractedItem"
+
+  outputs:
+    type: array
+    items:
+      $ref: "#/$defs/ExtractedItem"
+
+  diagnostics:
+    type: array
+    items:
+      type: object
+      additionalProperties: true
+      required: [severity, code, message]
+      properties:
+        severity:
+          type: string
+          enum: [error, warning, info]
+        code: { type: string }
+        message: { type: string }
+
+$defs:
+  Provenance:
+    type: object
+    additionalProperties: false
+    required: [documentId, pageStart]
+    properties:
+      documentId: { type: string }
+      pageStart:
+        type: integer
+        minimum: 1
+      pageEnd:
+        type: integer
+        minimum: 1
+      sectionId: { type: string }
+      spanStart:
+        type: integer
+        minimum: 0
+      spanEnd:
+        type: integer
+        minimum: 0
+
+  Uncertainty:
+    type: string
+    enum: [ambiguous, inferred, unresolved, table-derived]
+
+  Quantity:
+    type: object
+    additionalProperties: false
+    required: [raw]
+    properties:
+      raw: { type: string }
+      value: { type: number }
+      unit: { type: string }
+
+  ExtractedItem:
+    type: object
+    additionalProperties: false
+    required: [id, label, sourceText, provenance, confidence]
+    properties:
+      id: { type: string }
+      label: { type: string }
+      sourceText: { type: string }
+      provenance:
+        $ref: "#/$defs/Provenance"
+      confidence:
+        type: number
+        minimum: 0
+        maximum: 1
+      uncertainty:
+        $ref: "#/$defs/Uncertainty"
+      role: { type: string }
+      quantity: { type: string }
+
+  Action:
+    type: object
+    additionalProperties: false
+    required: [actionKind, sourceText, provenance]
+    properties:
+      actionKind:
+        type: string
+        enum: [add, mix, transfer, aspirate, discard, incubate, centrifuge, magnetize, dry, elute, seal, repeat, other]
+      sourceText: { type: string }
+      target: { type: string }
+      source: { type: string }
+      material: { type: string }
+      volume:
+        $ref: "#/$defs/Quantity"
+      duration:
+        $ref: "#/$defs/Quantity"
+      temperature:
+        $ref: "#/$defs/Quantity"
+      speed:
+        $ref: "#/$defs/Quantity"
+      wellSelector: { type: string }
+      equipment: { type: string }
+      provenance:
+        $ref: "#/$defs/Provenance"
+      uncertainty:
+        $ref: "#/$defs/Uncertainty"
+

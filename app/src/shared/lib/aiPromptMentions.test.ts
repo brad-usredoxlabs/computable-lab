@@ -59,6 +59,13 @@ describe('aiPromptMentions', () => {
       })
     })
 
+    it('resets parser state across repeated calls', () => {
+      const prompt = 'Use [[labware:def:opentrons/nest_12_reservoir_22ml@v1|12-Channel Reservoir]] and [[aliquot:ALQ-PR9-TEST-CLO-001|Clofibrate stock tube]]'
+
+      expect(parsePromptMentionMatches(prompt)).toHaveLength(2)
+      expect(parsePromptMentionMatches(prompt)).toHaveLength(2)
+    })
+
     it('parses mixed mentions including protocol and graph-component', () => {
       const result = parsePromptMentionMatches(
         'Use [[material:MAT-001|Buffer A]] with [[protocol:PRT-123|PBS Wash]] and [[labware:LW-001|96-well plate]] then [[graph-component:GC-456|Serial Dilution]]'

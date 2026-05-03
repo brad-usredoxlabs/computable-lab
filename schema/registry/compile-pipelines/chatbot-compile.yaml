@@ -10,6 +10,11 @@ passes:
     family: parse
     description: Run ExtractionRunnerService against prompt text and file attachments; emit structured entities (labware hints, material refs, operators, dates, volumes).
 
+  - id: tag_prompt
+    family: parse
+    depends_on: []
+    description: Shadow-mode LLM lexical tagger. Emits text/nthOccurrence tags with server-materialized spans; no compile consumer reads it yet.
+
   - id: deterministic_precompile
     family: parse
     depends_on: []
@@ -87,6 +92,14 @@ passes:
     family: emit
     depends_on: [compute_volumes]
     description: Emit resource manifest (tip racks, reservoir loads, consumables).
+
+  - id: derive_execution_scale_plan
+    family: emit
+    depends_on: [compute_resources]
+    description: >
+      Deterministically derive a conservative execution scaling plan from the
+      compiled event graph. Emits ready or blocked guidance for manual tubes,
+      bench multichannel plates/reservoirs, and robot deck lowering.
 
   - id: plan_deck_layout
     family: emit
