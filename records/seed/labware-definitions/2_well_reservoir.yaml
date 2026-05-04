@@ -16,6 +16,7 @@ wellGeometry:
   compatibleWith:
     - integra_assist
     - assist_plus_default
+    - generic_platform
 
 ---
 kind: labware-definition
@@ -37,3 +38,4 @@ wellGeometry:
     - integra_assist
     - assist_plus_default
     - generic_platform
+    - lbw-def-2-well-reservoir
