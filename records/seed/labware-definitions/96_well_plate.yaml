@@ -1,0 +1,38 @@
+kind: labware-definition
+labwareId: lbw-def-96-well-plate
+labwareType: plate_96
+name: generic 96-well plate
+dimensions:
+  x: 127.76
+  y: 85.48
+  z: 14.0
+wellCount: 96
+wellGeometry:
+  shape: circle
+  diameter: 6.4
+  depth: 12.0
+  displayName: 96-well plate
+  category: plate
+  compatibleWith:
+    - generic_platform
+    - lbw-def-96-well-plate-generic
+
+---
+kind: labware-definition
+labwareId: lbw-def-96-well-plate-generic
+labwareType: plate_96
+name: generic 96-well plate
+dimensions:
+  x: 127.76
+  y: 85.48
+  z: 14.0
+wellCount: 96
+wellGeometry:
+  shape: circle
+  diameter: 6.4
+  depth: 12.0
+  displayName: generic 96-well plate
+  category: plate
+  compatibleWith:
+    - generic_platform
+    - lbw-def-96-well-plate
