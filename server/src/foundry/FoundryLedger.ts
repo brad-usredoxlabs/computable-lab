@@ -113,6 +113,10 @@ function coderPatchIsTerminal(path: string | undefined): boolean {
   return status === 'applied' || status === 'skipped' || status === 'needs-human';
 }
 
+function coderPatchNeedsRefresh(path: string | undefined): boolean {
+  return coderPatchResultStatus(path) === 'stale';
+}
+
 function patchSpecPaths(artifactRoot: string, protocolId: string, variant: FoundryVariant): string[] {
   const dir = join(artifactRoot, 'patch-specs', protocolId, variant);
   if (!existsSync(dir)) return [];
@@ -278,6 +282,7 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
       const adoptionPath = join(ledger.artifact_root, 'adoption', protocol.protocolId, variant, 'adoption.yaml');
       const coderPatchPath = join(ledger.artifact_root, 'code-patches', protocol.protocolId, variant, 'result.yaml');
       const coderPatchTerminal = coderPatchIsTerminal(coderPatchPath);
+      const coderPatchRefresh = coderPatchNeedsRefresh(coderPatchPath);
       const hasPatchSpecs = patchSpecPaths(ledger.artifact_root, protocol.protocolId, variant).length > 0;
       const rerunPath = join(ledger.artifact_root, 'rerun', protocol.protocolId, variant, 'rerun.yaml');
       const assumptionsPath = join(ledger.artifact_root, 'assumptions', protocol.protocolId, `${variant}.yaml`);
@@ -304,6 +309,8 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'architect_review' });
       } else if (item.artifacts.architectVerdict && (!existsSync(adoptionPath) || adoptionStale)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'patch_adoption' });
+      } else if (coderPatchRefresh) {
+        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
       } else if (existsSync(adoptionPath) && hasPatchSpecs && (!coderPatchTerminal || coderPatchStale)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'coder_patch' });
       } else if (existsSync(adoptionPath) && (!hasPatchSpecs || coderPatchTerminal) && (!existsSync(rerunPath) || rerunStale)) {

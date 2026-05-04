@@ -266,6 +266,8 @@ async function runCoderPatchTask(options: FoundryLoopOptions, ledger: FoundryLed
     ? 'completed'
     : result.status === 'needs-human'
       ? 'blocked'
+    : result.status === 'stale'
+      ? 'gap'
     : result.status;
   markFoundryTask(ledger, {
     protocolId: task.protocolId,

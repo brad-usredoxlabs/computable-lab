@@ -14,7 +14,7 @@ const MAX_FILE_CHARS = 16_000;
 const MAX_ARTIFACT_CONTEXT_CHARS = 50_000;
 const MAX_ARTIFACT_FILE_CHARS = 12_000;
 
-type CoderPatchStatus = 'applied' | 'blocked' | 'failed' | 'skipped' | 'needs-human';
+type CoderPatchStatus = 'applied' | 'blocked' | 'failed' | 'skipped' | 'stale' | 'needs-human';
 
 export interface FoundryCoderPatchResult {
   status: CoderPatchStatus;
@@ -649,17 +649,17 @@ export async function runFoundryCoderPatch(input: {
       protocolId: input.protocolId,
       variant: input.variant,
       generated_at: nowIso(),
-      status: 'skipped',
+      status: 'stale',
       fixClasses,
       sourceSpecIds: specs.map((spec) => spec.id),
       staleChangedFiles: staleContext.changedFiles,
       newestSpecMtime: staleContext.newestSpecMtime,
-      message: 'Patch specs are stale because tracked owned files changed after spec generation; rerun the variant and architect review to refresh context before coding.',
+      message: 'Patch specs are stale because tracked owned files changed after spec generation; rerun and refresh architect context before coding.',
     });
     return {
-      status: 'skipped',
+      status: 'stale',
       resultPath,
-      message: 'stale patch specs; refresh architect context',
+      message: 'stale patch specs; rerun and refresh architect context',
       touchedFiles: [],
     };
   }

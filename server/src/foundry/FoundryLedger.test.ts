@@ -285,6 +285,57 @@ describe('FoundryLedger', () => {
     });
   });
 
+  it('refreshes stale patch specs by rerunning before another coder tournament', async () => {
+    const root = await makeArtifactRoot();
+    await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-compiler-result',
+      outcome: 'gap',
+      eventCount: 1,
+      diagnostics: [],
+    });
+    await writeYamlFile(join(root, 'event-graphs', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-event-graph-proposal',
+    });
+    await writeYamlFile(join(root, 'execution-scale', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'execution-scale-plan',
+      blockers: [],
+    });
+    await writeYamlFile(join(root, 'assumptions', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-test-assumption-profile',
+    });
+    await writeYamlFile(join(root, 'architect', 'demo-protocol', 'manual_tubes', 'verdict.yaml'), {
+      kind: 'protocol-foundry-architect-verdict',
+      accepted: false,
+    });
+    await writeYamlFile(join(root, 'patch-specs', 'demo-protocol', 'manual_tubes', 'fix-extractor.yaml'), {
+      id: 'fix-extractor',
+      fixClass: 'extractor_prompt_contract',
+      ownedFiles: ['server/src/extract'],
+    });
+    await writeYamlFile(join(root, 'adoption', 'demo-protocol', 'manual_tubes', 'adoption.yaml'), {
+      kind: 'protocol-foundry-adoption-decision',
+      status: 'accepted',
+    });
+    await writeYamlFile(join(root, 'code-patches', 'demo-protocol', 'manual_tubes', 'result.yaml'), {
+      kind: 'protocol-foundry-coder-patch-result',
+      status: 'stale',
+      message: 'stale patch specs; rerun and refresh architect context',
+    });
+
+    const ledger = await scanFoundryLedger(root);
+
+    expect(readyTasks(ledger)).toContainEqual({
+      protocolId: 'demo-protocol',
+      variant: 'manual_tubes',
+      stage: 'rerun',
+    });
+    expect(readyTasks(ledger)).not.toContainEqual({
+      protocolId: 'demo-protocol',
+      variant: 'manual_tubes',
+      stage: 'coder_patch',
+    });
+  });
+
   it('marks task status and persists stage artifacts in memory', async () => {
     const root = await makeArtifactRoot();
     const ledger = await scanFoundryLedger(root);
