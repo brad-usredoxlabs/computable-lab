@@ -40,3 +40,28 @@ content: |
   - If a phrase is ambiguous, still tag the surface text and let the compiler resolve it later.
   - CRITICAL: Never return empty arrays for all keys if the text contains any biological protocol content. Always populate at least one key (e.g., mintMaterials for reagents/instruments) to ensure downstream compilation can proceed.
   - If no clear action verbs are found, extract mintMaterials for all mentioned reagents, labware, and instruments.
+
+  mintMaterials format:
+  - { "materialKind": "reagent|labware|instrument", "name": "string", "quantity": "string", "concentration": "string", "unit": "string" }
+
+  directives format:
+  - { "action": "string", "target": "string", "parameters": { "key": "value" } }
+
+  priorLabwareRefs format:
+  - { "reference": "string", "labwareKind": "string", "position": "string" }
+
+  downstreamCompileJobs format:
+  - { "jobType": "string", "input": "string", "output": "string", "parameters": { "key": "value" } }
+
+  candidateEvents format:
+  - { "eventType": "string", "target": "string", "parameters": { "key": "value" } }
+
+  Example:
+  {
+    "mintMaterials": [
+      { "materialKind": "reagent", "name": "KAPA Library Quantification Kit", "quantity": "1", "unit": "kit" }
+    ],
+    "directives": [
+      { "action": "quantify", "target": "library", "parameters": { "method": "KAPA qPCR" } }
+    ]
+  }
