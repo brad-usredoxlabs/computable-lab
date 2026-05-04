@@ -2,7 +2,8 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import { scanFoundryLedger, readyTasks, markFoundryTask } from './FoundryLedger.js';
+import { scanFoundryLedger, readyTasks, markFoundryTask, saveFoundryLedger } from './FoundryLedger.js';
+import { selectRunnableTasks } from './FoundrySupervisor.js';
 import { writeYamlFile } from './FoundryArtifacts.js';
 
 describe('FoundryLedger', () => {
@@ -145,6 +146,59 @@ describe('FoundryLedger', () => {
       variant: 'manual_tubes',
       stage: 'rerun',
     });
+  });
+
+  it('recovers stale running variants so they can be rerun after supervisor restart', async () => {
+    const root = await makeArtifactRoot();
+    await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-compiler-result',
+      outcome: 'gap',
+      eventCount: 1,
+      diagnostics: [],
+    });
+    await writeYamlFile(join(root, 'event-graphs', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-event-graph-proposal',
+    });
+    await writeYamlFile(join(root, 'execution-scale', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'execution-scale-plan',
+      blockers: [],
+    });
+    await writeYamlFile(join(root, 'assumptions', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-test-assumption-profile',
+    });
+
+    const firstLedger = await scanFoundryLedger(root);
+    const staleVariant = firstLedger.protocol_status['demo-protocol']!.variants.bench_plate_multichannel;
+    staleVariant.status = 'running';
+    staleVariant.startedAt = '2000-01-01T00:00:00.000Z';
+    await saveFoundryLedger(firstLedger);
+
+    const ledger = await scanFoundryLedger(root);
+
+    expect(ledger.protocol_status['demo-protocol']?.variants.bench_plate_multichannel.status).toBe('pending');
+    expect(readyTasks(ledger)).toContainEqual({
+      protocolId: 'demo-protocol',
+      variant: 'bench_plate_multichannel',
+      stage: 'rerun',
+    });
+  });
+
+  it('prioritizes patch adoption and coder patch work over compile backlog', () => {
+    expect(selectRunnableTasks([
+      { protocolId: 'p1', variant: 'manual_tubes', stage: 'compile' },
+      { protocolId: 'p2', variant: 'manual_tubes', stage: 'architect_review' },
+      { protocolId: 'p3', variant: 'manual_tubes', stage: 'patch_adoption' },
+    ])).toEqual([
+      { protocolId: 'p3', variant: 'manual_tubes', stage: 'patch_adoption' },
+    ]);
+
+    expect(selectRunnableTasks([
+      { protocolId: 'p1', variant: 'manual_tubes', stage: 'compile' },
+      { protocolId: 'p2', variant: 'manual_tubes', stage: 'patch_adoption' },
+      { protocolId: 'p3', variant: 'manual_tubes', stage: 'coder_patch' },
+    ])).toEqual([
+      { protocolId: 'p3', variant: 'manual_tubes', stage: 'coder_patch' },
+    ]);
   });
 
   it('marks task status and persists stage artifacts in memory', async () => {

@@ -19,6 +19,8 @@ import {
 } from './FoundryArtifacts.js';
 import { FOUNDRY_VARIANTS, type FoundryVariant } from './ProtocolFoundryCompileRunner.js';
 
+const DEFAULT_RUNNING_STALE_MS = 15 * 60 * 1000;
+
 export interface FoundryReadyTask {
   protocolId: string;
   variant: FoundryVariant;
@@ -124,6 +126,15 @@ function artifactNewerThan(path: string | undefined, otherPath: string | undefin
   return artifactMtime(path) > artifactMtime(otherPath);
 }
 
+function runningStale(previous: FoundryVariantLedger): boolean {
+  if (previous.status !== 'running') return false;
+  if (!previous.startedAt) return true;
+  const startedAt = Date.parse(previous.startedAt);
+  if (!Number.isFinite(startedAt)) return true;
+  const staleMs = Number(process.env['FOUNDRY_RUNNING_STALE_MS'] ?? DEFAULT_RUNNING_STALE_MS);
+  return Date.now() - startedAt > staleMs;
+}
+
 async function architectAccepted(verdictArtifact: string | undefined): Promise<boolean | undefined> {
   if (!verdictArtifact || !existsSync(verdictArtifact)) return undefined;
   const parsed = asRecord(await readYamlFile(verdictArtifact));
@@ -192,7 +203,7 @@ async function scanVariantArtifacts(
     architectVerdict ? (accepted === true ? 'accepted' : 'gap') :
     browserReport ? 'completed' :
     compiler && eventGraph && executionScale ? (metrics.foundryComplete === 1 ? 'completed' : 'gap') :
-    previous.status === 'running' ? 'running' :
+    previous.status === 'running' && !runningStale(previous) ? 'running' :
     'pending';
 
   return {
@@ -269,7 +280,11 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
       const adoptionStale = artifactNewerThan(item.artifacts.architectVerdict, adoptionPath);
       const coderPatchStale = artifactNewerThan(adoptionPath, coderPatchPath);
       const rerunStale = artifactNewerThan(coderPatchPath, rerunPath);
-      if (item.artifacts.compiler && !existsSync(assumptionsPath)) {
+      if (!item.artifacts.compiler) {
+        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
+      } else if (!item.artifacts.eventGraph || !item.artifacts.executionScale) {
+        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
+      } else if (item.artifacts.compiler && !existsSync(assumptionsPath)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
       } else if (item.artifacts.eventGraph && (!item.artifacts.browserReport || browserStale)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'browser_review' });

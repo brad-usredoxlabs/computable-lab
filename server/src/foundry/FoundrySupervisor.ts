@@ -345,9 +345,11 @@ async function runTask(options: FoundryLoopOptions, ledger: FoundryLedger, task:
   }
 }
 
-function selectRunnableTasks(tasks: FoundryReadyTask[]): FoundryReadyTask[] {
+export function selectRunnableTasks(tasks: FoundryReadyTask[]): FoundryReadyTask[] {
   const coderTasks = tasks.filter((task) => task.stage === 'coder_patch');
   if (coderTasks.length > 0) return [coderTasks[0]!];
+  const adoptionTasks = tasks.filter((task) => task.stage === 'patch_adoption');
+  if (adoptionTasks.length > 0) return adoptionTasks;
   const compileProtocols = new Set<string>();
   const selected: FoundryReadyTask[] = [];
   for (const task of tasks) {
@@ -358,12 +360,12 @@ function selectRunnableTasks(tasks: FoundryReadyTask[]): FoundryReadyTask[] {
     selected.push(task);
   }
   const stageOrder = new Map<string, number>([
-    ['compile', 0],
-    ['browser_review', 1],
+    ['patch_adoption', 0],
+    ['coder_patch', 1],
     ['architect_review', 2],
-    ['patch_adoption', 3],
-    ['coder_patch', 4],
-    ['rerun', 5],
+    ['browser_review', 3],
+    ['rerun', 4],
+    ['compile', 5],
   ]);
   return selected.sort((a, b) => (stageOrder.get(a.stage) ?? 99) - (stageOrder.get(b.stage) ?? 99));
 }
