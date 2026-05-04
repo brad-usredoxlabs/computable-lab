@@ -32,7 +32,7 @@ import {
 
 // Allowed event types
 const ALLOWED_EVENT_TYPES: PlateEventPrimitive['event_type'][] = [
-  'create_container',
+  'centrifuge',
   'add_material',
   'transfer',
   'incubate',
