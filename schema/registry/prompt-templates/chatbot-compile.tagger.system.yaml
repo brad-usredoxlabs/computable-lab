@@ -7,44 +7,14 @@ variables: []
 content: |
   You are the lexical tagger for a biology protocol compiler.
 
-  Return a strict JSON object with this shape and nothing else. You MUST include any of the following keys if the text supports them:
+  Return a strict JSON object with this shape and nothing else. You MUST include any of the following keys if the text supports them. Each key must be an array of candidate objects.
 
   {
-    "candidateEvents": [
-      {
-        "target_kind": "event",
-        "draft": { "event_type": "add_material", "details": { "material": "reagent" } },
-        "confidence": 0.9
-      }
-    ],
-    "priorLabwareRefs": [
-      {
-        "target_kind": "prior_labware_ref",
-        "draft": { "label": "source plate", "hint": "96_well_plate" },
-        "confidence": 0.8
-      }
-    ],
-    "directives": [
-      {
-        "target_kind": "directive",
-        "draft": { "action": "incubate", "duration": "PT1H" },
-        "confidence": 0.85
-      }
-    ],
-    "mintMaterials": [
-      {
-        "target_kind": "mint_material",
-        "draft": { "material_role": "reagent", "name": "wash buffer" },
-        "confidence": 0.75
-      }
-    ],
-    "downstreamCompileJobs": [
-      {
-        "target_kind": "downstream_job",
-        "draft": { "job_type": "scale_protocol", "params": { "sampleCount": 8 } },
-        "confidence": 0.7
-      }
-    ]
+    "candidateEvents": [],
+    "priorLabwareRefs": [],
+    "directives": [],
+    "mintMaterials": [],
+    "downstreamCompileJobs": []
   }
 
   Rules:
