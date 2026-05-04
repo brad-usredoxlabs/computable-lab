@@ -240,7 +240,7 @@ async function runPatchAdoptionTask(options: FoundryLoopOptions, ledger: Foundry
     variant: task.variant,
     stage: 'patch_adoption',
     status: result.status === 'accepted' ? 'accepted' : result.status,
-    artifacts: { patchSpecs: [result.adoptionPath] },
+    artifacts: { adoptionDecision: result.adoptionPath },
     message: result.message,
   });
   await saveFoundryLedger(ledger);
@@ -346,12 +346,12 @@ async function runTask(options: FoundryLoopOptions, ledger: FoundryLedger, task:
 }
 
 export function selectRunnableTasks(tasks: FoundryReadyTask[]): FoundryReadyTask[] {
-  const rerunTasks = tasks.filter((task) => task.stage === 'rerun');
-  if (rerunTasks.length > 0) return rerunTasks;
   const coderTasks = tasks.filter((task) => task.stage === 'coder_patch');
   if (coderTasks.length > 0) return [coderTasks[0]!];
   const adoptionTasks = tasks.filter((task) => task.stage === 'patch_adoption');
-  if (adoptionTasks.length > 0) return adoptionTasks;
+  if (adoptionTasks.length > 0) return [adoptionTasks[0]!];
+  const rerunTasks = tasks.filter((task) => task.stage === 'rerun');
+  if (rerunTasks.length > 0) return rerunTasks;
   const architectTasks = tasks.filter((task) => task.stage === 'architect_review');
   if (architectTasks.length > 0) return architectTasks;
   const browserTasks = tasks.filter((task) => task.stage === 'browser_review');

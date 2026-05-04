@@ -46,9 +46,9 @@ export async function runPatchAdoption(input: {
     return { status: 'skipped', adoptionPath, message: 'no patch specs' };
   }
 
-  const status = input.applyPatches ? 'blocked' : 'accepted';
+  const status = 'accepted';
   const message = input.applyPatches
-    ? 'Patch specs require coder execution; automatic code editing is intentionally not performed inside this supervisor yet.'
+    ? 'Patch specs accepted for unattended coder tournament execution.'
     : 'Patch specs accepted for improvement backlog. Rerun will measure current behavior until coder execution applies fixes.';
   await writeYamlFile(adoptionPath, {
     kind: 'protocol-foundry-adoption-decision',

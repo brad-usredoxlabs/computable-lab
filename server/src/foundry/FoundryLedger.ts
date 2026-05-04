@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import YAML from 'yaml';
 import {
@@ -113,6 +113,19 @@ function coderPatchIsTerminal(path: string | undefined): boolean {
   return status === 'applied' || status === 'skipped' || status === 'needs-human';
 }
 
+function patchSpecPaths(artifactRoot: string, protocolId: string, variant: FoundryVariant): string[] {
+  const dir = join(artifactRoot, 'patch-specs', protocolId, variant);
+  if (!existsSync(dir)) return [];
+  try {
+    return readdirSync(dir)
+      .filter((file: string) => file.endsWith('.yaml') && file !== 'index.yaml')
+      .sort()
+      .map((file: string) => join(dir, file));
+  } catch {
+    return [];
+  }
+}
+
 function artifactMtime(path: string | undefined): number {
   if (!path || !existsSync(path)) return 0;
   try {
@@ -180,7 +193,7 @@ async function scanVariantArtifacts(
   const coderPatch = fileIfExists(join(artifactRoot, 'code-patches', protocolId, variant, 'result.yaml'));
   const coderPatchStatus = coderPatchResultStatus(coderPatch);
   const rerunReport = fileIfExists(join(artifactRoot, 'rerun', protocolId, variant, 'rerun.yaml'));
-  const previousPatchSpecs = previous.artifacts.patchSpecs?.filter((path) => existsSync(path)) ?? [];
+  const currentPatchSpecs = patchSpecPaths(artifactRoot, protocolId, variant);
   const metrics = await compilerMetrics(compiler);
   const accepted = await architectAccepted(architectVerdict);
   const browserStale = eventGraph ? artifactNewerThan(eventGraph, browserReport) : false;
@@ -215,7 +228,8 @@ async function scanVariantArtifacts(
       ...(executionScale ? { executionScale } : {}),
       ...(browserReport ? { browserReport } : {}),
       ...(architectVerdict ? { architectVerdict } : {}),
-      ...(previousPatchSpecs.length > 0 ? { patchSpecs: previousPatchSpecs } : {}),
+      ...(currentPatchSpecs.length > 0 ? { patchSpecs: currentPatchSpecs } : {}),
+      ...(adoption ? { adoptionDecision: adoption } : {}),
       ...(coderPatch ? { coderPatch } : {}),
       ...(rerunReport ? { rerunReport } : {}),
     },
@@ -264,7 +278,7 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
       const adoptionPath = join(ledger.artifact_root, 'adoption', protocol.protocolId, variant, 'adoption.yaml');
       const coderPatchPath = join(ledger.artifact_root, 'code-patches', protocol.protocolId, variant, 'result.yaml');
       const coderPatchTerminal = coderPatchIsTerminal(coderPatchPath);
-      const hasPatchSpecs = Boolean(item.artifacts.patchSpecs && item.artifacts.patchSpecs.length > 0);
+      const hasPatchSpecs = patchSpecPaths(ledger.artifact_root, protocol.protocolId, variant).length > 0;
       const rerunPath = join(ledger.artifact_root, 'rerun', protocol.protocolId, variant, 'rerun.yaml');
       const assumptionsPath = join(ledger.artifact_root, 'assumptions', protocol.protocolId, `${variant}.yaml`);
       const browserStale = item.artifacts.eventGraph

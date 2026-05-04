@@ -43,6 +43,7 @@ export interface FoundryVariantLedger {
     browserReport?: string;
     architectVerdict?: string;
     patchSpecs?: string[];
+    adoptionDecision?: string;
     coderPatch?: string;
     rerunReport?: string;
   };
