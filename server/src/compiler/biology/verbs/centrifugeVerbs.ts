@@ -1,3 +1,5 @@
+// Side-effect registration for centrifuge verbs (spin, pellet)
+// This file must be imported to register the expanders with the BiologyVerbExpander registry.
 import { registerVerbExpander, makeEventId, type BiologyVerbExpander, type VerbInput, type PlateEventPrimitive } from '../BiologyVerbExpander.js';
 
 const spinExpander: BiologyVerbExpander = {
