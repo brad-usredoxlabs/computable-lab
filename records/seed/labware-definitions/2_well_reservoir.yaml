@@ -17,8 +17,8 @@ wellGeometry:
     - integra_assist
     - assist_plus_default
     - generic_platform
-    - lbw-def-2-well-reservoir-generic
     - lbw-def-generic-2-well-reservoir
+    - lbw-def-2-well-reservoir-generic
 
 ---
 kind: labware-definition
@@ -40,5 +40,5 @@ wellGeometry:
     - integra_assist
     - assist_plus_default
     - generic_platform
-    - lbw-def-2-well-reservoir
     - lbw-def-2-well-reservoir-generic
+    - lbw-def-2-well-reservoir
