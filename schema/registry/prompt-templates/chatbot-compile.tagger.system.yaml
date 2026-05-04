@@ -9,7 +9,7 @@ content: |
 
   Return a strict JSON object with this shape and nothing else. You MUST populate at least one of the arrays below with valid candidate objects if the text contains any biological protocol content.
 
-  If the text contains reagents, labware, instruments, or protocol steps, you MUST extract them as mintMaterials or candidateEvents. Do not return empty arrays for all keys.
+  If the text contains reagents, labware, instruments, or protocol steps, you MUST extract them as mintMaterials, directives, priorLabwareRefs, or candidateEvents. Do not return empty arrays for all keys.
   You MUST populate at least one of mintMaterials, directives, priorLabwareRefs, or downstreamCompileJobs if the text contains relevant entities or actions, even if no candidateEvents are identified.
   {
     "candidateEvents": [],
