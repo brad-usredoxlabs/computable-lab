@@ -40,6 +40,9 @@ describe('FoundryLedger', () => {
       kind: 'execution-scale-plan',
       blockers: [],
     });
+    await writeYamlFile(join(root, 'assumptions', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-test-assumption-profile',
+    });
 
     const ledger = await scanFoundryLedger(root);
 
@@ -65,6 +68,9 @@ describe('FoundryLedger', () => {
     await writeYamlFile(join(root, 'execution-scale', 'demo-protocol', 'manual_tubes.yaml'), {
       kind: 'execution-scale-plan',
       blockers: [],
+    });
+    await writeYamlFile(join(root, 'assumptions', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-test-assumption-profile',
     });
     await writeYamlFile(join(root, 'rerun', 'demo-protocol', 'manual_tubes', 'rerun.yaml'), {
       kind: 'protocol-foundry-rerun-report',
@@ -94,6 +100,9 @@ describe('FoundryLedger', () => {
       kind: 'execution-scale-plan',
       blockers: [],
     });
+    await writeYamlFile(join(root, 'assumptions', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-test-assumption-profile',
+    });
     await writeYamlFile(join(root, 'browser-review', 'demo-protocol', 'manual_tubes', 'report.yaml'), {
       kind: 'protocol-browser-review-report',
       status: 'pass',
@@ -110,6 +119,31 @@ describe('FoundryLedger', () => {
       protocolId: 'demo-protocol',
       variant: 'manual_tubes',
       stage: 'browser_review',
+    });
+  });
+
+  it('reruns compiled variants that predate Foundry test assumption artifacts', async () => {
+    const root = await makeArtifactRoot();
+    await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-compiler-result',
+      outcome: 'gap',
+      eventCount: 1,
+      diagnostics: [],
+    });
+    await writeYamlFile(join(root, 'event-graphs', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-event-graph-proposal',
+    });
+    await writeYamlFile(join(root, 'execution-scale', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'execution-scale-plan',
+      blockers: [],
+    });
+
+    const ledger = await scanFoundryLedger(root);
+
+    expect(readyTasks(ledger)).toContainEqual({
+      protocolId: 'demo-protocol',
+      variant: 'manual_tubes',
+      stage: 'rerun',
     });
   });
 

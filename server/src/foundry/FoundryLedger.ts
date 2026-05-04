@@ -255,6 +255,7 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
       const coderPatchTerminal = coderPatchIsTerminal(coderPatchPath);
       const hasPatchSpecs = Boolean(item.artifacts.patchSpecs && item.artifacts.patchSpecs.length > 0);
       const rerunPath = join(ledger.artifact_root, 'rerun', protocol.protocolId, variant, 'rerun.yaml');
+      const assumptionsPath = join(ledger.artifact_root, 'assumptions', protocol.protocolId, `${variant}.yaml`);
       const browserStale = item.artifacts.eventGraph
         ? artifactNewerThan(item.artifacts.eventGraph, item.artifacts.browserReport)
         : false;
@@ -268,7 +269,9 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
       const adoptionStale = artifactNewerThan(item.artifacts.architectVerdict, adoptionPath);
       const coderPatchStale = artifactNewerThan(adoptionPath, coderPatchPath);
       const rerunStale = artifactNewerThan(coderPatchPath, rerunPath);
-      if (item.artifacts.eventGraph && (!item.artifacts.browserReport || browserStale)) {
+      if (item.artifacts.compiler && !existsSync(assumptionsPath)) {
+        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
+      } else if (item.artifacts.eventGraph && (!item.artifacts.browserReport || browserStale)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'browser_review' });
       } else if (item.artifacts.compiler && item.artifacts.eventGraph && (!item.artifacts.architectVerdict || architectStale)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'architect_review' });
