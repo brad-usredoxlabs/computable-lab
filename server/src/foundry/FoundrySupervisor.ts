@@ -346,6 +346,8 @@ async function runTask(options: FoundryLoopOptions, ledger: FoundryLedger, task:
 }
 
 export function selectRunnableTasks(tasks: FoundryReadyTask[]): FoundryReadyTask[] {
+  const rerunTasks = tasks.filter((task) => task.stage === 'rerun');
+  if (rerunTasks.length > 0) return rerunTasks;
   const coderTasks = tasks.filter((task) => task.stage === 'coder_patch');
   if (coderTasks.length > 0) return [coderTasks[0]!];
   const adoptionTasks = tasks.filter((task) => task.stage === 'patch_adoption');
@@ -354,8 +356,6 @@ export function selectRunnableTasks(tasks: FoundryReadyTask[]): FoundryReadyTask
   if (architectTasks.length > 0) return architectTasks;
   const browserTasks = tasks.filter((task) => task.stage === 'browser_review');
   if (browserTasks.length > 0) return browserTasks;
-  const rerunTasks = tasks.filter((task) => task.stage === 'rerun');
-  if (rerunTasks.length > 0) return rerunTasks;
   const compileProtocols = new Set<string>();
   const selected: FoundryReadyTask[] = [];
   for (const task of tasks) {

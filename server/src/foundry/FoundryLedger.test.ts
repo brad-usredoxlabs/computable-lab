@@ -195,7 +195,7 @@ describe('FoundryLedger', () => {
     });
   });
 
-  it('prioritizes patch adoption and coder patch work over compile backlog', () => {
+  it('prioritizes reruns to close the patch feedback loop before more patching', () => {
     expect(selectRunnableTasks([
       { protocolId: 'p1', variant: 'manual_tubes', stage: 'compile' },
       { protocolId: 'p2', variant: 'manual_tubes', stage: 'architect_review' },
@@ -218,8 +218,15 @@ describe('FoundryLedger', () => {
       { protocolId: 'p3', variant: 'manual_tubes', stage: 'architect_review' },
       { protocolId: 'p4', variant: 'manual_tubes', stage: 'architect_review' },
     ])).toEqual([
-      { protocolId: 'p3', variant: 'manual_tubes', stage: 'architect_review' },
-      { protocolId: 'p4', variant: 'manual_tubes', stage: 'architect_review' },
+      { protocolId: 'p2', variant: 'manual_tubes', stage: 'rerun' },
+    ]);
+
+    expect(selectRunnableTasks([
+      { protocolId: 'p1', variant: 'manual_tubes', stage: 'coder_patch' },
+      { protocolId: 'p2', variant: 'manual_tubes', stage: 'rerun' },
+      { protocolId: 'p3', variant: 'manual_tubes', stage: 'coder_patch' },
+    ])).toEqual([
+      { protocolId: 'p2', variant: 'manual_tubes', stage: 'rerun' },
     ]);
   });
 
