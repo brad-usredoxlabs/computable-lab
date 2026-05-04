@@ -1,5 +1,5 @@
 kind: labware-definition
-labwareId: lbw-def-2-well-reservoir
+labwareId: lbw-def-2-well-reservoir-generic
 labwareType: reservoir_2
 name: 2-well reservoir
 dimensions:
