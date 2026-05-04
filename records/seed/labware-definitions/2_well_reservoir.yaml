@@ -11,3 +11,8 @@ wellGeometry:
   shape: circle
   diameter: 10.0
   depth: 15.0
+  displayName: 2-well reservoir
+  category: reservoir
+  compatibleWith:
+    - integra_assist
+    - assist_plus_default
