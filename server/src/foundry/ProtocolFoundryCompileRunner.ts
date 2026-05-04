@@ -69,9 +69,36 @@ interface FoundryEventGraphProposal {
   };
   terminalArtifacts: RunChatbotCompileResult['terminalArtifacts'];
   diagnostics: RunChatbotCompileResult['diagnostics'];
+  foundryTestAssumptions: FoundryTestAssumptionProfile;
   browserReview: {
     routeTemplate: '/labware-editor?id=<eventGraphRecordId>';
     importRequired: true;
+  };
+}
+
+interface FoundrySyntheticAnswer {
+  questionClass: string;
+  answer: string | number | boolean | Record<string, unknown> | string[];
+  rationale: string;
+}
+
+interface FoundryTestAssumptionProfile {
+  kind: 'protocol-foundry-test-assumption-profile';
+  protocolId: string;
+  variant: FoundryVariant;
+  mode: 'deterministic_test_assumptions';
+  acceptanceLevel: 'test_compile_only';
+  selectionPolicy: {
+    multipleChoice: 'first_valid_option';
+    freeTextClarification: 'match_question_to_profile_else_first_valid_option';
+    randomization: 'disabled';
+  };
+  syntheticAnswers: FoundrySyntheticAnswer[];
+  provenance: {
+    syntheticInputs: true;
+    createsMaterialInstances: false;
+    createsPhysicalInventory: false;
+    note: string;
   };
 }
 
@@ -133,11 +160,106 @@ function variantInstruction(variant: FoundryVariant): string {
   return 'Bind the plate/multichannel plan to a robot deck. Prefer ASSIST PLUS when the source or run asks for ASSIST PLUS; otherwise use an available robot-deck profile and report blockers.';
 }
 
+function foundryTestAssumptionProfile(protocolId: string, variant: FoundryVariant): FoundryTestAssumptionProfile {
+  const sampleLayout = variant === 'manual_tubes'
+    ? {
+        sampleCount: 8,
+        sourceLabware: 'generic_24x1_5ml_tube_rack',
+        sourcePositions: ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'B1', 'B2'],
+      }
+    : {
+        sampleCount: 8,
+        sourceLabware: 'generic_96_well_plate',
+        sourcePositions: ['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1'],
+      };
+  return {
+    kind: 'protocol-foundry-test-assumption-profile',
+    protocolId,
+    variant,
+    mode: 'deterministic_test_assumptions',
+    acceptanceLevel: 'test_compile_only',
+    selectionPolicy: {
+      multipleChoice: 'first_valid_option',
+      freeTextClarification: 'match_question_to_profile_else_first_valid_option',
+      randomization: 'disabled',
+    },
+    syntheticAnswers: [
+      {
+        questionClass: 'multiple_choice',
+        answer: 'Select the first biologically valid option. If options are lettered, choose A only when A is valid.',
+        rationale: 'Determinism makes regression comparisons meaningful across Foundry runs.',
+      },
+      {
+        questionClass: 'sample_count_and_layout',
+        answer: sampleLayout,
+        rationale: 'Eight samples exercise single-channel, multichannel, and first-column plate logic without requiring a full 96-sample run.',
+      },
+      {
+        questionClass: 'sample_provenance',
+        answer: {
+          provenanceId: `SYNTHETIC-FOUNDRY-SAMPLE-SET-${protocolId}`,
+          description: 'Synthetic Foundry test samples for compiler stress testing only.',
+        },
+        rationale: 'Unblocks event graph generation while preserving that no real sample provenance was supplied.',
+      },
+      {
+        questionClass: 'lot_or_physical_inventory',
+        answer: {
+          lot: 'SYNTHETIC-LOT-FOUNDRY-TEST',
+          sourceTube: 'SYNTHETIC-SOURCE-TUBE-1',
+        },
+        rationale: 'Provides deterministic test handles but must not be promoted to real material-instance records.',
+      },
+      {
+        questionClass: 'missing_coa_or_vendor_default',
+        answer: 'Use the explicit value printed in the vendor protocol when present; otherwise use a synthetic COA placeholder and continue with a warning.',
+        rationale: 'Foundry improvement mode should expose compiler and renderer gaps instead of stopping on missing lot-specific COA data.',
+      },
+      {
+        questionClass: 'manual_labware',
+        answer: {
+          tubeRack: 'generic_24x1_5ml_tube_rack',
+          conical15mlRack: 'generic_6x15ml_tube_rack',
+          conical50mlRack: 'generic_4x50ml_tube_rack',
+        },
+        rationale: 'Tube-heavy protocols need concrete rack geometry for browser review.',
+      },
+      {
+        questionClass: 'bench_plate_labware',
+        answer: {
+          plate: 'generic_96_well_plate',
+          reservoir: 'generic_12_well_reservoir',
+          pipette: '8_channel_multichannel',
+          tips: 'generic_96_tip_rack',
+        },
+        rationale: 'Exercises the manual-to-plate scaling path consistently.',
+      },
+      {
+        questionClass: 'robot_deck_binding',
+        answer: {
+          platform: 'integra_assist',
+          deckProfile: 'assist_plus_default',
+          reservoir: 'generic_12_well_reservoir',
+          pipette: '8_channel_multichannel',
+        },
+        rationale: 'Exercises robot deck lowering while making platform assumptions explicit.',
+      },
+    ],
+    provenance: {
+      syntheticInputs: true,
+      createsMaterialInstances: false,
+      createsPhysicalInventory: false,
+      note: 'These assumptions are only for Foundry compiler stress testing. They are not scientific truth and must not be accepted as real run context.',
+    },
+  };
+}
+
 function buildPrompt(input: {
   protocolId: string;
   variant: FoundryVariant;
   protocolText: string;
   materialContext?: Record<string, unknown>;
+  assumptions: FoundryTestAssumptionProfile;
 }): string {
   return [
     `Protocol Foundry compile target: ${input.protocolId}`,
@@ -148,7 +270,13 @@ function buildPrompt(input: {
     '- Produce reviewable event graph semantics; do not invent physical inventory.',
     '- A vendor PDF may justify material, material-spec, or vendor-product records.',
     '- Do not create material-instance, aliquot, or physical labware-instance records unless the provided run context has a lot, tube, prepared source, sample provenance, or operator decision.',
-    '- If execution scaling lacks sample count, labware definition, pipette capability, or platform binding, emit blockers instead of guessing.',
+    '- Foundry test mode is enabled. If you would normally ask the user for clarification, use the deterministic Foundry test assumptions below instead of stopping.',
+    '- Treat these assumptions as test compile inputs only. Mark them as assumptions/provenance in outputs; do not promote them to real inventory or real material-instance records.',
+    '- If a clarification presents options, choose the first biologically valid option. Do not use random choices.',
+    '- If execution scaling lacks sample count, labware definition, pipette capability, or platform binding, use the matching Foundry test assumption below before emitting a blocker.',
+    '',
+    'Foundry deterministic test assumptions YAML:',
+    YAML.stringify(input.assumptions),
     '',
     'Material/labware context YAML:',
     input.materialContext ? YAML.stringify(input.materialContext) : '(none provided)',
@@ -328,11 +456,13 @@ async function runVariant(input: {
   materialContext?: Record<string, unknown>;
   llmClient: LlmClient;
 }): Promise<ProtocolFoundryCompileSummary['variants'][number]> {
+  const assumptions = foundryTestAssumptionProfile(input.protocolId, input.variant);
   const prompt = buildPrompt({
     protocolId: input.protocolId,
     variant: input.variant,
     protocolText: input.protocolText,
     ...(input.materialContext ? { materialContext: input.materialContext } : {}),
+    assumptions,
   });
   const model = input.options.inference?.model ?? process.env['PI_WORKER_MODEL'] ?? process.env['OPENAI_MODEL'];
   const result = await runChatbotCompile({
@@ -355,6 +485,7 @@ async function runVariant(input: {
   const graphArtifact = join(input.options.artifactRoot, 'event-graphs', input.protocolId, `${input.variant}.yaml`);
   const scaleArtifact = join(input.options.artifactRoot, 'execution-scale', input.protocolId, `${input.variant}.yaml`);
   const compilerArtifact = join(input.options.artifactRoot, 'compiler', input.protocolId, `${input.variant}.yaml`);
+  const assumptionsArtifact = join(input.options.artifactRoot, 'assumptions', input.protocolId, `${input.variant}.yaml`);
 
   const proposal: FoundryEventGraphProposal = {
     kind: 'protocol-event-graph-proposal',
@@ -382,6 +513,7 @@ async function runVariant(input: {
       events,
     },
     diagnostics: result.diagnostics,
+    foundryTestAssumptions: assumptions,
     browserReview: {
       routeTemplate: '/labware-editor?id=<eventGraphRecordId>',
       importRequired: true,
@@ -389,6 +521,7 @@ async function runVariant(input: {
   };
 
   await writeYaml(graphArtifact, proposal);
+  await writeYaml(assumptionsArtifact, assumptions);
   await writeYaml(scaleArtifact, plan ?? {
     kind: 'execution-scale-plan',
     recordId: `execution-scale-plan/${input.variant}`,
@@ -413,6 +546,7 @@ async function runVariant(input: {
     diagnostics: result.diagnostics,
     extractorRepairExhaustedCount: extractorRepairExhaustedCount(result),
     gaps: result.terminalArtifacts.gaps,
+    foundryTestAssumptionsRef: assumptionsArtifact,
     terminalArtifactsRef: graphArtifact,
   });
 
