@@ -261,6 +261,8 @@ async function runCoderPatchTask(options: FoundryLoopOptions, ledger: FoundryLed
   });
   const status = result.status === 'applied' || result.status === 'skipped'
     ? 'completed'
+    : result.status === 'needs-human'
+      ? 'blocked'
     : result.status;
   markFoundryTask(ledger, {
     protocolId: task.protocolId,

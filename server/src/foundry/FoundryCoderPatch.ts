@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -12,8 +12,10 @@ const execFileAsync = promisify(execFile);
 const MAX_CONTEXT_CHARS = 60_000;
 const MAX_FILE_CHARS = 16_000;
 
+type CoderPatchStatus = 'applied' | 'blocked' | 'failed' | 'skipped' | 'needs-human';
+
 export interface FoundryCoderPatchResult {
-  status: 'applied' | 'blocked' | 'failed' | 'skipped';
+  status: CoderPatchStatus;
   resultPath: string;
   message: string;
   touchedFiles: string[];
@@ -28,6 +30,35 @@ interface PatchSpec {
   acceptance: string[];
   raw: Record<string, unknown>;
   path: string;
+}
+
+interface CoderResponse {
+  attempt: number;
+  strategy: string;
+  content: string;
+  parsed?: Record<string, unknown>;
+  diff?: string;
+  summary?: string;
+}
+
+interface AttemptResult {
+  attempt: number;
+  strategy: string;
+  status: 'blocked' | 'failed' | 'applied';
+  phase: string;
+  message: string;
+  diffPath?: string;
+  touchedFiles: string[];
+  verification?: Array<{
+    command: string;
+    status: 'pass' | 'fail';
+    stdout?: string;
+    stderr?: string;
+  }>;
+  commit?: string;
+  pushed?: boolean;
+  summary?: string;
+  rawResponse?: string;
 }
 
 function asStringArray(value: unknown): string[] {
@@ -64,7 +95,7 @@ async function readPatchSpec(path: string): Promise<PatchSpec> {
 
 async function walkFiles(root: string, start: string, limit: number): Promise<string[]> {
   if (limit <= 0 || !existsSync(start)) return [];
-  const stats = await import('node:fs/promises').then((fs) => fs.stat(start));
+  const stats = await stat(start);
   if (stats.isFile()) return [start];
   if (!stats.isDirectory()) return [];
   const entries = await readdir(start, { withFileTypes: true });
@@ -167,7 +198,7 @@ async function findDirectoryTouchedFiles(repoRoot: string, touchedFiles: string[
   for (const file of touchedFiles) {
     const fullPath = join(repoRoot, file);
     if (!existsSync(fullPath)) continue;
-    const stats = await import('node:fs/promises').then((fs) => fs.stat(fullPath));
+    const stats = await stat(fullPath);
     if (stats.isDirectory()) directories.push(file);
   }
   return directories;
@@ -277,6 +308,222 @@ async function maybeCommit(repoRoot: string, touchedFiles: string[], title: stri
   return { commit, pushed: false };
 }
 
+function sanitizeSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'unknown';
+}
+
+function groupByFixClass(specs: PatchSpec[]): Map<string, PatchSpec[]> {
+  const grouped = new Map<string, PatchSpec[]>();
+  for (const spec of specs) {
+    grouped.set(spec.fixClass, [...(grouped.get(spec.fixClass) ?? []), spec]);
+  }
+  return grouped;
+}
+
+function selectFixClass(specs: PatchSpec[]): { fixClass: string; specs: PatchSpec[] } {
+  const grouped = groupByFixClass(specs);
+  const fixClass = Array.from(grouped.keys()).sort()[0] ?? 'unknown';
+  return { fixClass, specs: grouped.get(fixClass) ?? [] };
+}
+
+function attemptScore(attempt: AttemptResult): number {
+  let score = 0;
+  if (attempt.touchedFiles.length > 0) score += 20;
+  if (attempt.diffPath) score += 20;
+  if (attempt.phase === 'verification') score += 30;
+  if (attempt.phase === 'git-apply-check') score += 10;
+  if (attempt.status === 'failed') score += 10;
+  return score;
+}
+
+async function writeAttempt(tournamentDir: string, result: AttemptResult): Promise<void> {
+  await writeYamlFile(join(tournamentDir, `attempt-${result.attempt}.yaml`), {
+    kind: 'protocol-foundry-coder-patch-attempt',
+    generated_at: nowIso(),
+    ...result,
+  });
+}
+
+async function requestCoderPatch(input: {
+  attempt: number;
+  strategy: string;
+  client: ReturnType<typeof createInferenceClient>;
+  model: string;
+  protocolId: string;
+  variant: FoundryVariant;
+  fixClass: string;
+  specs: PatchSpec[];
+  ownedFiles: string[];
+  context: string;
+  priorDiff?: string;
+  priorFailure?: string;
+}): Promise<CoderResponse> {
+  const response = await input.client.complete({
+    model: input.model,
+    temperature: 0.15,
+    max_tokens: 8192,
+    messages: [
+      {
+        role: 'system',
+        content: [
+          'You are the Protocol Foundry coder. Produce one minimal git unified diff for exactly one compiler/precompiler fix class.',
+          'Return only JSON with keys: summary, unifiedDiff.',
+          'Do not modify files outside ownedFiles. Do not include markdown.',
+          'Use exact file paths and context from the supplied repository context.',
+          'Avoid whitespace-only edits. Do not invent unrelated refactors.',
+          'If an ownedFiles entry is a directory, patch a specific existing file under it; never patch the directory path itself.',
+          'The unifiedDiff must be directly accepted by git apply.',
+          'Prefer small, testable changes over broad refactors.',
+        ].join('\n'),
+      },
+      {
+        role: 'user',
+        content: JSON.stringify({
+          protocolId: input.protocolId,
+          variant: input.variant,
+          fixClass: input.fixClass,
+          strategy: input.strategy,
+          patchSpecs: input.specs.map((spec) => spec.raw),
+          ownedFiles: input.ownedFiles,
+          context: input.context,
+          ...(input.priorDiff ? { priorDiff: input.priorDiff } : {}),
+          ...(input.priorFailure ? { priorFailure: input.priorFailure } : {}),
+        }),
+      },
+    ],
+  });
+  const content = response.choices[0]?.message.content ?? '';
+  const parsed = extractJsonObject(content);
+  const diff = typeof parsed?.['unifiedDiff'] === 'string'
+    ? parsed['unifiedDiff']
+    : extractUnifiedDiff(content);
+  return {
+    attempt: input.attempt,
+    strategy: input.strategy,
+    content,
+    ...(parsed ? { parsed } : {}),
+    ...(diff ? { diff } : {}),
+    ...(typeof parsed?.['summary'] === 'string' ? { summary: parsed['summary'] } : {}),
+  };
+}
+
+async function evaluateCandidate(input: {
+  response: CoderResponse;
+  repoRoot: string;
+  tournamentDir: string;
+  ownedFiles: string[];
+  fixClass: string;
+  title: string;
+  autoCommit?: boolean;
+  autoPush?: boolean;
+}): Promise<AttemptResult> {
+  const rawResponse = input.response.content.slice(0, 4000);
+  if (!input.response.diff || (!input.response.diff.includes('diff --git ') && !input.response.diff.includes('--- a/'))) {
+    const result: AttemptResult = {
+      attempt: input.response.attempt,
+      strategy: input.response.strategy,
+      status: 'blocked',
+      phase: 'parse',
+      message: 'Coder response did not contain a git unified diff.',
+      touchedFiles: [],
+      rawResponse,
+      ...(input.response.summary ? { summary: input.response.summary } : {}),
+    };
+    await writeAttempt(input.tournamentDir, result);
+    return result;
+  }
+
+  const diffPath = join(input.tournamentDir, `attempt-${input.response.attempt}.diff`);
+  await mkdir(dirname(diffPath), { recursive: true });
+  await writeFile(diffPath, input.response.diff, 'utf-8');
+
+  const touchedFiles = parseTouchedFiles(input.response.diff);
+  const disallowed = touchedFiles.filter((file) => !pathIsAllowed(file, input.ownedFiles));
+  const directories = await findDirectoryTouchedFiles(input.repoRoot, touchedFiles);
+  if (touchedFiles.length === 0 || disallowed.length > 0 || directories.length > 0) {
+    const result: AttemptResult = {
+      attempt: input.response.attempt,
+      strategy: input.response.strategy,
+      status: 'blocked',
+      phase: 'path-guard',
+      message: directories.length > 0
+        ? `Coder patch attempted to patch directory paths instead of files: ${directories.join(', ')}`
+        : `Coder patch touched files outside architect-owned paths: ${disallowed.join(', ')}`,
+      diffPath,
+      touchedFiles,
+      rawResponse,
+      ...(input.response.summary ? { summary: input.response.summary } : {}),
+    };
+    await writeAttempt(input.tournamentDir, result);
+    return result;
+  }
+
+  let applied = false;
+  try {
+    await assertTouchedFilesClean(input.repoRoot, touchedFiles);
+    await runGit(input.repoRoot, gitApplyArgs(diffPath, 'check'));
+    await runGit(input.repoRoot, gitApplyArgs(diffPath, 'apply'));
+    applied = true;
+    const verification = await runVerification(input.repoRoot, touchedFiles);
+    const verificationPassed = verification.every((item) => item.status === 'pass');
+    if (!verificationPassed) {
+      await runGit(input.repoRoot, gitApplyArgs(diffPath, 'reverse')).catch(() => ({ stdout: '', stderr: '' }));
+      applied = false;
+      const result: AttemptResult = {
+        attempt: input.response.attempt,
+        strategy: input.response.strategy,
+        status: 'failed',
+        phase: 'verification',
+        message: 'Patch applied but verification failed; patch was reversed.',
+        diffPath,
+        touchedFiles,
+        verification,
+        rawResponse,
+        ...(input.response.summary ? { summary: input.response.summary } : {}),
+      };
+      await writeAttempt(input.tournamentDir, result);
+      return result;
+    }
+    const commit = await maybeCommit(
+      input.repoRoot,
+      touchedFiles,
+      `${input.fixClass}: ${input.title}`,
+      input.autoCommit,
+      input.autoPush,
+    );
+    const result: AttemptResult = {
+      attempt: input.response.attempt,
+      strategy: input.response.strategy,
+      status: 'applied',
+      phase: 'verification',
+      message: 'Coder patch applied and verified.',
+      diffPath,
+      touchedFiles,
+      verification,
+      ...commit,
+      rawResponse,
+      ...(input.response.summary ? { summary: input.response.summary } : {}),
+    };
+    await writeAttempt(input.tournamentDir, result);
+    return result;
+  } catch (error) {
+    if (applied) await runGit(input.repoRoot, gitApplyArgs(diffPath, 'reverse')).catch(() => ({ stdout: '', stderr: '' }));
+    const result: AttemptResult = {
+      attempt: input.response.attempt,
+      strategy: input.response.strategy,
+      status: 'blocked',
+      phase: 'git-apply-check',
+      message: error instanceof Error ? error.message : String(error),
+      diffPath,
+      touchedFiles,
+      rawResponse,
+      ...(input.response.summary ? { summary: input.response.summary } : {}),
+    };
+    await writeAttempt(input.tournamentDir, result);
+    return result;
+  }
+}
+
 export async function runFoundryCoderPatch(input: {
   artifactRoot: string;
   repoRoot: string;
@@ -287,14 +534,13 @@ export async function runFoundryCoderPatch(input: {
   autoCommit?: boolean;
   autoPush?: boolean;
 }): Promise<FoundryCoderPatchResult> {
-  const resultPath = join(input.artifactRoot, 'code-patches', input.protocolId, input.variant, 'result.yaml');
-  const diffPath = join(input.artifactRoot, 'code-patches', input.protocolId, input.variant, 'proposed.diff');
+  const resultRoot = join(input.artifactRoot, 'code-patches', input.protocolId, input.variant);
+  const resultPath = join(resultRoot, 'result.yaml');
   const specPaths = await listPatchSpecs(input.artifactRoot, input.protocolId, input.variant);
   const allSpecs = await Promise.all(specPaths.map(readPatchSpec));
   const allFixClasses = Array.from(new Set(allSpecs.map((spec) => spec.fixClass)));
   const alreadyApplied = await existingAppliedFixClasses(input.artifactRoot);
-  const specs = allSpecs.filter((spec) => !alreadyApplied.has(spec.fixClass));
-  const fixClasses = Array.from(new Set(specs.map((spec) => spec.fixClass)));
+  const pendingSpecs = allSpecs.filter((spec) => !alreadyApplied.has(spec.fixClass));
 
   if (allSpecs.length === 0) {
     await writeYamlFile(resultPath, {
@@ -308,7 +554,7 @@ export async function runFoundryCoderPatch(input: {
     return { status: 'skipped', resultPath, message: 'no patch specs', touchedFiles: [] };
   }
 
-  if (specs.length === 0) {
+  if (pendingSpecs.length === 0) {
     await writeYamlFile(resultPath, {
       kind: 'protocol-foundry-coder-patch-result',
       protocolId: input.protocolId,
@@ -323,6 +569,10 @@ export async function runFoundryCoderPatch(input: {
 
   const baseUrl = input.inference?.baseUrl ?? process.env['PI_WORKER_BASE_URL'] ?? process.env['OPENAI_BASE_URL'];
   const model = input.inference?.model ?? process.env['PI_WORKER_MODEL'] ?? process.env['OPENAI_MODEL'];
+  const { fixClass, specs } = selectFixClass(pendingSpecs);
+  const fixClasses = [fixClass];
+  const tournamentDir = join(resultRoot, sanitizeSegment(fixClass));
+
   if (!baseUrl || !model || input.dryRun) {
     await writeYamlFile(resultPath, {
       kind: 'protocol-foundry-coder-patch-result',
@@ -341,144 +591,137 @@ export async function runFoundryCoderPatch(input: {
   const client = createInferenceClient({
     baseUrl,
     model,
-    temperature: input.inference?.temperature ?? 0.1,
+    temperature: input.inference?.temperature ?? 0.15,
     timeoutMs: input.inference?.timeoutMs ?? 600_000,
     maxTokens: input.inference?.maxTokens ?? 8192,
     enableThinking: input.inference?.enableThinking ?? false,
   });
-  const response = await client.complete({
-    model,
-    temperature: 0.1,
-    max_tokens: 8192,
-    messages: [
-      {
-        role: 'system',
-        content: [
-          'You are the Protocol Foundry coder. Produce one minimal git unified diff that implements the provided compiler/precompiler patch specs.',
-          'Return only JSON with keys: summary, unifiedDiff.',
-          'Do not modify files outside ownedFiles. Do not include markdown.',
-          'Use exact file paths and context from the supplied repository context.',
-          'Avoid whitespace-only edits. Do not invent unrelated refactors.',
-          'If an ownedFiles entry is a directory, patch a specific existing file under it; never patch the directory path itself.',
-          'The unifiedDiff must be directly accepted by git apply.',
-          'Prefer small, testable changes over broad refactors.',
-        ].join('\n'),
-      },
-      {
-        role: 'user',
-        content: JSON.stringify({
-          protocolId: input.protocolId,
-          variant: input.variant,
-          patchSpecs: specs.map((spec) => spec.raw),
-          ownedFiles,
-          context,
-        }),
-      },
-    ],
-  });
-  const content = response.choices[0]?.message.content ?? '';
-  const parsed = extractJsonObject(content);
-  const diff = typeof parsed?.['unifiedDiff'] === 'string'
-    ? parsed['unifiedDiff']
-    : extractUnifiedDiff(content);
-  if (!diff || (!diff.includes('diff --git ') && !diff.includes('--- a/'))) {
-    await writeYamlFile(resultPath, {
-      kind: 'protocol-foundry-coder-patch-result',
+  await mkdir(tournamentDir, { recursive: true });
+
+  const strategies = [
+    'minimal direct patch: make the smallest implementation change that satisfies the acceptance criteria',
+    'data/schema first: prefer YAML/data/schema extension if that can satisfy the fix without broad code changes',
+    'diagnostics and testability: improve the narrow failure path with explicit diagnostics and focused behavior',
+  ];
+
+  const responses = await Promise.all(strategies.map((strategy, index) =>
+    requestCoderPatch({
+      attempt: index + 1,
+      strategy,
+      client,
+      model,
       protocolId: input.protocolId,
       variant: input.variant,
-      generated_at: nowIso(),
-      status: 'blocked',
-      fixClasses,
-      rawResponse: content.slice(0, 4000),
-      message: 'Coder response did not contain a git unified diff.',
+      fixClass,
+      specs,
+      ownedFiles,
+      context,
+    }),
+  ));
+
+  const attempts: AttemptResult[] = [];
+  for (const response of responses.sort((a, b) => (a.diff?.length ?? Number.POSITIVE_INFINITY) - (b.diff?.length ?? Number.POSITIVE_INFINITY))) {
+    const attempt = await evaluateCandidate({
+      response,
+      repoRoot: input.repoRoot,
+      tournamentDir,
+      ownedFiles,
+      fixClass,
+      title: specs[0]?.title ?? input.protocolId,
+      ...(input.autoCommit !== undefined ? { autoCommit: input.autoCommit } : {}),
+      ...(input.autoPush !== undefined ? { autoPush: input.autoPush } : {}),
     });
-    return { status: 'blocked', resultPath, message: 'missing unified diff', touchedFiles: [] };
-  }
-
-  const touchedFiles = parseTouchedFiles(diff);
-  const disallowed = touchedFiles.filter((file) => !pathIsAllowed(file, ownedFiles));
-  const directories = await findDirectoryTouchedFiles(input.repoRoot, touchedFiles);
-  if (touchedFiles.length === 0 || disallowed.length > 0 || directories.length > 0) {
-    await writeYamlFile(resultPath, {
-      kind: 'protocol-foundry-coder-patch-result',
-      protocolId: input.protocolId,
-      variant: input.variant,
-      generated_at: nowIso(),
-      status: 'blocked',
-      fixClasses,
-      touchedFiles,
-      disallowed,
-      directories,
-      message: directories.length > 0
-        ? 'Coder patch attempted to patch directory paths instead of files.'
-        : 'Coder patch touched files outside architect-owned paths.',
-    });
-    return {
-      status: 'blocked',
-      resultPath,
-      message: directories.length > 0 ? 'directory paths in patch' : 'disallowed touched files',
-      touchedFiles,
-    };
-  }
-
-  await mkdir(dirname(diffPath), { recursive: true });
-  await writeFile(diffPath, diff, 'utf-8');
-
-  try {
-    await assertTouchedFilesClean(input.repoRoot, touchedFiles);
-    await runGit(input.repoRoot, gitApplyArgs(diffPath, 'check'));
-    await runGit(input.repoRoot, gitApplyArgs(diffPath, 'apply'));
-    const verification = await runVerification(input.repoRoot, touchedFiles);
-    const verificationPassed = verification.every((item) => item.status === 'pass');
-    if (!verificationPassed) {
-      await runGit(input.repoRoot, gitApplyArgs(diffPath, 'reverse')).catch(() => ({ stdout: '', stderr: '' }));
+    attempts.push(attempt);
+    if (attempt.status === 'applied') {
       await writeYamlFile(resultPath, {
         kind: 'protocol-foundry-coder-patch-result',
         protocolId: input.protocolId,
         variant: input.variant,
         generated_at: nowIso(),
-        status: 'failed',
+        status: 'applied',
         fixClasses,
-        touchedFiles,
-        diffPath,
-        verification,
-        message: 'Patch applied but verification failed; patch was reversed.',
+        tournamentDir,
+        winningAttempt: attempt.attempt,
+        attempts,
+        touchedFiles: attempt.touchedFiles,
+        diffPath: attempt.diffPath,
+        verification: attempt.verification,
+        ...(attempt.commit ? { commit: attempt.commit } : {}),
+        ...(attempt.pushed !== undefined ? { pushed: attempt.pushed } : {}),
+        ...(attempt.summary ? { summary: attempt.summary } : {}),
+        message: 'Patch tournament produced an applied and verified patch.',
       });
-      return { status: 'failed', resultPath, message: 'verification failed; patch reversed', touchedFiles };
+      return { status: 'applied', resultPath, message: 'patch tournament applied a verified patch', touchedFiles: attempt.touchedFiles };
     }
-    const commit = await maybeCommit(input.repoRoot, touchedFiles, specs[0]?.title ?? input.protocolId, input.autoCommit, input.autoPush);
-    await writeYamlFile(resultPath, {
-      kind: 'protocol-foundry-coder-patch-result',
-      protocolId: input.protocolId,
-      variant: input.variant,
-      generated_at: nowIso(),
-      status: 'applied',
-      fixClasses,
-      touchedFiles,
-      diffPath,
-      verification,
-      ...commit,
-      summary: typeof parsed?.['summary'] === 'string' ? parsed['summary'] : undefined,
-      message: 'Coder patch applied and verified.',
-    });
-    return { status: 'applied', resultPath, message: 'coder patch applied', touchedFiles };
-  } catch (error) {
-    await writeYamlFile(resultPath, {
-      kind: 'protocol-foundry-coder-patch-result',
-      protocolId: input.protocolId,
-      variant: input.variant,
-      generated_at: nowIso(),
-      status: 'blocked',
-      fixClasses,
-      touchedFiles,
-      diffPath,
-      message: error instanceof Error ? error.message : String(error),
-    });
-    return {
-      status: 'blocked',
-      resultPath,
-      message: error instanceof Error ? error.message : String(error),
-      touchedFiles,
-    };
   }
+
+  const best = attempts.sort((a, b) => attemptScore(b) - attemptScore(a))[0];
+  if (best?.diffPath) {
+    const priorDiff = await readFile(best.diffPath, 'utf-8').catch(() => undefined);
+    const repairResponse = await requestCoderPatch({
+      attempt: 4,
+      strategy: 'repair: fix the best failed candidate using the exact failure message; keep the patch narrower than the original',
+      client,
+      model,
+      protocolId: input.protocolId,
+      variant: input.variant,
+      fixClass,
+      specs,
+      ownedFiles,
+      context,
+      ...(priorDiff ? { priorDiff } : {}),
+      priorFailure: `${best.phase}: ${best.message}`,
+    });
+    const repair = await evaluateCandidate({
+      response: repairResponse,
+      repoRoot: input.repoRoot,
+      tournamentDir,
+      ownedFiles,
+      fixClass,
+      title: specs[0]?.title ?? input.protocolId,
+      ...(input.autoCommit !== undefined ? { autoCommit: input.autoCommit } : {}),
+      ...(input.autoPush !== undefined ? { autoPush: input.autoPush } : {}),
+    });
+    attempts.push(repair);
+    if (repair.status === 'applied') {
+      await writeYamlFile(resultPath, {
+        kind: 'protocol-foundry-coder-patch-result',
+        protocolId: input.protocolId,
+        variant: input.variant,
+        generated_at: nowIso(),
+        status: 'applied',
+        fixClasses,
+        tournamentDir,
+        winningAttempt: repair.attempt,
+        attempts,
+        touchedFiles: repair.touchedFiles,
+        diffPath: repair.diffPath,
+        verification: repair.verification,
+        ...(repair.commit ? { commit: repair.commit } : {}),
+        ...(repair.pushed !== undefined ? { pushed: repair.pushed } : {}),
+        ...(repair.summary ? { summary: repair.summary } : {}),
+        message: 'Repair round produced an applied and verified patch.',
+      });
+      return { status: 'applied', resultPath, message: 'repair round applied a verified patch', touchedFiles: repair.touchedFiles };
+    }
+  }
+
+  await writeYamlFile(resultPath, {
+    kind: 'protocol-foundry-coder-patch-result',
+    protocolId: input.protocolId,
+    variant: input.variant,
+    generated_at: nowIso(),
+    status: 'needs-human',
+    fixClasses,
+    tournamentDir,
+    attempts,
+    bestFailure: best ? `${best.phase}: ${best.message}` : 'no viable patch attempts',
+    message: 'Patch tournament could not produce a verified patch for this single fix class.',
+  });
+  return {
+    status: 'needs-human',
+    resultPath,
+    message: 'patch tournament needs human review',
+    touchedFiles: [],
+  };
 }

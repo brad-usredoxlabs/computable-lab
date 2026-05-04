@@ -1,5 +1,6 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import YAML from 'yaml';
 import {
   asRecord,
   discoverProtocolInputs,
@@ -95,6 +96,21 @@ function fileIfExists(path: string): string | undefined {
   return existsSync(path) ? path : undefined;
 }
 
+function coderPatchResultStatus(path: string | undefined): string | undefined {
+  if (!path || !existsSync(path)) return undefined;
+  try {
+    const result = asRecord(YAML.parse(readFileSync(path, 'utf-8')));
+    return typeof result['status'] === 'string' ? result['status'] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function coderPatchIsTerminal(path: string | undefined): boolean {
+  const status = coderPatchResultStatus(path);
+  return status === 'applied' || status === 'skipped' || status === 'needs-human';
+}
+
 async function compilerMetrics(compilerArtifact: string | undefined): Promise<{
   eventCount?: number;
   blockerCount?: number;
@@ -126,12 +142,15 @@ async function scanVariantArtifacts(
   const architectVerdict = fileIfExists(join(artifactRoot, 'architect', protocolId, variant, 'verdict.yaml'));
   const adoption = fileIfExists(join(artifactRoot, 'adoption', protocolId, variant, 'adoption.yaml'));
   const coderPatch = fileIfExists(join(artifactRoot, 'code-patches', protocolId, variant, 'result.yaml'));
+  const coderPatchStatus = coderPatchResultStatus(coderPatch);
   const rerunReport = fileIfExists(join(artifactRoot, 'rerun', protocolId, variant, 'rerun.yaml'));
   const previousPatchSpecs = previous.artifacts.patchSpecs?.filter((path) => existsSync(path)) ?? [];
   const metrics = await compilerMetrics(compiler);
   const status: FoundryWorkStatus =
     rerunReport ? 'completed' :
-    coderPatch ? 'accepted' :
+    coderPatchStatus === 'applied' || coderPatchStatus === 'skipped' ? 'accepted' :
+    coderPatchStatus === 'needs-human' ? 'blocked' :
+    coderPatch ? 'gap' :
     adoption ? 'accepted' :
     architectVerdict ? 'gap' :
     browserReport ? 'completed' :
@@ -196,6 +215,8 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
       const item = protocol.variants[variant];
       const adoptionPath = join(ledger.artifact_root, 'adoption', protocol.protocolId, variant, 'adoption.yaml');
       const coderPatchPath = join(ledger.artifact_root, 'code-patches', protocol.protocolId, variant, 'result.yaml');
+      const coderPatchTerminal = coderPatchIsTerminal(coderPatchPath);
+      const hasPatchSpecs = Boolean(item.artifacts.patchSpecs && item.artifacts.patchSpecs.length > 0);
       const rerunPath = join(ledger.artifact_root, 'rerun', protocol.protocolId, variant, 'rerun.yaml');
       if (item.artifacts.eventGraph && !item.artifacts.browserReport) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'browser_review' });
@@ -203,9 +224,9 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'architect_review' });
       } else if (item.artifacts.architectVerdict && !existsSync(adoptionPath)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'patch_adoption' });
-      } else if (existsSync(adoptionPath) && item.artifacts.patchSpecs && item.artifacts.patchSpecs.length > 0 && !existsSync(coderPatchPath)) {
+      } else if (existsSync(adoptionPath) && hasPatchSpecs && !coderPatchTerminal) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'coder_patch' });
-      } else if (existsSync(adoptionPath) && !existsSync(rerunPath)) {
+      } else if (existsSync(adoptionPath) && (!hasPatchSpecs || coderPatchTerminal) && !existsSync(rerunPath)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
       }
     }
