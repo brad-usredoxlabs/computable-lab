@@ -350,6 +350,12 @@ export function selectRunnableTasks(tasks: FoundryReadyTask[]): FoundryReadyTask
   if (coderTasks.length > 0) return [coderTasks[0]!];
   const adoptionTasks = tasks.filter((task) => task.stage === 'patch_adoption');
   if (adoptionTasks.length > 0) return adoptionTasks;
+  const architectTasks = tasks.filter((task) => task.stage === 'architect_review');
+  if (architectTasks.length > 0) return architectTasks;
+  const browserTasks = tasks.filter((task) => task.stage === 'browser_review');
+  if (browserTasks.length > 0) return browserTasks;
+  const rerunTasks = tasks.filter((task) => task.stage === 'rerun');
+  if (rerunTasks.length > 0) return rerunTasks;
   const compileProtocols = new Set<string>();
   const selected: FoundryReadyTask[] = [];
   for (const task of tasks) {

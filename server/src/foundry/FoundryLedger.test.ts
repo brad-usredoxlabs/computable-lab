@@ -211,6 +211,16 @@ describe('FoundryLedger', () => {
     ])).toEqual([
       { protocolId: 'p3', variant: 'manual_tubes', stage: 'coder_patch' },
     ]);
+
+    expect(selectRunnableTasks([
+      { protocolId: 'p1', variant: 'manual_tubes', stage: 'compile' },
+      { protocolId: 'p2', variant: 'manual_tubes', stage: 'rerun' },
+      { protocolId: 'p3', variant: 'manual_tubes', stage: 'architect_review' },
+      { protocolId: 'p4', variant: 'manual_tubes', stage: 'architect_review' },
+    ])).toEqual([
+      { protocolId: 'p3', variant: 'manual_tubes', stage: 'architect_review' },
+      { protocolId: 'p4', variant: 'manual_tubes', stage: 'architect_review' },
+    ]);
   });
 
   it('marks task status and persists stage artifacts in memory', async () => {
