@@ -125,11 +125,13 @@ async function scanVariantArtifacts(
   const browserReport = fileIfExists(join(artifactRoot, 'browser-review', protocolId, variant, 'report.yaml'));
   const architectVerdict = fileIfExists(join(artifactRoot, 'architect', protocolId, variant, 'verdict.yaml'));
   const adoption = fileIfExists(join(artifactRoot, 'adoption', protocolId, variant, 'adoption.yaml'));
-  const rerunCompiler = fileIfExists(join(artifactRoot, 'compiler', protocolId, `rerun-${variant}.yaml`));
+  const coderPatch = fileIfExists(join(artifactRoot, 'code-patches', protocolId, variant, 'result.yaml'));
+  const rerunReport = fileIfExists(join(artifactRoot, 'rerun', protocolId, variant, 'rerun.yaml'));
   const previousPatchSpecs = previous.artifacts.patchSpecs?.filter((path) => existsSync(path)) ?? [];
   const metrics = await compilerMetrics(compiler);
   const status: FoundryWorkStatus =
-    rerunCompiler ? 'completed' :
+    rerunReport ? 'completed' :
+    coderPatch ? 'accepted' :
     adoption ? 'accepted' :
     architectVerdict ? 'gap' :
     browserReport ? 'completed' :
@@ -147,6 +149,8 @@ async function scanVariantArtifacts(
       ...(browserReport ? { browserReport } : {}),
       ...(architectVerdict ? { architectVerdict } : {}),
       ...(previousPatchSpecs.length > 0 ? { patchSpecs: previousPatchSpecs } : {}),
+      ...(coderPatch ? { coderPatch } : {}),
+      ...(rerunReport ? { rerunReport } : {}),
     },
     metrics: {
       ...previous.metrics,
@@ -190,13 +194,18 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
 
     for (const variant of FOUNDRY_VARIANTS) {
       const item = protocol.variants[variant];
+      const adoptionPath = join(ledger.artifact_root, 'adoption', protocol.protocolId, variant, 'adoption.yaml');
+      const coderPatchPath = join(ledger.artifact_root, 'code-patches', protocol.protocolId, variant, 'result.yaml');
+      const rerunPath = join(ledger.artifact_root, 'rerun', protocol.protocolId, variant, 'rerun.yaml');
       if (item.artifacts.eventGraph && !item.artifacts.browserReport) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'browser_review' });
       } else if (item.artifacts.compiler && item.artifacts.eventGraph && !item.artifacts.architectVerdict) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'architect_review' });
-      } else if (item.artifacts.architectVerdict && !existsSync(join(ledger.artifact_root, 'adoption', protocol.protocolId, variant, 'adoption.yaml'))) {
+      } else if (item.artifacts.architectVerdict && !existsSync(adoptionPath)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'patch_adoption' });
-      } else if (existsSync(join(ledger.artifact_root, 'adoption', protocol.protocolId, variant, 'adoption.yaml')) && !existsSync(join(ledger.artifact_root, 'compiler', protocol.protocolId, `rerun-${variant}.yaml`))) {
+      } else if (existsSync(adoptionPath) && item.artifacts.patchSpecs && item.artifacts.patchSpecs.length > 0 && !existsSync(coderPatchPath)) {
+        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'coder_patch' });
+      } else if (existsSync(adoptionPath) && !existsSync(rerunPath)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
       }
     }

@@ -30,9 +30,11 @@ function usage(): string {
     '  --watch                      Keep polling for new ready work.',
     '  --poll-ms <n>                Poll interval for --watch. Default 30000.',
     '  --skip-browser               Mark browser review skipped instead of launching Playwright.',
-    '  --improvement-mode           Run patch adoption and affected-protocol rerun stages.',
-    '  --apply-patches              Reserve patch specs for coder execution; supervisor records blocked adoption.',
-    '  --no-review-index            Do not generate artifacts/review-index/index.html.',
+  '  --improvement-mode           Run patch adoption and affected-protocol rerun stages.',
+  '  --apply-patches              Let the coder endpoint apply guarded source patches from architect specs.',
+  '  --auto-commit-patches        Commit verified coder patches.',
+  '  --auto-push-patches          Push verified coder-patch commits after committing.',
+  '  --no-review-index            Do not generate artifacts/review-index/index.html.',
     '  --dry-run                    Use null LLM/dry browser behavior where supported.',
   ].join('\n');
 }
@@ -77,6 +79,8 @@ async function main(): Promise<number> {
     skipBrowser: hasFlag('--skip-browser', args),
     improvementMode: hasFlag('--improvement-mode', args),
     applyPatches: hasFlag('--apply-patches', args),
+    autoCommitPatches: hasFlag('--auto-commit-patches', args) || hasFlag('--auto-push-patches', args),
+    autoPushPatches: hasFlag('--auto-push-patches', args),
     writeReviewIndex: !hasFlag('--no-review-index', args),
   });
   console.log(JSON.stringify(summary, null, 2));

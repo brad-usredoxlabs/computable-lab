@@ -9,6 +9,7 @@ export type FoundryWorkStage =
   | 'browser_review'
   | 'architect_review'
   | 'patch_adoption'
+  | 'coder_patch'
   | 'patch_specs'
   | 'rerun';
 
@@ -33,6 +34,7 @@ export interface FoundryVariantLedger {
   browserReview?: FoundryStageRecord;
   architectReview?: FoundryStageRecord;
   patchSpecs?: FoundryStageRecord;
+  coderPatch?: FoundryStageRecord;
   rerun?: FoundryStageRecord;
   artifacts: {
     compiler?: string;
@@ -41,6 +43,8 @@ export interface FoundryVariantLedger {
     browserReport?: string;
     architectVerdict?: string;
     patchSpecs?: string[];
+    coderPatch?: string;
+    rerunReport?: string;
   };
   metrics: {
     eventCount?: number;

@@ -11,6 +11,7 @@ import { FOUNDRY_VARIANTS, runProtocolFoundryCompile } from './ProtocolFoundryCo
 import { runFoundryBrowserReview } from './FoundryBrowserReview.js';
 import { runFoundryArchitectReview } from './FoundryArchitect.js';
 import { runPatchAdoption } from './FoundryImprovement.js';
+import { runFoundryCoderPatch } from './FoundryCoderPatch.js';
 import { writeFoundryReviewIndex } from './FoundryReviewIndex.js';
 import {
   fetchModelEndpointUsage,
@@ -38,6 +39,8 @@ export interface FoundryLoopOptions {
   skipBrowser?: boolean;
   improvementMode?: boolean;
   applyPatches?: boolean;
+  autoCommitPatches?: boolean;
+  autoPushPatches?: boolean;
   writeReviewIndex?: boolean;
 }
 
@@ -240,6 +243,36 @@ async function runPatchAdoptionTask(options: FoundryLoopOptions, ledger: Foundry
   await saveFoundryLedger(ledger);
 }
 
+async function runCoderPatchTask(options: FoundryLoopOptions, ledger: FoundryLedger, task: FoundryReadyTask): Promise<void> {
+  markFoundryTask(ledger, { protocolId: task.protocolId, variant: task.variant, stage: 'coder_patch', status: 'running' });
+  await saveFoundryLedger(ledger);
+  const result = await runFoundryCoderPatch({
+    artifactRoot: options.artifactRoot,
+    repoRoot: options.repoRoot,
+    protocolId: task.protocolId,
+    variant: task.variant,
+    ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {}),
+    inference: {
+      ...(options.workerBaseUrl ? { baseUrl: options.workerBaseUrl } : {}),
+      ...(options.workerModel ? { model: options.workerModel } : {}),
+    },
+    ...(options.autoCommitPatches !== undefined ? { autoCommit: options.autoCommitPatches } : {}),
+    ...(options.autoPushPatches !== undefined ? { autoPush: options.autoPushPatches } : {}),
+  });
+  const status = result.status === 'applied' || result.status === 'skipped'
+    ? 'completed'
+    : result.status;
+  markFoundryTask(ledger, {
+    protocolId: task.protocolId,
+    variant: task.variant,
+    stage: 'coder_patch',
+    status,
+    artifacts: { coderPatch: result.resultPath },
+    message: result.message,
+  });
+  await saveFoundryLedger(ledger);
+}
+
 async function runRerunTask(options: FoundryLoopOptions, ledger: FoundryLedger, task: FoundryReadyTask): Promise<void> {
   const protocol = ledger.protocol_status[task.protocolId];
   if (!protocol) throw new Error(`unknown protocol ${task.protocolId}`);
@@ -259,6 +292,19 @@ async function runRerunTask(options: FoundryLoopOptions, ledger: FoundryLedger, 
   });
   const variantSummary = summary.variants[0];
   if (!variantSummary) throw new Error(`rerun produced no summary for ${task.protocolId}/${task.variant}`);
+  const rerunReport = join(options.artifactRoot, 'rerun', task.protocolId, task.variant, 'rerun.yaml');
+  await writeYamlFile(rerunReport, {
+    kind: 'protocol-foundry-rerun-report',
+    protocolId: task.protocolId,
+    variant: task.variant,
+    generated_at: new Date().toISOString(),
+    compilerArtifact: variantSummary.compilerArtifact,
+    eventGraphArtifact: variantSummary.eventGraphArtifact,
+    executionScaleArtifact: variantSummary.executionScaleArtifact,
+    outcome: variantSummary.outcome,
+    eventCount: variantSummary.eventCount,
+    blockerCount: variantSummary.blockerCount,
+  });
   markFoundryTask(ledger, {
     protocolId: task.protocolId,
     variant: task.variant,
@@ -268,6 +314,7 @@ async function runRerunTask(options: FoundryLoopOptions, ledger: FoundryLedger, 
       compiler: variantSummary.compilerArtifact,
       eventGraph: variantSummary.eventGraphArtifact,
       executionScale: variantSummary.executionScaleArtifact,
+      rerunReport,
     },
     metrics: {
       eventCount: variantSummary.eventCount,
@@ -286,12 +333,16 @@ async function runTask(options: FoundryLoopOptions, ledger: FoundryLedger, task:
     await runArchitectTask(options, ledger, task);
   } else if (task.stage === 'patch_adoption') {
     await runPatchAdoptionTask(options, ledger, task);
+  } else if (task.stage === 'coder_patch') {
+    await runCoderPatchTask(options, ledger, task);
   } else if (task.stage === 'rerun') {
     await runRerunTask(options, ledger, task);
   }
 }
 
 function selectRunnableTasks(tasks: FoundryReadyTask[]): FoundryReadyTask[] {
+  const coderTasks = tasks.filter((task) => task.stage === 'coder_patch');
+  if (coderTasks.length > 0) return [coderTasks[0]!];
   const compileProtocols = new Set<string>();
   const selected: FoundryReadyTask[] = [];
   for (const task of tasks) {
@@ -306,7 +357,8 @@ function selectRunnableTasks(tasks: FoundryReadyTask[]): FoundryReadyTask[] {
     ['browser_review', 1],
     ['architect_review', 2],
     ['patch_adoption', 3],
-    ['rerun', 4],
+    ['coder_patch', 4],
+    ['rerun', 5],
   ]);
   return selected.sort((a, b) => (stageOrder.get(a.stage) ?? 99) - (stageOrder.get(b.stage) ?? 99));
 }
@@ -327,7 +379,11 @@ export async function runFoundryLoop(options: FoundryLoopOptions): Promise<Found
       cycles += 1;
       ledger = await scanFoundryLedger(options.artifactRoot);
       const tasks = selectRunnableTasks(readyTasks(ledger));
-      const runnableTasks = options.improvementMode ? tasks : tasks.filter((task) => task.stage !== 'patch_adoption' && task.stage !== 'rerun');
+      const runnableTasks = tasks.filter((task) => {
+        if (!options.improvementMode && (task.stage === 'patch_adoption' || task.stage === 'coder_patch' || task.stage === 'rerun')) return false;
+        if (task.stage === 'coder_patch' && !options.applyPatches) return false;
+        return true;
+      });
       if (runnableTasks.length === 0) {
         await writeAllFoundryMetrics(ledger);
         if (options.writeReviewIndex !== false) await writeFoundryReviewIndex(ledger);
