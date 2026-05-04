@@ -14,6 +14,12 @@ import type { ExecutionScalePlan } from '../compiler/pipeline/CompileContracts.j
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string | null;
+  /**
+   * Some OpenAI-compatible reasoning models return the assistant's usable
+   * answer here when `content` is null.
+   */
+  reasoning?: string | null;
+  reasoning_content?: string | null;
   /** Tool calls requested by the assistant. */
   tool_calls?: ToolCall[];
   /** ID of the tool call this message is responding to. */

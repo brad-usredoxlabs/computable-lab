@@ -223,6 +223,8 @@ async function runWithRetry(
     const failureDiag = (result.diagnostics ?? []).find((d) =>
       d.code === 'extractor_parse_error' ||
       d.code === 'candidate_malformed' ||
+      d.code === 'extractor_empty_choices' ||
+      d.code === 'extractor_empty_candidates' ||
       d.code === 'extractor_repair_exhausted',
     );
     lastError = failureDiag?.message ?? `Zero candidates returned on attempt ${attempt}`;

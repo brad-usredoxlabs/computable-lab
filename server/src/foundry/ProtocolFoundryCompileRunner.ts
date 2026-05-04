@@ -202,7 +202,7 @@ function createLlmClient(options: ProtocolFoundryCompileOptions): LlmClient {
     model,
     ...(apiKey ? { apiKey } : {}),
     temperature: options.inference?.temperature ?? 0.1,
-    timeoutMs: options.inference?.timeoutMs ?? 180_000,
+    timeoutMs: options.inference?.timeoutMs ?? 600_000,
     maxTokens: options.inference?.maxTokens ?? 4096,
     enableThinking: options.inference?.enableThinking ?? false,
   });

@@ -242,6 +242,8 @@ export interface LintGlobalConfig {
 export interface LintSpec {
   /** Lint specification version */
   lintVersion: number;
+  /** Schema ID all contained rules apply to unless a rule overrides it */
+  schemaId?: string;
   /** Global configuration */
   global?: LintGlobalConfig;
   /** Array of lint rule definitions */

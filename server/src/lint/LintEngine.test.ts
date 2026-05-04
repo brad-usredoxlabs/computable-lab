@@ -118,6 +118,22 @@ describe('LintEngine', () => {
       expect(otherRules.length).toBe(1);
       expect(otherRules[0]?.id).toBe('generic');
     });
+
+    it('applies spec-level schemaId to contained rules for filtering', () => {
+      engine.addSpec('event-graph', {
+        lintVersion: 1,
+        schemaId: 'schema:event-graph',
+        rules: [makeRule('event-only', { op: 'exists', path: 'events' })],
+      });
+      engine.addSpec('claim', {
+        lintVersion: 1,
+        schemaId: 'schema:claim',
+        rules: [makeRule('claim-only', { op: 'exists', path: 'predicate' })],
+      });
+
+      expect(engine.getRules('schema:event-graph').map((rule) => rule.id)).toEqual(['event-only']);
+      expect(engine.getRules('schema:claim').map((rule) => rule.id)).toEqual(['claim-only']);
+    });
   });
   
   describe('predicate evaluation', () => {

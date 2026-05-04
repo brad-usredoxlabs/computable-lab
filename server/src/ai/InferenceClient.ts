@@ -13,6 +13,37 @@ import type {
   StreamChunk,
 } from './types.js';
 
+function firstText(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim().length > 0) return value;
+  }
+  return null;
+}
+
+function normalizeReasoningContent(response: CompletionResponse): CompletionResponse {
+  for (const choice of response.choices ?? []) {
+    const message = choice.message as typeof choice.message & Record<string, unknown>;
+    if (typeof message.content === 'string' && message.content.trim().length > 0) continue;
+    const fallback = firstText(message.reasoning, message.reasoning_content);
+    if (fallback) {
+      message.content = fallback;
+    }
+  }
+  return response;
+}
+
+function normalizeReasoningDelta(chunk: StreamChunk): StreamChunk {
+  for (const choice of chunk.choices ?? []) {
+    const delta = choice.delta as typeof choice.delta & Record<string, unknown>;
+    if (typeof delta.content === 'string' && delta.content.length > 0) continue;
+    const fallback = firstText(delta.reasoning, delta.reasoning_content);
+    if (fallback) {
+      delta.content = fallback;
+    }
+  }
+  return chunk;
+}
+
 /**
  * Create an inference client for the given config.
  */
@@ -68,7 +99,7 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
           throw new Error(`Inference error ${res.status}: ${body}`);
         }
 
-        return (await res.json()) as CompletionResponse;
+        return normalizeReasoningContent((await res.json()) as CompletionResponse);
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') {
           throw new Error(`Inference timeout after ${timeoutMs}ms`);
@@ -120,7 +151,7 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
             if (data === '[DONE]') return;
 
             try {
-              yield JSON.parse(data) as StreamChunk;
+              yield normalizeReasoningDelta(JSON.parse(data) as StreamChunk);
             } catch {
               // Skip malformed SSE chunks
             }

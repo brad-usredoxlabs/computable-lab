@@ -54,12 +54,18 @@ export class LintEngine {
   addSpec(name: string, spec: LintSpec): void {
     this.specs.set(name, spec);
     
-    // Index rules by ID
+    // Index rules by ID. Specs usually declare schemaId once at the file level,
+    // while the engine filters individual rules by schemaId at runtime.
     for (const rule of spec.rules) {
       if (this.rulesById.has(rule.id)) {
         throw new Error(`Duplicate rule ID: ${rule.id}`);
       }
-      this.rulesById.set(rule.id, rule);
+      this.rulesById.set(
+        rule.id,
+        rule.schemaId === undefined && spec.schemaId !== undefined
+          ? { ...rule, schemaId: spec.schemaId }
+          : rule,
+      );
     }
   }
   

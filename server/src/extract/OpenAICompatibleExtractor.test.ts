@@ -91,6 +91,93 @@ describe('OpenAICompatibleExtractor', () => {
       });
       expect(result.diagnostics).toEqual([]);
     });
+
+    it('should parse reasoning-only responses when content is null', async () => {
+      const config: ExtractorProfileConfig = {
+        enabled: true,
+        provider: 'openai-compatible',
+        baseUrl: 'http://localhost:8889/v1',
+        model: 'qwen3.5-9b',
+        temperature: 0.1,
+        max_tokens: 4096
+      };
+
+      const mockResponse = {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: null,
+                reasoning: JSON.stringify({
+                  candidates: [
+                    {
+                      target_kind: 'event',
+                      draft: { verb: 'wash', material: 'PBS' },
+                      confidence: 0.82
+                    }
+                  ]
+                })
+              }
+            }
+          ]
+        })
+      };
+
+      const extractor = new OpenAICompatibleExtractor({
+        config,
+        fetchImpl: async () => mockResponse as unknown as Response
+      });
+
+      const result = await extractor.extract({ text: 'Wash cells with PBS' });
+
+      expect(result.candidates).toHaveLength(1);
+      expect(result.candidates[0]).toMatchObject({
+        target_kind: 'event',
+        draft: { verb: 'wash', material: 'PBS' },
+        confidence: 0.82
+      });
+      expect(result.diagnostics).toEqual([]);
+    });
+
+    it('surfaces raw response diagnostics when parsed JSON has no candidates', async () => {
+      const config: ExtractorProfileConfig = {
+        enabled: true,
+        provider: 'openai-compatible',
+        baseUrl: 'http://localhost:8889/v1',
+        model: 'qwen3.5-9b',
+        temperature: 0.1,
+        max_tokens: 4096
+      };
+      const rawText = JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({ candidates: [] })
+            }
+          }
+        ]
+      });
+
+      const extractor = new OpenAICompatibleExtractor({
+        config,
+        fetchImpl: async () => new Response(rawText, { status: 200 }) as Response
+      });
+
+      const result = await extractor.extract({ text: 'Wash cells with PBS' });
+
+      expect(result.candidates).toEqual([]);
+      expect(result.diagnostics).toHaveLength(1);
+      expect(result.diagnostics[0]).toMatchObject({
+        severity: 'warning',
+        code: 'extractor_empty_candidates',
+        message: 'Extractor returned an empty candidates array'
+      });
+      const details = result.diagnostics[0]?.details as Record<string, unknown> | undefined;
+      expect(typeof details?.rawResponse).toBe('string');
+      expect(details?.parsedContent).toEqual({ candidates: [] });
+    });
   });
 
   describe('HTTP errors', () => {
@@ -489,6 +576,7 @@ describe('OpenAICompatibleExtractor', () => {
         model: 'qwen3.5-9b',
         temperature: 0.7,
         max_tokens: 2048,
+        chat_template_kwargs: { enable_thinking: false },
         response_format: { type: 'json_object' }
       });
       expect(capturedBody.messages).toHaveLength(2);
@@ -741,7 +829,14 @@ describe('OpenAICompatibleExtractor', () => {
       const result = await extractor.extract({ text: 'Some text' });
 
       expect(result.candidates).toEqual([]);
-      expect(result.diagnostics).toEqual([]);
+      expect(result.diagnostics).toHaveLength(1);
+      expect(result.diagnostics[0]).toMatchObject({
+        severity: 'warning',
+        code: 'extractor_empty_choices',
+        message: 'Extractor response had no choices'
+      });
+      const details = result.diagnostics[0]?.details as Record<string, unknown> | undefined;
+      expect(typeof details?.rawResponse).toBe('string');
     });
   });
 

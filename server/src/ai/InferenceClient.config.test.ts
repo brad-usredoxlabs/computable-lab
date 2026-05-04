@@ -93,6 +93,25 @@ describe('InferenceClient honors construction-time config', () => {
       .toBeUndefined();
   });
 
+  it('normalizes reasoning-only responses into message content', async () => {
+    globalThis.fetch = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: null, reasoning: '{"events":[],"notes":["from reasoning"]}' }, finish_reason: 'stop' }],
+        }),
+      );
+    }) as unknown as typeof globalThis.fetch;
+
+    const client = createInferenceClient({
+      baseUrl: 'http://example.test/v1',
+      enableThinking: false,
+    });
+
+    const response = await client.complete({ model: 'm', messages: [{ role: 'user', content: 'hi' }] });
+
+    expect(response.choices[0]?.message.content).toBe('{"events":[],"notes":["from reasoning"]}');
+  });
+
   // -----------------------------------------------------------------------
   // Per-request enableThinking override (spec-027)
   // -----------------------------------------------------------------------
