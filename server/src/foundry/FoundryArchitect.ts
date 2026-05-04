@@ -34,6 +34,21 @@ export interface ArchitectVerdict {
     rationale: string;
     ownedFiles: string[];
     acceptance: string[];
+    implementationBudget?: {
+      targetChangedFiles: number;
+      maxChangedFiles: number;
+      targetChangedLines: number;
+      maxChangedLines: number;
+      requireFocusedFixture: boolean;
+    };
+    coderModelProfile?: {
+      model: string;
+      guidance: string;
+    };
+    contextHints?: string[];
+    doNotTouch?: string[];
+    sourceArtifacts?: Record<string, string | undefined>;
+    failureEvidence?: Record<string, unknown>;
   }>;
   sourceArtifacts: Record<string, string | undefined>;
   architectNotes: string;
@@ -48,6 +63,7 @@ function artifactPaths(options: FoundryArchitectOptions): Record<string, string 
     eventGraph: join(root, 'event-graphs', protocol, `${variant}.yaml`),
     executionScale: join(root, 'execution-scale', protocol, `${variant}.yaml`),
     browserReport: join(root, 'browser-review', protocol, variant, 'report.yaml'),
+    assumptions: join(root, 'assumptions', protocol, `${variant}.yaml`),
     segment: join(root, 'segments', `${protocol}.yaml`),
     materialContext: join(root, 'material-context', `${protocol}.yaml`),
     text: join(root, 'text', `${protocol}.txt`),
@@ -67,6 +83,37 @@ function diagnosticCodes(compiler: Record<string, unknown>): string[] {
     .filter((code): code is string => typeof code === 'string');
 }
 
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function eventThresholdForVariant(variant: FoundryVariant): number {
+  return variant === 'manual_tubes' ? 3 : 5;
+}
+
+function fixSpecDefaults(paths: Record<string, string | undefined>, evidence: Record<string, unknown>) {
+  return {
+    implementationBudget: {
+      targetChangedFiles: 1,
+      maxChangedFiles: 3,
+      targetChangedLines: 80,
+      maxChangedLines: 220,
+      requireFocusedFixture: true,
+    },
+    coderModelProfile: {
+      model: 'Qwen/Qwen3.6-35B-A3B-FP8',
+      guidance: 'This coder is capable but works best with narrow ownership, concrete evidence, and one observable behavior change per patch.',
+    },
+    doNotTouch: [
+      'Do not rewrite the pipeline end to end.',
+      'Do not create real material-instance, aliquot, or physical inventory records from vendor PDF evidence.',
+      'Do not add JSON records data; computable-lab data records must be YAML.',
+    ],
+    sourceArtifacts: paths,
+    failureEvidence: evidence,
+  };
+}
+
 function deterministicVerdict(input: {
   options: FoundryArchitectOptions;
   compiler: Record<string, unknown>;
@@ -77,33 +124,82 @@ function deterministicVerdict(input: {
   const codes = diagnosticCodes(input.compiler);
   const outcome = typeof input.compiler['outcome'] === 'string' ? input.compiler['outcome'] : 'unknown';
   const eventCount = typeof input.compiler['eventCount'] === 'number' ? input.compiler['eventCount'] : 0;
-  const blockers = Array.isArray(input.executionScale['blockers']) ? input.executionScale['blockers'] : [];
+  const paths = artifactPaths(input.options);
+  const blockers = asArray(input.executionScale['blockers']);
+  const gaps = asArray(input.compiler['gaps']);
+  const extractorRepairExhaustedCount = typeof input.compiler['extractorRepairExhaustedCount'] === 'number'
+    ? input.compiler['extractorRepairExhaustedCount']
+    : 0;
   const browserStatus = typeof input.browserReport['status'] === 'string' ? input.browserReport['status'] : 'blocked';
+  const minUsefulEvents = eventThresholdForVariant(input.options.variant);
   const failureClasses = new Set<string>();
-  if (codes.includes('extractor_repair_exhausted') || codes.includes('extractor_empty_candidates') || codes.includes('extractor_empty_choices')) {
+  if (extractorRepairExhaustedCount > 0 || codes.includes('extractor_repair_exhausted') || codes.includes('extractor_empty_candidates') || codes.includes('extractor_empty_choices')) {
     failureClasses.add('extractor_yield');
   }
   if (eventCount === 0) failureClasses.add('event_graph_empty');
+  if (eventCount > 0 && eventCount < minUsefulEvents) failureClasses.add('event_graph_tiny');
   if (blockers.length > 0 || outcome !== 'complete') failureClasses.add('compiler_gap');
   if (browserStatus !== 'pass') failureClasses.add('browser_review');
   if (input.options.variant === 'robot_deck' && blockers.length > 0) failureClasses.add('robot_deck_binding');
+  const evidence = {
+    outcome,
+    eventCount,
+    minUsefulEvents,
+    diagnosticCodes: codes,
+    extractorRepairExhaustedCount,
+    blockerCount: blockers.length,
+    gapCount: gaps.length,
+    browserStatus,
+  };
 
   const recommendedFixes: ArchitectVerdict['recommendedFixes'] = [];
   if (failureClasses.has('extractor_yield')) {
     recommendedFixes.push({
-      id: 'fix-extractor-yield',
-      class: 'extractor_prompt_or_parser',
-      title: 'Improve protocol extraction candidate yield',
+      id: 'fix-extractor-contract',
+      class: 'extractor_prompt_contract',
+      title: 'Make the tagger return structured candidates for protocol steps',
       rationale: 'Non-empty protocol text produced zero extractor candidates; downstream compiler is operating without structured extraction evidence.',
       ownedFiles: [
         'server/src/extract/OpenAICompatibleExtractor.ts',
         'server/src/extract/runChunkedExtractionService.ts',
-        'schema/registry/prompt-templates/chatbot-compile.tagger.system.md',
+        'schema/registry/prompt-templates/chatbot-compile.tagger.system.yaml',
       ],
       acceptance: [
-        'Extraction diagnostics include raw response and parsed failure class.',
-        'A focused fixture for this protocol yields at least one candidate or a classified non-protocol reason.',
+        'For this protocol artifact, at least one chunk yields a candidate event, candidate labware, mint material, directive, unresolved reference, or downstream compile job.',
+        'Zero-candidate chunks preserve raw model response and a classified reason in diagnostics.',
+        'A focused extractor fixture or Foundry regression covers the failing protocol text slice.',
       ],
+      contextHints: [
+        'Start with the tagger prompt/response contract before changing broad compiler behavior.',
+        'Prefer accepting existing useful shapes such as priorLabwareRefs, directives, mintMaterials, and downstreamCompileJobs instead of only candidateEvents.',
+      ],
+      ...fixSpecDefaults(paths, evidence),
+    });
+  }
+  if (failureClasses.has('event_graph_tiny') || failureClasses.has('event_graph_empty')) {
+    recommendedFixes.push({
+      id: failureClasses.has('event_graph_empty') ? 'fix-event-graph-empty' : 'fix-event-graph-coverage',
+      class: 'compiler_event_coverage',
+      title: failureClasses.has('event_graph_empty')
+        ? 'Lower recognized protocol actions into event graph primitives'
+        : 'Expand tiny event graphs into the core protocol action sequence',
+      rationale: `Compiler produced ${eventCount} events for a ${input.options.variant} protocol; this is below the Foundry usefulness threshold of ${minUsefulEvents}.`,
+      ownedFiles: [
+        'server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts',
+        'server/src/compiler/biology',
+        'schema/registry/compile-pipelines/chatbot-compile.yaml',
+      ],
+      acceptance: [
+        `This protocol variant compiles to at least ${minUsefulEvents} event graph events or emits a specific missing-verb diagnostic naming the unsupported action.`,
+        'The patch handles one concrete action family only, such as add reagent, incubate, centrifuge, wash, transfer, readout, or serial dilution.',
+        'A focused regression demonstrates the new event(s) from the supplied protocol artifact.',
+      ],
+      contextHints: [
+        'Do not try to solve every biology verb in one patch.',
+        'Use diagnostics and gaps to pick the single most common missing action in this protocol.',
+        'Keep provenance/material-instance boundaries intact when adding event lowering.',
+      ],
+      ...fixSpecDefaults(paths, evidence),
     });
   }
   if (failureClasses.has('browser_review')) {
@@ -121,6 +217,11 @@ function deterministicVerdict(input: {
         'Browser review report status is pass.',
         'Screenshot shows expected labware and event sequence.',
       ],
+      contextHints: [
+        'Prefer adding or mapping one missing labware icon/geometry at a time.',
+        'Tube protocols should render in generic 24x1.5ml, 15ml, or 50ml rack geometry when possible.',
+      ],
+      ...fixSpecDefaults(paths, evidence),
     });
   }
   if (failureClasses.has('robot_deck_binding')) {
@@ -138,6 +239,11 @@ function deterministicVerdict(input: {
         'Robot-deck verdict distinguishes true missing user input from missing platform data.',
         'ASSIST PLUS defaults are applied only when valid for the protocol.',
       ],
+      contextHints: [
+        'Patch one platform binding gap at a time.',
+        'Prefer YAML platform/tool defaults when the behavior can be data.',
+      ],
+      ...fixSpecDefaults(paths, evidence),
     });
   }
 
@@ -190,7 +296,12 @@ async function llmArchitectNotes(options: FoundryArchitectOptions, context: unkn
     messages: [
       {
         role: 'system',
-        content: 'You are the Protocol Foundry architect. Summarize actionable compiler improvements in concise prose. Do not emit chain-of-thought.',
+        content: [
+          'You are the Protocol Foundry architect. Summarize actionable compiler improvements in concise prose.',
+          'These notes will feed a Qwen/Qwen3.6-35B-A3B-FP8 coder. It is strong, but specs must be granular, context-rich, and limited to one observable behavior change.',
+          'Prefer patch guidance that names source artifacts, exact failure evidence, owned files, a focused fixture, and a small acceptance test.',
+          'Do not emit chain-of-thought.',
+        ].join('\n'),
       },
       {
         role: 'user',
@@ -253,6 +364,12 @@ async function writePatchSpecs(artifactRoot: string, verdict: ArchitectVerdict):
       rationale: fix.rationale,
       ownedFiles: fix.ownedFiles,
       acceptance: fix.acceptance,
+      ...(fix.implementationBudget ? { implementationBudget: fix.implementationBudget } : {}),
+      ...(fix.coderModelProfile ? { coderModelProfile: fix.coderModelProfile } : {}),
+      ...(fix.contextHints ? { contextHints: fix.contextHints } : {}),
+      ...(fix.doNotTouch ? { doNotTouch: fix.doNotTouch } : {}),
+      ...(fix.sourceArtifacts ? { sourceArtifacts: fix.sourceArtifacts } : {}),
+      ...(fix.failureEvidence ? { failureEvidence: fix.failureEvidence } : {}),
       sourceVerdict: join(artifactRoot, 'architect', verdict.protocolId, verdict.variant, 'verdict.yaml'),
     });
     specPaths.push(path);

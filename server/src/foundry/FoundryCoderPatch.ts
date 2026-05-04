@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createInferenceClient } from '../ai/InferenceClient.js';
@@ -11,6 +11,8 @@ import type { FoundryVariant } from './ProtocolFoundryCompileRunner.js';
 const execFileAsync = promisify(execFile);
 const MAX_CONTEXT_CHARS = 60_000;
 const MAX_FILE_CHARS = 16_000;
+const MAX_ARTIFACT_CONTEXT_CHARS = 50_000;
+const MAX_ARTIFACT_FILE_CHARS = 12_000;
 
 type CoderPatchStatus = 'applied' | 'blocked' | 'failed' | 'skipped' | 'needs-human';
 
@@ -129,6 +131,34 @@ async function collectOwnedContext(repoRoot: string, specs: PatchSpec[]): Promis
     if (chunks.join('\n\n').length > MAX_CONTEXT_CHARS) break;
   }
   return chunks.join('\n\n').slice(0, MAX_CONTEXT_CHARS);
+}
+
+async function collectSpecArtifactContext(artifactRoot: string, specs: PatchSpec[]): Promise<string> {
+  const artifactRootResolved = resolve(artifactRoot);
+  const candidates: string[] = [];
+  for (const spec of specs) {
+    const sourceArtifacts = asRecord(spec.raw['sourceArtifacts']);
+    for (const value of Object.values(sourceArtifacts)) {
+      if (typeof value === 'string' && value.trim()) candidates.push(value.trim());
+    }
+    const sourceVerdict = spec.raw['sourceVerdict'];
+    if (typeof sourceVerdict === 'string' && sourceVerdict.trim()) candidates.push(sourceVerdict.trim());
+  }
+
+  const chunks: string[] = [];
+  for (const candidate of Array.from(new Set(candidates))) {
+    const fullPath = resolve(candidate);
+    if (!fullPath.startsWith(`${artifactRootResolved}/`) && fullPath !== artifactRootResolved) continue;
+    if (!existsSync(fullPath)) continue;
+    const stats = await stat(fullPath);
+    if (!stats.isFile()) continue;
+    if (!/\.(ya?ml|txt|md)$/i.test(fullPath)) continue;
+    const rel = relative(artifactRootResolved, fullPath);
+    const content = (await readFile(fullPath, 'utf-8')).slice(0, MAX_ARTIFACT_FILE_CHARS);
+    chunks.push(`--- artifact:${rel}\n${content}`);
+    if (chunks.join('\n\n').length > MAX_ARTIFACT_CONTEXT_CHARS) break;
+  }
+  return chunks.join('\n\n').slice(0, MAX_ARTIFACT_CONTEXT_CHARS);
 }
 
 function extractJsonObject(text: string): Record<string, unknown> | undefined {
@@ -371,14 +401,17 @@ async function requestCoderPatch(input: {
         role: 'system',
         content: [
           'You are the Protocol Foundry coder. Produce one minimal git unified diff for exactly one compiler/precompiler fix class.',
+          'The target worker model is Qwen/Qwen3.6-35B-A3B-FP8: it is strong, but this harness succeeds when patches are small, concrete, and context-local.',
           'Return only JSON with keys: summary, unifiedDiff.',
           'Do not modify files outside ownedFiles. Do not include markdown.',
           'Use exact file paths and context from the supplied repository context.',
+          'Use source artifact context as failure evidence; do not patch generated artifacts directly.',
           'Avoid whitespace-only edits. Do not invent unrelated refactors.',
           'If an ownedFiles entry is a directory, patch a specific existing file under it; never patch the directory path itself.',
           'Data files under records/ must be YAML. Do not create JSON files for records data.',
           'The unifiedDiff must be directly accepted by git apply.',
-          'Prefer small, testable changes over broad refactors.',
+          'Prefer one changed file and one focused fixture when possible. Never attempt to fix multiple biology verb families at once.',
+          'If the spec is broad, choose the smallest acceptance criterion that advances the exact failure evidence.',
         ].join('\n'),
       },
       {
@@ -595,7 +628,17 @@ export async function runFoundryCoderPatch(input: {
   }
 
   const ownedFiles = Array.from(new Set(specs.flatMap((spec) => spec.ownedFiles)));
-  const context = await collectOwnedContext(input.repoRoot, specs);
+  const [ownedContext, artifactContext] = await Promise.all([
+    collectOwnedContext(input.repoRoot, specs),
+    collectSpecArtifactContext(input.artifactRoot, specs),
+  ]);
+  const context = [
+    'Repository context:',
+    ownedContext || '(no owned-file context found)',
+    '',
+    'Source artifact context:',
+    artifactContext || '(no source artifact context found)',
+  ].join('\n').slice(0, MAX_CONTEXT_CHARS + MAX_ARTIFACT_CONTEXT_CHARS);
   const client = createInferenceClient({
     baseUrl,
     model,
