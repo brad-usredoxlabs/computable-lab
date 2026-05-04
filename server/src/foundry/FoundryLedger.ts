@@ -286,8 +286,6 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
       } else if (item.artifacts.compiler && !existsSync(assumptionsPath)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
-      } else if (item.artifacts.eventGraph && (!item.artifacts.browserReport || browserStale)) {
-        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'browser_review' });
       } else if (item.artifacts.compiler && item.artifacts.eventGraph && (!item.artifacts.architectVerdict || architectStale)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'architect_review' });
       } else if (item.artifacts.architectVerdict && (!existsSync(adoptionPath) || adoptionStale)) {
@@ -296,6 +294,8 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'coder_patch' });
       } else if (existsSync(adoptionPath) && (!hasPatchSpecs || coderPatchTerminal) && (!existsSync(rerunPath) || rerunStale)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
+      } else if (item.artifacts.eventGraph && (!item.artifacts.browserReport || browserStale)) {
+        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'browser_review' });
       }
     }
   }

@@ -26,7 +26,7 @@ describe('FoundryLedger', () => {
     ]);
   });
 
-  it('detects compiled variants and advances to browser review', async () => {
+  it('detects compiled variants and advances to architect review before browser review', async () => {
     const root = await makeArtifactRoot();
     await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
       kind: 'protocol-foundry-compiler-result',
@@ -51,7 +51,7 @@ describe('FoundryLedger', () => {
     expect(readyTasks(ledger)).toContainEqual({
       protocolId: 'demo-protocol',
       variant: 'manual_tubes',
-      stage: 'browser_review',
+      stage: 'architect_review',
     });
   });
 
@@ -85,7 +85,7 @@ describe('FoundryLedger', () => {
     expect(ledger.protocol_status['demo-protocol']?.variants.manual_tubes.status).toBe('gap');
   });
 
-  it('schedules browser review again when a rerun updates the event graph', async () => {
+  it('schedules architect review again when a rerun updates the event graph', async () => {
     const root = await makeArtifactRoot();
     await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
       kind: 'protocol-foundry-compiler-result',
@@ -108,6 +108,18 @@ describe('FoundryLedger', () => {
       kind: 'protocol-browser-review-report',
       status: 'pass',
     });
+    await writeYamlFile(join(root, 'architect', 'demo-protocol', 'manual_tubes', 'verdict.yaml'), {
+      kind: 'protocol-foundry-architect-verdict',
+      accepted: false,
+    });
+    await writeYamlFile(join(root, 'adoption', 'demo-protocol', 'manual_tubes', 'adoption.yaml'), {
+      kind: 'protocol-foundry-patch-adoption',
+      status: 'skipped',
+    });
+    await writeYamlFile(join(root, 'rerun', 'demo-protocol', 'manual_tubes', 'rerun.yaml'), {
+      kind: 'protocol-foundry-rerun-report',
+      outcome: 'gap',
+    });
     await new Promise((resolve) => setTimeout(resolve, 20));
     await writeYamlFile(join(root, 'event-graphs', 'demo-protocol', 'manual_tubes.yaml'), {
       kind: 'protocol-event-graph-proposal',
@@ -119,7 +131,7 @@ describe('FoundryLedger', () => {
     expect(readyTasks(ledger)).toContainEqual({
       protocolId: 'demo-protocol',
       variant: 'manual_tubes',
-      stage: 'browser_review',
+      stage: 'architect_review',
     });
   });
 
