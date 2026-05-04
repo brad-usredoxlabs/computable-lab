@@ -1,0 +1,13 @@
+kind: labware-definition
+labwareId: lbw-def-2-well-reservoir
+labwareType: reservoir_2
+name: 2-well reservoir
+dimensions:
+  x: 127.76
+  y: 85.48
+  z: 25.4
+wellCount: 2
+wellGeometry:
+  shape: circle
+  diameter: 10.0
+  depth: 15.0
