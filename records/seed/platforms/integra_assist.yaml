@@ -1,6 +1,12 @@
 platformId: integra_assist
 displayName: INTEGRA Assist Plus
 deckProfile:
+  labwareDefinitions:
+    - id: lbw-def-2-well-reservoir
+      kind: 2_well_reservoir
+      slots:
+        - A1
+        - A2
   slots:
     - A1
     - A2
@@ -9,6 +15,8 @@ deckProfile:
     - C1
     - C2
   defaultLabware:
+    A1: lbw-def-2-well-reservoir
+    A2: lbw-def-2-well-reservoir
     A1: 96_well_plate
     A2: 8_well_reservoir
 pipetteDefaults:
