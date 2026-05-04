@@ -51,6 +51,68 @@ describe('FoundryLedger', () => {
     });
   });
 
+  it('does not mark rerun gaps as completed', async () => {
+    const root = await makeArtifactRoot();
+    await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-compiler-result',
+      outcome: 'gap',
+      eventCount: 0,
+      diagnostics: [{ code: 'extractor_repair_exhausted' }],
+    });
+    await writeYamlFile(join(root, 'event-graphs', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-event-graph-proposal',
+    });
+    await writeYamlFile(join(root, 'execution-scale', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'execution-scale-plan',
+      blockers: [],
+    });
+    await writeYamlFile(join(root, 'rerun', 'demo-protocol', 'manual_tubes', 'rerun.yaml'), {
+      kind: 'protocol-foundry-rerun-report',
+      outcome: 'gap',
+      eventCount: 0,
+      blockerCount: 0,
+    });
+
+    const ledger = await scanFoundryLedger(root);
+
+    expect(ledger.protocol_status['demo-protocol']?.variants.manual_tubes.status).toBe('gap');
+  });
+
+  it('schedules browser review again when a rerun updates the event graph', async () => {
+    const root = await makeArtifactRoot();
+    await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-compiler-result',
+      outcome: 'gap',
+      eventCount: 1,
+      diagnostics: [],
+    });
+    await writeYamlFile(join(root, 'event-graphs', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-event-graph-proposal',
+      revision: 1,
+    });
+    await writeYamlFile(join(root, 'execution-scale', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'execution-scale-plan',
+      blockers: [],
+    });
+    await writeYamlFile(join(root, 'browser-review', 'demo-protocol', 'manual_tubes', 'report.yaml'), {
+      kind: 'protocol-browser-review-report',
+      status: 'pass',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await writeYamlFile(join(root, 'event-graphs', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-event-graph-proposal',
+      revision: 2,
+    });
+
+    const ledger = await scanFoundryLedger(root);
+
+    expect(readyTasks(ledger)).toContainEqual({
+      protocolId: 'demo-protocol',
+      variant: 'manual_tubes',
+      stage: 'browser_review',
+    });
+  });
+
   it('marks task status and persists stage artifacts in memory', async () => {
     const root = await makeArtifactRoot();
     const ledger = await scanFoundryLedger(root);

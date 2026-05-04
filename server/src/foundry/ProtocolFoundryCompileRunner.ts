@@ -296,6 +296,18 @@ function blockedBy(result: RunChatbotCompileResult): number {
   return result.terminalArtifacts.executionScalePlan?.blockers.length ?? 0;
 }
 
+function extractorRepairExhaustedCount(result: RunChatbotCompileResult): number {
+  return result.diagnostics.filter((diagnostic) => asRecord(diagnostic)['code'] === 'extractor_repair_exhausted').length;
+}
+
+function foundryOutcome(result: RunChatbotCompileResult, events: PlateEventPrimitive[]): 'complete' | 'gap' | 'error' {
+  if (result.outcome === 'error') return 'error';
+  if (events.length === 0) return 'gap';
+  if (blockedBy(result) > 0) return 'gap';
+  if (extractorRepairExhaustedCount(result) > 0) return 'gap';
+  return result.outcome === 'complete' ? 'complete' : 'gap';
+}
+
 async function writeYaml(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, YAML.stringify(value), 'utf-8');
@@ -336,8 +348,9 @@ async function runVariant(input: {
   const plan = result.terminalArtifacts.executionScalePlan;
   const labwares = buildLabwares(result.events, plan, input.variant);
   const events = normalizeEvents(result.events, labwares);
+  const outcome = foundryOutcome(result, events);
   const graphId = `EVG-FOUNDRY-${slugify(input.protocolId)}-${input.variant}`;
-  const status = result.outcome === 'error' || blockedBy(result) > 0 ? 'blocked' : 'ready';
+  const status = outcome === 'complete' ? 'ready' : 'blocked';
   const targetLevel = plan?.targetLevel ?? input.variant;
   const graphArtifact = join(input.options.artifactRoot, 'event-graphs', input.protocolId, `${input.variant}.yaml`);
   const scaleArtifact = join(input.options.artifactRoot, 'execution-scale', input.protocolId, `${input.variant}.yaml`);
@@ -394,16 +407,18 @@ async function runVariant(input: {
     kind: 'protocol-foundry-compiler-result',
     protocolId: input.protocolId,
     variant: input.variant,
-    outcome: result.outcome,
+    outcome,
+    rawOutcome: result.outcome,
     eventCount: events.length,
     diagnostics: result.diagnostics,
+    extractorRepairExhaustedCount: extractorRepairExhaustedCount(result),
     gaps: result.terminalArtifacts.gaps,
     terminalArtifactsRef: graphArtifact,
   });
 
   return {
     variant: input.variant,
-    outcome: result.outcome,
+    outcome,
     eventGraphArtifact: graphArtifact,
     executionScaleArtifact: scaleArtifact,
     compilerArtifact,

@@ -51,6 +51,7 @@ export interface FoundryVariantLedger {
     blockerCount?: number;
     diagnosticCount?: number;
     extractorRepairExhaustedCount?: number;
+    foundryComplete?: number;
     qualityScore?: number;
     coverageEstimate?: number;
   };

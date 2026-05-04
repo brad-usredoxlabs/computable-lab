@@ -34,6 +34,8 @@ function usage(): string {
   '  --apply-patches              Let the coder endpoint apply guarded source patches from architect specs.',
   '  --auto-commit-patches        Commit verified coder patches.',
   '  --auto-push-patches          Push verified coder-patch commits after committing.',
+  '  --no-pdf-intake              Do not convert new artifacts/pdfs/*.pdf files into segment inputs.',
+  '  --pdf-intake-batch-size <n>  Number of new PDFs to ingest per watch cycle. Default 4.',
   '  --no-review-index            Do not generate artifacts/review-index/index.html.',
     '  --dry-run                    Use null LLM/dry browser behavior where supported.',
   ].join('\n');
@@ -60,6 +62,7 @@ async function main(): Promise<number> {
   const appBase = readArg('--app-base', args);
   const maxCycles = readArg('--max-cycles', args);
   const pollMs = readArg('--poll-ms', args);
+  const pdfIntakeBatchSize = readArg('--pdf-intake-batch-size', args);
 
   const summary = await runFoundryLoop({
     artifactRoot,
@@ -82,6 +85,8 @@ async function main(): Promise<number> {
     autoCommitPatches: hasFlag('--auto-commit-patches', args) || hasFlag('--auto-push-patches', args),
     autoPushPatches: hasFlag('--auto-push-patches', args),
     writeReviewIndex: !hasFlag('--no-review-index', args),
+    intakePdfs: !hasFlag('--no-pdf-intake', args),
+    ...(pdfIntakeBatchSize ? { pdfIntakeBatchSize: Number(pdfIntakeBatchSize) } : {}),
   });
   console.log(JSON.stringify(summary, null, 2));
   return 0;

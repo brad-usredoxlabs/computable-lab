@@ -276,7 +276,7 @@ async function runVerification(repoRoot: string, touchedFiles: string[]): Promis
   return results;
 }
 
-async function existingAppliedFixClasses(artifactRoot: string): Promise<Set<string>> {
+async function existingAppliedSpecIds(artifactRoot: string): Promise<Set<string>> {
   const root = join(artifactRoot, 'code-patches');
   const applied = new Set<string>();
   async function visit(dir: string): Promise<void> {
@@ -288,7 +288,7 @@ async function existingAppliedFixClasses(artifactRoot: string): Promise<Set<stri
       if (entry.isFile() && entry.name === 'result.yaml') {
         const result = asRecord(await readYamlFile(fullPath));
         if (result['status'] !== 'applied') continue;
-        for (const fixClass of asStringArray(result['fixClasses'])) applied.add(fixClass);
+        for (const specId of asStringArray(result['sourceSpecIds'])) applied.add(specId);
       }
     }
   }
@@ -547,8 +547,8 @@ export async function runFoundryCoderPatch(input: {
   const specPaths = await listPatchSpecs(input.artifactRoot, input.protocolId, input.variant);
   const allSpecs = await Promise.all(specPaths.map(readPatchSpec));
   const allFixClasses = Array.from(new Set(allSpecs.map((spec) => spec.fixClass)));
-  const alreadyApplied = await existingAppliedFixClasses(input.artifactRoot);
-  const pendingSpecs = allSpecs.filter((spec) => !alreadyApplied.has(spec.fixClass));
+  const alreadyAppliedSpecIds = await existingAppliedSpecIds(input.artifactRoot);
+  const pendingSpecs = allSpecs.filter((spec) => !alreadyAppliedSpecIds.has(spec.id));
 
   if (allSpecs.length === 0) {
     await writeYamlFile(resultPath, {
@@ -648,6 +648,7 @@ export async function runFoundryCoderPatch(input: {
         generated_at: nowIso(),
         status: 'applied',
         fixClasses,
+        sourceSpecIds: specs.map((spec) => spec.id),
         tournamentDir,
         winningAttempt: attempt.attempt,
         attempts,
@@ -699,6 +700,7 @@ export async function runFoundryCoderPatch(input: {
         generated_at: nowIso(),
         status: 'applied',
         fixClasses,
+        sourceSpecIds: specs.map((spec) => spec.id),
         tournamentDir,
         winningAttempt: repair.attempt,
         attempts,

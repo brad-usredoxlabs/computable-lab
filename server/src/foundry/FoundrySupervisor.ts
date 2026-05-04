@@ -12,6 +12,7 @@ import { runFoundryBrowserReview } from './FoundryBrowserReview.js';
 import { runFoundryArchitectReview } from './FoundryArchitect.js';
 import { runPatchAdoption } from './FoundryImprovement.js';
 import { runFoundryCoderPatch } from './FoundryCoderPatch.js';
+import { ingestFoundryPdfs } from './FoundryPdfIntake.js';
 import { writeFoundryReviewIndex } from './FoundryReviewIndex.js';
 import {
   fetchModelEndpointUsage,
@@ -42,6 +43,8 @@ export interface FoundryLoopOptions {
   autoCommitPatches?: boolean;
   autoPushPatches?: boolean;
   writeReviewIndex?: boolean;
+  intakePdfs?: boolean;
+  pdfIntakeBatchSize?: number;
 }
 
 export interface FoundryLoopSummary {
@@ -379,6 +382,12 @@ export async function runFoundryLoop(options: FoundryLoopOptions): Promise<Found
   try {
     while (cycles < maxCycles) {
       cycles += 1;
+      if (options.intakePdfs !== false) {
+        await ingestFoundryPdfs({
+          artifactRoot: options.artifactRoot,
+          ...(options.pdfIntakeBatchSize !== undefined ? { batchSize: options.pdfIntakeBatchSize } : {}),
+        });
+      }
       ledger = await scanFoundryLedger(options.artifactRoot);
       const tasks = selectRunnableTasks(readyTasks(ledger));
       const runnableTasks = tasks.filter((task) => {
