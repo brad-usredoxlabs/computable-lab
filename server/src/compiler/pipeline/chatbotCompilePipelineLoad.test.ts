@@ -31,9 +31,9 @@ describe('chatbot-compile.yaml', () => {
       expect(spec.entrypoint).toBe('chatbot-compile');
     });
 
-    it('has exactly 21 passes', () => {
+    it('has exactly 22 passes', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
-      expect(spec.passes.length).toBe(21);
+      expect(spec.passes.length).toBe(22);
     });
   });
 
@@ -54,6 +54,7 @@ describe('chatbot-compile.yaml', () => {
         'resolve_prior_labware_references',
         'expand_protocol',
         'expand_patterns',
+        'fallback_side_evidence_events',
         'resolve_roles',
         'compute_volumes',
         'compute_resources',
@@ -82,6 +83,7 @@ describe('chatbot-compile.yaml', () => {
         'disambiguate',
         'disambiguate',
         'disambiguate',
+        'expand',
         'expand',
         'expand',
         'expand',
@@ -163,11 +165,19 @@ describe('chatbot-compile.yaml', () => {
       expect(expandProtocol?.depends_on).toEqual(['resolve_references']);
     });
 
-    it('resolve_roles depends on expand_protocol', () => {
+    it('resolve_roles depends on fallback_side_evidence_events', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const resolveRoles = spec.passes.find((p) => p.id === 'resolve_roles');
       expect(resolveRoles).toBeDefined();
-      expect(resolveRoles?.depends_on).toEqual(['expand_protocol']);
+      expect(resolveRoles?.depends_on).toEqual(['fallback_side_evidence_events']);
+    });
+
+    it('fallback_side_evidence_events depends on expand_protocol', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const fallback = spec.passes.find((p) => p.id === 'fallback_side_evidence_events');
+      expect(fallback).toBeDefined();
+      expect(fallback?.depends_on).toEqual(['expand_protocol']);
+      expect(fallback?.family).toBe('expand');
     });
 
     it('lab_state depends on resolve_roles', () => {
@@ -240,6 +250,13 @@ describe('chatbot-compile.yaml', () => {
       const expandPatterns = spec.passes.find((p) => p.id === 'expand_patterns');
       expect(expandPatterns).toBeDefined();
       expect(expandPatterns?.when).toBe('outputs.ai_precompile.patternEvents');
+    });
+
+    it('fallback_side_evidence_events has no when clause', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const fallback = spec.passes.find((p) => p.id === 'fallback_side_evidence_events');
+      expect(fallback).toBeDefined();
+      expect(fallback?.when).toBeUndefined();
     });
 
     it('emit_downstream_queue has when clause for downstreamCompileJobs', () => {

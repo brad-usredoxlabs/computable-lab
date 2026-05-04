@@ -19,6 +19,7 @@ import {
   createResolvePriorLabwareReferencesPass,
   createExpandProtocolPass,
   createExpandPatternsPass,
+  createFallbackSideEvidenceEventsPass,
   createResolveRolesPass,
   createLabStatePass,
   createComputeVolumesPass,
@@ -213,6 +214,7 @@ export async function runChatbotCompile(
   registry.register(createExpandPatternsPass({
     stampPatternRegistry: getStampPatternRegistry(),
   }));
+  registry.register(createFallbackSideEvidenceEventsPass());
   registry.register(createResolveRolesPass());
   registry.register(createLabStatePass());
   registry.register(createComputeVolumesPass());

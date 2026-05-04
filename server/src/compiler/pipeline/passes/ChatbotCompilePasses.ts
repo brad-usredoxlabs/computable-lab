@@ -402,6 +402,52 @@ function createAiPrecompileOutputSchema() {
   });
 }
 
+function salvageAiPrecompileOutput(input: {
+  parsed: Partial<AiPrecompileOutput>;
+  deterministicHasCoreArtifacts: boolean;
+  detCandidateEvents: Array<{ verb: string; [key: string]: unknown }>;
+  detCandidateLabwares: CandidateLabware[];
+  detUnresolvedRefs: Array<{ kind: string; label: string; reason: string }>;
+}): AiPrecompileOutput {
+  const output: AiPrecompileOutput = {
+    candidateEvents: input.deterministicHasCoreArtifacts
+      ? []
+      : (Array.isArray(input.parsed.candidateEvents) ? input.parsed.candidateEvents : []),
+    candidateLabwares: input.deterministicHasCoreArtifacts
+      ? []
+      : (Array.isArray(input.parsed.candidateLabwares) ? input.parsed.candidateLabwares : []),
+    unresolvedRefs: Array.isArray(input.parsed.unresolvedRefs) ? input.parsed.unresolvedRefs : [],
+    ...(typeof input.parsed.clarification === 'string' && input.parsed.clarification.trim()
+      ? { clarification: input.parsed.clarification }
+      : {}),
+    ...(Array.isArray(input.parsed.mintMaterials) ? { mintMaterials: input.parsed.mintMaterials } : {}),
+    ...(Array.isArray(input.parsed.priorLabwareRefs) ? { priorLabwareRefs: input.parsed.priorLabwareRefs } : {}),
+    ...(Array.isArray(input.parsed.directives) ? { directives: input.parsed.directives } : {}),
+    ...(Array.isArray(input.parsed.downstreamCompileJobs) ? { downstreamCompileJobs: input.parsed.downstreamCompileJobs } : {}),
+    ...(Array.isArray(input.parsed.patternEvents) ? { patternEvents: input.parsed.patternEvents } : {}),
+  };
+
+  if (input.detCandidateEvents.length > 0) {
+    output.candidateEvents = [...input.detCandidateEvents, ...output.candidateEvents];
+  }
+  if (input.detCandidateLabwares.length > 0) {
+    const existingHints = new Set(output.candidateLabwares.map((labware) => labware.hint));
+    for (const labware of input.detCandidateLabwares) {
+      if (!existingHints.has(labware.hint)) output.candidateLabwares.push(labware);
+    }
+  }
+  if (input.detUnresolvedRefs.length > 0) {
+    const existingRefs = new Set(
+      output.unresolvedRefs.map((ref) => `${ref.kind}\u0000${ref.label}\u0000${ref.reason}`),
+    );
+    for (const ref of input.detUnresolvedRefs) {
+      const key = `${ref.kind}\u0000${ref.label}\u0000${ref.reason}`;
+      if (!existingRefs.has(key)) output.unresolvedRefs.push(ref);
+    }
+  }
+  return output;
+}
+
 /**
  * Dependencies for creating the ai_precompile pass.
  */
@@ -517,13 +563,16 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
         // spec-019: log raw LLM response on shape mismatch for debugging
         const truncated = raw.slice(0, 4000);
         console.warn(`[ai_precompile_shape_mismatch] ${truncated}`);
+        const salvagedOutput = salvageAiPrecompileOutput({
+          parsed,
+          deterministicHasCoreArtifacts,
+          detCandidateEvents,
+          detCandidateLabwares,
+          detUnresolvedRefs,
+        });
         return {
           ok: true,
-          output: {
-            candidateEvents: detCandidateEvents,
-            candidateLabwares: detCandidateLabwares,
-            unresolvedRefs: detUnresolvedRefs,
-          } satisfies AiPrecompileOutput,
+          output: salvagedOutput,
           diagnostics: [{
             severity: 'warning',
             code: 'ai_precompile_shape_mismatch',
@@ -1625,6 +1674,10 @@ export interface ExpandPatternsOutput {
   events: PlateEventPrimitive[];
 }
 
+export interface FallbackSideEvidenceEventsOutput {
+  events: PlateEventPrimitive[];
+}
+
 /**
  * Dependencies for creating the expand_patterns pass.
  */
@@ -1689,6 +1742,131 @@ export function createExpandPatternsPass(
   };
 }
 
+function safeEvidenceId(value: string, fallback: string): string {
+  const safe = value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48);
+  return safe || fallback;
+}
+
+function sideEvidenceLabwareHints(ai: Partial<AiPrecompileOutput>): string[] {
+  const hints = [
+    ...(ai.priorLabwareRefs ?? []).map((ref) => ref.hint || ref.kindHint),
+    ...(ai.candidateLabwares ?? []).map((labware) => labware.hint),
+    ...(ai.mintMaterials ?? []).map((directive) => directive.placementLabwareHint),
+  ].filter((hint): hint is string => typeof hint === 'string' && hint.trim().length > 0);
+  const seen = new Set<string>();
+  const unique: string[] = [];
+  for (const hint of hints) {
+    const key = hint.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(hint);
+  }
+  return unique.slice(0, 4);
+}
+
+function upstreamEventCount(state: PipelineState): number {
+  return [
+    'mint_materials',
+    'expand_patterns',
+    'expand_biology_verbs',
+    'expand_protocol',
+  ].reduce((count, passId) => {
+    const output = state.outputs.get(passId) as { events?: PlateEventPrimitive[] } | undefined;
+    return count + (output?.events?.length ?? 0);
+  }, 0);
+}
+
+/**
+ * Creates conservative event graph anchors from useful side evidence when the
+ * extractor/precompiler found labware/readout context but no candidate events.
+ *
+ * This is intentionally a fallback: if any normal event-producing pass has
+ * emitted events, it returns an empty list. It should make zero-event protocols
+ * renderable and reviewable without pretending that the protocol is complete.
+ */
+export function createFallbackSideEvidenceEventsPass(): Pass {
+  return {
+    id: 'fallback_side_evidence_events',
+    family: 'expand' as const,
+    run({ pass_id, state }: PassRunArgs): PassResult {
+      const ai = (state.outputs.get('ai_precompile') ?? {}) as Partial<AiPrecompileOutput>;
+      if ((ai.candidateEvents?.length ?? 0) > 0 || upstreamEventCount(state) > 0) {
+        return { ok: true, output: { events: [] } satisfies FallbackSideEvidenceEventsOutput };
+      }
+
+      const events: PlateEventPrimitive[] = [];
+      const labwareHints = sideEvidenceLabwareHints(ai);
+      const labwareInstanceIds: string[] = [];
+      for (const [index, hint] of labwareHints.entries()) {
+        const instanceId = `fallback-${safeEvidenceId(hint, `labware-${index + 1}`)}`;
+        labwareInstanceIds.push(instanceId);
+        events.push({
+          eventId: `evt-fallback-container-${index + 1}`,
+          event_type: 'create_container',
+          details: {
+            instanceId,
+            labwareType: hint,
+            slot: 'auto',
+            source: 'ai_precompile_side_evidence',
+          },
+        });
+      }
+
+      for (const [index, job] of (ai.downstreamCompileJobs ?? []).slice(0, 4).entries()) {
+        const details: Record<string, unknown> = {
+          readout: job.kind,
+          description: job.description ?? job.kind,
+          source: 'ai_precompile_downstream_compile_job',
+          ...(job.params ? { params: job.params } : {}),
+        };
+        const labwareId = labwareInstanceIds[0];
+        if (labwareId) details.labwareInstanceId = labwareId;
+        events.push({
+          eventId: `evt-fallback-read-${safeEvidenceId(job.kind, `job-${index + 1}`)}-${index + 1}`,
+          event_type: 'read',
+          details,
+          ...(labwareId ? { labwareId } : {}),
+        });
+      }
+
+      if (events.length === 0 && (ai.directives?.length ?? 0) > 0) {
+        events.push({
+          eventId: 'evt-fallback-directive-context',
+          event_type: 'create_container',
+          details: {
+            instanceId: 'fallback-protocol-context',
+            labwareType: 'protocol-context',
+            slot: 'auto',
+            source: 'ai_precompile_directive_context',
+            directives: ai.directives,
+          },
+        });
+      }
+
+      const diagnostics: PassDiagnostic[] = events.length > 0
+        ? [{
+            severity: 'warning',
+            code: 'fallback_side_evidence_events',
+            message: `Emitted ${events.length} conservative fallback event(s) from ai_precompile side evidence because no candidate events were available.`,
+            pass_id,
+            details: {
+              priorLabwareRefs: ai.priorLabwareRefs?.length ?? 0,
+              candidateLabwares: ai.candidateLabwares?.length ?? 0,
+              mintMaterials: ai.mintMaterials?.length ?? 0,
+              downstreamCompileJobs: ai.downstreamCompileJobs?.length ?? 0,
+              directives: ai.directives?.length ?? 0,
+            },
+          }]
+        : [];
+      return { ok: true, output: { events } satisfies FallbackSideEvidenceEventsOutput, diagnostics };
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // resolve_roles pass
 // ---------------------------------------------------------------------------
@@ -1714,12 +1892,15 @@ function collectEventsToResolve(state: PipelineState): PlateEventPrimitive[] {
     { events?: PlateEventPrimitive[] } | undefined;
   const protocolOutput = state.outputs.get('expand_protocol') as
     { events?: PlateEventPrimitive[] } | undefined;
+  const fallbackOutput = state.outputs.get('fallback_side_evidence_events') as
+    { events?: PlateEventPrimitive[] } | undefined;
 
   return [
     ...(mintOutput?.events ?? []),
     ...(patternsOutput?.events ?? []),
     ...(verbsOutput?.events ?? []),
     ...(protocolOutput?.events ?? []),
+    ...(fallbackOutput?.events ?? []),
   ];
 }
 

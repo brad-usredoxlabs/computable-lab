@@ -191,6 +191,59 @@ describe('ai_precompile shape mismatch logging', () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
+  it('salvages valid side-evidence arrays when nullable fields cause shape mismatch', async () => {
+    const malformedButUseful = {
+      candidateEvents: [],
+      candidateLabwares: [],
+      unresolvedRefs: [],
+      clarification: null,
+      priorLabwareRefs: [
+        { hint: 'generic_96_well_plate', kindHint: 'generic 96-well plate' },
+      ],
+      directives: [
+        { kind: 'mount_pipette', params: { mountSide: 'right', pipetteType: '8_channel_multichannel' } },
+      ],
+      downstreamCompileJobs: [
+        { kind: 'fluorescence_microscopy_imaging', description: 'Image stained coverslips' },
+      ],
+    };
+
+    const mockLlmClient = {
+      complete: vi.fn().mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(malformedButUseful) } }],
+      }),
+    } as unknown as LlmClient;
+
+    const pass = createAiPrecompilePass({ llmClient: mockLlmClient });
+
+    const mockState: PipelineState = {
+      input: { prompt: 'image stained coverslips', attachments: [] },
+      context: {},
+      meta: {},
+      outputs: new Map(),
+      diagnostics: [],
+    };
+
+    const result = await pass.run({
+      pass_id: 'ai_precompile',
+      state: mockState,
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as AiPrecompileOutput;
+    expect(output.candidateEvents).toEqual([]);
+    expect(output.candidateLabwares).toEqual([]);
+    expect(output.clarification).toBeUndefined();
+    expect(output.priorLabwareRefs).toHaveLength(1);
+    expect(output.directives).toHaveLength(1);
+    expect(output.downstreamCompileJobs).toHaveLength(1);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect((result.diagnostics ?? [])[0]).toMatchObject({
+      code: 'ai_precompile_shape_mismatch',
+      severity: 'warning',
+    });
+  });
+
   it('does NOT log on invalid JSON (parse error) — only on zod shape mismatch', async () => {
     // This is a JSON parse error, not a zod shape mismatch
     // The parse error path returns early before zod validation

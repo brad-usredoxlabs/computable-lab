@@ -21,6 +21,7 @@ import {
   type MintMaterialsPassOutput,
   createApplyDirectivesPass,
   type ApplyDirectivesPassOutput,
+  createFallbackSideEvidenceEventsPass,
   createLabStatePass,
 } from './ChatbotCompilePasses.js';
 import type { PipelineState } from '../types.js';
@@ -682,6 +683,110 @@ describe('createExpandBiologyVerbsPass', () => {
     const pass = createExpandBiologyVerbsPass();
     expect(pass.id).toBe('expand_biology_verbs');
     expect(pass.family).toBe('expand');
+  });
+});
+
+describe('createFallbackSideEvidenceEventsPass', () => {
+  it('emits conservative container and read events from side evidence when candidateEvents are empty', () => {
+    const pass = createFallbackSideEvidenceEventsPass();
+
+    const mockState: PipelineState = {
+      input: {},
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['ai_precompile', {
+          candidateEvents: [],
+          priorLabwareRefs: [
+            { hint: 'generic_96_well_plate', kindHint: '96-well plate', contentHint: 'ELISA samples' },
+          ],
+          downstreamCompileJobs: [
+            { kind: 'readout', description: 'ELISA absorbance reading', params: { wavelength_nm: 450 } },
+          ],
+        }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'fallback_side_evidence_events',
+      state: mockState,
+    }) as { ok: boolean; output: { events: Array<{ event_type: string; details: Record<string, unknown> }> }; diagnostics: unknown[] };
+
+    expect(result.ok).toBe(true);
+    expect(result.output.events).toHaveLength(2);
+    expect(result.output.events[0]).toMatchObject({
+      event_type: 'create_container',
+      details: {
+        labwareType: 'generic_96_well_plate',
+        source: 'ai_precompile_side_evidence',
+      },
+    });
+    expect(result.output.events[1]).toMatchObject({
+      event_type: 'read',
+      details: {
+        readout: 'readout',
+        description: 'ELISA absorbance reading',
+      },
+    });
+    expect(result.diagnostics[0]).toMatchObject({
+      code: 'fallback_side_evidence_events',
+      severity: 'warning',
+    });
+  });
+
+  it('does not emit fallback events when normal event-producing passes already emitted events', () => {
+    const pass = createFallbackSideEvidenceEventsPass();
+
+    const mockState: PipelineState = {
+      input: {},
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['ai_precompile', {
+          candidateEvents: [],
+          priorLabwareRefs: [{ hint: 'generic_96_well_plate' }],
+        }],
+        ['mint_materials', {
+          events: [{ eventId: 'evt-existing', event_type: 'add_material', details: {} }],
+        }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'fallback_side_evidence_events',
+      state: mockState,
+    }) as { ok: boolean; output: { events: unknown[] }; diagnostics?: unknown[] };
+
+    expect(result.ok).toBe(true);
+    expect(result.output.events).toHaveLength(0);
+    expect(result.diagnostics?.length ?? 0).toBe(0);
+  });
+
+  it('does not emit fallback events when candidateEvents are present', () => {
+    const pass = createFallbackSideEvidenceEventsPass();
+
+    const mockState: PipelineState = {
+      input: {},
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['ai_precompile', {
+          candidateEvents: [{ verb: 'seed', material: 'cells' }],
+          priorLabwareRefs: [{ hint: 'generic_96_well_plate' }],
+        }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'fallback_side_evidence_events',
+      state: mockState,
+    }) as { ok: boolean; output: { events: unknown[] } };
+
+    expect(result.ok).toBe(true);
+    expect(result.output.events).toHaveLength(0);
   });
 });
 
