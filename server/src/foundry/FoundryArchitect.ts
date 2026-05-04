@@ -114,12 +114,64 @@ function fixSpecDefaults(paths: Record<string, string | undefined>, evidence: Re
   };
 }
 
+function stringifyEvidence(value: unknown): string {
+  return JSON.stringify(value, (_key, entry) => {
+    if (typeof entry === 'string' && entry.length > 500) return `${entry.slice(0, 500)}...`;
+    return entry;
+  }).toLowerCase();
+}
+
+function hasMaterialCatalogOrSpecGap(input: {
+  compiler: Record<string, unknown>;
+  executionScale: Record<string, unknown>;
+  materialContext: Record<string, unknown>;
+}): boolean {
+  const evidence = stringifyEvidence({
+    diagnostics: input.compiler['diagnostics'],
+    gaps: input.compiler['gaps'],
+    terminalArtifacts: input.compiler['terminalArtifacts'],
+    blockers: input.executionScale['blockers'],
+    materialContext: input.materialContext,
+  });
+  const materialSignals = [
+    'could not materialize',
+    'mint_materials',
+    'kind material not handled',
+    'unresolvedrefs',
+    'unresolved refs',
+    'material_ref',
+    'material-spec',
+    'formulation',
+    'vendor-product',
+    'catalog',
+    'certificate of analysis',
+    ' coa',
+    'reagent',
+    'buffer',
+    'antibody',
+    'enzyme',
+    'media',
+    'serum',
+    'lysis',
+  ];
+  const physicalInventoryOnlySignals = [
+    'material-instance',
+    'aliquot',
+    'lot number',
+    'physical inventory',
+    'source tube',
+  ];
+  return materialSignals.some((signal) => evidence.includes(signal))
+    && !physicalInventoryOnlySignals.every((signal) => evidence.includes(signal));
+}
+
 function deterministicVerdict(input: {
   options: FoundryArchitectOptions;
   compiler: Record<string, unknown>;
   eventGraph: Record<string, unknown>;
   executionScale: Record<string, unknown>;
   browserReport: Record<string, unknown>;
+  materialContext: Record<string, unknown>;
 }): ArchitectVerdict {
   const codes = diagnosticCodes(input.compiler);
   const outcome = typeof input.compiler['outcome'] === 'string' ? input.compiler['outcome'] : 'unknown';
@@ -139,6 +191,13 @@ function deterministicVerdict(input: {
   if (eventCount === 0) failureClasses.add('event_graph_empty');
   if (eventCount > 0 && eventCount < minUsefulEvents) failureClasses.add('event_graph_tiny');
   if (blockers.length > 0 || outcome !== 'complete') failureClasses.add('compiler_gap');
+  if (hasMaterialCatalogOrSpecGap({
+    compiler: input.compiler,
+    executionScale: input.executionScale,
+    materialContext: input.materialContext,
+  })) {
+    failureClasses.add('material_catalog_or_spec_gap');
+  }
   if (browserStatus !== 'pass') failureClasses.add('browser_review');
   if (input.options.variant === 'robot_deck' && blockers.length > 0) failureClasses.add('robot_deck_binding');
   const evidence = {
@@ -198,6 +257,38 @@ function deterministicVerdict(input: {
         'Do not try to solve every biology verb in one patch.',
         'Use diagnostics and gaps to pick the single most common missing action in this protocol.',
         'Keep provenance/material-instance boundaries intact when adding event lowering.',
+      ],
+      ...fixSpecDefaults(paths, evidence),
+    });
+  }
+  if (failureClasses.has('material_catalog_or_spec_gap')) {
+    recommendedFixes.push({
+      id: 'fix-material-catalog-spec-gap',
+      class: 'material_catalog_or_spec_gap',
+      title: 'Resolve protocol materials as catalog/spec data without inventing inventory',
+      rationale: 'Compiler evidence points at unresolved reagents, buffers, formulations, vendor products, or material tags that should be represented as reusable YAML data or material resolver behavior.',
+      ownedFiles: [
+        'records/material',
+        'records/seed/materials',
+        'records/seed/labware-definition',
+        'schema/lab/material.schema.yaml',
+        'schema/lab/material-spec.schema.yaml',
+        'schema/lab/vendor-product.schema.yaml',
+        'server/src/compiler/material',
+        'server/src/materials',
+      ],
+      acceptance: [
+        'Adds or improves only material, material-spec, vendor-product, or labware-definition/catalog data needed by the source protocol.',
+        'Does not create material-instance, aliquot, material-lot, physical inventory, source-tube, or run-specific records from vendor PDF evidence.',
+        'Uses ontology refs only when a CURIE/IRI is present in local records or source artifacts; otherwise marks the material as vendor/provenance-backed with an ontology backfill need.',
+        'Compiler diagnostics for the protocol show fewer unresolved material/catalog/spec failures, or the patch adds a focused regression documenting the remaining blocker.',
+      ],
+      contextHints: [
+        'Everything that can be data should be YAML data in records/ or schema registry files.',
+        'A vendor PDF can justify material, material-spec/formulation, vendor-product, and labware definition/product facts.',
+        'A vendor PDF cannot prove that this lab has a tube, aliquot, lot, prepared source, or sample provenance.',
+        'The unattended coder does not have a live OLS/ChEBI lookup tool in this patch lane; do not invent ontology identifiers.',
+        'Prefer one reagent family or one vendor kit component family per patch.',
       ],
       ...fixSpecDefaults(paths, evidence),
     });
@@ -330,6 +421,7 @@ export async function runFoundryArchitectReview(options: FoundryArchitectOptions
     eventGraph: asRecord(eventGraphRaw),
     executionScale: asRecord(executionScaleRaw),
     browserReport: asRecord(browserReportRaw),
+    materialContext: asRecord(materialContextRaw),
   });
 
   const notes = await llmArchitectNotes(options, {

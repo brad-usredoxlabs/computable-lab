@@ -409,6 +409,8 @@ async function requestCoderPatch(input: {
           'Avoid whitespace-only edits. Do not invent unrelated refactors.',
           'If an ownedFiles entry is a directory, patch a specific existing file under it; never patch the directory path itself.',
           'Data files under records/ must be YAML. Do not create JSON files for records data.',
+          'Do not create material-instance, aliquot, material-lot, source-tube, or physical inventory records from vendor PDF evidence.',
+          'Do not invent ontology identifiers. Use ontology refs only when supplied by source artifacts or local records.',
           'The unifiedDiff must be directly accepted by git apply.',
           'Prefer one changed file and one focused fixture when possible. Never attempt to fix multiple biology verb families at once.',
           'If the spec is broad, choose the smallest acceptance criterion that advances the exact failure evidence.',
