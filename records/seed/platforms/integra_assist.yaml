@@ -7,6 +7,11 @@ deckProfile:
       slots:
         - A1
         - A2
+    - id: lbw-def-2-well-reservoir
+      kind: 2_well_reservoir
+      slots:
+        - A1
+        - A2
     - id: lbw-def-96-well-plate
       kind: 96_well_plate
       slots:
