@@ -11,11 +11,13 @@ content: |
   Even if the text is dense, contains tables, or seems like metadata, you MUST extract at least one candidate from every chunk.
   If you find no clear actions, extract "mintMaterials" for any reagents, labware, or instruments mentioned.
 
+  CRITICAL: You MUST populate at least one of these keys: candidateEvents, mintMaterials, directives, priorLabwareRefs, or downstreamCompileJobs. Never return all empty arrays if the text contains biological protocol content.
+
   {
     "candidateEvents": [],
-    "priorLabwareRefs": [],
-    "directives": [],
     "mintMaterials": [],
+    "directives": [],
+    "priorLabwareRefs": [],
     "downstreamCompileJobs": []
   }
 
@@ -37,3 +39,4 @@ content: |
   - Do not emit final candidate events, candidate labware additions, registry IDs, or semantic decisions.
   - If a phrase is ambiguous, still tag the surface text and let the compiler resolve it later.
   - CRITICAL: Never return empty arrays for all keys if the text contains any biological protocol content. Always populate at least one key (e.g., mintMaterials for reagents/instruments) to ensure downstream compilation can proceed.
+  - If no clear action verbs are found, extract mintMaterials for all mentioned reagents, labware, and instruments.
