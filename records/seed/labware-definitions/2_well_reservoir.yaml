@@ -18,10 +18,11 @@ wellGeometry:
     - assist_plus_default
     - generic_platform
     - lbw-def-2-well-reservoir-generic
+    - lbw-def-generic-2-well-reservoir
 
 ---
 kind: labware-definition
-labwareId: lbw-def-2-well-reservoir-generic
+labwareId: lbw-def-generic-2-well-reservoir
 labwareType: reservoir_2
 name: generic 2-well reservoir
 dimensions:
