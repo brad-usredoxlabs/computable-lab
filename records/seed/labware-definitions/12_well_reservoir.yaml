@@ -1,0 +1,22 @@
+kind: labware-definition
+labwareId: lbw-def-generic-12-well-reservoir
+labwareType: reservoir_12
+name: generic 12-well reservoir
+dimensions:
+  x: 127.76
+  y: 85.48
+  z: 25.4
+wellCount: 12
+wellGeometry:
+  shape: circle
+  diameter: 10.0
+  depth: 15.0
+  displayName: 12-well reservoir
+  category: reservoir
+  compatibleWith:
+    - generic_platform
+    - assist_plus_default
+    - integra_assist
+    - lbw-def-generic-12-well-reservoir
+    - generic_12_well_reservoir
+
