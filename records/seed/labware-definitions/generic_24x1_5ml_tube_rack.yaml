@@ -1,0 +1,23 @@
+kind: labware-definition
+labwareId: lbw-def-generic-24x1_5ml-tube-rack
+labwareType: tube_rack_24
+name: generic 24x1.5ml tube rack
+dimensions:
+  x: 127.76
+  y: 85.48
+  z: 50.0
+wellCount: 24
+wellGeometry:
+  shape: circle
+  diameter: 10.0
+  depth: 45.0
+  displayName: 1.5ml tube
+  category: tube
+  compatibleWith:
+    - generic_platform
+    - assist_plus_default
+    - integra_assist
+    - lbw-def-generic-24x1_5ml_tube_rack
+    - lbw-def-24x1_5ml_tube_rack
+
+---
