@@ -121,6 +121,119 @@ function stringifyEvidence(value: unknown): string {
   }).toLowerCase();
 }
 
+type EventCoverageFamily = 'centrifuge' | 'wash' | 'incubate' | 'transfer' | 'readout' | 'serial_dilution' | 'general';
+
+function eventCoverageFamily(input: {
+  compiler: Record<string, unknown>;
+  eventGraph: Record<string, unknown>;
+  executionScale: Record<string, unknown>;
+}): EventCoverageFamily {
+  const evidence = stringifyEvidence({
+    diagnostics: input.compiler['diagnostics'],
+    gaps: input.compiler['gaps'],
+    terminalArtifacts: input.compiler['terminalArtifacts'],
+    eventGraph: input.eventGraph,
+    blockers: input.executionScale['blockers'],
+  });
+  if (/\b(centrifuge|spin|pellet|supernatant|rpm|rcf|g-force)\b/.test(evidence)) return 'centrifuge';
+  if (/\b(wash|rinse|aspirat|remove supernatant|decant)\b/.test(evidence)) return 'wash';
+  if (/\b(incubat|room temperature|37 ?c|heat block|thermomixer|overnight)\b/.test(evidence)) return 'incubate';
+  if (/\b(serial dilution|dilution series|standard curve|two[- ]fold|ten[- ]fold)\b/.test(evidence)) return 'serial_dilution';
+  if (/\b(absorbance|fluorescence|luminescence|readout|plate reader|spectro|450 ?nm|590 ?nm)\b/.test(evidence)) return 'readout';
+  if (/\b(add|transfer|pipet|dispense|aliquot|mix|resuspend)\b/.test(evidence)) return 'transfer';
+  return 'general';
+}
+
+function eventCoverageSpecDetails(input: {
+  family: EventCoverageFamily;
+  eventCount: number;
+  minUsefulEvents: number;
+  isEmpty: boolean;
+  variant: FoundryVariant;
+}) {
+  const commonAcceptance = [
+    `This protocol variant compiles to at least ${input.minUsefulEvents} event graph events or emits a specific missing-verb diagnostic naming the unsupported ${input.family.replace('_', ' ')} action.`,
+    'The patch handles this one concrete action family only.',
+    'A focused regression demonstrates the new event(s) from the supplied protocol artifact.',
+  ];
+  const commonHints = [
+    'Do not try to solve every biology verb in one patch.',
+    'Use diagnostics and gaps to pick the single concrete action from this protocol.',
+    'Keep provenance/material-instance boundaries intact when adding event lowering.',
+  ];
+  const details = {
+    centrifuge: {
+      label: 'centrifuge/spin',
+      ownedFiles: [
+        'server/src/compiler/biology/verbs/centrifugeVerbs.ts',
+        'server/src/compiler/biology/BiologyVerbExpander.test.ts',
+      ],
+      hints: ['Prefer extending centrifuge/spin lowering instead of broad simple-verb dispatch.'],
+    },
+    wash: {
+      label: 'wash/aspirate',
+      ownedFiles: [
+        'server/src/compiler/biology/verbs/simpleVerbs.ts',
+        'server/src/compiler/biology/BiologyVerbExpander.test.ts',
+      ],
+      hints: ['Add one wash/aspirate/remove-supernatant mapping with explicit volume/container evidence.'],
+    },
+    incubate: {
+      label: 'incubation',
+      ownedFiles: [
+        'server/src/compiler/biology/verbs/simpleVerbs.ts',
+        'server/src/compiler/biology/BiologyVerbExpander.test.ts',
+      ],
+      hints: ['Map one incubation/time/temperature phrase into the existing event vocabulary.'],
+    },
+    transfer: {
+      label: 'transfer/add/mix',
+      ownedFiles: [
+        'server/src/compiler/biology/verbs/simpleVerbs.ts',
+        'server/src/compiler/biology/BiologyVerbExpander.test.ts',
+      ],
+      hints: ['Map one add, transfer, dispense, or mix phrase; do not rewrite the full extraction contract here.'],
+    },
+    readout: {
+      label: 'instrument readout',
+      ownedFiles: [
+        'server/src/compiler/biology/verbs/simpleVerbs.ts',
+        'server/src/compiler/biology/BiologyVerbExpander.test.ts',
+        'schema/registry/readout-definitions',
+      ],
+      hints: ['Represent one absorbance/fluorescence/plate-reader readout without inventing instrument inventory.'],
+    },
+    serial_dilution: {
+      label: 'serial dilution',
+      ownedFiles: [
+        'server/src/compiler/biology/verbs/simpleVerbs.ts',
+        'server/src/compiler/biology/BiologyVerbExpander.test.ts',
+      ],
+      hints: ['Represent one standard-curve or serial-dilution primitive; leave plate layout optimization to scaling passes.'],
+    },
+    general: {
+      label: 'protocol action',
+      ownedFiles: [
+        'server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts',
+        'server/src/compiler/biology',
+        'schema/registry/compile-pipelines/chatbot-compile.yaml',
+      ],
+      hints: ['Only use this general lane when diagnostics do not identify a more specific biology action family.'],
+    },
+  }[input.family];
+  return {
+    id: input.isEmpty ? `fix-event-graph-empty-${input.family}` : `fix-event-graph-coverage-${input.family}`,
+    class: `compiler_event_coverage_${input.family}`,
+    title: input.isEmpty
+      ? `Lower ${details.label} protocol actions into event graph primitives`
+      : `Expand tiny event graphs with ${details.label} actions`,
+    rationale: `Compiler produced ${input.eventCount} events for a ${input.variant} protocol; this is below the Foundry usefulness threshold of ${input.minUsefulEvents}. The strongest evidence points at ${details.label} coverage.`,
+    ownedFiles: details.ownedFiles,
+    acceptance: commonAcceptance,
+    contextHints: [...commonHints, ...details.hints],
+  };
+}
+
 function hasMaterialCatalogOrSpecGap(input: {
   compiler: Record<string, unknown>;
   executionScale: Record<string, unknown>;
@@ -236,28 +349,25 @@ function deterministicVerdict(input: {
     });
   }
   if (failureClasses.has('event_graph_tiny') || failureClasses.has('event_graph_empty')) {
+    const coverageDetails = eventCoverageSpecDetails({
+      family: eventCoverageFamily({
+        compiler: input.compiler,
+        eventGraph: input.eventGraph,
+        executionScale: input.executionScale,
+      }),
+      eventCount,
+      minUsefulEvents,
+      isEmpty: failureClasses.has('event_graph_empty'),
+      variant: input.options.variant,
+    });
     recommendedFixes.push({
-      id: failureClasses.has('event_graph_empty') ? 'fix-event-graph-empty' : 'fix-event-graph-coverage',
-      class: 'compiler_event_coverage',
-      title: failureClasses.has('event_graph_empty')
-        ? 'Lower recognized protocol actions into event graph primitives'
-        : 'Expand tiny event graphs into the core protocol action sequence',
-      rationale: `Compiler produced ${eventCount} events for a ${input.options.variant} protocol; this is below the Foundry usefulness threshold of ${minUsefulEvents}.`,
-      ownedFiles: [
-        'server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts',
-        'server/src/compiler/biology',
-        'schema/registry/compile-pipelines/chatbot-compile.yaml',
-      ],
-      acceptance: [
-        `This protocol variant compiles to at least ${minUsefulEvents} event graph events or emits a specific missing-verb diagnostic naming the unsupported action.`,
-        'The patch handles one concrete action family only, such as add reagent, incubate, centrifuge, wash, transfer, readout, or serial dilution.',
-        'A focused regression demonstrates the new event(s) from the supplied protocol artifact.',
-      ],
-      contextHints: [
-        'Do not try to solve every biology verb in one patch.',
-        'Use diagnostics and gaps to pick the single most common missing action in this protocol.',
-        'Keep provenance/material-instance boundaries intact when adding event lowering.',
-      ],
+      id: coverageDetails.id,
+      class: coverageDetails.class,
+      title: coverageDetails.title,
+      rationale: coverageDetails.rationale,
+      ownedFiles: coverageDetails.ownedFiles,
+      acceptance: coverageDetails.acceptance,
+      contextHints: coverageDetails.contextHints,
       ...fixSpecDefaults(paths, evidence),
     });
   }
@@ -302,6 +412,7 @@ function deterministicVerdict(input: {
       ownedFiles: [
         'client/src',
         'records/seed/labware-definitions',
+        'records/seed/labware-definition',
         'server/src/foundry',
       ],
       acceptance: [

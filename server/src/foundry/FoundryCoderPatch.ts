@@ -243,6 +243,31 @@ async function runGit(repoRoot: string, args: string[]): Promise<{ stdout: strin
   return { stdout: result.stdout, stderr: result.stderr };
 }
 
+async function staleOwnedFileContext(repoRoot: string, specs: PatchSpec[]): Promise<{
+  stale: boolean;
+  newestSpecMtime: number;
+  changedFiles: string[];
+}> {
+  const ownedFiles = Array.from(new Set(specs.flatMap((spec) => spec.ownedFiles))).filter(Boolean);
+  if (ownedFiles.length === 0) return { stale: false, newestSpecMtime: 0, changedFiles: [] };
+  const specStats = await Promise.all(specs.map((spec) => stat(spec.path)));
+  const newestSpecMtime = Math.max(...specStats.map((item) => item.mtimeMs));
+  const tracked = (await runGit(repoRoot, ['ls-files', '--', ...ownedFiles])).stdout
+    .split('\n')
+    .map((file) => file.trim())
+    .filter(Boolean);
+  const changedFiles: string[] = [];
+  for (const file of tracked) {
+    const stats = await stat(join(repoRoot, file)).catch(() => undefined);
+    if (stats && stats.mtimeMs > newestSpecMtime + 1000) changedFiles.push(file);
+  }
+  return {
+    stale: changedFiles.length > 0,
+    newestSpecMtime,
+    changedFiles: changedFiles.sort().slice(0, 30),
+  };
+}
+
 function gitApplyArgs(diffPath: string, mode: 'check' | 'apply' | 'reverse'): string[] {
   if (mode === 'check') return ['apply', '--check', '--recount', diffPath];
   if (mode === 'reverse') return ['apply', '-R', '--recount', diffPath];
@@ -414,6 +439,8 @@ async function requestCoderPatch(input: {
           'The unifiedDiff must be directly accepted by git apply.',
           'Prefer one changed file and one focused fixture when possible. Never attempt to fix multiple biology verb families at once.',
           'If the spec is broad, choose the smallest acceptance criterion that advances the exact failure evidence.',
+          'Before editing a YAML record, inspect the supplied context and update the existing record in place if it already matches the requested labware/material family.',
+          'If the requested capability already exists in context, add a narrow diagnostic, alias, mapping, or regression instead of recreating a large existing file.',
         ].join('\n'),
       },
       {
@@ -615,6 +642,27 @@ export async function runFoundryCoderPatch(input: {
   const { fixClass, specs } = selectFixClass(pendingSpecs);
   const fixClasses = [fixClass];
   const tournamentDir = join(resultRoot, sanitizeSegment(fixClass));
+  const staleContext = await staleOwnedFileContext(input.repoRoot, specs);
+  if (staleContext.stale) {
+    await writeYamlFile(resultPath, {
+      kind: 'protocol-foundry-coder-patch-result',
+      protocolId: input.protocolId,
+      variant: input.variant,
+      generated_at: nowIso(),
+      status: 'skipped',
+      fixClasses,
+      sourceSpecIds: specs.map((spec) => spec.id),
+      staleChangedFiles: staleContext.changedFiles,
+      newestSpecMtime: staleContext.newestSpecMtime,
+      message: 'Patch specs are stale because tracked owned files changed after spec generation; rerun the variant and architect review to refresh context before coding.',
+    });
+    return {
+      status: 'skipped',
+      resultPath,
+      message: 'stale patch specs; refresh architect context',
+      touchedFiles: [],
+    };
+  }
 
   if (!baseUrl || !model || input.dryRun) {
     await writeYamlFile(resultPath, {
