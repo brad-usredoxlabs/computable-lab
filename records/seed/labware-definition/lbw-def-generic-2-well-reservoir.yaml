@@ -1,7 +1,6 @@
 $schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
 kind: labware-definition
 recordId: lbw-def-generic-2-well-reservoir
-type: labware_definition
 id: generic/2_well_reservoir@v1
 display_name: Generic 2-Well Reservoir (2-well)
 source: generic
