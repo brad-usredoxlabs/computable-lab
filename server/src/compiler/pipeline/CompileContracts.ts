@@ -219,6 +219,11 @@ export interface ExecutionScaleBlocker {
   code: string;
   message: string;
   requiredInput?: string;
+  /**
+   * Distinguishes whether the blocker is due to missing platform data
+   * (e.g., undefined labware definition) vs missing user input.
+   */
+  source: 'platform_data' | 'user_input';
 }
 
 /**
@@ -239,6 +244,11 @@ export interface ExecutionScalePlan {
   pipettingStrategy?: ExecutionScalePipettingStrategy;
   deckBinding?: ExecutionScaleDeckBinding;
   assumptions: string[];
+  /**
+   * Defaults applied by the platform binding layer (e.g., ASSIST PLUS defaults).
+   * Only populated when valid for the protocol.
+   */
+  platformDefaults?: Record<string, unknown>;
   blockers: ExecutionScaleBlocker[];
 }
 
