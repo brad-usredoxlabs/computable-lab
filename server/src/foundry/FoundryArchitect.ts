@@ -78,7 +78,7 @@ function deterministicVerdict(input: {
   const outcome = typeof input.compiler['outcome'] === 'string' ? input.compiler['outcome'] : 'unknown';
   const eventCount = typeof input.compiler['eventCount'] === 'number' ? input.compiler['eventCount'] : 0;
   const blockers = Array.isArray(input.executionScale['blockers']) ? input.executionScale['blockers'] : [];
-  const browserStatus = typeof input.browserReport['status'] === 'string' ? input.browserReport['status'] : 'missing';
+  const browserStatus = typeof input.browserReport['status'] === 'string' ? input.browserReport['status'] : 'blocked';
   const failureClasses = new Set<string>();
   if (codes.includes('extractor_repair_exhausted') || codes.includes('extractor_empty_candidates') || codes.includes('extractor_empty_choices')) {
     failureClasses.add('extractor_yield');
