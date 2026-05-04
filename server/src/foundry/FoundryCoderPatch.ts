@@ -193,6 +193,10 @@ function pathIsAllowed(path: string, ownedFiles: string[]): boolean {
   return ownedFiles.some((owned) => path === owned || path.startsWith(`${owned.replace(/\/+$/, '')}/`));
 }
 
+function dataFormatViolations(touchedFiles: string[]): string[] {
+  return touchedFiles.filter((file) => file.startsWith('records/') && !/\.(ya?ml)$/i.test(file));
+}
+
 async function findDirectoryTouchedFiles(repoRoot: string, touchedFiles: string[]): Promise<string[]> {
   const directories: string[] = [];
   for (const file of touchedFiles) {
@@ -372,6 +376,7 @@ async function requestCoderPatch(input: {
           'Use exact file paths and context from the supplied repository context.',
           'Avoid whitespace-only edits. Do not invent unrelated refactors.',
           'If an ownedFiles entry is a directory, patch a specific existing file under it; never patch the directory path itself.',
+          'Data files under records/ must be YAML. Do not create JSON files for records data.',
           'The unifiedDiff must be directly accepted by git apply.',
           'Prefer small, testable changes over broad refactors.',
         ].join('\n'),
@@ -440,7 +445,8 @@ async function evaluateCandidate(input: {
   const touchedFiles = parseTouchedFiles(input.response.diff);
   const disallowed = touchedFiles.filter((file) => !pathIsAllowed(file, input.ownedFiles));
   const directories = await findDirectoryTouchedFiles(input.repoRoot, touchedFiles);
-  if (touchedFiles.length === 0 || disallowed.length > 0 || directories.length > 0) {
+  const dataFormatErrors = dataFormatViolations(touchedFiles);
+  if (touchedFiles.length === 0 || disallowed.length > 0 || directories.length > 0 || dataFormatErrors.length > 0) {
     const result: AttemptResult = {
       attempt: input.response.attempt,
       strategy: input.response.strategy,
@@ -448,7 +454,9 @@ async function evaluateCandidate(input: {
       phase: 'path-guard',
       message: directories.length > 0
         ? `Coder patch attempted to patch directory paths instead of files: ${directories.join(', ')}`
-        : `Coder patch touched files outside architect-owned paths: ${disallowed.join(', ')}`,
+        : dataFormatErrors.length > 0
+          ? `Coder patch attempted to write non-YAML records data: ${dataFormatErrors.join(', ')}`
+          : `Coder patch touched files outside architect-owned paths: ${disallowed.join(', ')}`,
       diffPath,
       touchedFiles,
       rawResponse,

@@ -1,0 +1,17 @@
+platformId: integra_assist
+displayName: INTEGRA Assist Plus
+deckProfile:
+  slots:
+    - A1
+    - A2
+    - B1
+    - B2
+    - C1
+    - C2
+  defaultLabware:
+    A1: 96_well_plate
+    A2: 8_well_reservoir
+pipetteDefaults:
+  mount: left
+  type: single
+  model: assist_plus_default
