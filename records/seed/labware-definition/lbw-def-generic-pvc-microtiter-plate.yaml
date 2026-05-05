@@ -1,0 +1,25 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-pvc-microtiter-plate
+type: labware_definition
+id: generic/pvc_microtiter_plate@v1
+display_name: Generic PVC Microtiter Plate
+source: generic
+specificity: generic
+legacy_labware_types:
+  - plate_pvc
+  - microtiter_plate
+topology:
+  addressing: grid
+  rows: 8
+  columns: 12
+  well_pitch_mm: 9.0
+  orientation_default: landscape
+  orientation_allowed:
+    - landscape
+    - portrait
+capacity:
+  max_well_volume_uL: 350
+  min_working_volume_uL: 20
+render_hints:
+  profile: plate
