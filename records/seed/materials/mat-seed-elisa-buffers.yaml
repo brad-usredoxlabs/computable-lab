@@ -1,0 +1,207 @@
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-blocking-buffer
+recordId: mat-seed-blocking-buffer
+name: Blocking Buffer (seed)
+domain: chemical
+definition: Buffer solution used to block non-specific binding sites in ELISA assays.
+tags:
+  - buffer
+  - elisa
+  - seed
+
+---
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-capture-antibody
+recordId: mat-seed-capture-antibody
+name: Capture Antibody (seed)
+domain: reagent
+definition: Antibody immobilized on the solid phase to capture the target antigen in sandwich ELISA.
+tags:
+  - antibody
+  - elisa
+  - seed
+
+---
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-detection-antibody
+recordId: mat-seed-detection-antibody
+name: Detection Antibody (seed)
+domain: reagent
+definition: Antibody used to detect the captured antigen in ELISA assays.
+tags:
+  - antibody
+  - elisa
+  - seed
+
+---
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-conjugate-secondary-antibody
+recordId: mat-seed-conjugate-secondary-antibody
+name: Conjugate Secondary Antibody (seed)
+domain: reagent
+definition: Secondary antibody conjugated to an enzyme or fluorophore for detection in ELISA.
+tags:
+  - antibody
+  - conjugate
+  - elisa
+  - seed
+
+---
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-tmb-solution
+recordId: mat-seed-tmb-solution
+name: TMB Solution (seed)
+domain: reagent
+definition: 3,3',5,5'-Tetramethylbenzidine substrate solution used as chromogen in ELISA.
+tags:
+  - substrate
+  - elisa
+  - seed
+
+---
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-stopping-solution
+recordId: mat-seed-stopping-solution
+name: Stopping Solution (seed)
+domain: chemical
+definition: Acidic solution used to terminate the enzymatic reaction in ELISA colorimetric assays.
+tags:
+  - reagent
+  - elisa
+  - seed
+
+---
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-carbamate-bicarbonate-buffer
+recordId: mat-seed-carbamate-bicarbonate-buffer
+name: Carbamate/Bicarbonate Buffer (seed)
+domain: chemical
+definition: Buffer solution used for coating plates or diluting antibodies in ELISA.
+tags:
+  - buffer
+  - elisa
+  - seed
+
+---
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-centrifuge-tube
+recordId: mat-seed-centrifuge-tube
+name: Centrifuge Tube (seed)
+domain: other
+definition: Tube designed for use in centrifugation, typically polypropylene.
+tags:
+  - labware
+  - tube
+  - seed
+
+---
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-pre-chilled-tube
+recordId: mat-seed-pre-chilled-tube
+name: Pre-chilled Tube (seed)
+domain: other
+definition: Tube pre-chilled for sample handling at low temperatures.
+tags:
+  - labware
+  - tube
+  - seed
+
+---
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-clean-tube
+recordId: mat-seed-clean-tube
+name: Clean Tube (seed)
+domain: other
+definition: Sterile or clean tube for sample storage or processing.
+tags:
+  - labware
+  - tube
+  - seed
+
+---
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-test-tube
+recordId: mat-seed-test-tube
+name: Test Tube (seed)
+domain: other
+definition: General-purpose glass or plastic tube for laboratory testing.
+tags:
+  - labware
+  - tube
+  - seed
+
+---
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-100mm-plate
+recordId: mat-seed-100mm-plate
+name: 100 mM Plate (seed)
+domain: other
+definition: Plate associated with 100 mM concentration context, likely a microtiter plate.
+tags:
+  - plate
+  - elisa
+  - seed
+
+---
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-run-bottom-microfuge-tubes
+recordId: mat-seed-run-bottom-microfuge-tubes
+name: Run Bottom Microfuge Tubes (seed)
+domain: other
+definition: Microfuge tubes with flat or rounded bottoms used for running assays.
+tags:
+  - labware
+  - tube
+  - seed
+
+---
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-anti-caution-containing-tube
+recordId: mat-seed-anti-caution-containing-tube
+name: Anti-Caution Containing Tube (seed)
+domain: other
+definition: Tube designated for handling with caution, possibly containing hazardous materials.
+tags:
+  - labware
+  - tube
+  - seed
+
+---
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-untreated-test-tube
+recordId: mat-seed-untreated-test-tube
+name: Untreated Test Tube (seed)
+domain: other
+definition: Test tube with no surface treatment, suitable for general use.
+tags:
+  - labware
+  - tube
+  - seed
+
+---
+$schema: https://computable-lab.com/schema/computable-lab/material.schema.yaml
+kind: material
+id: mat-seed-pvc-microtiter-plate
+recordId: mat-seed-pvc-microtiter-plate
+name: PVC Microtiter Plate (seed)
+domain: other
+definition: Microtiter plate made from polyvinyl chloride (PVC), used in ELISA.
+tags:
+  - plate
+  - elisa
+  - seed
