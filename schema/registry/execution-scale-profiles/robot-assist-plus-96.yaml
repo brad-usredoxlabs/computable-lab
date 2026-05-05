@@ -13,7 +13,8 @@ matching:
     - assist plus
     - robot
     - deck
-    - 2-well reservoir
+    - single reservoir
+    - reagent trough
     - 96-well
   platforms:
     - integra_assist
@@ -24,7 +25,8 @@ sampleLayout:
   defaultWellOrder: column_major
 reagentSource:
   sourceLabwareRole: reagent_reservoir
-  sourceLabwareKind: 2_well_reservoir
+  sourceLabwareKind: 1_well_reservoir
+  labwareDefinition: lbw-def-generic-reservoir-1-v1
   defaultSourceWells:
     - "1"
 pipetting:
@@ -40,14 +42,12 @@ deckBinding:
   platform: integra_assist
   requiredLabwareDefinitions:
     - lbw-def-generic-96-well-plate
+    - lbw-def-generic-reservoir-1-v1
   requiredTools:
     - pipette-capability/p20-multi-8
-defaultBlockers:
-  - code: missing_2_well_reservoir_definition
-    message: INTEGRA ASSIST PLUS scaling requested a 2-well reservoir, but no 2-well reservoir labware definition is registered.
-    requiredInput: labware-definition:2_well_reservoir
 assumptions:
   - ASSIST PLUS lowering uses the same plate and lane semantics as bench multichannel planning, then binds them to deck-compatible labware and tool profiles.
 notes: >
-  Robot profile is intentionally blocked until the 2-well reservoir definition
-  is added as YAML data.
+  Default ASSIST PLUS reagent source is a single shared reservoir/trough suitable
+  for loading 8-channel or 12-channel pipettes. Use a 2-well reservoir only when
+  a protocol or run context explicitly requests one.

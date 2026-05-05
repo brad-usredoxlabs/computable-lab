@@ -73,12 +73,12 @@ describe('derive_execution_scale_plan pass', () => {
     });
   });
 
-  it('blocks robot deck plans that need missing two-well reservoir definitions', async () => {
+  it('defaults ASSIST PLUS robot deck plans to a single shared reservoir', async () => {
     const pass = createDeriveExecutionScalePlanPass();
     const result = await pass.run({
       pass_id: pass.id,
       state: makeState(
-        'Run 96 samples on ASSIST PLUS with 2-well reagent reservoirs, a 96-well plate, and an 8-channel pipette.',
+        'Run 96 samples on ASSIST PLUS with a reagent reservoir, a 96-well plate, and an 8-channel pipette.',
         [],
       ),
     });
@@ -88,8 +88,13 @@ describe('derive_execution_scale_plan pass', () => {
     expect(output.executionScalePlan?.recordId).toBe('execution-scale-plan/robot_deck');
     expect(output.executionScalePlan?.profileRef).toBe('execution-scale-profile/robot-assist-plus-96');
     expect(output.executionScalePlan?.deckBinding?.platform).toBe('integra_assist');
-    expect(output.executionScalePlan?.status).toBe('blocked');
-    expect(output.executionScalePlan?.blockers).toContainEqual(
+    expect(output.executionScalePlan?.status).toBe('ready');
+    expect(output.executionScalePlan?.reagentLayout[0]).toMatchObject({
+      sourceLabwareKind: '1_well_reservoir',
+      sourceLabwareDefinition: 'lbw-def-generic-reservoir-1-v1',
+    });
+    expect(output.executionScalePlan?.deckBinding?.requiredLabwareDefinitions).toContain('lbw-def-generic-reservoir-1-v1');
+    expect(output.executionScalePlan?.blockers ?? []).not.toContainEqual(
       expect.objectContaining({ code: 'missing_2_well_reservoir_definition' }),
     );
   });

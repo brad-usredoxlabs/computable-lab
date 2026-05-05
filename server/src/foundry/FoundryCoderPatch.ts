@@ -381,7 +381,17 @@ function groupByFixClass(specs: PatchSpec[]): Map<string, PatchSpec[]> {
 
 function selectFixClass(specs: PatchSpec[]): { fixClass: string; specs: PatchSpec[] } {
   const grouped = groupByFixClass(specs);
-  const fixClass = Array.from(grouped.keys()).sort()[0] ?? 'unknown';
+  const priority = [
+    'extractor_prompt_contract',
+    'event_graph_coverage',
+    'event_graph_empty',
+    'execution_scaling',
+    'material_catalog_or_spec_gap',
+    'browser_or_labware_rendering',
+  ];
+  const fixClass = priority.find((candidate) => grouped.has(candidate))
+    ?? Array.from(grouped.keys()).sort()[0]
+    ?? 'unknown';
   return { fixClass, specs: grouped.get(fixClass) ?? [] };
 }
 

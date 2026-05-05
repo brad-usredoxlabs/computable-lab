@@ -434,8 +434,15 @@ function deterministicVerdict(input: {
       rationale: 'Robot-deck variants are repeatedly blocked by missing deck profile, pipette mount, or reservoir binding.',
       ownedFiles: [
         'server/src/compiler/pipeline/CompileContracts.ts',
-        'server/src/execution',
+        'server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts',
+        'server/src/compiler/pipeline/passes/ExecutionScalePlanPass.test.ts',
+        'server/src/registry/ExecutionScaleProfileRegistry.ts',
+        'server/src/registry/ExecutionScaleProfileRegistry.test.ts',
+        'schema/registry/execution-scale-profiles',
+        'schema/workflow/execution-scale-profile.schema.yaml',
+        'schema/workflow/execution-scale-plan.schema.yaml',
         'records/seed/platforms',
+        'records/seed/labware-definition',
       ],
       acceptance: [
         'Robot-deck verdict distinguishes true missing user input from missing platform data.',
@@ -443,7 +450,9 @@ function deterministicVerdict(input: {
       ],
       contextHints: [
         'Patch one platform binding gap at a time.',
-        'Prefer YAML platform/tool defaults when the behavior can be data.',
+        'Prefer YAML execution-scale profile, platform, tool, or labware-definition data when the behavior can be data.',
+        'If a repeated blocker is caused by a bad default in an execution-scale profile, patch the profile instead of adding workaround labware.',
+        'ASSIST PLUS reagent defaults should use a single shared reservoir/trough unless the protocol or run context explicitly requests a 2-well reservoir.',
       ],
       ...fixSpecDefaults(paths, evidence),
     });

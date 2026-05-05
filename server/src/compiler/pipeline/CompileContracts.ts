@@ -148,6 +148,7 @@ export type ExecutionScalePlanStatus = 'ready' | 'blocked';
 export type ExecutionScaleLabwareKind =
   | 'tube'
   | 'tube_rack'
+  | '1_well_reservoir'
   | '2_well_reservoir'
   | '8_well_reservoir'
   | '12_well_reservoir'
@@ -195,7 +196,7 @@ export interface ExecutionScaleSampleLayout {
 export interface ExecutionScaleReagentLayout {
   materialRole: string;
   sourceLabwareRole: string;
-  sourceLabwareKind: Extract<ExecutionScaleLabwareKind, 'tube' | '2_well_reservoir' | '8_well_reservoir' | '12_well_reservoir'>;
+  sourceLabwareKind: Extract<ExecutionScaleLabwareKind, 'tube' | '1_well_reservoir' | '2_well_reservoir' | '8_well_reservoir' | '12_well_reservoir'>;
   sourceLabwareDefinition?: string;
   sourceWells: string[];
   reason: string;

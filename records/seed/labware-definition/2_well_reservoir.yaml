@@ -1,76 +1,14 @@
-
----
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
 kind: labware-definition
-labwareId: lbw-def-2-well-reservoir
-labwareType: reservoir_2
-name: generic 2-well reservoir
-tags:
-  - execution-scale-compatible
-  - integra-assist-plus
-  - browser-review-compatible
-dimensions:
-  x: 127.76
-  y: 85.48
-  z: 25.4
-wellCount: 2
-wellGeometry:
-  shape: circle
-  diameter: 10.0
-  depth: 15.0
-  displayName: generic 2-well reservoir
-  category: reservoir
-  compatibleWith:
-    - generic_platform
-    - assist_plus_default
-    - integra_assist
-    - lbw-def-2-well-reservoir
-    - lbw-def-generic-2-well-reservoir
-
-
----
-kind: labware-definition
-labwareId: lbw-def-generic-2-well-reservoir
-labwareType: reservoir_2
-name: generic 2-well reservoir
-tags:
-  - execution-scale-compatible
-  - integra-assist-plus
-  - browser-review-compatible
-dimensions:
-  x: 127.76
-  y: 85.48
-  z: 25.4
-wellCount: 2
-wellGeometry:
-  shape: circle
-  diameter: 10.0
-  depth: 15.0
-  displayName: generic 2-well reservoir
-  category: reservoir
-  compatibleWith:
-    - generic_platform
-    - assist_plus_default
-    - integra_assist
-    - lbw-def-2-well-reservoir
-    - lbw-def-generic-2-well-reservoir
-
-
----
-kind: labware-definition
-labwareId: lbw-def-generic-2-well-reservoir
-labwareType: reservoir_2
-name: generic 2-well reservoir
-tags:
-  - execution-scale-compatible
-  - integra-assist-plus
-  - browser-review-compatible
-  - abcam-elisa-guide
-id: generic/2_well_reservoir@v1
-display_name: Generic 2-Well Reservoir (2-well)
+recordId: lbw-def-2-well-reservoir
+type: labware_definition
+id: generic/2_well_reservoir@legacy
+display_name: Generic 2-Well Reservoir (legacy alias)
 source: generic
 specificity: generic
 legacy_labware_types:
   - reservoir_2
+  - lbw-def-generic-2-well-reservoir
 topology:
   addressing: linear
   linear_count: 2
@@ -89,52 +27,7 @@ aspiration_hints:
 render_hints:
   profile: reservoir
   linear_well_style: trough
-
-
----
-kind: labware-definition
-labwareId: lbw-def-generic-2-well-reservoir
-labwareType: reservoir_2
-name: generic 2-well reservoir
-dimensions:
-  x: 127.76
-  y: 85.48
-  z: 25.4
-wellCount: 2
-wellGeometry:
-  shape: circle
-  diameter: 10.0
-  depth: 15.0
-  displayName: generic 2-well reservoir
-  category: reservoir
-  compatibleWith:
-    - integra_assist
-    - assist_plus_default
-    - generic_platform
-    - lbw-def-2-well-reservoir-generic
-    - lbw-def-2-well-reservoir-generic
-    - lbw-def-2-well-reservoir
-
-
----
-kind: labware-definition
-labwareId: lbw-def-generic-2-well-reservoir
-labwareType: reservoir_2
-name: generic 2-well reservoir
-dimensions:
-  x: 127.76
-  y: 85.48
-  z: 25.4
-wellCount: 2
-wellGeometry:
-  shape: circle
-  diameter: 10.0
-  depth: 15.0
-  displayName: 2-well reservoir
-  category: reservoir
-  compatibleWith:
-    - generic_platform
-    - assist_plus_default
-    - integra_assist
-    - lbw-def-2-well-reservoir
-    - lbw-def-generic-2-well-reservoir
+tags:
+  - execution-scale-compatible
+  - integra-assist-plus
+  - browser-review-compatible

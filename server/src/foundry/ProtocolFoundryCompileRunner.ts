@@ -419,9 +419,10 @@ function labwareTypeForKind(kind: ExecutionScaleLabwareKind | undefined, fallbac
   if (kind === 'tube_rack') return 'tubeset_24';
   if (kind === '384_well_plate') return 'plate_384';
   if (kind === '96_well_plate') return 'plate_96';
+  if (kind === '1_well_reservoir') return 'reservoir_1';
   if (kind === '12_well_reservoir') return 'reservoir_12';
   if (kind === '8_well_reservoir') return 'reservoir_8';
-  if (kind === '2_well_reservoir') return 'reservoir_12';
+  if (kind === '2_well_reservoir') return 'reservoir_2';
   if (kind === 'tube') return 'tube';
   return fallback;
 }

@@ -1,20 +1,9 @@
 $schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
 kind: labware-definition
 recordId: lbw-def-generic-2-well-reservoir
-labwareId: lbw-def-generic-2-well-reservoir
-labwareType: reservoir_2
-tags:
-  - execution-scale-compatible
-  - integra-assist-plus
-  - browser-review-compatible
-  - abcam-elisa-guide
-  - bio-rad-protein-blotting-guide
+type: labware_definition
 id: generic/2_well_reservoir@v1
-display_name: Generic 2-Well Reservoir (2-well)
-dimensions:
-  x: 127.76
-  y: 85.48
-  z: 25.4
+display_name: Generic 2-Well Reservoir
 source: generic
 specificity: generic
 legacy_labware_types:
@@ -41,29 +30,3 @@ tags:
   - execution-scale-compatible
   - integra-assist-plus
   - browser-review-compatible
-  - abcam-elisa-guide
-  - execution-scale-compatible
-
----
-kind: labware-definition
-labwareId: lbw-def-generic-2-well-reservoir
-labwareType: reservoir_2
-name: generic 2-well reservoir
-dimensions:
-  x: 127.76
-  y: 85.48
-  z: 25.4
-wellCount: 2
-wellGeometry:
-  shape: circle
-  diameter: 10.0
-  depth: 15.0
-  displayName: generic 2-well reservoir
-  category: reservoir
-  compatibleWith:
-    - integra_assist
-    - assist_plus_default
-    - generic_platform
-    - lbw-def-2-well-reservoir-generic
-    - lbw-def-2-well-reservoir-generic
-    - lbw-def-2-well-reservoir

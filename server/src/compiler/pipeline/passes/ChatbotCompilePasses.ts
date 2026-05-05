@@ -2692,11 +2692,12 @@ function inferSampleLabwareKind(promptLower: string): Extract<ExecutionScaleLabw
   return '96_well_plate';
 }
 
-function inferReservoirKind(promptLower: string): Extract<ExecutionScaleLabwareKind, 'tube' | '2_well_reservoir' | '8_well_reservoir' | '12_well_reservoir'> {
+function inferReservoirKind(promptLower: string): Extract<ExecutionScaleLabwareKind, 'tube' | '1_well_reservoir' | '2_well_reservoir' | '8_well_reservoir' | '12_well_reservoir'> {
   if (includesAny(promptLower, ['12-well reservoir', '12 well reservoir', '12-channel reservoir'])) return '12_well_reservoir';
   if (includesAny(promptLower, ['8-well reservoir', '8 well reservoir'])) return '8_well_reservoir';
-  if (/\b2[- ]well reservoir\b/.test(promptLower) || includesAny(promptLower, ['assist plus', 'assist+'])) return '2_well_reservoir';
-  if (includesAny(promptLower, ['reservoir', '96', '384', 'plate', 'multi-channel', 'multichannel'])) return '12_well_reservoir';
+  if (/\b2[- ]well reservoir\b/.test(promptLower)) return '2_well_reservoir';
+  if (/\b(?:1|one|single)[- ]well reservoir\b/.test(promptLower) || includesAny(promptLower, ['single reservoir', 'shared reservoir', 'reagent trough'])) return '1_well_reservoir';
+  if (includesAny(promptLower, ['reservoir', '96', '384', 'plate', 'multi-channel', 'multichannel'])) return '1_well_reservoir';
   return 'tube';
 }
 
@@ -2775,6 +2776,7 @@ function maxTransferVolumeUl(events: PlateEventPrimitive[]): number | undefined 
 function labwareDefinitionFor(kind: ExecutionScaleLabwareKind): string | undefined {
   if (kind === '96_well_plate') return 'lbw-def-generic-96-well-plate';
   if (kind === '384_well_plate') return 'lbw-def-generic-384-well-pcr-plate';
+  if (kind === '1_well_reservoir') return 'lbw-def-generic-reservoir-1-v1';
   if (kind === '12_well_reservoir') return 'lbw-def-generic-12-well-reservoir';
   return undefined;
 }

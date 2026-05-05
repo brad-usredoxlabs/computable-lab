@@ -27,6 +27,7 @@ const SampleLabwareKind = z.enum([
 
 const ReagentSourceLabwareKind = z.enum([
   'tube',
+  '1_well_reservoir',
   '2_well_reservoir',
   '8_well_reservoir',
   '12_well_reservoir',
