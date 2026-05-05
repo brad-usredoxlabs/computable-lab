@@ -353,6 +353,64 @@ describe('FoundryLedger', () => {
     });
   });
 
+  it('stalls a variant after repeated unsuccessful vertical attempts so the loop can move on', async () => {
+    const root = await makeArtifactRoot();
+    await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-compiler-result',
+      outcome: 'gap',
+      eventCount: 1,
+      diagnostics: [{ code: 'extractor_repair_exhausted' }],
+    });
+    await writeYamlFile(join(root, 'event-graphs', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-event-graph-proposal',
+    });
+    await writeYamlFile(join(root, 'execution-scale', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'execution-scale-plan',
+      blockers: [{ reason: 'still incomplete' }],
+    });
+    await writeYamlFile(join(root, 'assumptions', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-test-assumption-profile',
+    });
+    await writeYamlFile(join(root, 'architect', 'demo-protocol', 'manual_tubes', 'verdict.yaml'), {
+      kind: 'protocol-foundry-architect-verdict',
+      accepted: false,
+    });
+    await writeYamlFile(join(root, 'adoption', 'demo-protocol', 'manual_tubes', 'adoption.yaml'), {
+      kind: 'protocol-foundry-adoption-decision',
+      status: 'accepted',
+    });
+    await writeYamlFile(join(root, 'code-patches', 'demo-protocol', 'manual_tubes', 'result.yaml'), {
+      kind: 'protocol-foundry-coder-patch-result',
+      status: 'applied',
+    });
+    await writeYamlFile(join(root, 'rerun', 'demo-protocol', 'manual_tubes', 'rerun.yaml'), {
+      kind: 'protocol-foundry-rerun-report',
+      outcome: 'gap',
+      eventCount: 1,
+      blockerCount: 1,
+    });
+
+    const firstLedger = await scanFoundryLedger(root);
+    firstLedger.protocol_status['demo-protocol']!.variants.manual_tubes.attempt = 24;
+    await saveFoundryLedger(firstLedger);
+
+    const ledger = await scanFoundryLedger(root);
+    const variant = ledger.protocol_status['demo-protocol']!.variants.manual_tubes;
+
+    expect(variant.status).toBe('stalled');
+    expect(variant.artifacts.stallReport).toContain('/stalled/demo-protocol/manual_tubes/stall.yaml');
+    expect(readyTasks(ledger)).not.toContainEqual({
+      protocolId: 'demo-protocol',
+      variant: 'manual_tubes',
+      stage: 'architect_review',
+    });
+    expect(readyTasks(ledger)).not.toContainEqual({
+      protocolId: 'demo-protocol',
+      variant: 'manual_tubes',
+      stage: 'coder_patch',
+    });
+  });
+
   it('marks task status and persists stage artifacts in memory', async () => {
     const root = await makeArtifactRoot();
     const ledger = await scanFoundryLedger(root);

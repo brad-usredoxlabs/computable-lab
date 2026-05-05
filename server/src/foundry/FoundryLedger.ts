@@ -20,6 +20,7 @@ import {
 import { FOUNDRY_VARIANTS, type FoundryVariant } from './ProtocolFoundryCompileRunner.js';
 
 const DEFAULT_RUNNING_STALE_MS = 15 * 60 * 1000;
+const DEFAULT_VARIANT_MAX_ATTEMPTS = 24;
 
 export interface FoundryReadyTask {
   protocolId: string;
@@ -130,6 +131,47 @@ function patchSpecPaths(artifactRoot: string, protocolId: string, variant: Found
   }
 }
 
+function variantMaxAttempts(): number {
+  const parsed = Number(process.env['FOUNDRY_VARIANT_MAX_ATTEMPTS'] ?? DEFAULT_VARIANT_MAX_ATTEMPTS);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_VARIANT_MAX_ATTEMPTS;
+}
+
+function stallReportPath(artifactRoot: string, protocolId: string, variant: FoundryVariant): string {
+  return join(artifactRoot, 'stalled', protocolId, variant, 'stall.yaml');
+}
+
+async function writeStallReport(input: {
+  artifactRoot: string;
+  protocolId: string;
+  variant: FoundryVariant;
+  item: FoundryVariantLedger;
+  maxAttempts: number;
+}): Promise<string> {
+  const path = stallReportPath(input.artifactRoot, input.protocolId, input.variant);
+  if (existsSync(path)) return path;
+  await writeYamlFile(path, {
+    kind: 'protocol-foundry-stall-report',
+    protocolId: input.protocolId,
+    variant: input.variant,
+    generated_at: nowIso(),
+    status: 'stalled',
+    reason: `Variant reached ${input.item.attempt} attempts without reaching foundryComplete.`,
+    maxAttempts: input.maxAttempts,
+    attempt: input.item.attempt,
+    metrics: input.item.metrics,
+    artifacts: input.item.artifacts,
+    nextAction: 'Move to the next variant/protocol; revisit after broader compiler improvements land.',
+  });
+  return path;
+}
+
+function shouldStallVariant(item: FoundryVariantLedger, maxAttempts: number): boolean {
+  if (item.metrics.foundryComplete === 1) return false;
+  if (item.status === 'completed' || item.status === 'accepted' || item.status === 'blocked' || item.status === 'stalled') return false;
+  if (item.attempt < maxAttempts) return false;
+  return Boolean(item.artifacts.rerunReport || item.artifacts.coderPatch || item.artifacts.adoptionDecision);
+}
+
 function artifactMtime(path: string | undefined): number {
   if (!path || !existsSync(path)) return 0;
   try {
@@ -197,6 +239,7 @@ async function scanVariantArtifacts(
   const coderPatch = fileIfExists(join(artifactRoot, 'code-patches', protocolId, variant, 'result.yaml'));
   const coderPatchStatus = coderPatchResultStatus(coderPatch);
   const rerunReport = fileIfExists(join(artifactRoot, 'rerun', protocolId, variant, 'rerun.yaml'));
+  let stallReport = fileIfExists(stallReportPath(artifactRoot, protocolId, variant));
   const currentPatchSpecs = patchSpecPaths(artifactRoot, protocolId, variant);
   const metrics = await compilerMetrics(compiler);
   const accepted = await architectAccepted(architectVerdict);
@@ -210,8 +253,38 @@ async function scanVariantArtifacts(
   );
   const rerunStale = Boolean(coderPatch && artifactNewerThan(coderPatch, rerunReport));
   const foundryComplete = metrics.foundryComplete === 1 && accepted === true && !browserStale && !architectStale && !rerunStale;
+  const previousWithArtifacts: FoundryVariantLedger = {
+    ...previous,
+    artifacts: {
+      ...previous.artifacts,
+      ...(compiler ? { compiler } : {}),
+      ...(eventGraph ? { eventGraph } : {}),
+      ...(executionScale ? { executionScale } : {}),
+      ...(browserReport ? { browserReport } : {}),
+      ...(architectVerdict ? { architectVerdict } : {}),
+      ...(currentPatchSpecs.length > 0 ? { patchSpecs: currentPatchSpecs } : {}),
+      ...(adoption ? { adoptionDecision: adoption } : {}),
+      ...(coderPatch ? { coderPatch } : {}),
+      ...(rerunReport ? { rerunReport } : {}),
+      ...(stallReport ? { stallReport } : {}),
+    },
+    metrics: {
+      ...previous.metrics,
+      ...metrics,
+    },
+  };
+  if (!stallReport && shouldStallVariant(previousWithArtifacts, variantMaxAttempts())) {
+    stallReport = await writeStallReport({
+      artifactRoot,
+      protocolId,
+      variant,
+      item: previousWithArtifacts,
+      maxAttempts: variantMaxAttempts(),
+    });
+  }
   const status: FoundryWorkStatus =
     foundryComplete ? 'completed' :
+    stallReport ? 'stalled' :
     rerunReport && metrics.foundryComplete !== 1 ? 'gap' :
     coderPatchStatus === 'applied' || coderPatchStatus === 'skipped' ? 'accepted' :
     coderPatchStatus === 'needs-human' ? 'blocked' :
@@ -236,6 +309,7 @@ async function scanVariantArtifacts(
       ...(adoption ? { adoptionDecision: adoption } : {}),
       ...(coderPatch ? { coderPatch } : {}),
       ...(rerunReport ? { rerunReport } : {}),
+      ...(stallReport ? { stallReport } : {}),
     },
     metrics: {
       ...previous.metrics,
@@ -260,7 +334,9 @@ export async function scanFoundryLedger(artifactRoot: string): Promise<FoundryLe
       ? 'completed'
       : variantStatuses.some((status) => status === 'failed' || status === 'blocked')
         ? 'blocked'
-        : variantStatuses.some((status) => status === 'completed' || status === 'gap')
+        : variantStatuses.every((status) => status === 'stalled')
+          ? 'stalled'
+        : variantStatuses.some((status) => status === 'completed' || status === 'gap' || status === 'stalled')
           ? 'gap'
           : 'pending';
   }
@@ -279,6 +355,7 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
 
     for (const variant of FOUNDRY_VARIANTS) {
       const item = protocol.variants[variant];
+      if (item.status === 'stalled' || item.artifacts.stallReport) continue;
       const adoptionPath = join(ledger.artifact_root, 'adoption', protocol.protocolId, variant, 'adoption.yaml');
       const coderPatchPath = join(ledger.artifact_root, 'code-patches', protocol.protocolId, variant, 'result.yaml');
       const coderPatchTerminal = coderPatchIsTerminal(coderPatchPath);

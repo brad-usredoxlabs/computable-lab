@@ -22,7 +22,8 @@ export type FoundryWorkStatus =
   | 'gap'
   | 'blocked'
   | 'failed'
-  | 'skipped';
+  | 'skipped'
+  | 'stalled';
 
 export interface FoundryVariantLedger {
   variant: FoundryVariant;
@@ -46,6 +47,7 @@ export interface FoundryVariantLedger {
     adoptionDecision?: string;
     coderPatch?: string;
     rerunReport?: string;
+    stallReport?: string;
   };
   metrics: {
     eventCount?: number;
