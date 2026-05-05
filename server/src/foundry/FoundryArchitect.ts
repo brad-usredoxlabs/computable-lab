@@ -278,6 +278,26 @@ function hasMaterialCatalogOrSpecGap(input: {
     && !physicalInventoryOnlySignals.every((signal) => evidence.includes(signal));
 }
 
+function hasLabwareAliasOrResolverGap(input: {
+  compiler: Record<string, unknown>;
+  executionScale: Record<string, unknown>;
+  browserReport: Record<string, unknown>;
+}): boolean {
+  const evidence = stringifyEvidence({
+    diagnostics: input.compiler['diagnostics'],
+    gaps: input.compiler['gaps'],
+    terminalArtifacts: input.compiler['terminalArtifacts'],
+    blockers: input.executionScale['blockers'],
+    browserReport: input.browserReport,
+  });
+  return (
+    evidence.includes('no matching labware in prior snapshot')
+    || evidence.includes('missing_sample_labware_definition')
+    || evidence.includes('labware-definition:')
+    || /\bgeneric[_-](?:\d+[_-])?(?:well[_-])?(?:plate|reservoir|tube[_-]rack|rack)\b/.test(evidence)
+  ) && /\b(labware|plate|reservoir|tube[_ -]?rack|rack|tiprack|well[_ -]?plate)\b/.test(evidence);
+}
+
 function deterministicVerdict(input: {
   options: FoundryArchitectOptions;
   compiler: Record<string, unknown>;
@@ -310,6 +330,13 @@ function deterministicVerdict(input: {
     materialContext: input.materialContext,
   })) {
     failureClasses.add('material_catalog_or_spec_gap');
+  }
+  if (hasLabwareAliasOrResolverGap({
+    compiler: input.compiler,
+    executionScale: input.executionScale,
+    browserReport: input.browserReport,
+  })) {
+    failureClasses.add('labware_alias_or_resolver_gap');
   }
   if (browserStatus !== 'pass') failureClasses.add('browser_review');
   if (input.options.variant === 'robot_deck' && blockers.length > 0) failureClasses.add('robot_deck_binding');
@@ -371,6 +398,39 @@ function deterministicVerdict(input: {
       ...fixSpecDefaults(paths, evidence),
     });
   }
+  if (failureClasses.has('labware_alias_or_resolver_gap')) {
+    recommendedFixes.push({
+      id: 'fix-labware-alias-resolver-gap',
+      class: 'labware_alias_or_resolver_gap',
+      title: 'Resolve existing labware definitions through compiler aliases or Foundry lookup wiring',
+      rationale: 'Compiler/browser evidence shows labware hints such as generic plates, reservoirs, or tube racks are being treated as missing even though canonical labware-definition records may already exist. This is a resolver, alias, lookup, or Foundry wiring gap rather than permission to recreate labware records.',
+      ownedFiles: [
+        'server/src/foundry/ProtocolFoundryCompileRunner.ts',
+        'server/src/foundry/ProtocolFoundryCompileRunner.test.ts',
+        'server/src/ai/compiler/labwareLookup.ts',
+        'server/src/ai/compiler/labwareLookup.test.ts',
+        'server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts',
+        'server/src/compiler/pipeline/passes/ChatbotCompilePasses.test.ts',
+        'server/src/compiler/pipeline/passes/ResolvePriorLabwareReferences.test.ts',
+        'server/src/compiler/precompile/NounPhraseResolver.ts',
+        'server/src/compiler/precompile/NounPhraseResolver.test.ts',
+      ],
+      acceptance: [
+        'Does not create or rewrite labware-definition YAML records for this fix class.',
+        'Maps unresolved labware hints such as generic_96_well_plate, generic_24x1_5ml_tube_rack, generic_12_well_reservoir, or equivalent prose to existing canonical labware-definition records when they exist.',
+        'Foundry compile runs use real seed labware lookup or deterministic alias resolution instead of an always-empty labware lookup.',
+        'Compiler diagnostics for the source protocol no longer report the same labware hint as unresolved, or a focused regression proves the hint resolves to an existing canonical record.',
+      ],
+      contextHints: [
+        'This is the widened architect lane for existing labware capability that is not being found.',
+        'The correct patch is usually compiler lookup wiring, an alias normalization map, a resolver fallback, or a focused regression. It is not another attempt to add records/seed/labware-definition/lbw-def-generic-96-well-plate.yaml.',
+        'If the file already exists under records/seed/labware-definition, do not add it again. Teach the compiler or Foundry runner to find it.',
+        'Prior-labware refs are run-context instances; vendor PDFs and Foundry assumptions can point to a labware definition but must not invent physical labware instances.',
+        'Keep the patch narrow: one alias family or one Foundry lookup wiring behavior per patch.',
+      ],
+      ...fixSpecDefaults(paths, evidence),
+    });
+  }
   if (failureClasses.has('material_catalog_or_spec_gap')) {
     recommendedFixes.push({
       id: 'fix-material-catalog-spec-gap',
@@ -402,6 +462,7 @@ function deterministicVerdict(input: {
         'Labware definitions must use the canonical records/seed/labware-definition/*.yaml location with $schema, kind, recordId, type: labware_definition, id, display_name, topology/capacity/render_hints as appropriate.',
         'The unattended coder does not have a live OLS/ChEBI lookup tool in this patch lane; do not invent ontology identifiers.',
         'Prefer one reagent family or one vendor kit component family per patch.',
+        'If the unresolved item is a plate, tube rack, reservoir, tip rack, or other existing labware definition that is not being found, use the labware_alias_or_resolver_gap lane instead of adding a new record.',
       ],
       ...fixSpecDefaults(paths, evidence),
     });
@@ -423,6 +484,7 @@ function deterministicVerdict(input: {
       ],
       contextHints: [
         'Prefer adding or mapping one missing labware icon/geometry at a time.',
+        'If the blocker is that an existing labware-definition record is not being resolved, use the labware_alias_or_resolver_gap lane and patch resolver/lookup wiring instead of creating duplicate labware records.',
         'Tube protocols should render in generic 24x1.5ml, 15ml, or 50ml rack geometry when possible.',
         'New or repaired labware records must use canonical records/seed/labware-definition/*.yaml files, not the legacy records/seed/labware-definitions directory.',
         'Canonical labware-definition records include $schema, kind: labware-definition, recordId, type: labware_definition, id, display_name, topology/capacity/render_hints as appropriate.',
@@ -513,8 +575,10 @@ async function llmArchitectNotes(options: FoundryArchitectOptions, context: unkn
         role: 'system',
         content: [
           'You are the Protocol Foundry architect. Summarize actionable compiler improvements in concise prose.',
+          'Do not write standalone patch specifications, file-creation instructions, or unified diffs in these notes. Deterministic recommendedFixes are the authoritative patch specs.',
           'These notes will feed a Qwen/Qwen3.6-35B-A3B-FP8 coder. It is strong, but specs must be granular, context-rich, and limited to one observable behavior change.',
           'Prefer patch guidance that names source artifacts, exact failure evidence, owned files, a focused fixture, and a small acceptance test.',
+          'If an existing labware definition is not being found, describe it as a resolver/alias/lookup wiring problem; do not tell the coder to recreate the labware YAML file.',
           'Do not emit chain-of-thought.',
         ].join('\n'),
       },

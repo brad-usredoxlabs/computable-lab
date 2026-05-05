@@ -179,7 +179,7 @@ async function collectSchemaContext(repoRoot: string, fixClass: string): Promise
       'schema/lab/aliquot.schema.yaml',
     ]);
   }
-  if (fixClass === 'browser_or_labware_rendering' || fixClass === 'execution_scaling') {
+  if (fixClass === 'browser_or_labware_rendering' || fixClass === 'execution_scaling' || fixClass === 'labware_alias_or_resolver_gap') {
     add([
       'schema/workflow/labware-definition.schema.yaml',
       'schema/lab/labware.schema.yaml',
@@ -218,7 +218,8 @@ async function collectSchemaContext(repoRoot: string, fixClass: string): Promise
 function labwareContextApplies(fixClass: string): boolean {
   return fixClass === 'material_catalog_or_spec_gap'
     || fixClass === 'browser_or_labware_rendering'
-    || fixClass === 'execution_scaling';
+    || fixClass === 'execution_scaling'
+    || fixClass === 'labware_alias_or_resolver_gap';
 }
 
 function stringifySmall(value: unknown): string {
@@ -651,6 +652,7 @@ function selectFixClass(specs: PatchSpec[]): { fixClass: string; specs: PatchSpe
     'event_graph_coverage',
     'event_graph_empty',
     'execution_scaling',
+    'labware_alias_or_resolver_gap',
     'material_catalog_or_spec_gap',
     'browser_or_labware_rendering',
   ];
@@ -717,6 +719,7 @@ async function requestCoderPatch(input: {
           'Before editing a YAML record, inspect the supplied context and update the existing record in place if it already matches the requested labware/material family.',
           'If the requested capability already exists in context, add a narrow diagnostic, alias, mapping, or regression instead of recreating a large existing file.',
           'Never write an add-from-empty patch for a file that exists in repository context; update the existing file with normal context lines or patch resolver code instead.',
+          'For fixClass labware_alias_or_resolver_gap, do not create labware-definition YAML; patch lookup, alias normalization, compiler wiring, or tests so existing records are found.',
           'Use the relevant schema context. Labware definitions go in records/seed/labware-definition/*.yaml with canonical labware-definition schema fields.',
           'Never model plates, tubes, racks, reservoirs, tips, or other containers as material records.',
         ].join('\n'),
