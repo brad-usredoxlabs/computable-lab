@@ -440,7 +440,6 @@ function deterministicVerdict(input: {
       ownedFiles: [
         'records/material',
         'records/seed/materials',
-        'records/seed/labware-definition',
         'schema/lab/material.schema.yaml',
         'schema/lab/material-spec.schema.yaml',
         'schema/lab/vendor-product.schema.yaml',
@@ -448,8 +447,8 @@ function deterministicVerdict(input: {
         'server/src/materials',
       ],
       acceptance: [
-        'Adds or improves only material, material-spec, vendor-product, or canonical labware-definition/catalog data needed by the source protocol.',
-        'Routes containers, tubes, plates, racks, reservoirs, tips, and other physical holders to labware-definition YAML, not material YAML.',
+        'Adds or improves only material, material-spec, vendor-product, or material resolver/catalog data needed by the source protocol.',
+        'Does not create or modify labware-definition YAML; containers, tubes, plates, racks, reservoirs, tips, and other physical holders must go through a labware-specific fix class.',
         'Does not create material-instance, aliquot, material-lot, physical inventory, source-tube, or run-specific records from vendor PDF evidence.',
         'Uses ontology refs only when a CURIE/IRI is present in local records or source artifacts; otherwise marks the material as vendor/provenance-backed with an ontology backfill need.',
         'Compiler diagnostics for the protocol show fewer unresolved material/catalog/spec failures, or the patch adds a focused regression documenting the remaining blocker.',
@@ -459,7 +458,6 @@ function deterministicVerdict(input: {
         'A vendor PDF can justify material, material-spec/formulation, vendor-product, and labware definition/product facts.',
         'A vendor PDF cannot prove that this lab has a tube, aliquot, lot, prepared source, or sample provenance.',
         'Material records describe substances/reagents/concepts such as antibodies, buffers, substrates, and stop solutions. They must not describe plates, tubes, racks, reservoirs, or tips.',
-        'Labware definitions must use the canonical records/seed/labware-definition/*.yaml location with $schema, kind, recordId, type: labware_definition, id, display_name, topology/capacity/render_hints as appropriate.',
         'The unattended coder does not have a live OLS/ChEBI lookup tool in this patch lane; do not invent ontology identifiers.',
         'Prefer one reagent family or one vendor kit component family per patch.',
         'If the unresolved item is a plate, tube rack, reservoir, tip rack, or other existing labware definition that is not being found, use the labware_alias_or_resolver_gap lane instead of adding a new record.',

@@ -716,6 +716,7 @@ async function requestCoderPatch(input: {
           'The unifiedDiff must be directly accepted by git apply.',
           'Prefer one changed file and one focused fixture when possible. Never attempt to fix multiple biology verb families at once.',
           'If the spec is broad, choose the smallest acceptance criterion that advances the exact failure evidence.',
+          'For fixClass material_catalog_or_spec_gap, do not create or edit labware-definition YAML; that lane is for substances, material specs, vendor products, and material resolver/catalog behavior.',
           'Before editing a YAML record, inspect the supplied context and update the existing record in place if it already matches the requested labware/material family.',
           'If the requested capability already exists in context, add a narrow diagnostic, alias, mapping, or regression instead of recreating a large existing file.',
           'Never write an add-from-empty patch for a file that exists in repository context; update the existing file with normal context lines or patch resolver code instead.',
