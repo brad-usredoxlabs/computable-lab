@@ -2,7 +2,11 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import { existingFileAdditionViolations, recordSchemaPolicyViolations } from './FoundryCoderPatch.js';
+import {
+  existingFileAdditionViolations,
+  recordSchemaPolicyViolations,
+  selectPatchSpecIdForRun,
+} from './FoundryCoderPatch.js';
 
 describe('FoundryCoderPatch record schema policy', () => {
   async function makeRepo(): Promise<string> {
@@ -115,5 +119,26 @@ describe('FoundryCoderPatch record schema policy', () => {
     ].join('\n');
 
     expect(existingFileAdditionViolations(root, diff)).toEqual([]);
+  });
+});
+
+describe('FoundryCoderPatch patch scheduling', () => {
+  it('selects exactly one pending patch spec for a coder run', () => {
+    const selected = selectPatchSpecIdForRun([
+      { id: 'protocol/manual/fix-material', fixClass: 'material_catalog_or_spec_gap' },
+      { id: 'protocol/manual/fix-runtime', fixClass: 'foundry_runtime_wiring_gap' },
+      { id: 'protocol/manual/fix-reference-shape', fixClass: 'precompiler_reference_shape_gap' },
+    ]);
+
+    expect(selected).toBe('protocol/manual/fix-runtime');
+  });
+
+  it('breaks same-priority ties deterministically by spec id', () => {
+    const selected = selectPatchSpecIdForRun([
+      { id: 'protocol/manual/fix-runtime-b', fixClass: 'foundry_runtime_wiring_gap' },
+      { id: 'protocol/manual/fix-runtime-a', fixClass: 'foundry_runtime_wiring_gap' },
+    ]);
+
+    expect(selected).toBe('protocol/manual/fix-runtime-a');
   });
 });

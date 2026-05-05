@@ -716,16 +716,7 @@ function sanitizeSegment(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'unknown';
 }
 
-function groupByFixClass(specs: PatchSpec[]): Map<string, PatchSpec[]> {
-  const grouped = new Map<string, PatchSpec[]>();
-  for (const spec of specs) {
-    grouped.set(spec.fixClass, [...(grouped.get(spec.fixClass) ?? []), spec]);
-  }
-  return grouped;
-}
-
-function selectFixClass(specs: PatchSpec[]): { fixClass: string; specs: PatchSpec[] } {
-  const grouped = groupByFixClass(specs);
+function fixClassPriorityRank(fixClass: string): number {
   const priority = [
     'foundry_runtime_wiring_gap',
     'precompiler_reference_shape_gap',
@@ -737,10 +728,21 @@ function selectFixClass(specs: PatchSpec[]): { fixClass: string; specs: PatchSpe
     'material_catalog_or_spec_gap',
     'browser_or_labware_rendering',
   ];
-  const fixClass = priority.find((candidate) => grouped.has(candidate))
-    ?? Array.from(grouped.keys()).sort()[0]
-    ?? 'unknown';
-  return { fixClass, specs: grouped.get(fixClass) ?? [] };
+  const index = priority.indexOf(fixClass);
+  return index === -1 ? priority.length : index;
+}
+
+export function selectPatchSpecIdForRun(specs: Array<{ id: string; fixClass: string }>): string | undefined {
+  const [selected] = [...specs].sort((a, b) =>
+    fixClassPriorityRank(a.fixClass) - fixClassPriorityRank(b.fixClass)
+    || a.id.localeCompare(b.id),
+  );
+  return selected?.id;
+}
+
+function selectPatchSpecForRun(specs: PatchSpec[]): PatchSpec | undefined {
+  const selectedId = selectPatchSpecIdForRun(specs);
+  return selectedId ? specs.find((spec) => spec.id === selectedId) : undefined;
 }
 
 function attemptScore(attempt: AttemptResult): number {
@@ -1035,8 +1037,26 @@ export async function runFoundryCoderPatch(input: {
 
   const baseUrl = input.inference?.baseUrl ?? process.env['PI_WORKER_BASE_URL'] ?? process.env['OPENAI_BASE_URL'];
   const model = input.inference?.model ?? process.env['PI_WORKER_MODEL'] ?? process.env['OPENAI_MODEL'];
-  const { fixClass, specs } = selectFixClass(pendingSpecs);
+  const selectedSpec = selectPatchSpecForRun(pendingSpecs);
+  if (!selectedSpec) {
+    await writeYamlFile(resultPath, {
+      kind: 'protocol-foundry-coder-patch-result',
+      protocolId: input.protocolId,
+      variant: input.variant,
+      generated_at: nowIso(),
+      status: 'skipped',
+      fixClasses: allFixClasses,
+      message: 'No selectable patch spec is pending.',
+    });
+    return { status: 'skipped', resultPath, message: 'no selectable patch spec', touchedFiles: [] };
+  }
+
+  const specs = [selectedSpec];
+  const fixClass = selectedSpec.fixClass;
   const fixClasses = [fixClass];
+  const deferredSpecIds = pendingSpecs
+    .filter((spec) => spec.id !== selectedSpec.id)
+    .map((spec) => spec.id);
   const tournamentDir = join(resultRoot, sanitizeSegment(fixClass));
   const staleContext = await staleOwnedFileContext(input.repoRoot, specs);
   if (staleContext.stale) {
@@ -1048,6 +1068,8 @@ export async function runFoundryCoderPatch(input: {
       status: 'stale',
       fixClasses,
       sourceSpecIds: specs.map((spec) => spec.id),
+      selectedSpecId: selectedSpec.id,
+      deferredSpecIds,
       staleChangedFiles: staleContext.changedFiles,
       newestSpecMtime: staleContext.newestSpecMtime,
       message: 'Patch specs are stale because tracked owned files changed after spec generation; rerun and refresh architect context before coding.',
@@ -1068,6 +1090,8 @@ export async function runFoundryCoderPatch(input: {
       generated_at: nowIso(),
       status: 'blocked',
       fixClasses,
+      selectedSpecId: selectedSpec.id,
+      deferredSpecIds,
       message: 'Coder endpoint/model not configured or dry-run mode is enabled.',
     });
     return { status: 'blocked', resultPath, message: 'coder not configured', touchedFiles: [] };
@@ -1146,6 +1170,8 @@ export async function runFoundryCoderPatch(input: {
         status: 'applied',
         fixClasses,
         sourceSpecIds: specs.map((spec) => spec.id),
+        selectedSpecId: selectedSpec.id,
+        deferredSpecIds,
         tournamentDir,
         winningAttempt: attempt.attempt,
         attempts,
@@ -1198,6 +1224,8 @@ export async function runFoundryCoderPatch(input: {
         status: 'applied',
         fixClasses,
         sourceSpecIds: specs.map((spec) => spec.id),
+        selectedSpecId: selectedSpec.id,
+        deferredSpecIds,
         tournamentDir,
         winningAttempt: repair.attempt,
         attempts,
@@ -1220,6 +1248,8 @@ export async function runFoundryCoderPatch(input: {
     generated_at: nowIso(),
     status: 'needs-human',
     fixClasses,
+    selectedSpecId: selectedSpec.id,
+    deferredSpecIds,
     tournamentDir,
     attempts,
     bestFailure: best ? `${best.phase}: ${best.message}` : 'no viable patch attempts',

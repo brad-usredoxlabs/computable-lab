@@ -1,9 +1,11 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import YAML from 'yaml';
+import { createLabwareLookup } from '../ai/compiler/labwareLookup.js';
 import { createInferenceClient } from '../ai/InferenceClient.js';
 import { runChatbotCompile, type RunChatbotCompileResult } from '../ai/runChatbotCompile.js';
 import type { InferenceConfig } from '../config/types.js';
+import type { RecordStore } from '../store/types.js';
 import type { ExtractionRunnerService, RunExtractionServiceArgs } from '../extract/ExtractionRunnerService.js';
 import type { LlmClient } from '../compiler/pipeline/passes/ChatbotCompilePasses.js';
 import type { PlateEventPrimitive } from '../compiler/biology/BiologyVerbExpander.js';
@@ -406,6 +408,16 @@ function createLlmClient(options: ProtocolFoundryCompileOptions): LlmClient {
   });
 }
 
+function createFoundryLabwareLookup(): (hint: string) => Promise<Array<{ recordId: string; title: string }>> {
+  // Foundry stress tests mostly use deterministic assumption aliases such as
+  // generic_96_well_plate. The main app backs this helper with RecordStore; the
+  // Foundry CLI can still exercise the same alias resolver without opening a
+  // mutating store by supplying an empty read-only list fallback.
+  return createLabwareLookup({
+    list: async () => [],
+  } as unknown as RecordStore);
+}
+
 function valueFromDetails(details: Record<string, unknown>, keys: string[]): string[] {
   const values: string[] = [];
   for (const key of keys) {
@@ -541,7 +553,7 @@ async function runVariant(input: {
     deps: {
       extractionService: presegmentedExtractionService(),
       llmClient: input.llmClient,
-      searchLabwareByHint: async () => [],
+      searchLabwareByHint: createFoundryLabwareLookup(),
     },
     ...(model ? { model } : {}),
   });
