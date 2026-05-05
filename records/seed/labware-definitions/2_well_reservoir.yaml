@@ -1,6 +1,7 @@
 kind: labware-definition
 labwareId: lbw-def-2-well-reservoir
 labwareType: reservoir_2
+id: generic/2_well_reservoir@v1
 name: 2-well reservoir
 tags:
   - execution-scale-compatible
@@ -16,6 +17,12 @@ wellGeometry:
   shape: circle
   diameter: 10.0
   depth: 15.0
+  displayName: 2-well reservoir
+  category: reservoir
+  compatibleWith:
+    - generic_platform
+    - assist_plus_default
+    - integra_assist
   displayName: 2-well reservoir
   category: reservoir
   compatibleWith:
