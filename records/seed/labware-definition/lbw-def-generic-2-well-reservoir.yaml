@@ -8,6 +8,7 @@ tags:
   - integra-assist-plus
   - browser-review-compatible
   - abcam-elisa-guide
+  - bio-rad-protein-blotting-guide
 id: generic/2_well_reservoir@v1
 display_name: Generic 2-Well Reservoir (2-well)
 dimensions:
