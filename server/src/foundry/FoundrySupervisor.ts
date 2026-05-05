@@ -1,4 +1,6 @@
+import { execFile } from 'node:child_process';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import {
   loadOrCreateFoundryLedger,
   markFoundryTask,
@@ -21,6 +23,8 @@ import {
   type ModelEndpointUsage,
 } from './FoundryMetrics.js';
 import { writeYamlFile, type FoundryLedger } from './FoundryArtifacts.js';
+
+const execFileAsync = promisify(execFile);
 
 export interface FoundryLoopOptions {
   artifactRoot: string;
@@ -45,6 +49,56 @@ export interface FoundryLoopOptions {
   writeReviewIndex?: boolean;
   intakePdfs?: boolean;
   pdfIntakeBatchSize?: number;
+}
+
+async function sourceCodeDriftFiles(repoRoot: string): Promise<string[]> {
+  const { stdout } = await execFileAsync('git', [
+    'status',
+    '--porcelain',
+    '--',
+    'server/src',
+    'schema',
+    'package.json',
+    'package-lock.json',
+  ], { cwd: repoRoot });
+  return stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.slice(3).trim())
+    .filter((path) => path.length > 0)
+    .sort();
+}
+
+async function writeSourceDriftArchitectVerdict(
+  options: FoundryLoopOptions,
+  task: FoundryReadyTask,
+  driftFiles: string[],
+): Promise<string> {
+  const verdictPath = join(options.artifactRoot, 'architect', task.protocolId, task.variant, 'verdict.yaml');
+  await writeYamlFile(verdictPath, {
+    kind: 'protocol-foundry-architect-verdict',
+    protocolId: task.protocolId,
+    variant: task.variant,
+    generated_at: new Date().toISOString(),
+    accepted: false,
+    qualityScore: 0,
+    coverageEstimate: 0,
+    failureClasses: ['source_code_drift'],
+    missingVerbs: [],
+    missingLabware: [],
+    missingMaterials: [],
+    badEvents: [],
+    badScalingAssumptions: [],
+    recommendedFixes: [],
+    sourceArtifacts: {},
+    architectNotes: [
+      'Architect review skipped because source files changed before spec generation.',
+      'Refresh the protocol run after the codebase is clean so patch specs are based on current code.',
+      `Changed source files: ${driftFiles.join(', ')}`,
+    ].join('\n'),
+  });
+  return verdictPath;
 }
 
 export interface FoundryLoopSummary {
@@ -197,6 +251,20 @@ async function runBrowserTask(options: FoundryLoopOptions, ledger: FoundryLedger
 async function runArchitectTask(options: FoundryLoopOptions, ledger: FoundryLedger, task: FoundryReadyTask): Promise<void> {
   markFoundryTask(ledger, { protocolId: task.protocolId, variant: task.variant, stage: 'architect_review', status: 'running' });
   await saveFoundryLedger(ledger);
+  const driftFiles = await sourceCodeDriftFiles(options.repoRoot);
+  if (driftFiles.length > 0) {
+    const verdictPath = await writeSourceDriftArchitectVerdict(options, task, driftFiles);
+    markFoundryTask(ledger, {
+      protocolId: task.protocolId,
+      variant: task.variant,
+      stage: 'architect_review',
+      status: 'gap',
+      artifacts: { architectVerdict: verdictPath, patchSpecs: [] },
+      message: `architect review skipped until source drift is resolved: ${driftFiles.join(', ')}`,
+    });
+    await saveFoundryLedger(ledger);
+    return;
+  }
   const verdict = await runFoundryArchitectReview({
     artifactRoot: options.artifactRoot,
     protocolId: task.protocolId,
