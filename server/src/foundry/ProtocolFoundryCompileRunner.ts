@@ -1,12 +1,13 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import YAML from 'yaml';
-import { getLabwareDefinitionRegistry } from '../registry/LabwareDefinitionRegistry.js';
+import { getLabwareDefinitionRegistry, type LabwareDefinitionRecord } from '../registry/LabwareDefinitionRegistry.js';
 import { createLabwareLookup } from '../ai/compiler/labwareLookup.js';
 import { createInferenceClient } from '../ai/InferenceClient.js';
 import { runChatbotCompile, type RunChatbotCompileResult } from '../ai/runChatbotCompile.js';
 import type { InferenceConfig } from '../config/types.js';
 import type { RecordStore } from '../store/types.js';
+import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import type { ExtractionRunnerService, RunExtractionServiceArgs } from '../extract/ExtractionRunnerService.js';
 import type { LlmClient } from '../compiler/pipeline/passes/ChatbotCompilePasses.js';
 import type { PlateEventPrimitive } from '../compiler/biology/BiologyVerbExpander.js';
@@ -33,10 +34,6 @@ export interface ProtocolFoundryCompileOptions {
   inference?: Partial<InferenceConfig>;
   dryRun?: boolean;
 }
-
-// Minimal RecordStore shim for Foundry compile runs that need labware resolution
-// without mutating the main application store. It delegates to the global registry.
-const foundryLabwareStore = { list: async () => getLabwareDefinitionRegistry().list() };
 
 export interface ProtocolFoundryCompileSummary {
   kind: 'protocol-foundry-compile-summary';
@@ -413,11 +410,30 @@ function createLlmClient(options: ProtocolFoundryCompileOptions): LlmClient {
   });
 }
 
-function createFoundryLabwareLookup(): (hint: string) => Promise<Array<{ recordId: string; title: string }>> {
+function labwareDefinitionEnvelope(record: LabwareDefinitionRecord): RecordEnvelope<Record<string, unknown>> {
+  return {
+    recordId: record.recordId,
+    schemaId: 'https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml',
+    payload: {
+      ...record,
+      name: record.display_name,
+      aliases: [
+        record.id,
+        record.display_name,
+        ...(record.platform_aliases?.map((alias) => alias.alias) ?? []),
+        ...(record.compatibility_tags ?? []),
+      ],
+    },
+  };
+}
+
+export function createFoundryLabwareLookup(): (hint: string) => Promise<Array<{ recordId: string; title: string }>> {
   // Foundry stress tests mostly use deterministic assumption aliases such as
   // generic_96_well_plate. The main app backs this helper with RecordStore; the
-  // Foundry CLI can still exercise the same alias resolver without opening a
-  // mutating store by supplying an empty read-only list fallback.
+  // Foundry CLI can exercise the same resolver with read-only registry records.
+  const foundryLabwareStore = {
+    list: async () => getLabwareDefinitionRegistry().list().map(labwareDefinitionEnvelope),
+  };
   return createLabwareLookup(foundryLabwareStore as unknown as RecordStore);
 }
 

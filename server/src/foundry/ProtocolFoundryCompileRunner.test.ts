@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { extractPresegmentedFoundryCandidates } from './ProtocolFoundryCompileRunner.js';
+import {
+  createFoundryLabwareLookup,
+  extractPresegmentedFoundryCandidates,
+} from './ProtocolFoundryCompileRunner.js';
 
 describe('extractPresegmentedFoundryCandidates', () => {
   it('extracts protocol-action candidates from presegmented protocol text without using final event semantics', () => {
@@ -23,5 +26,25 @@ describe('extractPresegmentedFoundryCandidates', () => {
     expect(candidates[1]?.draft).toMatchObject({
       verb: 'incubate',
     });
+  });
+});
+
+describe('createFoundryLabwareLookup', () => {
+  it('resolves deterministic Foundry labware aliases', async () => {
+    const lookup = createFoundryLabwareLookup();
+
+    await expect(lookup('generic_96_well_plate')).resolves.toEqual([
+      { recordId: 'lbw-def-generic-96-well-plate', title: 'lbw-def-generic-96-well-plate' },
+    ]);
+    await expect(lookup('generic_24x1_5ml_tube_rack')).resolves.toEqual([
+      { recordId: 'lbw-def-generic-50x1p5ml-tube-rack', title: 'lbw-def-generic-50x1p5ml-tube-rack' },
+    ]);
+  });
+
+  it('searches registry-backed labware definitions without throwing', async () => {
+    const lookup = createFoundryLabwareLookup();
+
+    const matches = await lookup('96 well plate');
+    expect(matches.some((match) => match.recordId === 'lbw-def-generic-96-well-plate')).toBe(true);
   });
 });
