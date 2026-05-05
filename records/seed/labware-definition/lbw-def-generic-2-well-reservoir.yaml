@@ -1,7 +1,7 @@
 $schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
 kind: labware-definition
 recordId: lbw-def-generic-2-well-reservoir
-labwareId: lbw-def-2-well-reservoir
+labwareId: lbw-def-generic-2-well-reservoir
 labwareType: reservoir_2
 tags:
   - execution-scale-compatible
@@ -10,6 +10,10 @@ tags:
   - abcam-elisa-guide
 id: generic/2_well_reservoir@v1
 display_name: Generic 2-Well Reservoir (2-well)
+dimensions:
+  x: 127.76
+  y: 85.48
+  z: 25.4
 source: generic
 specificity: generic
 legacy_labware_types:
