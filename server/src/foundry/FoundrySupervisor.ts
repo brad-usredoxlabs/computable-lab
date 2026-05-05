@@ -353,11 +353,11 @@ export function selectRunnableTasks(tasks: FoundryReadyTask[]): FoundryReadyTask
   const adoptionTasks = tasks.filter((task) => task.stage === 'patch_adoption');
   if (adoptionTasks.length > 0) return [adoptionTasks[0]!];
   const rerunTasks = tasks.filter((task) => task.stage === 'rerun');
-  if (rerunTasks.length > 0) return rerunTasks;
+  if (rerunTasks.length > 0) return [rerunTasks[0]!];
   const architectTasks = tasks.filter((task) => task.stage === 'architect_review');
-  if (architectTasks.length > 0) return architectTasks;
+  if (architectTasks.length > 0) return [architectTasks[0]!];
   const browserTasks = tasks.filter((task) => task.stage === 'browser_review');
-  if (browserTasks.length > 0) return browserTasks;
+  if (browserTasks.length > 0) return [browserTasks[0]!];
   const compileProtocols = new Set<string>();
   const selected: FoundryReadyTask[] = [];
   for (const task of tasks) {
@@ -375,7 +375,8 @@ export function selectRunnableTasks(tasks: FoundryReadyTask[]): FoundryReadyTask
     ['rerun', 4],
     ['compile', 5],
   ]);
-  return selected.sort((a, b) => (stageOrder.get(a.stage) ?? 99) - (stageOrder.get(b.stage) ?? 99));
+  const [nextTask] = selected.sort((a, b) => (stageOrder.get(a.stage) ?? 99) - (stageOrder.get(b.stage) ?? 99));
+  return nextTask ? [nextTask] : [];
 }
 
 export async function runFoundryLoop(options: FoundryLoopOptions): Promise<FoundryLoopSummary> {

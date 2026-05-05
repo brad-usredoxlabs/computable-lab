@@ -240,6 +240,23 @@ describe('FoundryLedger', () => {
     ]);
   });
 
+  it('runs one review or rerun task before rechecking for newly unblocked coder work', () => {
+    expect(selectRunnableTasks([
+      { protocolId: 'p1', variant: 'manual_tubes', stage: 'architect_review' },
+      { protocolId: 'p2', variant: 'manual_tubes', stage: 'architect_review' },
+      { protocolId: 'p3', variant: 'manual_tubes', stage: 'architect_review' },
+    ])).toEqual([
+      { protocolId: 'p1', variant: 'manual_tubes', stage: 'architect_review' },
+    ]);
+
+    expect(selectRunnableTasks([
+      { protocolId: 'p1', variant: 'manual_tubes', stage: 'rerun' },
+      { protocolId: 'p2', variant: 'manual_tubes', stage: 'rerun' },
+    ])).toEqual([
+      { protocolId: 'p1', variant: 'manual_tubes', stage: 'rerun' },
+    ]);
+  });
+
   it('schedules coder patch from real patch spec files after adoption', async () => {
     const root = await makeArtifactRoot();
     await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
