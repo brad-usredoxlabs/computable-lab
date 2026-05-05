@@ -173,23 +173,28 @@ async function collectSchemaContext(repoRoot: string, fixClass: string): Promise
       'schema/lab/material.schema.yaml',
       'schema/lab/material-spec.schema.yaml',
       'schema/lab/vendor-product.schema.yaml',
-      'schema/workflow/labware-definition.schema.yaml',
-      'schema/lab/labware.schema.yaml',
       'schema/lab/material-instance.schema.yaml',
       'schema/lab/aliquot.schema.yaml',
     ]);
   }
-  if (fixClass === 'browser_or_labware_rendering' || fixClass === 'execution_scaling' || fixClass === 'labware_alias_or_resolver_gap') {
+  if (fixClass === 'browser_or_labware_rendering' || fixClass === 'execution_scaling' || fixClass === 'labware_alias_or_resolver_gap' || fixClass === 'foundry_runtime_wiring_gap') {
     add([
       'schema/workflow/labware-definition.schema.yaml',
       'schema/lab/labware.schema.yaml',
       'schema/lab/labware-geometry.schema.yaml',
     ]);
   }
-  if (fixClass === 'execution_scaling') {
+  if (fixClass === 'execution_scaling' || fixClass === 'foundry_runtime_wiring_gap') {
     add([
       'schema/workflow/execution-scale-profile.schema.yaml',
       'schema/workflow/execution-scale-plan.schema.yaml',
+    ]);
+  }
+  if (fixClass === 'precompiler_reference_shape_gap' || fixClass === 'foundry_runtime_wiring_gap') {
+    add([
+      'schema/registry/compile-pipelines/chatbot-compile.yaml',
+      'schema/registry/prompt-templates/chatbot-compile.precompile.system.yaml',
+      'schema/registry/prompt-templates/chatbot-compile.tagger.system.yaml',
     ]);
   }
 
@@ -219,7 +224,8 @@ function labwareContextApplies(fixClass: string): boolean {
   return fixClass === 'material_catalog_or_spec_gap'
     || fixClass === 'browser_or_labware_rendering'
     || fixClass === 'execution_scaling'
-    || fixClass === 'labware_alias_or_resolver_gap';
+    || fixClass === 'labware_alias_or_resolver_gap'
+    || fixClass === 'foundry_runtime_wiring_gap';
 }
 
 function stringifySmall(value: unknown): string {
@@ -306,6 +312,79 @@ async function collectExistingLabwareContext(repoRoot: string, specs: PatchSpec[
     '',
     selected.join('\n\n') || '(no labware definition summaries found)',
   ].join('\n').slice(0, MAX_LABWARE_CONTEXT_CHARS);
+}
+
+function genericRecordSummary(path: string, doc: Record<string, unknown>): string {
+  const parts = [
+    `path: ${path}`,
+    `kind: ${typeof doc['kind'] === 'string' ? doc['kind'] : '(missing)'}`,
+    `recordId: ${typeof doc['recordId'] === 'string' ? doc['recordId'] : typeof doc['id'] === 'string' ? doc['id'] : '(missing)'}`,
+    `name: ${typeof doc['name'] === 'string' ? doc['name'] : typeof doc['display_name'] === 'string' ? doc['display_name'] : typeof doc['title'] === 'string' ? doc['title'] : '(missing)'}`,
+  ];
+  const aliases = [
+    ...(Array.isArray(doc['aliases']) ? doc['aliases'] : []),
+    ...(Array.isArray(doc['tags']) ? doc['tags'] : []),
+    ...(Array.isArray(doc['legacy_labware_types']) ? doc['legacy_labware_types'] : []),
+  ].filter((entry): entry is string => typeof entry === 'string');
+  if (aliases.length > 0) parts.push(`aliases/tags: ${Array.from(new Set(aliases)).join(', ')}`);
+  return parts.join('\n');
+}
+
+async function collectRecordDirectoryContext(repoRoot: string, directories: string[], specs: PatchSpec[], title: string): Promise<string> {
+  const evidence = specs.map((spec) => stringifySmall(spec.raw)).join('\n').toLowerCase();
+  const files: string[] = [];
+  for (const directory of directories) {
+    const fullDir = join(repoRoot, directory);
+    if (!existsSync(fullDir)) continue;
+    files.push(...await walkFiles(repoRoot, fullDir, 40));
+  }
+  const summaries: Array<{ score: number; text: string }> = [];
+  for (const file of Array.from(new Set(files))) {
+    if (!/\.ya?ml$/i.test(file)) continue;
+    const rel = relative(repoRoot, file);
+    let docs: Array<Record<string, unknown>> = [];
+    try {
+      docs = parseYamlDocuments(await readFile(file, 'utf-8'));
+    } catch {
+      continue;
+    }
+    for (const doc of docs) {
+      const text = genericRecordSummary(rel, doc);
+      const haystack = `${rel}\n${text}`.toLowerCase();
+      const score = evidence.split(/[^a-z0-9_.-]+/).filter((token) => token.length > 2 && haystack.includes(token)).length;
+      summaries.push({ score, text });
+    }
+  }
+  const selected = summaries
+    .sort((a, b) => b.score - a.score || a.text.localeCompare(b.text))
+    .slice(0, 16)
+    .map((entry) => entry.text);
+  return [`${title}:`, selected.join('\n\n') || '(no matching existing records found)'].join('\n');
+}
+
+async function collectExistingRecordContext(repoRoot: string, specs: PatchSpec[], fixClass: string): Promise<string> {
+  const sections: string[] = [];
+  if (labwareContextApplies(fixClass)) {
+    sections.push(await collectExistingLabwareContext(repoRoot, specs, fixClass));
+  }
+  if (fixClass === 'material_catalog_or_spec_gap' || fixClass === 'foundry_runtime_wiring_gap') {
+    sections.push(await collectRecordDirectoryContext(repoRoot, [
+      'records/material',
+      'records/seed/materials',
+      'schema/registry/curated-vendors',
+      'schema/registry/compound-classes',
+      'schema/registry/ontology-terms',
+    ], specs, 'Existing material/vendor/ontology-adjacent records'));
+  }
+  if (fixClass === 'execution_scaling' || fixClass === 'foundry_runtime_wiring_gap') {
+    sections.push(await collectRecordDirectoryContext(repoRoot, [
+      'schema/registry/execution-scale-profiles',
+      'schema/registry/pipette-capabilities',
+      'records/seed/platforms',
+    ], specs, 'Existing execution/tool/platform records'));
+  }
+  if (sections.length === 0) return '(no existing record context for this fix class)';
+  return sections.join('\n\n---\n\n').slice(0, MAX_LABWARE_CONTEXT_CHARS);
 }
 
 function extractJsonObject(text: string): Record<string, unknown> | undefined {
@@ -648,6 +727,8 @@ function groupByFixClass(specs: PatchSpec[]): Map<string, PatchSpec[]> {
 function selectFixClass(specs: PatchSpec[]): { fixClass: string; specs: PatchSpec[] } {
   const grouped = groupByFixClass(specs);
   const priority = [
+    'foundry_runtime_wiring_gap',
+    'precompiler_reference_shape_gap',
     'extractor_prompt_contract',
     'event_graph_coverage',
     'event_graph_empty',
@@ -720,6 +801,8 @@ async function requestCoderPatch(input: {
           'Before editing a YAML record, inspect the supplied context and update the existing record in place if it already matches the requested labware/material family.',
           'If the requested capability already exists in context, add a narrow diagnostic, alias, mapping, or regression instead of recreating a large existing file.',
           'Never write an add-from-empty patch for a file that exists in repository context; update the existing file with normal context lines or patch resolver code instead.',
+          'For fixClass foundry_runtime_wiring_gap, patch Foundry harness dependency wiring or focused tests; do not add records to compensate for a stubbed lookup.',
+          'For fixClass precompiler_reference_shape_gap, patch shape normalization/contract handling; do not add records to mask malformed refs.',
           'For fixClass labware_alias_or_resolver_gap, do not create labware-definition YAML; patch lookup, alias normalization, compiler wiring, or tests so existing records are found.',
           'Use the relevant schema context. Labware definitions go in records/seed/labware-definition/*.yaml with canonical labware-definition schema fields.',
           'Never model plates, tubes, racks, reservoirs, tips, or other containers as material records.',
@@ -991,11 +1074,11 @@ export async function runFoundryCoderPatch(input: {
   }
 
   const ownedFiles = Array.from(new Set(specs.flatMap((spec) => spec.ownedFiles)));
-  const [ownedContext, artifactContext, schemaContext, labwareContext] = await Promise.all([
+  const [ownedContext, artifactContext, schemaContext, recordContext] = await Promise.all([
     collectOwnedContext(input.repoRoot, specs),
     collectSpecArtifactContext(input.artifactRoot, specs),
     collectSchemaContext(input.repoRoot, fixClass),
-    collectExistingLabwareContext(input.repoRoot, specs, fixClass),
+    collectExistingRecordContext(input.repoRoot, specs, fixClass),
   ]);
   const context = [
     'Repository context:',
@@ -1004,8 +1087,8 @@ export async function runFoundryCoderPatch(input: {
     'Relevant schema context:',
     schemaContext || '(no schema context found)',
     '',
-    'Existing labware capability context:',
-    labwareContext || '(no existing labware context found)',
+    'Existing lane record context:',
+    recordContext || '(no existing record context found)',
     '',
     'Source artifact context:',
     artifactContext || '(no source artifact context found)',

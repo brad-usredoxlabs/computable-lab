@@ -298,6 +298,37 @@ function hasLabwareAliasOrResolverGap(input: {
   ) && /\b(labware|plate|reservoir|tube[_ -]?rack|rack|tiprack|well[_ -]?plate)\b/.test(evidence);
 }
 
+function hasFoundryRuntimeWiringGap(input: {
+  compiler: Record<string, unknown>;
+  executionScale: Record<string, unknown>;
+  browserReport: Record<string, unknown>;
+}): boolean {
+  const evidence = stringifyEvidence({
+    diagnostics: input.compiler['diagnostics'],
+    gaps: input.compiler['gaps'],
+    terminalArtifacts: input.compiler['terminalArtifacts'],
+    blockers: input.executionScale['blockers'],
+    browserReport: input.browserReport,
+  });
+  return evidence.includes('no matching labware in prior snapshot')
+    || evidence.includes('pass skipped by when')
+    || evidence.includes('resolve_labware')
+    || evidence.includes('foundry_presegmented');
+}
+
+function hasPrecompilerReferenceShapeGap(input: {
+  compiler: Record<string, unknown>;
+}): boolean {
+  const evidence = stringifyEvidence({
+    diagnostics: input.compiler['diagnostics'],
+    gaps: input.compiler['gaps'],
+  });
+  return evidence.includes('ai_precompile_shape_mismatch')
+    || evidence.includes('kind undefined not handled by resolve_references')
+    || evidence.includes('undefined (undefined)')
+    || /"0"\s*:\s*"[a-z0-9 ]"/.test(evidence);
+}
+
 function deterministicVerdict(input: {
   options: FoundryArchitectOptions;
   compiler: Record<string, unknown>;
@@ -337,6 +368,16 @@ function deterministicVerdict(input: {
     browserReport: input.browserReport,
   })) {
     failureClasses.add('labware_alias_or_resolver_gap');
+  }
+  if (hasFoundryRuntimeWiringGap({
+    compiler: input.compiler,
+    executionScale: input.executionScale,
+    browserReport: input.browserReport,
+  })) {
+    failureClasses.add('foundry_runtime_wiring_gap');
+  }
+  if (hasPrecompilerReferenceShapeGap({ compiler: input.compiler })) {
+    failureClasses.add('precompiler_reference_shape_gap');
   }
   if (browserStatus !== 'pass') failureClasses.add('browser_review');
   if (input.options.variant === 'robot_deck' && blockers.length > 0) failureClasses.add('robot_deck_binding');
@@ -395,6 +436,65 @@ function deterministicVerdict(input: {
       ownedFiles: coverageDetails.ownedFiles,
       acceptance: coverageDetails.acceptance,
       contextHints: coverageDetails.contextHints,
+      ...fixSpecDefaults(paths, evidence),
+    });
+  }
+  if (failureClasses.has('foundry_runtime_wiring_gap')) {
+    recommendedFixes.push({
+      id: 'fix-foundry-runtime-wiring-gap',
+      class: 'foundry_runtime_wiring_gap',
+      title: 'Wire Foundry compile dependencies to the real compiler runtime',
+      rationale: 'Foundry-specific runs are producing compiler gaps that look like missing resolver dependencies or skipped runtime wiring rather than missing protocol records. The architect may patch Foundry harness wiring, dependency injection, and focused Foundry regressions.',
+      ownedFiles: [
+        'server/src/foundry/ProtocolFoundryCompileRunner.ts',
+        'server/src/foundry/ProtocolFoundryCompileRunner.test.ts',
+        'server/src/tools/protocolFoundryCompile.ts',
+        'server/src/tools/protocolFoundryLoop.ts',
+        'server/src/ai/runChatbotCompile.ts',
+        'server/src/ai/compiler/labwareLookup.ts',
+        'server/src/ai/compiler/labwareLookup.test.ts',
+      ],
+      acceptance: [
+        'Foundry compile runs use the same real lookup/resolver dependencies as the main app when local seed records exist.',
+        'Does not hard-code one protocol ID or one vendor PDF.',
+        'Adds a focused regression proving a Foundry compile dependency is no longer stubbed or empty when seed data can satisfy it.',
+        'Compiler diagnostics for the source protocol lose at least one resolver/wiring gap, or the remaining gap is classified more specifically.',
+      ],
+      contextHints: [
+        'This lane is for the Foundry harness around the compiler, not for adding new biology data records.',
+        'A likely failure pattern is a Foundry runner passing an always-empty lookup function where the main app uses a real RecordStore-backed lookup.',
+        'Patch dependency wiring before adding YAML. Existing records should be found before new records are minted.',
+        'Keep changes local to Foundry runtime wiring unless the regression proves a shared compiler API needs a small extension.',
+      ],
+      ...fixSpecDefaults(paths, evidence),
+    });
+  }
+  if (failureClasses.has('precompiler_reference_shape_gap')) {
+    recommendedFixes.push({
+      id: 'fix-precompiler-reference-shape-gap',
+      class: 'precompiler_reference_shape_gap',
+      title: 'Normalize malformed precompiler unresolved reference shapes',
+      rationale: 'Compiler gaps contain malformed unresolved references, undefined kinds, or character-index objects. This is a precompiler/AI-output normalization problem, not permission to add duplicate records.',
+      ownedFiles: [
+        'server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts',
+        'server/src/compiler/pipeline/passes/AiPrecompileShapeMismatch.log.test.ts',
+        'server/src/compiler/pipeline/passes/ResolveReferences.test.ts',
+        'server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts',
+        'server/src/compiler/pipeline/passes/DeterministicPrecompilePass.test.ts',
+        'server/src/compiler/precompile/TaggerOutput.ts',
+        'schema/registry/prompt-templates/chatbot-compile.precompile.system.yaml',
+      ],
+      acceptance: [
+        'Malformed unresolved references are normalized into structured refs with label/kind/reason fields or dropped with a diagnostic naming the invalid shape.',
+        'Character-index object refs no longer appear in compiler gaps.',
+        'The patch includes a focused regression for the malformed shape seen in the source compiler artifact.',
+        'Does not add material or labware records to mask malformed precompiler output.',
+      ],
+      contextHints: [
+        'Look for ai_precompile shape mismatch, unresolvedRefs coercion, and resolve_references handling of undefined kind.',
+        'This lane should repair contracts and normalization boundaries before resolver/data lanes run.',
+        'Prefer preserving raw response diagnostics while converting useful malformed entries into structured references.',
+      ],
       ...fixSpecDefaults(paths, evidence),
     });
   }
