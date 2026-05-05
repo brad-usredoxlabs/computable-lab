@@ -431,6 +431,39 @@ describe('runChunkedExtractionService', () => {
       expect(result.candidates).toHaveLength(0);
       expect(result.diagnostics.some((d) => d.code === 'extractor_empty_non_protocol_chunk')).toBe(true);
     });
+
+    it('does not retry explicit no-actionable-content empty diagnostics', async () => {
+      const fakeService = {
+        run: vi.fn().mockResolvedValue({
+          kind: 'extraction-draft',
+          recordId: 'XDR-test-v1',
+          source_artifact: { kind: 'file', id: 'test.pdf' },
+          status: 'pending_review',
+          candidates: [],
+          created_at: '2026-01-01T00:00:00.000Z',
+          diagnostics: [
+            {
+              severity: 'info',
+              code: 'foundry_presegmented_no_actionable_candidates',
+              message: 'No protocol-action evidence found in this presegmented chunk.',
+              pass_id: 'protocol_extract',
+            },
+          ],
+        } as ExtractionDraftBody),
+      } as unknown as ExtractionRunnerService;
+
+      const req: RunExtractionServiceArgs = {
+        target_kind: 'protocol-fragment',
+        text: 'Foundry deterministic test assumptions YAML',
+        source: { kind: 'file', id: 'test.pdf' },
+      };
+
+      const result = await runChunkedExtractionService(fakeService, req);
+
+      expect(fakeService.run).toHaveBeenCalledTimes(1);
+      expect(result.retryBudgetRemaining).toBe(6);
+      expect(result.diagnostics.some((d) => d.code === 'foundry_presegmented_no_actionable_candidates')).toBe(true);
+    });
   });
 
   // -----------------------------------------------------------------------

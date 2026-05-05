@@ -286,15 +286,85 @@ function buildPrompt(input: {
   ].join('\n');
 }
 
-function nullExtractionService(): ExtractionRunnerService {
+const PROTOCOL_ACTION_ALIASES: Array<[RegExp, string]> = [
+  [/\b(add|combine|dispense|pipette|transfer|load)\b/i, 'transfer'],
+  [/\b(mix|vortex|resuspend)\b/i, 'mix'],
+  [/\b(incubate|culture)\b/i, 'incubate'],
+  [/\b(wash|rinse)\b/i, 'wash'],
+  [/\b(centrifuge|spin)\b/i, 'spin'],
+  [/\b(pellet)\b/i, 'pellet'],
+  [/\b(elute)\b/i, 'elute'],
+  [/\b(read|measure|quantify|image|scan)\b/i, 'read'],
+  [/\b(seed|plate)\b/i, 'seed'],
+  [/\b(dilute|prepare)\b/i, 'prepare'],
+  [/\b(run)\b/i, 'run_protocol'],
+];
+
+function protocolActionVerb(text: string): string | null {
+  for (const [pattern, verb] of PROTOCOL_ACTION_ALIASES) {
+    if (pattern.test(text)) return verb;
+  }
+  return null;
+}
+
+function isFoundryPromptBoilerplate(line: string): boolean {
+  return /^(- |rules:|protocol foundry compile target:|execution variant:|foundry deterministic test assumptions yaml:|material\/labware context yaml:|protocol text:)/i.test(line.trim());
+}
+
+export function extractPresegmentedFoundryCandidates(text: string): Array<{
+  target_kind: string;
+  draft: Record<string, unknown>;
+  confidence: number;
+}> {
+  const candidates: Array<{
+    target_kind: string;
+    draft: Record<string, unknown>;
+    confidence: number;
+  }> = [];
+  const lines = text
+    .split(/\r?\n|(?<=[.!?])\s+(?=[A-Z0-9])/)
+    .map((line) => line.trim())
+    .filter((line) => line.length >= 12 && !isFoundryPromptBoilerplate(line));
+
+  for (const line of lines) {
+    const verb = protocolActionVerb(line);
+    if (!verb) continue;
+    candidates.push({
+      target_kind: 'protocol-action',
+      draft: {
+        phrase: line.slice(0, 500),
+        verb,
+        section: 'protocol_steps',
+        source: 'foundry_presegmented_text',
+      },
+      confidence: 0.62,
+    });
+    if (candidates.length >= 80) break;
+  }
+
+  return candidates;
+}
+
+function presegmentedExtractionService(): ExtractionRunnerService {
   return {
-    async run(_args: RunExtractionServiceArgs) {
+    async run(args: RunExtractionServiceArgs) {
+      const candidates = extractPresegmentedFoundryCandidates(args.text);
+      if (candidates.length > 0) {
+        return {
+          candidates,
+          diagnostics: [{
+            severity: 'info',
+            code: 'foundry_presegmented_candidates',
+            message: `Protocol Foundry supplied ${candidates.length} deterministic candidates from presegmented text.`,
+          }],
+        };
+      }
       return {
         candidates: [],
         diagnostics: [{
           severity: 'info',
-          code: 'FOUNDRY_EXTRACTION_PRESEGMENTED',
-          message: 'Protocol Foundry supplied presegmented text; extraction runner skipped freetext candidate creation.',
+          code: 'foundry_presegmented_no_actionable_candidates',
+          message: 'Protocol Foundry supplied presegmented text, but this chunk had no deterministic protocol-action evidence.',
         }],
       };
     },
@@ -468,7 +538,7 @@ async function runVariant(input: {
   const result = await runChatbotCompile({
     prompt,
     deps: {
-      extractionService: nullExtractionService(),
+      extractionService: presegmentedExtractionService(),
       llmClient: input.llmClient,
       searchLabwareByHint: async () => [],
     },

@@ -217,6 +217,13 @@ async function runWithRetry(
       return result;
     }
 
+    if (hasNoRetryEmptyDiagnostic(result.diagnostics)) {
+      return {
+        ...result,
+        status: 'rejected',
+      };
+    }
+
     if (isLikelyNonProtocolChunk(request.text)) {
       return {
         ...result,
@@ -290,6 +297,13 @@ async function runWithRetry(
       },
     ],
   };
+}
+
+function hasNoRetryEmptyDiagnostic(diagnostics: ExtractionDraftBody['diagnostics']): boolean {
+  return (diagnostics ?? []).some((d) =>
+    d.code === 'extractor_no_actionable_content' ||
+    d.code === 'foundry_presegmented_no_actionable_candidates'
+  );
 }
 
 function isLikelyNonProtocolChunk(text: string): boolean {
