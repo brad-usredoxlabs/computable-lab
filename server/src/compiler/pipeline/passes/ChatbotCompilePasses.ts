@@ -173,11 +173,22 @@ export function createExtractEntitiesPass(
 
       // 2. Run extraction on each attachment
       for (const att of attachments) {
-        // Derive target_kind from filename extension or default to 'unknown'
+        // Derive target_kind from filename extension or default to 'unknown'.
+        // PDFs are protocol sources, but the extractor should emit mixed
+        // compiler evidence instead of one giant protocol record.
         let targetKind = 'unknown';
+        let targetKindsHint: string[] | undefined;
         const fileNameLower = att.name.toLowerCase();
         if (fileNameLower.endsWith('.pdf')) {
-          targetKind = 'protocol'; // Default for PDFs
+          targetKind = 'protocol-fragment';
+          targetKindsHint = [
+            'protocol-action',
+            'tagged-phrase',
+            'material-spec',
+            'labware-spec',
+            'instrument',
+            'readout',
+          ];
         } else if (fileNameLower.endsWith('.xlsx') || fileNameLower.endsWith('.xls')) {
           targetKind = 'material'; // Default for spreadsheets
         } else if (fileNameLower.endsWith('.html') || fileNameLower.endsWith('.htm')) {
@@ -219,6 +230,9 @@ export function createExtractEntitiesPass(
           },
           fileName: att.name,
         };
+        if (targetKindsHint) {
+          runRequest.hint = { target_kinds: targetKindsHint };
+        }
 
         try {
           const result: ExtractionDraftBody = await runChunkedExtractionService(deps.extractionService, runRequest);

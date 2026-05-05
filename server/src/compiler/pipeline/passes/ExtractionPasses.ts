@@ -212,11 +212,16 @@ export function createDraftAssemblePass(params: {
       const recordId = `${recordIdPrefix}${timestamp}-v1`;
 
       // Build extraction draft
+      const extractionDiagnostics = state.diagnostics.filter((d) =>
+        d.pass_id === 'extractor_run' ||
+        d.pass_id === 'mention_resolve'
+      );
       const buildArgs: BuildExtractionDraftArgs = {
         recordId,
         source_artifact,
         candidates: mentionResolveOutput.resolved_candidates,
-        ambiguity_spans_by_candidate: mentionResolveOutput.ambiguity_spans_by_candidate
+        ambiguity_spans_by_candidate: mentionResolveOutput.ambiguity_spans_by_candidate,
+        diagnostics: extractionDiagnostics,
       };
       if (now !== undefined) {
         buildArgs.now = now;

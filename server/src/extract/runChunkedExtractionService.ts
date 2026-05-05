@@ -189,6 +189,7 @@ async function runWithRetry(
   const MAX_ATTEMPTS = 3;
   let lastError: string | null = null;
   let lastRawResponse: string | null = null;
+  let attemptsMade = 0;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     if (retryBudget.remaining <= 0 && attempt > 1) {
@@ -210,9 +211,30 @@ async function runWithRetry(
         : request;
 
     const result = await service.run(attemptRequest);
+    attemptsMade++;
 
     if (result.candidates && result.candidates.length > 0) {
       return result;
+    }
+
+    if (isLikelyNonProtocolChunk(request.text)) {
+      return {
+        ...result,
+        status: 'rejected',
+        diagnostics: [
+          ...(result.diagnostics ?? []),
+          {
+            severity: 'info',
+            code: 'extractor_empty_non_protocol_chunk',
+            message: `Chunk ${chunkIndex} appears to contain no actionable protocol content; not retrying empty extraction.`,
+            pass_id: 'protocol_extract',
+            details: {
+              chunk_index: chunkIndex,
+              attempts_made: attemptsMade,
+            },
+          },
+        ],
+      };
     }
 
     // Capture validation error + raw response from result diagnostics.
@@ -256,14 +278,80 @@ async function runWithRetry(
       {
         severity: 'warning',
         code: 'extractor_repair_exhausted',
-        message: `Extraction failed after ${MAX_ATTEMPTS} attempts for chunk ${chunkIndex}`,
+        message: `Extraction failed after ${attemptsMade} attempt${attemptsMade === 1 ? '' : 's'} for chunk ${chunkIndex}`,
         pass_id: 'protocol_extract',
         details: {
           chunk_index: chunkIndex,
+          attempts_made: attemptsMade,
+          max_attempts: MAX_ATTEMPTS,
           last_error: lastError,
           last_raw_response: lastRawResponse,
         },
       },
     ],
   };
+}
+
+function isLikelyNonProtocolChunk(text: string): boolean {
+  const normalized = text.toLowerCase();
+  const actionSignals = [
+    ' add ',
+    ' transfer ',
+    ' incubat',
+    ' wash',
+    ' mix',
+    ' centrifug',
+    ' spin ',
+    ' vortex',
+    ' pipet',
+    ' aspirat',
+    ' dispens',
+    ' elut',
+    ' resuspend',
+    ' pellet',
+    ' seed ',
+    ' read ',
+    ' measure',
+    ' quantify',
+    ' dilute',
+    ' prepare',
+    ' collect',
+    ' load ',
+    ' run ',
+  ];
+  const labSignals = [
+    ' ul',
+    ' µl',
+    ' ml',
+    ' nm',
+    ' mg/ml',
+    ' ng/',
+    ' rpm',
+    ' x g',
+    ' °c',
+    ' buffer',
+    ' reagent',
+    ' sample',
+    ' tube',
+    ' well',
+    ' plate',
+    ' column',
+    ' pipette',
+    ' centrifuge',
+  ];
+  const boilerplateSignals = [
+    'table of contents',
+    'limited warranty',
+    'trademark',
+    'copyright',
+    'technical support',
+    'ordering information',
+    'references',
+    'revision history',
+    'safety data sheet',
+  ];
+  const hasAction = actionSignals.some((s) => normalized.includes(s));
+  const hasLab = labSignals.some((s) => normalized.includes(s));
+  const hasBoilerplate = boilerplateSignals.some((s) => normalized.includes(s));
+  return hasBoilerplate && !hasAction && !hasLab;
 }

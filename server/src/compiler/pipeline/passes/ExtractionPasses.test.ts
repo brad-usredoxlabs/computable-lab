@@ -319,4 +319,56 @@ describe('createDraftAssemblePass', () => {
     expect(draft.candidates.length).toBe(1);
     expect(draft.created_at).toBe('2024-01-15T10:30:00.000Z');
   });
+
+  it('preserves extractor diagnostics, including raw response details, in the assembled draft', async () => {
+    const assemblePass = createDraftAssemblePass({
+      recordIdPrefix: 'XDR-test-',
+      source_artifact: { kind: 'file', id: 'test-file-1' },
+      now: () => new Date('2024-01-15T10:30:00.000Z')
+    });
+
+    const assembleResult = await assemblePass.run({
+      pass_id: 'draft_assemble',
+      state: {
+        input: {},
+        context: {},
+        meta: {},
+        outputs: new Map([
+          ['mention_resolve', {
+            resolved_candidates: [],
+            ambiguity_spans_by_candidate: [],
+          }],
+        ]),
+        diagnostics: [
+          {
+            severity: 'warning',
+            code: 'extractor_empty_candidates',
+            message: 'Extractor returned an empty candidates array',
+            pass_id: 'extractor_run',
+            details: {
+              rawResponse: '{"choices":[{"message":{"content":"{\\"candidates\\":[]}"}}]}',
+              parsedContent: { candidates: [] },
+            },
+          },
+          {
+            severity: 'info',
+            code: 'unrelated',
+            message: 'not part of extraction draft',
+            pass_id: 'other_pass',
+          },
+        ],
+      }
+    });
+
+    expect(assembleResult.ok).toBe(true);
+    const draft = assembleResult.output as any;
+    expect(draft.diagnostics).toHaveLength(1);
+    expect(draft.diagnostics[0]).toMatchObject({
+      code: 'extractor_empty_candidates',
+      details: {
+        rawResponse: expect.any(String),
+        parsedContent: { candidates: [] },
+      },
+    });
+  });
 });

@@ -159,7 +159,18 @@ export class OpenAICompatibleExtractor implements ExtractorAdapter {
   }
 
   private buildSystemMessage(): string {
-    return 'You are a biology-protocol extractor. Given unstructured text, produce JSON with a candidates[] array. Each candidate has: target_kind (string), draft (object), confidence (0..1). Optionally ambiguity_spans[]. Respond ONLY with JSON.';
+    return [
+      'You are a biology-protocol lexical extractor for a compiler.',
+      'Given unstructured protocol text, produce JSON with a candidates[] array.',
+      'Each candidate must have: target_kind (string), draft (object), confidence (0..1). Optionally ambiguity_spans[].',
+      'For protocol PDFs, prefer multiple small evidence candidates over one whole-protocol summary.',
+      'Useful target_kind values include protocol-action, tagged-phrase, material-spec, labware-spec, instrument, readout, and material.',
+      'Use protocol-action for concrete steps; draft should preserve the exact phrase plus surface fields such as verb, object, amount, target, duration, temperature, and section when present.',
+      'Use tagged-phrase for important verbs, materials, labware, quantities, durations, temperatures, instruments, well regions, and conditions.',
+      'Do not invent final event graph events, material instances, aliquots, deck bindings, registry IDs, or physical inventory.',
+      'If a chunk contains only table of contents, legal text, warranty text, catalog boilerplate, or references and no protocol content, return {"candidates":[]}.',
+      'Respond ONLY with JSON.',
+    ].join(' ');
   }
 
   private buildUserMessage(req: ExtractionRequest): string {
