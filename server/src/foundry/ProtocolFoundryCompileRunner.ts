@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import YAML from 'yaml';
+import { getLabwareDefinitionRegistry } from '../registry/LabwareDefinitionRegistry.js';
 import { createLabwareLookup } from '../ai/compiler/labwareLookup.js';
 import { createInferenceClient } from '../ai/InferenceClient.js';
 import { runChatbotCompile, type RunChatbotCompileResult } from '../ai/runChatbotCompile.js';
@@ -32,6 +33,10 @@ export interface ProtocolFoundryCompileOptions {
   inference?: Partial<InferenceConfig>;
   dryRun?: boolean;
 }
+
+// Minimal RecordStore shim for Foundry compile runs that need labware resolution
+// without mutating the main application store. It delegates to the global registry.
+const foundryLabwareStore = { list: async () => getLabwareDefinitionRegistry().list() };
 
 export interface ProtocolFoundryCompileSummary {
   kind: 'protocol-foundry-compile-summary';
@@ -413,9 +418,7 @@ function createFoundryLabwareLookup(): (hint: string) => Promise<Array<{ recordI
   // generic_96_well_plate. The main app backs this helper with RecordStore; the
   // Foundry CLI can still exercise the same alias resolver without opening a
   // mutating store by supplying an empty read-only list fallback.
-  return createLabwareLookup({
-    list: async () => [],
-  } as unknown as RecordStore);
+  return createLabwareLookup(foundryLabwareStore as unknown as RecordStore);
 }
 
 function valueFromDetails(details: Record<string, unknown>, keys: string[]): string[] {
