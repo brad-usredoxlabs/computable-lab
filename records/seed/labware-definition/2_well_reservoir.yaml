@@ -16,6 +16,20 @@ topology:
   orientation_allowed:
     - landscape
     - portrait
+capacity
+  max_well_volume_uL: 5000
+  min_working_volume_uL: 50
+aspiration_hints:
+  multichannel_source_mode: single_well
+  single_well_multichannel_source: true
+  per_channel_source_expected: false
+render_hints:
+  profile: reservoir
+  linear_well_style: trough
+tags:
+  - execution-scale-compatible
+  - integra-assist-plus
+  - browser-review-compatible
 capacity:
   max_well_volume_uL: 5000
   min_working_volume_uL: 50
