@@ -350,6 +350,73 @@ describe('createAiPrecompilePass', () => {
     expect(mockLlmClient.complete).toHaveBeenCalledTimes(1);
   });
 
+  it('lowers LLM candidateActions into compiler candidateEvents while preserving action tags', async () => {
+    const expectedOutput: AiPrecompileOutput = {
+      candidateActions: [
+        {
+          phrase: 'Add 100 uL wash buffer to each well',
+          verb: 'add',
+          object: 'wash buffer',
+          amount: '100 uL',
+          target: 'each well',
+          section: 'protocol_steps',
+        },
+        {
+          phrase: 'Incubate for 5 min at room temperature',
+          verb: 'incubate',
+          duration: '5 min',
+          temperature: 'room temperature',
+          section: 'protocol_steps',
+        },
+      ],
+      taggedPhrases: [
+        { phrase: 'Add', tag: 'verb', value: 'add' },
+        { phrase: '100 uL', tag: 'quantity', value: '100 uL' },
+      ],
+      candidateEvents: [],
+      candidateLabwares: [],
+      unresolvedRefs: [],
+    };
+
+    const mockLlmClient = {
+      complete: vi.fn().mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(expectedOutput) } }],
+      }),
+    } as unknown as LlmClient;
+
+    const pass = createAiPrecompilePass({ llmClient: mockLlmClient });
+    const result = await pass.run({
+      pass_id: 'ai_precompile',
+      state: {
+        input: { prompt: 'Add 100 uL wash buffer to each well. Incubate for 5 min.', attachments: [] },
+        context: {},
+        meta: {},
+        outputs: new Map(),
+        diagnostics: [],
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as AiPrecompileOutput;
+    expect(output.candidateActions).toHaveLength(2);
+    expect(output.taggedPhrases).toHaveLength(2);
+    expect(output.candidateEvents).toHaveLength(2);
+    expect(output.candidateEvents[0]).toMatchObject({
+      verb: 'add_material',
+      source: 'llm_candidate_action',
+      phrase: 'Add 100 uL wash buffer to each well',
+      material: 'wash buffer',
+      volume: '100 uL',
+      target: 'each well',
+    });
+    expect(output.candidateEvents[1]).toMatchObject({
+      verb: 'incubate',
+      source: 'llm_candidate_action',
+      duration: '5 min',
+      temperature: 'room temperature',
+    });
+  });
+
   it('directives round-trip: mock LLM emits a reorient_labware directive', async () => {
     const expectedOutput: AiPrecompileOutput = {
       candidateEvents: [],

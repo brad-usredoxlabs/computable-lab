@@ -9,9 +9,11 @@ content: |
 
   Return a strict JSON object with this shape and nothing else. You MUST populate at least one of the arrays below with valid candidate objects if the text contains any biological protocol content. You may populate multiple arrays. Do not return empty arrays for all keys unless the text is completely devoid of protocol content.
 
-  If the text contains reagents, labware, instruments, or protocol steps, you MUST extract them as mintMaterials, directives, priorLabwareRefs, or candidateEvents. Do not return empty arrays for all keys.
+  If the text contains reagents, labware, instruments, or protocol steps, you MUST extract them as taggedPhrases, candidateActions, mintMaterials, directives, or priorLabwareRefs. Do not return empty arrays for all keys.
   You MUST populate at least one of mintMaterials, directives, priorLabwareRefs, or downstreamCompileJobs if the text contains relevant entities or actions, even if no candidateEvents are identified. The compiler accepts any non-empty subset of these arrays.
   {
+    "taggedPhrases": [],
+    "candidateActions": [],
     "candidateEvents": [],
     "mintMaterials": [],
     "directives": [],
@@ -34,7 +36,8 @@ content: |
   - Emit instrument tags for pipettes, plate readers, qPCR, GC-MS, centrifuges, shakers, heaters, and magnetic stands.
   - Emit back_reference tags for references such as it, that plate, the reservoir, or the target.
   - Emit mention tags when the prompt contains [[kind:id|label]] or [[selection:role|labwareId|wells|label]] tokens. The mention tag text must be the full token text. Preserve trusted IDs in id when present and include mentionKind when obvious.
-  - Do not emit final candidate events, candidate labware additions, registry IDs, or semantic decisions.
+  - Do not emit final event graph events, candidate labware additions, registry IDs, deck bindings, material instances, aliquots, or semantic execution decisions.
+  - Prefer taggedPhrases and candidateActions. Leave candidateEvents empty unless a legacy caller explicitly requires it.
   - If a phrase is ambiguous, still tag the surface text and let the compiler resolve it later.
   - If no clear action verbs are found, extract mintMaterials for all mentioned reagents, labware, and instruments.
 
@@ -50,11 +53,20 @@ content: |
   downstreamCompileJobs format:
   - { "jobType": "string", "input": "string", "output": "string", "parameters": { "key": "value" } }
 
+  taggedPhrases format:
+  - { "phrase": "exact text", "tag": "verb|material|labware|quantity|duration|temperature|instrument|well_region|condition", "value": "normalized value if obvious" }
+
+  candidateActions format:
+  - { "phrase": "exact protocol phrase", "verb": "surface verb", "object": "material/labware/action object", "amount": "volume/count if present", "target": "target phrase if present", "duration": "duration if present", "temperature": "temperature if present", "section": "protocol_steps|materials|reagent_prep|readout|notes|unknown" }
+
   candidateEvents format:
-  - { "eventType": "string", "target": "string", "parameters": { "key": "value" } }
+  - legacy compatibility only; prefer candidateActions.
 
   Example:
   {
+    "candidateActions": [
+      { "phrase": "Quantify libraries with the KAPA Library Quantification Kit", "verb": "quantify", "object": "libraries", "target": "KAPA Library Quantification Kit", "section": "readout" }
+    ],
     "mintMaterials": [
       { "materialKind": "reagent", "name": "KAPA Library Quantification Kit", "quantity": "1", "unit": "kit" }
     ],

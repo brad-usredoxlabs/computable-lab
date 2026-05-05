@@ -343,6 +343,8 @@ export interface AiLabwareAdditionPatch {
  * Output shape for the ai_precompile pass.
  */
 export interface AiPrecompileOutput {
+  candidateActions?: CandidateAction[];
+  taggedPhrases?: TaggedPhrase[];
   candidateEvents: Array<{ verb: string; [key: string]: unknown }>;
   candidateLabwares: CandidateLabware[];
   unresolvedRefs: Array<{ kind: string; label: string; reason: string }>;
@@ -352,6 +354,33 @@ export interface AiPrecompileOutput {
   directives?: Directive[];                   // state-change nodes (reorient, mount, swap)
   downstreamCompileJobs?: DownstreamCompileJob[];  // declared future compile targets
   patternEvents?: PatternEvent[];             // named stamp pattern invocations
+}
+
+export interface CandidateAction {
+  phrase?: string;
+  verb: string;
+  object?: string;
+  material?: string;
+  reagent?: string;
+  target?: string;
+  amount?: string;
+  volume?: string;
+  duration?: string;
+  temperature?: string | number;
+  section?: string;
+  confidence?: number;
+  [key: string]: unknown;
+}
+
+export interface TaggedPhrase {
+  text?: string;
+  phrase?: string;
+  tag?: string;
+  kind?: string;
+  verb?: string;
+  value?: string;
+  unit?: string;
+  [key: string]: unknown;
 }
 
 /**
@@ -381,6 +410,8 @@ function createAiPrecompileOutputSchema() {
   const { z } = require('zod') as typeof import('zod');
   return z.object({
     candidateEvents: z.array(z.any()).default([]),
+    candidateActions: z.array(z.any()).optional(),
+    taggedPhrases: z.array(z.any()).optional(),
     candidateLabwares: z.array(z.any()).default([]),
     unresolvedRefs: z.array(z.any()).default([]),
     clarification: z.string().optional(),
@@ -402,6 +433,71 @@ function createAiPrecompileOutputSchema() {
   });
 }
 
+function normalizeCandidateActionVerb(verb: string): string {
+  const normalized = verb.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  const aliases: Record<string, string> = {
+    add: 'add_material',
+    pipette: 'transfer',
+    dispense: 'transfer',
+    aspirate: 'transfer',
+    transfer: 'transfer',
+    incubate: 'incubate',
+    mix: 'mix',
+    vortex: 'mix',
+    resuspend: 'resuspend',
+    wash: 'wash',
+    rinse: 'wash',
+    spin: 'spin',
+    centrifuge: 'spin',
+    pellet: 'pellet',
+    seed: 'seed',
+    read: 'read',
+    measure: 'read',
+    quantify: 'read',
+    run: 'run_protocol',
+  };
+  return aliases[normalized] ?? normalized;
+}
+
+function lowerCandidateActionsToEvents(actions: unknown[] | undefined): Array<{ verb: string; [key: string]: unknown }> {
+  if (!Array.isArray(actions)) return [];
+  const events: Array<{ verb: string; [key: string]: unknown }> = [];
+  for (const action of actions) {
+    if (!action || typeof action !== 'object' || Array.isArray(action)) continue;
+    const record = action as Record<string, unknown>;
+    const rawVerb = typeof record.verb === 'string'
+      ? record.verb
+      : typeof record.action === 'string'
+        ? record.action
+        : undefined;
+    if (!rawVerb) continue;
+    const verb = normalizeCandidateActionVerb(rawVerb);
+    const phrase = typeof record.phrase === 'string'
+      ? record.phrase
+      : typeof record.text === 'string'
+        ? record.text
+        : undefined;
+    const material = record.material ?? record.reagent ?? record.object;
+    const volume = record.volume ?? record.amount;
+    const event: { verb: string; [key: string]: unknown } = {
+      verb,
+      source: 'llm_candidate_action',
+      ...(phrase ? { phrase, originalPhrase: phrase } : {}),
+      ...(material !== undefined ? { material, material_name: material, reagent: material } : {}),
+      ...(volume !== undefined ? { volume } : {}),
+      ...(record.target !== undefined ? { target: record.target } : {}),
+      ...(record.duration !== undefined ? { duration: record.duration } : {}),
+      ...(record.temperature !== undefined ? { temperature: record.temperature } : {}),
+      ...(record.labware !== undefined ? { labware: record.labware } : {}),
+      ...(record.labware_id !== undefined ? { labware_id: record.labware_id } : {}),
+      ...(record.wells !== undefined ? { wells: record.wells } : {}),
+      candidateAction: record,
+    };
+    events.push(event);
+  }
+  return events;
+}
+
 function salvageAiPrecompileOutput(input: {
   parsed: Partial<AiPrecompileOutput>;
   deterministicHasCoreArtifacts: boolean;
@@ -410,9 +506,14 @@ function salvageAiPrecompileOutput(input: {
   detUnresolvedRefs: Array<{ kind: string; label: string; reason: string }>;
 }): AiPrecompileOutput {
   const output: AiPrecompileOutput = {
+    ...(Array.isArray(input.parsed.candidateActions) ? { candidateActions: input.parsed.candidateActions } : {}),
+    ...(Array.isArray(input.parsed.taggedPhrases) ? { taggedPhrases: input.parsed.taggedPhrases } : {}),
     candidateEvents: input.deterministicHasCoreArtifacts
       ? []
-      : (Array.isArray(input.parsed.candidateEvents) ? input.parsed.candidateEvents : []),
+      : [
+        ...lowerCandidateActionsToEvents(input.parsed.candidateActions),
+        ...(Array.isArray(input.parsed.candidateEvents) ? input.parsed.candidateEvents : []),
+      ],
     candidateLabwares: input.deterministicHasCoreArtifacts
       ? []
       : (Array.isArray(input.parsed.candidateLabwares) ? input.parsed.candidateLabwares : []),
@@ -583,9 +684,14 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
       }
       // Normalize: ensure all three arrays exist; carry through validated fields
       const llmOutput: AiPrecompileOutput = {
+        ...(Array.isArray(parsed.candidateActions) ? { candidateActions: parsed.candidateActions } : {}),
+        ...(Array.isArray(parsed.taggedPhrases) ? { taggedPhrases: parsed.taggedPhrases } : {}),
         candidateEvents: deterministicHasCoreArtifacts
           ? []
-          : (Array.isArray(parsed.candidateEvents) ? parsed.candidateEvents : []),
+          : [
+            ...lowerCandidateActionsToEvents(parsed.candidateActions),
+            ...(Array.isArray(parsed.candidateEvents) ? parsed.candidateEvents : []),
+          ],
         candidateLabwares: deterministicHasCoreArtifacts
           ? []
           : (Array.isArray(parsed.candidateLabwares) ? parsed.candidateLabwares : []),

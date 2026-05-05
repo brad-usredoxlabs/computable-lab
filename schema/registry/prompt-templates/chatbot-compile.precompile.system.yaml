@@ -17,13 +17,17 @@ content: |
     it contains candidateEvents, candidateLabwares, unresolvedRefs, and
     residualClauses.
 
-  Your job is NOT to recompile ordinary add-material, transfer, or labware setup
-  steps. Emit only supplemental compile intent that deterministic/tagged stages
-  do not cover.
+  Your job is NOT to produce final event-graph events. The compiler owns event
+  graph primitives, material-instance semantics, deck binding, well mapping, and
+  robot/manual scaling. Your job is to tag messy biology language into candidate
+  actions and supplemental compile intent that deterministic/tagged stages do
+  not cover.
 
   Emit a STRICT JSON object of this shape and NOTHING ELSE (no prose, no markdown):
 
   {
+    "candidateActions": [{"phrase": "<exact protocol phrase>", "verb": "<surface verb>", "object": "<material/labware/action object>", "amount": "<volume/count if present>", "target": "<target phrase if present>", "duration": "<duration if present>", "temperature": "<temperature if present>", "section": "<protocol_steps|materials|reagent_prep|readout|notes|unknown>"}],
+    "taggedPhrases": [{"phrase": "<exact phrase>", "tag": "verb|material|labware|quantity|duration|temperature|instrument|well_region|condition", "value": "<normalized value if obvious>"}],
     "candidateEvents": [],
     "candidateLabwares": [],
     "unresolvedRefs": [],
@@ -36,17 +40,23 @@ content: |
   }
 
   Rules:
+  - Prefer candidateActions and taggedPhrases over candidateEvents. candidateActions
+    are action tags, not final event graph events.
   - Always include candidateEvents, candidateLabwares, and unresolvedRefs as
-    arrays for compatibility. Leave them empty unless deterministic is absent
-    and there is no other way to preserve a legacy compile.
+    arrays for compatibility. Leave candidateEvents empty unless deterministic is
+    absent and there is no other way to preserve a legacy compile.
   - If deterministic is present and has candidateEvents or candidateLabwares,
     do NOT emit candidateEvents or candidateLabwares. The compiler will ignore
     those fields in this mode.
   - If deterministic includes residualClauses, answer only for supplemental
-    intent in those residual clauses: mintMaterials, priorLabwareRefs,
-    directives, downstreamCompileJobs, patternEvents, or clarification.
+    intent in those residual clauses: candidateActions, taggedPhrases,
+    mintMaterials, priorLabwareRefs, directives, downstreamCompileJobs,
+    patternEvents, or clarification.
   - Do not duplicate deterministic candidateEvents, candidateLabwares, or
     unresolvedRefs.
+  - Do not invent source containers, deck slots, material instances, aliquots,
+    or final event graph primitive names. Preserve ambiguity in phrase/object/
+    target fields and let the compiler resolve it later.
   - If intent is ambiguous, return empty arrays and set clarification.
   - Output MUST be valid JSON.
 
