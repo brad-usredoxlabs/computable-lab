@@ -15,6 +15,7 @@ const MAX_FILE_CHARS = 16_000;
 const MAX_ARTIFACT_CONTEXT_CHARS = 50_000;
 const MAX_ARTIFACT_FILE_CHARS = 12_000;
 const MAX_SCHEMA_CONTEXT_CHARS = 32_000;
+const MAX_LABWARE_CONTEXT_CHARS = 24_000;
 
 type CoderPatchStatus = 'applied' | 'blocked' | 'failed' | 'skipped' | 'stale' | 'needs-human';
 
@@ -214,6 +215,98 @@ async function collectSchemaContext(repoRoot: string, fixClass: string): Promise
   return chunks.join('\n\n').slice(0, MAX_SCHEMA_CONTEXT_CHARS);
 }
 
+function labwareContextApplies(fixClass: string): boolean {
+  return fixClass === 'material_catalog_or_spec_gap'
+    || fixClass === 'browser_or_labware_rendering'
+    || fixClass === 'execution_scaling';
+}
+
+function stringifySmall(value: unknown): string {
+  return JSON.stringify(value, (_key, entry) => {
+    if (typeof entry === 'string' && entry.length > 1000) return `${entry.slice(0, 1000)}...`;
+    return entry;
+  });
+}
+
+function labwareSearchNeedles(specs: PatchSpec[]): string[] {
+  const evidence = specs.map((spec) => stringifySmall(spec.raw)).join('\n').toLowerCase();
+  const needles = new Set<string>();
+  for (const token of [
+    '96', '384', '24', '12', '8', '2', '1.5', '2ml', '15ml', '50ml',
+    'plate', 'well', 'reservoir', 'trough', 'tube', 'rack', 'tip', 'tiprack',
+    'assist', 'integra', 'opentrons', 'generic_96_well_plate',
+    'generic_12_well_reservoir', 'generic_24x1_5ml_tube_rack',
+  ]) {
+    if (evidence.includes(token)) needles.add(token);
+  }
+  return Array.from(needles);
+}
+
+function labwareRecordSummary(path: string, doc: Record<string, unknown>): string {
+  const aliases = [
+    doc['recordId'],
+    doc['id'],
+    doc['display_name'],
+    ...(Array.isArray(doc['legacy_labware_types']) ? doc['legacy_labware_types'] : []),
+    ...(Array.isArray(doc['tags']) ? doc['tags'] : []),
+    ...(Array.isArray(doc['platform_aliases'])
+      ? doc['platform_aliases']
+        .map((entry) => asRecord(entry)['alias'])
+        .filter((entry): entry is string => typeof entry === 'string')
+      : []),
+  ].filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+  return [
+    `path: ${path}`,
+    `recordId: ${typeof doc['recordId'] === 'string' ? doc['recordId'] : '(missing)'}`,
+    `id: ${typeof doc['id'] === 'string' ? doc['id'] : '(missing)'}`,
+    `display_name: ${typeof doc['display_name'] === 'string' ? doc['display_name'] : '(missing)'}`,
+    `aliases: ${Array.from(new Set(aliases)).join(', ') || '(none)'}`,
+  ].join('\n');
+}
+
+async function collectExistingLabwareContext(repoRoot: string, specs: PatchSpec[], fixClass: string): Promise<string> {
+  if (!labwareContextApplies(fixClass)) return '(not a labware/material/schema fix class)';
+  const dir = join(repoRoot, 'records/seed/labware-definition');
+  if (!existsSync(dir)) return '(canonical labware-definition directory not found)';
+
+  const files = (await readdir(dir))
+    .filter((file) => /\.ya?ml$/i.test(file))
+    .sort()
+    .map((file) => join(dir, file));
+  const needles = labwareSearchNeedles(specs);
+  const summaries: Array<{ score: number; text: string }> = [];
+
+  for (const file of files) {
+    const rel = relative(repoRoot, file);
+    let docs: Array<Record<string, unknown>> = [];
+    try {
+      docs = parseYamlDocuments(await readFile(file, 'utf-8'));
+    } catch {
+      continue;
+    }
+    for (const doc of docs) {
+      if (doc['kind'] !== 'labware-definition') continue;
+      const text = labwareRecordSummary(rel, doc);
+      const haystack = `${rel}\n${text}`.toLowerCase();
+      const score = needles.reduce((sum, needle) => sum + (haystack.includes(needle) ? 1 : 0), 0);
+      summaries.push({ score, text });
+    }
+  }
+
+  const selected = summaries
+    .sort((a, b) => b.score - a.score || a.text.localeCompare(b.text))
+    .slice(0, 18)
+    .map((entry) => entry.text);
+
+  return [
+    'Existing canonical labware definitions:',
+    'If one of these already satisfies the requested plate/tube/rack/reservoir capability, do not recreate it.',
+    'Patch the compiler resolver, alias map, execution-scale mapping, or a focused regression that proves the existing record is used.',
+    '',
+    selected.join('\n\n') || '(no labware definition summaries found)',
+  ].join('\n').slice(0, MAX_LABWARE_CONTEXT_CHARS);
+}
+
 function extractJsonObject(text: string): Record<string, unknown> | undefined {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
   const candidates = [fenced, text].filter((value): value is string => Boolean(value));
@@ -269,6 +362,48 @@ function parseTouchedFiles(diff: string): string[] {
     }
   }
   return Array.from(files).filter((file) => file !== '/dev/null').sort();
+}
+
+export function existingFileAdditionViolations(repoRoot: string, diff: string): string[] {
+  const violations: string[] = [];
+  let currentOldPath: string | undefined;
+  let currentNewPath: string | undefined;
+
+  function recordViolation(path: string): void {
+    const normalized = path.replace(/^a\//, '').replace(/^b\//, '');
+    if (normalized === '/dev/null' || normalized.startsWith('/')) return;
+    if (!existsSync(join(repoRoot, normalized))) return;
+    violations.push(`${normalized}: patch is written as a new-file/add-from-empty change, but the file already exists. Update the existing record or patch an alias/resolver mapping instead.`);
+  }
+
+  for (const line of diff.split('\n')) {
+    const gitMatch = line.match(/^diff --git a\/(.+?) b\/(.+)$/);
+    if (gitMatch) {
+      currentOldPath = gitMatch[1]!;
+      currentNewPath = gitMatch[2]!;
+      continue;
+    }
+    const oldMatch = line.match(/^--- (a\/.+|\/dev\/null)$/);
+    if (oldMatch) {
+      currentOldPath = oldMatch[1]!.replace(/^a\//, '');
+      continue;
+    }
+    const newMatch = line.match(/^\+\+\+ (b\/.+|\/dev\/null)$/);
+    if (newMatch) {
+      currentNewPath = newMatch[1]!.replace(/^b\//, '');
+      continue;
+    }
+    if (/^new file mode\b/.test(line) && currentNewPath) {
+      recordViolation(currentNewPath);
+      continue;
+    }
+    if (/^@@ -0,0 \+\d+(?:,\d+)? @@/.test(line)) {
+      if (currentOldPath && currentOldPath !== '/dev/null') recordViolation(currentOldPath);
+      else if (currentNewPath) recordViolation(currentNewPath);
+    }
+  }
+
+  return Array.from(new Set(violations));
 }
 
 function pathIsAllowed(path: string, ownedFiles: string[]): boolean {
@@ -581,6 +716,7 @@ async function requestCoderPatch(input: {
           'If the spec is broad, choose the smallest acceptance criterion that advances the exact failure evidence.',
           'Before editing a YAML record, inspect the supplied context and update the existing record in place if it already matches the requested labware/material family.',
           'If the requested capability already exists in context, add a narrow diagnostic, alias, mapping, or regression instead of recreating a large existing file.',
+          'Never write an add-from-empty patch for a file that exists in repository context; update the existing file with normal context lines or patch resolver code instead.',
           'Use the relevant schema context. Labware definitions go in records/seed/labware-definition/*.yaml with canonical labware-definition schema fields.',
           'Never model plates, tubes, racks, reservoirs, tips, or other containers as material records.',
         ].join('\n'),
@@ -651,7 +787,15 @@ async function evaluateCandidate(input: {
   const directories = await findDirectoryTouchedFiles(input.repoRoot, touchedFiles);
   const dataFormatErrors = dataFormatViolations(touchedFiles);
   const recordPathErrors = recordPathPolicyViolations(touchedFiles);
-  if (touchedFiles.length === 0 || disallowed.length > 0 || directories.length > 0 || dataFormatErrors.length > 0 || recordPathErrors.length > 0) {
+  const existingFileAdditionErrors = existingFileAdditionViolations(input.repoRoot, input.response.diff);
+  if (
+    touchedFiles.length === 0
+    || disallowed.length > 0
+    || directories.length > 0
+    || dataFormatErrors.length > 0
+    || recordPathErrors.length > 0
+    || existingFileAdditionErrors.length > 0
+  ) {
     const result: AttemptResult = {
       attempt: input.response.attempt,
       strategy: input.response.strategy,
@@ -663,7 +807,9 @@ async function evaluateCandidate(input: {
           ? `Coder patch attempted to write non-YAML records data: ${dataFormatErrors.join(', ')}`
           : recordPathErrors.length > 0
             ? `Coder patch used legacy/noncanonical record paths: ${recordPathErrors.join(', ')}. Use records/seed/labware-definition/*.yaml for labware definitions.`
-            : `Coder patch touched files outside architect-owned paths: ${disallowed.join(', ')}`,
+            : existingFileAdditionErrors.length > 0
+              ? existingFileAdditionErrors.join('\n')
+              : `Coder patch touched files outside architect-owned paths: ${disallowed.join(', ')}`,
       diffPath,
       touchedFiles,
       rawResponse,
@@ -841,10 +987,11 @@ export async function runFoundryCoderPatch(input: {
   }
 
   const ownedFiles = Array.from(new Set(specs.flatMap((spec) => spec.ownedFiles)));
-  const [ownedContext, artifactContext, schemaContext] = await Promise.all([
+  const [ownedContext, artifactContext, schemaContext, labwareContext] = await Promise.all([
     collectOwnedContext(input.repoRoot, specs),
     collectSpecArtifactContext(input.artifactRoot, specs),
     collectSchemaContext(input.repoRoot, fixClass),
+    collectExistingLabwareContext(input.repoRoot, specs, fixClass),
   ]);
   const context = [
     'Repository context:',
@@ -853,9 +1000,12 @@ export async function runFoundryCoderPatch(input: {
     'Relevant schema context:',
     schemaContext || '(no schema context found)',
     '',
+    'Existing labware capability context:',
+    labwareContext || '(no existing labware context found)',
+    '',
     'Source artifact context:',
     artifactContext || '(no source artifact context found)',
-  ].join('\n').slice(0, MAX_CONTEXT_CHARS + MAX_SCHEMA_CONTEXT_CHARS + MAX_ARTIFACT_CONTEXT_CHARS);
+  ].join('\n').slice(0, MAX_CONTEXT_CHARS + MAX_SCHEMA_CONTEXT_CHARS + MAX_LABWARE_CONTEXT_CHARS + MAX_ARTIFACT_CONTEXT_CHARS);
   const client = createInferenceClient({
     baseUrl,
     model,

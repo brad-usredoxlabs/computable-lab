@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import { recordSchemaPolicyViolations } from './FoundryCoderPatch.js';
+import { existingFileAdditionViolations, recordSchemaPolicyViolations } from './FoundryCoderPatch.js';
 
 describe('FoundryCoderPatch record schema policy', () => {
   async function makeRepo(): Promise<string> {
@@ -82,5 +82,38 @@ describe('FoundryCoderPatch record schema policy', () => {
     ].join('\n'), 'utf-8');
 
     await expect(recordSchemaPolicyViolations(root, [rel])).resolves.toEqual([]);
+  });
+
+  it('rejects add-from-empty patches against files that already exist', async () => {
+    const root = await makeRepo();
+    const rel = 'records/seed/labware-definition/lbw-def-generic-96-well-plate.yaml';
+    await writeFile(join(root, rel), 'kind: labware-definition\n', 'utf-8');
+    const diff = [
+      `--- a/${rel}`,
+      `+++ b/${rel}`,
+      '@@ -0,0 +1,3 @@',
+      '+kind: labware-definition',
+      '+recordId: lbw-def-generic-96-well-plate',
+      '+type: labware_definition',
+    ].join('\n');
+
+    expect(existingFileAdditionViolations(root, diff)).toEqual([
+      expect.stringContaining('file already exists'),
+    ]);
+  });
+
+  it('allows add-from-empty patches for genuinely new files', async () => {
+    const root = await makeRepo();
+    const rel = 'records/seed/labware-definition/lbw-def-new.yaml';
+    const diff = [
+      '--- /dev/null',
+      `+++ b/${rel}`,
+      '@@ -0,0 +1,3 @@',
+      '+kind: labware-definition',
+      '+recordId: lbw-def-new',
+      '+type: labware_definition',
+    ].join('\n');
+
+    expect(existingFileAdditionViolations(root, diff)).toEqual([]);
   });
 });
