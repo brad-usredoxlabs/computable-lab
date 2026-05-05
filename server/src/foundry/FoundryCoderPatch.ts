@@ -745,6 +745,87 @@ function selectPatchSpecForRun(specs: PatchSpec[]): PatchSpec | undefined {
   return selectedId ? specs.find((spec) => spec.id === selectedId) : undefined;
 }
 
+function diagnosticsFromCompilerArtifact(compiler: Record<string, unknown>): Array<Record<string, unknown>> {
+  return Array.isArray(compiler['diagnostics'])
+    ? compiler['diagnostics'].map(asRecord)
+    : [];
+}
+
+function diagnosticSearchText(diagnostic: Record<string, unknown>): string {
+  return [
+    diagnostic['code'],
+    diagnostic['pass_id'],
+    diagnostic['message'],
+    diagnostic['details'] ? YAML.stringify(diagnostic['details']) : undefined,
+  ]
+    .filter((value): value is string => typeof value === 'string')
+    .join(' ')
+    .toLowerCase();
+}
+
+function diagnosticShowsRuntimeWiringFailure(diagnostic: Record<string, unknown>): boolean {
+  const code = typeof diagnostic['code'] === 'string' ? diagnostic['code'] : '';
+  const passId = typeof diagnostic['pass_id'] === 'string' ? diagnostic['pass_id'] : '';
+  const text = diagnosticSearchText(diagnostic);
+  return (
+    (code === 'PASS_EXCEPTION' && passId === 'deterministic_precompile')
+    || text.includes('stubbed lookup')
+    || text.includes('always-empty lookup')
+    || text.includes('empty lookup')
+    || (text.includes('cannot read properties of undefined') && text.includes('name'))
+    || text.includes('no matching labware in prior snapshot')
+  );
+}
+
+export function patchSpecSupersededByCompilerArtifact(
+  spec: { fixClass: string },
+  compiler: Record<string, unknown>,
+): string | undefined {
+  if (spec.fixClass !== 'foundry_runtime_wiring_gap') return undefined;
+  const diagnostics = diagnosticsFromCompilerArtifact(compiler);
+  if (diagnostics.length === 0) return undefined;
+  if (diagnostics.some(diagnosticShowsRuntimeWiringFailure)) return undefined;
+  return 'current compiler diagnostics no longer show Foundry runtime-wiring failure evidence';
+}
+
+function pathIsInside(root: string, candidate: string): boolean {
+  const rel = relative(root, candidate);
+  return rel === '' || (!rel.startsWith('..') && !rel.startsWith('/'));
+}
+
+function compilerArtifactPathForSpec(artifactRoot: string, spec: PatchSpec): string | undefined {
+  const sourceArtifacts = asRecord(spec.raw['sourceArtifacts']);
+  const compilerPath = sourceArtifacts['compiler'];
+  if (typeof compilerPath !== 'string' || !compilerPath.trim()) return undefined;
+  const artifactRootResolved = resolve(artifactRoot);
+  const fullPath = resolve(artifactRootResolved, compilerPath);
+  return pathIsInside(artifactRootResolved, fullPath) ? fullPath : undefined;
+}
+
+async function supersededReasonForSpec(artifactRoot: string, spec: PatchSpec): Promise<string | undefined> {
+  const compilerPath = compilerArtifactPathForSpec(artifactRoot, spec);
+  if (!compilerPath || !existsSync(compilerPath)) return undefined;
+  const compiler = asRecord(await readYamlFile(compilerPath));
+  return patchSpecSupersededByCompilerArtifact(spec, compiler);
+}
+
+async function partitionSupersededSpecs(artifactRoot: string, specs: PatchSpec[]): Promise<{
+  activeSpecs: PatchSpec[];
+  supersededSpecs: Array<{ spec: PatchSpec; reason: string }>;
+}> {
+  const activeSpecs: PatchSpec[] = [];
+  const supersededSpecs: Array<{ spec: PatchSpec; reason: string }> = [];
+  for (const spec of specs) {
+    const reason = await supersededReasonForSpec(artifactRoot, spec);
+    if (reason) {
+      supersededSpecs.push({ spec, reason });
+    } else {
+      activeSpecs.push(spec);
+    }
+  }
+  return { activeSpecs, supersededSpecs };
+}
+
 function attemptScore(attempt: AttemptResult): number {
   let score = 0;
   if (attempt.touchedFiles.length > 0) score += 20;
@@ -1035,9 +1116,30 @@ export async function runFoundryCoderPatch(input: {
     return { status: 'skipped', resultPath, message: 'fix classes already applied', touchedFiles: [] };
   }
 
+  const { activeSpecs, supersededSpecs } = await partitionSupersededSpecs(input.artifactRoot, pendingSpecs);
+  const supersededSpecIds = supersededSpecs.map(({ spec }) => spec.id);
+  const supersededFixClasses = Array.from(new Set(supersededSpecs.map(({ spec }) => spec.fixClass)));
+  const supersededReasons = Object.fromEntries(supersededSpecs.map(({ spec, reason }) => [spec.id, reason]));
+
+  if (activeSpecs.length === 0) {
+    await writeYamlFile(resultPath, {
+      kind: 'protocol-foundry-coder-patch-result',
+      protocolId: input.protocolId,
+      variant: input.variant,
+      generated_at: nowIso(),
+      status: 'skipped',
+      fixClasses: allFixClasses,
+      supersededSpecIds,
+      supersededFixClasses,
+      supersededReasons,
+      message: 'All remaining patch specs were superseded by current compiler diagnostics.',
+    });
+    return { status: 'skipped', resultPath, message: 'remaining patch specs superseded', touchedFiles: [] };
+  }
+
   const baseUrl = input.inference?.baseUrl ?? process.env['PI_WORKER_BASE_URL'] ?? process.env['OPENAI_BASE_URL'];
   const model = input.inference?.model ?? process.env['PI_WORKER_MODEL'] ?? process.env['OPENAI_MODEL'];
-  const selectedSpec = selectPatchSpecForRun(pendingSpecs);
+  const selectedSpec = selectPatchSpecForRun(activeSpecs);
   if (!selectedSpec) {
     await writeYamlFile(resultPath, {
       kind: 'protocol-foundry-coder-patch-result',
@@ -1046,6 +1148,9 @@ export async function runFoundryCoderPatch(input: {
       generated_at: nowIso(),
       status: 'skipped',
       fixClasses: allFixClasses,
+      supersededSpecIds,
+      supersededFixClasses,
+      supersededReasons,
       message: 'No selectable patch spec is pending.',
     });
     return { status: 'skipped', resultPath, message: 'no selectable patch spec', touchedFiles: [] };
@@ -1054,7 +1159,7 @@ export async function runFoundryCoderPatch(input: {
   const specs = [selectedSpec];
   const fixClass = selectedSpec.fixClass;
   const fixClasses = [fixClass];
-  const deferredSpecIds = pendingSpecs
+  const deferredSpecIds = activeSpecs
     .filter((spec) => spec.id !== selectedSpec.id)
     .map((spec) => spec.id);
   const tournamentDir = join(resultRoot, sanitizeSegment(fixClass));
@@ -1070,6 +1175,9 @@ export async function runFoundryCoderPatch(input: {
       sourceSpecIds: specs.map((spec) => spec.id),
       selectedSpecId: selectedSpec.id,
       deferredSpecIds,
+      supersededSpecIds,
+      supersededFixClasses,
+      supersededReasons,
       staleChangedFiles: staleContext.changedFiles,
       newestSpecMtime: staleContext.newestSpecMtime,
       message: 'Patch specs are stale because tracked owned files changed after spec generation; rerun and refresh architect context before coding.',
@@ -1092,6 +1200,9 @@ export async function runFoundryCoderPatch(input: {
       fixClasses,
       selectedSpecId: selectedSpec.id,
       deferredSpecIds,
+      supersededSpecIds,
+      supersededFixClasses,
+      supersededReasons,
       message: 'Coder endpoint/model not configured or dry-run mode is enabled.',
     });
     return { status: 'blocked', resultPath, message: 'coder not configured', touchedFiles: [] };
@@ -1172,6 +1283,9 @@ export async function runFoundryCoderPatch(input: {
         sourceSpecIds: specs.map((spec) => spec.id),
         selectedSpecId: selectedSpec.id,
         deferredSpecIds,
+        supersededSpecIds,
+        supersededFixClasses,
+        supersededReasons,
         tournamentDir,
         winningAttempt: attempt.attempt,
         attempts,
@@ -1226,6 +1340,9 @@ export async function runFoundryCoderPatch(input: {
         sourceSpecIds: specs.map((spec) => spec.id),
         selectedSpecId: selectedSpec.id,
         deferredSpecIds,
+        supersededSpecIds,
+        supersededFixClasses,
+        supersededReasons,
         tournamentDir,
         winningAttempt: repair.attempt,
         attempts,
@@ -1250,6 +1367,9 @@ export async function runFoundryCoderPatch(input: {
     fixClasses,
     selectedSpecId: selectedSpec.id,
     deferredSpecIds,
+    supersededSpecIds,
+    supersededFixClasses,
+    supersededReasons,
     tournamentDir,
     attempts,
     bestFailure: best ? `${best.phase}: ${best.message}` : 'no viable patch attempts',

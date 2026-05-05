@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import {
   existingFileAdditionViolations,
+  patchSpecSupersededByCompilerArtifact,
   recordSchemaPolicyViolations,
   selectPatchSpecIdForRun,
 } from './FoundryCoderPatch.js';
@@ -140,5 +141,61 @@ describe('FoundryCoderPatch patch scheduling', () => {
     ]);
 
     expect(selected).toBe('protocol/manual/fix-runtime-a');
+  });
+
+  it('keeps runtime-wiring specs active while runtime wiring evidence remains', () => {
+    const reason = patchSpecSupersededByCompilerArtifact(
+      { fixClass: 'foundry_runtime_wiring_gap' },
+      {
+        diagnostics: [
+          {
+            code: 'PASS_EXCEPTION',
+            pass_id: 'deterministic_precompile',
+            message: "Cannot read properties of undefined (reading 'name')",
+          },
+        ],
+      },
+    );
+
+    expect(reason).toBeUndefined();
+  });
+
+  it('supersedes runtime-wiring specs once current diagnostics move to later gaps', () => {
+    const reason = patchSpecSupersededByCompilerArtifact(
+      { fixClass: 'foundry_runtime_wiring_gap' },
+      {
+        diagnostics: [
+          {
+            code: 'ai_precompile_shape_mismatch',
+            pass_id: 'ai_precompile',
+            message: 'ai_precompile output shape mismatch',
+          },
+          {
+            code: 'execution_scale_plan_blocked',
+            pass_id: 'derive_execution_scale_plan',
+            message: 'Execution scaling plan has 1 blocker(s).',
+          },
+        ],
+      },
+    );
+
+    expect(reason).toContain('no longer show Foundry runtime-wiring failure evidence');
+  });
+
+  it('does not supersede unrelated fix classes from compiler diagnostics', () => {
+    const reason = patchSpecSupersededByCompilerArtifact(
+      { fixClass: 'precompiler_reference_shape_gap' },
+      {
+        diagnostics: [
+          {
+            code: 'ai_precompile_shape_mismatch',
+            pass_id: 'ai_precompile',
+            message: 'ai_precompile output shape mismatch',
+          },
+        ],
+      },
+    );
+
+    expect(reason).toBeUndefined();
   });
 });
