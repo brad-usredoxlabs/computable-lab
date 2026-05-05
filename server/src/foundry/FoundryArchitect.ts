@@ -388,7 +388,8 @@ function deterministicVerdict(input: {
         'server/src/materials',
       ],
       acceptance: [
-        'Adds or improves only material, material-spec, vendor-product, or labware-definition/catalog data needed by the source protocol.',
+        'Adds or improves only material, material-spec, vendor-product, or canonical labware-definition/catalog data needed by the source protocol.',
+        'Routes containers, tubes, plates, racks, reservoirs, tips, and other physical holders to labware-definition YAML, not material YAML.',
         'Does not create material-instance, aliquot, material-lot, physical inventory, source-tube, or run-specific records from vendor PDF evidence.',
         'Uses ontology refs only when a CURIE/IRI is present in local records or source artifacts; otherwise marks the material as vendor/provenance-backed with an ontology backfill need.',
         'Compiler diagnostics for the protocol show fewer unresolved material/catalog/spec failures, or the patch adds a focused regression documenting the remaining blocker.',
@@ -397,6 +398,8 @@ function deterministicVerdict(input: {
         'Everything that can be data should be YAML data in records/ or schema registry files.',
         'A vendor PDF can justify material, material-spec/formulation, vendor-product, and labware definition/product facts.',
         'A vendor PDF cannot prove that this lab has a tube, aliquot, lot, prepared source, or sample provenance.',
+        'Material records describe substances/reagents/concepts such as antibodies, buffers, substrates, and stop solutions. They must not describe plates, tubes, racks, reservoirs, or tips.',
+        'Labware definitions must use the canonical records/seed/labware-definition/*.yaml location with $schema, kind, recordId, type: labware_definition, id, display_name, topology/capacity/render_hints as appropriate.',
         'The unattended coder does not have a live OLS/ChEBI lookup tool in this patch lane; do not invent ontology identifiers.',
         'Prefer one reagent family or one vendor kit component family per patch.',
       ],
@@ -411,7 +414,6 @@ function deterministicVerdict(input: {
       rationale: 'Protocol variants cannot be accepted until browser review passes with screenshot evidence.',
       ownedFiles: [
         'client/src',
-        'records/seed/labware-definitions',
         'records/seed/labware-definition',
         'server/src/foundry',
       ],
@@ -422,6 +424,8 @@ function deterministicVerdict(input: {
       contextHints: [
         'Prefer adding or mapping one missing labware icon/geometry at a time.',
         'Tube protocols should render in generic 24x1.5ml, 15ml, or 50ml rack geometry when possible.',
+        'New or repaired labware records must use canonical records/seed/labware-definition/*.yaml files, not the legacy records/seed/labware-definitions directory.',
+        'Canonical labware-definition records include $schema, kind: labware-definition, recordId, type: labware_definition, id, display_name, topology/capacity/render_hints as appropriate.',
       ],
       ...fixSpecDefaults(paths, evidence),
     });

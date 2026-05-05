@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import YAML from 'yaml';
 import { createInferenceClient } from '../ai/InferenceClient.js';
 import type { InferenceConfig } from '../config/types.js';
 import { asRecord, nowIso, readYamlFile, writeYamlFile } from './FoundryArtifacts.js';
@@ -13,6 +14,7 @@ const MAX_CONTEXT_CHARS = 60_000;
 const MAX_FILE_CHARS = 16_000;
 const MAX_ARTIFACT_CONTEXT_CHARS = 50_000;
 const MAX_ARTIFACT_FILE_CHARS = 12_000;
+const MAX_SCHEMA_CONTEXT_CHARS = 32_000;
 
 type CoderPatchStatus = 'applied' | 'blocked' | 'failed' | 'skipped' | 'stale' | 'needs-human';
 
@@ -161,6 +163,57 @@ async function collectSpecArtifactContext(artifactRoot: string, specs: PatchSpec
   return chunks.join('\n\n').slice(0, MAX_ARTIFACT_CONTEXT_CHARS);
 }
 
+async function collectSchemaContext(repoRoot: string, fixClass: string): Promise<string> {
+  const schemaPaths = new Set<string>();
+  const add = (paths: string[]) => paths.forEach((path) => schemaPaths.add(path));
+
+  if (fixClass === 'material_catalog_or_spec_gap') {
+    add([
+      'schema/lab/material.schema.yaml',
+      'schema/lab/material-spec.schema.yaml',
+      'schema/lab/vendor-product.schema.yaml',
+      'schema/workflow/labware-definition.schema.yaml',
+      'schema/lab/labware.schema.yaml',
+      'schema/lab/material-instance.schema.yaml',
+      'schema/lab/aliquot.schema.yaml',
+    ]);
+  }
+  if (fixClass === 'browser_or_labware_rendering' || fixClass === 'execution_scaling') {
+    add([
+      'schema/workflow/labware-definition.schema.yaml',
+      'schema/lab/labware.schema.yaml',
+      'schema/lab/labware-geometry.schema.yaml',
+    ]);
+  }
+  if (fixClass === 'execution_scaling') {
+    add([
+      'schema/workflow/execution-scale-profile.schema.yaml',
+      'schema/workflow/execution-scale-plan.schema.yaml',
+    ]);
+  }
+
+  if (schemaPaths.size === 0) return '(no schema bundle for this fix class)';
+
+  const chunks: string[] = [
+    [
+      'Record policy summary:',
+      '- Material records describe substances/reagents/concepts, not containers or physical holders.',
+      '- Tubes, plates, racks, reservoirs, tips, and deck-compatible holders belong in labware-definition YAML.',
+      '- Vendor PDFs may justify material, material-spec, vendor-product, or labware-definition records.',
+      '- Vendor PDFs must not create material-instance, aliquot, material-lot, source-tube, or inventory records.',
+      '- New labware definitions must use records/seed/labware-definition/*.yaml, not records/seed/labware-definitions/*.yaml.',
+    ].join('\n'),
+  ];
+  for (const schemaPath of schemaPaths) {
+    const fullPath = join(repoRoot, schemaPath);
+    if (!existsSync(fullPath)) continue;
+    const content = (await readFile(fullPath, 'utf-8')).slice(0, MAX_FILE_CHARS);
+    chunks.push(`--- schema:${schemaPath}\n${content}`);
+    if (chunks.join('\n\n').length > MAX_SCHEMA_CONTEXT_CHARS) break;
+  }
+  return chunks.join('\n\n').slice(0, MAX_SCHEMA_CONTEXT_CHARS);
+}
+
 function extractJsonObject(text: string): Record<string, unknown> | undefined {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
   const candidates = [fenced, text].filter((value): value is string => Boolean(value));
@@ -225,6 +278,83 @@ function pathIsAllowed(path: string, ownedFiles: string[]): boolean {
 
 function dataFormatViolations(touchedFiles: string[]): string[] {
   return touchedFiles.filter((file) => file.startsWith('records/') && !/\.(ya?ml)$/i.test(file));
+}
+
+function recordPathPolicyViolations(touchedFiles: string[]): string[] {
+  return touchedFiles.filter((file) => file.startsWith('records/seed/labware-definitions/'));
+}
+
+function parseYamlDocuments(content: string): Array<Record<string, unknown>> {
+  return YAML.parseAllDocuments(content)
+    .map((document) => document.toJSON())
+    .filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value));
+}
+
+function recordText(value: Record<string, unknown>): string {
+  const parts = [
+    value['id'],
+    value['recordId'],
+    value['name'],
+    value['display_name'],
+    value['definition'],
+    ...(Array.isArray(value['tags']) ? value['tags'] : []),
+  ];
+  return parts.filter((item): item is string => typeof item === 'string').join(' ').toLowerCase();
+}
+
+function isLabwareLikeMaterial(value: Record<string, unknown>): boolean {
+  const text = recordText(value);
+  return /\b(labware|tube|tubes|microfuge|plate|microtiter|well[- ]?plate|rack|reservoir|tiprack|tip rack|pipette tip|holder|container)\b/.test(text);
+}
+
+export async function recordSchemaPolicyViolations(repoRoot: string, touchedFiles: string[]): Promise<string[]> {
+  const violations: string[] = [];
+  for (const file of touchedFiles) {
+    if (!file.startsWith('records/') || !/\.(ya?ml)$/i.test(file)) continue;
+    if (file.startsWith('records/seed/labware-definitions/')) {
+      violations.push(`${file}: use canonical records/seed/labware-definition/*.yaml for labware definitions`);
+      continue;
+    }
+    const fullPath = join(repoRoot, file);
+    if (!existsSync(fullPath)) continue;
+    let docs: Array<Record<string, unknown>>;
+    try {
+      docs = parseYamlDocuments(await readFile(fullPath, 'utf-8'));
+    } catch (error) {
+      violations.push(`${file}: YAML parse failed: ${error instanceof Error ? error.message : String(error)}`);
+      continue;
+    }
+
+    if (file.startsWith('records/seed/labware-definition/')) {
+      if (docs.length !== 1) violations.push(`${file}: labware-definition files must contain exactly one YAML document`);
+      for (const doc of docs) {
+        if (doc['$schema'] !== 'https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml') {
+          violations.push(`${file}: labware-definition record must declare the labware-definition $schema`);
+        }
+        if (doc['kind'] !== 'labware-definition') violations.push(`${file}: labware-definition record must use kind: labware-definition`);
+        if (doc['type'] !== 'labware_definition') violations.push(`${file}: labware-definition record must use type: labware_definition`);
+        for (const key of ['recordId', 'id', 'display_name']) {
+          if (typeof doc[key] !== 'string' || !doc[key]) violations.push(`${file}: labware-definition record missing ${key}`);
+        }
+      }
+    }
+
+    if (file.startsWith('records/seed/materials/') || file.startsWith('records/material/')) {
+      for (const doc of docs) {
+        if (doc['kind'] !== 'material') continue;
+        if (doc['$schema'] !== 'https://computable-lab.com/schema/computable-lab/material.schema.yaml') {
+          violations.push(`${file}: material record must declare the material $schema`);
+        }
+        for (const key of ['id', 'recordId', 'name', 'domain']) {
+          if (typeof doc[key] !== 'string' || !doc[key]) violations.push(`${file}: material record missing ${key}`);
+        }
+        if (isLabwareLikeMaterial(doc)) {
+          violations.push(`${file}: material record '${String(doc['recordId'] ?? doc['id'] ?? 'unknown')}' looks like labware/container data; use labware-definition YAML instead`);
+        }
+      }
+    }
+  }
+  return violations;
 }
 
 async function findDirectoryTouchedFiles(repoRoot: string, touchedFiles: string[]): Promise<string[]> {
@@ -451,6 +581,8 @@ async function requestCoderPatch(input: {
           'If the spec is broad, choose the smallest acceptance criterion that advances the exact failure evidence.',
           'Before editing a YAML record, inspect the supplied context and update the existing record in place if it already matches the requested labware/material family.',
           'If the requested capability already exists in context, add a narrow diagnostic, alias, mapping, or regression instead of recreating a large existing file.',
+          'Use the relevant schema context. Labware definitions go in records/seed/labware-definition/*.yaml with canonical labware-definition schema fields.',
+          'Never model plates, tubes, racks, reservoirs, tips, or other containers as material records.',
         ].join('\n'),
       },
       {
@@ -518,7 +650,8 @@ async function evaluateCandidate(input: {
   const disallowed = touchedFiles.filter((file) => !pathIsAllowed(file, input.ownedFiles));
   const directories = await findDirectoryTouchedFiles(input.repoRoot, touchedFiles);
   const dataFormatErrors = dataFormatViolations(touchedFiles);
-  if (touchedFiles.length === 0 || disallowed.length > 0 || directories.length > 0 || dataFormatErrors.length > 0) {
+  const recordPathErrors = recordPathPolicyViolations(touchedFiles);
+  if (touchedFiles.length === 0 || disallowed.length > 0 || directories.length > 0 || dataFormatErrors.length > 0 || recordPathErrors.length > 0) {
     const result: AttemptResult = {
       attempt: input.response.attempt,
       strategy: input.response.strategy,
@@ -528,7 +661,9 @@ async function evaluateCandidate(input: {
         ? `Coder patch attempted to patch directory paths instead of files: ${directories.join(', ')}`
         : dataFormatErrors.length > 0
           ? `Coder patch attempted to write non-YAML records data: ${dataFormatErrors.join(', ')}`
-          : `Coder patch touched files outside architect-owned paths: ${disallowed.join(', ')}`,
+          : recordPathErrors.length > 0
+            ? `Coder patch used legacy/noncanonical record paths: ${recordPathErrors.join(', ')}. Use records/seed/labware-definition/*.yaml for labware definitions.`
+            : `Coder patch touched files outside architect-owned paths: ${disallowed.join(', ')}`,
       diffPath,
       touchedFiles,
       rawResponse,
@@ -544,6 +679,24 @@ async function evaluateCandidate(input: {
     await runGit(input.repoRoot, gitApplyArgs(diffPath, 'check'));
     await runGit(input.repoRoot, gitApplyArgs(diffPath, 'apply'));
     applied = true;
+    const recordPolicyErrors = await recordSchemaPolicyViolations(input.repoRoot, touchedFiles);
+    if (recordPolicyErrors.length > 0) {
+      await runGit(input.repoRoot, gitApplyArgs(diffPath, 'reverse')).catch(() => ({ stdout: '', stderr: '' }));
+      applied = false;
+      const result: AttemptResult = {
+        attempt: input.response.attempt,
+        strategy: input.response.strategy,
+        status: 'blocked',
+        phase: 'record-schema-policy',
+        message: recordPolicyErrors.join('\n'),
+        diffPath,
+        touchedFiles,
+        rawResponse,
+        ...(input.response.summary ? { summary: input.response.summary } : {}),
+      };
+      await writeAttempt(input.tournamentDir, result);
+      return result;
+    }
     const verification = await runVerification(input.repoRoot, touchedFiles);
     const verificationPassed = verification.every((item) => item.status === 'pass');
     if (!verificationPassed) {
@@ -688,17 +841,21 @@ export async function runFoundryCoderPatch(input: {
   }
 
   const ownedFiles = Array.from(new Set(specs.flatMap((spec) => spec.ownedFiles)));
-  const [ownedContext, artifactContext] = await Promise.all([
+  const [ownedContext, artifactContext, schemaContext] = await Promise.all([
     collectOwnedContext(input.repoRoot, specs),
     collectSpecArtifactContext(input.artifactRoot, specs),
+    collectSchemaContext(input.repoRoot, fixClass),
   ]);
   const context = [
     'Repository context:',
     ownedContext || '(no owned-file context found)',
     '',
+    'Relevant schema context:',
+    schemaContext || '(no schema context found)',
+    '',
     'Source artifact context:',
     artifactContext || '(no source artifact context found)',
-  ].join('\n').slice(0, MAX_CONTEXT_CHARS + MAX_ARTIFACT_CONTEXT_CHARS);
+  ].join('\n').slice(0, MAX_CONTEXT_CHARS + MAX_SCHEMA_CONTEXT_CHARS + MAX_ARTIFACT_CONTEXT_CHARS);
   const client = createInferenceClient({
     baseUrl,
     model,
