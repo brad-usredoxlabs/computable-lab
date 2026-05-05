@@ -32,6 +32,33 @@ describe('createLabwareLookup', () => {
     expect(fakeStore.list).not.toHaveBeenCalled();
   });
 
+  it('resolves Foundry deterministic labware aliases without hitting the store', async () => {
+    const fakeStore: RecordStore = {
+      get: vi.fn(),
+      getByPath: vi.fn(),
+      getWithValidation: vi.fn(),
+      list: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      validate: vi.fn(),
+      lint: vi.fn(),
+      exists: vi.fn(),
+    };
+
+    vi.mocked(fakeStore.list).mockResolvedValue([]);
+
+    const lookup = createLabwareLookup(fakeStore);
+    await expect(lookup('generic_96_well_plate')).resolves.toEqual([
+      { recordId: 'lbw-def-generic-96-well-plate', title: 'lbw-def-generic-96-well-plate' },
+    ]);
+    await expect(lookup('generic_6x15ml_tube_rack')).resolves.toEqual([
+      { recordId: 'lbw-def-generic-6x15ml-tube-rack', title: 'lbw-def-generic-6x15ml-tube-rack' },
+    ]);
+
+    expect(fakeStore.list).not.toHaveBeenCalled();
+  });
+
   it('returns empty array for nonexistent hint', async () => {
     const fakeStore: RecordStore = {
       get: vi.fn(),

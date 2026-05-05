@@ -8,41 +8,47 @@
 
 import type { RecordStore } from '../../store/types.js';
 
-export interface LabwareLookupResult {
-  /**
-   * Deterministic alias map for Foundry test assumption hints.
-   * Maps common prose/labware hints to canonical labware-definition recordIds.
-   */
-  const LABWARE_ALIAS_MAP: Record<string, string> = {
-    // Manual tube rack hints
-    'generic_24x1_5ml_tube_rack': 'lbw-def-generic-24-well-plate',
-    'generic_6x15ml_tube_rack': 'lbw-def-generic-24-well-plate',
-    'generic_4x50ml_tube_rack': 'lbw-def-generic-24-well-plate',
-    // Plate hints
-    'generic_96_well_plate': 'lbw-def-generic-96-well-plate',
-    'generic_384_well_plate': 'lbw-def-generic-384-well-plate',
-    'generic_24_well_plate': 'lbw-def-generic-24-well-plate',
-    // Reservoir hints
-    'generic_12_well_reservoir': 'lbw-def-generic-12-reservoir',
-    'generic_2_well_reservoir': 'lbw-def-generic-2-well-reservoir',
-    // Tip rack hints
-    'generic_96_tip_rack': 'lbw-def-generic-96-tip-rack',
-    // Deep well plate hints
-    'generic_96_well_deep_plate': 'lbw-def-generic-96-well-deep-plate',
-    // PCR rack hints
-    'generic_96x0p2ml_pcr_rack': 'lbw-def-generic-96x0p2ml-pcr-rack',
-    // Integra tip rack hints
-    'integra_tiprack_12_5ul_384': 'lbw-def-integra-tiprack-12-5ul-384-v1',
-    'integra_tiprack_1250ul_96': 'lbw-def-integra-tiprack-1250ul-96-v1',
-    'integra_tiprack_125ul_384': 'lbw-def-integra-tiprack-125ul-384-v1',
-    // Nest plate hints
-    'nest_96_wellplate_200ul_flat': 'lbw-def-opentrons-nest-96-wellplate-200ul-flat-v1',
-    'nest_96_wellplate_2ml_deep': 'lbw-def-opentrons-nest-96-wellplate-2ml-deep-v1',
-    // Reservoir hints
-    'nest_12_reservoir_22ml': 'lbw-def-opentrons-nest-12-reservoir-22ml-v1',
-    'nest_8_reservoir_22ml': 'lbw-def-opentrons-nest-8-reservoir-22ml-v1',
-  };
+/**
+ * Deterministic aliases for Foundry test assumption hints.
+ *
+ * These map only to existing, semantically compatible labware-definition
+ * records. Missing exact definitions should stay unresolved so the Foundry can
+ * route them to a labware definition/rendering patch instead of hiding the gap.
+ */
+const LABWARE_ALIAS_MAP: Record<string, string> = {
+  // Manual tube rack hints
+  generic_24x1_5ml_tube_rack: 'lbw-def-generic-50x1p5ml-tube-rack',
+  generic_6x15ml_tube_rack: 'lbw-def-generic-6x15ml-tube-rack',
+  generic_4x50ml_tube_rack: 'lbw-def-generic-4x50ml-tube-rack',
+  // Plate hints
+  generic_96_well_plate: 'lbw-def-generic-96-well-plate',
+  generic_384_well_plate: 'lbw-def-generic-384-well-plate',
+  generic_24_well_plate: 'lbw-def-generic-24-well-plate',
+  // Reservoir hints
+  generic_1_well_reservoir: 'lbw-def-generic-reservoir-1-v1',
+  generic_8_well_reservoir: 'lbw-def-generic-8-reservoir',
+  generic_12_well_reservoir: 'lbw-def-generic-12-reservoir',
+  generic_2_well_reservoir: 'lbw-def-generic-2-well-reservoir',
+  // Tip rack hints
+  generic_96_tip_rack: 'lbw-def-generic-96-tip-rack',
+  // Deep well plate hints
+  generic_96_well_deep_plate: 'lbw-def-generic-96-well-deep-plate',
+  // PCR rack hints
+  generic_96x0p2ml_pcr_rack: 'lbw-def-generic-96x0p2ml-pcr-rack',
+  // Integra tip rack hints
+  integra_tiprack_12_5ul_384: 'lbw-def-integra-tiprack-12-5ul-384-v1',
+  integra_tiprack_1250ul_96: 'lbw-def-integra-tiprack-1250ul-96-v1',
+  integra_tiprack_125ul_384: 'lbw-def-integra-tiprack-125ul-384-v1',
+  integra_tiprack_300ul_96: 'lbw-def-integra-tiprack-300ul-96-v1',
+  // Nest plate hints
+  nest_96_wellplate_200ul_flat: 'lbw-def-opentrons-nest-96-wellplate-200ul-flat-v1',
+  nest_96_wellplate_2ml_deep: 'lbw-def-opentrons-nest-96-wellplate-2ml-deep-v1',
+  // Nest reservoir hints
+  nest_12_reservoir_22ml: 'lbw-def-opentrons-nest-12-reservoir-22ml-v1',
+  nest_8_reservoir_22ml: 'lbw-def-opentrons-nest-8-reservoir-22ml-v1',
+};
 
+export interface LabwareLookupResult {
   recordId: string;
   title: string;
 }
@@ -58,14 +64,13 @@ export function createLabwareLookup(
 ): (hint: string) => Promise<LabwareLookupResult[]> {
   return async (hint: string) => {
     const normalized = hint.toLowerCase().trim();
+    if (!normalized) return [];
     
     // Check deterministic alias map first for Foundry test assumption hints
     const directAlias = LABWARE_ALIAS_MAP[normalized];
     if (directAlias) {
       return [{ recordId: directAlias, title: directAlias }];
     }
-
-    if (!normalized) return [];
 
     // Use store.list({kind: 'labware'}) — the existing RecordStoreImpl.list
     // signature accepts a filter object
