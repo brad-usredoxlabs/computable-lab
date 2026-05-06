@@ -267,6 +267,7 @@ async function runArchitectTask(options: FoundryLoopOptions, ledger: FoundryLedg
   }
   const verdict = await runFoundryArchitectReview({
     artifactRoot: options.artifactRoot,
+    repoRoot: options.repoRoot,
     protocolId: task.protocolId,
     variant: task.variant,
     ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {}),

@@ -4,9 +4,11 @@ import { createInferenceClient } from '../ai/InferenceClient.js';
 import type { InferenceConfig } from '../config/types.js';
 import { asRecord, nowIso, readYamlFile, writeYamlFile } from './FoundryArtifacts.js';
 import type { FoundryVariant } from './ProtocolFoundryCompileRunner.js';
+import { completeWithCodebaseTools } from './FoundryCodebaseTools.js';
 
 export interface FoundryArchitectOptions {
   artifactRoot: string;
+  repoRoot?: string;
   protocolId: string;
   variant: FoundryVariant;
   inference?: Partial<InferenceConfig>;
@@ -664,16 +666,22 @@ async function llmArchitectNotes(options: FoundryArchitectOptions, context: unkn
     maxTokens: options.inference?.maxTokens ?? 2048,
     enableThinking: options.inference?.enableThinking ?? false,
   });
-  const response = await client.complete({
-    model,
-    temperature: 0.1,
-    max_tokens: 2048,
-    messages: [
+  const response = await completeWithCodebaseTools({
+    client,
+    ...(options.repoRoot ? { repoRoot: options.repoRoot } : {}),
+    maxToolRounds: 8,
+    request: {
+      model,
+      temperature: 0.1,
+      max_tokens: 4096,
+      messages: [
       {
         role: 'system',
         content: [
           'You are the Protocol Foundry architect. Summarize actionable compiler improvements in concise prose.',
+          'You have live codebase tools: codebase_search, codebase_read, and codebase_list. Use them to inspect the current compiler/precompiler/runtime code before judging what lane needs a patch.',
           'Do not write standalone patch specifications, file-creation instructions, or unified diffs in these notes. Deterministic recommendedFixes are the authoritative patch specs.',
+          'Do name exact files, symbols, schemas, records, and tests you inspected. These notes are included in coder context through the verdict artifact.',
           'These notes will feed a Qwen/Qwen3.6-35B-A3B-FP8 coder. It is strong, but specs must be granular, context-rich, and limited to one observable behavior change.',
           'Prefer patch guidance that names source artifacts, exact failure evidence, owned files, a focused fixture, and a small acceptance test.',
           'If an existing labware definition is not being found, describe it as a resolver/alias/lookup wiring problem; do not tell the coder to recreate the labware YAML file.',
@@ -685,6 +693,7 @@ async function llmArchitectNotes(options: FoundryArchitectOptions, context: unkn
         content: JSON.stringify(context).slice(0, 80_000),
       },
     ],
+    },
   });
   const content = response.choices[0]?.message.content;
   return typeof content === 'string' && content.trim() ? content.trim() : undefined;
@@ -748,6 +757,7 @@ async function writePatchSpecs(artifactRoot: string, verdict: ArchitectVerdict):
       ...(fix.doNotTouch ? { doNotTouch: fix.doNotTouch } : {}),
       ...(fix.sourceArtifacts ? { sourceArtifacts: fix.sourceArtifacts } : {}),
       ...(fix.failureEvidence ? { failureEvidence: fix.failureEvidence } : {}),
+      architectNotes: verdict.architectNotes,
       sourceVerdict: join(artifactRoot, 'architect', verdict.protocolId, verdict.variant, 'verdict.yaml'),
     });
     specPaths.push(path);

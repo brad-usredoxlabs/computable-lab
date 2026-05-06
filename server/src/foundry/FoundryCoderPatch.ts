@@ -8,6 +8,7 @@ import { createInferenceClient } from '../ai/InferenceClient.js';
 import type { InferenceConfig } from '../config/types.js';
 import { asRecord, nowIso, readYamlFile, writeYamlFile } from './FoundryArtifacts.js';
 import type { FoundryVariant } from './ProtocolFoundryCompileRunner.js';
+import { completeWithCodebaseTools } from './FoundryCodebaseTools.js';
 
 const execFileAsync = promisify(execFile);
 const MAX_CONTEXT_CHARS = 60_000;
@@ -1110,6 +1111,7 @@ async function requestCoderPatch(input: {
   strategy: string;
   client: ReturnType<typeof createInferenceClient>;
   model: string;
+  repoRoot: string;
   protocolId: string;
   variant: FoundryVariant;
   fixClass: string;
@@ -1120,7 +1122,11 @@ async function requestCoderPatch(input: {
   priorResponse?: string;
   priorFailure?: string;
 }): Promise<CoderResponse> {
-  const response = await input.client.complete({
+  const response = await completeWithCodebaseTools({
+    client: input.client,
+    repoRoot: input.repoRoot,
+    maxToolRounds: 8,
+    request: {
     model: input.model,
     temperature: 0.15,
     max_tokens: 8192,
@@ -1130,6 +1136,8 @@ async function requestCoderPatch(input: {
         content: [
           'You are the Protocol Foundry coder. Produce one minimal source edit for exactly one compiler/precompiler fix class.',
           'The target worker model is Qwen/Qwen3.6-35B-A3B-FP8: it is strong, but this harness succeeds when patches are small, concrete, and context-local.',
+          'You have live codebase tools: codebase_search, codebase_read, and codebase_list. Use them before patching whenever the exact symbol, nearby test, schema, or record shape is not already obvious.',
+          'Do not guess source code. Search for the symbol or diagnostic, read the exact current file slice, then write edits against that exact text.',
           'Return only JSON. Prefer keys: summary, edits.',
           'Each edit must be { "path": "repo/relative/file", "search": "exact current text block", "replace": "replacement text block", "anchorId": "optional supplied anchor id" }.',
           'Use edits instead of unifiedDiff unless you must create a new file. The harness will generate the git patch from exact search/replace edits.',
@@ -1176,6 +1184,7 @@ async function requestCoderPatch(input: {
         }),
       },
     ],
+    },
   });
   const content = response.choices[0]?.message.content ?? '';
   const parsed = extractJsonObject(content);
@@ -1559,6 +1568,7 @@ export async function runFoundryCoderPatch(input: {
       strategy,
       client,
       model,
+      repoRoot: input.repoRoot,
       protocolId: input.protocolId,
       variant: input.variant,
       fixClass,
@@ -1618,6 +1628,7 @@ export async function runFoundryCoderPatch(input: {
       strategy: 'repair: fix the best failed candidate using the exact failure message; keep the patch narrower than the original and copy search blocks exactly from repository context',
       client,
       model,
+      repoRoot: input.repoRoot,
       protocolId: input.protocolId,
       variant: input.variant,
       fixClass,
