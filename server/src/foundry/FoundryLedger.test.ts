@@ -302,7 +302,7 @@ describe('FoundryLedger', () => {
     });
   });
 
-  it('refreshes stale patch specs by rerunning before another coder tournament', async () => {
+  it('schedules a fresh coder tournament after stale patch specs have been refreshed', async () => {
     const root = await makeArtifactRoot();
     await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
       kind: 'protocol-foundry-compiler-result',
@@ -342,11 +342,6 @@ describe('FoundryLedger', () => {
     const ledger = await scanFoundryLedger(root);
 
     expect(readyTasks(ledger)).toContainEqual({
-      protocolId: 'demo-protocol',
-      variant: 'manual_tubes',
-      stage: 'rerun',
-    });
-    expect(readyTasks(ledger)).not.toContainEqual({
       protocolId: 'demo-protocol',
       variant: 'manual_tubes',
       stage: 'coder_patch',
