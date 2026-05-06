@@ -643,10 +643,10 @@ async function diffForFile(repoRoot: string, tournamentDir: string, path: string
       cwd: repoRoot,
       maxBuffer: 1024 * 1024 * 12,
     });
-    return result.stdout;
+    return `diff --git a/${path} b/${path}\n${result.stdout}`;
   } catch (error) {
     const err = error as { stdout?: string; stderr?: string; code?: number; message?: string };
-    if (err.code === 1 && err.stdout) return err.stdout;
+    if (err.code === 1 && err.stdout) return `diff --git a/${path} b/${path}\n${err.stdout}`;
     throw new Error(err.stderr || err.message || String(error));
   }
 }
@@ -873,10 +873,11 @@ async function staleOwnedFileContext(repoRoot: string, specs: PatchSpec[]): Prom
   };
 }
 
-function gitApplyArgs(diffPath: string, mode: 'check' | 'apply' | 'reverse'): string[] {
-  if (mode === 'check') return ['apply', '--check', '--recount', diffPath];
-  if (mode === 'reverse') return ['apply', '-R', '--recount', diffPath];
-  return ['apply', '--recount', diffPath];
+function gitApplyArgs(diffPath: string, mode: 'check' | 'apply' | 'reverse', options: { recount?: boolean } = {}): string[] {
+  const recount = options.recount ? ['--recount'] : [];
+  if (mode === 'check') return ['apply', '--check', ...recount, diffPath];
+  if (mode === 'reverse') return ['apply', '-R', ...recount, diffPath];
+  return ['apply', ...recount, diffPath];
 }
 
 async function assertTouchedFilesClean(repoRoot: string, touchedFiles: string[]): Promise<void> {
@@ -1289,14 +1290,15 @@ async function evaluateCandidate(input: {
   }
 
   let applied = false;
+  const recountPatch = diffSource !== 'structuredEdits';
   try {
     await assertTouchedFilesClean(input.repoRoot, touchedFiles);
-    await runGit(input.repoRoot, gitApplyArgs(diffPath, 'check'));
-    await runGit(input.repoRoot, gitApplyArgs(diffPath, 'apply'));
+    await runGit(input.repoRoot, gitApplyArgs(diffPath, 'check', { recount: recountPatch }));
+    await runGit(input.repoRoot, gitApplyArgs(diffPath, 'apply', { recount: recountPatch }));
     applied = true;
     const recordPolicyErrors = await recordSchemaPolicyViolations(input.repoRoot, touchedFiles);
     if (recordPolicyErrors.length > 0) {
-      await runGit(input.repoRoot, gitApplyArgs(diffPath, 'reverse')).catch(() => ({ stdout: '', stderr: '' }));
+      await runGit(input.repoRoot, gitApplyArgs(diffPath, 'reverse', { recount: recountPatch })).catch(() => ({ stdout: '', stderr: '' }));
       applied = false;
       const result: AttemptResult = {
         attempt: input.response.attempt,
@@ -1316,7 +1318,7 @@ async function evaluateCandidate(input: {
     const verification = await runVerification(input.repoRoot, touchedFiles);
     const verificationPassed = verification.every((item) => item.status === 'pass');
     if (!verificationPassed) {
-      await runGit(input.repoRoot, gitApplyArgs(diffPath, 'reverse')).catch(() => ({ stdout: '', stderr: '' }));
+      await runGit(input.repoRoot, gitApplyArgs(diffPath, 'reverse', { recount: recountPatch })).catch(() => ({ stdout: '', stderr: '' }));
       applied = false;
       const result: AttemptResult = {
         attempt: input.response.attempt,
@@ -1358,7 +1360,7 @@ async function evaluateCandidate(input: {
     await writeAttempt(input.tournamentDir, result);
     return result;
   } catch (error) {
-    if (applied) await runGit(input.repoRoot, gitApplyArgs(diffPath, 'reverse')).catch(() => ({ stdout: '', stderr: '' }));
+    if (applied) await runGit(input.repoRoot, gitApplyArgs(diffPath, 'reverse', { recount: recountPatch })).catch(() => ({ stdout: '', stderr: '' }));
     const result: AttemptResult = {
       attempt: input.response.attempt,
       strategy: input.response.strategy,

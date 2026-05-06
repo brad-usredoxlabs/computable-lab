@@ -1,6 +1,8 @@
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import {
   existingFileAdditionViolations,
@@ -10,6 +12,8 @@ import {
   selectPatchSpecIdForRun,
   structuredEditsToUnifiedDiff,
 } from './FoundryCoderPatch.js';
+
+const execFileAsync = promisify(execFile);
 
 describe('FoundryCoderPatch record schema policy', () => {
   async function makeRepo(): Promise<string> {
@@ -259,8 +263,41 @@ describe('FoundryCoderPatch structured edits', () => {
 
     expect(diff).toContain(`--- a/${rel}`);
     expect(diff).toContain(`+++ b/${rel}`);
+    expect(diff).toContain(`diff --git a/${rel} b/${rel}`);
     expect(diff).toContain('-  return 1;');
     expect(diff).toContain('+  return 2;');
+  });
+
+  it('emits git headers so multi-file structured diffs are git-applicable', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'foundry-coder-edits-'));
+    const tournamentDir = join(root, 'artifacts');
+    await mkdir(join(root, 'server/src/example'), { recursive: true });
+    const first = 'server/src/example/first.ts';
+    const second = 'server/src/example/second.ts';
+    await writeFile(join(root, first), 'export const first = 1;\n', 'utf-8');
+    await writeFile(join(root, second), 'export const second = 1;\n', 'utf-8');
+
+    const diff = await structuredEditsToUnifiedDiff({
+      repoRoot: root,
+      tournamentDir,
+      edits: [
+        {
+          path: first,
+          search: 'export const first = 1;',
+          replace: 'export const first = 2;',
+        },
+        {
+          path: second,
+          search: 'export const second = 1;',
+          replace: 'export const second = 2;',
+        },
+      ],
+    });
+    const diffPath = join(tournamentDir, 'multi.diff');
+    await writeFile(diffPath, diff, 'utf-8');
+
+    expect(diff.match(/^diff --git /gm)).toHaveLength(2);
+    await expect(execFileAsync('git', ['apply', '--check', diffPath], { cwd: root })).resolves.toBeDefined();
   });
 
   it('requires ambiguous search blocks to include an occurrence', async () => {
