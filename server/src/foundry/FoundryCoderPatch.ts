@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -8,7 +8,7 @@ import { createInferenceClient } from '../ai/InferenceClient.js';
 import type { InferenceConfig } from '../config/types.js';
 import { asRecord, nowIso, readYamlFile, writeYamlFile } from './FoundryArtifacts.js';
 import type { FoundryVariant } from './ProtocolFoundryCompileRunner.js';
-import { completeWithCodebaseTools } from './FoundryCodebaseTools.js';
+import { completeWithWorktreeTools, readWorktreeDiff } from './FoundryWorktreeTools.js';
 
 const execFileAsync = promisify(execFile);
 const MAX_CONTEXT_CHARS = 60_000;
@@ -45,7 +45,7 @@ interface CoderResponse {
   content: string;
   parsed?: Record<string, unknown>;
   diff?: string;
-  diffSource?: 'unifiedDiff' | 'structuredEdits';
+  diffSource?: 'unifiedDiff' | 'structuredEdits' | 'worktreeTools';
   summary?: string;
 }
 
@@ -567,20 +567,6 @@ function extractJsonObject(text: string): Record<string, unknown> | undefined {
   return undefined;
 }
 
-function extractUnifiedDiff(text: string): string | undefined {
-  const fenced = text.match(/```(?:diff|patch)?\s*([\s\S]*?)```/i)?.[1];
-  const candidates = [fenced, text].filter((value): value is string => Boolean(value));
-  for (const candidate of candidates) {
-    const gitIndex = candidate.indexOf('diff --git ');
-    if (gitIndex !== -1) return candidate.slice(gitIndex).trimEnd() + '\n';
-    const unifiedIndex = candidate.indexOf('--- a/');
-    if (unifiedIndex !== -1 && candidate.includes('\n+++ b/')) {
-      return candidate.slice(unifiedIndex).trimEnd() + '\n';
-    }
-  }
-  return undefined;
-}
-
 function parseStructuredEdits(value: unknown): StructuredEdit[] {
   if (!Array.isArray(value)) return [];
   const edits: StructuredEdit[] = [];
@@ -747,9 +733,18 @@ export function existingFileAdditionViolations(repoRoot: string, diff: string): 
   return Array.from(new Set(violations));
 }
 
-function pathIsAllowed(path: string, ownedFiles: string[]): boolean {
-  if (path.startsWith('/') || path.includes('..')) return false;
-  return ownedFiles.some((owned) => path === owned || path.startsWith(`${owned.replace(/\/+$/, '')}/`));
+function pathIsRepositorySafe(path: string): boolean {
+  if (path.startsWith('/') || path.includes('\0')) return false;
+  const parts = path.split('/').filter(Boolean);
+  if (parts.includes('..')) return false;
+  return !parts.some((part) =>
+    part === '.git'
+    || part === 'node_modules'
+    || part === 'dist'
+    || part === 'coverage'
+    || part === '.next'
+    || part === '.turbo'
+  );
 }
 
 function dataFormatViolations(touchedFiles: string[]): string[] {
@@ -912,6 +907,9 @@ export function defaultVerificationArgs(touchedFiles: string[]): string[][] {
   }
   if (touchedFiles.some((file) => file.startsWith('server/src/foundry/'))) {
     tests.add('src/foundry/FoundryLedger.test.ts');
+    tests.add('src/foundry/FoundryCoderPatch.test.ts');
+    tests.add('src/foundry/FoundryCodebaseTools.test.ts');
+    tests.add('src/foundry/FoundryWorktreeTools.test.ts');
   }
   if (tests.size === 0) tests.add('src/foundry/FoundryLedger.test.ts');
   return [['npm', 'test', '--', '--run', ...Array.from(tests)]];
@@ -1118,6 +1116,20 @@ async function writeAttempt(tournamentDir: string, result: AttemptResult): Promi
   });
 }
 
+async function createAttemptWorktree(repoRoot: string, tournamentDir: string, attempt: number): Promise<string> {
+  const worktreeRoot = join(tournamentDir, 'worktrees', `attempt-${attempt}`);
+  await runGit(repoRoot, ['worktree', 'remove', '--force', worktreeRoot]).catch(() => ({ stdout: '', stderr: '' }));
+  await rm(worktreeRoot, { recursive: true, force: true });
+  await mkdir(dirname(worktreeRoot), { recursive: true });
+  await runGit(repoRoot, ['worktree', 'add', '--detach', worktreeRoot, 'HEAD']);
+  return worktreeRoot;
+}
+
+async function removeAttemptWorktree(repoRoot: string, worktreeRoot: string): Promise<void> {
+  await runGit(repoRoot, ['worktree', 'remove', '--force', worktreeRoot]).catch(() => ({ stdout: '', stderr: '' }));
+  await rm(worktreeRoot, { recursive: true, force: true });
+}
+
 async function requestCoderPatch(input: {
   attempt: number;
   strategy: string;
@@ -1125,6 +1137,7 @@ async function requestCoderPatch(input: {
   model: string;
   repoRoot: string;
   artifactRoot: string;
+  tournamentDir: string;
   workbenchRoot?: string;
   protocolId: string;
   variant: FoundryVariant;
@@ -1138,99 +1151,86 @@ async function requestCoderPatch(input: {
   priorResponse?: string;
   priorFailure?: string;
 }): Promise<CoderResponse> {
-  const response = await completeWithCodebaseTools({
-    client: input.client,
-    repoRoot: input.repoRoot,
-    browserContext: {
-      artifactRoot: input.artifactRoot,
-      ...(input.workbenchRoot ? { workbenchRoot: input.workbenchRoot } : {}),
-      protocolId: input.protocolId,
-      variant: input.variant,
-      ...(input.appBase ? { appBase: input.appBase } : {}),
-      ...(input.apiBase ? { apiBase: input.apiBase } : {}),
-    },
-    maxToolRounds: 8,
-    request: {
-    model: input.model,
-    temperature: 0.15,
-    max_tokens: 8192,
-    messages: [
-      {
-        role: 'system',
-        content: [
-          'You are the Protocol Foundry coder. Produce one minimal source edit for exactly one compiler/precompiler fix class.',
-          'The target worker model is Qwen/Qwen3.6-35B-A3B-FP8: it is strong, but this harness succeeds when patches are small, concrete, and context-local.',
-          'You have live codebase tools: codebase_search, codebase_read, and codebase_list. Use them before patching whenever the exact symbol, nearby test, schema, or record shape is not already obvious.',
-          'You also have Foundry browser tools: foundry_browser_review_read and foundry_browser_review_run. Use them when the fix concerns browser rendering, labware-editor playback, labware visualization, or UI-load behavior.',
-          'Do not guess source code. Search for the symbol or diagnostic, read the exact current file slice, then write edits against that exact text.',
-          'Return only JSON. Prefer keys: summary, edits.',
-          'Each edit must be { "path": "repo/relative/file", "search": "exact current text block", "replace": "replacement text block", "anchorId": "optional supplied anchor id" }.',
-          'Use edits instead of unifiedDiff unless you must create a new file. The harness will generate the git patch from exact search/replace edits.',
-          'Copy search text from Exact source anchors whenever possible. In anchor snippets, line prefixes look like "000123 | "; do not include that prefix in search or replace.',
-          'Do not reconstruct unseen source from memory. If no exact source anchor contains the edit site, return JSON with summary and blockedReason instead of guessing.',
-          'If a search block appears more than once, include "occurrence": 1-based-number. Otherwise choose a larger exact search block.',
-          'You may return unifiedDiff only for changes that cannot be expressed as exact search/replace.',
-          'Do not modify files outside ownedFiles. Do not include markdown.',
-          'Use exact file paths and context from the supplied repository context.',
-          'Use source artifact context as failure evidence; do not patch generated artifacts directly.',
-          'Avoid whitespace-only edits. Do not invent unrelated refactors.',
-          'Limit this response to one behavior, one primary production file, and at most one focused test file.',
-          'If an ownedFiles entry is a directory, patch a specific existing file under it; never patch the directory path itself.',
-          'Data files under records/ must be YAML. Do not create JSON files for records data.',
-          'Do not create material-instance, aliquot, material-lot, source-tube, or physical inventory records from vendor PDF evidence.',
-          'Do not invent ontology identifiers. Use ontology refs only when supplied by source artifacts or local records.',
-          'If returning unifiedDiff, it must be directly accepted by git apply.',
-          'Prefer one changed file and one focused fixture when possible. Never attempt to fix multiple biology verb families at once.',
-          'If the spec is broad, choose the smallest acceptance criterion that advances the exact failure evidence.',
-          'For fixClass material_catalog_or_spec_gap, do not create or edit labware-definition YAML; that lane is for substances, material specs, vendor products, and material resolver/catalog behavior.',
-          'Before editing a YAML record, inspect the supplied context and update the existing record in place if it already matches the requested labware/material family.',
-          'If the requested capability already exists in context, add a narrow diagnostic, alias, mapping, or regression instead of recreating a large existing file.',
-          'Never write an add-from-empty patch for a file that exists in repository context; update the existing file with normal context lines or patch resolver code instead.',
-          'For fixClass foundry_runtime_wiring_gap, patch Foundry harness dependency wiring or focused tests; do not add records to compensate for a stubbed lookup.',
-          'For fixClass precompiler_reference_shape_gap, patch shape normalization/contract handling; do not add records to mask malformed refs.',
-          'For fixClass labware_alias_or_resolver_gap, do not create labware-definition YAML; patch lookup, alias normalization, compiler wiring, or tests so existing records are found.',
-          'Use the relevant schema context. Labware definitions go in records/seed/labware-definition/*.yaml with canonical labware-definition schema fields.',
-          'Never model plates, tubes, racks, reservoirs, tips, or other containers as material records.',
-        ].join('\n'),
+  const worktreeRoot = await createAttemptWorktree(input.repoRoot, input.tournamentDir, input.attempt);
+  try {
+    const response = await completeWithWorktreeTools({
+      client: input.client,
+      worktreeRoot,
+      maxToolRounds: 18,
+      request: {
+        model: input.model,
+        temperature: 0.15,
+        max_tokens: 8192,
+        messages: [
+          {
+            role: 'system',
+            content: [
+              'You are the Protocol Foundry coder. You are not a JSON patch generator. You are a real coding agent in a scratch git worktree.',
+              'Use your tools to inspect the repository, edit files directly, run focused tests or type checks when useful, then call worktree_diff.',
+              'The architect spec is guidance, not a cage. If the spec points at the wrong file or is too narrow, search the codebase and fix the real compiler/precompiler/foundry problem.',
+              'You may modify source, tests, schemas, YAML records, Foundry runtime wiring, compiler passes, precompiler passes, extractor contracts, browser-review wiring, and focused fixtures when the failure evidence justifies it.',
+              'You can run the browser review through worktree_run using the supplied browserReviewCommand when playback or rendering evidence matters.',
+              'Do not patch generated run artifacts as the fix. Use artifacts as evidence and fix the code/data that produced them.',
+              'Keep the change coherent and reviewable. Prefer one real root-cause fix over broad churn, but do not stop just because the needed file is outside ownedFiles.',
+              'Project invariants still matter: records data is YAML; vendor PDFs may justify materials, material specs, vendor products, and labware definitions; vendor PDFs must not invent physical material-instances, aliquots, lots, source tubes, or inventory unless run context proves they exist.',
+              'Never model plates, tubes, racks, reservoirs, tips, or other containers as material records. Those are labware definitions or resolver/compiler behavior.',
+              'If you add or edit YAML records, inspect nearby records and schemas first. Reuse existing records when they already cover the capability.',
+              'If you change compiler/precompiler behavior, add or update a focused regression when practical.',
+              'Before final answer, call worktree_diff. Return final JSON only with keys like summary, testsRun, remainingConcerns.',
+            ].join('\n'),
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              protocolId: input.protocolId,
+              variant: input.variant,
+              fixClass: input.fixClass,
+              strategy: input.strategy,
+              patchSpecs: input.specs.map((spec) => spec.raw),
+              ownedFilesAreHintsNotLimits: input.ownedFiles,
+              context: input.context,
+              browserReviewCommand: {
+                command: 'node',
+                args: [
+                  join(input.workbenchRoot ?? resolve(input.repoRoot, '..', 'agent-workbench'), 'scripts', 'protocol_foundry_browser_review.cjs'),
+                  '--repo-root',
+                  input.repoRoot,
+                  '--proposal',
+                  join(input.artifactRoot, 'event-graphs', input.protocolId, `${input.variant}.yaml`),
+                  '--out',
+                  join(input.artifactRoot, 'browser-review', input.protocolId, input.variant),
+                  ...(input.apiBase ? ['--api-base', input.apiBase] : []),
+                  ...(input.appBase ? ['--app-base', input.appBase] : []),
+                ],
+              },
+              ...(input.priorDiff ? { priorDiff: input.priorDiff } : {}),
+              ...(input.priorResponse ? { priorResponse: input.priorResponse } : {}),
+              ...(input.priorFailure ? { priorFailure: input.priorFailure } : {}),
+            }),
+          },
+        ],
       },
-      {
-        role: 'user',
-        content: JSON.stringify({
-          protocolId: input.protocolId,
-          variant: input.variant,
-          fixClass: input.fixClass,
-          strategy: input.strategy,
-          patchSpecs: input.specs.map((spec) => spec.raw),
-          ownedFiles: input.ownedFiles,
-          context: input.context,
-          ...(input.priorDiff ? { priorDiff: input.priorDiff } : {}),
-          ...(input.priorResponse ? { priorResponse: input.priorResponse } : {}),
-          ...(input.priorFailure ? { priorFailure: input.priorFailure } : {}),
-        }),
-      },
-    ],
-    },
-  });
-  const content = response.choices[0]?.message.content ?? '';
-  const parsed = extractJsonObject(content);
-  const diff = typeof parsed?.['unifiedDiff'] === 'string'
-    ? parsed['unifiedDiff']
-    : extractUnifiedDiff(content);
-  return {
-    attempt: input.attempt,
-    strategy: input.strategy,
-    content,
-    ...(parsed ? { parsed } : {}),
-    ...(diff ? { diff, diffSource: 'unifiedDiff' as const } : {}),
-    ...(typeof parsed?.['summary'] === 'string' ? { summary: parsed['summary'] } : {}),
-  };
+    });
+    const content = response.choices[0]?.message.content ?? '';
+    const parsed = extractJsonObject(content);
+    const diff = await readWorktreeDiff(worktreeRoot);
+    return {
+      attempt: input.attempt,
+      strategy: input.strategy,
+      content,
+      ...(parsed ? { parsed } : {}),
+      ...(diff.trim() ? { diff, diffSource: 'worktreeTools' as const } : {}),
+      ...(typeof parsed?.['summary'] === 'string' ? { summary: parsed['summary'] } : {}),
+    };
+  } finally {
+    await removeAttemptWorktree(input.repoRoot, worktreeRoot);
+  }
 }
 
 async function evaluateCandidate(input: {
   response: CoderResponse;
   repoRoot: string;
   tournamentDir: string;
-  ownedFiles: string[];
   fixClass: string;
   title: string;
   autoCommit?: boolean;
@@ -1286,14 +1286,14 @@ async function evaluateCandidate(input: {
   await writeFile(diffPath, responseDiff, 'utf-8');
 
   const touchedFiles = parseTouchedFiles(responseDiff);
-  const disallowed = touchedFiles.filter((file) => !pathIsAllowed(file, input.ownedFiles));
+  const unsafePaths = touchedFiles.filter((file) => !pathIsRepositorySafe(file));
   const directories = await findDirectoryTouchedFiles(input.repoRoot, touchedFiles);
   const dataFormatErrors = dataFormatViolations(touchedFiles);
   const recordPathErrors = recordPathPolicyViolations(touchedFiles);
   const existingFileAdditionErrors = existingFileAdditionViolations(input.repoRoot, responseDiff);
   if (
     touchedFiles.length === 0
-    || disallowed.length > 0
+    || unsafePaths.length > 0
     || directories.length > 0
     || dataFormatErrors.length > 0
     || recordPathErrors.length > 0
@@ -1312,7 +1312,7 @@ async function evaluateCandidate(input: {
             ? `Coder patch used legacy/noncanonical record paths: ${recordPathErrors.join(', ')}. Use records/seed/labware-definition/*.yaml for labware definitions.`
             : existingFileAdditionErrors.length > 0
               ? existingFileAdditionErrors.join('\n')
-              : `Coder patch touched files outside architect-owned paths: ${disallowed.join(', ')}`,
+              : `Coder patch touched unsafe repository paths: ${unsafePaths.join(', ')}`,
       diffPath,
       ...(diffSource ? { diffSource } : {}),
       touchedFiles,
@@ -1598,6 +1598,7 @@ export async function runFoundryCoderPatch(input: {
       model,
       repoRoot: input.repoRoot,
       artifactRoot: input.artifactRoot,
+      tournamentDir,
       ...(input.workbenchRoot ? { workbenchRoot: input.workbenchRoot } : {}),
       protocolId: input.protocolId,
       variant: input.variant,
@@ -1616,7 +1617,6 @@ export async function runFoundryCoderPatch(input: {
       response,
       repoRoot: input.repoRoot,
       tournamentDir,
-      ownedFiles,
       fixClass,
       title: specs[0]?.title ?? input.protocolId,
       ...(input.autoCommit !== undefined ? { autoCommit: input.autoCommit } : {}),
@@ -1662,6 +1662,7 @@ export async function runFoundryCoderPatch(input: {
       model,
       repoRoot: input.repoRoot,
       artifactRoot: input.artifactRoot,
+      tournamentDir,
       ...(input.workbenchRoot ? { workbenchRoot: input.workbenchRoot } : {}),
       protocolId: input.protocolId,
       variant: input.variant,
@@ -1679,7 +1680,6 @@ export async function runFoundryCoderPatch(input: {
       response: repairResponse,
       repoRoot: input.repoRoot,
       tournamentDir,
-      ownedFiles,
       fixClass,
       title: specs[0]?.title ?? input.protocolId,
       ...(input.autoCommit !== undefined ? { autoCommit: input.autoCommit } : {}),
