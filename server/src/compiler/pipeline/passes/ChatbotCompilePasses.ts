@@ -561,9 +561,9 @@ function salvageAiPrecompileOutput(input: {
         ...lowerCandidateActionsToEvents(input.parsed.candidateActions),
         ...(Array.isArray(input.parsed.candidateEvents) ? input.parsed.candidateEvents : []),
       ],
-    candidateLabwares: input.deterministicHasCoreArtifacts
-      ? []
-      : (Array.isArray(input.parsed.candidateLabwares) ? input.parsed.candidateLabwares : []),
+    candidateLabwares: Array.isArray(input.parsed.candidateLabwares)
+      ? input.parsed.candidateLabwares
+      : [],
     unresolvedRefs: Array.isArray(input.parsed.unresolvedRefs) ? input.parsed.unresolvedRefs : [],
     ...(typeof input.parsed.clarification === 'string' && input.parsed.clarification.trim()
       ? { clarification: input.parsed.clarification }
