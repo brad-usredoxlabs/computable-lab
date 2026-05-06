@@ -427,15 +427,7 @@ function createAiPrecompileOutputSchema() {
     candidateActions: z.array(z.any()).optional(),
     taggedPhrases: z.array(z.any()).optional(),
     candidateLabwares: z.array(z.any()).default([]),
-    unresolvedRefs: z
-      .array(
-        z.object({
-          kind: z.string(),
-          label: z.string(),
-          reason: z.string(),
-        }),
-      )
-      .default([]),
+    unresolvedRefs: z.array(z.any()).default([]),
     clarification: z.string().optional(),
     mintMaterials: z.array(z.any()).optional(),
     priorLabwareRefs: z.array(z.any()).optional(),
@@ -762,7 +754,7 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
         candidateLabwares: deterministicHasCoreArtifacts
           ? []
           : (Array.isArray(parsed.candidateLabwares) ? parsed.candidateLabwares : []),
-        unresolvedRefs: Array.isArray(parsed.unresolvedRefs) ? parsed.unresolvedRefs : [],
+        unresolvedRefs: normalizeUnresolvedRefs(parsed.unresolvedRefs),
         ...(typeof parsed.clarification === 'string' ? { clarification: parsed.clarification } : {}),
         ...(Array.isArray(parsed.mintMaterials) ? { mintMaterials: parsed.mintMaterials } : {}),
         ...(Array.isArray(parsed.priorLabwareRefs) ? { priorLabwareRefs: parsed.priorLabwareRefs } : {}),

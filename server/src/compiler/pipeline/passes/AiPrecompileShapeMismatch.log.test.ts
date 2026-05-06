@@ -347,10 +347,8 @@ describe('ai_precompile shape mismatch logging', () => {
       label: 'specific secondary fluorophore reagent selection (e.g. AB325286 vs AB325287)',
       reason: 'malformed character-index object from LLM',
     });
-
-    // Verify console.warn was called with the correct prefix
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    const warnCall = warnSpy.mock.calls[0][0] as string;
-    expect(warnCall).toMatch(/^\[ai_precompile_shape_mismatch\]/);
+    // Character-index objects are now normalized in the success path (zod accepts z.any()),
+    // so no shape-mismatch warning is emitted for this case.
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
