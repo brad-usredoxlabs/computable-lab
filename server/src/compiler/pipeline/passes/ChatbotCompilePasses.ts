@@ -431,18 +431,8 @@ function createAiPrecompileOutputSchema() {
     clarification: z.string().optional(),
     mintMaterials: z.array(z.any()).optional(),
     priorLabwareRefs: z.array(z.any()).optional(),
-    directives: z
-      .array(z.object({ kind: z.string(), params: z.any() }))
-      .optional(),
-    downstreamCompileJobs: z
-      .array(
-        z.object({
-          kind: z.string(),
-          description: z.string().optional(),
-          params: z.any().optional(),
-        }),
-      )
-      .optional(),
+    directives: z.array(z.any()).optional(),
+    downstreamCompileJobs: z.array(z.any()).optional(),
     patternEvents: z.array(z.any()).optional(),
   });
 }
