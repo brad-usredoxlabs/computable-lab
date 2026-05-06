@@ -43,7 +43,15 @@ interface CoderResponse {
   content: string;
   parsed?: Record<string, unknown>;
   diff?: string;
+  diffSource?: 'unifiedDiff' | 'structuredEdits';
   summary?: string;
+}
+
+export interface StructuredEdit {
+  path: string;
+  search: string;
+  replace: string;
+  occurrence?: number;
 }
 
 interface AttemptResult {
@@ -53,6 +61,7 @@ interface AttemptResult {
   phase: string;
   message: string;
   diffPath?: string;
+  diffSource?: CoderResponse['diffSource'];
   touchedFiles: string[];
   verification?: Array<{
     command: string;
@@ -415,6 +424,90 @@ function extractUnifiedDiff(text: string): string | undefined {
     }
   }
   return undefined;
+}
+
+function parseStructuredEdits(value: unknown): StructuredEdit[] {
+  if (!Array.isArray(value)) return [];
+  const edits: StructuredEdit[] = [];
+  for (const item of value) {
+    const edit = asRecord(item);
+    const path = edit['path'];
+    const search = edit['search'];
+    const replace = edit['replace'];
+    const occurrence = edit['occurrence'];
+    if (typeof path !== 'string' || typeof search !== 'string' || typeof replace !== 'string') continue;
+    if (!path || !search) continue;
+    edits.push({
+      path,
+      search,
+      replace,
+      ...(typeof occurrence === 'number' && Number.isInteger(occurrence) && occurrence > 0 ? { occurrence } : {}),
+    });
+  }
+  return edits;
+}
+
+function applyOneStructuredEdit(content: string, edit: StructuredEdit): string {
+  if (edit.search === edit.replace) throw new Error(`${edit.path}: search and replace are identical`);
+  const matches: number[] = [];
+  let index = content.indexOf(edit.search);
+  while (index !== -1) {
+    matches.push(index);
+    index = content.indexOf(edit.search, index + edit.search.length);
+  }
+  if (matches.length === 0) throw new Error(`${edit.path}: search block not found`);
+  const occurrence = edit.occurrence ?? 1;
+  if (!edit.occurrence && matches.length > 1) {
+    throw new Error(`${edit.path}: search block matched ${matches.length} times; include occurrence to disambiguate`);
+  }
+  const selectedIndex = matches[occurrence - 1];
+  if (selectedIndex === undefined) throw new Error(`${edit.path}: occurrence ${occurrence} not found`);
+  return `${content.slice(0, selectedIndex)}${edit.replace}${content.slice(selectedIndex + edit.search.length)}`;
+}
+
+async function diffForFile(repoRoot: string, tournamentDir: string, path: string, before: string, after: string): Promise<string> {
+  const tempDir = join(tournamentDir, 'structured-edits-tmp', sanitizeSegment(path));
+  await mkdir(tempDir, { recursive: true });
+  const beforePath = join(tempDir, 'before');
+  const afterPath = join(tempDir, 'after');
+  await writeFile(beforePath, before, 'utf-8');
+  await writeFile(afterPath, after, 'utf-8');
+  try {
+    const result = await execFileAsync('diff', ['-u', '--label', `a/${path}`, '--label', `b/${path}`, beforePath, afterPath], {
+      cwd: repoRoot,
+      maxBuffer: 1024 * 1024 * 12,
+    });
+    return result.stdout;
+  } catch (error) {
+    const err = error as { stdout?: string; stderr?: string; code?: number; message?: string };
+    if (err.code === 1 && err.stdout) return err.stdout;
+    throw new Error(err.stderr || err.message || String(error));
+  }
+}
+
+export async function structuredEditsToUnifiedDiff(input: {
+  repoRoot: string;
+  tournamentDir: string;
+  edits: StructuredEdit[];
+}): Promise<string> {
+  if (input.edits.length === 0) throw new Error('structured edits were empty');
+  const byPath = new Map<string, StructuredEdit[]>();
+  for (const edit of input.edits) {
+    if (edit.path.startsWith('/') || edit.path.includes('..')) throw new Error(`${edit.path}: invalid edit path`);
+    byPath.set(edit.path, [...(byPath.get(edit.path) ?? []), edit]);
+  }
+
+  const chunks: string[] = [];
+  for (const [path, edits] of [...byPath.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const filePath = join(input.repoRoot, path);
+    if (!existsSync(filePath)) throw new Error(`${path}: structured edits only support existing files`);
+    const before = await readFile(filePath, 'utf-8');
+    let after = before;
+    for (const edit of edits) after = applyOneStructuredEdit(after, edit);
+    if (after === before) throw new Error(`${path}: structured edits produced no change`);
+    chunks.push(await diffForFile(input.repoRoot, input.tournamentDir, path, before, after));
+  }
+  return chunks.join('\n').trimEnd() + '\n';
 }
 
 function parseTouchedFiles(diff: string): string[] {
@@ -866,9 +959,13 @@ async function requestCoderPatch(input: {
       {
         role: 'system',
         content: [
-          'You are the Protocol Foundry coder. Produce one minimal git unified diff for exactly one compiler/precompiler fix class.',
+          'You are the Protocol Foundry coder. Produce one minimal source edit for exactly one compiler/precompiler fix class.',
           'The target worker model is Qwen/Qwen3.6-35B-A3B-FP8: it is strong, but this harness succeeds when patches are small, concrete, and context-local.',
-          'Return only JSON with keys: summary, unifiedDiff.',
+          'Return only JSON. Prefer keys: summary, edits.',
+          'Each edit must be { "path": "repo/relative/file", "search": "exact current text block", "replace": "replacement text block" }.',
+          'Use edits instead of unifiedDiff unless you must create a new file. The harness will generate the git patch from exact search/replace edits.',
+          'If a search block appears more than once, include "occurrence": 1-based-number. Otherwise choose a larger exact search block.',
+          'You may return unifiedDiff only for changes that cannot be expressed as exact search/replace.',
           'Do not modify files outside ownedFiles. Do not include markdown.',
           'Use exact file paths and context from the supplied repository context.',
           'Use source artifact context as failure evidence; do not patch generated artifacts directly.',
@@ -877,7 +974,7 @@ async function requestCoderPatch(input: {
           'Data files under records/ must be YAML. Do not create JSON files for records data.',
           'Do not create material-instance, aliquot, material-lot, source-tube, or physical inventory records from vendor PDF evidence.',
           'Do not invent ontology identifiers. Use ontology refs only when supplied by source artifacts or local records.',
-          'The unifiedDiff must be directly accepted by git apply.',
+          'If returning unifiedDiff, it must be directly accepted by git apply.',
           'Prefer one changed file and one focused fixture when possible. Never attempt to fix multiple biology verb families at once.',
           'If the spec is broad, choose the smallest acceptance criterion that advances the exact failure evidence.',
           'For fixClass material_catalog_or_spec_gap, do not create or edit labware-definition YAML; that lane is for substances, material specs, vendor products, and material resolver/catalog behavior.',
@@ -917,7 +1014,7 @@ async function requestCoderPatch(input: {
     strategy: input.strategy,
     content,
     ...(parsed ? { parsed } : {}),
-    ...(diff ? { diff } : {}),
+    ...(diff ? { diff, diffSource: 'unifiedDiff' as const } : {}),
     ...(typeof parsed?.['summary'] === 'string' ? { summary: parsed['summary'] } : {}),
   };
 }
@@ -933,13 +1030,42 @@ async function evaluateCandidate(input: {
   autoPush?: boolean;
 }): Promise<AttemptResult> {
   const rawResponse = input.response.content.slice(0, 4000);
-  if (!input.response.diff || (!input.response.diff.includes('diff --git ') && !input.response.diff.includes('--- a/'))) {
+  let responseDiff = input.response.diff;
+  let diffSource = input.response.diffSource;
+  if (!responseDiff && input.response.parsed) {
+    const structuredEdits = parseStructuredEdits(input.response.parsed['edits']);
+    if (structuredEdits.length > 0) {
+      try {
+        responseDiff = await structuredEditsToUnifiedDiff({
+          repoRoot: input.repoRoot,
+          tournamentDir: input.tournamentDir,
+          edits: structuredEdits,
+        });
+        diffSource = 'structuredEdits';
+      } catch (error) {
+        const result: AttemptResult = {
+          attempt: input.response.attempt,
+          strategy: input.response.strategy,
+          status: 'blocked',
+          phase: 'structured-edit',
+          message: error instanceof Error ? error.message : String(error),
+          touchedFiles: structuredEdits.map((edit) => edit.path).sort(),
+          rawResponse,
+          ...(input.response.summary ? { summary: input.response.summary } : {}),
+        };
+        await writeAttempt(input.tournamentDir, result);
+        return result;
+      }
+    }
+  }
+
+  if (!responseDiff || (!responseDiff.includes('diff --git ') && !responseDiff.includes('--- a/'))) {
     const result: AttemptResult = {
       attempt: input.response.attempt,
       strategy: input.response.strategy,
       status: 'blocked',
       phase: 'parse',
-      message: 'Coder response did not contain a git unified diff.',
+      message: 'Coder response did not contain structured edits or a git unified diff.',
       touchedFiles: [],
       rawResponse,
       ...(input.response.summary ? { summary: input.response.summary } : {}),
@@ -950,14 +1076,14 @@ async function evaluateCandidate(input: {
 
   const diffPath = join(input.tournamentDir, `attempt-${input.response.attempt}.diff`);
   await mkdir(dirname(diffPath), { recursive: true });
-  await writeFile(diffPath, input.response.diff, 'utf-8');
+  await writeFile(diffPath, responseDiff, 'utf-8');
 
-  const touchedFiles = parseTouchedFiles(input.response.diff);
+  const touchedFiles = parseTouchedFiles(responseDiff);
   const disallowed = touchedFiles.filter((file) => !pathIsAllowed(file, input.ownedFiles));
   const directories = await findDirectoryTouchedFiles(input.repoRoot, touchedFiles);
   const dataFormatErrors = dataFormatViolations(touchedFiles);
   const recordPathErrors = recordPathPolicyViolations(touchedFiles);
-  const existingFileAdditionErrors = existingFileAdditionViolations(input.repoRoot, input.response.diff);
+  const existingFileAdditionErrors = existingFileAdditionViolations(input.repoRoot, responseDiff);
   if (
     touchedFiles.length === 0
     || disallowed.length > 0
@@ -981,6 +1107,7 @@ async function evaluateCandidate(input: {
               ? existingFileAdditionErrors.join('\n')
               : `Coder patch touched files outside architect-owned paths: ${disallowed.join(', ')}`,
       diffPath,
+      ...(diffSource ? { diffSource } : {}),
       touchedFiles,
       rawResponse,
       ...(input.response.summary ? { summary: input.response.summary } : {}),
@@ -1006,6 +1133,7 @@ async function evaluateCandidate(input: {
         phase: 'record-schema-policy',
         message: recordPolicyErrors.join('\n'),
         diffPath,
+        ...(diffSource ? { diffSource } : {}),
         touchedFiles,
         rawResponse,
         ...(input.response.summary ? { summary: input.response.summary } : {}),
@@ -1025,6 +1153,7 @@ async function evaluateCandidate(input: {
         phase: 'verification',
         message: 'Patch applied but verification failed; patch was reversed.',
         diffPath,
+        ...(diffSource ? { diffSource } : {}),
         touchedFiles,
         verification,
         rawResponse,
@@ -1047,6 +1176,7 @@ async function evaluateCandidate(input: {
       phase: 'verification',
       message: 'Coder patch applied and verified.',
       diffPath,
+      ...(diffSource ? { diffSource } : {}),
       touchedFiles,
       verification,
       ...commit,
@@ -1064,6 +1194,7 @@ async function evaluateCandidate(input: {
       phase: 'git-apply-check',
       message: error instanceof Error ? error.message : String(error),
       diffPath,
+      ...(diffSource ? { diffSource } : {}),
       touchedFiles,
       rawResponse,
       ...(input.response.summary ? { summary: input.response.summary } : {}),
@@ -1302,11 +1433,11 @@ export async function runFoundryCoderPatch(input: {
   }
 
   const best = attempts.sort((a, b) => attemptScore(b) - attemptScore(a))[0];
-  if (best?.diffPath) {
-    const priorDiff = await readFile(best.diffPath, 'utf-8').catch(() => undefined);
+  if (best) {
+    const priorDiff = best.diffPath ? await readFile(best.diffPath, 'utf-8').catch(() => undefined) : undefined;
     const repairResponse = await requestCoderPatch({
       attempt: 4,
-      strategy: 'repair: fix the best failed candidate using the exact failure message; keep the patch narrower than the original',
+      strategy: 'repair: fix the best failed candidate using the exact failure message; keep the patch narrower than the original and copy search blocks exactly from repository context',
       client,
       model,
       protocolId: input.protocolId,

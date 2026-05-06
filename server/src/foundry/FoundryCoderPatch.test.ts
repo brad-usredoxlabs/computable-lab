@@ -7,6 +7,7 @@ import {
   patchSpecSupersededByCompilerArtifact,
   recordSchemaPolicyViolations,
   selectPatchSpecIdForRun,
+  structuredEditsToUnifiedDiff,
 } from './FoundryCoderPatch.js';
 
 describe('FoundryCoderPatch record schema policy', () => {
@@ -197,5 +198,57 @@ describe('FoundryCoderPatch patch scheduling', () => {
     );
 
     expect(reason).toBeUndefined();
+  });
+});
+
+describe('FoundryCoderPatch structured edits', () => {
+  it('turns exact search/replace edits into a git-applicable unified diff', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'foundry-coder-edits-'));
+    const tournamentDir = join(root, 'artifacts');
+    await mkdir(join(root, 'server/src/example'), { recursive: true });
+    const rel = 'server/src/example/value.ts';
+    await writeFile(join(root, rel), [
+      'export function value(): number {',
+      '  return 1;',
+      '}',
+      '',
+    ].join('\n'), 'utf-8');
+
+    const diff = await structuredEditsToUnifiedDiff({
+      repoRoot: root,
+      tournamentDir,
+      edits: [{
+        path: rel,
+        search: '  return 1;',
+        replace: '  return 2;',
+      }],
+    });
+
+    expect(diff).toContain(`--- a/${rel}`);
+    expect(diff).toContain(`+++ b/${rel}`);
+    expect(diff).toContain('-  return 1;');
+    expect(diff).toContain('+  return 2;');
+  });
+
+  it('requires ambiguous search blocks to include an occurrence', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'foundry-coder-edits-'));
+    const tournamentDir = join(root, 'artifacts');
+    await mkdir(join(root, 'server/src/example'), { recursive: true });
+    const rel = 'server/src/example/value.ts';
+    await writeFile(join(root, rel), [
+      'const item = 1;',
+      'const item = 1;',
+      '',
+    ].join('\n'), 'utf-8');
+
+    await expect(structuredEditsToUnifiedDiff({
+      repoRoot: root,
+      tournamentDir,
+      edits: [{
+        path: rel,
+        search: 'const item = 1;',
+        replace: 'const item = 2;',
+      }],
+    })).rejects.toThrow('matched 2 times');
   });
 });
