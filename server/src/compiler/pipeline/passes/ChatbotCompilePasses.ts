@@ -593,6 +593,17 @@ function salvageAiPrecompileOutput(input: {
       if (!existingRefs.has(key)) output.unresolvedRefs.push(ref);
     }
   }
+  // Convert labware-related unresolved refs into candidateLabwares so the
+  // resolve_labware pass can attempt resolution instead of being skipped.
+  if (input.detUnresolvedRefs.length > 0) {
+    const existingHints = new Set(output.candidateLabwares.map((lw) => lw.hint));
+    for (const ref of input.detUnresolvedRefs) {
+      if (ref.kind === 'labware' && ref.label && !existingHints.has(ref.label)) {
+        output.candidateLabwares.push({ hint: ref.label, reason: ref.reason });
+        existingHints.add(ref.label);
+      }
+    }
+  }
   return output;
 }
 
@@ -774,6 +785,17 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
           const key = `${ref.kind}\u0000${ref.label}\u0000${ref.reason}`;
           if (!existingRefs.has(key)) {
             llmOutput.unresolvedRefs.push(ref);
+          }
+        }
+      }
+      // Convert labware-related unresolved refs into candidateLabwares so the
+      // resolve_labware pass can attempt resolution instead of being skipped.
+      if (detUnresolvedRefs.length > 0) {
+        const existingHints = new Set(llmOutput.candidateLabwares.map((l: { hint: string }) => l.hint));
+        for (const ref of detUnresolvedRefs) {
+          if (ref.kind === 'labware' && ref.label && !existingHints.has(ref.label)) {
+            llmOutput.candidateLabwares.push({ hint: ref.label, reason: ref.reason });
+            existingHints.add(ref.label);
           }
         }
       }
