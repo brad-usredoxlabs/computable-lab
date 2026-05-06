@@ -27,14 +27,38 @@ function reviewScript(workbenchRoot?: string): string {
   return join(workbenchRoot ?? resolve(process.cwd(), '..'), 'scripts', 'protocol_foundry_browser_review.cjs');
 }
 
-function runNodeScript(script: string, args: string[], cwd: string): Promise<{ stdout: string; stderr: string; code: number | null }> {
+function runNodeScript(script: string, args: string[], cwd: string, timeoutMs = 180_000): Promise<{
+  stdout: string;
+  stderr: string;
+  code: number | null;
+  timedOut?: boolean;
+}> {
   return new Promise((resolvePromise) => {
     const child = spawn(process.execPath, [script, ...args], { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
+    let settled = false;
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      stderr += `\nbrowser review timed out after ${timeoutMs}ms`;
+      child.kill('SIGTERM');
+      setTimeout(() => child.kill('SIGKILL'), 5_000).unref();
+    }, timeoutMs);
+    timeout.unref();
+    const finish = (result: { code: number | null; timedOut?: boolean }) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolvePromise({ stdout, stderr, ...result });
+    };
     child.stdout.on('data', (chunk) => { stdout += String(chunk); });
     child.stderr.on('data', (chunk) => { stderr += String(chunk); });
-    child.on('close', (code) => resolvePromise({ stdout, stderr, code }));
+    child.on('error', (error) => {
+      stderr += `\n${error instanceof Error ? error.message : String(error)}`;
+      finish({ code: 1 });
+    });
+    child.on('close', (code) => finish({ code, ...(timedOut ? { timedOut: true } : {}) }));
   });
 }
 
@@ -81,6 +105,22 @@ export async function runFoundryBrowserReview(options: BrowserReviewOptions): Pr
   ];
   const result = await runNodeScript(script, args, options.repoRoot);
   let status: BrowserReviewResult['status'] = result.code === 0 ? 'pass' : 'fail';
+  if (result.timedOut) {
+    status = 'blocked';
+    await writeYamlFile(reportPath, {
+      kind: 'protocol-browser-review-report',
+      protocolId: options.protocolId,
+      variant: options.variant,
+      status,
+      route: '',
+      played_events: false,
+      commands: [`node ${script} ${args.join(' ')}`],
+      screenshots: [],
+      console_errors: [],
+      visual_failures: [result.stderr.trim() || 'browser review timed out'],
+      labware_checks: [],
+    });
+  }
   if (existsSync(reportPath)) {
     const report = asRecord(await readYamlFile(reportPath));
     const reportStatus = report['status'];
