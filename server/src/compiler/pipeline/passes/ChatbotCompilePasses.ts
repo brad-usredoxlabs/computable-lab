@@ -2887,8 +2887,8 @@ export function createDeriveExecutionScalePlanPass(): Pass {
       const generatedWells = eventWells.length === 0 && explicitSampleCount && sampleLabwareKind !== 'tube_rack'
         ? generatePlateWells(explicitSampleCount, sampleLabwareKind)
         : [];
-      const sampleWells = eventWells.length > 0 ? eventWells : generatedWells;
-      const sampleCount = explicitSampleCount
+      let sampleWells = eventWells.length > 0 ? eventWells : generatedWells;
+      let sampleCount = explicitSampleCount
         ?? (sampleWells.length > 0 ? sampleWells.length : undefined)
         ?? (!explicitScaleOut && events.length > 0 ? 1 : undefined);
       const blockers: ExecutionScalePlan['blockers'] = [];
