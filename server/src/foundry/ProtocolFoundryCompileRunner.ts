@@ -375,7 +375,17 @@ function presegmentedExtractionService(): ExtractionRunnerService {
   } as unknown as ExtractionRunnerService;
 }
 
-function nullLlmClient(): LlmClient {
+function nullLlmClient(variant?: FoundryVariant): LlmClient {
+  // When the LLM is unavailable (dry-run / no inference config), fall back to
+  // deterministic labware hints from the Foundry test assumption profile so that
+  // the resolve_labware pass is not skipped and existing canonical labware
+  // definitions are resolved through the alias map.
+  const variantLabwareHints: Record<FoundryVariant, string[]> = {
+    manual_tubes: ['generic_24x1_5ml_tube_rack'],
+    bench_plate_multichannel: ['generic_96_well_plate', 'generic_12_well_reservoir'],
+    robot_deck: ['generic_96_well_plate', 'generic_12_well_reservoir'],
+  };
+  const hints = variant ? (variantLabwareHints[variant] ?? []) : [];
   return {
     async complete() {
       return {
@@ -384,7 +394,7 @@ function nullLlmClient(): LlmClient {
             content: JSON.stringify({
               tags: [],
               candidateEvents: [],
-              candidateLabwares: [],
+              candidateLabwares: hints.map((hint) => ({ hint, reason: 'deterministic_foundry_assumption' })),
               unresolvedRefs: [],
             }),
           },
@@ -394,10 +404,10 @@ function nullLlmClient(): LlmClient {
   };
 }
 
-function createLlmClient(options: ProtocolFoundryCompileOptions): LlmClient {
+function createLlmClient(options: ProtocolFoundryCompileOptions, variant?: FoundryVariant): LlmClient {
   const baseUrl = options.inference?.baseUrl ?? process.env['PI_WORKER_BASE_URL'] ?? process.env['OPENAI_BASE_URL'];
   const model = options.inference?.model ?? process.env['PI_WORKER_MODEL'] ?? process.env['OPENAI_MODEL'];
-  if (!baseUrl || !model || options.dryRun) return nullLlmClient();
+  if (!baseUrl || !model || options.dryRun) return nullLlmClient(variant);
   const apiKey = options.inference?.apiKey ?? process.env['OPENAI_API_KEY'];
   return createInferenceClient({
     baseUrl,
@@ -409,7 +419,6 @@ function createLlmClient(options: ProtocolFoundryCompileOptions): LlmClient {
     enableThinking: options.inference?.enableThinking ?? false,
   });
 }
-
 function labwareDefinitionEnvelope(record: LabwareDefinitionRecord): RecordEnvelope<Record<string, unknown>> {
   return {
     recordId: record.recordId,
@@ -668,7 +677,6 @@ export async function runProtocolFoundryCompile(options: ProtocolFoundryCompileO
   const materialContext = options.materialContextPath ? await readYamlFile(options.materialContextPath) : undefined;
   const protocolId = options.protocolId ? slugify(options.protocolId) : inferProtocolId(options.segmentPath, segment);
   const protocolText = extractProtocolText(segment);
-  const llmClient = createLlmClient(options);
   const variants = options.variants && options.variants.length > 0 ? options.variants : [...FOUNDRY_VARIANTS];
   const summary: ProtocolFoundryCompileSummary = {
     kind: 'protocol-foundry-compile-summary',
@@ -678,6 +686,7 @@ export async function runProtocolFoundryCompile(options: ProtocolFoundryCompileO
   };
 
   for (const variant of variants) {
+    const llmClient = createLlmClient(options, variant);
     summary.variants.push(await runVariant({
       options,
       protocolId,
