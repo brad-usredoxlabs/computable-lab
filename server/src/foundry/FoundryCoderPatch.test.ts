@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   existingFileAdditionViolations,
   collectSourceAnchorContext,
+  defaultVerificationArgs,
   patchSpecSupersededByCompilerArtifact,
   recordSchemaPolicyViolations,
   selectPatchSpecIdForRun,
@@ -344,5 +345,20 @@ describe('FoundryCoderPatch structured edits', () => {
         anchorId: 'value-function',
       }],
     })).rejects.toThrow('edit #1 server/src/example/value.ts anchor:value-function: search block not found');
+  });
+});
+
+describe('FoundryCoderPatch verification routing', () => {
+  it('runs touched tests instead of falling back to unrelated Foundry ledger tests', () => {
+    expect(defaultVerificationArgs([
+      'server/src/compiler/pipeline/passes/AiPrecompileShapeMismatch.log.test.ts',
+    ])).toEqual([[
+      'npm',
+      'test',
+      '--',
+      '--run',
+      'src/compiler/pipeline/passes/AiPrecompileShapeMismatch.log.test.ts',
+      'src/compiler/pipeline/passes/ChatbotCompilePasses.test.ts',
+    ]]);
   });
 });

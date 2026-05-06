@@ -889,8 +889,20 @@ async function assertTouchedFilesClean(repoRoot: string, touchedFiles: string[])
   }
 }
 
-function defaultVerificationArgs(touchedFiles: string[]): string[][] {
+export function defaultVerificationArgs(touchedFiles: string[]): string[][] {
   const tests = new Set<string>();
+  for (const file of touchedFiles) {
+    if (file.startsWith('server/src/') && /\.test\.(ts|tsx)$/.test(file)) {
+      tests.add(file.replace(/^server\//, ''));
+    }
+  }
+  if (touchedFiles.some((file) => file.startsWith('server/src/compiler/pipeline/passes/'))) {
+    tests.add('src/compiler/pipeline/passes/ChatbotCompilePasses.test.ts');
+    tests.add('src/compiler/pipeline/passes/AiPrecompileShapeMismatch.log.test.ts');
+  }
+  if (touchedFiles.some((file) => file.startsWith('server/src/compiler/biology/'))) {
+    tests.add('src/compiler/biology/BiologyVerbExpander.test.ts');
+  }
   if (touchedFiles.some((file) => file.startsWith('server/src/extract/'))) {
     tests.add('src/extract/OpenAICompatibleExtractor.test.ts');
     tests.add('src/extract/runChunkedExtractionService.test.ts');
