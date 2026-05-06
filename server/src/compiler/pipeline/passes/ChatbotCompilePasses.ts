@@ -427,7 +427,15 @@ function createAiPrecompileOutputSchema() {
     candidateActions: z.array(z.any()).optional(),
     taggedPhrases: z.array(z.any()).optional(),
     candidateLabwares: z.array(z.any()).default([]),
-    unresolvedRefs: z.array(z.any()).default([]),
+    unresolvedRefs: z
+      .array(
+        z.object({
+          kind: z.string(),
+          label: z.string(),
+          reason: z.string(),
+        }),
+      )
+      .default([]),
     clarification: z.string().optional(),
     mintMaterials: z.array(z.any()).optional(),
     priorLabwareRefs: z.array(z.any()).optional(),
