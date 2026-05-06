@@ -114,6 +114,11 @@ function coderPatchIsTerminal(path: string | undefined): boolean {
   return status === 'applied' || status === 'skipped' || status === 'needs-human';
 }
 
+function coderPatchNeedsArchitectRefresh(path: string | undefined): boolean {
+  const status = coderPatchResultStatus(path);
+  return status === 'needs-human' || status === 'failed';
+}
+
 function coderPatchNeedsRefresh(path: string | undefined): boolean {
   return coderPatchResultStatus(path) === 'stale';
 }
@@ -375,13 +380,15 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
       const adoptionStale = artifactNewerThan(item.artifacts.architectVerdict, adoptionPath);
       const coderPatchStale = artifactNewerThan(adoptionPath, coderPatchPath);
       const rerunStale = artifactNewerThan(coderPatchPath, rerunPath);
+      const coderPatchAsksArchitect = coderPatchNeedsArchitectRefresh(coderPatchPath)
+        && artifactNewerThan(coderPatchPath, item.artifacts.architectVerdict);
       if (!item.artifacts.compiler) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
       } else if (!item.artifacts.eventGraph || !item.artifacts.executionScale) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
       } else if (item.artifacts.compiler && !existsSync(assumptionsPath)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
-      } else if (item.artifacts.compiler && item.artifacts.eventGraph && (!item.artifacts.architectVerdict || architectStale)) {
+      } else if (item.artifacts.compiler && item.artifacts.eventGraph && (!item.artifacts.architectVerdict || architectStale || coderPatchAsksArchitect)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'architect_review' });
       } else if (item.artifacts.architectVerdict && (!existsSync(adoptionPath) || adoptionStale)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'patch_adoption' });

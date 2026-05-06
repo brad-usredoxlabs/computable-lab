@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -174,5 +175,98 @@ describe('runFoundryArchitectReview', () => {
     const shapeFix = verdict.recommendedFixes.find((fix) => fix.class === 'precompiler_reference_shape_gap');
     expect(shapeFix?.ownedFiles).toContain('server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts');
     expect(shapeFix?.acceptance.join('\n')).toContain('Character-index object refs no longer appear');
+  });
+
+  it('does not route generic ai_precompile shape mismatches to the stale unresolved-ref lane', async () => {
+    const artifactRoot = await mkdtemp(join(tmpdir(), 'foundry-architect-'));
+    const protocolId = 'demo-protocol';
+    const variant = 'manual_tubes';
+
+    await writeYaml(join(artifactRoot, 'compiler', protocolId, `${variant}.yaml`), {
+      kind: 'protocol-foundry-compiler-result',
+      outcome: 'gap',
+      eventCount: 7,
+      diagnostics: [
+        {
+          severity: 'warning',
+          code: 'ai_precompile_shape_mismatch',
+          pass_id: 'ai_precompile',
+          message: 'candidateEvents was an object instead of an array',
+        },
+      ],
+      gaps: [],
+    });
+    await writeYaml(join(artifactRoot, 'event-graphs', protocolId, `${variant}.yaml`), {
+      kind: 'protocol-event-graph-proposal',
+      eventGraph: { events: Array.from({ length: 7 }, (_, index) => ({ eventId: `e${index}` })) },
+    });
+    await writeYaml(join(artifactRoot, 'execution-scale', protocolId, `${variant}.yaml`), {
+      kind: 'execution-scale-plan',
+      blockers: [],
+    });
+    await writeYaml(join(artifactRoot, 'browser-review', protocolId, variant, 'report.yaml'), {
+      status: 'pass',
+    });
+    await writeYaml(join(artifactRoot, 'segments', `${protocolId}.yaml`), { protocolId });
+    await writeYaml(join(artifactRoot, 'material-context', `${protocolId}.yaml`), {});
+
+    const verdict = await runFoundryArchitectReview({
+      artifactRoot,
+      protocolId,
+      variant,
+      dryRun: true,
+    });
+
+    expect(verdict.failureClasses).not.toContain('precompiler_reference_shape_gap');
+    expect(verdict.recommendedFixes.some((fix) => fix.class === 'precompiler_reference_shape_gap')).toBe(false);
+  });
+
+  it('prunes stale patch specs when the refreshed architect queue changes', async () => {
+    const artifactRoot = await mkdtemp(join(tmpdir(), 'foundry-architect-'));
+    const protocolId = 'demo-protocol';
+    const variant = 'manual_tubes';
+    const staleSpecPath = join(artifactRoot, 'patch-specs', protocolId, variant, 'fix-precompiler-reference-shape-gap.yaml');
+
+    await writeYaml(staleSpecPath, {
+      kind: 'protocol-foundry-patch-spec',
+      id: `${protocolId}/${variant}/fix-precompiler-reference-shape-gap`,
+      fixClass: 'precompiler_reference_shape_gap',
+    });
+    await writeYaml(join(artifactRoot, 'compiler', protocolId, `${variant}.yaml`), {
+      kind: 'protocol-foundry-compiler-result',
+      outcome: 'gap',
+      eventCount: 7,
+      diagnostics: [],
+      gaps: [
+        {
+          kind: 'unresolved_ref',
+          message: 'generic_24x1_5ml_tube_rack (no matching labware in prior snapshot)',
+        },
+      ],
+    });
+    await writeYaml(join(artifactRoot, 'event-graphs', protocolId, `${variant}.yaml`), {
+      kind: 'protocol-event-graph-proposal',
+      eventGraph: { events: Array.from({ length: 7 }, (_, index) => ({ eventId: `e${index}` })) },
+    });
+    await writeYaml(join(artifactRoot, 'execution-scale', protocolId, `${variant}.yaml`), {
+      kind: 'execution-scale-plan',
+      blockers: [],
+    });
+    await writeYaml(join(artifactRoot, 'browser-review', protocolId, variant, 'report.yaml'), {
+      status: 'blocked',
+    });
+    await writeYaml(join(artifactRoot, 'segments', `${protocolId}.yaml`), { protocolId });
+    await writeYaml(join(artifactRoot, 'material-context', `${protocolId}.yaml`), {});
+
+    const verdict = await runFoundryArchitectReview({
+      artifactRoot,
+      protocolId,
+      variant,
+      dryRun: true,
+    });
+
+    expect(verdict.recommendedFixes.some((fix) => fix.class === 'labware_alias_or_resolver_gap')).toBe(true);
+    expect(existsSync(staleSpecPath)).toBe(false);
+    expect(existsSync(join(artifactRoot, 'patch-specs', protocolId, variant, 'fix-labware-alias-resolver-gap.yaml'))).toBe(true);
   });
 });

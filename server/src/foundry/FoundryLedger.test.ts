@@ -16,6 +16,10 @@ describe('FoundryLedger', () => {
     return root;
   }
 
+  async function tick(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
   it('discovers protocols and exposes compile as the first ready task', async () => {
     const root = await makeArtifactRoot();
     const ledger = await scanFoundryLedger(root);
@@ -299,6 +303,53 @@ describe('FoundryLedger', () => {
       protocolId: 'demo-protocol',
       variant: 'manual_tubes',
       stage: 'coder_patch',
+    });
+  });
+
+  it('returns control to the architect when a coder tournament needs human review', async () => {
+    const root = await makeArtifactRoot();
+    await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-compiler-result',
+      outcome: 'gap',
+      eventCount: 1,
+      diagnostics: [],
+    });
+    await writeYamlFile(join(root, 'event-graphs', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-event-graph-proposal',
+    });
+    await writeYamlFile(join(root, 'execution-scale', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'execution-scale-plan',
+      blockers: [],
+    });
+    await writeYamlFile(join(root, 'assumptions', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-test-assumption-profile',
+    });
+    await writeYamlFile(join(root, 'architect', 'demo-protocol', 'manual_tubes', 'verdict.yaml'), {
+      kind: 'protocol-foundry-architect-verdict',
+      accepted: false,
+    });
+    await writeYamlFile(join(root, 'patch-specs', 'demo-protocol', 'manual_tubes', 'fix-extractor.yaml'), {
+      id: 'fix-extractor',
+      fixClass: 'extractor_prompt_contract',
+      ownedFiles: ['server/src/extract'],
+    });
+    await writeYamlFile(join(root, 'adoption', 'demo-protocol', 'manual_tubes', 'adoption.yaml'), {
+      kind: 'protocol-foundry-adoption-decision',
+      status: 'accepted',
+    });
+    await tick();
+    await writeYamlFile(join(root, 'code-patches', 'demo-protocol', 'manual_tubes', 'result.yaml'), {
+      kind: 'protocol-foundry-coder-patch-result',
+      status: 'needs-human',
+      message: 'coder found the selected spec already satisfied',
+    });
+
+    const ledger = await scanFoundryLedger(root);
+
+    expect(readyTasks(ledger)).toContainEqual({
+      protocolId: 'demo-protocol',
+      variant: 'manual_tubes',
+      stage: 'architect_review',
     });
   });
 

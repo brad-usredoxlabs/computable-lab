@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createInferenceClient } from '../ai/InferenceClient.js';
 import type { InferenceConfig } from '../config/types.js';
@@ -68,6 +69,7 @@ function artifactPaths(options: FoundryArchitectOptions): Record<string, string 
     eventGraph: join(root, 'event-graphs', protocol, `${variant}.yaml`),
     executionScale: join(root, 'execution-scale', protocol, `${variant}.yaml`),
     browserReport: join(root, 'browser-review', protocol, variant, 'report.yaml'),
+    coderPatch: join(root, 'code-patches', protocol, variant, 'result.yaml'),
     assumptions: join(root, 'assumptions', protocol, `${variant}.yaml`),
     segment: join(root, 'segments', `${protocol}.yaml`),
     materialContext: join(root, 'material-context', `${protocol}.yaml`),
@@ -329,6 +331,12 @@ function hasPrecompilerReferenceShapeGap(input: {
     gaps: input.compiler['gaps'],
   });
   return evidence.includes('ai_precompile_shape_mismatch')
+    && (
+      evidence.includes('kind undefined not handled by resolve_references')
+      || evidence.includes('malformed character-index')
+      || evidence.includes('character-index object')
+      || /"\d+"\s*:\s*"[a-z0-9 _.-]"/.test(evidence)
+    )
     || evidence.includes('kind undefined not handled by resolve_references')
     || evidence.includes('undefined (undefined)')
     || /"0"\s*:\s*"[a-z0-9 ]"/.test(evidence);
@@ -715,11 +723,12 @@ async function llmArchitectNotes(options: FoundryArchitectOptions, context: unkn
 
 export async function runFoundryArchitectReview(options: FoundryArchitectOptions): Promise<ArchitectVerdict> {
   const paths = artifactPaths(options);
-  const [compilerRaw, eventGraphRaw, executionScaleRaw, browserReportRaw, segmentRaw, materialContextRaw, textRaw] = await Promise.all([
+  const [compilerRaw, eventGraphRaw, executionScaleRaw, browserReportRaw, coderPatchRaw, segmentRaw, materialContextRaw, textRaw] = await Promise.all([
     readIfExists(paths.compiler),
     readIfExists(paths.eventGraph),
     readIfExists(paths.executionScale),
     readIfExists(paths.browserReport),
+    readIfExists(paths.coderPatch),
     readIfExists(paths.segment),
     readIfExists(paths.materialContext),
     readIfExists(paths.text),
@@ -739,6 +748,7 @@ export async function runFoundryArchitectReview(options: FoundryArchitectOptions
     eventGraph: eventGraphRaw,
     executionScale: executionScaleRaw,
     browserReport: browserReportRaw,
+    coderPatch: coderPatchRaw,
     segment: segmentRaw,
     materialContext: materialContextRaw,
     text: typeof textRaw === 'string' ? textRaw.slice(0, 40_000) : undefined,
@@ -753,8 +763,16 @@ export async function runFoundryArchitectReview(options: FoundryArchitectOptions
 
 async function writePatchSpecs(artifactRoot: string, verdict: ArchitectVerdict): Promise<void> {
   const specPaths: string[] = [];
+  const specDir = join(artifactRoot, 'patch-specs', verdict.protocolId, verdict.variant);
+  const expectedSpecFiles = new Set(verdict.recommendedFixes.map((fix) => `${fix.id}.yaml`));
+  if (existsSync(specDir)) {
+    const existingFiles = await readdir(specDir);
+    await Promise.all(existingFiles
+      .filter((file) => file.endsWith('.yaml') && file !== 'index.yaml' && !expectedSpecFiles.has(file))
+      .map((file) => rm(join(specDir, file), { force: true })));
+  }
   for (const fix of verdict.recommendedFixes) {
-    const path = join(artifactRoot, 'patch-specs', verdict.protocolId, verdict.variant, `${fix.id}.yaml`);
+    const path = join(specDir, `${fix.id}.yaml`);
     await writeYamlFile(path, {
       kind: 'protocol-foundry-patch-spec',
       id: `${verdict.protocolId}/${verdict.variant}/${fix.id}`,
@@ -776,7 +794,7 @@ async function writePatchSpecs(artifactRoot: string, verdict: ArchitectVerdict):
     });
     specPaths.push(path);
   }
-  await writeYamlFile(join(artifactRoot, 'patch-specs', verdict.protocolId, verdict.variant, 'index.yaml'), {
+  await writeYamlFile(join(specDir, 'index.yaml'), {
     kind: 'protocol-foundry-patch-spec-index',
     protocolId: verdict.protocolId,
     variant: verdict.variant,
