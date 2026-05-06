@@ -2810,9 +2810,11 @@ function maxTransferVolumeUl(events: PlateEventPrimitive[]): number | undefined 
 
 function labwareDefinitionFor(kind: ExecutionScaleLabwareKind): string | undefined {
   if (kind === '96_well_plate') return 'lbw-def-generic-96-well-plate';
-  if (kind === '384_well_plate') return 'lbw-def-generic-384-well-pcr-plate';
+  if (kind === '384_well_plate') return 'lbw-def-generic-384-well-plate';
   if (kind === '1_well_reservoir') return 'lbw-def-generic-reservoir-1-v1';
-  if (kind === '12_well_reservoir') return 'lbw-def-generic-12-well-reservoir';
+  if (kind === '12_well_reservoir') return 'lbw-def-generic-12-reservoir';
+  if (kind === '2_well_reservoir') return 'lbw-def-generic-2-well-reservoir';
+  if (kind === '8_well_reservoir') return 'lbw-def-generic-8-reservoir';
   return undefined;
 }
 
