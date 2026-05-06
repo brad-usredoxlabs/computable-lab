@@ -512,6 +512,49 @@ function lowerCandidateActionsToEvents(actions: unknown[] | undefined): Array<{ 
   return events;
 }
 
+/**
+ * Normalize malformed unresolvedRefs from LLM output.
+ * Handles character-index objects (e.g. {"0": "p", "1": "r"...}) by reconstructing the label string.
+ * Returns a clean array of { kind, label, reason } objects.
+ */
+function normalizeUnresolvedRefs(input: unknown): Array<{ kind: string; label: string; reason: string }> {
+  if (!Array.isArray(input)) return [];
+  const normalized: Array<{ kind: string; label: string; reason: string }> = [];
+  for (const ref of input) {
+    if (!ref || typeof ref !== 'object' || Array.isArray(ref)) continue;
+    const record = ref as Record<string, unknown>;
+    
+    // Check if it's a character-index object (keys are numeric strings)
+    const keys = Object.keys(record);
+    const isCharIndexObj = keys.length > 0 && keys.every(k => /^\d+$/.test(k));
+    
+    if (isCharIndexObj) {
+      // Reconstruct label from character indices
+      const maxIndex = Math.max(...keys.map(k => parseInt(k, 10)));
+      const chars: string[] = new Array(maxIndex + 1);
+      for (const [k, v] of Object.entries(record)) {
+        const idx = parseInt(k, 10);
+        if (typeof v === 'string') {
+          chars[idx] = v;
+        }
+      }
+      const label = chars.join('');
+      normalized.push({
+        kind: 'unknown',
+        label,
+        reason: 'malformed character-index object from LLM',
+      });
+    } else {
+      // Standard object: extract kind, label, reason
+      const kind = typeof record.kind === 'string' ? record.kind : 'unknown';
+      const label = typeof record.label === 'string' ? record.label : String(record.label ?? '');
+      const reason = typeof record.reason === 'string' ? record.reason : 'unresolved reference';
+      normalized.push({ kind, label, reason });
+    }
+  }
+  return normalized;
+}
+
 function salvageAiPrecompileOutput(input: {
   parsed: Partial<AiPrecompileOutput>;
   deterministicHasCoreArtifacts: boolean;
@@ -678,8 +721,10 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
         // spec-019: log raw LLM response on shape mismatch for debugging
         const truncated = raw.slice(0, 4000);
         console.warn(`[ai_precompile_shape_mismatch] ${truncated}`);
+        // Normalize malformed unresolvedRefs (e.g. character-index objects) into structured refs
+        const normalizedUnresolvedRefs = normalizeUnresolvedRefs(parsed.unresolvedRefs);
         const salvagedOutput = salvageAiPrecompileOutput({
-          parsed,
+          parsed: { ...parsed, unresolvedRefs: normalizedUnresolvedRefs },
           deterministicHasCoreArtifacts,
           detCandidateEvents,
           detCandidateLabwares,
