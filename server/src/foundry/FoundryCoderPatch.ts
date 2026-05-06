@@ -747,6 +747,23 @@ function pathIsRepositorySafe(path: string): boolean {
   );
 }
 
+function isPackageManagerArtifact(path: string): boolean {
+  return /(^|\/)(pnpm-lock\.yaml|package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|bun\.lockb)$/.test(path);
+}
+
+function isMeaningfulPatchFile(path: string): boolean {
+  if (isPackageManagerArtifact(path)) return false;
+  return path.startsWith('server/src/')
+    || path.startsWith('client/src/')
+    || path.startsWith('schema/')
+    || path.startsWith('records/')
+    || path.startsWith('scripts/');
+}
+
+export function meaningfulPatchFiles(touchedFiles: string[]): string[] {
+  return touchedFiles.filter(isMeaningfulPatchFile).sort();
+}
+
 function dataFormatViolations(touchedFiles: string[]): string[] {
   return touchedFiles.filter((file) => file.startsWith('records/') && !/\.(ya?ml)$/i.test(file));
 }
@@ -1287,6 +1304,7 @@ async function evaluateCandidate(input: {
 
   const touchedFiles = parseTouchedFiles(responseDiff);
   const unsafePaths = touchedFiles.filter((file) => !pathIsRepositorySafe(file));
+  const meaningfulFiles = meaningfulPatchFiles(touchedFiles);
   const directories = await findDirectoryTouchedFiles(input.repoRoot, touchedFiles);
   const dataFormatErrors = dataFormatViolations(touchedFiles);
   const recordPathErrors = recordPathPolicyViolations(touchedFiles);
@@ -1294,6 +1312,7 @@ async function evaluateCandidate(input: {
   if (
     touchedFiles.length === 0
     || unsafePaths.length > 0
+    || meaningfulFiles.length === 0
     || directories.length > 0
     || dataFormatErrors.length > 0
     || recordPathErrors.length > 0
@@ -1312,7 +1331,9 @@ async function evaluateCandidate(input: {
             ? `Coder patch used legacy/noncanonical record paths: ${recordPathErrors.join(', ')}. Use records/seed/labware-definition/*.yaml for labware definitions.`
             : existingFileAdditionErrors.length > 0
               ? existingFileAdditionErrors.join('\n')
-              : `Coder patch touched unsafe repository paths: ${unsafePaths.join(', ')}`,
+              : unsafePaths.length > 0
+                ? `Coder patch touched unsafe repository paths: ${unsafePaths.join(', ')}`
+                : `Coder patch touched no meaningful compiler/precompiler/schema/record/test files. Touched files: ${touchedFiles.join(', ')}`,
       diffPath,
       ...(diffSource ? { diffSource } : {}),
       touchedFiles,

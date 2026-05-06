@@ -8,6 +8,7 @@ import {
   existingFileAdditionViolations,
   collectSourceAnchorContext,
   defaultVerificationArgs,
+  meaningfulPatchFiles,
   patchSpecSupersededByCompilerArtifact,
   recordSchemaPolicyViolations,
   selectPatchSpecIdForRun,
@@ -131,6 +132,27 @@ describe('FoundryCoderPatch record schema policy', () => {
 });
 
 describe('FoundryCoderPatch patch scheduling', () => {
+  it('does not count lockfile-only diffs as meaningful compiler improvement patches', () => {
+    expect(meaningfulPatchFiles(['pnpm-lock.yaml'])).toEqual([]);
+    expect(meaningfulPatchFiles(['server/pnpm-lock.yaml'])).toEqual([]);
+    expect(meaningfulPatchFiles(['package-lock.json', 'yarn.lock'])).toEqual([]);
+  });
+
+  it('counts source, schema, records, scripts, and tests as meaningful patch files', () => {
+    expect(meaningfulPatchFiles([
+      'pnpm-lock.yaml',
+      'server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts',
+      'schema/lab/material.schema.yaml',
+      'records/seed/materials/example.yaml',
+      'scripts/protocol-foundry-supervisor.sh',
+    ])).toEqual([
+      'records/seed/materials/example.yaml',
+      'schema/lab/material.schema.yaml',
+      'scripts/protocol-foundry-supervisor.sh',
+      'server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts',
+    ]);
+  });
+
   it('selects exactly one pending patch spec for a coder run', () => {
     const selected = selectPatchSpecIdForRun([
       { id: 'protocol/manual/fix-material', fixClass: 'material_catalog_or_spec_gap' },
