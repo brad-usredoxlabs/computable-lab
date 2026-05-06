@@ -233,15 +233,12 @@ describe('ai_precompile shape mismatch logging', () => {
     const output = result.output as AiPrecompileOutput;
     expect(output.candidateEvents).toEqual([]);
     expect(output.candidateLabwares).toEqual([]);
+    // clarification: null now passes zod (nullable), so no shape-mismatch warning
     expect(output.clarification).toBeUndefined();
     expect(output.priorLabwareRefs).toHaveLength(1);
     expect(output.directives).toHaveLength(1);
     expect(output.downstreamCompileJobs).toHaveLength(1);
-    expect(warnSpy).toHaveBeenCalledTimes(1);
-    expect((result.diagnostics ?? [])[0]).toMatchObject({
-      code: 'ai_precompile_shape_mismatch',
-      severity: 'warning',
-    });
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
   it('does NOT log on invalid JSON (parse error) — only on zod shape mismatch', async () => {
