@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import {
   existingFileAdditionViolations,
+  collectSourceAnchorContext,
   patchSpecSupersededByCompilerArtifact,
   recordSchemaPolicyViolations,
   selectPatchSpecIdForRun,
@@ -202,6 +203,38 @@ describe('FoundryCoderPatch patch scheduling', () => {
 });
 
 describe('FoundryCoderPatch structured edits', () => {
+  it('collects exact source anchors past the broad file excerpt limit', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'foundry-coder-anchors-'));
+    await mkdir(join(root, 'server/src/compiler/pipeline/passes'), { recursive: true });
+    const rel = 'server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts';
+    const filler = Array.from({ length: 700 }, (_, index) => `const filler${index} = ${index};`);
+    await writeFile(join(root, rel), [
+      ...filler,
+      'export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {',
+      '  return {',
+      "    id: 'ai_precompile',",
+      '  };',
+      '}',
+      '',
+    ].join('\n'), 'utf-8');
+
+    const context = await collectSourceAnchorContext(root, [{
+      id: 'spec-1',
+      fixClass: 'precompiler_reference_shape_gap',
+      title: 'Fix AI precompile shape handling',
+      rationale: '',
+      ownedFiles: [rel],
+      acceptance: [],
+      raw: {},
+      path: 'spec.yaml',
+    }], 'precompiler_reference_shape_gap');
+
+    expect(context).toContain('anchor:ai-precompile-pass');
+    expect(context).toContain(`file:${rel}`);
+    expect(context).toContain('export function createAiPrecompilePass');
+    expect(context).toMatch(/\d+ \| export function createAiPrecompilePass/);
+  });
+
   it('turns exact search/replace edits into a git-applicable unified diff', async () => {
     const root = await mkdtemp(join(tmpdir(), 'foundry-coder-edits-'));
     const tournamentDir = join(root, 'artifacts');
@@ -250,5 +283,29 @@ describe('FoundryCoderPatch structured edits', () => {
         replace: 'const item = 2;',
       }],
     })).rejects.toThrow('matched 2 times');
+  });
+
+  it('reports failed structured edit index and anchor for repair', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'foundry-coder-edits-'));
+    const tournamentDir = join(root, 'artifacts');
+    await mkdir(join(root, 'server/src/example'), { recursive: true });
+    const rel = 'server/src/example/value.ts';
+    await writeFile(join(root, rel), [
+      'export function value(): number {',
+      '  return 1;',
+      '}',
+      '',
+    ].join('\n'), 'utf-8');
+
+    await expect(structuredEditsToUnifiedDiff({
+      repoRoot: root,
+      tournamentDir,
+      edits: [{
+        path: rel,
+        search: '  return 42;',
+        replace: '  return 2;',
+        anchorId: 'value-function',
+      }],
+    })).rejects.toThrow('edit #1 server/src/example/value.ts anchor:value-function: search block not found');
   });
 });

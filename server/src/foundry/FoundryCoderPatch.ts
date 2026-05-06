@@ -16,6 +16,7 @@ const MAX_ARTIFACT_CONTEXT_CHARS = 50_000;
 const MAX_ARTIFACT_FILE_CHARS = 12_000;
 const MAX_SCHEMA_CONTEXT_CHARS = 32_000;
 const MAX_LABWARE_CONTEXT_CHARS = 24_000;
+const MAX_ANCHOR_CONTEXT_CHARS = 52_000;
 
 type CoderPatchStatus = 'applied' | 'blocked' | 'failed' | 'skipped' | 'stale' | 'needs-human';
 
@@ -26,7 +27,7 @@ export interface FoundryCoderPatchResult {
   touchedFiles: string[];
 }
 
-interface PatchSpec {
+export interface PatchSpec {
   id: string;
   fixClass: string;
   title: string;
@@ -52,6 +53,11 @@ export interface StructuredEdit {
   search: string;
   replace: string;
   occurrence?: number;
+  anchorId?: string;
+}
+
+interface IndexedStructuredEdit extends StructuredEdit {
+  editIndex: number;
 }
 
 interface AttemptResult {
@@ -143,6 +149,154 @@ async function collectOwnedContext(repoRoot: string, specs: PatchSpec[]): Promis
     if (chunks.join('\n\n').length > MAX_CONTEXT_CHARS) break;
   }
   return chunks.join('\n\n').slice(0, MAX_CONTEXT_CHARS);
+}
+
+interface SourceAnchorPattern {
+  id: string;
+  pattern: RegExp;
+  before: number;
+  after: number;
+}
+
+function sourceAnchorPatternsForFixClass(fixClass: string): SourceAnchorPattern[] {
+  const generic: SourceAnchorPattern[] = [
+    { id: 'exported-function', pattern: /^export function \w+/, before: 18, after: 80 },
+    { id: 'exported-interface', pattern: /^export interface \w+/, before: 12, after: 60 },
+    { id: 'exported-const', pattern: /^export const \w+/, before: 12, after: 60 },
+  ];
+
+  if (fixClass === 'precompiler_reference_shape_gap') {
+    return [
+      { id: 'ai-precompile-output-interface', pattern: /^export interface AiPrecompileOutput\b/, before: 16, after: 72 },
+      { id: 'ai-precompile-output-schema', pattern: /^function createAiPrecompileOutputSchema\b/, before: 16, after: 96 },
+      { id: 'ai-precompile-salvage', pattern: /^function salvageAiPrecompileOutput\b/, before: 16, after: 92 },
+      { id: 'ai-precompile-pass', pattern: /^export function createAiPrecompilePass\b/, before: 20, after: 132 },
+      { id: 'ai-precompile-shape-mismatch', pattern: /ai_precompile_shape_mismatch/, before: 28, after: 56 },
+      { id: 'resolve-references-pass', pattern: /createResolveReferencesPass\b/, before: 24, after: 92 },
+      { id: 'deterministic-precompile-pass', pattern: /DeterministicPrecompile|createDeterministicPrecompile/, before: 24, after: 92 },
+    ];
+  }
+
+  if (fixClass === 'foundry_runtime_wiring_gap') {
+    return [
+      { id: 'foundry-run-chatbot-compile', pattern: /runChatbotCompile|createChatbotCompile|CompileRunner/, before: 24, after: 96 },
+      { id: 'dependency-wiring', pattern: /deps|dependencies|registry\.register|create.*Pass/, before: 18, after: 80 },
+      ...generic,
+    ];
+  }
+
+  if (fixClass === 'execution_scaling') {
+    return [
+      { id: 'execution-scale-plan', pattern: /executionScale|ExecutionScale|scale.*profile|derive.*scale/i, before: 24, after: 96 },
+      { id: 'pipette-capability', pattern: /pipette|multichannel|reservoir|deck/i, before: 18, after: 80 },
+      ...generic,
+    ];
+  }
+
+  if (fixClass === 'labware_alias_or_resolver_gap' || fixClass === 'browser_or_labware_rendering') {
+    return [
+      { id: 'labware-resolver', pattern: /labware.*resolve|resolve.*labware|labware.*alias/i, before: 24, after: 96 },
+      { id: 'labware-rendering', pattern: /render.*labware|labware.*render|geometry|deckSlot/i, before: 18, after: 80 },
+      ...generic,
+    ];
+  }
+
+  if (fixClass === 'material_catalog_or_spec_gap') {
+    return [
+      { id: 'material-resolver', pattern: /material.*resolve|resolve.*material|vendor.*product|formulation/i, before: 24, after: 96 },
+      { id: 'material-schema-use', pattern: /materialSpec|MaterialSpec|vendorProduct|VendorProduct/i, before: 18, after: 80 },
+      ...generic,
+    ];
+  }
+
+  return generic;
+}
+
+function lineNumberedSlice(content: string, startLine: number, endLine: number): string {
+  const lines = content.split('\n');
+  const start = Math.max(1, startLine);
+  const end = Math.min(lines.length, endLine);
+  const width = String(end).length;
+  const output: string[] = [];
+  for (let line = start; line <= end; line += 1) {
+    output.push(`${String(line).padStart(width, '0')} | ${lines[line - 1] ?? ''}`);
+  }
+  return output.join('\n');
+}
+
+function findSourceAnchorRanges(content: string, patterns: SourceAnchorPattern[]): Array<{
+  id: string;
+  startLine: number;
+  endLine: number;
+  matchedLine: number;
+}> {
+  const lines = content.split('\n');
+  const ranges: Array<{ id: string; startLine: number; endLine: number; matchedLine: number }> = [];
+  const seen = new Set<string>();
+  for (const pattern of patterns) {
+    for (let index = 0; index < lines.length; index += 1) {
+      if (!pattern.pattern.test(lines[index] ?? '')) continue;
+      const matchedLine = index + 1;
+      const startLine = Math.max(1, matchedLine - pattern.before);
+      const endLine = Math.min(lines.length, matchedLine + pattern.after);
+      const key = `${pattern.id}:${startLine}:${endLine}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      ranges.push({ id: pattern.id, startLine, endLine, matchedLine });
+    }
+  }
+  return ranges.sort((a, b) => a.startLine - b.startLine || a.id.localeCompare(b.id));
+}
+
+function mergeAnchorRanges(ranges: Array<{
+  id: string;
+  startLine: number;
+  endLine: number;
+  matchedLine: number;
+}>): Array<{ ids: string[]; startLine: number; endLine: number; matchedLines: number[] }> {
+  const merged: Array<{ ids: string[]; startLine: number; endLine: number; matchedLines: number[] }> = [];
+  for (const range of ranges) {
+    const previous = merged[merged.length - 1];
+    if (previous && range.startLine <= previous.endLine + 8) {
+      previous.endLine = Math.max(previous.endLine, range.endLine);
+      previous.ids.push(range.id);
+      previous.matchedLines.push(range.matchedLine);
+    } else {
+      merged.push({
+        ids: [range.id],
+        startLine: range.startLine,
+        endLine: range.endLine,
+        matchedLines: [range.matchedLine],
+      });
+    }
+  }
+  return merged;
+}
+
+export async function collectSourceAnchorContext(repoRoot: string, specs: PatchSpec[], fixClass: string): Promise<string> {
+  const owned = Array.from(new Set(specs.flatMap((spec) => spec.ownedFiles))).slice(0, 12);
+  const files: string[] = [];
+  for (const ownedPath of owned) {
+    files.push(...await walkFiles(repoRoot, join(repoRoot, ownedPath), 8));
+  }
+  const patterns = sourceAnchorPatternsForFixClass(fixClass);
+  const chunks: string[] = [];
+  for (const file of Array.from(new Set(files)).slice(0, 24)) {
+    const rel = relative(repoRoot, file);
+    const content = await readFile(file, 'utf-8');
+    const ranges = mergeAnchorRanges(findSourceAnchorRanges(content, patterns)).slice(0, 8);
+    for (const range of ranges) {
+      const anchorIds = Array.from(new Set(range.ids)).join(',');
+      chunks.push([
+        `--- anchor:${anchorIds} file:${rel} lines:${range.startLine}-${range.endLine} matched:${range.matchedLines.join(',')}`,
+        lineNumberedSlice(content, range.startLine, range.endLine),
+      ].join('\n'));
+      if (chunks.join('\n\n').length > MAX_ANCHOR_CONTEXT_CHARS) {
+        return chunks.join('\n\n').slice(0, MAX_ANCHOR_CONTEXT_CHARS);
+      }
+    }
+  }
+  return chunks.join('\n\n').slice(0, MAX_ANCHOR_CONTEXT_CHARS);
 }
 
 async function collectSpecArtifactContext(artifactRoot: string, specs: PatchSpec[]): Promise<string> {
@@ -435,6 +589,7 @@ function parseStructuredEdits(value: unknown): StructuredEdit[] {
     const search = edit['search'];
     const replace = edit['replace'];
     const occurrence = edit['occurrence'];
+    const anchorId = edit['anchorId'];
     if (typeof path !== 'string' || typeof search !== 'string' || typeof replace !== 'string') continue;
     if (!path || !search) continue;
     edits.push({
@@ -442,26 +597,37 @@ function parseStructuredEdits(value: unknown): StructuredEdit[] {
       search,
       replace,
       ...(typeof occurrence === 'number' && Number.isInteger(occurrence) && occurrence > 0 ? { occurrence } : {}),
+      ...(typeof anchorId === 'string' && anchorId.trim() ? { anchorId: anchorId.trim() } : {}),
     });
   }
   return edits;
 }
 
-function applyOneStructuredEdit(content: string, edit: StructuredEdit): string {
-  if (edit.search === edit.replace) throw new Error(`${edit.path}: search and replace are identical`);
+function structuredEditLabel(edit: StructuredEdit | IndexedStructuredEdit): string {
+  const indexed = 'editIndex' in edit ? `edit #${edit.editIndex} ` : '';
+  const anchor = edit.anchorId ? ` anchor:${edit.anchorId}` : '';
+  return `${indexed}${edit.path}${anchor}`;
+}
+
+function applyOneStructuredEdit(content: string, edit: StructuredEdit | IndexedStructuredEdit): string {
+  const label = structuredEditLabel(edit);
+  if (edit.search === edit.replace) throw new Error(`${label}: search and replace are identical`);
   const matches: number[] = [];
   let index = content.indexOf(edit.search);
   while (index !== -1) {
     matches.push(index);
     index = content.indexOf(edit.search, index + edit.search.length);
   }
-  if (matches.length === 0) throw new Error(`${edit.path}: search block not found`);
+  if (matches.length === 0) {
+    const preview = edit.search.length > 800 ? `${edit.search.slice(0, 800)}...` : edit.search;
+    throw new Error(`${label}: search block not found. Repair by copying a smaller 3-10 line search block exactly from the current Exact source anchors. Missing search preview:\n${preview}`);
+  }
   const occurrence = edit.occurrence ?? 1;
   if (!edit.occurrence && matches.length > 1) {
-    throw new Error(`${edit.path}: search block matched ${matches.length} times; include occurrence to disambiguate`);
+    throw new Error(`${label}: search block matched ${matches.length} times; include occurrence to disambiguate`);
   }
   const selectedIndex = matches[occurrence - 1];
-  if (selectedIndex === undefined) throw new Error(`${edit.path}: occurrence ${occurrence} not found`);
+  if (selectedIndex === undefined) throw new Error(`${label}: occurrence ${occurrence} not found`);
   return `${content.slice(0, selectedIndex)}${edit.replace}${content.slice(selectedIndex + edit.search.length)}`;
 }
 
@@ -491,10 +657,11 @@ export async function structuredEditsToUnifiedDiff(input: {
   edits: StructuredEdit[];
 }): Promise<string> {
   if (input.edits.length === 0) throw new Error('structured edits were empty');
-  const byPath = new Map<string, StructuredEdit[]>();
-  for (const edit of input.edits) {
+  const byPath = new Map<string, IndexedStructuredEdit[]>();
+  for (const [index, edit] of input.edits.entries()) {
     if (edit.path.startsWith('/') || edit.path.includes('..')) throw new Error(`${edit.path}: invalid edit path`);
-    byPath.set(edit.path, [...(byPath.get(edit.path) ?? []), edit]);
+    const indexedEdit: IndexedStructuredEdit = { ...edit, editIndex: index + 1 };
+    byPath.set(edit.path, [...(byPath.get(edit.path) ?? []), indexedEdit]);
   }
 
   const chunks: string[] = [];
@@ -949,6 +1116,7 @@ async function requestCoderPatch(input: {
   ownedFiles: string[];
   context: string;
   priorDiff?: string;
+  priorResponse?: string;
   priorFailure?: string;
 }): Promise<CoderResponse> {
   const response = await input.client.complete({
@@ -962,14 +1130,17 @@ async function requestCoderPatch(input: {
           'You are the Protocol Foundry coder. Produce one minimal source edit for exactly one compiler/precompiler fix class.',
           'The target worker model is Qwen/Qwen3.6-35B-A3B-FP8: it is strong, but this harness succeeds when patches are small, concrete, and context-local.',
           'Return only JSON. Prefer keys: summary, edits.',
-          'Each edit must be { "path": "repo/relative/file", "search": "exact current text block", "replace": "replacement text block" }.',
+          'Each edit must be { "path": "repo/relative/file", "search": "exact current text block", "replace": "replacement text block", "anchorId": "optional supplied anchor id" }.',
           'Use edits instead of unifiedDiff unless you must create a new file. The harness will generate the git patch from exact search/replace edits.',
+          'Copy search text from Exact source anchors whenever possible. In anchor snippets, line prefixes look like "000123 | "; do not include that prefix in search or replace.',
+          'Do not reconstruct unseen source from memory. If no exact source anchor contains the edit site, return JSON with summary and blockedReason instead of guessing.',
           'If a search block appears more than once, include "occurrence": 1-based-number. Otherwise choose a larger exact search block.',
           'You may return unifiedDiff only for changes that cannot be expressed as exact search/replace.',
           'Do not modify files outside ownedFiles. Do not include markdown.',
           'Use exact file paths and context from the supplied repository context.',
           'Use source artifact context as failure evidence; do not patch generated artifacts directly.',
           'Avoid whitespace-only edits. Do not invent unrelated refactors.',
+          'Limit this response to one behavior, one primary production file, and at most one focused test file.',
           'If an ownedFiles entry is a directory, patch a specific existing file under it; never patch the directory path itself.',
           'Data files under records/ must be YAML. Do not create JSON files for records data.',
           'Do not create material-instance, aliquot, material-lot, source-tube, or physical inventory records from vendor PDF evidence.',
@@ -999,6 +1170,7 @@ async function requestCoderPatch(input: {
           ownedFiles: input.ownedFiles,
           context: input.context,
           ...(input.priorDiff ? { priorDiff: input.priorDiff } : {}),
+          ...(input.priorResponse ? { priorResponse: input.priorResponse } : {}),
           ...(input.priorFailure ? { priorFailure: input.priorFailure } : {}),
         }),
       },
@@ -1340,8 +1512,9 @@ export async function runFoundryCoderPatch(input: {
   }
 
   const ownedFiles = Array.from(new Set(specs.flatMap((spec) => spec.ownedFiles)));
-  const [ownedContext, artifactContext, schemaContext, recordContext] = await Promise.all([
+  const [ownedContext, anchorContext, artifactContext, schemaContext, recordContext] = await Promise.all([
     collectOwnedContext(input.repoRoot, specs),
+    collectSourceAnchorContext(input.repoRoot, specs, fixClass),
     collectSpecArtifactContext(input.artifactRoot, specs),
     collectSchemaContext(input.repoRoot, fixClass),
     collectExistingRecordContext(input.repoRoot, specs, fixClass),
@@ -1349,6 +1522,9 @@ export async function runFoundryCoderPatch(input: {
   const context = [
     'Repository context:',
     ownedContext || '(no owned-file context found)',
+    '',
+    'Exact source anchors:',
+    anchorContext || '(no exact source anchors found)',
     '',
     'Relevant schema context:',
     schemaContext || '(no schema context found)',
@@ -1358,7 +1534,7 @@ export async function runFoundryCoderPatch(input: {
     '',
     'Source artifact context:',
     artifactContext || '(no source artifact context found)',
-  ].join('\n').slice(0, MAX_CONTEXT_CHARS + MAX_SCHEMA_CONTEXT_CHARS + MAX_LABWARE_CONTEXT_CHARS + MAX_ARTIFACT_CONTEXT_CHARS);
+  ].join('\n').slice(0, MAX_CONTEXT_CHARS + MAX_ANCHOR_CONTEXT_CHARS + MAX_SCHEMA_CONTEXT_CHARS + MAX_LABWARE_CONTEXT_CHARS + MAX_ARTIFACT_CONTEXT_CHARS);
   const client = createInferenceClient({
     baseUrl,
     model,
@@ -1447,6 +1623,7 @@ export async function runFoundryCoderPatch(input: {
       ownedFiles,
       context,
       ...(priorDiff ? { priorDiff } : {}),
+      ...(best.rawResponse ? { priorResponse: best.rawResponse } : {}),
       priorFailure: `${best.phase}: ${best.message}`,
     });
     const repair = await evaluateCandidate({
