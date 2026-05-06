@@ -2902,11 +2902,24 @@ export function createDeriveExecutionScalePlanPass(): Pass {
       }
 
       if (!sampleCount) {
-        blockers.push({
-          code: 'missing_sample_count',
-          message: 'Sample count or target wells are required to scale a manual protocol into a plate layout.',
-          requiredInput: 'sampleCount',
-        });
+        // For robot_deck with a valid profile, apply a default sample layout
+        // (first column of the plate) instead of blocking. This covers the common
+        // case where the protocol describes liquid-handling steps without specifying
+        // how many samples to run.
+        if (targetLevel === 'robot_deck' && profile?.deckBinding) {
+          const defaultSampleCount = sampleLabwareKind === '384_well_plate' ? 16 : 8;
+          sampleCount = defaultSampleCount;
+          sampleWells = generatePlateWells(defaultSampleCount, sampleLabwareKind);
+          assumptions.push(
+            `No sample count was specified; defaulting to ${defaultSampleCount} samples (first column of ${sampleLabwareKind}).`,
+          );
+        } else {
+          blockers.push({
+            code: 'missing_sample_count',
+            message: 'Sample count or target wells are required to scale a manual protocol into a plate layout.',
+            requiredInput: 'sampleCount',
+          });
+        }
       }
 
       const plateCapacity = sampleLabwareKind === '384_well_plate' ? 384 : sampleLabwareKind === '96_well_plate' ? 96 : undefined;
