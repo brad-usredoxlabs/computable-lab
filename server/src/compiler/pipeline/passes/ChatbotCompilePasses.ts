@@ -423,11 +423,11 @@ export const AI_PRECOMPILE_SYSTEM_PROMPT = getAiPrecompileSystemPrompt();
 function createAiPrecompileOutputSchema() {
   const { z } = require('zod') as typeof import('zod');
   return z.object({
-    candidateEvents: z.array(z.any()).default([]),
+    candidateEvents: z.array(z.any()).nullable().default([]),
     candidateActions: z.array(z.any()).optional(),
     taggedPhrases: z.array(z.any()).optional(),
-    candidateLabwares: z.array(z.any()).default([]),
-    unresolvedRefs: z.array(z.any()).default([]),
+    candidateLabwares: z.array(z.any()).nullable().default([]),
+    unresolvedRefs: z.array(z.any()).nullable().default([]),
     clarification: z.string().nullable().optional(),
     mintMaterials: z.array(z.any()).optional(),
     priorLabwareRefs: z.array(z.any()).optional(),
