@@ -64,5 +64,81 @@ describe('FoundryCodebaseTools', () => {
     expect(response.choices[0]?.message.content).toBe('{"summary":"saw code"}');
     expect(requests).toHaveLength(2);
   });
-});
 
+  it('exposes browser review evidence as a Foundry tool when context is supplied', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'foundry-browser-tools-repo-'));
+    const artifactRoot = await mkdtemp(join(tmpdir(), 'foundry-browser-tools-artifacts-'));
+    await mkdir(join(artifactRoot, 'browser-review', 'demo-protocol', 'manual_tubes'), { recursive: true });
+    await writeFile(join(artifactRoot, 'browser-review', 'demo-protocol', 'manual_tubes', 'report.yaml'), [
+      'kind: protocol-browser-review-report',
+      'protocolId: demo-protocol',
+      'variant: manual_tubes',
+      'status: fail',
+      'route: http://localhost:5173/labware-editor?id=demo',
+      'visual_failures:',
+      '  - event sequence was not visible',
+      '',
+    ].join('\n'), 'utf-8');
+    await writeFile(join(artifactRoot, 'browser-review', 'demo-protocol', 'manual_tubes', 'screenshot-1.png'), '', 'utf-8');
+
+    const requests: CompletionRequest[] = [];
+    const client: InferenceClient = {
+      async complete(request: CompletionRequest): Promise<CompletionResponse> {
+        requests.push(request);
+        if (requests.length === 1) {
+          expect(request.tools?.map((tool) => tool.function.name)).toContain('foundry_browser_review_read');
+          return {
+            id: 'tool-request',
+            choices: [{
+              index: 0,
+              finish_reason: 'tool_calls',
+              message: {
+                role: 'assistant',
+                content: null,
+                tool_calls: [{
+                  id: 'call-browser-1',
+                  type: 'function',
+                  function: {
+                    name: 'foundry_browser_review_read',
+                    arguments: '{}',
+                  },
+                }],
+              },
+            }],
+          };
+        }
+        const toolMessage = request.messages.find((message) => message.role === 'tool');
+        expect(toolMessage?.content).toContain('event sequence was not visible');
+        expect(toolMessage?.content).toContain('screenshot-1.png');
+        return {
+          id: 'final',
+          choices: [{
+            index: 0,
+            finish_reason: 'stop',
+            message: { role: 'assistant', content: '{"summary":"saw browser report"}' },
+          }],
+        };
+      },
+      async *completeStream() {
+        throw new Error('not used');
+      },
+    };
+
+    const response = await completeWithCodebaseTools({
+      client,
+      repoRoot: root,
+      browserContext: {
+        artifactRoot,
+        protocolId: 'demo-protocol',
+        variant: 'manual_tubes',
+      },
+      request: {
+        model: 'architect',
+        messages: [{ role: 'user', content: 'inspect browser evidence' }],
+      },
+    });
+
+    expect(response.choices[0]?.message.content).toBe('{"summary":"saw browser report"}');
+    expect(requests).toHaveLength(2);
+  });
+});

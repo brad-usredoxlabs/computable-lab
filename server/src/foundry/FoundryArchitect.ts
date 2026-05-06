@@ -9,8 +9,11 @@ import { completeWithCodebaseTools } from './FoundryCodebaseTools.js';
 export interface FoundryArchitectOptions {
   artifactRoot: string;
   repoRoot?: string;
+  workbenchRoot?: string;
   protocolId: string;
   variant: FoundryVariant;
+  appBase?: string;
+  apiBase?: string;
   inference?: Partial<InferenceConfig>;
   dryRun?: boolean;
 }
@@ -669,6 +672,16 @@ async function llmArchitectNotes(options: FoundryArchitectOptions, context: unkn
   const response = await completeWithCodebaseTools({
     client,
     ...(options.repoRoot ? { repoRoot: options.repoRoot } : {}),
+    ...(options.repoRoot ? {
+      browserContext: {
+        artifactRoot: options.artifactRoot,
+        ...(options.workbenchRoot ? { workbenchRoot: options.workbenchRoot } : {}),
+        protocolId: options.protocolId,
+        variant: options.variant,
+        ...(options.appBase ? { appBase: options.appBase } : {}),
+        ...(options.apiBase ? { apiBase: options.apiBase } : {}),
+      },
+    } : {}),
     maxToolRounds: 8,
     request: {
       model,
@@ -680,6 +693,7 @@ async function llmArchitectNotes(options: FoundryArchitectOptions, context: unkn
         content: [
           'You are the Protocol Foundry architect. Summarize actionable compiler improvements in concise prose.',
           'You have live codebase tools: codebase_search, codebase_read, and codebase_list. Use them to inspect the current compiler/precompiler/runtime code before judging what lane needs a patch.',
+          'You also have Foundry browser tools: foundry_browser_review_read and foundry_browser_review_run. Use browser evidence before judging browser_visualization, labware rendering, event playback, or UI-load failures.',
           'Do not write standalone patch specifications, file-creation instructions, or unified diffs in these notes. Deterministic recommendedFixes are the authoritative patch specs.',
           'Do name exact files, symbols, schemas, records, and tests you inspected. These notes are included in coder context through the verdict artifact.',
           'These notes will feed a Qwen/Qwen3.6-35B-A3B-FP8 coder. It is strong, but specs must be granular, context-rich, and limited to one observable behavior change.',

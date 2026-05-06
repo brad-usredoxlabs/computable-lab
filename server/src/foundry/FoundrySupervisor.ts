@@ -268,8 +268,11 @@ async function runArchitectTask(options: FoundryLoopOptions, ledger: FoundryLedg
   const verdict = await runFoundryArchitectReview({
     artifactRoot: options.artifactRoot,
     repoRoot: options.repoRoot,
+    ...(options.workbenchRoot ? { workbenchRoot: options.workbenchRoot } : {}),
     protocolId: task.protocolId,
     variant: task.variant,
+    ...(options.appBase ? { appBase: options.appBase } : {}),
+    ...(options.apiBase ? { apiBase: options.apiBase } : {}),
     ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {}),
     inference: {
       ...(options.architectBaseUrl ? { baseUrl: options.architectBaseUrl } : {}),
@@ -321,8 +324,11 @@ async function runCoderPatchTask(options: FoundryLoopOptions, ledger: FoundryLed
   const result = await runFoundryCoderPatch({
     artifactRoot: options.artifactRoot,
     repoRoot: options.repoRoot,
+    ...(options.workbenchRoot ? { workbenchRoot: options.workbenchRoot } : {}),
     protocolId: task.protocolId,
     variant: task.variant,
+    ...(options.appBase ? { appBase: options.appBase } : {}),
+    ...(options.apiBase ? { apiBase: options.apiBase } : {}),
     ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {}),
     inference: {
       ...(options.workerBaseUrl ? { baseUrl: options.workerBaseUrl } : {}),

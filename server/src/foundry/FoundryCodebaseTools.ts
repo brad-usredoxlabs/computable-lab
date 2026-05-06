@@ -10,6 +10,15 @@ const MAX_TOOL_RESULT_CHARS = 24_000;
 const MAX_READ_CHARS = 32_000;
 const DEFAULT_MAX_TOOL_ROUNDS = 8;
 
+export interface FoundryBrowserToolContext {
+  artifactRoot: string;
+  workbenchRoot?: string;
+  protocolId: string;
+  variant: string;
+  appBase?: string;
+  apiBase?: string;
+}
+
 const CODEBASE_TOOLS: ToolDefinition[] = [
   {
     type: 'function',
@@ -62,6 +71,38 @@ const CODEBASE_TOOLS: ToolDefinition[] = [
   },
 ];
 
+const BROWSER_TOOLS: ToolDefinition[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'foundry_browser_review_run',
+      description: 'Run the deterministic Playwright browser review for the current protocol variant event graph, then write browser-review/<protocol>/<variant>/report.yaml and screenshots.',
+      parameters: {
+        type: 'object',
+        properties: {
+          proposalPath: {
+            type: 'string',
+            description: 'Optional proposal path. Defaults to artifactRoot/event-graphs/<protocolId>/<variant>.yaml. Relative paths are resolved under artifactRoot.',
+          },
+        },
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'foundry_browser_review_read',
+      description: 'Read the current protocol variant browser-review report, including route, status, console errors, visual failures, labware checks, and screenshot filenames.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
+    },
+  },
+];
+
 function clampInt(value: unknown, fallback: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, typeof value === 'number' && Number.isFinite(value) ? Math.trunc(value) : fallback));
 }
@@ -89,6 +130,15 @@ function safeRepoPath(repoRoot: string, requested: unknown): { rel: string; full
   return { rel, full };
 }
 
+function safeArtifactPath(context: FoundryBrowserToolContext, requested: unknown, fallback: string): string {
+  const root = resolve(context.artifactRoot);
+  const raw = typeof requested === 'string' && requested.trim() ? requested : fallback;
+  if (raw.includes('\0')) throw new Error(`${raw}: invalid artifact path`);
+  const full = raw.startsWith('/') ? resolve(raw) : resolve(root, raw);
+  if (full !== root && !full.startsWith(`${root}/`)) throw new Error(`${raw}: path escapes artifact root`);
+  return full;
+}
+
 function lineNumbered(content: string, startLine = 1, endLine?: number): string {
   const lines = content.split('\n');
   const start = Math.max(1, startLine);
@@ -99,6 +149,75 @@ function lineNumbered(content: string, startLine = 1, endLine?: number): string 
     out.push(`${String(line).padStart(width, '0')} | ${lines[line - 1] ?? ''}`);
   }
   return out.join('\n');
+}
+
+async function readBrowserReport(context: FoundryBrowserToolContext): Promise<Record<string, unknown>> {
+  const reportDir = join(context.artifactRoot, 'browser-review', context.protocolId, context.variant);
+  const reportPath = join(reportDir, 'report.yaml');
+  if (!existsSync(reportPath)) {
+    return { ok: false, reportPath, error: 'browser review report does not exist yet' };
+  }
+  const report = await readFile(reportPath, 'utf-8');
+  const screenshots = existsSync(reportDir)
+    ? (await readdir(reportDir)).filter((file) => /^screenshot-.*\.png$/.test(file)).sort()
+    : [];
+  return {
+    ok: true,
+    reportPath,
+    screenshots: screenshots.map((file) => join(reportDir, file)),
+    output: report.slice(0, MAX_TOOL_RESULT_CHARS),
+  };
+}
+
+async function runBrowserTool(
+  repoRoot: string,
+  context: FoundryBrowserToolContext,
+  toolCall: ToolCall,
+): Promise<Record<string, unknown>> {
+  const args = JSON.parse(toolCall.function.arguments || '{}') as Record<string, unknown>;
+
+  if (toolCall.function.name === 'foundry_browser_review_read') {
+    return readBrowserReport(context);
+  }
+
+  if (toolCall.function.name === 'foundry_browser_review_run') {
+    const fallbackProposal = join('event-graphs', context.protocolId, `${context.variant}.yaml`);
+    const proposalPath = safeArtifactPath(context, args['proposalPath'], fallbackProposal);
+    if (!existsSync(proposalPath)) throw new Error(`${proposalPath}: proposal does not exist`);
+    const workbenchRoot = context.workbenchRoot ?? resolve(repoRoot, '..', 'agent-workbench');
+    const script = join(workbenchRoot, 'scripts', 'protocol_foundry_browser_review.cjs');
+    if (!existsSync(script)) throw new Error(`${script}: browser review script not found`);
+    const outDir = join(context.artifactRoot, 'browser-review', context.protocolId, context.variant);
+    const reviewArgs = [script, '--repo-root', repoRoot, '--proposal', proposalPath, '--out', outDir];
+    if (context.apiBase) reviewArgs.push('--api-base', context.apiBase);
+    if (context.appBase) reviewArgs.push('--app-base', context.appBase);
+    try {
+      const { stdout, stderr } = await execFileAsync('node', reviewArgs, {
+        cwd: workbenchRoot,
+        timeout: 180_000,
+        maxBuffer: 1024 * 1024 * 8,
+      });
+      return {
+        ok: true,
+        command: ['node', ...reviewArgs].join(' '),
+        stdout: stdout.slice(0, MAX_TOOL_RESULT_CHARS),
+        stderr: stderr.slice(0, MAX_TOOL_RESULT_CHARS),
+        report: await readBrowserReport(context),
+      };
+    } catch (error) {
+      const err = error as { stdout?: string; stderr?: string; message?: string; code?: number };
+      return {
+        ok: false,
+        command: ['node', ...reviewArgs].join(' '),
+        exitCode: err.code,
+        stdout: (err.stdout ?? '').slice(0, MAX_TOOL_RESULT_CHARS),
+        stderr: (err.stderr ?? err.message ?? String(error)).slice(0, MAX_TOOL_RESULT_CHARS),
+        report: await readBrowserReport(context),
+      };
+    }
+  }
+
+  throw new Error(`${toolCall.function.name}: unsupported browser tool`);
 }
 
 async function walkFiles(root: string, dir: string, limit: number, out: string[]): Promise<void> {
@@ -168,17 +287,19 @@ export async function completeWithCodebaseTools(input: {
   client: InferenceClient;
   request: CompletionRequest;
   repoRoot?: string;
+  browserContext?: FoundryBrowserToolContext;
   maxToolRounds?: number;
 }): Promise<CompletionResponse> {
   if (!input.repoRoot) return input.client.complete(input.request);
   const messages = [...input.request.messages];
   const maxToolRounds = input.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
+  const tools = [...CODEBASE_TOOLS, ...(input.browserContext ? BROWSER_TOOLS : [])];
 
   for (let round = 0; round <= maxToolRounds; round += 1) {
     const response = await input.client.complete({
       ...input.request,
       messages,
-      tools: [...(input.request.tools ?? []), ...CODEBASE_TOOLS],
+      tools: [...(input.request.tools ?? []), ...tools],
       tool_choice: input.request.tool_choice ?? 'auto',
     });
     const message = response.choices[0]?.message;
@@ -188,7 +309,9 @@ export async function completeWithCodebaseTools(input: {
     for (const toolCall of toolCalls.slice(0, 6)) {
       const started = Date.now();
       try {
-        const result = await runCodebaseTool(input.repoRoot, toolCall);
+        const result = toolCall.function.name.startsWith('foundry_browser_review_') && input.browserContext
+          ? await runBrowserTool(input.repoRoot, input.browserContext, toolCall)
+          : await runCodebaseTool(input.repoRoot, toolCall);
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,

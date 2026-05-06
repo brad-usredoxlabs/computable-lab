@@ -1124,8 +1124,12 @@ async function requestCoderPatch(input: {
   client: ReturnType<typeof createInferenceClient>;
   model: string;
   repoRoot: string;
+  artifactRoot: string;
+  workbenchRoot?: string;
   protocolId: string;
   variant: FoundryVariant;
+  appBase?: string;
+  apiBase?: string;
   fixClass: string;
   specs: PatchSpec[];
   ownedFiles: string[];
@@ -1137,6 +1141,14 @@ async function requestCoderPatch(input: {
   const response = await completeWithCodebaseTools({
     client: input.client,
     repoRoot: input.repoRoot,
+    browserContext: {
+      artifactRoot: input.artifactRoot,
+      ...(input.workbenchRoot ? { workbenchRoot: input.workbenchRoot } : {}),
+      protocolId: input.protocolId,
+      variant: input.variant,
+      ...(input.appBase ? { appBase: input.appBase } : {}),
+      ...(input.apiBase ? { apiBase: input.apiBase } : {}),
+    },
     maxToolRounds: 8,
     request: {
     model: input.model,
@@ -1149,6 +1161,7 @@ async function requestCoderPatch(input: {
           'You are the Protocol Foundry coder. Produce one minimal source edit for exactly one compiler/precompiler fix class.',
           'The target worker model is Qwen/Qwen3.6-35B-A3B-FP8: it is strong, but this harness succeeds when patches are small, concrete, and context-local.',
           'You have live codebase tools: codebase_search, codebase_read, and codebase_list. Use them before patching whenever the exact symbol, nearby test, schema, or record shape is not already obvious.',
+          'You also have Foundry browser tools: foundry_browser_review_read and foundry_browser_review_run. Use them when the fix concerns browser rendering, labware-editor playback, labware visualization, or UI-load behavior.',
           'Do not guess source code. Search for the symbol or diagnostic, read the exact current file slice, then write edits against that exact text.',
           'Return only JSON. Prefer keys: summary, edits.',
           'Each edit must be { "path": "repo/relative/file", "search": "exact current text block", "replace": "replacement text block", "anchorId": "optional supplied anchor id" }.',
@@ -1402,8 +1415,11 @@ async function evaluateCandidate(input: {
 export async function runFoundryCoderPatch(input: {
   artifactRoot: string;
   repoRoot: string;
+  workbenchRoot?: string;
   protocolId: string;
   variant: FoundryVariant;
+  appBase?: string;
+  apiBase?: string;
   inference?: Partial<InferenceConfig>;
   dryRun?: boolean;
   autoCommit?: boolean;
@@ -1581,8 +1597,12 @@ export async function runFoundryCoderPatch(input: {
       client,
       model,
       repoRoot: input.repoRoot,
+      artifactRoot: input.artifactRoot,
+      ...(input.workbenchRoot ? { workbenchRoot: input.workbenchRoot } : {}),
       protocolId: input.protocolId,
       variant: input.variant,
+      ...(input.appBase ? { appBase: input.appBase } : {}),
+      ...(input.apiBase ? { apiBase: input.apiBase } : {}),
       fixClass,
       specs,
       ownedFiles,
@@ -1641,8 +1661,12 @@ export async function runFoundryCoderPatch(input: {
       client,
       model,
       repoRoot: input.repoRoot,
+      artifactRoot: input.artifactRoot,
+      ...(input.workbenchRoot ? { workbenchRoot: input.workbenchRoot } : {}),
       protocolId: input.protocolId,
       variant: input.variant,
+      ...(input.appBase ? { appBase: input.appBase } : {}),
+      ...(input.apiBase ? { apiBase: input.apiBase } : {}),
       fixClass,
       specs,
       ownedFiles,
