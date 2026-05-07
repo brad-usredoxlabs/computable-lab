@@ -1,0 +1,20 @@
+$schema: https://computable-lab.com/schema/computable-lab/readout-definition.schema.yaml
+recordId: RDEF-PLATE-FITC-MMP
+kind: readout-definition
+id: RDEF-PLATE-FITC-MMP
+name: FITC Fluorescence
+instrument_type: plate_reader
+mode: fluorescence
+channel_label: FITC
+excitation_nm: 485
+emission_nm: 535
+units: RFU
+proxy_ref:
+  kind: ontology
+  id: GO:0005747
+  label: mitochondrial membrane
+  namespace: GO
+tags:
+  - mmp
+  - plate-reader
+title: FITC Fluorescence

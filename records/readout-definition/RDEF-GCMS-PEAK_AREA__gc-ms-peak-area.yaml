@@ -1,0 +1,12 @@
+$schema: https://computable-lab.com/schema/computable-lab/readout-definition.schema.yaml
+recordId: RDEF-GCMS-PEAK_AREA
+kind: readout-definition
+id: RDEF-GCMS-PEAK_AREA
+name: GC-MS Peak Area
+instrument_type: gc_ms
+mode: peak_area
+channel_label: Peak Area
+units: a.u.
+tags:
+  - gc-ms
+title: GC-MS Peak Area

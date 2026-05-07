@@ -1,0 +1,68 @@
+$schema: https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml
+recordId: EVG-FOUNDRY-abcam-ic-if-protocol-manual_tubes
+id: EVG-FOUNDRY-abcam-ic-if-protocol-manual_tubes
+name: Foundry abcam-ic-if-protocol manual_tubes
+description: Protocol Foundry preview graph for abcam-ic-if-protocol (manual_tubes).
+status: draft
+protocolId: abcam-ic-if-protocol
+events:
+  - eventId: evt-block_add-jejthug9
+    event_type: add_material
+    details:
+      material: block_agent
+    labwareId: sample_plate
+  - eventId: evt-block_incubate-56cxhjy5
+    event_type: incubate
+    details:
+      duration: PT1H
+      temperature: 20
+    labwareId: sample_plate
+    t_offset: PT1H
+  - eventId: evt-block_add-p8e38tso
+    event_type: add_material
+    details:
+      material: block_agent
+    labwareId: sample_plate
+  - eventId: evt-block_incubate-b99vr9e4
+    event_type: incubate
+    details:
+      duration: PT1H
+      temperature: 20
+    labwareId: sample_plate
+    t_offset: PT1H
+  - eventId: evt-block_add-c7325xyc
+    event_type: add_material
+    details:
+      material: block_agent
+    labwareId: sample_plate
+  - eventId: evt-block_incubate-tvy13qu9
+    event_type: incubate
+    details:
+      duration: PT1H
+      temperature: 20
+    labwareId: sample_plate
+    t_offset: PT1H
+  - eventId: evt-block_add-2y73jrte
+    event_type: add_material
+    details:
+      material: block_agent
+    labwareId: sample_plate
+  - eventId: evt-block_incubate-y1ti962n
+    event_type: incubate
+    details:
+      duration: PT1H
+      temperature: 20
+    labwareId: sample_plate
+    t_offset: PT1H
+labwares:
+  - labwareId: sample_plate
+    labwareType: plate_96
+    name: sample plate
+  - labwareId: reagent_reservoir
+    labwareType: reservoir_1
+    name: reagent reservoir
+tags:
+  - protocol-foundry
+  - manual_tubes
+createdAt: 2026-05-07T00:45:28.977Z
+updatedAt: 2026-05-07T00:45:28.977Z

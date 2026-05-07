@@ -1,0 +1,12 @@
+$schema: https://computable-lab.com/schema/computable-lab/readout-definition.schema.yaml
+recordId: RDEF-PLATE-ABS450
+kind: readout-definition
+id: RDEF-PLATE-ABS450
+name: Absorbance 450 nm
+instrument_type: plate_reader
+mode: absorbance
+channel_label: Abs450
+units: OD
+tags:
+  - absorbance
+title: Absorbance 450 nm

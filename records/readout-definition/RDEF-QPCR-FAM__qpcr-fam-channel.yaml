@@ -1,0 +1,12 @@
+$schema: https://computable-lab.com/schema/computable-lab/readout-definition.schema.yaml
+recordId: RDEF-QPCR-FAM
+kind: readout-definition
+id: RDEF-QPCR-FAM
+name: qPCR FAM Channel
+instrument_type: qpcr
+mode: ct
+channel_label: FAM
+units: Ct
+tags:
+  - qpcr
+title: qPCR FAM Channel
