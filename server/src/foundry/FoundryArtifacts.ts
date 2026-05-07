@@ -10,6 +10,7 @@ export type FoundryWorkStage =
   | 'architect_review'
   | 'patch_adoption'
   | 'coder_patch'
+  | 'patch_critic'
   | 'patch_specs'
   | 'rerun';
 
@@ -46,6 +47,9 @@ export interface FoundryVariantLedger {
     patchSpecs?: string[];
     adoptionDecision?: string;
     coderPatch?: string;
+    patchReport?: string;
+    criticReport?: string;
+    patchFailure?: string;
     rerunReport?: string;
     stallReport?: string;
   };

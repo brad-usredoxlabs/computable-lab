@@ -111,7 +111,7 @@ function coderPatchResultStatus(path: string | undefined): string | undefined {
 
 function coderPatchIsTerminal(path: string | undefined): boolean {
   const status = coderPatchResultStatus(path);
-  return status === 'applied' || status === 'skipped' || status === 'needs-human';
+  return status === 'applied' || status === 'needs-human';
 }
 
 function coderPatchNeedsArchitectRefresh(path: string | undefined): boolean {
@@ -121,6 +121,30 @@ function coderPatchNeedsArchitectRefresh(path: string | undefined): boolean {
 
 function coderPatchNeedsRefresh(path: string | undefined): boolean {
   return coderPatchResultStatus(path) === 'stale';
+}
+
+function coderPatchIsSkipped(path: string | undefined): boolean {
+  return coderPatchResultStatus(path) === 'skipped';
+}
+
+function adoptionStatus(path: string | undefined): string | undefined {
+  if (!path || !existsSync(path)) return undefined;
+  try {
+    const result = asRecord(YAML.parse(readFileSync(path, 'utf-8')));
+    return typeof result['status'] === 'string' ? result['status'] : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function criticVerdict(path: string | undefined): string | undefined {
+  if (!path || !existsSync(path)) return undefined;
+  try {
+    const result = asRecord(YAML.parse(readFileSync(path, 'utf-8')));
+    return typeof result['verdict'] === 'string' ? result['verdict'] : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function patchSpecPaths(artifactRoot: string, protocolId: string, variant: FoundryVariant): string[] {
@@ -242,7 +266,11 @@ async function scanVariantArtifacts(
   const architectVerdict = fileIfExists(join(artifactRoot, 'architect', protocolId, variant, 'verdict.yaml'));
   const adoption = fileIfExists(join(artifactRoot, 'adoption', protocolId, variant, 'adoption.yaml'));
   const coderPatch = fileIfExists(join(artifactRoot, 'code-patches', protocolId, variant, 'result.yaml'));
+  const patchReport = fileIfExists(join(artifactRoot, 'patch-reports', `${protocolId}-${variant}.yaml`));
   const coderPatchStatus = coderPatchResultStatus(coderPatch);
+  const criticReport = fileIfExists(join(artifactRoot, 'critic-reports', protocolId, variant, 'report.yaml'))
+    ?? fileIfExists(join(artifactRoot, 'critic-reports', `${protocolId}-${variant}.yaml`));
+  const patchFailure = fileIfExists(join(artifactRoot, 'patch-failures', `${protocolId}-${variant}.yaml`));
   const rerunReport = fileIfExists(join(artifactRoot, 'rerun', protocolId, variant, 'rerun.yaml'));
   let stallReport = fileIfExists(stallReportPath(artifactRoot, protocolId, variant));
   const currentPatchSpecs = patchSpecPaths(artifactRoot, protocolId, variant);
@@ -270,6 +298,9 @@ async function scanVariantArtifacts(
       ...(currentPatchSpecs.length > 0 ? { patchSpecs: currentPatchSpecs } : {}),
       ...(adoption ? { adoptionDecision: adoption } : {}),
       ...(coderPatch ? { coderPatch } : {}),
+      ...(patchReport ? { patchReport } : {}),
+      ...(criticReport ? { criticReport } : {}),
+      ...(patchFailure ? { patchFailure } : {}),
       ...(rerunReport ? { rerunReport } : {}),
       ...(stallReport ? { stallReport } : {}),
     },
@@ -290,11 +321,12 @@ async function scanVariantArtifacts(
   const status: FoundryWorkStatus =
     foundryComplete ? 'completed' :
     stallReport ? 'stalled' :
+    patchFailure ? 'blocked' :
     rerunReport && metrics.foundryComplete !== 1 ? 'gap' :
-    coderPatchStatus === 'applied' || coderPatchStatus === 'skipped' ? 'accepted' :
-    coderPatchStatus === 'needs-human' ? 'blocked' :
+    coderPatchStatus === 'applied' ? 'accepted' :
+    coderPatchStatus === 'skipped' || coderPatchStatus === 'needs-human' ? 'blocked' :
     coderPatch ? 'gap' :
-    adoption ? (accepted === true ? 'accepted' : 'gap') :
+    adoption ? (adoptionStatus(adoption) === 'skipped' ? 'blocked' : accepted === true ? 'accepted' : 'gap') :
     architectVerdict ? (accepted === true ? 'accepted' : 'gap') :
     browserReport ? 'completed' :
     compiler && eventGraph && executionScale ? (metrics.foundryComplete === 1 ? 'completed' : 'gap') :
@@ -313,6 +345,9 @@ async function scanVariantArtifacts(
       ...(currentPatchSpecs.length > 0 ? { patchSpecs: currentPatchSpecs } : {}),
       ...(adoption ? { adoptionDecision: adoption } : {}),
       ...(coderPatch ? { coderPatch } : {}),
+      ...(patchReport ? { patchReport } : {}),
+      ...(criticReport ? { criticReport } : {}),
+      ...(patchFailure ? { patchFailure } : {}),
       ...(rerunReport ? { rerunReport } : {}),
       ...(stallReport ? { stallReport } : {}),
     },
@@ -363,7 +398,11 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
       if (item.status === 'stalled' || item.artifacts.stallReport) continue;
       const adoptionPath = join(ledger.artifact_root, 'adoption', protocol.protocolId, variant, 'adoption.yaml');
       const coderPatchPath = join(ledger.artifact_root, 'code-patches', protocol.protocolId, variant, 'result.yaml');
+      const criticReportPath = join(ledger.artifact_root, 'critic-reports', protocol.protocolId, variant, 'report.yaml');
+      const flatCriticReportPath = join(ledger.artifact_root, 'critic-reports', `${protocol.protocolId}-${variant}.yaml`);
+      const patchFailurePath = join(ledger.artifact_root, 'patch-failures', `${protocol.protocolId}-${variant}.yaml`);
       const coderPatchTerminal = coderPatchIsTerminal(coderPatchPath);
+      const coderPatchSkipped = coderPatchIsSkipped(coderPatchPath);
       const hasPatchSpecs = patchSpecPaths(ledger.artifact_root, protocol.protocolId, variant).length > 0;
       const rerunPath = join(ledger.artifact_root, 'rerun', protocol.protocolId, variant, 'rerun.yaml');
       const assumptionsPath = join(ledger.artifact_root, 'assumptions', protocol.protocolId, `${variant}.yaml`);
@@ -380,7 +419,10 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
       const adoptionStale = artifactNewerThan(item.artifacts.architectVerdict, adoptionPath);
       const coderPatchStale = artifactNewerThan(adoptionPath, coderPatchPath);
       const rerunStale = artifactNewerThan(coderPatchPath, rerunPath);
-      const coderPatchAsksArchitect = coderPatchNeedsArchitectRefresh(coderPatchPath)
+      const criticPath = existsSync(criticReportPath) ? criticReportPath : flatCriticReportPath;
+      const criticPassed = criticVerdict(criticPath) === 'pass';
+      const criticFailed = criticVerdict(criticPath) === 'fail';
+      const coderPatchAsksArchitect = (coderPatchNeedsArchitectRefresh(coderPatchPath) || coderPatchNeedsRefresh(coderPatchPath) || criticFailed)
         && artifactNewerThan(coderPatchPath, item.artifacts.architectVerdict);
       if (!item.artifacts.compiler) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
@@ -388,16 +430,22 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
       } else if (item.artifacts.compiler && !existsSync(assumptionsPath)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
-      } else if (item.artifacts.compiler && item.artifacts.eventGraph && (!item.artifacts.architectVerdict || architectStale || coderPatchAsksArchitect)) {
-        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'architect_review' });
-      } else if (item.artifacts.architectVerdict && (!existsSync(adoptionPath) || adoptionStale)) {
-        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'patch_adoption' });
-      } else if (existsSync(adoptionPath) && hasPatchSpecs && (!coderPatchTerminal || coderPatchStale)) {
-        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'coder_patch' });
-      } else if (existsSync(adoptionPath) && (!hasPatchSpecs || coderPatchTerminal) && (!existsSync(rerunPath) || rerunStale)) {
-        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
       } else if (item.artifacts.eventGraph && (!item.artifacts.browserReport || browserStale)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'browser_review' });
+      } else if (item.artifacts.compiler && item.artifacts.eventGraph && (!item.artifacts.architectVerdict || architectStale || coderPatchAsksArchitect)) {
+        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'architect_review' });
+      } else if (existsSync(patchFailurePath)) {
+        continue;
+      } else if (item.artifacts.architectVerdict && (!existsSync(adoptionPath) || adoptionStale)) {
+        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'patch_adoption' });
+      } else if (existsSync(adoptionPath) && hasPatchSpecs && !coderPatchSkipped && (!coderPatchTerminal || coderPatchStale)) {
+        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'coder_patch' });
+      } else if (existsSync(adoptionPath) && (!hasPatchSpecs || coderPatchSkipped)) {
+        continue;
+      } else if (existsSync(adoptionPath) && coderPatchTerminal && (!existsSync(criticPath) || artifactNewerThan(coderPatchPath, criticPath))) {
+        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'patch_critic' });
+      } else if (existsSync(adoptionPath) && coderPatchTerminal && criticPassed && (!existsSync(rerunPath) || rerunStale)) {
+        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
       }
     }
   }

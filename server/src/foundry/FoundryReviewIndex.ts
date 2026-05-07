@@ -51,9 +51,16 @@ export async function writeFoundryReviewIndex(ledger: FoundryLedger): Promise<st
           screenshot: existsSync(screenshot) ? rel(root, screenshot) : undefined,
           architectVerdict: rel(root, variant.artifacts.architectVerdict),
           patchSpecs: variant.artifacts.patchSpecs?.map((path) => rel(root, path)).filter((path): path is string => Boolean(path)) ?? [],
+          adoptionDecision: rel(root, variant.artifacts.adoptionDecision),
+          coderPatch: rel(root, variant.artifacts.coderPatch),
+          patchReport: rel(root, variant.artifacts.patchReport),
+          criticReport: rel(root, variant.artifacts.criticReport),
+          patchFailure: rel(root, variant.artifacts.patchFailure),
+          rerunReport: rel(root, variant.artifacts.rerunReport),
         },
         browserStatus: await readStatus(variant.artifacts.browserReport),
         architectStatus: await readStatus(variant.artifacts.architectVerdict),
+        criticStatus: await readStatus(variant.artifacts.criticReport),
       };
       variants.push(item);
       htmlRows.push([
@@ -71,6 +78,9 @@ export async function writeFoundryReviewIndex(ledger: FoundryLedger): Promise<st
         `<td>${variant.artifacts.browserReport ? `<a href="${artifactHref(root, variant.artifacts.browserReport)}">browser</a>` : '<span class="missing">missing</span>'}</td>`,
         `<td>${existsSync(screenshot) ? `<a href="${artifactHref(root, screenshot)}">screenshot</a>` : '<span class="missing">missing</span>'}</td>`,
         `<td>${variant.artifacts.architectVerdict ? `<a href="${artifactHref(root, variant.artifacts.architectVerdict)}">verdict</a>` : '<span class="missing">missing</span>'}</td>`,
+        `<td>${variant.artifacts.patchReport ? `<a href="${artifactHref(root, variant.artifacts.patchReport)}">patch</a>` : '<span class="missing">missing</span>'}</td>`,
+        `<td>${variant.artifacts.criticReport ? `<a href="${artifactHref(root, variant.artifacts.criticReport)}">critic</a>` : '<span class="missing">missing</span>'}</td>`,
+        `<td>${variant.artifacts.rerunReport ? `<a href="${artifactHref(root, variant.artifacts.rerunReport)}">rerun</a>` : '<span class="missing">missing</span>'}</td>`,
         '</tr>',
       ].join(''));
     }
@@ -99,7 +109,7 @@ export async function writeFoundryReviewIndex(ledger: FoundryLedger): Promise<st
     '<h1>Protocol Foundry Review Index</h1>',
     `<p>Generated ${nowIso()}</p>`,
     '<table>',
-    '<thead><tr><th>Protocol</th><th>Variant</th><th>Status</th><th>Events</th><th>Blockers</th><th>Browser</th><th>Architect</th><th>Quality</th><th>Text</th><th>Graph</th><th>Browser Report</th><th>Screenshot</th><th>Verdict</th></tr></thead>',
+    '<thead><tr><th>Protocol</th><th>Variant</th><th>Status</th><th>Events</th><th>Blockers</th><th>Browser</th><th>Architect</th><th>Quality</th><th>Text</th><th>Graph</th><th>Browser Report</th><th>Screenshot</th><th>Verdict</th><th>Patch</th><th>Critic</th><th>Rerun</th></tr></thead>',
     `<tbody>${htmlRows.join('\n')}</tbody>`,
     '</table>',
   ].join('\n'), 'utf-8');

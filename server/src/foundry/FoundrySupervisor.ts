@@ -14,6 +14,7 @@ import { runFoundryBrowserReview } from './FoundryBrowserReview.js';
 import { runFoundryArchitectReview } from './FoundryArchitect.js';
 import { runPatchAdoption } from './FoundryImprovement.js';
 import { runFoundryCoderPatch } from './FoundryCoderPatch.js';
+import { runFoundryPatchCritic } from './FoundryCritic.js';
 import { ingestFoundryPdfs } from './FoundryPdfIntake.js';
 import { writeFoundryReviewIndex } from './FoundryReviewIndex.js';
 import {
@@ -337,8 +338,20 @@ async function runCoderPatchTask(options: FoundryLoopOptions, ledger: FoundryLed
     ...(options.autoCommitPatches !== undefined ? { autoCommit: options.autoCommitPatches } : {}),
     ...(options.autoPushPatches !== undefined ? { autoPush: options.autoPushPatches } : {}),
   });
-  const status = result.status === 'applied' || result.status === 'skipped'
+  await writeYamlFile(join(options.artifactRoot, 'patch-reports', `${task.protocolId}-${task.variant}.yaml`), {
+    kind: 'protocol-worker-report',
+    protocolId: task.protocolId,
+    variant: task.variant,
+    generated_at: new Date().toISOString(),
+    status: result.status,
+    coderPatch: result.resultPath,
+    touchedFiles: result.touchedFiles,
+    message: result.message,
+  });
+  const status = result.status === 'applied'
     ? 'completed'
+    : result.status === 'skipped'
+      ? 'blocked'
     : result.status === 'needs-human'
       ? 'blocked'
     : result.status === 'stale'
@@ -349,7 +362,32 @@ async function runCoderPatchTask(options: FoundryLoopOptions, ledger: FoundryLed
     variant: task.variant,
     stage: 'coder_patch',
     status,
-    artifacts: { coderPatch: result.resultPath },
+    artifacts: {
+      coderPatch: result.resultPath,
+      patchReport: join(options.artifactRoot, 'patch-reports', `${task.protocolId}-${task.variant}.yaml`),
+    },
+    message: result.message,
+  });
+  await saveFoundryLedger(ledger);
+}
+
+async function runPatchCriticTask(options: FoundryLoopOptions, ledger: FoundryLedger, task: FoundryReadyTask): Promise<void> {
+  markFoundryTask(ledger, { protocolId: task.protocolId, variant: task.variant, stage: 'patch_critic', status: 'running' });
+  await saveFoundryLedger(ledger);
+  const result = await runFoundryPatchCritic({
+    artifactRoot: options.artifactRoot,
+    protocolId: task.protocolId,
+    variant: task.variant,
+  });
+  markFoundryTask(ledger, {
+    protocolId: task.protocolId,
+    variant: task.variant,
+    stage: 'patch_critic',
+    status: result.verdict === 'pass' ? 'accepted' : 'blocked',
+    artifacts: {
+      criticReport: result.reportPath,
+      ...(result.patchFailurePath ? { patchFailure: result.patchFailurePath } : {}),
+    },
     message: result.message,
   });
   await saveFoundryLedger(ledger);
@@ -417,6 +455,8 @@ async function runTask(options: FoundryLoopOptions, ledger: FoundryLedger, task:
     await runPatchAdoptionTask(options, ledger, task);
   } else if (task.stage === 'coder_patch') {
     await runCoderPatchTask(options, ledger, task);
+  } else if (task.stage === 'patch_critic') {
+    await runPatchCriticTask(options, ledger, task);
   } else if (task.stage === 'rerun') {
     await runRerunTask(options, ledger, task);
   }
@@ -425,14 +465,16 @@ async function runTask(options: FoundryLoopOptions, ledger: FoundryLedger, task:
 export function selectRunnableTasks(tasks: FoundryReadyTask[]): FoundryReadyTask[] {
   const coderTasks = tasks.filter((task) => task.stage === 'coder_patch');
   if (coderTasks.length > 0) return [coderTasks[0]!];
+  const criticTasks = tasks.filter((task) => task.stage === 'patch_critic');
+  if (criticTasks.length > 0) return [criticTasks[0]!];
   const adoptionTasks = tasks.filter((task) => task.stage === 'patch_adoption');
   if (adoptionTasks.length > 0) return [adoptionTasks[0]!];
   const rerunTasks = tasks.filter((task) => task.stage === 'rerun');
   if (rerunTasks.length > 0) return [rerunTasks[0]!];
-  const architectTasks = tasks.filter((task) => task.stage === 'architect_review');
-  if (architectTasks.length > 0) return [architectTasks[0]!];
   const browserTasks = tasks.filter((task) => task.stage === 'browser_review');
   if (browserTasks.length > 0) return [browserTasks[0]!];
+  const architectTasks = tasks.filter((task) => task.stage === 'architect_review');
+  if (architectTasks.length > 0) return [architectTasks[0]!];
   const compileProtocols = new Set<string>();
   const selected: FoundryReadyTask[] = [];
   for (const task of tasks) {
@@ -445,10 +487,11 @@ export function selectRunnableTasks(tasks: FoundryReadyTask[]): FoundryReadyTask
   const stageOrder = new Map<string, number>([
     ['patch_adoption', 0],
     ['coder_patch', 1],
-    ['architect_review', 2],
+    ['patch_critic', 2],
     ['browser_review', 3],
-    ['rerun', 4],
-    ['compile', 5],
+    ['architect_review', 4],
+    ['rerun', 5],
+    ['compile', 6],
   ]);
   const [nextTask] = selected.sort((a, b) => (stageOrder.get(a.stage) ?? 99) - (stageOrder.get(b.stage) ?? 99));
   return nextTask ? [nextTask] : [];

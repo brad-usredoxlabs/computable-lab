@@ -30,7 +30,7 @@ describe('FoundryLedger', () => {
     ]);
   });
 
-  it('detects compiled variants and advances to architect review before browser review', async () => {
+  it('detects compiled variants and advances to browser review before architect review', async () => {
     const root = await makeArtifactRoot();
     await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
       kind: 'protocol-foundry-compiler-result',
@@ -55,7 +55,7 @@ describe('FoundryLedger', () => {
     expect(readyTasks(ledger)).toContainEqual({
       protocolId: 'demo-protocol',
       variant: 'manual_tubes',
-      stage: 'architect_review',
+      stage: 'browser_review',
     });
   });
 
@@ -89,7 +89,7 @@ describe('FoundryLedger', () => {
     expect(ledger.protocol_status['demo-protocol']?.variants.manual_tubes.status).toBe('gap');
   });
 
-  it('schedules architect review again when a rerun updates the event graph', async () => {
+  it('schedules browser review before architect review when a rerun updates the event graph', async () => {
     const root = await makeArtifactRoot();
     await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
       kind: 'protocol-foundry-compiler-result',
@@ -133,6 +133,19 @@ describe('FoundryLedger', () => {
     const ledger = await scanFoundryLedger(root);
 
     expect(readyTasks(ledger)).toContainEqual({
+      protocolId: 'demo-protocol',
+      variant: 'manual_tubes',
+      stage: 'browser_review',
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await writeYamlFile(join(root, 'browser-review', 'demo-protocol', 'manual_tubes', 'report.yaml'), {
+      kind: 'protocol-browser-review-report',
+      status: 'pass',
+    });
+
+    const browserReviewedLedger = await scanFoundryLedger(root);
+    expect(readyTasks(browserReviewedLedger)).toContainEqual({
       protocolId: 'demo-protocol',
       variant: 'manual_tubes',
       stage: 'architect_review',
@@ -259,6 +272,13 @@ describe('FoundryLedger', () => {
     ])).toEqual([
       { protocolId: 'p1', variant: 'manual_tubes', stage: 'rerun' },
     ]);
+
+    expect(selectRunnableTasks([
+      { protocolId: 'p1', variant: 'manual_tubes', stage: 'architect_review' },
+      { protocolId: 'p2', variant: 'manual_tubes', stage: 'browser_review' },
+    ])).toEqual([
+      { protocolId: 'p2', variant: 'manual_tubes', stage: 'browser_review' },
+    ]);
   });
 
   it('schedules coder patch from real patch spec files after adoption', async () => {
@@ -278,6 +298,10 @@ describe('FoundryLedger', () => {
     });
     await writeYamlFile(join(root, 'assumptions', 'demo-protocol', 'manual_tubes.yaml'), {
       kind: 'protocol-foundry-test-assumption-profile',
+    });
+    await writeYamlFile(join(root, 'browser-review', 'demo-protocol', 'manual_tubes', 'report.yaml'), {
+      kind: 'protocol-browser-review-report',
+      status: 'pass',
     });
     await writeYamlFile(join(root, 'architect', 'demo-protocol', 'manual_tubes', 'verdict.yaml'), {
       kind: 'protocol-foundry-architect-verdict',
@@ -324,6 +348,10 @@ describe('FoundryLedger', () => {
     await writeYamlFile(join(root, 'assumptions', 'demo-protocol', 'manual_tubes.yaml'), {
       kind: 'protocol-foundry-test-assumption-profile',
     });
+    await writeYamlFile(join(root, 'browser-review', 'demo-protocol', 'manual_tubes', 'report.yaml'), {
+      kind: 'protocol-browser-review-report',
+      status: 'pass',
+    });
     await writeYamlFile(join(root, 'architect', 'demo-protocol', 'manual_tubes', 'verdict.yaml'), {
       kind: 'protocol-foundry-architect-verdict',
       accepted: false,
@@ -353,7 +381,7 @@ describe('FoundryLedger', () => {
     });
   });
 
-  it('schedules a fresh coder tournament after stale patch specs have been refreshed', async () => {
+  it('returns stale coder results to the architect instead of rerunning the compiler', async () => {
     const root = await makeArtifactRoot();
     await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
       kind: 'protocol-foundry-compiler-result',
@@ -371,6 +399,125 @@ describe('FoundryLedger', () => {
     await writeYamlFile(join(root, 'assumptions', 'demo-protocol', 'manual_tubes.yaml'), {
       kind: 'protocol-foundry-test-assumption-profile',
     });
+    await writeYamlFile(join(root, 'browser-review', 'demo-protocol', 'manual_tubes', 'report.yaml'), {
+      kind: 'protocol-browser-review-report',
+      status: 'pass',
+    });
+    await writeYamlFile(join(root, 'architect', 'demo-protocol', 'manual_tubes', 'verdict.yaml'), {
+      kind: 'protocol-foundry-architect-verdict',
+      accepted: false,
+    });
+    await writeYamlFile(join(root, 'patch-specs', 'demo-protocol', 'manual_tubes', 'fix-extractor.yaml'), {
+      id: 'fix-extractor',
+      fixClass: 'extractor_prompt_contract',
+      ownedFiles: ['server/src/extract'],
+    });
+    await writeYamlFile(join(root, 'adoption', 'demo-protocol', 'manual_tubes', 'adoption.yaml'), {
+      kind: 'protocol-foundry-adoption-decision',
+      status: 'accepted',
+    });
+    await tick();
+    await writeYamlFile(join(root, 'code-patches', 'demo-protocol', 'manual_tubes', 'result.yaml'), {
+      kind: 'protocol-foundry-coder-patch-result',
+      status: 'stale',
+      message: 'stale patch specs; rerun and refresh architect context',
+    });
+
+    const ledger = await scanFoundryLedger(root);
+
+    expect(readyTasks(ledger)).toContainEqual({
+      protocolId: 'demo-protocol',
+      variant: 'manual_tubes',
+      stage: 'architect_review',
+    });
+  });
+
+  it('reruns only after a terminal coder patch passes critic review', async () => {
+    const root = await makeArtifactRoot();
+    await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-compiler-result',
+      outcome: 'gap',
+      eventCount: 1,
+      diagnostics: [],
+    });
+    await writeYamlFile(join(root, 'event-graphs', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-event-graph-proposal',
+    });
+    await writeYamlFile(join(root, 'execution-scale', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'execution-scale-plan',
+      blockers: [],
+    });
+    await writeYamlFile(join(root, 'assumptions', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-test-assumption-profile',
+    });
+    await writeYamlFile(join(root, 'browser-review', 'demo-protocol', 'manual_tubes', 'report.yaml'), {
+      kind: 'protocol-browser-review-report',
+      status: 'pass',
+    });
+    await writeYamlFile(join(root, 'architect', 'demo-protocol', 'manual_tubes', 'verdict.yaml'), {
+      kind: 'protocol-foundry-architect-verdict',
+      accepted: false,
+    });
+    await writeYamlFile(join(root, 'patch-specs', 'demo-protocol', 'manual_tubes', 'fix-extractor.yaml'), {
+      id: 'fix-extractor',
+      fixClass: 'extractor_prompt_contract',
+      ownedFiles: ['server/src/extract'],
+    });
+    await writeYamlFile(join(root, 'adoption', 'demo-protocol', 'manual_tubes', 'adoption.yaml'), {
+      kind: 'protocol-foundry-adoption-decision',
+      status: 'accepted',
+    });
+    await tick();
+    await writeYamlFile(join(root, 'code-patches', 'demo-protocol', 'manual_tubes', 'result.yaml'), {
+      kind: 'protocol-foundry-coder-patch-result',
+      status: 'applied',
+      touchedFiles: ['server/src/extract/demo.ts'],
+      verification: [{ command: 'npm test', status: 'pass' }],
+    });
+
+    const awaitingCritic = await scanFoundryLedger(root);
+    expect(readyTasks(awaitingCritic)).toContainEqual({
+      protocolId: 'demo-protocol',
+      variant: 'manual_tubes',
+      stage: 'patch_critic',
+    });
+
+    await tick();
+    await writeYamlFile(join(root, 'critic-reports', 'demo-protocol', 'manual_tubes', 'report.yaml'), {
+      kind: 'protocol-critic-report',
+      verdict: 'pass',
+    });
+
+    const accepted = await scanFoundryLedger(root);
+    expect(readyTasks(accepted)).toContainEqual({
+      protocolId: 'demo-protocol',
+      variant: 'manual_tubes',
+      stage: 'rerun',
+    });
+  });
+
+  it('blocks skipped coder patches instead of rerunning or repeating coder work', async () => {
+    const root = await makeArtifactRoot();
+    await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-compiler-result',
+      outcome: 'gap',
+      eventCount: 1,
+      diagnostics: [],
+    });
+    await writeYamlFile(join(root, 'event-graphs', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-event-graph-proposal',
+    });
+    await writeYamlFile(join(root, 'execution-scale', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'execution-scale-plan',
+      blockers: [],
+    });
+    await writeYamlFile(join(root, 'assumptions', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-test-assumption-profile',
+    });
+    await writeYamlFile(join(root, 'browser-review', 'demo-protocol', 'manual_tubes', 'report.yaml'), {
+      kind: 'protocol-browser-review-report',
+      status: 'pass',
+    });
     await writeYamlFile(join(root, 'architect', 'demo-protocol', 'manual_tubes', 'verdict.yaml'), {
       kind: 'protocol-foundry-architect-verdict',
       accepted: false,
@@ -386,13 +533,61 @@ describe('FoundryLedger', () => {
     });
     await writeYamlFile(join(root, 'code-patches', 'demo-protocol', 'manual_tubes', 'result.yaml'), {
       kind: 'protocol-foundry-coder-patch-result',
-      status: 'stale',
-      message: 'stale patch specs; rerun and refresh architect context',
+      status: 'skipped',
     });
 
     const ledger = await scanFoundryLedger(root);
+    expect(readyTasks(ledger)).not.toContainEqual({
+      protocolId: 'demo-protocol',
+      variant: 'manual_tubes',
+      stage: 'coder_patch',
+    });
+    expect(readyTasks(ledger)).not.toContainEqual({
+      protocolId: 'demo-protocol',
+      variant: 'manual_tubes',
+      stage: 'rerun',
+    });
+  });
 
-    expect(readyTasks(ledger)).toContainEqual({
+  it('blocks adoption decisions with no patch specs instead of rerunning the compiler', async () => {
+    const root = await makeArtifactRoot();
+    await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-compiler-result',
+      outcome: 'gap',
+      eventCount: 1,
+      diagnostics: [],
+    });
+    await writeYamlFile(join(root, 'event-graphs', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-event-graph-proposal',
+    });
+    await writeYamlFile(join(root, 'execution-scale', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'execution-scale-plan',
+      blockers: [],
+    });
+    await writeYamlFile(join(root, 'assumptions', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-test-assumption-profile',
+    });
+    await writeYamlFile(join(root, 'browser-review', 'demo-protocol', 'manual_tubes', 'report.yaml'), {
+      kind: 'protocol-browser-review-report',
+      status: 'pass',
+    });
+    await writeYamlFile(join(root, 'architect', 'demo-protocol', 'manual_tubes', 'verdict.yaml'), {
+      kind: 'protocol-foundry-architect-verdict',
+      accepted: false,
+      recommendedFixes: [],
+    });
+    await writeYamlFile(join(root, 'adoption', 'demo-protocol', 'manual_tubes', 'adoption.yaml'), {
+      kind: 'protocol-foundry-adoption-decision',
+      status: 'accepted',
+    });
+
+    const ledger = await scanFoundryLedger(root);
+    expect(readyTasks(ledger)).not.toContainEqual({
+      protocolId: 'demo-protocol',
+      variant: 'manual_tubes',
+      stage: 'rerun',
+    });
+    expect(readyTasks(ledger)).not.toContainEqual({
       protocolId: 'demo-protocol',
       variant: 'manual_tubes',
       stage: 'coder_patch',
