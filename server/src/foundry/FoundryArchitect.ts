@@ -742,6 +742,20 @@ export async function runFoundryArchitectReview(options: FoundryArchitectOptions
 
   // Truncate artifacts to keep the JSON context under ~30KB so the architect
   // prompt fits within the vLLM request body budget (~80KB including tools).
+  // JSON.stringify inflates YAML with escaping, so we truncate the RAW YAML
+  // inputs before they're passed to llmArchitectNotes.
+  const compilerStr = typeof compilerRaw === 'string'
+    ? compilerRaw.slice(0, 4_000)
+    : undefined;
+  const eventGraphStr = typeof eventGraphRaw === 'string'
+    ? eventGraphRaw.slice(0, 6_000)
+    : undefined;
+  const executionScaleStr = typeof executionScaleRaw === 'string'
+    ? executionScaleRaw.slice(0, 2_000)
+    : undefined;
+  const browserReportStr = typeof browserReportRaw === 'string'
+    ? browserReportRaw.slice(0, 2_000)
+    : undefined;
   const coderPatchStr = typeof coderPatchRaw === 'string'
     ? coderPatchRaw.slice(0, 3_000)
     : undefined;
@@ -755,10 +769,10 @@ export async function runFoundryArchitectReview(options: FoundryArchitectOptions
   // that already fit the vLLM request budget (~60-80KB).
   const notes = await llmArchitectNotes(options, {
     verdict,
-    compiler: compilerRaw,
-    eventGraph: eventGraphRaw,
-    executionScale: executionScaleRaw,
-    browserReport: browserReportRaw,
+    compiler: compilerStr,
+    eventGraph: eventGraphStr,
+    executionScale: executionScaleStr,
+    browserReport: browserReportStr,
     coderPatch: coderPatchStr,
     materialContext: materialContextStr,
   }).catch((error: unknown) => `Architect LLM note generation failed: ${error instanceof Error ? error.message : String(error)}`);
