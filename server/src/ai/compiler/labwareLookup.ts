@@ -22,17 +22,17 @@ const LABWARE_ALIAS_MAP: Record<string, string> = {
   generic_4x50ml_tube_rack: 'lbw-def-generic-4x50ml-tube-rack',
   // Plate hints
   generic_96_well_plate: 'lbw-def-generic-96-well-plate',
-  generic_384_well_plate: 'lbw-def-generic-384-well-plate',
+  generic_384_well_plate: 'lbw-def-generic-384-well-pcr-plate',
   generic_24_well_plate: 'lbw-def-generic-24-well-plate',
   // Reservoir hints
   generic_1_well_reservoir: 'lbw-def-generic-reservoir-1-v1',
   generic_8_well_reservoir: 'lbw-def-generic-8-reservoir',
-  generic_12_well_reservoir: 'lbw-def-generic-12-reservoir',
+  generic_12_well_reservoir: 'lbw-def-generic-12-well-reservoir',
   generic_2_well_reservoir: 'lbw-def-generic-2-well-reservoir',
   // Tip rack hints
   generic_96_tip_rack: 'lbw-def-generic-96-tip-rack',
   // Deep well plate hints
-  generic_96_well_deep_plate: 'lbw-def-generic-96-well-deep-plate',
+  generic_96_well_deep_plate: 'lbw-def-generic-96-well-deepwell-plate',
   // PCR rack hints
   generic_96x0p2ml_pcr_rack: 'lbw-def-generic-96x0p2ml-pcr-rack',
   // Integra tip rack hints
