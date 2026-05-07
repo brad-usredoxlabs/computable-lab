@@ -374,13 +374,22 @@ describe('FoundryCoderPatch verification routing', () => {
   it('runs touched tests instead of falling back to unrelated Foundry ledger tests', () => {
     expect(defaultVerificationArgs([
       'server/src/compiler/pipeline/passes/AiPrecompileShapeMismatch.log.test.ts',
-    ])).toEqual([[
-      'npm',
-      'test',
-      '--',
-      '--run',
-      'src/compiler/pipeline/passes/AiPrecompileShapeMismatch.log.test.ts',
-      'src/compiler/pipeline/passes/ChatbotCompilePasses.test.ts',
-    ]]);
+    ])).toEqual([
+      [
+        'npx',
+        'tsc',
+        '--noEmit',
+        '--pretty',
+        'false',
+      ],
+      [
+        'npm',
+        'test',
+        '--',
+        '--run',
+        'src/compiler/pipeline/passes/AiPrecompileShapeMismatch.log.test.ts',
+        'src/compiler/pipeline/passes/ChatbotCompilePasses.test.ts',
+      ],
+    ]);
   });
 });

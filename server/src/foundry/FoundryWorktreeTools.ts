@@ -190,6 +190,26 @@ function splitLinesForEdit(content: string): { lines: string[]; hadFinalNewline:
   return { lines, hadFinalNewline };
 }
 
+/**
+ * Normalize escaped newline sequences that survive JSON.parse.
+ *
+ * When the LLM double-escapes newlines in tool-call arguments (sending \\n
+ * instead of \n), JSON.parse produces the literal two-character sequence
+ * backslash + 'n' instead of an actual newline. This function converts those
+ * literal escape sequences back into real control characters so that
+ * worktree_replace_lines produces correctly line-broken output.
+ */
+function normalizeEscapedWhitespace(text: string): string {
+  // Handle literal \n, \r, \t that survived JSON.parse (double-escaped input).
+  // We do NOT touch \\ (actual backslash-backslash) because that's intentional.
+  // Strategy: replace literal \n / \r / \t sequences with real characters,
+  // but preserve \ (backslash followed by anything else) as-is.
+  return text
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\r')
+    .replace(/\\t/g, '\t');
+}
+
 async function gitDiff(worktreeRoot: string): Promise<string> {
   const { stdout } = await execFileAsync('git', ['diff', '--no-ext-diff', '--binary'], {
     cwd: worktreeRoot,
@@ -246,7 +266,9 @@ async function runWorktreeTool(worktreeRoot: string, toolCall: ToolCall): Promis
     if (!stats.isFile()) throw new Error(`${rel}: not a file`);
     const startLine = clampInt(args['startLine'], 1, 1, 1_000_000);
     const endLine = clampInt(args['endLine'], startLine, startLine, 1_000_000);
-    const replacement = typeof args['replacement'] === 'string' ? args['replacement'] : '';
+    const replacement = normalizeEscapedWhitespace(
+      typeof args['replacement'] === 'string' ? args['replacement'] : '',
+    );
     const before = await readFile(full, 'utf-8');
     const { lines, hadFinalNewline } = splitLinesForEdit(before);
     if (startLine > lines.length + 1 || endLine > lines.length) {
@@ -260,7 +282,9 @@ async function runWorktreeTool(worktreeRoot: string, toolCall: ToolCall): Promis
 
   if (toolCall.function.name === 'worktree_write_file') {
     const { rel, full } = safeRepoPath(worktreeRoot, args['path']);
-    const content = typeof args['content'] === 'string' ? args['content'] : '';
+    const content = normalizeEscapedWhitespace(
+      typeof args['content'] === 'string' ? args['content'] : '',
+    );
     await mkdir(dirname(full), { recursive: true });
     await writeFile(full, content, 'utf-8');
     return { ok: true, path: rel, diff: (await gitDiff(worktreeRoot)).slice(0, MAX_TOOL_RESULT_CHARS) };

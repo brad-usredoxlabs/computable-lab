@@ -23,7 +23,7 @@ import {
   writeModelUsageMetrics,
   type ModelEndpointUsage,
 } from './FoundryMetrics.js';
-import { writeYamlFile, type FoundryLedger } from './FoundryArtifacts.js';
+import { readYamlFile, writeYamlFile, type FoundryLedger } from './FoundryArtifacts.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -69,37 +69,6 @@ async function sourceCodeDriftFiles(repoRoot: string): Promise<string[]> {
     .map((line) => line.slice(3).trim())
     .filter((path) => path.length > 0)
     .sort();
-}
-
-async function writeSourceDriftArchitectVerdict(
-  options: FoundryLoopOptions,
-  task: FoundryReadyTask,
-  driftFiles: string[],
-): Promise<string> {
-  const verdictPath = join(options.artifactRoot, 'architect', task.protocolId, task.variant, 'verdict.yaml');
-  await writeYamlFile(verdictPath, {
-    kind: 'protocol-foundry-architect-verdict',
-    protocolId: task.protocolId,
-    variant: task.variant,
-    generated_at: new Date().toISOString(),
-    accepted: false,
-    qualityScore: 0,
-    coverageEstimate: 0,
-    failureClasses: ['source_code_drift'],
-    missingVerbs: [],
-    missingLabware: [],
-    missingMaterials: [],
-    badEvents: [],
-    badScalingAssumptions: [],
-    recommendedFixes: [],
-    sourceArtifacts: {},
-    architectNotes: [
-      'Architect review skipped because source files changed before spec generation.',
-      'Refresh the protocol run after the codebase is clean so patch specs are based on current code.',
-      `Changed source files: ${driftFiles.join(', ')}`,
-    ].join('\n'),
-  });
-  return verdictPath;
 }
 
 export interface FoundryLoopSummary {
@@ -254,15 +223,96 @@ async function runArchitectTask(options: FoundryLoopOptions, ledger: FoundryLedg
   await saveFoundryLedger(ledger);
   const driftFiles = await sourceCodeDriftFiles(options.repoRoot);
   if (driftFiles.length > 0) {
-    const verdictPath = await writeSourceDriftArchitectVerdict(options, task, driftFiles);
+    const verdictPath = join(options.artifactRoot, 'architect', task.protocolId, task.variant, 'verdict.yaml');
+    // Count consecutive drift detections to prevent infinite recompile loops.
+    let driftCount = 1;
+    const existing = await readYamlFile<Record<string, unknown>>(verdictPath);
+    if (existing && Array.isArray(existing.failureClasses) && existing.failureClasses.includes('source_code_drift')) {
+      driftCount = (Number(existing.driftCount) || 0) + 1;
+    }
+    const MAX_DRIFT = 3;
+    if (driftCount >= MAX_DRIFT) {
+      // Too many consecutive drift detections — stall this variant instead of
+      // looping endlessly.  The user can resolve the drift manually and resume.
+      const stallPath = join(options.artifactRoot, 'stalls', task.protocolId, task.variant, 'stall-report.yaml');
+      await writeYamlFile(stallPath, {
+        kind: 'protocol-foundry-stall-report',
+        protocolId: task.protocolId,
+        variant: task.variant,
+        generated_at: new Date().toISOString(),
+        failureClass: 'source_code_drift',
+        driftCount,
+        changedFiles: driftFiles,
+        message: `Source code drifted ${driftCount} consecutive times. Variant stalled to prevent infinite recompile loop.`,
+        recommendations: [
+          'Stop modifying server/src/foundry/ files while the loop is running',
+          'Or restart the loop after the codebase stabilizes',
+        ],
+      });
+      markFoundryTask(ledger, {
+        protocolId: task.protocolId,
+        variant: task.variant,
+        stage: 'architect_review',
+        status: 'gap',
+        artifacts: { architectVerdict: verdictPath, stallReport: stallPath },
+        message: `stalled: source drift detected ${driftCount} consecutive times`,
+      });
+      await saveFoundryLedger(ledger);
+      return;
+    }
+    const verdictContent: Record<string, unknown> = {
+      kind: 'protocol-foundry-architect-verdict',
+      protocolId: task.protocolId,
+      variant: task.variant,
+      generated_at: new Date().toISOString(),
+      accepted: false,
+      qualityScore: 0,
+      coverageEstimate: 0,
+      failureClasses: ['source_code_drift'],
+      driftCount,
+      missingVerbs: [],
+      missingLabware: [],
+      missingMaterials: [],
+      badEvents: [],
+      badScalingAssumptions: [],
+      recommendedFixes: [],
+      sourceArtifacts: {},
+      architectNotes: [
+        'Architect review skipped because source files changed before spec generation.',
+        'Refresh the protocol run after the codebase is clean so patch specs are based on current code.',
+        `Changed source files: ${driftFiles.join(', ')}`,
+        `Drift detection count: ${driftCount}/${MAX_DRIFT}`,
+      ].join('\n'),
+    };
+    await writeYamlFile(verdictPath, verdictContent);
     markFoundryTask(ledger, {
       protocolId: task.protocolId,
       variant: task.variant,
       stage: 'architect_review',
       status: 'gap',
       artifacts: { architectVerdict: verdictPath, patchSpecs: [] },
-      message: `architect review skipped until source drift is resolved: ${driftFiles.join(', ')}`,
+      message: `architect review skipped until source drift is resolved: ${driftFiles.join(', ')} (attempt ${driftCount}/${MAX_DRIFT})`,
     });
+    // Also mark this protocol for recompile so that the next cycle produces
+    // fresh compiler output against the now-stable codebase.  After the rerun,
+    // the stale drift verdict will be superseded and architect_review will be
+    // re-offered on clean source.
+    const protocol = ledger.protocol_status[task.protocolId];
+    if (protocol) {
+      for (const v of FOUNDRY_VARIANTS) {
+        const vi = protocol.variants[v];
+        if (vi.artifacts.compiler) {
+          markFoundryTask(ledger, {
+            protocolId: task.protocolId,
+            variant: v,
+            stage: 'rerun',
+            status: 'pending',
+            artifacts: {},
+            message: 'source drift detected during architect review; forcing recompile',
+          });
+        }
+      }
+    }
     await saveFoundryLedger(ledger);
     return;
   }
@@ -463,18 +513,26 @@ async function runTask(options: FoundryLoopOptions, ledger: FoundryLedger, task:
 }
 
 export function selectRunnableTasks(tasks: FoundryReadyTask[]): FoundryReadyTask[] {
+  // Stages that MUST be serial (one at a time): coder_patch, patch_critic, patch_adoption.
+  // These involve mutable state (git apply, critic review) that conflicts across variants.
   const coderTasks = tasks.filter((task) => task.stage === 'coder_patch');
   if (coderTasks.length > 0) return [coderTasks[0]!];
   const criticTasks = tasks.filter((task) => task.stage === 'patch_critic');
   if (criticTasks.length > 0) return [criticTasks[0]!];
   const adoptionTasks = tasks.filter((task) => task.stage === 'patch_adoption');
   if (adoptionTasks.length > 0) return [adoptionTasks[0]!];
+
+  // Rerun tasks are also serial because they write to shared compiler state.
   const rerunTasks = tasks.filter((task) => task.stage === 'rerun');
   if (rerunTasks.length > 0) return [rerunTasks[0]!];
+
+  // Stages that CAN run in parallel: browser_review, architect_review.
   const browserTasks = tasks.filter((task) => task.stage === 'browser_review');
-  if (browserTasks.length > 0) return [browserTasks[0]!];
+  if (browserTasks.length > 0) return browserTasks;
   const architectTasks = tasks.filter((task) => task.stage === 'architect_review');
-  if (architectTasks.length > 0) return [architectTasks[0]!];
+  if (architectTasks.length > 0) return architectTasks;
+
+  // Compile: one task per protocol (all variants compiled together).
   const compileProtocols = new Set<string>();
   const selected: FoundryReadyTask[] = [];
   for (const task of tasks) {
@@ -484,17 +542,14 @@ export function selectRunnableTasks(tasks: FoundryReadyTask[]): FoundryReadyTask
     }
     selected.push(task);
   }
-  const stageOrder = new Map<string, number>([
-    ['patch_adoption', 0],
-    ['coder_patch', 1],
-    ['patch_critic', 2],
-    ['browser_review', 3],
-    ['architect_review', 4],
-    ['rerun', 5],
-    ['compile', 6],
-  ]);
-  const [nextTask] = selected.sort((a, b) => (stageOrder.get(a.stage) ?? 99) - (stageOrder.get(b.stage) ?? 99));
-  return nextTask ? [nextTask] : [];
+  if (selected.length > 0) {
+    const stageOrder: Record<string, number> = {
+      patch_adoption: 0, coder_patch: 1, patch_critic: 2, browser_review: 3, architect_review: 4, rerun: 5, compile: 6,
+    };
+    selected.sort((a, b) => (stageOrder[a.stage] ?? 99) - (stageOrder[b.stage] ?? 99));
+    return selected;
+  }
+  return [];
 }
 
 export async function runFoundryLoop(options: FoundryLoopOptions): Promise<FoundryLoopSummary> {

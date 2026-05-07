@@ -401,6 +401,7 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
       const criticReportPath = join(ledger.artifact_root, 'critic-reports', protocol.protocolId, variant, 'report.yaml');
       const flatCriticReportPath = join(ledger.artifact_root, 'critic-reports', `${protocol.protocolId}-${variant}.yaml`);
       const patchFailurePath = join(ledger.artifact_root, 'patch-failures', `${protocol.protocolId}-${variant}.yaml`);
+      const escalationPath = join(ledger.artifact_root, 'patch-escalations', `${protocol.protocolId}-${variant}.yaml`);
       const coderPatchTerminal = coderPatchIsTerminal(coderPatchPath);
       const coderPatchSkipped = coderPatchIsSkipped(coderPatchPath);
       const hasPatchSpecs = patchSpecPaths(ledger.artifact_root, protocol.protocolId, variant).length > 0;
@@ -436,6 +437,9 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'architect_review' });
       } else if (existsSync(patchFailurePath)) {
         continue;
+      } else if (existsSync(escalationPath)) {
+        // Escalation retry: allow one more coder_patch attempt with senior worker
+        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'coder_patch' });
       } else if (item.artifacts.architectVerdict && (!existsSync(adoptionPath) || adoptionStale)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'patch_adoption' });
       } else if (existsSync(adoptionPath) && hasPatchSpecs && !coderPatchSkipped && (!coderPatchTerminal || coderPatchStale)) {

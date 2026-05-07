@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -152,5 +152,81 @@ describe('FoundryWorktreeTools', () => {
     const diff = await readWorktreeDiff(root);
     expect(diff).toContain('-  return 1;');
     expect(diff).toContain('+  return 2;');
+  });
+
+  it('handles double-escaped newlines from LLM tool arguments', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'foundry-worktree-newline-'));
+    await mkdir(join(root, 'server/src/example'), { recursive: true });
+    await writeFile(join(root, 'server/src/example/multi.ts'), [
+      'export function greet(): string {',
+      '  return 1;',
+      '}',
+      '',
+    ].join('\n'), 'utf-8');
+    await git(root, ['init']);
+    await git(root, ['add', '.']);
+    await git(root, ['-c', 'user.name=Foundry Test', '-c', 'user.email=foundry@example.test', 'commit', '-m', 'initial']);
+
+    // Simulate an LLM that double-escapes newlines in JSON arguments
+    // (sends \\n instead of \n, so JSON.parse produces literal \n)
+    const doubleEscapedReplacement = '  return `hello\\nworld`;';
+
+    const requests: CompletionRequest[] = [];
+    const client: InferenceClient = {
+      async complete(request: CompletionRequest): Promise<CompletionResponse> {
+        requests.push(request);
+        if (requests.length === 1) {
+          return {
+            id: 'edit',
+            choices: [{
+              index: 0,
+              finish_reason: 'tool_calls',
+              message: {
+                role: 'assistant',
+                content: null,
+                tool_calls: [{
+                  id: 'call-edit',
+                  type: 'function',
+                  function: {
+                    name: 'worktree_replace_lines',
+                    arguments: JSON.stringify({
+                      path: 'server/src/example/multi.ts',
+                      startLine: 2,
+                      endLine: 2,
+                      replacement: doubleEscapedReplacement,
+                    }),
+                  },
+                }],
+              },
+            }],
+          };
+        }
+        return {
+          id: 'final',
+          choices: [{
+            index: 0,
+            finish_reason: 'stop',
+            message: { role: 'assistant', content: '{"summary":"patched"}' },
+          }],
+        };
+      },
+      async *completeStream() {
+        throw new Error('not used');
+      },
+    };
+
+    await completeWithWorktreeTools({
+      client,
+      worktreeRoot: root,
+      request: {
+        model: 'coder',
+        messages: [{ role: 'user', content: 'patch' }],
+      },
+    });
+
+    const fileContent = await readFile(join(root, 'server/src/example/multi.ts'), 'utf-8');
+    // The literal \n should have been normalized to an actual newline
+    expect(fileContent).not.toContain('\\n');
+    expect(fileContent).toContain('hello\nworld');
   });
 });

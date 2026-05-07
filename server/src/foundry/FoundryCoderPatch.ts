@@ -76,6 +76,10 @@ interface AttemptResult {
     stdout?: string;
     stderr?: string;
   }>;
+  corruptedFileRegion?: {
+    file: string;
+    lines: string;
+  }[];
   commit?: string;
   pushed?: boolean;
   summary?: string;
@@ -902,6 +906,15 @@ async function assertTouchedFilesClean(repoRoot: string, touchedFiles: string[])
 }
 
 export function defaultVerificationArgs(touchedFiles: string[]): string[][] {
+  // Step 1: Fast TypeScript syntax/type check — catches corrupted patches in <1s
+  const syntaxCheck = [
+    'npx',
+    'tsc',
+    '--noEmit',
+    '--pretty',
+    'false',
+  ];
+
   const tests = new Set<string>();
   for (const file of touchedFiles) {
     if (file.startsWith('server/src/') && /\.test\.(ts|tsx)$/.test(file)) {
@@ -929,7 +942,10 @@ export function defaultVerificationArgs(touchedFiles: string[]): string[][] {
     tests.add('src/foundry/FoundryWorktreeTools.test.ts');
   }
   if (tests.size === 0) tests.add('src/foundry/FoundryLedger.test.ts');
-  return [['npm', 'test', '--', '--run', ...Array.from(tests)]];
+  return [
+    syntaxCheck,
+    ['npm', 'test', '--', '--run', ...Array.from(tests)],
+  ];
 }
 
 async function runVerification(repoRoot: string, touchedFiles: string[]): Promise<Array<{
@@ -1167,6 +1183,16 @@ async function requestCoderPatch(input: {
   priorDiff?: string;
   priorResponse?: string;
   priorFailure?: string;
+  priorVerification?: Array<{
+    command: string;
+    status: 'pass' | 'fail';
+    stderr?: string;
+  }>;
+  corruptedFileRegion?: {
+    file: string;
+    lines: string;
+  }[];
+  forceFullFileRewrite?: boolean;
 }): Promise<CoderResponse> {
   const worktreeRoot = await createAttemptWorktree(input.repoRoot, input.tournamentDir, input.attempt);
   try {
@@ -1194,6 +1220,9 @@ async function requestCoderPatch(input: {
               'If you add or edit YAML records, inspect nearby records and schemas first. Reuse existing records when they already cover the capability.',
               'If you change compiler/precompiler behavior, add or update a focused regression when practical.',
               'Before final answer, call worktree_diff. Return final JSON only with keys like summary, testsRun, remainingConcerns.',
+              ...(input.forceFullFileRewrite
+                ? ['CRITICAL: You MUST use worktree_write_file to write complete file content. Do NOT use worktree_replace_lines. Read the file with worktree_read first, then write the complete corrected version back with worktree_write_file.']
+                : []),
             ].join('\n'),
           },
           {
@@ -1223,6 +1252,8 @@ async function requestCoderPatch(input: {
               ...(input.priorDiff ? { priorDiff: input.priorDiff } : {}),
               ...(input.priorResponse ? { priorResponse: input.priorResponse } : {}),
               ...(input.priorFailure ? { priorFailure: input.priorFailure } : {}),
+              ...(input.priorVerification ? { priorVerification: input.priorVerification } : {}),
+              ...(input.corruptedFileRegion ? { corruptedFileRegion: input.corruptedFileRegion } : {}),
             }),
           },
         ],
@@ -1373,6 +1404,18 @@ async function evaluateCandidate(input: {
     const verification = await runVerification(input.repoRoot, touchedFiles);
     const verificationPassed = verification.every((item) => item.status === 'pass');
     if (!verificationPassed) {
+      // Capture corrupted file content BEFORE reversing the patch
+      // so the repair round gets exact evidence of what went wrong
+      const corruptedFiles = await Promise.all(
+        touchedFiles.map(async (file) => {
+          const fullPath = join(input.repoRoot, file);
+          if (!existsSync(fullPath)) return { file, lines: '' };
+          const content = await readFile(fullPath, 'utf-8').catch(() => '');
+          // Return first 120 lines — enough to show corruption without bloating context
+          return { file, lines: content.split('\n').slice(0, 120).join('\n') };
+        }),
+      );
+
       await runGit(input.repoRoot, gitApplyArgs(diffPath, 'reverse', { recount: recountPatch })).catch(() => ({ stdout: '', stderr: '' }));
       applied = false;
       const result: AttemptResult = {
@@ -1385,6 +1428,7 @@ async function evaluateCandidate(input: {
         ...(diffSource ? { diffSource } : {}),
         touchedFiles,
         verification,
+        corruptedFileRegion: corruptedFiles,
         rawResponse,
         ...(input.response.summary ? { summary: input.response.summary } : {}),
       };
@@ -1610,8 +1654,15 @@ export async function runFoundryCoderPatch(input: {
     'data/schema first: prefer YAML/data/schema extension if that can satisfy the fix without broad code changes',
     'diagnostics and testability: improve the narrow failure path with explicit diagnostics and focused behavior',
   ];
+  const strategyOptions: Array<{ strategy: string; forceFullFileRewrite?: boolean }> = [
+    ...strategies.map((s) => ({ strategy: s })),
+    {
+      strategy: 'full-file-rewrite: read each affected file completely, apply the fix in the full context, and write back the complete corrected file using worktree_write_file',
+      forceFullFileRewrite: true,
+    },
+  ];
 
-  const responses = await Promise.all(strategies.map((strategy, index) =>
+  const responses = await Promise.all(strategyOptions.map(({ strategy, forceFullFileRewrite }, index) =>
     requestCoderPatch({
       attempt: index + 1,
       strategy,
@@ -1629,6 +1680,7 @@ export async function runFoundryCoderPatch(input: {
       specs,
       ownedFiles,
       context,
+      ...(forceFullFileRewrite ? { forceFullFileRewrite } : {}),
     }),
   ));
 
@@ -1676,9 +1728,18 @@ export async function runFoundryCoderPatch(input: {
   const best = attempts.sort((a, b) => attemptScore(b) - attemptScore(a))[0];
   if (best) {
     const priorDiff = best.diffPath ? await readFile(best.diffPath, 'utf-8').catch(() => undefined) : undefined;
+    // Detect whether the failure was syntax-related (e.g. tsc --noEmit, esbuild transform)
+    const isSyntaxFailure =
+      best.phase === 'verification'
+      && best.verification?.some((v) =>
+        v.status === 'fail'
+        && (v.command.includes('tsc') || v.stderr?.includes('Unexpected') || v.stderr?.includes('esbuild') || v.stderr?.includes('SyntaxError')),
+      );
     const repairResponse = await requestCoderPatch({
       attempt: 4,
-      strategy: 'repair: fix the best failed candidate using the exact failure message; keep the patch narrower than the original and copy search blocks exactly from repository context',
+      strategy: isSyntaxFailure
+        ? 'repair: the previous attempt had a syntax/type error. Use worktree_write_file to rewrite the affected function or file completely — do NOT use worktree_replace_lines. Read the full file first, fix the corrupted section, write back the complete version.'
+        : 'repair: fix the best failed candidate using the exact failure message; keep the patch narrower than the original and copy search blocks exactly from repository context',
       client,
       model,
       repoRoot: input.repoRoot,
@@ -1696,6 +1757,9 @@ export async function runFoundryCoderPatch(input: {
       ...(priorDiff ? { priorDiff } : {}),
       ...(best.rawResponse ? { priorResponse: best.rawResponse } : {}),
       priorFailure: `${best.phase}: ${best.message}`,
+      ...(best.verification ? { priorVerification: best.verification } : {}),
+      ...(best.corruptedFileRegion ? { corruptedFileRegion: best.corruptedFileRegion } : {}),
+      ...(isSyntaxFailure ? { forceFullFileRewrite: true } : {}),
     });
     const repair = await evaluateCandidate({
       response: repairResponse,
@@ -1736,6 +1800,22 @@ export async function runFoundryCoderPatch(input: {
     }
   }
 
+  // Classify the failure mode for the escalation packet
+  const failureMode = best?.phase === 'verification'
+    ? best.verification?.some((v) =>
+        v.status === 'fail'
+        && (v.command.includes('tsc') || v.stderr?.includes('Unexpected') || v.stderr?.includes('esbuild')),
+      )
+      ? 'syntax-corruption'
+      : 'test-failure'
+    : best?.phase === 'git-apply-check'
+      ? 'patch-apply-failed'
+      : best?.phase === 'path-guard'
+        ? 'path-policy-violation'
+        : best?.phase === 'parse'
+          ? 'parse-blocked'
+          : best?.phase ?? 'unknown';
+
   await writeYamlFile(resultPath, {
     kind: 'protocol-foundry-coder-patch-result',
     protocolId: input.protocolId,
@@ -1751,7 +1831,31 @@ export async function runFoundryCoderPatch(input: {
     tournamentDir,
     attempts,
     bestFailure: best ? `${best.phase}: ${best.message}` : 'no viable patch attempts',
+    bestFailureMode: failureMode,
     message: 'Patch tournament could not produce a verified patch for this single fix class.',
+  });
+
+  // Write escalation packet so the supervisor can retry with a senior worker
+  const escalationDir = join(input.artifactRoot, 'patch-escalations');
+  const escalationPath = join(escalationDir, `${input.protocolId}-${input.variant}.yaml`);
+  await mkdir(escalationDir, { recursive: true });
+  await writeYamlFile(escalationPath, {
+    kind: 'protocol-foundry-escalation',
+    protocolId: input.protocolId,
+    variant: input.variant,
+    generated_at: nowIso(),
+    fixClass,
+    fixClasses,
+    failureMode,
+    selectedSpecId: selectedSpec.id,
+    bestFailure: best ? `${best.phase}: ${best.message}` : 'no viable patch attempts',
+    bestAttemptStrategy: best?.strategy,
+    attemptCount: attempts.length,
+    recommendation: failureMode === 'syntax-corruption'
+      ? 'retry with senior worker (27B+ model) using full-file-rewrite strategy'
+      : 'retry with senior worker (27B+ model) with broader context',
+    priorVerification: best?.verification,
+    corruptedFileRegion: best?.corruptedFileRegion,
   });
   return {
     status: 'needs-human',
