@@ -740,6 +740,15 @@ export async function runFoundryArchitectReview(options: FoundryArchitectOptions
     materialContext: asRecord(materialContextRaw),
   });
 
+  // Truncate artifacts to keep the JSON context under ~50KB so the architect
+  // prompt fits within the vLLM request body budget (~80-90KB including tools).
+  const coderPatchStr = typeof coderPatchRaw === 'string'
+    ? coderPatchRaw.slice(0, 5_000)
+    : undefined;
+  const materialContextStr = typeof materialContextRaw === 'string'
+    ? materialContextRaw.slice(0, 10_000)
+    : undefined;
+
   // The deterministicVerdict above is the authoritative source of fix specs.
   // The LLM notes are supplementary prose only — don't dump the full PDF
   // text into every architect prompt. Pass only the structured artifacts
@@ -750,8 +759,8 @@ export async function runFoundryArchitectReview(options: FoundryArchitectOptions
     eventGraph: eventGraphRaw,
     executionScale: executionScaleRaw,
     browserReport: browserReportRaw,
-    coderPatch: coderPatchRaw,
-    materialContext: materialContextRaw,
+    coderPatch: coderPatchStr,
+    materialContext: materialContextStr,
   }).catch((error: unknown) => `Architect LLM note generation failed: ${error instanceof Error ? error.message : String(error)}`);
   if (notes) verdict.architectNotes = notes;
 
