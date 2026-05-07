@@ -723,15 +723,13 @@ async function llmArchitectNotes(options: FoundryArchitectOptions, context: unkn
 
 export async function runFoundryArchitectReview(options: FoundryArchitectOptions): Promise<ArchitectVerdict> {
   const paths = artifactPaths(options);
-  const [compilerRaw, eventGraphRaw, executionScaleRaw, browserReportRaw, coderPatchRaw, segmentRaw, materialContextRaw, textRaw] = await Promise.all([
+  const [compilerRaw, eventGraphRaw, executionScaleRaw, browserReportRaw, coderPatchRaw, materialContextRaw] = await Promise.all([
     readIfExists(paths.compiler),
     readIfExists(paths.eventGraph),
     readIfExists(paths.executionScale),
     readIfExists(paths.browserReport),
     readIfExists(paths.coderPatch),
-    readIfExists(paths.segment),
     readIfExists(paths.materialContext),
-    readIfExists(paths.text),
   ]);
   const verdict = deterministicVerdict({
     options,
@@ -742,6 +740,10 @@ export async function runFoundryArchitectReview(options: FoundryArchitectOptions
     materialContext: asRecord(materialContextRaw),
   });
 
+  // The deterministicVerdict above is the authoritative source of fix specs.
+  // The LLM notes are supplementary prose only — don't dump the full PDF
+  // text into every architect prompt. Pass only the structured artifacts
+  // that already fit the vLLM request budget (~60-80KB).
   const notes = await llmArchitectNotes(options, {
     verdict,
     compiler: compilerRaw,
@@ -749,9 +751,7 @@ export async function runFoundryArchitectReview(options: FoundryArchitectOptions
     executionScale: executionScaleRaw,
     browserReport: browserReportRaw,
     coderPatch: coderPatchRaw,
-    segment: typeof segmentRaw === 'string' ? segmentRaw.slice(0, 8_000) : undefined,
     materialContext: materialContextRaw,
-    text: typeof textRaw === 'string' ? textRaw.slice(0, 16_000) : undefined,
   }).catch((error: unknown) => `Architect LLM note generation failed: ${error instanceof Error ? error.message : String(error)}`);
   if (notes) verdict.architectNotes = notes;
 
