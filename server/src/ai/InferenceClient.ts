@@ -81,43 +81,72 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
     };
   }
 
+  function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  async function completeOnce(request: CompletionRequest): Promise<CompletionResponse> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const res = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(normalizeRequest(request)),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`Inference error ${res.status}: ${body}`);
+      }
+
+      return normalizeReasoningContent((await res.json()) as CompletionResponse);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new Error(`Inference timeout after ${timeoutMs}ms`);
+      }
+      if (err instanceof TypeError && err.message === 'fetch failed') {
+        // vLLM may reject large requests or drop connections silently.
+        const requestStr = JSON.stringify(normalizeRequest(request));
+        throw new Error(
+          `Inference fetch failed to ${baseUrl}/chat/completions ("fetch failed", ` +
+          `${requestStr.length} bytes).  Usually means the server rejected the connection, ` +
+          `returned an invalid or incomplete response, or the request body exceeded server limits.`,
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   return {
     async complete(request: CompletionRequest): Promise<CompletionResponse> {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const maxRetries = 3;
+      let lastError: Error | null = null;
 
-      try {
-        const res = await fetch(`${baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify(normalizeRequest(request)),
-          signal: controller.signal,
-        });
-
-        if (!res.ok) {
-          const body = await res.text();
-          throw new Error(`Inference error ${res.status}: ${body}`);
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          return await completeOnce(request);
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          // Only retry on transient network errors (fetch failed, ECONNRESET, etc.)
+          const isTransient =
+            lastError.message.includes('fetch failed') ||
+            lastError.message.includes('ECONNRESET') ||
+            lastError.message.includes('ECONNREFUSED') ||
+            lastError.message.includes('socket hang up');
+          if (!isTransient || attempt >= maxRetries) throw lastError;
+          // Exponential backoff: 2s, 4s, 8s
+          const delay = Math.min(2000 * Math.pow(2, attempt - 1), 15000);
+          console.warn(`Inference retry ${attempt}/${maxRetries} after ${delay}ms: ${lastError.message}`);
+          await sleep(delay);
         }
-
-        return normalizeReasoningContent((await res.json()) as CompletionResponse);
-      } catch (err) {
-        if (err instanceof DOMException && err.name === 'AbortError') {
-          throw new Error(`Inference timeout after ${timeoutMs}ms`);
-        }
-        if (err instanceof TypeError && err.message === 'fetch failed') {
-          // vLLM may reject large requests or drop connections silently.
-          // Surface the actual URL and request size so the failure is actionable.
-          const requestStr = JSON.stringify(normalizeRequest(request));
-          throw new Error(
-            `Inference fetch failed to ${baseUrl}/chat/completions ("fetch failed", ` +
-            `${requestStr.length} bytes).  Usually means the server rejected the connection, ` +
-            `returned an invalid or incomplete response, or the request body exceeded server limits.`,
-          );
-        }
-        throw err;
-      } finally {
-        clearTimeout(timer);
       }
+
+      throw lastError!;
     },
 
     async *completeStream(request: CompletionRequest): AsyncIterable<StreamChunk> {
