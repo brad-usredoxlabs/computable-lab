@@ -749,9 +749,9 @@ export async function runFoundryArchitectReview(options: FoundryArchitectOptions
     executionScale: executionScaleRaw,
     browserReport: browserReportRaw,
     coderPatch: coderPatchRaw,
-    segment: segmentRaw,
+    segment: typeof segmentRaw === 'string' ? segmentRaw.slice(0, 8_000) : undefined,
     materialContext: materialContextRaw,
-    text: typeof textRaw === 'string' ? textRaw.slice(0, 40_000) : undefined,
+    text: typeof textRaw === 'string' ? textRaw.slice(0, 16_000) : undefined,
   }).catch((error: unknown) => `Architect LLM note generation failed: ${error instanceof Error ? error.message : String(error)}`);
   if (notes) verdict.architectNotes = notes;
 
