@@ -712,7 +712,7 @@ async function llmArchitectNotes(options: FoundryArchitectOptions, context: unkn
       },
       {
         role: 'user',
-        content: JSON.stringify(context).slice(0, 40_000),
+        content: JSON.stringify(context).slice(0, 25_000),
       },
     ],
     },
@@ -740,13 +740,13 @@ export async function runFoundryArchitectReview(options: FoundryArchitectOptions
     materialContext: asRecord(materialContextRaw),
   });
 
-  // Truncate artifacts to keep the JSON context under ~50KB so the architect
-  // prompt fits within the vLLM request body budget (~80-90KB including tools).
+  // Truncate artifacts to keep the JSON context under ~30KB so the architect
+  // prompt fits within the vLLM request body budget (~80KB including tools).
   const coderPatchStr = typeof coderPatchRaw === 'string'
-    ? coderPatchRaw.slice(0, 5_000)
+    ? coderPatchRaw.slice(0, 3_000)
     : undefined;
   const materialContextStr = typeof materialContextRaw === 'string'
-    ? materialContextRaw.slice(0, 10_000)
+    ? materialContextRaw.slice(0, 5_000)
     : undefined;
 
   // The deterministicVerdict above is the authoritative source of fix specs.
