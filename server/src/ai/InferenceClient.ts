@@ -104,6 +104,16 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
         if (err instanceof DOMException && err.name === 'AbortError') {
           throw new Error(`Inference timeout after ${timeoutMs}ms`);
         }
+        if (err instanceof TypeError && err.message === 'fetch failed') {
+          // vLLM may reject large requests or drop connections silently.
+          // Surface the actual URL and request size so the failure is actionable.
+          const requestStr = JSON.stringify(normalizeRequest(request));
+          throw new Error(
+            `Inference fetch failed to ${baseUrl}/chat/completions ("fetch failed", ` +
+            `${requestStr.length} bytes).  Usually means the server rejected the connection, ` +
+            `returned an invalid or incomplete response, or the request body exceeded server limits.`,
+          );
+        }
         throw err;
       } finally {
         clearTimeout(timer);
