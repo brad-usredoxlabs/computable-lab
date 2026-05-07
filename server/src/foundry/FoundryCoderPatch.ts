@@ -11,13 +11,13 @@ import type { FoundryVariant } from './ProtocolFoundryCompileRunner.js';
 import { completeWithWorktreeTools, readWorktreeDiff } from './FoundryWorktreeTools.js';
 
 const execFileAsync = promisify(execFile);
-const MAX_CONTEXT_CHARS = 30_000;
-const MAX_FILE_CHARS = 16_000;
-const MAX_ARTIFACT_CONTEXT_CHARS = 20_000;
-const MAX_ARTIFACT_FILE_CHARS = 8_000;
-const MAX_SCHEMA_CONTEXT_CHARS = 16_000;
-const MAX_LABWARE_CONTEXT_CHARS = 12_000;
-const MAX_ANCHOR_CONTEXT_CHARS = 26_000;
+const MAX_CONTEXT_CHARS = 15_000;
+const MAX_FILE_CHARS = 12_000;
+const MAX_ARTIFACT_CONTEXT_CHARS = 10_000;
+const MAX_ARTIFACT_FILE_CHARS = 5_000;
+const MAX_SCHEMA_CONTEXT_CHARS = 8_000;
+const MAX_LABWARE_CONTEXT_CHARS = 6_000;
+const MAX_ANCHOR_CONTEXT_CHARS = 13_000;
 
 type CoderPatchStatus = 'applied' | 'blocked' | 'failed' | 'skipped' | 'stale' | 'needs-human';
 
