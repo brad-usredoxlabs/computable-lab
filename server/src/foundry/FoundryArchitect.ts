@@ -712,7 +712,7 @@ async function llmArchitectNotes(options: FoundryArchitectOptions, context: unkn
       },
       {
         role: 'user',
-        content: JSON.stringify(context).slice(0, 80_000),
+        content: JSON.stringify(context).slice(0, 40_000),
       },
     ],
     },
