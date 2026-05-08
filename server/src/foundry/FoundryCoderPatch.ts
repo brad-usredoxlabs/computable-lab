@@ -201,21 +201,43 @@ function parseDiffToHunks(diff: string): DiffHunk[] {
     }
     // Detect hunk header
     if (/^@@ /.test(rawLine) && currentHunk) continue;
-    
-    // Hunk content
+
+    // Hunk content — strip ONLY LLM indentation, keep the actual diff prefix
     if (currentHunk) {
-      const line = rawLine.replace(/^\s+/, ''); // strip leading whitespace
-      if (line.startsWith('-') && !line.startsWith('--')) {
-        currentHunk.removedLines.push(line.slice(1));
-      } else if (line.startsWith('+')) {
-        currentHunk.addedLines.push(line.slice(1));
-      } else if (line.startsWith(' ')) {
-        currentHunk.contextLines.push(line.slice(1));
-      } else if (line === '') {
-        // Empty line in hunk - treat as context
-        currentHunk.contextLines.push(line);
+      // Strip LLM's leading whitespace but preserve the first meaningful char
+      // A git diff line starts with ' ' (context), '-' (removal), or '+' (addition)
+      // LLM may add extra indentation like '   + line' or '   - line' or '   line'
+      let stripped = rawLine;
+      // Count leading whitespace
+      const wsMatch = rawLine.match(/^(\s*)/);
+      const wsLen = wsMatch ? wsMatch[1]!.length : 0;
+      if (wsLen > 0) {
+        // Find first non-whitespace char
+        const firstChar = rawLine.trimStart()[0];
+        if (firstChar === '-' || firstChar === '+') {
+          // Addition/removal — strip all leading whitespace
+          stripped = rawLine.trimStart();
+        } else if (firstChar === ' ' && wsLen > 1) {
+          // Context line with extra indentation — strip to single space prefix
+          stripped = ' ' + rawLine.trim();
+        } else if (wsLen > 1) {
+          // Likely malformed context — strip to just content
+          stripped = rawLine.trim();
+        }
       }
-      // Lines without any prefix are ignored (they're malformed context)
+      
+      if (stripped.startsWith('-') && !stripped.startsWith('--')) {
+        currentHunk.removedLines.push(stripped.slice(1));
+      } else if (stripped.startsWith('+') && !stripped.startsWith('+++')) {
+        currentHunk.addedLines.push(stripped.slice(1));
+      } else if (stripped.startsWith(' ')) {
+        currentHunk.contextLines.push(stripped.slice(1));
+      } else if (stripped === '') {
+        currentHunk.contextLines.push(stripped);
+      } else {
+        // Un-prefixed line inside a hunk — treat as context (LLM forgot prefix)
+        currentHunk.contextLines.push(stripped);
+      }
     }
   }
   if (currentHunk) hunks.push(currentHunk);
@@ -227,18 +249,18 @@ function applyHunkToContent(content: string, hunk: DiffHunk): string {
   const lines = content.split('\n');
   const context = hunk.contextLines.filter((l) => l !== '');
   if (context.length === 0) {
-    // No context to anchor — append at end
+    // No context to anchor - append at end
     const additions = hunk.addedLines.join('\n');
     if (additions) {
       return content + '\n' + additions;
     }
     return content;
   }
-  
+
   // Find the anchor: longest matching context block in the file
   let bestStart = -1;
   let bestLen = 0;
-  
+
   for (let start = 0; start <= lines.length - context.length; start++) {
     let matchLen = 0;
     for (let i = 0; i < context.length; i++) {
@@ -257,9 +279,9 @@ function applyHunkToContent(content: string, hunk: DiffHunk): string {
       bestStart = start;
     }
   }
-  
+
   if (bestStart < 0) {
-    // Could not find context — try first context line as anchor
+    // Could not find context - try first context line as anchor
     const anchor = context[0];
     if (anchor) {
       bestStart = lines.findIndex((l) => l.includes(anchor) || anchor.includes(l));
@@ -267,7 +289,7 @@ function applyHunkToContent(content: string, hunk: DiffHunk): string {
     if (bestStart < 0) bestStart = lines.length - 1;
     bestLen = 1;
   }
-  
+
   // Determine position: skip consumed context lines, then apply
   const insertPos = bestStart + bestLen;
   const newLines = [
@@ -275,7 +297,7 @@ function applyHunkToContent(content: string, hunk: DiffHunk): string {
     ...hunk.addedLines,
     ...lines.slice(insertPos + (hunk.removedLines.length > 0 ? hunk.removedLines.length : 0)),
   ];
-  
+
   return newLines.join('\n');
 }
 
@@ -288,14 +310,14 @@ export function extractUnifiedDiff(text: string): string | undefined {
       return stripLeadingWhitespace(diff.trimEnd()) + '\n';
     }
   }
-  
+
   // Strategy 2: Look for diff --git headers (including those at end of text)
   const diffMatch = text.match(/(diff --git .+?)(?=\ndiff --git |\n```|\n\n[A-Z]|\nSummary|\n{2,}|$)/s);
   if (diffMatch && diffMatch[1]) {
     return diffMatch[1].trimEnd() + '\n';
   }
-  
-  // Strategy 3: Fallback — find lines that start with --- a/ or --- /dev/null
+
+  // Strategy 3: Fallback - find lines that start with --- a/ or --- /dev/null
   // Must include +++ b/ and @@ to be considered a valid diff
   const lines = text.split('\n');
   const firstDiffLine = lines.findIndex((l) => /^\s*--- (a\/|\/)\S/.test(l));
@@ -317,7 +339,7 @@ export function extractUnifiedDiff(text: string): string | undefined {
       return stripLeadingWhitespace(candidate.trimEnd()) + '\n';
     }
   }
-  
+
   return undefined;
 }
 
@@ -738,7 +760,7 @@ export async function runFoundryCoderPatch(input: {
     // Ensure clean state on any failure
     await runGit(input.repoRoot, ['checkout', '--', ...touchedFiles]).catch(() => {});
     await runGit(input.repoRoot, ['reset', '--hard', 'HEAD']).catch(() => {});
-    
+
     await writeYamlFile(resultPath, {
       kind: 'protocol-foundry-coder-patch-result',
       protocolId: input.protocolId,
