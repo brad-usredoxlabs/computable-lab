@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import {
+  extractUnifiedDiff,
   meaningfulPatchFiles,
   selectPatchSpecIdForRun,
 } from './FoundryCoderPatch.js';
@@ -61,5 +62,41 @@ describe('selectPatchSpecIdForRun', () => {
       { id: 'spec-2', fixClass: 'foundry_runtime_wiring_gap' },
     ];
     expect(selectPatchSpecIdForRun(specs)).toBe('spec-2');
+  });
+});
+
+describe('extractUnifiedDiff', () => {
+  it('extracts fenced diff', () => {
+    const text = '```diff\ndiff --git a/foo.ts b/foo.ts\n--- a/foo.ts\n+++ b/foo.ts\n@@ -1,0 +1,1 @@\n+new line\n```';
+    const result = extractUnifiedDiff(text);
+    expect(result).toContain('diff --git a/foo.ts');
+    expect(result).toContain('+++ b/foo.ts');
+    expect(result).toContain('+new line');
+  });
+
+  it('extracts diff with leading whitespace', () => {
+    const text = '  --- a/foo.ts\n  +++ b/foo.ts\n  @@ -1,0 +1,1 @@\n  +new line\n';
+    const result = extractUnifiedDiff(text);
+    expect(result).toBeDefined();
+    expect(result!.includes('--- a/foo.ts')).toBe(true);
+    expect(result!.startsWith('  ---')).toBe(false);
+  });
+
+  it('extracts raw diff with diff --git', () => {
+    const text = 'Some text before\ndiff --git a/foo.ts b/foo.ts\n--- a/foo.ts\n+++ b/foo.ts\n';
+    const result = extractUnifiedDiff(text);
+    expect(result).toContain('diff --git a/foo.ts');
+  });
+
+  it('returns undefined for non-diff content', () => {
+    const text = 'Just some text without any diff markers.';
+    expect(extractUnifiedDiff(text)).toBeUndefined();
+  });
+
+  it('extracts fallback diff with --- a/ and +++ b/', () => {
+    const text = 'Some preamble text\n--- a/foo.ts\n+++ b/foo.ts\n@@ -1,0 +1,1 @@\n+added line\n';
+    const result = extractUnifiedDiff(text);
+    expect(result).toContain('--- a/foo.ts');
+    expect(result).toContain('+added line');
   });
 });

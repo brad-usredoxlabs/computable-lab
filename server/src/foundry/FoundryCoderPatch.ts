@@ -161,23 +161,116 @@ async function collectSchemaContext(repoRoot: string, fixClass: string): Promise
   return chunks.join('\n\n').slice(0, MAX_SCHEMA_CONTEXT_CHARS);
 }
 
-function extractUnifiedDiff(text: string): string | undefined {
-  // Try fenced code blocks first
-  const fenced = text.match(/```(?:diff)?\s*([\s\S]*?)```/i);
-  if (fenced && fenced[1]) {
-    const diff = fenced[1];
-    if (diff.includes('diff --git ') || diff.includes('--- a/')) {
-      return diff.trimEnd() + '\n';
+// Repair diff lines that are missing proper git prefixes (common LLM issue)
+function repairUnifiedDiff(diff: string, sourceContext?: string): string {
+  const lines = diff.split('\n');
+  const result: string[] = [];
+  let inHunk = false;
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    
+    // Detect hunk header
+    if (/^@@ /.test(line)) {
+      inHunk = true;
+      result.push(line);
+      continue;
+    }
+    
+    // Detect end of hunk (new ---, diff --git, or +++b)
+    if ((/^--- a\//.test(line) && i > 0) || /^diff --git /.test(line) || /^\+\+\+ b\//.test(line)) {
+      inHunk = false;
+      result.push(line);
+      continue;
+    }
+    
+    // Check if line ends with a single backslash (line continuation)
+    if (line.endsWith('\\') && line.trim() !== '\\') {
+      inHunk = false;
+      result.push(line);
+      continue;
+    }
+    
+    if (inHunk && line !== '' && !/^\s*$/.test(line)) {
+      const prefixed = line.startsWith(' ') || line.startsWith('-') || line.startsWith('+');
+      if (!prefixed) {
+        // Try to match against source context
+        const trimmed = line.trim();
+        if (sourceContext && sourceContext.includes(trimmed)) {
+          // Likely a context line - prefix with space
+          result.push(' ' + line);
+        } else {
+          // Likely an addition line - prefix with +
+          result.push('+' + line);
+        }
+      } else {
+        result.push(line);
+      }
+    } else {
+      result.push(line);
     }
   }
   
-  // Try to find unified diff directly in text
-  const diffMatch = text.match(/(diff --git .+?)(?=\ndiff --git |\n```|\n\n[A-Z]|\nSummary|\n{2,})/s);
+  return result.join('\n');
+}
+
+export function extractUnifiedDiff(text: string): string | undefined {
+  // Strategy 1: Try fenced code blocks (most reliable for LLM output)
+  const fenced = text.match(/```(?:diff)?\s*([\s\S]*?)```/i);
+  if (fenced && fenced[1]) {
+    const diff = fenced[1];
+    if (diff.includes('diff --git ') || (diff.includes('--- a/') && diff.includes('+++ b/') && diff.includes('@@ '))) {
+      return stripLeadingWhitespace(diff.trimEnd()) + '\n';
+    }
+  }
+  
+  // Strategy 2: Look for diff --git headers (including those at end of text)
+  const diffMatch = text.match(/(diff --git .+?)(?=\ndiff --git |\n```|\n\n[A-Z]|\nSummary|\n{2,}|$)/s);
   if (diffMatch && diffMatch[1]) {
     return diffMatch[1].trimEnd() + '\n';
   }
   
+  // Strategy 3: Fallback — find lines that start with --- a/ or --- /dev/null
+  // Must include +++ b/ and @@ to be considered a valid diff
+  const lines = text.split('\n');
+  const firstDiffLine = lines.findIndex((l) => /^\s*--- (a\/|\/)\S/.test(l));
+  if (firstDiffLine >= 0) {
+    const diffLines: string[] = [];
+    for (let i = firstDiffLine; i < lines.length; i++) {
+      const trimmed = lines[i]!.trim();
+      if (/^(## |### |#### |##### |###### |####### )/.test(trimmed)) break;
+      if (trimmed === '' && i + 1 < lines.length) {
+        const nextTrimmed = lines[i + 1]!.trim();
+        if (!/^(--- |\+\+\+ |\+|@@ |diff |$)/.test(nextTrimmed)) break;
+      }
+      diffLines.push(lines[i]!);
+    }
+    const candidate = diffLines.join('\n');
+    if ((candidate.includes('--- a/') || candidate.includes('--- /dev/null'))
+        && (candidate.includes('+++ b/') || candidate.includes('+++ /dev/null'))
+        && candidate.includes('@@ ')) {
+      return stripLeadingWhitespace(candidate.trimEnd()) + '\n';
+    }
+  }
+  
   return undefined;
+}
+
+// Strip common leading whitespace from LLM-indented diff output
+function stripLeadingWhitespace(text: string): string {
+  const normalized = text.replace(/\t/g, '  ');
+  const lines = normalized.split('\n');
+  let commonWs = Infinity;
+  for (const line of lines) {
+    if (line.trim() === '') continue;
+    const match = line.match(/^(\s*)/);
+    const wsLen = match ? match[1]!.length : 0;
+    if (wsLen < commonWs) commonWs = wsLen;
+  }
+  if (commonWs > 0 && commonWs <= 4) {
+    return lines.map((line) => line.slice(commonWs)).join('\n');
+  }
+  return lines.map((line) => line.replace(/^\s+/, '')).join('\n');
 }
 
 function parseTouchedFiles(diff: string): string[] {
@@ -443,6 +536,20 @@ export async function runFoundryCoderPatch(input: {
           'You are the Protocol Foundry coder. Produce a git unified diff that fixes the compiler issue described in the patch spec.',
           'Return ONLY a valid git unified diff. No JSON, no explanations, no markdown except the diff itself.',
           'The diff must apply cleanly with `git apply`. Use exact line matches from the source context.',
+          '',
+          'DIFF FORMAT REQUIREMENTS:',
+          '1. Start each file diff with: diff --git a/<path> b/<path>',
+          '2. Follow with --- a/<path>',
+          '3. Follow with +++ b/<path>',
+          '4. Follow with @@ -X,Y +X,Y @@ hunk header',
+          '5. Context lines and +/- lines MUST have NO leading whitespace',
+          '6. End each diff with an empty line',
+          '',
+          'WRONG:   --- a/server/src/foundry/foo.ts  (leading spaces)',
+          'RIGHT:   --- a/server/src/foundry/foo.ts',
+          'WRONG:     +  return x;                    (leading spaces)',
+          'RIGHT:     +  return x;',
+          '',
           'If you cannot produce a clean diff, explain why in a comment at the top of your response.',
         ].join('\n'),
       },
@@ -463,8 +570,8 @@ export async function runFoundryCoderPatch(input: {
   });
 
   const content = response.choices[0]?.message.content ?? '';
-  const diff = extractUnifiedDiff(content);
-  if (!diff) {
+  const rawDiff = extractUnifiedDiff(content);
+  if (!rawDiff) {
     await writeYamlFile(resultPath, {
       kind: 'protocol-foundry-coder-patch-result',
       protocolId: input.protocolId,
@@ -479,8 +586,8 @@ export async function runFoundryCoderPatch(input: {
 
   // Apply diff directly to the repo
   const diffPath = join(resultRoot, 'patch.diff');
-  await writeFile(diffPath, diff, 'utf-8');
-  const touchedFiles = parseTouchedFiles(diff);
+  // Parse touched files from raw diff first (before repair)
+  const touchedFiles = parseTouchedFiles(rawDiff);
   const meaningfulFiles = meaningfulPatchFiles(touchedFiles);
   if (meaningfulFiles.length === 0) {
     await writeYamlFile(resultPath, {
@@ -494,11 +601,33 @@ export async function runFoundryCoderPatch(input: {
     });
     return { status: 'blocked', resultPath, message: 'no meaningful files touched', touchedFiles: [] };
   }
+  // Read source file content for diff repair
+  const sourceContext = new Map<string, string>();
+  for (const f of touchedFiles) {
+    const fullPath = join(input.repoRoot, f);
+    if (existsSync(fullPath)) {
+      sourceContext.set(f, await readFile(fullPath, 'utf-8'));
+    }
+  }
+  // Repair diff lines that may be missing git prefixes
+  const diff = repairUnifiedDiff(rawDiff, Array.from(sourceContext.values()).join('\n'));
+  await writeFile(diffPath, diff, 'utf-8');
 
   try {
     await assertTouchedFilesClean(input.repoRoot, touchedFiles);
-    await runGit(input.repoRoot, ['apply', '--check', diffPath]);
-    await runGit(input.repoRoot, ['apply', diffPath]);
+    // Try 3-way apply first (more forgiving of context drift)
+    let applied = false;
+    try {
+      await runGit(input.repoRoot, ['apply', '--3way', '--check', diffPath]);
+      await runGit(input.repoRoot, ['apply', '--3way', diffPath]);
+      applied = true;
+    } catch {
+      // 3-way failed, fall back to 2-way check+apply
+    }
+    if (!applied) {
+      await runGit(input.repoRoot, ['apply', '--check', diffPath]);
+      await runGit(input.repoRoot, ['apply', diffPath]);
+    }
 
     // Verify it compiles
     const compiles = await runCompileCheck(input.repoRoot);
