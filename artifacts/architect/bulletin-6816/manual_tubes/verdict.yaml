@@ -1,0 +1,31 @@
+kind: protocol-foundry-architect-verdict
+protocolId: bulletin-6816
+variant: manual_tubes
+generated_at: 2026-05-08T04:49:05.223Z
+accepted: false
+qualityScore: 0
+coverageEstimate: 0
+failureClasses:
+  - source_code_drift
+driftCount: 1
+missingVerbs: []
+missingLabware: []
+missingMaterials: []
+badEvents: []
+badScalingAssumptions: []
+recommendedFixes: []
+sourceArtifacts: {}
+architectNotes: >-
+  Architect review skipped because source files changed before spec generation.
+
+  Refresh the protocol run after the codebase is clean so patch specs are based
+  on current code.
+
+  Changed source files: erver/src/foundry/FoundryArtifacts.ts,
+  erver/src/foundry/FoundryCoderPatch.test.ts,
+  erver/src/foundry/FoundryCoderPatch.ts,
+  erver/src/foundry/FoundryCritic.test.ts, erver/src/foundry/FoundryCritic.ts,
+  erver/src/foundry/FoundryWorktreeTools.test.ts,
+  erver/src/foundry/FoundryWorktreeTools.ts
+
+  Drift detection count: 1/3

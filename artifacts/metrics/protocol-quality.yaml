@@ -1,0 +1,47 @@
+kind: protocol-foundry-protocol-quality
+generated_at: 2026-05-08T04:49:05.311Z
+summary:
+  protocolCount: 1
+  variantTotal: 3
+  accepted: 0
+  complete: 0
+  gaps: 1
+  extractorFailures: 0
+  eventTotal: 3
+  blockerTotal: 0
+  acceptedRate: 0
+  completeRate: 0
+protocols:
+  - protocolId: bulletin-6816
+    status: blocked
+    variants:
+      - variant: manual_tubes
+        status: blocked
+        accepted: false
+        browserStatus: skipped
+        eventCount: 1
+        blockerCount: 0
+        diagnosticCount: 10
+        extractorRepairExhaustedCount: 0
+        qualityScore: null
+        coverageEstimate: null
+      - variant: bench_plate_multichannel
+        status: gap
+        accepted: false
+        browserStatus: skipped
+        eventCount: 1
+        blockerCount: 0
+        diagnosticCount: 9
+        extractorRepairExhaustedCount: 0
+        qualityScore: null
+        coverageEstimate: null
+      - variant: robot_deck
+        status: blocked
+        accepted: false
+        browserStatus: skipped
+        eventCount: 1
+        blockerCount: 0
+        diagnosticCount: 11
+        extractorRepairExhaustedCount: 0
+        qualityScore: null
+        coverageEstimate: null

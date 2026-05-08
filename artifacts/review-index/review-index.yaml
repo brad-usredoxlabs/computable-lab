@@ -1,0 +1,69 @@
+kind: protocol-foundry-review-index
+generated_at: 2026-05-08T04:49:05.314Z
+artifactRoot: /home/brad/git/computable-foundry/artifacts
+protocols:
+  - protocolId: bulletin-6816
+    status: blocked
+    variants:
+      - variant: manual_tubes
+        status: blocked
+        eventCount: 1
+        blockerCount: 0
+        qualityScore: null
+        coverageEstimate: null
+        artifacts:
+          protocolText: text/bulletin-6816.txt
+          segment: segments/bulletin-6816.yaml
+          materialContext: material-context/bulletin-6816.yaml
+          compiler: compiler/bulletin-6816/manual_tubes.yaml
+          eventGraph: event-graphs/bulletin-6816/manual_tubes.yaml
+          executionScale: execution-scale/bulletin-6816/manual_tubes.yaml
+          browserReport: browser-review/bulletin-6816/manual_tubes/report.yaml
+          architectVerdict: architect/bulletin-6816/manual_tubes/verdict.yaml
+          patchSpecs: []
+          adoptionDecision: adoption/bulletin-6816/manual_tubes/adoption.yaml
+        browserStatus: skipped
+        architectStatus: rejected
+        criticStatus: missing
+      - variant: bench_plate_multichannel
+        status: gap
+        eventCount: 1
+        blockerCount: 0
+        qualityScore: null
+        coverageEstimate: null
+        artifacts:
+          protocolText: text/bulletin-6816.txt
+          segment: segments/bulletin-6816.yaml
+          materialContext: material-context/bulletin-6816.yaml
+          compiler: compiler/bulletin-6816/bench_plate_multichannel.yaml
+          eventGraph: event-graphs/bulletin-6816/bench_plate_multichannel.yaml
+          executionScale: execution-scale/bulletin-6816/bench_plate_multichannel.yaml
+          browserReport: browser-review/bulletin-6816/bench_plate_multichannel/report.yaml
+          architectVerdict: architect/bulletin-6816/bench_plate_multichannel/verdict.yaml
+          patchSpecs: []
+          adoptionDecision: adoption/bulletin-6816/bench_plate_multichannel/adoption.yaml
+          rerunReport: rerun/bulletin-6816/bench_plate_multichannel/rerun.yaml
+        browserStatus: skipped
+        architectStatus: rejected
+        criticStatus: missing
+      - variant: robot_deck
+        status: blocked
+        eventCount: 1
+        blockerCount: 0
+        qualityScore: null
+        coverageEstimate: null
+        artifacts:
+          protocolText: text/bulletin-6816.txt
+          segment: segments/bulletin-6816.yaml
+          materialContext: material-context/bulletin-6816.yaml
+          compiler: compiler/bulletin-6816/robot_deck.yaml
+          eventGraph: event-graphs/bulletin-6816/robot_deck.yaml
+          executionScale: execution-scale/bulletin-6816/robot_deck.yaml
+          browserReport: browser-review/bulletin-6816/robot_deck/report.yaml
+          architectVerdict: architect/bulletin-6816/robot_deck/verdict.yaml
+          patchSpecs: []
+          adoptionDecision: adoption/bulletin-6816/robot_deck/adoption.yaml
+          rerunReport: rerun/bulletin-6816/robot_deck/rerun.yaml
+        browserStatus: skipped
+        architectStatus: rejected
+        criticStatus: missing

@@ -1,0 +1,46 @@
+kind: protocol-foundry-model-usage
+generated_at: 2026-05-08T04:49:05.332Z
+startedAt: 2026-05-08T04:49:05.126Z
+completedAt: 2026-05-08T04:49:05.315Z
+elapsedSeconds: 0.189
+endpoints:
+  - role: worker
+    baseUrl: http://thunderbeast:8001/v1
+    start:
+      endpoint: http://thunderbeast:8001/metrics
+      promptTokensTotal: 84760917
+      generationTokensTotal: 347420
+      runningRequests: 0
+      waitingRequests: 0
+      kvCacheUsage: 0
+    end:
+      endpoint: http://thunderbeast:8001/metrics
+      promptTokensTotal: 84760917
+      generationTokensTotal: 347420
+      runningRequests: 0
+      waitingRequests: 0
+      kvCacheUsage: 0
+    deltaPromptTokens: 0
+    deltaGenerationTokens: 0
+    promptTokensPerSecond: 0
+    generationTokensPerSecond: 0
+  - role: architect
+    baseUrl: http://thunderbeast:8000/v1
+    start:
+      endpoint: http://thunderbeast:8000/metrics
+      promptTokensTotal: 13347607
+      generationTokensTotal: 84449
+      runningRequests: 0
+      waitingRequests: 0
+      kvCacheUsage: 0
+    end:
+      endpoint: http://thunderbeast:8000/metrics
+      promptTokensTotal: 13347607
+      generationTokensTotal: 84449
+      runningRequests: 0
+      waitingRequests: 0
+      kvCacheUsage: 0
+    deltaPromptTokens: 0
+    deltaGenerationTokens: 0
+    promptTokensPerSecond: 0
+    generationTokensPerSecond: 0

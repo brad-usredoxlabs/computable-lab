@@ -121,7 +121,8 @@ export function ledgerPath(artifactRoot: string): string {
   return join(artifactRoot, 'queues', 'stage-ledger.yaml');
 }
 
-export async function readYamlFile<T = unknown>(path: string): Promise<T> {
+export async function readYamlFile<T = unknown>(path: string): Promise<T | undefined> {
+  if (!existsSync(path)) return undefined;
   return YAML.parse(await readFile(path, 'utf-8')) as T;
 }
 

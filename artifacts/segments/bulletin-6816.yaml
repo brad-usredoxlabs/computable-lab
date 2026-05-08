@@ -1,0 +1,337 @@
+kind: protocol-foundry-segment
+protocolId: bulletin-6816
+generated_at: 2026-05-08T04:38:23.663Z
+sourcePdf: /home/brad/git/computable-foundry/artifacts/pdfs/Bulletin_6816.pdf
+sourceText: /home/brad/git/computable-foundry/artifacts/text/bulletin-6816.txt
+title: Bulletin_6816
+protocol_text: "Real-Time PCR
+
+
+
+
+
+  \                Protocol for Multiplex RT-qPCR Analysis
+
+  \                Using PrimePCR Assays
+
+
+
+
+  \    Abstract
+
+  \    Multiplex real-time PCR using Bio-Rad’s PrimePCR Assays and iQ Multiplex
+  Powermix enables
+
+  \    quantitative relative gene expression analysis of up to five targets in
+  qPCR. Traditionally, multiplex
+
+  \    qPCR experiments have been challenging to design. This protocol describes
+  an off-the-shelf solution
+
+  \    for increasing throughput and reducing reagent costs through the adoption
+  of multiplex assays.
+
+  \    For one-step multiplex RT-qPCR using Reliance One-Step Multiplex Supermix
+  and PrimePCR Probe
+
+  \    Assays, refer to bulletin 7197.
+
+
+  \                                                                      RNA
+  Isolation
+
+  Materials                                                             ■ \a
+
+  \                                                                        Total
+  RNA isolation from most samples
+
+  ■   \aiQ Multiplex Powermix, catalog #1725849                              –
+  Aurum Total RNA Mini Kit, catalog #7326820
+
+  ■   \aPrimePCR Probe Assays for Gene Expression                            –
+  PureZOL RNA Isolation Reagent, catalog #7326880
+
+  ■   \a ard-Shell™ Thin-Wall 96- or 384-Well Skirted PCR Plates,
+
+  \    H                                                                 ■   \a\
+  Rapid isolation of total RNA from tissue culture samples
+
+  \    catalog #HSP9655 or HSP3805, respectively                             –
+  SingleShot Cell Lysis RT-qPCR Kits, catalog #1725080
+
+  ■   Microseal™ 'B' Adhesive Seals, catalog #MSB1001                   cDNA
+  Synthesis
+
+  \                                                                      ■ \a
+
+  \                                                                        Firs\
+  t-strand cDNA synthesis
+
+  Equipment                                                                 –
+  iScript Advanced cDNA Synthesis Kit, catalog #1725037
+
+  ■   CFX Opus 96 Real-Time PCR System, catalog
+  #12011319               ■   \aFirst-strand cDNA synthesis with genomic DNA
+  elimination
+
+  ■   CFX Opus 384 Real-Time PCR System, catalog #12011452                  –
+  iScript gDNA Clear cDNA Synthesis Kit, catalog #1725034
+
+  \                                                                          \a
+  irst-strand cDNA synthesis for processing samples with
+
+  \                                                                          F
+
+  Software
+
+  \                                                                      ■
+
+
+
+  \                                                                          in\
+  hibitors and degraded RNA (e.g., FFPE samples)
+
+  ■   CFX Maestro Software, catalog #12013758                               –
+  Reliance Select cDNA Synthesis Kit, catalog #12012802
+
+
+  Note: Compatible with Windows 7 and 10. Includes
+  USB                  Optional: Preamplification
+
+  \                                                                      ■ \a
+
+  installation drive, video quick guides, and PDF instruction
+  manual.     Preamplification for analysis of targets from a limited sample
+
+  \                                                                          –
+  SsoAdvanced PreAmp Supermix, catalog #1725160
+
+  Before You Begin                                                          –
+  PrimePCR PreAmp Assays
+
+  You will first need to isolate total RNA and prepare first-strand
+
+  cDNA for use in multiplex qPCR. We recommend the
+
+  following options:
+
+
+
+
+
+  Bulletin 6816
+
+  \fProtocol for Multiplex RT-qPCR Analysis Using PrimePCR Assays
+
+
+
+
+  \                                                                                              \
+  1.4\t\aSeal the plate with a Microseal 'B' Adhesive Seal and vortex
+
+  Procedure                                                                                          \
+  to mix reagents. Centrifuge briefly to collect all reaction
+
+  Protocol                                                                                           \
+  components at the bottom of the plate.
+
+  1.1\t\aPrepare the multiplex PrimePCR assay pool(s) according to
+
+  \                                                                                              \
+  1.5\t\aAnalyze the plate using a CFX Opus 96 or CFX Opus 384
+
+  \     Table 1. Scale the size of the pool(s) to the total number of
+
+  \                                                                                                   \
+  Real-Time PCR System. Select User-defined as the run type
+
+  \     reactions that will be performed. Prepare an excess of at least
+
+  \                                                                                                   \
+  and use the following cycling protocol: 95°C for 2 min followed
+
+  \     10% to account for pipetting variation.
+
+  \                                                                                                   \
+  by 40 cycles of 95°C for 10 sec and 60°C for 45 sec. Ensure
+
+  Note: If multiplexing fewer than five targets, use water
+  or                                        that the scan mode is set to All
+  Channels.
+
+  TE buffer with low EDTA in place of unused PrimePCR Assays.
+
+  \                                                                                              \
+  1.6\t\aAnalyze the relative gene expression data using
+
+  Note: PrimePCR Assays are used at a 0.5x
+  concentration                                             CFX Maestro
+  Software.
+
+  in this protocol.
+
+  \                                                                                              \
+  Important Considerations for Multiplex Validation
+
+  Table 1. Preparation of multiplex assay
+  pool(s).                                              ■ \a
+
+  \                                                                                                \
+  Interactions between assays can potentially compromise target
+
+  Component                           Per 20 µl Reaction           Per 10 µl
+  Reaction
+
+  \                                                                                                \
+  quantification in a multiplex qPCR assay. To validate a multiplex
+
+  PrimePCR Assay-FAM                         0.5 µl                       0.25
+  µl
+
+  \                                                                                                \
+  qPCR assay, compare generated results side by side with the
+
+  PrimePCR Assay-HEX                         0.5 µl                       0.25
+  µl
+
+  \                                                                                                \
+  individual assays in the same qPCR experiment. In addition,
+
+  PrimePCR Assay-TEX 615                     0.5 µl                       0.25
+  µl
+
+  PrimePCR Assay-Cy5                         0.5 µl                       0.25
+  µl                 keep the following in mind:
+
+  PrimePCR Assay-Cy5.5*                      0.5 µl                       0.25
+  µl                  – \a\aReactions for the individual assays should be set up
+  using the
+
+  Total                                      2.5 µl                      1.25
+  µl                     same amount of iQ Multiplex Powermix and cDNA sample as
+
+  * This channel is available only on CFX Opus 96
+  Systems.                                           in the multiplex reaction,
+  but the individual PrimePCR Assay
+
+  1.2\t\aPrepare a multiplex qPCR master mix according to Table
+  2                                      should be used at a 1x concentration
+
+  \     that contains all of the components listed except the
+  cDNA                                  \a– \a\aA representative set of samples
+  spanning expression ranges
+
+  \     sample. An excess of 10% should be prepared to
+  account                                         should be used
+
+  \     for pipetting
+  variation.                                                                    \
+  \a– \a\aThe difference in Cq value between singleplex and multiplex
+
+  1.3\t\aAliquot the appropriate volume of the multiplex qPCR
+  master                                    reactions should be less than one
+  cycle
+
+  \     mix to a Hard-Shell Thin-Wall 96- or 384-Well Skirted
+  PCR                                   \a– \a\aCaution should be used when
+  comparing results for targets
+
+  \     Plate and add the cDNA sample to complete the reaction
+  mix.                                    with lower expression levels where
+  qPCR results can exhibit
+
+  \                                                                                                    \
+  stochastic variability
+
+  Note: If using technical (reaction) replicates, prepare the reaction
+
+  mix at a larger scale using PCR tube strips or iQ PCR Plates.
+  Mix                             Tips
+
+  well and then dispense replicate reactions to a Hard-Shell Plate.
+
+  \                                                                                              \
+  I\af your CFX instrument is not calibrated for the fluorophores in
+
+  Table 2. Preparation of multiplex qPCR reaction mix.
+
+  \                                                                                               \
+  the PrimePCR Probe Assays, contact our technical support
+
+  Component                           Per 20 µl Reaction           Per 10 µl
+  Reaction
+
+  iQ Multiplex Powermix                      10 µl                         5 µl
+
+  \                                                                                               \
+  team for assistance.
+
+  Multiplex assay pool                       2.5 µl                       1.25
+  µl
+
+  cDNA sample*                               Varies                       Varies
+
+  \                                                                                              \
+  Visit bio-rad.com/primepcr for expertly predesigned probe
+
+  Nuclease-free
+  water                        Varies                       Varies                \
+  assays for gene expression.
+
+  Total                                      20 µl                         10 µl
+
+  \                                                                                              \
+  BIO-RAD, HARD-SHELL, and MICROSEAL are trademarks of Bio-Rad Laboratories,
+  Inc. in
+
+  * The qPCR reactions should not contain more than 20% of the undiluted cDNA
+  reaction.         certain jurisdictions. All trademarks used herein are the
+  property of their respective owner.
+
+  \                                                                                              \
+  © 2024 Bio-Rad Laboratories, Inc.
+
+
+
+
+
+  \                              Bio-Rad
+
+  \                              Laboratories, Inc.
+
+
+
+  Life Science                  Website bio-rad.com USA 1 800 424 6723 Australia
+  61 2 9914 2800 Austria 00 800 00 24 67 23 Belgium 00 800 00 24 67 23 Brazil
+  4003 0399
+
+  \                              Canada 1 905 364 3435 China 86 21 6169 8500
+  Czech Republic 00 800 00 24 67 23 Denmark 00 800 00 24 67 23 Finland 00 800 00
+  24 67 23
+
+  Group                         France 00 800 00 24 67 23 Germany 00 800 00 24
+  67 23 Hong Kong 852 2789 3300 Hungary 00 800 00 24 67 23 India 91 124 4029300
+  Israel 0 3 9636050
+
+  \                              Italy 00 800 00 24 67 23 Japan 81 3 6361 7000
+  Korea 82 080 007 7373 Luxembourg 00 800 00 24 67 23 Mexico 52 555 488 7670
+
+  \                              The Netherlands 00 800 00 24 67 23 New Zealand
+  64 9 415 2280 Norway 00 800 00 24 67 23 Poland 00 800 00 24 67 23 Portugal 00
+  800 00 24 67 23
+
+  \                              Russian Federation 00 800 00 24 67 23 Singapore
+  65 6415 3188 South Africa 00 800 00 24 67 23 Spain 00 800 00 24 67 23 Sweden
+  00 800 00 24 67 23
+
+  \                              Switzerland 00 800 00 24 67 23 Taiwan 886 2
+  2578 7189 Thailand 66 2 651 8311 United Arab Emirates 36 1 459 6150 United
+  Kingdom 00 800 00 24 67 23
+
+
+
+  Bulletin 6816 Ver
+  B   US/EG                                                                                                                                      \
+  24-0609   1024   Sig 0124
+
+  \f"

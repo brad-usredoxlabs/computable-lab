@@ -1,0 +1,12 @@
+kind: protocol-foundry-material-context
+protocolId: bulletin-6816
+generated_at: 2026-05-08T04:38:23.665Z
+sourcePdf: /home/brad/git/computable-foundry/artifacts/pdfs/Bulletin_6816.pdf
+materials: []
+materialSpecs: []
+vendorProducts: []
+labwareHints: []
+notes:
+  - PDF intake creates protocol text and provenance only.
+    Material/material-spec/vendor-product records must be justified by compiler
+    or architect evidence.

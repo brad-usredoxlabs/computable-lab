@@ -1,0 +1,10 @@
+kind: protocol-foundry-pdf-intake-report
+generated_at: 2026-05-08T04:49:05.304Z
+ingested: 0
+skipped: 1
+failed: 0
+records:
+  - protocolId: bulletin-6816
+    pdfPath: /home/brad/git/computable-foundry/artifacts/pdfs/Bulletin_6816.pdf
+    status: skipped
+    message: segment already exists
