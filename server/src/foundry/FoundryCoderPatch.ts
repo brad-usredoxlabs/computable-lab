@@ -167,6 +167,7 @@ interface DiffHunk {
   contextLines: string[];
   addedLines: string[];
   removedLines: string[];
+  claimedOldLine?: number;  // from @@ -X,Y
 }
 
 function parseDiffToHunks(diff: string): DiffHunk[] {
@@ -199,8 +200,12 @@ function parseDiffToHunks(diff: string): DiffHunk[] {
       }
       continue;
     }
-    // Detect hunk header
-    if (/^@@ /.test(rawLine) && currentHunk) continue;
+    // Detect hunk header and capture claimed line number
+    const hunkMatch = rawLine.match(/^@@ -([0-9]+),[0-9]+ \+([0-9]+),([0-9]+)/);
+    if (hunkMatch && currentHunk) {
+      currentHunk.claimedOldLine = parseInt(hunkMatch[1]!, 10);
+      continue;
+    }
 
     // Hunk content — strip ONLY LLM indentation, keep the actual diff prefix
     if (currentHunk) {
@@ -245,7 +250,8 @@ function parseDiffToHunks(diff: string): DiffHunk[] {
 }
 
 // Apply a parsed hunk to a file by matching context lines
-function applyHunkToContent(content: string, hunk: DiffHunk): string {
+// Returns null if the patch should be rejected (position mismatch or conflict)
+function applyHunkToContent(content: string, hunk: DiffHunk): string | null {
   const lines = content.split('\n');
   const context = hunk.contextLines.filter((l) => l !== '');
   if (context.length === 0) {
@@ -288,6 +294,32 @@ function applyHunkToContent(content: string, hunk: DiffHunk): string {
     }
     if (bestStart < 0) bestStart = lines.length - 1;
     bestLen = 1;
+  }
+
+  // Validate: if the hunk header claimed a position, check it's close to our match
+  if (hunk.claimedOldLine && bestStart >= 0) {
+    const actualLine = bestStart + 1; // 1-indexed
+    const offset = Math.abs(actualLine - hunk.claimedOldLine);
+    if (offset > 5) {
+      // Position mismatch — LLM's context doesn't match the claimed position
+      // This usually means the patch was generated against stale file content
+      return null;
+    }
+  }
+
+  // Check for duplicate exports: if we're adding exports that already exist
+  for (const add of hunk.addedLines) {
+    if (add.startsWith('export function') || add.startsWith('export const') || add.startsWith('export type')) {
+      const funcNameMatch = add.match(/export (?:function|const|type)\s+(\w+)/);
+      if (funcNameMatch) {
+        const name = funcNameMatch[1]!;
+        // Check if this export already exists elsewhere in the file
+        if (content.split('\n').some((l) => l.includes(`export ${name.split(' ')[0]}`))) {
+          // Duplicate export — reject
+          return null;
+        }
+      }
+    }
   }
 
   // Determine position: skip consumed context lines, then apply
@@ -706,6 +738,19 @@ export async function runFoundryCoderPatch(input: {
     if (!touchedFiles.includes(relPath)) continue;
     const content = await readFile(fullPath, 'utf-8');
     const newContent = applyHunkToContent(content, hunk);
+    if (newContent === null) {
+      // Patch position mismatch — reject entire patch
+      await writeYamlFile(resultPath, {
+        kind: 'protocol-foundry-coder-patch-result',
+        protocolId: input.protocolId,
+        variant: input.variant,
+        generated_at: nowIso(),
+        status: 'failed',
+        message: 'Patch context position mismatch — context lines match at different position than hunk header claims. LLM may have used stale file content.',
+        touchedFiles,
+      });
+      return { status: 'failed', resultPath, message: 'patch position mismatch', touchedFiles: [] };
+    }
     modifiedFiles.set(relPath, newContent);
     await writeFile(fullPath, newContent, 'utf-8');
   }
