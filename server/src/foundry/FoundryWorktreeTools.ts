@@ -5,7 +5,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { CompletionRequest, CompletionResponse, InferenceClient, ToolCall, ToolDefinition } from '../ai/types.js';
 import { queryWorkbenchRetrieval } from './FoundryRetrieval.js';
-import { boundedToolTranscript } from './FoundryToolBudget.js';
+import { boundedToolTranscript, extractInlineXmlToolCalls } from './FoundryToolBudget.js';
 
 const execFileAsync = promisify(execFile);
 const MAX_TOOL_RESULT_CHARS = 14_000;
@@ -381,9 +381,10 @@ export async function completeWithWorktreeTools(input: {
       tool_choice: input.request.tool_choice ?? 'auto',
     });
     const message = response.choices[0]?.message;
-    const toolCalls = message?.tool_calls ?? [];
+    const inlineToolCalls = message?.tool_calls?.length ? [] : extractInlineXmlToolCalls(message?.content);
+    const toolCalls = message?.tool_calls?.length ? message.tool_calls : inlineToolCalls;
     if (!message || toolCalls.length === 0) return response;
-    messages.push(message);
+    messages.push(inlineToolCalls.length > 0 ? { ...message, content: null, tool_calls: inlineToolCalls } : message);
     for (const toolCall of toolCalls.slice(0, 8)) {
       const started = Date.now();
       try {
