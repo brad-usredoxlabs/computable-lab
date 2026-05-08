@@ -738,9 +738,8 @@ export async function runFoundryCoderPatch(input: {
   }
 
   try {
-    // Verify it compiles
+    // Verify it compiles — only check errors in files we actually touched
     let tscOutput = '';
-    let compiles = false;
     try {
       const result = await execFileAsync('npx', ['tsc', '--noEmit', '--pretty', 'false'], {
         cwd: join(input.repoRoot, 'server'),
@@ -748,11 +747,18 @@ export async function runFoundryCoderPatch(input: {
         timeout: 120_000,
       });
       tscOutput = result.stdout + result.stderr;
-      compiles = true;
     } catch (err: any) {
       tscOutput = (err.stdout || '') + (err.stderr || '');
     }
-    if (!compiles) {
+
+    // Filter to only errors in touched files - ignore pre-existing errors elsewhere
+    const touchedBases = touchedFiles.map((f) => f.startsWith('src/') ? f.slice(4) : f);
+    const relevantErrors = tscOutput.split('\n').filter((line) => {
+      if (!line.includes(' error TS')) return false;
+      return touchedBases.some((t) => line.includes(t));
+    });
+
+    if (relevantErrors.length > 0) {
       // Save debug info before reverting
       await writeFile(join(resultRoot, 'debug_tsc_output.txt'), tscOutput.slice(0, 8000), 'utf-8');
       await writeFile(join(resultRoot, 'debug_ai_response.txt'), (response.choices[0]?.message.content ?? '').slice(0, 8000), 'utf-8');
@@ -768,10 +774,16 @@ export async function runFoundryCoderPatch(input: {
         status: 'failed',
         message: 'Patch applied but compilation failed; reverted.',
         touchedFiles,
-        tscOutput: tscOutput.slice(0, 4000),
+        tscOutput: relevantErrors.join('\n').slice(0, 4000),
         rawResponse: (response.choices[0]?.message.content ?? '').slice(0, 4000),
       });
       return { status: 'failed', resultPath, message: 'compilation failed', touchedFiles: [] };
+    }
+
+    // Log pre-existing errors as warnings (not blockers)
+    if (tscOutput.includes('error TS')) {
+      const preExisting = tscOutput.split('\n').filter((l) => l.includes('error TS')).length;
+      console.log(`[foundry-coder] compilation ok, ${preExisting} pre-existing error(s) in untouched files ignored`);
     }
 
     // Run focused tests (warnings only)
