@@ -139,7 +139,7 @@ function applySymbolReplacements(
   replacements: SymbolReplacement[],
 ): string {
   const blocks = findSymbolBlocks(content);
-  const lines = content.split('\n');
+  let lines = content.split('\n');
 
   interface EditOp {
     start: number;
@@ -164,24 +164,23 @@ function applySymbolReplacements(
   // Apply bottom-up so earlier positions remain valid
   ops.sort((a, b) => b.start - a.start);
   for (const op of ops) {
-    const newLines = [
-      ...lines.slice(0, op.start),
-      ...op.insert.split('\n'),
-      ...lines.slice(op.end),
-    ];
-    content = newLines.join('\n');
-    // Re-split for next iteration (only bottom-up ops, so earlier positions unchanged)
-    const newLinesArr = content.split('\n');
-    content = newLinesArr.join('\n');
+    const insertLines = op.insert.split('\n');
+    const before = lines.slice(0, op.start);
+    const after = lines.slice(op.end);
+    lines = [...before, ...insertLines, ...after];
   }
 
-  return content;
+  return lines.join('\n');
 }
 
 /** Parse LLM response for symbol replacement blocks */
 function parseSymbolResponse(text: string): SymbolReplacement[] {
   const replacements: SymbolReplacement[] = [];
-  const pattern = /@@(replace|add)\s*([^@\n]*)\n?([\s\S]*?)@@end@@/g;
+  // Consume the closing @@ of the header delimiter explicitly so group 3
+  // does NOT capture a stray @@ prefix that would break TypeScript syntax.
+  //   @@replace funcName@@\n  <body>  \n@@end@@
+  //   @@add@@\n               <body>  \n@@end@@
+  const pattern = /@@(replace|add)\s*([^@\n]*)@@\s*([\s\S]*?)@@end@@/g;
   let match;
   while ((match = pattern.exec(text)) !== null) {
     const op = match[1]!.toLowerCase() as 'replace' | 'add';
@@ -680,11 +679,24 @@ export async function runFoundryCoderPatch(input: {
   const touchedFiles: string[] = [];
   const modifiedFiles = new Map<string, string>();
 
+  // Track which add ops have been applied so they only land once
+  const appliedAddOps = new Set<number>();
+
   for (const tf of targetFiles) {
-    const fileReplacements = replacements.filter((r) =>
-      r.op === 'replace' ? tf.symbols.some((s) => s.name === r.targetName) : true,
-    );
+    const fileReplacements = replacements.filter((r) => {
+      if (r.op === 'replace') {
+        return tf.symbols.some((s) => s.name === r.targetName);
+      }
+      // add ops: only apply to the first file, and only once
+      return !appliedAddOps.has(replacements.indexOf(r));
+    });
     if (fileReplacements.length === 0) continue;
+    // Mark add ops in this file as applied
+    fileReplacements.forEach((r) => {
+      if (r.op === 'add') {
+        appliedAddOps.add(replacements.indexOf(r));
+      }
+    });
 
     const newContent = applySymbolReplacements(tf.content, fileReplacements);
     if (newContent !== tf.content) {
