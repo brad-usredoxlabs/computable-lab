@@ -1,11 +1,11 @@
 kind: protocol-foundry-protocol-quality
-generated_at: 2026-05-08T04:49:05.311Z
+generated_at: 2026-05-08T18:24:41.371Z
 summary:
   protocolCount: 1
   variantTotal: 3
   accepted: 0
   complete: 0
-  gaps: 1
+  gaps: 3
   extractorFailures: 0
   eventTotal: 3
   blockerTotal: 0
@@ -13,18 +13,18 @@ summary:
   completeRate: 0
 protocols:
   - protocolId: bulletin-6816
-    status: blocked
+    status: gap
     variants:
       - variant: manual_tubes
-        status: blocked
+        status: gap
         accepted: false
         browserStatus: skipped
         eventCount: 1
         blockerCount: 0
         diagnosticCount: 10
         extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.7999999999999999
+        coverageEstimate: 0.1
       - variant: bench_plate_multichannel
         status: gap
         accepted: false
@@ -33,15 +33,15 @@ protocols:
         blockerCount: 0
         diagnosticCount: 9
         extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.7999999999999999
+        coverageEstimate: 0.1
       - variant: robot_deck
-        status: blocked
+        status: gap
         accepted: false
         browserStatus: skipped
         eventCount: 1
         blockerCount: 0
         diagnosticCount: 11
         extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.7999999999999999
+        coverageEstimate: 0.1

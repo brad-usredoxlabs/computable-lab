@@ -1,0 +1,8 @@
+kind: protocol-worker-report
+protocolId: bulletin-6816
+variant: manual_tubes
+generated_at: 2026-05-08T18:24:41.271Z
+status: failed
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/manual_tubes/result.yaml
+touchedFiles: []
+message: compilation failed

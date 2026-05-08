@@ -1,31 +1,254 @@
 kind: protocol-foundry-architect-verdict
 protocolId: bulletin-6816
 variant: robot_deck
-generated_at: 2026-05-08T04:49:05.220Z
+generated_at: 2026-05-08T15:34:06.056Z
 accepted: false
-qualityScore: 0
-coverageEstimate: 0
+qualityScore: 0.7999999999999999
+coverageEstimate: 0.1
 failureClasses:
-  - source_code_drift
-driftCount: 1
+  - event_graph_tiny
+  - material_catalog_or_spec_gap
+  - foundry_runtime_wiring_gap
+  - browser_review
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
-recommendedFixes: []
-sourceArtifacts: {}
-architectNotes: >-
-  Architect review skipped because source files changed before spec generation.
-
-  Refresh the protocol run after the codebase is clean so patch specs are based
-  on current code.
-
-  Changed source files: erver/src/foundry/FoundryArtifacts.ts,
-  erver/src/foundry/FoundryCoderPatch.test.ts,
-  erver/src/foundry/FoundryCoderPatch.ts,
-  erver/src/foundry/FoundryCritic.test.ts, erver/src/foundry/FoundryCritic.ts,
-  erver/src/foundry/FoundryWorktreeTools.test.ts,
-  erver/src/foundry/FoundryWorktreeTools.ts
-
-  Drift detection count: 1/3
+recommendedFixes:
+  - id: fix-event-graph-coverage-transfer
+    class: compiler_event_coverage_transfer
+    title: Expand tiny event graphs with transfer/add/mix actions
+    rationale: Compiler produced 1 events for a robot_deck protocol; this is below
+      the Foundry usefulness threshold of 5. The strongest evidence points at
+      transfer/add/mix coverage.
+    ownedFiles:
+      - server/src/compiler/biology/verbs/simpleVerbs.ts
+      - server/src/compiler/biology/BiologyVerbExpander.test.ts
+    acceptance:
+      - This protocol variant compiles to at least 5 event graph events or emits
+        a specific missing-verb diagnostic naming the unsupported transfer
+        action.
+      - The patch handles this one concrete action family only.
+      - A focused regression demonstrates the new event(s) from the supplied
+        protocol artifact.
+    contextHints:
+      - Do not try to solve every biology verb in one patch.
+      - Use diagnostics and gaps to pick the single concrete action from this
+        protocol.
+      - Keep provenance/material-instance boundaries intact when adding event
+        lowering.
+      - Map one add, transfer, dispense, or mix phrase; do not rewrite the full
+        extraction contract here.
+    implementationBudget:
+      targetChangedFiles: 1
+      maxChangedFiles: 3
+      targetChangedLines: 80
+      maxChangedLines: 220
+      requireFocusedFixture: true
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: This coder is capable but works best with narrow ownership, concrete
+        evidence, and one observable behavior change per patch.
+    doNotTouch:
+      - Do not rewrite the pipeline end to end.
+      - Do not create real material-instance, aliquot, or physical inventory
+        records from vendor PDF evidence.
+      - Do not add JSON records data; computable-lab data records must be YAML.
+    sourceArtifacts: &a1
+      compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/robot_deck.yaml
+      eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/robot_deck.yaml
+      executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/bulletin-6816/robot_deck.yaml
+      browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/bulletin-6816/robot_deck/report.yaml
+      coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/robot_deck/result.yaml
+      assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/bulletin-6816/robot_deck.yaml
+      segment: /home/brad/git/computable-foundry/artifacts/segments/bulletin-6816.yaml
+      materialContext: /home/brad/git/computable-foundry/artifacts/material-context/bulletin-6816.yaml
+      text: /home/brad/git/computable-foundry/artifacts/text/bulletin-6816.txt
+    failureEvidence: &a2
+      outcome: complete
+      eventCount: 1
+      minUsefulEvents: 5
+      diagnosticCodes:
+        - foundry_presegmented_candidates
+        - foundry_presegmented_candidates
+        - foundry_presegmented_no_actionable_candidates
+        - foundry_presegmented_no_actionable_candidates
+        - ai_precompile_shape_mismatch
+        - pass_skipped_by_when
+        - pass_skipped_by_when
+        - pass_skipped_by_when
+        - pass_skipped_by_when
+        - pass_skipped_by_when
+        - execution_scale_plan_ready
+      extractorRepairExhaustedCount: 0
+      blockerCount: 0
+      gapCount: 0
+      browserStatus: skipped
+  - id: fix-foundry-runtime-wiring-gap
+    class: foundry_runtime_wiring_gap
+    title: Wire Foundry compile dependencies to the real compiler runtime
+    rationale: Foundry-specific runs are producing compiler gaps that look like
+      missing resolver dependencies or skipped runtime wiring rather than
+      missing protocol records. The architect may patch Foundry harness wiring,
+      dependency injection, and focused Foundry regressions.
+    ownedFiles:
+      - server/src/foundry/ProtocolFoundryCompileRunner.ts
+      - server/src/foundry/ProtocolFoundryCompileRunner.test.ts
+      - server/src/tools/protocolFoundryCompile.ts
+      - server/src/tools/protocolFoundryLoop.ts
+      - server/src/ai/runChatbotCompile.ts
+      - server/src/ai/compiler/labwareLookup.ts
+      - server/src/ai/compiler/labwareLookup.test.ts
+    acceptance:
+      - Foundry compile runs use the same real lookup/resolver dependencies as
+        the main app when local seed records exist.
+      - Does not hard-code one protocol ID or one vendor PDF.
+      - Adds a focused regression proving a Foundry compile dependency is no
+        longer stubbed or empty when seed data can satisfy it.
+      - Compiler diagnostics for the source protocol lose at least one
+        resolver/wiring gap, or the remaining gap is classified more
+        specifically.
+    contextHints:
+      - This lane is for the Foundry harness around the compiler, not for adding
+        new biology data records.
+      - A likely failure pattern is a Foundry runner passing an always-empty
+        lookup function where the main app uses a real RecordStore-backed
+        lookup.
+      - Patch dependency wiring before adding YAML. Existing records should be
+        found before new records are minted.
+      - Keep changes local to Foundry runtime wiring unless the regression
+        proves a shared compiler API needs a small extension.
+    implementationBudget:
+      targetChangedFiles: 1
+      maxChangedFiles: 3
+      targetChangedLines: 80
+      maxChangedLines: 220
+      requireFocusedFixture: true
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: This coder is capable but works best with narrow ownership, concrete
+        evidence, and one observable behavior change per patch.
+    doNotTouch:
+      - Do not rewrite the pipeline end to end.
+      - Do not create real material-instance, aliquot, or physical inventory
+        records from vendor PDF evidence.
+      - Do not add JSON records data; computable-lab data records must be YAML.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+  - id: fix-material-catalog-spec-gap
+    class: material_catalog_or_spec_gap
+    title: Resolve protocol materials as catalog/spec data without inventing inventory
+    rationale: Compiler evidence points at unresolved reagents, buffers,
+      formulations, vendor products, or material tags that should be represented
+      as reusable YAML data or material resolver behavior.
+    ownedFiles:
+      - records/material
+      - records/seed/materials
+      - schema/lab/material.schema.yaml
+      - schema/lab/material-spec.schema.yaml
+      - schema/lab/vendor-product.schema.yaml
+      - server/src/compiler/material
+      - server/src/materials
+    acceptance:
+      - Adds or improves only material, material-spec, vendor-product, or
+        material resolver/catalog data needed by the source protocol.
+      - Does not create or modify labware-definition YAML; containers, tubes,
+        plates, racks, reservoirs, tips, and other physical holders must go
+        through a labware-specific fix class.
+      - Does not create material-instance, aliquot, material-lot, physical
+        inventory, source-tube, or run-specific records from vendor PDF
+        evidence.
+      - Uses ontology refs only when a CURIE/IRI is present in local records or
+        source artifacts; otherwise marks the material as
+        vendor/provenance-backed with an ontology backfill need.
+      - Compiler diagnostics for the protocol show fewer unresolved
+        material/catalog/spec failures, or the patch adds a focused regression
+        documenting the remaining blocker.
+    contextHints:
+      - Everything that can be data should be YAML data in records/ or schema
+        registry files.
+      - A vendor PDF can justify material, material-spec/formulation,
+        vendor-product, and labware definition/product facts.
+      - A vendor PDF cannot prove that this lab has a tube, aliquot, lot,
+        prepared source, or sample provenance.
+      - Material records describe substances/reagents/concepts such as
+        antibodies, buffers, substrates, and stop solutions. They must not
+        describe plates, tubes, racks, reservoirs, or tips.
+      - The unattended coder does not have a live OLS/ChEBI lookup tool in this
+        patch lane; do not invent ontology identifiers.
+      - Prefer one reagent family or one vendor kit component family per patch.
+      - If the unresolved item is a plate, tube rack, reservoir, tip rack, or
+        other existing labware definition that is not being found, use the
+        labware_alias_or_resolver_gap lane instead of adding a new record.
+    implementationBudget:
+      targetChangedFiles: 1
+      maxChangedFiles: 3
+      targetChangedLines: 80
+      maxChangedLines: 220
+      requireFocusedFixture: true
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: This coder is capable but works best with narrow ownership, concrete
+        evidence, and one observable behavior change per patch.
+    doNotTouch:
+      - Do not rewrite the pipeline end to end.
+      - Do not create real material-instance, aliquot, or physical inventory
+        records from vendor PDF evidence.
+      - Do not add JSON records data; computable-lab data records must be YAML.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+  - id: fix-browser-rendering
+    class: browser_or_labware_rendering
+    title: Make event graph render and play in labware-editor
+    rationale: Protocol variants cannot be accepted until browser review passes with
+      screenshot evidence.
+    ownedFiles:
+      - client/src
+      - records/seed/labware-definition
+      - server/src/foundry
+    acceptance:
+      - Browser review report status is pass.
+      - Screenshot shows expected labware and event sequence.
+    contextHints:
+      - Prefer adding or mapping one missing labware icon/geometry at a time.
+      - If the blocker is that an existing labware-definition record is not
+        being resolved, use the labware_alias_or_resolver_gap lane and patch
+        resolver/lookup wiring instead of creating duplicate labware records.
+      - Tube protocols should render in generic 24x1.5ml, 15ml, or 50ml rack
+        geometry when possible.
+      - New or repaired labware records must use canonical
+        records/seed/labware-definition/*.yaml files, not the legacy
+        records/seed/labware-definitions directory.
+      - "Canonical labware-definition records include $schema, kind:
+        labware-definition, recordId, type: labware_definition, id,
+        display_name, topology/capacity/render_hints as appropriate."
+    implementationBudget:
+      targetChangedFiles: 1
+      maxChangedFiles: 3
+      targetChangedLines: 80
+      maxChangedLines: 220
+      requireFocusedFixture: true
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: This coder is capable but works best with narrow ownership, concrete
+        evidence, and one observable behavior change per patch.
+    doNotTouch:
+      - Do not rewrite the pipeline end to end.
+      - Do not create real material-instance, aliquot, or physical inventory
+        records from vendor PDF evidence.
+      - Do not add JSON records data; computable-lab data records must be YAML.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/bulletin-6816/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/bulletin-6816/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/bulletin-6816/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/bulletin-6816.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/bulletin-6816.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/bulletin-6816.txt
+architectNotes: Deterministic architect gate generated patch specs from
+  compiler, scaling, extractor, and browser evidence.

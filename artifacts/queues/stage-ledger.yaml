@@ -1,6 +1,6 @@
 kind: protocol-foundry-stage-ledger
-generated_at: 2026-05-08T04:37:46.150Z
-updated_at: 2026-05-08T04:49:05.309Z
+generated_at: 2026-05-08 04:37:46.150000+00:00
+updated_at: 2026-05-08T18:24:41.395Z
 artifact_root: /home/brad/git/computable-foundry/artifacts
 protocols:
   - bulletin-6816
@@ -9,69 +9,98 @@ protocol_status:
     protocolId: bulletin-6816
     segmentPath: /home/brad/git/computable-foundry/artifacts/segments/bulletin-6816.yaml
     materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/bulletin-6816.yaml
-    status: blocked
+    status: gap
     variants:
       manual_tubes:
         variant: manual_tubes
-        status: blocked
-        attempt: 5
+        status: gap
+        attempt: 22
         artifacts:
           compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/manual_tubes.yaml
           eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/manual_tubes.yaml
           executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/bulletin-6816/manual_tubes.yaml
           browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/bulletin-6816/manual_tubes/report.yaml
           architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/bulletin-6816/manual_tubes/verdict.yaml
+          patchSpecs:
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/manual_tubes/fix-browser-rendering.yaml
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/manual_tubes/fix-event-graph-coverage-readout.yaml
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/manual_tubes/fix-foundry-runtime-wiring-gap.yaml
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/manual_tubes/fix-labware-alias-resolver-gap.yaml
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/manual_tubes/fix-material-catalog-spec-gap.yaml
           adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/bulletin-6816/manual_tubes/adoption.yaml
+          coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/manual_tubes/result.yaml
+          patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/bulletin-6816-manual_tubes.yaml
         metrics:
-          eventCount: 1
           diagnosticCount: 10
+          eventCount: 1
           extractorRepairExhaustedCount: 0
-          outcome: gap
           foundryComplete: 0
-        startedAt: 2026-05-08T04:49:05.250Z
-        completedAt: 2026-05-08T04:49:05.251Z
-        failureReason: no patch specs
+          outcome: gap
+          qualityScore: 0.7999999999999999
+          coverageEstimate: 0.1
+        completedAt: 2026-05-08T18:24:41.272Z
+        failureReason: compilation failed
+        startedAt: 2026-05-08T18:20:19.845Z
       bench_plate_multichannel:
         variant: bench_plate_multichannel
         status: gap
-        attempt: 8
+        attempt: 21
         artifacts:
           compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/bench_plate_multichannel.yaml
           eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/bench_plate_multichannel.yaml
           executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/bulletin-6816/bench_plate_multichannel.yaml
           browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/bulletin-6816/bench_plate_multichannel/report.yaml
           architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/bulletin-6816/bench_plate_multichannel/verdict.yaml
+          patchSpecs:
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-browser-rendering.yaml
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-event-graph-coverage-readout.yaml
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-foundry-runtime-wiring-gap.yaml
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-labware-alias-resolver-gap.yaml
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-material-catalog-spec-gap.yaml
           adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/bulletin-6816/bench_plate_multichannel/adoption.yaml
+          coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/bench_plate_multichannel/result.yaml
+          patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/bulletin-6816-bench_plate_multichannel.yaml
           rerunReport: /home/brad/git/computable-foundry/artifacts/rerun/bulletin-6816/bench_plate_multichannel/rerun.yaml
         metrics:
-          eventCount: 1
           blockerCount: 0
           diagnosticCount: 9
+          eventCount: 1
           extractorRepairExhaustedCount: 0
-          outcome: gap
           foundryComplete: 0
-        startedAt: 2026-05-08T04:49:05.271Z
-        completedAt: 2026-05-08T04:49:05.272Z
-        failureReason: no patch specs
+          outcome: gap
+          qualityScore: 0.7999999999999999
+          coverageEstimate: 0.1
+        completedAt: 2026-05-08T18:09:16.509Z
+        failureReason: compilation failed
+        startedAt: 2026-05-08T18:04:50.476Z
       robot_deck:
         variant: robot_deck
-        status: blocked
-        attempt: 7
+        status: running
+        attempt: 18
         artifacts:
           compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/robot_deck.yaml
           eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/robot_deck.yaml
           executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/bulletin-6816/robot_deck.yaml
           browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/bulletin-6816/robot_deck/report.yaml
           architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/bulletin-6816/robot_deck/verdict.yaml
+          patchSpecs:
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-browser-rendering.yaml
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-event-graph-coverage-transfer.yaml
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-foundry-runtime-wiring-gap.yaml
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-material-catalog-spec-gap.yaml
           adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/bulletin-6816/robot_deck/adoption.yaml
+          coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/robot_deck/result.yaml
+          patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/bulletin-6816-robot_deck.yaml
           rerunReport: /home/brad/git/computable-foundry/artifacts/rerun/bulletin-6816/robot_deck/rerun.yaml
         metrics:
-          eventCount: 1
           blockerCount: 0
           diagnosticCount: 11
+          eventCount: 1
           extractorRepairExhaustedCount: 0
-          outcome: complete
           foundryComplete: 1
-        startedAt: 2026-05-08T04:49:05.294Z
-        completedAt: 2026-05-08T04:49:05.295Z
-        failureReason: no patch specs
+          outcome: complete
+          qualityScore: 0.7999999999999999
+          coverageEstimate: 0.1
+        completedAt: 2026-05-08T18:24:41.351Z
+        failureReason: Patch specs accepted for unattended coder tournament execution.
+        startedAt: 2026-05-08T18:24:41.395Z

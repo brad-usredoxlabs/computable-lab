@@ -10,10 +10,10 @@ import { asRecord, nowIso, readYamlFile, writeYamlFile } from './FoundryArtifact
 import type { FoundryVariant } from './ProtocolFoundryCompileRunner.js';
 
 const execFileAsync = promisify(execFile);
-const MAX_CONTEXT_CHARS = 15_000;
-const MAX_FILE_CHARS = 8_000;
-const MAX_ARTIFACT_CONTEXT_CHARS = 5_000;
-const MAX_SCHEMA_CONTEXT_CHARS = 4_000;
+const MAX_CONTEXT_CHARS = 6_000;
+const MAX_FILE_CHARS = 3_000;
+const MAX_ARTIFACT_CONTEXT_CHARS = 3_000;
+const MAX_SCHEMA_CONTEXT_CHARS = 3_000;
 
 type CoderPatchStatus = 'applied' | 'blocked' | 'failed' | 'skipped' | 'stale' | 'needs-human';
 
@@ -425,19 +425,6 @@ async function runVerification(repoRoot: string, touchedFiles: string[]): Promis
   return true;
 }
 
-async function runCompileCheck(repoRoot: string): Promise<boolean> {
-  try {
-    await execFileAsync('npx', ['tsc', '--noEmit', '--pretty', 'false'], {
-      cwd: join(repoRoot, 'server'),
-      maxBuffer: 1024 * 1024 * 12,
-      timeout: 120_000,
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 async function existingAppliedSpecIds(artifactRoot: string): Promise<Set<string>> {
   const root = join(artifactRoot, 'code-patches');
   const applied = new Set<string>();
@@ -543,11 +530,41 @@ export async function runFoundryCoderPatch(input: {
     return { status: 'skipped', resultPath, message: 'no selectable patch spec', touchedFiles: [] };
   }
 
-  const baseUrl = input.inference?.baseUrl ?? process.env['PI_ARCHITECT_BASE_URL'] ?? process.env['OPENAI_BASE_URL'];
-  const model = input.inference?.model ?? process.env['PI_ARCHITECT_MODEL'] ?? 'Qwen/Qwen3.6-27B-FP8';
+  // ── Dual-coder routing: respect architect's coderModelProfile recommendation ──
+  // The architect specifies which model to use per spec in coderModelProfile.model.
+  //   35B-A3B on :8001  → fast coder for "easy" tasks
+  //   27B on :8000      → senior coder for "difficult" tasks (longer timeout)
+  const specModelProfile = typeof selectedSpec.raw['coderModelProfile'] === 'object'
+    && selectedSpec.raw['coderModelProfile'] !== null
+      ? selectedSpec.raw['coderModelProfile'] as Record<string, unknown>
+      : null;
+  const specRecommendedModel = typeof specModelProfile?.['model'] === 'string' ? specModelProfile['model'] : undefined;
+
+  const archBaseUrl = input.inference?.baseUrl ?? process.env['PI_ARCHITECT_BASE_URL'] ?? process.env['OPENAI_BASE_URL'] ?? 'http://localhost:8000/v1';
+  const workerBaseUrl = process.env['PI_WORKER_BASE_URL'] ?? archBaseUrl.replace(':8000', ':8001');
+
+  let baseUrl: string, model: string, timeoutMs: number;
+  if (specRecommendedModel && specRecommendedModel.includes('35B-A3B')) {
+    // Architect recommends fast coder for this spec
+    baseUrl = workerBaseUrl;
+    model = specRecommendedModel;
+    timeoutMs = 300_000; // 5 min for 35B
+  } else if (specRecommendedModel && specRecommendedModel.includes('27B')) {
+    // Architect recommends senior coder
+    baseUrl = archBaseUrl;
+    model = specRecommendedModel;
+    timeoutMs = 600_000; // 10 min for 27B
+  } else {
+    // No recommendation: default to fast coder (35B-A3B)
+    baseUrl = workerBaseUrl;
+    model = process.env['PI_WORKER_MODEL'] ?? 'Qwen/Qwen3.6-35B-A3B-FP8';
+    timeoutMs = 300_000;
+  }
+
   if (!baseUrl || !model || input.dryRun) {
     return { status: 'blocked', resultPath, message: 'coder not configured', touchedFiles: [] };
   }
+  console.log(`[foundry-coder] routing: model=${model}, endpoint=${baseUrl}, timeout=${timeoutMs / 1000}s`);
 
   const [ownedContext, artifactContext, schemaContext] = await Promise.all([
     collectOwnedContext(input.repoRoot, [selectedSpec]),
@@ -570,7 +587,7 @@ export async function runFoundryCoderPatch(input: {
     baseUrl,
     model,
     temperature: 0.1,
-    timeoutMs: 300_000,
+    timeoutMs,
     maxTokens: 16384,
   });
 
@@ -722,8 +739,23 @@ export async function runFoundryCoderPatch(input: {
 
   try {
     // Verify it compiles
-    const compiles = await runCompileCheck(input.repoRoot);
+    let tscOutput = '';
+    let compiles = false;
+    try {
+      const result = await execFileAsync('npx', ['tsc', '--noEmit', '--pretty', 'false'], {
+        cwd: join(input.repoRoot, 'server'),
+        maxBuffer: 1024 * 1024 * 12,
+        timeout: 120_000,
+      });
+      tscOutput = result.stdout + result.stderr;
+      compiles = true;
+    } catch (err: any) {
+      tscOutput = (err.stdout || '') + (err.stderr || '');
+    }
     if (!compiles) {
+      // Save debug info before reverting
+      await writeFile(join(resultRoot, 'debug_tsc_output.txt'), tscOutput.slice(0, 8000), 'utf-8');
+      await writeFile(join(resultRoot, 'debug_ai_response.txt'), (response.choices[0]?.message.content ?? '').slice(0, 8000), 'utf-8');
       // Revert changes
       for (const [file, originalContent] of modifiedFiles) {
         await writeFile(join(input.repoRoot, file), originalContent, 'utf-8');
@@ -736,6 +768,8 @@ export async function runFoundryCoderPatch(input: {
         status: 'failed',
         message: 'Patch applied but compilation failed; reverted.',
         touchedFiles,
+        tscOutput: tscOutput.slice(0, 4000),
+        rawResponse: (response.choices[0]?.message.content ?? '').slice(0, 4000),
       });
       return { status: 'failed', resultPath, message: 'compilation failed', touchedFiles: [] };
     }

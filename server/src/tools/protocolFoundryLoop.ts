@@ -58,6 +58,12 @@ async function main(): Promise<number> {
   const workerModel = readArg('--worker-model', args) ?? process.env['PI_WORKER_MODEL'] ?? process.env['OPENAI_MODEL'];
   const architectBaseUrl = readArg('--architect-base-url', args) ?? process.env['PI_ARCHITECT_BASE_URL'];
   const architectModel = readArg('--architect-model', args) ?? process.env['PI_ARCHITECT_MODEL'];
+
+  // Export env vars so downstream modules (coder patch) can read them
+  if (workerBaseUrl) process.env['PI_WORKER_BASE_URL'] = workerBaseUrl;
+  if (workerModel) process.env['PI_WORKER_MODEL'] = workerModel;
+  if (architectBaseUrl) process.env['PI_ARCHITECT_BASE_URL'] = architectBaseUrl;
+  if (architectModel) process.env['PI_ARCHITECT_MODEL'] = architectModel;
   const apiBase = readArg('--api-base', args);
   const appBase = readArg('--app-base', args);
   const maxCycles = readArg('--max-cycles', args);

@@ -1,0 +1,8 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: bulletin-6816
+variant: bench_plate_multichannel
+generated_at: 2026-05-08T18:09:16.506Z
+status: failed
+message: Patch applied but compilation failed; reverted.
+touchedFiles:
+  - server/src/foundry/ProtocolFoundryCompileRunner.ts

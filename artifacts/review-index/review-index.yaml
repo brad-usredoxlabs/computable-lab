@@ -1,16 +1,16 @@
 kind: protocol-foundry-review-index
-generated_at: 2026-05-08T04:49:05.314Z
+generated_at: 2026-05-08T18:24:41.379Z
 artifactRoot: /home/brad/git/computable-foundry/artifacts
 protocols:
   - protocolId: bulletin-6816
-    status: blocked
+    status: gap
     variants:
       - variant: manual_tubes
-        status: blocked
+        status: gap
         eventCount: 1
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.7999999999999999
+        coverageEstimate: 0.1
         artifacts:
           protocolText: text/bulletin-6816.txt
           segment: segments/bulletin-6816.yaml
@@ -20,8 +20,15 @@ protocols:
           executionScale: execution-scale/bulletin-6816/manual_tubes.yaml
           browserReport: browser-review/bulletin-6816/manual_tubes/report.yaml
           architectVerdict: architect/bulletin-6816/manual_tubes/verdict.yaml
-          patchSpecs: []
+          patchSpecs:
+            - patch-specs/bulletin-6816/manual_tubes/fix-browser-rendering.yaml
+            - patch-specs/bulletin-6816/manual_tubes/fix-event-graph-coverage-readout.yaml
+            - patch-specs/bulletin-6816/manual_tubes/fix-foundry-runtime-wiring-gap.yaml
+            - patch-specs/bulletin-6816/manual_tubes/fix-labware-alias-resolver-gap.yaml
+            - patch-specs/bulletin-6816/manual_tubes/fix-material-catalog-spec-gap.yaml
           adoptionDecision: adoption/bulletin-6816/manual_tubes/adoption.yaml
+          coderPatch: code-patches/bulletin-6816/manual_tubes/result.yaml
+          patchReport: patch-reports/bulletin-6816-manual_tubes.yaml
         browserStatus: skipped
         architectStatus: rejected
         criticStatus: missing
@@ -29,8 +36,8 @@ protocols:
         status: gap
         eventCount: 1
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.7999999999999999
+        coverageEstimate: 0.1
         artifacts:
           protocolText: text/bulletin-6816.txt
           segment: segments/bulletin-6816.yaml
@@ -40,18 +47,25 @@ protocols:
           executionScale: execution-scale/bulletin-6816/bench_plate_multichannel.yaml
           browserReport: browser-review/bulletin-6816/bench_plate_multichannel/report.yaml
           architectVerdict: architect/bulletin-6816/bench_plate_multichannel/verdict.yaml
-          patchSpecs: []
+          patchSpecs:
+            - patch-specs/bulletin-6816/bench_plate_multichannel/fix-browser-rendering.yaml
+            - patch-specs/bulletin-6816/bench_plate_multichannel/fix-event-graph-coverage-readout.yaml
+            - patch-specs/bulletin-6816/bench_plate_multichannel/fix-foundry-runtime-wiring-gap.yaml
+            - patch-specs/bulletin-6816/bench_plate_multichannel/fix-labware-alias-resolver-gap.yaml
+            - patch-specs/bulletin-6816/bench_plate_multichannel/fix-material-catalog-spec-gap.yaml
           adoptionDecision: adoption/bulletin-6816/bench_plate_multichannel/adoption.yaml
+          coderPatch: code-patches/bulletin-6816/bench_plate_multichannel/result.yaml
+          patchReport: patch-reports/bulletin-6816-bench_plate_multichannel.yaml
           rerunReport: rerun/bulletin-6816/bench_plate_multichannel/rerun.yaml
         browserStatus: skipped
         architectStatus: rejected
         criticStatus: missing
       - variant: robot_deck
-        status: blocked
+        status: gap
         eventCount: 1
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.7999999999999999
+        coverageEstimate: 0.1
         artifacts:
           protocolText: text/bulletin-6816.txt
           segment: segments/bulletin-6816.yaml
@@ -61,8 +75,14 @@ protocols:
           executionScale: execution-scale/bulletin-6816/robot_deck.yaml
           browserReport: browser-review/bulletin-6816/robot_deck/report.yaml
           architectVerdict: architect/bulletin-6816/robot_deck/verdict.yaml
-          patchSpecs: []
+          patchSpecs:
+            - patch-specs/bulletin-6816/robot_deck/fix-browser-rendering.yaml
+            - patch-specs/bulletin-6816/robot_deck/fix-event-graph-coverage-transfer.yaml
+            - patch-specs/bulletin-6816/robot_deck/fix-foundry-runtime-wiring-gap.yaml
+            - patch-specs/bulletin-6816/robot_deck/fix-material-catalog-spec-gap.yaml
           adoptionDecision: adoption/bulletin-6816/robot_deck/adoption.yaml
+          coderPatch: code-patches/bulletin-6816/robot_deck/result.yaml
+          patchReport: patch-reports/bulletin-6816-robot_deck.yaml
           rerunReport: rerun/bulletin-6816/robot_deck/rerun.yaml
         browserStatus: skipped
         architectStatus: rejected

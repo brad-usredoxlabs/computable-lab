@@ -1,0 +1,8 @@
+kind: protocol-foundry-patch-spec-index
+protocolId: bulletin-6816
+variant: robot_deck
+patchSpecs:
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-event-graph-coverage-transfer.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-foundry-runtime-wiring-gap.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-material-catalog-spec-gap.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-browser-rendering.yaml

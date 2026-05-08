@@ -1,0 +1,13 @@
+kind: protocol-foundry-stall-report
+protocolId: bulletin-6816
+variant: manual_tubes
+generated_at: 2026-05-08T12:59:39.795Z
+failureClass: source_code_drift
+driftCount: 3
+changedFiles:
+  - ackage-lock.json
+message: Source code drifted 3 consecutive times. Variant stalled to prevent
+  infinite recompile loop.
+recommendations:
+  - Stop modifying server/src/foundry/ files while the loop is running
+  - Or restart the loop after the codebase stabilizes

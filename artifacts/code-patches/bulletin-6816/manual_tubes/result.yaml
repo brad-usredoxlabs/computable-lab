@@ -1,0 +1,93 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: bulletin-6816
+variant: manual_tubes
+generated_at: 2026-05-08T18:24:41.270Z
+status: failed
+message: Patch applied but compilation failed; reverted.
+touchedFiles:
+  - server/src/foundry/ProtocolFoundryCompileRunner.ts
+tscOutput: >-
+  src/ai/compiler/labwareLookup.ts(37,3): error TS1117: An object literal cannot
+  have multiple properties with the same name.
+
+  src/api/handlers/AIHandlers.ts(13,10): error TS6133: 'extractFileContent' is
+  declared but its value is never read.
+
+  src/api/handlers/AIHandlers.ts(13,54): error TS6133: 'ExtractedFile' is
+  declared but its value is never read.
+
+  src/api/handlers/ExtractHandlers.ts(88,54): error TS2532: Object is possibly
+  'undefined'.
+
+  src/api/handlers/ExtractHandlers.ts(188,9): error TS2375: Type '{ draft:
+  Record<string, unknown>; ambiguity_spans?: AmbiguitySpan[]; status?:
+  "promoted" | "rejected"; evidence_span?: string; uncertainty?: string;
+  target_kind: string; confidence: number; }' is not assignable to type
+  'ExtractionCandidate & { ambiguity_spans?: AmbiguitySpan[]; }' with
+  'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types
+  of the target's properties.
+    Type '{ draft: Record<string, unknown>; ambiguity_spans?: AmbiguitySpan[]; status?: "promoted" | "rejected"; evidence_span?: string; uncertainty?: string; target_kind: string; confidence: number; }' is not assignable to type 'ExtractionCandidate' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+      Types of property 'uncertainty' are incompatible.
+        Type 'string' is not assignable to type '"inferred" | "unresolved" | "low" | "medium" | "high"'.
+  src/api/handlers/PlannedRunHandlers.ts(24,7): error TS6133: 'WELL_ID_LENIENT'
+  is declared but its value is never read.
+
+  src/api/handlers/PlannedRunHandlers.ts(48,10): error TS18048: 'pattern' is
+  possibly 'undefined'.
+
+  src/api/handlers/PlannedRunHandlers.ts(161,38): error TS2339: Property
+  'getRecord' does not exist on type 'RecordStoreImpl'.
+
+  src/api/handlers/PlannedRunHandlers.ts(188,63): error TS2345: Argument of type
+  'unknown' is not assignable to parameter of type 'string'.
+
+  src/api/handlers/PlannedRunHandlers.ts(203,64): error TS2345: Argument of type
+  'unknown' is not assignable to parameter of type 'string'.
+
+  src/api/handlers/PlannedRunHandlers.ts(222,23): error TS2339: Property
+  'updateRecord' does not exist on type 'RecordStoreImpl'.
+
+  src/api/handlers/PlannedRunHandlers.ts(340,7): error TS2322: Type '{ status:
+  RunPlanCompileStatus; diagnostics: PassDiagnostic[]; eventGraphRef: string |
+  undefined; }' is not assignable to type 'ApiError | { status: string;
+  diagnostics: unknown[]; eventGraphRef?: string; }'.
+    Type '{ status: RunPlanCompileStatus; diagnostics: PassDiagnostic[]; eventGraphRef: string | undefined; }' is not assignable to type '{ status: string; diagnostics: unknown[]; eventGraphRef?: string; }' with 'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the types of the target's properties.
+      Types of property 'eventGraphRef' are incompatible.
+        Type 'string | undefined' is not assignable to type 'string'.
+          Type 'undefined' is not assignable to type 'string'.
+  src/api/handlers/ProcurementHandlers.ts(10,28): error TS6196: 'RecordEnvelope'
+  is declared but never used.
+
+  src/api/handlers/ProcurementHandlers.ts(58,13): error TS6133: 'sourceType' is
+  declared but its value is never read.
+
+  src/api/handlers/UIHandlers.ts(123,5): error TS2412: Type 'ProcurementManifest
+  | undefined' is not assignable to type 'ProcurementManifest' with
+  'exactOptionalPropertyTypes: true'. Consider adding 'undefined' to the type of
+  the target.
+    Type 'undefined' is not assignable to type 'ProcurementManifest'.
+  src/api/handlers/UIHandlers.ts(337,11): error TS6133: 'recordId' is declared
+  but its value is never read.
+
+  src/api/handlers/UIHandlers.ts(338,21): error TS6133: 'query' is declared but
+  its value is never read.
+
+  src/api/handlers/UIHandlers.ts(348,11): error TS6133: 'resolvedLimit' is
+  declared but its value is never read.
+
+  src/api/handlers/VendorSearchHandlers.ts(4,42): error TS6196:
+  'ProtocolIdeVendorId' is declared but never used.
+
+  src/compiler/artifacts/QuantStudioEmitter.ts(10,7): error TS2322: Type
+  '(events: PlateEventPrimitive[], resol
+rawResponse: >-
+  
+
+  @@replace createLlmClient@@
+
+  function createLlmClient(options: ProtocolFoundryCompileOptions, variant?:
+  FoundryVariant): LlmClient {
+    return createInferenceClient(options.inference ?? {});
+  }
+
+  @@end@@

@@ -1,0 +1,8 @@
+kind: protocol-worker-report
+protocolId: bulletin-6816
+variant: robot_deck
+generated_at: 2026-05-08T15:34:05.989Z
+status: failed
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/robot_deck/result.yaml
+touchedFiles: []
+message: compilation failed

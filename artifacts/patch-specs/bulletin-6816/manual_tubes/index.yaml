@@ -1,0 +1,9 @@
+kind: protocol-foundry-patch-spec-index
+protocolId: bulletin-6816
+variant: manual_tubes
+patchSpecs:
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/manual_tubes/fix-event-graph-coverage-readout.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/manual_tubes/fix-foundry-runtime-wiring-gap.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/manual_tubes/fix-labware-alias-resolver-gap.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/manual_tubes/fix-material-catalog-spec-gap.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/manual_tubes/fix-browser-rendering.yaml
