@@ -3,7 +3,7 @@ import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { dirname, join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
-import type { CompletionRequest, CompletionResponse, InferenceClient, ToolCall, ToolDefinition } from '../ai/types.js';
+import type { ChatMessage, CompletionRequest, CompletionResponse, InferenceClient, ToolCall, ToolDefinition } from '../ai/types.js';
 import { queryWorkbenchRetrieval } from './FoundryRetrieval.js';
 import { boundedToolTranscript, extractInlineXmlToolCalls } from './FoundryToolBudget.js';
 
@@ -368,10 +368,27 @@ export async function completeWithWorktreeTools(input: {
   repoRoot?: string;
   workbenchRoot?: string;
   maxToolRounds?: number;
+  tracePath?: string;
+  onTranscriptUpdate?: (messages: ChatMessage[]) => void | Promise<void>;
 }): Promise<CompletionResponse> {
   const messages = [...input.request.messages];
   const maxToolRounds = input.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
   const profileName = process.env['PROTOCOL_FOUNDRY_RETRIEVAL_PROFILE'] ?? process.env['WORKBENCH_PROFILE'] ?? 'dgx-spark';
+  let editToolSeen = false;
+  let lastEditNudgeRound = -1;
+
+  async function recordTranscript(): Promise<void> {
+    await input.onTranscriptUpdate?.(messages.map((message) => ({ ...message })));
+    if (input.tracePath) {
+      await mkdir(dirname(input.tracePath), { recursive: true });
+      await writeFile(input.tracePath, JSON.stringify({
+        updated_at: new Date().toISOString(),
+        worktreeRoot: input.worktreeRoot,
+        messageCount: messages.length,
+        messages,
+      }, null, 2), 'utf-8');
+    }
+  }
 
   for (let round = 0; round <= maxToolRounds; round += 1) {
     const response = await input.client.complete({
@@ -385,6 +402,8 @@ export async function completeWithWorktreeTools(input: {
     const toolCalls = message?.tool_calls?.length ? message.tool_calls : inlineToolCalls;
     if (!message || toolCalls.length === 0) return response;
     messages.push(inlineToolCalls.length > 0 ? { ...message, content: null, tool_calls: inlineToolCalls } : message);
+    editToolSeen = editToolSeen || toolCalls.some((toolCall) =>
+      toolCall.function.name === 'worktree_replace_lines' || toolCall.function.name === 'worktree_write_file');
     for (const toolCall of toolCalls.slice(0, 8)) {
       const started = Date.now();
       try {
@@ -410,6 +429,18 @@ export async function completeWithWorktreeTools(input: {
         });
       }
     }
+    if (!editToolSeen && round >= 5 && round - lastEditNudgeRound >= 4) {
+      lastEditNudgeRound = round;
+      messages.push({
+        role: 'user',
+        content: [
+          'You have spent multiple rounds inspecting without changing files.',
+          'On the next tool turn, either call worktree_replace_lines/worktree_write_file to make the smallest safe edit, or return final JSON with a concrete blockedReason explaining which exact context is still missing.',
+          'Do not call worktree_diff again until after an edit tool has changed the worktree.',
+        ].join('\n'),
+      });
+    }
+    await recordTranscript();
   }
 
   const currentDiff = await gitDiff(input.worktreeRoot).catch((error) =>
@@ -417,6 +448,7 @@ export async function completeWithWorktreeTools(input: {
   const diffBlock = currentDiff.trim()
     ? currentDiff.slice(0, MAX_TOOL_RESULT_CHARS)
     : '(no worktree changes)';
+  await recordTranscript();
 
   return input.client.complete({
     ...input.request,

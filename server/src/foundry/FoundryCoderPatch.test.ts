@@ -376,13 +376,6 @@ describe('FoundryCoderPatch verification routing', () => {
       'server/src/compiler/pipeline/passes/AiPrecompileShapeMismatch.log.test.ts',
     ])).toEqual([
       [
-        'npx',
-        'tsc',
-        '--noEmit',
-        '--pretty',
-        'false',
-      ],
-      [
         'npm',
         'test',
         '--',

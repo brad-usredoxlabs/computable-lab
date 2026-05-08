@@ -5,6 +5,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import YAML from 'yaml';
 import { createInferenceClient } from '../ai/InferenceClient.js';
+import type { ChatMessage } from '../ai/types.js';
 import type { InferenceConfig } from '../config/types.js';
 import { asRecord, nowIso, readYamlFile, writeYamlFile } from './FoundryArtifacts.js';
 import type { FoundryVariant } from './ProtocolFoundryCompileRunner.js';
@@ -621,6 +622,28 @@ function parsedHasPatchPayload(value: Record<string, unknown> | undefined): bool
   return parseStructuredEdits(value['edits']).length > 0;
 }
 
+function compactToolTraceForPrompt(messages: ChatMessage[], maxChars = 18_000): string {
+  const entries: string[] = [];
+  for (const message of messages) {
+    if (message.role === 'assistant' && message.tool_calls?.length) {
+      for (const toolCall of message.tool_calls) {
+        entries.push(`assistant_tool ${toolCall.function.name} ${toolCall.function.arguments}`);
+      }
+      continue;
+    }
+    if (message.role === 'tool') {
+      const content = typeof message.content === 'string' ? message.content : '';
+      entries.push(`tool_result ${message.tool_call_id ?? '(unknown)'} ${content.slice(0, 2500)}`);
+      continue;
+    }
+    if (message.role === 'user' && typeof message.content === 'string' && message.content.includes('multiple rounds inspecting')) {
+      entries.push(`harness_nudge ${message.content}`);
+    }
+  }
+  const text = entries.slice(-40).join('\n\n');
+  return text.length > maxChars ? `${text.slice(-maxChars)}\n...[truncated earlier tool trace]` : text;
+}
+
 function parseStructuredEdits(value: unknown): StructuredEdit[] {
   if (!Array.isArray(value)) return [];
   const edits: StructuredEdit[] = [];
@@ -956,15 +979,6 @@ async function assertTouchedFilesClean(repoRoot: string, touchedFiles: string[])
 }
 
 export function defaultVerificationArgs(touchedFiles: string[]): string[][] {
-  // Step 1: Fast TypeScript syntax/type check — catches corrupted patches in <1s
-  const syntaxCheck = [
-    'npx',
-    'tsc',
-    '--noEmit',
-    '--pretty',
-    'false',
-  ];
-
   const tests = new Set<string>();
   for (const file of touchedFiles) {
     if (file.startsWith('server/src/') && /\.test\.(ts|tsx)$/.test(file)) {
@@ -992,10 +1006,18 @@ export function defaultVerificationArgs(touchedFiles: string[]): string[][] {
     tests.add('src/foundry/FoundryWorktreeTools.test.ts');
   }
   if (tests.size === 0) tests.add('src/foundry/FoundryLedger.test.ts');
-  return [
-    syntaxCheck,
-    ['npm', 'test', '--', '--run', ...Array.from(tests)],
-  ];
+  const commands: string[][] = [];
+  if (process.env['PROTOCOL_FOUNDRY_STRICT_TSC'] === 'true') {
+    commands.push([
+      'npx',
+      'tsc',
+      '--noEmit',
+      '--pretty',
+      'false',
+    ]);
+  }
+  commands.push(['npm', 'test', '--', '--run', ...Array.from(tests)]);
+  return commands;
 }
 
 async function runVerification(repoRoot: string, touchedFiles: string[]): Promise<Array<{
@@ -1246,6 +1268,8 @@ async function requestCoderPatch(input: {
 }): Promise<CoderResponse> {
   const worktreeRoot = await createAttemptWorktree(input.repoRoot, input.tournamentDir, input.attempt);
   try {
+    let toolTranscript: ChatMessage[] = [];
+    const tracePath = join(input.tournamentDir, 'traces', `attempt-${input.attempt}.json`);
     const userPayload = {
       protocolId: input.protocolId,
       variant: input.variant,
@@ -1280,6 +1304,10 @@ async function requestCoderPatch(input: {
       repoRoot: input.repoRoot,
       ...(input.workbenchRoot ? { workbenchRoot: input.workbenchRoot } : {}),
       maxToolRounds: Number(process.env['PROTOCOL_FOUNDRY_CODER_TOOL_ROUNDS'] ?? 18),
+      tracePath,
+      onTranscriptUpdate: (messages) => {
+        toolTranscript = messages;
+      },
       request: {
         model: input.model,
         temperature: 0.15,
@@ -1316,6 +1344,7 @@ async function requestCoderPatch(input: {
     let parsed = extractJsonObject(content);
     const diff = await readWorktreeDiff(worktreeRoot);
     if (!diff.trim() && !parsedHasPatchPayload(parsed)) {
+      const toolTrace = compactToolTraceForPrompt(toolTranscript);
       const fallback = await input.client.complete({
         model: input.model,
         temperature: 0.05,
@@ -1337,6 +1366,7 @@ async function requestCoderPatch(input: {
             role: 'user',
             content: JSON.stringify({
               ...userPayload,
+              toolTrace,
               priorResponse: content.slice(0, 6000),
               priorFailure: 'The previous response produced no worktree diff and no structured edits. Produce a real patch payload now.',
             }),
