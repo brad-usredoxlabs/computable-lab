@@ -579,6 +579,10 @@ export async function runFoundryLoop(options: FoundryLoopOptions): Promise<Found
         if (task.stage === 'coder_patch' && !options.applyPatches) return false;
         return true;
       });
+      // Serialize coder_patch: only one at a time to avoid merge conflicts on the same files
+      const coderPatchTasks = runnableTasks.filter((t) => t.stage === 'coder_patch');
+      const otherTasks = runnableTasks.filter((t) => t.stage !== 'coder_patch');
+      const limitedTasks = otherTasks.concat(coderPatchTasks.slice(0, 1));
       if (runnableTasks.length === 0) {
         await writeAllFoundryMetrics(ledger);
         if (options.writeReviewIndex !== false) await writeFoundryReviewIndex(ledger);
@@ -586,7 +590,7 @@ export async function runFoundryLoop(options: FoundryLoopOptions): Promise<Found
         await sleep(options.pollMs ?? 30_000);
         continue;
       }
-      await runLimited(runnableTasks, options.maxConcurrency ?? 4, async (task) => {
+      await runLimited(limitedTasks, options.maxConcurrency ?? 4, async (task) => {
         await runTask(options, ledger, task);
         tasksRun += 1;
       });
