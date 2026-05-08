@@ -4,11 +4,14 @@ import { execFile } from 'node:child_process';
 import { join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { InferenceClient, CompletionRequest, CompletionResponse, ToolDefinition, ToolCall } from '../ai/types.js';
+import { queryWorkbenchRetrieval } from './FoundryRetrieval.js';
+import { boundedToolTranscript } from './FoundryToolBudget.js';
 
 const execFileAsync = promisify(execFile);
-const MAX_TOOL_RESULT_CHARS = 24_000;
-const MAX_READ_CHARS = 32_000;
-const DEFAULT_MAX_TOOL_ROUNDS = 8;
+const MAX_TOOL_RESULT_CHARS = 12_000;
+const MAX_READ_CHARS = 16_000;
+const DEFAULT_MAX_TOOL_ROUNDS = 6;
+const MAX_TRANSCRIPT_CHARS = Number(process.env['PROTOCOL_FOUNDRY_TOOL_TRANSCRIPT_CHARS'] ?? 220_000);
 
 export interface FoundryBrowserToolContext {
   artifactRoot: string;
@@ -20,6 +23,23 @@ export interface FoundryBrowserToolContext {
 }
 
 const CODEBASE_TOOLS: ToolDefinition[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'codebase_retrieve',
+      description: 'Use the agent-workbench retrieval index to get reranked codebase chunks for a focused compiler/precompiler question. Prefer this before broad codebase_read calls.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Focused natural-language or symbol query.' },
+          topK: { type: 'number', description: 'Number of reranked chunks to return, default 6.' },
+          candidateK: { type: 'number', description: 'Candidate pool before reranking, default topK * 3.' },
+        },
+        required: ['query'],
+        additionalProperties: false,
+      },
+    },
+  },
   {
     type: 'function',
     function: {
@@ -235,8 +255,21 @@ async function walkFiles(root: string, dir: string, limit: number, out: string[]
   }
 }
 
-async function runCodebaseTool(repoRoot: string, toolCall: ToolCall): Promise<Record<string, unknown>> {
+async function runCodebaseTool(repoRoot: string, toolCall: ToolCall, options: { workbenchRoot?: string; profileName?: string } = {}): Promise<Record<string, unknown>> {
   const args = JSON.parse(toolCall.function.arguments || '{}') as Record<string, unknown>;
+  if (toolCall.function.name === 'codebase_retrieve') {
+    const query = typeof args['query'] === 'string' ? args['query'] : '';
+    if (!query.trim()) throw new Error('query must be a non-empty string');
+    return queryWorkbenchRetrieval({
+      repoRoot,
+      ...(options.workbenchRoot ? { workbenchRoot: options.workbenchRoot } : {}),
+      query,
+      topK: clampInt(args['topK'], 6, 1, 12),
+      candidateK: clampInt(args['candidateK'], 18, 4, 80),
+      profileName: options.profileName ?? process.env['PROTOCOL_FOUNDRY_RETRIEVAL_PROFILE'] ?? process.env['WORKBENCH_PROFILE'] ?? 'dgx-spark',
+    });
+  }
+
   if (toolCall.function.name === 'codebase_search') {
     const query = typeof args['query'] === 'string' ? args['query'] : '';
     if (!query.trim()) throw new Error('query must be a non-empty string');
@@ -294,11 +327,13 @@ export async function completeWithCodebaseTools(input: {
   const messages = [...input.request.messages];
   const maxToolRounds = input.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
   const tools = [...CODEBASE_TOOLS, ...(input.browserContext ? BROWSER_TOOLS : [])];
+  const workbenchRoot = input.browserContext?.workbenchRoot;
+  const profileName = process.env['PROTOCOL_FOUNDRY_RETRIEVAL_PROFILE'] ?? process.env['WORKBENCH_PROFILE'] ?? 'dgx-spark';
 
   for (let round = 0; round <= maxToolRounds; round += 1) {
     const response = await input.client.complete({
       ...input.request,
-      messages,
+      messages: boundedToolTranscript({ messages, maxToolContentChars: MAX_TOOL_RESULT_CHARS, maxTranscriptChars: MAX_TRANSCRIPT_CHARS }),
       tools: [...(input.request.tools ?? []), ...tools],
       tool_choice: input.request.tool_choice ?? 'auto',
     });
@@ -311,7 +346,7 @@ export async function completeWithCodebaseTools(input: {
       try {
         const result = toolCall.function.name.startsWith('foundry_browser_review_') && input.browserContext
           ? await runBrowserTool(input.repoRoot, input.browserContext, toolCall)
-          : await runCodebaseTool(input.repoRoot, toolCall);
+          : await runCodebaseTool(input.repoRoot, toolCall, { ...(workbenchRoot ? { workbenchRoot } : {}), profileName });
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
@@ -334,7 +369,7 @@ export async function completeWithCodebaseTools(input: {
   return input.client.complete({
     ...input.request,
     messages: [
-      ...messages,
+      ...boundedToolTranscript({ messages, maxToolContentChars: MAX_TOOL_RESULT_CHARS, maxTranscriptChars: MAX_TRANSCRIPT_CHARS }),
       {
         role: 'user',
         content: 'Tool budget is exhausted. Return the best final answer now using the codebase evidence already gathered.',

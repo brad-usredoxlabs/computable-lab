@@ -11,13 +11,13 @@ import type { FoundryVariant } from './ProtocolFoundryCompileRunner.js';
 import { completeWithWorktreeTools, readWorktreeDiff } from './FoundryWorktreeTools.js';
 
 const execFileAsync = promisify(execFile);
-const MAX_CONTEXT_CHARS = 15_000;
-const MAX_FILE_CHARS = 12_000;
-const MAX_ARTIFACT_CONTEXT_CHARS = 10_000;
-const MAX_ARTIFACT_FILE_CHARS = 5_000;
-const MAX_SCHEMA_CONTEXT_CHARS = 8_000;
-const MAX_LABWARE_CONTEXT_CHARS = 6_000;
-const MAX_ANCHOR_CONTEXT_CHARS = 13_000;
+const MAX_CONTEXT_CHARS = 9_000;
+const MAX_FILE_CHARS = 7_000;
+const MAX_ARTIFACT_CONTEXT_CHARS = 7_000;
+const MAX_ARTIFACT_FILE_CHARS = 3_000;
+const MAX_SCHEMA_CONTEXT_CHARS = 5_000;
+const MAX_LABWARE_CONTEXT_CHARS = 4_000;
+const MAX_ANCHOR_CONTEXT_CHARS = 8_000;
 
 type CoderPatchStatus = 'applied' | 'blocked' | 'failed' | 'skipped' | 'stale' | 'needs-human';
 
@@ -88,6 +88,39 @@ interface AttemptResult {
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function compactUnknown(value: unknown, maxChars: number): unknown {
+  if (typeof value === 'string') {
+    return value.length > maxChars ? `${value.slice(0, maxChars)}\n...[truncated ${value.length - maxChars} chars]` : value;
+  }
+  if (!value || typeof value !== 'object') return value;
+  const text = JSON.stringify(value, (_key, entry) => {
+    if (typeof entry === 'string' && entry.length > 500) return `${entry.slice(0, 500)}...`;
+    return entry;
+  });
+  if (text.length <= maxChars) return value;
+  return `${text.slice(0, maxChars)}\n...[truncated ${text.length - maxChars} chars]`;
+}
+
+function compactPatchSpecForPrompt(spec: PatchSpec): Record<string, unknown> {
+  const raw = spec.raw;
+  return {
+    id: spec.id,
+    fixClass: spec.fixClass,
+    title: spec.title,
+    rationale: spec.rationale,
+    ownedFiles: spec.ownedFiles,
+    acceptance: spec.acceptance,
+    implementationBudget: raw['implementationBudget'],
+    coderModelProfile: raw['coderModelProfile'],
+    contextHints: Array.isArray(raw['contextHints']) ? raw['contextHints'].slice(0, 8) : raw['contextHints'],
+    doNotTouch: raw['doNotTouch'],
+    sourceArtifacts: raw['sourceArtifacts'],
+    failureEvidence: compactUnknown(raw['failureEvidence'], 2_000),
+    architectNotes: compactUnknown(raw['architectNotes'], 2_000),
+    sourceVerdict: raw['sourceVerdict'],
+  };
 }
 
 async function listPatchSpecs(root: string, protocolId: string, variant: FoundryVariant): Promise<string[]> {
@@ -1199,7 +1232,9 @@ async function requestCoderPatch(input: {
     const response = await completeWithWorktreeTools({
       client: input.client,
       worktreeRoot,
-      maxToolRounds: 18,
+      repoRoot: input.repoRoot,
+      ...(input.workbenchRoot ? { workbenchRoot: input.workbenchRoot } : {}),
+      maxToolRounds: 10,
       request: {
         model: input.model,
         temperature: 0.15,
@@ -1232,7 +1267,7 @@ async function requestCoderPatch(input: {
               variant: input.variant,
               fixClass: input.fixClass,
               strategy: input.strategy,
-              patchSpecs: input.specs.map((spec) => spec.raw),
+              patchSpecs: input.specs.map(compactPatchSpecForPrompt),
               ownedFilesAreHintsNotLimits: input.ownedFiles,
               context: input.context,
               browserReviewCommand: {

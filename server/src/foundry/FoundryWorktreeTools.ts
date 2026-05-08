@@ -4,13 +4,33 @@ import { execFile } from 'node:child_process';
 import { dirname, join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type { CompletionRequest, CompletionResponse, InferenceClient, ToolCall, ToolDefinition } from '../ai/types.js';
+import { queryWorkbenchRetrieval } from './FoundryRetrieval.js';
+import { boundedToolTranscript } from './FoundryToolBudget.js';
 
 const execFileAsync = promisify(execFile);
-const MAX_TOOL_RESULT_CHARS = 30_000;
-const MAX_READ_CHARS = 40_000;
-const DEFAULT_MAX_TOOL_ROUNDS = 16;
+const MAX_TOOL_RESULT_CHARS = 14_000;
+const MAX_READ_CHARS = 18_000;
+const DEFAULT_MAX_TOOL_ROUNDS = 10;
+const MAX_TRANSCRIPT_CHARS = Number(process.env['PROTOCOL_FOUNDRY_WORKTREE_TRANSCRIPT_CHARS'] ?? 260_000);
 
 const WORKTREE_TOOLS: ToolDefinition[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'worktree_retrieve',
+      description: 'Use the agent-workbench retrieval index for the base repository to get reranked code context before broad reads in this scratch worktree.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Focused natural-language or symbol query.' },
+          topK: { type: 'number', description: 'Number of reranked chunks to return, default 6.' },
+          candidateK: { type: 'number', description: 'Candidate pool before reranking, default topK * 3.' },
+        },
+        required: ['query'],
+        additionalProperties: false,
+      },
+    },
+  },
   {
     type: 'function',
     function: {
@@ -218,8 +238,20 @@ async function gitDiff(worktreeRoot: string): Promise<string> {
   return stdout;
 }
 
-async function runWorktreeTool(worktreeRoot: string, toolCall: ToolCall): Promise<Record<string, unknown>> {
+async function runWorktreeTool(worktreeRoot: string, toolCall: ToolCall, options: { repoRoot?: string; workbenchRoot?: string; profileName?: string } = {}): Promise<Record<string, unknown>> {
   const args = JSON.parse(toolCall.function.arguments || '{}') as Record<string, unknown>;
+  if (toolCall.function.name === 'worktree_retrieve') {
+    const query = typeof args['query'] === 'string' ? args['query'] : '';
+    if (!query.trim()) throw new Error('query must be a non-empty string');
+    return queryWorkbenchRetrieval({
+      repoRoot: options.repoRoot ?? worktreeRoot,
+      ...(options.workbenchRoot ? { workbenchRoot: options.workbenchRoot } : {}),
+      query,
+      topK: clampInt(args['topK'], 6, 1, 12),
+      candidateK: clampInt(args['candidateK'], 18, 4, 80),
+      profileName: options.profileName ?? process.env['PROTOCOL_FOUNDRY_RETRIEVAL_PROFILE'] ?? process.env['WORKBENCH_PROFILE'] ?? 'dgx-spark',
+    });
+  }
 
   if (toolCall.function.name === 'worktree_search') {
     const query = typeof args['query'] === 'string' ? args['query'] : '';
@@ -333,15 +365,18 @@ export async function completeWithWorktreeTools(input: {
   client: InferenceClient;
   request: CompletionRequest;
   worktreeRoot: string;
+  repoRoot?: string;
+  workbenchRoot?: string;
   maxToolRounds?: number;
 }): Promise<CompletionResponse> {
   const messages = [...input.request.messages];
   const maxToolRounds = input.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS;
+  const profileName = process.env['PROTOCOL_FOUNDRY_RETRIEVAL_PROFILE'] ?? process.env['WORKBENCH_PROFILE'] ?? 'dgx-spark';
 
   for (let round = 0; round <= maxToolRounds; round += 1) {
     const response = await input.client.complete({
       ...input.request,
-      messages,
+      messages: boundedToolTranscript({ messages, maxToolContentChars: MAX_TOOL_RESULT_CHARS, maxTranscriptChars: MAX_TRANSCRIPT_CHARS }),
       tools: [...(input.request.tools ?? []), ...WORKTREE_TOOLS],
       tool_choice: input.request.tool_choice ?? 'auto',
     });
@@ -352,7 +387,11 @@ export async function completeWithWorktreeTools(input: {
     for (const toolCall of toolCalls.slice(0, 8)) {
       const started = Date.now();
       try {
-        const result = await runWorktreeTool(input.worktreeRoot, toolCall);
+        const result = await runWorktreeTool(input.worktreeRoot, toolCall, {
+          ...(input.repoRoot ? { repoRoot: input.repoRoot } : {}),
+          ...(input.workbenchRoot ? { workbenchRoot: input.workbenchRoot } : {}),
+          profileName,
+        });
         messages.push({
           role: 'tool',
           tool_call_id: toolCall.id,
@@ -375,7 +414,7 @@ export async function completeWithWorktreeTools(input: {
   return input.client.complete({
     ...input.request,
     messages: [
-      ...messages,
+      ...boundedToolTranscript({ messages, maxToolContentChars: MAX_TOOL_RESULT_CHARS, maxTranscriptChars: MAX_TRANSCRIPT_CHARS }),
       {
         role: 'user',
         content: 'Tool budget is exhausted. Call worktree_diff if you changed files, then return final JSON with summary and remaining concerns.',

@@ -128,6 +128,40 @@ function stringifyEvidence(value: unknown): string {
   }).toLowerCase();
 }
 
+function compactEvidence(value: unknown, maxChars: number): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  const text = typeof value === 'string'
+    ? value
+    : JSON.stringify(value, (_key, entry) => {
+      if (typeof entry === 'string' && entry.length > 800) return `${entry.slice(0, 800)}...`;
+      return entry;
+    }, 2);
+  return text.length > maxChars ? `${text.slice(0, maxChars)}\n...[truncated ${text.length - maxChars} chars]` : text;
+}
+
+function compactVerdictForNotes(verdict: ArchitectVerdict): Record<string, unknown> {
+  return {
+    protocolId: verdict.protocolId,
+    variant: verdict.variant,
+    accepted: verdict.accepted,
+    qualityScore: verdict.qualityScore,
+    coverageEstimate: verdict.coverageEstimate,
+    failureClasses: verdict.failureClasses,
+    badScalingAssumptions: verdict.badScalingAssumptions,
+    recommendedFixes: verdict.recommendedFixes.map((fix) => ({
+      id: fix.id,
+      class: fix.class,
+      title: fix.title,
+      rationale: fix.rationale,
+      ownedFiles: fix.ownedFiles,
+      acceptance: fix.acceptance.slice(0, 4),
+      contextHints: fix.contextHints?.slice(0, 6) ?? [],
+      failureEvidence: fix.failureEvidence,
+    })),
+    sourceArtifacts: verdict.sourceArtifacts,
+  };
+}
+
 type EventCoverageFamily = 'centrifuge' | 'wash' | 'incubate' | 'transfer' | 'readout' | 'serial_dilution' | 'general';
 
 function eventCoverageFamily(input: {
@@ -690,11 +724,11 @@ async function llmArchitectNotes(options: FoundryArchitectOptions, context: unkn
         ...(options.apiBase ? { apiBase: options.apiBase } : {}),
       },
     } : {}),
-    maxToolRounds: 8,
+    maxToolRounds: 5,
     request: {
       model,
       temperature: 0.1,
-      max_tokens: 4096,
+      max_tokens: options.inference?.maxTokens ?? 2048,
       messages: [
       {
         role: 'system',
@@ -740,35 +774,19 @@ export async function runFoundryArchitectReview(options: FoundryArchitectOptions
     materialContext: asRecord(materialContextRaw),
   });
 
-  // Truncate artifacts to keep the JSON context under ~30KB so the architect
-  // prompt fits within the vLLM request body budget (~80KB including tools).
-  // JSON.stringify inflates YAML with escaping, so we truncate the RAW YAML
-  // inputs before they're passed to llmArchitectNotes.
-  const compilerStr = typeof compilerRaw === 'string'
-    ? compilerRaw.slice(0, 4_000)
-    : undefined;
-  const eventGraphStr = typeof eventGraphRaw === 'string'
-    ? eventGraphRaw.slice(0, 6_000)
-    : undefined;
-  const executionScaleStr = typeof executionScaleRaw === 'string'
-    ? executionScaleRaw.slice(0, 2_000)
-    : undefined;
-  const browserReportStr = typeof browserReportRaw === 'string'
-    ? browserReportRaw.slice(0, 2_000)
-    : undefined;
-  const coderPatchStr = typeof coderPatchRaw === 'string'
-    ? coderPatchRaw.slice(0, 3_000)
-    : undefined;
-  const materialContextStr = typeof materialContextRaw === 'string'
-    ? materialContextRaw.slice(0, 5_000)
-    : undefined;
+  const compilerStr = compactEvidence(compilerRaw, 4_000);
+  const eventGraphStr = compactEvidence(eventGraphRaw, 6_000);
+  const executionScaleStr = compactEvidence(executionScaleRaw, 2_000);
+  const browserReportStr = compactEvidence(browserReportRaw, 2_000);
+  const coderPatchStr = compactEvidence(coderPatchRaw, 3_000);
+  const materialContextStr = compactEvidence(materialContextRaw, 5_000);
 
   // The deterministicVerdict above is the authoritative source of fix specs.
   // The LLM notes are supplementary prose only — don't dump the full PDF
   // text into every architect prompt. Pass only the structured artifacts
   // that already fit the vLLM request budget (~60-80KB).
   const notes = await llmArchitectNotes(options, {
-    verdict,
+    verdict: compactVerdictForNotes(verdict),
     compiler: compilerStr,
     eventGraph: eventGraphStr,
     executionScale: executionScaleStr,
