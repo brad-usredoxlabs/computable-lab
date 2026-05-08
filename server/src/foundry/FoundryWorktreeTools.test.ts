@@ -229,4 +229,74 @@ describe('FoundryWorktreeTools', () => {
     expect(fileContent).not.toContain('\\n');
     expect(fileContent).toContain('hello\nworld');
   });
+
+  it('finalizes without asking for more tools after the worktree tool budget is exhausted', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'foundry-worktree-budget-'));
+    await mkdir(join(root, 'server/src/example'), { recursive: true });
+    await writeFile(join(root, 'server/src/example/value.ts'), 'export const value = 1;\n', 'utf-8');
+    await git(root, ['init']);
+    await git(root, ['add', '.']);
+    await git(root, ['-c', 'user.name=Foundry Test', '-c', 'user.email=foundry@example.test', 'commit', '-m', 'initial']);
+
+    const requests: CompletionRequest[] = [];
+    const client: InferenceClient = {
+      async complete(request: CompletionRequest): Promise<CompletionResponse> {
+        requests.push(request);
+        if (requests.length === 1) {
+          return {
+            id: 'diff',
+            choices: [{
+              index: 0,
+              finish_reason: 'tool_calls',
+              message: {
+                role: 'assistant',
+                content: null,
+                tool_calls: [{
+                  id: 'call-diff',
+                  type: 'function',
+                  function: {
+                    name: 'worktree_diff',
+                    arguments: '{}',
+                  },
+                }],
+              },
+            }],
+          };
+        }
+
+        expect(request.tool_choice).toBe('none');
+        expect(request.tools).toBeUndefined();
+        const finalInstruction = request.messages.at(-1);
+        expect(finalInstruction?.role).toBe('user');
+        expect(finalInstruction?.content).toContain('No further tools are available.');
+        expect(finalInstruction?.content).toContain('Do not emit <tool_call> XML');
+        expect(finalInstruction?.content).toContain('(no worktree changes)');
+        expect(finalInstruction?.content).not.toContain('Call worktree_diff');
+        return {
+          id: 'final',
+          choices: [{
+            index: 0,
+            finish_reason: 'stop',
+            message: { role: 'assistant', content: '{"summary":"no changes","remainingConcerns":["blocked"]}' },
+          }],
+        };
+      },
+      async *completeStream() {
+        throw new Error('not used');
+      },
+    };
+
+    const response = await completeWithWorktreeTools({
+      client,
+      worktreeRoot: root,
+      maxToolRounds: 0,
+      request: {
+        model: 'coder',
+        messages: [{ role: 'user', content: 'try patch' }],
+      },
+    });
+
+    expect(response.choices[0]?.message.content).toContain('"summary":"no changes"');
+    expect(requests).toHaveLength(2);
+  });
 });

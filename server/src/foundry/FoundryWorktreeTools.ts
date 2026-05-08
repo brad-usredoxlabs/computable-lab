@@ -10,8 +10,8 @@ import { boundedToolTranscript, extractInlineXmlToolCalls } from './FoundryToolB
 const execFileAsync = promisify(execFile);
 const MAX_TOOL_RESULT_CHARS = 14_000;
 const MAX_READ_CHARS = 18_000;
-const DEFAULT_MAX_TOOL_ROUNDS = 10;
-const MAX_TRANSCRIPT_CHARS = Number(process.env['PROTOCOL_FOUNDRY_WORKTREE_TRANSCRIPT_CHARS'] ?? 260_000);
+const DEFAULT_MAX_TOOL_ROUNDS = 18;
+const MAX_TRANSCRIPT_CHARS = Number(process.env['PROTOCOL_FOUNDRY_WORKTREE_TRANSCRIPT_CHARS'] ?? 72_000);
 
 const WORKTREE_TOOLS: ToolDefinition[] = [
   {
@@ -412,13 +412,27 @@ export async function completeWithWorktreeTools(input: {
     }
   }
 
+  const currentDiff = await gitDiff(input.worktreeRoot).catch((error) =>
+    `Unable to read worktree_diff: ${error instanceof Error ? error.message : String(error)}`);
+  const diffBlock = currentDiff.trim()
+    ? currentDiff.slice(0, MAX_TOOL_RESULT_CHARS)
+    : '(no worktree changes)';
+
   return input.client.complete({
     ...input.request,
     messages: [
       ...boundedToolTranscript({ messages, maxToolContentChars: MAX_TOOL_RESULT_CHARS, maxTranscriptChars: MAX_TRANSCRIPT_CHARS }),
       {
         role: 'user',
-        content: 'Tool budget is exhausted. Call worktree_diff if you changed files, then return final JSON with summary and remaining concerns.',
+        content: [
+          'Tool budget is exhausted. No further tools are available.',
+          'Do not emit <tool_call> XML or request another tool.',
+          'Use this current worktree_diff snapshot as the final diff evidence:',
+          '```diff',
+          diffBlock,
+          '```',
+          'Return final JSON only with keys like summary, testsRun, remainingConcerns. If there are no worktree changes, explain why edits are blocked in remainingConcerns.',
+        ].join('\n'),
       },
     ],
     tool_choice: 'none',

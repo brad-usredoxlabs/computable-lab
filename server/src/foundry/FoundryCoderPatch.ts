@@ -1234,7 +1234,7 @@ async function requestCoderPatch(input: {
       worktreeRoot,
       repoRoot: input.repoRoot,
       ...(input.workbenchRoot ? { workbenchRoot: input.workbenchRoot } : {}),
-      maxToolRounds: 10,
+      maxToolRounds: Number(process.env['PROTOCOL_FOUNDRY_CODER_TOOL_ROUNDS'] ?? 18),
       request: {
         model: input.model,
         temperature: 0.15,

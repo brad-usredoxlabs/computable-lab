@@ -11,7 +11,7 @@ const execFileAsync = promisify(execFile);
 const MAX_TOOL_RESULT_CHARS = 12_000;
 const MAX_READ_CHARS = 16_000;
 const DEFAULT_MAX_TOOL_ROUNDS = 6;
-const MAX_TRANSCRIPT_CHARS = Number(process.env['PROTOCOL_FOUNDRY_TOOL_TRANSCRIPT_CHARS'] ?? 220_000);
+const MAX_TRANSCRIPT_CHARS = Number(process.env['PROTOCOL_FOUNDRY_TOOL_TRANSCRIPT_CHARS'] ?? 72_000);
 
 export interface FoundryBrowserToolContext {
   artifactRoot: string;
