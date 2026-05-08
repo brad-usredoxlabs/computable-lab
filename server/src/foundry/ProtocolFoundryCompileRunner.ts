@@ -405,18 +405,9 @@ function nullLlmClient(variant?: FoundryVariant): LlmClient {
 }
 
 function createLlmClient(options: ProtocolFoundryCompileOptions, variant?: FoundryVariant): LlmClient {
-  const baseUrl = options.inference?.baseUrl ?? process.env['PI_WORKER_BASE_URL'] ?? process.env['OPENAI_BASE_URL'];
-  const model = options.inference?.model ?? process.env['PI_WORKER_MODEL'] ?? process.env['OPENAI_MODEL'];
-  if (!baseUrl || !model || options.dryRun) return nullLlmClient(variant);
-  const apiKey = options.inference?.apiKey ?? process.env['OPENAI_API_KEY'];
   return createInferenceClient({
-    baseUrl,
-    model,
-    ...(apiKey ? { apiKey } : {}),
-    temperature: options.inference?.temperature ?? 0.1,
-    timeoutMs: options.inference?.timeoutMs ?? 600_000,
-    maxTokens: options.inference?.maxTokens ?? 4096,
-    enableThinking: options.inference?.enableThinking ?? false,
+    ...(options.inference ?? {}),
+    variant,
   });
 }
 function labwareDefinitionEnvelope(record: LabwareDefinitionRecord): RecordEnvelope<Record<string, unknown>> {
@@ -559,117 +550,19 @@ async function readYamlFile(path: string): Promise<Record<string, unknown>> {
 
 async function runVariant(input: {
   options: ProtocolFoundryCompileOptions;
-  protocolId: string;
   variant: FoundryVariant;
-  protocolText: string;
-  segmentPath: string;
-  materialContextPath?: string;
-  materialContext?: Record<string, unknown>;
-  llmClient: LlmClient;
-}): Promise<ProtocolFoundryCompileSummary['variants'][number]> {
-  const assumptions = foundryTestAssumptionProfile(input.protocolId, input.variant);
-  const prompt = buildPrompt({
-    protocolId: input.protocolId,
+  labwareLookup: ReturnType<typeof createFoundryLabwareLookup>;
+  recordStore?: RecordStore;
+}): Promise<RunChatbotCompileResult> {
+  const client = createLlmClient(input.options, input.variant);
+  return runChatbotCompile({
+    prompt: input.options.segmentPath,
     variant: input.variant,
-    protocolText: input.protocolText,
-    ...(input.materialContext ? { materialContext: input.materialContext } : {}),
-    assumptions,
+    labwareLookup: input.labwareLookup,
+    recordStore: input.recordStore,
+    inference: input.options.inference,
+    dryRun: input.options.dryRun,
   });
-  const model = input.options.inference?.model ?? process.env['PI_WORKER_MODEL'] ?? process.env['OPENAI_MODEL'];
-  const result = await runChatbotCompile({
-    prompt,
-    deps: {
-      extractionService: presegmentedExtractionService(),
-      llmClient: input.llmClient,
-      searchLabwareByHint: createFoundryLabwareLookup(),
-    },
-    ...(model ? { model } : {}),
-  });
-
-  const plan = result.terminalArtifacts.executionScalePlan;
-  const labwares = buildLabwares(result.events, plan, input.variant);
-  const events = normalizeEvents(result.events, labwares);
-  const outcome = foundryOutcome(result, events);
-  const graphId = `EVG-FOUNDRY-${slugify(input.protocolId)}-${input.variant}`;
-  const status = outcome === 'complete' ? 'ready' : 'blocked';
-  const targetLevel = plan?.targetLevel ?? input.variant;
-  const graphArtifact = join(input.options.artifactRoot, 'event-graphs', input.protocolId, `${input.variant}.yaml`);
-  const scaleArtifact = join(input.options.artifactRoot, 'execution-scale', input.protocolId, `${input.variant}.yaml`);
-  const compilerArtifact = join(input.options.artifactRoot, 'compiler', input.protocolId, `${input.variant}.yaml`);
-  const assumptionsArtifact = join(input.options.artifactRoot, 'assumptions', input.protocolId, `${input.variant}.yaml`);
-
-  const proposal: FoundryEventGraphProposal = {
-    kind: 'protocol-event-graph-proposal',
-    recordId: `protocol-event-graph-proposal/${input.protocolId}/${input.variant}`,
-    protocolId: input.protocolId,
-    variant: input.variant,
-    targetLevel,
-    status,
-    sourceRefs: {
-      segment: input.segmentPath,
-      ...(input.materialContextPath ? { materialContext: input.materialContextPath } : {}),
-    },
-    eventGraph: {
-      id: graphId,
-      name: `Foundry ${input.protocolId} ${input.variant}`,
-      description: `Protocol Foundry preview graph for ${input.protocolId} (${input.variant}).`,
-      status: 'draft',
-      protocolId: input.protocolId,
-      events,
-      labwares,
-      tags: ['protocol-foundry', input.variant],
-    },
-    terminalArtifacts: {
-      ...result.terminalArtifacts,
-      events,
-    },
-    diagnostics: result.diagnostics,
-    foundryTestAssumptions: assumptions,
-    browserReview: {
-      routeTemplate: '/labware-editor?id=<eventGraphRecordId>',
-      importRequired: true,
-    },
-  };
-
-  await writeYaml(graphArtifact, proposal);
-  await writeYaml(assumptionsArtifact, assumptions);
-  await writeYaml(scaleArtifact, plan ?? {
-    kind: 'execution-scale-plan',
-    recordId: `execution-scale-plan/${input.variant}`,
-    sourceLevel: 'manual_tubes',
-    targetLevel,
-    status: 'blocked',
-    reagentLayout: [],
-    assumptions: [],
-    blockers: [{
-      code: 'compile_produced_no_execution_scale_plan',
-      message: 'chatbot-compile did not emit terminalArtifacts.executionScalePlan for this variant.',
-      requiredInput: 'compiler diagnostics',
-    }],
-  });
-  await writeYaml(compilerArtifact, {
-    kind: 'protocol-foundry-compiler-result',
-    protocolId: input.protocolId,
-    variant: input.variant,
-    outcome,
-    rawOutcome: result.outcome,
-    eventCount: events.length,
-    diagnostics: result.diagnostics,
-    extractorRepairExhaustedCount: extractorRepairExhaustedCount(result),
-    gaps: result.terminalArtifacts.gaps,
-    foundryTestAssumptionsRef: assumptionsArtifact,
-    terminalArtifactsRef: graphArtifact,
-  });
-
-  return {
-    variant: input.variant,
-    outcome,
-    eventGraphArtifact: graphArtifact,
-    executionScaleArtifact: scaleArtifact,
-    compilerArtifact,
-    eventCount: events.length,
-    blockerCount: blockedBy(result),
-  };
 }
 
 export async function runProtocolFoundryCompile(options: ProtocolFoundryCompileOptions): Promise<ProtocolFoundryCompileSummary> {
