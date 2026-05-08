@@ -700,6 +700,7 @@ function deterministicVerdict(input: {
 }
 
 async function llmArchitectNotes(options: FoundryArchitectOptions, context: unknown): Promise<string | undefined> {
+  if (process.env['PROTOCOL_FOUNDRY_ARCHITECT_LLM_NOTES'] !== 'true') return undefined;
   const baseUrl = options.inference?.baseUrl ?? process.env['PI_ARCHITECT_BASE_URL'] ?? process.env['OPENAI_BASE_URL'];
   const model = options.inference?.model ?? process.env['PI_ARCHITECT_MODEL'] ?? process.env['OPENAI_MODEL'];
   if (!baseUrl || !model || options.dryRun) return undefined;
