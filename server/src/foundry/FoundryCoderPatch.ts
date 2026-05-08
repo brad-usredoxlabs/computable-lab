@@ -310,11 +310,11 @@ function applyHunkToContent(content: string, hunk: DiffHunk): string | null {
   // Check for duplicate exports: if we're adding exports that already exist
   for (const add of hunk.addedLines) {
     if (add.startsWith('export function') || add.startsWith('export const') || add.startsWith('export type')) {
-      const funcNameMatch = add.match(/export (?:function|const|type)\s+(\w+)/);
+      const funcNameMatch = add.match(/export\s+(?:function|const|type)\s+(\w+)/);
       if (funcNameMatch) {
         const name = funcNameMatch[1]!;
-        // Check if this export already exists elsewhere in the file
-        if (content.split('\n').some((l) => l.includes(`export ${name.split(' ')[0]}`))) {
+        // Check if this export name already exists elsewhere in the file
+        if (content.split('\n').some((l) => l.includes(name) && l.includes('export'))) {
           // Duplicate export — reject
           return null;
         }
@@ -527,29 +527,6 @@ function selectPatchSpecForRun(specs: PatchSpec[]): PatchSpec | undefined {
   return selectedId ? specs.find((spec) => spec.id === selectedId) : undefined;
 }
 
-async function staleOwnedFileContext(repoRoot: string, specs: PatchSpec[]): Promise<{
-  stale: boolean;
-  changedFiles: string[];
-}> {
-  const ownedFiles = Array.from(new Set(specs.flatMap((spec) => spec.ownedFiles))).filter(Boolean);
-  if (ownedFiles.length === 0) return { stale: false, changedFiles: [] };
-  const specStats = await Promise.all(specs.map((spec) => import('node:fs/promises').then((fs) => fs.stat(spec.path))));
-  const newestSpecMtime = Math.max(...specStats.map((item) => item.mtimeMs));
-  const tracked = (await runGit(repoRoot, ['ls-files', '--', ...ownedFiles])).stdout
-    .split('\n')
-    .map((file) => file.trim())
-    .filter(Boolean);
-  const changedFiles: string[] = [];
-  for (const file of tracked) {
-    const stats = await import('node:fs/promises').then((fs) => fs.stat(join(repoRoot, file))).catch(() => undefined);
-    if (stats && stats.mtimeMs > newestSpecMtime + 1000) changedFiles.push(file);
-  }
-  return {
-    stale: changedFiles.length > 0,
-    changedFiles: changedFiles.sort().slice(0, 30),
-  };
-}
-
 export async function runFoundryCoderPatch(input: {
   artifactRoot: string;
   repoRoot: string;
@@ -603,11 +580,6 @@ export async function runFoundryCoderPatch(input: {
   const model = input.inference?.model ?? process.env['PI_ARCHITECT_MODEL'] ?? process.env['OPENAI_MODEL'];
   if (!baseUrl || !model || input.dryRun) {
     return { status: 'blocked', resultPath, message: 'coder not configured', touchedFiles: [] };
-  }
-
-  const staleContext = await staleOwnedFileContext(input.repoRoot, [selectedSpec]);
-  if (staleContext.stale) {
-    return { status: 'stale', resultPath, message: 'stale patch specs', touchedFiles: [] };
   }
 
   const [ownedContext, artifactContext, schemaContext] = await Promise.all([
