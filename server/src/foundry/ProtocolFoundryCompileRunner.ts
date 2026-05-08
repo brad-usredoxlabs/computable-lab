@@ -673,32 +673,50 @@ async function runVariant(input: {
 }
 
 export async function runProtocolFoundryCompile(options: ProtocolFoundryCompileOptions): Promise<ProtocolFoundryCompileSummary> {
-  const segment = await readYamlFile(options.segmentPath);
-  const materialContext = options.materialContextPath ? await readYamlFile(options.materialContextPath) : undefined;
-  const protocolId = options.protocolId ? slugify(options.protocolId) : inferProtocolId(options.segmentPath, segment);
-  const protocolText = extractProtocolText(segment);
-  const variants = options.variants && options.variants.length > 0 ? options.variants : [...FOUNDRY_VARIANTS];
-  const summary: ProtocolFoundryCompileSummary = {
+  const variants = options.variants ?? FOUNDRY_VARIANTS;
+  const protocolId = options.protocolId ?? slugify(options.segmentPath);
+  const artifactRoot = options.artifactRoot;
+
+  const variantResults = await Promise.all(
+    variants.map(async (variant) => {
+      const llmClient = createLlmClient(options, variant);
+      const labwareLookup = createFoundryLabwareLookup();
+
+      const result = await runChatbotCompile({
+        prompt: buildPrompt({ input: options.segmentPath, variant }),
+        llmClient,
+        labwareLookup,
+        variant,
+        dryRun: options.dryRun,
+      });
+
+      const labwares = buildLabwares(result.events, undefined, variant);
+      const events = normalizeEvents(result.events, labwares);
+      const outcome = foundryOutcome(result, events);
+
+      if (!options.dryRun) {
+        await mkdir(artifactRoot, { recursive: true });
+        await writeYaml(join(artifactRoot, `event-graph-${variant}.yaml`), result.eventGraph);
+        await writeYaml(join(artifactRoot, `execution-scale-${variant}.yaml`), result.executionScale);
+        await writeYaml(join(artifactRoot, `compiler-${variant}.yaml`), result.compilerOutput);
+      }
+
+      return {
+        variant,
+        outcome,
+        eventGraphArtifact: join(artifactRoot, `event-graph-${variant}.yaml`),
+        executionScaleArtifact: join(artifactRoot, `execution-scale-${variant}.yaml`),
+        compilerArtifact: join(artifactRoot, `compiler-${variant}.yaml`),
+        eventCount: events.length,
+        blockerCount: blockedBy(result),
+      };
+    })
+  );
+
+  return {
     kind: 'protocol-foundry-compile-summary',
     protocolId,
-    artifactRoot: options.artifactRoot,
-    variants: [],
+    artifactRoot,
+    variants: variantResults,
   };
-
-  for (const variant of variants) {
-    const llmClient = createLlmClient(options, variant);
-    summary.variants.push(await runVariant({
-      options,
-      protocolId,
-      variant,
-      protocolText,
-      segmentPath: options.segmentPath,
-      ...(options.materialContextPath ? { materialContextPath: options.materialContextPath } : {}),
-      ...(materialContext ? { materialContext } : {}),
-      llmClient,
-    }));
-  }
-
-  await writeYaml(join(options.artifactRoot, 'compiler', protocolId, 'summary.yaml'), summary);
-  return summary;
 }
