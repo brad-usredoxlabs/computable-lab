@@ -544,7 +544,7 @@ export async function runFoundryCoderPatch(input: {
   }
 
   const baseUrl = input.inference?.baseUrl ?? process.env['PI_ARCHITECT_BASE_URL'] ?? process.env['OPENAI_BASE_URL'];
-  const model = input.inference?.model ?? process.env['PI_ARCHITECT_MODEL'] ?? process.env['OPENAI_MODEL'];
+  const model = input.inference?.model ?? process.env['PI_ARCHITECT_MODEL'] ?? 'Qwen/Qwen3.6-27B-FP8';
   if (!baseUrl || !model || input.dryRun) {
     return { status: 'blocked', resultPath, message: 'coder not configured', touchedFiles: [] };
   }

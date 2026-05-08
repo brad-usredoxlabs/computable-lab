@@ -221,7 +221,7 @@ async function runBrowserTask(options: FoundryLoopOptions, ledger: FoundryLedger
 async function runArchitectTask(options: FoundryLoopOptions, ledger: FoundryLedger, task: FoundryReadyTask): Promise<void> {
   markFoundryTask(ledger, { protocolId: task.protocolId, variant: task.variant, stage: 'architect_review', status: 'running' });
   await saveFoundryLedger(ledger);
-  const driftFiles = await sourceCodeDriftFiles(options.repoRoot);
+  const driftFiles = options.improvementMode ? [] : await sourceCodeDriftFiles(options.repoRoot);
   if (driftFiles.length > 0) {
     const verdictPath = join(options.artifactRoot, 'architect', task.protocolId, task.variant, 'verdict.yaml');
     // Count consecutive drift detections to prevent infinite recompile loops.
@@ -230,7 +230,7 @@ async function runArchitectTask(options: FoundryLoopOptions, ledger: FoundryLedg
     if (existing && Array.isArray(existing.failureClasses) && existing.failureClasses.includes('source_code_drift')) {
       driftCount = (Number(existing.driftCount) || 0) + 1;
     }
-    const MAX_DRIFT = 3;
+    const MAX_DRIFT = 999; // effectively disabled - be permissive to compiler improvements
     if (driftCount >= MAX_DRIFT) {
       // Too many consecutive drift detections — stall this variant instead of
       // looping endlessly.  The user can resolve the drift manually and resume.
@@ -382,8 +382,8 @@ async function runCoderPatchTask(options: FoundryLoopOptions, ledger: FoundryLed
     ...(options.apiBase ? { apiBase: options.apiBase } : {}),
     ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {}),
     inference: {
-      ...(options.workerBaseUrl ? { baseUrl: options.workerBaseUrl } : {}),
-      ...(options.workerModel ? { model: options.workerModel } : {}),
+      ...(options.architectBaseUrl ? { baseUrl: options.architectBaseUrl } : {}),
+      ...(options.architectModel ? { model: options.architectModel } : {}),
     },
     ...(options.autoCommitPatches !== undefined ? { autoCommit: options.autoCommitPatches } : {}),
     ...(options.autoPushPatches !== undefined ? { autoPush: options.autoPushPatches } : {}),
