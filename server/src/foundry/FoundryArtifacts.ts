@@ -38,6 +38,7 @@ export interface FoundryVariantLedger {
   patchSpecs?: FoundryStageRecord;
   coderPatch?: FoundryStageRecord;
   rerun?: FoundryStageRecord;
+  patchRevision?: boolean;
   artifacts: {
     compiler?: string;
     eventGraph?: string;

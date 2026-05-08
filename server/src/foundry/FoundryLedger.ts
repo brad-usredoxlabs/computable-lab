@@ -26,6 +26,7 @@ export interface FoundryReadyTask {
   protocolId: string;
   variant: FoundryVariant;
   stage: FoundryWorkStage;
+  revisionMode?: boolean;
 }
 
 export interface MarkFoundryTaskInput {
@@ -450,6 +451,12 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'patch_critic' });
       } else if (existsSync(adoptionPath) && coderPatchTerminal && criticPassed && (!existsSync(rerunPath) || rerunStale)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'rerun' });
+      }
+
+      // Revision injection: if the variant has patchRevision set, inject a coder_patch
+      // with revisionMode so the supervisor can retry the patch with critic feedback.
+      if (item.patchRevision && item.artifacts.adoptionDecision && hasPatchSpecs) {
+        tasks.push({ protocolId: protocol.protocolId, variant, stage: 'coder_patch', revisionMode: true });
       }
     }
   }

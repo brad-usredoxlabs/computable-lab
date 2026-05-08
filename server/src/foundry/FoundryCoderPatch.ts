@@ -506,6 +506,7 @@ export async function runFoundryCoderPatch(input: {
   dryRun?: boolean;
   autoCommit?: boolean;
   autoPush?: boolean;
+  revisionFeedback?: string;
 }): Promise<FoundryCoderPatchResult> {
   const resultRoot = join(input.artifactRoot, 'code-patches', input.protocolId, input.variant);
   const resultPath = join(resultRoot, 'result.yaml');
@@ -651,6 +652,8 @@ export async function runFoundryCoderPatch(input: {
           ``,
           `## Relevant Artifact Context`,
           `${(context || '').slice(0, 6000)}`,
+          ...(input.revisionFeedback ? [`
+## CRITIC REVISION FEEDBACK`, input.revisionFeedback] : []),
           ``,
           `Produce symbol replacement blocks that fix this issue.`,
         ].join('\n'),

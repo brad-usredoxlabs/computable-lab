@@ -23,7 +23,7 @@ import {
   writeModelUsageMetrics,
   type ModelEndpointUsage,
 } from './FoundryMetrics.js';
-import { readYamlFile, writeYamlFile, type FoundryLedger } from './FoundryArtifacts.js';
+import { asRecord, readYamlFile, writeYamlFile, type FoundryLedger } from './FoundryArtifacts.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -372,6 +372,15 @@ async function runPatchAdoptionTask(options: FoundryLoopOptions, ledger: Foundry
 async function runCoderPatchTask(options: FoundryLoopOptions, ledger: FoundryLedger, task: FoundryReadyTask): Promise<void> {
   markFoundryTask(ledger, { protocolId: task.protocolId, variant: task.variant, stage: 'coder_patch', status: 'running' });
   await saveFoundryLedger(ledger);
+
+  // Load revision feedback if this is a revision run
+  let revisionFeedback: string | undefined;
+  if (task.revisionMode) {
+    const coderPatchPath = join(options.artifactRoot, 'code-patches', task.protocolId, task.variant, 'result.yaml');
+    const existing = asRecord(await readYamlFile(coderPatchPath));
+    revisionFeedback = (existing['revisionFeedback'] as string) || undefined;
+  }
+
   const result = await runFoundryCoderPatch({
     artifactRoot: options.artifactRoot,
     repoRoot: options.repoRoot,
@@ -387,6 +396,7 @@ async function runCoderPatchTask(options: FoundryLoopOptions, ledger: FoundryLed
     },
     ...(options.autoCommitPatches !== undefined ? { autoCommit: options.autoCommitPatches } : {}),
     ...(options.autoPushPatches !== undefined ? { autoPush: options.autoPushPatches } : {}),
+    ...(revisionFeedback ? { revisionFeedback } : {}),
   });
   await writeYamlFile(join(options.artifactRoot, 'patch-reports', `${task.protocolId}-${task.variant}.yaml`), {
     kind: 'protocol-worker-report',
@@ -428,18 +438,40 @@ async function runPatchCriticTask(options: FoundryLoopOptions, ledger: FoundryLe
     artifactRoot: options.artifactRoot,
     protocolId: task.protocolId,
     variant: task.variant,
+    repoRoot: options.repoRoot,
   });
+
+  // Clear patch_critic task from ledger to prevent re-selection.
+  // The coder_patch result tracks the actual pipeline state.
   markFoundryTask(ledger, {
     protocolId: task.protocolId,
     variant: task.variant,
     stage: 'patch_critic',
-    status: result.verdict === 'pass' ? 'accepted' : 'blocked',
+    status: 'completed',
     artifacts: {
       criticReport: result.reportPath,
       ...(result.patchFailurePath ? { patchFailure: result.patchFailurePath } : {}),
     },
     message: result.message,
   });
+
+  // If revision is needed, set the flag and write feedback to the coder patch result.
+  // The next cycle will inject a revision coder_patch via readyTasks.
+  if (result.verdict === 'revision' && result.revisionFeedback) {
+    const coderPatchPath = join(options.artifactRoot, 'code-patches', task.protocolId, task.variant, 'result.yaml');
+    const existing = asRecord(await readYamlFile(coderPatchPath));
+    existing['revisionFeedback'] = result.revisionFeedback;
+    await writeYamlFile(coderPatchPath, existing);
+
+    const protocol = ledger.protocol_status[task.protocolId];
+    const item = protocol?.variants[task.variant];
+    if (item) {
+      item.patchRevision = true;
+      await saveFoundryLedger(ledger);
+      return;
+    }
+  }
+
   await saveFoundryLedger(ledger);
 }
 
