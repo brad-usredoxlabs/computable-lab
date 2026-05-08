@@ -604,6 +604,23 @@ function extractJsonObject(text: string): Record<string, unknown> | undefined {
   return undefined;
 }
 
+function parsedUnifiedDiff(value: Record<string, unknown> | undefined): string | undefined {
+  if (!value) return undefined;
+  const candidate = typeof value['unifiedDiff'] === 'string'
+    ? value['unifiedDiff']
+    : typeof value['diff'] === 'string'
+      ? value['diff']
+      : undefined;
+  if (!candidate) return undefined;
+  return candidate.includes('diff --git ') || candidate.includes('--- a/') ? candidate : undefined;
+}
+
+function parsedHasPatchPayload(value: Record<string, unknown> | undefined): boolean {
+  if (!value) return false;
+  if (parsedUnifiedDiff(value)) return true;
+  return parseStructuredEdits(value['edits']).length > 0;
+}
+
 function parseStructuredEdits(value: unknown): StructuredEdit[] {
   if (!Array.isArray(value)) return [];
   const edits: StructuredEdit[] = [];
@@ -1229,6 +1246,34 @@ async function requestCoderPatch(input: {
 }): Promise<CoderResponse> {
   const worktreeRoot = await createAttemptWorktree(input.repoRoot, input.tournamentDir, input.attempt);
   try {
+    const userPayload = {
+      protocolId: input.protocolId,
+      variant: input.variant,
+      fixClass: input.fixClass,
+      strategy: input.strategy,
+      patchSpecs: input.specs.map(compactPatchSpecForPrompt),
+      ownedFilesAreHintsNotLimits: input.ownedFiles,
+      context: input.context,
+      browserReviewCommand: {
+        command: 'node',
+        args: [
+          join(input.workbenchRoot ?? resolve(input.repoRoot, '..', 'agent-workbench'), 'scripts', 'protocol_foundry_browser_review.cjs'),
+          '--repo-root',
+          input.repoRoot,
+          '--proposal',
+          join(input.artifactRoot, 'event-graphs', input.protocolId, `${input.variant}.yaml`),
+          '--out',
+          join(input.artifactRoot, 'browser-review', input.protocolId, input.variant),
+          ...(input.apiBase ? ['--api-base', input.apiBase] : []),
+          ...(input.appBase ? ['--app-base', input.appBase] : []),
+        ],
+      },
+      ...(input.priorDiff ? { priorDiff: input.priorDiff } : {}),
+      ...(input.priorResponse ? { priorResponse: input.priorResponse } : {}),
+      ...(input.priorFailure ? { priorFailure: input.priorFailure } : {}),
+      ...(input.priorVerification ? { priorVerification: input.priorVerification } : {}),
+      ...(input.corruptedFileRegion ? { corruptedFileRegion: input.corruptedFileRegion } : {}),
+    };
     const response = await completeWithWorktreeTools({
       client: input.client,
       worktreeRoot,
@@ -1262,41 +1307,45 @@ async function requestCoderPatch(input: {
           },
           {
             role: 'user',
-            content: JSON.stringify({
-              protocolId: input.protocolId,
-              variant: input.variant,
-              fixClass: input.fixClass,
-              strategy: input.strategy,
-              patchSpecs: input.specs.map(compactPatchSpecForPrompt),
-              ownedFilesAreHintsNotLimits: input.ownedFiles,
-              context: input.context,
-              browserReviewCommand: {
-                command: 'node',
-                args: [
-                  join(input.workbenchRoot ?? resolve(input.repoRoot, '..', 'agent-workbench'), 'scripts', 'protocol_foundry_browser_review.cjs'),
-                  '--repo-root',
-                  input.repoRoot,
-                  '--proposal',
-                  join(input.artifactRoot, 'event-graphs', input.protocolId, `${input.variant}.yaml`),
-                  '--out',
-                  join(input.artifactRoot, 'browser-review', input.protocolId, input.variant),
-                  ...(input.apiBase ? ['--api-base', input.apiBase] : []),
-                  ...(input.appBase ? ['--app-base', input.appBase] : []),
-                ],
-              },
-              ...(input.priorDiff ? { priorDiff: input.priorDiff } : {}),
-              ...(input.priorResponse ? { priorResponse: input.priorResponse } : {}),
-              ...(input.priorFailure ? { priorFailure: input.priorFailure } : {}),
-              ...(input.priorVerification ? { priorVerification: input.priorVerification } : {}),
-              ...(input.corruptedFileRegion ? { corruptedFileRegion: input.corruptedFileRegion } : {}),
-            }),
+            content: JSON.stringify(userPayload),
           },
         ],
       },
     });
-    const content = response.choices[0]?.message.content ?? '';
-    const parsed = extractJsonObject(content);
+    let content = response.choices[0]?.message.content ?? '';
+    let parsed = extractJsonObject(content);
     const diff = await readWorktreeDiff(worktreeRoot);
+    if (!diff.trim() && !parsedHasPatchPayload(parsed)) {
+      const fallback = await input.client.complete({
+        model: input.model,
+        temperature: 0.05,
+        max_tokens: 8192,
+        tool_choice: 'none',
+        messages: [
+          {
+            role: 'system',
+            content: [
+              'You are the Protocol Foundry patch synthesizer. The previous coder used repository tools but left an empty git diff.',
+              'You have no tools. Do not emit <tool_call> XML. Do not claim that changes were applied.',
+              'Return JSON only. Prefer an edits array of exact search/replace edits: { "path": string, "search": string, "replace": string, "occurrence"?: number, "anchorId"?: string }.',
+              'Every search block must be copied exactly from Repository context or Exact source anchors and should be a small stable 3-10 line block when possible.',
+              'If structured edits are impossible but a valid patch is clear, return unifiedDiff with a git unified diff.',
+              'If no exact patch can be produced from the supplied context, return {"summary": "...", "edits": [], "remainingConcerns": "..."} without pretending success.',
+            ].join('\n'),
+          },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              ...userPayload,
+              priorResponse: content.slice(0, 6000),
+              priorFailure: 'The previous response produced no worktree diff and no structured edits. Produce a real patch payload now.',
+            }),
+          },
+        ],
+      });
+      content = fallback.choices[0]?.message.content ?? content;
+      parsed = extractJsonObject(content);
+    }
     return {
       attempt: input.attempt,
       strategy: input.strategy,
@@ -1322,6 +1371,13 @@ async function evaluateCandidate(input: {
   const rawResponse = input.response.content.slice(0, 4000);
   let responseDiff = input.response.diff;
   let diffSource = input.response.diffSource;
+  if (!responseDiff && input.response.parsed) {
+    const unifiedDiff = parsedUnifiedDiff(input.response.parsed);
+    if (unifiedDiff) {
+      responseDiff = unifiedDiff.trimEnd() + '\n';
+      diffSource = 'unifiedDiff';
+    }
+  }
   if (!responseDiff && input.response.parsed) {
     const structuredEdits = parseStructuredEdits(input.response.parsed['edits']);
     if (structuredEdits.length > 0) {
