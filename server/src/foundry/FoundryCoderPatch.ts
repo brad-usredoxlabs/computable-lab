@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { Project } from 'ts-morph';
 import { createInferenceClient } from '../ai/InferenceClient.js';
 import type { InferenceConfig } from '../config/types.js';
 import { asRecord, nowIso, readYamlFile, writeYamlFile } from './FoundryArtifacts.js';
@@ -36,6 +37,161 @@ export interface PatchSpec {
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+// ─── Symbol replacement infrastructure (via ts-morph) ───
+
+interface SymbolBlock {
+  name: string;
+  start: number;    // 0-indexed line
+  end: number;      // exclusive end line
+  declaration: string;
+  kind: string;
+}
+
+interface SymbolReplacement {
+  op: 'replace' | 'add';
+  targetName: string | undefined;
+  content: string;
+}
+
+// Convert char position to 0-indexed line number
+function charToLine(content: string, charPos: number): number {
+  let line = 0;
+  for (let i = 0; i < charPos && i < content.length; i++) {
+    if (content[i] === '\n') line++;
+  }
+  return line;
+}
+
+function firstLineOf(text: string): string {
+  return text.split('\n')[0]!;
+}
+
+/** Parse a TypeScript file with ts-morph and extract all symbol boundaries */
+function findSymbolBlocks(content: string): SymbolBlock[] {
+  const project = new Project({ skipAddingFilesFromTsConfig: true, compilerOptions: { skipLibCheck: true } });
+  const source = project.createSourceFile('/tmp/symbols.ts', content, { overwrite: true });
+  const blocks: SymbolBlock[] = [];
+
+  // Functions
+  for (const func of source.getFunctions()) {
+    const name = func.getName() || '<anonymous>';
+    blocks.push({
+      name,
+      start: charToLine(content, func.getStart()),
+      end: charToLine(content, func.getEnd()),
+      declaration: firstLineOf(func.getText()),
+      kind: 'function',
+    });
+  }
+
+  // Interfaces
+  for (const iface of source.getInterfaces()) {
+    blocks.push({
+      name: iface.getName(),
+      start: charToLine(content, iface.getStart()),
+      end: charToLine(content, iface.getEnd()),
+      declaration: firstLineOf(iface.getText()),
+      kind: 'interface',
+    });
+  }
+
+  // Type aliases
+  for (const alias of source.getTypeAliases()) {
+    blocks.push({
+      name: alias.getName(),
+      start: charToLine(content, alias.getStart()),
+      end: charToLine(content, alias.getEnd()),
+      declaration: firstLineOf(alias.getText()),
+      kind: 'type',
+    });
+  }
+
+  // Classes
+  for (const cls of source.getClasses()) {
+    blocks.push({
+      name: cls.getName() || '<anonymous>',
+      start: charToLine(content, cls.getStart()),
+      end: charToLine(content, cls.getEnd()),
+      declaration: firstLineOf(cls.getText()),
+      kind: 'class',
+    });
+  }
+
+  // Enums
+  for (const enumDecl of source.getEnums()) {
+    blocks.push({
+      name: enumDecl.getName(),
+      start: charToLine(content, enumDecl.getStart()),
+      end: charToLine(content, enumDecl.getEnd()),
+      declaration: firstLineOf(enumDecl.getText()),
+      kind: 'enum',
+    });
+  }
+
+  return blocks.sort((a, b) => a.start - b.start);
+}
+
+/** Apply symbol-level replacements to source content */
+function applySymbolReplacements(
+  content: string,
+  replacements: SymbolReplacement[],
+): string {
+  const blocks = findSymbolBlocks(content);
+  const lines = content.split('\n');
+
+  interface EditOp {
+    start: number;
+    end: number;
+    insert: string;
+  }
+  const ops: EditOp[] = [];
+
+  for (const repl of replacements) {
+    if (repl.op === 'replace' && repl.targetName) {
+      const block = blocks.find((b) => b.name === repl.targetName);
+      if (block) {
+        ops.push({ start: block.start, end: block.end + 1, insert: repl.content });
+      }
+    } else if (repl.op === 'add') {
+      let insertAt = lines.length;
+      while (insertAt > 0 && lines[insertAt - 1]!.trim() === '') insertAt--;
+      ops.push({ start: insertAt, end: insertAt, insert: repl.content });
+    }
+  }
+
+  // Apply bottom-up so earlier positions remain valid
+  ops.sort((a, b) => b.start - a.start);
+  for (const op of ops) {
+    const newLines = [
+      ...lines.slice(0, op.start),
+      ...op.insert.split('\n'),
+      ...lines.slice(op.end),
+    ];
+    content = newLines.join('\n');
+    // Re-split for next iteration (only bottom-up ops, so earlier positions unchanged)
+    const newLinesArr = content.split('\n');
+    content = newLinesArr.join('\n');
+  }
+
+  return content;
+}
+
+/** Parse LLM response for symbol replacement blocks */
+function parseSymbolResponse(text: string): SymbolReplacement[] {
+  const replacements: SymbolReplacement[] = [];
+  const pattern = /@@(replace|add)\s*([^@\n]*)\n?([\s\S]*?)@@end@@/g;
+  let match;
+  while ((match = pattern.exec(text)) !== null) {
+    const op = match[1]!.toLowerCase() as 'replace' | 'add';
+    const targetName = match[2]!.trim() || undefined;
+    const content = match[3]!.trim();
+    if (content) {
+      replacements.push({ op, targetName, content });
+    }
+  }
+  return replacements;
 }
 
 async function listPatchSpecs(root: string, protocolId: string, variant: FoundryVariant): Promise<string[]> {
@@ -161,178 +317,6 @@ async function collectSchemaContext(repoRoot: string, fixClass: string): Promise
   return chunks.join('\n\n').slice(0, MAX_SCHEMA_CONTEXT_CHARS);
 }
 
-// Parse a (possibly malformed) git diff to extract per-file hunks
-interface DiffHunk {
-  file: string;
-  contextLines: string[];
-  addedLines: string[];
-  removedLines: string[];
-  claimedOldLine?: number;  // from @@ -X,Y
-}
-
-function parseDiffToHunks(diff: string): DiffHunk[] {
-  const hunks: DiffHunk[] = [];
-  const lines = diff.split('\n');
-  let currentFile = '';
-  let currentHunk: DiffHunk | null = null;
-
-  for (const rawLine of lines) {
-    // Detect new file
-    const gitMatch = rawLine.match(/^diff --git a\/(.+?) b\/(.+)$/);
-    if (gitMatch) {
-      if (currentHunk) hunks.push(currentHunk);
-      currentFile = gitMatch[1]!;
-      currentHunk = { file: currentFile, contextLines: [], addedLines: [], removedLines: [] };
-      continue;
-    }
-    // Detect --- a/file line (file header)
-    const oldMatch = rawLine.match(/^--- a\/(.+)$/);
-    if (oldMatch && !currentHunk) {
-      currentFile = oldMatch[1]!;
-      currentHunk = { file: currentFile, contextLines: [], addedLines: [], removedLines: [] };
-      continue;
-    }
-    // Detect +++ b/file line
-    const newMatch = rawLine.match(/^\+\+\+ b\/(.+)$/);
-    if (newMatch && !currentHunk) {
-      if (currentFile) {
-        currentHunk = { file: currentFile, contextLines: [], addedLines: [], removedLines: [] };
-      }
-      continue;
-    }
-    // Detect hunk header and capture claimed line number
-    const hunkMatch = rawLine.match(/^@@ -([0-9]+),[0-9]+ \+([0-9]+),([0-9]+)/);
-    if (hunkMatch && currentHunk) {
-      currentHunk.claimedOldLine = parseInt(hunkMatch[1]!, 10);
-      continue;
-    }
-
-    // Hunk content — strip ONLY LLM indentation, keep the actual diff prefix
-    if (currentHunk) {
-      // Strip LLM's leading whitespace but preserve the first meaningful char
-      // A git diff line starts with ' ' (context), '-' (removal), or '+' (addition)
-      // LLM may add extra indentation like '   + line' or '   - line' or '   line'
-      let stripped = rawLine;
-      // Count leading whitespace
-      const wsMatch = rawLine.match(/^(\s*)/);
-      const wsLen = wsMatch ? wsMatch[1]!.length : 0;
-      if (wsLen > 0) {
-        // Find first non-whitespace char
-        const firstChar = rawLine.trimStart()[0];
-        if (firstChar === '-' || firstChar === '+') {
-          // Addition/removal — strip all leading whitespace
-          stripped = rawLine.trimStart();
-        } else if (firstChar === ' ' && wsLen > 1) {
-          // Context line with extra indentation — strip to single space prefix
-          stripped = ' ' + rawLine.trim();
-        } else if (wsLen > 1) {
-          // Likely malformed context — strip to just content
-          stripped = rawLine.trim();
-        }
-      }
-      
-      if (stripped.startsWith('-') && !stripped.startsWith('--')) {
-        currentHunk.removedLines.push(stripped.slice(1));
-      } else if (stripped.startsWith('+') && !stripped.startsWith('+++')) {
-        currentHunk.addedLines.push(stripped.slice(1));
-      } else if (stripped.startsWith(' ')) {
-        currentHunk.contextLines.push(stripped.slice(1));
-      } else if (stripped === '') {
-        currentHunk.contextLines.push(stripped);
-      } else {
-        // Un-prefixed line inside a hunk — treat as context (LLM forgot prefix)
-        currentHunk.contextLines.push(stripped);
-      }
-    }
-  }
-  if (currentHunk) hunks.push(currentHunk);
-  return hunks;
-}
-
-// Apply a parsed hunk to a file by matching context lines
-// Returns null if the patch should be rejected (position mismatch or conflict)
-function applyHunkToContent(content: string, hunk: DiffHunk): string | null {
-  const lines = content.split('\n');
-  const context = hunk.contextLines.filter((l) => l !== '');
-  if (context.length === 0) {
-    // No context to anchor - append at end
-    const additions = hunk.addedLines.join('\n');
-    if (additions) {
-      return content + '\n' + additions;
-    }
-    return content;
-  }
-
-  // Find the anchor: longest matching context block in the file
-  let bestStart = -1;
-  let bestLen = 0;
-
-  for (let start = 0; start <= lines.length - context.length; start++) {
-    let matchLen = 0;
-    for (let i = 0; i < context.length; i++) {
-      const ctx = context[i];
-      if (!ctx) break;
-      // Fuzzy match: check if file line contains the context fragment
-      const fileLine = lines[start + i] || '';
-      if (fileLine.includes(ctx) || ctx.includes(fileLine.trim())) {
-        matchLen = i + 1;
-      } else {
-        break;
-      }
-    }
-    if (matchLen > bestLen) {
-      bestLen = matchLen;
-      bestStart = start;
-    }
-  }
-
-  if (bestStart < 0) {
-    // Could not find context - try first context line as anchor
-    const anchor = context[0];
-    if (anchor) {
-      bestStart = lines.findIndex((l) => l.includes(anchor) || anchor.includes(l));
-    }
-    if (bestStart < 0) bestStart = lines.length - 1;
-    bestLen = 1;
-  }
-
-  // Validate: if the hunk header claimed a position, check it's close to our match
-  if (hunk.claimedOldLine && bestStart >= 0) {
-    const actualLine = bestStart + 1; // 1-indexed
-    const offset = Math.abs(actualLine - hunk.claimedOldLine);
-    if (offset > 5) {
-      // Position mismatch — LLM's context doesn't match the claimed position
-      // This usually means the patch was generated against stale file content
-      return null;
-    }
-  }
-
-  // Check for duplicate exports: if we're adding exports that already exist
-  for (const add of hunk.addedLines) {
-    if (add.startsWith('export function') || add.startsWith('export const') || add.startsWith('export type')) {
-      const funcNameMatch = add.match(/export\s+(?:function|const|type)\s+(\w+)/);
-      if (funcNameMatch) {
-        const name = funcNameMatch[1]!;
-        // Check if this export name already exists elsewhere in the file
-        if (content.split('\n').some((l) => l.includes(name) && l.includes('export'))) {
-          // Duplicate export — reject
-          return null;
-        }
-      }
-    }
-  }
-
-  // Determine position: skip consumed context lines, then apply
-  const insertPos = bestStart + bestLen;
-  const newLines = [
-    ...lines.slice(0, insertPos),
-    ...hunk.addedLines,
-    ...lines.slice(insertPos + (hunk.removedLines.length > 0 ? hunk.removedLines.length : 0)),
-  ];
-
-  return newLines.join('\n');
-}
-
 export function extractUnifiedDiff(text: string): string | undefined {
   // Strategy 1: Try fenced code blocks (most reliable for LLM output)
   const fenced = text.match(/```(?:diff)?\s*([\s\S]*?)```/i);
@@ -390,23 +374,6 @@ function stripLeadingWhitespace(text: string): string {
     return lines.map((line) => line.slice(commonWs)).join('\n');
   }
   return lines.map((line) => line.replace(/^\s+/, '')).join('\n');
-}
-
-function parseTouchedFiles(diff: string): string[] {
-  const files = new Set<string>();
-  for (const line of diff.split('\n')) {
-    const gitMatch = line.match(/^diff --git a\/(.+?) b\/(.+)$/);
-    if (gitMatch) {
-      files.add(gitMatch[1]!);
-      files.add(gitMatch[2]!);
-      continue;
-    }
-    const oldMatch = line.match(/^--- a\/(.+)$/);
-    if (oldMatch) files.add(oldMatch[1]!);
-    const newMatch = line.match(/^\+\+\+ b\/(.+)$/);
-    if (newMatch) files.add(newMatch[1]!);
-  }
-  return Array.from(files).filter((file) => file !== '/dev/null').sort();
 }
 
 function isMeaningfulPatchFile(path: string): boolean {
@@ -609,7 +576,35 @@ export async function runFoundryCoderPatch(input: {
 
   await mkdir(resultRoot, { recursive: true });
 
-  // Single direct attempt: ask coder for a unified diff
+  // Collect the full target file(s) for symbol replacement
+  const owned = Array.from(new Set(selectedSpec.ownedFiles)).slice(0, 6);
+  const targetFiles: { path: string; fullPath: string; content: string; symbols: SymbolBlock[] }[] = [];
+  for (const ownedPath of owned) {
+    const dirPath = join(input.repoRoot, ownedPath);
+    const files = await walkFiles(input.repoRoot, dirPath, 4);
+    for (const file of files) {
+      if (!file.endsWith('.ts') && !file.endsWith('.js')) continue;
+      try {
+        const fileContent = await readFile(file, 'utf-8');
+        const symbols = findSymbolBlocks(fileContent);
+        targetFiles.push({
+          path: relative(input.repoRoot, file),
+          fullPath: file,
+          content: fileContent,
+          symbols,
+        });
+      } catch {
+        // skip unreadable files
+      }
+    }
+  }
+
+  // Build symbol list for the prompt
+  const symbolList = targetFiles.map((tf) =>
+    [tf.path, tf.symbols.map((s) => `  ${s.declaration}`).join('\n')].join('\n'),
+  ).join('\n\n');
+
+  // Single direct attempt: ask coder for symbol replacements
   const response = await client.complete({
     model,
     temperature: 0.1,
@@ -618,61 +613,84 @@ export async function runFoundryCoderPatch(input: {
       {
         role: 'system',
         content: [
-          'You are the Protocol Foundry coder. Produce a git unified diff that fixes the compiler issue described in the patch spec.',
-          'Return ONLY a valid git unified diff. No JSON, no explanations, no markdown except the diff itself.',
-          'The diff must apply cleanly with `git apply`. Use exact line matches from the source context.',
+          'You are the Protocol Foundry coder. Fix the compiler issue described in the patch spec.',
           '',
-          'DIFF FORMAT REQUIREMENTS:',
-          '1. Start each file diff with: diff --git a/<path> b/<path>',
-          '2. Follow with --- a/<path>',
-          '3. Follow with +++ b/<path>',
-          '4. Follow with @@ -X,Y +X,Y @@ hunk header',
-          '5. Context lines and +/- lines MUST have NO leading whitespace',
-          '6. End each diff with an empty line',
+          'OUTPUT FORMAT — Symbol Replacement Blocks:',
           '',
-          'WRONG:   --- a/server/src/foundry/foo.ts  (leading spaces)',
-          'RIGHT:   --- a/server/src/foundry/foo.ts',
-          'WRONG:     +  return x;                    (leading spaces)',
-          'RIGHT:     +  return x;',
+          'For each change, wrap the replacement in markers:',
           '',
-          'If you cannot produce a clean diff, explain why in a comment at the top of your response.',
+          '  @@replace functionName@@',
+          '  [complete replacement code for this function]',
+          '  @@end@@',
+          '',
+          '  @@add@@',
+          '  [new code to append at end of file]',
+          '  @@end@@',
+          '',
+          'Rules:',
+          '- For @@replace: output the COMPLETE function body, including the function declaration line',
+          '- For @@add: output new functions/code to append at end of the target file',
+          '- Include necessary imports if adding new functions (as @@add@@ blocks)',
+          '- Do NOT output unified diffs, git apply output, or partial snippets',
+          '- If the fix needs to modify an existing function, use @@replace functionName@@',
+          '- If the fix needs new code, use @@add@@',
+          '- Be precise: the content between markers is inserted exactly as-is',
+          '- One block per function change',
         ].join('\n'),
       },
       {
         role: 'user',
-        content: JSON.stringify({
-          protocolId: input.protocolId,
-          variant: input.variant,
-          fixClass: selectedSpec.fixClass,
-          title: selectedSpec.title,
-          rationale: selectedSpec.rationale,
-          ownedFiles: selectedSpec.ownedFiles,
-          acceptance: selectedSpec.acceptance,
-          context,
-        }),
+        content: [
+          `## Patch Spec`,
+          `- Title: ${selectedSpec.title}`,
+          `- Rationale: ${selectedSpec.rationale}`,
+          `- Fix class: ${selectedSpec.fixClass}`,
+          ``,
+          `## Target File(s) and Available Symbols`,
+          `${symbolList || '(none)'}`,
+          ``,
+          `## Relevant Artifact Context`,
+          `${(context || '').slice(0, 6000)}`,
+          ``,
+          `Produce symbol replacement blocks that fix this issue.`,
+        ].join('\n'),
       },
     ],
   });
 
-  const content = response.choices[0]?.message.content ?? '';
-  const rawDiff = extractUnifiedDiff(content);
-  if (!rawDiff) {
+  const aiContent = response.choices[0]?.message.content ?? '';
+  const replacements = parseSymbolResponse(aiContent);
+  if (replacements.length === 0) {
     await writeYamlFile(resultPath, {
       kind: 'protocol-foundry-coder-patch-result',
       protocolId: input.protocolId,
       variant: input.variant,
       generated_at: nowIso(),
       status: 'needs-human',
-      message: 'Coder did not produce a valid unified diff.',
-      rawResponse: content.slice(0, 4000),
+      message: 'Coder did not produce any valid symbol replacement blocks.',
+      rawResponse: aiContent.slice(0, 4000),
     });
-    return { status: 'needs-human', resultPath, message: 'no valid diff produced', touchedFiles: [] };
+    return { status: 'needs-human', resultPath, message: 'no symbol replacements produced', touchedFiles: [] };
   }
 
-  // Apply diff directly to the repo
-  const diffPath = join(resultRoot, 'patch.diff');
-  // Parse touched files from raw diff first (before repair)
-  const touchedFiles = parseTouchedFiles(rawDiff);
+  // Apply symbol replacements directly to target files
+  const touchedFiles: string[] = [];
+  const modifiedFiles = new Map<string, string>();
+
+  for (const tf of targetFiles) {
+    const fileReplacements = replacements.filter((r) =>
+      r.op === 'replace' ? tf.symbols.some((s) => s.name === r.targetName) : true,
+    );
+    if (fileReplacements.length === 0) continue;
+
+    const newContent = applySymbolReplacements(tf.content, fileReplacements);
+    if (newContent !== tf.content) {
+      modifiedFiles.set(tf.path, tf.content);
+      await writeFile(tf.fullPath, newContent, 'utf-8');
+      touchedFiles.push(tf.path);
+    }
+  }
+
   const meaningfulFiles = meaningfulPatchFiles(touchedFiles);
   if (meaningfulFiles.length === 0) {
     await writeYamlFile(resultPath, {
@@ -686,47 +704,6 @@ export async function runFoundryCoderPatch(input: {
     });
     return { status: 'blocked', resultPath, message: 'no meaningful files touched', touchedFiles: [] };
   }
-  // Parse the raw diff into hunks (handles LLM formatting issues)
-  const hunks = parseDiffToHunks(rawDiff);
-  if (hunks.length === 0) {
-    await writeYamlFile(resultPath, {
-      kind: 'protocol-foundry-coder-patch-result',
-      protocolId: input.protocolId,
-      variant: input.variant,
-      generated_at: nowIso(),
-      status: 'blocked',
-      message: 'Diff contained no parseable hunks.',
-      touchedFiles,
-    });
-    return { status: 'blocked', resultPath, message: 'no parseable hunks', touchedFiles: [] };
-  }
-
-  // Apply each hunk directly to the source files (bypasses git apply entirely)
-  const modifiedFiles = new Map<string, string>(); // file -> new content
-  for (const hunk of hunks) {
-    const relPath = hunk.file;
-    const fullPath = join(input.repoRoot, relPath);
-    if (!existsSync(fullPath)) continue;
-    if (!touchedFiles.includes(relPath)) continue;
-    const content = await readFile(fullPath, 'utf-8');
-    const newContent = applyHunkToContent(content, hunk);
-    if (newContent === null) {
-      // Patch position mismatch — reject entire patch
-      await writeYamlFile(resultPath, {
-        kind: 'protocol-foundry-coder-patch-result',
-        protocolId: input.protocolId,
-        variant: input.variant,
-        generated_at: nowIso(),
-        status: 'failed',
-        message: 'Patch context position mismatch — context lines match at different position than hunk header claims. LLM may have used stale file content.',
-        touchedFiles,
-      });
-      return { status: 'failed', resultPath, message: 'patch position mismatch', touchedFiles: [] };
-    }
-    modifiedFiles.set(relPath, newContent);
-    await writeFile(fullPath, newContent, 'utf-8');
-  }
-  await writeFile(diffPath, rawDiff, 'utf-8');
 
   try {
     // Verify it compiles
@@ -744,7 +721,6 @@ export async function runFoundryCoderPatch(input: {
         status: 'failed',
         message: 'Patch applied but compilation failed; reverted.',
         touchedFiles,
-        diffPath,
       });
       return { status: 'failed', resultPath, message: 'compilation failed', touchedFiles: [] };
     }
@@ -766,7 +742,6 @@ export async function runFoundryCoderPatch(input: {
       status: 'applied',
       selectedSpecId: selectedSpec.id,
       touchedFiles,
-      diffPath,
       ...(commit ? { commit } : {}),
       message: 'Patch applied and committed.',
     });
