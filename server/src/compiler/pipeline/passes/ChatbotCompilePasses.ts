@@ -547,37 +547,44 @@ function normalizeUnresolvedRefs(input: unknown): Array<{ kind: string; label: s
 
 function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unknown }): AiPrecompileOutput {
   let data: unknown = input.parsed;
-  if (!data && input.raw) {
+  if (data === undefined && input.raw) {
     if (typeof input.raw === 'string') {
       try {
         data = JSON.parse(input.raw);
       } catch {
-        data = input.raw;
+        data = null;
       }
     } else {
       data = input.raw;
     }
-  }
-  if (!data || typeof data !== 'object') {
-    return {};
-  }
-
-  const getArray = (keys: string[]): unknown[] | undefined => {
-    for (const k of keys) {
-      const v = (data as Record<string, unknown>)[k];
-      if (Array.isArray(v)) return v;
+  } else if (typeof data === 'string') {
+    try {
+      data = JSON.parse(data);
+    } catch {
+      data = null;
     }
-    return undefined;
-  };
+  }
 
-  return {
-    mintMaterials: getArray(['mintMaterials', 'mint_materials']),
-    candidateLabwares: getArray(['candidateLabwares', 'candidate_labwares']),
-    priorLabwareRefs: getArray(['priorLabwareRefs', 'prior_labware_refs']),
-    patternEvents: getArray(['patternEvents', 'pattern_events']),
-    candidateActions: getArray(['candidateActions', 'candidate_actions']),
-    unresolvedRefs: getArray(['unresolvedRefs', 'unresolved_refs']),
-  } as AiPrecompileOutput;
+  if (!data || typeof data !== 'object') {
+    return { candidateLabwares: [], mintMaterials: [], patternEvents: [] };
+  }
+
+  // Unwrap common LLM response wrappers
+  const payload = (data as Record<string, unknown>).output || 
+                  (data as Record<string, unknown>).result || 
+                  data;
+
+  const candidateLabwares = Array.isArray((payload as Record<string, unknown>).candidateLabwares) 
+    ? (payload as Record<string, unknown>).candidateLabwares as CandidateLabware[] 
+    : [];
+  const mintMaterials = Array.isArray((payload as Record<string, unknown>).mintMaterials) 
+    ? (payload as Record<string, unknown>).mintMaterials as MintMaterialsDirective[] 
+    : [];
+  const patternEvents = Array.isArray((payload as Record<string, unknown>).patternEvents) 
+    ? (payload as Record<string, unknown>).patternEvents as PatternEvent[] 
+    : [];
+
+  return { candidateLabwares, mintMaterials, patternEvents };
 }
 
 /**
