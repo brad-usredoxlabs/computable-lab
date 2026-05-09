@@ -520,29 +520,183 @@ function normalizeUnresolvedRefs(input: unknown): Array<{ kind: string; label: s
 }
 
 function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unknown }): AiPrecompileOutput {
-  let parsed: Partial<AiPrecompileOutput> | undefined = input.parsed as Partial<AiPrecompileOutput> | undefined;
-  
-  if (!parsed && typeof input.raw === 'string') {
-    try {
-      parsed = JSON.parse(input.raw) as Partial<AiPrecompileOutput>;
-    } catch {
-      parsed = {};
+  let parsed: unknown = input.parsed;
+
+  // If parsed is not available, try to parse raw
+  if (parsed == null && input.raw != null) {
+    if (typeof input.raw === 'string') {
+      try {
+        parsed = JSON.parse(input.raw);
+      } catch {
+        parsed = null;
+      }
+    } else {
+      parsed = input.raw;
     }
-  } else if (!parsed && typeof input.raw === 'object') {
-    parsed = input.raw as Partial<AiPrecompileOutput>;
   }
 
-  if (!parsed) {
+  // Normalize parsed to a plain object
+  if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) {
     parsed = {};
   }
 
+  const obj = parsed as Record<string, unknown>;
+
+  // Extract and normalize mintMaterials
+  const rawMintMaterials = obj.mintMaterials ?? obj.mint_materials ?? obj.materials ?? [];
+  const mintMaterials: MintMaterialsDirective[] = Array.isArray(rawMintMaterials)
+    ? rawMintMaterials.map((item: unknown) => {
+        if (item == null || typeof item !== 'object') return null;
+        const o = item as Record<string, unknown>;
+        return {
+          materialId: (o.materialId ?? o.material_id ?? o.id ?? '') as string,
+          name: (o.name ?? o.materialName ?? o.material_name ?? '') as string,
+          kind: (o.kind ?? o.materialKind ?? o.material_kind ?? 'reagent') as string,
+          volumeUl: typeof o.volumeUl === 'number' || typeof o.volume_ul === 'number'
+            ? (o.volumeUl ?? o.volume_ul) as number
+            : undefined,
+          source: o.source as string | undefined,
+        };
+      })
+      .filter((item): item is MintMaterialsDirective => item != null && item.materialId && item.name)
+    : [];
+
+  // Extract and normalize directives
+  const rawDirectives = obj.directives ?? obj.applyDirectives ?? obj.apply_directives ?? [];
+  const directives: Directive[] = Array.isArray(rawDirectives)
+    ? rawDirectives.map((item: unknown) => {
+        if (item == null || typeof item !== 'object') return null;
+        const o = item as Record<string, unknown>;
+        return {
+          kind: (o.kind ?? o.directiveKind ?? o.directive_kind ?? 'apply') as string,
+          target: (o.target ?? o.labwareId ?? o.labware_id ?? '') as string,
+          action: (o.action ?? o.directiveAction ?? o.directive_action ?? '') as string,
+          params: o.params as Record<string, unknown> | undefined,
+        };
+      })
+      .filter((item): item is Directive => item != null && item.kind && item.target)
+    : [];
+
+  // Extract and normalize candidateLabwares
+  const rawCandidateLabwares = obj.candidateLabwares ?? obj.candidate_labwares ?? obj.labwares ?? [];
+  const candidateLabwares: CandidateLabware[] = Array.isArray(rawCandidateLabwares)
+    ? rawCandidateLabwares.map((item: unknown) => {
+        if (item == null || typeof item !== 'object') return null;
+        const o = item as Record<string, unknown>;
+        return {
+          id: (o.id ?? o.labwareId ?? o.labware_id ?? '') as string,
+          kind: (o.kind ?? o.labwareKind ?? o.labware_kind ?? '') as string,
+          definitionUri: (o.definitionUri ?? o.definition_uri ?? o.uri ?? '') as string,
+          label: (o.label ?? o.name ?? o.labwareLabel ?? o.labware_label ?? '') as string,
+          hints: Array.isArray(o.hints) ? o.hints : (o.hint ? [o.hint] : []),
+        };
+      })
+      .filter((item): item is CandidateLabware => item != null && item.id && item.kind)
+    : [];
+
+  // Extract and normalize priorLabwareRefs
+  const rawPriorLabwareRefs = obj.priorLabwareRefs ?? obj.prior_labware_refs ?? obj.priorRefs ?? [];
+  const priorLabwareRefs: PriorLabwareRef[] = Array.isArray(rawPriorLabwareRefs)
+    ? rawPriorLabwareRefs.map((item: unknown) => {
+        if (item == null || typeof item !== 'object') return null;
+        const o = item as Record<string, unknown>;
+        return {
+          id: (o.id ?? o.refId ?? o.ref_id ?? '') as string,
+          kind: (o.kind ?? o.labwareKind ?? o.labware_kind ?? '') as string,
+          label: (o.label ?? o.name ?? o.refLabel ?? o.ref_label ?? '') as string,
+          reason: (o.reason ?? o.refReason ?? o.ref_reason ?? '') as string,
+        };
+      })
+      .filter((item): item is PriorLabwareRef => item != null && item.id && item.kind)
+    : [];
+
+  // Extract and normalize patternEvents
+  const rawPatternEvents = obj.patternEvents ?? obj.pattern_events ?? obj.patterns ?? [];
+  const patternEvents: PatternEvent[] = Array.isArray(rawPatternEvents)
+    ? rawPatternEvents.map((item: unknown) => {
+        if (item == null || typeof item !== 'object') return null;
+        const o = item as Record<string, unknown>;
+        return {
+          id: (o.id ?? o.eventId ?? o.event_id ?? '') as string,
+          patternId: (o.patternId ?? o.pattern_id ?? o.stampId ?? o.stamp_id ?? '') as string,
+          verb: (o.verb ?? o.action ?? o.eventVerb ?? o.event_verb ?? '') as string,
+          params: o.params as Record<string, unknown> | undefined,
+        };
+      })
+      .filter((item): item is PatternEvent => item != null && item.id && item.patternId)
+    : [];
+
+  // Extract and normalize candidateActions
+  const rawCandidateActions = obj.candidateActions ?? obj.candidate_actions ?? obj.actions ?? [];
+  const candidateActions: CandidateAction[] = Array.isArray(rawCandidateActions)
+    ? rawCandidateActions.map((item: unknown) => {
+        if (item == null || typeof item !== 'object') return null;
+        const o = item as Record<string, unknown>;
+        return {
+          id: (o.id ?? o.actionId ?? o.action_id ?? '') as string,
+          verb: normalizeCandidateActionVerb((o.verb ?? o.action ?? o.actionVerb ?? o.action_verb ?? '') as string),
+          params: o.params as Record<string, unknown> | undefined,
+        };
+      })
+      .filter((item): item is CandidateAction => item != null && item.id && item.verb)
+    : [];
+
+  // Extract and normalize unresolvedRefs
+  const rawUnresolvedRefs = obj.unresolvedRefs ?? obj.unresolved_refs ?? obj.unresolvedReferences ?? [];
+  const unresolvedRefs: Array<{ kind: string; label: string; reason: string }> = Array.isArray(rawUnresolvedRefs)
+    ? rawUnresolvedRefs.map((item: unknown) => {
+        if (item == null || typeof item !== 'object') return null;
+        const o = item as Record<string, unknown>;
+        return {
+          kind: (o.kind ?? o.refKind ?? o.ref_kind ?? '') as string,
+          label: (o.label ?? o.name ?? o.refLabel ?? o.ref_label ?? '') as string,
+          reason: (o.reason ?? o.refReason ?? o.ref_reason ?? '') as string,
+        };
+      })
+      .filter((item): item is { kind: string; label: string; reason: string } => item != null && item.kind && item.label)
+    : [];
+
+  // Extract and normalize taggedPhrases
+  const rawTaggedPhrases = obj.taggedPhrases ?? obj.tagged_phrases ?? obj.phrases ?? [];
+  const taggedPhrases: TaggedPhrase[] = Array.isArray(rawTaggedPhrases)
+    ? rawTaggedPhrases.map((item: unknown) => {
+        if (item == null || typeof item !== 'object') return null;
+        const o = item as Record<string, unknown>;
+        return {
+          text: (o.text ?? o.phrase ?? o.phraseText ?? o.phrase_text ?? '') as string,
+          tag: (o.tag ?? o.tagLabel ?? o.tag_label ?? '') as string,
+          confidence: typeof o.confidence === 'number' ? o.confidence : undefined,
+        };
+      })
+      .filter((item): item is TaggedPhrase => item != null && item.text && item.tag)
+    : [];
+
+  // Extract and normalize aiLabwareAdditions
+  const rawAiLabwareAdditions = obj.aiLabwareAdditions ?? obj.ai_labware_additions ?? obj.labwareAdditions ?? [];
+  const aiLabwareAdditions: AiLabwareAdditionPatch[] = Array.isArray(rawAiLabwareAdditions)
+    ? rawAiLabwareAdditions.map((item: unknown) => {
+        if (item == null || typeof item !== 'object') return null;
+        const o = item as Record<string, unknown>;
+        return {
+          labwareId: (o.labwareId ?? o.labware_id ?? o.id ?? '') as string,
+          kind: (o.kind ?? o.labwareKind ?? o.labware_kind ?? '') as string,
+          definitionUri: (o.definitionUri ?? o.definition_uri ?? o.uri ?? '') as string,
+          label: (o.label ?? o.name ?? o.labwareLabel ?? o.labware_label ?? '') as string,
+        };
+      })
+      .filter((item): item is AiLabwareAdditionPatch => item != null && item.labwareId && item.kind)
+    : [];
+
   return {
-    mintMaterials: Array.isArray(parsed.mintMaterials) ? parsed.mintMaterials : [],
-    candidateLabwares: Array.isArray(parsed.candidateLabwares) ? parsed.candidateLabwares : [],
-    patternEvents: Array.isArray(parsed.patternEvents) ? parsed.patternEvents : [],
-    unresolvedRefs: normalizeUnresolvedRefs(parsed.unresolvedRefs),
-    candidateActions: lowerCandidateActionsToEvents(parsed.candidateActions),
-    directives: Array.isArray(parsed.directives) ? parsed.directives : [],
+    mintMaterials,
+    directives,
+    candidateLabwares,
+    priorLabwareRefs,
+    patternEvents,
+    candidateActions,
+    unresolvedRefs,
+    taggedPhrases,
+    aiLabwareAdditions,
   };
 }
 
@@ -568,35 +722,108 @@ export interface CreateAiPrecompilePassDeps {
  * legacy LLM candidateEvents/candidateLabwares remain accepted as a fallback.
  */
 export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
+  const schema = createAiPrecompileOutputSchema();
+
   return {
     id: 'ai_precompile',
-    run: async (args: PassRunArgs): Promise<PassResult> => {
-      const prompt = renderPromptTemplate('ai_precompile', {
-        prompt: args.state.input.prompt,
-        entities: args.state.outputs.extract_entities?.extractedEntities ?? [],
-      });
+    async run(args: PassRunArgs): Promise<PassResult> {
+      const { state, services } = args;
+      const llmClient = services.llmClient;
 
-      const messages: ChatMessage[] = [
-        { role: 'system', content: getAiPrecompileSystemPrompt() },
-        { role: 'user', content: prompt },
-      ];
-
-      const completion = await deps.llmClient.chat({ messages, model: 'default' });
-      const rawContent = completion.content;
-
-      let parsed: unknown;
-      try {
-        parsed = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
-      } catch {
-        parsed = undefined;
+      if (!llmClient) {
+        return {
+          outputs: {
+            ai_precompile: {
+              mintMaterials: [],
+              directives: [],
+              candidateLabwares: [],
+              priorLabwareRefs: [],
+              patternEvents: [],
+              candidateActions: [],
+              unresolvedRefs: [],
+              taggedPhrases: [],
+              aiLabwareAdditions: [],
+            },
+          },
+          diagnostics: [{
+            severity: 'error',
+            code: 'llm_client_missing',
+            message: 'LLM client not available for ai_precompile pass',
+            pass_id: 'ai_precompile',
+            details: {},
+          }],
+        };
       }
 
-      const output = salvageAiPrecompileOutput({ raw: rawContent, parsed });
+      const systemPrompt = getAiPrecompileSystemPrompt();
+      const userPrompt = state.input.prompt ?? '';
 
-      return {
-        output,
-        diagnostics: [],
-      };
+      const messages: ChatMessage[] = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ];
+
+      try {
+        const response = await llmClient.complete({
+          messages,
+          schema,
+        });
+
+        let output: AiPrecompileOutput;
+
+        // Handle response - could be parsed directly or need salvage
+        if (response.parsed && typeof response.parsed === 'object' && !Array.isArray(response.parsed)) {
+          const parsed = response.parsed as Record<string, unknown>;
+          // Validate that required fields exist (even if empty arrays)
+          const hasValidShape =
+            Array.isArray(parsed.mintMaterials) &&
+            Array.isArray(parsed.directives) &&
+            Array.isArray(parsed.candidateLabwares) &&
+            Array.isArray(parsed.priorLabwareRefs) &&
+            Array.isArray(parsed.patternEvents);
+
+          if (hasValidShape) {
+            output = salvageAiPrecompileOutput({ parsed: response.parsed });
+          } else {
+            output = salvageAiPrecompileOutput({ parsed: response.parsed });
+          }
+        } else if (response.raw) {
+          output = salvageAiPrecompileOutput({ raw: response.raw });
+        } else {
+          output = salvageAiPrecompileOutput({});
+        }
+
+        return {
+          outputs: {
+            ai_precompile: output,
+          },
+          diagnostics: [],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          outputs: {
+            ai_precompile: {
+              mintMaterials: [],
+              directives: [],
+              candidateLabwares: [],
+              priorLabwareRefs: [],
+              patternEvents: [],
+              candidateActions: [],
+              unresolvedRefs: [],
+              taggedPhrases: [],
+              aiLabwareAdditions: [],
+            },
+          },
+          diagnostics: [{
+            severity: 'error',
+            code: 'ai_precompile_llm_error',
+            message: `LLM completion failed: ${errorMessage}`,
+            pass_id: 'ai_precompile',
+            details: {},
+          }],
+        };
+      }
     },
   };
 }
