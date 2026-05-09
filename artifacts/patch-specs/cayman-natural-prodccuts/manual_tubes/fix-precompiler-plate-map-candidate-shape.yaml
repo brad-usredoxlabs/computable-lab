@@ -1,0 +1,51 @@
+kind: protocol-foundry-patch-spec
+id: cayman-natural-prodccuts/manual_tubes/fix-precompiler-plate-map-candidate-shape
+protocolId: cayman-natural-prodccuts
+variant: manual_tubes
+fixClass: precompiler_reference_shape
+title: Ensure precompiler extracts structured plate-map candidates with
+  well-position and compound fields
+rationale: "The precompiler diagnostics show many
+  'foundry_presegmented_candidates' messages but the candidates are not being
+  lowered to events. The precompiler needs to explicitly tag candidates with a
+  'plateMapEntry' kind that includes structured fields: wellPosition (e.g.,
+  'A2'), compoundName (e.g., 'Ursolic Acid'), and catalogNumber (e.g., '10072').
+  Currently the candidates appear to be unstructured text fragments that the
+  compiler cannot match to any known verb pattern. Adding explicit candidate
+  typing will allow the compiler's new plate-map lowering pass to consume them
+  correctly."
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+acceptance:
+  - "Precompiler output includes candidates with kind='plateMapEntry' and
+    fields: wellPosition, compoundName, catalogNumber"
+  - At least 20 plateMapEntry candidates are extracted from the Cayman plate-map
+    PDF
+  - Compiler diagnostics show successful matching of plateMapEntry candidates to
+    lowering rules
+  - No 'ai_precompile_shape_mismatch' warnings for plate-map protocols
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 80
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-35B-A3B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-natural-prodccuts/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-natural-prodccuts/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-natural-prodccuts/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-natural-prodccuts/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-natural-prodccuts/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-natural-prodccuts/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-natural-prodccuts.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-natural-prodccuts.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cayman-natural-prodccuts.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-natural-prodccuts/manual_tubes/verdict.yaml

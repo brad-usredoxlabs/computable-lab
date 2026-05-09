@@ -3,5 +3,4 @@ protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
 variant: bench_plate_multichannel
 patchSpecs:
   - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/fix-labware-resolver-generic-aliases.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/fix-compiler-event-coverage-spin-column-protocol.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/fix-generic-labware-resolution.yaml

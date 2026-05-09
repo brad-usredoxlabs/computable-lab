@@ -3,28 +3,26 @@ id: an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-ai-precompile-shape-m
 protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
 variant: robot_deck
 fixClass: precompiler_reference_shape
-title: Fix ai_precompile output shape mismatch to enable downstream passes
-rationale: "The compiler diagnostics show 'ai_precompile output shape mismatch',
-  which causes the ai_precompile output to be invalid. This cascades to skip
-  critical passes: 'mint_materials', 'resolve_labware',
-  'resolve_prior_labware_references', and 'expand_patterns' are all skipped
-  because their 'when' conditions evaluate to false (e.g.,
-  'outputs.ai_precompile.mintMaterials' is false). Without these passes, no
-  events can be generated, resulting in eventCount=0. The pre-compiler must
-  produce a correctly shaped output that the compiler can consume."
+title: Fix ai_precompile output shape to include candidateEvents and labware refs
+rationale: The compiler reports 'ai_precompile_shape_mismatch' and subsequent
+  passes (mint_materials, resolve_labware, expand_patterns) are skipped because
+  their 'when' conditions evaluate to false. The ai_precompile pass in
+  ChatbotCompilePasses.ts is not producing the expected output shape with
+  candidateEvents, candidateLabwares, or mintMaterials. This causes all
+  downstream event generation to fail, resulting in eventCount=0.
 ownedFiles:
-  - server/src/protocol-foundry/precompiler/ai-precompile.ts
-  - server/src/protocol-foundry/precompiler/schema.ts
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
 acceptance:
-  - ai_precompile pass completes without 'shape_mismatch' warning
-  - outputs.ai_precompile.mintMaterials is truthy when materials are present in
-    candidates
-  - outputs.ai_precompile.candidateLabwares is truthy when labware hints exist
-  - Downstream passes (mint_materials, resolve_labware) are no longer skipped
-    due to false when conditions
+  - ai_precompile pass outputs an object with candidateEvents array when
+    protocol text contains actionable steps
+  - ai_precompile pass outputs candidateLabwares when labware is mentioned in
+    text
+  - resolve_labware pass is no longer skipped when labware hints exist
+  - eventCount >= 3 for protocols with clear procedural steps
+  - ai_precompile_shape_mismatch warning is eliminated from diagnostics
 implementationBudget:
-  targetChangedFiles: 2
-  maxChangedFiles: 4
+  targetChangedFiles: 1
+  maxChangedFiles: 2
   targetChangedLines: 120
   maxChangedLines: 250
   requireFocusedFixture: true

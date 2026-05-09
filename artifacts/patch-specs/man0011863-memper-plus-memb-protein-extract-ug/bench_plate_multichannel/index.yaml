@@ -3,5 +3,4 @@ protocolId: man0011863-memper-plus-memb-protein-extract-ug
 variant: bench_plate_multichannel
 patchSpecs:
   - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-labware-resolver-snapshot-gap.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-material-extraction-for-memper-protocol.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-labware-resolution-gaps.yaml

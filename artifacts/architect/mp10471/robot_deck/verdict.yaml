@@ -1,7 +1,7 @@
 kind: protocol-foundry-architect-verdict
 protocolId: mp10471
 variant: robot_deck
-generated_at: 2026-05-09T06:42:40.803Z
+generated_at: 2026-05-09T09:40:13.279Z
 accepted: false
 qualityScore: 0.1
 coverageEstimate: 0.1
@@ -17,22 +17,24 @@ recommendedFixes:
   - id: fix-ai-precompile-shape-mismatch
     class: precompiler_reference_shape
     title: Fix ai_precompile output shape mismatch to enable downstream passes
-    rationale: "The compiler diagnostics show 'ai_precompile_shape_mismatch', which
-      caused all subsequent passes (mint_materials, apply_directives,
-      resolve_labware, expand_patterns) to be skipped. This is the root cause of
-      the gap: the pre-compiler extracted candidates but the AI pre-compile step
-      failed to produce a valid shape, preventing the compiler from lowering
-      those candidates into events. The event graph only has 2 generic mix
-      events with no details, indicating the compiler fell back to defaults."
+    rationale: The compiler diagnostics show 'ai_precompile output shape mismatch',
+      which causes all downstream passes (mint_materials, apply_directives,
+      resolve_labware, expand_patterns) to be skipped because their 'when'
+      conditions evaluate to false. This is the root cause of the gap outcome.
+      The ai_precompile pass in ChatbotCompilePasses.ts is producing output that
+      doesn't match the expected AiPrecompileOutput type schema, preventing the
+      compiler from extracting candidates, labwares, and directives needed to
+      generate meaningful events.
     ownedFiles:
-      - server/src/protocol-foundry/passes/ai_precompile.ts
-      - server/src/protocol-foundry/passes/ai_precompile.schema.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass produces output matching the expected schema without
-        shape mismatch warnings
-      - Downstream passes (mint_materials, resolve_labware, expand_patterns) are
-        no longer skipped due to false when conditions
-      - Compiler eventCount increases beyond 2 for protocols with clear steps
+      - ai_precompile pass produces output matching AiPrecompileOutput type
+        schema
+      - No 'ai_precompile_shape_mismatch' warning in diagnostics
+      - Downstream passes (mint_materials, resolve_labware) are no longer
+        skipped due to false when conditions
+      - candidateLabwares and directives fields are populated when present in
+        LLM output
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -50,72 +52,43 @@ recommendedFixes:
       eventCount: 2
       outcome: gap
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
-      targetChangedLines: 120
-      maxChangedLines: 250
+      targetChangedFiles: 1
+      maxChangedFiles: 2
+      targetChangedLines: 60
+      maxChangedLines: 150
       requireFocusedFixture: true
-  - id: fix-fluo4-assay-verb-lowering
+  - id: fix-verb-expansion-for-assay-protocol
     class: compiler_event_coverage
-    title: Add verb lowering for Fluo-4 Direct assay preparation and loading steps
-    rationale: "The PDF describes a clear protocol: prepare 2X loading solution (mix
-      Component A, B, C), then add to cells. The compiler produced only 2 empty
-      mix events. The compiler lacks verb lowering rules for 'prepare loading
-      solution' and 'add reagent to cells' patterns common in calcium assay
-      kits. Without these verbs, the compiler cannot translate the extracted
-      candidates into meaningful pipetting events."
+    title: Add verb lowering for Fluo-4 assay preparation and loading steps
+    rationale: The PDF describes a calcium assay protocol with clear steps (prepare
+      loading solution, add to cells, incubate, measure fluorescence), but the
+      compiler only produces 2 empty mix events. The BiologyVerbExpander needs
+      to recognize assay preparation verbs like 'prepare loading solution', 'add
+      reagent to cells', 'incubate', and 'measure fluorescence' and lower them
+      to appropriate liquid handling events (dispense, mix, incubate, read).
+      Without these verb mappings, the compiler cannot generate meaningful
+      events from the extracted candidates.
     ownedFiles:
-      - server/src/protocol-foundry/verbs/assay-preparation.ts
-      - server/src/protocol-foundry/verbs/calcium-assay.ts
-      - server/src/protocol-foundry/passes/expand_patterns.ts
+      - server/src/compiler/biology/BiologyVerbExpander.ts
     acceptance:
-      - Compiler recognizes 'prepare 2X loading solution' as a mix event with
-        specific reagent volumes
-      - Compiler recognizes 'add loading solution to cells' as a pipette event
-        with source/destination labware
-      - "Event graph contains at least 4 events: mix reagents, pipette to cells,
-        incubate, read fluorescence"
-      - Reagent roles (Component A, B, C) are resolved to specific labware
-        locations
+      - Verb expander recognizes 'prepare loading solution' and lowers to
+        dispense/mix events
+      - Verb expander recognizes 'add reagent to cells' and lowers to dispense
+        events
+      - Verb expander recognizes 'incubate' and lowers to incubate events
+      - Event count increases to at least 5 events for a complete assay protocol
+      - Events include proper labware references (sample_plate,
+        reagent_reservoir)
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
-      targetChangedFiles: 3
-      maxChangedFiles: 5
-      targetChangedLines: 150
-      maxChangedLines: 300
-      requireFocusedFixture: true
-  - id: fix-material-extraction-from-kit-contents
-    class: material_catalog_or_spec
-    title: Extract kit components as materials from Table 1 contents
-    rationale: "The material context is empty (materials: [], materialSpecs: []).
-      The PDF clearly lists Component A (Fluo-4 Direct reagent), Component B
-      (Probenecid), and Component C (buffer) with volumes. The pre-compiler
-      should extract these as materials with roles, but the material extraction
-      pass is not running or not finding the table structure. Without materials,
-      the compiler cannot resolve reagent roles for pipetting events."
-    ownedFiles:
-      - server/src/protocol-foundry/passes/extract_materials.ts
-      - server/src/protocol-foundry/passes/mint_materials.ts
-    acceptance:
-      - "Material context contains 3 materials: Component A, Component B,
-        Component C"
-      - Each material has a role (reagent) and volume specification
-      - Materials are linked to labware hints (reservoirs for reagents)
-      - Compiler can resolve reagent_reservoir to specific component materials
-    coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
-    implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
+      targetChangedFiles: 1
+      maxChangedFiles: 2
       targetChangedLines: 80
-      maxChangedLines: 180
+      maxChangedLines: 200
       requireFocusedFixture: true
 sourceArtifacts: *a1
-architectNotes: "LLM architect analysis: 3 fix recommendations."
+architectNotes: "LLM architect analysis: 2 fix recommendations."

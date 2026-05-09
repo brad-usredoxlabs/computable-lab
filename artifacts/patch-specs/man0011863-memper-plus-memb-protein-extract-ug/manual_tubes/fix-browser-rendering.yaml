@@ -1,0 +1,72 @@
+kind: protocol-foundry-patch-spec
+id: man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-browser-rendering
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: manual_tubes
+fixClass: browser_or_labware_rendering
+title: Make event graph render and play in labware-editor
+rationale: Protocol variants cannot be accepted until browser review passes with
+  screenshot evidence.
+ownedFiles:
+  - client/src
+  - records/seed/labware-definition
+  - server/src/foundry
+acceptance:
+  - Browser review report status is pass.
+  - Screenshot shows expected labware and event sequence.
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 3
+  targetChangedLines: 80
+  maxChangedLines: 220
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-35B-A3B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+contextHints:
+  - Prefer adding or mapping one missing labware icon/geometry at a time.
+  - If the blocker is that an existing labware-definition record is not being
+    resolved, use the labware_alias_or_resolver_gap lane and patch
+    resolver/lookup wiring instead of creating duplicate labware records.
+  - Tube protocols should render in generic 24x1.5ml, 15ml, or 50ml rack
+    geometry when possible.
+  - New or repaired labware records must use canonical
+    records/seed/labware-definition/*.yaml files, not the legacy
+    records/seed/labware-definitions directory.
+  - "Canonical labware-definition records include $schema, kind:
+    labware-definition, recordId, type: labware_definition, id, display_name,
+    topology/capacity/render_hints as appropriate."
+doNotTouch:
+  - Do not rewrite the pipeline end to end.
+  - Do not create real material-instance, aliquot, or physical inventory records
+    from vendor PDF evidence.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011863-memper-plus-memb-protein-extract-ug.txt
+failureEvidence:
+  outcome: gap
+  eventCount: 5
+  minUsefulEvents: 3
+  diagnosticCodes:
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_no_actionable_candidates
+    - ai_precompile_shape_mismatch
+    - pass_skipped_by_when
+    - pass_skipped_by_when
+    - pass_skipped_by_when
+    - pass_skipped_by_when
+    - execution_scale_plan_ready
+  extractorRepairExhaustedCount: 0
+  blockerCount: 0
+  gapCount: 2
+  browserStatus: skipped
+architectNotes: "Deterministic fallback: 4 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/verdict.yaml

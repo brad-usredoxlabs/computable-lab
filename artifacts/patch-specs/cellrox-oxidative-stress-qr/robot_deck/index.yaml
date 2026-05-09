@@ -2,7 +2,7 @@ kind: protocol-foundry-patch-spec-index
 protocolId: cellrox-oxidative-stress-qr
 variant: robot_deck
 patchSpecs:
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/add-treat-remove-analyze-verbs.yaml
   - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/fix-fixation-event-material-and-temperature.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/resolve-labware-references.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/add-treat-verb-expander.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/add-remove-verb-expander.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/add-analyze-verb-expander.yaml

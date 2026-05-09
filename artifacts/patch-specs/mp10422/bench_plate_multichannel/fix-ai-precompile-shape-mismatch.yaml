@@ -4,22 +4,25 @@ protocolId: mp10422
 variant: bench_plate_multichannel
 fixClass: precompiler_reference_shape
 title: Fix ai_precompile output shape mismatch to enable downstream passes
-rationale: The compiler diagnostics show 'ai_precompile output shape mismatch',
-  which caused the 'apply_directives' and 'resolve_labware' passes to be
-  skipped. This is the root cause of the unresolved labware refs and the 'gap'
-  outcome. The pre-compiler's AI output does not match the expected schema, so
-  the compiler cannot extract candidateLabwares or directives.
+rationale: The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
+  ai_precompile pass produced output that doesn't match the expected
+  AiPrecompileOutput schema. This caused 'apply_directives' and
+  'resolve_labware' passes to be skipped (their 'when' conditions evaluated to
+  false because outputs.ai_precompile.directives and
+  outputs.ai_precompile.candidateLabwares were missing or malformed). Without
+  labware resolution, generic labware references remain unresolved, creating
+  gaps.
 ownedFiles:
-  - server/src/protocol-foundry/passes/ai_precompile.ts
-  - server/src/protocol-foundry/schema/precompile-output.ts
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
 acceptance:
-  - ai_precompile pass completes without shape mismatch warning
+  - ai_precompile pass produces output matching AiPrecompileOutput type with
+    directives and candidateLabwares fields
   - apply_directives and resolve_labware passes are no longer skipped due to
-    false when conditions
-  - candidateLabwares array is populated in compiler output
+    missing ai_precompile output
+  - No 'ai_precompile_shape_mismatch' warning in diagnostics for mp10422
 implementationBudget:
-  targetChangedFiles: 2
-  maxChangedFiles: 3
+  targetChangedFiles: 1
+  maxChangedFiles: 2
   targetChangedLines: 60
   maxChangedLines: 150
   requireFocusedFixture: true

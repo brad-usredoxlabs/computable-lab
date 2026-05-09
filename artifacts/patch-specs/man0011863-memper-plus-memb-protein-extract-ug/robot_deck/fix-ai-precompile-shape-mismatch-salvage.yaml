@@ -1,0 +1,58 @@
+kind: protocol-foundry-patch-spec
+id: man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-ai-precompile-shape-mismatch-salvage
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: robot_deck
+fixClass: precompiler_reference_shape
+title: Fix ai_precompile shape mismatch by improving salvage logic for malformed
+  LLM output
+rationale: The compiler emits 'ai_precompile_shape_mismatch' warning, indicating
+  the LLM output from ai_precompile did not conform to the expected
+  AiPrecompileOutput schema. The salvage function (salvageAiPrecompileOutput)
+  attempts to recover but the resulting output still has issues. The diagnostics
+  show that passes like 'mint_materials', 'resolve_labware', and
+  'expand_patterns' were skipped because their 'when' conditions evaluated to
+  false (e.g., outputs.ai_precompile.mintMaterials was false/undefined). This
+  means the LLM either didn't produce these fields or they were malformed and
+  stripped. The root cause is that the LLM response shape doesn't match the
+  expected schema, and the salvage logic doesn't properly reconstruct missing
+  optional fields that downstream passes depend on. Additionally, the 'kind
+  unknown not handled by resolve_references' gaps indicate that unresolvedRefs
+  with kind 'unknown' or empty kind are being produced, which the
+  resolve_references pass doesn't handle (it only handles protocol, assay,
+  pattern, compound-class).
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - ai_precompile_shape_mismatch warning is eliminated or reduced for protocols
+    with clear steps
+  - salvageAiPrecompileOutput properly reconstructs mintMaterials,
+    candidateLabwares, and patternEvents arrays even when LLM output is partial
+  - resolve_references pass handles 'unknown' or empty kind refs by either
+    resolving them as labware/material or emitting a specific diagnostic
+  - Downstream passes (mint_materials, resolve_labware, expand_patterns) are no
+    longer skipped due to missing ai_precompile fields when deterministic
+    precompile has core artifacts
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 100
+  maxChangedLines: 200
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011863-memper-plus-memb-protein-extract-ug.txt
+failureEvidence:
+  eventCount: 5
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/verdict.yaml

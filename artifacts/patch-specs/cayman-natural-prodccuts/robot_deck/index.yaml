@@ -2,5 +2,7 @@ kind: protocol-foundry-patch-spec-index
 protocolId: cayman-natural-prodccuts
 variant: robot_deck
 patchSpecs:
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/robot_deck/fix-precompiler-candidate-shape.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/robot_deck/fix-compiler-plate-dispense-verb.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/robot_deck/fix-event-graph-empty-general.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/robot_deck/fix-foundry-runtime-wiring-gap.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/robot_deck/fix-material-catalog-spec-gap.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/robot_deck/fix-browser-rendering.yaml

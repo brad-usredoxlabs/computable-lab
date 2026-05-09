@@ -1,0 +1,101 @@
+kind: protocol-foundry-patch-spec
+id: cayman-natural-prodccuts/robot_deck/fix-event-graph-empty-general
+protocolId: cayman-natural-prodccuts
+variant: robot_deck
+fixClass: compiler_event_coverage_general
+title: Lower protocol action protocol actions into event graph primitives
+rationale: Compiler produced 0 events for a robot_deck protocol; this is below
+  the Foundry usefulness threshold of 5. The strongest evidence points at
+  protocol action coverage.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+  - server/src/compiler/biology
+  - schema/registry/compile-pipelines/chatbot-compile.yaml
+acceptance:
+  - This protocol variant compiles to at least 5 event graph events or emits a
+    specific missing-verb diagnostic naming the unsupported general action.
+  - The patch handles this one concrete action family only.
+  - A focused regression demonstrates the new event(s) from the supplied
+    protocol artifact.
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 3
+  targetChangedLines: 80
+  maxChangedLines: 220
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-35B-A3B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+contextHints:
+  - Do not try to solve every biology verb in one patch.
+  - Use diagnostics and gaps to pick the single concrete action from this
+    protocol.
+  - Keep provenance/material-instance boundaries intact when adding event
+    lowering.
+  - Only use this general lane when diagnostics do not identify a more specific
+    biology action family.
+doNotTouch:
+  - Do not rewrite the pipeline end to end.
+  - Do not create real material-instance, aliquot, or physical inventory records
+    from vendor PDF evidence.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-natural-prodccuts/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-natural-prodccuts/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-natural-prodccuts/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-natural-prodccuts/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-natural-prodccuts/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-natural-prodccuts/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-natural-prodccuts.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-natural-prodccuts.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cayman-natural-prodccuts.txt
+failureEvidence:
+  outcome: gap
+  eventCount: 0
+  minUsefulEvents: 5
+  diagnosticCodes:
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_no_actionable_candidates
+    - ai_precompile_shape_mismatch
+    - pass_skipped_by_when
+    - unknown_biology_verb
+    - unknown_biology_verb
+    - unknown_biology_verb
+    - pass_skipped_by_when
+    - pass_skipped_by_when
+    - pass_skipped_by_when
+    - pass_skipped_by_when
+    - execution_scale_plan_ready
+  extractorRepairExhaustedCount: 0
+  blockerCount: 0
+  gapCount: 0
+  browserStatus: skipped
+architectNotes: "Deterministic fallback: 4 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-natural-prodccuts/robot_deck/verdict.yaml

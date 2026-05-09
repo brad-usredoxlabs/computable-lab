@@ -3,26 +3,31 @@ id: mp10471/manual_tubes/fix-ai-precompile-shape-mismatch
 protocolId: mp10471
 variant: manual_tubes
 fixClass: precompiler_reference_shape
-title: Fix ai_precompile output shape mismatch causing pass cascade failure
-rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch', which
-  caused downstream passes (mint_materials, apply_directives, resolve_labware,
-  expand_patterns) to be skipped because their 'when' conditions evaluated to
-  false. This is the root cause of the empty event graph (only 2 stub mix
-  events) and unresolved labware refs. The ai_precompile pass is not producing
-  the expected output schema, so the compiler cannot extract candidates,
-  materials, or labware hints.
+title: Fix ai_precompile output shape mismatch causing pass skips
+rationale: "The compiler diagnostics show 'ai_precompile output shape mismatch'
+  (ai_precompile_shape_mismatch). This caused downstream passes to be skipped:
+  mint_materials, apply_directives, resolve_labware, and expand_patterns all had
+  their 'when' conditions evaluate to false because the ai_precompile output
+  fields (mintMaterials, directives, candidateLabwares, patternEvents) were
+  malformed or missing. The pre-compiler extracted 25+ candidates but the AI
+  precompile pass failed to shape them correctly, resulting in only 2 trivial
+  mix events instead of the full protocol. The fix must ensure
+  createAiPrecompilePass in ChatbotCompilePasses.ts produces a valid
+  AiPrecompileOutput with properly populated fields when candidates exist."
 ownedFiles:
-  - server/src/protocol-foundry/passes/ai_precompile.ts
-  - server/src/protocol-foundry/passes/ai_precompile.schema.ts
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
 acceptance:
-  - ai_precompile pass produces output matching the expected schema with
-    candidateLabwares, mintMaterials, directives, and patternEvents fields
-  - Downstream passes (mint_materials, resolve_labware, expand_patterns) are no
-    longer skipped due to false 'when' conditions
-  - Compiler diagnostic 'ai_precompile_shape_mismatch' is eliminated for mp10471
+  - ai_precompile_shape_mismatch warning no longer appears in diagnostics for
+    mp10471
+  - mint_materials, apply_directives, resolve_labware, and expand_patterns
+    passes are no longer skipped due to false when conditions
+  - eventCount increases from 2 to at least 8 events covering the Fluo-4 Direct
+    protocol steps (cell plating, reagent prep, loading, incubation, reading)
+  - AiPrecompileOutput fields (mintMaterials, directives, candidateLabwares,
+    patternEvents) are populated when candidates are extracted
 implementationBudget:
-  targetChangedFiles: 2
-  maxChangedFiles: 4
+  targetChangedFiles: 1
+  maxChangedFiles: 2
   targetChangedLines: 120
   maxChangedLines: 250
   requireFocusedFixture: true
@@ -42,5 +47,5 @@ sourceArtifacts:
 failureEvidence:
   eventCount: 2
   outcome: gap
-architectNotes: "LLM architect analysis: 3 fix recommendations."
+architectNotes: "LLM architect analysis: 2 fix recommendations."
 sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10471/manual_tubes/verdict.yaml

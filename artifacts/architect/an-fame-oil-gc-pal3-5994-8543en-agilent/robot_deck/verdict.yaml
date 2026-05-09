@@ -1,9 +1,9 @@
 kind: protocol-foundry-architect-verdict
 protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
 variant: robot_deck
-generated_at: 2026-05-09T06:30:47.282Z
+generated_at: 2026-05-09T08:43:54.610Z
 accepted: false
-qualityScore: 0
+qualityScore: 0.1
 coverageEstimate: 0
 failureClasses:
   - precompiler_reference_shape
@@ -16,26 +16,23 @@ badScalingAssumptions: []
 recommendedFixes:
   - id: fix-ai-precompile-shape-mismatch
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch to enable downstream passes
-    rationale: "The compiler diagnostics show 'ai_precompile output shape mismatch',
-      which causes the ai_precompile output to be invalid. This cascades to skip
-      critical passes: 'mint_materials', 'resolve_labware',
-      'resolve_prior_labware_references', and 'expand_patterns' are all skipped
-      because their 'when' conditions evaluate to false (e.g.,
-      'outputs.ai_precompile.mintMaterials' is false). Without these passes, no
-      events can be generated, resulting in eventCount=0. The pre-compiler must
-      produce a correctly shaped output that the compiler can consume."
+    title: Fix ai_precompile output shape to include candidateEvents and labware refs
+    rationale: The compiler reports 'ai_precompile_shape_mismatch' and subsequent
+      passes (mint_materials, resolve_labware, expand_patterns) are skipped
+      because their 'when' conditions evaluate to false. The ai_precompile pass
+      in ChatbotCompilePasses.ts is not producing the expected output shape with
+      candidateEvents, candidateLabwares, or mintMaterials. This causes all
+      downstream event generation to fail, resulting in eventCount=0.
     ownedFiles:
-      - server/src/protocol-foundry/precompiler/ai-precompile.ts
-      - server/src/protocol-foundry/precompiler/schema.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass completes without 'shape_mismatch' warning
-      - outputs.ai_precompile.mintMaterials is truthy when materials are present
-        in candidates
-      - outputs.ai_precompile.candidateLabwares is truthy when labware hints
-        exist
-      - Downstream passes (mint_materials, resolve_labware) are no longer
-        skipped due to false when conditions
+      - ai_precompile pass outputs an object with candidateEvents array when
+        protocol text contains actionable steps
+      - ai_precompile pass outputs candidateLabwares when labware is mentioned
+        in text
+      - resolve_labware pass is no longer skipped when labware hints exist
+      - eventCount >= 3 for protocols with clear procedural steps
+      - ai_precompile_shape_mismatch warning is eliminated from diagnostics
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -53,39 +50,40 @@ recommendedFixes:
       eventCount: 0
       outcome: gap
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
+      targetChangedFiles: 1
+      maxChangedFiles: 2
       targetChangedLines: 120
       maxChangedLines: 250
       requireFocusedFixture: true
-  - id: fix-unknown-biology-verbs
+  - id: fix-unknown-verbs-bind-prefer-use-report
     class: compiler_event_coverage
-    title: "Register expanders for unknown biology verbs: bind, prefer, use, report,
-      continue"
-    rationale: The compiler drops candidate events because it has no registered
-      expanders for verbs 'bind', 'prefer', 'use', 'report', and 'continue'.
-      These verbs appear in the pre-compiler's extracted candidates but cannot
-      be lowered to protocol events. For this GC-FID protocol, 'use' likely maps
-      to pipette/transfer operations, 'bind' may map to labware mounting, and
-      'continue' may be a no-op or sequencing directive. Adding these verb
-      expanders will allow the compiler to generate events from the extracted
-      candidates.
+    title: Add verb expanders for bind, prefer, use, report, continue
+    rationale: The compiler drops candidate events because verbs 'bind', 'prefer',
+      'use', 'report', and 'continue' have no registered expanders in
+      BiologyVerbExpander.ts. These are common verbs in GC-FID protocols (e.g.,
+      'use PAL3 autosampler', 'bind column', 'report results'). Without
+      expanders, all candidates using these verbs are discarded, contributing to
+      eventCount=0.
     ownedFiles:
-      - server/src/protocol-foundry/compiler/verb-expanders.ts
-      - server/src/protocol-foundry/compiler/verb-registry.ts
+      - server/src/compiler/biology/BiologyVerbExpander.ts
     acceptance:
-      - No 'unknown_biology_verb' warnings for 'bind', 'prefer', 'use',
-        'report', 'continue'
-      - Candidate events with these verbs are lowered to concrete protocol events
-      - eventCount >= 3 after fix is applied
+      - Verb 'use' maps to a pipette or instrument configuration event
+      - Verb 'bind' maps to a labware mounting or column installation event
+      - Verb 'prefer' is handled as a no-op or configuration hint without
+        dropping the event
+      - Verb 'report' maps to a data acquisition or analysis event
+      - Verb 'continue' is handled as a no-op or sequence continuation without
+        dropping the event
+      - unknown_biology_verb warnings for these verbs are eliminated from
+        diagnostics
     coderModelProfile:
       model: Qwen/Qwen3.6-35B-A3B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
+      targetChangedFiles: 1
+      maxChangedFiles: 2
       targetChangedLines: 80
       maxChangedLines: 180
       requireFocusedFixture: true

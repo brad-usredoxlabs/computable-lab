@@ -2,5 +2,5 @@ kind: protocol-foundry-patch-spec-index
 protocolId: cayman-natural-prodccuts
 variant: manual_tubes
 patchSpecs:
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/manual_tubes/add-library-inventory-lowering-pass.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/manual_tubes/precompiler-extract-plate-map-entities.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/manual_tubes/add-plate-map-lowering-pass.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/manual_tubes/fix-precompiler-plate-map-candidate-shape.yaml

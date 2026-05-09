@@ -1,14 +1,13 @@
 kind: protocol-foundry-architect-verdict
 protocolId: mp10471
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T06:42:38.035Z
+generated_at: 2026-05-09T09:37:52.990Z
 accepted: false
 qualityScore: 0.15
 coverageEstimate: 0.1
 failureClasses:
   - precompiler_reference_shape
   - labware_alias_or_resolver
-  - compiler_event_coverage
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
@@ -17,25 +16,24 @@ badScalingAssumptions: []
 recommendedFixes:
   - id: fix-ai-precompile-shape-mismatch
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch causing pass skips
-    rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch', which
-      caused downstream passes 'mint_materials', 'resolve_labware', and
-      'expand_patterns' to be skipped because their 'when' conditions evaluated
-      to false. This is the root cause of the empty event graph (only 2 mix
-      events) and unresolved labware refs. The ai_precompile pass is not
-      producing the expected output shape (mintMaterials, candidateLabwares,
-      patternEvents), so the compiler cannot proceed with material resolution,
-      labware resolution, or pattern expansion.
+    title: Fix ai_precompile output shape mismatch to enable downstream passes
+    rationale: "The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
+      AI precompile pass produced output that doesn't match the expected schema.
+      This caused critical downstream passes to be skipped: 'mint_materials' (no
+      mintMaterials), 'resolve_labware' (no candidateLabwares), and
+      'expand_patterns' (no patternEvents). Without these passes, the compiler
+      cannot extract reagents, resolve labware, or expand protocol patterns,
+      resulting in only 2 trivial mix events instead of a full calcium assay
+      protocol."
     ownedFiles:
-      - server/src/protocol-foundry/passes/ai_precompile.ts
-      - server/src/protocol-foundry/passes/ai_precompile.schema.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass produces output with mintMaterials,
-        candidateLabwares, and patternEvents fields
+      - ai_precompile pass output matches the expected AiPrecompileOutput schema
+        with mintMaterials, candidateLabwares, and patternEvents fields
       - Downstream passes mint_materials, resolve_labware, and expand_patterns
-        are no longer skipped
-      - Compiler outcome changes from 'gap' to 'complete' or produces more than
-        2 events
+        are no longer skipped due to false when conditions
+      - Compiler produces more than 2 events for protocols with clear multi-step
+        procedures
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -53,76 +51,40 @@ recommendedFixes:
       eventCount: 2
       outcome: gap
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
-      targetChangedLines: 120
-      maxChangedLines: 250
+      targetChangedFiles: 1
+      maxChangedFiles: 2
+      targetChangedLines: 60
+      maxChangedLines: 150
       requireFocusedFixture: true
-  - id: fix-labware-resolver-generic-aliases
+  - id: fix-labware-resolution-for-generic-types
     class: labware_alias_or_resolver
-    title: Add generic labware alias resolution for 96-well plate, 12-well
-      reservoir, and 96-tip rack
-    rationale: The compiler output shows 3 unresolved_ref gaps for
-      generic_96_well_plate, generic_12_well_reservoir, and generic_96_tip_rack.
-      The execution scale plan references lbw-def-generic-96-well-plate and
-      lbw-def-generic-reservoir-1-v1, suggesting these definitions exist but the
-      resolver cannot map the generic aliases to them. The labware resolver
-      needs to handle generic labware type aliases that are commonly used in
-      protocols.
+    title: Resolve generic labware references (96-well plate, reservoir, tip rack)
+    rationale: "Three unresolved labware references exist: generic_96_well_plate,
+      generic_12_well_reservoir, and generic_96_tip_rack. The execution scale
+      plan shows these map to lbw-def-generic-96-well-plate and
+      lbw-def-generic-reservoir-1-v1, suggesting the definitions exist but the
+      compiler's labware resolution pass cannot find them. This is likely a
+      wiring issue where the LabwareDefinitionRegistry is not properly queried
+      or the alias mapping is broken."
     ownedFiles:
-      - server/src/protocol-foundry/resolvers/labware-resolver.ts
-      - server/src/protocol-foundry/labware/aliases.ts
+      - server/src/registry/LabwareDefinitionRegistry.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
       - generic_96_well_plate resolves to lbw-def-generic-96-well-plate
-      - generic_12_well_reservoir resolves to lbw-def-generic-reservoir-12 or
+      - generic_12_well_reservoir resolves to lbw-def-generic-reservoir-1-v1 or
         equivalent
-      - generic_96_tip_rack resolves to lbw-def-generic-96-tip-rack or equivalent
-      - No unresolved_ref gaps for generic labware types in compiler output
+      - generic_96_tip_rack resolves to an existing tip rack definition
+      - No unresolved_ref gaps for these labware types in compiler output
     coderModelProfile:
       model: Qwen/Qwen3.6-35B-A3B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
-      targetChangedFiles: 2
+      targetChangedFiles: 1
       maxChangedFiles: 3
-      targetChangedLines: 60
-      maxChangedLines: 150
-      requireFocusedFixture: true
-  - id: fix-compiler-event-coverage-fluo4-protocol
-    class: compiler_event_coverage
-    title: Add verb lowering for Fluo-4 Direct calcium assay protocol steps
-    rationale: "The PDF describes a multi-step protocol including: 1) Cell
-      preparation (adherent/non-adherent), 2) Probenecid preparation (dissolving
-      Component B in Component C buffer), 3) Fluo-4 Direct reagent preparation
-      (mixing Component A with buffer), 4) Loading cells with reagent, 5)
-      Incubation, 6) Measurement. The compiler only produced 2 mix events,
-      missing the critical pipetting, incubation, and measurement steps. The
-      compiler needs verb lowering rules for: pipette_transfer (loading reagent
-      to cells), incubate (37°C or RT incubation), and measure_fluorescence
-      (reading at 495/516 nm)."
-    ownedFiles:
-      - server/src/protocol-foundry/verbs/pipette_transfer.ts
-      - server/src/protocol-foundry/verbs/incubate.ts
-      - server/src/protocol-foundry/verbs/measure_fluorescence.ts
-      - server/src/protocol-foundry/passes/expand_patterns.ts
-    acceptance:
-      - Compiler produces events for pipette_transfer (loading Fluo-4 reagent to
-        cells)
-      - Compiler produces events for incubate (cell loading incubation step)
-      - Compiler produces events for measure_fluorescence (reading fluorescence)
-      - Event count increases from 2 to at least 6 events covering the full
-        protocol workflow
-    coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
-    implementationBudget:
-      targetChangedFiles: 3
-      maxChangedFiles: 5
-      targetChangedLines: 150
-      maxChangedLines: 300
+      targetChangedLines: 40
+      maxChangedLines: 120
       requireFocusedFixture: true
 sourceArtifacts: *a1
-architectNotes: "LLM architect analysis: 3 fix recommendations."
+architectNotes: "LLM architect analysis: 2 fix recommendations."

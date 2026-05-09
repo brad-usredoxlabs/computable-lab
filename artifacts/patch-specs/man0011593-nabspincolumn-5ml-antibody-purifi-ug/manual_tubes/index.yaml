@@ -3,5 +3,4 @@ protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
 variant: manual_tubes
 patchSpecs:
   - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/fix-labware-resolver-generic-racks.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/fix-compiler-event-coverage-spin-column-protocol.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/fix-labware-resolution-for-generic-racks.yaml

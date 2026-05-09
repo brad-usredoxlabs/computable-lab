@@ -1,41 +1,67 @@
 kind: protocol-foundry-architect-verdict
 protocolId: cellrox-oxidative-stress-qr
 variant: manual_tubes
-generated_at: 2026-05-09T06:34:59.582Z
+generated_at: 2026-05-09T09:08:40.111Z
 accepted: false
-qualityScore: 0.45
+qualityScore: 0.7999999999999999
 coverageEstimate: 0.5
 failureClasses:
-  - compiler_event_coverage
-  - precompiler_reference_shape
-  - labware_alias_or_resolver
+  - material_catalog_or_spec_gap
+  - foundry_runtime_wiring_gap
+  - browser_review
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: add-treat-and-analyze-verbs
-    class: compiler_event_coverage
-    title: Register expanders for 'treat' and 'analyze' biology verbs
-    rationale: The compiler diagnostics show 'unknown_biology_verb' for 'treat' and
-      'analyze', causing candidate events to be dropped. The PDF protocol
-      explicitly includes 'Treat the cells with the test compound' (step 1) and
-      'Analyze the cells' (step 8). These are standard biology verbs that should
-      lower to 'add_material' (for treat) and 'measure' or 'analyze' events.
-      Without these expanders, the event graph is incomplete.
+  - id: fix-foundry-runtime-wiring-gap
+    class: foundry_runtime_wiring_gap
+    title: Wire Foundry compile dependencies to the real compiler runtime
+    rationale: Foundry-specific runs are producing compiler gaps that look like
+      missing resolver dependencies or skipped runtime wiring rather than
+      missing protocol records. The architect may patch Foundry harness wiring,
+      dependency injection, and focused Foundry regressions.
     ownedFiles:
-      - server/src/compiler/passes/expand_biology_verbs.ts
-      - server/src/compiler/verb_registry.ts
+      - server/src/foundry/ProtocolFoundryCompileRunner.ts
+      - server/src/foundry/ProtocolFoundryCompileRunner.test.ts
+      - server/src/tools/protocolFoundryCompile.ts
+      - server/src/tools/protocolFoundryLoop.ts
+      - server/src/ai/runChatbotCompile.ts
+      - server/src/ai/compiler/labwareLookup.ts
+      - server/src/ai/compiler/labwareLookup.test.ts
     acceptance:
-      - Compiler no longer emits 'unknown_biology_verb' warnings for 'treat' and
-        'analyze'
-      - Event graph includes an event for step 1 (treat cells) and step 8
-        (analyze cells)
-      - eventCount increases from 10 to at least 12
+      - Foundry compile runs use the same real lookup/resolver dependencies as
+        the main app when local seed records exist.
+      - Does not hard-code one protocol ID or one vendor PDF.
+      - Adds a focused regression proving a Foundry compile dependency is no
+        longer stubbed or empty when seed data can satisfy it.
+      - Compiler diagnostics for the source protocol lose at least one
+        resolver/wiring gap, or the remaining gap is classified more
+        specifically.
+    contextHints:
+      - This lane is for the Foundry harness around the compiler, not for adding
+        new biology data records.
+      - A likely failure pattern is a Foundry runner passing an always-empty
+        lookup function where the main app uses a real RecordStore-backed
+        lookup.
+      - Patch dependency wiring before adding YAML. Existing records should be
+        found before new records are minted.
+      - Keep changes local to Foundry runtime wiring unless the regression
+        proves a shared compiler API needs a small extension.
+    implementationBudget:
+      targetChangedFiles: 1
+      maxChangedFiles: 3
+      targetChangedLines: 80
+      maxChangedLines: 220
+      requireFocusedFixture: true
     coderModelProfile:
       model: Qwen/Qwen3.6-35B-A3B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
+    doNotTouch:
+      - Do not rewrite the pipeline end to end.
+      - Do not create real material-instance, aliquot, or physical inventory
+        records from vendor PDF evidence.
     sourceArtifacts: &a1
       compiler: /home/brad/git/computable-foundry/artifacts/compiler/cellrox-oxidative-stress-qr/manual_tubes.yaml
       eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cellrox-oxidative-stress-qr/manual_tubes.yaml
@@ -47,78 +73,123 @@ recommendedFixes:
       materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cellrox-oxidative-stress-qr.yaml
       text: /home/brad/git/computable-foundry/artifacts/text/cellrox-oxidative-stress-qr.txt
     failureEvidence: &a2
+      outcome: complete
       eventCount: 10
-      outcome: gap
-    implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
-      targetChangedLines: 60
-      maxChangedLines: 150
-      requireFocusedFixture: true
-  - id: fix-ai-precompile-shape-mismatch
-    class: precompiler_reference_shape
-    title: Fix ai_precompile output shape to include mintMaterials, directives, and
-      candidateLabwares
-    rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch' and
-      multiple passes skipped because outputs.ai_precompile.mintMaterials,
-      directives, candidateLabwares, priorLabwareRefs, and patternEvents
-      evaluated to false. This means the pre-compiler's AI output shape doesn't
-      match what the compiler expects, causing critical passes (mint_materials,
-      apply_directives, resolve_labware) to be skipped. The pre-compiler needs
-      to output the correct shape with these fields populated.
+      minUsefulEvents: 3
+      diagnosticCodes:
+        - foundry_presegmented_candidates
+        - ai_precompile_shape_mismatch
+        - pass_skipped_by_when
+        - pass_skipped_by_when
+        - unknown_biology_verb
+        - unknown_biology_verb
+        - pass_skipped_by_when
+        - pass_skipped_by_when
+        - pass_skipped_by_when
+        - execution_scale_plan_ready
+      extractorRepairExhaustedCount: 0
+      blockerCount: 0
+      gapCount: 0
+      browserStatus: skipped
+  - id: fix-material-catalog-spec-gap
+    class: material_catalog_or_spec_gap
+    title: Resolve protocol materials as catalog/spec data without inventing inventory
+    rationale: Compiler evidence points at unresolved reagents, buffers,
+      formulations, vendor products, or material tags that should be represented
+      as reusable YAML data or material resolver behavior.
     ownedFiles:
-      - server/src/precompiler/ai_precompile.ts
-      - server/src/precompiler/output_schema.ts
-      - server/src/compiler/passes/resolve_labware.ts
+      - records/material
+      - records/seed/materials
+      - schema/lab/material.schema.yaml
+      - schema/lab/material-spec.schema.yaml
+      - schema/lab/vendor-product.schema.yaml
+      - server/src/compiler/material
+      - server/src/materials
     acceptance:
-      - No 'ai_precompile_shape_mismatch' warning in compiler diagnostics
-      - Passes 'mint_materials', 'apply_directives', and 'resolve_labware' are
-        no longer skipped
-      - candidateLabwares and mintMaterials are populated in ai_precompile output
-    coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
+      - Adds or improves only material, material-spec, vendor-product, or
+        material resolver/catalog data needed by the source protocol.
+      - Does not create or modify labware-definition YAML; containers, tubes,
+        plates, racks, reservoirs, tips, and other physical holders must go
+        through a labware-specific fix class.
+      - Does not create material-instance, aliquot, material-lot, physical
+        inventory, source-tube, or run-specific records from vendor PDF
+        evidence.
+      - Uses ontology refs only when a CURIE/IRI is present in local records or
+        source artifacts; otherwise marks the material as
+        vendor/provenance-backed with an ontology backfill need.
+      - Compiler diagnostics for the protocol show fewer unresolved
+        material/catalog/spec failures, or the patch adds a focused regression
+        documenting the remaining blocker.
+    contextHints:
+      - Everything that can be data should be YAML data in records/ or schema
+        registry files.
+      - A vendor PDF can justify material, material-spec/formulation,
+        vendor-product, and labware definition/product facts.
+      - A vendor PDF cannot prove that this lab has a tube, aliquot, lot,
+        prepared source, or sample provenance.
+      - Material records describe substances/reagents/concepts such as
+        antibodies, buffers, substrates, and stop solutions. They must not
+        describe plates, tubes, racks, reservoirs, or tips.
+      - The unattended coder does not have a live OLS/ChEBI lookup tool in this
+        patch lane; do not invent ontology identifiers.
+      - Prefer one reagent family or one vendor kit component family per patch.
+      - If the unresolved item is a plate, tube rack, reservoir, tip rack, or
+        other existing labware definition that is not being found, use the
+        labware_alias_or_resolver_gap lane instead of adding a new record.
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
-      targetChangedLines: 100
-      maxChangedLines: 220
-      requireFocusedFixture: true
-  - id: fix-labware-and-material-resolution
-    class: labware_alias_or_resolver
-    title: Resolve labware references and fix malformed event details
-    rationale: "The event graph has several issues: 1) 'resolve_labware' pass was
-      skipped due to shape mismatch, so labware references may not be properly
-      resolved. 2) Event evt-fix_add-woox5atd has material 'cells' and volume
-      '3.7% formaldehyde' which is semantically wrong - it should be adding
-      formaldehyde to cells. 3) Event evt-stain_add-r7gzrjb6 has material
-      'cells' but should be adding NucBlue stain. 4) Event
-      evt-permeabilize_add-9ayqc2ke has material 'cells' but should be adding
-      Triton X-100. The labware resolver needs to properly map materials to
-      their correct roles and fix the event details."
-    ownedFiles:
-      - server/src/compiler/passes/resolve_labware.ts
-      - server/src/compiler/passes/expand_biology_verbs.ts
-      - server/src/labware/resolver.ts
-    acceptance:
-      - Event evt-fix_add-woox5atd has material 'formaldehyde' not 'cells'
-      - Event evt-stain_add-r7gzrjb6 has material 'NucBlue stain' not 'cells'
-      - Event evt-permeabilize_add-9ayqc2ke has material 'Triton X-100' not
-        'cells'
-      - Labware references are properly resolved and linked to correct labware
-        definitions
-    coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
-    implementationBudget:
-      targetChangedFiles: 2
+      targetChangedFiles: 1
       maxChangedFiles: 3
       targetChangedLines: 80
-      maxChangedLines: 180
+      maxChangedLines: 220
       requireFocusedFixture: true
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    doNotTouch:
+      - Do not rewrite the pipeline end to end.
+      - Do not create real material-instance, aliquot, or physical inventory
+        records from vendor PDF evidence.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+  - id: fix-browser-rendering
+    class: browser_or_labware_rendering
+    title: Make event graph render and play in labware-editor
+    rationale: Protocol variants cannot be accepted until browser review passes with
+      screenshot evidence.
+    ownedFiles:
+      - client/src
+      - records/seed/labware-definition
+      - server/src/foundry
+    acceptance:
+      - Browser review report status is pass.
+      - Screenshot shows expected labware and event sequence.
+    contextHints:
+      - Prefer adding or mapping one missing labware icon/geometry at a time.
+      - If the blocker is that an existing labware-definition record is not
+        being resolved, use the labware_alias_or_resolver_gap lane and patch
+        resolver/lookup wiring instead of creating duplicate labware records.
+      - Tube protocols should render in generic 24x1.5ml, 15ml, or 50ml rack
+        geometry when possible.
+      - New or repaired labware records must use canonical
+        records/seed/labware-definition/*.yaml files, not the legacy
+        records/seed/labware-definitions directory.
+      - "Canonical labware-definition records include $schema, kind:
+        labware-definition, recordId, type: labware_definition, id,
+        display_name, topology/capacity/render_hints as appropriate."
+    implementationBudget:
+      targetChangedFiles: 1
+      maxChangedFiles: 3
+      targetChangedLines: 80
+      maxChangedLines: 220
+      requireFocusedFixture: true
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    doNotTouch:
+      - Do not rewrite the pipeline end to end.
+      - Do not create real material-instance, aliquot, or physical inventory
+        records from vendor PDF evidence.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
 sourceArtifacts: *a1
-architectNotes: "LLM architect analysis: 3 fix recommendations."
+architectNotes: "Deterministic fallback: 3 fix recommendations."

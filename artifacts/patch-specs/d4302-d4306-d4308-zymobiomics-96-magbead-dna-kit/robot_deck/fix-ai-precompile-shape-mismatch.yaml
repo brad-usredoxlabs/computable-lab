@@ -3,33 +3,28 @@ id: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/fix-ai-precompil
 protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
 variant: robot_deck
 fixClass: precompiler_reference_shape
-title: Fix ai_precompile output shape mismatch causing downstream pass skips
-rationale: "The compiler diagnostics show 'ai_precompile_shape_mismatch', which
-  caused critical downstream passes to be skipped: 'mint_materials' (because
-  mintMaterials was false), 'resolve_labware' (because candidateLabwares was
-  false), and 'expand_patterns' (because patternEvents was false). This is the
-  root cause of the empty materials list, unresolved labware refs, and the
-  generic/incorrect event graph. The pre-compiler's AI output shape does not
-  match the compiler's expected schema, so the compiler falls back to defaults
-  or skips entirely."
+title: Fix ai_precompile output shape mismatch to enable downstream passes
+rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch', which
+  caused critical downstream passes (mint_materials, resolve_labware,
+  expand_patterns) to be skipped because their 'when' conditions evaluated to
+  false. This is the root cause of the gap outcome. The ai_precompile pass in
+  ChatbotCompilePasses.ts is producing output that doesn't match the expected
+  AiPrecompileOutput schema, preventing the compiler from extracting candidate
+  events, labwares, and materials.
 ownedFiles:
-  - server/src/protocol-foundry/passes/ai_precompile.ts
-  - server/src/protocol-foundry/passes/mint_materials.ts
-  - server/src/protocol-foundry/passes/resolve_labware.ts
-  - server/src/protocol-foundry/schema/precompile-output.ts
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
 acceptance:
-  - ai_precompile pass outputs a shape that includes non-empty mintMaterials,
-    candidateLabwares, and patternEvents arrays when the PDF contains protocol
-    steps.
-  - No 'ai_precompile_shape_mismatch' warning appears in diagnostics for this
-    protocol.
+  - ai_precompile pass produces output matching AiPrecompileOutput schema with
+    candidateEvents, candidateLabwares, and mintMaterials fields
   - Downstream passes (mint_materials, resolve_labware, expand_patterns) are no
-    longer skipped by when conditions for this protocol.
+    longer skipped due to false when conditions
+  - Compiler outcome changes from 'gap' to 'complete' or 'error' with specific
+    diagnostics
 implementationBudget:
-  targetChangedFiles: 2
-  maxChangedFiles: 4
-  targetChangedLines: 120
-  maxChangedLines: 250
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 60
+  maxChangedLines: 150
   requireFocusedFixture: true
 coderModelProfile:
   model: Qwen/Qwen3.6-27B-FP8

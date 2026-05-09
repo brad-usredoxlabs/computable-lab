@@ -1,7 +1,0 @@
-kind: protocol-foundry-coder-patch-result
-protocolId: bulletin-6816
-variant: robot_deck
-generated_at: 2026-05-09T06:01:42.659Z
-status: blocked
-message: Patch touches no meaningful compiler/schema/record files.
-touchedFiles: []

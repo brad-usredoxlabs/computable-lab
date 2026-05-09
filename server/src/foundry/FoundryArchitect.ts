@@ -108,7 +108,7 @@ function fixSpecDefaults(paths: Record<string, string | undefined>, evidence: Re
       requireFocusedFixture: true,
     },
     coderModelProfile: {
-      model: 'Qwen/Qwen3.6-35B-A3B-FP8',
+      model: 'Kbenkhaled/Qwen3.5-35B-3A-NVFP4',
       guidance: 'Narrow ownership, concrete evidence, one behavior change.',
     },
     doNotTouch: [
@@ -246,7 +246,7 @@ async function llmArchitectVerdict(
           "ownedFiles": ["server/src/path/to/file.ts"],
           "acceptance": ["Criterion 1", "Criterion 2"],
           "implementationBudget": {"targetChangedFiles": 1, "maxChangedFiles": 3, "targetChangedLines": 80, "maxChangedLines": 220},
-          "coderModelProfile": {"model": "Qwen/Qwen3.6-35B-A3B-FP8"}
+          "coderModelProfile": {"model": "Kbenkhaled/Qwen3.5-35B-3A-NVFP4"}
         }
       ]
     }`,
@@ -257,7 +257,7 @@ async function llmArchitectVerdict(
     `- Name EXACT files to change (relative to repo root).`,
     `- Include concrete acceptance criteria.`,
     `- If an existing labware/material record is not being found, the fix is WIRING, not adding records.`,
-    `- Use Qwen/Qwen3.6-27B-FP8 for complex cross-file patches, 35B-A3B-FP8 for simple ones.`,
+    `- Use Qwen/Qwen3.6-27B-FP8 (port 8000) for complex cross-file patches, Kbenkhaled/Qwen3.5-35B-3A-NVFP4 (port 8888) for simple ones.`,
     `- Output ONLY valid JSON (no markdown, no prose outside the JSON).`,
   ].join('\n');
 
@@ -456,7 +456,7 @@ function normalizeLlmVerdict(
       // Normalize to valid model names
       const model = (rawModel.includes('27B') || rawModel.includes('slow') || rawModel.includes('complex'))
         ? 'Qwen/Qwen3.6-27B-FP8'
-        : 'Qwen/Qwen3.6-35B-A3B-FP8';
+        : 'Kbenkhaled/Qwen3.5-35B-3A-NVFP4';
 
       const base: ArchitectVerdict['recommendedFixes'][number] = {
         id: String(fix.id ?? 'unknown-fix'),

@@ -3,4 +3,4 @@ protocolId: mp10422
 variant: bench_plate_multichannel
 patchSpecs:
   - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/bench_plate_multichannel/fix-labware-resolver-generic-aliases.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/bench_plate_multichannel/fix-labware-resolution-for-generic-refs.yaml

@@ -3,5 +3,5 @@ protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
 variant: bench_plate_multichannel
 patchSpecs:
   - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-labware-resolver-generic-plates.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-material-resolver-resuspend-ontology.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-labware-resolution-generic-plates.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-material-resolution-resuspend.yaml

@@ -1,0 +1,47 @@
+kind: protocol-foundry-patch-spec
+id: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-labware-resolution-generic-plates
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: bench_plate_multichannel
+fixClass: labware_alias_or_resolver
+title: Add generic labware definitions for 96-well plate, 12-well reservoir, and
+  tube rack
+rationale: "The compiler gaps show three unresolved labware references:
+  'generic_96_well_plate', 'generic_12_well_reservoir', and
+  'generic_24x1_5ml_tube_rack' with reason 'no matching labware in prior
+  snapshot'. The execution scale plan references 'lbw-def-generic-96-well-plate'
+  and 'lbw-def-generic-reservoir-1-v1', suggesting these definitions should
+  exist but may not be properly registered or aliased. The
+  LabwareDefinitionRegistry needs to include these generic labware types so the
+  compiler can resolve them during the resolve_labware pass."
+ownedFiles:
+  - server/src/registry/LabwareDefinitionRegistry.ts
+acceptance:
+  - LabwareDefinitionRegistry includes definitions for generic_96_well_plate,
+    generic_12_well_reservoir, and generic_24x1_5ml_tube_rack
+  - Compiler gaps no longer contain unresolved_ref for these labware hints
+  - resolve_labware pass successfully resolves these labware references when
+    ai_precompile provides candidateLabwares
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 40
+  maxChangedLines: 100
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-35B-A3B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.txt
+failureEvidence:
+  eventCount: 6
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/verdict.yaml

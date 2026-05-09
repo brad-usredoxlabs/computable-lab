@@ -1,7 +1,7 @@
 kind: protocol-foundry-architect-verdict
 protocolId: mp10422
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T06:40:45.595Z
+generated_at: 2026-05-09T09:35:05.463Z
 accepted: false
 qualityScore: 0.35
 coverageEstimate: 0.75
@@ -17,19 +17,22 @@ recommendedFixes:
   - id: fix-ai-precompile-shape-mismatch
     class: precompiler_reference_shape
     title: Fix ai_precompile output shape mismatch to enable downstream passes
-    rationale: The compiler diagnostics show 'ai_precompile output shape mismatch',
-      which caused the 'apply_directives' and 'resolve_labware' passes to be
-      skipped. This is the root cause of the unresolved labware refs and the
-      'gap' outcome. The pre-compiler's AI output does not match the expected
-      schema, so the compiler cannot extract candidateLabwares or directives.
+    rationale: The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
+      ai_precompile pass produced output that doesn't match the expected
+      AiPrecompileOutput schema. This caused 'apply_directives' and
+      'resolve_labware' passes to be skipped (their 'when' conditions evaluated
+      to false because outputs.ai_precompile.directives and
+      outputs.ai_precompile.candidateLabwares were missing or malformed).
+      Without labware resolution, generic labware references remain unresolved,
+      creating gaps.
     ownedFiles:
-      - server/src/protocol-foundry/passes/ai_precompile.ts
-      - server/src/protocol-foundry/schema/precompile-output.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass completes without shape mismatch warning
+      - ai_precompile pass produces output matching AiPrecompileOutput type with
+        directives and candidateLabwares fields
       - apply_directives and resolve_labware passes are no longer skipped due to
-        false when conditions
-      - candidateLabwares array is populated in compiler output
+        missing ai_precompile output
+      - No 'ai_precompile_shape_mismatch' warning in diagnostics for mp10422
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -47,40 +50,43 @@ recommendedFixes:
       eventCount: 15
       outcome: gap
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
+      targetChangedFiles: 1
+      maxChangedFiles: 2
       targetChangedLines: 60
       maxChangedLines: 150
       requireFocusedFixture: true
-  - id: fix-labware-resolver-generic-aliases
+  - id: fix-labware-resolution-for-generic-refs
     class: labware_alias_or_resolver
-    title: Wire generic labware aliases to existing labware definitions
-    rationale: "The compiler output shows 3 unresolved refs: generic_96_well_plate,
-      generic_12_well_reservoir, and generic_96_tip_rack. These are common
-      generic labware types that should map to existing labware definitions in
-      the catalog. The resolve_labware pass was skipped due to the shape
-      mismatch, but even if it ran, the alias mapping may be missing. Need to
-      ensure these generic aliases resolve to actual labware records."
+    title: Resolve generic labware references (96_well_plate, 12_well_reservoir,
+      96_tip_rack) in compiler
+    rationale: Three unresolved_ref gaps exist for generic_96_well_plate,
+      generic_12_well_reservoir, and generic_96_tip_rack. The
+      LabwareDefinitionRegistry likely contains these definitions but the
+      compiler's resolve_labware pass (skipped due to ai_precompile shape
+      mismatch) cannot find them. Once the ai_precompile shape is fixed, the
+      resolve_labware pass should be able to match these generic references to
+      existing labware definitions. If definitions are missing, they need to be
+      added to the registry.
     ownedFiles:
-      - server/src/protocol-foundry/passes/resolve_labware.ts
-      - server/src/labware/aliases.ts
+      - server/src/registry/LabwareDefinitionRegistry.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - generic_96_well_plate resolves to an existing 96-well plate labware
-        definition
-      - generic_12_well_reservoir resolves to an existing reservoir labware
-        definition
-      - generic_96_tip_rack resolves to an existing tip rack labware definition
-      - No unresolved_ref gaps for these labware types in compiler output
+      - No unresolved_ref gaps for generic_96_well_plate,
+        generic_12_well_reservoir, generic_96_tip_rack
+      - LabwareDefinitionRegistry contains definitions for all three generic
+        labware types
+      - resolve_labware pass successfully resolves these references when
+        ai_precompile output is valid
     coderModelProfile:
       model: Qwen/Qwen3.6-35B-A3B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
-      targetChangedFiles: 2
+      targetChangedFiles: 1
       maxChangedFiles: 3
       targetChangedLines: 40
-      maxChangedLines: 100
+      maxChangedLines: 120
       requireFocusedFixture: true
 sourceArtifacts: *a1
 architectNotes: "LLM architect analysis: 2 fix recommendations."

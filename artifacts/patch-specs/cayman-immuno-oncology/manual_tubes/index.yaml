@@ -2,6 +2,8 @@ kind: protocol-foundry-patch-spec-index
 protocolId: cayman-immuno-oncology
 variant: manual_tubes
 patchSpecs:
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-catalog-protocol-event-generation.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-labware-resolution-for-generic-plates.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-event-graph-coverage-wash.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-foundry-runtime-wiring-gap.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-labware-alias-resolver-gap.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-material-catalog-spec-gap.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-browser-rendering.yaml

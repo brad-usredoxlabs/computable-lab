@@ -1,0 +1,54 @@
+kind: protocol-foundry-patch-spec
+id: mp10471/manual_tubes/fix-labware-resolution-gaps
+protocolId: mp10471
+variant: manual_tubes
+fixClass: labware_alias_or_resolver
+title: Resolve unresolved labware refs for generic_96_well_plate and
+  generic_24x1_5ml_tube_rack
+rationale: "The compiler output shows two unresolved_ref gaps:
+  'generic_96_well_plate (no matching labware in prior snapshot)' and
+  'generic_24x1_5ml_tube_rack (no matching labware in prior snapshot)'. The
+  execution scale plan references 'lbw-def-generic-96-well-plate' and
+  'lbw-def-generic-reservoir-1-v1' in requiredLabwareDefinitions, suggesting
+  these definitions exist in the registry but the compiler's resolve_labware
+  pass couldn't find them. Since resolve_labware was skipped due to the
+  ai_precompile shape mismatch, this is partially a downstream effect. However,
+  the labware resolution logic may also have issues matching candidate labware
+  hints to registry definitions. The fix should ensure that when labware hints
+  like 'generic_96_well_plate' are extracted, they correctly resolve to existing
+  registry definitions like 'lbw-def-generic-96-well-plate'."
+ownedFiles:
+  - server/src/registry/LabwareDefinitionRegistry.ts
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - No unresolved_ref gaps for generic_96_well_plate or
+    generic_24x1_5ml_tube_rack in compiler output
+  - Labware hints from pre-compiler candidates correctly resolve to existing
+    registry definitions
+  - Event graph labwares section contains properly resolved labware references
+    with matching definitions
+  - Execution scale plan can bind all required labware definitions without gaps
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 3
+  targetChangedLines: 60
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-35B-A3B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10471/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10471/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10471/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10471/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/mp10471/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/mp10471/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/mp10471.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10471.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/mp10471.txt
+failureEvidence:
+  eventCount: 2
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10471/manual_tubes/verdict.yaml

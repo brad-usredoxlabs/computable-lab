@@ -1,0 +1,91 @@
+kind: protocol-foundry-patch-spec
+id: man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-material-catalog-spec-gap
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: manual_tubes
+fixClass: material_catalog_or_spec_gap
+title: Resolve protocol materials as catalog/spec data without inventing inventory
+rationale: Compiler evidence points at unresolved reagents, buffers,
+  formulations, vendor products, or material tags that should be represented as
+  reusable YAML data or material resolver behavior.
+ownedFiles:
+  - records/material
+  - records/seed/materials
+  - schema/lab/material.schema.yaml
+  - schema/lab/material-spec.schema.yaml
+  - schema/lab/vendor-product.schema.yaml
+  - server/src/compiler/material
+  - server/src/materials
+acceptance:
+  - Adds or improves only material, material-spec, vendor-product, or material
+    resolver/catalog data needed by the source protocol.
+  - Does not create or modify labware-definition YAML; containers, tubes,
+    plates, racks, reservoirs, tips, and other physical holders must go through
+    a labware-specific fix class.
+  - Does not create material-instance, aliquot, material-lot, physical
+    inventory, source-tube, or run-specific records from vendor PDF evidence.
+  - Uses ontology refs only when a CURIE/IRI is present in local records or
+    source artifacts; otherwise marks the material as vendor/provenance-backed
+    with an ontology backfill need.
+  - Compiler diagnostics for the protocol show fewer unresolved
+    material/catalog/spec failures, or the patch adds a focused regression
+    documenting the remaining blocker.
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 3
+  targetChangedLines: 80
+  maxChangedLines: 220
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-35B-A3B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+contextHints:
+  - Everything that can be data should be YAML data in records/ or schema
+    registry files.
+  - A vendor PDF can justify material, material-spec/formulation,
+    vendor-product, and labware definition/product facts.
+  - A vendor PDF cannot prove that this lab has a tube, aliquot, lot, prepared
+    source, or sample provenance.
+  - Material records describe substances/reagents/concepts such as antibodies,
+    buffers, substrates, and stop solutions. They must not describe plates,
+    tubes, racks, reservoirs, or tips.
+  - The unattended coder does not have a live OLS/ChEBI lookup tool in this
+    patch lane; do not invent ontology identifiers.
+  - Prefer one reagent family or one vendor kit component family per patch.
+  - If the unresolved item is a plate, tube rack, reservoir, tip rack, or other
+    existing labware definition that is not being found, use the
+    labware_alias_or_resolver_gap lane instead of adding a new record.
+doNotTouch:
+  - Do not rewrite the pipeline end to end.
+  - Do not create real material-instance, aliquot, or physical inventory records
+    from vendor PDF evidence.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011863-memper-plus-memb-protein-extract-ug.txt
+failureEvidence:
+  outcome: gap
+  eventCount: 5
+  minUsefulEvents: 3
+  diagnosticCodes:
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_no_actionable_candidates
+    - ai_precompile_shape_mismatch
+    - pass_skipped_by_when
+    - pass_skipped_by_when
+    - pass_skipped_by_when
+    - pass_skipped_by_when
+    - execution_scale_plan_ready
+  extractorRepairExhaustedCount: 0
+  blockerCount: 0
+  gapCount: 2
+  browserStatus: skipped
+architectNotes: "Deterministic fallback: 4 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/verdict.yaml

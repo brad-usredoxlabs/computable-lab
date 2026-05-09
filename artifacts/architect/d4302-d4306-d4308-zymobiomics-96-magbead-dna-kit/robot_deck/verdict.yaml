@@ -1,7 +1,7 @@
 kind: protocol-foundry-architect-verdict
 protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
 variant: robot_deck
-generated_at: 2026-05-09T06:37:30.830Z
+generated_at: 2026-05-09T09:18:23.059Z
 accepted: false
 qualityScore: 0.15
 coverageEstimate: 0.3
@@ -17,28 +17,23 @@ badScalingAssumptions: []
 recommendedFixes:
   - id: fix-ai-precompile-shape-mismatch
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch causing downstream pass skips
-    rationale: "The compiler diagnostics show 'ai_precompile_shape_mismatch', which
-      caused critical downstream passes to be skipped: 'mint_materials' (because
-      mintMaterials was false), 'resolve_labware' (because candidateLabwares was
-      false), and 'expand_patterns' (because patternEvents was false). This is
-      the root cause of the empty materials list, unresolved labware refs, and
-      the generic/incorrect event graph. The pre-compiler's AI output shape does
-      not match the compiler's expected schema, so the compiler falls back to
-      defaults or skips entirely."
+    title: Fix ai_precompile output shape mismatch to enable downstream passes
+    rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch', which
+      caused critical downstream passes (mint_materials, resolve_labware,
+      expand_patterns) to be skipped because their 'when' conditions evaluated
+      to false. This is the root cause of the gap outcome. The ai_precompile
+      pass in ChatbotCompilePasses.ts is producing output that doesn't match the
+      expected AiPrecompileOutput schema, preventing the compiler from
+      extracting candidate events, labwares, and materials.
     ownedFiles:
-      - server/src/protocol-foundry/passes/ai_precompile.ts
-      - server/src/protocol-foundry/passes/mint_materials.ts
-      - server/src/protocol-foundry/passes/resolve_labware.ts
-      - server/src/protocol-foundry/schema/precompile-output.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass outputs a shape that includes non-empty
-        mintMaterials, candidateLabwares, and patternEvents arrays when the PDF
-        contains protocol steps.
-      - No 'ai_precompile_shape_mismatch' warning appears in diagnostics for
-        this protocol.
+      - ai_precompile pass produces output matching AiPrecompileOutput schema
+        with candidateEvents, candidateLabwares, and mintMaterials fields
       - Downstream passes (mint_materials, resolve_labware, expand_patterns) are
-        no longer skipped by when conditions for this protocol.
+        no longer skipped due to false when conditions
+      - Compiler outcome changes from 'gap' to 'complete' or 'error' with
+        specific diagnostics
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -56,73 +51,58 @@ recommendedFixes:
       eventCount: 6
       outcome: gap
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
-      targetChangedLines: 120
-      maxChangedLines: 250
+      targetChangedFiles: 1
+      maxChangedFiles: 2
+      targetChangedLines: 60
+      maxChangedLines: 150
       requireFocusedFixture: true
-  - id: fix-labware-resolver-zymo-bashing-bead
+  - id: fix-labware-resolution-for-zymo-labware
     class: labware_alias_or_resolver
-    title: Add labware resolver entries for ZymoBIOMICS BashingBead lysis modules
-    rationale: "The compiler gaps show multiple unresolved labware refs: 'ZR
-      BashingBead™ Lysis Tubes', 'BashingBead™ Lysis Module',
+    title: Add labware resolution for ZymoBIOMICS-specific labware
+    rationale: "Multiple unresolved_ref gaps exist for ZymoBIOMICS-specific labware:
+      'ZR BashingBead™ Lysis Tubes', 'BashingBead™ Lysis Module',
       'generic_96_well_plate', 'generic_24x1_5ml_tube_rack',
-      'generic_6x15ml_tube_rack', 'generic_4x50ml_tube_rack'. These are standard
-      labware types that should be resolvable. The resolver needs aliases
-      mapping vendor-specific names (e.g., 'ZR BashingBead Lysis Tubes') to
-      canonical labware definitions, and generic labware definitions need to
-      exist in the labware registry."
+      'generic_6x15ml_tube_rack', 'generic_4x50ml_tube_rack'. The labware
+      resolver cannot find these in the registry. Need to add aliases or
+      mappings for these Zymo-specific labware items to existing generic labware
+      definitions."
     ownedFiles:
-      - server/src/protocol-foundry/labware/resolver.ts
-      - server/src/protocol-foundry/labware/aliases.ts
-      - server/src/protocol-foundry/labware/definitions/generic-96-well-plate.yaml
-      - server/src/protocol-foundry/labware/definitions/zymo-bashing-bead-tubes.yaml
+      - server/src/registry/LabwareDefinitionRegistry.ts
     acceptance:
-      - Labware resolver successfully resolves 'ZR BashingBead™ Lysis Tubes' to
-        a canonical labware definition.
-      - Labware resolver successfully resolves 'BashingBead™ Lysis Module' to a
-        canonical labware definition.
-      - Generic labware types (96-well plate, tube racks) are resolved without
-        'no matching labware in prior snapshot' errors.
-      - No unresolved_ref gaps for labware in the compiler output for this
-        protocol.
+      - ZR BashingBead™ Lysis Tubes resolves to an existing labware definition
+        or new definition is created
+      - BashingBead™ Lysis Module resolves to an existing labware definition
+      - generic_96_well_plate resolves to lbw-def-generic-96-well-plate
+      - No unresolved_ref gaps for Zymo-specific labware in compiler output
     coderModelProfile:
       model: Qwen/Qwen3.6-35B-A3B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
-      targetChangedLines: 80
-      maxChangedLines: 180
+      targetChangedFiles: 1
+      maxChangedFiles: 2
+      targetChangedLines: 40
+      maxChangedLines: 100
       requireFocusedFixture: true
-  - id: fix-material-catalog-zymo-reagents
+  - id: fix-material-resolution-for-zymo-reagents
     class: material_catalog_or_spec
-    title: Add material catalog entries for ZymoBIOMICS kit reagents
+    title: Add material resolution for ZymoBIOMICS reagents
     rationale: "The material context is empty (materials: [], materialSpecs: [],
-      vendorProducts: []). The PDF clearly lists reagents: ZymoBIOMICS Lysis
-      Solution, DNA/RNA Shield, MagBinding Buffer, MagWash 1, MagWash 2,
-      DNase/RNase Free Water, MagBinding Beads. The compiler event graph
-      incorrectly references 'trypsin-EDTA-0.25%' which is NOT in this protocol
-      (this is a cell culture reagent, not a DNA extraction reagent). The
-      material catalog needs entries for the ZymoBIOMICS reagents so the
-      compiler can resolve material refs and generate correct add_material
-      events."
+      vendorProducts: []). The PDF lists specific reagents: ZymoBIOMICS™ Lysis
+      Solution, DNA/RNA Shield™, ZymoBIOMICS™ MagBinding Buffer, ZymoBIOMICS™
+      MagWash 1, ZymoBIOMICS™ MagWash 2, ZymoBIOMICS™ DNase/RNase Free Water,
+      ZymoBIOMICS™ MagBinding Beads. These need to be added to the material
+      catalog or the compiler needs to be able to create material instances from
+      the PDF text."
     ownedFiles:
-      - server/src/protocol-foundry/materials/catalog/zymobiomics-d4302.yaml
-      - server/src/protocol-foundry/materials/resolver.ts
-      - server/src/protocol-foundry/passes/mint_materials.ts
+      - server/src/registry/CompoundClassRegistry.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - "Material catalog contains entries for: ZymoBIOMICS Lysis Solution,
-        DNA/RNA Shield, MagBinding Buffer, MagWash 1, MagWash 2, MagBinding
-        Beads."
-      - Compiler no longer generates events with incorrect material refs like
-        'trypsin-EDTA-0.25%' for this protocol.
-      - mint_materials pass successfully creates material instances from the
-        catalog for this protocol.
-      - Event graph contains add_material events referencing correct ZymoBIOMICS
-        reagents.
+      - ZymoBIOMICS reagents are resolved to material instances in the compiler
+        output
+      - mint_materials pass is no longer skipped
+      - Event graph includes proper material references for Zymo reagents
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -131,7 +111,7 @@ recommendedFixes:
     implementationBudget:
       targetChangedFiles: 2
       maxChangedFiles: 3
-      targetChangedLines: 100
+      targetChangedLines: 80
       maxChangedLines: 200
       requireFocusedFixture: true
 sourceArtifacts: *a1

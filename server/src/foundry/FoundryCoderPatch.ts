@@ -532,8 +532,8 @@ export async function runFoundryCoderPatch(input: {
 
   // ── Dual-coder routing: respect architect's coderModelProfile recommendation ──
   // The architect specifies which model to use per spec in coderModelProfile.model.
-  //   35B-A3B on :8001  → fast coder for "easy" tasks
-  //   27B on :8000      → senior coder for "difficult" tasks (longer timeout)
+  //   Kbenkhaled/Qwen3.5-35B-3A-NVFP4 on :8888  → speedy coder (default, fast)
+  //   Qwen/Qwen3.6-27B-FP8 on :8000              → senior coder for "difficult" tasks (longer timeout)
   const specModelProfile = typeof selectedSpec.raw['coderModelProfile'] === 'object'
     && selectedSpec.raw['coderModelProfile'] !== null
       ? selectedSpec.raw['coderModelProfile'] as Record<string, unknown>
@@ -541,24 +541,20 @@ export async function runFoundryCoderPatch(input: {
   const specRecommendedModel = typeof specModelProfile?.['model'] === 'string' ? specModelProfile['model'] : undefined;
 
   const archBaseUrl = input.inference?.baseUrl ?? process.env['PI_ARCHITECT_BASE_URL'] ?? process.env['OPENAI_BASE_URL'] ?? 'http://localhost:8000/v1';
-  const workerBaseUrl = process.env['PI_WORKER_BASE_URL'] ?? archBaseUrl.replace(':8000', ':8001');
+  const workerBaseUrl = process.env['PI_WORKER_BASE_URL'] ?? 'http://localhost:8888/v1';
+  const speedyCoderModel = process.env['PI_WORKER_MODEL'] ?? 'Kbenkhaled/Qwen3.5-35B-3A-NVFP4';
 
   let baseUrl: string, model: string, timeoutMs: number;
-  if (specRecommendedModel && specRecommendedModel.includes('35B-A3B')) {
-    // Architect recommends fast coder for this spec
-    baseUrl = workerBaseUrl;
-    model = specRecommendedModel;
-    timeoutMs = 300_000; // 5 min for 35B
-  } else if (specRecommendedModel && specRecommendedModel.includes('27B')) {
-    // Architect recommends senior coder
+  if (specRecommendedModel && specRecommendedModel.includes('27B')) {
+    // Architect recommends senior coder for difficult task
     baseUrl = archBaseUrl;
     model = specRecommendedModel;
     timeoutMs = 600_000; // 10 min for 27B
   } else {
-    // No recommendation: default to fast coder (35B-A3B)
+    // Default to speedy coder on :8888
     baseUrl = workerBaseUrl;
-    model = process.env['PI_WORKER_MODEL'] ?? 'Qwen/Qwen3.6-35B-A3B-FP8';
-    timeoutMs = 300_000;
+    model = speedyCoderModel;
+    timeoutMs = 300_000; // 5 min for speedy coder
   }
 
   if (!baseUrl || !model || input.dryRun) {

@@ -4,23 +4,22 @@ protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
 variant: bench_plate_multichannel
 fixClass: precompiler_reference_shape
 title: Fix ai_precompile output shape mismatch to enable downstream passes
-rationale: The compiler diagnostics show 'ai_precompile output shape mismatch',
-  which caused 'mint_materials', 'resolve_labware', and 'expand_patterns' passes
-  to be skipped. This is the root cause of the unresolved labware refs and
-  missing material resolution. The pre-compiler's AI output schema does not
-  match what the compiler expects, breaking the pipeline.
+rationale: The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
+  AI precompile pass produced output that doesn't match the expected schema.
+  This caused downstream passes (mint_materials, resolve_labware,
+  expand_patterns) to be skipped because their 'when' conditions evaluated to
+  false. Without these passes, labware and materials cannot be resolved, leading
+  to unresolved_ref gaps.
 ownedFiles:
-  - server/src/protocol-foundry/passes/ai_precompile.ts
-  - server/src/protocol-foundry/passes/resolve_labware.ts
-  - server/src/protocol-foundry/passes/mint_materials.ts
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
 acceptance:
-  - ai_precompile pass outputs a shape that satisfies the when conditions for
-    mint_materials, resolve_labware, and expand_patterns
-  - No 'ai_precompile_shape_mismatch' warning in diagnostics for this protocol
-  - resolve_labware pass is no longer skipped for this protocol
+  - ai_precompile pass output matches expected AiPrecompileOutput schema
+  - mint_materials pass is no longer skipped when materials are present
+  - resolve_labware pass is no longer skipped when candidateLabwares are present
+  - No 'ai_precompile_shape_mismatch' warnings in diagnostics
 implementationBudget:
-  targetChangedFiles: 2
-  maxChangedFiles: 4
+  targetChangedFiles: 1
+  maxChangedFiles: 2
   targetChangedLines: 60
   maxChangedLines: 150
   requireFocusedFixture: true

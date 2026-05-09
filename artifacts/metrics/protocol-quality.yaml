@@ -1,11 +1,11 @@
 kind: protocol-foundry-protocol-quality
-generated_at: 2026-05-09T07:31:57.120Z
+generated_at: 2026-05-09T10:01:36.081Z
 summary:
   protocolCount: 10
   variantTotal: 30
   accepted: 0
   complete: 0
-  gaps: 26
+  gaps: 25
   extractorFailures: 0
   eventTotal: 143
   blockerTotal: 0
@@ -26,14 +26,14 @@ protocols:
         qualityScore: 0.35
         coverageEstimate: 0.5
       - variant: bench_plate_multichannel
-        status: gap
+        status: running
         accepted: false
         browserStatus: skipped
         eventCount: 9
         blockerCount: 0
         diagnosticCount: 12
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.25
+        qualityScore: 0.35
         coverageEstimate: 0.45
       - variant: robot_deck
         status: gap
@@ -43,7 +43,7 @@ protocols:
         blockerCount: 0
         diagnosticCount: 18
         extractorRepairExhaustedCount: 0
-        qualityScore: 0
+        qualityScore: 0.1
         coverageEstimate: 0
   - protocolId: bulletin-6816
     status: stalled
@@ -89,7 +89,7 @@ protocols:
         blockerCount: 0
         diagnosticCount: 11
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.1
+        qualityScore: 0.7999999999999999
         coverageEstimate: 0.1
       - variant: bench_plate_multichannel
         status: gap
@@ -99,7 +99,7 @@ protocols:
         blockerCount: 0
         diagnosticCount: 10
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.25
+        qualityScore: 0.7999999999999999
         coverageEstimate: 0.55
       - variant: robot_deck
         status: gap
@@ -142,7 +142,7 @@ protocols:
         blockerCount: 0
         diagnosticCount: 40
         extractorRepairExhaustedCount: 0
-        qualityScore: 0
+        qualityScore: 0.55
         coverageEstimate: 0
   - protocolId: cellrox-oxidative-stress-qr
     status: gap
@@ -155,7 +155,7 @@ protocols:
         blockerCount: 0
         diagnosticCount: 10
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.45
+        qualityScore: 0.7999999999999999
         coverageEstimate: 0.5
       - variant: bench_plate_multichannel
         status: gap
@@ -165,7 +165,7 @@ protocols:
         blockerCount: 0
         diagnosticCount: 8
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.35
+        qualityScore: 0.7999999999999999
         coverageEstimate: 0.95
       - variant: robot_deck
         status: gap
@@ -221,7 +221,7 @@ protocols:
         blockerCount: 0
         diagnosticCount: 10
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.05
+        qualityScore: 0.15
         coverageEstimate: 0.1
       - variant: bench_plate_multichannel
         status: gap
@@ -231,7 +231,7 @@ protocols:
         blockerCount: 0
         diagnosticCount: 11
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.1
+        qualityScore: 0.15
         coverageEstimate: 0.1
       - variant: robot_deck
         status: gap
@@ -241,7 +241,7 @@ protocols:
         blockerCount: 0
         diagnosticCount: 11
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.1
+        qualityScore: 0.15
         coverageEstimate: 0.1
   - protocolId: man0011863-memper-plus-memb-protein-extract-ug
     status: gap
@@ -254,7 +254,7 @@ protocols:
         blockerCount: 0
         diagnosticCount: 10
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.15
+        qualityScore: 0.7999999999999999
         coverageEstimate: 0.25
       - variant: bench_plate_multichannel
         status: gap
@@ -274,7 +274,7 @@ protocols:
         blockerCount: 0
         diagnosticCount: 9
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.15
+        qualityScore: 0.35
         coverageEstimate: 0.25
   - protocolId: mp10422
     status: gap

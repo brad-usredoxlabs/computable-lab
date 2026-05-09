@@ -2,6 +2,6 @@ kind: protocol-foundry-patch-spec-index
 protocolId: man0011863-memper-plus-memb-protein-extract-ug
 variant: robot_deck
 patchSpecs:
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-labware-resolver-generic-aliases.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-material-minting-from-kit-contents.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-ai-precompile-shape-mismatch-salvage.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-labware-resolution-generic-aliases.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-resolve-references-unknown-kind.yaml

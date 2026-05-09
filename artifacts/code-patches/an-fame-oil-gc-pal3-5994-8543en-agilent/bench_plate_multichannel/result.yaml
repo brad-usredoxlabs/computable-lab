@@ -1,7 +1,0 @@
-kind: protocol-foundry-coder-patch-result
-protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
-variant: bench_plate_multichannel
-generated_at: 2026-05-09T07:31:56.922Z
-status: blocked
-message: Patch touches no meaningful compiler/schema/record files.
-touchedFiles: []

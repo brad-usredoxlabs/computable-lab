@@ -1,45 +1,69 @@
 kind: protocol-foundry-architect-verdict
 protocolId: cayman-immuno-oncology
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T06:33:16.672Z
+generated_at: 2026-05-09T08:41:35.545Z
 accepted: false
-qualityScore: 0.25
+qualityScore: 0.7999999999999999
 coverageEstimate: 0.55
 failureClasses:
-  - precompiler_reference_shape
-  - labware_alias_or_resolver
-  - material_catalog_or_spec
+  - compiler_gap
+  - material_catalog_or_spec_gap
+  - labware_alias_or_resolver_gap
+  - foundry_runtime_wiring_gap
+  - browser_review
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: fix-ai-precompile-shape-mismatch
-    class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch to enable downstream passes
-    rationale: "The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
-      pre-compiler's output schema doesn't match what the compiler expects. This
-      causes critical downstream passes to be skipped: 'resolve_labware'
-      (because candidateLabwares is missing/false), 'expand_patterns', and
-      'emit_downstream_queue'. Without these passes, labware can't be resolved
-      and the event graph remains incomplete. The pre-compiler must output a
-      shape that includes candidateLabwares, patternEvents, and
-      downstreamCompileJobs fields even if empty arrays."
+  - id: fix-foundry-runtime-wiring-gap
+    class: foundry_runtime_wiring_gap
+    title: Wire Foundry compile dependencies to the real compiler runtime
+    rationale: Foundry-specific runs are producing compiler gaps that look like
+      missing resolver dependencies or skipped runtime wiring rather than
+      missing protocol records. The architect may patch Foundry harness wiring,
+      dependency injection, and focused Foundry regressions.
     ownedFiles:
-      - server/src/protocol-foundry/precompiler/ai-precompile.ts
-      - server/src/protocol-foundry/precompiler/schema.ts
+      - server/src/foundry/ProtocolFoundryCompileRunner.ts
+      - server/src/foundry/ProtocolFoundryCompileRunner.test.ts
+      - server/src/tools/protocolFoundryCompile.ts
+      - server/src/tools/protocolFoundryLoop.ts
+      - server/src/ai/runChatbotCompile.ts
+      - server/src/ai/compiler/labwareLookup.ts
+      - server/src/ai/compiler/labwareLookup.test.ts
     acceptance:
-      - ai_precompile output includes 'candidateLabwares' array (can be empty)
-      - ai_precompile output includes 'patternEvents' array (can be empty)
-      - ai_precompile output includes 'downstreamCompileJobs' array (can be
-        empty)
-      - resolve_labware pass is no longer skipped due to missing
-        candidateLabwares
-      - No 'ai_precompile_shape_mismatch' warning in compiler diagnostics
+      - Foundry compile runs use the same real lookup/resolver dependencies as
+        the main app when local seed records exist.
+      - Does not hard-code one protocol ID or one vendor PDF.
+      - Adds a focused regression proving a Foundry compile dependency is no
+        longer stubbed or empty when seed data can satisfy it.
+      - Compiler diagnostics for the source protocol lose at least one
+        resolver/wiring gap, or the remaining gap is classified more
+        specifically.
+    contextHints:
+      - This lane is for the Foundry harness around the compiler, not for adding
+        new biology data records.
+      - A likely failure pattern is a Foundry runner passing an always-empty
+        lookup function where the main app uses a real RecordStore-backed
+        lookup.
+      - Patch dependency wiring before adding YAML. Existing records should be
+        found before new records are minted.
+      - Keep changes local to Foundry runtime wiring unless the regression
+        proves a shared compiler API needs a small extension.
+    implementationBudget:
+      targetChangedFiles: 1
+      maxChangedFiles: 3
+      targetChangedLines: 80
+      maxChangedLines: 220
+      requireFocusedFixture: true
     coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
+      model: Qwen/Qwen3.6-35B-A3B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
+    doNotTouch:
+      - Do not rewrite the pipeline end to end.
+      - Do not create real material-instance, aliquot, or physical inventory
+        records from vendor PDF evidence.
     sourceArtifacts: &a1
       compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-immuno-oncology/bench_plate_multichannel.yaml
       eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-immuno-oncology/bench_plate_multichannel.yaml
@@ -51,83 +75,182 @@ recommendedFixes:
       materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-immuno-oncology.yaml
       text: /home/brad/git/computable-foundry/artifacts/text/cayman-immuno-oncology.txt
     failureEvidence: &a2
-      eventCount: 11
       outcome: gap
+      eventCount: 11
+      minUsefulEvents: 5
+      diagnosticCodes:
+        - foundry_presegmented_candidates
+        - foundry_presegmented_candidates
+        - foundry_presegmented_candidates
+        - foundry_presegmented_no_actionable_candidates
+        - ai_precompile_shape_mismatch
+        - unknown_biology_verb
+        - pass_skipped_by_when
+        - pass_skipped_by_when
+        - pass_skipped_by_when
+        - execution_scale_plan_ready
+      extractorRepairExhaustedCount: 0
+      blockerCount: 0
+      gapCount: 7
+      browserStatus: skipped
+  - id: fix-labware-alias-resolver-gap
+    class: labware_alias_or_resolver_gap
+    title: Resolve existing labware definitions through compiler aliases or Foundry
+      lookup wiring
+    rationale: Compiler/browser evidence shows labware hints such as generic plates,
+      reservoirs, or tube racks are being treated as missing even though
+      canonical labware-definition records may already exist. This is a
+      resolver, alias, lookup, or Foundry wiring gap rather than permission to
+      recreate labware records.
+    ownedFiles:
+      - server/src/foundry/ProtocolFoundryCompileRunner.ts
+      - server/src/foundry/ProtocolFoundryCompileRunner.test.ts
+      - server/src/ai/compiler/labwareLookup.ts
+      - server/src/ai/compiler/labwareLookup.test.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.test.ts
+      - server/src/compiler/pipeline/passes/ResolvePriorLabwareReferences.test.ts
+      - server/src/compiler/precompile/NounPhraseResolver.ts
+      - server/src/compiler/precompile/NounPhraseResolver.test.ts
+    acceptance:
+      - Does not create or rewrite labware-definition YAML records for this fix
+        class.
+      - Maps unresolved labware hints such as generic_96_well_plate,
+        generic_24x1_5ml_tube_rack, generic_12_well_reservoir, or equivalent
+        prose to existing canonical labware-definition records when they exist.
+      - Foundry compile runs use real seed labware lookup or deterministic alias
+        resolution instead of an always-empty labware lookup.
+      - Compiler diagnostics for the source protocol no longer report the same
+        labware hint as unresolved, or a focused regression proves the hint
+        resolves to an existing canonical record.
+    contextHints:
+      - This is the widened architect lane for existing labware capability that
+        is not being found.
+      - The correct patch is usually compiler lookup wiring, an alias
+        normalization map, a resolver fallback, or a focused regression. It is
+        not another attempt to add
+        records/seed/labware-definition/lbw-def-generic-96-well-plate.yaml.
+      - If the file already exists under records/seed/labware-definition, do not
+        add it again. Teach the compiler or Foundry runner to find it.
+      - Prior-labware refs are run-context instances; vendor PDFs and Foundry
+        assumptions can point to a labware definition but must not invent
+        physical labware instances.
+      - "Keep the patch narrow: one alias family or one Foundry lookup wiring
+        behavior per patch."
     implementationBudget:
-      targetChangedFiles: 2
+      targetChangedFiles: 1
       maxChangedFiles: 3
-      targetChangedLines: 60
-      maxChangedLines: 150
-      requireFocusedFixture: true
-  - id: fix-labware-resolver-generic-aliases
-    class: labware_alias_or_resolver
-    title: Wire generic labware aliases to existing labware definitions
-    rationale: The compiler reports 6 unresolved labware references
-      (generic_96_well_plate, generic_12_well_reservoir, generic_96_tip_rack,
-      generic_24x1_5ml_tube_rack, generic_6x15ml_tube_rack,
-      generic_4x50ml_tube_rack) with reason 'no matching labware in prior
-      snapshot'. The execution scale plan references definitions like
-      'lbw-def-generic-96-well-plate' and 'lbw-def-generic-reservoir-1-v1',
-      suggesting these definitions exist but the resolver can't map the
-      generic_* aliases to them. The labware resolver needs alias mappings or
-      the compiler needs to use the correct definition IDs directly.
-    ownedFiles:
-      - server/src/protocol-foundry/compiler/passes/resolve-labware.ts
-      - server/src/labware/aliases.ts
-      - server/src/labware/definitions/index.ts
-    acceptance:
-      - generic_96_well_plate resolves to an existing labware definition
-      - generic_12_well_reservoir resolves to an existing labware definition
-      - generic_96_tip_rack resolves to an existing labware definition
-      - generic_24x1_5ml_tube_rack resolves to an existing labware definition
-      - generic_6x15ml_tube_rack resolves to an existing labware definition
-      - generic_4x50ml_tube_rack resolves to an existing labware definition
-      - No 'unresolved_ref' gaps for generic labware in compiler output
-    coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
-    implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
       targetChangedLines: 80
-      maxChangedLines: 200
-      requireFocusedFixture: true
-  - id: fix-material-catalog-cayman-compounds
-    class: material_catalog_or_spec
-    title: Populate material catalog with Cayman Immuno-Oncology library compounds
-    rationale: The PDF lists 48+ specific compounds (PLX4032, I-BET762, IC-87114,
-      etc.) with catalog item numbers (10618, 10676, 11589, etc.), but the
-      material context shows empty materials, materialSpecs, and vendorProducts
-      arrays. The pre-compiler extracted candidates but the compiler couldn't
-      lower them to material events because there are no material records to
-      reference. Need to create material specs for the key compounds and link
-      them to the Cayman vendor product (Item No. 28760).
-    ownedFiles:
-      - server/src/protocol-foundry/precompiler/material-extractor.ts
-      - server/src/materials/catalog/cayman-immuno-oncology.ts
-      - server/src/materials/specs/index.ts
-    acceptance:
-      - Material specs exist for at least the first 12 compounds (PLX4032
-        through Sunitinib)
-      - Each material spec includes the Cayman catalog item number
-      - Vendor product record exists for Item No. 28760 (Immuno-Oncology
-        Screening Library)
-      - Compiler can resolve compound names to material IDs during event
-        generation
-      - Event graph includes add_material events with real material references
-        instead of synthetic samples
-    coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
-    implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
-      targetChangedLines: 120
       maxChangedLines: 220
       requireFocusedFixture: true
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    doNotTouch:
+      - Do not rewrite the pipeline end to end.
+      - Do not create real material-instance, aliquot, or physical inventory
+        records from vendor PDF evidence.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+  - id: fix-material-catalog-spec-gap
+    class: material_catalog_or_spec_gap
+    title: Resolve protocol materials as catalog/spec data without inventing inventory
+    rationale: Compiler evidence points at unresolved reagents, buffers,
+      formulations, vendor products, or material tags that should be represented
+      as reusable YAML data or material resolver behavior.
+    ownedFiles:
+      - records/material
+      - records/seed/materials
+      - schema/lab/material.schema.yaml
+      - schema/lab/material-spec.schema.yaml
+      - schema/lab/vendor-product.schema.yaml
+      - server/src/compiler/material
+      - server/src/materials
+    acceptance:
+      - Adds or improves only material, material-spec, vendor-product, or
+        material resolver/catalog data needed by the source protocol.
+      - Does not create or modify labware-definition YAML; containers, tubes,
+        plates, racks, reservoirs, tips, and other physical holders must go
+        through a labware-specific fix class.
+      - Does not create material-instance, aliquot, material-lot, physical
+        inventory, source-tube, or run-specific records from vendor PDF
+        evidence.
+      - Uses ontology refs only when a CURIE/IRI is present in local records or
+        source artifacts; otherwise marks the material as
+        vendor/provenance-backed with an ontology backfill need.
+      - Compiler diagnostics for the protocol show fewer unresolved
+        material/catalog/spec failures, or the patch adds a focused regression
+        documenting the remaining blocker.
+    contextHints:
+      - Everything that can be data should be YAML data in records/ or schema
+        registry files.
+      - A vendor PDF can justify material, material-spec/formulation,
+        vendor-product, and labware definition/product facts.
+      - A vendor PDF cannot prove that this lab has a tube, aliquot, lot,
+        prepared source, or sample provenance.
+      - Material records describe substances/reagents/concepts such as
+        antibodies, buffers, substrates, and stop solutions. They must not
+        describe plates, tubes, racks, reservoirs, or tips.
+      - The unattended coder does not have a live OLS/ChEBI lookup tool in this
+        patch lane; do not invent ontology identifiers.
+      - Prefer one reagent family or one vendor kit component family per patch.
+      - If the unresolved item is a plate, tube rack, reservoir, tip rack, or
+        other existing labware definition that is not being found, use the
+        labware_alias_or_resolver_gap lane instead of adding a new record.
+    implementationBudget:
+      targetChangedFiles: 1
+      maxChangedFiles: 3
+      targetChangedLines: 80
+      maxChangedLines: 220
+      requireFocusedFixture: true
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    doNotTouch:
+      - Do not rewrite the pipeline end to end.
+      - Do not create real material-instance, aliquot, or physical inventory
+        records from vendor PDF evidence.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+  - id: fix-browser-rendering
+    class: browser_or_labware_rendering
+    title: Make event graph render and play in labware-editor
+    rationale: Protocol variants cannot be accepted until browser review passes with
+      screenshot evidence.
+    ownedFiles:
+      - client/src
+      - records/seed/labware-definition
+      - server/src/foundry
+    acceptance:
+      - Browser review report status is pass.
+      - Screenshot shows expected labware and event sequence.
+    contextHints:
+      - Prefer adding or mapping one missing labware icon/geometry at a time.
+      - If the blocker is that an existing labware-definition record is not
+        being resolved, use the labware_alias_or_resolver_gap lane and patch
+        resolver/lookup wiring instead of creating duplicate labware records.
+      - Tube protocols should render in generic 24x1.5ml, 15ml, or 50ml rack
+        geometry when possible.
+      - New or repaired labware records must use canonical
+        records/seed/labware-definition/*.yaml files, not the legacy
+        records/seed/labware-definitions directory.
+      - "Canonical labware-definition records include $schema, kind:
+        labware-definition, recordId, type: labware_definition, id,
+        display_name, topology/capacity/render_hints as appropriate."
+    implementationBudget:
+      targetChangedFiles: 1
+      maxChangedFiles: 3
+      targetChangedLines: 80
+      maxChangedLines: 220
+      requireFocusedFixture: true
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    doNotTouch:
+      - Do not rewrite the pipeline end to end.
+      - Do not create real material-instance, aliquot, or physical inventory
+        records from vendor PDF evidence.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
 sourceArtifacts: *a1
-architectNotes: "LLM architect analysis: 3 fix recommendations."
+architectNotes: "Deterministic fallback: 4 fix recommendations."

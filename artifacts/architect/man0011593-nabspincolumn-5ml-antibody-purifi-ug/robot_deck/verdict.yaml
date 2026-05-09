@@ -1,9 +1,9 @@
 kind: protocol-foundry-architect-verdict
 protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
 variant: robot_deck
-generated_at: 2026-05-09T06:39:03.408Z
+generated_at: 2026-05-09T09:22:54.944Z
 accepted: false
-qualityScore: 0.1
+qualityScore: 0.15
 coverageEstimate: 0.1
 failureClasses:
   - precompiler_reference_shape
@@ -16,25 +16,24 @@ badScalingAssumptions: []
 recommendedFixes:
   - id: fix-ai-precompile-shape-mismatch
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch causing downstream pass skips
-    rationale: "The compiler diagnostics show 'ai_precompile_shape_mismatch', which
-      caused critical downstream passes to be skipped: 'mint_materials',
-      'resolve_labware', 'resolve_prior_labware_references', and
-      'expand_patterns'. This is the root cause of the low event count (1) and
-      empty material/labware resolution. The pre-compiler extracted 13+6+16+5=40
-      candidates but the AI precompile step failed to produce the expected
-      output shape, breaking the pipeline."
+    title: Fix ai_precompile output shape mismatch to enable downstream passes
+    rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch', which
+      caused all downstream passes (mint_materials, resolve_labware,
+      resolve_prior_labware_references, expand_patterns) to be skipped. This is
+      the root cause of the low event count (1 event instead of the expected 10+
+      for an antibody purification protocol). The ai_precompile pass in
+      ChatbotCompilePasses.ts is producing output that doesn't match the
+      expected AiPrecompileOutput schema, causing the when conditions for
+      subsequent passes to evaluate to false.
     ownedFiles:
-      - server/src/protocol-foundry/passes/ai_precompile.ts
-      - server/src/protocol-foundry/passes/ai_precompile.schema.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass produces output matching expected schema with
-        candidateLabwares, mintMaterials, priorLabwareRefs, and patternEvents
-        fields
-      - Downstream passes (mint_materials, resolve_labware) are no longer
-        skipped due to false when conditions
-      - Compiler eventCount increases from 1 to at least 5 events for this
-        protocol
+      - ai_precompile pass produces output matching AiPrecompileOutput schema
+        with candidateLabwares, mintMaterials, and patternEvents fields
+      - Downstream passes (mint_materials, resolve_labware, expand_patterns) are
+        no longer skipped due to false when conditions
+      - No 'ai_precompile_shape_mismatch' warning in diagnostics for protocols
+        with extractable content
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -52,75 +51,41 @@ recommendedFixes:
       eventCount: 1
       outcome: gap
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
-      targetChangedLines: 120
-      maxChangedLines: 250
+      targetChangedFiles: 1
+      maxChangedFiles: 2
+      targetChangedLines: 60
+      maxChangedLines: 150
       requireFocusedFixture: true
-  - id: fix-spin-column-protocol-verb-lowering
+  - id: fix-antibody-purification-verb-coverage
     class: compiler_event_coverage
-    title: Add spin column affinity purification verb lowering for antibody
-      purification protocols
-    rationale: "The PDF describes a multi-step antibody purification protocol using
-      NAb Spin Columns with binding, washing, elution, and neutralization steps.
-      The compiler only produced 1 centrifuge event, missing the core protocol
-      steps: column equilibration, sample binding, wash steps, elution, and
-      neutralization. The compiler lacks verb lowering rules for spin column
-      affinity purification workflows."
+    title: Add verb lowering for antibody purification protocol steps
+    rationale: The PDF describes a multi-step antibody purification protocol
+      (equilibration, sample loading, washing, elution, neutralization, column
+      storage) but only 1 centrifuge event was generated. The compiler lacks
+      verb expanders for key biology operations like 'bind', 'wash', 'elute',
+      'neutralize', and 'store' in the context of spin column purification.
+      BiologyVerbExpander.ts needs to recognize these operations and lower them
+      to appropriate pipette/centrifuge events.
     ownedFiles:
-      - server/src/protocol-foundry/verbs/spin-column-affinity.ts
-      - server/src/protocol-foundry/verbs/index.ts
-      - server/src/protocol-foundry/passes/lower_to_events.ts
+      - server/src/compiler/biology/BiologyVerbExpander.ts
+      - server/src/compiler/biology/BiologyVerbExpander.test.ts
     acceptance:
-      - Compiler recognizes and lowers 'bind', 'wash', 'elute', 'neutralize'
-        verbs for spin column protocols
-      - "Event graph contains at least 5 events: equilibrate, bind_sample, wash,
-        elute, neutralize"
-      - Labware references include spin column (5 mL) and collection tubes
-      - Reagent references include Binding Buffer, Elution Buffer, and
-        Neutralization Buffer
+      - BiologyVerbExpander recognizes 'bind', 'wash', 'elute', 'neutralize' as
+        valid biology verbs for spin column protocols
+      - Each verb lowers to appropriate pipette transfer and centrifuge events
+        with correct volumes and labware references
+      - Test coverage includes spin column antibody purification workflow with
+        at least 8 events
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
-      targetChangedFiles: 3
-      maxChangedFiles: 5
-      targetChangedLines: 150
-      maxChangedLines: 300
-      requireFocusedFixture: true
-  - id: fix-material-extraction-from-pdf
-    class: extractor_prompt_contract
-    title: Improve material and labware extraction from antibody purification
-      protocol text
-    rationale: The material context shows empty materials, materialSpecs,
-      vendorProducts, and labwareHints arrays despite the PDF containing
-      explicit references to NAb Spin Columns (Cat. No. 89960-89963), Binding
-      Buffer (Cat. No. 28372, 21001, 21007, 21011, 54200), Elution Buffer (Cat.
-      No. 21004, 21009), and Neutralization Buffer. The pre-compiler failed to
-      extract these concrete material references.
-    ownedFiles:
-      - server/src/protocol-foundry/precompiler/extract_materials.ts
-      - server/src/protocol-foundry/precompiler/extract_labware.ts
-      - server/src/protocol-foundry/precompiler/prompts/material_extraction.prompt.ts
-    acceptance:
-      - Pre-compiler extracts NAb Spin Column variants as labware candidates
-        with catalog numbers
-      - Pre-compiler extracts Binding Buffer, Elution Buffer, and Neutralization
-        Buffer as material candidates
-      - Material context contains at least 5 material entries and 3 labware hints
-      - Catalog number references are preserved in extracted entities
-    coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
-    implementationBudget:
-      targetChangedFiles: 3
-      maxChangedFiles: 5
+      targetChangedFiles: 2
+      maxChangedFiles: 3
       targetChangedLines: 100
-      maxChangedLines: 200
+      maxChangedLines: 220
       requireFocusedFixture: true
 sourceArtifacts: *a1
-architectNotes: "LLM architect analysis: 3 fix recommendations."
+architectNotes: "LLM architect analysis: 2 fix recommendations."

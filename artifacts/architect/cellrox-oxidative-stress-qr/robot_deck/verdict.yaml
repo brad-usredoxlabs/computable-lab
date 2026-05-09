@@ -1,43 +1,41 @@
 kind: protocol-foundry-architect-verdict
 protocolId: cellrox-oxidative-stress-qr
 variant: robot_deck
-generated_at: 2026-05-09T06:36:22.072Z
+generated_at: 2026-05-09T09:19:44.979Z
 accepted: false
 qualityScore: 0.45
 coverageEstimate: 0.5
 failureClasses:
-  - compiler_event_coverage
   - precompiler_reference_shape
-  - labware_alias_or_resolver
+  - compiler_event_coverage
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: add-treat-remove-analyze-verbs
-    class: compiler_event_coverage
-    title: Register expanders for 'treat', 'remove', and 'analyze' biology verbs
-    rationale: "The compiler diagnostics explicitly warn 'No expander registered for
-      verb' for 'treat', 'remove', and 'analyze'. These are core protocol steps
-      from the PDF (Step 1: Treat cells, Step 4: Remove medium, Step 8: Analyze
-      cells). Without these expanders, the compiler drops these candidate
-      events, resulting in incomplete protocol coverage. 'treat' should lower to
-      an add_material or incubate event, 'remove' should lower to a
-      transfer/aspirate event, and 'analyze' should lower to a read/measure
-      event."
+  - id: fix-ai-precompile-shape-mismatch
+    class: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch to enable downstream passes
+    rationale: "The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
+      AI precompile pass produced output that doesn't match the expected schema.
+      This caused critical downstream passes to be skipped: 'mint_materials',
+      'apply_directives', 'resolve_labware', 'resolve_prior_labware_references',
+      and 'expand_patterns'. Without these passes, materials aren't minted,
+      labware isn't resolved, and the event graph lacks proper material
+      references. The fix must ensure the ai_precompile pass outputs a correctly
+      shaped object with fields like mintMaterials, directives,
+      candidateLabwares, priorLabwareRefs, and patternEvents."
     ownedFiles:
-      - server/src/compiler/passes/expand_biology_verbs.ts
-      - server/src/compiler/verbs/index.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - Compiler diagnostics no longer contain 'unknown_biology_verb' warnings
-        for 'treat', 'remove', or 'analyze'.
-      - Event graph includes events corresponding to treating cells, removing
-        medium, and analyzing cells.
-      - The 'treat' verb lowers to an appropriate add_material or incubate event
-        with correct parameters.
-      - The 'remove' verb lowers to a transfer or aspirate event.
-      - The 'analyze' verb lowers to a read or measure event.
+      - ai_precompile pass outputs an object matching the AiPrecompileOutput
+        type schema
+      - mint_materials pass is no longer skipped when materials are present in
+        the protocol
+      - resolve_labware pass is no longer skipped when labware hints exist
+      - No 'ai_precompile_shape_mismatch' warning in diagnostics for this
+        protocol
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -55,107 +53,91 @@ recommendedFixes:
       eventCount: 10
       outcome: gap
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
+      targetChangedFiles: 1
+      maxChangedFiles: 2
       targetChangedLines: 60
       maxChangedLines: 150
       requireFocusedFixture: true
-  - id: fix-ai-precompile-shape-mismatch
-    class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch to enable downstream passes
-    rationale: The compiler reports 'ai_precompile output shape mismatch' warning,
-      and multiple downstream passes are skipped because their 'when' conditions
-      evaluate to false (mint_materials, apply_directives, resolve_labware,
-      resolve_prior_labware_references, expand_patterns). This indicates the
-      ai_precompile pass is producing output that doesn't match the expected
-      schema, causing the compiler to skip critical resolution steps. This
-      results in unresolved labware references and missing material instances.
-    ownedFiles:
-      - server/src/compiler/passes/ai_precompile.ts
-      - server/src/compiler/schema/precompile-output.ts
-    acceptance:
-      - Compiler diagnostics no longer contain 'ai_precompile_shape_mismatch'
-        warning.
-      - Downstream passes (mint_materials, resolve_labware, etc.) are no longer
-        skipped due to false 'when' conditions.
-      - The ai_precompile output conforms to the expected schema with proper
-        candidateLabwares, mintMaterials, and directives fields.
-      - Labware resolution pass executes and resolves labware references
-        correctly.
-    coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
-    implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
-      targetChangedLines: 80
-      maxChangedLines: 200
-      requireFocusedFixture: true
-  - id: fix-fixation-event-material-and-temperature
+  - id: add-treat-verb-expander
     class: compiler_event_coverage
-    title: Correct fixation event material reference and temperature
-    rationale: The event graph shows evt-fix_add-fuy8k0xq with material 'cells' and
-      volume '3.7% formaldehyde', which is incorrect. The material should be
-      '3.7% formaldehyde' (the fixative), not 'cells'. Additionally,
-      evt-fix_incubate-7ffhan5y has temperature 4 (Celsius), but the PDF
-      specifies fixation at room temperature or 37°C, not 4°C. This is a
-      semantic error in the verb expander or candidate event construction that
-      misinterprets the protocol step.
+    title: Add biology verb expander for 'treat' to handle cell treatment steps
+    rationale: The compiler dropped the candidate event for 'treat' because no
+      expander is registered for this verb. Step 1 of the protocol ('Treat the
+      cells with the test compound or drug') is a critical biological operation
+      that should be lowered to an event (likely add_material or a specialized
+      treat_cells event). Without this expander, the protocol is incomplete and
+      missing the initial treatment step.
     ownedFiles:
-      - server/src/compiler/passes/expand_biology_verbs.ts
-      - server/src/compiler/verbs/incubate.ts
+      - server/src/compiler/biology/BiologyVerbExpander.ts
     acceptance:
-      - Fixation add_material event has material '3.7% formaldehyde' or
-        'formaldehyde' instead of 'cells'.
-      - Fixation incubate event has temperature 37 or 22 (room temp) instead of
-        4.
-      - Permeabilization event has material '0.5% Triton X-100' instead of
-        'cells'.
-      - Stain event has material 'NucBlue Live Cell Stain' or similar
-        counterstain instead of 'cells'.
+      - Verb 'treat' is registered in the BiologyVerbExpander
+      - Candidate events with verb 'treat' are expanded to appropriate event
+        types (e.g., add_material with treatment details)
+      - No 'unknown_biology_verb' warning for 'treat' in diagnostics
+      - Event graph includes a treatment event for step 1 of the protocol
     coderModelProfile:
       model: Qwen/Qwen3.6-35B-A3B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
+      targetChangedFiles: 1
+      maxChangedFiles: 2
       targetChangedLines: 40
       maxChangedLines: 100
       requireFocusedFixture: true
-  - id: resolve-labware-references
-    class: labware_alias_or_resolver
-    title: Enable labware resolution pass to resolve sample_plate and reagent_source
-    rationale: The resolve_labware pass was skipped due to the ai_precompile shape
-      mismatch. The event graph references 'sample_plate' and 'reagent_source'
-      labware IDs, but these may not be properly resolved to labware
-      definitions. The execution scale plan shows these are mapped to
-      'lbw-def-generic-96-well-plate' and 'lbw-def-generic-reservoir-1-v1', but
-      the compiler should explicitly resolve these references. Once the
-      ai_precompile shape is fixed, the labware resolution pass should execute
-      and properly link labware IDs to definitions.
+  - id: add-remove-verb-expander
+    class: compiler_event_coverage
+    title: Add biology verb expander for 'remove' to handle medium removal steps
+    rationale: The compiler dropped the candidate event for 'remove' because no
+      expander is registered. Step 4 ('Remove medium and wash the cells 3 times
+      with PBS') includes a removal operation that should be lowered to an event
+      (likely aspirate or remove_liquid). Without this expander, the medium
+      removal step is missing from the event graph.
     ownedFiles:
-      - server/src/compiler/passes/resolve_labware.ts
-      - server/src/compiler/labware/resolver.ts
+      - server/src/compiler/biology/BiologyVerbExpander.ts
     acceptance:
-      - resolve_labware pass executes successfully without being skipped.
-      - Labware references 'sample_plate' and 'reagent_source' are resolved to
-        proper labware definitions.
-      - Event graph labware entries include resolved definition references.
-      - No unresolved labware references remain in the event graph.
+      - Verb 'remove' is registered in the BiologyVerbExpander
+      - Candidate events with verb 'remove' are expanded to appropriate event
+        types (e.g., aspirate or remove_liquid)
+      - No 'unknown_biology_verb' warning for 'remove' in diagnostics
+      - Event graph includes a medium removal event for step 4 of the protocol
     coderModelProfile:
       model: Qwen/Qwen3.6-35B-A3B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
-      targetChangedLines: 50
-      maxChangedLines: 120
+      targetChangedFiles: 1
+      maxChangedFiles: 2
+      targetChangedLines: 40
+      maxChangedLines: 100
+      requireFocusedFixture: true
+  - id: add-analyze-verb-expander
+    class: compiler_event_coverage
+    title: Add biology verb expander for 'analyze' to handle analysis/readout steps
+    rationale: The compiler dropped the candidate event for 'analyze' because no
+      expander is registered. Step 8 ('Analyze the cells') is the final readout
+      step that should be lowered to an event (likely measure or analyze).
+      Without this expander, the protocol lacks its terminal analysis step.
+    ownedFiles:
+      - server/src/compiler/biology/BiologyVerbExpander.ts
+    acceptance:
+      - Verb 'analyze' is registered in the BiologyVerbExpander
+      - Candidate events with verb 'analyze' are expanded to appropriate event
+        types (e.g., measure or analyze)
+      - No 'unknown_biology_verb' warning for 'analyze' in diagnostics
+      - Event graph includes an analysis event for step 8 of the protocol
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 1
+      maxChangedFiles: 2
+      targetChangedLines: 40
+      maxChangedLines: 100
       requireFocusedFixture: true
 sourceArtifacts: *a1
 architectNotes: "LLM architect analysis: 4 fix recommendations."

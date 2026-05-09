@@ -3,21 +3,23 @@ id: cayman-immuno-oncology/robot_deck/fix-unknown-biology-verbs
 protocolId: cayman-immuno-oncology
 variant: robot_deck
 fixClass: compiler_event_coverage
-title: "Register expanders for biology verbs: bind, prefer, use, report"
-rationale: The compiler drops all candidate events because verbs 'bind',
-  'prefer', 'use', and 'report' have no registered expanders. These are common
-  verbs in screening library protocols where compounds are assigned to wells.
-  Without expanders, no events are generated, resulting in eventCount=0.
+title: Register expanders for bind, prefer, use, report verbs in BiologyVerbExpander
+rationale: The compiler drops all candidate events because the verbs 'bind',
+  'prefer', 'use', and 'report' have no registered expanders in
+  BiologyVerbExpander.ts. These are common protocol verbs that should map to
+  standard pipetting or plate-setup actions. Without expanders, all candidates
+  are dropped, resulting in zero events. The pre-compiler extracted 9+3+3=15
+  candidates, but none survive to the event graph.
 ownedFiles:
-  - server/src/protocol-foundry/compiler/expand-biology-verbs.ts
-  - server/src/protocol-foundry/compiler/verb-expanders/index.ts
+  - server/src/compiler/biology/BiologyVerbExpander.ts
 acceptance:
   - No 'unknown_biology_verb' warnings for bind, prefer, use, report
-  - Candidate events with these verbs are expanded into protocol events
-  - eventCount > 0 after compilation
+  - Candidate events with these verbs are expanded into concrete pipette/plate
+    events
+  - Event count increases from 0 to at least 3 for protocols with these verbs
 implementationBudget:
-  targetChangedFiles: 2
-  maxChangedFiles: 3
+  targetChangedFiles: 1
+  maxChangedFiles: 2
   targetChangedLines: 80
   maxChangedLines: 200
   requireFocusedFixture: true

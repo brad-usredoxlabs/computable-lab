@@ -1,7 +1,7 @@
 kind: protocol-foundry-architect-verdict
 protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
 variant: manual_tubes
-generated_at: 2026-05-09T06:36:49.560Z
+generated_at: 2026-05-09T09:17:52.749Z
 accepted: false
 qualityScore: 0.15
 coverageEstimate: 0.3
@@ -9,7 +9,6 @@ failureClasses:
   - precompiler_reference_shape
   - labware_alias_or_resolver
   - material_catalog_or_spec
-  - compiler_event_coverage
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
@@ -22,19 +21,21 @@ recommendedFixes:
     rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch', which
       caused critical downstream passes (mint_materials, apply_directives,
       resolve_labware, expand_patterns) to be skipped. This is the root cause of
-      the empty materials list and unresolved labware refs. The pre-compiler's
-      AI output schema does not match what the compiler expects, causing the
-      pipeline to short-circuit before resolving any entities.
+      the gap outcome. The ai_precompile pass in ChatbotCompilePasses.ts is
+      producing output that doesn't match the expected AiPrecompileOutput
+      schema, causing the when conditions for subsequent passes to evaluate to
+      false. Without these passes, materials aren't minted, labware isn't
+      resolved, and patterns aren't expanded.
     ownedFiles:
-      - server/src/protocol-foundry/passes/ai_precompile.ts
-      - server/src/protocol-foundry/schema/precompile-output.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass completes without shape_mismatch warning for this
-        protocol
-      - mint_materials, apply_directives, resolve_labware, and expand_patterns
-        passes are no longer skipped
-      - candidateLabwares and mintMaterials fields are populated in
-        ai_precompile output
+      - ai_precompile pass produces output matching AiPrecompileOutput schema
+        with mintMaterials, directives, candidateLabwares, and patternEvents
+        fields
+      - Downstream passes (mint_materials, apply_directives, resolve_labware,
+        expand_patterns) are no longer skipped due to false when conditions
+      - Compiler outcome changes from 'gap' to 'complete' or 'error' with
+        specific error messages instead of generic shape mismatch
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -52,102 +53,72 @@ recommendedFixes:
       eventCount: 6
       outcome: gap
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
-      targetChangedLines: 120
-      maxChangedLines: 250
+      targetChangedFiles: 1
+      maxChangedFiles: 2
+      targetChangedLines: 100
+      maxChangedLines: 200
       requireFocusedFixture: true
-  - id: fix-labware-resolver-zymo-bashing-bead
+  - id: fix-labware-resolution-for-zymobiomics
     class: labware_alias_or_resolver
-    title: Add labware resolver entries for ZymoBIOMICS BashingBead Lysis Tubes and
-      Rack
-    rationale: The compiler gaps show unresolved refs for 'ZR BashingBead™ Lysis
-      Tubes (0.1 & 0.5 mm)', 'ZymoBIOMICS™ BashingBead™ Lysis Rack (0.1 & 0.5
-      mm)', 'generic_96_well_plate', and 'elution plate or tube'. These are core
-      labware items from the ZymoBIOMICS kit. The labware resolver needs alias
-      mappings from the vendor product names to internal labware definitions.
+    title: Add labware resolution for ZymoBIOMICS specific labware types
+    rationale: "The compiler gaps show unresolved labware references: 'ZR
+      BashingBead™ Lysis Tubes (0.1 & 0.5 mm)', 'ZymoBIOMICS™ BashingBead™ Lysis
+      Rack (0.1 & 0.5 mm)', 'generic_96_well_plate', and 'elution plate or
+      tube'. These are specific to the ZymoBIOMICS protocol but the labware
+      resolver cannot find matching definitions. The
+      LabwareDefinitionRegistry.ts needs to either have these definitions added
+      or the resolver needs to be updated to handle these specific labware types
+      with appropriate aliases."
     ownedFiles:
-      - server/src/protocol-foundry/labware/resolver-aliases.ts
-      - server/src/protocol-foundry/labware/zymo-definitions.ts
+      - server/src/registry/LabwareDefinitionRegistry.ts
     acceptance:
-      - ZR BashingBead™ Lysis Tubes resolves to a valid labware definition
-      - ZymoBIOMICS™ BashingBead™ Lysis Rack resolves to a valid labware
+      - ZR BashingBead™ Lysis Tubes (0.1 & 0.5 mm) resolves to a valid labware
         definition
-      - generic_96_well_plate resolves to lbw-def-generic-96-well-plate
-      - elution plate or tube resolves to an appropriate 96-well plate or tube
-        definition
+      - ZymoBIOMICS™ BashingBead™ Lysis Rack (0.1 & 0.5 mm) resolves to a valid
+        labware definition
+      - generic_96_well_plate resolves to a valid labware definition
+      - elution plate or tube resolves to a valid labware definition
+      - No unresolved_ref gaps for labware in compiler output
     coderModelProfile:
       model: Qwen/Qwen3.6-35B-A3B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
+      targetChangedFiles: 1
+      maxChangedFiles: 2
       targetChangedLines: 60
+      maxChangedLines: 150
+      requireFocusedFixture: true
+  - id: fix-material-resolution-for-resuspend
+    class: material_catalog_or_spec
+    title: Resolve 'resuspend' material reference in compiler
+    rationale: The compiler gaps show 'resuspend' as an unresolved material
+      reference with 'registry hit ontology' and 'kind material not handled by
+      resolve_references'. This indicates that 'resuspend' is being treated as a
+      material when it should be treated as an action/verb. The
+      resolve_references function in the compiler needs to be updated to handle
+      this case, either by recognizing 'resuspend' as a verb that should trigger
+      a mix/resuspend event rather than a material lookup, or by adding it to
+      the material catalog with appropriate handling.
+    ownedFiles:
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+      - server/src/compiler/biology/BiologyVerbExpander.ts
+    acceptance:
+      - "'resuspend' is no longer reported as an unresolved material reference"
+      - Resuspend operations are correctly lowered to mix or resuspend events in
+        the event graph
+      - No unresolved_ref gaps for 'resuspend' in compiler output
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 1
+      maxChangedFiles: 2
+      targetChangedLines: 50
       maxChangedLines: 120
       requireFocusedFixture: true
-  - id: fix-material-resolver-resuspend-verb
-    class: material_catalog_or_spec
-    title: Fix unresolved 'resuspend' material reference and add ZymoBIOMICS reagent
-      catalog entries
-    rationale: The compiler gaps show 'resuspend' as an unresolved material ref with
-      'registry hit ontology' and 'kind material not handled by
-      resolve_references'. This indicates the compiler is treating 'resuspend'
-      (which is a verb/action) as a material. Additionally, the material context
-      is empty despite the PDF listing many reagents (Lysis Solution, MagBinding
-      Buffer, MagWash 1/2, MagBinding Beads, DNase/RNase Free Water). The
-      material resolver needs to distinguish verbs from materials and catalog
-      the ZymoBIOMICS reagents.
-    ownedFiles:
-      - server/src/protocol-foundry/materials/resolver.ts
-      - server/src/protocol-foundry/materials/zymo-catalog.ts
-    acceptance:
-      - "'resuspend' is recognized as a verb/action, not a material reference"
-      - ZymoBIOMICS Lysis Solution, MagBinding Buffer, MagWash 1, MagWash 2,
-        MagBinding Beads, and DNase/RNase Free Water are cataloged as materials
-      - No unresolved_ref gaps for materials in the compiler output
-    coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
-    implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
-      targetChangedLines: 100
-      maxChangedLines: 200
-      requireFocusedFixture: true
-  - id: fix-event-graph-protocol-coverage
-    class: compiler_event_coverage
-    title: Add compiler lowering rules for ZymoBIOMICS MagBead DNA extraction workflow
-    rationale: "The event graph contains only 6 events that appear to be from a
-      generic cell harvest protocol (trypsin-EDTA, centrifuge, mix) rather than
-      the ZymoBIOMICS MagBead DNA extraction workflow. The PDF describes a
-      bead-beating lysis, magnetic bead binding, wash, and elution workflow. The
-      compiler lacks verb lowering rules for: bead-beat/lyse,
-      bind_magnetic_beads, wash_magnetic_beads, elute_dna, and
-      incubate_with_shield. These biology-specific verbs need to be added to the
-      compiler's event lowering pipeline."
-    ownedFiles:
-      - server/src/protocol-foundry/compiler/verb-lowering.ts
-      - server/src/protocol-foundry/compiler/magbead-workflow.ts
-    acceptance:
-      - Event graph includes bead-beat/lysis events for ZymoBIOMICS protocol
-      - Event graph includes magnetic bead binding events
-      - Event graph includes wash steps (MagWash 1 and MagWash 2)
-      - Event graph includes DNA elution event
-      - Event count is >= 10 events covering the full workflow
-    coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
-    implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
-      targetChangedLines: 150
-      maxChangedLines: 300
-      requireFocusedFixture: true
 sourceArtifacts: *a1
-architectNotes: "LLM architect analysis: 4 fix recommendations."
+architectNotes: "LLM architect analysis: 3 fix recommendations."

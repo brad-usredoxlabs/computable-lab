@@ -1,6 +1,0 @@
-kind: protocol-foundry-patch-spec-index
-protocolId: bulletin-6816
-variant: bench_plate_multichannel
-patchSpecs:
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-pcr-protocol-event-coverage.yaml

@@ -1,44 +1,39 @@
 kind: protocol-foundry-architect-verdict
 protocolId: cayman-natural-prodccuts
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T06:33:56.706Z
+generated_at: 2026-05-09T08:53:32.104Z
 accepted: false
 qualityScore: 0
 coverageEstimate: 0
 failureClasses:
-  - precompiler_reference_shape
   - compiler_event_coverage
-  - material_catalog_or_spec
+  - precompiler_reference_shape
+  - labware_alias_or_resolver
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: precompiler-extract-plate-map-candidates
-    class: precompiler_reference_shape
-    title: Pre-compiler must extract plate-map candidates from Cayman 96-well
-      library PDF
-    rationale: "The pre-compiler segments contain no candidateEvents, entities, or
-      labwareHints. The PDF clearly contains a structured plate map (Plate 1,
-      wells A1-H12 with compound names and item numbers). The pre-compiler's
-      extract_entities pass is producing zero usable candidates for the compiler
-      to lower into events. This is a pre-compiler extraction failure: the
-      prompt or regex patterns do not recognize the Cayman Chemical plate-map
-      table format."
+  - id: add-plate-map-verb-lowering
+    class: compiler_event_coverage
+    title: Add 'plate_map' verb lowering for 96-well library plate maps
+    rationale: The PDF is a 96-well plate map (Cayman Natural Products Screening
+      Library). The pre-compiler extracted 22+ candidate groups, but the
+      compiler produced 0 events because it has no verb lowering path for
+      'plate_map' or 'library_plate' content types. The compiler needs a verb
+      expander that recognizes plate-map-style text (well-position +
+      compound-name + catalog-number tables) and lowers them to 'load_plate' or
+      'set_well_contents' events.
     ownedFiles:
-      - server/src/precompiler/extractors/plate-map-extractor.ts
-      - server/src/precompiler/prompts/extract-entities.ts
+      - server/src/compiler/biology/BiologyVerbExpander.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - Pre-compiler output for cayman-natural-prodccuts must contain at least 1
-        candidateEvent with kind 'plate_map' or 'load_plate' containing
-        well-to-compound mappings.
-      - Pre-compiler must extract at least 20 compound entities with name and
-        item_number from the plate map table.
-      - Pre-compiler must emit a labwareHint for a 96-well plate (e.g.,
-        '96_well_plate' or 'plate_96').
-      - Compiler eventCount must be >= 1 after this fix (at minimum a
-        plate-loading event).
+      - Compiler produces >= 1 event for a plate-map-style PDF with
+        well-position/compound tables
+      - Events include well positions (e.g., A2, A3) and compound identifiers
+        from the plate map
+      - eventCount > 0 for this protocol variant
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -59,29 +54,29 @@ recommendedFixes:
       targetChangedFiles: 2
       maxChangedFiles: 3
       targetChangedLines: 120
-      maxChangedLines: 250
+      maxChangedLines: 220
       requireFocusedFixture: true
-  - id: compiler-lower-plate-map-to-events
-    class: compiler_event_coverage
-    title: Compiler must lower plate-map candidates to load_plate events
-    rationale: Even if the pre-compiler produces plate-map candidates, the compiler
-      currently produces 0 events. The compiler lacks a lowering rule for
-      plate-map / load_plate candidate types. For a screening library protocol,
-      the primary event is loading compounds into a 96-well plate. The compiler
-      needs a verb handler that transforms a plate-map candidate (well ->
-      compound mapping) into a load_plate event with well assignments.
+  - id: fix-presegmented-candidate-shape
+    class: precompiler_reference_shape
+    title: Ensure presegmented candidates include verb hints for plate-map protocols
+    rationale: The diagnostics show many 'foundry_presegmented_candidates' messages
+      but the candidates lack verb/type hints that the compiler needs to
+      dispatch lowering. The pre-compiler segments the text into candidate
+      groups but doesn't annotate them with a 'verbHint' or 'contentType' field
+      (e.g., 'plate_map', 'library_layout'). Without this, the compiler's verb
+      matcher can't find a matching verb and produces 0 events. The
+      createAiPrecompilePass or deterministic precompile pass needs to annotate
+      candidates with contentType when plate-map patterns are detected.
     ownedFiles:
-      - server/src/compiler/lowering/plate-map-lowering.ts
-      - server/src/compiler/verbs/load-plate.ts
-      - server/src/compiler/event-graph-builder.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+      - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
     acceptance:
-      - Compiler must produce at least 1 event of kind 'load_plate' or
-        'assign_wells' when given a plate-map candidate.
-      - The event graph must contain well-to-compound assignments matching the
-        PDF plate map (e.g., A2 -> Ursolic Acid, A3 -> (+)-Abscisic Acid).
-      - eventCount must be >= 1 (ideally >= 2 including a plate initialization
-        event).
-      - outcome must not be 'gap' after this fix.
+      - Pre-compiler output includes 'contentType' or 'verbHint' on candidates
+        for plate-map protocols
+      - Candidates from plate-map PDFs are annotated with 'plate_map' or
+        equivalent type
+      - Compiler can dispatch to the correct verb lowering path based on
+        candidate annotations
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -89,32 +84,29 @@ recommendedFixes:
     failureEvidence: *a2
     implementationBudget:
       targetChangedFiles: 2
-      maxChangedFiles: 4
-      targetChangedLines: 100
-      maxChangedLines: 200
+      maxChangedFiles: 3
+      targetChangedLines: 80
+      maxChangedLines: 150
       requireFocusedFixture: true
-  - id: material-catalog-cayman-compounds
-    class: material_catalog_or_spec
-    title: Material context must resolve Cayman compound names to material records
-    rationale: "The material context is empty (materials: [], materialSpecs: [],
-      vendorProducts: []). The PDF lists 40+ compounds with Cayman item numbers
-      (e.g., Ursolic Acid 10072, Paclitaxel 10461). Without material records,
-      the compiler cannot resolve compound references, and the execution scale
-      cannot bind reagents. The material extractor must parse the plate map
-      table and create vendor-product and material-spec records for each
-      compound."
+  - id: resolve-generic-labware-refs
+    class: labware_alias_or_resolver
+    title: Wire generic labware definitions to resolve unresolved_ref gaps
+    rationale: "The event graph has 3 unresolved_ref gaps: generic_96_well_plate,
+      generic_12_well_reservoir, and generic_96_tip_rack. The
+      LabwareDefinitionRegistry likely has these definitions but the compiler's
+      labware resolver can't find them by the 'generic_*' alias. The resolver
+      needs to map these generic names to actual labware definition IDs (e.g.,
+      lbw-def-generic-96-well-plate). This is a wiring issue, not a missing
+      definition issue."
     ownedFiles:
-      - server/src/precompiler/materials/cayman-material-extractor.ts
-      - server/src/materials/vendor-product-resolver.ts
+      - server/src/registry/LabwareDefinitionRegistry.ts
+      - server/src/foundry/ProtocolFoundryCompileRunner.ts
     acceptance:
-      - Material context must contain at least 20 material records corresponding
-        to compounds in the plate map.
-      - Each material record must include name, vendor (Cayman Chemical), and
-        item_number.
-      - Compiler must be able to resolve compound names in plate-map candidates
-        to material IDs.
-      - Execution scale reagentLayout must reference resolved material roles
-        instead of provisional placeholders.
+      - No unresolved_ref gaps for generic_96_well_plate,
+        generic_12_well_reservoir, generic_96_tip_rack
+      - Labware resolver successfully maps generic_* aliases to labware
+        definition IDs
+      - Event graph status changes from 'blocked' to 'draft' or better
     coderModelProfile:
       model: Qwen/Qwen3.6-35B-A3B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -123,8 +115,8 @@ recommendedFixes:
     implementationBudget:
       targetChangedFiles: 2
       maxChangedFiles: 3
-      targetChangedLines: 80
-      maxChangedLines: 180
+      targetChangedLines: 40
+      maxChangedLines: 100
       requireFocusedFixture: true
 sourceArtifacts: *a1
 architectNotes: "LLM architect analysis: 3 fix recommendations."

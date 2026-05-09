@@ -3,4 +3,4 @@ protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
 variant: robot_deck
 patchSpecs:
   - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-unknown-biology-verbs.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-unknown-verbs-bind-prefer-use-report.yaml

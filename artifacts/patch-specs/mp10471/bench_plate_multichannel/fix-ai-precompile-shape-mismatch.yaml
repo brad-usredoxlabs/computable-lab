@@ -3,30 +3,29 @@ id: mp10471/bench_plate_multichannel/fix-ai-precompile-shape-mismatch
 protocolId: mp10471
 variant: bench_plate_multichannel
 fixClass: precompiler_reference_shape
-title: Fix ai_precompile output shape mismatch causing pass skips
-rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch', which
-  caused downstream passes 'mint_materials', 'resolve_labware', and
-  'expand_patterns' to be skipped because their 'when' conditions evaluated to
-  false. This is the root cause of the empty event graph (only 2 mix events) and
-  unresolved labware refs. The ai_precompile pass is not producing the expected
-  output shape (mintMaterials, candidateLabwares, patternEvents), so the
-  compiler cannot proceed with material resolution, labware resolution, or
-  pattern expansion.
+title: Fix ai_precompile output shape mismatch to enable downstream passes
+rationale: "The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
+  AI precompile pass produced output that doesn't match the expected schema.
+  This caused critical downstream passes to be skipped: 'mint_materials' (no
+  mintMaterials), 'resolve_labware' (no candidateLabwares), and
+  'expand_patterns' (no patternEvents). Without these passes, the compiler
+  cannot extract reagents, resolve labware, or expand protocol patterns,
+  resulting in only 2 trivial mix events instead of a full calcium assay
+  protocol."
 ownedFiles:
-  - server/src/protocol-foundry/passes/ai_precompile.ts
-  - server/src/protocol-foundry/passes/ai_precompile.schema.ts
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
 acceptance:
-  - ai_precompile pass produces output with mintMaterials, candidateLabwares,
-    and patternEvents fields
+  - ai_precompile pass output matches the expected AiPrecompileOutput schema
+    with mintMaterials, candidateLabwares, and patternEvents fields
   - Downstream passes mint_materials, resolve_labware, and expand_patterns are
-    no longer skipped
-  - Compiler outcome changes from 'gap' to 'complete' or produces more than 2
-    events
+    no longer skipped due to false when conditions
+  - Compiler produces more than 2 events for protocols with clear multi-step
+    procedures
 implementationBudget:
-  targetChangedFiles: 2
-  maxChangedFiles: 4
-  targetChangedLines: 120
-  maxChangedLines: 250
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 60
+  maxChangedLines: 150
   requireFocusedFixture: true
 coderModelProfile:
   model: Qwen/Qwen3.6-27B-FP8
@@ -44,5 +43,5 @@ sourceArtifacts:
 failureEvidence:
   eventCount: 2
   outcome: gap
-architectNotes: "LLM architect analysis: 3 fix recommendations."
+architectNotes: "LLM architect analysis: 2 fix recommendations."
 sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10471/bench_plate_multichannel/verdict.yaml

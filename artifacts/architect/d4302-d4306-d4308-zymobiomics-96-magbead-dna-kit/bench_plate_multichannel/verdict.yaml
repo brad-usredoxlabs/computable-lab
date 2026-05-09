@@ -1,14 +1,14 @@
 kind: protocol-foundry-architect-verdict
 protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T06:36:49.561Z
+generated_at: 2026-05-09T09:20:05.255Z
 accepted: false
 qualityScore: 0.15
 coverageEstimate: 0.3
 failureClasses:
   - precompiler_reference_shape
-  - compiler_event_coverage
   - labware_alias_or_resolver
+  - material_catalog_or_spec
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
@@ -17,24 +17,25 @@ badScalingAssumptions: []
 recommendedFixes:
   - id: fix-ai-precompile-shape-mismatch
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch causing downstream pass skips
-    rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch' warning,
-      which directly caused 'mint_materials', 'resolve_labware', and
-      'expand_patterns' passes to be skipped. This is the root cause of the gap
-      outcome. The pre-compiler's AI precompile step is producing output that
-      doesn't match the expected schema, causing the compiler to bail out of
-      critical material and labware resolution steps. Without these passes, no
-      materials or labware can be resolved, leading to unresolved references and
-      a blocked event graph.
+    title: Fix ai_precompile output shape mismatch to enable downstream passes
+    rationale: "The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
+      AI precompile pass produced output that doesn't match the expected schema.
+      This caused critical downstream passes to be skipped: 'mint_materials' (no
+      mintMaterials), 'resolve_labware' (no candidateLabwares), and
+      'expand_patterns' (no patternEvents). Without these passes, materials and
+      labware cannot be resolved, leading to unresolved references and a blocked
+      event graph. The root cause is likely in ChatbotCompilePasses.ts where
+      createAiPrecompilePass generates output that doesn't conform to the
+      AiPrecompileOutput type expected by subsequent passes."
     ownedFiles:
-      - server/src/protocol-foundry/passes/ai_precompile.ts
-      - server/src/protocol-foundry/schema/precompile-output.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass completes without shape_mismatch warning for this
-        protocol
-      - mint_materials, resolve_labware, and expand_patterns passes are no
-        longer skipped due to false when conditions
-      - Precompile output schema validation passes for all test protocols
+      - ai_precompile pass produces output matching AiPrecompileOutput schema
+        with mintMaterials, candidateLabwares, and patternEvents fields
+      - Downstream passes mint_materials, resolve_labware, and expand_patterns
+        are no longer skipped due to false when conditions
+      - Compiler diagnostics no longer contain 'ai_precompile_shape_mismatch'
+        warning
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -52,34 +53,70 @@ recommendedFixes:
       eventCount: 6
       outcome: gap
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
-      targetChangedLines: 120
-      maxChangedLines: 250
+      targetChangedFiles: 1
+      maxChangedFiles: 2
+      targetChangedLines: 60
+      maxChangedLines: 150
       requireFocusedFixture: true
-  - id: fix-labware-resolver-generic-plates
+  - id: fix-labware-resolution-generic-plates
     class: labware_alias_or_resolver
     title: Add generic labware definitions for 96-well plate, 12-well reservoir, and
       tube rack
-    rationale: The compiler gaps show unresolved references for
+    rationale: "The compiler gaps show three unresolved labware references:
       'generic_96_well_plate', 'generic_12_well_reservoir', and
       'generic_24x1_5ml_tube_rack' with reason 'no matching labware in prior
-      snapshot'. These are standard labware types that should exist in the
-      labware registry. The execution scale plan references
+      snapshot'. The execution scale plan references
       'lbw-def-generic-96-well-plate' and 'lbw-def-generic-reservoir-1-v1',
-      suggesting these definitions should exist but aren't being found by the
-      resolver. This is a wiring/resolution issue, not a missing definition
-      issue.
+      suggesting these definitions should exist but may not be properly
+      registered or aliased. The LabwareDefinitionRegistry needs to include
+      these generic labware types so the compiler can resolve them during the
+      resolve_labware pass."
     ownedFiles:
-      - server/src/protocol-foundry/resolvers/labware-resolver.ts
-      - server/src/labware/registry/generic-labware.ts
+      - server/src/registry/LabwareDefinitionRegistry.ts
     acceptance:
-      - generic_96_well_plate resolves to a valid labware definition
-      - generic_12_well_reservoir resolves to a valid labware definition
-      - generic_24x1_5ml_tube_rack resolves to a valid labware definition
-      - No unresolved_ref gaps for these labware types in compiler output
+      - LabwareDefinitionRegistry includes definitions for
+        generic_96_well_plate, generic_12_well_reservoir, and
+        generic_24x1_5ml_tube_rack
+      - Compiler gaps no longer contain unresolved_ref for these labware hints
+      - resolve_labware pass successfully resolves these labware references when
+        ai_precompile provides candidateLabwares
     coderModelProfile:
       model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 1
+      maxChangedFiles: 2
+      targetChangedLines: 40
+      maxChangedLines: 100
+      requireFocusedFixture: true
+  - id: fix-material-resolution-resuspend
+    class: material_catalog_or_spec
+    title: Resolve 'resuspend' material reference and add ZymoBIOMICS kit materials
+    rationale: "The compiler gaps show two unresolved references for 'resuspend'
+      material: one due to 'registry hit ontology' and another because 'kind
+      material not handled by resolve_references'. Additionally, the PDF
+      describes specific kit materials (ZymoBIOMICS Lysis Solution, MagBinding
+      Buffer, MagWash 1/2, MagBinding Beads, DNase/RNase Free Water) that should
+      be extracted and resolved. The material context shows empty materials
+      array, indicating the pre-compiler failed to extract these kit-specific
+      materials. The resolve_references pass needs to handle material kind
+      properly, and the material catalog should include ZymoBIOMICS kit
+      components."
+    ownedFiles:
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+      - server/src/registry/CompoundClassRegistry.ts
+    acceptance:
+      - resolve_references pass handles 'material' kind without producing
+        unresolved_ref gaps
+      - ZymoBIOMICS kit materials (Lysis Solution, MagBinding Buffer, MagWash
+        1/2, MagBinding Beads, DNase/RNase Free Water) are extracted and
+        resolved
+      - Compiler gaps no longer contain unresolved_ref for 'resuspend' or kit
+        materials
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
@@ -87,36 +124,7 @@ recommendedFixes:
       targetChangedFiles: 2
       maxChangedFiles: 3
       targetChangedLines: 80
-      maxChangedLines: 150
-      requireFocusedFixture: true
-  - id: fix-material-resolver-resuspend-ontology
-    class: compiler_event_coverage
-    title: Handle 'resuspend' as a valid material reference in resolve_references
-    rationale: The compiler gaps show two unresolved_ref entries for 'resuspend'
-      with reasons 'registry hit ontology' and 'kind material not handled by
-      resolve_references'. This indicates that 'resuspend' is being treated as a
-      material reference when it should either be handled as a verb/action or
-      properly resolved. The resolve_references pass doesn't know how to handle
-      this kind of material reference, causing it to fail. This needs to be
-      either added to the material registry or handled as a special case in the
-      resolver.
-    ownedFiles:
-      - server/src/protocol-foundry/resolvers/material-resolver.ts
-      - server/src/protocol-foundry/passes/resolve_references.ts
-    acceptance:
-      - resuspend material reference resolves without gap
-      - resolve_references pass handles ontology-hit materials correctly
-      - No unresolved_ref gaps for resuspend in compiler output
-    coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
-    implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
-      targetChangedLines: 60
-      maxChangedLines: 120
+      maxChangedLines: 200
       requireFocusedFixture: true
 sourceArtifacts: *a1
 architectNotes: "LLM architect analysis: 3 fix recommendations."

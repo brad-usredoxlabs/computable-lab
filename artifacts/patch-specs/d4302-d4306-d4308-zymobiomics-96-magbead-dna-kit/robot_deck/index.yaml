@@ -3,5 +3,5 @@ protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
 variant: robot_deck
 patchSpecs:
   - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/fix-labware-resolver-zymo-bashing-bead.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/fix-material-catalog-zymo-reagents.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/fix-labware-resolution-for-zymo-labware.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/fix-material-resolution-for-zymo-reagents.yaml

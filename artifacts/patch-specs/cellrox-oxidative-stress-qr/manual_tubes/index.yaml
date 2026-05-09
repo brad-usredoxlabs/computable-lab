@@ -2,6 +2,6 @@ kind: protocol-foundry-patch-spec-index
 protocolId: cellrox-oxidative-stress-qr
 variant: manual_tubes
 patchSpecs:
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/manual_tubes/add-treat-and-analyze-verbs.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/manual_tubes/fix-labware-and-material-resolution.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/manual_tubes/fix-foundry-runtime-wiring-gap.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/manual_tubes/fix-material-catalog-spec-gap.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/manual_tubes/fix-browser-rendering.yaml

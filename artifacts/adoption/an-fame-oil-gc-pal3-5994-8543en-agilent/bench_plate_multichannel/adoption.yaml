@@ -1,20 +1,20 @@
 kind: protocol-foundry-adoption-decision
 protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T07:22:24.185Z
+generated_at: 2026-05-09T09:46:26.372Z
 status: accepted
 applyPatches: true
 patchSpecs:
-  - id: an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/add-wait-and-scale-verb-expanders
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/add-wait-and-scale-verb-expanders.yaml
-    fixClass: compiler_event_coverage
-    title: Register expanders for 'wait' and 'scale' biology verbs
   - id: an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-ai-precompile-shape-mismatch
     path: /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
     fixClass: precompiler_reference_shape
     title: Fix ai_precompile output shape mismatch to enable downstream passes
-  - id: an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/resolve-generic-labware-refs
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/resolve-generic-labware-refs.yaml
+  - id: an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-labware-resolution-generic-refs
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-labware-resolution-generic-refs.yaml
     fixClass: labware_alias_or_resolver
-    title: Wire generic labware hints to existing labware definitions
+    title: Resolve generic labware references to existing labware definitions
+  - id: an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-unknown-verbs-scale-wait
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-unknown-verbs-scale-wait.yaml
+    fixClass: compiler_event_coverage
+    title: Add expanders for 'scale' and 'wait' biology verbs
 message: Patch specs accepted for unattended coder tournament execution.

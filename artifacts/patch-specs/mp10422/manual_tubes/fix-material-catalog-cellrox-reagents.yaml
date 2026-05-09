@@ -3,33 +3,35 @@ id: mp10422/manual_tubes/fix-material-catalog-cellrox-reagents
 protocolId: mp10422
 variant: manual_tubes
 fixClass: material_catalog_or_spec
-title: Add CellROX reagent material records to catalog
+title: Add CellROX reagent material records to enable proper material resolution
 rationale: The material context shows empty materials, materialSpecs, and
-  vendorProducts arrays. The PDF clearly lists four catalog numbers (C10422,
-  C10443, C10444, C10448) with specific reagent names, concentrations (2.5 mM in
-  DMSO), and storage conditions. Without these material records, the compiler
-  cannot resolve reagent references even if the shape mismatch is fixed. The
-  execution scale plan notes 'prompt mentions reagents but compiled events did
-  not identify concrete reagent roles'.
+  vendorProducts arrays. The PDF clearly specifies CellROX Deep Red (C10422),
+  Orange (C10443), Green (C10444), and Variety Pack (C10448) reagents with
+  specific concentrations (2.5 mM in DMSO), storage conditions, and
+  excitation/emission spectra. Without these material records, the compiler
+  cannot resolve reagent references and falls back to generic placeholders. The
+  mint_materials pass was skipped due to the shape mismatch, but even if it ran,
+  the material catalog needs these specific reagent definitions.
 ownedFiles:
-  - server/src/materials/catalog/cellrox-reagents.yaml
-  - server/src/materials/specs/cellrox-deep-red-spec.yaml
-  - server/src/materials/specs/cellrox-orange-spec.yaml
-  - server/src/materials/specs/cellrox-green-spec.yaml
+  - server/src/registry/CompoundClassRegistry.ts
+  - server/src/registry/LabwareDefinitionRegistry.ts
 acceptance:
-  - Material catalog contains records for C10422, C10443, C10444, C10448
-  - Each material record includes concentration (2.5 mM), solvent (DMSO), and
-    storage conditions
-  - Compiler can resolve 'CellROX Deep Red Reagent' to material ID C10422
-  - Material context for mp10422 is no longer empty after compilation
+  - CellROX Green Reagent (C10444) is resolvable as a material with
+    concentration 2.5 mM in DMSO
+  - CellROX Orange Reagent (C10443) is resolvable as a material
+  - CellROX Deep Red Reagent (C10422) is resolvable as a material
+  - Event graph events reference these specific materials instead of generic
+    stain_agent/fix_agent placeholders
+  - Material specs include storage conditions (≤-20°C, protect from light,
+    desiccate)
 implementationBudget:
-  targetChangedFiles: 3
-  maxChangedFiles: 5
-  targetChangedLines: 100
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 80
   maxChangedLines: 200
   requireFocusedFixture: true
 coderModelProfile:
-  model: Qwen/Qwen3.6-35B-A3B-FP8
+  model: Qwen/Qwen3.6-27B-FP8
   guidance: Narrow ownership, concrete evidence, one behavior change.
 sourceArtifacts:
   compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/manual_tubes.yaml
@@ -44,5 +46,5 @@ sourceArtifacts:
 failureEvidence:
   eventCount: 6
   outcome: gap
-architectNotes: "LLM architect analysis: 3 fix recommendations."
+architectNotes: "LLM architect analysis: 2 fix recommendations."
 sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10422/manual_tubes/verdict.yaml

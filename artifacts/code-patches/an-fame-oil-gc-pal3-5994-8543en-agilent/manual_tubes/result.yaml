@@ -1,7 +1,0 @@
-kind: protocol-foundry-coder-patch-result
-protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
-variant: manual_tubes
-generated_at: 2026-05-09T07:22:23.884Z
-status: blocked
-message: Patch touches no meaningful compiler/schema/record files.
-touchedFiles: []

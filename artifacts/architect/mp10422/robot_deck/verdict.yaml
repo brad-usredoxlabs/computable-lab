@@ -1,14 +1,13 @@
 kind: protocol-foundry-architect-verdict
 protocolId: mp10422
 variant: robot_deck
-generated_at: 2026-05-09T06:42:33.428Z
+generated_at: 2026-05-09T09:37:24.042Z
 accepted: false
 qualityScore: 0.35
 coverageEstimate: 0.3
 failureClasses:
   - precompiler_reference_shape
   - material_catalog_or_spec
-  - labware_alias_or_resolver
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
@@ -17,29 +16,28 @@ badScalingAssumptions: []
 recommendedFixes:
   - id: fix-ai-precompile-shape-mismatch
     class: precompiler_reference_shape
-    title: Fix ai_precompile shape mismatch causing skipped downstream passes
-    rationale: "The compiler diagnostics show 'ai_precompile_shape_mismatch'
-      warning, which caused critical passes to be skipped: 'mint_materials',
-      'resolve_labware', 'resolve_prior_labware_references', and
-      'expand_patterns'. This means the pre-compiler's AI output did not conform
-      to the expected schema, so the compiler fell back to generic stubs
-      (stain_agent, fix_agent) instead of resolving actual CellROX reagents. The
-      root cause is likely a schema drift between the ai_precompile prompt
-      output and the compiler's expected input shape."
+    title: Fix ai_precompile output shape mismatch to enable material and labware
+      resolution passes
+    rationale: The compiler diagnostics show 'ai_precompile output shape mismatch'
+      warning, and subsequent passes (mint_materials, resolve_labware,
+      resolve_prior_labware_references, expand_patterns) are all skipped because
+      their 'when' conditions evaluate to false. This means the ai_precompile
+      pass is producing output that doesn't match the expected
+      AiPrecompileOutput type schema, causing the compiler to skip critical
+      resolution steps. The resulting event graph uses generic 'stain_agent' and
+      'fix_agent' materials instead of the specific CellROX reagents (C10422,
+      C10443, C10444) mentioned in the PDF.
     ownedFiles:
-      - server/src/protocol-foundry/passes/ai_precompile.ts
-      - server/src/protocol-foundry/passes/ai_precompile.schema.ts
-      - server/src/protocol-foundry/passes/mint_materials.ts
-      - server/src/protocol-foundry/passes/resolve_labware.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile_shape_mismatch warning no longer appears in diagnostics
-        for mp10422
-      - mint_materials pass is no longer skipped
-        (outputs.ai_precompile.mintMaterials evaluates to true)
-      - resolve_labware pass is no longer skipped
-        (outputs.ai_precompile.candidateLabwares evaluates to true)
-      - Event graph events reference concrete material IDs (e.g., C10422,
-        C10443) instead of generic 'stain_agent'
+      - ai_precompile pass output matches AiPrecompileOutput type schema without
+        shape mismatch warnings
+      - mint_materials pass is no longer skipped when candidate materials are
+        present
+      - resolve_labware pass is no longer skipped when candidate labwares are
+        present
+      - Compiler diagnostics no longer contain 'ai_precompile_shape_mismatch'
+        warnings
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -57,79 +55,42 @@ recommendedFixes:
       eventCount: 6
       outcome: gap
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
-      targetChangedLines: 120
-      maxChangedLines: 250
+      targetChangedFiles: 1
+      maxChangedFiles: 2
+      targetChangedLines: 60
+      maxChangedLines: 150
       requireFocusedFixture: true
   - id: fix-material-catalog-cellrox-reagents
     class: material_catalog_or_spec
-    title: Add CellROX reagent material records to material catalog
+    title: Add CellROX reagent material records for C10422, C10443, C10444, C10448
     rationale: The material context shows empty materials, materialSpecs, and
-      vendorProducts arrays. The PDF clearly lists four catalog numbers (C10422,
-      C10443, C10444, C10448) with specific properties (concentration 2.5 mM in
-      DMSO, excitation/emission wavelengths, storage conditions). Without these
-      material records, the compiler cannot resolve reagent references and falls
-      back to generic 'stain_agent' and 'fix_agent' placeholders. The material
-      catalog needs entries for each CellROX reagent variant.
+      vendorProducts arrays. The PDF clearly specifies CellROX Deep Red
+      (C10422), Orange (C10443), Green (C10444), and Variety Pack (C10448)
+      reagents with specific concentrations (2.5 mM in DMSO), storage conditions
+      (-20°C, protect from light), and excitation/emission wavelengths. Without
+      these material records, the compiler cannot resolve specific reagent
+      roles, resulting in generic 'stain_agent' placeholders in the event graph.
     ownedFiles:
-      - server/src/materials/catalog/cellrox-reagents.yaml
-      - server/src/materials/catalog/index.ts
-      - server/src/protocol-foundry/passes/mint_materials.ts
+      - server/src/registry/CompoundClassRegistry.ts
     acceptance:
-      - Material records exist for C10422 (Deep Red), C10443 (Orange), C10444
-        (Green), and C10448 (Variety Pack)
-      - Each material record includes concentration (2.5 mM), solvent (DMSO),
-        and storage conditions (≤-20°C, protect from light)
-      - Compiler can resolve 'CellROX Deep Red Reagent' text to material ID
-        C10422
-      - Event graph events reference concrete material catalog IDs instead of
-        generic placeholders
+      - Material records exist for CellROX Deep Red (C10422), Orange (C10443),
+        Green (C10444), and Variety Pack (C10448)
+      - Material specs include concentration (2.5 mM), solvent (DMSO), and
+        storage conditions
+      - Compiler can resolve CellROX reagent catalog numbers to material roles
+        in event graph
+      - Event graph events reference specific CellROX materials instead of
+        generic 'stain_agent'
     coderModelProfile:
       model: Qwen/Qwen3.6-35B-A3B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
-      targetChangedLines: 80
-      maxChangedLines: 150
-      requireFocusedFixture: true
-  - id: fix-labware-resolution-cellrox-protocol
-    class: labware_alias_or_resolver
-    title: Enable labware resolution for CellROX staining protocol
-    rationale: The resolve_labware pass was skipped due to the ai_precompile shape
-      mismatch, but even if it ran, the compiler needs to know that CellROX
-      staining protocols typically use 96-well plates for cell samples and
-      reservoirs for reagent dispensing. The execution scale plan shows a
-      generic 'reagent_reservoir' with reason 'prompt mentions reagents but
-      compiled events did not identify concrete reagent roles'. The labware
-      resolver needs to be wired to recognize staining/incubation workflows and
-      suggest appropriate labware (96-well plate for cells, reservoir for
-      reagents).
-    ownedFiles:
-      - server/src/protocol-foundry/passes/resolve_labware.ts
-      - server/src/labware/resolver/staining-workflow.ts
-      - server/src/labware/definitions/cell-culture-plates.yaml
-    acceptance:
-      - resolve_labware pass produces candidateLabwares for staining protocols
-      - Labware resolution suggests 96-well plate for cell samples and reservoir
-        for reagent dispensing
-      - Event graph labware references are resolved to concrete labware
-        definitions
-      - Execution scale plan reagent layout references concrete material roles
-        instead of generic 'reagent'
-    coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
-    implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
-      targetChangedLines: 100
-      maxChangedLines: 200
+      targetChangedFiles: 1
+      maxChangedFiles: 2
+      targetChangedLines: 40
+      maxChangedLines: 100
       requireFocusedFixture: true
 sourceArtifacts: *a1
-architectNotes: "LLM architect analysis: 3 fix recommendations."
+architectNotes: "LLM architect analysis: 2 fix recommendations."

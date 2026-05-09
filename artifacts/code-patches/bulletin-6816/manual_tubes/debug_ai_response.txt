@@ -1,7 +1,0 @@
-
-
-@@replace createLlmClient@@
-function createLlmClient(options: ProtocolFoundryCompileOptions, variant?: FoundryVariant): LlmClient {
-  return createInferenceClient(options.inference ?? {});
-}
-@@end@@

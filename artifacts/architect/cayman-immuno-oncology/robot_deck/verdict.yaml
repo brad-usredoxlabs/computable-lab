@@ -1,7 +1,7 @@
 kind: protocol-foundry-architect-verdict
 protocolId: cayman-immuno-oncology
 variant: robot_deck
-generated_at: 2026-05-09T06:32:41.954Z
+generated_at: 2026-05-09T08:46:04.259Z
 accepted: false
 qualityScore: 0.05
 coverageEstimate: 0
@@ -15,25 +15,26 @@ missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: fix-precompiler-shape-mismatch
+  - id: fix-ai-precompile-shape-mismatch
     class: precompiler_reference_shape
     title: Fix ai_precompile output shape mismatch to enable downstream passes
-    rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch', which
-      causes downstream passes (mint_materials, resolve_labware,
+    rationale: The compiler reports 'ai_precompile output shape mismatch', which
+      causes all downstream passes (mint_materials, resolve_labware,
       expand_patterns) to be skipped because their 'when' conditions evaluate to
-      false. The pre-compiler is not producing the expected output schema,
-      blocking the entire compilation pipeline. This is the root cause of
-      eventCount=0.
+      false. The ai_precompile pass in ChatbotCompilePasses.ts is producing
+      output that doesn't match the expected AiPrecompileOutput schema,
+      preventing the pipeline from extracting candidate events, labwares, or
+      materials. This is the root cause of the zero-event output.
     ownedFiles:
-      - server/src/protocol-foundry/precompiler/ai-precompile.ts
-      - server/src/protocol-foundry/precompiler/schema.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile_shape_mismatch warning no longer appears in diagnostics
-      - outputs.ai_precompile.mintMaterials evaluates to true when materials are
-        present
-      - outputs.ai_precompile.candidateLabwares evaluates to true when labware
-        hints exist
-      - Downstream passes (mint_materials, resolve_labware) are no longer skipped
+      - ai_precompile pass no longer emits 'ai_precompile_shape_mismatch' warning
+      - outputs.ai_precompile.candidateEvents is a non-empty array when
+        candidates exist
+      - outputs.ai_precompile.candidateLabwares is populated when labware hints
+        are present
+      - Downstream passes (mint_materials, resolve_labware) are no longer
+        skipped due to false when conditions
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -51,54 +52,61 @@ recommendedFixes:
       eventCount: 0
       outcome: gap
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
+      targetChangedFiles: 1
+      maxChangedFiles: 2
       targetChangedLines: 60
       maxChangedLines: 150
       requireFocusedFixture: true
   - id: fix-unknown-biology-verbs
     class: compiler_event_coverage
-    title: "Register expanders for biology verbs: bind, prefer, use, report"
-    rationale: The compiler drops all candidate events because verbs 'bind',
-      'prefer', 'use', and 'report' have no registered expanders. These are
-      common verbs in screening library protocols where compounds are assigned
-      to wells. Without expanders, no events are generated, resulting in
-      eventCount=0.
+    title: Register expanders for bind, prefer, use, report verbs in
+      BiologyVerbExpander
+    rationale: The compiler drops all candidate events because the verbs 'bind',
+      'prefer', 'use', and 'report' have no registered expanders in
+      BiologyVerbExpander.ts. These are common protocol verbs that should map to
+      standard pipetting or plate-setup actions. Without expanders, all
+      candidates are dropped, resulting in zero events. The pre-compiler
+      extracted 9+3+3=15 candidates, but none survive to the event graph.
     ownedFiles:
-      - server/src/protocol-foundry/compiler/expand-biology-verbs.ts
-      - server/src/protocol-foundry/compiler/verb-expanders/index.ts
+      - server/src/compiler/biology/BiologyVerbExpander.ts
     acceptance:
       - No 'unknown_biology_verb' warnings for bind, prefer, use, report
-      - Candidate events with these verbs are expanded into protocol events
-      - eventCount > 0 after compilation
+      - Candidate events with these verbs are expanded into concrete
+        pipette/plate events
+      - Event count increases from 0 to at least 3 for protocols with these verbs
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
+      targetChangedFiles: 1
+      maxChangedFiles: 2
       targetChangedLines: 80
       maxChangedLines: 200
       requireFocusedFixture: true
-  - id: fix-labware-resolver-gaps
+  - id: fix-labware-resolution-gaps
     class: labware_alias_or_resolver
-    title: Resolve generic labware references in compiler labware registry
-    rationale: Three unresolved labware references (generic_96_well_plate,
-      generic_12_well_reservoir, generic_96_tip_rack) block the event graph. The
-      execution scale plan references 'lbw-def-generic-96-well-plate' and
-      'lbw-def-generic-reservoir-1-v1', suggesting these definitions exist but
-      the compiler's labware resolver cannot find them. The resolver needs to
-      map the pre-compiler hints to the existing labware definitions.
+    title: Resolve generic_96_well_plate, generic_12_well_reservoir,
+      generic_96_tip_rack labware references
+    rationale: "Three labware references are unresolved: generic_96_well_plate,
+      generic_12_well_reservoir, generic_96_tip_rack. The execution scale plan
+      references 'lbw-def-generic-96-well-plate' and
+      'lbw-def-generic-reservoir-1-v1', suggesting these definitions exist in
+      the registry but the compiler's resolve_labware pass cannot find them.
+      This is likely a wiring issue where the labware resolver uses incorrect
+      lookup keys or the registry is not properly initialized in the Foundry
+      context."
     ownedFiles:
-      - server/src/protocol-foundry/compiler/resolve-labware.ts
-      - server/src/labware/registry/generic-labware.ts
+      - server/src/registry/LabwareDefinitionRegistry.ts
+      - server/src/foundry/ProtocolFoundryCompileRunner.ts
     acceptance:
       - No unresolved_ref gaps for generic_96_well_plate,
         generic_12_well_reservoir, generic_96_tip_rack
-      - Labware references are resolved to existing labware definitions
-      - Event graph labwares array contains resolved labware entries
+      - resolve_labware pass successfully resolves these labware hints to
+        registry definitions
+      - Event graph labwares array contains resolved labware entries with
+        correct definitions
     coderModelProfile:
       model: Qwen/Qwen3.6-35B-A3B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
