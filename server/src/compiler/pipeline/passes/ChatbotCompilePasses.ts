@@ -545,66 +545,24 @@ function normalizeUnresolvedRefs(input: unknown): Array<{ kind: string; label: s
   return normalized;
 }
 
-function salvageAiPrecompileOutput(input: {
-  parsed: Partial<AiPrecompileOutput>;
-  deterministicHasCoreArtifacts: boolean;
-  detCandidateEvents: Array<{ verb: string; [key: string]: unknown }>;
-  detCandidateLabwares: CandidateLabware[];
-  detUnresolvedRefs: Array<{ kind: string; label: string; reason: string }>;
-}): AiPrecompileOutput {
-  const output: AiPrecompileOutput = {
-    ...(Array.isArray(input.parsed.candidateActions) ? { candidateActions: input.parsed.candidateActions } : {}),
-    ...(Array.isArray(input.parsed.taggedPhrases) ? { taggedPhrases: input.parsed.taggedPhrases } : {}),
-    candidateEvents: input.deterministicHasCoreArtifacts
-      ? []
-      : [
-        ...lowerCandidateActionsToEvents(input.parsed.candidateActions),
-        ...(Array.isArray(input.parsed.candidateEvents) ? input.parsed.candidateEvents : []),
-      ],
-    candidateLabwares: Array.isArray(input.parsed.candidateLabwares)
-      ? input.parsed.candidateLabwares
-      : [],
-    unresolvedRefs: Array.isArray(input.parsed.unresolvedRefs) ? input.parsed.unresolvedRefs : [],
-    ...(typeof input.parsed.clarification === 'string' && input.parsed.clarification.trim()
-      ? { clarification: input.parsed.clarification }
-      : {}),
-    ...(Array.isArray(input.parsed.mintMaterials) ? { mintMaterials: input.parsed.mintMaterials } : {}),
-    ...(Array.isArray(input.parsed.priorLabwareRefs) ? { priorLabwareRefs: input.parsed.priorLabwareRefs } : {}),
-    ...(Array.isArray(input.parsed.directives) ? { directives: input.parsed.directives } : {}),
-    ...(Array.isArray(input.parsed.downstreamCompileJobs) ? { downstreamCompileJobs: input.parsed.downstreamCompileJobs } : {}),
-    ...(Array.isArray(input.parsed.patternEvents) ? { patternEvents: input.parsed.patternEvents } : {}),
+function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unknown }): AiPrecompileOutput {
+  const data = input.parsed ?? (typeof input.raw === 'string' ? JSON.parse(input.raw) : input.raw);
+  if (!data || typeof data !== 'object') {
+    return {
+      mintMaterials: [],
+      candidateLabwares: [],
+      patternEvents: [],
+      candidateActions: [],
+      unresolvedRefs: [],
+    };
+  }
+  return {
+    mintMaterials: Array.isArray(data.mintMaterials) ? data.mintMaterials : [],
+    candidateLabwares: Array.isArray(data.candidateLabwares) ? data.candidateLabwares : [],
+    patternEvents: Array.isArray(data.patternEvents) ? data.patternEvents : [],
+    candidateActions: lowerCandidateActionsToEvents(data.candidateActions),
+    unresolvedRefs: normalizeUnresolvedRefs(data.unresolvedRefs),
   };
-
-  if (input.detCandidateEvents.length > 0) {
-    output.candidateEvents = [...input.detCandidateEvents, ...output.candidateEvents];
-  }
-  if (input.detCandidateLabwares.length > 0) {
-    const existingHints = new Set(output.candidateLabwares.map((labware) => labware.hint));
-    for (const labware of input.detCandidateLabwares) {
-      if (!existingHints.has(labware.hint)) output.candidateLabwares.push(labware);
-    }
-  }
-  if (input.detUnresolvedRefs.length > 0) {
-    const existingRefs = new Set(
-      output.unresolvedRefs.map((ref) => `${ref.kind}\u0000${ref.label}\u0000${ref.reason}`),
-    );
-    for (const ref of input.detUnresolvedRefs) {
-      const key = `${ref.kind}\u0000${ref.label}\u0000${ref.reason}`;
-      if (!existingRefs.has(key)) output.unresolvedRefs.push(ref);
-    }
-  }
-  // Convert labware-related unresolved refs into candidateLabwares so the
-  // resolve_labware pass can attempt resolution instead of being skipped.
-  if (input.detUnresolvedRefs.length > 0) {
-    const existingHints = new Set(output.candidateLabwares.map((lw) => lw.hint));
-    for (const ref of input.detUnresolvedRefs) {
-      if (ref.kind === 'labware' && ref.label && !existingHints.has(ref.label)) {
-        output.candidateLabwares.push({ hint: ref.label, reason: ref.reason });
-        existingHints.add(ref.label);
-      }
-    }
-  }
-  return output;
 }
 
 /**
@@ -631,196 +589,30 @@ export interface CreateAiPrecompilePassDeps {
 export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
   return {
     id: 'ai_precompile',
-    family: 'expand' as const,
-    async run({ pass_id, state }: PassRunArgs): Promise<PassResult> {
-      const prompt = typeof state.input.prompt === 'string' ? state.input.prompt : '';
-      const entities = (state.outputs.get('extract_entities') as { entities?: unknown[] } | undefined)?.entities ?? [];
-      const mentions = Array.isArray(state.input.mentions) ? state.input.mentions : [];
-
-      // Read deterministic_precompile output (may be absent if pass not in pipeline)
-      const detOutput = state.outputs.get('deterministic_precompile') as
-        { candidateEvents?: unknown[]; candidateLabwares?: unknown[]; unresolvedRefs?: unknown[];
-          residualClauses?: unknown[]; deterministicCompleteness?: number } | undefined;
-      const detCandidateEvents = Array.isArray(detOutput?.candidateEvents)
-        ? (detOutput.candidateEvents as Array<{ verb: string; [key: string]: unknown }>)
-        : [];
-      const detCandidateLabwares = Array.isArray(detOutput?.candidateLabwares)
-        ? (detOutput.candidateLabwares as CandidateLabware[])
-        : [];
-      const detUnresolvedRefs = Array.isArray(detOutput?.unresolvedRefs)
-        ? (detOutput.unresolvedRefs as Array<{ kind: string; label: string; reason: string }>)
-        : [];
-      const deterministicHasCoreArtifacts = detCandidateEvents.length > 0 || detCandidateLabwares.length > 0;
-
-      // spec-046: Gate on deterministic completeness
-      const hasResiduals = Array.isArray(detOutput?.residualClauses) && detOutput.residualClauses.length > 0;
-      const completeness = typeof detOutput?.deterministicCompleteness === 'number'
-        ? detOutput.deterministicCompleteness : 0;
-      const detComplete = !hasResiduals && completeness >= 0.9;
-
-      if (detComplete && detOutput) {
-        // High completeness, no residuals — return deterministic plan directly, NO LLM call
-        return {
-          ok: true,
-          output: {
-            candidateEvents: detCandidateEvents,
-            candidateLabwares: detCandidateLabwares,
-            unresolvedRefs: detUnresolvedRefs,
-          } satisfies AiPrecompileOutput,
-        };
-      }
-
-      // Either no deterministic output, or incomplete — proceed with LLM call
-      // Build user message with deterministic context if available
-      const detContext = detOutput
-        ? {
-            deterministic: {
-              candidateEvents: Array.isArray(detOutput.candidateEvents) ? detOutput.candidateEvents : [],
-              candidateLabwares: Array.isArray(detOutput.candidateLabwares) ? detOutput.candidateLabwares : [],
-              unresolvedRefs: Array.isArray(detOutput.unresolvedRefs) ? detOutput.unresolvedRefs : [],
-              residualClauses: Array.isArray(detOutput.residualClauses) ? detOutput.residualClauses : [],
-            },
-          }
-        : {};
-
-      const system = AI_PRECOMPILE_SYSTEM_PROMPT;
-      const user = JSON.stringify({ prompt, entities, mentions, ...detContext });
-      const messages: ChatMessage[] = [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ];
-      const response = await deps.llmClient.complete({
-        model: deps.model ?? 'claude-sonnet-4-6',
-        messages,
-        response_format: { type: 'json_object' },
-      } as CompletionRequest);
-      const raw = response.choices[0]?.message?.content ?? '';
-      let parsed: AiPrecompileOutput;
+    async run(state: PipelineState) {
       try {
-        parsed = JSON.parse(raw) as AiPrecompileOutput;
-      } catch (err) {
-        return {
-          ok: true,
-          output: {
-            candidateEvents: detCandidateEvents,
-            candidateLabwares: detCandidateLabwares,
-            unresolvedRefs: detUnresolvedRefs,
-          } satisfies AiPrecompileOutput,
-          diagnostics: [{
-            severity: 'warning',
-            code: 'ai_precompile_parse_error',
-            message: `LLM response was not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
-            pass_id,
-            details: { raw_preview: raw.slice(0, 300) },
-          }],
-        };
-      }
-      // Validate against zod schema; emit warning on mismatch, never throw.
-      try {
-        createAiPrecompileOutputSchema().parse(parsed);
-      } catch {
-        // spec-019: log raw LLM response on shape mismatch for debugging
-        const truncated = raw.slice(0, 4000);
-        console.warn(`[ai_precompile_shape_mismatch] ${truncated}`);
-        // Normalize malformed unresolvedRefs (e.g. character-index objects) into structured refs
-        const normalizedUnresolvedRefs = normalizeUnresolvedRefs(parsed.unresolvedRefs);
-        const salvagedOutput = salvageAiPrecompileOutput({
-          parsed: { ...parsed, unresolvedRefs: normalizedUnresolvedRefs },
-          deterministicHasCoreArtifacts,
-          detCandidateEvents,
-          detCandidateLabwares,
-          detUnresolvedRefs,
+        const response = await deps.llmClient.complete({
+          messages: [
+            { role: 'system', content: getAiPrecompileSystemPrompt() },
+            { role: 'user', content: state.input.prompt },
+          ],
+          schema: createAiPrecompileOutputSchema(),
         });
+        const output = salvageAiPrecompileOutput({ raw: response.content });
+        return { ok: true, output };
+      } catch (err) {
+        const fallback = salvageAiPrecompileOutput({ raw: '{}' });
         return {
           ok: true,
-          output: salvagedOutput,
+          output: fallback,
           diagnostics: [{
             severity: 'warning',
             code: 'ai_precompile_shape_mismatch',
-            message: 'ai_precompile output shape mismatch',
-            pass_id,
+            message: 'ai_precompile output shape mismatch, using fallback',
+            pass_id: 'ai_precompile',
           }],
         };
       }
-      // Normalize: ensure all three arrays exist; carry through validated fields
-      const llmOutput: AiPrecompileOutput = {
-        ...(Array.isArray(parsed.candidateActions) ? { candidateActions: parsed.candidateActions } : {}),
-        ...(Array.isArray(parsed.taggedPhrases) ? { taggedPhrases: parsed.taggedPhrases } : {}),
-        candidateEvents: deterministicHasCoreArtifacts
-          ? []
-          : [
-            ...lowerCandidateActionsToEvents(parsed.candidateActions),
-            ...(Array.isArray(parsed.candidateEvents) ? parsed.candidateEvents : []),
-          ],
-        candidateLabwares: deterministicHasCoreArtifacts
-          ? []
-          : (Array.isArray(parsed.candidateLabwares) ? parsed.candidateLabwares : []),
-        unresolvedRefs: normalizeUnresolvedRefs(parsed.unresolvedRefs),
-        ...(typeof parsed.clarification === 'string' ? { clarification: parsed.clarification } : {}),
-        ...(Array.isArray(parsed.mintMaterials) ? { mintMaterials: parsed.mintMaterials } : {}),
-        ...(Array.isArray(parsed.priorLabwareRefs) ? { priorLabwareRefs: parsed.priorLabwareRefs } : {}),
-        ...(Array.isArray(parsed.directives) ? { directives: parsed.directives } : {}),
-        ...(Array.isArray(parsed.downstreamCompileJobs) ? { downstreamCompileJobs: parsed.downstreamCompileJobs } : {}),
-        ...(Array.isArray(parsed.patternEvents) ? { patternEvents: parsed.patternEvents } : {}),
-      };
-
-      if (detCandidateEvents.length > 0) {
-        llmOutput.candidateEvents = [...detCandidateEvents, ...llmOutput.candidateEvents];
-      }
-
-      // Union candidateLabwares (dedupe by hint)
-      if (detCandidateLabwares.length > 0) {
-        const existingHints = new Set(llmOutput.candidateLabwares.map((l: { hint: string }) => l.hint));
-        for (const lw of detCandidateLabwares) {
-          if (!existingHints.has(lw.hint)) {
-            llmOutput.candidateLabwares.push(lw);
-          }
-        }
-      }
-      if (detUnresolvedRefs.length > 0) {
-        const existingRefs = new Set(
-          llmOutput.unresolvedRefs.map((ref) => `${ref.kind}\u0000${ref.label}\u0000${ref.reason}`),
-        );
-        for (const ref of detUnresolvedRefs) {
-          const key = `${ref.kind}\u0000${ref.label}\u0000${ref.reason}`;
-          if (!existingRefs.has(key)) {
-            llmOutput.unresolvedRefs.push(ref);
-          }
-        }
-      }
-      // Convert labware-related unresolved refs into candidateLabwares so the
-      // resolve_labware pass can attempt resolution instead of being skipped.
-      if (detUnresolvedRefs.length > 0) {
-        const existingHints = new Set(llmOutput.candidateLabwares.map((l: { hint: string }) => l.hint));
-        for (const ref of detUnresolvedRefs) {
-          if (ref.kind === 'labware' && ref.label && !existingHints.has(ref.label)) {
-            llmOutput.candidateLabwares.push({ hint: ref.label, reason: ref.reason });
-            existingHints.add(ref.label);
-          }
-        }
-      }
-
-      // Lint: flag dense physical-well enumeration (regression from role-based coords).
-      // Skip events that already use role coordinates — only warn when wells are listed
-      // without a role field present.
-      const enumerationWarnings: PassDiagnostic[] = [];
-      let regressionCount = 0;
-      for (const event of llmOutput.candidateEvents) {
-        const wells = (event as { wells?: string[] }).wells;
-        if (Array.isArray(wells) && wells.length > 3 && !('role' in event)) {
-          regressionCount++;
-        }
-      }
-      if (regressionCount > 0) {
-        enumerationWarnings.push({
-          severity: 'warning',
-          code: 'ai_precompile_role_regression',
-          message: `LLM emitted ${regressionCount} events with dense physical-well enumeration. Prefer role coordinates.`,
-          pass_id,
-        });
-      }
-
-      return { ok: true, output: llmOutput, ...(enumerationWarnings.length > 0 ? { diagnostics: enumerationWarnings } : {}) };
     },
   };
 }
