@@ -551,17 +551,16 @@ async function readYamlFile(path: string): Promise<Record<string, unknown>> {
 async function runVariant(input: {
   options: ProtocolFoundryCompileOptions;
   variant: FoundryVariant;
-  labwareLookup: ReturnType<typeof createFoundryLabwareLookup>;
-  recordStore?: RecordStore;
-}): Promise<RunChatbotCompileResult> {
-  const client = createLlmClient(input.options, input.variant);
+}) {
+  const { options, variant } = input;
+  const labwareLookup = createFoundryLabwareLookup();
+
   return runChatbotCompile({
-    prompt: input.options.segmentPath,
-    variant: input.variant,
-    labwareLookup: input.labwareLookup,
-    recordStore: input.recordStore,
-    inference: input.options.inference,
-    dryRun: input.options.dryRun,
+    prompt: buildPrompt({ input: options.segmentPath, variant }),
+    inference: options.inference,
+    recordStore: options.recordStore,
+    labwareLookup,
+    variant,
   });
 }
 
