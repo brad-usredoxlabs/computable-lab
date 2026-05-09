@@ -12,7 +12,7 @@
  */
 export interface PlateEventPrimitive {
   eventId: string;                    // unique per emitted event
-  event_type: 'create_container' | 'add_material' | 'transfer' | 'incubate' | 'mix' | 'read' | 'centrifuge';
+  event_type: 'create_container' | 'add_material' | 'transfer' | 'incubate' | 'mix' | 'read' | 'centrifuge' | 'load_plate' | 'set_well_contents';
   details: Record<string, unknown>;
   labwareId?: string;
   t_offset?: string;                  // e.g. 'PT0M', 'PT4H'
@@ -73,3 +73,17 @@ export function _resetRegistryForTest(): void {
 export function makeEventId(verb: string): string {
   return `evt-${verb}-${Math.random().toString(36).slice(2, 10)}`;
 }
+const plateMapExpander: BiologyVerbExpander = {
+  verb: 'plate_map',
+  expand(input: VerbInput): PlateEventPrimitive[] {
+    const { params } = input;
+    const wells = (params.wells || params.data || params.plate_map || []) as Array<Record<string, unknown>>;
+    return [{
+      eventId: makeEventId('plate_map'),
+      event_type: 'load_plate',
+      details: { wells: Array.isArray(wells) ? wells : params },
+    }];
+  },
+};
+
+registerVerbExpander(plateMapExpander);
