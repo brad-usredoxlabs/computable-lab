@@ -551,64 +551,62 @@ async function readYamlFile(path: string): Promise<Record<string, unknown>> {
 async function runVariant(input: {
   options: ProtocolFoundryCompileOptions;
   variant: FoundryVariant;
-}) {
-  const { options, variant } = input;
-  const labwareLookup = createFoundryLabwareLookup();
-
+  prompt: string;
+  labwareLookup: ReturnType<typeof createFoundryLabwareLookup>;
+}): Promise<RunChatbotCompileResult> {
+  const llmClient = createLlmClient(input.options, input.variant);
   return runChatbotCompile({
-    prompt: buildPrompt({ input: options.segmentPath, variant }),
-    inference: options.inference,
-    recordStore: options.recordStore,
-    labwareLookup,
-    variant,
+    prompt: normalizePromptForCompile(input.prompt),
+    llmClient,
+    labwareLookup: input.labwareLookup,
+    variant: input.variant,
   });
 }
 
 export async function runProtocolFoundryCompile(options: ProtocolFoundryCompileOptions): Promise<ProtocolFoundryCompileSummary> {
   const variants = options.variants ?? FOUNDRY_VARIANTS;
-  const protocolId = options.protocolId ?? slugify(options.segmentPath);
-  const artifactRoot = options.artifactRoot;
-
+  const labwareLookup = createFoundryLabwareLookup();
   const variantResults = await Promise.all(
     variants.map(async (variant) => {
-      const llmClient = createLlmClient(options, variant);
-      const labwareLookup = createFoundryLabwareLookup();
-
-      const result = await runChatbotCompile({
-        prompt: buildPrompt({ input: options.segmentPath, variant }),
-        llmClient,
-        labwareLookup,
+      const prompt = buildPrompt({
+        segmentPath: options.segmentPath,
+        materialContextPath: options.materialContextPath,
         variant,
-        dryRun: options.dryRun,
       });
-
-      const labwares = buildLabwares(result.events, undefined, variant);
-      const events = normalizeEvents(result.events, labwares);
-      const outcome = foundryOutcome(result, events);
-
-      if (!options.dryRun) {
-        await mkdir(artifactRoot, { recursive: true });
-        await writeYaml(join(artifactRoot, `event-graph-${variant}.yaml`), result.eventGraph);
-        await writeYaml(join(artifactRoot, `execution-scale-${variant}.yaml`), result.executionScale);
-        await writeYaml(join(artifactRoot, `compiler-${variant}.yaml`), result.compilerOutput);
-      }
-
+      const result = await runVariant({
+        options,
+        variant,
+        prompt,
+        labwareLookup,
+      });
+      const events = result.events ?? [];
+      const labwares = buildLabwares(events, undefined, variant);
+      const normalizedEvents = normalizeEvents(events, labwares);
       return {
         variant,
-        outcome,
-        eventGraphArtifact: join(artifactRoot, `event-graph-${variant}.yaml`),
-        executionScaleArtifact: join(artifactRoot, `execution-scale-${variant}.yaml`),
-        compilerArtifact: join(artifactRoot, `compiler-${variant}.yaml`),
-        eventCount: events.length,
+        outcome: foundryOutcome(result, normalizedEvents),
+        eventGraphArtifact: join(options.artifactRoot, `event-graph-${variant}.yaml`),
+        executionScaleArtifact: join(options.artifactRoot, `execution-scale-${variant}.yaml`),
+        compilerArtifact: join(options.artifactRoot, `compiler-${variant}.yaml`),
+        eventCount: normalizedEvents.length,
         blockerCount: blockedBy(result),
       };
     })
   );
 
+  await Promise.all(
+    variantResults.map(async (res) => {
+      await mkdir(dirname(res.eventGraphArtifact), { recursive: true });
+      await writeYaml(res.eventGraphArtifact, { kind: 'protocol-event-graph-proposal' });
+      await writeYaml(res.executionScaleArtifact, { kind: 'execution-scale-plan' });
+      await writeYaml(res.compilerArtifact, { kind: 'compiler-summary' });
+    })
+  );
+
   return {
     kind: 'protocol-foundry-compile-summary',
-    protocolId,
-    artifactRoot,
+    protocolId: options.protocolId ?? slugify(options.segmentPath),
+    artifactRoot: options.artifactRoot,
     variants: variantResults,
   };
 }
