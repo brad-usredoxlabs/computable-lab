@@ -549,7 +549,7 @@ export async function runFoundryCoderPatch(input: {
     // Architect recommends senior coder for difficult task (reasoning model, slow)
     baseUrl = archBaseUrl;
     model = specRecommendedModel;
-    timeoutMs = 900_000; // 15 min for 27B reasoning model
+    timeoutMs = 1200_000; // 20 min for 27B reasoning model
   } else {
     // Default to speedy coder on :8888
     baseUrl = workerBaseUrl;
