@@ -1,0 +1,7 @@
+kind: protocol-foundry-patch-spec-index
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: manual_tubes
+patchSpecs:
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/add-missing-biology-verbs.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/add-pal3-labware-records.yaml

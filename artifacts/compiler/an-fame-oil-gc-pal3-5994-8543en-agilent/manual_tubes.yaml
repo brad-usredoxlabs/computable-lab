@@ -1,0 +1,125 @@
+kind: protocol-foundry-compiler-result
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: manual_tubes
+outcome: gap
+rawOutcome: gap
+eventCount: 10
+diagnostics:
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 6 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 12 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 1 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_no_actionable_candidates
+    message: Protocol Foundry supplied presegmented text, but this chunk had no
+      deterministic protocol-action evidence.
+    pass_id: extract_entities
+    details: {}
+  - severity: warning
+    code: ai_precompile_shape_mismatch
+    message: ai_precompile output shape mismatch
+    pass_id: ai_precompile
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'mint_materials' skipped: when condition
+      'outputs.ai_precompile.mintMaterials' evaluated to false"
+    pass_id: mint_materials
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'apply_directives' skipped: when condition
+      'outputs.ai_precompile.directives' evaluated to false"
+    pass_id: apply_directives
+  - severity: warning
+    code: unknown_biology_verb
+    message: No expander registered for verb 'weigh'; dropping candidate event.
+    pass_id: expand_biology_verbs
+    details:
+      verb: weigh
+  - severity: warning
+    code: unknown_biology_verb
+    message: No expander registered for verb 'place'; dropping candidate event.
+    pass_id: expand_biology_verbs
+    details:
+      verb: place
+  - severity: warning
+    code: unknown_biology_verb
+    message: No expander registered for verb 'cap'; dropping candidate event.
+    pass_id: expand_biology_verbs
+    details:
+      verb: cap
+  - severity: warning
+    code: unknown_biology_verb
+    message: No expander registered for verb 'place'; dropping candidate event.
+    pass_id: expand_biology_verbs
+    details:
+      verb: place
+  - severity: warning
+    code: unknown_biology_verb
+    message: No expander registered for verb 'wait'; dropping candidate event.
+    pass_id: expand_biology_verbs
+    details:
+      verb: wait
+  - severity: warning
+    code: unknown_biology_verb
+    message: No expander registered for verb 'wait'; dropping candidate event.
+    pass_id: expand_biology_verbs
+    details:
+      verb: wait
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_labware' skipped: when condition
+      'outputs.ai_precompile.candidateLabwares' evaluated to false"
+    pass_id: resolve_labware
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_patterns' skipped: when condition
+      'outputs.ai_precompile.patternEvents' evaluated to false"
+    pass_id: expand_patterns
+  - severity: info
+    code: execution_scale_plan_ready
+    message: Execution scaling plan is ready for robot_deck.
+    pass_id: derive_execution_scale_plan
+    details:
+      sourceLevel: manual_tubes
+      targetLevel: robot_deck
+      profileId: robot-assist-plus-96
+      blockers: []
+extractorRepairExhaustedCount: 0
+gaps:
+  - kind: clarification
+    message: The protocol describes two distinct derivatization workflows
+      (M5795-14000 base-catalyzed and M5795-14001 acid-base catalyzed). Please
+      confirm which specific workflow (M5795-14000 or M5795-14001) should be
+      compiled for this run context.
+  - kind: unresolved_ref
+    message: 10 mL vial (no matching labware in prior snapshot)
+    details:
+      hint: 10 mL vial
+      reason: no matching labware in prior snapshot
+  - kind: unresolved_ref
+    message: PAL3 VT15 sample rack (no matching labware in prior snapshot)
+    details:
+      hint: PAL3 VT15 sample rack
+      reason: no matching labware in prior snapshot
+foundryTestAssumptionsRef: /home/brad/git/computable-foundry/artifacts/assumptions/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+terminalArtifactsRef: /home/brad/git/computable-foundry/artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml

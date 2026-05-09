@@ -1,52 +1,52 @@
 kind: protocol-foundry-protocol-quality
-generated_at: 2026-05-09T04:54:12.060Z
+generated_at: 2026-05-09T07:31:57.120Z
 summary:
   protocolCount: 10
   variantTotal: 30
   accepted: 0
   complete: 0
-  gaps: 1
+  gaps: 26
   extractorFailures: 0
-  eventTotal: 3
+  eventTotal: 143
   blockerTotal: 0
   acceptedRate: 0
   completeRate: 0
 protocols:
   - protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
-    status: pending
+    status: gap
     variants:
       - variant: manual_tubes
-        status: pending
+        status: stalled
         accepted: false
-        browserStatus: missing
-        eventCount: 0
+        browserStatus: skipped
+        eventCount: 10
         blockerCount: 0
-        diagnosticCount: 0
+        diagnosticCount: 17
         extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.35
+        coverageEstimate: 0.5
       - variant: bench_plate_multichannel
-        status: pending
+        status: gap
         accepted: false
-        browserStatus: missing
-        eventCount: 0
+        browserStatus: skipped
+        eventCount: 9
         blockerCount: 0
-        diagnosticCount: 0
+        diagnosticCount: 12
         extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.25
+        coverageEstimate: 0.45
       - variant: robot_deck
-        status: pending
+        status: gap
         accepted: false
-        browserStatus: missing
+        browserStatus: skipped
         eventCount: 0
         blockerCount: 0
-        diagnosticCount: 0
+        diagnosticCount: 18
         extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0
+        coverageEstimate: 0
   - protocolId: bulletin-6816
-    status: gap
+    status: stalled
     variants:
       - variant: manual_tubes
         status: stalled
@@ -59,7 +59,172 @@ protocols:
         qualityScore: 0.7999999999999999
         coverageEstimate: 0.1
       - variant: bench_plate_multichannel
-        status: running
+        status: stalled
+        accepted: false
+        browserStatus: skipped
+        eventCount: 1
+        blockerCount: 0
+        diagnosticCount: 11
+        extractorRepairExhaustedCount: 0
+        qualityScore: 0.1
+        coverageEstimate: 0.1
+      - variant: robot_deck
+        status: stalled
+        accepted: false
+        browserStatus: skipped
+        eventCount: 1
+        blockerCount: 0
+        diagnosticCount: 10
+        extractorRepairExhaustedCount: 0
+        qualityScore: 0.1
+        coverageEstimate: 0.1
+  - protocolId: cayman-immuno-oncology
+    status: gap
+    variants:
+      - variant: manual_tubes
+        status: gap
+        accepted: false
+        browserStatus: skipped
+        eventCount: 2
+        blockerCount: 0
+        diagnosticCount: 11
+        extractorRepairExhaustedCount: 0
+        qualityScore: 0.1
+        coverageEstimate: 0.1
+      - variant: bench_plate_multichannel
+        status: gap
+        accepted: false
+        browserStatus: skipped
+        eventCount: 11
+        blockerCount: 0
+        diagnosticCount: 10
+        extractorRepairExhaustedCount: 0
+        qualityScore: 0.25
+        coverageEstimate: 0.55
+      - variant: robot_deck
+        status: gap
+        accepted: false
+        browserStatus: skipped
+        eventCount: 0
+        blockerCount: 0
+        diagnosticCount: 16
+        extractorRepairExhaustedCount: 0
+        qualityScore: 0.05
+        coverageEstimate: 0
+  - protocolId: cayman-natural-prodccuts
+    status: gap
+    variants:
+      - variant: manual_tubes
+        status: gap
+        accepted: false
+        browserStatus: skipped
+        eventCount: 0
+        blockerCount: 0
+        diagnosticCount: 39
+        extractorRepairExhaustedCount: 0
+        qualityScore: 0
+        coverageEstimate: 0
+      - variant: bench_plate_multichannel
+        status: gap
+        accepted: false
+        browserStatus: skipped
+        eventCount: 0
+        blockerCount: 0
+        diagnosticCount: 37
+        extractorRepairExhaustedCount: 0
+        qualityScore: 0
+        coverageEstimate: 0
+      - variant: robot_deck
+        status: gap
+        accepted: false
+        browserStatus: skipped
+        eventCount: 0
+        blockerCount: 0
+        diagnosticCount: 40
+        extractorRepairExhaustedCount: 0
+        qualityScore: 0
+        coverageEstimate: 0
+  - protocolId: cellrox-oxidative-stress-qr
+    status: gap
+    variants:
+      - variant: manual_tubes
+        status: gap
+        accepted: false
+        browserStatus: skipped
+        eventCount: 10
+        blockerCount: 0
+        diagnosticCount: 10
+        extractorRepairExhaustedCount: 0
+        qualityScore: 0.45
+        coverageEstimate: 0.5
+      - variant: bench_plate_multichannel
+        status: gap
+        accepted: false
+        browserStatus: skipped
+        eventCount: 19
+        blockerCount: 0
+        diagnosticCount: 8
+        extractorRepairExhaustedCount: 0
+        qualityScore: 0.35
+        coverageEstimate: 0.95
+      - variant: robot_deck
+        status: gap
+        accepted: false
+        browserStatus: skipped
+        eventCount: 10
+        blockerCount: 0
+        diagnosticCount: 11
+        extractorRepairExhaustedCount: 0
+        qualityScore: 0.45
+        coverageEstimate: 0.5
+  - protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+    status: gap
+    variants:
+      - variant: manual_tubes
+        status: gap
+        accepted: false
+        browserStatus: skipped
+        eventCount: 6
+        blockerCount: 0
+        diagnosticCount: 15
+        extractorRepairExhaustedCount: 0
+        qualityScore: 0.15
+        coverageEstimate: 0.3
+      - variant: bench_plate_multichannel
+        status: gap
+        accepted: false
+        browserStatus: skipped
+        eventCount: 6
+        blockerCount: 0
+        diagnosticCount: 14
+        extractorRepairExhaustedCount: 0
+        qualityScore: 0.15
+        coverageEstimate: 0.3
+      - variant: robot_deck
+        status: gap
+        accepted: false
+        browserStatus: skipped
+        eventCount: 6
+        blockerCount: 0
+        diagnosticCount: 14
+        extractorRepairExhaustedCount: 0
+        qualityScore: 0.15
+        coverageEstimate: 0.3
+  - protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+    status: gap
+    variants:
+      - variant: manual_tubes
+        status: gap
+        accepted: false
+        browserStatus: skipped
+        eventCount: 1
+        blockerCount: 0
+        diagnosticCount: 10
+        extractorRepairExhaustedCount: 0
+        qualityScore: 0.05
+        coverageEstimate: 0.1
+      - variant: bench_plate_multichannel
+        status: gap
         accepted: false
         browserStatus: skipped
         eventCount: 1
@@ -74,271 +239,106 @@ protocols:
         browserStatus: skipped
         eventCount: 1
         blockerCount: 0
-        diagnosticCount: 10
+        diagnosticCount: 11
         extractorRepairExhaustedCount: 0
         qualityScore: 0.1
         coverageEstimate: 0.1
-  - protocolId: cayman-immuno-oncology
-    status: pending
-    variants:
-      - variant: manual_tubes
-        status: pending
-        accepted: false
-        browserStatus: missing
-        eventCount: 0
-        blockerCount: 0
-        diagnosticCount: 0
-        extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
-      - variant: bench_plate_multichannel
-        status: pending
-        accepted: false
-        browserStatus: missing
-        eventCount: 0
-        blockerCount: 0
-        diagnosticCount: 0
-        extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
-      - variant: robot_deck
-        status: pending
-        accepted: false
-        browserStatus: missing
-        eventCount: 0
-        blockerCount: 0
-        diagnosticCount: 0
-        extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
-  - protocolId: cayman-natural-prodccuts
-    status: pending
-    variants:
-      - variant: manual_tubes
-        status: pending
-        accepted: false
-        browserStatus: missing
-        eventCount: 0
-        blockerCount: 0
-        diagnosticCount: 0
-        extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
-      - variant: bench_plate_multichannel
-        status: pending
-        accepted: false
-        browserStatus: missing
-        eventCount: 0
-        blockerCount: 0
-        diagnosticCount: 0
-        extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
-      - variant: robot_deck
-        status: pending
-        accepted: false
-        browserStatus: missing
-        eventCount: 0
-        blockerCount: 0
-        diagnosticCount: 0
-        extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
-  - protocolId: cellrox-oxidative-stress-qr
-    status: pending
-    variants:
-      - variant: manual_tubes
-        status: pending
-        accepted: false
-        browserStatus: missing
-        eventCount: 0
-        blockerCount: 0
-        diagnosticCount: 0
-        extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
-      - variant: bench_plate_multichannel
-        status: pending
-        accepted: false
-        browserStatus: missing
-        eventCount: 0
-        blockerCount: 0
-        diagnosticCount: 0
-        extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
-      - variant: robot_deck
-        status: pending
-        accepted: false
-        browserStatus: missing
-        eventCount: 0
-        blockerCount: 0
-        diagnosticCount: 0
-        extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
-  - protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
-    status: pending
-    variants:
-      - variant: manual_tubes
-        status: pending
-        accepted: false
-        browserStatus: missing
-        eventCount: 0
-        blockerCount: 0
-        diagnosticCount: 0
-        extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
-      - variant: bench_plate_multichannel
-        status: pending
-        accepted: false
-        browserStatus: missing
-        eventCount: 0
-        blockerCount: 0
-        diagnosticCount: 0
-        extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
-      - variant: robot_deck
-        status: pending
-        accepted: false
-        browserStatus: missing
-        eventCount: 0
-        blockerCount: 0
-        diagnosticCount: 0
-        extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
-  - protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
-    status: pending
-    variants:
-      - variant: manual_tubes
-        status: pending
-        accepted: false
-        browserStatus: missing
-        eventCount: 0
-        blockerCount: 0
-        diagnosticCount: 0
-        extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
-      - variant: bench_plate_multichannel
-        status: pending
-        accepted: false
-        browserStatus: missing
-        eventCount: 0
-        blockerCount: 0
-        diagnosticCount: 0
-        extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
-      - variant: robot_deck
-        status: pending
-        accepted: false
-        browserStatus: missing
-        eventCount: 0
-        blockerCount: 0
-        diagnosticCount: 0
-        extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
   - protocolId: man0011863-memper-plus-memb-protein-extract-ug
-    status: pending
+    status: gap
     variants:
       - variant: manual_tubes
-        status: pending
+        status: gap
         accepted: false
-        browserStatus: missing
-        eventCount: 0
+        browserStatus: skipped
+        eventCount: 5
         blockerCount: 0
-        diagnosticCount: 0
+        diagnosticCount: 10
         extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.15
+        coverageEstimate: 0.25
       - variant: bench_plate_multichannel
-        status: pending
+        status: gap
         accepted: false
-        browserStatus: missing
-        eventCount: 0
+        browserStatus: skipped
+        eventCount: 5
         blockerCount: 0
-        diagnosticCount: 0
+        diagnosticCount: 10
         extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.15
+        coverageEstimate: 0.25
       - variant: robot_deck
-        status: pending
+        status: gap
         accepted: false
-        browserStatus: missing
-        eventCount: 0
+        browserStatus: skipped
+        eventCount: 5
         blockerCount: 0
-        diagnosticCount: 0
+        diagnosticCount: 9
         extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.15
+        coverageEstimate: 0.25
   - protocolId: mp10422
-    status: pending
+    status: gap
     variants:
       - variant: manual_tubes
-        status: pending
+        status: gap
         accepted: false
-        browserStatus: missing
-        eventCount: 0
+        browserStatus: skipped
+        eventCount: 6
         blockerCount: 0
-        diagnosticCount: 0
+        diagnosticCount: 14
         extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.35
+        coverageEstimate: 0.3
       - variant: bench_plate_multichannel
-        status: pending
+        status: gap
         accepted: false
-        browserStatus: missing
-        eventCount: 0
+        browserStatus: skipped
+        eventCount: 15
         blockerCount: 0
-        diagnosticCount: 0
+        diagnosticCount: 12
         extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.35
+        coverageEstimate: 0.75
       - variant: robot_deck
-        status: pending
+        status: gap
         accepted: false
-        browserStatus: missing
-        eventCount: 0
+        browserStatus: skipped
+        eventCount: 6
         blockerCount: 0
-        diagnosticCount: 0
+        diagnosticCount: 13
         extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.35
+        coverageEstimate: 0.3
   - protocolId: mp10471
-    status: pending
+    status: gap
     variants:
       - variant: manual_tubes
-        status: pending
+        status: gap
         accepted: false
-        browserStatus: missing
-        eventCount: 0
+        browserStatus: skipped
+        eventCount: 2
         blockerCount: 0
-        diagnosticCount: 0
+        diagnosticCount: 13
         extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.15
+        coverageEstimate: 0.1
       - variant: bench_plate_multichannel
-        status: pending
+        status: gap
         accepted: false
-        browserStatus: missing
-        eventCount: 0
+        browserStatus: skipped
+        eventCount: 2
         blockerCount: 0
-        diagnosticCount: 0
+        diagnosticCount: 12
         extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.15
+        coverageEstimate: 0.1
       - variant: robot_deck
-        status: pending
+        status: gap
         accepted: false
-        browserStatus: missing
-        eventCount: 0
+        browserStatus: skipped
+        eventCount: 2
         blockerCount: 0
-        diagnosticCount: 0
+        diagnosticCount: 14
         extractorRepairExhaustedCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.1
+        coverageEstimate: 0.1

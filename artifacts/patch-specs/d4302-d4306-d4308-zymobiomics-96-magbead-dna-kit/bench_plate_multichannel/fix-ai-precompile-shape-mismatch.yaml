@@ -1,0 +1,46 @@
+kind: protocol-foundry-patch-spec
+id: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-ai-precompile-shape-mismatch
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: bench_plate_multichannel
+fixClass: precompiler_reference_shape
+title: Fix ai_precompile output shape mismatch causing downstream pass skips
+rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch' warning,
+  which directly caused 'mint_materials', 'resolve_labware', and
+  'expand_patterns' passes to be skipped. This is the root cause of the gap
+  outcome. The pre-compiler's AI precompile step is producing output that
+  doesn't match the expected schema, causing the compiler to bail out of
+  critical material and labware resolution steps. Without these passes, no
+  materials or labware can be resolved, leading to unresolved references and a
+  blocked event graph.
+ownedFiles:
+  - server/src/protocol-foundry/passes/ai_precompile.ts
+  - server/src/protocol-foundry/schema/precompile-output.ts
+acceptance:
+  - ai_precompile pass completes without shape_mismatch warning for this protocol
+  - mint_materials, resolve_labware, and expand_patterns passes are no longer
+    skipped due to false when conditions
+  - Precompile output schema validation passes for all test protocols
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 4
+  targetChangedLines: 120
+  maxChangedLines: 250
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.txt
+failureEvidence:
+  eventCount: 6
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/verdict.yaml

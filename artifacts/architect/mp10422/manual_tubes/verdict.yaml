@@ -1,0 +1,127 @@
+kind: protocol-foundry-architect-verdict
+protocolId: mp10422
+variant: manual_tubes
+generated_at: 2026-05-09T06:41:22.101Z
+accepted: false
+qualityScore: 0.35
+coverageEstimate: 0.3
+failureClasses:
+  - precompiler_reference_shape
+  - material_catalog_or_spec
+  - labware_alias_or_resolver
+missingVerbs: []
+missingLabware: []
+missingMaterials: []
+badEvents: []
+badScalingAssumptions: []
+recommendedFixes:
+  - id: fix-ai-precompile-shape-mismatch
+    class: precompiler_reference_shape
+    title: Fix ai_precompile shape mismatch causing skipped resolution passes
+    rationale: "The compiler diagnostics show 'ai_precompile_shape_mismatch'
+      warning, which caused critical passes to be skipped: 'mint_materials',
+      'apply_directives', 'resolve_labware', 'resolve_prior_labware_references',
+      and 'expand_patterns'. This means the pre-compiler's AI output did not
+      conform to the expected schema, so the compiler fell back to generic event
+      generation without resolving concrete materials, labware, or directives.
+      The resulting event graph uses placeholder materials ('stain_agent',
+      'fix_agent') instead of the specific CellROX reagents from the PDF."
+    ownedFiles:
+      - server/src/protocol-foundry/passes/ai_precompile.ts
+      - server/src/protocol-foundry/passes/resolve_labware.ts
+      - server/src/protocol-foundry/passes/mint_materials.ts
+    acceptance:
+      - ai_precompile_shape_mismatch warning no longer appears in diagnostics
+        for mp10422
+      - resolve_labware pass is no longer skipped (no 'pass_skipped_by_when' for
+        resolve_labware)
+      - mint_materials pass is no longer skipped
+      - Event graph events reference concrete material IDs (e.g.,
+        'CellROX_Deep_Red_C10422') instead of generic placeholders
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: &a1
+      compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/manual_tubes.yaml
+      eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10422/manual_tubes.yaml
+      executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10422/manual_tubes.yaml
+      browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10422/manual_tubes/report.yaml
+      coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/mp10422/manual_tubes/result.yaml
+      assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/mp10422/manual_tubes.yaml
+      segment: /home/brad/git/computable-foundry/artifacts/segments/mp10422.yaml
+      materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10422.yaml
+      text: /home/brad/git/computable-foundry/artifacts/text/mp10422.txt
+    failureEvidence: &a2
+      eventCount: 6
+      outcome: gap
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 60
+      maxChangedLines: 150
+      requireFocusedFixture: true
+  - id: fix-material-catalog-cellrox-reagents
+    class: material_catalog_or_spec
+    title: Add CellROX reagent material records to catalog
+    rationale: The material context shows empty materials, materialSpecs, and
+      vendorProducts arrays. The PDF clearly lists four catalog numbers (C10422,
+      C10443, C10444, C10448) with specific reagent names, concentrations (2.5
+      mM in DMSO), and storage conditions. Without these material records, the
+      compiler cannot resolve reagent references even if the shape mismatch is
+      fixed. The execution scale plan notes 'prompt mentions reagents but
+      compiled events did not identify concrete reagent roles'.
+    ownedFiles:
+      - server/src/materials/catalog/cellrox-reagents.yaml
+      - server/src/materials/specs/cellrox-deep-red-spec.yaml
+      - server/src/materials/specs/cellrox-orange-spec.yaml
+      - server/src/materials/specs/cellrox-green-spec.yaml
+    acceptance:
+      - Material catalog contains records for C10422, C10443, C10444, C10448
+      - Each material record includes concentration (2.5 mM), solvent (DMSO),
+        and storage conditions
+      - Compiler can resolve 'CellROX Deep Red Reagent' to material ID C10422
+      - Material context for mp10422 is no longer empty after compilation
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 3
+      maxChangedFiles: 5
+      targetChangedLines: 100
+      maxChangedLines: 200
+      requireFocusedFixture: true
+  - id: fix-labware-resolution-for-cellrox-protocol
+    class: labware_alias_or_resolver
+    title: Enable labware resolution for CellROX staining protocol
+    rationale: The 'resolve_labware' pass was skipped due to the shape mismatch, but
+      even if it runs, the event graph uses generic 'sample_plate' and
+      'reagent_reservoir' labware IDs without proper resolution to labware
+      definitions. The PDF describes a staining workflow that requires specific
+      labware (tubes or plates for cell staining, reservoirs for reagent
+      storage). The execution scale plan shows provisional labware bindings that
+      need to be grounded in resolved labware records.
+    ownedFiles:
+      - server/src/protocol-foundry/passes/resolve_labware.ts
+      - server/src/labware/aliases/cellrox-staining-labware.yaml
+    acceptance:
+      - resolve_labware pass produces resolved labware references in the event
+        graph
+      - Labware IDs in events map to concrete labware definitions (e.g., 96-well
+        plate, reservoir)
+      - Execution scale plan shows resolved (not provisional) labware bindings
+      - No 'pass_skipped_by_when' warnings for labware resolution passes
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 50
+      maxChangedLines: 120
+      requireFocusedFixture: true
+sourceArtifacts: *a1
+architectNotes: "LLM architect analysis: 3 fix recommendations."

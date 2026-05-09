@@ -1,0 +1,84 @@
+kind: protocol-foundry-compiler-result
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: bench_plate_multichannel
+outcome: gap
+rawOutcome: gap
+eventCount: 5
+diagnostics:
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 10 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 43 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 12 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_no_actionable_candidates
+    message: Protocol Foundry supplied presegmented text, but this chunk had no
+      deterministic protocol-action evidence.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: fuzzy_registry_match
+    message: Resolved "96-well plate" to registry key "96-well-plate"
+    pass_id: deterministic_precompile
+    details:
+      phrase: 96-well plate
+      kind: labware
+      recordId: lbw-def-generic-96-well-plate
+      matchedKey: 96-well-plate
+      matchKind: normalized
+      distance: 0
+  - severity: warning
+    code: ai_precompile_shape_mismatch
+    message: ai_precompile output shape mismatch
+    pass_id: ai_precompile
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'mint_materials' skipped: when condition
+      'outputs.ai_precompile.mintMaterials' evaluated to false"
+    pass_id: mint_materials
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_labware' skipped: when condition
+      'outputs.ai_precompile.candidateLabwares' evaluated to false"
+    pass_id: resolve_labware
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_patterns' skipped: when condition
+      'outputs.ai_precompile.patternEvents' evaluated to false"
+    pass_id: expand_patterns
+  - severity: info
+    code: execution_scale_plan_ready
+    message: Execution scaling plan is ready for robot_deck.
+    pass_id: derive_execution_scale_plan
+    details:
+      sourceLevel: manual_tubes
+      targetLevel: robot_deck
+      profileId: robot-assist-plus-96
+      blockers: []
+extractorRepairExhaustedCount: 0
+gaps:
+  - kind: unresolved_ref
+    message: generic_96_well_plate (no matching labware in prior snapshot)
+    details:
+      hint: generic_96_well_plate
+      reason: no matching labware in prior snapshot
+  - kind: unresolved_ref
+    message: generic_12_well_reservoir (no matching labware in prior snapshot)
+    details:
+      hint: generic_12_well_reservoir
+      reason: no matching labware in prior snapshot
+foundryTestAssumptionsRef: /home/brad/git/computable-foundry/artifacts/assumptions/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+terminalArtifactsRef: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml

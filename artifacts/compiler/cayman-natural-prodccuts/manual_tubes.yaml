@@ -1,0 +1,246 @@
+kind: protocol-foundry-compiler-result
+protocolId: cayman-natural-prodccuts
+variant: manual_tubes
+outcome: gap
+rawOutcome: gap
+eventCount: 0
+diagnostics:
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 7 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 1 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 3 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 3 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 3 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 3 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 3 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 2 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 3 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 1 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_no_actionable_candidates
+    message: Protocol Foundry supplied presegmented text, but this chunk had no
+      deterministic protocol-action evidence.
+    pass_id: extract_entities
+    details: {}
+  - severity: warning
+    code: ai_precompile_shape_mismatch
+    message: ai_precompile output shape mismatch
+    pass_id: ai_precompile
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'mint_materials' skipped: when condition
+      'outputs.ai_precompile.mintMaterials' evaluated to false"
+    pass_id: mint_materials
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'apply_directives' skipped: when condition
+      'outputs.ai_precompile.directives' evaluated to false"
+    pass_id: apply_directives
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_biology_verbs' skipped: when condition
+      'outputs.ai_precompile.candidateEvents' evaluated to false"
+    pass_id: expand_biology_verbs
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_labware' skipped: when condition
+      'outputs.ai_precompile.candidateLabwares' evaluated to false"
+    pass_id: resolve_labware
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_prior_labware_references' skipped: when condition
+      'outputs.ai_precompile.priorLabwareRefs' evaluated to false"
+    pass_id: resolve_prior_labware_references
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_patterns' skipped: when condition
+      'outputs.ai_precompile.patternEvents' evaluated to false"
+    pass_id: expand_patterns
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'emit_downstream_queue' skipped: when condition
+      'outputs.ai_precompile.downstreamCompileJobs' evaluated to false"
+    pass_id: emit_downstream_queue
+  - severity: info
+    code: execution_scale_plan_ready
+    message: Execution scaling plan is ready for robot_deck.
+    pass_id: derive_execution_scale_plan
+    details:
+      sourceLevel: manual_tubes
+      targetLevel: robot_deck
+      profileId: robot-assist-plus-96
+      blockers: []
+extractorRepairExhaustedCount: 0
+gaps:
+  - kind: clarification
+    message: The provided protocol text is a library inventory list (Natural
+      Products Screening Library) and does not contain specific experimental
+      steps, liquid handling instructions, or reagent preparation details. It
+      lists 96-well plate contents by item number and well position but lacks
+      actions such as 'reconstitute', 'dilute', 'transfer', or 'incubate'.
+      Please provide the specific experimental protocol steps to compile.
+foundryTestAssumptionsRef: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-natural-prodccuts/manual_tubes.yaml
+terminalArtifactsRef: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-natural-prodccuts/manual_tubes.yaml

@@ -1,0 +1,114 @@
+kind: protocol-foundry-architect-verdict
+protocolId: cayman-immuno-oncology
+variant: robot_deck
+generated_at: 2026-05-09T06:32:41.954Z
+accepted: false
+qualityScore: 0.05
+coverageEstimate: 0
+failureClasses:
+  - precompiler_reference_shape
+  - compiler_event_coverage
+  - labware_alias_or_resolver
+missingVerbs: []
+missingLabware: []
+missingMaterials: []
+badEvents: []
+badScalingAssumptions: []
+recommendedFixes:
+  - id: fix-precompiler-shape-mismatch
+    class: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch to enable downstream passes
+    rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch', which
+      causes downstream passes (mint_materials, resolve_labware,
+      expand_patterns) to be skipped because their 'when' conditions evaluate to
+      false. The pre-compiler is not producing the expected output schema,
+      blocking the entire compilation pipeline. This is the root cause of
+      eventCount=0.
+    ownedFiles:
+      - server/src/protocol-foundry/precompiler/ai-precompile.ts
+      - server/src/protocol-foundry/precompiler/schema.ts
+    acceptance:
+      - ai_precompile_shape_mismatch warning no longer appears in diagnostics
+      - outputs.ai_precompile.mintMaterials evaluates to true when materials are
+        present
+      - outputs.ai_precompile.candidateLabwares evaluates to true when labware
+        hints exist
+      - Downstream passes (mint_materials, resolve_labware) are no longer skipped
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: &a1
+      compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-immuno-oncology/robot_deck.yaml
+      eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-immuno-oncology/robot_deck.yaml
+      executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-immuno-oncology/robot_deck.yaml
+      browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-immuno-oncology/robot_deck/report.yaml
+      coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-immuno-oncology/robot_deck/result.yaml
+      assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-immuno-oncology/robot_deck.yaml
+      segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-immuno-oncology.yaml
+      materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-immuno-oncology.yaml
+      text: /home/brad/git/computable-foundry/artifacts/text/cayman-immuno-oncology.txt
+    failureEvidence: &a2
+      eventCount: 0
+      outcome: gap
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 60
+      maxChangedLines: 150
+      requireFocusedFixture: true
+  - id: fix-unknown-biology-verbs
+    class: compiler_event_coverage
+    title: "Register expanders for biology verbs: bind, prefer, use, report"
+    rationale: The compiler drops all candidate events because verbs 'bind',
+      'prefer', 'use', and 'report' have no registered expanders. These are
+      common verbs in screening library protocols where compounds are assigned
+      to wells. Without expanders, no events are generated, resulting in
+      eventCount=0.
+    ownedFiles:
+      - server/src/protocol-foundry/compiler/expand-biology-verbs.ts
+      - server/src/protocol-foundry/compiler/verb-expanders/index.ts
+    acceptance:
+      - No 'unknown_biology_verb' warnings for bind, prefer, use, report
+      - Candidate events with these verbs are expanded into protocol events
+      - eventCount > 0 after compilation
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 80
+      maxChangedLines: 200
+      requireFocusedFixture: true
+  - id: fix-labware-resolver-gaps
+    class: labware_alias_or_resolver
+    title: Resolve generic labware references in compiler labware registry
+    rationale: Three unresolved labware references (generic_96_well_plate,
+      generic_12_well_reservoir, generic_96_tip_rack) block the event graph. The
+      execution scale plan references 'lbw-def-generic-96-well-plate' and
+      'lbw-def-generic-reservoir-1-v1', suggesting these definitions exist but
+      the compiler's labware resolver cannot find them. The resolver needs to
+      map the pre-compiler hints to the existing labware definitions.
+    ownedFiles:
+      - server/src/protocol-foundry/compiler/resolve-labware.ts
+      - server/src/labware/registry/generic-labware.ts
+    acceptance:
+      - No unresolved_ref gaps for generic_96_well_plate,
+        generic_12_well_reservoir, generic_96_tip_rack
+      - Labware references are resolved to existing labware definitions
+      - Event graph labwares array contains resolved labware entries
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 50
+      maxChangedLines: 120
+      requireFocusedFixture: true
+sourceArtifacts: *a1
+architectNotes: "LLM architect analysis: 3 fix recommendations."

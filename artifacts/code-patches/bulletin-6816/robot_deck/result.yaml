@@ -1,10 +1,7 @@
 kind: protocol-foundry-coder-patch-result
 protocolId: bulletin-6816
 variant: robot_deck
-generated_at: 2026-05-09T03:12:59.184Z
-status: applied
-selectedSpecId: bulletin-6816/robot_deck/fix-foundry-runtime-wiring-gap
-touchedFiles:
-  - server/src/foundry/ProtocolFoundryCompileRunner.ts
-commit: 77ac39f99d1feb9d60324051228a26b31a12c338
-message: Patch applied and committed.
+generated_at: 2026-05-09T06:01:42.659Z
+status: blocked
+message: Patch touches no meaningful compiler/schema/record files.
+touchedFiles: []

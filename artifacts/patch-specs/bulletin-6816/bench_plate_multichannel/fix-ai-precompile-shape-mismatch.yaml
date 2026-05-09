@@ -4,33 +4,31 @@ protocolId: bulletin-6816
 variant: bench_plate_multichannel
 fixClass: precompiler_reference_shape
 title: Fix ai_precompile output shape mismatch causing downstream pass skips
-rationale: The compiler diagnostics show 'ai_precompile output shape mismatch'
-  (ai_precompile_shape_mismatch). This caused all downstream passes
-  (mint_materials, apply_directives, resolve_labware, expand_patterns) to be
-  skipped because their 'when' conditions evaluated to false. The pre-compiler
-  extracted 8+18 candidates but the ai_precompile pass failed to produce a valid
-  output shape, resulting in only 1 generic 'mix' event instead of the full PCR
-  protocol (pool preparation, plate setup, thermal cycling). The root cause is
-  that the ai_precompile LLM output did not conform to the expected schema,
-  causing the compiler to discard all extracted candidates.
+rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch' warning,
+  which caused all downstream passes (mint_materials, apply_directives,
+  resolve_labware, expand_patterns) to be skipped because their 'when'
+  conditions evaluated to false. This resulted in only 1 event being generated
+  instead of the full protocol. The ai_precompile pass is producing output that
+  doesn't match the expected schema, causing the compiler to bail out of event
+  generation.
 ownedFiles:
-  - server/src/foundry/passes/aiPrecompile.ts
-  - server/src/foundry/passes/aiPrecompileSchema.ts
+  - server/src/foundry/passes/ai_precompile.ts
+  - server/src/foundry/schema/precompileOutput.ts
 acceptance:
-  - ai_precompile pass produces valid output matching the expected schema for
-    bulletin-6816
+  - ai_precompile pass produces output matching the expected schema without
+    shape mismatch warnings
   - Downstream passes (mint_materials, resolve_labware, expand_patterns) are no
-    longer skipped due to shape mismatch
-  - eventCount increases from 1 to at least 5 events (pool prep, dispense, seal,
-    thermal cycle, analyze)
+    longer skipped due to false 'when' conditions
+  - Compiler generates >= 5 events for bulletin-6816 protocol (pool prep,
+    dispense, seal, thermocycle, analyze)
 implementationBudget:
   targetChangedFiles: 2
-  maxChangedFiles: 3
+  maxChangedFiles: 4
   targetChangedLines: 120
-  maxChangedLines: 200
+  maxChangedLines: 250
   requireFocusedFixture: true
 coderModelProfile:
-  model: Qwen/Qwen3-Coder-27B-FP8
+  model: Qwen/Qwen3.6-27B-FP8
   guidance: Narrow ownership, concrete evidence, one behavior change.
 sourceArtifacts:
   compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/bench_plate_multichannel.yaml
@@ -45,5 +43,5 @@ sourceArtifacts:
 failureEvidence:
   eventCount: 1
   outcome: gap
-architectNotes: "LLM architect analysis: 3 fix recommendations."
+architectNotes: "LLM architect analysis: 2 fix recommendations."
 sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/bulletin-6816/bench_plate_multichannel/verdict.yaml

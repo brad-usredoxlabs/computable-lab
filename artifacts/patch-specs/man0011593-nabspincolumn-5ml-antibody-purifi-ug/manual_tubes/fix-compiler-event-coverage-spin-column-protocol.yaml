@@ -1,0 +1,44 @@
+kind: protocol-foundry-patch-spec
+id: man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/fix-compiler-event-coverage-spin-column-protocol
+protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+variant: manual_tubes
+fixClass: compiler_event_coverage
+title: Add spin column purification protocol verb lowering
+rationale: "The event graph contains only 1 centrifuge event, but the PDF
+  describes a multi-step antibody purification protocol including: column
+  equilibration, sample binding, washing, elution, and neutralization. The
+  compiler lacks verb lowering rules for spin column affinity purification steps
+  (equilibrate, bind, wash, elute, neutralize). These need to be added to the
+  compiler's verb registry to generate the complete event sequence."
+ownedFiles:
+  - server/src/protocol-foundry/verbs/spin-column.ts
+  - server/src/protocol-foundry/passes/expand-patterns.ts
+acceptance:
+  - Compiler generates events for equilibration, binding, washing, elution, and
+    neutralization steps
+  - eventCount >= 8 for this protocol variant
+  - Each event has correct labware references and volume parameters from the PDF
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 4
+  targetChangedLines: 150
+  maxChangedLines: 300
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011593-nabspincolumn-5ml-antibody-purifi-ug.txt
+failureEvidence:
+  eventCount: 1
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/verdict.yaml

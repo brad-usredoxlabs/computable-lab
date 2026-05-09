@@ -1,7 +1,7 @@
 kind: protocol-foundry-architect-verdict
 protocolId: bulletin-6816
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T04:54:11.841Z
+generated_at: 2026-05-09T05:09:40.100Z
 accepted: false
 qualityScore: 0.1
 coverageEstimate: 0.1
@@ -17,34 +17,25 @@ recommendedFixes:
   - id: fix-ai-precompile-shape-mismatch
     class: precompiler_reference_shape
     title: Fix ai_precompile output shape mismatch causing downstream pass skips
-    rationale: The compiler diagnostics show 'ai_precompile output shape mismatch'
-      (ai_precompile_shape_mismatch). This caused all downstream passes
-      (mint_materials, apply_directives, resolve_labware, expand_patterns) to be
-      skipped because their 'when' conditions evaluated to false. The
-      pre-compiler extracted 8+18 candidates but the ai_precompile pass failed
-      to produce a valid output shape, resulting in only 1 generic 'mix' event
-      instead of the full PCR protocol (pool preparation, plate setup, thermal
-      cycling). The root cause is that the ai_precompile LLM output did not
-      conform to the expected schema, causing the compiler to discard all
-      extracted candidates.
+    rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch' warning,
+      which caused all downstream passes (mint_materials, apply_directives,
+      resolve_labware, expand_patterns) to be skipped because their 'when'
+      conditions evaluated to false. This resulted in only 1 event being
+      generated instead of the full protocol. The ai_precompile pass is
+      producing output that doesn't match the expected schema, causing the
+      compiler to bail out of event generation.
     ownedFiles:
-      - server/src/foundry/passes/aiPrecompile.ts
-      - server/src/foundry/passes/aiPrecompileSchema.ts
+      - server/src/foundry/passes/ai_precompile.ts
+      - server/src/foundry/schema/precompileOutput.ts
     acceptance:
-      - ai_precompile pass produces valid output matching the expected schema
-        for bulletin-6816
+      - ai_precompile pass produces output matching the expected schema without
+        shape mismatch warnings
       - Downstream passes (mint_materials, resolve_labware, expand_patterns) are
-        no longer skipped due to shape mismatch
-      - eventCount increases from 1 to at least 5 events (pool prep, dispense,
-        seal, thermal cycle, analyze)
-    implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
-      targetChangedLines: 120
-      maxChangedLines: 200
-      requireFocusedFixture: true
+        no longer skipped due to false 'when' conditions
+      - Compiler generates >= 5 events for bulletin-6816 protocol (pool prep,
+        dispense, seal, thermocycle, analyze)
     coderModelProfile:
-      model: Qwen/Qwen3-Coder-27B-FP8
+      model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: &a1
       compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/bench_plate_multichannel.yaml
@@ -59,64 +50,44 @@ recommendedFixes:
     failureEvidence: &a2
       eventCount: 1
       outcome: gap
-  - id: fix-pcr-thermal-cycle-event-lowering
-    class: compiler_event_coverage
-    title: Add thermal cycling event lowering for qPCR protocols
-    rationale: "The PDF text contains a clear thermal cycling protocol: '95°C for 2
-      min followed by 40 cycles of 95°C for 10 sec and 60°C for 45 sec'. The
-      compiler produced only a single 'mix' event with empty details. The
-      compiler lacks a verb lowering rule for thermal cycling/temperature
-      ramping events, which is a core operation in qPCR protocols. Without this,
-      the event graph cannot represent the actual protocol steps."
-    ownedFiles:
-      - server/src/foundry/verbs/thermalCycle.ts
-      - server/src/foundry/passes/expandPatterns.ts
-    acceptance:
-      - Thermal cycling steps from PDF text are lowered to thermal_cycle events
-        with correct temperature, duration, and cycle count
-      - Event graph contains at least one thermal_cycle event for bulletin-6816
-      - "Thermal cycle events include details: initialDenature (95°C, 2min),
-        amplificationCycles (40x: 95°C/10s, 60°C/45s)"
     implementationBudget:
       targetChangedFiles: 2
-      maxChangedFiles: 3
-      targetChangedLines: 80
-      maxChangedLines: 150
+      maxChangedFiles: 4
+      targetChangedLines: 120
+      maxChangedLines: 250
       requireFocusedFixture: true
+  - id: fix-pcr-protocol-event-coverage
+    class: compiler_event_coverage
+    title: Add PCR-specific verb lowering for multiplex qPCR protocol steps
+    rationale: "The PDF describes a clear multiplex RT-qPCR protocol with steps: 1)
+      Prepare multiplex assay pool, 2) Dispense reagents to plate, 3) Seal
+      plate, 4) Thermocycle (95°C 2min, 40 cycles of 95°C 10s/60°C 45s), 5)
+      Analyze with CFX Maestro. The compiler only produced 1 'mix' event,
+      missing the critical pipetting, sealing, and thermocycling events. The
+      compiler needs verb lowering rules for PCR-specific operations like
+      'prepare_pool', 'dispense_reagents', 'seal_plate', and 'thermocycle'."
+    ownedFiles:
+      - server/src/foundry/verbs/pcrVerbs.ts
+      - server/src/foundry/passes/expand_patterns.ts
+      - server/src/foundry/schema/eventTypes.ts
+    acceptance:
+      - Compiler recognizes and lowers 'prepare_pool' verb from assay pool
+        preparation steps
+      - Compiler generates dispense events for reagent transfer to 96-well plate
+      - Compiler generates seal event for Microseal 'B' adhesive seal application
+      - Compiler generates thermocycle event with correct cycling parameters
+        (95°C 2min, 40x[95°C 10s, 60°C 45s])
+      - Event graph contains >= 5 events covering the full PCR workflow
     coderModelProfile:
-      model: Qwen/Qwen3-Coder-27B-FP8
+      model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
-  - id: fix-reagent-pool-dispense-events
-    class: compiler_event_coverage
-    title: Add reagent pool preparation and dispense events for multiplex PCR
-    rationale: "The PDF describes preparing a multiplex assay pool (Table 1:
-      PrimePCR Assay-FAM 0.5µl per 20µl reaction) and dispensing it into a
-      96-well plate. The compiler produced no dispense events for reagent
-      preparation. The event graph should include: (1) pool preparation events
-      combining multiple reagents, (2) dispense events transferring reagents to
-      plate wells. Without these, the protocol is incomplete."
-    ownedFiles:
-      - server/src/foundry/verbs/dispense.ts
-      - server/src/foundry/passes/expandPatterns.ts
-    acceptance:
-      - Event graph contains dispense events for reagent pool components
-        (PrimePCR Assay-FAM, iQ Multiplex Powermix)
-      - Dispense events specify correct volumes (0.5µl FAM per 20µl reaction)
-        and target wells
-      - Pool preparation is represented as a mix or combine event before
-        dispensing
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
-      targetChangedLines: 60
-      maxChangedLines: 120
+      targetChangedFiles: 3
+      maxChangedFiles: 5
+      targetChangedLines: 150
+      maxChangedLines: 300
       requireFocusedFixture: true
-    coderModelProfile:
-      model: Qwen/Qwen3-Coder-35B-A3B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
 sourceArtifacts: *a1
-architectNotes: "LLM architect analysis: 3 fix recommendations."
+architectNotes: "LLM architect analysis: 2 fix recommendations."

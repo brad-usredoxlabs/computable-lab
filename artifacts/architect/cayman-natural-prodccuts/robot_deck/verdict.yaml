@@ -1,0 +1,91 @@
+kind: protocol-foundry-architect-verdict
+protocolId: cayman-natural-prodccuts
+variant: robot_deck
+generated_at: 2026-05-09T06:34:16.575Z
+accepted: false
+qualityScore: 0
+coverageEstimate: 0
+failureClasses:
+  - precompiler_reference_shape
+  - compiler_event_coverage
+missingVerbs: []
+missingLabware: []
+missingMaterials: []
+badEvents: []
+badScalingAssumptions: []
+recommendedFixes:
+  - id: fix-precompiler-candidate-shape
+    class: precompiler_reference_shape
+    title: Pre-compiler must emit structured candidate objects instead of raw text
+    rationale: "The pre-compiler segments contain only raw PDF text in the
+      'protocol_text' field. The compiler diagnostics show
+      'foundry_presegmented_candidates' messages but the compiler produced 0
+      events. This indicates the compiler expects structured candidate objects
+      (with verbs, entities, volumes) but receives only raw text. The
+      pre-compiler needs to parse the well plate layout table and emit
+      structured candidates like {verb: 'dispense', entity: 'Ursolic Acid',
+      well: 'A2', source: 'plate_1'}."
+    ownedFiles:
+      - server/src/precompiler/extract-candidates.ts
+      - server/src/precompiler/plate-layout-parser.ts
+    acceptance:
+      - Pre-compiler output includes 'candidates' array with structured objects
+        containing verb, entity, well, and source fields
+      - Each well in the PDF plate layout (A2-C12) generates a candidate with
+        correct compound name and item number
+      - Compiler receives structured candidates and produces at least 20 events
+        for this protocol
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: &a1
+      compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-natural-prodccuts/robot_deck.yaml
+      eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-natural-prodccuts/robot_deck.yaml
+      executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-natural-prodccuts/robot_deck.yaml
+      browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-natural-prodccuts/robot_deck/report.yaml
+      coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-natural-prodccuts/robot_deck/result.yaml
+      assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-natural-prodccuts/robot_deck.yaml
+      segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-natural-prodccuts.yaml
+      materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-natural-prodccuts.yaml
+      text: /home/brad/git/computable-foundry/artifacts/text/cayman-natural-prodccuts.txt
+    failureEvidence: &a2
+      eventCount: 0
+      outcome: gap
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 4
+      targetChangedLines: 120
+      maxChangedLines: 250
+      requireFocusedFixture: true
+  - id: fix-compiler-plate-dispense-verb
+    class: compiler_event_coverage
+    title: Add compiler lowering for plate-based compound dispensing events
+    rationale: The PDF describes a 96-well plate with specific compounds in each
+      well. The compiler needs to lower 'dispense compound to well' candidates
+      into events that reference the plate labware and individual wells.
+      Currently the event graph has 0 events despite having a sample_plate
+      labware defined. The compiler lacks the verb lowering logic for
+      plate-based compound dispensing operations.
+    ownedFiles:
+      - server/src/compiler/verb-lowering.ts
+      - server/src/compiler/plate-event-generator.ts
+    acceptance:
+      - Compiler produces events for each compound well (A2-C12) with correct
+        compound names
+      - Events reference the sample_plate labware and specific well positions
+      - Event graph contains at least 20 events for this protocol
+      - Each event includes the compound name, well position, and source plate
+        reference
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 100
+      maxChangedLines: 200
+      requireFocusedFixture: true
+sourceArtifacts: *a1
+architectNotes: "LLM architect analysis: 2 fix recommendations."

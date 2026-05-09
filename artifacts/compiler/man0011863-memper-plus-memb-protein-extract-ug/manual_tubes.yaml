@@ -1,0 +1,77 @@
+kind: protocol-foundry-compiler-result
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: manual_tubes
+outcome: gap
+rawOutcome: gap
+eventCount: 5
+diagnostics:
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 9 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 43 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 12 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_no_actionable_candidates
+    message: Protocol Foundry supplied presegmented text, but this chunk had no
+      deterministic protocol-action evidence.
+    pass_id: extract_entities
+    details: {}
+  - severity: warning
+    code: ai_precompile_shape_mismatch
+    message: ai_precompile output shape mismatch
+    pass_id: ai_precompile
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'mint_materials' skipped: when condition
+      'outputs.ai_precompile.mintMaterials' evaluated to false"
+    pass_id: mint_materials
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'apply_directives' skipped: when condition
+      'outputs.ai_precompile.directives' evaluated to false"
+    pass_id: apply_directives
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_labware' skipped: when condition
+      'outputs.ai_precompile.candidateLabwares' evaluated to false"
+    pass_id: resolve_labware
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_patterns' skipped: when condition
+      'outputs.ai_precompile.patternEvents' evaluated to false"
+    pass_id: expand_patterns
+  - severity: info
+    code: execution_scale_plan_ready
+    message: Execution scaling plan is ready for robot_deck.
+    pass_id: derive_execution_scale_plan
+    details:
+      sourceLevel: manual_tubes
+      targetLevel: robot_deck
+      profileId: robot-assist-plus-96
+      blockers: []
+extractorRepairExhaustedCount: 0
+gaps:
+  - kind: clarification
+    message: The protocol specifies different starting materials (adherent cells,
+      suspension cells, soft tissue, hard tissue). Which specific sample type
+      protocol should be compiled?
+  - kind: unresolved_ref
+    message: 2mL centrifuge tube (no matching labware in prior snapshot)
+    details:
+      hint: 2mL centrifuge tube
+      reason: no matching labware in prior snapshot
+foundryTestAssumptionsRef: /home/brad/git/computable-foundry/artifacts/assumptions/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+terminalArtifactsRef: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml

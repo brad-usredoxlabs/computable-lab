@@ -1,0 +1,46 @@
+kind: protocol-foundry-patch-spec
+id: an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/add-pal3-labware-records
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: manual_tubes
+fixClass: labware_alias_or_resolver
+title: Add labware records for 10 mL vial and PAL3 VT15 sample rack
+rationale: The compiler gaps report unresolved references for '10 mL vial' and
+  'PAL3 VT15 sample rack', which are explicitly mentioned in the PDF text. These
+  are critical labware items for the protocol. The labware resolver cannot find
+  matching records in the prior snapshot, causing unresolved_ref gaps. Adding
+  these labware definitions with proper aliases will allow the compiler to
+  resolve these references.
+ownedFiles:
+  - server/data/labware/lbw-def-10ml-vial.yaml
+  - server/data/labware/lbw-def-pal3-vt15-rack.yaml
+  - server/src/compiler/resolvers/labware_resolver.ts
+acceptance:
+  - No unresolved_ref gaps for '10 mL vial' or 'PAL3 VT15 sample rack'
+  - Labware resolver successfully matches '10 mL vial' to lbw-def-10ml-vial
+  - Labware resolver successfully matches 'PAL3 VT15 sample rack' to
+    lbw-def-pal3-vt15-rack
+  - Event graph includes proper labware references for sample vials and rack
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 40
+  maxChangedLines: 100
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-35B-A3B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/an-fame-oil-gc-pal3-5994-8543en-agilent.txt
+failureEvidence:
+  eventCount: 10
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/verdict.yaml

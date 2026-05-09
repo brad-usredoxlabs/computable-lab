@@ -1,0 +1,73 @@
+kind: protocol-foundry-compiler-result
+protocolId: cellrox-oxidative-stress-qr
+variant: robot_deck
+outcome: complete
+rawOutcome: complete
+eventCount: 10
+diagnostics:
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 12 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: warning
+    code: ai_precompile_shape_mismatch
+    message: ai_precompile output shape mismatch
+    pass_id: ai_precompile
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'mint_materials' skipped: when condition
+      'outputs.ai_precompile.mintMaterials' evaluated to false"
+    pass_id: mint_materials
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'apply_directives' skipped: when condition
+      'outputs.ai_precompile.directives' evaluated to false"
+    pass_id: apply_directives
+  - severity: warning
+    code: unknown_biology_verb
+    message: No expander registered for verb 'treat'; dropping candidate event.
+    pass_id: expand_biology_verbs
+    details:
+      verb: treat
+  - severity: warning
+    code: unknown_biology_verb
+    message: No expander registered for verb 'remove'; dropping candidate event.
+    pass_id: expand_biology_verbs
+    details:
+      verb: remove
+  - severity: warning
+    code: unknown_biology_verb
+    message: No expander registered for verb 'analyze'; dropping candidate event.
+    pass_id: expand_biology_verbs
+    details:
+      verb: analyze
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_labware' skipped: when condition
+      'outputs.ai_precompile.candidateLabwares' evaluated to false"
+    pass_id: resolve_labware
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_prior_labware_references' skipped: when condition
+      'outputs.ai_precompile.priorLabwareRefs' evaluated to false"
+    pass_id: resolve_prior_labware_references
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_patterns' skipped: when condition
+      'outputs.ai_precompile.patternEvents' evaluated to false"
+    pass_id: expand_patterns
+  - severity: info
+    code: execution_scale_plan_ready
+    message: Execution scaling plan is ready for robot_deck.
+    pass_id: derive_execution_scale_plan
+    details:
+      sourceLevel: manual_tubes
+      targetLevel: robot_deck
+      profileId: robot-assist-plus-96
+      blockers: []
+extractorRepairExhaustedCount: 0
+gaps: []
+foundryTestAssumptionsRef: /home/brad/git/computable-foundry/artifacts/assumptions/cellrox-oxidative-stress-qr/robot_deck.yaml
+terminalArtifactsRef: /home/brad/git/computable-foundry/artifacts/event-graphs/cellrox-oxidative-stress-qr/robot_deck.yaml

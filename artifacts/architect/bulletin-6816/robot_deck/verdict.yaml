@@ -1,7 +1,7 @@
 kind: protocol-foundry-architect-verdict
 protocolId: bulletin-6816
 variant: robot_deck
-generated_at: 2026-05-09T04:54:08.374Z
+generated_at: 2026-05-09T05:10:01.029Z
 accepted: false
 qualityScore: 0.1
 coverageEstimate: 0.1
@@ -22,24 +22,20 @@ recommendedFixes:
       caused all downstream passes (mint_materials, apply_directives,
       resolve_labware, expand_patterns) to be skipped because their 'when'
       conditions evaluated to false. This is the root cause of the single-event
-      output. The pre-compiler is not producing the expected output schema that
-      the compiler passes depend on.
+      output. The pre-compiler's AI stage is producing output that doesn't match
+      the expected schema, so the compiler defensively skips processing. The fix
+      must ensure the ai_precompile pass produces a valid shape with
+      candidateLabwares, directives, and patternEvents even if some are empty
+      arrays rather than missing fields.
     ownedFiles:
       - server/src/foundry/passes/ai_precompile.ts
-      - server/src/foundry/passes/ai_precompile.schema.ts
+      - server/src/foundry/schema/aiPrecompileOutput.ts
     acceptance:
-      - ai_precompile pass produces output matching the expected schema with
-        candidateLabwares, mintMaterials, directives, and patternEvents fields
+      - ai_precompile pass no longer emits 'ai_precompile_shape_mismatch' warning
       - Downstream passes (mint_materials, resolve_labware, expand_patterns) are
-        no longer skipped due to false when conditions
-      - Compiler eventCount increases from 1 to at least 5 events for
-        bulletin-6816
-    implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
-      targetChangedLines: 120
-      maxChangedLines: 250
-      requireFocusedFixture: true
+        no longer skipped due to false 'when' conditions
+      - ai_precompile output includes at least empty arrays for
+        candidateLabwares, directives, and patternEvents
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -56,67 +52,75 @@ recommendedFixes:
     failureEvidence: &a2
       eventCount: 1
       outcome: gap
-  - id: fix-pcr-protocol-verb-lowering
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 60
+      maxChangedLines: 150
+      requireFocusedFixture: true
+  - id: fix-pcr-protocol-event-coverage
     class: compiler_event_coverage
     title: Add PCR plate preparation and thermal cycling event lowering
     rationale: "The PDF describes a clear multiplex RT-qPCR protocol with steps: 1.1
-      prepare assay pool, 1.4 seal and vortex, 1.5 thermal cycling (95°C 2min,
-      40 cycles of 95°C 10sec/60°C 45sec), 1.6 analyze data. The compiler only
-      produced a single 'mix' event. The compiler lacks verb lowering for
-      PCR-specific operations like 'prepare_pool', 'seal_plate',
-      'thermal_cycle', and 'analyze_qpcr'."
+      prepare assay pool, 1.4 seal/vortex/centrifuge, 1.5 thermal cycling (95°C
+      2min, 40 cycles of 95°C 10s/60°C 45s), 1.6 analyze data. The compiler only
+      produced one 'mix' event. The compiler lacks verb lowering for
+      PCR-specific operations: 'prepare_pool' (mixing reagents per Table 1),
+      'seal_plate', 'thermal_cycle', and 'analyze_qpcr'. These must be added to
+      the compiler's verb registry so that extracted candidates from the PDF
+      text can be lowered to concrete events."
     ownedFiles:
-      - server/src/foundry/verbs/pcr_verbs.ts
-      - server/src/foundry/lowering/event_lowering.ts
+      - server/src/foundry/verbs/pcrVerbs.ts
+      - server/src/foundry/passes/lower_events.ts
+      - server/src/foundry/schema/eventTypes.ts
     acceptance:
-      - Compiler recognizes and lowers 'prepare_pool' events from assay
-        preparation steps
-      - Compiler recognizes and lowers 'thermal_cycle' events with
-        temperature/time parameters from cycling protocols
-      - Compiler recognizes and lowers 'seal_plate' events from sealing
-        instructions
-      - Event graph contains at least 5 events covering the qPCR workflow (pool
-        prep, dispense, seal, cycle, analyze)
-    implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 4
-      targetChangedLines: 150
-      maxChangedLines: 300
-      requireFocusedFixture: true
+      - "Compiler produces at least 5 events for bulletin-6816: prepare_pool,
+        dispense_reagents, seal_plate, thermal_cycle, analyze_data"
+      - "thermal_cycle event includes cycling parameters: 95°C 2min initial, 40
+        cycles of 95°C 10s + 60°C 45s"
+      - prepare_pool event references PrimePCR Assay-FAM and iQ Multiplex
+        Powermix with correct volumes from Table 1
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 3
+      maxChangedFiles: 5
+      targetChangedLines: 120
+      maxChangedLines: 220
+      requireFocusedFixture: true
   - id: fix-labware-resolution-for-pcr-plates
     class: labware_alias_or_resolver
-    title: Resolve Bio-Rad Hard-Shell PCR plate labware references
-    rationale: "The PDF explicitly references 'Hard-Shell Thin-Wall 96- or 384-Well
-      Skirted PCR Plates, catalog #HSP9655 or HSP3805' and 'Microseal B Adhesive
-      Seals, catalog #MSB1001'. The compiler output shows an unresolved_ref for
-      'generic_96_well_plate' with 'no matching labware in prior snapshot'. The
-      labware resolver needs to map Bio-Rad catalog numbers to existing labware
-      definitions or create appropriate generic PCR plate definitions."
+    title: Resolve generic_96_well_plate to Hard-Shell Thin-Wall PCR plate definition
+    rationale: "The compiler gap reports 'generic_96_well_plate (no matching labware
+      in prior snapshot)'. The PDF explicitly specifies 'Hard-Shell Thin-Wall
+      96- or 384-Well Skirted PCR Plates, catalog #HSP9655 or HSP3805'. The
+      labware resolver needs to map the generic hint to the specific Bio-Rad PCR
+      plate definition. Additionally, the Microseal 'B' Adhesive Seal (catalog
+      #MSB1001) should be resolved as a consumable. The resolver should check
+      the labware catalog for Bio-Rad-specific PCR plate definitions and create
+      an alias from 'generic_96_well_plate' to the correct definition."
     ownedFiles:
       - server/src/foundry/labware/resolver.ts
-      - server/src/foundry/labware/aliases/biorad_aliases.ts
+      - server/src/foundry/labware/catalog/bioRadPcrPlates.ts
     acceptance:
-      - "Labware resolver maps catalog #HSP9655 to a 96-well PCR plate
-        definition"
-      - "Labware resolver maps catalog #MSB1001 to a plate seal definition"
-      - No unresolved_ref gaps for PCR plate labware in compiler output
-      - Event graph labwares include properly typed PCR plate with correct well
-        count
-    implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
-      targetChangedLines: 80
-      maxChangedLines: 150
-      requireFocusedFixture: true
+      - generic_96_well_plate resolves to
+        lbw-def-biorad-hardshell-96-well-pcr-plate or equivalent
+      - No unresolved_ref gaps for labware in the compiler output
+      - Microseal 'B' Adhesive Seal is recognized as a consumable in the
+        resource manifest
     coderModelProfile:
       model: Qwen/Qwen3.6-35B-A3B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 40
+      maxChangedLines: 100
+      requireFocusedFixture: true
 sourceArtifacts: *a1
 architectNotes: "LLM architect analysis: 3 fix recommendations."

@@ -1,0 +1,50 @@
+kind: protocol-foundry-patch-spec
+id: man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-ai-precompile-shape-mismatch
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: manual_tubes
+fixClass: precompiler_reference_shape
+title: Fix ai_precompile output shape mismatch causing downstream pass skips
+rationale: "The compiler diagnostics show 'ai_precompile_shape_mismatch'
+  warning, which caused critical downstream passes to be skipped:
+  'mint_materials', 'apply_directives', 'resolve_labware', and
+  'expand_patterns'. This is the root cause of the gap outcome. The pre-compiler
+  extracted 9+43+12 candidates but the ai_precompile pass failed to produce the
+  expected output shape (mintMaterials, directives, candidateLabwares,
+  patternEvents), so the compiler couldn't lower these candidates into proper
+  events. The resulting 5 events are generic stubs (wash-add/wash-remove) that
+  don't reflect the actual Mem-PER Plus protocol steps (permeabilization,
+  solubilization, centrifugation)."
+ownedFiles:
+  - server/src/protocol-foundry/passes/ai_precompile.ts
+  - server/src/protocol-foundry/passes/ai_precompile.schema.ts
+acceptance:
+  - ai_precompile pass produces output matching expected schema with
+    mintMaterials, directives, candidateLabwares, and patternEvents fields
+  - Downstream passes (mint_materials, apply_directives, resolve_labware,
+    expand_patterns) are no longer skipped due to shape mismatch
+  - Compiler outcome changes from 'gap' to 'complete' or produces meaningful
+    error if protocol ambiguity remains
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 4
+  targetChangedLines: 120
+  maxChangedLines: 250
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011863-memper-plus-memb-protein-extract-ug.txt
+failureEvidence:
+  eventCount: 5
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/verdict.yaml

@@ -1,0 +1,138 @@
+kind: protocol-foundry-architect-verdict
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: robot_deck
+generated_at: 2026-05-09T06:37:30.830Z
+accepted: false
+qualityScore: 0.15
+coverageEstimate: 0.3
+failureClasses:
+  - precompiler_reference_shape
+  - labware_alias_or_resolver
+  - material_catalog_or_spec
+missingVerbs: []
+missingLabware: []
+missingMaterials: []
+badEvents: []
+badScalingAssumptions: []
+recommendedFixes:
+  - id: fix-ai-precompile-shape-mismatch
+    class: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch causing downstream pass skips
+    rationale: "The compiler diagnostics show 'ai_precompile_shape_mismatch', which
+      caused critical downstream passes to be skipped: 'mint_materials' (because
+      mintMaterials was false), 'resolve_labware' (because candidateLabwares was
+      false), and 'expand_patterns' (because patternEvents was false). This is
+      the root cause of the empty materials list, unresolved labware refs, and
+      the generic/incorrect event graph. The pre-compiler's AI output shape does
+      not match the compiler's expected schema, so the compiler falls back to
+      defaults or skips entirely."
+    ownedFiles:
+      - server/src/protocol-foundry/passes/ai_precompile.ts
+      - server/src/protocol-foundry/passes/mint_materials.ts
+      - server/src/protocol-foundry/passes/resolve_labware.ts
+      - server/src/protocol-foundry/schema/precompile-output.ts
+    acceptance:
+      - ai_precompile pass outputs a shape that includes non-empty
+        mintMaterials, candidateLabwares, and patternEvents arrays when the PDF
+        contains protocol steps.
+      - No 'ai_precompile_shape_mismatch' warning appears in diagnostics for
+        this protocol.
+      - Downstream passes (mint_materials, resolve_labware, expand_patterns) are
+        no longer skipped by when conditions for this protocol.
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: &a1
+      compiler: /home/brad/git/computable-foundry/artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+      eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+      executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+      browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/report.yaml
+      coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/result.yaml
+      assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+      segment: /home/brad/git/computable-foundry/artifacts/segments/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+      materialContext: /home/brad/git/computable-foundry/artifacts/material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+      text: /home/brad/git/computable-foundry/artifacts/text/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.txt
+    failureEvidence: &a2
+      eventCount: 6
+      outcome: gap
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 4
+      targetChangedLines: 120
+      maxChangedLines: 250
+      requireFocusedFixture: true
+  - id: fix-labware-resolver-zymo-bashing-bead
+    class: labware_alias_or_resolver
+    title: Add labware resolver entries for ZymoBIOMICS BashingBead lysis modules
+    rationale: "The compiler gaps show multiple unresolved labware refs: 'ZR
+      BashingBead™ Lysis Tubes', 'BashingBead™ Lysis Module',
+      'generic_96_well_plate', 'generic_24x1_5ml_tube_rack',
+      'generic_6x15ml_tube_rack', 'generic_4x50ml_tube_rack'. These are standard
+      labware types that should be resolvable. The resolver needs aliases
+      mapping vendor-specific names (e.g., 'ZR BashingBead Lysis Tubes') to
+      canonical labware definitions, and generic labware definitions need to
+      exist in the labware registry."
+    ownedFiles:
+      - server/src/protocol-foundry/labware/resolver.ts
+      - server/src/protocol-foundry/labware/aliases.ts
+      - server/src/protocol-foundry/labware/definitions/generic-96-well-plate.yaml
+      - server/src/protocol-foundry/labware/definitions/zymo-bashing-bead-tubes.yaml
+    acceptance:
+      - Labware resolver successfully resolves 'ZR BashingBead™ Lysis Tubes' to
+        a canonical labware definition.
+      - Labware resolver successfully resolves 'BashingBead™ Lysis Module' to a
+        canonical labware definition.
+      - Generic labware types (96-well plate, tube racks) are resolved without
+        'no matching labware in prior snapshot' errors.
+      - No unresolved_ref gaps for labware in the compiler output for this
+        protocol.
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 4
+      targetChangedLines: 80
+      maxChangedLines: 180
+      requireFocusedFixture: true
+  - id: fix-material-catalog-zymo-reagents
+    class: material_catalog_or_spec
+    title: Add material catalog entries for ZymoBIOMICS kit reagents
+    rationale: "The material context is empty (materials: [], materialSpecs: [],
+      vendorProducts: []). The PDF clearly lists reagents: ZymoBIOMICS Lysis
+      Solution, DNA/RNA Shield, MagBinding Buffer, MagWash 1, MagWash 2,
+      DNase/RNase Free Water, MagBinding Beads. The compiler event graph
+      incorrectly references 'trypsin-EDTA-0.25%' which is NOT in this protocol
+      (this is a cell culture reagent, not a DNA extraction reagent). The
+      material catalog needs entries for the ZymoBIOMICS reagents so the
+      compiler can resolve material refs and generate correct add_material
+      events."
+    ownedFiles:
+      - server/src/protocol-foundry/materials/catalog/zymobiomics-d4302.yaml
+      - server/src/protocol-foundry/materials/resolver.ts
+      - server/src/protocol-foundry/passes/mint_materials.ts
+    acceptance:
+      - "Material catalog contains entries for: ZymoBIOMICS Lysis Solution,
+        DNA/RNA Shield, MagBinding Buffer, MagWash 1, MagWash 2, MagBinding
+        Beads."
+      - Compiler no longer generates events with incorrect material refs like
+        'trypsin-EDTA-0.25%' for this protocol.
+      - mint_materials pass successfully creates material instances from the
+        catalog for this protocol.
+      - Event graph contains add_material events referencing correct ZymoBIOMICS
+        reagents.
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 100
+      maxChangedLines: 200
+      requireFocusedFixture: true
+sourceArtifacts: *a1
+architectNotes: "LLM architect analysis: 3 fix recommendations."

@@ -1,0 +1,46 @@
+kind: protocol-foundry-patch-spec
+id: an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-unknown-biology-verbs
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: robot_deck
+fixClass: compiler_event_coverage
+title: "Register expanders for unknown biology verbs: bind, prefer, use, report,
+  continue"
+rationale: The compiler drops candidate events because it has no registered
+  expanders for verbs 'bind', 'prefer', 'use', 'report', and 'continue'. These
+  verbs appear in the pre-compiler's extracted candidates but cannot be lowered
+  to protocol events. For this GC-FID protocol, 'use' likely maps to
+  pipette/transfer operations, 'bind' may map to labware mounting, and
+  'continue' may be a no-op or sequencing directive. Adding these verb expanders
+  will allow the compiler to generate events from the extracted candidates.
+ownedFiles:
+  - server/src/protocol-foundry/compiler/verb-expanders.ts
+  - server/src/protocol-foundry/compiler/verb-registry.ts
+acceptance:
+  - No 'unknown_biology_verb' warnings for 'bind', 'prefer', 'use', 'report',
+    'continue'
+  - Candidate events with these verbs are lowered to concrete protocol events
+  - eventCount >= 3 after fix is applied
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 80
+  maxChangedLines: 180
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-35B-A3B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/an-fame-oil-gc-pal3-5994-8543en-agilent.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/verdict.yaml

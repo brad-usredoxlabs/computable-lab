@@ -1,0 +1,7 @@
+kind: protocol-foundry-patch-spec-index
+protocolId: cayman-immuno-oncology
+variant: robot_deck
+patchSpecs:
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/robot_deck/fix-precompiler-shape-mismatch.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/robot_deck/fix-unknown-biology-verbs.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/robot_deck/fix-labware-resolver-gaps.yaml

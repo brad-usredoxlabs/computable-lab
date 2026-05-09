@@ -1,0 +1,13 @@
+kind: protocol-browser-review-report
+protocolId: mp10422
+variant: robot_deck
+status: skipped
+route: ""
+played_events: false
+commands:
+  - foundry:loop --skip-browser
+screenshots: []
+console_errors: []
+visual_failures:
+  - browser review skipped by --skip-browser
+labware_checks: []

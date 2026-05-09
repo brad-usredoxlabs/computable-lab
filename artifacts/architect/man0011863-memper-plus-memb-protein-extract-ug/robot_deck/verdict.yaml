@@ -1,0 +1,125 @@
+kind: protocol-foundry-architect-verdict
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: robot_deck
+generated_at: 2026-05-09T06:40:57.073Z
+accepted: false
+qualityScore: 0.15
+coverageEstimate: 0.25
+failureClasses:
+  - precompiler_reference_shape
+  - labware_alias_or_resolver
+  - material_catalog_or_spec
+missingVerbs: []
+missingLabware: []
+missingMaterials: []
+badEvents: []
+badScalingAssumptions: []
+recommendedFixes:
+  - id: fix-ai-precompile-shape-mismatch
+    class: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch causing downstream pass skips
+    rationale: "The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
+      pre-compiler's AI output does not conform to the expected schema. This
+      caused critical downstream passes to be skipped: 'mint_materials' (no
+      materials created), 'resolve_labware' (no labware resolved), and
+      'expand_patterns' (no pattern events expanded). The result is an event
+      graph with only 5 generic wash events and unresolved references to labware
+      like 'generic_96_well_plate'. The pre-compiler must output a valid shape
+      with candidateLabwares, mintMaterials, and patternEvents arrays so the
+      compiler can process them."
+    ownedFiles:
+      - server/src/protocol-foundry/precompiler/ai-precompile.ts
+      - server/src/protocol-foundry/precompiler/schema.ts
+    acceptance:
+      - ai_precompile pass outputs a valid object with candidateLabwares,
+        mintMaterials, and patternEvents arrays
+      - No 'ai_precompile_shape_mismatch' warning in compiler diagnostics
+      - Downstream passes mint_materials, resolve_labware, and expand_patterns
+        are no longer skipped by when conditions
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: &a1
+      compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+      eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+      executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+      browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/report.yaml
+      coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/result.yaml
+      assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+      segment: /home/brad/git/computable-foundry/artifacts/segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
+      materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
+      text: /home/brad/git/computable-foundry/artifacts/text/man0011863-memper-plus-memb-protein-extract-ug.txt
+    failureEvidence: &a2
+      eventCount: 5
+      outcome: gap
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 60
+      maxChangedLines: 150
+      requireFocusedFixture: true
+  - id: fix-labware-resolver-generic-aliases
+    class: labware_alias_or_resolver
+    title: Add generic labware aliases to resolver for 96-well plate, tube rack, and
+      reservoir
+    rationale: "The compiler gaps show three unresolved labware references:
+      'generic_96_well_plate', 'generic_24x1_5ml_tube_rack', and
+      'generic_12_well_reservoir'. These are standard generic labware types that
+      should resolve to existing labware definitions
+      (lbw-def-generic-96-well-plate, lbw-def-generic-reservoir-1-v1, etc.). The
+      labware resolver needs alias mappings for these common generic names so
+      the compiler can bind them to actual labware definitions."
+    ownedFiles:
+      - server/src/protocol-foundry/compiler/labware-resolver.ts
+      - server/src/protocol-foundry/labware/aliases.ts
+    acceptance:
+      - Labware resolver successfully resolves 'generic_96_well_plate' to
+        'lbw-def-generic-96-well-plate'
+      - Labware resolver successfully resolves 'generic_12_well_reservoir' to an
+        appropriate reservoir definition
+      - No unresolved_ref gaps for generic labware aliases in compiler output
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 40
+      maxChangedLines: 100
+      requireFocusedFixture: true
+  - id: fix-material-minting-from-kit-contents
+    class: material_catalog_or_spec
+    title: Enable material minting for kit contents (Cell Wash, Solubilization,
+      Permeabilization buffers)
+    rationale: "The PDF clearly lists three kit reagents: Cell Wash Solution
+      (225mL), Solubilization Buffer (25mL), and Permeabilization Buffer (50mL).
+      The material context shows empty materials array, and the mint_materials
+      pass was skipped due to the shape mismatch. Once the pre-compiler shape is
+      fixed, the compiler must mint these three materials with correct storage
+      conditions and volumes. The event graph currently references 'wash-buffer'
+      but this should be properly minted as 'Cell Wash Solution' with correct
+      properties."
+    ownedFiles:
+      - server/src/protocol-foundry/compiler/mint-materials.ts
+      - server/src/protocol-foundry/precompiler/entity-extractor.ts
+    acceptance:
+      - "Compiler mints three materials: Cell Wash Solution, Solubilization
+        Buffer, Permeabilization Buffer"
+      - Each material has correct volume and storage temperature from PDF
+      - Event graph references minted material IDs instead of generic
+        'wash-buffer'
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 50
+      maxChangedLines: 120
+      requireFocusedFixture: true
+sourceArtifacts: *a1
+architectNotes: "LLM architect analysis: 3 fix recommendations."

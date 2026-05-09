@@ -1,0 +1,46 @@
+kind: protocol-foundry-patch-spec
+id: mp10422/bench_plate_multichannel/fix-labware-resolver-generic-aliases
+protocolId: mp10422
+variant: bench_plate_multichannel
+fixClass: labware_alias_or_resolver
+title: Wire generic labware aliases to existing labware definitions
+rationale: "The compiler output shows 3 unresolved refs: generic_96_well_plate,
+  generic_12_well_reservoir, and generic_96_tip_rack. These are common generic
+  labware types that should map to existing labware definitions in the catalog.
+  The resolve_labware pass was skipped due to the shape mismatch, but even if it
+  ran, the alias mapping may be missing. Need to ensure these generic aliases
+  resolve to actual labware records."
+ownedFiles:
+  - server/src/protocol-foundry/passes/resolve_labware.ts
+  - server/src/labware/aliases.ts
+acceptance:
+  - generic_96_well_plate resolves to an existing 96-well plate labware
+    definition
+  - generic_12_well_reservoir resolves to an existing reservoir labware
+    definition
+  - generic_96_tip_rack resolves to an existing tip rack labware definition
+  - No unresolved_ref gaps for these labware types in compiler output
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 40
+  maxChangedLines: 100
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-35B-A3B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/bench_plate_multichannel.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10422/bench_plate_multichannel.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10422/bench_plate_multichannel.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10422/bench_plate_multichannel/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/mp10422/bench_plate_multichannel/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/mp10422/bench_plate_multichannel.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/mp10422.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10422.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/mp10422.txt
+failureEvidence:
+  eventCount: 15
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10422/bench_plate_multichannel/verdict.yaml

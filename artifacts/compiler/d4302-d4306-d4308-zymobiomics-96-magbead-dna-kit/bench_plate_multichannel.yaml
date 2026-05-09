@@ -1,0 +1,120 @@
+kind: protocol-foundry-compiler-result
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: bench_plate_multichannel
+outcome: gap
+rawOutcome: gap
+eventCount: 6
+diagnostics:
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 9 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 5 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 33 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 15 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 28 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 17 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 6 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 1 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_no_actionable_candidates
+    message: Protocol Foundry supplied presegmented text, but this chunk had no
+      deterministic protocol-action evidence.
+    pass_id: extract_entities
+    details: {}
+  - severity: warning
+    code: ai_precompile_shape_mismatch
+    message: ai_precompile output shape mismatch
+    pass_id: ai_precompile
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'mint_materials' skipped: when condition
+      'outputs.ai_precompile.mintMaterials' evaluated to false"
+    pass_id: mint_materials
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_labware' skipped: when condition
+      'outputs.ai_precompile.candidateLabwares' evaluated to false"
+    pass_id: resolve_labware
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_patterns' skipped: when condition
+      'outputs.ai_precompile.patternEvents' evaluated to false"
+    pass_id: expand_patterns
+  - severity: info
+    code: execution_scale_plan_ready
+    message: Execution scaling plan is ready for robot_deck.
+    pass_id: derive_execution_scale_plan
+    details:
+      sourceLevel: manual_tubes
+      targetLevel: robot_deck
+      profileId: robot-assist-plus-96
+      blockers: []
+extractorRepairExhaustedCount: 0
+gaps:
+  - kind: unresolved_ref
+    message: resuspend (registry hit ontology)
+    details:
+      kind: material
+      label: resuspend
+      reason: registry hit ontology
+  - kind: unresolved_ref
+    message: resuspend (kind material not handled by resolve_references)
+    details:
+      kind: material
+      label: resuspend
+      reason: kind material not handled by resolve_references
+  - kind: unresolved_ref
+    message: generic_96_well_plate (no matching labware in prior snapshot)
+    details:
+      hint: generic_96_well_plate
+      reason: no matching labware in prior snapshot
+  - kind: unresolved_ref
+    message: generic_12_well_reservoir (no matching labware in prior snapshot)
+    details:
+      hint: generic_12_well_reservoir
+      reason: no matching labware in prior snapshot
+  - kind: unresolved_ref
+    message: generic_24x1_5ml_tube_rack (no matching labware in prior snapshot)
+    details:
+      hint: generic_24x1_5ml_tube_rack
+      reason: no matching labware in prior snapshot
+foundryTestAssumptionsRef: /home/brad/git/computable-foundry/artifacts/assumptions/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+terminalArtifactsRef: /home/brad/git/computable-foundry/artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml

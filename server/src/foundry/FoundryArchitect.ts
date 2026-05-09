@@ -208,14 +208,29 @@ async function llmArchitectVerdict(
     `- Recommend SPECIFIC fixes with exact files, symbols, and acceptance criteria`,
     ``,
     `FIX LANE CATEGORIES:`,
-    `- compiler_event_coverage — the compiler doesn't know a biology verb (add verb lowering)`,
+    `- compiler_event_coverage — the compiler doesn't know a biology verb (add verb lowering in ChatbotCompilePasses.ts or verb expanders)`,
     `- foundry_runtime_wiring — Foundry harness passes stub/empty deps where the real app uses live data`,
-    `- precompiler_reference_shape — malformed pre-compiler output (shape mismatch, bad refs)`,
+    `- precompiler_reference_shape — malformed ai_precompile output in ChatbotCompilePasses.ts (createAiPrecompilePass)`,
     `- labware_alias_or_resolver — existing labware record exists but compiler can't find it`,
     `- material_catalog_or_spec — unresolved materials/reagents`,
     `- extractor_prompt_contract — pre-compiler extracts zero candidates from text that has content`,
     `- execution_scaling — robot deck/platform binding failures`,
     `- browser_or_labware_rendering — UI doesn't render the event graph correctly`,
+    ``,
+    `REAL FILE LOCATIONS (use these for your recommendations - they ACTUALLY EXIST):`,
+    `- ChatbotCompilePasses.ts: server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts (main compiler, ai_precompile pass, AiPrecompileOutput type)`,
+    `- DeterministicPrecompilePass.ts: server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts (deterministic precompile)`,
+    `- ProtocolFoundryCompileRunner.ts: server/src/foundry/ProtocolFoundryCompileRunner.ts (Foundry runtime, createLlmClient, presegmentedExtractionService)`,
+    `- VerbActionMapRegistry.ts: server/src/registry/VerbActionMapRegistry.ts (verb/action map registry)`,
+    `- LabwareDefinitionRegistry.ts: server/src/registry/LabwareDefinitionRegistry.ts (labware definitions)`,
+    `- CompoundClassRegistry.ts: server/src/registry/CompoundClassRegistry.ts (compound class registry)`,
+    `- ExtractionRunnerService.ts: server/src/extract/ExtractionRunnerService.ts (extraction service)`,
+    `- BiologyVerbExpander.ts: server/src/compiler/biology/BiologyVerbExpander.ts (biology verb expander)`,
+    `- VerbMatchers: server/src/compiler/precompile/VerbMatcher.js (verb matching)`,
+    `- ParameterGrammar: server/src/compiler/precompile/ParameterGrammar.js (parameter parsing)`,
+    `- BiologyVerbExpander.test.ts: server/src/compiler/biology/BiologyVerbExpander.test.ts (tests for verb expanders)`,
+    ``,
+    `CRITICAL: ALWAYS verify files exist before recommending them. The compiler lives in server/src/compiler/, NOT server/src/foundry/passes/.`,
     ``,
     `OUTPUT FORMAT (return ONLY this JSON object, no markdown, no prose):`,
     `{
@@ -313,6 +328,106 @@ async function llmArchitectVerdict(
     const jsonStr = content.replace(/^```(?:json)?\s*|^\s*|\s*```$/g, '').trim();
     const parsed = JSON.parse(jsonStr);
     const verdict = normalizeLlmVerdict(options, paths, parsed, eventCount);
+
+    // Validate that recommended fix files actually exist on disk
+    // If files don't exist, the LLM hallucinated paths and we need a retry
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const repoRoot = options.repoRoot || process.cwd();
+    const badFiles = verdict.recommendedFixes.flatMap((fix, fixIdx) =>
+      fix.ownedFiles.filter(f => {
+        const fullPath = path.join(repoRoot, f);
+        const exists = fs.existsSync(fullPath);
+        if (!exists) {
+          console.log(`[foundry-architect] WARNING: Fix #${fixIdx+1} references non-existent file: ${f}`);
+        }
+        return !exists;
+      })
+    );
+
+    // If ANY fix has non-existent files, retry with codebase_search to find real paths
+    let retryCount = 0;
+    const maxRetries = 3;
+    if (badFiles.length > 0 && (verdict.recommendedFixes.length <= 5 || retryCount < maxRetries)) {
+      retryCount = retryCount + 1;
+      console.log(`[foundry-architect] File hallucination detected (${badFiles.length} bad files), retry ${retryCount}/${maxRetries} with corrected paths`);
+
+      // Build retry prompt instructing the LLM to search for real file paths
+      const badFileRefs = badFiles.map(f => `  - ${f} (DOES NOT EXIST)`).join('\n');
+      const retrySystemPrompt = systemPrompt + [
+        '',
+        'CRITICAL FIX: The following files you recommended DO NOT EXIST. Search the codebase to find REAL file paths.',
+        badFileRefs,
+        '',
+        'Use foundry_codebase_search to find the actual files. Your output MUST reference files that actually exist on disk.',
+        'The compiler lives under server/src/compiler/pipeline/passes/. The Foundry runtime lives under server/src/foundry/.',
+        'Always verify file paths exist before recommending them.',
+      ].join('\n');
+
+      const retryUserContent = userContent + [
+        '',
+        '=== FILE HALLUCINATION FIX ===',
+        'The following files in your recommended fixes DO NOT EXIST. Find real file paths.',
+        '',
+        badFileRefs,
+        '',
+        'Search the codebase for the real files that implement:',
+        '  - ai_precompile pass (look in server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts)',
+        '  - compiler pipeline (look in server/src/compiler/pipeline/passes/)',
+        '  - Foundry runtime wiring (look in server/src/foundry/ProtocolFoundryCompileRunner.ts)',
+        '',
+        'Return updated fix recommendations with CORRECTED file paths that actually exist.',
+      ].join('\n');
+
+      const retryArgs: Record<string, unknown> = {
+        client,
+        maxToolRounds: 5,
+        request: {
+          model,
+          temperature: 0.1,
+          max_tokens: 4096,
+          messages: [
+            { role: 'system', content: retrySystemPrompt },
+            { role: 'user', content: retryUserContent },
+          ],
+        },
+      };
+      if (options.repoRoot) retryArgs.repoRoot = options.repoRoot;
+      if (options.appBase) {
+        const browserCtx: Record<string, unknown> = {
+          artifactRoot: options.artifactRoot,
+          protocolId: options.protocolId,
+          variant: options.variant,
+          appBase: options.appBase,
+        };
+        if (options.workbenchRoot) browserCtx.workbenchRoot = options.workbenchRoot;
+        if (options.apiBase) browserCtx.apiBase = options.apiBase;
+        retryArgs.browserContext = browserCtx;
+      }
+      const retryResponse = await completeWithCodebaseTools(retryArgs as Parameters<typeof completeWithCodebaseTools>[0]);
+
+      const retryContent = retryResponse.choices[0]?.message?.content;
+      if (retryContent && typeof retryContent === 'string' && retryContent.trim()) {
+        const retryJsonStr = retryContent.replace(/^```(?:json)?\s*|^\s*|\s*```$/g, '').trim();
+        const retryParsed = JSON.parse(retryJsonStr);
+        const retryVerdict = normalizeLlmVerdict(options, paths, retryParsed, eventCount);
+        const retryBadFiles = retryVerdict.recommendedFixes.flatMap(fix =>
+          fix.ownedFiles.filter(f => {
+            const fullPath = path.join(repoRoot, f);
+            return !fs.existsSync(fullPath);
+          })
+        );
+        if (retryBadFiles.length === 0) {
+          console.log(`[foundry-architect] Retry succeeded: ${retryVerdict.recommendedFixes.length} fixes with valid files`);
+          console.log(`[foundry-architect] verdict source: llm`);
+          return { verdict: retryVerdict, source: 'llm' };
+        } else {
+          console.log(`[foundry-architect] Retry still has ${retryBadFiles.length} bad files, using deterministic fallback`);
+          return { verdict: deterministicVerdict(options, artifacts), source: 'fallback' };
+        }
+      }
+    }
+
     console.log(`[foundry-architect] LLM verdict: ${verdict.recommendedFixes.length} fixes, ${verdict.failureClasses.length} failure classes`);
     return { verdict, source: 'llm' };
   } catch (err) {

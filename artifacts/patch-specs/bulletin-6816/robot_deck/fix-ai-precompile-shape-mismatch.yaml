@@ -8,22 +8,25 @@ rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch', which
   caused all downstream passes (mint_materials, apply_directives,
   resolve_labware, expand_patterns) to be skipped because their 'when'
   conditions evaluated to false. This is the root cause of the single-event
-  output. The pre-compiler is not producing the expected output schema that the
-  compiler passes depend on.
+  output. The pre-compiler's AI stage is producing output that doesn't match the
+  expected schema, so the compiler defensively skips processing. The fix must
+  ensure the ai_precompile pass produces a valid shape with candidateLabwares,
+  directives, and patternEvents even if some are empty arrays rather than
+  missing fields.
 ownedFiles:
   - server/src/foundry/passes/ai_precompile.ts
-  - server/src/foundry/passes/ai_precompile.schema.ts
+  - server/src/foundry/schema/aiPrecompileOutput.ts
 acceptance:
-  - ai_precompile pass produces output matching the expected schema with
-    candidateLabwares, mintMaterials, directives, and patternEvents fields
+  - ai_precompile pass no longer emits 'ai_precompile_shape_mismatch' warning
   - Downstream passes (mint_materials, resolve_labware, expand_patterns) are no
-    longer skipped due to false when conditions
-  - Compiler eventCount increases from 1 to at least 5 events for bulletin-6816
+    longer skipped due to false 'when' conditions
+  - ai_precompile output includes at least empty arrays for candidateLabwares,
+    directives, and patternEvents
 implementationBudget:
   targetChangedFiles: 2
-  maxChangedFiles: 4
-  targetChangedLines: 120
-  maxChangedLines: 250
+  maxChangedFiles: 3
+  targetChangedLines: 60
+  maxChangedLines: 150
   requireFocusedFixture: true
 coderModelProfile:
   model: Qwen/Qwen3.6-27B-FP8

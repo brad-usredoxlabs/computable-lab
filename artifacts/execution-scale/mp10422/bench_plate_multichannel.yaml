@@ -1,0 +1,99 @@
+kind: execution-scale-plan
+recordId: execution-scale-plan/robot_deck
+profileRef: execution-scale-profile/robot-assist-plus-96
+sourceLevel: manual_tubes
+targetLevel: robot_deck
+status: ready
+sampleLayout:
+  labwareRole: sample_plate
+  labwareKind: 96_well_plate
+  labwareDefinition: lbw-def-generic-96-well-plate
+  sampleCount: 8
+  wellGroups:
+    - groupId: samples
+      wells:
+        - A1
+        - A2
+        - A3
+        - A4
+        - A5
+        - A6
+        - A7
+        - A8
+reagentLayout:
+  - materialRole: synthetic_foundry_sample
+    sourceLabwareRole: reagent_source
+    sourceLabwareKind: 1_well_reservoir
+    sourceWells:
+      - A1
+    reason: inferred from liquid-handling events without creating material instances
+    sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
+  - materialRole: synthetic_foundry_sample
+    sourceLabwareRole: reagent_source
+    sourceLabwareKind: 1_well_reservoir
+    sourceWells:
+      - A2
+    reason: inferred from liquid-handling events without creating material instances
+    sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
+  - materialRole: synthetic_foundry_sample
+    sourceLabwareRole: reagent_source
+    sourceLabwareKind: 1_well_reservoir
+    sourceWells:
+      - A3
+    reason: inferred from liquid-handling events without creating material instances
+    sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
+  - materialRole: synthetic_foundry_sample
+    sourceLabwareRole: reagent_source
+    sourceLabwareKind: 1_well_reservoir
+    sourceWells:
+      - A4
+    reason: inferred from liquid-handling events without creating material instances
+    sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
+  - materialRole: synthetic_foundry_sample
+    sourceLabwareRole: reagent_source
+    sourceLabwareKind: 1_well_reservoir
+    sourceWells:
+      - A5
+    reason: inferred from liquid-handling events without creating material instances
+    sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
+  - materialRole: synthetic_foundry_sample
+    sourceLabwareRole: reagent_source
+    sourceLabwareKind: 1_well_reservoir
+    sourceWells:
+      - A6
+    reason: inferred from liquid-handling events without creating material instances
+    sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
+  - materialRole: synthetic_foundry_sample
+    sourceLabwareRole: reagent_source
+    sourceLabwareKind: 1_well_reservoir
+    sourceWells:
+      - A7
+    reason: inferred from liquid-handling events without creating material instances
+    sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
+  - materialRole: synthetic_foundry_sample
+    sourceLabwareRole: reagent_source
+    sourceLabwareKind: 1_well_reservoir
+    sourceWells:
+      - A8
+    reason: inferred from liquid-handling events without creating material instances
+    sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
+pipettingStrategy:
+  pipetteMode: multi_channel_parallel
+  channels: 8
+  laneStrategy: parallel_lanes
+  channelization: multi_channel_prefer
+  batching: group_by_source
+deckBinding:
+  platform: integra_assist
+  requiredLabwareDefinitions:
+    - lbw-def-generic-96-well-plate
+    - lbw-def-generic-reservoir-1-v1
+  requiredTools:
+    - pipette-capability/p20-multi-8
+assumptions:
+  - Manual tube operations preserve biological intent when lifted to plate wells
+    and shared reagent reservoirs.
+  - ASSIST PLUS lowering uses the same plate and lane semantics as bench
+    multichannel planning, then binds them to deck-compatible labware and tool
+    profiles.
+blockers: []

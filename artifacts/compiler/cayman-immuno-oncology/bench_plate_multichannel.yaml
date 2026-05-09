@@ -1,0 +1,108 @@
+kind: protocol-foundry-compiler-result
+protocolId: cayman-immuno-oncology
+variant: bench_plate_multichannel
+outcome: gap
+rawOutcome: gap
+eventCount: 11
+diagnostics:
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 8 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 3 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 3 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_no_actionable_candidates
+    message: Protocol Foundry supplied presegmented text, but this chunk had no
+      deterministic protocol-action evidence.
+    pass_id: extract_entities
+    details: {}
+  - severity: warning
+    code: ai_precompile_shape_mismatch
+    message: ai_precompile output shape mismatch
+    pass_id: ai_precompile
+  - severity: warning
+    code: unknown_biology_verb
+    message: No expander registered for verb 'scale'; dropping candidate event.
+    pass_id: expand_biology_verbs
+    details:
+      verb: scale
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_labware' skipped: when condition
+      'outputs.ai_precompile.candidateLabwares' evaluated to false"
+    pass_id: resolve_labware
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_patterns' skipped: when condition
+      'outputs.ai_precompile.patternEvents' evaluated to false"
+    pass_id: expand_patterns
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'emit_downstream_queue' skipped: when condition
+      'outputs.ai_precompile.downstreamCompileJobs' evaluated to false"
+    pass_id: emit_downstream_queue
+  - severity: info
+    code: execution_scale_plan_ready
+    message: Execution scaling plan is ready for robot_deck.
+    pass_id: derive_execution_scale_plan
+    details:
+      sourceLevel: manual_tubes
+      targetLevel: robot_deck
+      profileId: robot-assist-plus-96
+      blockers: []
+extractorRepairExhaustedCount: 0
+gaps:
+  - kind: clarification
+    message: Protocol execution details (volumes, incubation times, specific liquid
+      handling steps) are not present in the provided Product Information sheet
+      (which lists catalog contents only). The compiler will use Foundry test
+      assumptions for sample counts and inventory handles, but the actual
+      step-by-step biological actions (e.g., adding samples to wells, adding
+      reagents) must be inferred or provided by a separate procedural protocol
+      description. Proceeding with structural labware and sample definition
+      based on test assumptions.
+  - kind: unresolved_ref
+    message: generic_96_well_plate (no matching labware in prior snapshot)
+    details:
+      hint: generic_96_well_plate
+      reason: no matching labware in prior snapshot
+  - kind: unresolved_ref
+    message: generic_12_well_reservoir (no matching labware in prior snapshot)
+    details:
+      hint: generic_12_well_reservoir
+      reason: no matching labware in prior snapshot
+  - kind: unresolved_ref
+    message: generic_96_tip_rack (no matching labware in prior snapshot)
+    details:
+      hint: generic_96_tip_rack
+      reason: no matching labware in prior snapshot
+  - kind: unresolved_ref
+    message: generic_24x1_5ml_tube_rack (no matching labware in prior snapshot)
+    details:
+      hint: generic_24x1_5ml_tube_rack
+      reason: no matching labware in prior snapshot
+  - kind: unresolved_ref
+    message: generic_6x15ml_tube_rack (no matching labware in prior snapshot)
+    details:
+      hint: generic_6x15ml_tube_rack
+      reason: no matching labware in prior snapshot
+  - kind: unresolved_ref
+    message: generic_4x50ml_tube_rack (no matching labware in prior snapshot)
+    details:
+      hint: generic_4x50ml_tube_rack
+      reason: no matching labware in prior snapshot
+foundryTestAssumptionsRef: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-immuno-oncology/bench_plate_multichannel.yaml
+terminalArtifactsRef: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-immuno-oncology/bench_plate_multichannel.yaml

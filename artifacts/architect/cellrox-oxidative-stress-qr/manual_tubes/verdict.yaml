@@ -1,0 +1,124 @@
+kind: protocol-foundry-architect-verdict
+protocolId: cellrox-oxidative-stress-qr
+variant: manual_tubes
+generated_at: 2026-05-09T06:34:59.582Z
+accepted: false
+qualityScore: 0.45
+coverageEstimate: 0.5
+failureClasses:
+  - compiler_event_coverage
+  - precompiler_reference_shape
+  - labware_alias_or_resolver
+missingVerbs: []
+missingLabware: []
+missingMaterials: []
+badEvents: []
+badScalingAssumptions: []
+recommendedFixes:
+  - id: add-treat-and-analyze-verbs
+    class: compiler_event_coverage
+    title: Register expanders for 'treat' and 'analyze' biology verbs
+    rationale: The compiler diagnostics show 'unknown_biology_verb' for 'treat' and
+      'analyze', causing candidate events to be dropped. The PDF protocol
+      explicitly includes 'Treat the cells with the test compound' (step 1) and
+      'Analyze the cells' (step 8). These are standard biology verbs that should
+      lower to 'add_material' (for treat) and 'measure' or 'analyze' events.
+      Without these expanders, the event graph is incomplete.
+    ownedFiles:
+      - server/src/compiler/passes/expand_biology_verbs.ts
+      - server/src/compiler/verb_registry.ts
+    acceptance:
+      - Compiler no longer emits 'unknown_biology_verb' warnings for 'treat' and
+        'analyze'
+      - Event graph includes an event for step 1 (treat cells) and step 8
+        (analyze cells)
+      - eventCount increases from 10 to at least 12
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: &a1
+      compiler: /home/brad/git/computable-foundry/artifacts/compiler/cellrox-oxidative-stress-qr/manual_tubes.yaml
+      eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cellrox-oxidative-stress-qr/manual_tubes.yaml
+      executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cellrox-oxidative-stress-qr/manual_tubes.yaml
+      browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cellrox-oxidative-stress-qr/manual_tubes/report.yaml
+      coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cellrox-oxidative-stress-qr/manual_tubes/result.yaml
+      assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cellrox-oxidative-stress-qr/manual_tubes.yaml
+      segment: /home/brad/git/computable-foundry/artifacts/segments/cellrox-oxidative-stress-qr.yaml
+      materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cellrox-oxidative-stress-qr.yaml
+      text: /home/brad/git/computable-foundry/artifacts/text/cellrox-oxidative-stress-qr.txt
+    failureEvidence: &a2
+      eventCount: 10
+      outcome: gap
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 60
+      maxChangedLines: 150
+      requireFocusedFixture: true
+  - id: fix-ai-precompile-shape-mismatch
+    class: precompiler_reference_shape
+    title: Fix ai_precompile output shape to include mintMaterials, directives, and
+      candidateLabwares
+    rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch' and
+      multiple passes skipped because outputs.ai_precompile.mintMaterials,
+      directives, candidateLabwares, priorLabwareRefs, and patternEvents
+      evaluated to false. This means the pre-compiler's AI output shape doesn't
+      match what the compiler expects, causing critical passes (mint_materials,
+      apply_directives, resolve_labware) to be skipped. The pre-compiler needs
+      to output the correct shape with these fields populated.
+    ownedFiles:
+      - server/src/precompiler/ai_precompile.ts
+      - server/src/precompiler/output_schema.ts
+      - server/src/compiler/passes/resolve_labware.ts
+    acceptance:
+      - No 'ai_precompile_shape_mismatch' warning in compiler diagnostics
+      - Passes 'mint_materials', 'apply_directives', and 'resolve_labware' are
+        no longer skipped
+      - candidateLabwares and mintMaterials are populated in ai_precompile output
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 4
+      targetChangedLines: 100
+      maxChangedLines: 220
+      requireFocusedFixture: true
+  - id: fix-labware-and-material-resolution
+    class: labware_alias_or_resolver
+    title: Resolve labware references and fix malformed event details
+    rationale: "The event graph has several issues: 1) 'resolve_labware' pass was
+      skipped due to shape mismatch, so labware references may not be properly
+      resolved. 2) Event evt-fix_add-woox5atd has material 'cells' and volume
+      '3.7% formaldehyde' which is semantically wrong - it should be adding
+      formaldehyde to cells. 3) Event evt-stain_add-r7gzrjb6 has material
+      'cells' but should be adding NucBlue stain. 4) Event
+      evt-permeabilize_add-9ayqc2ke has material 'cells' but should be adding
+      Triton X-100. The labware resolver needs to properly map materials to
+      their correct roles and fix the event details."
+    ownedFiles:
+      - server/src/compiler/passes/resolve_labware.ts
+      - server/src/compiler/passes/expand_biology_verbs.ts
+      - server/src/labware/resolver.ts
+    acceptance:
+      - Event evt-fix_add-woox5atd has material 'formaldehyde' not 'cells'
+      - Event evt-stain_add-r7gzrjb6 has material 'NucBlue stain' not 'cells'
+      - Event evt-permeabilize_add-9ayqc2ke has material 'Triton X-100' not
+        'cells'
+      - Labware references are properly resolved and linked to correct labware
+        definitions
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 80
+      maxChangedLines: 180
+      requireFocusedFixture: true
+sourceArtifacts: *a1
+architectNotes: "LLM architect analysis: 3 fix recommendations."

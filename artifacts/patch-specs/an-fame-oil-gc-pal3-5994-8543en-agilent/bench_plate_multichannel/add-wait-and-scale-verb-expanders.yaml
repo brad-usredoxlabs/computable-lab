@@ -1,0 +1,43 @@
+kind: protocol-foundry-patch-spec
+id: an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/add-wait-and-scale-verb-expanders
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: bench_plate_multichannel
+fixClass: compiler_event_coverage
+title: Register expanders for 'wait' and 'scale' biology verbs
+rationale: The compiler dropped candidate events for verbs 'wait' and 'scale'
+  because no expanders are registered. The PDF explicitly mentions 'Wait for
+  phase separation (5 minutes)' and vortexing steps. Missing verb expanders
+  cause event loss and incomplete protocol coverage.
+ownedFiles:
+  - server/src/protocol-foundry/verbs/wait.ts
+  - server/src/protocol-foundry/verbs/scale.ts
+  - server/src/protocol-foundry/verbs/index.ts
+acceptance:
+  - No 'unknown_biology_verb' warnings for 'wait' or 'scale' in diagnostics
+  - Wait events from the PDF are lowered to incubate or delay events in the
+    event graph
+  - Event count increases to include previously dropped candidates
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 40
+  maxChangedLines: 100
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-35B-A3B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/an-fame-oil-gc-pal3-5994-8543en-agilent.txt
+failureEvidence:
+  eventCount: 9
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/verdict.yaml

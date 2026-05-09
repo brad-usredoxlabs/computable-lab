@@ -1,0 +1,47 @@
+kind: protocol-foundry-patch-spec
+id: cellrox-oxidative-stress-qr/robot_deck/resolve-labware-references
+protocolId: cellrox-oxidative-stress-qr
+variant: robot_deck
+fixClass: labware_alias_or_resolver
+title: Enable labware resolution pass to resolve sample_plate and reagent_source
+rationale: The resolve_labware pass was skipped due to the ai_precompile shape
+  mismatch. The event graph references 'sample_plate' and 'reagent_source'
+  labware IDs, but these may not be properly resolved to labware definitions.
+  The execution scale plan shows these are mapped to
+  'lbw-def-generic-96-well-plate' and 'lbw-def-generic-reservoir-1-v1', but the
+  compiler should explicitly resolve these references. Once the ai_precompile
+  shape is fixed, the labware resolution pass should execute and properly link
+  labware IDs to definitions.
+ownedFiles:
+  - server/src/compiler/passes/resolve_labware.ts
+  - server/src/compiler/labware/resolver.ts
+acceptance:
+  - resolve_labware pass executes successfully without being skipped.
+  - Labware references 'sample_plate' and 'reagent_source' are resolved to
+    proper labware definitions.
+  - Event graph labware entries include resolved definition references.
+  - No unresolved labware references remain in the event graph.
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 50
+  maxChangedLines: 120
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-35B-A3B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cellrox-oxidative-stress-qr/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cellrox-oxidative-stress-qr/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cellrox-oxidative-stress-qr/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cellrox-oxidative-stress-qr/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cellrox-oxidative-stress-qr/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cellrox-oxidative-stress-qr/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cellrox-oxidative-stress-qr.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cellrox-oxidative-stress-qr.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cellrox-oxidative-stress-qr.txt
+failureEvidence:
+  eventCount: 10
+  outcome: gap
+architectNotes: "LLM architect analysis: 4 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cellrox-oxidative-stress-qr/robot_deck/verdict.yaml

@@ -1,0 +1,20 @@
+kind: protocol-foundry-adoption-decision
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: manual_tubes
+generated_at: 2026-05-09T06:42:41.078Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/add-missing-biology-verbs
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/add-missing-biology-verbs.yaml
+    fixClass: compiler_event_coverage
+    title: Register expanders for weigh, place, cap, and wait verbs
+  - id: an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/add-pal3-labware-records
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/add-pal3-labware-records.yaml
+    fixClass: labware_alias_or_resolver
+    title: Add labware records for 10 mL vial and PAL3 VT15 sample rack
+  - id: an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/fix-ai-precompile-shape-mismatch
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch causing skipped passes
+message: Patch specs accepted for unattended coder tournament execution.

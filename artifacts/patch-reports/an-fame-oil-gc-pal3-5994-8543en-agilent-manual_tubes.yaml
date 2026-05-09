@@ -1,0 +1,8 @@
+kind: protocol-worker-report
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: manual_tubes
+generated_at: 2026-05-09T07:22:23.886Z
+status: blocked
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/result.yaml
+touchedFiles: []
+message: no meaningful files touched

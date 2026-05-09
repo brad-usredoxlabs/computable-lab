@@ -1,7 +1,20 @@
 kind: protocol-foundry-adoption-decision
 protocolId: bulletin-6816
 variant: robot_deck
-generated_at: 2026-05-09T04:27:43.718Z
-status: skipped
-patchSpecs: []
-message: No patch specs were produced for this verdict.
+generated_at: 2026-05-09T05:33:47.345Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: bulletin-6816/robot_deck/fix-ai-precompile-shape-mismatch
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch causing downstream pass skips
+  - id: bulletin-6816/robot_deck/fix-labware-resolution-for-pcr-plates
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-labware-resolution-for-pcr-plates.yaml
+    fixClass: labware_alias_or_resolver
+    title: Resolve generic_96_well_plate to Hard-Shell Thin-Wall PCR plate definition
+  - id: bulletin-6816/robot_deck/fix-pcr-protocol-event-coverage
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-pcr-protocol-event-coverage.yaml
+    fixClass: compiler_event_coverage
+    title: Add PCR plate preparation and thermal cycling event lowering
+message: Patch specs accepted for unattended coder tournament execution.

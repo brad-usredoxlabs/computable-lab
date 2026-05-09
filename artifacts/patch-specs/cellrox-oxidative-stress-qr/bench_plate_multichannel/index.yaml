@@ -1,0 +1,8 @@
+kind: protocol-foundry-patch-spec-index
+protocolId: cellrox-oxidative-stress-qr
+variant: bench_plate_multichannel
+patchSpecs:
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/add-treat-verb-expander.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/add-analyze-verb-expander.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/fix-precompile-labware-shape.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/resolve-generic-labware-aliases.yaml

@@ -1,0 +1,46 @@
+kind: protocol-foundry-patch-spec
+id: man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/fix-ai-precompile-shape-mismatch
+protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+variant: robot_deck
+fixClass: precompiler_reference_shape
+title: Fix ai_precompile output shape mismatch causing downstream pass skips
+rationale: "The compiler diagnostics show 'ai_precompile_shape_mismatch', which
+  caused critical downstream passes to be skipped: 'mint_materials',
+  'resolve_labware', 'resolve_prior_labware_references', and 'expand_patterns'.
+  This is the root cause of the low event count (1) and empty material/labware
+  resolution. The pre-compiler extracted 13+6+16+5=40 candidates but the AI
+  precompile step failed to produce the expected output shape, breaking the
+  pipeline."
+ownedFiles:
+  - server/src/protocol-foundry/passes/ai_precompile.ts
+  - server/src/protocol-foundry/passes/ai_precompile.schema.ts
+acceptance:
+  - ai_precompile pass produces output matching expected schema with
+    candidateLabwares, mintMaterials, priorLabwareRefs, and patternEvents fields
+  - Downstream passes (mint_materials, resolve_labware) are no longer skipped
+    due to false when conditions
+  - Compiler eventCount increases from 1 to at least 5 events for this protocol
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 4
+  targetChangedLines: 120
+  maxChangedLines: 250
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011593-nabspincolumn-5ml-antibody-purifi-ug.txt
+failureEvidence:
+  eventCount: 1
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/verdict.yaml

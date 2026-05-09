@@ -1,0 +1,128 @@
+kind: protocol-foundry-architect-verdict
+protocolId: mp10471
+variant: bench_plate_multichannel
+generated_at: 2026-05-09T06:42:38.035Z
+accepted: false
+qualityScore: 0.15
+coverageEstimate: 0.1
+failureClasses:
+  - precompiler_reference_shape
+  - labware_alias_or_resolver
+  - compiler_event_coverage
+missingVerbs: []
+missingLabware: []
+missingMaterials: []
+badEvents: []
+badScalingAssumptions: []
+recommendedFixes:
+  - id: fix-ai-precompile-shape-mismatch
+    class: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch causing pass skips
+    rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch', which
+      caused downstream passes 'mint_materials', 'resolve_labware', and
+      'expand_patterns' to be skipped because their 'when' conditions evaluated
+      to false. This is the root cause of the empty event graph (only 2 mix
+      events) and unresolved labware refs. The ai_precompile pass is not
+      producing the expected output shape (mintMaterials, candidateLabwares,
+      patternEvents), so the compiler cannot proceed with material resolution,
+      labware resolution, or pattern expansion.
+    ownedFiles:
+      - server/src/protocol-foundry/passes/ai_precompile.ts
+      - server/src/protocol-foundry/passes/ai_precompile.schema.ts
+    acceptance:
+      - ai_precompile pass produces output with mintMaterials,
+        candidateLabwares, and patternEvents fields
+      - Downstream passes mint_materials, resolve_labware, and expand_patterns
+        are no longer skipped
+      - Compiler outcome changes from 'gap' to 'complete' or produces more than
+        2 events
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: &a1
+      compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10471/bench_plate_multichannel.yaml
+      eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10471/bench_plate_multichannel.yaml
+      executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10471/bench_plate_multichannel.yaml
+      browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10471/bench_plate_multichannel/report.yaml
+      coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/mp10471/bench_plate_multichannel/result.yaml
+      assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/mp10471/bench_plate_multichannel.yaml
+      segment: /home/brad/git/computable-foundry/artifacts/segments/mp10471.yaml
+      materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10471.yaml
+      text: /home/brad/git/computable-foundry/artifacts/text/mp10471.txt
+    failureEvidence: &a2
+      eventCount: 2
+      outcome: gap
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 4
+      targetChangedLines: 120
+      maxChangedLines: 250
+      requireFocusedFixture: true
+  - id: fix-labware-resolver-generic-aliases
+    class: labware_alias_or_resolver
+    title: Add generic labware alias resolution for 96-well plate, 12-well
+      reservoir, and 96-tip rack
+    rationale: The compiler output shows 3 unresolved_ref gaps for
+      generic_96_well_plate, generic_12_well_reservoir, and generic_96_tip_rack.
+      The execution scale plan references lbw-def-generic-96-well-plate and
+      lbw-def-generic-reservoir-1-v1, suggesting these definitions exist but the
+      resolver cannot map the generic aliases to them. The labware resolver
+      needs to handle generic labware type aliases that are commonly used in
+      protocols.
+    ownedFiles:
+      - server/src/protocol-foundry/resolvers/labware-resolver.ts
+      - server/src/protocol-foundry/labware/aliases.ts
+    acceptance:
+      - generic_96_well_plate resolves to lbw-def-generic-96-well-plate
+      - generic_12_well_reservoir resolves to lbw-def-generic-reservoir-12 or
+        equivalent
+      - generic_96_tip_rack resolves to lbw-def-generic-96-tip-rack or equivalent
+      - No unresolved_ref gaps for generic labware types in compiler output
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 60
+      maxChangedLines: 150
+      requireFocusedFixture: true
+  - id: fix-compiler-event-coverage-fluo4-protocol
+    class: compiler_event_coverage
+    title: Add verb lowering for Fluo-4 Direct calcium assay protocol steps
+    rationale: "The PDF describes a multi-step protocol including: 1) Cell
+      preparation (adherent/non-adherent), 2) Probenecid preparation (dissolving
+      Component B in Component C buffer), 3) Fluo-4 Direct reagent preparation
+      (mixing Component A with buffer), 4) Loading cells with reagent, 5)
+      Incubation, 6) Measurement. The compiler only produced 2 mix events,
+      missing the critical pipetting, incubation, and measurement steps. The
+      compiler needs verb lowering rules for: pipette_transfer (loading reagent
+      to cells), incubate (37°C or RT incubation), and measure_fluorescence
+      (reading at 495/516 nm)."
+    ownedFiles:
+      - server/src/protocol-foundry/verbs/pipette_transfer.ts
+      - server/src/protocol-foundry/verbs/incubate.ts
+      - server/src/protocol-foundry/verbs/measure_fluorescence.ts
+      - server/src/protocol-foundry/passes/expand_patterns.ts
+    acceptance:
+      - Compiler produces events for pipette_transfer (loading Fluo-4 reagent to
+        cells)
+      - Compiler produces events for incubate (cell loading incubation step)
+      - Compiler produces events for measure_fluorescence (reading fluorescence)
+      - Event count increases from 2 to at least 6 events covering the full
+        protocol workflow
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 3
+      maxChangedFiles: 5
+      targetChangedLines: 150
+      maxChangedLines: 300
+      requireFocusedFixture: true
+sourceArtifacts: *a1
+architectNotes: "LLM architect analysis: 3 fix recommendations."

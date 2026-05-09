@@ -1,0 +1,271 @@
+kind: protocol-event-graph-proposal
+recordId: protocol-event-graph-proposal/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck
+protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+variant: robot_deck
+targetLevel: robot_deck
+status: ready
+sourceRefs:
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+eventGraph:
+  id: EVG-FOUNDRY-man0011593-nabspincolumn-5ml-antibody-purifi-ug-robot_deck
+  name: Foundry man0011593-nabspincolumn-5ml-antibody-purifi-ug robot_deck
+  description: Protocol Foundry preview graph for
+    man0011593-nabspincolumn-5ml-antibody-purifi-ug (robot_deck).
+  status: draft
+  protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+  events: &a1
+    - eventId: evt-spin-b9ufbck6
+      event_type: centrifuge
+      details: &a2
+        rpm: 300
+        duration: PT5M
+      labwareId: sample_plate
+  labwares:
+    - labwareId: sample_plate
+      labwareType: plate_96
+      name: sample plate
+    - labwareId: reagent_reservoir
+      labwareType: reservoir_1
+      name: reagent reservoir
+  tags:
+    - protocol-foundry
+    - robot_deck
+terminalArtifacts:
+  events: *a1
+  directives:
+    - directiveId: dir_1
+      kind: mount_pipette
+      params:
+        mountSide: right
+        pipetteType: 8_channel_multichannel
+  gaps: []
+  resolvedRefs: []
+  labStateDelta:
+    events:
+      - eventId: evt-spin-b9ufbck6
+        event_type: centrifuge
+        details: *a2
+    snapshotAfter:
+      deck: []
+      mountedPipettes:
+        - mountSide: right
+          pipetteType: 8_channel_multichannel
+          maxVolumeUl: 50
+      labware: {}
+      reservoirs: {}
+      mintCounter: 0
+      turnIndex: 1
+  resolvedLabwareRefs: []
+  deckLayoutPlan:
+    pinned: []
+    autoFilled: []
+    conflicts: []
+  resourceManifest:
+    tipRacks: []
+    reservoirLoads: []
+    consumables: []
+  executionScalePlan:
+    kind: execution-scale-plan
+    recordId: execution-scale-plan/robot_deck
+    profileRef: execution-scale-profile/robot-assist-plus-96
+    sourceLevel: manual_tubes
+    targetLevel: robot_deck
+    status: ready
+    sampleLayout:
+      labwareRole: sample_plate
+      labwareKind: 96_well_plate
+      labwareDefinition: lbw-def-generic-96-well-plate
+      sampleCount: 8
+      wellGroups:
+        - groupId: samples
+          wells:
+            - A1
+            - B1
+            - C1
+            - D1
+            - E1
+            - F1
+            - G1
+            - H1
+    reagentLayout:
+      - materialRole: reagent
+        sourceLabwareRole: reagent_reservoir
+        sourceLabwareKind: 1_well_reservoir
+        sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
+        sourceWells:
+          - "1"
+        reason: prompt mentions reagents but compiled events did not identify concrete
+          reagent roles
+    pipettingStrategy:
+      pipetteMode: multi_channel_parallel
+      channels: 8
+      laneStrategy: parallel_lanes
+      channelization: multi_channel_prefer
+      batching: group_by_source
+    deckBinding:
+      platform: integra_assist
+      requiredLabwareDefinitions:
+        - lbw-def-generic-96-well-plate
+        - lbw-def-generic-reservoir-1-v1
+      requiredTools:
+        - pipette-capability/p20-multi-8
+    assumptions:
+      - No sample count was specified; defaulting to 8 samples (first column of
+        96_well_plate).
+      - Reagent source role is provisional until material roles are resolved.
+      - Samples are mapped down plate columns in row order.
+      - Manual tube operations preserve biological intent when lifted to plate
+        wells and shared reagent reservoirs.
+      - ASSIST PLUS lowering uses the same plate and lane semantics as bench
+        multichannel planning, then binds them to deck-compatible labware and
+        tool profiles.
+    blockers: &a3 []
+  validationReport:
+    findings: []
+  instrumentRunFiles: []
+  downstreamQueue:
+    - kind: readout
+      description: Measure absorbance at 280nm to identify antibody fractions
+      params:
+        wavelength: 280nm
+diagnostics:
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 13 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 6 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 16 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 5 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_no_actionable_candidates
+    message: Protocol Foundry supplied presegmented text, but this chunk had no
+      deterministic protocol-action evidence.
+    pass_id: extract_entities
+    details: {}
+  - severity: warning
+    code: ai_precompile_shape_mismatch
+    message: ai_precompile output shape mismatch
+    pass_id: ai_precompile
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'mint_materials' skipped: when condition
+      'outputs.ai_precompile.mintMaterials' evaluated to false"
+    pass_id: mint_materials
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_labware' skipped: when condition
+      'outputs.ai_precompile.candidateLabwares' evaluated to false"
+    pass_id: resolve_labware
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_prior_labware_references' skipped: when condition
+      'outputs.ai_precompile.priorLabwareRefs' evaluated to false"
+    pass_id: resolve_prior_labware_references
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_patterns' skipped: when condition
+      'outputs.ai_precompile.patternEvents' evaluated to false"
+    pass_id: expand_patterns
+  - severity: info
+    code: execution_scale_plan_ready
+    message: Execution scaling plan is ready for robot_deck.
+    pass_id: derive_execution_scale_plan
+    details:
+      sourceLevel: manual_tubes
+      targetLevel: robot_deck
+      profileId: robot-assist-plus-96
+      blockers: *a3
+foundryTestAssumptions:
+  kind: protocol-foundry-test-assumption-profile
+  protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+  variant: robot_deck
+  mode: deterministic_test_assumptions
+  acceptanceLevel: test_compile_only
+  selectionPolicy:
+    multipleChoice: first_valid_option
+    freeTextClarification: match_question_to_profile_else_first_valid_option
+    randomization: disabled
+  syntheticAnswers:
+    - questionClass: multiple_choice
+      answer: Select the first biologically valid option. If options are lettered,
+        choose A only when A is valid.
+      rationale: Determinism makes regression comparisons meaningful across Foundry runs.
+    - questionClass: sample_count_and_layout
+      answer:
+        sampleCount: 8
+        sourceLabware: generic_96_well_plate
+        sourcePositions:
+          - A1
+          - B1
+          - C1
+          - D1
+          - E1
+          - F1
+          - G1
+          - H1
+      rationale: Eight samples exercise single-channel, multichannel, and first-column
+        plate logic without requiring a full 96-sample run.
+    - questionClass: sample_provenance
+      answer:
+        provenanceId: SYNTHETIC-FOUNDRY-SAMPLE-SET-man0011593-nabspincolumn-5ml-antibody-purifi-ug
+        description: Synthetic Foundry test samples for compiler stress testing only.
+      rationale: Unblocks event graph generation while preserving that no real sample
+        provenance was supplied.
+    - questionClass: lot_or_physical_inventory
+      answer:
+        lot: SYNTHETIC-LOT-FOUNDRY-TEST
+        sourceTube: SYNTHETIC-SOURCE-TUBE-1
+      rationale: Provides deterministic test handles but must not be promoted to real
+        material-instance records.
+    - questionClass: missing_coa_or_vendor_default
+      answer: Use the explicit value printed in the vendor protocol when present;
+        otherwise use a synthetic COA placeholder and continue with a warning.
+      rationale: Foundry improvement mode should expose compiler and renderer gaps
+        instead of stopping on missing lot-specific COA data.
+    - questionClass: manual_labware
+      answer:
+        tubeRack: generic_24x1_5ml_tube_rack
+        conical15mlRack: generic_6x15ml_tube_rack
+        conical50mlRack: generic_4x50ml_tube_rack
+      rationale: Tube-heavy protocols need concrete rack geometry for browser review.
+    - questionClass: bench_plate_labware
+      answer:
+        plate: generic_96_well_plate
+        reservoir: generic_12_well_reservoir
+        pipette: 8_channel_multichannel
+        tips: generic_96_tip_rack
+      rationale: Exercises the manual-to-plate scaling path consistently.
+    - questionClass: robot_deck_binding
+      answer:
+        platform: integra_assist
+        deckProfile: assist_plus_default
+        reservoir: generic_12_well_reservoir
+        pipette: 8_channel_multichannel
+      rationale: Exercises robot deck lowering while making platform assumptions explicit.
+  provenance:
+    syntheticInputs: true
+    createsMaterialInstances: false
+    createsPhysicalInventory: false
+    note: These assumptions are only for Foundry compiler stress testing. They are
+      not scientific truth and must not be accepted as real run context.
+browserReview:
+  routeTemplate: /labware-editor?id=<eventGraphRecordId>
+  importRequired: true

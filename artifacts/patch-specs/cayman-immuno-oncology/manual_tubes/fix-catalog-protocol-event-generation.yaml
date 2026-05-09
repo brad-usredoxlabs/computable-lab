@@ -1,0 +1,47 @@
+kind: protocol-foundry-patch-spec
+id: cayman-immuno-oncology/manual_tubes/fix-catalog-protocol-event-generation
+protocolId: cayman-immuno-oncology
+variant: manual_tubes
+fixClass: compiler_event_coverage
+title: Add compiler support for catalog-to-event lowering for screening libraries
+rationale: The PDF is a product catalog listing compounds in a 96-well plate
+  layout, not a step-by-step protocol. The compiler currently expects procedural
+  instructions (volumes, incubation times) and produces a clarification gap. The
+  compiler needs a new lowering path that converts catalog entries
+  (well-position + compound name + item number) into material minting and
+  plate-population events. This would generate events like 'mint_compound
+  PLX4032' and 'populate_well A2 with PLX4032' for each catalog entry.
+ownedFiles:
+  - server/src/protocol-foundry/passes/expand_patterns.ts
+  - server/src/protocol-foundry/passes/mint_materials.ts
+  - server/src/protocol-foundry/verbs/catalog-lowering.ts
+acceptance:
+  - Compiler generates at least one event per catalog entry (compound + well
+    position)
+  - Each compound from the PDF (PLX4032, I-BET762, etc.) is minted as a material
+  - Well positions (A2, A3, etc.) are mapped to plate coordinates in events
+  - eventCount >= 20 for this 96-well catalog protocol
+implementationBudget:
+  targetChangedFiles: 3
+  maxChangedFiles: 5
+  targetChangedLines: 180
+  maxChangedLines: 350
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-immuno-oncology/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-immuno-oncology/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-immuno-oncology/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-immuno-oncology/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-immuno-oncology/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-immuno-oncology/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-immuno-oncology.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-immuno-oncology.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cayman-immuno-oncology.txt
+failureEvidence:
+  eventCount: 2
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-immuno-oncology/manual_tubes/verdict.yaml

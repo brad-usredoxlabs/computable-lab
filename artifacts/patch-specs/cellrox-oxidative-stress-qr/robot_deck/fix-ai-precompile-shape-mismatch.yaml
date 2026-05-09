@@ -1,0 +1,48 @@
+kind: protocol-foundry-patch-spec
+id: cellrox-oxidative-stress-qr/robot_deck/fix-ai-precompile-shape-mismatch
+protocolId: cellrox-oxidative-stress-qr
+variant: robot_deck
+fixClass: precompiler_reference_shape
+title: Fix ai_precompile output shape mismatch to enable downstream passes
+rationale: The compiler reports 'ai_precompile output shape mismatch' warning,
+  and multiple downstream passes are skipped because their 'when' conditions
+  evaluate to false (mint_materials, apply_directives, resolve_labware,
+  resolve_prior_labware_references, expand_patterns). This indicates the
+  ai_precompile pass is producing output that doesn't match the expected schema,
+  causing the compiler to skip critical resolution steps. This results in
+  unresolved labware references and missing material instances.
+ownedFiles:
+  - server/src/compiler/passes/ai_precompile.ts
+  - server/src/compiler/schema/precompile-output.ts
+acceptance:
+  - Compiler diagnostics no longer contain 'ai_precompile_shape_mismatch'
+    warning.
+  - Downstream passes (mint_materials, resolve_labware, etc.) are no longer
+    skipped due to false 'when' conditions.
+  - The ai_precompile output conforms to the expected schema with proper
+    candidateLabwares, mintMaterials, and directives fields.
+  - Labware resolution pass executes and resolves labware references correctly.
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 4
+  targetChangedLines: 80
+  maxChangedLines: 200
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cellrox-oxidative-stress-qr/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cellrox-oxidative-stress-qr/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cellrox-oxidative-stress-qr/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cellrox-oxidative-stress-qr/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cellrox-oxidative-stress-qr/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cellrox-oxidative-stress-qr/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cellrox-oxidative-stress-qr.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cellrox-oxidative-stress-qr.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cellrox-oxidative-stress-qr.txt
+failureEvidence:
+  eventCount: 10
+  outcome: gap
+architectNotes: "LLM architect analysis: 4 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cellrox-oxidative-stress-qr/robot_deck/verdict.yaml

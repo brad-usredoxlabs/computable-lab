@@ -1,0 +1,46 @@
+kind: protocol-foundry-patch-spec
+id: mp10422/manual_tubes/fix-labware-resolution-for-cellrox-protocol
+protocolId: mp10422
+variant: manual_tubes
+fixClass: labware_alias_or_resolver
+title: Enable labware resolution for CellROX staining protocol
+rationale: The 'resolve_labware' pass was skipped due to the shape mismatch, but
+  even if it runs, the event graph uses generic 'sample_plate' and
+  'reagent_reservoir' labware IDs without proper resolution to labware
+  definitions. The PDF describes a staining workflow that requires specific
+  labware (tubes or plates for cell staining, reservoirs for reagent storage).
+  The execution scale plan shows provisional labware bindings that need to be
+  grounded in resolved labware records.
+ownedFiles:
+  - server/src/protocol-foundry/passes/resolve_labware.ts
+  - server/src/labware/aliases/cellrox-staining-labware.yaml
+acceptance:
+  - resolve_labware pass produces resolved labware references in the event graph
+  - Labware IDs in events map to concrete labware definitions (e.g., 96-well
+    plate, reservoir)
+  - Execution scale plan shows resolved (not provisional) labware bindings
+  - No 'pass_skipped_by_when' warnings for labware resolution passes
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 50
+  maxChangedLines: 120
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-35B-A3B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10422/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10422/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10422/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/mp10422/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/mp10422/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/mp10422.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10422.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/mp10422.txt
+failureEvidence:
+  eventCount: 6
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10422/manual_tubes/verdict.yaml

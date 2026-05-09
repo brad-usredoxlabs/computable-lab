@@ -1,0 +1,48 @@
+kind: protocol-foundry-patch-spec
+id: cellrox-oxidative-stress-qr/manual_tubes/fix-labware-and-material-resolution
+protocolId: cellrox-oxidative-stress-qr
+variant: manual_tubes
+fixClass: labware_alias_or_resolver
+title: Resolve labware references and fix malformed event details
+rationale: "The event graph has several issues: 1) 'resolve_labware' pass was
+  skipped due to shape mismatch, so labware references may not be properly
+  resolved. 2) Event evt-fix_add-woox5atd has material 'cells' and volume '3.7%
+  formaldehyde' which is semantically wrong - it should be adding formaldehyde
+  to cells. 3) Event evt-stain_add-r7gzrjb6 has material 'cells' but should be
+  adding NucBlue stain. 4) Event evt-permeabilize_add-9ayqc2ke has material
+  'cells' but should be adding Triton X-100. The labware resolver needs to
+  properly map materials to their correct roles and fix the event details."
+ownedFiles:
+  - server/src/compiler/passes/resolve_labware.ts
+  - server/src/compiler/passes/expand_biology_verbs.ts
+  - server/src/labware/resolver.ts
+acceptance:
+  - Event evt-fix_add-woox5atd has material 'formaldehyde' not 'cells'
+  - Event evt-stain_add-r7gzrjb6 has material 'NucBlue stain' not 'cells'
+  - Event evt-permeabilize_add-9ayqc2ke has material 'Triton X-100' not 'cells'
+  - Labware references are properly resolved and linked to correct labware
+    definitions
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 80
+  maxChangedLines: 180
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cellrox-oxidative-stress-qr/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cellrox-oxidative-stress-qr/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cellrox-oxidative-stress-qr/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cellrox-oxidative-stress-qr/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cellrox-oxidative-stress-qr/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cellrox-oxidative-stress-qr/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cellrox-oxidative-stress-qr.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cellrox-oxidative-stress-qr.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cellrox-oxidative-stress-qr.txt
+failureEvidence:
+  eventCount: 10
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cellrox-oxidative-stress-qr/manual_tubes/verdict.yaml

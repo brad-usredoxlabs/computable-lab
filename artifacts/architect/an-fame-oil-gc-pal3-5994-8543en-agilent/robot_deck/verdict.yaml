@@ -1,0 +1,93 @@
+kind: protocol-foundry-architect-verdict
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: robot_deck
+generated_at: 2026-05-09T06:30:47.282Z
+accepted: false
+qualityScore: 0
+coverageEstimate: 0
+failureClasses:
+  - precompiler_reference_shape
+  - compiler_event_coverage
+missingVerbs: []
+missingLabware: []
+missingMaterials: []
+badEvents: []
+badScalingAssumptions: []
+recommendedFixes:
+  - id: fix-ai-precompile-shape-mismatch
+    class: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch to enable downstream passes
+    rationale: "The compiler diagnostics show 'ai_precompile output shape mismatch',
+      which causes the ai_precompile output to be invalid. This cascades to skip
+      critical passes: 'mint_materials', 'resolve_labware',
+      'resolve_prior_labware_references', and 'expand_patterns' are all skipped
+      because their 'when' conditions evaluate to false (e.g.,
+      'outputs.ai_precompile.mintMaterials' is false). Without these passes, no
+      events can be generated, resulting in eventCount=0. The pre-compiler must
+      produce a correctly shaped output that the compiler can consume."
+    ownedFiles:
+      - server/src/protocol-foundry/precompiler/ai-precompile.ts
+      - server/src/protocol-foundry/precompiler/schema.ts
+    acceptance:
+      - ai_precompile pass completes without 'shape_mismatch' warning
+      - outputs.ai_precompile.mintMaterials is truthy when materials are present
+        in candidates
+      - outputs.ai_precompile.candidateLabwares is truthy when labware hints
+        exist
+      - Downstream passes (mint_materials, resolve_labware) are no longer
+        skipped due to false when conditions
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: &a1
+      compiler: /home/brad/git/computable-foundry/artifacts/compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+      eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+      executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+      browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/report.yaml
+      coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/result.yaml
+      assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+      segment: /home/brad/git/computable-foundry/artifacts/segments/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+      materialContext: /home/brad/git/computable-foundry/artifacts/material-context/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+      text: /home/brad/git/computable-foundry/artifacts/text/an-fame-oil-gc-pal3-5994-8543en-agilent.txt
+    failureEvidence: &a2
+      eventCount: 0
+      outcome: gap
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 4
+      targetChangedLines: 120
+      maxChangedLines: 250
+      requireFocusedFixture: true
+  - id: fix-unknown-biology-verbs
+    class: compiler_event_coverage
+    title: "Register expanders for unknown biology verbs: bind, prefer, use, report,
+      continue"
+    rationale: The compiler drops candidate events because it has no registered
+      expanders for verbs 'bind', 'prefer', 'use', 'report', and 'continue'.
+      These verbs appear in the pre-compiler's extracted candidates but cannot
+      be lowered to protocol events. For this GC-FID protocol, 'use' likely maps
+      to pipette/transfer operations, 'bind' may map to labware mounting, and
+      'continue' may be a no-op or sequencing directive. Adding these verb
+      expanders will allow the compiler to generate events from the extracted
+      candidates.
+    ownedFiles:
+      - server/src/protocol-foundry/compiler/verb-expanders.ts
+      - server/src/protocol-foundry/compiler/verb-registry.ts
+    acceptance:
+      - No 'unknown_biology_verb' warnings for 'bind', 'prefer', 'use',
+        'report', 'continue'
+      - Candidate events with these verbs are lowered to concrete protocol events
+      - eventCount >= 3 after fix is applied
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 80
+      maxChangedLines: 180
+      requireFocusedFixture: true
+sourceArtifacts: *a1
+architectNotes: "LLM architect analysis: 2 fix recommendations."

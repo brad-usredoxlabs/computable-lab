@@ -1,0 +1,43 @@
+kind: protocol-foundry-patch-spec
+id: mp10422/bench_plate_multichannel/fix-ai-precompile-shape-mismatch
+protocolId: mp10422
+variant: bench_plate_multichannel
+fixClass: precompiler_reference_shape
+title: Fix ai_precompile output shape mismatch to enable downstream passes
+rationale: The compiler diagnostics show 'ai_precompile output shape mismatch',
+  which caused the 'apply_directives' and 'resolve_labware' passes to be
+  skipped. This is the root cause of the unresolved labware refs and the 'gap'
+  outcome. The pre-compiler's AI output does not match the expected schema, so
+  the compiler cannot extract candidateLabwares or directives.
+ownedFiles:
+  - server/src/protocol-foundry/passes/ai_precompile.ts
+  - server/src/protocol-foundry/schema/precompile-output.ts
+acceptance:
+  - ai_precompile pass completes without shape mismatch warning
+  - apply_directives and resolve_labware passes are no longer skipped due to
+    false when conditions
+  - candidateLabwares array is populated in compiler output
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 60
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/bench_plate_multichannel.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10422/bench_plate_multichannel.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10422/bench_plate_multichannel.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10422/bench_plate_multichannel/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/mp10422/bench_plate_multichannel/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/mp10422/bench_plate_multichannel.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/mp10422.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10422.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/mp10422.txt
+failureEvidence:
+  eventCount: 15
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10422/bench_plate_multichannel/verdict.yaml

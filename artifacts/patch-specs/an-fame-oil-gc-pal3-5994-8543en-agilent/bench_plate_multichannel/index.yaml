@@ -1,0 +1,7 @@
+kind: protocol-foundry-patch-spec-index
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: bench_plate_multichannel
+patchSpecs:
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/add-wait-and-scale-verb-expanders.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/resolve-generic-labware-refs.yaml

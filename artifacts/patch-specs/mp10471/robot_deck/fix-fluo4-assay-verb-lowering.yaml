@@ -1,0 +1,48 @@
+kind: protocol-foundry-patch-spec
+id: mp10471/robot_deck/fix-fluo4-assay-verb-lowering
+protocolId: mp10471
+variant: robot_deck
+fixClass: compiler_event_coverage
+title: Add verb lowering for Fluo-4 Direct assay preparation and loading steps
+rationale: "The PDF describes a clear protocol: prepare 2X loading solution (mix
+  Component A, B, C), then add to cells. The compiler produced only 2 empty mix
+  events. The compiler lacks verb lowering rules for 'prepare loading solution'
+  and 'add reagent to cells' patterns common in calcium assay kits. Without
+  these verbs, the compiler cannot translate the extracted candidates into
+  meaningful pipetting events."
+ownedFiles:
+  - server/src/protocol-foundry/verbs/assay-preparation.ts
+  - server/src/protocol-foundry/verbs/calcium-assay.ts
+  - server/src/protocol-foundry/passes/expand_patterns.ts
+acceptance:
+  - Compiler recognizes 'prepare 2X loading solution' as a mix event with
+    specific reagent volumes
+  - Compiler recognizes 'add loading solution to cells' as a pipette event with
+    source/destination labware
+  - "Event graph contains at least 4 events: mix reagents, pipette to cells,
+    incubate, read fluorescence"
+  - Reagent roles (Component A, B, C) are resolved to specific labware locations
+implementationBudget:
+  targetChangedFiles: 3
+  maxChangedFiles: 5
+  targetChangedLines: 150
+  maxChangedLines: 300
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10471/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10471/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10471/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10471/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/mp10471/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/mp10471/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/mp10471.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10471.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/mp10471.txt
+failureEvidence:
+  eventCount: 2
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10471/robot_deck/verdict.yaml

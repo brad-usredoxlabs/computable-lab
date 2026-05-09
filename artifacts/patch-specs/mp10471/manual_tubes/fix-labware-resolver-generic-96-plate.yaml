@@ -1,0 +1,50 @@
+kind: protocol-foundry-patch-spec
+id: mp10471/manual_tubes/fix-labware-resolver-generic-96-plate
+protocolId: mp10471
+variant: manual_tubes
+fixClass: labware_alias_or_resolver
+title: Add labware definitions for generic_96_well_plate and
+  generic_24x1_5ml_tube_rack
+rationale: "The compiler output shows two unresolved_ref gaps:
+  'generic_96_well_plate' and 'generic_24x1_1_5ml_tube_rack' with reason 'no
+  matching labware in prior snapshot'. These labware types are referenced in the
+  execution scale plan but have no corresponding records in the labware catalog.
+  The PDF mentions 96- and 384-well plates, and the protocol uses tubes
+  (Component A comes in 10x10mL or 1x100mL formats). These labware definitions
+  must exist for the compiler to resolve references."
+ownedFiles:
+  - server/src/labware/definitions/generic-96-well-plate.yaml
+  - server/src/labware/definitions/generic-24x1-5ml-tube-rack.yaml
+  - server/src/labware/resolver.ts
+acceptance:
+  - Labware definition 'lbw-def-generic-96-well-plate' exists and is
+    discoverable by the resolver
+  - Labware definition 'lbw-def-generic-24x1-5ml-tube-rack' exists and is
+    discoverable by the resolver
+  - Compiler gaps for 'generic_96_well_plate' and 'generic_24x1_5ml_tube_rack'
+    are resolved
+  - Execution scale plan can bind these labware definitions to deck slots
+implementationBudget:
+  targetChangedFiles: 3
+  maxChangedFiles: 5
+  targetChangedLines: 80
+  maxChangedLines: 180
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-35B-A3B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10471/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10471/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10471/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10471/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/mp10471/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/mp10471/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/mp10471.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10471.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/mp10471.txt
+failureEvidence:
+  eventCount: 2
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10471/manual_tubes/verdict.yaml

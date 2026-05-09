@@ -1,0 +1,13 @@
+kind: protocol-browser-review-report
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: bench_plate_multichannel
+status: skipped
+route: ""
+played_events: false
+commands:
+  - foundry:loop --skip-browser
+screenshots: []
+console_errors: []
+visual_failures:
+  - browser review skipped by --skip-browser
+labware_checks: []

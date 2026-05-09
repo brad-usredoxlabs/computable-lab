@@ -1,0 +1,47 @@
+kind: protocol-foundry-patch-spec
+id: man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-labware-resolver-generic-aliases
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: robot_deck
+fixClass: labware_alias_or_resolver
+title: Add generic labware aliases to resolver for 96-well plate, tube rack, and
+  reservoir
+rationale: "The compiler gaps show three unresolved labware references:
+  'generic_96_well_plate', 'generic_24x1_5ml_tube_rack', and
+  'generic_12_well_reservoir'. These are standard generic labware types that
+  should resolve to existing labware definitions (lbw-def-generic-96-well-plate,
+  lbw-def-generic-reservoir-1-v1, etc.). The labware resolver needs alias
+  mappings for these common generic names so the compiler can bind them to
+  actual labware definitions."
+ownedFiles:
+  - server/src/protocol-foundry/compiler/labware-resolver.ts
+  - server/src/protocol-foundry/labware/aliases.ts
+acceptance:
+  - Labware resolver successfully resolves 'generic_96_well_plate' to
+    'lbw-def-generic-96-well-plate'
+  - Labware resolver successfully resolves 'generic_12_well_reservoir' to an
+    appropriate reservoir definition
+  - No unresolved_ref gaps for generic labware aliases in compiler output
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 40
+  maxChangedLines: 100
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-35B-A3B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011863-memper-plus-memb-protein-extract-ug.txt
+failureEvidence:
+  eventCount: 5
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/verdict.yaml

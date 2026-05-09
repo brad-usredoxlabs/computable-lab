@@ -1,0 +1,32 @@
+kind: protocol-foundry-stall-report
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: manual_tubes
+generated_at: 2026-05-09T07:22:24.112Z
+status: stalled
+reason: Variant reached 24 attempts without reaching foundryComplete.
+maxAttempts: 24
+attempt: 24
+metrics:
+  eventCount: 10
+  blockerCount: 0
+  diagnosticCount: 17
+  extractorRepairExhaustedCount: 0
+  outcome: gap
+  foundryComplete: 0
+  qualityScore: 0.35
+  coverageEstimate: 0.5
+artifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/report.yaml
+  architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/verdict.yaml
+  patchSpecs:
+    - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/add-missing-biology-verbs.yaml
+    - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/add-pal3-labware-records.yaml
+    - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+  adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/adoption.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/result.yaml
+  patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/an-fame-oil-gc-pal3-5994-8543en-agilent-manual_tubes.yaml
+nextAction: Move to the next variant/protocol; revisit after broader compiler
+  improvements land.

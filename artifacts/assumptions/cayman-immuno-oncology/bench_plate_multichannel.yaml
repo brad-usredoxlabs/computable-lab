@@ -1,0 +1,72 @@
+kind: protocol-foundry-test-assumption-profile
+protocolId: cayman-immuno-oncology
+variant: bench_plate_multichannel
+mode: deterministic_test_assumptions
+acceptanceLevel: test_compile_only
+selectionPolicy:
+  multipleChoice: first_valid_option
+  freeTextClarification: match_question_to_profile_else_first_valid_option
+  randomization: disabled
+syntheticAnswers:
+  - questionClass: multiple_choice
+    answer: Select the first biologically valid option. If options are lettered,
+      choose A only when A is valid.
+    rationale: Determinism makes regression comparisons meaningful across Foundry runs.
+  - questionClass: sample_count_and_layout
+    answer:
+      sampleCount: 8
+      sourceLabware: generic_96_well_plate
+      sourcePositions:
+        - A1
+        - B1
+        - C1
+        - D1
+        - E1
+        - F1
+        - G1
+        - H1
+    rationale: Eight samples exercise single-channel, multichannel, and first-column
+      plate logic without requiring a full 96-sample run.
+  - questionClass: sample_provenance
+    answer:
+      provenanceId: SYNTHETIC-FOUNDRY-SAMPLE-SET-cayman-immuno-oncology
+      description: Synthetic Foundry test samples for compiler stress testing only.
+    rationale: Unblocks event graph generation while preserving that no real sample
+      provenance was supplied.
+  - questionClass: lot_or_physical_inventory
+    answer:
+      lot: SYNTHETIC-LOT-FOUNDRY-TEST
+      sourceTube: SYNTHETIC-SOURCE-TUBE-1
+    rationale: Provides deterministic test handles but must not be promoted to real
+      material-instance records.
+  - questionClass: missing_coa_or_vendor_default
+    answer: Use the explicit value printed in the vendor protocol when present;
+      otherwise use a synthetic COA placeholder and continue with a warning.
+    rationale: Foundry improvement mode should expose compiler and renderer gaps
+      instead of stopping on missing lot-specific COA data.
+  - questionClass: manual_labware
+    answer:
+      tubeRack: generic_24x1_5ml_tube_rack
+      conical15mlRack: generic_6x15ml_tube_rack
+      conical50mlRack: generic_4x50ml_tube_rack
+    rationale: Tube-heavy protocols need concrete rack geometry for browser review.
+  - questionClass: bench_plate_labware
+    answer:
+      plate: generic_96_well_plate
+      reservoir: generic_12_well_reservoir
+      pipette: 8_channel_multichannel
+      tips: generic_96_tip_rack
+    rationale: Exercises the manual-to-plate scaling path consistently.
+  - questionClass: robot_deck_binding
+    answer:
+      platform: integra_assist
+      deckProfile: assist_plus_default
+      reservoir: generic_12_well_reservoir
+      pipette: 8_channel_multichannel
+    rationale: Exercises robot deck lowering while making platform assumptions explicit.
+provenance:
+  syntheticInputs: true
+  createsMaterialInstances: false
+  createsPhysicalInventory: false
+  note: These assumptions are only for Foundry compiler stress testing. They are
+    not scientific truth and must not be accepted as real run context.

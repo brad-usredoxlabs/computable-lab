@@ -1,0 +1,106 @@
+kind: protocol-foundry-compiler-result
+protocolId: mp10471
+variant: bench_plate_multichannel
+outcome: gap
+rawOutcome: gap
+eventCount: 2
+diagnostics:
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 7 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 10 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 24 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 25 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 1 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_candidates
+    message: Protocol Foundry supplied 4 deterministic candidates from presegmented
+      text.
+    pass_id: extract_entities
+    details: {}
+  - severity: info
+    code: foundry_presegmented_no_actionable_candidates
+    message: Protocol Foundry supplied presegmented text, but this chunk had no
+      deterministic protocol-action evidence.
+    pass_id: extract_entities
+    details: {}
+  - severity: warning
+    code: ai_precompile_shape_mismatch
+    message: ai_precompile output shape mismatch
+    pass_id: ai_precompile
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'mint_materials' skipped: when condition
+      'outputs.ai_precompile.mintMaterials' evaluated to false"
+    pass_id: mint_materials
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_labware' skipped: when condition
+      'outputs.ai_precompile.candidateLabwares' evaluated to false"
+    pass_id: resolve_labware
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_patterns' skipped: when condition
+      'outputs.ai_precompile.patternEvents' evaluated to false"
+    pass_id: expand_patterns
+  - severity: info
+    code: execution_scale_plan_ready
+    message: Execution scaling plan is ready for robot_deck.
+    pass_id: derive_execution_scale_plan
+    details:
+      sourceLevel: manual_tubes
+      targetLevel: robot_deck
+      profileId: robot-assist-plus-96
+      blockers: []
+extractorRepairExhaustedCount: 0
+gaps:
+  - kind: clarification
+    message: "The protocol describes two distinct workflows (Adherent and
+      Non-adherent cells) and three kit variants (Starter, Surveyor,
+      High-throughput). Additionally, deterministic assumptions provide specific
+      synthetic sample counts (8 samples in column 1). Please confirm: 1. Which
+      cell type protocol (Adherent or Non-adherent) is the primary target for
+      this compile? 2. Which kit catalog number (F10471, F10472, or F10473) is
+      being used, as this affects buffer preparation? 3. Should the compiler
+      strictly follow the deterministic assumption of 8 samples in positions
+      A1-H1?"
+  - kind: unresolved_ref
+    message: generic_96_well_plate (no matching labware in prior snapshot)
+    details:
+      hint: generic_96_well_plate
+      reason: no matching labware in prior snapshot
+  - kind: unresolved_ref
+    message: generic_12_well_reservoir (no matching labware in prior snapshot)
+    details:
+      hint: generic_12_well_reservoir
+      reason: no matching labware in prior snapshot
+  - kind: unresolved_ref
+    message: generic_96_tip_rack (no matching labware in prior snapshot)
+    details:
+      hint: generic_96_tip_rack
+      reason: no matching labware in prior snapshot
+foundryTestAssumptionsRef: /home/brad/git/computable-foundry/artifacts/assumptions/mp10471/bench_plate_multichannel.yaml
+terminalArtifactsRef: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10471/bench_plate_multichannel.yaml

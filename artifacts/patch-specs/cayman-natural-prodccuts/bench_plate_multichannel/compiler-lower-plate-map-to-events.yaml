@@ -1,0 +1,48 @@
+kind: protocol-foundry-patch-spec
+id: cayman-natural-prodccuts/bench_plate_multichannel/compiler-lower-plate-map-to-events
+protocolId: cayman-natural-prodccuts
+variant: bench_plate_multichannel
+fixClass: compiler_event_coverage
+title: Compiler must lower plate-map candidates to load_plate events
+rationale: Even if the pre-compiler produces plate-map candidates, the compiler
+  currently produces 0 events. The compiler lacks a lowering rule for plate-map
+  / load_plate candidate types. For a screening library protocol, the primary
+  event is loading compounds into a 96-well plate. The compiler needs a verb
+  handler that transforms a plate-map candidate (well -> compound mapping) into
+  a load_plate event with well assignments.
+ownedFiles:
+  - server/src/compiler/lowering/plate-map-lowering.ts
+  - server/src/compiler/verbs/load-plate.ts
+  - server/src/compiler/event-graph-builder.ts
+acceptance:
+  - Compiler must produce at least 1 event of kind 'load_plate' or
+    'assign_wells' when given a plate-map candidate.
+  - The event graph must contain well-to-compound assignments matching the PDF
+    plate map (e.g., A2 -> Ursolic Acid, A3 -> (+)-Abscisic Acid).
+  - eventCount must be >= 1 (ideally >= 2 including a plate initialization
+    event).
+  - outcome must not be 'gap' after this fix.
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 4
+  targetChangedLines: 100
+  maxChangedLines: 200
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-natural-prodccuts/bench_plate_multichannel/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-natural-prodccuts/bench_plate_multichannel/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-natural-prodccuts.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-natural-prodccuts.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cayman-natural-prodccuts.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-natural-prodccuts/bench_plate_multichannel/verdict.yaml

@@ -1,0 +1,137 @@
+kind: protocol-foundry-architect-verdict
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: bench_plate_multichannel
+generated_at: 2026-05-09T06:40:26.761Z
+accepted: false
+qualityScore: 0.15
+coverageEstimate: 0.25
+failureClasses:
+  - precompiler_reference_shape
+  - labware_alias_or_resolver
+  - material_catalog_or_spec
+missingVerbs: []
+missingLabware: []
+missingMaterials: []
+badEvents: []
+badScalingAssumptions: []
+recommendedFixes:
+  - id: fix-ai-precompile-shape-mismatch
+    class: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch to unblock downstream passes
+    rationale: "The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
+      AI pre-compiler produced output that doesn't match the expected schema.
+      This caused critical downstream passes to be skipped: 'mint_materials' (no
+      materials extracted), 'resolve_labware' (no labware resolved), and
+      'expand_patterns' (no pattern events generated). The pre-compiler
+      extracted 65 candidates total (10+43+12) but failed to structure them into
+      the expected output shape, resulting in only 5 generic wash events instead
+      of the full membrane protein extraction protocol with permeabilization,
+      solubilization, and centrifugation steps."
+    ownedFiles:
+      - server/src/protocol-foundry/passes/ai_precompile.ts
+      - server/src/protocol-foundry/passes/ai_precompile.schema.ts
+    acceptance:
+      - ai_precompile pass completes without shape_mismatch warning for
+        man0011863 protocol
+      - outputs.ai_precompile.mintMaterials is truthy, allowing mint_materials
+        pass to run
+      - outputs.ai_precompile.candidateLabwares is truthy, allowing
+        resolve_labware pass to run
+      - outputs.ai_precompile.patternEvents is truthy, allowing expand_patterns
+        pass to run
+      - Event count increases from 5 to at least 12 events covering wash,
+        permeabilize, solubilize, and centrifuge steps
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: &a1
+      compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+      eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+      executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+      browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/report.yaml
+      coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/result.yaml
+      assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+      segment: /home/brad/git/computable-foundry/artifacts/segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
+      materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
+      text: /home/brad/git/computable-foundry/artifacts/text/man0011863-memper-plus-memb-protein-extract-ug.txt
+    failureEvidence: &a2
+      eventCount: 5
+      outcome: gap
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 4
+      targetChangedLines: 120
+      maxChangedLines: 250
+      requireFocusedFixture: true
+  - id: fix-labware-resolver-snapshot-gap
+    class: labware_alias_or_resolver
+    title: Fix labware resolver to find existing registry records in prior snapshot
+    rationale: "The compiler reports two unresolved_ref gaps:
+      'generic_96_well_plate' and 'generic_12_well_reservoir' with reason 'no
+      matching labware in prior snapshot'. However, the fuzzy_registry_match
+      diagnostic shows '96-well plate' was successfully resolved to registry key
+      '96-well-plate' with recordId 'lbw-def-generic-96-well-plate'. The
+      execution scale plan also references 'lbw-def-generic-96-well-plate' and
+      'lbw-def-generic-reservoir-1-v1'. This indicates the labware resolver's
+      snapshot lookup is failing to find records that exist in the registry,
+      likely due to a key mismatch between the resolver's lookup format and the
+      registry's storage format."
+    ownedFiles:
+      - server/src/protocol-foundry/passes/resolve_labware.ts
+      - server/src/protocol-foundry/labware/registry.ts
+    acceptance:
+      - No unresolved_ref gaps for generic_96_well_plate or
+        generic_12_well_reservoir
+      - Labware resolver successfully matches 'generic_96_well_plate' to
+        'lbw-def-generic-96-well-plate'
+      - Labware resolver successfully matches 'generic_12_well_reservoir' to an
+        existing reservoir definition
+      - Event graph labwares array contains properly resolved labware definitions
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 60
+      maxChangedLines: 150
+      requireFocusedFixture: true
+  - id: fix-material-extraction-for-memper-protocol
+    class: material_catalog_or_spec
+    title: Extract and mint materials for Mem-PER Plus protocol reagents
+    rationale: "The material context shows empty materials, materialSpecs, and
+      vendorProducts arrays. The PDF clearly specifies three key reagents: Cell
+      Wash Solution (225mL), Solubilization Buffer (25mL), and Permeabilization
+      Buffer (50mL). The mint_materials pass was skipped due to the
+      ai_precompile shape mismatch, but even after fixing that, the pre-compiler
+      needs to properly extract these materials from the PDF text. The current
+      event graph only references 'wash-buffer' as a material_ref, missing the
+      permeabilization and solubilization buffers that are central to this
+      membrane protein extraction protocol."
+    ownedFiles:
+      - server/src/protocol-foundry/passes/mint_materials.ts
+      - server/src/protocol-foundry/passes/extract_entities.ts
+    acceptance:
+      - Material context contains entries for Cell Wash Solution, Solubilization
+        Buffer, and Permeabilization Buffer
+      - Event graph includes add_material events for permeabilization buffer and
+        solubilization buffer
+      - Material specs include storage conditions (4°C for wash/solubilization,
+        -20°C for permeabilization)
+      - "Protocol events reflect the correct sequence: wash -> permeabilize ->
+        centrifuge -> solubilize -> centrifuge"
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 4
+      targetChangedLines: 100
+      maxChangedLines: 200
+      requireFocusedFixture: true
+sourceArtifacts: *a1
+architectNotes: "LLM architect analysis: 3 fix recommendations."

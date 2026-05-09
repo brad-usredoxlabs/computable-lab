@@ -1,0 +1,49 @@
+kind: protocol-foundry-patch-spec
+id: cellrox-oxidative-stress-qr/robot_deck/add-treat-remove-analyze-verbs
+protocolId: cellrox-oxidative-stress-qr
+variant: robot_deck
+fixClass: compiler_event_coverage
+title: Register expanders for 'treat', 'remove', and 'analyze' biology verbs
+rationale: "The compiler diagnostics explicitly warn 'No expander registered for
+  verb' for 'treat', 'remove', and 'analyze'. These are core protocol steps from
+  the PDF (Step 1: Treat cells, Step 4: Remove medium, Step 8: Analyze cells).
+  Without these expanders, the compiler drops these candidate events, resulting
+  in incomplete protocol coverage. 'treat' should lower to an add_material or
+  incubate event, 'remove' should lower to a transfer/aspirate event, and
+  'analyze' should lower to a read/measure event."
+ownedFiles:
+  - server/src/compiler/passes/expand_biology_verbs.ts
+  - server/src/compiler/verbs/index.ts
+acceptance:
+  - Compiler diagnostics no longer contain 'unknown_biology_verb' warnings for
+    'treat', 'remove', or 'analyze'.
+  - Event graph includes events corresponding to treating cells, removing
+    medium, and analyzing cells.
+  - The 'treat' verb lowers to an appropriate add_material or incubate event
+    with correct parameters.
+  - The 'remove' verb lowers to a transfer or aspirate event.
+  - The 'analyze' verb lowers to a read or measure event.
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 60
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cellrox-oxidative-stress-qr/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cellrox-oxidative-stress-qr/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cellrox-oxidative-stress-qr/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cellrox-oxidative-stress-qr/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cellrox-oxidative-stress-qr/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cellrox-oxidative-stress-qr/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cellrox-oxidative-stress-qr.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cellrox-oxidative-stress-qr.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cellrox-oxidative-stress-qr.txt
+failureEvidence:
+  eventCount: 10
+  outcome: gap
+architectNotes: "LLM architect analysis: 4 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cellrox-oxidative-stress-qr/robot_deck/verdict.yaml

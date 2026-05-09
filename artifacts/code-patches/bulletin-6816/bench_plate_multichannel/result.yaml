@@ -1,10 +1,7 @@
 kind: protocol-foundry-coder-patch-result
 protocolId: bulletin-6816
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T03:10:03.996Z
-status: applied
-selectedSpecId: bulletin-6816/bench_plate_multichannel/fix-foundry-runtime-wiring-gap
-touchedFiles:
-  - server/src/foundry/ProtocolFoundryCompileRunner.ts
-commit: 6f8aab9f307552fedd855815bf83b23803b71573
-message: Patch applied and committed.
+generated_at: 2026-05-09T05:33:47.291Z
+status: blocked
+message: Patch touches no meaningful compiler/schema/record files.
+touchedFiles: []

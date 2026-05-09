@@ -1,0 +1,7 @@
+kind: protocol-foundry-patch-spec-index
+protocolId: cayman-natural-prodccuts
+variant: bench_plate_multichannel
+patchSpecs:
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/bench_plate_multichannel/precompiler-extract-plate-map-candidates.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/bench_plate_multichannel/compiler-lower-plate-map-to-events.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/bench_plate_multichannel/material-catalog-cayman-compounds.yaml

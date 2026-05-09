@@ -1,0 +1,46 @@
+kind: protocol-foundry-patch-spec
+id: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-material-resolver-resuspend-verb
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: manual_tubes
+fixClass: material_catalog_or_spec
+title: Fix unresolved 'resuspend' material reference and add ZymoBIOMICS reagent
+  catalog entries
+rationale: The compiler gaps show 'resuspend' as an unresolved material ref with
+  'registry hit ontology' and 'kind material not handled by resolve_references'.
+  This indicates the compiler is treating 'resuspend' (which is a verb/action)
+  as a material. Additionally, the material context is empty despite the PDF
+  listing many reagents (Lysis Solution, MagBinding Buffer, MagWash 1/2,
+  MagBinding Beads, DNase/RNase Free Water). The material resolver needs to
+  distinguish verbs from materials and catalog the ZymoBIOMICS reagents.
+ownedFiles:
+  - server/src/protocol-foundry/materials/resolver.ts
+  - server/src/protocol-foundry/materials/zymo-catalog.ts
+acceptance:
+  - "'resuspend' is recognized as a verb/action, not a material reference"
+  - ZymoBIOMICS Lysis Solution, MagBinding Buffer, MagWash 1, MagWash 2,
+    MagBinding Beads, and DNase/RNase Free Water are cataloged as materials
+  - No unresolved_ref gaps for materials in the compiler output
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 4
+  targetChangedLines: 100
+  maxChangedLines: 200
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.txt
+failureEvidence:
+  eventCount: 6
+  outcome: gap
+architectNotes: "LLM architect analysis: 4 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/verdict.yaml

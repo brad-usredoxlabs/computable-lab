@@ -3,26 +3,29 @@ id: bulletin-6816/robot_deck/fix-labware-resolution-for-pcr-plates
 protocolId: bulletin-6816
 variant: robot_deck
 fixClass: labware_alias_or_resolver
-title: Resolve Bio-Rad Hard-Shell PCR plate labware references
-rationale: "The PDF explicitly references 'Hard-Shell Thin-Wall 96- or 384-Well
-  Skirted PCR Plates, catalog #HSP9655 or HSP3805' and 'Microseal B Adhesive
-  Seals, catalog #MSB1001'. The compiler output shows an unresolved_ref for
-  'generic_96_well_plate' with 'no matching labware in prior snapshot'. The
-  labware resolver needs to map Bio-Rad catalog numbers to existing labware
-  definitions or create appropriate generic PCR plate definitions."
+title: Resolve generic_96_well_plate to Hard-Shell Thin-Wall PCR plate definition
+rationale: "The compiler gap reports 'generic_96_well_plate (no matching labware
+  in prior snapshot)'. The PDF explicitly specifies 'Hard-Shell Thin-Wall 96- or
+  384-Well Skirted PCR Plates, catalog #HSP9655 or HSP3805'. The labware
+  resolver needs to map the generic hint to the specific Bio-Rad PCR plate
+  definition. Additionally, the Microseal 'B' Adhesive Seal (catalog #MSB1001)
+  should be resolved as a consumable. The resolver should check the labware
+  catalog for Bio-Rad-specific PCR plate definitions and create an alias from
+  'generic_96_well_plate' to the correct definition."
 ownedFiles:
   - server/src/foundry/labware/resolver.ts
-  - server/src/foundry/labware/aliases/biorad_aliases.ts
+  - server/src/foundry/labware/catalog/bioRadPcrPlates.ts
 acceptance:
-  - "Labware resolver maps catalog #HSP9655 to a 96-well PCR plate definition"
-  - "Labware resolver maps catalog #MSB1001 to a plate seal definition"
-  - No unresolved_ref gaps for PCR plate labware in compiler output
-  - Event graph labwares include properly typed PCR plate with correct well count
+  - generic_96_well_plate resolves to lbw-def-biorad-hardshell-96-well-pcr-plate
+    or equivalent
+  - No unresolved_ref gaps for labware in the compiler output
+  - Microseal 'B' Adhesive Seal is recognized as a consumable in the resource
+    manifest
 implementationBudget:
   targetChangedFiles: 2
   maxChangedFiles: 3
-  targetChangedLines: 80
-  maxChangedLines: 150
+  targetChangedLines: 40
+  maxChangedLines: 100
   requireFocusedFixture: true
 coderModelProfile:
   model: Qwen/Qwen3.6-35B-A3B-FP8

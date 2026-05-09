@@ -1,0 +1,34 @@
+kind: protocol-foundry-stall-report
+protocolId: bulletin-6816
+variant: robot_deck
+generated_at: 2026-05-09T06:01:42.703Z
+status: stalled
+reason: Variant reached 24 attempts without reaching foundryComplete.
+maxAttempts: 24
+attempt: 24
+metrics:
+  eventCount: 1
+  diagnosticCount: 10
+  extractorRepairExhaustedCount: 0
+  outcome: gap
+  foundryComplete: 0
+  qualityScore: 0.1
+  coverageEstimate: 0.1
+  blockerCount: 0
+artifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/bulletin-6816/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/bulletin-6816/robot_deck/report.yaml
+  architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/bulletin-6816/robot_deck/verdict.yaml
+  patchSpecs:
+    - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+    - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-labware-resolution-for-pcr-plates.yaml
+    - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-pcr-protocol-event-coverage.yaml
+  adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/bulletin-6816/robot_deck/adoption.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/robot_deck/result.yaml
+  patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/bulletin-6816-robot_deck.yaml
+  criticReport: /home/brad/git/computable-foundry/artifacts/patch-critic/bulletin-6816/robot_deck/report.yaml
+  rerunReport: /home/brad/git/computable-foundry/artifacts/rerun/bulletin-6816/robot_deck/rerun.yaml
+nextAction: Move to the next variant/protocol; revisit after broader compiler
+  improvements land.

@@ -1,54 +1,83 @@
 kind: protocol-foundry-review-index
-generated_at: 2026-05-09T04:54:11.956Z
+generated_at: 2026-05-09T07:31:57.160Z
 artifactRoot: /home/brad/git/computable-foundry/artifacts
 protocols:
   - protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
-    status: pending
+    status: gap
     variants:
       - variant: manual_tubes
-        status: pending
-        eventCount: 0
+        status: stalled
+        eventCount: 10
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.35
+        coverageEstimate: 0.5
         artifacts:
           protocolText: text/an-fame-oil-gc-pal3-5994-8543en-agilent.txt
           segment: segments/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
           materialContext: material-context/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+          eventGraph: event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+          executionScale: execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+          browserReport: browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/report.yaml
+          architectVerdict: architect/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/verdict.yaml
+          patchSpecs:
+            - patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/add-missing-biology-verbs.yaml
+            - patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/add-pal3-labware-records.yaml
+            - patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+          adoptionDecision: adoption/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/adoption.yaml
+          coderPatch: code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/result.yaml
+          patchReport: patch-reports/an-fame-oil-gc-pal3-5994-8543en-agilent-manual_tubes.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: bench_plate_multichannel
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 9
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.25
+        coverageEstimate: 0.45
         artifacts:
           protocolText: text/an-fame-oil-gc-pal3-5994-8543en-agilent.txt
           segment: segments/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
           materialContext: material-context/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+          eventGraph: event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+          executionScale: execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+          browserReport: browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/report.yaml
+          architectVerdict: architect/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/verdict.yaml
+          patchSpecs:
+            - patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/add-wait-and-scale-verb-expanders.yaml
+            - patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/resolve-generic-labware-refs.yaml
+          adoptionDecision: adoption/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/adoption.yaml
+          coderPatch: code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/result.yaml
+          patchReport: patch-reports/an-fame-oil-gc-pal3-5994-8543en-agilent-bench_plate_multichannel.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: robot_deck
-        status: pending
+        status: gap
         eventCount: 0
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0
+        coverageEstimate: 0
         artifacts:
           protocolText: text/an-fame-oil-gc-pal3-5994-8543en-agilent.txt
           segment: segments/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
           materialContext: material-context/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+          eventGraph: event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+          executionScale: execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+          browserReport: browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/report.yaml
+          architectVerdict: architect/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/verdict.yaml
+          patchSpecs:
+            - patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-unknown-biology-verbs.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
   - protocolId: bulletin-6816
-    status: gap
+    status: stalled
     variants:
       - variant: manual_tubes
         status: stalled
@@ -64,12 +93,7 @@ protocols:
           eventGraph: event-graphs/bulletin-6816/manual_tubes.yaml
           executionScale: execution-scale/bulletin-6816/manual_tubes.yaml
           browserReport: browser-review/bulletin-6816/manual_tubes/report.yaml
-          patchSpecs:
-            - patch-specs/bulletin-6816/manual_tubes/fix-browser-rendering.yaml
-            - patch-specs/bulletin-6816/manual_tubes/fix-event-graph-coverage-readout.yaml
-            - patch-specs/bulletin-6816/manual_tubes/fix-foundry-runtime-wiring-gap.yaml
-            - patch-specs/bulletin-6816/manual_tubes/fix-labware-alias-resolver-gap.yaml
-            - patch-specs/bulletin-6816/manual_tubes/fix-material-catalog-spec-gap.yaml
+          patchSpecs: []
           adoptionDecision: adoption/bulletin-6816/manual_tubes/adoption.yaml
           coderPatch: code-patches/bulletin-6816/manual_tubes/result.yaml
           patchReport: patch-reports/bulletin-6816-manual_tubes.yaml
@@ -78,7 +102,7 @@ protocols:
         architectStatus: missing
         criticStatus: present
       - variant: bench_plate_multichannel
-        status: gap
+        status: stalled
         eventCount: 1
         blockerCount: 0
         qualityScore: 0.1
@@ -94,8 +118,7 @@ protocols:
           architectVerdict: architect/bulletin-6816/bench_plate_multichannel/verdict.yaml
           patchSpecs:
             - patch-specs/bulletin-6816/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
-            - patch-specs/bulletin-6816/bench_plate_multichannel/fix-pcr-thermal-cycle-event-lowering.yaml
-            - patch-specs/bulletin-6816/bench_plate_multichannel/fix-reagent-pool-dispense-events.yaml
+            - patch-specs/bulletin-6816/bench_plate_multichannel/fix-pcr-protocol-event-coverage.yaml
           adoptionDecision: adoption/bulletin-6816/bench_plate_multichannel/adoption.yaml
           coderPatch: code-patches/bulletin-6816/bench_plate_multichannel/result.yaml
           patchReport: patch-reports/bulletin-6816-bench_plate_multichannel.yaml
@@ -105,7 +128,7 @@ protocols:
         architectStatus: rejected
         criticStatus: present
       - variant: robot_deck
-        status: gap
+        status: stalled
         eventCount: 1
         blockerCount: 0
         qualityScore: 0.1
@@ -122,7 +145,7 @@ protocols:
           patchSpecs:
             - patch-specs/bulletin-6816/robot_deck/fix-ai-precompile-shape-mismatch.yaml
             - patch-specs/bulletin-6816/robot_deck/fix-labware-resolution-for-pcr-plates.yaml
-            - patch-specs/bulletin-6816/robot_deck/fix-pcr-protocol-verb-lowering.yaml
+            - patch-specs/bulletin-6816/robot_deck/fix-pcr-protocol-event-coverage.yaml
           adoptionDecision: adoption/bulletin-6816/robot_deck/adoption.yaml
           coderPatch: code-patches/bulletin-6816/robot_deck/result.yaml
           patchReport: patch-reports/bulletin-6816-robot_deck.yaml
@@ -132,362 +155,554 @@ protocols:
         architectStatus: rejected
         criticStatus: present
   - protocolId: cayman-immuno-oncology
-    status: pending
+    status: gap
     variants:
       - variant: manual_tubes
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 2
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.1
+        coverageEstimate: 0.1
         artifacts:
           protocolText: text/cayman-immuno-oncology.txt
           segment: segments/cayman-immuno-oncology.yaml
           materialContext: material-context/cayman-immuno-oncology.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/cayman-immuno-oncology/manual_tubes.yaml
+          eventGraph: event-graphs/cayman-immuno-oncology/manual_tubes.yaml
+          executionScale: execution-scale/cayman-immuno-oncology/manual_tubes.yaml
+          browserReport: browser-review/cayman-immuno-oncology/manual_tubes/report.yaml
+          architectVerdict: architect/cayman-immuno-oncology/manual_tubes/verdict.yaml
+          patchSpecs:
+            - patch-specs/cayman-immuno-oncology/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/cayman-immuno-oncology/manual_tubes/fix-catalog-protocol-event-generation.yaml
+            - patch-specs/cayman-immuno-oncology/manual_tubes/fix-labware-resolution-for-generic-plates.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: bench_plate_multichannel
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 11
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.25
+        coverageEstimate: 0.55
         artifacts:
           protocolText: text/cayman-immuno-oncology.txt
           segment: segments/cayman-immuno-oncology.yaml
           materialContext: material-context/cayman-immuno-oncology.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/cayman-immuno-oncology/bench_plate_multichannel.yaml
+          eventGraph: event-graphs/cayman-immuno-oncology/bench_plate_multichannel.yaml
+          executionScale: execution-scale/cayman-immuno-oncology/bench_plate_multichannel.yaml
+          browserReport: browser-review/cayman-immuno-oncology/bench_plate_multichannel/report.yaml
+          architectVerdict: architect/cayman-immuno-oncology/bench_plate_multichannel/verdict.yaml
+          patchSpecs:
+            - patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-labware-resolver-generic-aliases.yaml
+            - patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-material-catalog-cayman-compounds.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: robot_deck
-        status: pending
+        status: gap
         eventCount: 0
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.05
+        coverageEstimate: 0
         artifacts:
           protocolText: text/cayman-immuno-oncology.txt
           segment: segments/cayman-immuno-oncology.yaml
           materialContext: material-context/cayman-immuno-oncology.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/cayman-immuno-oncology/robot_deck.yaml
+          eventGraph: event-graphs/cayman-immuno-oncology/robot_deck.yaml
+          executionScale: execution-scale/cayman-immuno-oncology/robot_deck.yaml
+          browserReport: browser-review/cayman-immuno-oncology/robot_deck/report.yaml
+          architectVerdict: architect/cayman-immuno-oncology/robot_deck/verdict.yaml
+          patchSpecs:
+            - patch-specs/cayman-immuno-oncology/robot_deck/fix-labware-resolver-gaps.yaml
+            - patch-specs/cayman-immuno-oncology/robot_deck/fix-precompiler-shape-mismatch.yaml
+            - patch-specs/cayman-immuno-oncology/robot_deck/fix-unknown-biology-verbs.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
   - protocolId: cayman-natural-prodccuts
-    status: pending
+    status: gap
     variants:
       - variant: manual_tubes
-        status: pending
+        status: gap
         eventCount: 0
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0
+        coverageEstimate: 0
         artifacts:
           protocolText: text/cayman-natural-prodccuts.txt
           segment: segments/cayman-natural-prodccuts.yaml
           materialContext: material-context/cayman-natural-prodccuts.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/cayman-natural-prodccuts/manual_tubes.yaml
+          eventGraph: event-graphs/cayman-natural-prodccuts/manual_tubes.yaml
+          executionScale: execution-scale/cayman-natural-prodccuts/manual_tubes.yaml
+          browserReport: browser-review/cayman-natural-prodccuts/manual_tubes/report.yaml
+          architectVerdict: architect/cayman-natural-prodccuts/manual_tubes/verdict.yaml
+          patchSpecs:
+            - patch-specs/cayman-natural-prodccuts/manual_tubes/add-library-inventory-lowering-pass.yaml
+            - patch-specs/cayman-natural-prodccuts/manual_tubes/precompiler-extract-plate-map-entities.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: bench_plate_multichannel
-        status: pending
+        status: gap
         eventCount: 0
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0
+        coverageEstimate: 0
         artifacts:
           protocolText: text/cayman-natural-prodccuts.txt
           segment: segments/cayman-natural-prodccuts.yaml
           materialContext: material-context/cayman-natural-prodccuts.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+          eventGraph: event-graphs/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+          executionScale: execution-scale/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+          browserReport: browser-review/cayman-natural-prodccuts/bench_plate_multichannel/report.yaml
+          architectVerdict: architect/cayman-natural-prodccuts/bench_plate_multichannel/verdict.yaml
+          patchSpecs:
+            - patch-specs/cayman-natural-prodccuts/bench_plate_multichannel/compiler-lower-plate-map-to-events.yaml
+            - patch-specs/cayman-natural-prodccuts/bench_plate_multichannel/material-catalog-cayman-compounds.yaml
+            - patch-specs/cayman-natural-prodccuts/bench_plate_multichannel/precompiler-extract-plate-map-candidates.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: robot_deck
-        status: pending
+        status: gap
         eventCount: 0
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0
+        coverageEstimate: 0
         artifacts:
           protocolText: text/cayman-natural-prodccuts.txt
           segment: segments/cayman-natural-prodccuts.yaml
           materialContext: material-context/cayman-natural-prodccuts.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/cayman-natural-prodccuts/robot_deck.yaml
+          eventGraph: event-graphs/cayman-natural-prodccuts/robot_deck.yaml
+          executionScale: execution-scale/cayman-natural-prodccuts/robot_deck.yaml
+          browserReport: browser-review/cayman-natural-prodccuts/robot_deck/report.yaml
+          architectVerdict: architect/cayman-natural-prodccuts/robot_deck/verdict.yaml
+          patchSpecs:
+            - patch-specs/cayman-natural-prodccuts/robot_deck/fix-compiler-plate-dispense-verb.yaml
+            - patch-specs/cayman-natural-prodccuts/robot_deck/fix-precompiler-candidate-shape.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
   - protocolId: cellrox-oxidative-stress-qr
-    status: pending
+    status: gap
     variants:
       - variant: manual_tubes
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 10
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.45
+        coverageEstimate: 0.5
         artifacts:
           protocolText: text/cellrox-oxidative-stress-qr.txt
           segment: segments/cellrox-oxidative-stress-qr.yaml
           materialContext: material-context/cellrox-oxidative-stress-qr.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/cellrox-oxidative-stress-qr/manual_tubes.yaml
+          eventGraph: event-graphs/cellrox-oxidative-stress-qr/manual_tubes.yaml
+          executionScale: execution-scale/cellrox-oxidative-stress-qr/manual_tubes.yaml
+          browserReport: browser-review/cellrox-oxidative-stress-qr/manual_tubes/report.yaml
+          architectVerdict: architect/cellrox-oxidative-stress-qr/manual_tubes/verdict.yaml
+          patchSpecs:
+            - patch-specs/cellrox-oxidative-stress-qr/manual_tubes/add-treat-and-analyze-verbs.yaml
+            - patch-specs/cellrox-oxidative-stress-qr/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/cellrox-oxidative-stress-qr/manual_tubes/fix-labware-and-material-resolution.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: bench_plate_multichannel
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 19
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.35
+        coverageEstimate: 0.95
         artifacts:
           protocolText: text/cellrox-oxidative-stress-qr.txt
           segment: segments/cellrox-oxidative-stress-qr.yaml
           materialContext: material-context/cellrox-oxidative-stress-qr.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/cellrox-oxidative-stress-qr/bench_plate_multichannel.yaml
+          eventGraph: event-graphs/cellrox-oxidative-stress-qr/bench_plate_multichannel.yaml
+          executionScale: execution-scale/cellrox-oxidative-stress-qr/bench_plate_multichannel.yaml
+          browserReport: browser-review/cellrox-oxidative-stress-qr/bench_plate_multichannel/report.yaml
+          architectVerdict: architect/cellrox-oxidative-stress-qr/bench_plate_multichannel/verdict.yaml
+          patchSpecs:
+            - patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/add-analyze-verb-expander.yaml
+            - patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/add-treat-verb-expander.yaml
+            - patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/fix-precompile-labware-shape.yaml
+            - patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/resolve-generic-labware-aliases.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: robot_deck
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 10
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.45
+        coverageEstimate: 0.5
         artifacts:
           protocolText: text/cellrox-oxidative-stress-qr.txt
           segment: segments/cellrox-oxidative-stress-qr.yaml
           materialContext: material-context/cellrox-oxidative-stress-qr.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/cellrox-oxidative-stress-qr/robot_deck.yaml
+          eventGraph: event-graphs/cellrox-oxidative-stress-qr/robot_deck.yaml
+          executionScale: execution-scale/cellrox-oxidative-stress-qr/robot_deck.yaml
+          browserReport: browser-review/cellrox-oxidative-stress-qr/robot_deck/report.yaml
+          architectVerdict: architect/cellrox-oxidative-stress-qr/robot_deck/verdict.yaml
+          patchSpecs:
+            - patch-specs/cellrox-oxidative-stress-qr/robot_deck/add-treat-remove-analyze-verbs.yaml
+            - patch-specs/cellrox-oxidative-stress-qr/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/cellrox-oxidative-stress-qr/robot_deck/fix-fixation-event-material-and-temperature.yaml
+            - patch-specs/cellrox-oxidative-stress-qr/robot_deck/resolve-labware-references.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
   - protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
-    status: pending
+    status: gap
     variants:
       - variant: manual_tubes
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 6
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.15
+        coverageEstimate: 0.3
         artifacts:
           protocolText: text/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.txt
           segment: segments/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
           materialContext: material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+          eventGraph: event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+          executionScale: execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+          browserReport: browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/report.yaml
+          architectVerdict: architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/verdict.yaml
+          patchSpecs:
+            - patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-event-graph-protocol-coverage.yaml
+            - patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-labware-resolver-zymo-bashing-bead.yaml
+            - patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-material-resolver-resuspend-verb.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: bench_plate_multichannel
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 6
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.15
+        coverageEstimate: 0.3
         artifacts:
           protocolText: text/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.txt
           segment: segments/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
           materialContext: material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+          eventGraph: event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+          executionScale: execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+          browserReport: browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/report.yaml
+          architectVerdict: architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/verdict.yaml
+          patchSpecs:
+            - patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-labware-resolver-generic-plates.yaml
+            - patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-material-resolver-resuspend-ontology.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: robot_deck
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 6
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.15
+        coverageEstimate: 0.3
         artifacts:
           protocolText: text/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.txt
           segment: segments/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
           materialContext: material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+          eventGraph: event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+          executionScale: execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+          browserReport: browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/report.yaml
+          architectVerdict: architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/verdict.yaml
+          patchSpecs:
+            - patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/fix-labware-resolver-zymo-bashing-bead.yaml
+            - patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/fix-material-catalog-zymo-reagents.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
   - protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
-    status: pending
+    status: gap
     variants:
       - variant: manual_tubes
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 1
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.05
+        coverageEstimate: 0.1
         artifacts:
           protocolText: text/man0011593-nabspincolumn-5ml-antibody-purifi-ug.txt
           segment: segments/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
           materialContext: material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+          eventGraph: event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+          executionScale: execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+          browserReport: browser-review/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/report.yaml
+          architectVerdict: architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/verdict.yaml
+          patchSpecs:
+            - patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/fix-compiler-event-coverage-spin-column-protocol.yaml
+            - patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/fix-labware-resolver-generic-racks.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: bench_plate_multichannel
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 1
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.1
+        coverageEstimate: 0.1
         artifacts:
           protocolText: text/man0011593-nabspincolumn-5ml-antibody-purifi-ug.txt
           segment: segments/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
           materialContext: material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml
+          eventGraph: event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml
+          executionScale: execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml
+          browserReport: browser-review/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/report.yaml
+          architectVerdict: architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/verdict.yaml
+          patchSpecs:
+            - patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/fix-compiler-event-coverage-spin-column-protocol.yaml
+            - patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/fix-labware-resolver-generic-aliases.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: robot_deck
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 1
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.1
+        coverageEstimate: 0.1
         artifacts:
           protocolText: text/man0011593-nabspincolumn-5ml-antibody-purifi-ug.txt
           segment: segments/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
           materialContext: material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+          eventGraph: event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+          executionScale: execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+          browserReport: browser-review/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/report.yaml
+          architectVerdict: architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/verdict.yaml
+          patchSpecs:
+            - patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/fix-material-extraction-from-pdf.yaml
+            - patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/fix-spin-column-protocol-verb-lowering.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
   - protocolId: man0011863-memper-plus-memb-protein-extract-ug
-    status: pending
+    status: gap
     variants:
       - variant: manual_tubes
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 5
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.15
+        coverageEstimate: 0.25
         artifacts:
           protocolText: text/man0011863-memper-plus-memb-protein-extract-ug.txt
           segment: segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
           materialContext: material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+          eventGraph: event-graphs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+          executionScale: execution-scale/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+          browserReport: browser-review/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/report.yaml
+          architectVerdict: architect/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/verdict.yaml
+          patchSpecs:
+            - patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-labware-resolution-2ml-tube.yaml
+            - patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-multiprotocol-protocol-selection.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: bench_plate_multichannel
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 5
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.15
+        coverageEstimate: 0.25
         artifacts:
           protocolText: text/man0011863-memper-plus-memb-protein-extract-ug.txt
           segment: segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
           materialContext: material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+          eventGraph: event-graphs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+          executionScale: execution-scale/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+          browserReport: browser-review/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/report.yaml
+          architectVerdict: architect/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/verdict.yaml
+          patchSpecs:
+            - patch-specs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-labware-resolver-snapshot-gap.yaml
+            - patch-specs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-material-extraction-for-memper-protocol.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: robot_deck
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 5
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.15
+        coverageEstimate: 0.25
         artifacts:
           protocolText: text/man0011863-memper-plus-memb-protein-extract-ug.txt
           segment: segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
           materialContext: material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+          eventGraph: event-graphs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+          executionScale: execution-scale/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+          browserReport: browser-review/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/report.yaml
+          architectVerdict: architect/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/verdict.yaml
+          patchSpecs:
+            - patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-labware-resolver-generic-aliases.yaml
+            - patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-material-minting-from-kit-contents.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
   - protocolId: mp10422
-    status: pending
+    status: gap
     variants:
       - variant: manual_tubes
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 6
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.35
+        coverageEstimate: 0.3
         artifacts:
           protocolText: text/mp10422.txt
           segment: segments/mp10422.yaml
           materialContext: material-context/mp10422.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/mp10422/manual_tubes.yaml
+          eventGraph: event-graphs/mp10422/manual_tubes.yaml
+          executionScale: execution-scale/mp10422/manual_tubes.yaml
+          browserReport: browser-review/mp10422/manual_tubes/report.yaml
+          architectVerdict: architect/mp10422/manual_tubes/verdict.yaml
+          patchSpecs:
+            - patch-specs/mp10422/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/mp10422/manual_tubes/fix-labware-resolution-for-cellrox-protocol.yaml
+            - patch-specs/mp10422/manual_tubes/fix-material-catalog-cellrox-reagents.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: bench_plate_multichannel
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 15
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.35
+        coverageEstimate: 0.75
         artifacts:
           protocolText: text/mp10422.txt
           segment: segments/mp10422.yaml
           materialContext: material-context/mp10422.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/mp10422/bench_plate_multichannel.yaml
+          eventGraph: event-graphs/mp10422/bench_plate_multichannel.yaml
+          executionScale: execution-scale/mp10422/bench_plate_multichannel.yaml
+          browserReport: browser-review/mp10422/bench_plate_multichannel/report.yaml
+          architectVerdict: architect/mp10422/bench_plate_multichannel/verdict.yaml
+          patchSpecs:
+            - patch-specs/mp10422/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/mp10422/bench_plate_multichannel/fix-labware-resolver-generic-aliases.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: robot_deck
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 6
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.35
+        coverageEstimate: 0.3
         artifacts:
           protocolText: text/mp10422.txt
           segment: segments/mp10422.yaml
           materialContext: material-context/mp10422.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/mp10422/robot_deck.yaml
+          eventGraph: event-graphs/mp10422/robot_deck.yaml
+          executionScale: execution-scale/mp10422/robot_deck.yaml
+          browserReport: browser-review/mp10422/robot_deck/report.yaml
+          architectVerdict: architect/mp10422/robot_deck/verdict.yaml
+          patchSpecs:
+            - patch-specs/mp10422/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/mp10422/robot_deck/fix-labware-resolution-cellrox-protocol.yaml
+            - patch-specs/mp10422/robot_deck/fix-material-catalog-cellrox-reagents.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
   - protocolId: mp10471
-    status: pending
+    status: gap
     variants:
       - variant: manual_tubes
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 2
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.15
+        coverageEstimate: 0.1
         artifacts:
           protocolText: text/mp10471.txt
           segment: segments/mp10471.yaml
           materialContext: material-context/mp10471.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/mp10471/manual_tubes.yaml
+          eventGraph: event-graphs/mp10471/manual_tubes.yaml
+          executionScale: execution-scale/mp10471/manual_tubes.yaml
+          browserReport: browser-review/mp10471/manual_tubes/report.yaml
+          architectVerdict: architect/mp10471/manual_tubes/verdict.yaml
+          patchSpecs:
+            - patch-specs/mp10471/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/mp10471/manual_tubes/fix-compiler-event-coverage-fluo4-protocol.yaml
+            - patch-specs/mp10471/manual_tubes/fix-labware-resolver-generic-96-plate.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: bench_plate_multichannel
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 2
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.15
+        coverageEstimate: 0.1
         artifacts:
           protocolText: text/mp10471.txt
           segment: segments/mp10471.yaml
           materialContext: material-context/mp10471.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/mp10471/bench_plate_multichannel.yaml
+          eventGraph: event-graphs/mp10471/bench_plate_multichannel.yaml
+          executionScale: execution-scale/mp10471/bench_plate_multichannel.yaml
+          browserReport: browser-review/mp10471/bench_plate_multichannel/report.yaml
+          architectVerdict: architect/mp10471/bench_plate_multichannel/verdict.yaml
+          patchSpecs:
+            - patch-specs/mp10471/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/mp10471/bench_plate_multichannel/fix-compiler-event-coverage-fluo4-protocol.yaml
+            - patch-specs/mp10471/bench_plate_multichannel/fix-labware-resolver-generic-aliases.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing
       - variant: robot_deck
-        status: pending
-        eventCount: 0
+        status: gap
+        eventCount: 2
         blockerCount: 0
-        qualityScore: null
-        coverageEstimate: null
+        qualityScore: 0.1
+        coverageEstimate: 0.1
         artifacts:
           protocolText: text/mp10471.txt
           segment: segments/mp10471.yaml
           materialContext: material-context/mp10471.yaml
-          patchSpecs: []
-        browserStatus: missing
-        architectStatus: missing
+          compiler: compiler/mp10471/robot_deck.yaml
+          eventGraph: event-graphs/mp10471/robot_deck.yaml
+          executionScale: execution-scale/mp10471/robot_deck.yaml
+          browserReport: browser-review/mp10471/robot_deck/report.yaml
+          architectVerdict: architect/mp10471/robot_deck/verdict.yaml
+          patchSpecs:
+            - patch-specs/mp10471/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/mp10471/robot_deck/fix-fluo4-assay-verb-lowering.yaml
+            - patch-specs/mp10471/robot_deck/fix-material-extraction-from-kit-contents.yaml
+        browserStatus: skipped
+        architectStatus: rejected
         criticStatus: missing

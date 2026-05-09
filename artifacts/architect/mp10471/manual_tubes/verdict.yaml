@@ -1,0 +1,133 @@
+kind: protocol-foundry-architect-verdict
+protocolId: mp10471
+variant: manual_tubes
+generated_at: 2026-05-09T06:42:38.036Z
+accepted: false
+qualityScore: 0.15
+coverageEstimate: 0.1
+failureClasses:
+  - precompiler_reference_shape
+  - compiler_event_coverage
+  - labware_alias_or_resolver
+missingVerbs: []
+missingLabware: []
+missingMaterials: []
+badEvents: []
+badScalingAssumptions: []
+recommendedFixes:
+  - id: fix-ai-precompile-shape-mismatch
+    class: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch causing pass cascade failure
+    rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch', which
+      caused downstream passes (mint_materials, apply_directives,
+      resolve_labware, expand_patterns) to be skipped because their 'when'
+      conditions evaluated to false. This is the root cause of the empty event
+      graph (only 2 stub mix events) and unresolved labware refs. The
+      ai_precompile pass is not producing the expected output schema, so the
+      compiler cannot extract candidates, materials, or labware hints.
+    ownedFiles:
+      - server/src/protocol-foundry/passes/ai_precompile.ts
+      - server/src/protocol-foundry/passes/ai_precompile.schema.ts
+    acceptance:
+      - ai_precompile pass produces output matching the expected schema with
+        candidateLabwares, mintMaterials, directives, and patternEvents fields
+      - Downstream passes (mint_materials, resolve_labware, expand_patterns) are
+        no longer skipped due to false 'when' conditions
+      - Compiler diagnostic 'ai_precompile_shape_mismatch' is eliminated for
+        mp10471
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: &a1
+      compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10471/manual_tubes.yaml
+      eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10471/manual_tubes.yaml
+      executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10471/manual_tubes.yaml
+      browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10471/manual_tubes/report.yaml
+      coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/mp10471/manual_tubes/result.yaml
+      assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/mp10471/manual_tubes.yaml
+      segment: /home/brad/git/computable-foundry/artifacts/segments/mp10471.yaml
+      materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10471.yaml
+      text: /home/brad/git/computable-foundry/artifacts/text/mp10471.txt
+    failureEvidence: &a2
+      eventCount: 2
+      outcome: gap
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 4
+      targetChangedLines: 120
+      maxChangedLines: 250
+      requireFocusedFixture: true
+  - id: fix-labware-resolver-generic-96-plate
+    class: labware_alias_or_resolver
+    title: Add labware definitions for generic_96_well_plate and
+      generic_24x1_5ml_tube_rack
+    rationale: "The compiler output shows two unresolved_ref gaps:
+      'generic_96_well_plate' and 'generic_24x1_1_5ml_tube_rack' with reason 'no
+      matching labware in prior snapshot'. These labware types are referenced in
+      the execution scale plan but have no corresponding records in the labware
+      catalog. The PDF mentions 96- and 384-well plates, and the protocol uses
+      tubes (Component A comes in 10x10mL or 1x100mL formats). These labware
+      definitions must exist for the compiler to resolve references."
+    ownedFiles:
+      - server/src/labware/definitions/generic-96-well-plate.yaml
+      - server/src/labware/definitions/generic-24x1-5ml-tube-rack.yaml
+      - server/src/labware/resolver.ts
+    acceptance:
+      - Labware definition 'lbw-def-generic-96-well-plate' exists and is
+        discoverable by the resolver
+      - Labware definition 'lbw-def-generic-24x1-5ml-tube-rack' exists and is
+        discoverable by the resolver
+      - Compiler gaps for 'generic_96_well_plate' and
+        'generic_24x1_5ml_tube_rack' are resolved
+      - Execution scale plan can bind these labware definitions to deck slots
+    coderModelProfile:
+      model: Qwen/Qwen3.6-35B-A3B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 3
+      maxChangedFiles: 5
+      targetChangedLines: 80
+      maxChangedLines: 180
+      requireFocusedFixture: true
+  - id: fix-compiler-event-coverage-fluo4-protocol
+    class: compiler_event_coverage
+    title: Add verb lowering for Fluo-4 Direct calcium assay protocol steps
+    rationale: "The event graph contains only 2 stub 'mix' events with empty
+      details, which is insufficient for a calcium assay protocol. The PDF
+      describes a multi-step protocol involving: (1) preparing working solutions
+      from Components A, B, and C, (2) adding reagents to cells in culture
+      media, (3) incubation steps, and (4) fluorescence measurement. The
+      compiler lacks verb lowering rules for these biology operations
+      (prepare_solution, add_reagent, incubate, measure_fluorescence). Without
+      these verbs, the compiler cannot generate meaningful events from the
+      extracted candidates."
+    ownedFiles:
+      - server/src/protocol-foundry/verbs/index.ts
+      - server/src/protocol-foundry/verbs/prepare_solution.ts
+      - server/src/protocol-foundry/verbs/add_reagent.ts
+      - server/src/protocol-foundry/verbs/incubate.ts
+      - server/src/protocol-foundry/verbs/measure_fluorescence.ts
+    acceptance:
+      - Compiler recognizes and lowers 'prepare_solution' verb for mixing
+        Components A, B, and C
+      - Compiler recognizes and lowers 'add_reagent' verb for adding assay
+        reagent to cell culture wells
+      - Compiler recognizes and lowers 'incubate' verb for incubation steps
+      - Event graph contains at least 8 events covering the full Fluo-4 Direct
+        protocol workflow
+      - Events include proper labware references, volumes, and timing parameters
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 5
+      maxChangedFiles: 8
+      targetChangedLines: 200
+      maxChangedLines: 400
+      requireFocusedFixture: true
+sourceArtifacts: *a1
+architectNotes: "LLM architect analysis: 3 fix recommendations."

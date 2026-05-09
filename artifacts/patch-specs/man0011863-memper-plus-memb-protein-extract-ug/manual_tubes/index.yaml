@@ -1,0 +1,7 @@
+kind: protocol-foundry-patch-spec-index
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: manual_tubes
+patchSpecs:
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-multiprotocol-protocol-selection.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-labware-resolution-2ml-tube.yaml

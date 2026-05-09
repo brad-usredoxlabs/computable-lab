@@ -1,0 +1,41 @@
+kind: protocol-foundry-patch-spec
+id: cayman-immuno-oncology/robot_deck/fix-unknown-biology-verbs
+protocolId: cayman-immuno-oncology
+variant: robot_deck
+fixClass: compiler_event_coverage
+title: "Register expanders for biology verbs: bind, prefer, use, report"
+rationale: The compiler drops all candidate events because verbs 'bind',
+  'prefer', 'use', and 'report' have no registered expanders. These are common
+  verbs in screening library protocols where compounds are assigned to wells.
+  Without expanders, no events are generated, resulting in eventCount=0.
+ownedFiles:
+  - server/src/protocol-foundry/compiler/expand-biology-verbs.ts
+  - server/src/protocol-foundry/compiler/verb-expanders/index.ts
+acceptance:
+  - No 'unknown_biology_verb' warnings for bind, prefer, use, report
+  - Candidate events with these verbs are expanded into protocol events
+  - eventCount > 0 after compilation
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 80
+  maxChangedLines: 200
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-immuno-oncology/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-immuno-oncology/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-immuno-oncology/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-immuno-oncology/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-immuno-oncology/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-immuno-oncology/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-immuno-oncology.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-immuno-oncology.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cayman-immuno-oncology.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-immuno-oncology/robot_deck/verdict.yaml

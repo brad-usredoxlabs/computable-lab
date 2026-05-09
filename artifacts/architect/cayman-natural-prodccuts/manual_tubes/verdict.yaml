@@ -1,0 +1,98 @@
+kind: protocol-foundry-architect-verdict
+protocolId: cayman-natural-prodccuts
+variant: manual_tubes
+generated_at: 2026-05-09T06:33:05.101Z
+accepted: false
+qualityScore: 0
+coverageEstimate: 0
+failureClasses:
+  - compiler_event_coverage
+  - precompiler_reference_shape
+missingVerbs: []
+missingLabware: []
+missingMaterials: []
+badEvents: []
+badScalingAssumptions: []
+recommendedFixes:
+  - id: add-library-inventory-lowering-pass
+    class: compiler_event_coverage
+    title: Add compiler lowering pass for library inventory / plate-map protocols
+    rationale: "The compiler currently treats this PDF as a protocol with no
+      actionable steps because it only contains a plate map (well-to-compound
+      mapping). The gap message explicitly states that no experimental steps
+      were found. However, a library inventory IS a valid protocol type: it
+      defines the contents of a 96-well plate. The compiler needs a new lowering
+      pass that recognizes plate-map/inventory protocols and generates events to
+      populate a 96-well plate with the specified compounds at each well
+      position. This would produce events like 'load_compound_into_well' or
+      'set_plate_map' for each well entry."
+    ownedFiles:
+      - server/src/compiler/lowering/plate-map-lowering.ts
+      - server/src/compiler/lowering/index.ts
+      - server/src/compiler/protocol-types.ts
+    acceptance:
+      - Compiler produces at least 1 event per non-empty well in the plate map
+        (e.g., 72+ events for this protocol)
+      - Each event references the correct compound name and item number from the
+        PDF
+      - Events are associated with the correct well position (e.g., A2 ->
+        Ursolic Acid)
+      - outcome changes from 'gap' to 'complete' or 'partial' with eventCount > 3
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: &a1
+      compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-natural-prodccuts/manual_tubes.yaml
+      eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-natural-prodccuts/manual_tubes.yaml
+      executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-natural-prodccuts/manual_tubes.yaml
+      browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-natural-prodccuts/manual_tubes/report.yaml
+      coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-natural-prodccuts/manual_tubes/result.yaml
+      assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-natural-prodccuts/manual_tubes.yaml
+      segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-natural-prodccuts.yaml
+      materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-natural-prodccuts.yaml
+      text: /home/brad/git/computable-foundry/artifacts/text/cayman-natural-prodccuts.txt
+    failureEvidence: &a2
+      eventCount: 0
+      outcome: gap
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 4
+      targetChangedLines: 120
+      maxChangedLines: 250
+      requireFocusedFixture: true
+  - id: precompiler-extract-plate-map-entities
+    class: precompiler_reference_shape
+    title: Enhance pre-compiler to extract structured plate-map entities from
+      inventory tables
+    rationale: "The pre-compiler segments show 'deterministic candidates' were
+      extracted, but the material context is empty (materials: [],
+      materialSpecs: [], vendorProducts: []). The pre-compiler needs to
+      recognize the tabular format (Plate/Well/Contents/Item Number) and extract
+      each row as a structured entity with well position, compound name, and
+      catalog item number. These entities should be passed to the compiler as
+      plate-map candidates rather than generic text candidates."
+    ownedFiles:
+      - server/src/precompiler/extractors/plate-map-extractor.ts
+      - server/src/precompiler/extractors/index.ts
+      - server/src/precompiler/schema/plate-map-schema.ts
+    acceptance:
+      - Pre-compiler extracts at least 72 compound entities from the plate map
+        (one per non-empty well)
+      - Each entity includes well position (e.g., 'A2'), compound name (e.g.,
+        'Ursolic Acid'), and item number (e.g., '10072')
+      - Material context includes populated materials and vendorProducts arrays
+      - Compiler receives structured plate-map candidates instead of generic
+        text candidates
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 100
+      maxChangedLines: 200
+      requireFocusedFixture: true
+sourceArtifacts: *a1
+architectNotes: "LLM architect analysis: 2 fix recommendations."

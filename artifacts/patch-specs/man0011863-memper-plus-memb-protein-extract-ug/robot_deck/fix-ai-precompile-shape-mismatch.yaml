@@ -1,0 +1,47 @@
+kind: protocol-foundry-patch-spec
+id: man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-ai-precompile-shape-mismatch
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: robot_deck
+fixClass: precompiler_reference_shape
+title: Fix ai_precompile output shape mismatch causing downstream pass skips
+rationale: "The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
+  pre-compiler's AI output does not conform to the expected schema. This caused
+  critical downstream passes to be skipped: 'mint_materials' (no materials
+  created), 'resolve_labware' (no labware resolved), and 'expand_patterns' (no
+  pattern events expanded). The result is an event graph with only 5 generic
+  wash events and unresolved references to labware like 'generic_96_well_plate'.
+  The pre-compiler must output a valid shape with candidateLabwares,
+  mintMaterials, and patternEvents arrays so the compiler can process them."
+ownedFiles:
+  - server/src/protocol-foundry/precompiler/ai-precompile.ts
+  - server/src/protocol-foundry/precompiler/schema.ts
+acceptance:
+  - ai_precompile pass outputs a valid object with candidateLabwares,
+    mintMaterials, and patternEvents arrays
+  - No 'ai_precompile_shape_mismatch' warning in compiler diagnostics
+  - Downstream passes mint_materials, resolve_labware, and expand_patterns are
+    no longer skipped by when conditions
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 60
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011863-memper-plus-memb-protein-extract-ug.txt
+failureEvidence:
+  eventCount: 5
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/verdict.yaml
