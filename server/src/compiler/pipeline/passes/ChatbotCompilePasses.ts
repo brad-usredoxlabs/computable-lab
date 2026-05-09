@@ -546,22 +546,32 @@ function normalizeUnresolvedRefs(input: unknown): Array<{ kind: string; label: s
 }
 
 function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unknown }): AiPrecompileOutput {
-  const data = input.parsed ?? (typeof input.raw === 'string' ? JSON.parse(input.raw) : input.raw);
-  if (!data || typeof data !== 'object') {
-    return {
-      mintMaterials: [],
-      candidateLabwares: [],
-      patternEvents: [],
-      candidateActions: [],
-      unresolvedRefs: [],
-    };
+  const parsed = input.parsed && typeof input.parsed === 'object' ? input.parsed : {};
+  const raw = input.raw;
+
+  const getArray = (key: string): unknown[] => {
+    const val = (parsed as Record<string, unknown>)[key] ?? 
+                (raw && typeof raw === 'object' ? (raw as Record<string, unknown>)[key] : undefined);
+    return Array.isArray(val) ? val : [];
+  };
+
+  let candidateEvents = getArray('candidateEvents');
+  if (candidateEvents.length === 0) {
+    const actions = getArray('candidateActions');
+    if (actions.length > 0) {
+      candidateEvents = lowerCandidateActionsToEvents(actions);
+    }
   }
+
+  const candidateLabwares = getArray('candidateLabwares');
+  const mintMaterials = getArray('mintMaterials');
+  const unresolvedRefs = getArray('unresolvedRefs');
+
   return {
-    mintMaterials: Array.isArray(data.mintMaterials) ? data.mintMaterials : [],
-    candidateLabwares: Array.isArray(data.candidateLabwares) ? data.candidateLabwares : [],
-    patternEvents: Array.isArray(data.patternEvents) ? data.patternEvents : [],
-    candidateActions: lowerCandidateActionsToEvents(data.candidateActions),
-    unresolvedRefs: normalizeUnresolvedRefs(data.unresolvedRefs),
+    candidateEvents,
+    candidateLabwares,
+    mintMaterials,
+    unresolvedRefs,
   };
 }
 
