@@ -1,0 +1,44 @@
+kind: protocol-foundry-patch-spec
+id: bulletin-6816/robot_deck/fix-labware-resolution-for-pcr-plates
+protocolId: bulletin-6816
+variant: robot_deck
+fixClass: labware_alias_or_resolver
+title: Resolve Bio-Rad Hard-Shell PCR plate labware references
+rationale: "The PDF explicitly references 'Hard-Shell Thin-Wall 96- or 384-Well
+  Skirted PCR Plates, catalog #HSP9655 or HSP3805' and 'Microseal B Adhesive
+  Seals, catalog #MSB1001'. The compiler output shows an unresolved_ref for
+  'generic_96_well_plate' with 'no matching labware in prior snapshot'. The
+  labware resolver needs to map Bio-Rad catalog numbers to existing labware
+  definitions or create appropriate generic PCR plate definitions."
+ownedFiles:
+  - server/src/foundry/labware/resolver.ts
+  - server/src/foundry/labware/aliases/biorad_aliases.ts
+acceptance:
+  - "Labware resolver maps catalog #HSP9655 to a 96-well PCR plate definition"
+  - "Labware resolver maps catalog #MSB1001 to a plate seal definition"
+  - No unresolved_ref gaps for PCR plate labware in compiler output
+  - Event graph labwares include properly typed PCR plate with correct well count
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 80
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-35B-A3B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/bulletin-6816/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/bulletin-6816/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/bulletin-6816/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/bulletin-6816.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/bulletin-6816.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/bulletin-6816.txt
+failureEvidence:
+  eventCount: 1
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/bulletin-6816/robot_deck/verdict.yaml

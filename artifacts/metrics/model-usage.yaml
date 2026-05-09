@@ -1,15 +1,15 @@
 kind: protocol-foundry-model-usage
-generated_at: 2026-05-09T04:27:43.826Z
-startedAt: 2026-05-09T04:22:58.276Z
-completedAt: 2026-05-09T04:27:43.762Z
-elapsedSeconds: 285.486
+generated_at: 2026-05-09T04:54:12.049Z
+startedAt: 2026-05-09T04:52:47.757Z
+completedAt: 2026-05-09T04:54:12.033Z
+elapsedSeconds: 84.276
 endpoints:
   - role: worker
     baseUrl: http://thunderbeast:8001/v1
     start:
       endpoint: http://thunderbeast:8001/metrics
-      promptTokensTotal: 122196314
-      generationTokensTotal: 663591
+      promptTokensTotal: 122213921
+      generationTokensTotal: 668844
       runningRequests: 0
       waitingRequests: 0
       kvCacheUsage: 0
@@ -20,27 +20,27 @@ endpoints:
       runningRequests: 0
       waitingRequests: 0
       kvCacheUsage: 0
-    deltaPromptTokens: 17607
-    deltaGenerationTokens: 5253
-    promptTokensPerSecond: 61.67377734810113
-    generationTokensPerSecond: 18.400201761207207
+    deltaPromptTokens: 0
+    deltaGenerationTokens: 0
+    promptTokensPerSecond: 0
+    generationTokensPerSecond: 0
   - role: architect
     baseUrl: http://thunderbeast:8000/v1
     start:
       endpoint: http://thunderbeast:8000/metrics
-      promptTokensTotal: 60471377
-      generationTokensTotal: 478959
+      promptTokensTotal: 62129994
+      generationTokensTotal: 492118
       runningRequests: 0
       waitingRequests: 0
       kvCacheUsage: 0
     end:
       endpoint: http://thunderbeast:8000/metrics
-      promptTokensTotal: 60486652
-      generationTokensTotal: 483830
+      promptTokensTotal: 62143171
+      generationTokensTotal: 494539
       runningRequests: 0
       waitingRequests: 0
       kvCacheUsage: 0
-    deltaPromptTokens: 15275
-    deltaGenerationTokens: 4871
-    promptTokensPerSecond: 53.50525069530555
-    generationTokensPerSecond: 17.062132643982544
+    deltaPromptTokens: 13177
+    deltaGenerationTokens: 2421
+    promptTokensPerSecond: 156.35530874744887
+    generationTokensPerSecond: 28.72703972661256

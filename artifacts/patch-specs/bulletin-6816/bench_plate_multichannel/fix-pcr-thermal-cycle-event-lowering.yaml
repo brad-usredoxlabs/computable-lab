@@ -1,0 +1,45 @@
+kind: protocol-foundry-patch-spec
+id: bulletin-6816/bench_plate_multichannel/fix-pcr-thermal-cycle-event-lowering
+protocolId: bulletin-6816
+variant: bench_plate_multichannel
+fixClass: compiler_event_coverage
+title: Add thermal cycling event lowering for qPCR protocols
+rationale: "The PDF text contains a clear thermal cycling protocol: '95°C for 2
+  min followed by 40 cycles of 95°C for 10 sec and 60°C for 45 sec'. The
+  compiler produced only a single 'mix' event with empty details. The compiler
+  lacks a verb lowering rule for thermal cycling/temperature ramping events,
+  which is a core operation in qPCR protocols. Without this, the event graph
+  cannot represent the actual protocol steps."
+ownedFiles:
+  - server/src/foundry/verbs/thermalCycle.ts
+  - server/src/foundry/passes/expandPatterns.ts
+acceptance:
+  - Thermal cycling steps from PDF text are lowered to thermal_cycle events with
+    correct temperature, duration, and cycle count
+  - Event graph contains at least one thermal_cycle event for bulletin-6816
+  - "Thermal cycle events include details: initialDenature (95°C, 2min),
+    amplificationCycles (40x: 95°C/10s, 60°C/45s)"
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 80
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3-Coder-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/bench_plate_multichannel.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/bench_plate_multichannel.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/bulletin-6816/bench_plate_multichannel.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/bulletin-6816/bench_plate_multichannel/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/bench_plate_multichannel/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/bulletin-6816/bench_plate_multichannel.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/bulletin-6816.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/bulletin-6816.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/bulletin-6816.txt
+failureEvidence:
+  eventCount: 1
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/bulletin-6816/bench_plate_multichannel/verdict.yaml

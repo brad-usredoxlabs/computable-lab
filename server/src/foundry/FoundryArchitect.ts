@@ -330,29 +330,52 @@ function normalizeLlmVerdict(
   const evidence = { eventCount, outcome: parsed.outcome };
 
   const recommendedFixes: ArchitectVerdict['recommendedFixes'] = (Array.isArray(parsed.recommendedFixes) ? parsed.recommendedFixes : [])
-    .map((fix: Record<string, unknown>) => ({
-      id: String(fix.id ?? 'unknown-fix'),
-      class: String(fix.class ?? 'general'),
-      title: String(fix.title ?? 'Unspecified fix'),
-      rationale: String(fix.rationale ?? ''),
-      ownedFiles: Array.isArray(fix.ownedFiles) ? fix.ownedFiles.filter((f): f is string => typeof f === 'string') : [],
-      acceptance: Array.isArray(fix.acceptance) ? fix.acceptance.filter((a): a is string => typeof a === 'string') : [],
-      contextHints: Array.isArray(fix.contextHints) ? fix.contextHints.filter((h): h is string => typeof h === 'string') : undefined,
-      implementationBudget: typeof fix.implementationBudget === 'object' && fix.implementationBudget !== null ? {
-        targetChangedFiles: typeof fix.implementationBudget['targetChangedFiles'] === 'number' ? (fix.implementationBudget as Record<string, number>)['targetChangedFiles'] : 1,
-        maxChangedFiles: typeof fix.implementationBudget['maxChangedFiles'] === 'number' ? (fix.implementationBudget as Record<string, number>)['maxChangedFiles'] : 3,
-        targetChangedLines: typeof fix.implementationBudget['targetChangedLines'] === 'number' ? (fix.implementationBudget as Record<string, number>)['targetChangedLines'] : 80,
-        maxChangedLines: typeof fix.implementationBudget['maxChangedLines'] === 'number' ? (fix.implementationBudget as Record<string, number>)['maxChangedLines'] : 220,
-        requireFocusedFixture: typeof fix.implementationBudget['requireFocusedFixture'] === 'boolean' ? (fix.implementationBudget as Record<string, unknown>)['requireFocusedFixture'] as boolean : true,
-      } : undefined,
-      coderModelProfile: typeof fix.coderModelProfile === 'object' && fix.coderModelProfile !== null ? {
-        model: String((fix.coderModelProfile as Record<string, unknown>)['model'] ?? 'Qwen/Qwen3.6-35B-A3B-FP8'),
-        guidance: String((fix.coderModelProfile as Record<string, unknown>)['guidance'] ?? 'Narrow ownership, concrete evidence, one behavior change.'),
-      } : undefined,
-      doNotTouch: Array.isArray(fix.doNotTouch) ? fix.doNotTouch.filter((d): d is string => typeof d === 'string') : undefined,
-      sourceArtifacts: paths,
-      failureEvidence: evidence,
-    }));
+    .map((fix: Record<string, unknown>) => {
+      const budget = typeof fix.implementationBudget === 'object' && fix.implementationBudget !== null
+        ? fix.implementationBudget as Record<string, unknown>
+        : null;
+      const rawModelProfile = typeof fix.coderModelProfile === 'object' && fix.coderModelProfile !== null
+        ? fix.coderModelProfile as Record<string, unknown>
+        : null;
+      const rawModel = rawModelProfile ? String(rawModelProfile['model'] ?? '') : '';
+      // Normalize to valid model names
+      const model = (rawModel.includes('27B') || rawModel.includes('slow') || rawModel.includes('complex'))
+        ? 'Qwen/Qwen3.6-27B-FP8'
+        : 'Qwen/Qwen3.6-35B-A3B-FP8';
+
+      const base: ArchitectVerdict['recommendedFixes'][number] = {
+        id: String(fix.id ?? 'unknown-fix'),
+        class: String(fix.class ?? 'general'),
+        title: String(fix.title ?? 'Unspecified fix'),
+        rationale: String(fix.rationale ?? ''),
+        ownedFiles: Array.isArray(fix.ownedFiles) ? fix.ownedFiles.filter((f): f is string => typeof f === 'string') : [],
+        acceptance: Array.isArray(fix.acceptance) ? fix.acceptance.filter((a): a is string => typeof a === 'string') : [],
+        coderModelProfile: {
+          model,
+          guidance: rawModelProfile ? String(rawModelProfile['guidance'] ?? 'Narrow ownership, concrete evidence, one behavior change.') : 'Narrow ownership, concrete evidence, one behavior change.',
+        },
+        sourceArtifacts: paths,
+        failureEvidence: evidence,
+      };
+
+      if (budget) {
+        base.implementationBudget = {
+          targetChangedFiles: typeof budget.targetChangedFiles === 'number' ? budget.targetChangedFiles : 1,
+          maxChangedFiles: typeof budget.maxChangedFiles === 'number' ? budget.maxChangedFiles : 3,
+          targetChangedLines: typeof budget.targetChangedLines === 'number' ? budget.targetChangedLines : 80,
+          maxChangedLines: typeof budget.maxChangedLines === 'number' ? budget.maxChangedLines : 220,
+          requireFocusedFixture: typeof budget.requireFocusedFixture === 'boolean' ? budget.requireFocusedFixture : true,
+        };
+      }
+
+      const contextHints = Array.isArray(fix.contextHints) ? fix.contextHints.filter((h): h is string => typeof h === 'string') : [];
+      if (contextHints.length > 0) base.contextHints = contextHints;
+
+      const doNotTouch = Array.isArray(fix.doNotTouch) ? fix.doNotTouch.filter((d): d is string => typeof d === 'string') : [];
+      if (doNotTouch.length > 0) base.doNotTouch = doNotTouch;
+
+      return base;
+    });
 
   const qualityScore = Math.max(0, Math.min(1,
     typeof parsed.qualityScore === 'number' ? parsed.qualityScore :

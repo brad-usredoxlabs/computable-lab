@@ -1,6 +1,6 @@
 kind: protocol-foundry-stage-ledger
 generated_at: 2026-05-08T22:13:08.559Z
-updated_at: 2026-05-09T04:27:43.729Z
+updated_at: 2026-05-09T04:54:11.971Z
 artifact_root: /home/brad/git/computable-foundry/artifacts
 protocols:
   - an-fame-oil-gc-pal3-5994-8543en-agilent
@@ -53,7 +53,6 @@ protocol_status:
           eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/manual_tubes.yaml
           executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/bulletin-6816/manual_tubes.yaml
           browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/bulletin-6816/manual_tubes/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/bulletin-6816/manual_tubes/verdict.yaml
           patchSpecs:
             - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/manual_tubes/fix-browser-rendering.yaml
             - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/manual_tubes/fix-event-graph-coverage-readout.yaml
@@ -78,14 +77,18 @@ protocol_status:
         failureReason: "Patch applied: 1 file(s) changed, spec verification passed."
       bench_plate_multichannel:
         variant: bench_plate_multichannel
-        status: gap
-        attempt: 11
+        status: running
+        attempt: 14
         artifacts:
           compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/bench_plate_multichannel.yaml
           eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/bench_plate_multichannel.yaml
           executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/bulletin-6816/bench_plate_multichannel.yaml
           browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/bulletin-6816/bench_plate_multichannel/report.yaml
           architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/bulletin-6816/bench_plate_multichannel/verdict.yaml
+          patchSpecs:
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-pcr-thermal-cycle-event-lowering.yaml
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-reagent-pool-dispense-events.yaml
           adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/bulletin-6816/bench_plate_multichannel/adoption.yaml
           coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/bench_plate_multichannel/result.yaml
           patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/bulletin-6816-bench_plate_multichannel.yaml
@@ -97,22 +100,26 @@ protocol_status:
           extractorRepairExhaustedCount: 0
           outcome: gap
           foundryComplete: 0
-          qualityScore: 0.5
+          qualityScore: 0.1
           coverageEstimate: 0.1
           blockerCount: 0
-        startedAt: 2026-05-09T04:27:43.676Z
-        completedAt: 2026-05-09T04:27:43.678Z
-        failureReason: no patch specs
+        startedAt: 2026-05-09T04:54:11.971Z
+        completedAt: 2026-05-09T04:54:11.928Z
+        failureReason: Patch specs accepted for unattended coder tournament execution.
       robot_deck:
         variant: robot_deck
         status: gap
-        attempt: 10
+        attempt: 11
         artifacts:
           compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/robot_deck.yaml
           eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/robot_deck.yaml
           executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/bulletin-6816/robot_deck.yaml
           browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/bulletin-6816/robot_deck/report.yaml
           architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/bulletin-6816/robot_deck/verdict.yaml
+          patchSpecs:
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-labware-resolution-for-pcr-plates.yaml
+            - /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/robot_deck/fix-pcr-protocol-verb-lowering.yaml
           adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/bulletin-6816/robot_deck/adoption.yaml
           coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/robot_deck/result.yaml
           patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/bulletin-6816-robot_deck.yaml
@@ -124,11 +131,11 @@ protocol_status:
           extractorRepairExhaustedCount: 0
           outcome: gap
           foundryComplete: 0
-          qualityScore: 0.5
+          qualityScore: 0.1
           coverageEstimate: 0.1
           blockerCount: 0
-        startedAt: 2026-05-09T04:27:43.717Z
-        completedAt: 2026-05-09T04:27:43.719Z
+        startedAt: 2026-05-09T04:52:47.967Z
+        completedAt: 2026-05-09T04:54:08.383Z
         failureReason: no patch specs
   cayman-immuno-oncology:
     protocolId: cayman-immuno-oncology

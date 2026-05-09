@@ -1,0 +1,45 @@
+kind: protocol-foundry-patch-spec
+id: bulletin-6816/bench_plate_multichannel/fix-reagent-pool-dispense-events
+protocolId: bulletin-6816
+variant: bench_plate_multichannel
+fixClass: compiler_event_coverage
+title: Add reagent pool preparation and dispense events for multiplex PCR
+rationale: "The PDF describes preparing a multiplex assay pool (Table 1:
+  PrimePCR Assay-FAM 0.5µl per 20µl reaction) and dispensing it into a 96-well
+  plate. The compiler produced no dispense events for reagent preparation. The
+  event graph should include: (1) pool preparation events combining multiple
+  reagents, (2) dispense events transferring reagents to plate wells. Without
+  these, the protocol is incomplete."
+ownedFiles:
+  - server/src/foundry/verbs/dispense.ts
+  - server/src/foundry/passes/expandPatterns.ts
+acceptance:
+  - Event graph contains dispense events for reagent pool components (PrimePCR
+    Assay-FAM, iQ Multiplex Powermix)
+  - Dispense events specify correct volumes (0.5µl FAM per 20µl reaction) and
+    target wells
+  - Pool preparation is represented as a mix or combine event before dispensing
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 60
+  maxChangedLines: 120
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3-Coder-35B-A3B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/bench_plate_multichannel.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/bench_plate_multichannel.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/bulletin-6816/bench_plate_multichannel.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/bulletin-6816/bench_plate_multichannel/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/bench_plate_multichannel/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/bulletin-6816/bench_plate_multichannel.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/bulletin-6816.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/bulletin-6816.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/bulletin-6816.txt
+failureEvidence:
+  eventCount: 1
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/bulletin-6816/bench_plate_multichannel/verdict.yaml

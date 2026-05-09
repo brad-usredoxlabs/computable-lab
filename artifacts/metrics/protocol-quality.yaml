@@ -1,11 +1,11 @@
 kind: protocol-foundry-protocol-quality
-generated_at: 2026-05-09T04:27:43.738Z
+generated_at: 2026-05-09T04:54:12.060Z
 summary:
   protocolCount: 10
   variantTotal: 30
   accepted: 0
   complete: 0
-  gaps: 2
+  gaps: 1
   extractorFailures: 0
   eventTotal: 3
   blockerTotal: 0
@@ -59,14 +59,14 @@ protocols:
         qualityScore: 0.7999999999999999
         coverageEstimate: 0.1
       - variant: bench_plate_multichannel
-        status: gap
+        status: running
         accepted: false
         browserStatus: skipped
         eventCount: 1
         blockerCount: 0
         diagnosticCount: 11
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.5
+        qualityScore: 0.1
         coverageEstimate: 0.1
       - variant: robot_deck
         status: gap
@@ -76,7 +76,7 @@ protocols:
         blockerCount: 0
         diagnosticCount: 10
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.5
+        qualityScore: 0.1
         coverageEstimate: 0.1
   - protocolId: cayman-immuno-oncology
     status: pending

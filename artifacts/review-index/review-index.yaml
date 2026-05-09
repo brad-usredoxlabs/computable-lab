@@ -1,5 +1,5 @@
 kind: protocol-foundry-review-index
-generated_at: 2026-05-09T04:27:43.760Z
+generated_at: 2026-05-09T04:54:11.956Z
 artifactRoot: /home/brad/git/computable-foundry/artifacts
 protocols:
   - protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
@@ -64,7 +64,6 @@ protocols:
           eventGraph: event-graphs/bulletin-6816/manual_tubes.yaml
           executionScale: execution-scale/bulletin-6816/manual_tubes.yaml
           browserReport: browser-review/bulletin-6816/manual_tubes/report.yaml
-          architectVerdict: architect/bulletin-6816/manual_tubes/verdict.yaml
           patchSpecs:
             - patch-specs/bulletin-6816/manual_tubes/fix-browser-rendering.yaml
             - patch-specs/bulletin-6816/manual_tubes/fix-event-graph-coverage-readout.yaml
@@ -76,13 +75,13 @@ protocols:
           patchReport: patch-reports/bulletin-6816-manual_tubes.yaml
           criticReport: patch-critic/bulletin-6816/manual_tubes/report.yaml
         browserStatus: skipped
-        architectStatus: rejected
+        architectStatus: missing
         criticStatus: present
       - variant: bench_plate_multichannel
         status: gap
         eventCount: 1
         blockerCount: 0
-        qualityScore: 0.5
+        qualityScore: 0.1
         coverageEstimate: 0.1
         artifacts:
           protocolText: text/bulletin-6816.txt
@@ -93,7 +92,10 @@ protocols:
           executionScale: execution-scale/bulletin-6816/bench_plate_multichannel.yaml
           browserReport: browser-review/bulletin-6816/bench_plate_multichannel/report.yaml
           architectVerdict: architect/bulletin-6816/bench_plate_multichannel/verdict.yaml
-          patchSpecs: []
+          patchSpecs:
+            - patch-specs/bulletin-6816/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/bulletin-6816/bench_plate_multichannel/fix-pcr-thermal-cycle-event-lowering.yaml
+            - patch-specs/bulletin-6816/bench_plate_multichannel/fix-reagent-pool-dispense-events.yaml
           adoptionDecision: adoption/bulletin-6816/bench_plate_multichannel/adoption.yaml
           coderPatch: code-patches/bulletin-6816/bench_plate_multichannel/result.yaml
           patchReport: patch-reports/bulletin-6816-bench_plate_multichannel.yaml
@@ -106,7 +108,7 @@ protocols:
         status: gap
         eventCount: 1
         blockerCount: 0
-        qualityScore: 0.5
+        qualityScore: 0.1
         coverageEstimate: 0.1
         artifacts:
           protocolText: text/bulletin-6816.txt
@@ -117,7 +119,10 @@ protocols:
           executionScale: execution-scale/bulletin-6816/robot_deck.yaml
           browserReport: browser-review/bulletin-6816/robot_deck/report.yaml
           architectVerdict: architect/bulletin-6816/robot_deck/verdict.yaml
-          patchSpecs: []
+          patchSpecs:
+            - patch-specs/bulletin-6816/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+            - patch-specs/bulletin-6816/robot_deck/fix-labware-resolution-for-pcr-plates.yaml
+            - patch-specs/bulletin-6816/robot_deck/fix-pcr-protocol-verb-lowering.yaml
           adoptionDecision: adoption/bulletin-6816/robot_deck/adoption.yaml
           coderPatch: code-patches/bulletin-6816/robot_deck/result.yaml
           patchReport: patch-reports/bulletin-6816-robot_deck.yaml

@@ -1,7 +1,20 @@
 kind: protocol-foundry-adoption-decision
 protocolId: bulletin-6816
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T04:27:43.678Z
-status: skipped
-patchSpecs: []
-message: No patch specs were produced for this verdict.
+generated_at: 2026-05-09T04:54:11.927Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: bulletin-6816/bench_plate_multichannel/fix-ai-precompile-shape-mismatch
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch causing downstream pass skips
+  - id: bulletin-6816/bench_plate_multichannel/fix-pcr-thermal-cycle-event-lowering
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-pcr-thermal-cycle-event-lowering.yaml
+    fixClass: compiler_event_coverage
+    title: Add thermal cycling event lowering for qPCR protocols
+  - id: bulletin-6816/bench_plate_multichannel/fix-reagent-pool-dispense-events
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-reagent-pool-dispense-events.yaml
+    fixClass: compiler_event_coverage
+    title: Add reagent pool preparation and dispense events for multiplex PCR
+message: Patch specs accepted for unattended coder tournament execution.
