@@ -14,7 +14,7 @@ eventGraph:
   status: draft
   protocolId: bulletin-6816
   events: &a1
-    - eventId: evt-mix-v7z50exl
+    - eventId: evt-mix-1o9ez41z
       event_type: mix
       details: &a2 {}
       labwareId: sample_plate
@@ -30,73 +30,24 @@ eventGraph:
     - bench_plate_multichannel
 terminalArtifacts:
   events: *a1
-  directives:
-    - directiveId: dir_1
-      kind: mount_pipette
-      params:
-        mountSide: right
-        pipetteType: 8_channel_multichannel
-    - directiveId: dir_2
-      kind: swap_pipette
-      params:
-        from: single_channel
-        to: 8_channel_multichannel
+  directives: []
   gaps:
-    - kind: unresolved_ref
-      message: " (unresolved reference)"
-      details:
-        kind: unknown
-        label: ""
-        reason: unresolved reference
-    - kind: unresolved_ref
-      message: " (unresolved reference)"
-      details:
-        kind: unknown
-        label: ""
-        reason: unresolved reference
-    - kind: unresolved_ref
-      message: " (kind unknown not handled by resolve_references)"
-      details:
-        kind: unknown
-        label: ""
-        reason: kind unknown not handled by resolve_references
-    - kind: unresolved_ref
-      message: " (kind unknown not handled by resolve_references)"
-      details:
-        kind: unknown
-        label: ""
-        reason: kind unknown not handled by resolve_references
-    - kind: unresolved_ref
-      message: Hard-Shell Thin-Wall 96- or 384-Well Skirted PCR Plates (no matching
-        labware in prior snapshot)
-      details:
-        hint: Hard-Shell Thin-Wall 96- or 384-Well Skirted PCR Plates
-        reason: no matching labware in prior snapshot
-    - kind: unresolved_ref
-      message: generic_96_well_plate (no matching labware in prior snapshot)
-      details:
-        hint: generic_96_well_plate
-        reason: no matching labware in prior snapshot
-    - kind: unresolved_ref
-      message: generic_12_well_reservoir (no matching labware in prior snapshot)
-      details:
-        hint: generic_12_well_reservoir
-        reason: no matching labware in prior snapshot
+    - kind: clarification
+      message: The prompt specifies scaling to a 96-well plate but the protocol text
+        references both 96- and 384-well plates. Assuming 96-well plate based on
+        the 'Scale the manual protocol to a 96-well plate' instruction. The
+        specific cDNA source (SYNTHETIC-SOURCE-TUBE-1) and sample count (8) from
+        deterministic assumptions are noted for compile but do not require
+        immediate clarification as they are test assumptions.
   resolvedRefs: []
   labStateDelta:
     events:
-      - eventId: evt-mix-v7z50exl
+      - eventId: evt-mix-1o9ez41z
         event_type: mix
         details: *a2
     snapshotAfter:
       deck: []
-      mountedPipettes:
-        - mountSide: right
-          pipetteType: 8_channel_multichannel
-          maxVolumeUl: 50
-        - mountSide: single_channel
-          pipetteType: 8_channel_multichannel
-          maxVolumeUl: 50
+      mountedPipettes: []
       labware: {}
       reservoirs: {}
       mintCounter: 0
@@ -176,15 +127,9 @@ terminalArtifacts:
   instrumentRunFiles: []
   downstreamQueue:
     - kind: readout
-      description: CFX Opus Real-Time PCR System cycling and fluorescence acquisition
+      description: CFX Opus Real-Time PCR System readout
       params:
         instrument: CFX_Opus_96
-        protocol: 95C_2min, 40x(95C_10s, 60C_45s_scan_all)
-    - kind: analysis
-      description: Relative gene expression analysis using CFX Maestro Software
-      params:
-        software: CFX_Maestro
-        method: relative_quantification
 diagnostics:
   - severity: info
     code: foundry_presegmented_candidates
@@ -221,9 +166,19 @@ diagnostics:
     pass_id: mint_materials
   - severity: info
     code: pass_skipped_by_when
+    message: "Pass 'apply_directives' skipped: when condition
+      'outputs.ai_precompile.directives' evaluated to false"
+    pass_id: apply_directives
+  - severity: info
+    code: pass_skipped_by_when
     message: "Pass 'resolve_labware' skipped: when condition
       'outputs.ai_precompile.candidateLabwares' evaluated to false"
     pass_id: resolve_labware
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_prior_labware_references' skipped: when condition
+      'outputs.ai_precompile.priorLabwareRefs' evaluated to false"
+    pass_id: resolve_prior_labware_references
   - severity: info
     code: pass_skipped_by_when
     message: "Pass 'expand_patterns' skipped: when condition

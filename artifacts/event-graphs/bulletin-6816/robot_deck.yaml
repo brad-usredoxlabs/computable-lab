@@ -3,7 +3,7 @@ recordId: protocol-event-graph-proposal/bulletin-6816/robot_deck
 protocolId: bulletin-6816
 variant: robot_deck
 targetLevel: robot_deck
-status: ready
+status: blocked
 sourceRefs:
   segment: /home/brad/git/computable-foundry/artifacts/segments/bulletin-6816.yaml
   materialContext: /home/brad/git/computable-foundry/artifacts/material-context/bulletin-6816.yaml
@@ -14,7 +14,7 @@ eventGraph:
   status: draft
   protocolId: bulletin-6816
   events: &a1
-    - eventId: evt-mix-jixig79k
+    - eventId: evt-mix-ia11njtp
       event_type: mix
       details: &a2 {}
       labwareId: sample_plate
@@ -30,25 +30,27 @@ eventGraph:
     - robot_deck
 terminalArtifacts:
   events: *a1
-  directives:
-    - directiveId: dir_1
-      kind: mount_pipette
-      params:
-        mountSide: any
-        pipetteType: 8_channel_multichannel
-  gaps: []
+  directives: []
+  gaps:
+    - kind: clarification
+      message: The protocol describes both RNA isolation/cDNA synthesis and the final
+        RT-qPCR setup. Should the compile target the entire workflow from RNA to
+        qPCR data, or just the qPCR plate preparation and run steps described in
+        sections 1.1-1.6?
+    - kind: unresolved_ref
+      message: generic_96_well_plate (no matching labware in prior snapshot)
+      details:
+        hint: generic_96_well_plate
+        reason: no matching labware in prior snapshot
   resolvedRefs: []
   labStateDelta:
     events:
-      - eventId: evt-mix-jixig79k
+      - eventId: evt-mix-ia11njtp
         event_type: mix
         details: *a2
     snapshotAfter:
       deck: []
-      mountedPipettes:
-        - mountSide: any
-          pipetteType: 8_channel_multichannel
-          maxVolumeUl: 50
+      mountedPipettes: []
       labware: {}
       reservoirs: {}
       mintCounter: 0
@@ -126,7 +128,12 @@ terminalArtifacts:
   validationReport:
     findings: []
   instrumentRunFiles: []
-  downstreamQueue: []
+  downstreamQueue:
+    - kind: readout
+      description: CFX Maestro Software analysis of relative gene expression data
+      params:
+        instrument: CFX Maestro
+        output: relative gene expression data
 diagnostics:
   - severity: info
     code: foundry_presegmented_candidates
@@ -163,24 +170,19 @@ diagnostics:
     pass_id: mint_materials
   - severity: info
     code: pass_skipped_by_when
+    message: "Pass 'apply_directives' skipped: when condition
+      'outputs.ai_precompile.directives' evaluated to false"
+    pass_id: apply_directives
+  - severity: info
+    code: pass_skipped_by_when
     message: "Pass 'resolve_labware' skipped: when condition
       'outputs.ai_precompile.candidateLabwares' evaluated to false"
     pass_id: resolve_labware
   - severity: info
     code: pass_skipped_by_when
-    message: "Pass 'resolve_prior_labware_references' skipped: when condition
-      'outputs.ai_precompile.priorLabwareRefs' evaluated to false"
-    pass_id: resolve_prior_labware_references
-  - severity: info
-    code: pass_skipped_by_when
     message: "Pass 'expand_patterns' skipped: when condition
       'outputs.ai_precompile.patternEvents' evaluated to false"
     pass_id: expand_patterns
-  - severity: info
-    code: pass_skipped_by_when
-    message: "Pass 'emit_downstream_queue' skipped: when condition
-      'outputs.ai_precompile.downstreamCompileJobs' evaluated to false"
-    pass_id: emit_downstream_queue
   - severity: info
     code: execution_scale_plan_ready
     message: Execution scaling plan is ready for robot_deck.

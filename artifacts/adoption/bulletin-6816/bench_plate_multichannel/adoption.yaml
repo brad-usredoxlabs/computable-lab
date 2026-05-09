@@ -1,29 +1,7 @@
 kind: protocol-foundry-adoption-decision
 protocolId: bulletin-6816
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T03:06:58.664Z
-status: accepted
-applyPatches: true
-patchSpecs:
-  - id: bulletin-6816/bench_plate_multichannel/fix-browser-rendering
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-browser-rendering.yaml
-    fixClass: browser_or_labware_rendering
-    title: Make event graph render and play in labware-editor
-  - id: bulletin-6816/bench_plate_multichannel/fix-event-graph-coverage-readout
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-event-graph-coverage-readout.yaml
-    fixClass: compiler_event_coverage_readout
-    title: Expand tiny event graphs with instrument readout actions
-  - id: bulletin-6816/bench_plate_multichannel/fix-foundry-runtime-wiring-gap
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-foundry-runtime-wiring-gap.yaml
-    fixClass: foundry_runtime_wiring_gap
-    title: Wire Foundry compile dependencies to the real compiler runtime
-  - id: bulletin-6816/bench_plate_multichannel/fix-labware-alias-resolver-gap
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-labware-alias-resolver-gap.yaml
-    fixClass: labware_alias_or_resolver_gap
-    title: Resolve existing labware definitions through compiler aliases or Foundry
-      lookup wiring
-  - id: bulletin-6816/bench_plate_multichannel/fix-material-catalog-spec-gap
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/bulletin-6816/bench_plate_multichannel/fix-material-catalog-spec-gap.yaml
-    fixClass: material_catalog_or_spec_gap
-    title: Resolve protocol materials as catalog/spec data without inventing inventory
-message: Patch specs accepted for unattended coder tournament execution.
+generated_at: 2026-05-09T04:27:43.678Z
+status: skipped
+patchSpecs: []
+message: No patch specs were produced for this verdict.

@@ -182,6 +182,15 @@ async function llmArchitectVerdict(
     `PIPELINE:`,
     `  PDF text -> pre-compiler (extract entities/candidates) -> compiler (lower to event graph) -> execution scale (robot binding)`,
     ``,
+    `FAILURE CRITERIA (IF ANY APPLY, YOU MUST RECOMMEND FIXES):`,
+    `- eventCount < 3: The compiler produced too few events. This is ALWAYS a failure.`,
+    `- outcome == "error" or outcome == "gap": The compiler explicitly reported failure.`,
+    `- diagnostics contain warnings about shape mismatch, missing verbs, or unresolved refs.`,
+    `- compiler output mentions "ai_precompile_shape_mismatch" or "extractor_repair_exhausted".`,
+    `- execution scale has blockers (can't bind to robot deck).`,
+    `- candidateEvents is empty but PDF text has clear protocol steps.`,
+    `- labware/material references in PDF text are not resolved in the compiler output.`,
+    ``,
     `YOU ARE GIVEN:`,
     `1. PDF TEXT — the vendor protocol as extracted text (what SHOULD be compiled)`,
     `2. SEGMENTS — pre-compiler output: candidates, entities, labware hints`,
@@ -208,21 +217,47 @@ async function llmArchitectVerdict(
     `- execution_scaling — robot deck/platform binding failures`,
     `- browser_or_labware_rendering — UI doesn't render the event graph correctly`,
     ``,
+    `OUTPUT FORMAT (return ONLY this JSON object, no markdown, no prose):`,
+    `{
+      "outcome": "gap" or "complete" or "error",
+      "failureClasses": ["class1", "class2"],
+      "qualityScore": 0.0 to 1.0,
+      "recommendedFixes": [
+        {
+          "id": "fix-slug",
+          "class": "fix_lane_category",
+          "title": "Short title",
+          "rationale": "Why this fix is needed",
+          "ownedFiles": ["server/src/path/to/file.ts"],
+          "acceptance": ["Criterion 1", "Criterion 2"],
+          "implementationBudget": {"targetChangedFiles": 1, "maxChangedFiles": 3, "targetChangedLines": 80, "maxChangedLines": 220},
+          "coderModelProfile": {"model": "Qwen/Qwen3.6-35B-A3B-FP8"}
+        }
+      ]
+    }`,
+    ``,
     `RULES:`,
-    `- Each fix targets ONE observable behavior change`,
-    `- Name EXACT files to change (relative to repo root)`,
-    `- Include concrete acceptance criteria (commands, assertions, or test descriptions)`,
-    `- If an existing labware/material record is not being found, the fix is WIRING, not adding records`,
-    `- Use Qwen/Qwen3.6-27B-FP8 model for complex cross-file patches, 35B-A3B-FP8 for simple ones`,
-    `- Output ONLY valid JSON (no markdown, no prose outside the JSON)`,
+    `- If eventCount < 3 or outcome is "gap"/"error", ALWAYS recommend at least 1 fix.`,
+    `- Each fix targets ONE observable behavior change.`,
+    `- Name EXACT files to change (relative to repo root).`,
+    `- Include concrete acceptance criteria.`,
+    `- If an existing labware/material record is not being found, the fix is WIRING, not adding records.`,
+    `- Use Qwen/Qwen3.6-27B-FP8 for complex cross-file patches, 35B-A3B-FP8 for simple ones.`,
+    `- Output ONLY valid JSON (no markdown, no prose outside the JSON).`,
   ].join('\n');
+
+  // Trim PDF text to reduce context size
+  const maxPdfChars = 6000;
+  const trimmedText = artifacts.text && artifacts.text.length > maxPdfChars
+    ? artifacts.text.slice(0, maxPdfChars) + '\n... [truncated]'
+    : artifacts.text;
 
   const userContent = [
     `Protocol: ${options.protocolId}`,
     `Variant: ${options.variant}`,
     ``,
     `=== PDF TEXT ===`,
-    artifacts.text || '(none)',
+    trimmedText || '(none)',
     ``,
     `=== PRE-COMPILER SEGMENTS ===`,
     compactEvidence(artifacts.segment, 8_000) || '(none)',

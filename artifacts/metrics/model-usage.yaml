@@ -1,46 +1,46 @@
 kind: protocol-foundry-model-usage
-generated_at: 2026-05-09T03:51:09.181Z
-startedAt: 2026-05-09T03:51:09.040Z
-completedAt: 2026-05-09T03:51:09.161Z
-elapsedSeconds: 0.121
+generated_at: 2026-05-09T04:27:43.826Z
+startedAt: 2026-05-09T04:22:58.276Z
+completedAt: 2026-05-09T04:27:43.762Z
+elapsedSeconds: 285.486
 endpoints:
   - role: worker
     baseUrl: http://thunderbeast:8001/v1
     start:
       endpoint: http://thunderbeast:8001/metrics
-      promptTokensTotal: 122151223
-      generationTokensTotal: 651073
+      promptTokensTotal: 122196314
+      generationTokensTotal: 663591
       runningRequests: 0
       waitingRequests: 0
       kvCacheUsage: 0
     end:
       endpoint: http://thunderbeast:8001/metrics
-      promptTokensTotal: 122151223
-      generationTokensTotal: 651073
+      promptTokensTotal: 122213921
+      generationTokensTotal: 668844
       runningRequests: 0
       waitingRequests: 0
       kvCacheUsage: 0
-    deltaPromptTokens: 0
-    deltaGenerationTokens: 0
-    promptTokensPerSecond: 0
-    generationTokensPerSecond: 0
+    deltaPromptTokens: 17607
+    deltaGenerationTokens: 5253
+    promptTokensPerSecond: 61.67377734810113
+    generationTokensPerSecond: 18.400201761207207
   - role: architect
     baseUrl: http://thunderbeast:8000/v1
     start:
       endpoint: http://thunderbeast:8000/metrics
-      promptTokensTotal: 57623926
-      generationTokensTotal: 468777
+      promptTokensTotal: 60471377
+      generationTokensTotal: 478959
       runningRequests: 0
       waitingRequests: 0
       kvCacheUsage: 0
     end:
       endpoint: http://thunderbeast:8000/metrics
-      promptTokensTotal: 57623926
-      generationTokensTotal: 468777
+      promptTokensTotal: 60486652
+      generationTokensTotal: 483830
       runningRequests: 0
       waitingRequests: 0
       kvCacheUsage: 0
-    deltaPromptTokens: 0
-    deltaGenerationTokens: 0
-    promptTokensPerSecond: 0
-    generationTokensPerSecond: 0
+    deltaPromptTokens: 15275
+    deltaGenerationTokens: 4871
+    promptTokensPerSecond: 53.50525069530555
+    generationTokensPerSecond: 17.062132643982544

@@ -40,9 +40,19 @@ diagnostics:
     pass_id: mint_materials
   - severity: info
     code: pass_skipped_by_when
+    message: "Pass 'apply_directives' skipped: when condition
+      'outputs.ai_precompile.directives' evaluated to false"
+    pass_id: apply_directives
+  - severity: info
+    code: pass_skipped_by_when
     message: "Pass 'resolve_labware' skipped: when condition
       'outputs.ai_precompile.candidateLabwares' evaluated to false"
     pass_id: resolve_labware
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_prior_labware_references' skipped: when condition
+      'outputs.ai_precompile.priorLabwareRefs' evaluated to false"
+    pass_id: resolve_prior_labware_references
   - severity: info
     code: pass_skipped_by_when
     message: "Pass 'expand_patterns' skipped: when condition
@@ -59,45 +69,12 @@ diagnostics:
       blockers: []
 extractorRepairExhaustedCount: 0
 gaps:
-  - kind: unresolved_ref
-    message: " (unresolved reference)"
-    details:
-      kind: unknown
-      label: ""
-      reason: unresolved reference
-  - kind: unresolved_ref
-    message: " (unresolved reference)"
-    details:
-      kind: unknown
-      label: ""
-      reason: unresolved reference
-  - kind: unresolved_ref
-    message: " (kind unknown not handled by resolve_references)"
-    details:
-      kind: unknown
-      label: ""
-      reason: kind unknown not handled by resolve_references
-  - kind: unresolved_ref
-    message: " (kind unknown not handled by resolve_references)"
-    details:
-      kind: unknown
-      label: ""
-      reason: kind unknown not handled by resolve_references
-  - kind: unresolved_ref
-    message: Hard-Shell Thin-Wall 96- or 384-Well Skirted PCR Plates (no matching
-      labware in prior snapshot)
-    details:
-      hint: Hard-Shell Thin-Wall 96- or 384-Well Skirted PCR Plates
-      reason: no matching labware in prior snapshot
-  - kind: unresolved_ref
-    message: generic_96_well_plate (no matching labware in prior snapshot)
-    details:
-      hint: generic_96_well_plate
-      reason: no matching labware in prior snapshot
-  - kind: unresolved_ref
-    message: generic_12_well_reservoir (no matching labware in prior snapshot)
-    details:
-      hint: generic_12_well_reservoir
-      reason: no matching labware in prior snapshot
+  - kind: clarification
+    message: The prompt specifies scaling to a 96-well plate but the protocol text
+      references both 96- and 384-well plates. Assuming 96-well plate based on
+      the 'Scale the manual protocol to a 96-well plate' instruction. The
+      specific cDNA source (SYNTHETIC-SOURCE-TUBE-1) and sample count (8) from
+      deterministic assumptions are noted for compile but do not require
+      immediate clarification as they are test assumptions.
 foundryTestAssumptionsRef: /home/brad/git/computable-foundry/artifacts/assumptions/bulletin-6816/bench_plate_multichannel.yaml
 terminalArtifactsRef: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/bench_plate_multichannel.yaml
