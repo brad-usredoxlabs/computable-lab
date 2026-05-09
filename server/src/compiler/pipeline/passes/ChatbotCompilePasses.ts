@@ -546,32 +546,64 @@ function normalizeUnresolvedRefs(input: unknown): Array<{ kind: string; label: s
 }
 
 function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unknown }): AiPrecompileOutput {
-  const parsed = input.parsed && typeof input.parsed === 'object' ? input.parsed : {};
-  const raw = input.raw;
+  let parsed: unknown = input.parsed;
 
-  const getArray = (key: string): unknown[] => {
-    const val = (parsed as Record<string, unknown>)[key] ?? 
-                (raw && typeof raw === 'object' ? (raw as Record<string, unknown>)[key] : undefined);
-    return Array.isArray(val) ? val : [];
-  };
-
-  let candidateEvents = getArray('candidateEvents');
-  if (candidateEvents.length === 0) {
-    const actions = getArray('candidateActions');
-    if (actions.length > 0) {
-      candidateEvents = lowerCandidateActionsToEvents(actions);
+  // If parsed is undefined but raw exists, try to parse raw
+  if (parsed === undefined && input.raw != null) {
+    if (typeof input.raw === 'string') {
+      try {
+        parsed = JSON.parse(input.raw);
+      } catch {
+        parsed = {};
+      }
+    } else {
+      parsed = input.raw;
     }
   }
 
-  const candidateLabwares = getArray('candidateLabwares');
-  const mintMaterials = getArray('mintMaterials');
-  const unresolvedRefs = getArray('unresolvedRefs');
+  if (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    parsed = {};
+  }
+
+  const obj = parsed as Record<string, unknown>;
+
+  // Extract mintMaterials with fallback field names
+  const mintMaterialsRaw = obj.mintMaterials ?? obj.materials ?? obj.mint_materials ?? obj.directives ?? [];
+  const mintMaterials: MintMaterialsDirective[] = Array.isArray(mintMaterialsRaw)
+    ? mintMaterialsRaw.filter((m): m is MintMaterialsDirective => m != null && typeof m === 'object')
+    : [];
+
+  // Extract candidateLabwares with fallback field names
+  const candidateLabwaresRaw = obj.candidateLabwares ?? obj.candidate_labwares ?? obj.labwares ?? obj.labwareCandidates ?? [];
+  const candidateLabwares: CandidateLabware[] = Array.isArray(candidateLabwaresRaw)
+    ? candidateLabwaresRaw.filter((l): l is CandidateLabware => l != null && typeof l === 'object')
+    : [];
+
+  // Extract candidateActions with fallback field names
+  const candidateActionsRaw = obj.candidateActions ?? obj.candidate_actions ?? obj.actions ?? obj.events ?? [];
+  const candidateActions: CandidateAction[] = lowerCandidateActionsToEvents(
+    Array.isArray(candidateActionsRaw) ? candidateActionsRaw : undefined
+  ).map((a): CandidateAction => ({
+    verb: a.verb,
+    ...(a as Record<string, unknown>),
+  }));
+
+  // Extract unresolvedRefs with fallback field names
+  const unresolvedRefsRaw = obj.unresolvedRefs ?? obj.unresolved_refs ?? obj.unresolvedReferences ?? obj.refs ?? [];
+  const unresolvedRefs = normalizeUnresolvedRefs(Array.isArray(unresolvedRefsRaw) ? unresolvedRefsRaw : undefined);
+
+  // Extract taggedPhrases with fallback field names
+  const taggedPhrasesRaw = obj.taggedPhrases ?? obj.tagged_phrases ?? obj.phrases ?? obj.tagged ?? [];
+  const taggedPhrases: TaggedPhrase[] = Array.isArray(taggedPhrasesRaw)
+    ? taggedPhrasesRaw.filter((p): p is TaggedPhrase => p != null && typeof p === 'object')
+    : [];
 
   return {
-    candidateEvents,
-    candidateLabwares,
     mintMaterials,
+    candidateLabwares,
+    candidateActions,
     unresolvedRefs,
+    taggedPhrases,
   };
 }
 
@@ -597,30 +629,84 @@ export interface CreateAiPrecompilePassDeps {
  * legacy LLM candidateEvents/candidateLabwares remain accepted as a fallback.
  */
 export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
+  const { llmClient, registryLoader } = deps;
+
   return {
     id: 'ai_precompile',
-    async run(state: PipelineState) {
-      try {
-        const response = await deps.llmClient.complete({
-          messages: [
-            { role: 'system', content: getAiPrecompileSystemPrompt() },
-            { role: 'user', content: state.input.prompt },
-          ],
-          schema: createAiPrecompileOutputSchema(),
-        });
-        const output = salvageAiPrecompileOutput({ raw: response.content });
-        return { ok: true, output };
-      } catch (err) {
-        const fallback = salvageAiPrecompileOutput({ raw: '{}' });
+    async run(args: PassRunArgs): Promise<PassResult> {
+      const { state } = args;
+      const prompt = state.input.prompt;
+
+      if (!prompt || typeof prompt !== 'string') {
         return {
-          ok: true,
-          output: fallback,
-          diagnostics: [{
-            severity: 'warning',
-            code: 'ai_precompile_shape_mismatch',
-            message: 'ai_precompile output shape mismatch, using fallback',
-            pass_id: 'ai_precompile',
-          }],
+          outputs: {
+            ai_precompile: salvageAiPrecompileOutput({ raw: '', parsed: {} }),
+          },
+          diagnostics: [
+            {
+              severity: 'warning',
+              code: 'ai_precompile_no_prompt',
+              message: 'No prompt provided for ai_precompile pass',
+              pass_id: 'ai_precompile',
+              details: {},
+            },
+          ],
+        };
+      }
+
+      const systemPrompt = getAiPrecompileSystemPrompt();
+      const schema = createAiPrecompileOutputSchema();
+
+      const messages: ChatMessage[] = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt },
+      ];
+
+      try {
+        const completionRequest: CompletionRequest = {
+          messages,
+          responseFormat: { type: 'json_schema', json_schema: schema },
+        };
+
+        const response = await llmClient.complete(completionRequest);
+        const rawContent = response.content ?? '';
+
+        let parsed: unknown;
+        if (typeof rawContent === 'string') {
+          try {
+            parsed = JSON.parse(rawContent);
+          } catch {
+            parsed = undefined;
+          }
+        } else {
+          parsed = rawContent;
+        }
+
+        const output = salvageAiPrecompileOutput({ raw: rawContent, parsed });
+
+        return {
+          outputs: {
+            ai_precompile: output,
+          },
+          diagnostics: [],
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const fallbackOutput = salvageAiPrecompileOutput({ raw: '', parsed: {} });
+
+        return {
+          outputs: {
+            ai_precompile: fallbackOutput,
+          },
+          diagnostics: [
+            {
+              severity: 'error',
+              code: 'ai_precompile_llm_error',
+              message: `LLM completion failed: ${errorMessage}`,
+              pass_id: 'ai_precompile',
+              details: {},
+            },
+          ],
         };
       }
     },
