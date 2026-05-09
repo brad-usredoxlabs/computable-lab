@@ -520,39 +520,31 @@ function normalizeUnresolvedRefs(input: unknown): Array<{ kind: string; label: s
 }
 
 function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unknown }): AiPrecompileOutput {
-  let data: Record<string, unknown> = {};
-  if (input.parsed && typeof input.parsed === 'object' && !Array.isArray(input.parsed)) {
-    data = input.parsed as Record<string, unknown>;
-  } else if (typeof input.raw === 'string') {
-    try {
-      const parsed = JSON.parse(input.raw);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        data = parsed as Record<string, unknown>;
-      }
-    } catch {
-      // ignore parse errors
-    }
-  } else if (typeof input.raw === 'object' && input.raw !== null) {
-    data = input.raw as Record<string, unknown>;
+  const parsed = input.parsed || (typeof input.raw === 'object' ? input.raw : {});
+  if (!parsed || typeof parsed !== 'object') {
+    return {
+      mintMaterials: [],
+      directives: [],
+      candidateLabwares: [],
+      patternEvents: [],
+    };
   }
 
-  const toSafeArray = <T>(val: unknown): T[] => {
-    if (Array.isArray(val)) {
-      return val.filter((item): item is T => item != null && typeof item === 'object') as T[];
-    }
-    if (val && typeof val === 'object') {
-      return [val as T];
+  const getArray = (keys: string[]) => {
+    const record = parsed as Record<string, unknown>;
+    for (const key of keys) {
+      if (Array.isArray(record[key])) {
+        return record[key];
+      }
     }
     return [];
   };
 
   return {
-    candidateActions: toSafeArray(data.candidateActions),
-    mintMaterials: toSafeArray(data.mintMaterials),
-    candidateLabwares: toSafeArray(data.candidateLabwares),
-    priorLabwareRefs: toSafeArray(data.priorLabwareRefs),
-    patternEvents: toSafeArray(data.patternEvents),
-    unresolvedRefs: toSafeArray(data.unresolvedRefs),
+    mintMaterials: getArray(['mintMaterials', 'mint_materials', 'materials']),
+    directives: getArray(['directives', 'instructions']),
+    candidateLabwares: getArray(['candidateLabwares', 'candidate_labwares', 'labwares']),
+    patternEvents: getArray(['patternEvents', 'pattern_events', 'events', 'candidateActions']),
   };
 }
 
@@ -578,107 +570,51 @@ export interface CreateAiPrecompilePassDeps {
  * legacy LLM candidateEvents/candidateLabwares remain accepted as a fallback.
  */
 export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
-  const schema = createAiPrecompileOutputSchema();
-
   return {
     id: 'ai_precompile',
-    async run(args: PassRunArgs): Promise<PassResult> {
-      const { state, services } = args;
-      const llmClient = services.llmClient;
+    run: async (args: PassRunArgs): Promise<PassResult> => {
+      const { state } = args;
+      const llmClient = deps.llmClient;
+      const prompt = state.input.prompt;
+      const candidates = (state.outputs.extract_entities?.candidates as ExtractedEntity[]) || [];
 
-      if (!llmClient) {
-        return {
-          outputs: {
-            ai_precompile: {
-              mintMaterials: [],
-              directives: [],
-              candidateLabwares: [],
-              priorLabwareRefs: [],
-              patternEvents: [],
-              candidateActions: [],
-              unresolvedRefs: [],
-              taggedPhrases: [],
-              aiLabwareAdditions: [],
-            },
-          },
-          diagnostics: [{
-            severity: 'error',
-            code: 'llm_client_missing',
-            message: 'LLM client not available for ai_precompile pass',
-            pass_id: 'ai_precompile',
-            details: {},
-          }],
-        };
+      if (!prompt || candidates.length === 0) {
+        return { outputs: { ai_precompile: salvageAiPrecompileOutput({}) } };
       }
 
       const systemPrompt = getAiPrecompileSystemPrompt();
-      const userPrompt = state.input.prompt ?? '';
-
-      const messages: ChatMessage[] = [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ];
+      const userContent = `Extracted candidates to precompile:\n${JSON.stringify(candidates, null, 2)}`;
 
       try {
-        const response = await llmClient.complete({
-          messages,
-          schema,
+        const response = await llmClient.chat({
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userContent },
+          ],
+          response_format: { type: 'json_object' },
         });
 
-        let output: AiPrecompileOutput;
-
-        // Handle response - could be parsed directly or need salvage
-        if (response.parsed && typeof response.parsed === 'object' && !Array.isArray(response.parsed)) {
-          const parsed = response.parsed as Record<string, unknown>;
-          // Validate that required fields exist (even if empty arrays)
-          const hasValidShape =
-            Array.isArray(parsed.mintMaterials) &&
-            Array.isArray(parsed.directives) &&
-            Array.isArray(parsed.candidateLabwares) &&
-            Array.isArray(parsed.priorLabwareRefs) &&
-            Array.isArray(parsed.patternEvents);
-
-          if (hasValidShape) {
-            output = salvageAiPrecompileOutput({ parsed: response.parsed });
-          } else {
-            output = salvageAiPrecompileOutput({ parsed: response.parsed });
-          }
-        } else if (response.raw) {
-          output = salvageAiPrecompileOutput({ raw: response.raw });
-        } else {
-          output = salvageAiPrecompileOutput({});
+        const rawContent = response.choices?.[0]?.message?.content;
+        if (!rawContent) {
+          return { outputs: { ai_precompile: salvageAiPrecompileOutput({}) } };
         }
 
-        return {
-          outputs: {
-            ai_precompile: output,
-          },
-          diagnostics: [],
-        };
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          outputs: {
-            ai_precompile: {
-              mintMaterials: [],
-              directives: [],
-              candidateLabwares: [],
-              priorLabwareRefs: [],
-              patternEvents: [],
-              candidateActions: [],
-              unresolvedRefs: [],
-              taggedPhrases: [],
-              aiLabwareAdditions: [],
-            },
-          },
-          diagnostics: [{
-            severity: 'error',
-            code: 'ai_precompile_llm_error',
-            message: `LLM completion failed: ${errorMessage}`,
-            pass_id: 'ai_precompile',
-            details: {},
-          }],
-        };
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(rawContent);
+        } catch {
+          parsed = rawContent;
+        }
+
+        const output = salvageAiPrecompileOutput({ raw: rawContent, parsed });
+        return { outputs: { ai_precompile: output } };
+      } catch (err) {
+        const diagnostics: PassDiagnostic[] = [{
+          severity: 'warning',
+          code: 'ai_precompile_llm_error',
+          message: `AI precompile LLM call failed: ${err instanceof Error ? err.message : String(err)}`,
+        }];
+        return { outputs: { ai_precompile: salvageAiPrecompileOutput({}) }, diagnostics };
       }
     },
   };
