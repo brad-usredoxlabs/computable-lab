@@ -546,31 +546,38 @@ function normalizeUnresolvedRefs(input: unknown): Array<{ kind: string; label: s
 }
 
 function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unknown }): AiPrecompileOutput {
-  let obj: Record<string, unknown> = {};
-  if (input.parsed !== undefined) {
-    obj = (input.parsed && typeof input.parsed === 'object') ? (input.parsed as Record<string, unknown>) : {};
-  } else if (input.raw !== undefined) {
-    try {
-      const parsed = typeof input.raw === 'string' ? JSON.parse(input.raw) : input.raw;
-      obj = (parsed && typeof parsed === 'object') ? (parsed as Record<string, unknown>) : {};
-    } catch {
-      obj = {};
+  let data: unknown = input.parsed;
+  if (!data && input.raw) {
+    if (typeof input.raw === 'string') {
+      try {
+        data = JSON.parse(input.raw);
+      } catch {
+        data = input.raw;
+      }
+    } else {
+      data = input.raw;
     }
   }
+  if (!data || typeof data !== 'object') {
+    return {};
+  }
 
-  const safeArray = (val: unknown): unknown[] => Array.isArray(val) ? val : [];
-  const getArray = (camel: string, snake: string): unknown[] => {
-    const v = obj[camel] ?? obj[snake];
-    return safeArray(v);
+  const getArray = (keys: string[]): unknown[] | undefined => {
+    for (const k of keys) {
+      const v = (data as Record<string, unknown>)[k];
+      if (Array.isArray(v)) return v;
+    }
+    return undefined;
   };
 
   return {
-    candidateLabwares: getArray('candidateLabwares', 'candidate_labwares') as CandidateLabware[],
-    patternEvents: getArray('patternEvents', 'pattern_events') as PatternEvent[],
-    mintMaterials: getArray('mintMaterials', 'mint_materials') as MintMaterialsDirective[],
-    downstreamCompileJobs: getArray('downstreamCompileJobs', 'downstream_compile_jobs') as DownstreamCompileJob[],
-    unresolvedRefs: normalizeUnresolvedRefs(obj.unresolvedRefs ?? obj.unresolved_refs),
-  };
+    mintMaterials: getArray(['mintMaterials', 'mint_materials']),
+    candidateLabwares: getArray(['candidateLabwares', 'candidate_labwares']),
+    priorLabwareRefs: getArray(['priorLabwareRefs', 'prior_labware_refs']),
+    patternEvents: getArray(['patternEvents', 'pattern_events']),
+    candidateActions: getArray(['candidateActions', 'candidate_actions']),
+    unresolvedRefs: getArray(['unresolvedRefs', 'unresolved_refs']),
+  } as AiPrecompileOutput;
 }
 
 /**
