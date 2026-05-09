@@ -509,82 +509,41 @@ function lowerCandidateActionsToEvents(actions: unknown[] | undefined): Array<{ 
  */
 function normalizeUnresolvedRefs(input: unknown): Array<{ kind: string; label: string; reason: string }> {
   if (!Array.isArray(input)) return [];
-  const normalized: Array<{ kind: string; label: string; reason: string }> = [];
-  for (const ref of input) {
-    if (!ref || typeof ref !== 'object' || Array.isArray(ref)) continue;
-    const record = ref as Record<string, unknown>;
-    
-    // Check if it's a character-index object (keys are numeric strings)
-    const keys = Object.keys(record);
-    const isCharIndexObj = keys.length > 0 && keys.every(k => /^\d+$/.test(k));
-    
-    if (isCharIndexObj) {
-      // Reconstruct label from character indices
-      const maxIndex = Math.max(...keys.map(k => parseInt(k, 10)));
-      const chars: string[] = new Array(maxIndex + 1);
-      for (const [k, v] of Object.entries(record)) {
-        const idx = parseInt(k, 10);
-        if (typeof v === 'string') {
-          chars[idx] = v;
-        }
-      }
-      const label = chars.join('');
-      normalized.push({
-        kind: 'unknown',
-        label,
-        reason: 'malformed character-index object from LLM',
-      });
-    } else {
-      // Standard object: extract kind, label, reason
-      const kind = typeof record.kind === 'string' ? record.kind : 'unknown';
-      const label = typeof record.label === 'string' ? record.label : String(record.label ?? '');
-      const reason = typeof record.reason === 'string' ? record.reason : 'unresolved reference';
-      normalized.push({ kind, label, reason });
-    }
-  }
-  return normalized;
+  return input
+    .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+    .map(item => ({
+      kind: (item.kind as string) || 'unknown',
+      label: (item.label as string) || '',
+      reason: (item.reason as string) || 'unresolved reference',
+    }))
+    .filter(ref => ref.kind && ref.kind !== 'unknown');
 }
 
 function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unknown }): AiPrecompileOutput {
-  let data: unknown = input.parsed;
-  if (data === undefined && input.raw) {
-    if (typeof input.raw === 'string') {
-      try {
-        data = JSON.parse(input.raw);
-      } catch {
-        data = null;
-      }
-    } else {
-      data = input.raw;
-    }
-  } else if (typeof data === 'string') {
+  let parsed: Partial<AiPrecompileOutput> | undefined = input.parsed as Partial<AiPrecompileOutput> | undefined;
+  
+  if (!parsed && typeof input.raw === 'string') {
     try {
-      data = JSON.parse(data);
+      parsed = JSON.parse(input.raw) as Partial<AiPrecompileOutput>;
     } catch {
-      data = null;
+      parsed = {};
     }
+  } else if (!parsed && typeof input.raw === 'object') {
+    parsed = input.raw as Partial<AiPrecompileOutput>;
   }
 
-  if (!data || typeof data !== 'object') {
-    return { candidateLabwares: [], mintMaterials: [], patternEvents: [] };
+  if (!parsed) {
+    parsed = {};
   }
 
-  // Unwrap common LLM response wrappers
-  const payload = (data as Record<string, unknown>).output || 
-                  (data as Record<string, unknown>).result || 
-                  data;
-
-  const candidateLabwares = Array.isArray((payload as Record<string, unknown>).candidateLabwares) 
-    ? (payload as Record<string, unknown>).candidateLabwares as CandidateLabware[] 
-    : [];
-  const mintMaterials = Array.isArray((payload as Record<string, unknown>).mintMaterials) 
-    ? (payload as Record<string, unknown>).mintMaterials as MintMaterialsDirective[] 
-    : [];
-  const patternEvents = Array.isArray((payload as Record<string, unknown>).patternEvents) 
-    ? (payload as Record<string, unknown>).patternEvents as PatternEvent[] 
-    : [];
-
-  return { candidateLabwares, mintMaterials, patternEvents };
+  return {
+    mintMaterials: Array.isArray(parsed.mintMaterials) ? parsed.mintMaterials : [],
+    candidateLabwares: Array.isArray(parsed.candidateLabwares) ? parsed.candidateLabwares : [],
+    patternEvents: Array.isArray(parsed.patternEvents) ? parsed.patternEvents : [],
+    unresolvedRefs: normalizeUnresolvedRefs(parsed.unresolvedRefs),
+    candidateActions: lowerCandidateActionsToEvents(parsed.candidateActions),
+    directives: Array.isArray(parsed.directives) ? parsed.directives : [],
+  };
 }
 
 /**
