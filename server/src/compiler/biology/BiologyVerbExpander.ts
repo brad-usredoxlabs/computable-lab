@@ -87,3 +87,25 @@ const plateMapExpander: BiologyVerbExpander = {
 };
 
 registerVerbExpander(plateMapExpander);
+/**
+ * Expander for the 'analyze' verb.
+ * Lowers 'analyze' to a 'read' event type for the final analysis/readout step.
+ */
+const analyzeExpander: BiologyVerbExpander = {
+  verb: 'analyze',
+  expand(input: VerbInput): PlateEventPrimitive[] {
+    const { params } = input;
+    const eventId = makeEventId('analyze');
+    
+    return [{
+      eventId,
+      event_type: 'read',
+      details: {
+        action: 'analyze',
+        ...params,
+      },
+    }];
+  },
+};
+
+registerVerbExpander(analyzeExpander);
