@@ -1,0 +1,12 @@
+kind: protocol-foundry-material-context
+protocolId: mp10471
+generated_at: 2026-05-09T00:39:00.610Z
+sourcePdf: /home/brad/git/computable-foundry/artifacts/pdfs/mp10471.pdf
+materials: []
+materialSpecs: []
+vendorProducts: []
+labwareHints: []
+notes:
+  - PDF intake creates protocol text and provenance only.
+    Material/material-spec/vendor-product records must be justified by compiler
+    or architect evidence.

@@ -1,0 +1,176 @@
+                                                                                                                          USER GUIDE
+
+NAb™ Spin Columns, 5 mL
+For antibody purification
+Catalog Numbers 89960, 89961, 89962, and 89963
+Doc. Part No. 2161942       Pub. No. MAN0011593 Rev. B
+
+                                                                        Contents and storage
+        WARNING! Read the Safety Data Sheets (SDSs)
+        and follow the handling instructions. Wear appropriate                                 Item                         Cat. No.      Storage
+        protective eyewear, clothing, and gloves. Safety Data            NAb™ Protein A PLUS™ Spin Column, 5 mL[1]           89960
+        Sheets (SDSs) are available from thermofisher.com/
+        support.                                                         NAb™ Protein G Spin Column, 5 mL[2]                 89961
+                                                                                                                                       Store at 4°C.
+                                                                         NAb™ Protein A/G Spin Column, 5 mL[3]               89962
+
+Product description                                                      NAb™ Protein L Spin Column, 5 mL[4]                 89963
+                      ™      ™                                          [1] Binding Capacity: ≥175 mg human IgG or 80–85 mg mouse IgG per column
+The Thermo Scientific NAb Spin Columns are convenient for               [2] Binding Capacity: 55–75 mg human IgG per column
+rapid, small-scale affinity purification of antibodies from a variety   [3] Binding Capacity: ≥35 mg human IgG per column
+of sample types. Each column containing 5 mL of the immobilized         [4] Binding Capacity: 20–50 mg human IgG per column
+protein resin enables quick purification of 5-65 mg of IgG from
+2–10 mL of serum or other sample. The actual amount of IgG              Note: Columns are supplied with a top cap and snap off,
+purified varies depending upon the sample type and the specific         reusable bottom cap. Each column contains a 5 mL resin bed
+spin column used.                                                       of crosslinked 6% beaded agarose in 0.02% sodium azide
+Proteins A, G and L are different bacterial proteins that bind
+with high specificity to mammalian immunoglobulins. Immobilized
+forms of these proteins have been widely used for affinity
+                                                                        Required materials not supplied
+purification of antibodies from serum, ascites fluid and hybridoma            • 50 mL collection tubes
+culture supernatant samples. The particular species and class
+                                                                              • Centrifuge set to 1,000 x g for all centrifugation steps
+of antibody to be purified determines which one of these
+immobilized protein resins is most appropriate. The following                 • Binding Buffer: 0.1 M phosphate, 0.15 M sodium chloride;
+                                                                                                          ™       ™
+paragraphs provide very general guidelines for making this choice;              pH 7.2 (Thermo Scientific BupH Phosphate Buffered Saline
+consult the catalog or website for a more detailed description and              Packs, Cat. No. 28372). Alternatively, use a buffer optimized
+table of antibody-binding characteristics for Proteins A, G, A/G                for the specific antibody-binding protein, such as one of the
+and L.                                                                          following:
+                                                                                   – Protein A IgG Binding Buffer (Cat. No. 21001 or 21007)
+Proteins A and G bind to many of the same species and
+subclasses of IgG, although they have particular differences in                    – Protein G IgG Binding Buffer (Cat. No. 21011)
+affinity and binding capacity. Protein A is generally preferred for                – Protein A/G IgG Binding Buffer (Cat. No. 54200)
+affinity purification of rabbit, pig, dog and cat IgG. Protein G has
+better binding capacity for a broader range of mouse and human                • Elution Buffer: IgG Elution Buffer (Cat. No. 21004 or 21009)
+IgG subclasses (IgG1, IgG2, etc.). Protein A/G is a recombinant                 or 0.1 M glycine, pH 2–3
+fusion protein that includes the IgG-binding domains of both                  • Neutralization Buffer: 2 mL of high-ionic strength alkaline
+Protein A and Protein G. Therefore, Protein A/G is ideal for binding            buffer such as 1 M phosphate or 1 M Tris at pH 8–9
+the broadest range of IgG subclasses from rabbit, mouse, human
+                                                                              • Storage Solution: 0.02% sodium azide in phosphate-buffered
+and other mammalian samples.
+                                                                                saline (PBS)
+Protein L binds to certain immunoglobulin kappa light chains.
+Because kappa light chains occur in members of all classes of
+immunoglobulin (that is, IgG, IgM, IgA, IgE and IgD), Protein L
+can purify these different classes of antibody. However, only those
+antibodies within each class that possess the appropriate kappa
+light chains will bind. Generally, empirical testing is required
+to determine if Protein L is effective for purifying a particular
+antibody of interest.
+
+
+
+
+For Research Use Only. Not for use in diagnostic procedures.
+Procedure for antibody purification                                       Troubleshooting
+Note: Typically, the resin may be used as many as 10 times                       Problem                  Possible Cause                 Solution
+without significant loss in binding capacity.
+                                                                                                     Sample was devoid of           Ensure by other
+    1. Equilibrate column and buffers to room temperature. Set            No protein detected        any antibody species or        means, such
+       table top centrifuge to 1,000 x g.                                 in any elution fractions   isotype that binds to          as an ELISA
+                                                                          by absorbance at           the immobilized protein        or isotyping kit,
+                                                                          280 nm or general          used (for example,             that the sample
+    2. Prepare sample for purification by diluting in Binding Buffer
+                                                                          protein staining           no antibodies in the           contains IgG-type
+       to a minimum of 5 mL, or a maximum volume of 10 mL.                of electrophoresed         sample contain kappa           antibody (see
+                                                                          sample                     light chains when using        “Related products”
+    3. Loosen the top cap on the spin column and snap off the                                        Immobilized Protein L).        on page 2).
+       bottom closure (SAVE bottom closure to cap column bottom
+       in later steps). Place column in a 50 mL collection tube,                                                                    Use serum-free
+                                                                                                                                    medium for
+       centrifuge for 1 minute, and discard the flowthrough.
+                                                                                                     Antibody of interest was       cell supernatant
+                                                                                                     at low concentration           samples.
+    4. Equilibrate column by adding 10 mL of Binding Buffer.              Considerable antibody
+                                                                                                     or has low binding
+       Centrifuge for 1 minute and discard the flowthrough. Repeat        purified, but no                                          Affinity-purify the
+                                                                                                     affinity for the immobilized   antibody using the
+       this step once.                                                    specific antibody of
+                                                                                                     protein relative to other      specific antigen
+                                                                          interest detected
+                                                                                                     immunoglobulins in the         coupled to a
+    5. Cap bottom of column with the included rubber cap. Apply                                      sample.                        support (see
+       sample to column and tightly cap top. Incubate at room                                                                       “Related products”
+       temperature with end-over-end mixing for 10 minutes.                                                                         on page 2).
+
+    6. Loosen top cap and remove bottom cap. Place column in a                                                                 Try Gentle Ag/Ab
+       new 50 mL collection tube and centrifuge for 1 minute.             Antibody of interest       Antibody was sensitive to Elution Buffer (see
+                                                                          purified, but it           low pH Elution Buffer.    “Related products”
+       Note: This first collection tube contains the non-bound            is denatured (as                                     on page 2).
+       sample components and may be analyzed to assess binding            determined by lack                                     Desalt or dialyze
+       efficiency and capacity.                                           of function in             Downstream application
+                                                                                                                                 eluted sample into
+                                                                          downstream assay)          was sensitive to
+                                                                                                                                 an application-
+    7. Place column in a new 50 mL collection tube. Wash column                                      neutralized Elution Buffer.
+                                                                                                                                 compatible buffer.
+       by adding 10 mL of Binding Buffer. Centrifuge for 1 minute
+       and collect wash fraction. Repeat wash 2 additional times
+       for a total of 3 washes.                                           Related products
+    8. Add 500 µL of Neutralization Buffer to three 50 mL collection                                  Product                                 Cat. No.
+       tubes and place the spin column into one of the tubes.
+                                                                          Protein A IgG Binding Buffer, 1 L                                    21001
+    9. Add 5 mL of Elution Buffer to the column and centrifuge
+                                                                          Protein G IgG Binding Buffer, 3.75 L                                 21011
+       for 1 minute into the first of the 3 collection tubes with
+       Neutralization Buffer. Transfer the spin column to another         Protein A/G IgG Binding Buffer, 240 mL                               54200
+       tube that contains Neutralization Buffer, saving the collected
+       solution as the first elution fraction. Repeat this step 2 times   Gentle Ag/Ab Elution Buffer, 500 mL                                  21027
+       to obtain 3 fractions.
+                                                                          Monoclonal Antibody Isotyping Kit I (HRP/ABTS)                       37501
+
+10. Determine which fraction contains the purified antibody               BupH Phosphate Buffered Saline Packs, 40/pkg (500 mL
+                                                                                ™
+                                                                                                                                               28372
+    by measuring the relative absorbance of each fraction at              reconstituted)
+    280 nm. If required for downstream applications, exchange
+                                      ™     ™                             AminoLink Plus™ Immobilization Kit                                   44894
+    the buffer using Thermo Scientific Zeba Spin Desalting
+                                 ™               ™
+    Columns or Thermo Scientific Slide-A-Lyzer Dialysis                   Slide-A-Lyzer™ Dialysis Cassette Kit, 10 dialysis cassettes,
+    Cassettes (see “Related products” on page 2 section).                                                                                      66385
+                                                                          each appropriate for 0.1–0.5 mL samples
+
+11. To regenerate the column for storage or reuse, add 10 mL              Slide-A-Lyzer™ Concentrating Solution, 200 mL                        66528
+    of Elution Buffer and centrifuge for 1 minute. Repeat once.
+    Wash column with 10 mL of Storage Solution. Add 10 mL
+    of Storage Solution and store column at 4°C. Typically, the
+    immobilized protein column may be used up to 10 times
+    without significant loss in binding capacity, although the
+    actual number of effective usages may vary. To attach the
+    bottom closure, simply invert the snap-off cap and apply to
+    column bottom with gentle pressure.
+
+
+
+
+2                                                                                                                  ™
+                                                                                                              NAb Spin Columns, 5 mL User Guide
+              Thermo Fisher Scientific | 3747 N. Meridian Road | Rockford, Illinois 61101 USA
+              For descriptions of symbols on product labels or product documents, go to thermofisher.com/symbols-definition.
+
+Revision history: Pub. No. MAN0011593 B
+
+     Revision                       Date                                                                        Description
+                                                            • Instructions for using the bottom column closure were added to the document.
+         B                      17 May 2024
+                                                            • The document was updated to the current template, with associated updates to the warranty, trademarks, and logos.
+
+         A                    17 October 2015            New document for NAb Spin Columns.
+
+
+The information in this guide is subject to change without notice.
+DISCLAIMER: TO THE EXTENT ALLOWED BY LAW, THERMO FISHER SCIENTIFIC INC. AND/OR ITS AFFILIATE(S) WILL NOT BE LIABLE FOR SPECIAL, INCIDENTAL, INDIRECT,
+PUNITIVE, MULTIPLE, OR CONSEQUENTIAL DAMAGES IN CONNECTION WITH OR ARISING FROM THIS DOCUMENT, INCLUDING YOUR USE OF IT.
+Important Licensing Information: These products may be covered by one or more Limited Use Label Licenses. By use of these products, you accept the terms and conditions of all
+applicable Limited Use Label Licenses.
+©2015-2024 Thermo Fisher Scientific Inc. All rights reserved. All trademarks are the property of Thermo Fisher Scientific and its subsidiaries unless otherwise specified.
+
+
+
+
+thermofisher.com/support | thermofisher.com/askaquestion
+thermofisher.com
+17 May 2024
+

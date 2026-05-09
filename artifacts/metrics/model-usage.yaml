@@ -1,46 +1,46 @@
 kind: protocol-foundry-model-usage
-generated_at: 2026-05-08T18:18:39.925Z
-startedAt: 2026-05-08T18:13:39.517Z
-completedAt: 2026-05-08T18:18:39.783Z
-elapsedSeconds: 300.266
+generated_at: 2026-05-09T03:51:09.181Z
+startedAt: 2026-05-09T03:51:09.040Z
+completedAt: 2026-05-09T03:51:09.161Z
+elapsedSeconds: 0.121
 endpoints:
   - role: worker
     baseUrl: http://thunderbeast:8001/v1
     start:
       endpoint: http://thunderbeast:8001/metrics
-      promptTokensTotal: 114814476
-      generationTokensTotal: 610027
-      runningRequests: 1
-      waitingRequests: 0
-      kvCacheUsage: 0.04508566275924253
-    end:
-      endpoint: http://thunderbeast:8001/metrics
-      promptTokensTotal: 115008247
-      generationTokensTotal: 610346
+      promptTokensTotal: 122151223
+      generationTokensTotal: 651073
       runningRequests: 0
       waitingRequests: 0
       kvCacheUsage: 0
-    deltaPromptTokens: 193771
-    deltaGenerationTokens: 319
-    promptTokensPerSecond: 645.3311397227791
-    generationTokensPerSecond: 1.0623913463395789
+    end:
+      endpoint: http://thunderbeast:8001/metrics
+      promptTokensTotal: 122151223
+      generationTokensTotal: 651073
+      runningRequests: 0
+      waitingRequests: 0
+      kvCacheUsage: 0
+    deltaPromptTokens: 0
+    deltaGenerationTokens: 0
+    promptTokensPerSecond: 0
+    generationTokensPerSecond: 0
   - role: architect
     baseUrl: http://thunderbeast:8000/v1
     start:
       endpoint: http://thunderbeast:8000/metrics
-      promptTokensTotal: 34756537
-      generationTokensTotal: 309164
+      promptTokensTotal: 57623926
+      generationTokensTotal: 468777
       runningRequests: 0
       waitingRequests: 0
       kvCacheUsage: 0
     end:
       endpoint: http://thunderbeast:8000/metrics
-      promptTokensTotal: 34759336
-      generationTokensTotal: 315559
-      runningRequests: 1
+      promptTokensTotal: 57623926
+      generationTokensTotal: 468777
+      runningRequests: 0
       waitingRequests: 0
-      kvCacheUsage: 0.12435233160621761
-    deltaPromptTokens: 2799
-    deltaGenerationTokens: 6395
-    promptTokensPerSecond: 9.321734728540694
-    generationTokensPerSecond: 21.29778263273231
+      kvCacheUsage: 0
+    deltaPromptTokens: 0
+    deltaGenerationTokens: 0
+    promptTokensPerSecond: 0
+    generationTokensPerSecond: 0

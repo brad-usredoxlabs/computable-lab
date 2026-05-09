@@ -1,0 +1,12 @@
+kind: protocol-foundry-material-context
+protocolId: cayman-immuno-oncology
+generated_at: 2026-05-09T00:39:00.120Z
+sourcePdf: /home/brad/git/computable-foundry/artifacts/pdfs/Cayman-Immuno_oncology.pdf
+materials: []
+materialSpecs: []
+vendorProducts: []
+labwareHints: []
+notes:
+  - PDF intake creates protocol text and provenance only.
+    Material/material-spec/vendor-product records must be justified by compiler
+    or architect evidence.

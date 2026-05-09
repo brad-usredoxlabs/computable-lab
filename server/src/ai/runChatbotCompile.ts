@@ -131,7 +131,7 @@ export async function runChatbotCompile(
 ): Promise<RunChatbotCompileResult> {
   // Resolve priorLabState: explicit arg > cache lookup > emptyLabState
   const convId = args.conversationId;
-  const cache = args.deps.labStateCache;
+  const cache = args.deps?.labStateCache;
   const effectivePrior =
     args.priorLabState
     ?? (convId && cache ? cache.get(convId) : undefined)

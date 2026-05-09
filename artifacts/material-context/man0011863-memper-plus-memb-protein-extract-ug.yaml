@@ -1,0 +1,12 @@
+kind: protocol-foundry-material-context
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+generated_at: 2026-05-09T00:39:00.398Z
+sourcePdf: /home/brad/git/computable-foundry/artifacts/pdfs/MAN0011863_MemPER_Plus_Memb_Protein_Extract_UG.pdf
+materials: []
+materialSpecs: []
+vendorProducts: []
+labwareHints: []
+notes:
+  - PDF intake creates protocol text and provenance only.
+    Material/material-spec/vendor-product records must be justified by compiler
+    or architect evidence.

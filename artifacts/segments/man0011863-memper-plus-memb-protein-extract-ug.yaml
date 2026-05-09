@@ -1,0 +1,532 @@
+kind: protocol-foundry-segment
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+generated_at: 2026-05-09T00:39:00.396Z
+sourcePdf: /home/brad/git/computable-foundry/artifacts/pdfs/MAN0011863_MemPER_Plus_Memb_Protein_Extract_UG.pdf
+sourceText: /home/brad/git/computable-foundry/artifacts/text/man0011863-memper-plus-memb-protein-extract-ug.txt
+title: MAN0011863_MemPER_Plus_Memb_Protein_Extract_UG
+protocol_text: "INSTRUCTIONS
+
+  Mem-PERTM Plus
+
+  Membrane Protein Extraction Kit
+
+
+  89842                                                                                                                                                                               \
+  2519.1
+
+  Number                            Description
+
+  89842                             Mem-PER Plus Membrane Protein Extraction
+  Kit, contains sufficient lysis and extraction reagents
+
+  \                                  for approximately 50 mammalian cell pellet
+  fractions containing 5 × 106 cells each or 25 tissue
+
+  \                                  samples containing 20-40mg of tissue
+
+
+  \                                  Kit Contents:
+
+  \                                  Cell Wash Solution, 225mL; store at 4°C
+
+  \                                  Solubilization Buffer, 25mL; store at 4°C
+
+  \                                  Permeabilization Buffer, 50mL; store at
+  -20°C
+
+
+  \                                  Storage: Upon receipt store Cell Wash
+  Solution and Solubilization Buffer at 4°C. Aliquot and store
+
+  \                                  Permeabilization Buffer at -20°C to avoid
+  freeze/thaws. Product is shipped on ice.
+
+
+
+  Table of Contents
+
+  Introduction
+  .............................................................................\
+  .............................................................................\
+  ....................... 1
+
+  Important Product Information
+  .............................................................................\
+  ....................................................................... 1
+
+  Additional Materials
+  Required.....................................................................\
+  .............................................................................\
+  ... 2
+
+  Procedure for Membrane Protein Extraction from Different Sample Types
+  .............................................................................\
+  .. 2
+
+  \   Protocol 1: Adhesion Mammalian Cells
+  .............................................................................\
+  ..................................................... 2
+
+  \   Protocol 2: Suspension Mammalian Cells
+  .............................................................................\
+  .................................................. 2
+
+  \   Protocol 3: Soft Tissue
+  .............................................................................\
+  .............................................................................\
+  ... 2
+
+  \   Protocol 4: Hard Tissue
+  .............................................................................\
+  ..............................................................................
+  3
+
+  Troubleshooting
+  .............................................................................\
+  .............................................................................\
+  ................. 4
+
+  Related Thermo Scientific Products
+  .............................................................................\
+  ............................................................... 4
+
+
+  Introduction
+
+  The Thermo Scientific™ Mem-PER™ Plus Membrane Protein Extraction Kit is used
+  for the enrichment of integral
+
+  membrane proteins and membrane-associated proteins from cultured mammalian
+  cells or tissue. The kit uses a mild
+
+  detergent-based, selective extraction protocol, which eliminates the hassle of
+  phase separation based on hydrophobicity,
+
+  allowing better reproducibility and higher throughput.
+
+  The cells are permeabilized with a mild detergent to allow the release of
+  soluble cytosolic proteins. A second detergent then
+
+  solubilizes membrane proteins. Extraction efficiencies will vary depending on
+  the number of times the integral membrane
+
+  protein(s) of interest spans the lipid bilayer. Membrane proteins with at
+  least 1-2 transmembrane domains are typically
+
+  extracted with an efficiency of up to 90%. Cross-contamination of cytosolic
+  proteins into the membrane fraction is usually
+
+  less than 10%.
+
+
+
+  Important Product Information
+
+  •     For optimal results, include protease and phosphatase inhibitors (e.g.,
+  Product No. 78440) in the Permeabilization and
+
+  \      Solubilization Buffers.
+
+  •     To directly quantify proteins in the cytosolic and/or membrane fraction,
+  use a protein assay such as the Thermo
+
+  \      Scientific™ BCA Protein Assay (Product No. 23225), Micro BCA™ Protein
+  Assay (Product No. 23235) or Pierce™
+
+  \      660nm Protein Assay (Product No. 22660).
+
+
+
+  \                                          Pierce Biotechnology           PO
+  Box 117                       (815)
+  968-0747            www.thermoscientific.com/pierce
+
+  \                                          3747 N. Meridian
+  Road          Rockford, lL 61105 USA           (815) 968-7316 fax
+
+  \f•    Both fractions are compatible with SDS-PAGE. Use the Thermo Scientific™
+  Pierce™ SDS-PAGE Sample Prep Kit
+
+  \     (Product No. 89888) if the protein of interest is in low abundance and a
+  large volume is required for adequate detection.
+
+  •    If the detergent in the membrane fraction interferes with downstream
+  applications, use Thermo Scientific™ Pierce™
+
+  \     Detergent Removal Spin Columns (Product No. 87776-7) to decrease the
+  amount of detergent in the sample. However,
+
+  \     the sample:resin ratio will need to be empirically determined since
+  removing too much detergent may result in protein
+
+  \     precipitation.
+
+
+
+  Additional Material Required
+
+  •    Protease and phosphatase inhibitors (e.g., Product No. 78440)
+
+  •    Temperature-controlled mixer
+
+  •    Cell scraper to remove adherent cells from plates
+
+  •    5mL microcentrifuge tubes
+
+  •    For soft tissues, a 2mL Dounce Tissue Grinder (e.g., Kontes or Wheaton
+  Tenbroeck) is required.
+
+  •    For hard tissues, a hand-held homogenizer for 0.5-1.5mL samples (e.g.,
+  Brinkmann™ Polytron™ PT-1200CL
+
+  \     Homogenizer)
+
+
+
+  Procedure for Membrane Protein Extraction from Different Sample Types
+
+  Choose the appropriate protocol for the sample type used.
+
+  Protocol 1: Adherent Mammalian Cells
+
+  1.   Resuspend 5 × 106 cells in the growth media by scraping the cells off the
+  surface of the plate with a cell scraper.
+
+  \     Centrifuge harvested cell suspension at 300 × g for 5 minutes.
+
+  2.   Wash cell pellet with 3mL of Cell Wash Solution and centrifuge at 300 × g
+  for 5 minutes.
+
+  3.   Carefully remove and discard the supernatant. Resuspend the cells in
+  1.5mL of Cell Wash Solution and transfer to a
+
+  \     2mL centrifuge tube. Centrifuge at 300 × g for 5 minutes and discard
+  supernatant.
+
+  4.   Add 0.75mL of Permeabilization Buffer to the cell pellet. Vortex briefly
+  to obtain a homogeneous cell suspension.
+
+  \     Incubate 10 minutes at 4°C with constant mixing.
+
+  5.   Centrifuge permeabilized cells for 15 minutes at 16,000 × g. Carefully
+  remove the supernatant containing cytosolic
+
+  \     proteins and transfer to a new tube.
+
+  6.   Add 0.5mL of Solubilization Buffer to the pellet and resuspend by
+  pipetting up and down. Incubate tubes at 4°C for
+
+  \     30 minutes with constant mixing.
+
+  7.   Centrifuge tubes at 16,000 × g for 15 minutes at 4°C. Transfer
+  supernatant containing solubilized membrane and
+
+  \     membrane-associated proteins to a new tube.
+
+  8.   Proceed to downstream application. Immediately use cytosolic and membrane
+  fractions stored on ice or store aliquots at
+
+  \     -80°C for future use.
+
+
+  Protocol 2: Suspension Mammalian Cells
+
+  1.   Harvest 5 × 106 cells by centrifugation at 300 × g for 5 minutes. Wash
+  harvested cell pellet with 3mL of Cell Wash
+
+  \     Solution and centrifuge at 300 × g for 5 minutes.
+
+  2.   Carefully remove and discard the supernatant. Resuspend the cells in
+  1.5mL of Cell Wash Solution and transfer to a
+
+  \     2mL centrifuge tube. Centrifuge at 300 × g for 5 minutes and discard
+  supernatant.
+
+  3.   Add 0.75mL of Permeabilization Buffer to the cell pellet. Vortex briefly
+  to obtain a homogeneous cell suspension.
+
+  \     Incubate 10 minutes at 4oC with constant mixing.
+
+  4.   Centrifuge permeabilized cells for 15 minutes at 16,000 × g. Carefully
+  remove the supernatant containing cytoslic
+
+  \     proteins and transfer to a new tube.
+
+
+
+  \                            Pierce Biotechnology    PO Box
+  117               (815) 968-0747       www.thermoscientific.com/pierce
+
+  \                            3747 N. Meridian Road   Rockford, lL 61105
+  USA   (815) 968-7316 fax
+
+
+  \                                                                      2
+
+  \f5.   Add 0.5mL of Solubilization Buffer to the pellet and resuspend by
+  pipetting up and down. Incubate tubes at 4°C for
+
+  \     30 minutes with constant mixing.
+
+  6.   Centrifuge tubes at 16,000 × g for 15 minutes at 4°C. Transfer
+  supernatant containing solubilized membrane and
+
+  \     membrane-associated proteins to a new tube.
+
+  7.   Proceed to downstream application. Immediately use cytosolic and membrane
+  fractions stored on ice or store aliquots at
+
+  \     -80°C for future use.
+
+
+  Protocol 3: Soft Tissue
+
+  1.   Place 20-40mg of soft tissue in a 5mL microcentrifuge tube. Add 4mL of
+  Cell Wash Solution to the tissue, vortex briefly
+
+  \     and discard wash.
+
+  2.   Transfer to a 2mL tissue grinder and cut the tissue into small pieces
+  with a pair of scissors. Add 1mL of permeabilization
+
+  \     buffer to the tissue and homogenize until an even suspension is obtained
+  (6-10 strokes).
+
+  3.   Add 1mL of Permeabilization Buffer and transfer homogenate to a new tube,
+  incubating for 10 minutes at 4°C with
+
+  \     constant mixing.
+
+  \     Optional: Remove non-homogenized tissue using the protocol provided with
+  the Thermo Scientific™ Pierce™ Tissue
+
+  \     Strainers (Product No. 87791) before pelleting permeabilized cells.
+
+  4.   Centrifuge at 16,000 × g for 15 minutes at 4°C to pellet permeabilized
+  cells. Carefully remove the supernatant containing
+
+  \     cytosolic proteins and transfer to a new tube.
+
+  5.   Resuspend the pellet in 1mL of Solubilization Buffer. Pipette up and down
+  to obtain a homogeneous suspension.
+
+  \     Incubate 30 minutes at 4°C with constant mixing.
+
+  6.   Centrifuge tubes at 16,000 × g for 15 minutes at 4°C. Transfer
+  supernatant containing solubilized membrane and
+
+  \     membrane-associated proteins to a new tube.
+
+  7.   Proceed to downstream application. Immediately use cytosolic and membrane
+  fractions stored on ice or store aliquots at
+
+  \     -80°C for future use.
+
+
+  Protocol 4: Hard Tissue
+
+  1.   Place 20-40mg of hard tissue in a 5mL microcentrifuge tube. Add 4mL of
+  Cell Wash Solution to the tissue, vortex
+
+  \     briefly and discard the wash.
+
+  2.   Add 1mL of Permeabilization Buffer to the tissue and cut the tissue into
+  small pieces with a pair of scissors.
+
+  3.   Homogenize minced tissue with a hand-held Polytron Homogenizer. Use a low
+  setting (to prevent foaming) until an even
+
+  \     suspension is obtained.
+
+  4.   Add an additional 1mL of Permeabilization Buffer to the homogenate and
+  incubate for 10 minutes on ice with constant
+
+  \     mixing.
+
+  \     Optional: Remove non-homogenized tissue using protocol provided with the
+  Pierce Tissue Strainers before pelleting
+
+  \     permeabilized cells.
+
+  5.   Centrifuge at 16,000 × g for 15 minutes at 4°C to pellet permeabilized
+  cells. Carefully remove the supernatant containing
+
+  \     cytosolic proteins and transfer to a new tube.
+
+  6.   Resuspend the pellet in 1mL of Solubilization Buffer. Pipette up and down
+  to obtain a homogeneous suspension.
+
+  \     Incubate 30 minutes at 4°C with constant mixing.
+
+  7.   Centrifuge tubes at 16,000 × g for 15 minutes at 4°C. Transfer
+  supernatant containing solubilized membrane and
+
+  \     membrane-associated proteins to a new tube.
+
+  8.   Proceed to downstream application. Immediately use cytosolic and membrane
+  fractions stored on ice or store aliquots at
+
+  \     -80°C for future use.
+
+
+
+
+
+  \                            Pierce Biotechnology    PO Box
+  117               (815) 968-0747       www.thermoscientific.com/pierce
+
+  \                            3747 N. Meridian Road   Rockford, lL 61105
+  USA   (815) 968-7316 fax
+
+
+  \                                                                      3
+
+  \fTroubleshooting
+
+  \            Problem                                       Possible
+  Cause                                                  Solution
+
+  \ Contamination of                    Cells were not
+  permeabilized                                Increase incubation time or
+  strokes of
+
+  \ membrane fraction
+  with                                                                          \
+  homogenization
+
+  \ cytosolic proteins
+
+  \                                     Permeabilization Buffer was
+  improperly                      Store Permeabilization Buffer at -20°C
+
+  \                                     stored
+
+  \                                     Incomplete removal of permeabilized
+  cell                    Ensure complete removal of cytosolic extract
+
+  \                                     supernatant
+
+  \ Low membrane protein                Membranes were solubilized
+  by                               Decrease incubation time or strokes
+
+  \ yield                               Permeabilization Buffer
+
+  \                                     Incomplete membrane protein
+  isolation                       Increase incubation time
+
+  \ Low overall protein yield           Not enough
+  cells/tissue                                     Increase cell number or
+  amount of starting
+
+  \                                                                                                 \
+  tissue (mg)
+
+
+
+  Related Thermo Scientific Products
+
+  87785                       Halt™ Protease Inhibitor Cocktail, EDTA-Free
+  (100X), 1mL
+
+  87786                       Halt Protease Inhibitor Cocktail (100X), 1mL
+
+  78441                       Halt Protease and Phosphatase Inhibitor Cocktail,
+  EDTA-Free (100X), 1mL
+
+  78440                       Halt Protease and Phosphatase Inhibitor Cocktail
+  (100X), 1mL
+
+  78420                       Halt Phosphatase Inhibitor Cocktail (100X), 1mL
+
+  88665-9                     Pierce Protease Inhibitor Tablets
+
+  23225                       BCA Protein Assay Kit
+
+  89888                       Pierce SDS-PAGE Sample Prep Kit
+
+  87777                       Pierce Detergent Removal Spin Columns, 0.5mL
+
+  78840                       Subcellular Protein Fractionation Kit for Cultured
+  Cells
+
+  87790                       Subcellular Protein Fractionation Kit for Tissue
+
+  87791                       Pierce Tissue Strainers, 250µm, 2.5mL, 50 units
+
+
+  Products are warranted to operate or perform substantially in conformance with
+  published Product specifications in effect at the time of sale, as set forth
+  in
+
+  the Product documentation, specifications and/or accompanying package inserts
+  (“Documentation”). No claim of suitability for use in applications regulated
+
+  by FDA is made. The warranty provided herein is valid only when used by
+  properly trained individuals. Unless otherwise stated in the Documentation,
+  this
+
+  warranty is limited to one year from date of shipment when the Product is
+  subjected to normal, proper and intended usage. This warranty does not extend
+  to
+
+  anyone other than Buyer. Any model or sample furnished to Buyer is merely
+  illustrative of the general type and quality of goods and does not represent
+  that
+
+  any Product will conform to such model or sample.
+
+  NO OTHER WARRANTIES, EXPRESS OR IMPLIED, ARE GRANTED, INCLUDING WITHOUT
+  LIMITATION, IMPLIED WARRANTIES OF
+
+  MERCHANTABILITY, FITNESS FOR ANY PARTICULAR PURPOSE, OR NON INFRINGEMENT.
+  BUYER’S EXCLUSIVE REMEDY FOR NON-
+
+  CONFORMING PRODUCTS DURING THE WARRANTY PERIOD IS LIMITED TO REPAIR,
+  REPLACEMENT OF OR REFUND FOR THE NON-
+
+  CONFORMING PRODUCT(S) AT SELLER’S SOLE OPTION. THERE IS NO OBLIGATION TO
+  REPAIR, REPLACE OR REFUND FOR PRODUCTS
+
+  AS THE RESULT OF (I) ACCIDENT, DISASTER OR EVENT OF FORCE MAJEURE, (II)
+  MISUSE, FAULT OR NEGLIGENCE OF OR BY BUYER,
+
+  (III) USE OF THE PRODUCTS IN A MANNER FOR WHICH THEY WERE NOT DESIGNED, OR
+  (IV) IMPROPER STORAGE AND HANDLING OF
+
+  THE PRODUCTS.
+
+  Unless otherwise expressly stated on the Product or in the documentation
+  accompanying the Product, the Product is intended for research only and is not
+  to
+
+  be used for any other purpose, including without limitation, unauthorized
+  commercial uses, in vitro diagnostic uses, ex vivo or in vivo therapeutic
+  uses, or
+
+  any type of consumption by or application to humans or animals.
+
+
+  Current product instructions are available at www.thermoscientific.com/pierce.
+  For a faxed copy, call 800-874-3723 or contact your local distributor.
+
+  © 2013 Thermo Fisher Scientific Inc. All rights reserved. Polytron is a
+  trademark of Kinematica AG Company. Unless otherwise indicated, all other
+
+  trademarks are property of Thermo Fisher Scientific Inc. and its subsidiaries.
+  Printed in the USA.
+
+
+
+
+
+  \                                  Pierce Biotechnology       PO Box
+  117                 (815) 968-0747       www.thermoscientific.com/pierce
+
+  \                                  3747 N. Meridian Road      Rockford, lL
+  61105 USA     (815) 968-7316 fax
+
+
+  \                                                                               \
+  4
+
+  \f"

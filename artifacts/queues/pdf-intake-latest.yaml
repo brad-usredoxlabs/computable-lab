@@ -1,10 +1,46 @@
 kind: protocol-foundry-pdf-intake-report
-generated_at: 2026-05-08T18:24:41.380Z
+generated_at: 2026-05-09T03:51:09.128Z
 ingested: 0
-skipped: 1
+skipped: 10
 failed: 0
 records:
   - protocolId: bulletin-6816
     pdfPath: /home/brad/git/computable-foundry/artifacts/pdfs/Bulletin_6816.pdf
+    status: skipped
+    message: segment already exists
+  - protocolId: cayman-immuno-oncology
+    pdfPath: /home/brad/git/computable-foundry/artifacts/pdfs/Cayman-Immuno_oncology.pdf
+    status: skipped
+    message: segment already exists
+  - protocolId: cayman-natural-prodccuts
+    pdfPath: /home/brad/git/computable-foundry/artifacts/pdfs/Cayman-natural-prodccuts.pdf
+    status: skipped
+    message: segment already exists
+  - protocolId: cellrox-oxidative-stress-qr
+    pdfPath: /home/brad/git/computable-foundry/artifacts/pdfs/CellROX_Oxidative_Stress_QR.pdf
+    status: skipped
+    message: segment already exists
+  - protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+    pdfPath: /home/brad/git/computable-foundry/artifacts/pdfs/MAN0011593_NAbSpinColumn_5mL_Antibody_Purifi_UG.pdf
+    status: skipped
+    message: segment already exists
+  - protocolId: man0011863-memper-plus-memb-protein-extract-ug
+    pdfPath: /home/brad/git/computable-foundry/artifacts/pdfs/MAN0011863_MemPER_Plus_Memb_Protein_Extract_UG.pdf
+    status: skipped
+    message: segment already exists
+  - protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+    pdfPath: /home/brad/git/computable-foundry/artifacts/pdfs/_d4302_d4306_d4308_zymobiomics-96_magbead_dna_kit.pdf
+    status: skipped
+    message: segment already exists
+  - protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+    pdfPath: /home/brad/git/computable-foundry/artifacts/pdfs/an-fame-oil-gc-pal3-5994-8543en-agilent.pdf
+    status: skipped
+    message: segment already exists
+  - protocolId: mp10422
+    pdfPath: /home/brad/git/computable-foundry/artifacts/pdfs/mp10422.pdf
+    status: skipped
+    message: segment already exists
+  - protocolId: mp10471
+    pdfPath: /home/brad/git/computable-foundry/artifacts/pdfs/mp10471.pdf
     status: skipped
     message: segment already exists

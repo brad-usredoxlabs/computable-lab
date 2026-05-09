@@ -1,0 +1,52 @@
+Quick Reference
+
+CellROX® Oxidative Stress Reagents
+Cat. Nos. C10422, C10443, C10444, C10448
+Pub. No. MAN0007457 		                                                                                    Revision 1.0
+Detailed protocol is available online at www.lifetechnologies.com/manuals.
+WARNING! For every chemical, read the Safety Data Sheets (SDSs) and follow the handling instructions. Wear appropriate
+protective eyewear, clothing, and gloves. Safety Data Sheets (SDSs) are available from www.lifetechnologies.com/support.
+
+ Chemical       CAS           Warning
+ DMSO           67-68-5       Components of the product may be absorbed into the body through the skin.
+
+
+
+
+Spectral Characteristics of CellROX® Oxidative Stress Reagents
+        CellROX® Reagent                                   Ex/Em maxima (in nm)
+ CellROX® Deep Red Reagent                                       640/665
+ CellROX® Orange Reagent                                         545/565
+ CellROX® Green Reagent                                          485/520
+
+
+
+For research use only. Not for use in diagnostic procedures.
+Quick Protocol
+1.         Treat the cells with the test compound or drug.
+2.         Add the CellROX® Reagent at a final concentration of 5 μM.
+3.         Incubate the cells for 30 minutes at 37°C.
+4.         Remove medium and wash the cells 3 times with PBS.
+5.         Optional: If using CellROX® Deep Red or CellROX® Green, you may
+           fix the cells with 3.7% formaldehyde for 15 minutes.
+6.         Optional: You may stain the cells with NucBlue™ Live Cell Stain, a
+           nuclear counterstain, or another counterstain at this time.
+7.         Optional: If using CellROX® Green, you may permeabilize the
+           cells with 0.5% Triton® X-100 for 10 minutes, if multiplexing with
+           another reagent is desired.
+8.         Analyze the cells.
+Limited Product Warranty
+Life Technologies Corporation and/or its affiliate(s) warrant their products as set forth in the Life Technologies’ General Terms and Conditions of Sale found on Life
+Technologies’ website at www.lifetechnologies.com/termsandconditions. If you have any questions, please contact Life Technologies at www.lifetechnologies.com/support.
+DISCLAIMER - LIFE TECHNOLOGIES CORPORATION AND/OR ITS AFFILIATE(S) DISCLAIM ALL WARRANTIES WITH RESPECT TO THIS DOCUMENT, EXPRESSED OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THOSE OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, OR NON-INFRINGEMENT. TO THE EXTENT
+ALLOWED BY LAW, IN NO EVENT SHALL LIFE TECHNOLOGIES AND/OR ITS AFFILIATE(S) BE LIABLE, WHETHER IN CONTRACT, TORT, WARRANTY, OR UNDER ANY
+STATUTE OR ON ANY OTHER BASIS FOR SPECIAL, INCIDENTAL, INDIRECT, PUNITIVE, MULTIPLE OR CONSEQUENTIAL DAMAGES IN CONNECTION WITH OR ARISING
+FROM THIS DOCUMENT, INCLUDING BUT NOT LIMITED TO THE USE THEREOF.
+© 2013 Life Technologies Corporation. All rights reserved. The trademarks mentioned herein are the property of Life Technologies Corporation and/or its affiliate(s) or their
+respective owners. Triton is a registered trademark of Dow Chemical Co.
+
+For support visit lifetechnologies.com/support
+lifetechnologies.com
+25 February 2013
+

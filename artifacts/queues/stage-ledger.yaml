@@ -1,10 +1,43 @@
 kind: protocol-foundry-stage-ledger
-generated_at: 2026-05-08 04:37:46.150000+00:00
-updated_at: 2026-05-08T18:24:41.395Z
+generated_at: 2026-05-08T22:13:08.559Z
+updated_at: 2026-05-09T03:51:09.158Z
 artifact_root: /home/brad/git/computable-foundry/artifacts
 protocols:
+  - an-fame-oil-gc-pal3-5994-8543en-agilent
   - bulletin-6816
+  - cayman-immuno-oncology
+  - cayman-natural-prodccuts
+  - cellrox-oxidative-stress-qr
+  - d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+  - man0011593-nabspincolumn-5ml-antibody-purifi-ug
+  - man0011863-memper-plus-memb-protein-extract-ug
+  - mp10422
+  - mp10471
 protocol_status:
+  an-fame-oil-gc-pal3-5994-8543en-agilent:
+    protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+    status: pending
+    variants:
+      manual_tubes:
+        variant: manual_tubes
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      bench_plate_multichannel:
+        variant: bench_plate_multichannel
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      robot_deck:
+        variant: robot_deck
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
   bulletin-6816:
     protocolId: bulletin-6816
     segmentPath: /home/brad/git/computable-foundry/artifacts/segments/bulletin-6816.yaml
@@ -13,8 +46,8 @@ protocol_status:
     variants:
       manual_tubes:
         variant: manual_tubes
-        status: gap
-        attempt: 22
+        status: stalled
+        attempt: 401
         artifacts:
           compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/manual_tubes.yaml
           eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/manual_tubes.yaml
@@ -30,21 +63,23 @@ protocol_status:
           adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/bulletin-6816/manual_tubes/adoption.yaml
           coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/manual_tubes/result.yaml
           patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/bulletin-6816-manual_tubes.yaml
+          criticReport: /home/brad/git/computable-foundry/artifacts/patch-critic/bulletin-6816/manual_tubes/report.yaml
+          stallReport: /home/brad/git/computable-foundry/artifacts/stalled/bulletin-6816/manual_tubes/stall.yaml
         metrics:
-          diagnosticCount: 10
           eventCount: 1
+          diagnosticCount: 10
           extractorRepairExhaustedCount: 0
-          foundryComplete: 0
           outcome: gap
+          foundryComplete: 0
           qualityScore: 0.7999999999999999
           coverageEstimate: 0.1
-        completedAt: 2026-05-08T18:24:41.272Z
-        failureReason: compilation failed
-        startedAt: 2026-05-08T18:20:19.845Z
+        startedAt: 2026-05-09T03:12:59.332Z
+        completedAt: 2026-05-09T00:39:10.722Z
+        failureReason: "Patch applied: 1 file(s) changed, spec verification passed."
       bench_plate_multichannel:
         variant: bench_plate_multichannel
-        status: gap
-        attempt: 21
+        status: running
+        attempt: 6
         artifacts:
           compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/bench_plate_multichannel.yaml
           eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/bench_plate_multichannel.yaml
@@ -60,23 +95,22 @@ protocol_status:
           adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/bulletin-6816/bench_plate_multichannel/adoption.yaml
           coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/bench_plate_multichannel/result.yaml
           patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/bulletin-6816-bench_plate_multichannel.yaml
-          rerunReport: /home/brad/git/computable-foundry/artifacts/rerun/bulletin-6816/bench_plate_multichannel/rerun.yaml
+          criticReport: /home/brad/git/computable-foundry/artifacts/patch-critic/bulletin-6816/bench_plate_multichannel/report.yaml
         metrics:
-          blockerCount: 0
-          diagnosticCount: 9
           eventCount: 1
+          diagnosticCount: 9
           extractorRepairExhaustedCount: 0
-          foundryComplete: 0
           outcome: gap
+          foundryComplete: 0
           qualityScore: 0.7999999999999999
           coverageEstimate: 0.1
-        completedAt: 2026-05-08T18:09:16.509Z
-        failureReason: compilation failed
-        startedAt: 2026-05-08T18:04:50.476Z
+        startedAt: 2026-05-09T03:51:09.158Z
+        completedAt: 2026-05-09T03:10:04.100Z
+        failureReason: "Patch applied: 1 file(s) changed, spec verification passed."
       robot_deck:
         variant: robot_deck
-        status: running
-        attempt: 18
+        status: accepted
+        attempt: 4
         artifacts:
           compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/robot_deck.yaml
           eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/robot_deck.yaml
@@ -91,16 +125,207 @@ protocol_status:
           adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/bulletin-6816/robot_deck/adoption.yaml
           coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/bulletin-6816/robot_deck/result.yaml
           patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/bulletin-6816-robot_deck.yaml
-          rerunReport: /home/brad/git/computable-foundry/artifacts/rerun/bulletin-6816/robot_deck/rerun.yaml
+          criticReport: /home/brad/git/computable-foundry/artifacts/patch-critic/bulletin-6816/robot_deck/report.yaml
         metrics:
-          blockerCount: 0
-          diagnosticCount: 11
           eventCount: 1
+          diagnosticCount: 11
           extractorRepairExhaustedCount: 0
-          foundryComplete: 1
           outcome: complete
+          foundryComplete: 1
           qualityScore: 0.7999999999999999
           coverageEstimate: 0.1
-        completedAt: 2026-05-08T18:24:41.351Z
-        failureReason: Patch specs accepted for unattended coder tournament execution.
-        startedAt: 2026-05-08T18:24:41.395Z
+        startedAt: 2026-05-09T03:12:59.247Z
+        completedAt: 2026-05-09T03:12:59.256Z
+        failureReason: "Patch applied: 1 file(s) changed, spec verification passed."
+  cayman-immuno-oncology:
+    protocolId: cayman-immuno-oncology
+    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/cayman-immuno-oncology.yaml
+    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/cayman-immuno-oncology.yaml
+    status: pending
+    variants:
+      manual_tubes:
+        variant: manual_tubes
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      bench_plate_multichannel:
+        variant: bench_plate_multichannel
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      robot_deck:
+        variant: robot_deck
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+  cayman-natural-prodccuts:
+    protocolId: cayman-natural-prodccuts
+    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/cayman-natural-prodccuts.yaml
+    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/cayman-natural-prodccuts.yaml
+    status: pending
+    variants:
+      manual_tubes:
+        variant: manual_tubes
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      bench_plate_multichannel:
+        variant: bench_plate_multichannel
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      robot_deck:
+        variant: robot_deck
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+  cellrox-oxidative-stress-qr:
+    protocolId: cellrox-oxidative-stress-qr
+    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/cellrox-oxidative-stress-qr.yaml
+    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/cellrox-oxidative-stress-qr.yaml
+    status: pending
+    variants:
+      manual_tubes:
+        variant: manual_tubes
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      bench_plate_multichannel:
+        variant: bench_plate_multichannel
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      robot_deck:
+        variant: robot_deck
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+  d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit:
+    protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+    status: pending
+    variants:
+      manual_tubes:
+        variant: manual_tubes
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      bench_plate_multichannel:
+        variant: bench_plate_multichannel
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      robot_deck:
+        variant: robot_deck
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+  man0011593-nabspincolumn-5ml-antibody-purifi-ug:
+    protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+    status: pending
+    variants:
+      manual_tubes:
+        variant: manual_tubes
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      bench_plate_multichannel:
+        variant: bench_plate_multichannel
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      robot_deck:
+        variant: robot_deck
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+  man0011863-memper-plus-memb-protein-extract-ug:
+    protocolId: man0011863-memper-plus-memb-protein-extract-ug
+    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
+    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
+    status: pending
+    variants:
+      manual_tubes:
+        variant: manual_tubes
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      bench_plate_multichannel:
+        variant: bench_plate_multichannel
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      robot_deck:
+        variant: robot_deck
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+  mp10422:
+    protocolId: mp10422
+    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/mp10422.yaml
+    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/mp10422.yaml
+    status: pending
+    variants:
+      manual_tubes:
+        variant: manual_tubes
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      bench_plate_multichannel:
+        variant: bench_plate_multichannel
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      robot_deck:
+        variant: robot_deck
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+  mp10471:
+    protocolId: mp10471
+    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/mp10471.yaml
+    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/mp10471.yaml
+    status: pending
+    variants:
+      manual_tubes:
+        variant: manual_tubes
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      bench_plate_multichannel:
+        variant: bench_plate_multichannel
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}
+      robot_deck:
+        variant: robot_deck
+        status: pending
+        attempt: 0
+        artifacts: {}
+        metrics: {}

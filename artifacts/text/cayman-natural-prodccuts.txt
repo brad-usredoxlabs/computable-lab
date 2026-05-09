@@ -1,0 +1,2977 @@
+PRODUCT INFORMATION
+Natural Products Screening Library (96-Well)
+Item No. 20897 • Batch No. 0689479
+Panels are routinely re-evaluated to include new catalog introductions as the research evolves.                                                            Page 1 of 59
+   Plate                    Well                                                      Contents                                                    Item Number
+
+    1                        A1                       Unused
+    1                        A2                       Ursolic Acid                                                                        10072
+    1                        A3                       (+)-Abscisic Acid                                                                   10073
+    1                        A4                       (±)-Enterolactone                                                                   10112
+    1                        A5                       trans-trismethoxy Resveratrol                                                       10188
+    1                        A6                       (R)-(−)-Mellein                                                                     10311
+    1                        A7                       Paclitaxel                                                                          10461
+    1                        A8                       Sulforaphane                                                                        10496
+    1                        A9                       Thapsigargin                                                                        10522
+    1                       A10                       Garcinol                                                                            10566
+    1                       A11                       Ellagic Acid                                                                        10569
+    1                       A12                       Unused
+    1                        B1                       Unused
+    1                        B2                       Apicidin                                                                            10575
+    1                        B3                       Isoliquiritigenin                                                                   10739
+    1                        B4                       (±)-Jasmonic Acid-Isoleucine                                                        10740
+    1                        B5                       Epothilone B                                                                        10924
+    1                        B6                       Bisdemethoxycurcumin                                                                10960
+    1                        B7                       Demethoxycurcumin                                                                   10961
+    1                        B8                       (R,S)-Anatabine                                                                     11001
+    1                        B9                       Piperlongumine                                                                      11006
+    1                       B10                       Delphinidin (chloride)                                                              11012
+    1                       B11                       A23187                                                                              11016
+    1                       B12                       Unused
+    1                        C1                       Unused
+    1                        C2                       all-trans Retinoic Acid                                                             11017
+    1                        C3                       Forskolin                                                                           11018
+    1                        C4                       Bafilomycin A1                                                                      11038
+    1                        C5                       Betulin                                                                             11041
+    1                        C6                       Concanamycin A                                                                      11050
+    1                        C7                       4’-O-Methylhonokiol                                                                 11089
+    1                        C8                       Nicotinamide                                                                        11127
+    1                        C9                       Lupeol                                                                              11215
+    1                       C10                       Anisomycin                                                                          11308
+    1                       C11                       Ascomycin                                                                           11309
+    1                       C12                       Unused
+
+
+
+
+  WARNING
+  THIS PRODUCT IS FOR RESEARCH ONLY - NOT FOR HUMAN OR VETERINARY DIAGNOSTIC OR THERAPEUTIC USE.
+                                                                                                                                                                                 CAYMAN CHEMICAL
+                                                                                                                                                                                 1180 EAST ELLSWORTH RD
+  SAFETY DATA                                                                                                                                                                    ANN ARBOR, MI 48108 · USA
+  This material should be considered hazardous until further information becomes available. Do not ingest, inhale, get in eyes, on skin, or on clothing. Wash thoroughly after
+  handling. Before use, the user must review the complete Safety Data Sheet, which has been sent via email to your institution.                                                  PHONE: [800] 364-9897
+  WARRANTY AND LIMITATION OF REMEDY                                                                                                                                                     [734] 971-3335
+  Buyer agrees to purchase the material subject to Cayman’s Terms and Conditions. Complete Terms and Conditions including Warranty and Limitation of Liability information
+  can be found on our website.                                                                                                                                                     FAX: [734] 971-3640
+                                                                                                                        Copyright Cayman Chemical Company, 04/11/2025
+                                                                                                                                                                                 CUSTSERV@CAYMANCHEM.COM
+                                                                                                                                                                                 WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                               Page 2 of 59
+Plate   Well                       Contents                  Item Number
+ 1      D1     Unused
+ 1      D2     Cyclopamine                                11321
+ 1      D3     Indole-3-carbinol                          11325
+ 1      D4     Cytochalasin A                             11327
+ 1      D5     Cytochalasin B                             11328
+ 1      D6     Cytochalasin D                             11330
+ 1      D7     Cytochalasin E                             11331
+ 1      D8     Fumagillin                                 11332
+ 1      D9     Hypericin                                  11334
+ 1      D10    Oligomycin A                               11342
+ 1      D11    Oligomycin B                               11343
+ 1      D12    Unused
+ 1      E1     Unused
+ 1      E2     Paxilline                                  11345
+ 1      E3     Penitrem A                                 11347
+ 1      E4     Withaferin A                               11352
+ 1      E5     Zearalenone                                11353
+ 1      E6     Mithramycin A                              11434
+ 1      E7     Mitomycin C                                11435
+ 1      E8     Unused
+ 1      E9     Sterigmatocystin                           11441
+ 1      E10    Tunicamycin Mixture                        11445
+ 1      E11    Phlorizin                                  11576
+ 1      E12    Unused
+ 1      F1     Unused
+ 1      F2     Natamycin                                  11634
+ 1      F3     Amphotericin B                             11636
+ 1      F4     Pellitorine                                11662
+ 1      F5     12-Deoxywithastramonolide                  11669
+ 1      F6     14-deoxy-11,12-didehydro Andrographolide   11670
+ 1      F7     α-acetyl Boswellic Acid                    11673
+ 1      F8     β-acetyl-Boswellic Acid                    11674
+ 1      F9     Aloe-emodin                                11677
+ 1      F10    Andrographolide                            11679
+ 1      F11    α-Asarone                                  11681
+ 1      F12    Unused
+
+
+
+
+                                                                                 CAYMAN CHEMICAL
+                                                                                 1180 EAST ELLSWORTH RD
+                                                                                 ANN ARBOR, MI 48108 · USA
+                                                                                 PHONE: [800] 364-9897
+                                                                                        [734] 971-3335
+                                                                                   FAX: [734] 971-3640
+                                                                                 CUSTSERV@CAYMANCHEM.COM
+                                                                                 WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                   Page 3 of 59
+Plate   Well                       Contents      Item Number
+ 1      G1     Unused
+ 1      G2     β-Asarone                      11682
+ 1      G3     Angelicin                      11683
+ 1      G4     Bakuchiol                      11684
+ 1      G5     Bavachin                       11685
+ 1      G6     Betulinic Acid                 11686
+ 1      G7     α-Boswellic Acid               11692
+ 1      G8     Camptothecin                   11694
+ 1      G9     Catharanthine (tartrate)       11695
+ 1      G10    Conessine                      11700
+ 1      G11    Deacetylforskolin              11701
+ 1      G12    Unused
+ 1      H1     Unused
+ 1      H2     Demethylwedelolactone          11703
+ 1      H3     6-Gingerol                     11707
+ 1      H4     Diacerein                      11710
+ 1      H5     β-Elemonic Acid                11712
+ 1      H6     Gymnemagenin                   11713
+ 1      H7     Hexahydrocurcumin              11714
+ 1      H8     Hypophyllanthin                11715
+ 1      H9     Cycloastragenol                11722
+ 1      H10    Jervine                        11723
+ 1      H11    Veratramine                    11724
+ 1      H12    Unused
+ 2      A1     Unused
+ 2      A2     Platycodin D                   11725
+ 2      A3     Oleanolic Acid                 11726
+ 2      A4     Coumestrol                     11730
+ 2      A5     Ethyl p-methoxycinnamate       11740
+ 2      A6     Neoandrographolide             11742
+ 2      A7     Phyllanthin                    11745
+ 2      A8     Piperine                       11750
+ 2      A9     Purpurin                       11752
+ 2      A10    Rubiadin                       11753
+ 2      A11    Sesamolin                      11754
+ 2      A12    Unused
+
+
+
+
+                                                                     CAYMAN CHEMICAL
+                                                                     1180 EAST ELLSWORTH RD
+                                                                     ANN ARBOR, MI 48108 · USA
+                                                                     PHONE: [800] 364-9897
+                                                                            [734] 971-3335
+                                                                       FAX: [734] 971-3640
+                                                                     CUSTSERV@CAYMANCHEM.COM
+                                                                     WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                       Page 4 of 59
+Plate   Well                           Contents      Item Number
+ 2      B1     Unused
+ 2      B2     Unused
+ 2      B3     (+)-ar-Turmerone                   11759
+ 2      B4     Vasicinone                         11761
+ 2      B5     Vinblastine (sulfate)              11762
+ 2      B6     Vincamine                          11763
+ 2      B7     Vincristine (sulfate)              11764
+ 2      B8     Vindoline                          11765
+ 2      B9     Vitamin D2                         11791
+ 2      B10    Vitamin D3                         11792
+ 2      B11    Wedelolactone                      11796
+ 2      B12    Unused
+ 2      C1     Unused
+ 2      C2     Withanolide A                      11797
+ 2      C3     (−)-Epicatechin                    11807
+ 2      C4     (−)-Epicatechin Gallate            11808
+ 2      C5     (−)-Epigallocatechin               11809
+ 2      C6     4-Hydroxyisoleucine                11812
+ 2      C7     Artemether                         11815
+ 2      C8     Artemisinin                        11816
+ 2      C9     Asiatic Acid                       11818
+ 2      C10    Asiaticoside                       11819
+ 2      C11    Bacopasaponin C                    11820
+ 2      C12    Unused
+ 2      D1     Unused
+ 2      D2     Bacopaside I                       11821
+ 2      D3     Bacopaside II                      11822
+ 2      D4     Chebulic Acid                      11829
+ 2      D5     Colchicoside                       11831
+ 2      D6     Corilagin                          11832
+ 2      D7     Dioscin                            11834
+ 2      D8     Embelin                            11838
+ 2      D9     8-Gingerol                         11841
+ 2      D10    10-Gingerol                        11842
+ 2      D11    Glabridin                          11843
+ 2      D12    Unused
+
+
+
+
+                                                                         CAYMAN CHEMICAL
+                                                                         1180 EAST ELLSWORTH RD
+                                                                         ANN ARBOR, MI 48108 · USA
+                                                                         PHONE: [800] 364-9897
+                                                                                [734] 971-3335
+                                                                           FAX: [734] 971-3640
+                                                                         CUSTSERV@CAYMANCHEM.COM
+                                                                         WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                        Page 5 of 59
+Plate   Well                       Contents           Item Number
+ 2      E1     Unused
+ 2      E2     18β-Glycyrrhetinic Acid             11845
+ 2      E3     Gallic Acid                         11846
+ 2      E4     Glycyrrhizic Acid (ammonium salt)   11847
+ 2      E5     Gracillin                           11848
+ 2      E6     Bacopaside X                        11851
+ 2      E7     Kaempferol                          11852
+ 2      E8     Licochalcone A                      11853
+ 2      E9     Madecassic Acid                     11854
+ 2      E10    Madecassoside                       11855
+ 2      E11    Brefeldin A                         11861
+ 2      E12    Unused
+ 2      F1     Unused
+ 2      F2     Protodioscin                        11887
+ 2      F3     Rebaudioside A                      11894
+ 2      F4     Rebaudioside C                      11895
+ 2      F5     Atpenin A5                          11898
+ 2      F6     6-Shogaol                           11901
+ 2      F7     Stevioside (hydrate)                11902
+ 2      F8     Trigonelline (chloride)             11904
+ 2      F9     Salsalate                           11911
+ 2      F10    Ionomycin (calcium salt)            11932
+ 2      F11    Triptolide                          11973
+ 2      F12    Unused
+ 2      G1     Unused
+ 2      G2     Apocynin                            11976
+ 2      G3     Rottlerin                           12006
+ 2      G4     Atropine                            12008
+ 2      G5     Oxyresveratrol                      12028
+ 2      G6     Astragaloside IV                    12069
+ 2      G7     Etoposide                           12092
+ 2      G8     Kaempferitrin                       12093
+ 2      G9     Pterostilbene                       13000
+ 2      G10    Fucoxanthin                         13068
+ 2      G11    Punicalagin                         13069
+ 2      G12    Unused
+
+
+
+
+                                                                          CAYMAN CHEMICAL
+                                                                          1180 EAST ELLSWORTH RD
+                                                                          ANN ARBOR, MI 48108 · USA
+                                                                          PHONE: [800] 364-9897
+                                                                                 [734] 971-3335
+                                                                            FAX: [734] 971-3640
+                                                                          CUSTSERV@CAYMANCHEM.COM
+                                                                          WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                    Page 6 of 59
+Plate   Well                        Contents      Item Number
+ 2      H1     Unused
+ 2      H2     Pimecrolimus                    13107
+ 2      H3     Emodin                          13109
+ 2      H4     Anacardic Acid                  13144
+ 2      H5     (±)-Equol                       13184
+ 2      H6     cis-trismethoxy Resveratrol     13199
+ 2      H7     Daidzin                         13202
+ 2      H8     trans-Zeatin                    13226
+ 2      H9     Rapamycin                       13346
+ 2      H10    Celastramycin A                 13519
+ 2      H11    Pseudolaric Acid B              13527
+ 2      H12    Unused
+ 3      A1     Unused
+ 3      A2     Pristimerin                     13621
+ 3      A3     Icariin                         13624
+ 3      A4     Salidroside                     13628
+ 3      A5     Arecoline (hydrobromide)        13662
+ 3      A6     Puromycin (hydrochloride)       13884
+ 3      A7     Polydatin                       13932
+ 3      A8     Rotenone                        13995
+ 3      A9     Cafestol                        13999
+ 3      A10    Auraptene                       14000
+ 3      A11    (+)-Aphidicolin                 14007
+ 3      A12    Unused
+ 3      B1     Unused
+ 3      B2     Kahweol                         14015
+ 3      B3     Iberin                          14016
+ 3      B4     Erucin                          14017
+ 3      B5     Leupeptin (hemisulfate)         14026
+ 3      B6     Ingenol                         14031
+ 3      B7     Unused
+ 3      B8     Caffeine                        14118
+ 3      B9     Indirubin                       14155
+ 3      B10    Unused
+ 3      B11    Glycitin                        14161
+ 3      B12    Unused
+
+
+
+
+                                                                      CAYMAN CHEMICAL
+                                                                      1180 EAST ELLSWORTH RD
+                                                                      ANN ARBOR, MI 48108 · USA
+                                                                      PHONE: [800] 364-9897
+                                                                             [734] 971-3335
+                                                                        FAX: [734] 971-3640
+                                                                      CUSTSERV@CAYMANCHEM.COM
+                                                                      WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                            Page 7 of 59
+Plate   Well                       Contents               Item Number
+ 3      C1     Unused
+ 3      C2     Glycitein                               14162
+ 3      C3     Naringenin                              14173
+ 3      C4     Genistin                                14174
+ 3      C5     Puerarin                                14175
+ 3      C6     α-Spinasterol                           14197
+ 3      C7     Magnolol                                14233
+ 3      C8     Tetrahydromagnolol                      14234
+ 3      C9     Febrifugine                             14246
+ 3      C10    Wogonin                                 14248
+ 3      C11    Luotonin A                              14253
+ 3      C12    Unused
+ 3      D1     Unused
+ 3      D2     Luotonin F                              14254
+ 3      D3     Bilobalide                              14272
+ 3      D4     Hygromycin B (hydrate)                  14291
+ 3      D5     Plumbagin                               14314
+ 3      D6     Tanshinone IIA                          14323
+ 3      D7     Spectinomycin (hydrochloride hydrate)   14324
+ 3      D8     Unused
+ 3      D9     Yangonin                                14351
+ 3      D10    Cordycepin                              14426
+ 3      D11    Asperlactone                            14435
+ 3      D12    Unused
+ 3      E1     Unused
+ 3      E2     Obscurolide A1                          14439
+ 3      E3     Tetrahydroharmine                       14449
+ 3      E4     Phloretin                               14452
+ 3      E5     Gossypol                                14482
+ 3      E6     Unused
+ 3      E7     Virginiamycin Complex                   14503
+ 3      E8     Ibotenic Acid                           14584
+ 3      E9     Cantharidin                             14589
+ 3      E10    Deferoxamine (mesylate)                 14595
+ 3      E11    Honokiol                                14597
+ 3      E12    Unused
+
+
+
+
+                                                                              CAYMAN CHEMICAL
+                                                                              1180 EAST ELLSWORTH RD
+                                                                              ANN ARBOR, MI 48108 · USA
+                                                                              PHONE: [800] 364-9897
+                                                                                     [734] 971-3335
+                                                                                FAX: [734] 971-3640
+                                                                              CUSTSERV@CAYMANCHEM.COM
+                                                                              WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                      Page 8 of 59
+Plate   Well                           Contents        Item Number
+ 3      F1     Unused
+ 3      F2     7-dehydro Cholesterol                  14612
+ 3      F3     (−)-Huperzine A                        14620
+ 3      F4     Homoharringtonine                      14631
+ 3      F5     (S)-10-hydroxy-Camptothecin            14635
+ 3      F6     Ginkgolide B                           14636
+ 3      F7     Aloesin                                14649
+ 3      F8     Xanthorrhizol                          14668
+ 3      F9     3-Nitropropionic Acid                  14684
+ 3      F10    Sophorose                              14717
+ 3      F11    1’,4”-Sophorolactone 6’,6”-diacetate   14718
+ 3      F12    Unused
+ 3      G1     Unused
+ 3      G2     Costunolide                            14743
+ 3      G3     Cucurbitacin I                         14747
+ 3      G4     Shikonin                               14751
+ 3      G5     Gambogic Acid                          14761
+ 3      G6     Cyanidin (chloride)                    14803
+ 3      G7     Atractyloside (potassium salt)         14804
+ 3      G8     Cucurbitacin B                         14820
+ 3      G9     Cucurbitacin E                         14821
+ 3      G10    Fusidic Acid (sodium salt)             14825
+ 3      G11    Azaserine                              14834
+ 3      G12    Unused
+ 3      H1     Unused
+ 3      H2     Unused
+ 3      H3     Unused
+ 3      H4     Oxymatrine                             14915
+ 3      H5     Protocatechuic Acid                    14916
+ 3      H6     Digitonin                              14952
+ 3      H7     Polygodial                             14979
+ 3      H8     β-Lapachone                            15021
+ 3      H9     Thymoquinone                           15039
+ 3      H10    Phosphoramidon (sodium salt)           15113
+ 3      H11    Vitexin                                15116
+ 3      H12    Unused
+
+
+
+
+                                                                        CAYMAN CHEMICAL
+                                                                        1180 EAST ELLSWORTH RD
+                                                                        ANN ARBOR, MI 48108 · USA
+                                                                        PHONE: [800] 364-9897
+                                                                               [734] 971-3335
+                                                                          FAX: [734] 971-3640
+                                                                        CUSTSERV@CAYMANCHEM.COM
+                                                                        WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                   Page 9 of 59
+Plate   Well                       Contents      Item Number
+ 4      A1     Unused
+ 4      A2     Psoralidin                     15119
+ 4      A3     (R,S)-Anatabine (tartrate)     15132
+ 4      A4     Fisetin                        15246
+ 4      A5     A-54556A                       15305
+ 4      A6     (−)-Cotinine                   15314
+ 4      A7     Ginsenoside Rg1                15315
+ 4      A8     Ginsenoside Rb1                15319
+ 4      A9     Unused
+ 4      A10    Kasugamycin (hydrochloride)    15322
+ 4      A11    Validamycin A                  15326
+ 4      A12    Unused
+ 4      B1     Unused
+ 4      B2     Ginsenoside Rd                 15329
+ 4      B3     Ginsenoside Re                 15330
+ 4      B4     Ginsenoside Rg2                15331
+ 4      B5     20(S)-Ginsenoside Rg3          15332
+ 4      B6     Harringtonine                  15361
+ 4      B7     Butein                         15371
+ 4      B8     Arctiin                        15375
+ 4      B9     Bicyclomycin Benzoate          15384
+ 4      B10    Xanthohumol                    15399
+ 4      B11    Zerumbone                      15400
+ 4      B12    Unused
+ 4      C1     Unused
+ 4      C2     CAY10683                       15403
+ 4      C3     Nobiletin                      15421
+ 4      C4     Picroside I                    15431
+ 4      C5     Lasalocid                      15505
+ 4      C6     Phleomycin                     15549
+ 4      C7     Dobutamine (hydrochloride)     15582
+ 4      C8     Elaiophylin                    15583
+ 4      C9     Rauwolscine (hydrochloride)    15596
+ 4      C10    Daptomycin                     15615
+ 4      C11    Bufalin                        15725
+ 4      C12    Unused
+
+
+
+
+                                                                     CAYMAN CHEMICAL
+                                                                     1180 EAST ELLSWORTH RD
+                                                                     ANN ARBOR, MI 48108 · USA
+                                                                     PHONE: [800] 364-9897
+                                                                            [734] 971-3335
+                                                                       FAX: [734] 971-3640
+                                                                     CUSTSERV@CAYMANCHEM.COM
+                                                                     WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                             Page 10 of 59
+Plate   Well                           Contents               Item Number
+ 4      D1     Unused
+ 4      D2     Keracyanin (chloride)                         15778
+ 4      D3     3,3’-Diindolylmethane                         15927
+ 4      D4     Galangin                                      15948
+ 4      D5     Vitamin K3                                    15950
+ 4      D6     (R)-Prunasin                                  15959
+ 4      D7     Fosmidomycin (sodium salt)                    16000
+ 4      D8     Roseoflavin                                   16001
+ 4      D9     Unused
+ 4      D10    1,2,3,4,6-Penta-O-galloyl-β-D-glucopyranose   16007
+ 4      D11    Tomatine                                      16024
+ 4      D12    Unused
+ 4      E1     Unused
+ 4      E2     Muscone                                       16067
+ 4      E3     Pheophorbide a                                16072
+ 4      E4     N-Acetylneuraminic Acid                       16091
+ 4      E5     Oenin                                         16092
+ 4      E6     Delphinidin-3-β-D-glucoside (chloride)        16093
+ 4      E7     DL-Sulforaphane N-acetyl-L-cysteine           16098
+ 4      E8     trans-3’-Hydroxycotinine                      16100
+ 4      E9     Penta-N-acetylchitopentaose                   16101
+ 4      E10    trans-Clovamide                               16138
+ 4      E11    Sinomenine (hydrochloride)                    16143
+ 4      E12    Unused
+ 4      F1     Unused
+ 4      F2     Ingenol-3-angelate                            16207
+ 4      F3     Juglone                                       16216
+ 4      F4     β-Nicotyrine                                  16333
+ 4      F5     2,4-Diacetylphloroglucinol                    16345
+ 4      F6     Cyanidin 3-O-glucoside (chloride)             16406
+ 4      F7     Reserpine                                     16474
+ 4      F8     Biochanin A                                   16476
+ 4      F9     Epothilone A                                  16482
+ 4      F10    Erythromycin                                  16486
+ 4      F11    Isorhamnetin                                  16496
+ 4      F12    Unused
+
+
+
+
+                                                                                CAYMAN CHEMICAL
+                                                                                1180 EAST ELLSWORTH RD
+                                                                                ANN ARBOR, MI 48108 · USA
+                                                                                PHONE: [800] 364-9897
+                                                                                       [734] 971-3335
+                                                                                  FAX: [734] 971-3640
+                                                                                CUSTSERV@CAYMANCHEM.COM
+                                                                                WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                                Page 11 of 59
+Plate   Well                       Contents                   Item Number
+ 4      G1     Unused
+ 4      G2     Spinosyn A                                  16528
+ 4      G3     (±)-Nicotine                                16535
+ 4      G4     α-Zearalenol                                16549
+ 4      G5     Oleandomycin                                16552
+ 4      G6     Ferutinin                                   16554
+ 4      G7     1-Methylnicotinamide (chloride)             16604
+ 4      G8     3’-Sialyllactose (sodium salt)              16617
+ 4      G9     Kanosamine (hydrochloride)                  16623
+ 4      G10    Monocrotaline                               16666
+ 4      G11    Astragaloside A                             16677
+ 4      G12    Unused
+ 4      H1     Unused
+ 4      H2     β-Carotene                                  16837
+ 4      H3     8(Z),14(Z)-Eicosadienoic Acid               16854
+ 4      H4     Swainsonine                                 16860
+ 4      H5     (+)-Evodiamine                              16885
+ 4      H6     α-Naphthoflavone                            16924
+ 4      H7     Limonin                                     16932
+ 4      H8     Tomatidine (hydrochloride)                  16938
+ 4      H9     (−)-Gallocatechin                           16944
+ 4      H10    7,8-Dihydroxyflavone                        16946
+ 4      H11    1,3,7-Trimethyluric Acid                    16949
+ 4      H12    Unused
+ 5      A1     Unused
+ 5      A2     Sanguinarine (chloride)                     16951
+ 5      A3     Indole-3-acetic Acid (sodium salt)          16954
+ 5      A4     Casticin                                    16976
+ 5      A5     Cryptotanshinone                            16987
+ 5      A6     A-54556B                                    17090
+ 5      A7     Romidepsin                                  17130
+ 5      A8     L-Sulforaphene                              17152
+ 5      A9     2,3,4,6-Tetra-O-benzoyl-β-D-glucopyranose   17163
+ 5      A10    Sedanolide                                  17166
+ 5      A11    Unused
+ 5      A12    Unused
+
+
+
+
+                                                                                   CAYMAN CHEMICAL
+                                                                                   1180 EAST ELLSWORTH RD
+                                                                                   ANN ARBOR, MI 48108 · USA
+                                                                                   PHONE: [800] 364-9897
+                                                                                          [734] 971-3335
+                                                                                     FAX: [734] 971-3640
+                                                                                   CUSTSERV@CAYMANCHEM.COM
+                                                                                   WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                       Page 12 of 59
+Plate   Well                        Contents         Item Number
+ 5      B1     Unused
+ 5      B2     Guvacoline (hydrobromide)          17190
+ 5      B3     Noscapine (hydrochloride)          17255
+ 5      B4     Unused
+ 5      B5     Rhein                              17345
+ 5      B6     Salicin                            17357
+ 5      B7     Phytol                             17401
+ 5      B8     Chrysin                            17402
+ 5      B9     Dihydrodaidzein                    17423
+ 5      B10    Evernic Acid                       17430
+ 5      B11    (5Z)-7-Oxozeaenol                  17459
+ 5      B12    Unused
+ 5      C1     Unused
+ 5      C2     8-Prenylnaringenin                 17462
+ 5      C3     Cytosporone B                      17501
+ 5      C4     Hinokitiol                         17538
+ 5      C5     Formononetin                       17558
+ 5      C6     Galantamine                        17559
+ 5      C7     Guanidinoethyl sulfonate           17572
+ 5      C8     N-Acetyl-S-allyl-L-cysteine        17592
+ 5      C9     Unused
+ 5      C10    N-(p-Coumaroyl) Serotonin          17797
+ 5      C11    Salvianolic Acid A                 17800
+ 5      C12    Unused
+ 5      D1     Unused
+ 5      D2     DL-Cystathionine (hydrochloride)   17819
+ 5      D3     6’-Sialyllactose (sodium salt)     17866
+ 5      D4     Caffeic Acid methyl ester          17873
+ 5      D5     Berteroin                          17880
+ 5      D6     N6-(Δ2-Isopentenyl)adenine         17906
+ 5      D7     Myosmine                           17908
+ 5      D8     Tryptanthrin                       17913
+ 5      D9     Naringin                           17923
+ 5      D10    Micafungin (sodium salt)           18009
+ 5      D11    Oxytetracycline                    18076
+ 5      D12    Unused
+
+
+
+
+                                                                          CAYMAN CHEMICAL
+                                                                          1180 EAST ELLSWORTH RD
+                                                                          ANN ARBOR, MI 48108 · USA
+                                                                          PHONE: [800] 364-9897
+                                                                                 [734] 971-3335
+                                                                            FAX: [734] 971-3640
+                                                                          CUSTSERV@CAYMANCHEM.COM
+                                                                          WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                    Page 13 of 59
+Plate   Well                       Contents       Item Number
+ 5      E1     Unused
+ 5      E2     Unused
+ 5      E3     Capsiconiate                    18172
+ 5      E4     (±)-Anabasine (hydrochloride)   18206
+ 5      E5     Digitoxigenin                   18229
+ 5      E6     Carbenoxolone (sodium salt)     18240
+ 5      E7     Unused
+ 5      E8     Cardamonin                      18310
+ 5      E9     Anacardic Acid monoene          18422
+ 5      E10    Menaquinone 4                   18423
+ 5      E11    Vitamin B12 (hydrate)           18425
+ 5      E12    Unused
+ 5      F1     Unused
+ 5      F2     Galactinol (hydrate)            18426
+ 5      F3     4-methyl-1-Pentanol             18446
+ 5      F4     Boldine                         18447
+ 5      F5     all-trans Retinal               18449
+ 5      F6     Patchouli Alcohol               18450
+ 5      F7     Novobiocin (sodium salt)        18457
+ 5      F8     Dehydrocostus lactone           18485
+ 5      F9     Arphamenine B (hemisulfate)     18506
+ 5      F10    Tyramine                        18601
+ 5      F11    Tropine                         18627
+ 5      F12    Unused
+ 5      G1     Unused
+ 5      G2     Gomisin C                       18643
+ 5      G3     (−)-Catechin                    18644
+ 5      G4     Quercetagetin                   18645
+ 5      G5     Hesperidin                      18646
+ 5      G6     (±)-Taxifolin                   18647
+ 5      G7     Quercetin 3-D-galactoside       18648
+ 5      G8     Diosmetin                       18649
+ 5      G9     L-Histidinol (hydrochloride)    18739
+ 5      G10    Ellipticine (hydrochloride)     18742
+ 5      G11    Aureusimine B                   18752
+ 5      G12    Unused
+
+
+
+
+                                                                       CAYMAN CHEMICAL
+                                                                       1180 EAST ELLSWORTH RD
+                                                                       ANN ARBOR, MI 48108 · USA
+                                                                       PHONE: [800] 364-9897
+                                                                              [734] 971-3335
+                                                                         FAX: [734] 971-3640
+                                                                       CUSTSERV@CAYMANCHEM.COM
+                                                                       WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                         Page 14 of 59
+Plate   Well                     Contents              Item Number
+ 5      H1     Unused
+ 5      H2     Epothilone D                         18765
+ 5      H3     5-Phospho-D-ribose 1-diphosphate     18897
+               (sodium salt hydrate)
+ 5      H4     Unused
+ 5      H5     Unused
+ 5      H6     Mycophenolic Acid β-D-Glucuronide    19078
+ 5      H7     Osthole                              19195
+ 5      H8     Syringic Acid                        19196
+ 5      H9     2-hydroxy-6-Methylbenzoic Acid       19199
+ 5      H10    Thiostrepton                         19200
+ 5      H11    Nimbolide                            19230
+ 5      H12    Unused
+ 6      A1     Unused
+ 6      A2     Unused
+ 6      A3     Herbacetin                           19285
+ 6      A4     Esculetin                            19286
+ 6      A5     Bavachinin                           19376
+ 6      A6     Monoacetylphloroglucinol (hydrate)   19451
+ 6      A7     Pleuromutilin                        19452
+ 6      A8     Clarithromycin                       19455
+ 6      A9     β-Zearalenol                         19460
+ 6      A10    Griseofulvin                         19461
+ 6      A11    Prodigiosin                          19464
+ 6      A12    Unused
+ 6      B1     Unused
+ 6      B2     Unused
+ 6      B3     Arglabin                             19502
+ 6      B4     Unused
+ 6      B5     Ferulenol                            19568
+ 6      B6     Podophyllotoxin                      19575
+ 6      B7     Sauchinone                           19577
+ 6      B8     1,7-Dimethyluric Acid                19584
+ 6      B9     Eupatilin                            19601
+ 6      B10    Curvulin                             19609
+ 6      B11    Bafilomycin C1                       19625
+ 6      B12    Unused
+
+
+
+
+                                                                            CAYMAN CHEMICAL
+                                                                            1180 EAST ELLSWORTH RD
+                                                                            ANN ARBOR, MI 48108 · USA
+                                                                            PHONE: [800] 364-9897
+                                                                                   [734] 971-3335
+                                                                              FAX: [734] 971-3640
+                                                                            CUSTSERV@CAYMANCHEM.COM
+                                                                            WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                      Page 15 of 59
+Plate   Well                          Contents         Item Number
+ 6      C1     Unused
+ 6      C2     6-Methylsulfinylhexyl isothiocyanate   19638
+ 6      C3     β-Elemene                              19641
+ 6      C4     Juvenile Hormone III                   19646
+ 6      C5     Cepharanthine                          19648
+ 6      C6     D,L-1′-Acetoxychavicol Acetate         19649
+ 6      C7     Racanisodamine                         19650
+ 6      C8     Dihydroresveratrol                     19651
+ 6      C9     Flavokawain B                          19652
+ 6      C10    Unused
+ 6      C11    Combretastatin A1                      19750
+ 6      C12    Unused
+ 6      D1     Unused
+ 6      D2     Sinensetin                             19751
+ 6      D3     Malvidin (chloride)                    19752
+ 6      D4     Pelargonidin (chloride)                19753
+ 6      D5     Peonidin (chloride)                    19754
+ 6      D6     Petunidin (chloride)                   19755
+ 6      D7     7-methoxy Apigeninidin (chloride)      19757
+ 6      D8     Jaceosidin                             19758
+ 6      D9     Vanillic Acid 4-β-D-glucopyranoside    19759
+ 6      D10    6’,7’-Epoxybergamottin                 19760
+ 6      D11    Sakuranetin                            19761
+ 6      D12    Unused
+ 6      E1     Unused
+ 6      E2     Z3-Dodecenyl E2-butenoate              19787
+ 6      E3     Baicalin                               19843
+ 6      E4     Cinobufagin                            19844
+ 6      E5     Cinobufotalin                          19845
+ 6      E6     Unused
+ 6      E7     Diosmin                                19848
+ 6      E8     Schisandrin A                          19849
+ 6      E9     Unused
+ 6      E10    Isoimperatorin                         19851
+ 6      E11    Neobavaisoflavone                      19852
+ 6      E12    Unused
+
+
+
+
+                                                                         CAYMAN CHEMICAL
+                                                                         1180 EAST ELLSWORTH RD
+                                                                         ANN ARBOR, MI 48108 · USA
+                                                                         PHONE: [800] 364-9897
+                                                                                [734] 971-3335
+                                                                           FAX: [734] 971-3640
+                                                                         CUSTSERV@CAYMANCHEM.COM
+                                                                         WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                                   Page 16 of 59
+Plate   Well                       Contents                      Item Number
+ 6      F1     Unused
+ 6      F2     Mogroside V                                    19853
+ 6      F3     Paeoniflorin                                   19861
+ 6      F4     Paeonol                                        19862
+ 6      F5     Physcion                                       19863
+ 6      F6     Procyanidin B2                                 19865
+ 6      F7     Quercitrin                                     19866
+ 6      F8     Rhapontin                                      19867
+ 6      F9     Rutin (hydrate)                                19868
+ 6      F10    Yohimbine (hydrochloride)                      19869
+ 6      F11    Chrysophanol                                   19870
+ 6      F12    Unused
+ 6      G1     Unused
+ 6      G2     Ferulic Acid                                   19871
+ 6      G3     Ginkgolide C                                   19872
+ 6      G4     Isobavachalcone                                19873
+ 6      G5     Tetrandrine                                    19874
+ 6      G6     7-hydroxy Coumarin Glucuronide (sodium salt)   19882
+ 6      G7     Methyl Gallate                                 19951
+ 6      G8     Loganin                                        19997
+ 6      G9     6-Bromo-2-oxindole                             20041
+ 6      G10    Scopoletin                                     20042
+ 6      G11    Norharmane                                     20043
+ 6      G12    Unused
+ 6      H1     Unused
+ 6      H2     Trioxsalen                                     20044
+ 6      H3     Homogentisic Acid                              20045
+ 6      H4     Scoparone                                      20046
+ 6      H5     5-hydroxy-Nω-methyl Tryptamine (oxalate)       20047
+ 6      H6     L-Quisqualic Acid                              20211
+ 6      H7     UCN-02                                         20221
+ 6      H8     Icaritin                                       20236
+ 6      H9     Vitamin A                                      20241
+ 6      H10    Retinyl Acetate                                20242
+ 6      H11    Methysticin                                    20258
+ 6      H12    Unused
+
+
+
+
+                                                                                      CAYMAN CHEMICAL
+                                                                                      1180 EAST ELLSWORTH RD
+                                                                                      ANN ARBOR, MI 48108 · USA
+                                                                                      PHONE: [800] 364-9897
+                                                                                             [734] 971-3335
+                                                                                        FAX: [734] 971-3640
+                                                                                      CUSTSERV@CAYMANCHEM.COM
+                                                                                      WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                              Page 17 of 59
+Plate   Well                         Contents               Item Number
+ 7      A1     Unused
+ 7      A2     16-O-Methylcafestol                       20259
+ 7      A3     Spiramycin                                20267
+ 7      A4     Rhamnetin                                 20302
+ 7      A5     Epibrassinolide                           20337
+ 7      A6     Pyrogallol                                20347
+ 7      A7     Unused
+ 7      A8     Unused
+ 7      A9     Stachydrine (hydrochloride)               20506
+ 7      A10    Folic Acid                                20515
+ 7      A11    Trehalose (hydrate)                       20517
+ 7      A12    Unused
+ 7      B1     Unused
+ 7      B2     N6-(Δ2-Isopentenyl)adenosine              20522
+ 7      B3     Linamarin                                 20532
+ 7      B4     L-Tetrahydropalmatine                     20535
+ 7      B5     Ansamitocin P-3                           20538
+ 7      B6     Sandramycin                               20575
+ 7      B7     Lumiflavine                               20645
+ 7      B8     Secologanin                               20647
+ 7      B9     5-(Hydroxymethyl)furfuryl Alcohol         20658
+ 7      B10    Pyrroloquinoline quinone                  20681
+ 7      B11    Pyridoxine                                20706
+ 7      B12    Unused
+ 7      C1     Unused
+ 7      C2     7-epi Paclitaxel                          20741
+ 7      C3     N,N’,N’’-Triacetylchitotriose             20759
+ 7      C4     Marinobufagenin                           20798
+ 7      C5     Isoquercitroside                          20802
+ 7      C6     Daphnetin                                 20826
+ 7      C7     Acacetin                                  20827
+ 7      C8     Unused
+ 7      C9     Nomilin                                   20836
+ 7      C10    Homovanillic Acid sulfate (sodium salt)   20877
+ 7      C11    (−)-Nicotine (tartrate)                   20887
+ 7      C12    Unused
+
+
+
+
+                                                                                 CAYMAN CHEMICAL
+                                                                                 1180 EAST ELLSWORTH RD
+                                                                                 ANN ARBOR, MI 48108 · USA
+                                                                                 PHONE: [800] 364-9897
+                                                                                        [734] 971-3335
+                                                                                   FAX: [734] 971-3640
+                                                                                 CUSTSERV@CAYMANCHEM.COM
+                                                                                 WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                            Page 18 of 59
+Plate   Well                       Contents               Item Number
+ 7      D1     Unused
+ 7      D2     Diallyl Sulfide                         20894
+ 7      D3     2-keto D-Glucose                        20908
+ 7      D4     Tyvelose                                20910
+ 7      D5     6-deoxy-L-Talose                        20911
+ 7      D6     Cephaeline                              20916
+ 7      D7     Brassinin                               20922
+ 7      D8     p-Coumaric Acid                         20929
+ 7      D9     3’,4’,7-Trihydroxyisoflavone            20930
+ 7      D10    Unused
+ 7      D11    Tryptamine                              20995
+ 7      D12    Unused
+ 7      E1     Unused
+ 7      E2     β-Cembrenediol                          21031
+ 7      E3     Sisomicin                               21046
+ 7      E4     Emetine (hydrochloride hydrate)         21048
+ 7      E5     Vitamin K1                              21051
+ 7      E6     3-Methylcytidine (methosulfate)         21064
+ 7      E7     L-Iduronic Acid (sodium salt)           21066
+ 7      E8     7-Methyluric Acid                       21067
+ 7      E9     Paraxanthine                            21068
+ 7      E10    Kukoamine B                             21091
+ 7      E11    Mesembrine                              21100
+ 7      E12    Unused
+ 7      F1     Unused
+ 7      F2     Carboxyatractyloside (potassium salt)   21120
+ 7      F3     13-Methylberberine (chloride)           21154
+ 7      F4     Isogarcinol                             21164
+ 7      F5     Bestatin                                21217
+ 7      F6     Oleuropein                              21220
+ 7      F7     Digallic Acid                           21224
+ 7      F8     3,4′-5-Trihydroxystilbene-3-β-D-        21246
+               Glucopyranoside
+ 7      F9     Quercetin 3-O-glucuronide               21289
+ 7      F10    Pyropheophorbide a                      21371
+ 7      F11    Unused
+ 7      F12    Unused
+
+
+
+
+                                                                               CAYMAN CHEMICAL
+                                                                               1180 EAST ELLSWORTH RD
+                                                                               ANN ARBOR, MI 48108 · USA
+                                                                               PHONE: [800] 364-9897
+                                                                                      [734] 971-3335
+                                                                                 FAX: [734] 971-3640
+                                                                               CUSTSERV@CAYMANCHEM.COM
+                                                                               WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                       Page 19 of 59
+Plate   Well                          Contents       Item Number
+ 7      G1     Unused
+ 7      G2     Baccatin III                       21404
+ 7      G3     Tannic Acid                        21421
+ 7      G4     Glucotropaeolin (potassium salt)   21463
+ 7      G5     1-Deoxynojirimycin                 21500
+ 7      G6     Aristolochic Acid                  21520
+ 7      G7     Lincomycin                         21526
+ 7      G8     Coenzyme B12 (hydrate)             21571
+ 7      G9     β-Caryophyllene                    21572
+ 7      G10    (−)-Caryophyllene oxide            21573
+ 7      G11    α-Humulene                         21574
+ 7      G12    Unused
+ 7      H1     Unused
+ 7      H2     (±)-Linalool                       21575
+ 7      H3     α-Pinene                           21576
+ 7      H4     (−)-β-Pinene                       21577
+ 7      H5     Dianemycin                         21679
+ 7      H6     Vulpinic Acid                      21685
+ 7      H7     9-cis Retinal                      21692
+ 7      H8     Unused
+ 7      H9     Terpinolene                        21712
+ 7      H10    Fascaplysin (chloride)             21715
+ 7      H11    Mycophenolic Acid                  21716
+ 7      H12    Unused
+ 8      A1     Unused
+ 8      A2     (+)-Limonene                       21719
+ 8      A3     β-Myrcene                          21720
+ 8      A4     Theobromine                        21745
+ 8      A5     Curvularin                         21758
+ 8      A6     Demeclocycline (hydrochloride)     21759
+ 8      A7     Amentoflavone                      21779
+ 8      A8     Unused
+ 8      A9     (−)-Perillyl Alcohol               21860
+ 8      A10    Picrotin                           21870
+ 8      A11    Azadirachtin                       21893
+ 8      A12    Unused
+
+
+
+
+                                                                          CAYMAN CHEMICAL
+                                                                          1180 EAST ELLSWORTH RD
+                                                                          ANN ARBOR, MI 48108 · USA
+                                                                          PHONE: [800] 364-9897
+                                                                                 [734] 971-3335
+                                                                            FAX: [734] 971-3640
+                                                                          CUSTSERV@CAYMANCHEM.COM
+                                                                          WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                                    Page 20 of 59
+Plate   Well                       Contents                       Item Number
+ 8      B1     Unused
+ 8      B2     (±)-Dunnione                                    21943
+ 8      B3     Camalexin                                       21971
+ 8      B4     Isochlortetracycline                            22125
+ 8      B5     (2’S)-Nicotine-1-oxide                          22153
+ 8      B6     Adipostatin A                                   22163
+ 8      B7     Eucalyptol                                      22183
+ 8      B8     Geranyl Acetate                                 22184
+ 8      B9     Unused
+ 8      B10    D-Cycloserine                                   22194
+ 8      B11    Timosaponin AIII                                22236
+ 8      B12    Unused
+ 8      C1     Unused
+ 8      C2     Aloperine                                       22259
+ 8      C3     Cyclovirobuxine D                               22260
+ 8      C4     10-Deacetylbaccatin III                         22261
+ 8      C5     Cyanidin 3-O-β-D-Galactopyranoside (chloride)   22264
+ 8      C6     Ginsenoside Rb2                                 22265
+ 8      C7     Digoxin                                         22266
+ 8      C8     Tubeimoside I                                   22276
+ 8      C9     Elastatinal                                     22288
+ 8      C10    Hydroquinidine                                  22295
+ 8      C11    Unused
+ 8      C12    Unused
+ 8      D1     Unused
+ 8      D2     Mangiferin                                      22360
+ 8      D3     Syringin                                        22387
+ 8      D4     4’-O-methyl Quercetin                           22406
+ 8      D5     Procyanidin B1                                  22411
+ 8      D6     Astragaloside I                                 22431
+ 8      D7     Astragaloside III                               22432
+ 8      D8     Aloin                                           22435
+ 8      D9     Pinostrobin                                     22436
+ 8      D10    Brazilin                                        22456
+ 8      D11    Biotin                                          22582
+ 8      D12    Unused
+
+
+
+
+                                                                                       CAYMAN CHEMICAL
+                                                                                       1180 EAST ELLSWORTH RD
+                                                                                       ANN ARBOR, MI 48108 · USA
+                                                                                       PHONE: [800] 364-9897
+                                                                                              [734] 971-3335
+                                                                                         FAX: [734] 971-3640
+                                                                                       CUSTSERV@CAYMANCHEM.COM
+                                                                                       WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                   Page 21 of 59
+Plate   Well                       Contents      Item Number
+ 8      E1     Unused
+ 8      E2     Indole-3-butyric Acid          22591
+ 8      E3     Urolithin A                    22607
+ 8      E4     Anacardic Acid diene           22663
+ 8      E5     Orsellinic Acid                22708
+ 8      E6     Ethyl Orsellinate              22709
+ 8      E7     Kojic Acid                     22712
+ 8      E8     Isoferulic Acid                22715
+ 8      E9     Incensole                      22895
+ 8      E10    Rutaecarpine                   22897
+ 8      E11    4’-hydroxy Chalcone            22898
+ 8      E12    Unused
+ 8      F1     Unused
+ 8      F2     Matrine                        22901
+ 8      F3     Neohesperidin                  23028
+ 8      F4     Cyclopenin                     23145
+ 8      F5     Cardanol diene                 23153
+ 8      F6     Cardanol monoene               23154
+ 8      F7     Cardanol triene                23155
+ 8      F8     p-Cymene                       23159
+ 8      F9     (−)-Isopulegol                 23161
+ 8      F10    (+)-Fenchol                    23162
+ 8      F11    (R)-(+)-Pulegone               23163
+ 8      F12    Unused
+ 8      G1     Unused
+ 8      G2     (+)-3-Carene                   23165
+ 8      G3     Geraniol                       23166
+ 8      G4     (+)-Valencene                  23167
+ 8      G5     (−)-Guaiol                     23172
+ 8      G6     Terpineol                      23173
+ 8      G7     (1R)-(+)-Camphor               23175
+ 8      G8     (1S)-(–)-Camphor               23176
+ 8      G9     Isoborneol                     23177
+ 8      G10    α-Terpinene                    23178
+ 8      G11    α-Phellandrene                 23179
+ 8      G12    Unused
+
+
+
+
+                                                                      CAYMAN CHEMICAL
+                                                                      1180 EAST ELLSWORTH RD
+                                                                      ANN ARBOR, MI 48108 · USA
+                                                                      PHONE: [800] 364-9897
+                                                                             [734] 971-3335
+                                                                        FAX: [734] 971-3640
+                                                                      CUSTSERV@CAYMANCHEM.COM
+                                                                      WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                              Page 22 of 59
+Plate   Well                       Contents                 Item Number
+ 8      H1     Unused
+ 8      H2     Cedrene                                   23180
+ 8      H3     Nerolidol                                 23182
+ 8      H4     Sappanone A                               23205
+ 8      H5     Phloroglucinol                            23223
+ 8      H6     Acetosyringone                            23224
+ 8      H7     Isoxanthohumol                            23233
+ 8      H8     (+)-Taxifolin                             23234
+ 8      H9     Pseudomonic Acid                          23238
+ 8      H10    β-Methylamino-L-Alanine (hydrochloride)   23287
+ 8      H11    Chlortetracycline                         23302
+ 8      H12    Unused
+ 9      A1     Unused
+ 9      A2     Aloin B                                   23321
+ 9      A3     Guvacine (hydrochloride)                  23361
+ 9      A4     Cardol diene                              23373
+ 9      A5     Cardol triene                             23374
+ 9      A6     20(S)-Ginsenoside Rh2                     23390
+ 9      A7     Methylcardol triene                       23404
+ 9      A8     α-Zearalanol                              23424
+ 9      A9     Ginsenoside F2                            23435
+ 9      A10    (+)-Menthol                               23463
+ 9      A11    (+)-β-Citronellol                         23464
+ 9      A12    Unused
+ 9      B1     Unused
+ 9      B2     β-Ocimene                                 23466
+ 9      B3     (+)-Borneol                               23467
+ 9      B4     (−)-Borneol                               23468
+ 9      B5     Deoxyviolacein                            23477
+ 9      B6     Brevianamide F                            23493
+ 9      B7     Terrein                                   23496
+ 9      B8     Dihydromyricetin                          23549
+ 9      B9     Cellocidin                                23637
+ 9      B10    Ginsenoside Rf                            23667
+ 9      B11    γ-Terpinene                               23722
+ 9      B12    Unused
+
+
+
+
+                                                                                 CAYMAN CHEMICAL
+                                                                                 1180 EAST ELLSWORTH RD
+                                                                                 ANN ARBOR, MI 48108 · USA
+                                                                                 PHONE: [800] 364-9897
+                                                                                        [734] 971-3335
+                                                                                   FAX: [734] 971-3640
+                                                                                 CUSTSERV@CAYMANCHEM.COM
+                                                                                 WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                     Page 23 of 59
+Plate   Well                         Contents      Item Number
+ 9      C1     Unused
+ 9      C2     Retinyl Palmitate                23796
+ 9      C3     Chloramphenicol Acetate          23811
+ 9      C4     Unused
+ 9      C5     Phanerosporic Acid               23879
+ 9      C6     Ergoloid (mesylates)             24095
+ 9      C7     Hydroxocobalamin                 24099
+ 9      C8     Columbin                         24105
+ 9      C9     Transcrocetin                    24217
+ 9      C10    Diphenylamine                    24250
+ 9      C11    Nemorosone                       24256
+ 9      C12    Unused
+ 9      D1     Unused
+ 9      D2     (±)-Camphene                     24478
+ 9      D3     Phorbol                          24479
+ 9      D4     Umbelliferone                    24665
+ 9      D5     Voacangine                       24692
+ 9      D6     (–)-Securinine                   24902
+ 9      D7     Zingerone                        24909
+ 9      D8     (+)-Nootkatone                   24910
+ 9      D9     Atractylenolide III              24911
+ 9      D10    Isosilybin                       24913
+ 9      D11    Amarogentin                      24914
+ 9      D12    Unused
+ 9      E1     Unused
+ 9      E2     (+)-Praeruptorin A               24915
+ 9      E3     Gliorosein                       24921
+ 9      E4     Catalpol                         24925
+ 9      E5     Isoquercetin                     24926
+ 9      E6     Abietic Acid                     24927
+ 9      E7     Aucubin                          24928
+ 9      E8     Cyclo(D-Ala-L-Pro)               24940
+ 9      E9     Cyclo(L-Leu-L-Pro)               24941
+ 9      E10    Cyclo(L-Phe-L-Val)               24943
+ 9      E11    Chicoric Acid                    24960
+ 9      E12    Unused
+
+
+
+
+                                                                        CAYMAN CHEMICAL
+                                                                        1180 EAST ELLSWORTH RD
+                                                                        ANN ARBOR, MI 48108 · USA
+                                                                        PHONE: [800] 364-9897
+                                                                               [734] 971-3335
+                                                                          FAX: [734] 971-3640
+                                                                        CUSTSERV@CAYMANCHEM.COM
+                                                                        WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                       Page 24 of 59
+Plate   Well                       Contents          Item Number
+ 9      F1     Unused
+ 9      F2     (−)-Gallocatechin Gallate          24962
+ 9      F3     (−)-Catechin Gallate               24963
+ 9      F4     3,5-Dicaffeoylquinic Acid          24964
+ 9      F5     Verbascoside                       24965
+ 9      F6     Schizandrin B                      24968
+ 9      F7     Sennoside A                        24969
+ 9      F8     Ginkgolide A                       24970
+ 9      F9     Agnuside                           24971
+ 9      F10    Unused
+ 9      F11    Secoisolariciresinol Diglucoside   24974
+ 9      F12    Unused
+ 9      G1     Unused
+ 9      G2     Maltotetraose                      24975
+ 9      G3     Notoginsenoside Ft1                24976
+ 9      G4     Scutellarein                       24977
+ 9      G5     20(R)-Ginsenoside Rg3              24978
+ 9      G6     4-deoxy-4α-Phorbol                 24998
+ 9      G7     Maculosin                          25019
+ 9      G8     1,3-Dicaffeoylquinic Acid          25022
+ 9      G9     Galactitol                         25023
+ 9      G10    Saikosaponin A                     25026
+ 9      G11    Aconine                            25048
+ 9      G12    Unused
+ 9      H1     Unused
+ 9      H2     Marmesin                           25049
+ 9      H3     1,5-Dicaffeoylquinic Acid          25050
+ 9      H4     15,16-Dihydrotanshinone I          25051
+ 9      H5     20(R)-Protopanaxadiol              25052
+ 9      H6     3,4-Dicaffeoylquinic Acid          25053
+ 9      H7     5-O-Caffeoylquinic Acid            25054
+ 9      H8     Alkannin                           25058
+ 9      H9     Artemisinic Acid                   25059
+ 9      H10    Kaempferol-3-glucoside             25060
+ 9      H11    Atractylenolide I                  25061
+ 9      H12    Unused
+
+
+
+
+                                                                          CAYMAN CHEMICAL
+                                                                          1180 EAST ELLSWORTH RD
+                                                                          ANN ARBOR, MI 48108 · USA
+                                                                          PHONE: [800] 364-9897
+                                                                                 [734] 971-3335
+                                                                            FAX: [734] 971-3640
+                                                                          CUSTSERV@CAYMANCHEM.COM
+                                                                          WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                        Page 25 of 59
+Plate   Well                       Contents           Item Number
+10      A1     Unused
+10      A2     Baohuoside I                        25062
+10      A3     β-Mangostin                         25071
+10      A4     Caftaric Acid                       25090
+10      A5     Calycosin                           25091
+10      A6     Calycosin 7-O-β-D-Glucoside         25095
+10      A7     Chelidonine                         25097
+10      A8     Cryptochlorogenic Acid              25098
+10      A9     Cynaropicrin                        25099
+10      A10    Deacetylasperulosidic Acid          25100
+10      A11    Dehydroevodiamine (hydrochloride)   25101
+10      A12    Unused
+10      B1     Unused
+10      B2     Gentiopicrin                        25102
+10      B3     Ginkgetin                           25103
+10      B4     Isoginkgetin                        25104
+10      B5     (−)-Isoxanthohumol                  25105
+10      B6     3-methyl Orsellinic Acid            25113
+10      B7     Cinnamamide                         25117
+10      B8     Magnoflorine                        25122
+10      B9     Magnolin                            25123
+10      B10    Narirutin                           25124
+10      B11    (+)-Gallocatechin                   25125
+10      B12    Unused
+10      C1     Unused
+10      C2     23-epi-26-Deoxyactein               25126
+10      C3     Parishin C                          25127
+10      C4     Parishin E                          25128
+10      C5     Theaflavin                          25129
+10      C6     Ginsenoside Ro                      25137
+10      C7     Hederacoside C                      25138
+10      C8     Kukoamine A                         25139
+10      C9     Soyasaponin Bb                      25140
+10      C10    Luteoloside                         25141
+10      C11    Dihydroartemisinic Acid             25142
+10      C12    Unused
+
+
+
+
+                                                                           CAYMAN CHEMICAL
+                                                                           1180 EAST ELLSWORTH RD
+                                                                           ANN ARBOR, MI 48108 · USA
+                                                                           PHONE: [800] 364-9897
+                                                                                  [734] 971-3335
+                                                                             FAX: [734] 971-3640
+                                                                           CUSTSERV@CAYMANCHEM.COM
+                                                                           WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                    Page 26 of 59
+Plate   Well                        Contents      Item Number
+10      D1     Unused
+10      D2     Orientin                        25143
+10      D3     Kinsenoside                     25144
+10      D4     Senecionine                     25145
+10      D5     Seneciphylline                  25146
+10      D6     Ginsenoside Rg5                 25147
+10      D7     Lonicerin                       25148
+10      D8     Schisandrol B                   25149
+10      D9     Didymin                         25197
+10      D10    Isosakuranetin                  25198
+10      D11    Senkyunolide A                  25199
+10      D12    Unused
+10      E1     Unused
+10      E2     Procyanidin A2                  25200
+10      E3     Procyanidin C1                  25201
+10      E4     Chebulagic Acid                 25203
+10      E5     Voacamine                       25204
+10      E6     4-Hydroxy-6-methyl-2-pyrone     25210
+10      E7     Decursinol angelate             25212
+10      E8     Nodakenin                       25213
+10      E9     Decursin                        25214
+10      E10    Theaflavin 3,3’-digallate       25215
+10      E11    Periplocin                      25216
+10      E12    Unused
+10      F1     Unused
+10      F2     Ruscogenin                      25217
+10      F3     Cryogenine                      25287
+10      F4     Thiamine (nitrate)              25332
+10      F5     N-Acetylpuromycin               25335
+10      F6     Micheliolide                    25402
+10      F7     (−)-Voacangarine                25468
+10      F8     Dihydroaeruginoic Acid          25514
+10      F9     Mitraphylline                   25528
+10      F10    Unused
+10      F11    Thiamine (hydrochloride)        25656
+10      F12    Unused
+
+
+
+
+                                                                       CAYMAN CHEMICAL
+                                                                       1180 EAST ELLSWORTH RD
+                                                                       ANN ARBOR, MI 48108 · USA
+                                                                       PHONE: [800] 364-9897
+                                                                              [734] 971-3335
+                                                                         FAX: [734] 971-3640
+                                                                       CUSTSERV@CAYMANCHEM.COM
+                                                                       WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                    Page 27 of 59
+Plate   Well                        Contents      Item Number
+10      G1     Unused
+10      G2     Oridonin                        25665
+10      G3     Benzoylaconine                  25687
+10      G4     Obafluorin                      25731
+10      G5     trans-ε-Viniferin               25737
+10      G6     Piperitenone                    25752
+10      G7     (±)-Menthol                     25753
+10      G8     (±)-3-Carene                    25768
+10      G9     (+)-Cedrol                      25769
+10      G10    α-Copaene                       25770
+10      G11    β-Eudesmol                      25771
+10      G12    Unused
+10      H1     Unused
+10      H2     (±)-Limonene                    25773
+10      H3     Nerol                           25774
+10      H4     Sabinene                        25777
+10      H5     trans-Nerolidol                 25778
+10      H6     Lythrine                        25804
+10      H7     Trilobatin                      25837
+10      H8     Neoeriocitrin                   25839
+10      H9     Lythridine                      25865
+10      H10    Hecogenin Acetate               25977
+10      H11    Sinigrin (hydrate)              26028
+10      H12    Unused
+11      A1     Unused
+11      A2     Dendrobine                      26067
+11      A3     Imperatorin                     26070
+11      A4     Unused
+11      A5     Corynecin V                     26167
+11      A6     Kirenol                         26212
+11      A7     (E)-Ajoene                      26242
+11      A8     Bergapten                       26254
+11      A9     Olivetolic Acid                 26282
+11      A10    Varinolic Acid                  26283
+11      A11    (±)-Goitrin                     26382
+11      A12    Unused
+
+
+
+
+                                                                       CAYMAN CHEMICAL
+                                                                       1180 EAST ELLSWORTH RD
+                                                                       ANN ARBOR, MI 48108 · USA
+                                                                       PHONE: [800] 364-9897
+                                                                              [734] 971-3335
+                                                                         FAX: [734] 971-3640
+                                                                       CUSTSERV@CAYMANCHEM.COM
+                                                                       WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                  Page 28 of 59
+Plate   Well                      Contents      Item Number
+11      B1     Unused
+11      B2     Hispidulin                    26383
+11      B3     Specnuezhenide                26385
+11      B4     Bergenin                      26406
+11      B5     Arbutin                       26407
+11      B6     Daphnoretin                   26408
+11      B7     Totarol                       26412
+11      B8     Peimisine (hydrochloride)     26438
+11      B9     Lateropyrone                  26463
+11      B10    (+)-Kavain                    26524
+11      B11    Unused
+11      B12    Unused
+11      C1     Unused
+11      C2     Germacrene D                  26539
+11      C3     Agistatin B                   26600
+11      C4     Anacardic Acid triene         26611
+11      C5     Parishin A                    26665
+11      C6     Amygdalin                     26668
+11      C7     Ganoderic Acid A              26674
+11      C8     γ-Mangostin                   26675
+11      C9     Antipain (hydrochloride)      26705
+11      C10    Curcumenol                    26715
+11      C11    Schisantherin B               26716
+11      C12    Unused
+11      D1     Unused
+11      D2     (±)-β-Tocopherol              26758
+11      D3     Ganoderic Acid D              26765
+11      D4     2S-Eriodictyol                26803
+11      D5     Apigenin 7-glucoside          26813
+11      D6     D-Pinitol                     26815
+11      D7     Vitexin 2-O-rhamnoside        26816
+11      D8     Vatiquinone                   26819
+11      D9     Tabersonine                   26848
+11      D10    Curcumol                      26849
+11      D11    Leonurine                     26850
+11      D12    Unused
+
+
+
+
+                                                                     CAYMAN CHEMICAL
+                                                                     1180 EAST ELLSWORTH RD
+                                                                     ANN ARBOR, MI 48108 · USA
+                                                                     PHONE: [800] 364-9897
+                                                                            [734] 971-3335
+                                                                       FAX: [734] 971-3640
+                                                                     CUSTSERV@CAYMANCHEM.COM
+                                                                     WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                   Page 29 of 59
+Plate   Well                       Contents      Item Number
+11      E1     Unused
+11      E2     Shikimic Acid                  26851
+11      E3     Tanshinone I                   26852
+11      E4     Isoorientin                    26862
+11      E5     Farnesene (mixed isomers)      26891
+11      E6     Linarin                        26900
+11      E7     Myricetrin                     26902
+11      E8     (Z)-Ligustilide                26908
+11      E9     Altenusin                      26911
+11      E10    Ononin                         27046
+11      E11    Unused
+11      E12    Unused
+11      F1     Unused
+11      F2     (S)-Laudanosine                27170
+11      F3     (±)-γ-Tocopherol               27193
+11      F4     Schizandrin                    27211
+11      F5     Troxerutin                     27220
+11      F6     Brucine                        27221
+11      F7     Danshensu (sodium salt)        27222
+11      F8     4β-Hydroxywithanolide E        27245
+11      F9     Streptazolin                   27266
+11      F10    Ferrioxamine E                 27275
+11      F11    Complanatuside                 27295
+11      F12    Unused
+11      G1     Unused
+11      G2     Plantamajoside                 27296
+11      G3     20(R)-Ginsenoside Rh2          27300
+11      G4     Jatrorrhizine (chloride)       27314
+11      G5     Ginsenoside Rh1                27318
+11      G6     Oroxylin A                     27363
+11      G7     D-Mannose                      27388
+11      G8     Nicotiflorin                   27392
+11      G9     Ligustroflavone                27431
+11      G10    23-hydroxy Betulinic Acid      27446
+11      G11    Loureirin B                    27454
+11      G12    Unused
+
+
+
+
+                                                                      CAYMAN CHEMICAL
+                                                                      1180 EAST ELLSWORTH RD
+                                                                      ANN ARBOR, MI 48108 · USA
+                                                                      PHONE: [800] 364-9897
+                                                                             [734] 971-3335
+                                                                        FAX: [734] 971-3640
+                                                                      CUSTSERV@CAYMANCHEM.COM
+                                                                      WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                        Page 30 of 59
+Plate   Well                       Contents           Item Number
+11      H1     Unused
+11      H2     Asarinin                            27456
+11      H3     N-trans-Feruloyltyramine            27459
+11      H4     Santonin                            27460
+11      H5     Scutellarin                         27461
+11      H6     4-Hydroxybenzoic Acid               27468
+11      H7     Schisandrin C                       27475
+11      H8     Echinocystic Acid                   27476
+11      H9     β-Rubromycin                        27477
+11      H10    Linderane                           27479
+11      H11    Aurantioobtusin                     27481
+11      H12    Unused
+12      A1     Unused
+12      A2     Hederoside D2                       27507
+12      A3     Mulberroside A                      27545
+12      A4     3,4-Dihydroxybenzaldehyde           27547
+12      A5     6-Paradol                           27554
+12      A6     Dieugenol                           27557
+12      A7     Thymohydroquinone                   27558
+12      A8     Epimedin A                          27582
+12      A9     Monotropein                         27595
+12      A10    Acetylcimigenol Arabinoside         27596
+12      A11    Tyrosol                             27600
+12      A12    Unused
+12      B1     Unused
+12      B2     Nepodin                             27611
+12      B3     Pinosylvin                          27612
+12      B4     Gentisic Acid                       27615
+12      B5     Questiomycin A                      27623
+12      B6     Oxychlororaphine                    27624
+12      B7     Swertiamarin                        27634
+12      B8     Quercetin-7-O-β-D-Glucopyranoside   27641
+12      B9     Dihydromethysticin                  27644
+12      B10    Corydaline                          27654
+12      B11    Ginkgoneolic Acid                   27656
+12      B12    Unused
+
+
+
+
+                                                                           CAYMAN CHEMICAL
+                                                                           1180 EAST ELLSWORTH RD
+                                                                           ANN ARBOR, MI 48108 · USA
+                                                                           PHONE: [800] 364-9897
+                                                                                  [734] 971-3335
+                                                                             FAX: [734] 971-3640
+                                                                           CUSTSERV@CAYMANCHEM.COM
+                                                                           WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                    Page 31 of 59
+Plate   Well                        Contents      Item Number
+12      C1     Unused
+12      C2     Carubicin                       27660
+12      C3     Columbianadin                   27661
+12      C4     Agarotetrol                     27662
+12      C5     Ganoderenic Acid A              27685
+12      C6     (+)-Pinoresinol                 27700
+12      C7     Pinoresinol Diglucoside         27708
+12      C8     Talatisamine                    27721
+12      C9     Narcissoside                    27759
+12      C10    Naringin Dihydrochalcone        27791
+12      C11    Xanthotoxol                     27801
+12      C12    Unused
+12      D1     Unused
+12      D2     Phenethyl isothiocyanate        27804
+12      D3     Betulinic Aldehyde              27810
+12      D4     Digitoxin                       27825
+12      D5     Diphyllin                       27826
+12      D6     5-Hydroxymethylfurfural         27835
+12      D7     Cephalomannine                  27878
+12      D8     Rebaudioside D                  27880
+12      D9     Corosolic Acid                  27887
+12      D10    4,5-Dicaffeoylquinic Acid       27892
+12      D11    Umbelliprenin                   27894
+12      D12    Unused
+12      E1     Unused
+12      E2     Bilobetin                       27899
+12      E3     Sciadopitysin                   27900
+12      E4     Schaftoside                     27950
+12      E5     Unused
+12      E6     Cyclo(L-Pro-L-Val)              27961
+12      E7     Astringin                       27979
+12      E8     Telocinobufagin                 27981
+12      E9     Rubimaillin                     27999
+12      E10    Fraxetin                        28011
+12      E11    1,6-Dimethoxyphenazine          28061
+12      E12    Unused
+
+
+
+
+                                                                       CAYMAN CHEMICAL
+                                                                       1180 EAST ELLSWORTH RD
+                                                                       ANN ARBOR, MI 48108 · USA
+                                                                       PHONE: [800] 364-9897
+                                                                              [734] 971-3335
+                                                                         FAX: [734] 971-3640
+                                                                       CUSTSERV@CAYMANCHEM.COM
+                                                                       WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                      Page 32 of 59
+Plate   Well                          Contents      Item Number
+12      F1     Unused
+12      F2     Verrucofortine                    28062
+12      F3     2-O-Acetyl-20-hydroxyecdysone     28063
+12      F4     1-Hydroxyphenazine                28064
+12      F5     Atranorin                         28106
+12      F6     Solamargine                       28110
+12      F7     Solasonine                        28111
+12      F8     Unused
+12      F9     Garcinoic Acid                    28122
+12      F10    α-Hederin                         28164
+12      F11    Fraxin                            28217
+12      F12    Unused
+12      G1     Unused
+12      G2     Fraxinol                          28218
+12      G3     Crotonoside                       28219
+12      G4     Astilbin                          28267
+12      G5     Geniposide                        28281
+12      G6     Oxysophocarpine                   28305
+12      G7     (±)-α-Tocopherol Acetate          28399
+12      G8     Loganic Acid                      28402
+12      G9     Tryptophol                        28404
+12      G10    Geniposidic Acid                  28409
+12      G11    Sennoside B                       28410
+12      G12    Unused
+12      H1     Unused
+12      H2     Coptisine (chloride)              28424
+12      H3     Nicotinamide N-oxide              28441
+12      H4     Maltopentaose                     28456
+12      H5     Precocene II                      28480
+12      H6     Lupulone                          28481
+12      H7     Corynoxine (hydrochloride)        28496
+12      H8     10-deacetyl Paclitaxel            28503
+12      H9     Aristolochic Acid B               28504
+12      H10    Aristolochic Acid C               28505
+12      H11    Esculin (hydrate)                 28514
+12      H12    Unused
+
+
+
+
+                                                                         CAYMAN CHEMICAL
+                                                                         1180 EAST ELLSWORTH RD
+                                                                         ANN ARBOR, MI 48108 · USA
+                                                                         PHONE: [800] 364-9897
+                                                                                [734] 971-3335
+                                                                           FAX: [734] 971-3640
+                                                                         CUSTSERV@CAYMANCHEM.COM
+                                                                         WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                    Page 33 of 59
+Plate   Well                        Contents      Item Number
+13      A1     Unused
+13      A2     Hypocrellin B                   28544
+13      A3     Pulchinenoside A                28545
+13      A4     Quercetin 3-O-sophoroside       28592
+13      A5     Demethylzeylasteral             28595
+13      A6     Paclitaxel octadecanedioate     28635
+13      A7     SAHO                            28725
+13      A8     Lappaconitine                   28747
+13      A9     Aescin                          28815
+13      A10    Indole-3-propionic Acid         28821
+13      A11    (±)-Liquiritigenin              28823
+13      A12    Unused
+13      B1     Unused
+13      B2     Tenuigenin                      28824
+13      B3     Gastrodin                       28828
+13      B4     Panaxatriol                     28835
+13      B5     Rhein-8-glucoside               28844
+13      B6     Morusin                         28857
+13      B7     Kaurenoic Acid                  28957
+13      B8     Ginsenoside Rb3                 29005
+13      B9     5,7-Dihydroxychromone           29006
+13      B10    Rehmannioside D                 29034
+13      B11    Melittoside                     29035
+13      B12    Unused
+13      C1     Unused
+13      C2     Rubusoside                      29040
+13      C3     Forsythoside B                  29051
+13      C4     Procyanidin B3                  29065
+13      C5     20(S)-Protopanaxatriol          29073
+13      C6     2’’-O-Galloylhyperin            29086
+13      C7     Ginsenoside Rc                  29088
+13      C8     4’-O-Methylresveratrol          29106
+13      C9     α-Mangostin                     29108
+13      C10    Methylcobalamin                 29113
+13      C11    (−)-Nicotine                    29138
+13      C12    Unused
+
+
+
+
+                                                                       CAYMAN CHEMICAL
+                                                                       1180 EAST ELLSWORTH RD
+                                                                       ANN ARBOR, MI 48108 · USA
+                                                                       PHONE: [800] 364-9897
+                                                                              [734] 971-3335
+                                                                         FAX: [734] 971-3640
+                                                                       CUSTSERV@CAYMANCHEM.COM
+                                                                       WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                         Page 34 of 59
+Plate   Well                          Contents         Item Number
+13      D1     Unused
+13      D2     Cyclosporin C                        29152
+13      D3     (−)-Triptonide                       29156
+13      D4     Ginkgolide J                         29163
+13      D5     (±)-Catechin (hydrate)               29175
+13      D6     Polyphyllin I                        29179
+13      D7     2-heptyl-3-hydroxy-4(1H)-Quinolone   29186
+13      D8     Ailanthone                           29194
+13      D9     Agistatin E                          29211
+13      D10    Isoverbascoside                      29216
+13      D11    Nitidine (chloride)                  29223
+13      D12    Unused
+13      E1     Unused
+13      E2     Norwogonin                           29227
+13      E3     Maytansinol                          29228
+13      E4     Fangchinoline                        29243
+13      E5     Gibberellic Acid                     29322
+13      E6     Diallyl Tetrasulfide                 29328
+13      E7     Wogonoside                           29332
+13      E8     Citropten                            29338
+13      E9     trans-β-Ocimene                      29393
+13      E10    Elemicin                             29394
+13      E11    Prunetin                             29432
+13      E12    Unused
+13      F1     Unused
+13      F2     Arjunolic Acid                       29438
+13      F3     Asperuloside                         29439
+13      F4     Pulsatilla Saponin D                 29455
+13      F5     Coniferyl Alcohol                    29470
+13      F6     (–)-Lobelin (hydrochloride)          29526
+13      F7     Sophocarpine                         29598
+13      F8     Eupatorin                            29599
+13      F9     Josamycin                            29606
+13      F10    Harmane                              29613
+13      F11    (±)-Bornyl Acetate                   29617
+13      F12    Unused
+
+
+
+
+                                                                            CAYMAN CHEMICAL
+                                                                            1180 EAST ELLSWORTH RD
+                                                                            ANN ARBOR, MI 48108 · USA
+                                                                            PHONE: [800] 364-9897
+                                                                                   [734] 971-3335
+                                                                              FAX: [734] 971-3640
+                                                                            CUSTSERV@CAYMANCHEM.COM
+                                                                            WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                      Page 35 of 59
+Plate   Well                        Contents        Item Number
+13      G1     Unused
+13      G2     Peiminine                         29618
+13      G3     Coniferyl Ferulate                29620
+13      G4     Daurisoline                       29628
+13      G5     Isorhynchophylline                29650
+13      G6     Phillyrin                         29654
+13      G7     Hypaconitine                      29656
+13      G8     Ligustrazine (hydrochloride)      29658
+13      G9     Kaempferide                       29673
+13      G10    Tropolone                         29674
+13      G11    Eleutheroside E                   29684
+13      G12    Unused
+13      H1     Unused
+13      H2     Purpurogallin                     29689
+13      H3     Notoginsenoside R1                29691
+13      H4     Epimedin B                        29694
+13      H5     13-acetyl-9-Dihydrobaccatin III   29701
+13      H6     Gypenoside IX                     29705
+13      H7     Malabaricone C                    29741
+13      H8     Albiflorin                        29744
+13      H9     Alantolactone                     29762
+13      H10    Procyanidin                       29763
+13      H11    Oleanolic Acid Acetate            29764
+13      H12    Unused
+14      A1     Unused
+14      A2     Betulonic Acid                    29765
+14      A3     Estragole                         29824
+14      A4     Pinocembrin                       29852
+14      A5     Homoplantaginin                   29853
+14      A6     (E)-Anethol                       29862
+14      A7     Oleandrin                         29871
+14      A8     (S)-(–)-Perillaldehyde            29872
+14      A9     Indole-3-pyruvic Acid             29876
+14      A10    7,3’,4’-Trihydroxyflavone         29880
+14      A11    (−)-Isocorypalmine                29886
+14      A12    Unused
+
+
+
+
+                                                                         CAYMAN CHEMICAL
+                                                                         1180 EAST ELLSWORTH RD
+                                                                         ANN ARBOR, MI 48108 · USA
+                                                                         PHONE: [800] 364-9897
+                                                                                [734] 971-3335
+                                                                           FAX: [734] 971-3640
+                                                                         CUSTSERV@CAYMANCHEM.COM
+                                                                         WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                               Page 36 of 59
+Plate   Well                       Contents               Item Number
+14      B1     Unused
+14      B2     (–)-Sinoacutine                         29889
+14      B3     Malabaricone B                          29911
+14      B4     Geraniin                                29924
+14      B5     Ginsenoside CK                          29926
+14      B6     Echinacoside                            29927
+14      B7     Hypocrellin A                           29933
+14      B8     Bruceine A                              29936
+14      B9     Ajmaline                                29962
+14      B10    Peimine                                 29963
+14      B11    D-threo-Biopterin                       29986
+14      B12    Unused
+14      C1     Unused
+14      C2     5-Heneicosylresorcinol                  30031
+14      C3     5-Tricosylresorcinol                    30032
+14      C4     Deltorphin C (trifluoroacetate salt)    30050
+14      C5     Australine (hydrochloride)              30051
+14      C6     Polygalasaponin F                       30064
+14      C7     2-Hydroxy-4-methoxybenzaldehyde         30091
+14      C8     Isocorydine                             30101
+14      C9     Myricetin 3,4’-di-O-β-glucopyranoside   30102
+14      C10    Schisanhenol                            30109
+14      C11    Forsythoside A                          30110
+14      C12    Unused
+14      D1     Unused
+14      D2     Germacrone                              30111
+14      D3     Ganoderic Acid B                        30112
+14      D4     Neotuberostemonine                      30116
+14      D5     Dihydrochelerythrine                    30118
+14      D6     Erythrodiol                             30135
+14      D7     Unused
+14      D8     Lapachol                                30190
+14      D9     Methylophiopogonanone A                 30192
+14      D10    Methylophiopogonanone B                 30193
+14      D11    Gomisin J                               30213
+14      D12    Unused
+
+
+
+
+                                                                               CAYMAN CHEMICAL
+                                                                               1180 EAST ELLSWORTH RD
+                                                                               ANN ARBOR, MI 48108 · USA
+                                                                               PHONE: [800] 364-9897
+                                                                                      [734] 971-3335
+                                                                                 FAX: [734] 971-3640
+                                                                               CUSTSERV@CAYMANCHEM.COM
+                                                                               WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                               Page 37 of 59
+Plate   Well                       Contents               Item Number
+14      E1     Unused
+14      E2     Araloside A                             30219
+14      E3     Pseudoginsenoside F11                   30222
+14      E4     Pelargonidin 3-O-glucoside (chloride)   30224
+14      E5     Liquiritin                              30263
+14      E6     Secoxyloganin                           30267
+14      E7     Isoliquiritin                           30270
+14      E8     Pulchinenoside B4                       30271
+14      E9     2,3,5,6-Tetramethylpyrazine             30281
+14      E10    DL-3-n-Butylphthalide                   30284
+14      E11    Sclareol                                30287
+14      E12    Unused
+14      F1     Unused
+14      F2     Palmatine (chloride)                    30318
+14      F3     Picroside II                            30319
+14      F4     Pteryxin                                30320
+14      F5     Coniferin                               30364
+14      F6     Curdione                                30365
+14      F7     Ganoderenic Acid C                      30366
+14      F8     Ganoderic Acid C2                       30371
+14      F9     Lucidenic Acid A                        30372
+14      F10    (–)-Menthol                             30384
+14      F11    Tenuifolin                              30617
+14      F12    Unused
+14      G1     Unused
+14      G2     Polygalacic Acid                        30620
+14      G3     Polygalaxanthone III                    30621
+14      G4     Chrysosplenetin                         30625
+14      G5     Methyl 3,4-Dihydroxyphenylacetate       30637
+14      G6     Hederasaponin B                         30641
+14      G7     Timosaponin BII                         30644
+14      G8     Lycorine                                30650
+14      G9     Montbretin A                            30651
+14      G10    Arenobufagin                            30695
+14      G11    Tormentic Acid                          30696
+14      G12    Unused
+
+
+
+
+                                                                               CAYMAN CHEMICAL
+                                                                               1180 EAST ELLSWORTH RD
+                                                                               ANN ARBOR, MI 48108 · USA
+                                                                               PHONE: [800] 364-9897
+                                                                                      [734] 971-3335
+                                                                                 FAX: [734] 971-3640
+                                                                               CUSTSERV@CAYMANCHEM.COM
+                                                                               WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                                Page 38 of 59
+Plate   Well                          Contents             Item Number
+14      H1     Unused
+14      H2     Gomisin D                                30697
+14      H3     Phillygenin                              30698
+14      H4     Quercetin 3-O-α-L-arabinopyranoside      30707
+14      H5     Isocurcumenol                            30710
+14      H6     Morroniside                              30711
+14      H7     Corynoline                               30712
+14      H8     trans-Zeatin Riboside                    30747
+14      H9     Idronoxil                                30783
+14      H10    2(E),4(Z)-Decadienoic Acid ethyl ester   30835
+14      H11    7-Methoxycoumarin                        30857
+14      H12    Unused
+15      A1     Unused
+15      A2     Ergosterol Peroxide                      30860
+15      A3     Unused
+15      A4     Deslanoside                              30872
+15      A5     Cirsiliol                                30874
+15      A6     Ethamivan                                30876
+15      A7     Brusatol                                 30883
+15      A8     Fuziline                                 30889
+15      A9     Eurycomanone                             30896
+15      A10    Mahanimbine                              30897
+15      A11    Denudatine                               30904
+15      A12    Unused
+15      B1     Unused
+15      B2     Garcinone D                              30906
+15      B3     (3R,8S)-Falcarindiol                     30919
+15      B4     Blinin                                   30945
+15      B5     Dehydrocorydaline (chloride)             30972
+15      B6     Unused
+15      B7     Afzelin                                  31135
+15      B8     Ginsenoside F1                           31137
+15      B9     Dihydrosanguinarine                      31139
+15      B10    14-Deoxyandrographolide                  31140
+15      B11    Indole-3-carboxylic Acid                 31166
+15      B12    Unused
+
+
+
+
+                                                                                CAYMAN CHEMICAL
+                                                                                1180 EAST ELLSWORTH RD
+                                                                                ANN ARBOR, MI 48108 · USA
+                                                                                PHONE: [800] 364-9897
+                                                                                       [734] 971-3335
+                                                                                  FAX: [734] 971-3640
+                                                                                CUSTSERV@CAYMANCHEM.COM
+                                                                                WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                         Page 39 of 59
+Plate   Well                        Contents        Item Number
+15      C1     Unused
+15      C2     Unused
+15      C3     (±)-Epibatidine (hydrochloride)   31193
+15      C4     Capsanthin                        31202
+15      C5     Sophoricoside                     31203
+15      C6     Hydroxysafflor Yellow A           31204
+15      C7     4-Hydroxybenzyl Alcohol           31209
+15      C8     Isovitexin                        31212
+15      C9     Ajmalicine                        31213
+15      C10    Chelidonic Acid                   31324
+15      C11    Nebularine                        31329
+15      C12    Unused
+15      D1     Unused
+15      D2     Spiculisporic Acid                31334
+15      D3     Sclareolide                       31371
+15      D4     Aspyrone                          31389
+15      D5     (±)-α-Bisabolol                   31397
+15      D6     Anethol                           31398
+15      D7     Safranal                          31399
+15      D8     Gibberellin A4                    31400
+15      D9     Corynoxeine                       31403
+15      D10    Ginsenoside F3                    31409
+15      D11    Acetomycin                        31410
+15      D12    Unused
+15      E1     Unused
+15      E2     Echinosporin                      31416
+15      E3     Ascochin                          31450
+15      E4     trans-β-Farnesene                 31502
+15      E5     Guaiazulene                       31506
+15      E6     Theaflavin-3-gallate              31510
+15      E7     Quillaic Acid                     31512
+15      E8     Alyssin                           31513
+15      E9     Acetoxyvalerenic Acid             31516
+15      E10    Macranthoidin B                   31533
+15      E11    (+)-δ-Tocopherol                  31589
+15      E12    Unused
+
+
+
+
+                                                                         CAYMAN CHEMICAL
+                                                                         1180 EAST ELLSWORTH RD
+                                                                         ANN ARBOR, MI 48108 · USA
+                                                                         PHONE: [800] 364-9897
+                                                                                [734] 971-3335
+                                                                           FAX: [734] 971-3640
+                                                                         CUSTSERV@CAYMANCHEM.COM
+                                                                         WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                                 Page 40 of 59
+Plate   Well                       Contents                 Item Number
+15      F1     Unused
+15      F2     Poncirin                                  31706
+15      F3     Delsoline                                 31748
+15      F4     Erianin                                   32516
+15      F5     Parvodicin C2                             32542
+15      F6     Chebulinic Acid                           32554
+15      F7     Dihydrofolic Acid                         32750
+15      F8     Sesamol                                   32903
+15      F9     1-Hydroxyanthraquinone                    32905
+15      F10    2-Hydroxyanthraquinone                    32906
+15      F11    Se-Methylselenocysteine (hydrochloride)   32950
+15      F12    Unused
+15      G1     Unused
+15      G2     (±)-Salsolidine                           32953
+15      G3     10-deacetyl-7-xylosyl Paclitaxel          32955
+15      G4     (–)-Lupinine                              33026
+15      G5     Unused
+15      G6     Unused
+15      G7     Unused
+15      G8     28-Acetylbetulin                          33052
+15      G9     3-Oxobetulin                              33066
+15      G10    Sparstolonin B                            33080
+15      G11    Sophoradin                                33087
+15      G12    Unused
+15      H1     Unused
+15      H2     (−)-Physostigmine (salicylate)            33106
+15      H3     (−)-dehydro Griseofulvin                  33117
+15      H4     6,2’,4’-Trimethoxyflavone                 33150
+15      H5     (+)-Secoisolariciresinol                  33155
+15      H6     Saikosaponin D (hydrate)                  33156
+15      H7     Tetrahydroberberine                       33157
+15      H8     Pachymic Acid                             33180
+15      H9     Luteolin 7-O-Glucuronide                  33188
+15      H10    Unused
+15      H11    Rebaudioside B                            33199
+15      H12    Unused
+
+
+
+
+                                                                                 CAYMAN CHEMICAL
+                                                                                 1180 EAST ELLSWORTH RD
+                                                                                 ANN ARBOR, MI 48108 · USA
+                                                                                 PHONE: [800] 364-9897
+                                                                                        [734] 971-3335
+                                                                                   FAX: [734] 971-3640
+                                                                                 CUSTSERV@CAYMANCHEM.COM
+                                                                                 WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                         Page 41 of 59
+Plate   Well                       Contents         Item Number
+16      A1     Unused
+16      A2     20(S)-Protopanaxadiol             33201
+16      A3     Asperosaponin VI                  33206
+16      A4     Icariside I                       33209
+16      A5     Clitorin                          33211
+16      A6     Ganoderic Acid C1                 33212
+16      A7     Marein                            33213
+16      A8     Pseudoprotodioscin                33215
+16      A9     Tribuloside (hydrate)             33218
+16      A10    20-Deoxyingenol                   33225
+16      A11    Unused
+16      A12    Unused
+16      B1     Unused
+16      B2     Benzoylmesaconine                 33238
+16      B3     Ganoderic Acid C6                 33241
+16      B4     Unused
+16      B5     Pseudomonic Acid (lithium salt)   33271
+16      B6     Chrysoeriol                       33395
+16      B7     Aromadendrin                      33402
+16      B8     Vicenin-2                         33403
+16      B9     Nordihydrocapsaicin               33407
+16      B10    Previtamin D3                     33409
+16      B11    Helicid                           33414
+16      B12    Unused
+16      C1     Unused
+16      C2     Kuwanon C                         33421
+16      C3     Asiaticoside B                    33427
+16      C4     Unused
+16      C5     (−)-Sweroside                     33454
+16      C6     Ginkgotoxin                       33460
+16      C7     Syringaldehyde                    33489
+16      C8     Piperitone                        33490
+16      C9     Dihydrocoumarin                   33495
+16      C10    7-Methoxyflavone                  33497
+16      C11    N,N’-Diphenethylurea              33580
+16      C12    Unused
+
+
+
+
+                                                                         CAYMAN CHEMICAL
+                                                                         1180 EAST ELLSWORTH RD
+                                                                         ANN ARBOR, MI 48108 · USA
+                                                                         PHONE: [800] 364-9897
+                                                                                [734] 971-3335
+                                                                           FAX: [734] 971-3640
+                                                                         CUSTSERV@CAYMANCHEM.COM
+                                                                         WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                            Page 42 of 59
+Plate   Well                       Contents            Item Number
+16      D1     Unused
+16      D2     Tubermycin B                         33659
+16      D3     FR900359                             33666
+16      D4     Octahydrocurcumin                    33686
+16      D5     Lithospermic Acid                    33694
+16      D6     Punicalin                            33714
+16      D7     Dehydroabietic Acid                  33722
+16      D8     Kaempferol 3-O-galactoside           33747
+16      D9     Ricinine                             33748
+16      D10    Carvacrol                            33753
+16      D11    Apigenin 7-O-Glucuronide (hydrate)   33754
+16      D12    Unused
+16      E1     Unused
+16      E2     Urolithin B                          33757
+16      E3     Myrislignan                          33759
+16      E4     (S)-Canadine                         33805
+16      E5     Naringenin Chalcone                  33806
+16      E6     Eupalinolide A                       33808
+16      E7     Perhydrofarnesyl Acetone             33825
+16      E8     D-Arabinitol                         33826
+16      E9     Aromadendrene                        33829
+16      E10    Isoalantolactone                     33838
+16      E11    Nuciferine                           33839
+16      E12    Unused
+16      F1     Unused
+16      F2     Gossypetin                           33840
+16      F3     (+)-Oxypeucedanin hydrate            33841
+16      F4     1,4-Dicaffeoylquinic Acid            33842
+16      F5     Arteannuin B                         33852
+16      F6     Thermopsine                          33853
+16      F7     Scopolin                             33874
+16      F8     Marrubiin                            33876
+16      F9     Gentisein                            33877
+16      F10    Pyridoxamine (hydrochloride)         33899
+16      F11    β-Phellandrene                       33905
+16      F12    Unused
+
+
+
+
+                                                                            CAYMAN CHEMICAL
+                                                                            1180 EAST ELLSWORTH RD
+                                                                            ANN ARBOR, MI 48108 · USA
+                                                                            PHONE: [800] 364-9897
+                                                                                   [734] 971-3335
+                                                                              FAX: [734] 971-3640
+                                                                            CUSTSERV@CAYMANCHEM.COM
+                                                                            WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                              Page 43 of 59
+Plate   Well                          Contents           Item Number
+16      G1     Unused
+16      G2     (+)-Ledene                             33906
+16      G3     Unused
+16      G4     Sinapyl Alcohol                        33916
+16      G5     Avicularin                             33918
+16      G6     γ-Glu-Leu                              33923
+16      G7     Escin Ib                               33926
+16      G8     Isoflavone                             33964
+16      G9     Tectoridin                             33969
+16      G10    Vitamin K4                             33970
+16      G11    Brevilin A                             33993
+16      G12    Unused
+16      H1     Unused
+16      H2     Flavone                                34028
+16      H3     Prunin                                 34034
+16      H4     Isorhoifolin                           34036
+16      H5     Toosendanin                            34042
+16      H6     Benzoylhypaconine                      34046
+16      H7     Shanzhiside methyl ester               34047
+16      H8     Alisol A                               34050
+16      H9     Escin Ia                               34057
+16      H10    Didemnin B                             34063
+16      H11    Xanthone                               34098
+16      H12    Unused
+17      A1     Unused
+17      A2     Isoscopoletin                          34117
+17      A3     N-Demethylvancomycin (hydrochloride)   34119
+17      A4     N’-Nitrosonornicotine                  34120
+17      A5     meta-Topolin                           34122
+17      A6     Yunaconitine                           34127
+17      A7     Zingibroside R1                        34130
+17      A8     Visnagin                               34140
+17      A9     Isobergapten                           34141
+17      A10    Gossypin                               34142
+17      A11    Biotin (S)-sulfoxide                   34145
+17      A12    Unused
+
+
+
+
+                                                                              CAYMAN CHEMICAL
+                                                                              1180 EAST ELLSWORTH RD
+                                                                              ANN ARBOR, MI 48108 · USA
+                                                                              PHONE: [800] 364-9897
+                                                                                     [734] 971-3335
+                                                                                FAX: [734] 971-3640
+                                                                              CUSTSERV@CAYMANCHEM.COM
+                                                                              WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                         Page 44 of 59
+Plate   Well                        Contents        Item Number
+17      B1     Unused
+17      B2     Ethyl Gallate                     34193
+17      B3     Loliolide                         34196
+17      B4     Hederacoside D                    34202
+17      B5     Maduramicin (ammonium salt)       34270
+17      B6     Tropinone                         34287
+17      B7     3-Methylxanthine                  34288
+17      B8     Tricyclene                        34290
+17      B9     Gibberellin A1                    34291
+17      B10    1F-Fructofuranosylnystose         34292
+17      B11    α-Cyperone                        34294
+17      B12    Unused
+17      C1     Unused
+17      C2     7-epi-10-Deacetyltaxol            34296
+17      C3     Notoginsenoside Fe                34297
+17      C4     Ganoderol B                       34324
+17      C5     1-Kestose                         34346
+17      C6     Kaempferol 7-O-glucoside          34347
+17      C7     7-Methylxanthine                  34348
+17      C8     5-Feruloylquinic Acid             34349
+17      C9     Shikalkin                         34355
+17      C10    Epimedin C                        34375
+17      C11    Gardenoside                       34381
+17      C12    Unused
+17      D1     Unused
+17      D2     Quassin                           34382
+17      D3     Rosin                             34383
+17      D4     Oxyberberine                      34384
+17      D5     Ophiopogonin D                    34385
+17      D6     Levistolide A                     34386
+17      D7     Nepitrin                          34387
+17      D8     Poliumoside                       34389
+17      D9     Triptophenolide                   34390
+17      D10    Litorin (trifluoroacetate salt)   34427
+17      D11    (+)-δ-Cadinene                    34444
+17      D12    Unused
+
+
+
+
+                                                                         CAYMAN CHEMICAL
+                                                                         1180 EAST ELLSWORTH RD
+                                                                         ANN ARBOR, MI 48108 · USA
+                                                                         PHONE: [800] 364-9897
+                                                                                [734] 971-3335
+                                                                           FAX: [734] 971-3640
+                                                                         CUSTSERV@CAYMANCHEM.COM
+                                                                         WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                                        Page 45 of 59
+Plate   Well                       Contents                        Item Number
+17      E1     Unused
+17      E2     Tuberostemonine                                  34457
+17      E3     Bufotalin                                        34466
+17      E4     Orcinol                                          34467
+17      E5     8-Oxycoptisine                                   34472
+17      E6     Emodin 8-glucoside                               34474
+17      E7     Tiliroside                                       34493
+17      E8     Thymol                                           34496
+17      E9     (±)-6-Prenylnaringenin                           34499
+17      E10    Gypenoside XVII                                  34514
+17      E11    Kaempferol 3-neohesperidoside                    34533
+17      E12    Unused
+17      F1     Unused
+17      F2     Ganoderic Acid DM                                34536
+17      F3     Isopimaric Acid                                  34544
+17      F4     Hesperetin 7-O-glucoside                         34545
+17      F5     Unused
+17      F6     Epiberberine                                     34569
+17      F7     Byakangelicol                                    34571
+17      F8     Caudatin                                         34585
+17      F9     2,3,5,4’-Tetrahydroxyl-diphenylethylene 2-O-β-   34594
+               D-Glucoside
+17      F10    Apiin                                            34596
+17      F11    Saikosaponin C                                   34599
+17      F12    Unused
+17      G1     Unused
+17      G2     Byakangelicin                                    34600
+17      G3     Songorine                                        34601
+17      G4     Tetrahydrocoptisine                              34603
+17      G5     Isorhamnetin 3-O-neohesperidoside                34604
+17      G6     Saikosaponin B1                                  34609
+17      G7     Deltaline                                        34612
+17      G8     Podocarpusflavone A                              34613
+17      G9     Incensole Acetate                                34614
+17      G10    Ardisiacrispin A                                 34615
+17      G11    Corylifol A                                      34616
+17      G12    Unused
+
+
+
+
+                                                                                        CAYMAN CHEMICAL
+                                                                                        1180 EAST ELLSWORTH RD
+                                                                                        ANN ARBOR, MI 48108 · USA
+                                                                                        PHONE: [800] 364-9897
+                                                                                               [734] 971-3335
+                                                                                          FAX: [734] 971-3640
+                                                                                        CUSTSERV@CAYMANCHEM.COM
+                                                                                        WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                     Page 46 of 59
+Plate   Well                      Contents      Item Number
+17      H1     Unused
+17      H2     Veratrosine                   34617
+17      H3     Isopimpinellin                34642
+17      H4     Skimmianine                   34643
+17      H5     Kaempferol 3-glucuronide      34645
+17      H6     Dictamnine                    34646
+17      H7     Isocorynoxeine                34653
+17      H8     Unused
+17      H9     Trifolirhizin                 34655
+17      H10    Siamenoside I                 34656
+17      H11    Engeletin                     34657
+17      H12    Unused
+18      A1     Unused
+18      A2     Silychristin                  34658
+18      A3     Verbenalin                    34663
+18      A4     Fraxinellone                  34672
+18      A5     Bavachalcone                  34673
+18      A6     Crassicauline A               34674
+18      A7     Ganoderic Acid G              34675
+18      A8     Irigenin                      34676
+18      A9     Gitogenin                     34681
+18      A10    Menthone                      34683
+18      A11    α-Guaiene                     34686
+18      A12    Unused
+18      B1     Unused
+18      B2     (±)-Marinopyrrole A           34723
+18      B3     DL-Sulforaphane Glutathione   34731
+18      B4     Meranzin                      34743
+18      B5     Swertisin                     34744
+18      B6     Disogluside                   34746
+18      B7     N-Methylcytisine              34752
+18      B8     Neferine                      34753
+18      B9     Sophoraflavanone G            34755
+18      B10    N-Nornuciferine               34756
+18      B11    Obtusifolin                   34757
+18      B12    Unused
+
+
+
+
+                                                                     CAYMAN CHEMICAL
+                                                                     1180 EAST ELLSWORTH RD
+                                                                     ANN ARBOR, MI 48108 · USA
+                                                                     PHONE: [800] 364-9897
+                                                                            [734] 971-3335
+                                                                       FAX: [734] 971-3640
+                                                                     CUSTSERV@CAYMANCHEM.COM
+                                                                     WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                        Page 47 of 59
+Plate   Well                       Contents        Item Number
+18      C1     Unused
+18      C2     Cyclo(Phe-Pro)                   34758
+18      C3     Murrayone                        34767
+18      C4     Lithospermoside                  34771
+18      C5     Ranaconitine                     34774
+18      C6     Catechol                         34791
+18      C7     Phellodendrine (chloride)        34802
+18      C8     Decursinol                       34807
+18      C9     Alisol B                         34808
+18      C10    Blumeatin                        34809
+18      C11    Grosvenorine                     34810
+18      C12    Unused
+18      D1     Unused
+18      D2     3-Hydroxycoumarin                34815
+18      D3     4-Hexylresorcinol                34824
+18      D4     Chikusetsusaponin IVa            34832
+18      D5     all-trans-13,14-Dihydroretinol   34873
+18      D6     (E/Z)-Ajoene                     34881
+18      D7     Germacrene B                     34907
+18      D8     Prim-O-Glucosylcimifugin         34921
+18      D9     Brevifolincarboxylic Acid        34922
+18      D10    Vitexin-4’’-O-glucoside          34923
+18      D11    Oroxin A                         34924
+18      D12    Unused
+18      E1     Unused
+18      E2     Dehydrotumulosic Acid            34938
+18      E3     Hirsuteine                       34939
+18      E4     Rubiadin-1 methyl ether          34940
+18      E5     3-Butylidenephthalide            34983
+18      E6     Agrimol B                        34996
+18      E7     Perillene                        35006
+18      E8     Corydine                         35028
+18      E9     Wilforgine                       35029
+18      E10    Licoflavone C                    35031
+18      E11    Columbamine                      35032
+18      E12    Unused
+
+
+
+
+                                                                        CAYMAN CHEMICAL
+                                                                        1180 EAST ELLSWORTH RD
+                                                                        ANN ARBOR, MI 48108 · USA
+                                                                        PHONE: [800] 364-9897
+                                                                               [734] 971-3335
+                                                                          FAX: [734] 971-3640
+                                                                        CUSTSERV@CAYMANCHEM.COM
+                                                                        WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                           Page 48 of 59
+Plate   Well                        Contents          Item Number
+18      F1     Unused
+18      F2     Atractylodin                        35033
+18      F3     Chrysin 7-Glucuronide               35034
+18      F4     Suberosin                           35035
+18      F5     Periplogenin                        35047
+18      F6     Isomenthone                         35063
+18      F7     4-Hydroxyquinoline                  35064
+18      F8     N-desmethyl Galantamine             35074
+18      F9     O-desmethyl Galantamine             35080
+18      F10    Pyrrolnitrin                        35099
+18      F11    Lotusine                            35136
+18      F12    Unused
+18      G1     Unused
+18      G2     1-O-Acetylbritannilactone           35137
+18      G3     (2S)-6-Prenylnaringenin             35138
+18      G4     Scoulerine                          35140
+18      G5     Quercetin 3-O-β-D-xylopyranoside    35141
+18      G6     Senkyunolide H                      35142
+18      G7     Rosmanol                            35143
+18      G8     Akuammine                           35149
+18      G9     Methyl 4-hydroxycinnamate           35203
+18      G10    Rosarin                             35214
+18      G11    Hypaphorine                         35228
+18      G12    Unused
+18      H1     Unused
+18      H2     Genkwanin                           35229
+18      H3     5-O-Demethylnobiletin               35230
+18      H4     N-methyl Tyramine (hydrochloride)   35233
+18      H5     Sennidin A                          35237
+18      H6     Rebaudioside M                      35239
+18      H7     Continentalic Acid                  35240
+18      H8     1-Methylxanthine                    35245
+18      H9     Galantamine (hydrobromide)          35247
+18      H10    Thujopsene                          35270
+18      H11    Robinetin                           35272
+18      H12    Unused
+
+
+
+
+                                                                           CAYMAN CHEMICAL
+                                                                           1180 EAST ELLSWORTH RD
+                                                                           ANN ARBOR, MI 48108 · USA
+                                                                           PHONE: [800] 364-9897
+                                                                                  [734] 971-3335
+                                                                             FAX: [734] 971-3640
+                                                                           CUSTSERV@CAYMANCHEM.COM
+                                                                           WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                        Page 49 of 59
+Plate   Well                         Contents      Item Number
+19      A1     Unused
+19      A2     7-Demethylsuberosin              35282
+19      A3     Scopoline                        35301
+19      A4     Ginkgolide K                     35304
+19      A5     Larixyl Acetate                  35309
+19      A6     Lupenone                         35335
+19      A7     N6,N6-Dimethyladenosine          35348
+19      A8     Dihydrojasmonic Acid             35362
+19      A9     Paederosidic Acid                35363
+19      A10    α-Arbutin                        35386
+19      A11    Xylotetraose                     35387
+19      A12    Unused
+19      B1     Unused
+19      B2     7,4′-Di-O-methylapigenin         35388
+19      B3     1-Methylpseudouridine            35401
+19      B4     6,7,4’-Trihydroxyisoflavone      35405
+19      B5     Dihydronarwedine                 35409
+19      B6     Galanthamine N-oxide             35413
+19      B7     Indican                          35417
+19      B8     Galgravin                        35431
+19      B9     Primin                           35441
+19      B10    7,4’-Dihydroxyflavone            35491
+19      B11    Aristolochic Acid D              35492
+19      B12    Unused
+19      C1     Unused
+19      C2     20(R)-Ginsenoside Rh1            35493
+19      C3     Kumatakenin                      35514
+19      C4     4-Chloroindole-3-acetic Acid     35534
+19      C5     Oleuropein aglycone              35547
+19      C6     cis-Zeatin                       35549
+19      C7     1-Octen-3-ol                     35550
+19      C8     Hygromycin A                     35565
+19      C9     D-Tetrahydropalmatine            35577
+19      C10    Rhoifolin                        35583
+19      C11    Berbamine (hydrochloride)        35593
+19      C12    Unused
+
+
+
+
+                                                                        CAYMAN CHEMICAL
+                                                                        1180 EAST ELLSWORTH RD
+                                                                        ANN ARBOR, MI 48108 · USA
+                                                                        PHONE: [800] 364-9897
+                                                                               [734] 971-3335
+                                                                          FAX: [734] 971-3640
+                                                                        CUSTSERV@CAYMANCHEM.COM
+                                                                        WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                                    Page 50 of 59
+Plate   Well                        Contents                   Item Number
+19      D1     Unused
+19      D2     1-Isothiocyanato-6-(methylsulfenyl)-hexane   35595
+19      D3     Isorhamnetin-3-O-β-D-Glucoside               35600
+19      D4     Epigoitrin                                   35620
+19      D5     Genipin 1-gentiobioside                      35621
+19      D6     2-keto D-Gluconic Acid (calcium salt)        35622
+19      D7     Tirucallol                                   35623
+19      D8     Dipsacoside B                                35624
+19      D9     Saikosaponin F                               35626
+19      D10    Alisol F                                     35627
+19      D11    Camelliaside A                               35628
+19      D12    Unused
+19      E1     Unused
+19      E2     Huperzine B                                  35629
+19      E3     Gartanin                                     35631
+19      E4     Salvigenin                                   35632
+19      E5     4-Acetylphenol                               35636
+19      E6     Senkyunolide I                               35649
+19      E7     Coclaurine                                   35716
+19      E8     Ginkgolic Acid C17:1                         35737
+19      E9     (±)-Tuberonic Acid                           35750
+19      E10    Unused
+19      E11    Techtochrysin                                35791
+19      E12    Unused
+19      F1     Unused
+19      F2     Saponarin                                    35805
+19      F3     Ononetin                                     35813
+19      F4     4-Methoxyphenyl-β-D-Glucopyranoside          35818
+19      F5     4-oxo Retinoic Acid                          35819
+19      F6     Bayogenin                                    35822
+19      F7     Alisol C Monoacetate                         35823
+19      F8     Isomeranzin                                  35827
+19      F9     N-acetyl-2-Aminophenol                       35829
+19      F10    Tubercidin                                   35834
+19      F11    Vanillin 4-O-β-D-Glucoside                   35908
+19      F12    Unused
+
+
+
+
+                                                                                    CAYMAN CHEMICAL
+                                                                                    1180 EAST ELLSWORTH RD
+                                                                                    ANN ARBOR, MI 48108 · USA
+                                                                                    PHONE: [800] 364-9897
+                                                                                           [734] 971-3335
+                                                                                      FAX: [734] 971-3640
+                                                                                    CUSTSERV@CAYMANCHEM.COM
+                                                                                    WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                             Page 51 of 59
+Plate   Well                        Contents            Item Number
+19      G1     Unused
+19      G2     Eriodictyol 7-O-glucoside             36003
+19      G3     Yamogenin                             36008
+19      G4     Isosinensetin                         36009
+19      G5     β-Glucogallin                         36010
+19      G6     Cycleanine                            36020
+19      G7     Isolariciresinol                      36032
+19      G8     Remerin                               36035
+19      G9     α-Cembrenediol                        36042
+19      G10    7-Hydroxyflavone                      36071
+19      G11    Chamazulene                           36072
+19      G12    Unused
+19      H1     Unused
+19      H2     Flavokawain A                         36083
+19      H3     Frangulin A                           36087
+19      H4     Harmalol (hydrochloride hydrate)      36090
+19      H5     Quercetin 3-O-β-D-Glucose-7-O-β-D-    36130
+               Gentiobioside
+19      H6     Unused
+19      H7     Unused
+19      H8     3’-Hydroxygenkwanin                   36150
+19      H9     3-Deoxyaconitine                      36151
+19      H10    3-hydroxy-9,10-Dimethoxypterocarpan   36152
+19      H11    3-Acetylaconitine                     36155
+19      H12    Unused
+20      A1     Unused
+20      A2     2”-O-β-L-Galactopyranosylorientin     36156
+20      A3     Aristolone                            36157
+20      A4     3,29-Dibenzoyl Rarounitriol           36158
+20      A5     Euscaphic Acid                        36162
+20      A6     1,3-Dimethyluric Acid                 36167
+20      A7     Bullatine B                           36170
+20      A8     10-Shogaol                            36171
+20      A9     Cucurbitacin D                        36172
+20      A10    Atractylenolide II                    36173
+20      A11    Timosaponin AI                        36174
+20      A12    Unused
+
+
+
+
+                                                                             CAYMAN CHEMICAL
+                                                                             1180 EAST ELLSWORTH RD
+                                                                             ANN ARBOR, MI 48108 · USA
+                                                                             PHONE: [800] 364-9897
+                                                                                    [734] 971-3335
+                                                                               FAX: [734] 971-3640
+                                                                             CUSTSERV@CAYMANCHEM.COM
+                                                                             WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                                     Page 52 of 59
+Plate   Well                       Contents                     Item Number
+20      B1     Unused
+20      B2     12-O-Methylcarnosic Acid                      36175
+20      B3     Crebanine                                     36176
+20      B4     Unused
+20      B5     γ-Glu-Phe (trifluoroacetate salt)             36181
+20      B6     1-O-Caffeoylquinic Acid                       36189
+20      B7     4’,7-Di-O-methylnaringenin                    36190
+20      B8     Androsin                                      36191
+20      B9     9,10-Dimethoxypterocarpan-3-O-β-D-glucoside   36192
+20      B10    Arnicolide D                                  36193
+20      B11    Clinodiside A                                 36200
+20      B12    Unused
+20      C1     Unused
+20      C2     Koumine                                       36210
+20      C3     D-Mannosamine (hydrochloride)                 36231
+20      C4     3-(3-Hydroxyphenyl)propanoic Acid             36268
+20      C5     Rhamnocitrin                                  36272
+20      C6     Fustin                                        36273
+20      C7     Pimpinellin                                   36274
+20      C8     Cornuside                                     36284
+20      C9     Parishin B                                    36296
+20      C10    Hinokiflavone                                 36338
+20      C11    Pulmatin                                      36343
+20      C12    Unused
+20      D1     Unused
+20      D2     Methylprotodioscin                            36344
+20      D3     Rhodojaponin III                              36345
+20      D4     (+)-γ-Tocopherol                              36362
+20      D5     3-(4-Hydroxyphenyl)lactic Acid                36367
+20      D6     DL-Pyroglutamic Acid                          36375
+20      D7     Hexahydrohippuric Acid                        36386
+20      D8     Procyanidin B4                                36398
+20      D9     (+)-Sparteine                                 36400
+20      D10    2-Methoxy-4-vinylphenol                       36427
+20      D11    4-Methylcatechol                              36429
+20      D12    Unused
+
+
+
+
+                                                                                     CAYMAN CHEMICAL
+                                                                                     1180 EAST ELLSWORTH RD
+                                                                                     ANN ARBOR, MI 48108 · USA
+                                                                                     PHONE: [800] 364-9897
+                                                                                            [734] 971-3335
+                                                                                       FAX: [734] 971-3640
+                                                                                     CUSTSERV@CAYMANCHEM.COM
+                                                                                     WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                                   Page 53 of 59
+Plate   Well                        Contents                  Item Number
+20      E1     Unused
+20      E2     Deoxypodophyllotoxin                        36434
+20      E3     O-Desmethylangolensin                       36435
+20      E4     5,6-Dimethylbenzimidazole                   36437
+20      E5     Myricetin 3-galactoside                     36467
+20      E6     3,5,6,7,8,3’,4’-Heptamethoxyflavone         36475
+20      E7     4’-Demethylpodophyllotoxin                  36481
+20      E8     1-Cinnamoylpyrrolidine                      36483
+20      E9     3-Isomangostin                              36484
+20      E10    Dimethylfraxetin                            36485
+20      E11    2’-Acetylacteoside                          36511
+20      E12    Unused
+20      F1     Unused
+20      F2     Cephalotaxine                               36521
+20      F3     Valtrate                                    36522
+20      F4     Neoglycyrol                                 36525
+20      F5     3-epi Ursolic Acid                          36528
+20      F6     4-Allylcatechol                             36542
+20      F7     12-Epinapelline                             36550
+20      F8     Sulfuretin                                  36569
+20      F9     1,1,1,1-Kestohexose                         36591
+20      F10    Miltirone                                   36663
+20      F11    (−)-Syringaresinol di-O-glucoside           36672
+20      F12    Unused
+20      G1     Unused
+20      G2     γ-Glu-Ala (trifluoroacetate salt)           36688
+20      G3     Aposcopolamine                              36689
+20      G4     5-(3’,4’-Dihydroxyphenyl)-γ-Valerolactone   36690
+20      G5     Unused
+20      G6     Brazilein                                   36736
+20      G7     3’-hydroxy Puerarin                         36771
+20      G8     Butyl 4-hydroxybenzoate                     36797
+20      G9     Asaraldehyde                                36798
+20      G10    N-formyl-2-Aminophenol                      36802
+20      G11    Gingerenone A                               36841
+20      G12    Unused
+
+
+
+
+                                                                                   CAYMAN CHEMICAL
+                                                                                   1180 EAST ELLSWORTH RD
+                                                                                   ANN ARBOR, MI 48108 · USA
+                                                                                   PHONE: [800] 364-9897
+                                                                                          [734] 971-3335
+                                                                                     FAX: [734] 971-3640
+                                                                                   CUSTSERV@CAYMANCHEM.COM
+                                                                                   WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                              Page 54 of 59
+Plate   Well                       Contents              Item Number
+20      H1     Unused
+20      H2     Febrifugine (hydrochloride)            37044
+20      H3     Unused
+20      H4     Ziyuglycoside I                        37320
+20      H5     Ethylparaben                           37357
+20      H6     Hispidol                               37373
+20      H7     Unused
+20      H8     Propylparaben                          37417
+20      H9     Ermanin                                37535
+20      H10    Lentztrehalose A                       37732
+20      H11    Lentztrehalose B                       37733
+20      H12    Unused
+21      A1     Unused
+21      A2     Rhyncophylline                         37946
+21      A3     Mycophenolic Acid methyl ester         38397
+21      A4     5-(3’-Hydroxyphenyl)-γ-Valerolactone   38519
+21      A5     Bergaptol                              38742
+21      A6     Myriocin                               63150
+21      A7     Unused
+21      A8     Parthenolide                           70080
+21      A9     Guaiacol                               70430
+21      A10    Filipin III                            70440
+21      A11    Bestatin (hydrochloride)               70520
+21      A12    Unused
+21      B1     Unused
+21      B2     3,4-Dihydroxyphenyl ethanol            70604
+21      B3     Baicalein                              70610
+21      B4     trans-Resveratrol                      70675
+21      B5     rac-Astaxanthin                        70685
+21      B6     Rosmarinic Acid                        70900
+21      B7     Chlorogenic Acid                       70930
+21      B8     (−)-Epigallocatechin Gallate           70935
+21      B9     (+)-Catechin (hydrate)                 70940
+21      B10    Unused
+21      B11    Celastrol                              70950
+21      B12    Unused
+
+
+
+
+                                                                              CAYMAN CHEMICAL
+                                                                              1180 EAST ELLSWORTH RD
+                                                                              ANN ARBOR, MI 48108 · USA
+                                                                              PHONE: [800] 364-9897
+                                                                                     [734] 971-3335
+                                                                                FAX: [734] 971-3640
+                                                                              CUSTSERV@CAYMANCHEM.COM
+                                                                              WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                                   Page 55 of 59
+Plate   Well                        Contents                  Item Number
+21      C1     Unused
+21      C2     Lactacystin                                 70980
+21      C3     (Z)-Guggulsterone                           71800
+21      C4     Unused
+21      C5     Curcumin                                    81025
+21      C6     (±)-Jasmonic Acid                           88300
+21      C7     γ-CEHC                                      89630
+21      C8     Trichostatin A                              89730
+21      C9     Carnosol                                    89800
+21      C10    Carnosic Acid                               89820
+21      C11    Capsaicin                                   92350
+21      C12    Unused
+21      D1     Unused
+21      D2     Dihydrocapsaicin                            92355
+21      D3     8-methyl Nonanoic Acid                      9000310
+21      D4     Pepstatin A                                 9000469
+21      D5     25-hydroxy Vitamin D3                       9000683
+21      D6     4-chloro-α-Cyanocinnamic Acid               9000981
+21      D7     N-3-hydroxydecanoyl-L-Homoserine lactone    9001147
+21      D8     Piperlonguminine                            9001155
+21      D9     Resibufogenin                               9001348
+21      D10    Nanaomycin A                                9001479
+21      D11    β-Tocotrienol                               9001533
+21      D12    Unused
+21      E1     Unused
+21      E2     Salvianolic Acid B                          9001577
+21      E3     Propionyl-L-carnitine (chloride)            9001873
+21      E4     (–)-α-Bisabolol                             9002495
+21      E5     Unused
+21      E6     Geranylgeranoic Acid                        9003474
+21      E7     2-Nonylquinolin-4(1H)-one                   9003627
+21      E8     L-3-n-Butylphthalide                        9003759
+21      E9     3-(3-Hydroxyphenyl)propionic Acid sulfate   9004103
+21      E10    p-Carboxyphenyl Sulfate                     9004155
+21      E11    Luteolin                                    10004161
+21      E12    Unused
+
+
+
+
+                                                                                   CAYMAN CHEMICAL
+                                                                                   1180 EAST ELLSWORTH RD
+                                                                                   ANN ARBOR, MI 48108 · USA
+                                                                                   PHONE: [800] 364-9897
+                                                                                          [734] 971-3335
+                                                                                     FAX: [734] 971-3640
+                                                                                   CUSTSERV@CAYMANCHEM.COM
+                                                                                   WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                     Page 56 of 59
+Plate   Well                      Contents         Item Number
+21      F1     Unused
+21      F2     3,4’,5-Trismethoxybenzophenone   10004185
+21      F3     cis-Resveratrol                  10004235
+21      F4     Ionomycin                        10004974
+21      F5     Daidzein                         10005166
+21      F6     Genistein                        10005167
+21      F7     Quercetin (hydrate)              10005169
+21      F8     Matairesinol                     10005174
+21      F9     Cerulenin                        10005647
+21      F10    Hesperetin                       10006084
+21      F11    Leelamine                        10006148
+21      F12    Unused
+21      G1     Unused
+21      G2     Silybin                          10006211
+21      G3     Berberine (chloride)             10006427
+21      G4     E-64                             10007963
+21      G5     FK-506                           10007965
+21      G6     α-Tocotrienol                    10008377
+21      G7     γ-Tocotrienol                    10008494
+21      G8     δ-Tocotrienol                    10008513
+21      G9     Leelamine (hydrochloride)        10008614
+21      G10    Unused
+21      G11    (+)-2,5-epi Goniothalesdiol      10008887
+21      G12    Unused
+21      H1     Unused
+21      H2     Piceatannol                      10009366
+21      H3     Kifunensine                      10009437
+21      H4     Bergamottin                      10009439
+21      H5     Unused
+21      H6     Pyocyanin                        10009594
+21      H7     Maslinic Acid                    10009645
+21      H8     Tangeretin                       10009911
+21      H9     Zeaxanthin                       10009992
+21      H10    Inotilone                        10010089
+21      H11    (R)-Equol                        10010172
+21      H12    Unused
+
+
+
+
+                                                                     CAYMAN CHEMICAL
+                                                                     1180 EAST ELLSWORTH RD
+                                                                     ANN ARBOR, MI 48108 · USA
+                                                                     PHONE: [800] 364-9897
+                                                                            [734] 971-3335
+                                                                       FAX: [734] 971-3640
+                                                                     CUSTSERV@CAYMANCHEM.COM
+                                                                     WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                            Page 57 of 59
+Plate   Well                      Contents                Item Number
+22      A1     Unused
+22      A2     (S)-Equol                               10010173
+22      A3     Lavendustin A                           10010268
+22      A4     Apigenin                                10010275
+22      A5     Harmine                                 10010324
+22      A6     Lovastatin                              10010338
+22      A7     Lovastatin Hydroxy Acid (sodium salt)   10010339
+22      A8     Vialinin A                              10010519
+22      A9     Genipin                                 10010622
+22      A10    (-)-Deguelin                            10010706
+22      A11    Lutein                                  10010811
+22      A12    Unused
+22      B1     Unused
+22      B2     Steviol                                 10011344
+22      B3     1-Deoxynojirimycin (hydrochloride)      10011718
+22      B4     Myricetin                               10012600
+22      B5     Hispidin                                10012605
+22      B6     Cyclosporin H                           17182
+22      B7     Unused
+22      B8     Unused
+22      B9     Unused
+22      B10    Unused
+22      B11    Unused
+22      B12    Unused
+22      C1     Unused
+22      C2     Unused
+22      C3     Unused
+22      C4     Unused
+22      C5     Unused
+22      C6     Unused
+22      C7     Unused
+22      C8     Unused
+22      C9     Unused
+22      C10    Unused
+22      C11    Unused
+22      C12    Unused
+
+
+
+
+                                                                            CAYMAN CHEMICAL
+                                                                            1180 EAST ELLSWORTH RD
+                                                                            ANN ARBOR, MI 48108 · USA
+                                                                            PHONE: [800] 364-9897
+                                                                                   [734] 971-3335
+                                                                              FAX: [734] 971-3640
+                                                                            CUSTSERV@CAYMANCHEM.COM
+                                                                            WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                                                   Page 58 of 59
+Plate   Well                      Contents                    Item Number
+22      D1     Unused
+22      D2     Oligomycin Complex                          11341
+22      D3     Concanavalin A                              14951
+22      D4     Moenomycin Complex                          15506
+22      D5     Teicoplanin Complex                         15511
+22      D6     Bromelain                                   17337
+22      D7     Carotenoid Mixture                          18264
+22      D8     Bacitracin (zinc)                           21212
+22      D9     Tyrothricin                                 22177
+22      D10    Tylosin                                     22599
+22      D11    Crocin/Gardenia Extract                     26337
+22      D12    Unused
+22      E1     Unused
+22      E2     Ramoplanin Complex                          28189
+22      E3     Hesperidin methylchalcone/C. aurantium L.   30884
+               Extract (hydrate)
+22      E4     Antimycin A Complex                         34799
+22      E5     Enniatin Complex                            9002040
+22      E6     Unused
+22      E7     Unused
+22      E8     Unused
+22      E9     Unused
+22      E10    Unused
+22      E11    Unused
+22      E12    Unused
+22      F1     Unused
+22      F2     Unused
+22      F3     Unused
+22      F4     Unused
+22      F5     Unused
+22      F6     Unused
+22      F7     Unused
+22      F8     Unused
+22      F9     Unused
+22      F10    Unused
+22      F11    Unused
+22      F12    Unused
+
+
+
+
+                                                                                   CAYMAN CHEMICAL
+                                                                                   1180 EAST ELLSWORTH RD
+                                                                                   ANN ARBOR, MI 48108 · USA
+                                                                                   PHONE: [800] 364-9897
+                                                                                          [734] 971-3335
+                                                                                     FAX: [734] 971-3640
+                                                                                   CUSTSERV@CAYMANCHEM.COM
+                                                                                   WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION
+                                     Page 59 of 59
+Plate   Well            Contents   Item Number
+22      G1     Unused
+22      G2     Unused
+22      G3     Unused
+22      G4     Unused
+22      G5     Unused
+22      G6     Unused
+22      G7     Unused
+22      G8     Unused
+22      G9     Unused
+22      G10    Unused
+22      G11    Unused
+22      G12    Unused
+22      H1     Unused
+22      H2     Unused
+22      H3     Unused
+22      H4     Unused
+22      H5     Unused
+22      H6     Unused
+22      H7     Unused
+22      H8     Unused
+22      H9     Unused
+22      H10    Unused
+22      H11    Unused
+22      H12    Unused
+
+
+
+
+                                                     CAYMAN CHEMICAL
+                                                     1180 EAST ELLSWORTH RD
+                                                     ANN ARBOR, MI 48108 · USA
+                                                     PHONE: [800] 364-9897
+                                                            [734] 971-3335
+                                                       FAX: [734] 971-3640
+                                                     CUSTSERV@CAYMANCHEM.COM
+                                                     WWW.CAYMANCHEM.COM
+

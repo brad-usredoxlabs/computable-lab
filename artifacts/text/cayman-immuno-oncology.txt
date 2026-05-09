@@ -1,0 +1,213 @@
+PRODUCT INFORMATION
+Immuno-Oncology Screening Library (96-Well)
+Item No. 28760 • Batch No. 0581972
+Panels are routinely re-evaluated to include new catalog introductions as the research evolves.                                                            Page 1 of 4
+   Plate                    Well                                                      Contents                                                    Item Number
+
+    1                        A1                       Unused
+    1                        A2                       PLX4032                                                                             10618
+    1                        A3                       I-BET762                                                                            10676
+    1                        A4                       IC-87114                                                                            11589
+    1                        A5                       AMD 3465 (hydrobromide)                                                             11959
+    1                        A6                       INCB 3284 (dimesylate)                                                              11963
+    1                        A7                       SB 297006                                                                           11964
+    1                        A8                       SR 3335                                                                             12072
+    1                        A9                       Pazopanib                                                                           12097
+    1                       A10                       CAY10603                                                                            13146
+    1                       A11                       Sunitinib (malate)                                                                  13159
+    1                       A12                       Unused
+    1                        B1                       Unused
+    1                        B2                       MS-275                                                                              13284
+    1                        B3                       SB 225002                                                                           13336
+    1                        B4                       WZ811                                                                               13639
+    1                        B5                       HDAC-IN-7                                                                           13686
+    1                        B6                       Axitinib                                                                            13813
+    1                        B7                       TAK-242                                                                             13871
+    1                        B8                       Chloroquine (phosphate)                                                             14194
+    1                        B9                       DMXAA                                                                               14617
+    1                       B10                       R-848                                                                               14806
+    1                       B11                       Imiquimod                                                                           14956
+    1                       B12                       Unused
+    1                        C1                       Unused
+    1                        C2                       CAL-101                                                                             15279
+    1                        C3                       LY2157299                                                                           15312
+    1                        C4                       OTX015                                                                              15947
+    1                        C5                       Ibrutinib                                                                           16274
+    1                        C6                       Trametinib                                                                          16292
+    1                        C7                       SR 1078                                                                             16503
+    1                        C8                       SD 208                                                                              16619
+    1                       C9                        Dabrafenib                                                                          16989
+    1                       C10                       Encorafenib                                                                         16994
+    1                       C11                       Binimetinib                                                                         16996
+    1                       C12                       Unused
+
+
+
+
+  WARNING
+  THIS PRODUCT IS FOR RESEARCH ONLY - NOT FOR HUMAN OR VETERINARY DIAGNOSTIC OR THERAPEUTIC USE.
+                                                                                                                                                                                 CAYMAN CHEMICAL
+                                                                                                                                                                                 1180 EAST ELLSWORTH RD
+  SAFETY DATA                                                                                                                                                                    ANN ARBOR, MI 48108 · USA
+  This material should be considered hazardous until further information becomes available. Do not ingest, inhale, get in eyes, on skin, or on clothing. Wash thoroughly after
+  handling. Before use, the user must review the complete Safety Data Sheet, which has been sent via email to your institution.                                                  PHONE: [800] 364-9897
+  WARRANTY AND LIMITATION OF REMEDY                                                                                                                                                     [734] 971-3335
+  Buyer agrees to purchase the material subject to Cayman’s Terms and Conditions. Complete Terms and Conditions including Warranty and Limitation of Liability information
+  can be found on our website.                                                                                                                                                     FAX: [734] 971-3640
+                                                                                                                        Copyright Cayman Chemical Company, 04/10/2025
+                                                                                                                                                                                 CUSTSERV@CAYMANCHEM.COM
+                                                                                                                                                                                 WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                   Page 2 of 4
+Plate   Well                      Contents       Item Number
+
+ 1      D1     Unused
+
+ 1      D2     CGS 21680 (hydrochloride)      17126
+ 1      D3     RS 504393                      17330
+ 1      D4     GSK2126458                     17377
+ 1      D5     GSK2269557                     17388
+ 1      D6     MRS1706                        17417
+ 1      D7     Defactinib                     17737
+ 1      D8     Hydroxychloroquine (sulfate)   17911
+ 1      D9     Dyphylline                     17958
+ 1      D10    AVL-292                        17993
+ 1      D11    RS 102895 (hydrochloride)      18207
+ 1      D12    Unused
+ 1      E1     Unused
+ 1      E2     INCB024360 analog              18265
+ 1      E3     Mocetinostat                   18287
+ 1      E4     CGI1746                        18414
+ 1      E5     BX 471                         18503
+ 1      E6     Doxofylline                    18746
+ 1      E7     Regadenoson                    18814
+ 1      E8     Gardiquimod                    18877
+ 1      E9     PD-1/PD-L1 Inhibitor 2         19132
+ 1      E10    Lenvatinib                     19375
+ 1      E11    IDO-IN-1                       19402
+ 1      E12    Unused
+ 1      F1     Unused
+ 1      F2     SR 0987                        19503
+ 1      F3     Cobimetinib                    19563
+ 1      F4     GS-9620                        19628
+ 1      F5     Epacadostat                    19875
+ 1      F6     Acalabrutinib                  19899
+ 1      F7     PD-1/PD-L1 Inhibitor 1         19914
+ 1      F8     Vipadenant                     20239
+ 1       F9    ZM 241385                      20447
+ 1      F10    Ticlopidine (hydrochloride)    20770
+ 1      F11    Proxyphylline                  20937
+ 1      F12    Unused
+
+
+
+
+                                                                    CAYMAN CHEMICAL
+                                                                    1180 EAST ELLSWORTH RD
+                                                                    ANN ARBOR, MI 48108 · USA
+                                                                    PHONE: [800] 364-9897
+                                                                           [734] 971-3335
+                                                                      FAX: [734] 971-3640
+                                                                    CUSTSERV@CAYMANCHEM.COM
+                                                                    WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                               Page 3 of 4
+Plate   Well                       Contents                  Item Number
+ 1      G1     Unused
+ 1      G2     GSK2981278                                 20974
+ 1      G3     Danirixin                                  20980
+ 1      G4     5’-N-Ethylcarboxamidoadenosine (hydrate)   21420
+ 1      G5     Reparixin (L-Lysine salt)                  21492
+ 1      G6     NLG-919 analog                             21509
+ 1      G7     Theobromine                                21745
+ 1      G8     MK-0812                                    21803
+ 1      G9     Sulfamethoxypyridazine                     21875
+ 1      G10    BEC (hydrochloride)                        22145
+ 1      G11    Preladenant                                22210
+ 1      G12    Unused
+ 1      H1     Unused
+ 1      H2     G10                                        22353
+ 1      H3     Istradefylline                             22958
+ 1      H4     Vercirnon                                  23131
+ 1      H5     Sulfamethizole                             23355
+ 1      H6     MSX-122                                    23426
+ 1      H7     Theophylline                               23760
+ 1      H8     EOS200271                                  25003
+ 1      H9     CPI-444                                    25024
+ 1      H10    Atractylenolide I                          25061
+ 1      H11    Baohuoside I                               25062
+ 1      H12    Unused
+ 2      A1     Unused
+ 2      A2     CCCP                                       25458
+ 2      A3     H-151                                      25857
+ 2      A4     C-176                                      25859
+ 2      A5     C-178                                      25860
+ 2      A6     AZD 4635                                   26322
+ 2      A7     Eganelisib                                 26416
+ 2      A8     TAK-779                                    26744
+ 2      A9     C29                                        27029
+ 2      A10    2-Cl-IB-MECA                               27336
+ 2      A11    STING Agonist C11                          27886
+ 2      A12    Unused
+
+
+
+
+                                                                                CAYMAN CHEMICAL
+                                                                                1180 EAST ELLSWORTH RD
+                                                                                ANN ARBOR, MI 48108 · USA
+                                                                                PHONE: [800] 364-9897
+                                                                                       [734] 971-3335
+                                                                                  FAX: [734] 971-3640
+                                                                                CUSTSERV@CAYMANCHEM.COM
+                                                                                WWW.CAYMANCHEM.COM
+PRODUCT INFORMATION                                           Page 4 of 4
+Plate   Well                      Contents             Item Number
+
+ 2      B1     Unused
+ 2      B2     AZD 5069                             28297
+ 2      B3     GSK805                               9002444
+ 2      B4     ABH                                  10006862
+ 2      B5     Sorafenib                            10009644
+ 2      B6     SAHA                                 10009929
+ 2      B7     Plerixafor (hydrochloride hydrate)   10011332
+ 2      B8     Unused
+ 2      B9     Unused
+ 2      B10    Unused
+ 2      B11    Unused
+ 2      B12    Unused
+ 2      C1     Unused
+ 2      C2     Unused
+ 2      C3     Unused
+ 2      C4     Unused
+ 2      C5     Unused
+ 2      C6     Unused
+ 2      C7     Unused
+ 2      C8     Unused
+ 2      C9     Unused
+ 2      C10    Unused
+ 2      C11    Unused
+ 2      C12    Unused
+ 2      D1     Unused
+ 2      D2     Unused
+ 2      D3     Unused
+ 2      D4     Unused
+ 2      D5     Unused
+ 2      D6     Unused
+ 2      D7     Unused
+ 2      D8     Unused
+ 2      D9     Unused
+ 2      D10    Unused
+ 2      D11    Unused
+ 2      D12    Unused
+
+
+
+
+                                                                            CAYMAN CHEMICAL
+                                                                            1180 EAST ELLSWORTH RD
+                                                                            ANN ARBOR, MI 48108 · USA
+                                                                            PHONE: [800] 364-9897
+                                                                                   [734] 971-3335
+                                                                              FAX: [734] 971-3640
+                                                                            CUSTSERV@CAYMANCHEM.COM
+                                                                            WWW.CAYMANCHEM.COM
+

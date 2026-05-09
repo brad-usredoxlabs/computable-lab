@@ -1,0 +1,12 @@
+kind: protocol-foundry-material-context
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+generated_at: 2026-05-09T00:39:00.446Z
+sourcePdf: /home/brad/git/computable-foundry/artifacts/pdfs/_d4302_d4306_d4308_zymobiomics-96_magbead_dna_kit.pdf
+materials: []
+materialSpecs: []
+vendorProducts: []
+labwareHints: []
+notes:
+  - PDF intake creates protocol text and provenance only.
+    Material/material-spec/vendor-product records must be justified by compiler
+    or architect evidence.

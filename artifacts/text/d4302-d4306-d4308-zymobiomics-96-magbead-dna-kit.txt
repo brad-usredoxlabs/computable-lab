@@ -1,0 +1,1194 @@
+ZymoBIOMICS™ 96 MagBead DNA Kit
+DNA for microbiome or metagenome analyses
+
+
+
+Highlights
+  • Validated Unbiased for Microbiome Measurements: Unbiased
+    cellular lysis validated using the ZymoBIOMICS™ Microbial
+    Community Standard.
+  • Inhibitor-Free DNA from Any Sample: Isolate ultra-pure DNA ready
+    for any downstream application.
+  • Certified Low Bioburden: Boost your detection limit for low
+    abundance microbes.
+  • Simple Workflow: Simply bead-beat sample, purify via spin-plate,
+    and filter to remove PCR inhibitors. No precipitation or lengthy
+    incubations!
+
+
+
+Catalog Numbers:
+D4302, D4306, D4308
+
+
+
+
+Scan with your smart-phone camera to
+view the online protocol/video.
+                           Table of Contents
+
+         Product Contents ........................................... 01
+         Specifications................................................. 02
+         Product Description ....................................... 03
+         Protocol .......................................................... 07
+         Appendices .................................................... 10
+           Sample Collection ............................................. 10
+           Application Notes. ............................................. 12
+             Standardize Sample Preparation with
+             ZymoBIOMICS Microbial Standards ...................... 18
+             Optimized Lysis Protocols for Bead-Beating ............ 21
+             Heat Sealing Lysis Racks ............................................ 22
+         Troubleshooting............................................. 23
+         Ordering Information ..................................... 25
+         Complete Your Workflow............................... 27
+         Notes ............................................................... 28
+         Guarantee ....................................................... 29
+
+
+
+
+INSTRUCTION MANUAL Ver.1.4.1                                                Revised on: 5/11/2023
+Product Contents
+
+                                                       D4302            D4306             D4308
+ ZymoBIOMICS™ 96 MagBead DNA
+                                                  (2 x 96 Preps.)    (2 x 96 Preps.)   (2 x 96 Preps.)
+
+ ZymoBIOMICS™ Lysis Solution                           150 ml               -             150 ml
+
+ DNA/RNA Shield™                                      50 ml x 3             -            50 ml x 3
+
+ ZymoBIOMICS™ MagBinding Buffer                        250 ml           250 ml            250 ml
+
+ ZymoBIOMICS™ MagWash 1                               100 ml x 2      100 ml x 2        100 ml x 2
+
+ ZymoBIOMICS™ MagWash 2                               200 ml x 3      200 ml x 3        200 ml x 3
+
+ ZymoBIOMICS™ DNase/RNase Free
+                                                        50 ml            50 ml             50 ml
+ Water
+
+ ZymoBIOMICS™ MagBinding Beads                          12 ml            12 ml             12 ml
+
+ ZR BashingBead™ Lysis Tubes
+                                                          -                 -               200
+ (0.1 & 0.5 mm)
+
+ ZymoBIOMICS™ BashingBead™
+                                                          2                 -                  -
+ Lysis Rack (0.1 & 0.5 mm)
+
+ Sealing Foils for ZymoBIOMICS™
+                                                          4                 -                  -
+ BashingBead™ Lysis Rack
+
+ Instruction Manual                                       1                1                   1
+
+
+
+
+Storage Temperature - Store all kit components (i.e., buffers, columns) at room temperature.
+
+
+                                                  1
+Specifications
+ •     Sample Sources – Bacterial (including endospores)1, fungal,
+       protozoan, algal, viral, mitochondrial, and host DNA is efficiently
+       isolated from ≤ 100 mg of mammalian feces, ≤ 100 mg soil, and 5 –
+       20 mg (wet weight) of bacterial/fungal cells2, biofilms, and water3.
+
+ •     Bead Beating System – The innovative ZymoBIOMICS™ lysis
+       system enables complete homogenization/disruption of the microbial
+       cells walls and accurate microbial DNA analysis, free of bias. To
+       ensure unbiased lysis, calibration of each bead-beating device is
+       recommended by using the ZymoBIOMICS™ Microbial Community
+       Standard (see Appendix C).
+
+ •     DNA Purity – High quality, inhibitor-free DNA is eluted with
+       ZymoBIOMICS™ DNase/RNase Free Water and is suitable for all
+       downstream applications including PCR and Next-Generation
+       Sequencing.
+
+ •     DNA Integrity – On average, post bead beating, genomic DNA is
+       between 15-20 kb depending on the initial quality of the sample,
+       making it amenable to Next-Generation Sequencing platforms
+       requiring high molecular weight DNA. For optimal DNA integrity,
+       collect samples in DNA/RNA Shield™4.
+
+ •     DNA Recovery – Up to 5 µg total DNA can be eluted into 20 µl.
+
+ •     Bioburden – A single preparation is guaranteed to contain less than
+       3 bacterial genomic copies per µl of eluate as determined by
+       quantitative amplification of the 16S rRNA gene when eluted using
+       100 µl water.
+
+ •     Materials Required, But Not Supplied – Centrifuge w/ microplate
+       carriers and 96-well plate/block disruptor or pulverizer.
+
+
+
+
+1 See endospore lysis efficiency data in Appendix B.
+2 This equates to approximately 2 x 108 bacterial cells and 2 x 107 yeast cells.
+3 For water samples, filter using desired filter (not provided). Cut the filter into small pieces and place into ZR
+  BashingBead™ Lysis Tube (0.1 & 0.5 mm). Alternatively, up to 250 µl water can be processed directly.
+4 DNA/RNA Shield™ provides an accurate molecular signature of the sample at the time of collection by
+  preserving nucleic acids at ambient temperature and inactivating organisms including infectious agents (see
+  Appendix A).
+
+
+
+                                                          2
+Product Description
+The ZymoBIOMICS™ 96 MagBead DNA Kit is designed for purifying
+DNA from a wide array of sample inputs (e.g. feces, soil, water, biofilms,
+etc.), that is immediately ready for microbiome or metagenome analyses.
+
+The ZymoBIOMICS™ innovative lysis system eliminates bias associated
+with unequal lysis efficiencies1 of different organisms (e.g. Gram-
+negative/positive bacteria including endospores 2, fungi, protozoans,
+algae, etc.) making it ideal for microbial community profiling. Unbiased
+mechanical lysis of tough microbes is achieved by bead beating with the
+innovative ultra-high density BashingBeads™ and validated using the
+ZymoBIOMICS™ Microbial Community Standard3, as shown in Figure 3.
+
+In addition, the ZymoBIOMICS™ 96 MagBead DNA Kit is equipped with
+Zymo Research’s proprietary OneStep™ PCR Inhibitor Removal
+technology, enabling PCR from the most PCR prohibitive environmental
+samples rich in humic and fulvic acids, tannins, melanin, and other
+polyphenolic compounds. Coupling state-of-the-art lysis technology with
+Zymo-Spin™ Technology results in superior yields of ultra-pure DNA ideal
+for all downstream applications including PCR, arrays, 16S rRNA gene
+sequencing, and shotgun sequencing4.
+
+
+
+                               Innovation. Pure & Simple.
+
+
+
+
+1
+  Chemical, enzymatic, and inferior lysis matrices (beads) lead to unrealistic representation of organisms in
+  downstream metagenomic analyses that is not reflective of actual abundance.
+2
+  See endospore lysis efficiency data in Appendix B.
+3
+  For more information on the ZymoBIOMICS™ Microbial Community Standard (D6300) & ZymoBIOMICS™
+  Microbial Community DNA Standard (D6305), see Appendix C.
+4
+  DNA is predominately 15-20 kb and amenable to Next-Generation Sequencing techniques requiring high
+  molecular weight DNA.
+
+
+                                                     3
+               Ultra-pure DNA from Inhibitor Rich Samples
+
+
+
+
+Figure 1. The ZymoBIOMICS™ 96 MagBead DNA Kit provides inhibitor-free DNA even when
+challenged with extremely inhibitor rich samples. Real-time PCR was used to evaluate eluates recovered
+using the ZymoBIOMICS™ 96 MagBead DNA Kit, or Supplier A. Reaction volumes consisted of either
+10% or 35% of the eluate from each kit to detect the presence of PCR inhibitors. Each reaction contained
+10 ng of Brettanomyces DNA. Delayed amplification indicates PCR inhibition from inefficient inhibitor
+removal. N=8.
+
+
+
+
+                                          Superior Yields
+                   ZymoBIOMICS™                                         Supplier A
+
+
+
+
+  Figure 2. The ZymoBIOMICS™ 96 Magbead DNA Kit provides superior yields when compared to
+  Suppliers M, P, and Q. 80 mg of feces was processed using each kit according to the manufactures’
+  recommended protocol. DNA was eluted using 100 µl ZymoBIOMICS™ DNase/RNase Free Water.
+  6 µl of each sample was analyzed in a 1.0% (w/v) agarose/ethidium bromide gel. Samples were
+  processed in triplicate. L is a 1Kb ladder.
+
+
+
+
+Zymo Research offers a full suite of ZymoBIOMICS™ Services for reliable, accurate microbial and metagenomic
+analyses. Services include: Microbial Composition Profiling, Novel Microbe Identification, and Customizable
+Bioinformatics. For details visit us at: http://www.zymoresearch.com/services/metagenomics
+Or contact us at: services@zymoresearch.com
+
+
+
+                                                    4
+                       Reliability and Consistency
+
+                A) Consistent Yields Across Multiple Samples
+
+
+
+
+             B) No Cross Contamination Between Sample Wells
+
+
+
+
+Figure 3
+A). The ZymoBIOMICS™ 96 MagBead DNA Kit provides consistent yields when DNA is purified from
+20 mg of human fecal sample using an automated liquid handling system. Consistent and replicable
+yields were observed when DNA isolation was performed on an automated liquid handler. Samples were
+evaluated using spectrophotometric analysis in technical duplicates.
+B). Coupling the ZymoBIOMICS™ 96 MagBead DNA Kit with a liquid handler, isolated DNA is free
+from cross contamination when purified across a standard 96-well plate. Plate was setup with
+alternating rows of ZymoBIOMICS™ Microbial Community Standards1, HeLa cells, and S. Cerevisiae
+cells, and DNA was purified simultaneously from these samples on a liquid handling platform. Samples
+were evaluated using quantitative PCR with primer sets targeted at the bacterial 16S gene, the human
+LINE gene, and the fungal ITS gene. PCR was performed in technical duplicates.
+
+
+
+                                              5
+   A) Bias Free Microbial DNA Extraction Using ZymoBIOMICS™ DNA Kit
+    Validated with the ZymoBIOMICS™ Microbial Community Standard
+
+
+
+
+   B) Bias Free Microbial DNA Extraction Using ZymoBIOMICS™ DNA Kit
+                            From Human Stool
+
+
+
+
+Figure 4.
+A) The ZymoBIOMICS™ DNA Kit provides unbiased representation of the organisms extracted
+from the ZymoBIOMICS™ Microbial Community Standard. DNA was extracted from ZymoBIOMICS™
+Microbial Community Standard using four different DNA extraction methods (ZymoBIOMICS™ DNA Kit,
+Human Microbiome Project Protocol, Supplier Q1, and Supplier Q2) and analyzed using 16S rRNA gene
+sequencing. 16S rRNA genes were amplified with primers targeting v3-4 region and the amplicons were
+sequenced on Illumina® MiSeq™ (2 x 250 bp). Overlapping paired-end reads were assembled into
+complete amplicon sequences. The composition profile was determined based on sequence counts after
+mapping amplicon sequences to the known 16S rRNA genes of the eight different bacterial species.
+B) The ZymoBIOMICS™ DNA Kit reliably isolates DNA from even the toughest to lyse Gram
+positive organisms, enabling unbiased analyses of microbial community compositions. There is a
+significant increase in yield and Gram-positive bacterial abundance when DNA was isolated using the
+ZymoBIOMICS™ DNA Kit. Correlated with the results in Figure 3A, it can be concluded that unbiased
+DNA isolation was achieved. DNA was extracted from 200 µl of human feces suspended in PBS (10 %
+m/v) using four different DNA extraction methods (ZymoBIOMICS™ DNA Kit, Human Microbiome Project
+Protocol, Supplier Q1, and Supplier Q2) and analyzed using 16S rRNA gene sequencing. 16S rRNA genes
+were amplified with primers targeting v3-4 region and the amplicons were sequenced on Illumina®
+MiSeq™ (2 x 250 bp). Overlapping paired-end reads were assembled into complete amplicon sequences.
+Amplicon sequences were profiled with Qiime using Greengenes 16S rRNA gene database (gg_13_8).
+
+                                                6
+Protocol
+Sample Lysis
+For all mixing steps: pipette mix or shake at max speed.
+Note: Shaking speed will depend on sample volume and plate well
+depth. Use of shaker plates will require user optimization.
+
+1.      Add sample to the BashingBead™ Lysis Module using the table
+        below:
+        a. If using ZymoBIOMICS™ BashingBead™ Lysis Rack (0.1 & 0.5 mm,
+           D6002-96-7), add 550 µl ZymoBIOMICS™ Lysis Solution.
+        b. If using ZR BashingBead™ Lysis Tubes (0.1 & 0.5 mm), add 750 µl
+           ZymoBIOMICS™ Lysis Solution.
+
+Note: DNA/RNA Shield has been provided to optionally replace ZymoBIOMICS
+Lysis Solution to improve DNA integrity.
+
+                 Sample Type                                            Maximum Input
+                      Feces                                                   100 mg
+                        Soil                                                  100 mg
+        Liquid Samples1 and Swab
+                                                                               250 µl
+                Collections2
+                                                                    5-20 mg (wet weight)
+        Cells (Suspended in PBS)
+                                                      (2 x 108 bacterial and 2 x 107 yeast cells)
+     Samples in DNA/RNA Shield™,3                                             ≤ 800 µl
+Note: For samples stored and lysed in DNA/RNA Shield™ Lysis Tubes, do not
+add ZymoBIOMICS™ Lysis Solution and proceed to Step 2.
+
+2. When using the ZymoBIOMICS™ BashingBead™ Lysis Rack (0.1 &
+   0.5 mm, S6002-96-7), it is recommended to seal the rack with the
+   provided sealing foils. Seal the foils to the rack using a heat sealing
+   device set at 180°C for 4 seconds. Refer to Appendix E for more
+   detailed guidance.
+
+Note: If sealing foils cannot be used, remove the lysis rack cover before bead
+beating, and secure mounting clamp directly to the lysis rack base and strip caps.
+
+1
+  For water samples, filter using desired filter (not provided). Cut the filter into small pieces and place into ZR
+  BashingBead™ Lysis Tubes (0.1 & 0.5 mm).
+2
+  Swabs can also be cut or broken and placed directly in bead beating tube. For more information on processing
+  swab samples, see Appendix B.
+3
+  See Appendix A for additional information on sample collection in DNA/RNA Shield™.
+
+
+                                                        7
+3. Secure in a bead beater fitted with the appropriate holder assembly
+   for your bead beating module and process using optimized bead
+   beating conditions (speed and time) for your device (Appendix D).4
+        Optional Stopping Point: Following Step 3 is the best stopping point if breaking up the
+        work is needed. Samples post lysis can be stored for several hours at room temperature
+        or can be stored at – 80 °C for long term storage.
+
+
+4. Centrifuge the BashingBead™ Lysis Module:
+           a. If using ZymoBIOMICS™ BashingBead™ Lysis Rack (0.1 & 0.5 mm),
+              centrifuge at ≥ 4,000 x g for 5 minutes.
+           b. If using ZR BashingBead™ Lysis Tubes (0.1 & 0.5 mm), centrifuge at
+              ≥ 10,000 x g for 1 minute.
+
+5. Transfer up to 200 µl of the deep-well block (not provided). Add
+        600 µl ZymoBIOMICS™ MagBinding Buffer.
+
+        Note: For samples with excessive amounts of solid particulate, centrifuge at
+        4,000 x g for 5 minutes to reduce clogging.
+
+6. Dispense 25 µl of ZymoBIOMICS™ MagBinding Beads to each
+   well. Mix well by pipette or shaker plate for 10 minutes.
+
+        Note: ZymoBIOMICS MagBinding Beads settle quickly, ensure that beads
+        are kept in suspension while dispensing.
+
+7. Transfer the 96-well block to a magnetic stand until beads pellet,
+   then aspirate and discard the supernatant. Remove the 96-Well
+   Block from the magnetic stand.
+
+8. Dispense 500 µl of ZymoBIOMICS™ MagBinding Buffer and mix
+   well by pipette or shaker plate for 1 minute.
+
+9. Transfer the 96-well block to a magnetic stand until beads pellet,
+   then aspirate and discard the supernatant. Remove the 96-Well
+   Block from the magnetic stand.
+
+10. Dispense 500 µl of ZymoBIOMICS™ MagWash 1 and mix well by
+    pipette or shaker plate for 1 minute.
+
+11. Transfer the 96-well block to a magnetic stand until beads pellet,
+    then aspirate and discard the supernatant. Remove the 96-Well
+    Block from the magnetic stand.
+
+
+4
+    For optimal lysis efficiency and unbiased profiling all bead beater devices beyond those validated by Zymo
+    Research should be calibrated using the ZymoBIOMICS™ Microbial Community Standard. See Appendix C.
+
+                                                       8
+12. Dispense 900 µl ZymoBIOMICS™ MagWash 2 and mix well by
+    pipette or shaker plate for 1 minute.
+
+          Note: If high speed shaker plates are used, dispense 500 µl
+          ZymoBIOMICS™ MagWash 2.
+
+13. Transfer the deep-well block to a magnetic stand until beads pellet,
+    then aspirate and discard the supernatant. Remove the 96-Well Block
+    from the magnetic stand.
+
+14. Repeat the wash (Steps 12-13).
+
+15. Transfer the 96-Well Block onto a heating element (55°C) until beads
+    dry (approximately 10 minutes). If no heating element is available, air
+    dry for approximately 20-30 minutes.
+
+16. Dispense 50 μl of ZymoBIOMICS™ DNase/RNase Free Water to
+    each well and re-suspend beads. Mix the beads well for 10 minutes
+    and then transfer the plate onto the magnetic stand for 2-3 minutes
+    until the beads pellet5.
+
+17. Transfer the supernatant (containing the eluted DNA) to a clean
+    elution plate or tube6.
+
+        The eluted DNA can be used immediately for molecular based
+        applications or stored ≤ -20ºC for future use.
+
+
+
+
+5
+    In some cases a brown-colored pellet may form at the bottom of the tube after centrifugation. Avoid this pellet
+    when collecting the eluted DNA.
+6
+    If fungi or bacterial cultures were processed; the DNA is now suitable for all downstream applications.
+
+                                                          9
+Appendices
+Appendix A
+
+Sample Collection
+
+For high quality reproducible microbiomics data, DNA/RNA Shield™ is
+recommended for sample collection to avoid bias or erroneous results due
+to compositional changes from nucleic acid degradation or microbial
+growth. DNA/RNA Shield™ provides an unbiased molecular snapshot of
+the sample at the time of collection by preserving nucleic acids at ambient
+temperature and inactivating organisms including infectious agents.
+Samples can be stored and transported easily and safely with DNA/RNA
+Shield™ and is ideal for applications such as PCR, 16S rRNA gene
+sequencing, and shotgun metagenomic sequencing. DNA/RNA Shield™
+can preserve nucleic acids in nearly any sample including feces, soil,
+saliva, blood, and tissues.
+
+DNA/RNA Shield™ - Lysis Tube (Microbe) – Simply add sample, seal,
+and store at ambient temperature. The Lysis Tube is immediately ready
+for bead beating, thereby streamlining the collection to extraction
+transition. (Cat. No. R1103)
+
+DNA/RNA Shield™ – Fecal Collection Tube – The collection device is
+specifically designed for easy collection and stabilization of feces. Includes
+a scoop built for collecting 1 gram of feces (or any other sample such as
+saliva or soil). (Cat. No. R1101)
+
+DNA/RNA Shield™ – Swab Collection Tube – Easy collection of
+biological samples; swab has breakable tip to allow for easy sample
+collection and removes the need to dispose of a potentially biohazardous
+swab material. (Cat. No. R1106 & R1107).
+
+
+
+
+                                     10
+A) DNA/RNA Shield™ Preserves Nucleic
+Acids at Room Temperature
+                                           Figure 5.
+                                           A) Nucleic acids in stool are
+                                           effectively stabilized in DNA/RNA
+                                           Shield™ at room temperature.
+                                           Graph shows spike-in DNA and RNA
+                                           controls from stool purified at the
+                                           indicated time points and analyzed
+                                           by (RT)qPCR. Controls: HSV-1 and
+                                           HIV         (AcroMetrix™,       Life
+                                           Technologies).
+
+                                           B) Microbial composition of stool
+                                           is unchanged after one month at
+                                           ambient       temperature       with
+                                           DNA/RNA Shield™. Stool samples
+                                           suspended in DNA/RNA Shield™
+B) DNA/RNA Shield™ Preserves Microbial     and stored at room temperature
+                                           were compared to stool without
+Composition at Room Temperature            preservative for one month. They
+                                           were sampled at the indicated time
+                                           points    and     processed     with
+                                           ZymoBIOMICS™ DNA Kit. The
+                                           extracted DNA was then subjected to
+                                           microbial composition profiling via
+                                           16S     rRNA       gene     targeted
+                                           sequencing. Graphs show both
+                                           phylum composition (left) and genus
+                                           composition (right). Samples stored
+                                           with DNA/RNA Shield™ had a
+                                           constant microbial composition while
+                                           the samples stored without shifted
+                                           dramatically.
+
+                                           C) Viruses, bacteria and yeast are
+                                           effectively      inactivated       by
+                                           DNA/RNA        Shield™.     Samples
+                                           containing the infectious agent
+                                           (viruses, bacteria, yeast) were
+                                           treated with DNA/RNA Shield™ or
+                                           mock (PBS) treated for 5 minutes.
+                                           Titer (PFU) was subsequently
+C) DNA/RNA Shield™ Inactivates Pathogens   determined by plaque assay.
+for  Safe   Transport     and    Storage   Validated by: Influenza A - D. Poole
+                                           and Prof. A. Mehle, Department of
+                                           Medical        Microbiology       and
+                                           Immunology,        University       of
+                                           Wisconsin, Madison; Ebola (Kikwit) -
+                                           L. Avena and Dr. A. Griffiths,
+                                           Department      of   Virology     and
+                                           Immunology, Texas Biomedical
+                                           Research Institute; HSV-1/2 - H. Oh,
+                                           F. Diaz and Prof. D. Knipe, Virology
+                                           Program, Harvard Medical School;
+                                           E. coli, L. fermentum, B. subtilis, S.
+                                           cerevisiae – Zymo Research
+                                           Corporation).
+
+
+
+
+                                11
+Appendix B
+
+Application Notes
+
+DNA/RNA Shield™ Lysis Tubes (Microbe) (Cat. No. R1103)
+
+1. Collect sample directly into the DNA/RNA Shield™ Lysis Tube
+   (Microbe).
+2. Directly proceed to Step 2 of the protocol (page 7) and bead beat in
+   the DNA/RNA Shield™ Lysis Tube (Microbe) according to provided
+   recommendations.
+3. Proceed with the remaining protocol as written.
+
+DNA Viruses
+
+For unbiased metagenomics analysis of viruses, incorporating a
+Proteinase K digestion prior to bead beating is recommended.
+
+1. Following Step 3 (page 8) add 5% (v/v) of Proteinase K (Cat. No.
+   D3001-2-5) to the lysate within the ZR BashingBead™ Lysis Tubes
+   (0.1 & 0.5 mm) and incubate for 30 minutes at 55˚C.
+2. Proceed to Step 4 (page 8) and continue with the remaining protocol
+   as written.
+
+Cheese and Protein Rich Biofluids (e.g. Milk, Sputum, Saliva, Spinal
+Fluid, Blood, and Serum)
+
+1. Add ≤ 0.4 g of cheese or ≤ 200 µl of biofluid to the ZR BashingBead™
+   Lysis Tubes (0.1 & 0.5 mm). Add 750 µl of ZymoBIOMICS™ Lysis
+   Solution.
+2. Add 20 µl of Proteinase K (20 µg/µl) (cat. no. D3001-2-5) to the
+   ZymoBIOMICS™ Lysis Tubes (0.1 & 0.5 mm) and incubate for 30
+   minutes at 55˚C.
+3. Continue to Step 2 (page 7) and proceed with the protocol as written.
+
+Plant Tissue (Leaves and other plant material)
+
+Plant tissues such as leaves and roots contain DNA sources within the
+host tissue that can overwhelm 16S rRNA gene targeted sequencing (from
+both mitochondria & chloroplast). Microbes must be removed from the
+plant surface to exclude host tissue from the bead beating process.
+
+
+
+
+                                   12
+(A) Plant tissue – Centrifugation of cells
+ 1. Suspend plant tissue in isotonic solution (e.g. PBS) and gently
+     sonicate or vortex briefly.
+ 2. Remove plant tissue from solution and centrifuge at 15,000 x g for 10
+     minutes to pellet the cells.
+ 3. Without disturbing the pellet, slowly decant or pipette out the
+     supernatant, leaving behind 100 – 300 µl of pellet.
+ 4. Add ZymoBIOMICS™ Lysis Solution to the cells to a final volume
+     of 1 ml and mix to resuspend. Transfer the mixture to the ZR
+     BashingBead™ Lysis Tubes (0.1 & 0.5 mm) and proceed to Step
+     2 (page 6).
+
+(B) Plant tissue – Filtration of cells
+ 1. Place plant tissue in a submerging volume of PBS inside of a conical
+     tube and gently sonicate or vortex briefly. Remove plant tissue from
+     liquid volume.
+ 2. Filter liquid using a 0.22 µm filter (not provided).
+ 3. Cut the filter and place directly into the ZR BashingBead™ Lysis
+     Tubes (0.1 & 0.5 mm) and proceed to Step 1 (page 7).
+
+(C) Plant root – Lysis of surface microbes
+ 1. Cut root into small pieces and place directly into ZR BashingBead™
+     Lysis Tubes (0.1 & 0.5 mm) with 750 µl of ZymoBIOMICS™ Lysis
+     Buffer.
+ 2. Lysis should be performed with a lower speed bead beating device
+     (e.g. vortex adapter for 20 minutes) to avoid the host tissue
+     contamination.
+ 3. Continue to Step 4 (page 8) and proceed with the remaining protocol
+     as written.
+
+Water/Air Samples
+
+1. Filter samples using desired filter (not provided) prior to Step 1 (page
+   7).
+2. Cut the filter into small pieces and place them inside the ZR
+   BashingBead™ Lysis Tubes (0.1 & 0.5 mm) and add 750 µl of
+   ZymoBIOMICS Lysis Solution.
+3. Continue to Step 2 (page 7) and proceed with the remaining protocol
+   as written.
+
+
+
+
+                                    13
+Lytic Enzymes
+
+Lytic enzymes, such as Lysozyme, Lysostaphin, MetaPolyzyme, etc. can
+be used with this kit using the following:
+
+(A) Enzymatic lysis followed by bead beating:
+ 1.   Perform enzymatic digestion under manufacturer’s recommended conditions
+      (temperature/time/concentration).
+
+      Note: If sample is stored in DNA/RNA Shield, perform the following:
+
+      a.   Centrifuge sample at ≥ 10,000 x g for 1 minute.
+      b.   Transfer supernatant to a ZR BashingBead Lysis Tube (0.1 & 0.5 mm), to be
+           used in Step 2, below.
+      c.   Re-suspend pellet in a buffer suitable for enzymatic treatment (ex. PBS or other
+           isotonic solution).
+
+ 2.   Transfer the digestion mixture to a ZR BashingBead™ Lysis Tube (0.1 &
+      0.5 mm).
+ 3.   Add 750 µl ZymoBIOMICS™ Lysis Solution.
+
+      Note: For samples in DNA/RNA Shield, raise to a final volume of 1 ml with DNA/RNA
+      Shield.
+
+ 4.   Proceed to Step 2 (page 7) and continue with the remaining protocol as
+      written.
+
+(B) Enzymatic lysis only (no bead beating):
+ 1.   Perform enzymatic digestion under manufacturer’s recommended conditions
+      (temperature/time/concentration).
+
+      Note: If sample is stored in DNA/RNA Shield, perform the following:
+
+      a.   Centrifuge sample at ≥ 10,000 x g for 1 minute.
+      b.   Transfer supernatant to a clean microcentrifuge tube, to be used in Step 2.
+      c.   Re-suspend pellet in a buffer suitable for enzymatic treatment (ex. PBS or other
+           isotonic solution).
+
+ 2.   Raise the volume of sample to 400 µl with ZymoBIOMICS™ Lysis Solution.
+ 3.   Continue to Step 5 (page 8) and proceed with the remaining proceed as
+      written.
+
+
+
+
+                                            14
+Hair, Feather, and Nail Samples:
+
+1. To ≤ 25 mg sample, add 90 µl Water, 90 µl Solid Tissue Buffer (Blue)
+   (Cat. No. D4068-2-6), 10 µl 1M DTT, and 10 µl Proteinase K (Cat.
+   No. D3001-2-5) in a microcentrifuge tube.
+2. Mix thoroughly or vortex 10-15 seconds and then incubate the tube at
+   55ºC overnight.
+3. Transfer lysate to a ZR BashingBead™ Lysis Tube (0.1 & 0.5 mm)
+   and then add 750 µl ZymoBIOMICS™ Lysis Solution.
+4. Continue to Step 2 (page 7) and proceed with the remaining protocol
+   as written.
+
+Tissue and Insect Samples
+
+Tissue and Insect samples can be processed three different ways,
+depending on the sample type and the equipment available. The
+recommendations are listed next to the options below:
+
+(A) Proteinase K - Tissue
+ 1.   Add up to 15 mg of tissue to a 1.5 ml microcentrifuge tube, then add a
+      solution of 95 µl water, 95 µl Solid Tissue Buffer (Blue) (Cat. No. D4068-2-
+      6) and 10 µl Proteinase K (Cat. No. D3001-2-5). Incubate for at least 1 hour
+      at 55° C or until tissue clarifies (samples can be incubated overnight without
+      affecting DNA quality).
+ 2.   Transfer digestion to a ZR BashingBead™ Lysis Tube (0.1 & 0.5 mm) and
+      add 750 µl of ZymoBIOMICS™ Lysis Solution.
+ 3.   Proceed to Step 2 (page 7) and continue with the protocol as written.
+
+(B) Bead beating - Tissue and Insect
+ 1.   Add up to 15 mg of tissue/insect sample in a ZR BashingBead™ Lysis Tube
+      (2.0 mm) (Cat. No. S6003-50) with 750 µl of ZymoBIOMICS™ Lysis
+      Solution.
+ 2.   Secure in a bead beater fitted with a 2 ml tube holder assembly and process
+      at maximum speed for ≥ 5 minutes.
+
+      Note: Processing time will vary based on sample input and bead beater. Times
+      may be as little as 5 minutes when using high-speed cell disrupters (FastPrep® -
+      24) or as long as 20 minutes when using lower speeds (e.g., Vortex Genie®).
+
+ 3.   Transfer the entire lysate to the ZR BashingBead™ Lysis Tube (0.1 & 0.5
+      mm), proceed to Step 2 (page 7), and continue with protocol as written.
+
+(C) Mortar & Pestle - Tissue and Insect
+ 1. Homogenize up to 15 mg tissue/insect sample with a mortar and pestle while
+    submersed in liquid nitrogen.
+ 2. Transfer the entire sample into the ZR BashingBead™ Lysis Tube (0.1 &
+    0.5 mm) and add 750 µl of ZymoBIOMICS™ Lysis Solution.
+ 3. Proceed to Step 2 (page 7) and continue with the protocol as written.
+
+                                           15
+Samples Collected with Swabs
+
+(A) Directly process swab
+ 1.   Directly break swab at breakpoint or cut the swab into a ZR BashingBead
+      Lysis Tube (0.1 & 0.5 mm).
+ 2.   Proceed to Step 1 (page 6) and continue with the protocol as written.
+
+(B) Indirectly process swab
+ 1.   Vortex the swab in the ZR BashingBead™ Lysis Tube (0.1 & 0.5 mm) with
+      750 µl of ZymoBIOMICS™ Lysis Solution for 30 seconds to transfer the
+      microbes into solution.
+ 2.   Remove the swab and proceed to bead beating in Step 2 (page 7).
+
+                                               Figure 6. Phylum composition of a
+                                               simulated microbial community when
+                                               bead beating was performed with and
+                                               without the presence of a Puritan
+                                               HydraFlock® sterile flocked collection
+                                               device placed in a ZR BashingBead
+                                               Lysis Tube and processed at
+                                               maximum speed (6.5 m/s) for 5
+                                               minutes. The extracted DNA was then
+                                               subjected to microbial composition
+                                               profiling via 16S rRNA gene targeted
+                                               sequencing.       Experiment       was
+                                               performed in technical duplicates.
+
+
+
+
+Bacterial Endospore Lysis
+
+ZymoBIOMICS DNA Kit is capable of effectively lysing bacterial
+endospores, and also achieves higher yield when compared to
+competition.
+
+
+                                               Figure 7. DNA Extractions were
+                                               performed using the ZymoBIOMICS®
+                                               DNA Kit and DNeasy PowerSoil with 6
+                                               x 108 B. subtilis CFU. DNeasy
+                                               PowerSoil recovered 0.62 ng/µl DNA,
+                                               while the ZymoBIOMICS® DNA Kit was
+                                               capable of recovering 9.67 ng/µl in a
+                                               50 µl elution volume. Extractions were
+                                               performed in triplicate and quantified
+                                               via Qubit.
+
+
+
+
+                                     16
+Urine
+
+(A) Pelleting cells from fresh/frozen urine
+ 1.   Pellet the bacterial cells by centrifuging the urine at 15,000 x g for 10 minutes.
+ 2.   Without disturbing the pellet, slowly decant or pipette out the supernatant,
+      leaving behind 100 – 400 µl of pellet.
+ 3.   Add ZymoBIOMICS™ Lysis Solution to a final volume of 800 µl and then
+      transfer the mixture to a ZR BashingBead™ Lysis Tube (0.1 & 0.5 mm).
+      Proceed to Step 2 (page 7) and continue with the protocol as written.
+
+(B) Pelleting cells from stabilized urine
+ 1.   Add 70 µl Urine Conditioning Buffer (Cat. No. D3061-1-140) for every 1 ml
+      of urine and mix well by vortexing.
+
+      Note: Urine stabilized by the Urine Conditioning Buffer can be stored for up to 1 month
+      at ambient temperature. When samples are ready to be processed, mix well by
+      vortexing, and proceed to Step 2.
+
+ 2.   Centrifuge at 3,000 x g for 15 minutes.
+ 3.   Without disturbing the pellet, slowly decant or pipette out the supernatant,
+      leaving behind 100 – 400 µl of pellet.
+ 4.   Add ZymoBIOMICS™ Lysis Solution to a final volume of 800 µl and then
+      transfer the mixture to a ZR BashingBead™ Lysis Tube (0.1 & 0.5 mm).
+      Proceed to Step 2 (page 7) and continue with the protocol as written.
+
+
+
+
+ Figure 8. Phylum composition of urine preserved in Urine Conditioning Buffer™ (UCB™), which
+ preserves the microbial composition of urine with simulated stool contamination for a month at room
+ temperature. Urine with UCB™ added (Zymo Research, D3061-1-160) was stored at room
+ temperature and analyzed over a month period. At the indicated time points (0 Days, 2 weeks, and 1
+ month), DNA was extracted using the ZymoBIOMICS™ DNA Kit. The extracted DNA was then
+ subjected to microbial composition profiling via 16S rRNA gene targeted sequencing. Experiment was
+ performed in technical duplicates.
+
+
+
+
+                                                 17
+Appendix C
+
+Standardize Sample Preparation with ZymoBIOMICS™ Microbial
+Community Standards
+
+The ZymoBIOMICS™ Microbial Community Standard (Cat. No. D6300)
+is a mock microbial community of defined and well characterized
+composition making it the perfect control for all microbiome profiling and
+metagenomics analyses.
+
+It is ideal for assessing bias of DNA extraction methods since it contains
+three easy-to-lyse Gram-negative bacteria (e.g. Escherichia coli), five
+tough-to-lyse Gram-positive bacteria (e.g. Listeria monocytogenes), and
+two tough-to-lyse yeasts (e.g. Saccharomyces cerevisiae).
+
+Bead Beating Device Calibration Protocol:
+Zymo Research suggests calibrating bead beating devices with the
+ZymoBIOMICS™ Microbial Community Standard in order to ensure bias
+free microbial extraction. For lysis on the Vortex Genie, we suggest a
+time course ranging from 10-45 minutes with the vortex at maximum
+speed. For high-speed cell disruptors such as the MP FastPrep -24 we
+suggest a time course at maximum speed with a range of 3-10 minutes.
+The resulting DNA should be evaluated by quantifying DNA yield and
+changes in microbial profile at each time point. The bead beating time that
+yields a profile that closely matches the theoretical composition should
+become standard operating procedure for the bead beating device.
+
+ZymoBIOMICS™ Microbial Community DNA Standard (Cat. No.
+D6305) is a mixture of genomic DNA extracted from pure cultures of eight
+bacterial and two fungal strains. Genomic DNA from each culture was
+quantified before mixing. The ZymoBIOMICS™ Microbial Community
+Standard allows for assessment of bias from library preparation,
+sequencing, and bioinformatics analysis.
+
+It serves perfectly as a microbial standard for benchmarking the
+performance of microbiomics or metagenomics analyses, including those
+provided by a 3rd party.
+
+
+
+
+                                    18
+Accurate Composition for Reliable Use to Evaluate Shotgun
+              and 16S rRNA Sequencing
+
+gDNA by Shotgun Sequencing                              16S Counts by 16S Sequencing
+
+
+
+
+Figure 9. Characterization of the microbial composition of the two ZymoBIOMICS ™ standards with
+shotgun metagenomic sequencing (left panel) and 16S rRNA gene targeted sequencing (right panel).
+The measured composition of the two standards agrees with the theoretical/designed composition.
+“DNA Standard” represents ZymoBIOMICS™ Microbial Community DNA Standard (DNA version) and
+“Microbial Standard” represents ZymoBIOMICS™ Microbial Community Standard (cellular version).
+Genomic DNA composition by shotgun sequencing was calculated based on counting the amounts
+of raw reads mapped to each genome. 16S composition by 16S rRNA gene targeted sequencing
+was calculated based on counting the amount of 16S raw reads mapped to each genome.
+
+
+
+
+                                               19
+ A) Use ZymoBIOMICS™ Microbial Standards for assessing GC-Bias in
+    Shotgun Metagenomics
+
+
+
+
+ B) Perfect for tracking PCR Chimera in 16S rRNA Gene Sequencing
+
+
+
+
+Figure 10
+A) Library preparation for shotgun metagenomic sequencing was performed in two different ways: one
+    by supplier I and one by an in-house method. Shotgun sequencing was performed on Illumina®
+    MiSeq™ with paired-end sequencing (2 x 150 bp). Raw reads were mapped to the 10 microbial
+    genomes to evaluate the potential effect of GC content on sequencing coverage. Normalized
+    coverage was calculated by normalization by the average sequencing coverage of each genome.
+B) PCR chimera increases with PCR cycle number in the library preparation process of 16S rRNA gene
+    targeted sequencing. 20 ng ZymoBIOMICS™ Microbial Community Standard was used a template.
+    The PCR reaction was performed with ZymoBIOMICS™ PCR Premix and with primers that target V3-
+    V4 region of 16S rRNA gene. Chimera rate in percentage was determined with Uchime and using the
+    16S rRNA gene of the 8 bacterial strains in the standard as reference PCR.
+
+
+
+
+                                                20
+Appendix D
+Optimized Lysis Protocols for Bead-Beating
+
+The following conditions with different mechanical lysis machines were validated
+with minimum bias using the ZymoBIOMICS™ Microbial Community Standard.
+
+
+
+
+                                      21
+Appendix E
+
+Heat Sealing ZymoBIOMICS™ BashingBead™ Lysis Racks
+
+1. Remove all strip caps and use a Kimwipe to wipe away any residual
+   beads found on the tops of the tubes.
+2. Transfer samples into individual lysis rack tubes according to the
+   sample input guide found in Step 1 of the main protocol (Page 7).
+3. Cover the top of the lysis rack tubes with a Kimwipe and press down
+   gently to remove any residual liquid.1
+4. Place the lysis rack on the sealing device stage.
+5. Center a sealing foil on top of the lysis rack, such that all tubes are
+   covered by the foil with a slight overhang along each edge.
+6. Set heat sealing device to 180°C and allow the device adequate time
+   to reach the target temperature.
+7. Press the sealer down onto the foil for 4 seconds to seal the rack.2
+Note: At no point should a roller (or similar) be used to press down the foil, as it
+can damage the bond between the sealing foil and lysis rack, causing leakage.
+
+8. Allow the sealed lysis rack to cool to room temperature before loading
+   onto a mechanical lysis device.
+Note: Placing a rubber or silicone mat between the sealing foil and mounting clamp
+is recommended to protect the sealing foil from becoming worn or damaged by the
+clamp during mechanical lysis.
+
+9. Proceed with Step 3 of the main protocol (Page 8).
+
+For best results, it is recommended to use a validated heat sealing
+device, such as the Vitl Variable Temperature Sealer (VTS) (V902001),
+found here: https://vitlproducts.com/products/variable-temperature-
+sealer.
+
+
+
+
+1
+    Avoid leaving liquid on the tops of the tubes. Residual liquid may negatively affect subsequent heat sealing.
+2
+    If different sealing foils or devices are used, heat sealing parameters may require user optimization.
+
+
+
+
+                                                          22
+Troubleshooting
+For Technical Assistance, please contact 1-888-882-9682 or E-mail
+tech@zymoresearch.com.
+
+ Problem          Possible Causes and Suggested Solutions
+
+ Background      • Clean workspace, centrifuge, and pipettes with 10%
+ Contamination     bleach to routinely to avoid contamination.
+
+                 • Use of kit in exposed environment without proper
+                   filtration. Check pipettes, pipette tips, microcentrifuge
+                   tubes, workspace, etc. for contamination.
+
+                 • Make sure bags of columns and buffer bottles are
+                   properly sealed for storage. Use of these outside a clean
+                   room or hood can result in contamination.
+
+
+ Low DNA Yield    Lysis Methods
+
+                 • Refer to Appendix D for validated bead beating devices
+                   and parameters.
+                 • Bead beating devices that oscillate in a single dimension
+                   (only vertically or only horizontally) have been observed
+                   to inefficiently lyse very recalcitrant species. Devices that
+                   oscillate three-dimensionally or in a figure-8 motion often
+                   lyse microbes efficiently.
+
+                  Incomplete Debris Removal
+
+                 • For high density samples, ensure lysate is centrifuged
+                   properly to pellet insoluble debris following bead beating.
+                   Ensure that none of the debris is transferred to the Zymo-
+                   Spin™ III-F Filter in the next step.
+
+                  Input
+
+                 • If the lysate does not pass through the column or is
+                   extremely viscous, use less input material. Too much
+                   sample input can cause cellular debris to overload the
+                   column and insufficient flow.
+
+                 • Consult the Sample Input Table on Page 7 for
+                   information on your particular input limit based on
+                   sample.
+
+
+
+
+                                    23
+Low DNA Yield   Binding Step
+(cont.)
+                • Ensure that the ZymoBIOMICS™ DNA Binding Buffer
+                  is completely mixed with lysate before loading onto the
+                  column. Improperly mixed samples can lead to poor
+                  DNA recovery.
+
+                Elution Procedure
+
+                • Ensure the ZymoBIOMICS™ DNase/RNase Free
+                  Water hydrates the matrix for at least 1 minute before
+                  centrifugation.
+
+                • To increase yields, heat the ZymoBIOMICS™
+                  DNase/RNase Free Water to 60ºC before use.
+                  Additionally, users can reload the eluate onto the column
+                  matrix, incubate at room temperature for 3 minutes, and
+                  centrifuge again to increase yield without further dilution.
+
+
+
+
+                                   24
+Ordering Information
+Product Description                                           Catalog No.   Size
+
+
+ZymoBIOMICS™ DNA Microprep Kit                                D4301         50 Preps.
+
+
+
+ZymoBIOMICS™ DNA Microprep Kit (Lysis Matrix Not Included)    D4305         50 Preps.
+
+
+
+ZymoBIOMICS™ DNA Miniprep Kit                                 D4300T        5 Preps.
+
+
+
+ZymoBIOMICS™ DNA Miniprep Kit                                 D4300         50 Preps.
+
+
+
+ZymoBIOMICS™ DNA Miniprep Kit (Lysis Matrix Not Included)     D4304         50 Preps.
+
+
+ZymoBIOMICS™-96 DNA Kit (Includes BashingBead™ Lysis
+                                                              D4303         2 x 96 Preps.
+Rack)
+
+
+ZymoBIOMICS™-96 DNA Kit (Includes BashingBead™ Lysis
+                                                              D4309         2 x 96 Preps.
+Tubes)
+
+
+ZymoBIOMICS™-96 DNA Kit (Lysis Matrix Not Included)           D4307         2 x 96 Preps.
+
+
+ZymoBIOMICS™-96 Magbead DNA Kit (Includes BashingBead™
+                                                              D4302         2 x 96 Preps.
+Lysis Rack)
+
+
+ZymoBIOMICS™-96 Magbead DNA Kit (Includes BashingBead™
+                                                              D4308         2 x 96 Preps.
+Lysis Tubes)
+
+
+ZymoBIOMICS™-96 Magbead DNA Kit (Lysis Matrix Not Included)   D4306         2 x 96 Preps.
+
+
+
+
+                                            25
+Individual Kit Components                             Catalog No.   Amount
+
+ZymoBIOMICS™ MagBinding Buffer                        D4302-2-250   250 ml
+
+ZymoBIOMICS™ MagWash 1                                D4302-3-100   100 ml
+
+ZymoBIOMICS™ MagWash 2                                D4302-4-200   200 ml
+
+ZymoBIOMICS™ DNase/RNase Free Water                   D4302-5-50    50 ml
+
+ZymoBIOMICS™ MagBinding Beads                         D4302-6-12    12 ml
+
+ZymoBIOMICS™ Lysis Solution                           D4300-1-150   150 ml
+
+ZR BashingBead™ Lysis Tubes (0.1 & 0.5 mm)            S6012-50      50 Tubes
+
+ZymoBIOMICS™ BashingBead™ Lysis Rack (0.1 & 0.5 mm)   S6002-96-7    1 x 96
+
+OneStep-96™ PCR Inhibitor Removal Kit                 D6035         2 x 96 Preps.
+
+
+
+
+Sample Collection                                     Catalog No.   Amount
+
+DNA/RNA Shield™ - Lysis Tube (Microbe)                R1103         50 Pack
+
+DNA/RNA Shield™ – Fecal Collection Tube               R1101         10 Pack
+
+                                                      R1106         10 Pack
+DNA/RNA Shield™ – Swab and Collection Tube
+                                                      R1107         50 Pack
+                                                      R1100-50      50 ml
+DNA/RNA Shield™
+                                                      R1100-250     250 ml
+
+
+
+
+                                             26
+Explore Other Microbiome Products
+✓   To collect and transport samples at ambient temperatures:
+
+                      DNA/RNA Shield™ and Collection Devices
+                                                              For sample lysis and stabilization of
+                            1X Reagent #R1100
+                                                                           DNA/RNA
+                                                            Reagent concentrate (2X) for use with
+                          2X Concentrate #R1200
+                                                                      liquids at 1:1 ratio
+                                                              15 mL container (prefilled with 9 mL
+                        Fecal Collection Tube #R1101       DNA/RNA Shield™). Direct collection of
+                                                                    up to 1g or 1 mL stool
+                                                            12 x 80 mm screwcap container filled
+                      Collection Tube w/ Swab #R1106       with 1 mL DNA/RNA Shield™ and sterile
+                                                                 swab for specimen collection
+
+
+
+
+✓   Streamlined workflows with comprehensive bioinformatics analysis and publication-
+    ready plots and figures:
+
+                      ZymoBIOMICS™ Services
+
+                       Targeted Sequencing Service 16S #Q2001              With DNA Extraction
+
+                       Targeted Sequencing Service 16S #Q2012            Without DNA Extraction
+
+                       Targeted Sequencing Service ITS #Q2003              With DNA Extraction
+
+                       Targeted Sequencing Service ITS #Q2003            Without DNA Extraction
+
+
+
+
+✓   Microbial standards and references for profiling quality control, benchmarking, positive
+    controls, and to assess performance of entire microbiomic/metagenomic workflows:
+
+                      ZymoBIOMICS™ Standards and Reference Materials
+
+                          Microbial Community Standard            Contains 8 bacteria and 2 yeasts
+                                     #D6300                      for QC and method optimization
+
+                       Microbial Community DNA Standard         Contains 8 bacteria and 2 yeasts
+                                   #D6305                      DNA for bioinformatics optimization
+
+                                                                 Contains 21 different human gut
+                        Gut Microbiome Standard #D6331
+                                                                strains for method benchmarking
+                                                                    Contains real human fecal
+                         Fecal Reference with TruMatrix™
+                                                                  material for benchmarking and
+                              Technology #D6323
+                                                                  improved data reproducibility
+
+
+
+
+                                             27
+Notes
+
+
+
+
+        28
+ 100% satisfaction guarantee on all Zymo Research products,
+                    or your money back.
+ Zymo Research is committed to simplifying your research with quality products
+ and services. If you are dissatisfied with this product for any reason, please call
+                                 1(888) 882-9682.
+
+
+
+
+Integrity of kit components is guaranteed for up to one year from date of purchase.
+Reagents are routinely tested on a lot-to-lot basis to ensure they provide the highest performance and reliability.
+
+This product is for research use only and should only be used by trained professionals. It is not for use in
+diagnostic procedures. Some reagents included with this kit are irritants. Wear protective gloves and eye
+protection. Follow the safety guidelines and rules enacted by your research institution or facility.
+
+™ Trademarks of Zymo Research Corporation, ® Registered Trademarks of Zymo Research Corporation
+Other trademarks: Vortex Genie® (Scientific Industries, Inc.), FastPrep® (MP Biomedicals), Precellys® (Bertin
+Technologies, Inc.), Illumina® MiSeq™, (Illumina Inc.), AcroMetrix™, Qubit® (Thermo Fisher Scientific Inc.),
+DNeasy® (Qiagen), Hydraflock® (Puritan Medical Products), Bead Ruptor® (Omni International)
+
+
+                                                        29
+

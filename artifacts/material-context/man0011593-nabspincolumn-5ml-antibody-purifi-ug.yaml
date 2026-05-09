@@ -1,0 +1,12 @@
+kind: protocol-foundry-material-context
+protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+generated_at: 2026-05-09T00:39:00.294Z
+sourcePdf: /home/brad/git/computable-foundry/artifacts/pdfs/MAN0011593_NAbSpinColumn_5mL_Antibody_Purifi_UG.pdf
+materials: []
+materialSpecs: []
+vendorProducts: []
+labwareHints: []
+notes:
+  - PDF intake creates protocol text and provenance only.
+    Material/material-spec/vendor-product records must be justified by compiler
+    or architect evidence.

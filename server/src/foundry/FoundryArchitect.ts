@@ -109,23 +109,15 @@ function fixSpecDefaults(paths: Record<string, string | undefined>, evidence: Re
     },
     coderModelProfile: {
       model: 'Qwen/Qwen3.6-35B-A3B-FP8',
-      guidance: 'This coder is capable but works best with narrow ownership, concrete evidence, and one observable behavior change per patch.',
+      guidance: 'Narrow ownership, concrete evidence, one behavior change.',
     },
     doNotTouch: [
       'Do not rewrite the pipeline end to end.',
       'Do not create real material-instance, aliquot, or physical inventory records from vendor PDF evidence.',
-      'Do not add JSON records data; computable-lab data records must be YAML.',
     ],
     sourceArtifacts: paths,
     failureEvidence: evidence,
   };
-}
-
-function stringifyEvidence(value: unknown): string {
-  return JSON.stringify(value, (_key, entry) => {
-    if (typeof entry === 'string' && entry.length > 500) return `${entry.slice(0, 500)}...`;
-    return entry;
-  }).toLowerCase();
 }
 
 function compactEvidence(value: unknown, maxChars: number): string | undefined {
@@ -139,28 +131,224 @@ function compactEvidence(value: unknown, maxChars: number): string | undefined {
   return text.length > maxChars ? `${text.slice(0, maxChars)}\n...[truncated ${text.length - maxChars} chars]` : text;
 }
 
-function compactVerdictForNotes(verdict: ArchitectVerdict): Record<string, unknown> {
+function stringifyEvidence(value: unknown): string {
+  return JSON.stringify(value, (_key, entry) => {
+    if (typeof entry === 'string' && entry.length > 500) return `${entry.slice(0, 500)}...`;
+    return entry;
+  }).toLowerCase();
+}
+
+/* ------------------------------------------------------------------ */
+/*  LLM-DRIVEN ARCHITECT VERDICT (primary)                            */
+/* ------------------------------------------------------------------ */
+
+async function llmArchitectVerdict(
+  options: FoundryArchitectOptions,
+  artifacts: {
+    text: string | undefined;
+    segment: Record<string, unknown>;
+    compiler: Record<string, unknown>;
+    eventGraph: Record<string, unknown>;
+    executionScale: Record<string, unknown>;
+    browserReport: Record<string, unknown>;
+    materialContext: Record<string, unknown>;
+    coderPatch: Record<string, unknown>;
+  },
+): Promise<{ verdict: ArchitectVerdict; source: 'llm' | 'fallback' }> {
+  const baseUrl = options.inference?.baseUrl ?? process.env['PI_ARCHITECT_BASE_URL'] ?? process.env['OPENAI_BASE_URL'];
+  const model = options.inference?.model ?? process.env['PI_ARCHITECT_MODEL'] ?? process.env['OPENAI_MODEL'];
+  if (!baseUrl || !model || options.dryRun) {
+    console.log('[foundry-architect] LLM verdict skipped (no endpoint/dryRun), using deterministic fallback');
+    return { verdict: deterministicVerdict(options, artifacts), source: 'fallback' };
+  }
+
+  const paths = artifactPaths(options);
+  const eventCount = typeof artifacts.compiler['eventCount'] === 'number' ? artifacts.compiler['eventCount'] : 0;
+
+  const client = createInferenceClient({
+    baseUrl,
+    model,
+    temperature: options.inference?.temperature ?? 0.1,
+    timeoutMs: options.inference?.timeoutMs ?? 600_000,
+    maxTokens: options.inference?.maxTokens ?? 4096,
+    enableThinking: options.inference?.enableThinking ?? false,
+  });
+
+  const systemPrompt = [
+    `You are the Protocol Foundry Architect.`,
+    `Your job: analyze WHY the compiler did (or did not) produce a correct event graph from a vendor PDF protocol,`,
+    `then recommend specific patches to fix the compiler/pre-compiler/runtime.`,
+    ``,
+    `PIPELINE:`,
+    `  PDF text -> pre-compiler (extract entities/candidates) -> compiler (lower to event graph) -> execution scale (robot binding)`,
+    ``,
+    `YOU ARE GIVEN:`,
+    `1. PDF TEXT — the vendor protocol as extracted text (what SHOULD be compiled)`,
+    `2. SEGMENTS — pre-compiler output: candidates, entities, labware hints`,
+    `3. COMPILER OUTPUT — diagnostics, gaps, terminal artifacts, outcome, eventCount`,
+    `4. EVENT GRAPH — the event graph that was produced (if any)`,
+    `5. EXECUTION SCALE — robot binding blockers and scaling plan`,
+    `6. MATERIAL CONTEXT — materials catalog/spec evidence`,
+    `7. PRIOR CODER PATCH — prior patch attempt result (if any)`,
+    ``,
+    `YOUR ANALYSIS:`,
+    `- Read the PDF text to understand the biological protocol (steps, reagents, labware, volumes)`,
+    `- Compare against segments: did the pre-compiler extract the right entities?`,
+    `- Compare against compiler output: did the compiler correctly lower extracted entities to events?`,
+    `- Identify the ROOT CAUSE: missing verb? bad wiring? malformed data? missing labware? shape mismatch?`,
+    `- Recommend SPECIFIC fixes with exact files, symbols, and acceptance criteria`,
+    ``,
+    `FIX LANE CATEGORIES:`,
+    `- compiler_event_coverage — the compiler doesn't know a biology verb (add verb lowering)`,
+    `- foundry_runtime_wiring — Foundry harness passes stub/empty deps where the real app uses live data`,
+    `- precompiler_reference_shape — malformed pre-compiler output (shape mismatch, bad refs)`,
+    `- labware_alias_or_resolver — existing labware record exists but compiler can't find it`,
+    `- material_catalog_or_spec — unresolved materials/reagents`,
+    `- extractor_prompt_contract — pre-compiler extracts zero candidates from text that has content`,
+    `- execution_scaling — robot deck/platform binding failures`,
+    `- browser_or_labware_rendering — UI doesn't render the event graph correctly`,
+    ``,
+    `RULES:`,
+    `- Each fix targets ONE observable behavior change`,
+    `- Name EXACT files to change (relative to repo root)`,
+    `- Include concrete acceptance criteria (commands, assertions, or test descriptions)`,
+    `- If an existing labware/material record is not being found, the fix is WIRING, not adding records`,
+    `- Use Qwen/Qwen3.6-27B-FP8 model for complex cross-file patches, 35B-A3B-FP8 for simple ones`,
+    `- Output ONLY valid JSON (no markdown, no prose outside the JSON)`,
+  ].join('\n');
+
+  const userContent = [
+    `Protocol: ${options.protocolId}`,
+    `Variant: ${options.variant}`,
+    ``,
+    `=== PDF TEXT ===`,
+    artifacts.text || '(none)',
+    ``,
+    `=== PRE-COMPILER SEGMENTS ===`,
+    compactEvidence(artifacts.segment, 8_000) || '(none)',
+    ``,
+    `=== COMPILER OUTPUT ===`,
+    compactEvidence(artifacts.compiler, 6_000) || '(none)',
+    ``,
+    `=== EVENT GRAPH ===`,
+    compactEvidence(artifacts.eventGraph, 4_000) || '(none)',
+    ``,
+    `=== EXECUTION SCALE ===`,
+    compactEvidence(artifacts.executionScale, 2_000) || '(none)',
+    ``,
+    `=== MATERIAL CONTEXT ===`,
+    compactEvidence(artifacts.materialContext, 3_000) || '(none)',
+    ``,
+    `=== PRIOR CODER PATCH ===`,
+    compactEvidence(artifacts.coderPatch, 2_000) || '(none)',
+  ].join('\n');
+
+  try {
+    const response = await completeWithCodebaseTools({
+      client,
+      ...(options.repoRoot ? { repoRoot: options.repoRoot } : {}),
+      ...(options.repoRoot ? {
+        browserContext: {
+          artifactRoot: options.artifactRoot,
+          ...(options.workbenchRoot ? { workbenchRoot: options.workbenchRoot } : {}),
+          protocolId: options.protocolId,
+          variant: options.variant,
+          ...(options.appBase ? { appBase: options.appBase } : {}),
+          ...(options.apiBase ? { apiBase: options.apiBase } : {}),
+        },
+      } : {}),
+      maxToolRounds: 5,
+      request: {
+        model,
+        temperature: 0.1,
+        max_tokens: 4096,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userContent },
+        ],
+      },
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content || typeof content !== 'string' || !content.trim()) {
+      throw new Error('LLM returned empty response');
+    }
+
+    // Extract JSON from response
+    const jsonStr = content.replace(/^```(?:json)?\s*|^\s*|\s*```$/g, '').trim();
+    const parsed = JSON.parse(jsonStr);
+    const verdict = normalizeLlmVerdict(options, paths, parsed, eventCount);
+    console.log(`[foundry-architect] LLM verdict: ${verdict.recommendedFixes.length} fixes, ${verdict.failureClasses.length} failure classes`);
+    return { verdict, source: 'llm' };
+  } catch (err) {
+    console.log(`[foundry-architect] LLM verdict failed: ${err instanceof Error ? err.message : String(err)}, using deterministic fallback`);
+    return { verdict: deterministicVerdict(options, artifacts), source: 'fallback' };
+  }
+}
+
+function normalizeLlmVerdict(
+  options: FoundryArchitectOptions,
+  paths: Record<string, string | undefined>,
+  parsed: Record<string, unknown>,
+  eventCount: number,
+): ArchitectVerdict {
+  const evidence = { eventCount, outcome: parsed.outcome };
+
+  const recommendedFixes: ArchitectVerdict['recommendedFixes'] = (Array.isArray(parsed.recommendedFixes) ? parsed.recommendedFixes : [])
+    .map((fix: Record<string, unknown>) => ({
+      id: String(fix.id ?? 'unknown-fix'),
+      class: String(fix.class ?? 'general'),
+      title: String(fix.title ?? 'Unspecified fix'),
+      rationale: String(fix.rationale ?? ''),
+      ownedFiles: Array.isArray(fix.ownedFiles) ? fix.ownedFiles.filter((f): f is string => typeof f === 'string') : [],
+      acceptance: Array.isArray(fix.acceptance) ? fix.acceptance.filter((a): a is string => typeof a === 'string') : [],
+      contextHints: Array.isArray(fix.contextHints) ? fix.contextHints.filter((h): h is string => typeof h === 'string') : undefined,
+      implementationBudget: typeof fix.implementationBudget === 'object' && fix.implementationBudget !== null ? {
+        targetChangedFiles: typeof fix.implementationBudget['targetChangedFiles'] === 'number' ? (fix.implementationBudget as Record<string, number>)['targetChangedFiles'] : 1,
+        maxChangedFiles: typeof fix.implementationBudget['maxChangedFiles'] === 'number' ? (fix.implementationBudget as Record<string, number>)['maxChangedFiles'] : 3,
+        targetChangedLines: typeof fix.implementationBudget['targetChangedLines'] === 'number' ? (fix.implementationBudget as Record<string, number>)['targetChangedLines'] : 80,
+        maxChangedLines: typeof fix.implementationBudget['maxChangedLines'] === 'number' ? (fix.implementationBudget as Record<string, number>)['maxChangedLines'] : 220,
+        requireFocusedFixture: typeof fix.implementationBudget['requireFocusedFixture'] === 'boolean' ? (fix.implementationBudget as Record<string, unknown>)['requireFocusedFixture'] as boolean : true,
+      } : undefined,
+      coderModelProfile: typeof fix.coderModelProfile === 'object' && fix.coderModelProfile !== null ? {
+        model: String((fix.coderModelProfile as Record<string, unknown>)['model'] ?? 'Qwen/Qwen3.6-35B-A3B-FP8'),
+        guidance: String((fix.coderModelProfile as Record<string, unknown>)['guidance'] ?? 'Narrow ownership, concrete evidence, one behavior change.'),
+      } : undefined,
+      doNotTouch: Array.isArray(fix.doNotTouch) ? fix.doNotTouch.filter((d): d is string => typeof d === 'string') : undefined,
+      sourceArtifacts: paths,
+      failureEvidence: evidence,
+    }));
+
+  const qualityScore = Math.max(0, Math.min(1,
+    typeof parsed.qualityScore === 'number' ? parsed.qualityScore :
+    0.25 + (eventCount > 0 ? 0.25 : 0),
+  ));
+
   return {
-    protocolId: verdict.protocolId,
-    variant: verdict.variant,
-    accepted: verdict.accepted,
-    qualityScore: verdict.qualityScore,
-    coverageEstimate: verdict.coverageEstimate,
-    failureClasses: verdict.failureClasses,
-    badScalingAssumptions: verdict.badScalingAssumptions,
-    recommendedFixes: verdict.recommendedFixes.map((fix) => ({
-      id: fix.id,
-      class: fix.class,
-      title: fix.title,
-      rationale: fix.rationale,
-      ownedFiles: fix.ownedFiles,
-      acceptance: fix.acceptance.slice(0, 4),
-      contextHints: fix.contextHints?.slice(0, 6) ?? [],
-      failureEvidence: fix.failureEvidence,
-    })),
-    sourceArtifacts: verdict.sourceArtifacts,
+    kind: 'protocol-foundry-architect-verdict',
+    protocolId: options.protocolId,
+    variant: options.variant,
+    generated_at: nowIso(),
+    accepted: Array.isArray(parsed.recommendedFixes) && parsed.recommendedFixes.length === 0,
+    qualityScore,
+    coverageEstimate: typeof parsed.coverageEstimate === 'number' ? parsed.coverageEstimate :
+      eventCount > 0 ? Math.max(0.1, Math.min(1, eventCount / 20)) : 0,
+    failureClasses: Array.isArray(parsed.failureClasses) ? parsed.failureClasses.filter((f): f is string => typeof f === 'string') : [],
+    missingVerbs: Array.isArray(parsed.missingVerbs) ? parsed.missingVerbs.filter((v): v is string => typeof v === 'string') : [],
+    missingLabware: Array.isArray(parsed.missingLabware) ? parsed.missingLabware.filter((l): l is string => typeof l === 'string') : [],
+    missingMaterials: Array.isArray(parsed.missingMaterials) ? parsed.missingMaterials.filter((m): m is string => typeof m === 'string') : [],
+    badEvents: Array.isArray(parsed.badEvents) ? parsed.badEvents.filter((b): b is string => typeof b === 'string') : [],
+    badScalingAssumptions: Array.isArray(parsed.badScalingAssumptions) ? parsed.badScalingAssumptions.filter((b): b is string => typeof b === 'string') : [],
+    recommendedFixes,
+    sourceArtifacts: paths,
+    architectNotes: typeof parsed.architectNotes === 'string' ? parsed.architectNotes :
+      `LLM architect analysis: ${recommendedFixes.length} fix recommendations.`,
   };
 }
+
+/* ------------------------------------------------------------------ */
+/*  DETERMINISTIC VERDICT (fallback)                                  */
+/* ------------------------------------------------------------------ */
 
 type EventCoverageFamily = 'centrifuge' | 'wash' | 'incubate' | 'transfer' | 'readout' | 'serial_dilution' | 'general';
 
@@ -205,63 +393,41 @@ function eventCoverageSpecDetails(input: {
   const details = {
     centrifuge: {
       label: 'centrifuge/spin',
-      ownedFiles: [
-        'server/src/compiler/biology/verbs/centrifugeVerbs.ts',
-        'server/src/compiler/biology/BiologyVerbExpander.test.ts',
-      ],
+      ownedFiles: ['server/src/compiler/biology/verbs/centrifugeVerbs.ts', 'server/src/compiler/biology/BiologyVerbExpander.test.ts'],
       hints: ['Prefer extending centrifuge/spin lowering instead of broad simple-verb dispatch.'],
     },
     wash: {
       label: 'wash/aspirate',
-      ownedFiles: [
-        'server/src/compiler/biology/verbs/simpleVerbs.ts',
-        'server/src/compiler/biology/BiologyVerbExpander.test.ts',
-      ],
+      ownedFiles: ['server/src/compiler/biology/verbs/simpleVerbs.ts', 'server/src/compiler/biology/BiologyVerbExpander.test.ts'],
       hints: ['Add one wash/aspirate/remove-supernatant mapping with explicit volume/container evidence.'],
     },
     incubate: {
       label: 'incubation',
-      ownedFiles: [
-        'server/src/compiler/biology/verbs/simpleVerbs.ts',
-        'server/src/compiler/biology/BiologyVerbExpander.test.ts',
-      ],
+      ownedFiles: ['server/src/compiler/biology/verbs/simpleVerbs.ts', 'server/src/compiler/biology/BiologyVerbExpander.test.ts'],
       hints: ['Map one incubation/time/temperature phrase into the existing event vocabulary.'],
     },
     transfer: {
       label: 'transfer/add/mix',
-      ownedFiles: [
-        'server/src/compiler/biology/verbs/simpleVerbs.ts',
-        'server/src/compiler/biology/BiologyVerbExpander.test.ts',
-      ],
+      ownedFiles: ['server/src/compiler/biology/verbs/simpleVerbs.ts', 'server/src/compiler/biology/BiologyVerbExpander.test.ts'],
       hints: ['Map one add, transfer, dispense, or mix phrase; do not rewrite the full extraction contract here.'],
     },
     readout: {
       label: 'instrument readout',
-      ownedFiles: [
-        'server/src/compiler/biology/verbs/simpleVerbs.ts',
-        'server/src/compiler/biology/BiologyVerbExpander.test.ts',
-        'schema/registry/readout-definitions',
-      ],
+      ownedFiles: ['server/src/compiler/biology/verbs/simpleVerbs.ts', 'server/src/compiler/biology/BiologyVerbExpander.test.ts', 'schema/registry/readout-definitions'],
       hints: ['Represent one absorbance/fluorescence/plate-reader readout without inventing instrument inventory.'],
     },
     serial_dilution: {
       label: 'serial dilution',
-      ownedFiles: [
-        'server/src/compiler/biology/verbs/simpleVerbs.ts',
-        'server/src/compiler/biology/BiologyVerbExpander.test.ts',
-      ],
+      ownedFiles: ['server/src/compiler/biology/verbs/simpleVerbs.ts', 'server/src/compiler/biology/BiologyVerbExpander.test.ts'],
       hints: ['Represent one standard-curve or serial-dilution primitive; leave plate layout optimization to scaling passes.'],
     },
     general: {
       label: 'protocol action',
-      ownedFiles: [
-        'server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts',
-        'server/src/compiler/biology',
-        'schema/registry/compile-pipelines/chatbot-compile.yaml',
-      ],
+      ownedFiles: ['server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts', 'server/src/compiler/biology', 'schema/registry/compile-pipelines/chatbot-compile.yaml'],
       hints: ['Only use this general lane when diagnostics do not identify a more specific biology action family.'],
     },
   }[input.family];
+
   return {
     id: input.isEmpty ? `fix-event-graph-empty-${input.family}` : `fix-event-graph-coverage-${input.family}`,
     class: `compiler_event_coverage_${input.family}`,
@@ -288,32 +454,13 @@ function hasMaterialCatalogOrSpecGap(input: {
     materialContext: input.materialContext,
   });
   const materialSignals = [
-    'could not materialize',
-    'mint_materials',
-    'kind material not handled',
-    'unresolvedrefs',
-    'unresolved refs',
-    'material_ref',
-    'material-spec',
-    'formulation',
-    'vendor-product',
-    'catalog',
-    'certificate of analysis',
-    ' coa',
-    'reagent',
-    'buffer',
-    'antibody',
-    'enzyme',
-    'media',
-    'serum',
-    'lysis',
+    'could not materialize', 'mint_materials', 'kind material not handled',
+    'unresolvedrefs', 'unresolved refs', 'material_ref', 'material-spec',
+    'formulation', 'vendor-product', 'catalog', 'certificate of analysis',
+    ' coa', 'reagent', 'buffer', 'antibody', 'enzyme', 'media', 'serum', 'lysis',
   ];
   const physicalInventoryOnlySignals = [
-    'material-instance',
-    'aliquot',
-    'lot number',
-    'physical inventory',
-    'source tube',
+    'material-instance', 'aliquot', 'lot number', 'physical inventory', 'source tube',
   ];
   return materialSignals.some((signal) => evidence.includes(signal))
     && !physicalInventoryOnlySignals.every((signal) => evidence.includes(signal));
@@ -376,67 +523,54 @@ function hasPrecompilerReferenceShapeGap(input: {
     || /"0"\s*:\s*"[a-z0-9 ]"/.test(evidence);
 }
 
-function deterministicVerdict(input: {
-  options: FoundryArchitectOptions;
-  compiler: Record<string, unknown>;
-  eventGraph: Record<string, unknown>;
-  executionScale: Record<string, unknown>;
-  browserReport: Record<string, unknown>;
-  materialContext: Record<string, unknown>;
-}): ArchitectVerdict {
-  const codes = diagnosticCodes(input.compiler);
-  const outcome = typeof input.compiler['outcome'] === 'string' ? input.compiler['outcome'] : 'unknown';
-  const eventCount = typeof input.compiler['eventCount'] === 'number' ? input.compiler['eventCount'] : 0;
-  const paths = artifactPaths(input.options);
-  const blockers = asArray(input.executionScale['blockers']);
-  const gaps = asArray(input.compiler['gaps']);
-  const extractorRepairExhaustedCount = typeof input.compiler['extractorRepairExhaustedCount'] === 'number'
-    ? input.compiler['extractorRepairExhaustedCount']
+function deterministicVerdict(
+  options: FoundryArchitectOptions,
+  artifacts: {
+    compiler: Record<string, unknown>;
+    eventGraph: Record<string, unknown>;
+    executionScale: Record<string, unknown>;
+    browserReport: Record<string, unknown>;
+    materialContext: Record<string, unknown>;
+  },
+): ArchitectVerdict {
+  const { compiler, eventGraph, executionScale, browserReport, materialContext } = artifacts;
+  const codes = diagnosticCodes(compiler);
+  const outcome = typeof compiler['outcome'] === 'string' ? compiler['outcome'] : 'unknown';
+  const eventCount = typeof compiler['eventCount'] === 'number' ? compiler['eventCount'] : 0;
+  const paths = artifactPaths(options);
+  const blockers = asArray(executionScale['blockers']);
+  const gaps = asArray(compiler['gaps']);
+  const extractorRepairExhaustedCount = typeof compiler['extractorRepairExhaustedCount'] === 'number'
+    ? compiler['extractorRepairExhaustedCount']
     : 0;
-  const browserStatus = typeof input.browserReport['status'] === 'string' ? input.browserReport['status'] : 'blocked';
-  const minUsefulEvents = eventThresholdForVariant(input.options.variant);
+  const browserStatus = typeof browserReport['status'] === 'string' ? browserReport['status'] : 'blocked';
+  const minUsefulEvents = eventThresholdForVariant(options.variant);
   const failureClasses = new Set<string>();
+
   if (extractorRepairExhaustedCount > 0 || codes.includes('extractor_repair_exhausted') || codes.includes('extractor_empty_candidates') || codes.includes('extractor_empty_choices')) {
     failureClasses.add('extractor_yield');
   }
   if (eventCount === 0) failureClasses.add('event_graph_empty');
   if (eventCount > 0 && eventCount < minUsefulEvents) failureClasses.add('event_graph_tiny');
   if (blockers.length > 0 || outcome !== 'complete') failureClasses.add('compiler_gap');
-  if (hasMaterialCatalogOrSpecGap({
-    compiler: input.compiler,
-    executionScale: input.executionScale,
-    materialContext: input.materialContext,
-  })) {
+  if (hasMaterialCatalogOrSpecGap({ compiler, executionScale, materialContext })) {
     failureClasses.add('material_catalog_or_spec_gap');
   }
-  if (hasLabwareAliasOrResolverGap({
-    compiler: input.compiler,
-    executionScale: input.executionScale,
-    browserReport: input.browserReport,
-  })) {
+  if (hasLabwareAliasOrResolverGap({ compiler, executionScale, browserReport })) {
     failureClasses.add('labware_alias_or_resolver_gap');
   }
-  if (hasFoundryRuntimeWiringGap({
-    compiler: input.compiler,
-    executionScale: input.executionScale,
-    browserReport: input.browserReport,
-  })) {
+  if (hasFoundryRuntimeWiringGap({ compiler, executionScale, browserReport })) {
     failureClasses.add('foundry_runtime_wiring_gap');
   }
-  if (hasPrecompilerReferenceShapeGap({ compiler: input.compiler })) {
+  if (hasPrecompilerReferenceShapeGap({ compiler })) {
     failureClasses.add('precompiler_reference_shape_gap');
   }
   if (browserStatus !== 'pass') failureClasses.add('browser_review');
-  if (input.options.variant === 'robot_deck' && blockers.length > 0) failureClasses.add('robot_deck_binding');
+  if (options.variant === 'robot_deck' && blockers.length > 0) failureClasses.add('robot_deck_binding');
+
   const evidence = {
-    outcome,
-    eventCount,
-    minUsefulEvents,
-    diagnosticCodes: codes,
-    extractorRepairExhaustedCount,
-    blockerCount: blockers.length,
-    gapCount: gaps.length,
-    browserStatus,
+    outcome, eventCount, minUsefulEvents, diagnosticCodes: codes,
+    extractorRepairExhaustedCount, blockerCount: blockers.length, gapCount: gaps.length, browserStatus,
   };
 
   const recommendedFixes: ArchitectVerdict['recommendedFixes'] = [];
@@ -465,26 +599,12 @@ function deterministicVerdict(input: {
   }
   if (failureClasses.has('event_graph_tiny') || failureClasses.has('event_graph_empty')) {
     const coverageDetails = eventCoverageSpecDetails({
-      family: eventCoverageFamily({
-        compiler: input.compiler,
-        eventGraph: input.eventGraph,
-        executionScale: input.executionScale,
-      }),
-      eventCount,
-      minUsefulEvents,
+      family: eventCoverageFamily({ compiler, eventGraph, executionScale }),
+      eventCount, minUsefulEvents,
       isEmpty: failureClasses.has('event_graph_empty'),
-      variant: input.options.variant,
+      variant: options.variant,
     });
-    recommendedFixes.push({
-      id: coverageDetails.id,
-      class: coverageDetails.class,
-      title: coverageDetails.title,
-      rationale: coverageDetails.rationale,
-      ownedFiles: coverageDetails.ownedFiles,
-      acceptance: coverageDetails.acceptance,
-      contextHints: coverageDetails.contextHints,
-      ...fixSpecDefaults(paths, evidence),
-    });
+    recommendedFixes.push({ ...coverageDetails, ...fixSpecDefaults(paths, evidence) });
   }
   if (failureClasses.has('foundry_runtime_wiring_gap')) {
     recommendedFixes.push({
@@ -585,13 +705,9 @@ function deterministicVerdict(input: {
       title: 'Resolve protocol materials as catalog/spec data without inventing inventory',
       rationale: 'Compiler evidence points at unresolved reagents, buffers, formulations, vendor products, or material tags that should be represented as reusable YAML data or material resolver behavior.',
       ownedFiles: [
-        'records/material',
-        'records/seed/materials',
-        'schema/lab/material.schema.yaml',
-        'schema/lab/material-spec.schema.yaml',
-        'schema/lab/vendor-product.schema.yaml',
-        'server/src/compiler/material',
-        'server/src/materials',
+        'records/material', 'records/seed/materials', 'schema/lab/material.schema.yaml',
+        'schema/lab/material-spec.schema.yaml', 'schema/lab/vendor-product.schema.yaml',
+        'server/src/compiler/material', 'server/src/materials',
       ],
       acceptance: [
         'Adds or improves only material, material-spec, vendor-product, or material resolver/catalog data needed by the source protocol.',
@@ -618,11 +734,7 @@ function deterministicVerdict(input: {
       class: 'browser_or_labware_rendering',
       title: 'Make event graph render and play in labware-editor',
       rationale: 'Protocol variants cannot be accepted until browser review passes with screenshot evidence.',
-      ownedFiles: [
-        'client/src',
-        'records/seed/labware-definition',
-        'server/src/foundry',
-      ],
+      ownedFiles: ['client/src', 'records/seed/labware-definition', 'server/src/foundry'],
       acceptance: [
         'Browser review report status is pass.',
         'Screenshot shows expected labware and event sequence.',
@@ -652,8 +764,7 @@ function deterministicVerdict(input: {
         'schema/registry/execution-scale-profiles',
         'schema/workflow/execution-scale-profile.schema.yaml',
         'schema/workflow/execution-scale-plan.schema.yaml',
-        'records/seed/platforms',
-        'records/seed/labware-definition',
+        'records/seed/platforms', 'records/seed/labware-definition',
       ],
       acceptance: [
         'Robot-deck verdict distinguishes true missing user input from missing platform data.',
@@ -679,8 +790,8 @@ function deterministicVerdict(input: {
 
   return {
     kind: 'protocol-foundry-architect-verdict',
-    protocolId: input.options.protocolId,
-    variant: input.options.variant,
+    protocolId: options.protocolId,
+    variant: options.variant,
     generated_at: nowIso(),
     accepted: failureClasses.size === 0,
     qualityScore,
@@ -692,73 +803,26 @@ function deterministicVerdict(input: {
     badEvents: [],
     badScalingAssumptions: blockers.map((blocker) => String(asRecord(blocker)['message'] ?? asRecord(blocker)['code'] ?? 'execution blocker')),
     recommendedFixes,
-    sourceArtifacts: artifactPaths(input.options),
+    sourceArtifacts: paths,
     architectNotes: recommendedFixes.length === 0
       ? 'Deterministic architect gate found no actionable failures.'
-      : 'Deterministic architect gate generated patch specs from compiler, scaling, extractor, and browser evidence.',
+      : `Deterministic fallback: ${recommendedFixes.length} fix recommendations.`,
   };
 }
 
-async function llmArchitectNotes(options: FoundryArchitectOptions, context: unknown): Promise<string | undefined> {
-  if (process.env['PROTOCOL_FOUNDRY_ARCHITECT_LLM_NOTES'] !== 'true') return undefined;
-  const baseUrl = options.inference?.baseUrl ?? process.env['PI_ARCHITECT_BASE_URL'] ?? process.env['OPENAI_BASE_URL'];
-  const model = options.inference?.model ?? process.env['PI_ARCHITECT_MODEL'] ?? process.env['OPENAI_MODEL'];
-  if (!baseUrl || !model || options.dryRun) return undefined;
-  const client = createInferenceClient({
-    baseUrl,
-    model,
-    temperature: options.inference?.temperature ?? 0.1,
-    timeoutMs: options.inference?.timeoutMs ?? 600_000,
-    maxTokens: options.inference?.maxTokens ?? 2048,
-    enableThinking: options.inference?.enableThinking ?? false,
-  });
-  const response = await completeWithCodebaseTools({
-    client,
-    ...(options.repoRoot ? { repoRoot: options.repoRoot } : {}),
-    ...(options.repoRoot ? {
-      browserContext: {
-        artifactRoot: options.artifactRoot,
-        ...(options.workbenchRoot ? { workbenchRoot: options.workbenchRoot } : {}),
-        protocolId: options.protocolId,
-        variant: options.variant,
-        ...(options.appBase ? { appBase: options.appBase } : {}),
-        ...(options.apiBase ? { apiBase: options.apiBase } : {}),
-      },
-    } : {}),
-    maxToolRounds: 5,
-    request: {
-      model,
-      temperature: 0.1,
-      max_tokens: options.inference?.maxTokens ?? 2048,
-      messages: [
-      {
-        role: 'system',
-        content: [
-          'You are the Protocol Foundry architect. Summarize actionable compiler improvements in concise prose.',
-          'You have live codebase tools: codebase_search, codebase_read, and codebase_list. Use them to inspect the current compiler/precompiler/runtime code before judging what lane needs a patch.',
-          'You also have Foundry browser tools: foundry_browser_review_read and foundry_browser_review_run. Use browser evidence before judging browser_visualization, labware rendering, event playback, or UI-load failures.',
-          'Do not write standalone patch specifications, file-creation instructions, or unified diffs in these notes. Deterministic recommendedFixes are the authoritative patch specs.',
-          'Do name exact files, symbols, schemas, records, and tests you inspected. These notes are included in coder context through the verdict artifact.',
-          'These notes will feed a Qwen/Qwen3.6-35B-A3B-FP8 coder. It is strong, but specs must be granular, context-rich, and limited to one observable behavior change.',
-          'Prefer patch guidance that names source artifacts, exact failure evidence, owned files, a focused fixture, and a small acceptance test.',
-          'If an existing labware definition is not being found, describe it as a resolver/alias/lookup wiring problem; do not tell the coder to recreate the labware YAML file.',
-          'Do not emit chain-of-thought.',
-        ].join('\n'),
-      },
-      {
-        role: 'user',
-        content: JSON.stringify(context).slice(0, 25_000),
-      },
-    ],
-    },
-  });
-  const content = response.choices[0]?.message.content;
-  return typeof content === 'string' && content.trim() ? content.trim() : undefined;
-}
+/* ------------------------------------------------------------------ */
+/*  MAIN ENTRY                                                        */
+/* ------------------------------------------------------------------ */
 
 export async function runFoundryArchitectReview(options: FoundryArchitectOptions): Promise<ArchitectVerdict> {
   const paths = artifactPaths(options);
-  const [compilerRaw, eventGraphRaw, executionScaleRaw, browserReportRaw, coderPatchRaw, materialContextRaw] = await Promise.all([
+  const [
+    textRaw, segmentRaw, compilerRaw, eventGraphRaw,
+    executionScaleRaw, browserReportRaw, coderPatchRaw,
+    materialContextRaw,
+  ] = await Promise.all([
+    readIfExists(paths.text),
+    readIfExists(paths.segment),
     readIfExists(paths.compiler),
     readIfExists(paths.eventGraph),
     readIfExists(paths.executionScale),
@@ -766,36 +830,21 @@ export async function runFoundryArchitectReview(options: FoundryArchitectOptions
     readIfExists(paths.coderPatch),
     readIfExists(paths.materialContext),
   ]);
-  const verdict = deterministicVerdict({
-    options,
+
+  const artifacts = {
+    text: typeof textRaw === 'string' ? textRaw : undefined,
+    segment: asRecord(segmentRaw),
     compiler: asRecord(compilerRaw),
     eventGraph: asRecord(eventGraphRaw),
     executionScale: asRecord(executionScaleRaw),
     browserReport: asRecord(browserReportRaw),
     materialContext: asRecord(materialContextRaw),
-  });
+    coderPatch: asRecord(coderPatchRaw),
+  };
 
-  const compilerStr = compactEvidence(compilerRaw, 4_000);
-  const eventGraphStr = compactEvidence(eventGraphRaw, 6_000);
-  const executionScaleStr = compactEvidence(executionScaleRaw, 2_000);
-  const browserReportStr = compactEvidence(browserReportRaw, 2_000);
-  const coderPatchStr = compactEvidence(coderPatchRaw, 3_000);
-  const materialContextStr = compactEvidence(materialContextRaw, 5_000);
-
-  // The deterministicVerdict above is the authoritative source of fix specs.
-  // The LLM notes are supplementary prose only — don't dump the full PDF
-  // text into every architect prompt. Pass only the structured artifacts
-  // that already fit the vLLM request budget (~60-80KB).
-  const notes = await llmArchitectNotes(options, {
-    verdict: compactVerdictForNotes(verdict),
-    compiler: compilerStr,
-    eventGraph: eventGraphStr,
-    executionScale: executionScaleStr,
-    browserReport: browserReportStr,
-    coderPatch: coderPatchStr,
-    materialContext: materialContextStr,
-  }).catch((error: unknown) => `Architect LLM note generation failed: ${error instanceof Error ? error.message : String(error)}`);
-  if (notes) verdict.architectNotes = notes;
+  // LLM-driven verdict is primary; deterministic is fallback
+  const { verdict, source } = await llmArchitectVerdict(options, artifacts);
+  console.log(`[foundry-architect] verdict source: ${source}`);
 
   const verdictPath = join(options.artifactRoot, 'architect', options.protocolId, options.variant, 'verdict.yaml');
   await writeYamlFile(verdictPath, verdict);
@@ -803,16 +852,22 @@ export async function runFoundryArchitectReview(options: FoundryArchitectOptions
   return verdict;
 }
 
+/* ------------------------------------------------------------------ */
+/*  PATCH SPEC WRITING                                                */
+/* ------------------------------------------------------------------ */
+
 async function writePatchSpecs(artifactRoot: string, verdict: ArchitectVerdict): Promise<void> {
   const specPaths: string[] = [];
   const specDir = join(artifactRoot, 'patch-specs', verdict.protocolId, verdict.variant);
   const expectedSpecFiles = new Set(verdict.recommendedFixes.map((fix) => `${fix.id}.yaml`));
+
   if (existsSync(specDir)) {
     const existingFiles = await readdir(specDir);
     await Promise.all(existingFiles
       .filter((file) => file.endsWith('.yaml') && file !== 'index.yaml' && !expectedSpecFiles.has(file))
       .map((file) => rm(join(specDir, file), { force: true })));
   }
+
   for (const fix of verdict.recommendedFixes) {
     const path = join(specDir, `${fix.id}.yaml`);
     await writeYamlFile(path, {
@@ -836,6 +891,7 @@ async function writePatchSpecs(artifactRoot: string, verdict: ArchitectVerdict):
     });
     specPaths.push(path);
   }
+
   await writeYamlFile(join(specDir, 'index.yaml'), {
     kind: 'protocol-foundry-patch-spec-index',
     protocolId: verdict.protocolId,

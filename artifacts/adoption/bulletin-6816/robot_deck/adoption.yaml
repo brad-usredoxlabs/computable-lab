@@ -1,7 +1,7 @@
 kind: protocol-foundry-adoption-decision
 protocolId: bulletin-6816
 variant: robot_deck
-generated_at: 2026-05-08T18:24:41.350Z
+generated_at: 2026-05-09T03:10:04.179Z
 status: accepted
 applyPatches: true
 patchSpecs:

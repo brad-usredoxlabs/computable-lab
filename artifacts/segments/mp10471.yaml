@@ -1,0 +1,1003 @@
+kind: protocol-foundry-segment
+protocolId: mp10471
+generated_at: 2026-05-09T00:39:00.609Z
+sourcePdf: /home/brad/git/computable-foundry/artifacts/pdfs/mp10471.pdf
+sourceText: /home/brad/git/computable-foundry/artifacts/text/mp10471.txt
+title: mp10471
+protocol_text: "Fluo-4 Direct™ Calcium Assay Kits
+
+  Catalog nos. F10471, F10472, F10473
+
+
+
+  Table 1. Contents and storage information.
+
+
+  \                                                                            \
+  Amount
+
+  \                         Material                                                                          \
+  Storage*             Stability
+
+  \                                                             F10471        F\
+  10472        F10473
+
+
+  \ Fluo-4 Direct™ calcium assay
+  reagent                                                                                         \
+  When stored
+
+  \                                                             10 × 10 mL    1
+  × 100 mL    1×1L
+
+  \ (Component
+  A)                                                                                                                \
+  as directed
+
+  \                                                                                                      \
+  • ≤–20˚C
+
+  \                                                                                                                              \
+  the kit is
+
+  \ Probenecid, water-soluble (Component B)                     2 × 77 mg     2
+  × 77 mg     1 × 1.54 g   • Desiccate
+
+  \                                                                                                                              \
+  stable for
+
+  \                                                                                                      \
+  • Protect from light
+
+  \                                                                                         \
+  Not                                  at least
+
+  \ Fluo-4 Direct™ calcium assay buffer (Component C)           200
+  mL        200 mL                                             6 months.
+
+  \                                                                                         \
+  supplied
+
+
+  \ *These storage conditions are appropriate when storing the entire kit upon
+  receipt. For optimal storage conditions for each component,
+
+  \ refer to the vial labels.
+
+
+  \ Number of assays: Sufficient material is supplied for 20 × 96- or 384-well
+  plates (Starter pack, Cat. no. F10471) or 20 × 96- or 384-well
+
+  \ plates in a 1 × 100 mL (Surveyor pack, Cat. no. F10472) or 200 × 96- or
+  384-well plates in a 1 × 1 L (High-throughput pack, Cat. no.
+
+  \ F10473) based on the protocol below.
+
+  \ Approximate fluorescence excitation/emission maxima: Fluo-4 Direct™ calcium
+  reagent: 495/516 in nm.
+
+
+
+
+
+  Introduction
+
+
+  \                                             Fluo-4 Direct™ is an advanced
+  fluorescent Ca2+ indicator that complements the Invitrogen
+
+  \                                             portfolio by addressing a key
+  limitation in assay measurement; background fluorescence.
+
+  \                                             Fluorescent Ca2+ indicators are
+  widely used for in-cell measurement of agonist-stimulated
+
+  \                                             and antagonist-inhibited calcium
+  signaling through G protein-coupled receptors (GPCRs), a
+
+  \                                             large and active target class in
+  drug discovery, in addition to the measurement of ligand and
+
+  \                                             voltage-gated ion channel
+  activity. The visible excitation wavelength, high sensitivity, and
+
+  \                                             large fluorescence increase upon
+  binding Ca2+ has made them the indicators of choice for
+
+  \                                             calcium detection. Homogeneous
+  cell-based assays for calcium have gained popularity based
+
+  \                                             on the promise of fewer steps,
+  lower variability, and easier protocols. These characteristics
+
+  \                                             allow for automation of many
+  steps and consequently, lend themselves to multi-well
+
+  \                                             microplate based assays
+  important for high-throughput capability. However, many of the
+
+  \                                             current fluorescent Ca2+
+  indicators require media removal and washing steps to achieve good
+
+  \                                             results.
+
+
+  \                                             The Fluo-4 Direct™ Calcium Assay
+  Kits offer a proprietary assay formulation that allows
+
+  \                                             direct addition to wells
+  containing cells growing in culture media without the requirement
+
+  \                                             of media removal or a wash step.
+  Eliminating the media removal step from the workflow can
+
+  \                                             result in lower variability and
+  higher Z´ values compared to the standard fluo-4 assay, while
+
+  \                                             providing an easier and faster
+  assay. Contributions to baseline fluorescence by the growth
+
+  \                                             medium are eliminated by the
+  addition of a suppression dye which reduces background
+
+  \                                             fluorescence.
+
+
+  \                                                                                                       \
+  Revised: 3–April–2009 | MP 10471
+
+  \f                                Another source of potential fluorescence
+  outside the cells is extrusion of the indicator out of
+
+  \                                the cell by organic anion transporters. A
+  proprietary, water-soluble Probenecid is supplied
+
+  \                                with the Fluo-4 Direct™ Calcium Assay Kits,
+  which is commonly used to inhibit this transport
+
+  \                                and reduce the baseline signal. The
+  water-soluble form of probenecid is easy to dissolve in
+
+  \                                buffer and safer to use than the free acid
+  form, which requires caustic 1 M NaOH to dissolve.
+
+  \                                The Fluo-4 Direct™ Calcium Assay Kits are
+  designed for microplates and high-throughput
+
+  \                                screening (HTS), and the assay can be
+  performed on adherent as well as non-adherent
+
+  \                                cells. The Fluo-4 Direct™ Calcium Assay Kit,
+  Starter pack (Cat. no. F10471) and Surveyor
+
+  \                                pack (Cat. no. F10472) contains sufficient
+  reagents for 20 microplates and includes Fluo-4
+
+  \                                Direct™ calcium assay buffer (Component C).
+  The Fluo-4 Direct™ Calcium Assay Kit, High-
+
+  \                                throughput pack (Cat. no. F10473) contains
+  sufficient reagents for 200 microplates and does
+
+  \                                not include the Fluo-4 Direct™ calcium assay
+  buffer (Component C).
+
+
+
+
+
+  Before Starting
+
+
+  \   Materials Required but Not
+
+  \                    Provided    • Cells and culture media
+
+  \                                • Poly-D-Lysine coated 96- or 384-well
+  microplates
+
+
+  \                                For high-throughput kit only:
+
+
+  \                                • 1X Hanks’ balanced salt solution (HBSS),
+  1.5 L (Invitrogen Cat. no. 14025-092)
+
+  \                                • 1 M HEPES buffer solution, 30 mL
+  (Invitrogen Cat. no. 15630-106)
+
+
+
+
+  \                     Caution    Probenecid (Component B) is harmful if
+  swallowed. Wear appropriate protective laboratory
+
+  \                                clothing, gloves, and safety glasses when
+  handling this reagent.
+
+
+
+
+  \   General Recommendations      • Prepare reagents on the day that you
+  perform your experiments. Ensure that Components
+
+  \                                  A and B are completely dissolved when
+  making the reagent solutions.
+
+  \                                • Reagent quantities are given for assaying
+  two (Starter pack), twenty (Surveyor pack), or
+
+  \                                  two hundred microplates at a time
+  (high-throughput pack); scale up quantities according
+
+  \                                  to your experiment.
+
+  \                                • When following the directions below, the
+  Fluo-4 Direct™ calcium assay reagent solution
+
+  \                                  is at a 2X concentration. If you plan to
+  remove media and add the Fluo-4 Direct™ calcium
+
+  \                                  assay reagent directly to cells, dilute the
+  Fluo-4 Direct™ calcium assay reagent solution to
+
+  \                                  1X with media or assay buffer. For example,
+  if using the Starter Pack (Cat. no. F10471),
+
+  \                                  you need to add 10 mL of additional buffer
+  per bottle to bring the reagent concentration
+
+  \                                  to 1X before adding the reagent to the
+  wells. Additionally, if you are going to use the
+
+  \                                  Fluo-4 Direct™ calcium reagent loading
+  solution at 1X, there is no need to add additional
+
+  \                                  probenecid which can be toxic to the cells
+  as the final probenecid concentration will be
+
+  \                                  2.5 mM.
+
+  \                                • Fluo-4 Direct™ calcium assay reagent
+  solution made from Component A can be frozen for
+
+  \                                  up to 7 days at –20°C and reused with good
+  results.
+
+
+
+
+
+  Experimental Protocol for Adherent Cells
+
+
+  \              Preparing Cells   Culture adherent cells in 96- or 384-well
+  microplates (poly-D-Lysine–coated plates
+
+  \                                recommended), to near confluence. The
+  following assay was developed with M1WT3 (CHO
+
+
+  \                                                                                        \
+  Fluo-4 Direct™ Calcium Assay Kits | 2
+
+  \f                         M1) cell line (ATCC Cat. no. CRL-1985™),
+  GeneBLAzer® M1-NFAT-bla Jurkat (Invitrogen
+
+  \                         Cat. no. K1710), GeneBLAzer® H1-NFAT-bla HEK293T
+  (Invitrogen Cat. no. K1703) and U-2
+
+  \                         OS (ATCC Cat. no. HTB-96™) cells with BacMam
+  expressed muscarinic 1 and muscarinic 3
+
+  \                         GPCRs.
+
+
+  \                         In 384-well plates, CHO, U-2 OS, and HEK293 cells
+  can be plated at 5–10,000 cells per well
+
+  \                         and grown overnight. If you are using 96-well
+  plates, plate 4–8 times these cell numbers
+
+  \                         per well. Alternatively, cells can be plated at
+  higher densities and used after a 4–6 hour
+
+  \                         incubation. The success of this approach is
+  cell-type dependent.
+
+
+
+
+  Preparing Reagents       If you are using the Starter pack (Cat. no. F10471)
+  or Surveyor pack (Cat. no. F10472), the
+
+  \                         Fluo-4 Direct™ calcium assay buffer (Component C) is
+  supplied with the kit, proceed directly
+
+  \                         to step 1.2.
+
+
+  \                         The High-throughput pack (Cat. no. F10473) does not
+  include Fluo-4 Direct™ calcium assay
+
+  \                         buffer (Component C), proceed to step 1.1 to prepare
+  the buffer.
+
+
+  \                     1.1 For High-throughput pack, make the quantity of
+  Fluo-4 Direct™ calcium assay buffer you
+
+  \                         need, based on the number of microplates in your
+  experiment. For 200 microplates, a total of
+
+  \                         1.5 L of assay buffer is sufficient for all reagent
+  preparations. Prepare 1.5 L of Fluo-4 Direct™
+
+  \                         calcium assay buffer by adding 30 mL of 1 M HEPES to
+  1.47 L of 1X HBSS. Adjust the pH of
+
+  \                         the buffer to 7.3 with NaOH.
+
+
+  \                     1.2 Prepare 250 mM stock solution of probenecid by
+  adding 1 mL of Fluo-4 Direct™ calcium
+
+  \                         assay buffer to each 77 mg vial of water-soluble
+  probenecid (Component B for Cat. nos.
+
+  \                         F10471 and F10472) or 20 mL of Fluo-4 Direct™
+  calcium assay buffer to the 1.54 g bottle of
+
+  \                         water soluble probenecid (Component B for Cat. No.
+  F10473). Vortex until dissolved. Store
+
+  \                         any unused probenecid stock solution at ≤–20°C for
+  up to 6 months.
+
+
+  \                         Note: Water-soluble probenecid is supplied but is
+  optional for the assay. For best results with
+
+  \                         Fluo-4 Direct™, you may need to use probenecid for
+  certain cell types, while it may not be
+
+  \                         necessary for other cell types.
+
+
+  \                     1.3 Prepare the 2X Fluo-4 Direct™ calcium reagent
+  loading solution with a final probenecid
+
+  \                         concentration of 5 mM for the kit that you are
+  using, as follows:
+
+
+  \                         Starter pack (Cat. no. F10471): Add 10 mL Fluo-4
+  Direct™ calcium assay buffer and
+
+  \                         200 μL 250 mM probenecid stock solution to one
+  bottle of Fluo-4 Direct™ calcium reagent
+
+  \                         (Component A). This 2X Fluo-4 Direct™ calcium
+  reagent loading solution is sufficient for two
+
+  \                         microplates.
+
+
+  \                         Surveyor pack (Cat. no. F10472): Add 100 mL of
+  Fluo-4 Direct™ calcium assay buffer
+
+  \                         and 2 mL 250 mM probenecid stock solution to one
+  bottle Fluo-4 Direct™ calcium reagent
+
+  \                         (Component A). This 2X Fluo-4 Direct™ calcium
+  reagent loading solution is sufficient for
+
+  \                         20 microplates.
+
+
+  \                         High-throughput pack (Cat. no. F10473): Add 1 L
+  Fluo-4 Direct™ calcium assay buffer and
+
+  \                         20 mL 250 mM probenecid stock solution to one bottle
+  of Fluo-4 Direct™ calcium reagent
+
+  \                         (Component A). This 2X Fluo-4 Direct™ calcium
+  reagent loading solution is sufficient for
+
+  \                         200 microplates.
+
+
+  \                         Note: Vortex and allow the solution to sit for 5
+  minutes to ensure that the reagent is
+
+  \                         completely dissolved and then vortex again. Ensure
+  that reagent is completely dissolved
+
+  \                         before proceeding with loading cells.
+
+
+  \                     1.4 If needed, prepare solutions of the receptor ligands
+  for your experiment in Fluo-4 Direct™
+
+  \                         calcium assay buffer (without probenecid).
+
+
+
+
+
+  \                                                                                   \
+  Fluo-4 Direct™ Calcium Assay Kits | 3
+
+  \f Fluo-4 Direct™ Calcium Assay
+
+
+  \                                2.1 Remove microplates containing cells from
+  the incubator. Add an equal volume of 2X Fluo-4
+
+  \                                    Direct™ calcium reagent loading solution
+  (from step 1.3) directly to wells containing cells in
+
+  \                                    culture medium.
+
+
+  \                                    For example: Add 50 μL of the 2X Fluo-4
+  Direct™ calcium reagent loading solution per well
+
+  \                                    of a 96-well plate containing 50 μL of
+  growth medium per well or 12.5 μL of the 2X Fluo-4
+
+  \                                    Direct™ calcium reagent loading solution
+  per well of a 384-well plate containing 12.5 μL of
+
+  \                                    growth medium per well.
+
+
+  \                                2.2 Incubate plates at 37°C for 30–60
+  minutes. You can perform incubations for a period of time
+
+  \                                    at 37°C and at room temperature. However,
+  the total loading time (incubation time) should
+
+  \                                    be at least 60 minutes.
+
+
+  \                                    Note: We obtained best results with an
+  incubation of 30 minutes at 37°C and 30 minutes at
+
+  \                                    room temperature for CHO M1 and U-2 OS
+  cells.
+
+
+  \                                    The plates are now ready for use in an
+  experiment without removing the medium or Fluo-
+
+  \                                    4 Direct™ calcium reagent loading
+  solution from the wells. The amount of time the assay
+
+  \                                    can be successfully run after loading is
+  cell-type dependent. We obtained good results from
+
+  \                                    CHO-M1 cells kept at room temperature for
+  up to 5 hours after loading with Fluo-4 Direct™
+
+  \                                    reagent.
+
+
+  \                                2.3 Measure fluorescence using instrument
+  settings appropriate for excitation at 494 nm and
+
+  \                                    emission at 516 nm.
+
+
+
+
+
+  Experimental Protocol for Non-adherent Cells
+
+
+  \              Preparing Cells
+
+
+  \                                    Prior to pelleting cells (step 3.3),
+  ensure that you have sufficient Fluo-4 Direct™ calcium assay
+
+  \                                    buffer for the experiments.
+
+
+  \                                    If you are using the Starter pack (Cat.
+  no. F10471) or the Surveyor pack (Cat. no. F10472), the
+
+  \                                    Fluo-4 Direct™ calcium assay buffer
+  (Component C) is supplied with the kits, proceed directly
+
+  \                                    to step 3.2.
+
+
+  \                                    The High-throughput pack (Cat. no.
+  F10473) does not include Fluo-4 Direct™ calcium assay
+
+  \                                    buffer (Component C), proceed to step 3.1
+  to prepare the buffer.
+
+
+  \                                3.1 For the High-throughput pack, make the
+  quantity of Fluo-4 Direct™ calcium assay buffer you
+
+  \                                    need, based on the number of microplates
+  in your experiment. For 200 microplates, a total of
+
+  \                                    1.5 L of assay buffer is sufficient for
+  all reagent preparations. Prepare 1.5 L of Fluo-4 Direct™
+
+  \                                    calcium assay buffer by adding 30 mL of 1
+  M HEPES to 1.47 L of 1X HBSS. Adjust the pH of
+
+  \                                    the buffer to 7.3 with NaOH.
+
+
+  \                                3.2 Count the density of cells directly from
+  the cell culture flask. Calculate the amount of cells
+
+  \                                    needed for plating so that they cover the
+  bottom of the well when settled.
+
+
+  \                                    For Jurkat cell line (GeneBLAzer®
+  muscarinic receptor (M1) and NFAT-bla Jurkat cell line,
+
+  \                                    (Invitrogen Cat. no. K1051), 125,000
+  cells per well in a 96-well plate, or 31,250 cells per well
+
+  \                                    in a 384-well plate performed well in the
+  assay.
+
+
+  \                                    For example, if the cell culture density
+  is 1.5 × 106 cells/mL, then for each microplate (~100
+
+  \                                    wells in 96-well plates or ~400 wells in
+  384-well plates) you need:
+
+
+
+
+  \                                                                                              \
+  Fluo-4 Direct™ Calcium Assay Kits | 4
+
+  \f                                   125,000 cells × 100 (or 31,250 cells ×
+  400) = 1.25 × 107 cells
+
+
+  \                                   1.25 × 107 cells = 8.3 mL of 1.5 × 106
+  cells/mL cell culture required
+
+
+  \                               3.3 Pellet cells from the required amount of
+  the culture by centrifuging at ~200 × g (1,000 rpm)
+
+  \                                   for 3 minutes.
+
+
+  \                               3.4 Remove the medium and resuspend the cell
+  pellet in Fluo-4 Direct™ calcium assay buffer to a
+
+  \                                   density of ~2.5 × 106 cells/mL (125,000
+  cells/50 μL in 96-well plates, or 31,250 cells/12.5 μL in
+
+  \                                   384-well plates). The volume of Fluo-4
+  Direct™ calcium assay buffer needed to resuspend the
+
+  \                                   cells can be obtained by multiplying 50 μL
+  or 12.5 μL by the number of wells that you need.
+
+
+  \                                   For example:
+
+  \                                   50 μL per well × 100 wells in 96-well
+  plates = 5 mL
+
+  \                                   12.5 μL per well × 400 wells in 384-well
+  plates = 5 mL
+
+
+  \                               3.5 Pipet the resuspended cells, 50 μL per
+  well or 12.5 μL per well, into the microplate(s). If
+
+  \                                   desired, pipet the same volume of the
+  assay buffer alone into no-cell control wells.
+
+
+  \                               3.6 Incubate the plate(s) at 37°C and 5% CO2
+  for 60 minutes to allow the cells to settle.
+
+
+
+
+  \        Preparing Reagents
+
+
+  \                               4.1 Prepare 250 mM stock solution of
+  water-soluble probenecid by adding 1 mL Fluo-4 Direct™
+
+  \                                   calcium assay buffer to each 77 mg vial of
+  probenecid (Component B for Cat. nos. F10471 and
+
+  \                                   F10472) or 20 mL of Fluo-4 Direct™ calcium
+  assay buffer to the 1.54 g bottle of probenecid
+
+  \                                   (Component B for Cat. no. F10473). Vortex
+  until dissolved. Store any unused probenecid
+
+  \                                   stock solution at ≤–20°C for up to 6
+  months.
+
+
+  \                               4.2 Prepare a 2X Fluo-4 Direct™ calcium
+  reagent loading solution with a 5 mM final probenecid
+
+  \                                   concentration for the kit that you are
+  using, as follows:
+
+
+  \                                   Starter pack (Cat. no. F10471): Add 10 mL
+  Fluo-4 Direct™ calcium assay buffer and
+
+  \                                   200 μL 250 mM probenecid stock solution to
+  one bottle of Fluo-4 Direct™ calcium reagent
+
+  \                                   (Component A). This 2X Fluo-4 Direct™
+  calcium reagent loading solution is sufficient for two
+
+  \                                   microplates.
+
+
+  \                                   Surveyor pack (Cat. no. F10472): Add 100
+  mL of Fluo-4 Direct™ calcium assay buffer
+
+  \                                   and 2 mL 250 mM probenecid stock solution
+  to one bottle Fluo-4 Direct™ calcium reagent
+
+  \                                   (Component A). This 2X Fluo-4 Direct™
+  calcium reagent loading solution is sufficient for
+
+  \                                   20 microplates.
+
+
+  \                                   High-throughput pack (Cat. no. F10473):
+  Add 1 L Fluo-4 Direct™ calcium assay buffer and
+
+  \                                   20 mL 250 mM probenecid stock solution to
+  one bottle of Fluo-4 Direct™ calcium reagent
+
+  \                                   (Component A). This 2X Fluo-4 Direct™
+  calcium reagent loading solution is sufficient for
+
+  \                                   200 microplates.
+
+
+  \                                   Note: Vortex and allow the solution to sit
+  for 5 minutes to ensure that the reagent is
+
+  \                                   completely dissolved and then vortex
+  again. Ensure that reagent is completely dissolved
+
+  \                                   before proceeding with loading cells.
+
+
+  \                               4.3 If needed, prepare solutions of the
+  receptor ligands for your experiment in Fluo-4 Direct™
+
+  \                                   calcium assay buffer (without probenecid).
+
+
+
+
+  Fluo-4 Direct™ Calcium Assay
+
+
+  \                               5.1 Remove plate(s) containing the cells from
+  the incubator and add an equal volume of 2X Fluo-
+
+  \                                   4 Direct™ calcium reagent loading solution
+  (from step 4.2) directly into wells containing cells
+
+
+  \                                                                                             \
+  Fluo-4 Direct™ Calcium Assay Kits | 5
+
+  \f                                          in culture media.
+
+
+  \                                          For example, add 50 μL of the 2X
+  Fluo-4 Direct™ calcium reagent loading solution per well
+
+  \                                          of a 96-well plate containing 50 μL
+  of growth medium per well or 12.5 μL of the 2X Fluo-4
+
+  \                                          Direct™ calcium reagent loading
+  solution per well of a 384-well plate containing 12.5 μL of
+
+  \                                          growth medium per well.
+
+
+  \                                    5.2 Incubate plates at 37°C for 30–60
+  minutes. You can perform incubations for a period of time
+
+  \                                        at 37°C and at room temperature.
+  However, the total loading time (incubation time) should
+
+  \                                        be at least 60 minutes.
+
+
+  \                                          Note: We obtained best results with
+  an incubation of 30 minutes at 37°C and 30 minutes at
+
+  \                                          room temperature for CHO M1 and U-2
+  OS cells.
+
+
+  \                                          The plates are now ready for use in
+  an experiment without the need to remove the medium
+
+  \                                          or Fluo-4 Direct™ calcium reagent
+  loading solution from the wells. The amount of time the
+
+  \                                          assay can be successfully run after
+  loading is cell-type dependent. We obtained good results
+
+  \                                          from CHO-M1 cells kept at room
+  temperature for up to 5 hours after loading with Fluo-4
+
+  \                                          Direct™ reagent.
+
+
+  \                                    5.3 Measure fluorescence using instrument
+  settings appropriate for excitation at 494 nm and
+
+  \                                        emission at 516 nm.
+
+
+
+
+
+  Typical Results
+
+
+  \                                          CHO M1 cells were treated with
+  agonists and antagonists, and assayed for calcium response
+
+  \                                          using Fluo-4 Direct™ Calcium Assay
+  Kit. Responses agreed with published results as shown in
+
+  \                                          Figure 1.
+
+
+
+
+
+  \     A                                                                            \
+  B
+
+
+
+
+
+  \         Figure 1. Dose-dependent calcium response to muscarnic 1 (M1)
+  receptor agonists and antagonists. CHO M1 cells were plated in a poly-D-
+
+  \         Lysine coated 384-well plate and incubated overnight. The following
+  day, cells were assayed for a calcium response to carbachol using the
+
+  \         Fluo-4 Direct™ Calcium Assay Kit. Cells were stimulated with
+  agonists, carbachol, MCN-A-343, bethanechol, oxotremorine, and pilocarpine
+
+  \         (panel A) or cells were treated with antagonists, scopolamine,
+  telenzipine, and DAMP to block the calcium response elicited by 114 nM
+
+  \         carbachol (EC80 for this receptor) (panel B). Measurements are given
+  in relative fluorescent units (RFU) as the maximum response minus the
+
+  \         minimum response divided by the minimum response. Rank order of
+  agonist and antagonist potency agreed with published results.
+
+
+
+
+
+  \                                                                                                                 \
+  Fluo-4 Direct™ Calcium Assay Kits | 6
+
+  \fProduct List Current prices may be obtained from our website or from our
+  Customer Service Department.
+
+
+  Cat. no.     Product
+  Name                                                                                                                                                                                                                            \
+  Unit Size
+
+  F10471       Fluo-4 Direct™ Calcium Assay Kit, Starter pack. . . . . . . . . .
+  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+  .                        1 kit
+
+  F10472       Fluo-4 Direct™ Calcium Assay Kit, Surveyor pack . . . . . . . . .
+  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+  .                            1 kit
+
+  F10473       Fluo-4 Direct™ Calcium Assay Kit, High-throughput pack . . . . .
+  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+  .                                     1 kit
+
+  Related Products
+
+  P10020       PowerLoad™ concentrate, 100X . . . . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+  .              5 mL
+
+  P36400       Probenecid, water soluble . . . . . . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+  . . . . 10 × 77 mg
+
+  14025-092    Hanks’ Balanced Salt Solution (HBSS) (1X), liquid. . . . . . . .
+  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+  .                      500 mL
+
+  15630-106    HEPES Buffer Solution (1 M). . . . . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+  . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+  . . . . .     20 mL
+
+
+
+
+
+  Contact Information
+
+
+
+  Molecular Probes,
+  Inc.                                                  Further information on
+  Molecular Probes products, including product bibliographies, is available from
+  your local distributor or directly
+
+  29851 Willow Creek Road                                                 from
+  Molecular Probes. Customers in Europe, Africa and the Middle East should
+  contact our office in Paisley, United Kingdom. All others
+
+  Eugene, OR 97402                                                        should
+  contact our Technical Service Department in Eugene, Oregon.
+
+  Phone: (541) 465-8300
+
+  Fax: (541)
+  335-0504                                                     Molecular Probes
+  products are high-quality reagents and materials intended for research
+  purposes only. These products must be used
+
+  \                                                                        by,
+  or directly under the supervision of, a technically qualified individual
+  experienced in handling potentially hazardous chemicals. Please
+
+  Customer Service:                                                       read
+  the Material Safety Data Sheet provided for each product; other regulatory
+  considerations may apply.
+
+  6:00 am to 4:30 pm (Pacific Time)
+
+  Phone: (541)
+  335-0338                                                   Limited Use Label
+  License No. 223: Labeling and Detection Technology
+
+  Fax: (541) 335-0305                                                     The
+  purchase of this product conveys to the buyer the non-transferable right to
+  use the purchased amount of the product and compo-
+
+  probesorder@invitrogen.com                                              nents
+  of the product in research conducted by the buyer (whether the buyer is an
+  academic or for-profit entity). The buyer cannot sell or
+
+  \                                                                        othe\
+  rwise transfer (a) this product (b) its components or (c) materials made using
+  this product or its components to a third party or oth-
+
+  Toll-Free Ordering for USA:                                             erwise
+  use this product or its components or materials made using this product or its
+  components for Commercial Purposes. The buyer
+
+  Order Phone: (800) 438-2209                                             may
+  transfer information or materials made through the use of this product to a
+  scientific collaborator, provided that such transfer is not
+
+  Order Fax: (800) 438-0228                                               for
+  any Commercial Purpose, and that such collaborator agrees in writing (a) to
+  not transfer such materials to any third party, and (b) to
+
+  \                                                                        use
+  such transferred materials and/or information solely for research and not for
+  Commercial Purposes. Commercial Purposes means any
+
+  Technical
+  Service:                                                      activity by a
+  party for consideration and may include, but is not limited to: (1) use of the
+  product or its components in manufacturing; (2)
+
+  8:00 am to 4:00 pm (Pacific Time)                                       use of
+  the product or its components to provide a service, information, or data; (3)
+  use of the product or its components for therapeutic,
+
+  Phone: (541)
+  335-0353                                                   diagnostic or
+  prophylactic purposes; or (4) resale of the product or its components, whether
+  or not such product or its components are
+
+  Toll-Free (800) 438-2209                                                resold
+  for use in research. Invitrogen Corporation will not assert a claim against
+  the buyer of infringement of the above patents based
+
+  Fax: (541) 335-0238                                                     upon
+  the manufacture, use or sale of a therapeutic, clinical diagnostic, vaccine or
+  prophylactic product developed in research by the
+
+  probestech@invitrogen.com                                               buyer
+  in which this product or its components was employed, provided that neither
+  this product nor any of its components was used
+
+  \                                                                        in
+  the manufacture of such product. If the purchaser is not willing to accept the
+  limitations of this limited use statement, Invitrogen is
+
+  \                                                                        will\
+  ing to accept return of the product with a full refund. For information on
+  purchasing a license to this product for purposes other than
+
+  Invitrogen European Headquarters
+
+  \                                                                        rese\
+  arch, contact Molecular Probes, Inc., Business Development, 29851 Willow Creek
+  Road, Eugene, OR 97402, Tel: (541) 465-8300. Fax:
+
+  Invitrogen, Ltd.
+
+  \                                                                        (541)
+  335-0354.
+
+  3 Fountain Drive
+
+  Inchinnan Business Park
+
+  Paisley PA4 9RF,
+  UK                                                     Several Molecular
+  Probes products and product applications are covered by U.S. and foreign
+  patents and patents pending. All names con-
+
+  Phone: +44 (0) 141 814
+  6100                                             taining the designation ® are
+  registered with the U.S. Patent and Trademark Office.
+
+  Fax: +44 (0) 141 814 6260
+
+  Email:
+  euroinfo@invitrogen.com                                          Copyright
+  2009, Molecular Probes, Inc. All rights reserved. This information is subject
+  to change without notice.
+
+  Technical Services: eurotech@invitrogen.com
+
+
+  For country-specific contact information,
+
+  visit www.invitrogen.com.
+
+
+
+
+
+  \                                                                                                                                                                                    \
+  Fluo-4 Direct™ Calcium Assay Kits | 7
+
+  \f"

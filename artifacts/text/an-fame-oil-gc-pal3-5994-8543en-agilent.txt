@@ -1,0 +1,385 @@
+Application Note
+Food Testing
+
+
+
+
+                             FAMEs Analysis of Oils by GC‑FID
+                             Coupled with Fully Automated
+                             Sample Preparation using a
+                             PAL3 Series 2 RTC
+
+Authors                      Abstract
+Saurabh Patel,
+                             This work describes workflows to improve process safety, optimizes throughput,
+Samuel P. Haddad, and
+                             and minimizes errors in the analysis of fatty acid methyl esters (FAMEs). These
+Alan M. Medina-Gonzalez
+                             analyses are routinely performed in governmental, quality control (QC), and contract
+Agilent Technologies, Inc.
+                             research laboratories worldwide. The resulting data often informs nutrition labeling,
+                             helping consumers make informed dietary choices. The physiological effects of fatty
+                             acids depend on their structural characteristics and detailed compositional analysis
+                             is essential. The Agilent automated sample preparation workflow using the PAL3
+                             Series 2 RTC autosampler and the Agilent 8890 gas chromatography (GC) system
+                             with flame ionization detector (FID) delivered reproducibility and accuracy in the
+                             analysis of FAMEs.
+Introduction                                Experimental                                         Two different Agilent automated
+                                                                                                 sample preparation workflows were
+The analysis of fatty acid methyl esters    The 37 component FAME mix standard                   tested to extract FAMEs from oils. The
+(FAMEs) is a widely used technique for      was purchased from Sigma-Aldrich                     M5795-14000 workflow used a quick
+characterizing lipid profiles in various    (part number CRM47885), and                          base catalyzed reaction (Figure 1).
+food products, including oils, meats, and   three consumer oil products were                     While M5795-14001 workflow used an
+seeds. Fats are composed of a complex       purchased from a local grocery store.                acid‑base catalyzed reaction (Figure 2).
+mixture of saturated, monounsaturated,      The samples were prepared and                        Included in each of the workflows are
+and polyunsaturated fatty acids, each       injected into the GC using the PAL3                  FAMEs analytical method, parameters
+with varying carbon chain lengths.2 This    Series 2-RTC system. The analysis                    show in Table 1, and a corresponding
+type of analysis is routinely performed     was performed using an 8890 GC                       data process method. For ease of use
+in governmental, quality control (QC),      equipped with an Agilent DB‑FastFAME                 a FAMEs workflow consumables kit
+and contract research laboratories          GC column, 30 m × 250 µm, 0.25 µm,                   (part number 5150-2201) was utilized
+worldwide. The resulting data often         (part number G3903‑63011) and                        during the experiment (Table 2).
+informs product labeling. Among the         configured with an FID using
+                                                                                                 The oil samples were purchased from
+analytical techniques available, gas        Agilent OpenLab CDS v2.7+.
+                                                                                                 a local grocery store. For sample
+chromatography (GC) with flame
+                                                                                                 preparation, 100 mg of sample was
+ionization detection (GC-FID) is one
+                                                                                                 weighed, put into a 10 mL vial, and
+of the most common methods for
+                                                                                                 capped. Sample vials were placed into
+determining fatty acid composition
+                                                                                                 the PAL3 VT15 sample rack.
+in foods.
+This application note describes the
+use of automated sample preparation                                               100 mg of sample in vial
+and analysis of FAMEs using the
+PAL3 Series 2 RTC Autosampler
+                                                    Check system
+system coupled with Agilent 8890
+                                                                                                                              Add ISTD
+GC system equipped with an FID.                                                                                            (if requested)
+The results shown here focus on two             Add heptane/hexane
+                                                      (5 mL)
+different methods of derivatization for                                                                                Add 2 N KOH in MeOH
+FAMEs extraction: (1) base catalyzed                                                                                         (200 µL)
+reactions using potassium hydroxide              Vortex (30 seconds)
+(KOH) (part number M5795-14000)                                                                                      Wait for phase separation
+                                                                                                                            (5 minutes)
+and (2) base plus acid catalyzed
+reactions using boron trifluoride (BF3)1
+                                                                                         GC analysis
+(part number M5795-14001). For ease
+of use, both processes have been            Figure 1. Detailed description of the sample preparation done with the Agilent automated sample
+transcribed into dedicated sample           preparation method (M5795-14000) using a methanolic KOH solution. The red block indicates the need for
+                                            user input where 100 mg of sample was accurately weighed and put into a 10 mL vial.
+preparation methods. These methods
+are part of the Agilent automated sample
+preparation workflow suite of solutions.
+These workflows improve process
+safety, optimizes throughput, and
+minimizes errors.
+
+
+
+
+   2
+                                                100 mg of sample in vial
+
+
+         Check system
+                                                                                             Add ISTD
+                                                                                          (if requested)
+      Add KOH in MeOH
+           (1 mL)
+                                                                                     Incubate at reflux time A
+                                                                                          (10 minutes)
+       Add BF3 in MeOH
+            (1 mL)
+                                                                                     Incubate at reflux time B
+                                                                                           (5 minutes)
+       Add NaCl in water
+            (1 mL)
+
+                                                                                       Vortex (30 seconds)
+     Add heptane/hexane
+           (2 mL)
+
+                                                                                       Vortex (30 seconds)
+  Wait for phase separation
+         (5 minutes)
+
+
+
+                                                        GC analysis
+
+Figure 2. Sample preparation steps taken using the Agilent automated sample preparation method
+(M5795-14001) using a methanolic KOH solution in addition to methanolic BF3 solution.
+
+
+
+Table 1. GC-FID parameters used for FAMEs analysis.
+
+         Parameter                                   Value
+ Injection Volume                 1 µL
+
+ Inlet (Split/Splitless)          275 °C (50:1 split)
+                                  70 °C (hold for 0.5 min),
+                                  60 °C/min to 165 °C (hold for 0.5 min),
+ Oven Program
+                                  10 °C/min to 200 °C (hold for 0.5 min),
+                                  5 °C/min to 230 °C (hold for 2 min)
+ Column Flow                      3.0 mL/min (hydrogen)
+
+ FID Temperature Setpoint         300 °C
+
+
+
+Table 2. The Agilent FAMEs workflow consumables kit                                         Table 3. List of optional consumables that are recommended
+(part number 5150-2201) includes the following items.                                       for ease of use.
+
+  Part Number                                    Description                                   Part Number                           Description
+ 5183-4759           Advanced Green Inlet Septa, 11 mm 50/pk                                  G3440-81011        Agilent self-tightening column nut, inlet/detector
+
+ 5190-3163           Inlet liner, UI, single taper with glass wool, 5/pk                      G3440-88000        Agilent capillary column depth guide
+
+ 5181-3323           Ferrule, 0.4 mm id, 85:10 Vespel/graphite, 10/pk                         5200-0176          FID Jet, universal fit, 0.011 in. id
+
+ 5190-6145           DB-FastFAME GC column, 30 m × 0.25 mm, 0.25 µm (7 in. cage)              8010-1352          1 mL Liquid sample syringe
+
+ 5188-5392           10 mL Screw top vials
+
+ 5188-2759           Magnetic caps
+
+ 8010-1353           2.5 mL Liquid Sampling syringe with removable needle (D18/57)
+
+ 8010-1383           F1000 replacement needles (23/57/C)
+
+
+
+
+                                                                                                                                                                      3
+Results and discussion                            Table 4. Elution order for the 37 component FAMEs mixture on an Agilent DB-FastFAME GC column.
+
+Figure 3 shows the results from                      Elution Order    Analyte        Elution Order     Analyte       Elution Order     Analyte
+
+37 compound FAMEs standard using                    1                   c4:0        14                  c17:0        27                c20:3n6
+
+the analytical and processing methods               2                   c6:0        15                  c17:1        28                c20:4n6
+
+included in the Agilent FAMEs workflow.             3                   c8:0        16                  c18:0        29                c20:3n3
+
+The results show well resolved peaks                4                  c10:0        17               c18:1 trans     30                  c22:0
+
+(resolution >1.5) with analysis time                5                  c11:0        18                c18:1 cis      31              c20:5n3 (EPA)
+
+of less than 15 minutes. Table 4 lists              6                  c12:0        19               c18:2 trans     32                  c22:1
+
+the elution order of the 37 compound                7                  c13:0        20                c18:2 cis      33                c22:2n6
+
+FAMEs mix on the Agilent DB-FastFAME                8                  c14:0        21                 c18:3n6       34                  c23:0
+GC column.                                          9                  c14:1        22                 18:3n3        35                  c24:0
+
+                                                    10                 c15:0        23                  c20:0        36                  c24:1
+
+                                                    11                 c15:1        24                  c20:1        37               c22:6 (DHA)
+
+                                                    12                 c16:0        25                  c20:2
+
+                                                    13                 c16:1        26                  c21:0
+
+
+
+
+Figure 3. Chromatographic performance for a 37 component FAMEs mixture on a 30 m × 250 µm, 0.25 µm Agilent DB-FastFAME column using GC-FID.
+
+
+
+
+   4
+Figure 4 shows the results from three                       Olive oil                                                                       System 1         System 2
+different store-bought oils using the                                                                  72.8 72.4
+KOH solution. The results show stable
+results from system to system for all
+three samples. The calculated values of
+the saturated and unsaturated fats in the
+samples are comparable to expected
+
+
+
+
+                                                  Percent
+concentrations found in literature.
+Table 5 highlights the robustness of
+the automated sample preparation
+methodology. Repeatability tests were                             16.1 16.1
+carried out using five samples of olive
+                                                                                                                               9.4   9.2
+oil on two different PAL3 Series 2-RTC
+systems. The calculated RSD% shows                                                 0.8   0.8                                                           0.7    0.6
+
+highly reproducible results.                                      Saturated         C16:1              C18:1 cis               C18:2 cis               C18:3n3
+
+Similar studies on method reproducibility                   Canola:olive mix                                                                System 1         System 2
+and accuracy were carried out using
+                                                                                               63.5 63.5
+the KOH-BF3 solutions. The results are
+comparable to what was achieved using
+the simplified KOH solution method.
+
+
+Table 5. Repeatability studies on select
+                                                  Percent
+
+
+
+
+compounds on olive oil sample (N = 5), put
+through the automated sample preparation,
+show highly reproducible results independent of
+system dependency.
+                                                                                                               17.6 17.6
+                System 1            System 2
+             Peak Area RSD%      Peak Area RSD%
+                                                                  7.1 7.1                                                            8     7.7
+ C16:0              2.2                2.9
+
+ C16:1              2.2                2.9                                     0.4 0.4                                                                   0.4 0.4
+ C17:0              3.0                3.0                       Saturated     C16:1           C18:1 cis           C18:2 cis         C18:3n3            C18:3n6
+ C17:1              3.7                3.3
+                                                            Hemp oil                                                                        System 1         System 2
+ C18:0              2.2                2.9
+
+ C18:1 cis          2.1                2.9
+
+ c18:2 cis          2.1                2.9                                                                                     57.6 57.5
+
+ C18:3n3            2.8                3.6
+
+ C20:0              2.3                2.6
+                                                  Percent
+
+
+
+
+                                                                                                                                                   17.2 17.2
+                                                                                                       12.7 12.7
+                                                                  10.8 10.8
+
+
+                                                                                   0.1   0.1
+                                                                  Saturated         C16:1              C18:1 cis               C18:2 cis               C18:3n3
+
+                                                   Figure 4. Precision study was carried out on three store-bought oils using M5795-14000 workflow.
+
+
+
+
+                                                                                                                                                                    5
+Table 6. Repeatability studies using olive oil              Olive oil                                                                        System 1         System 2
+(N = 5) show highly reproducible results across
+multiple systems.                                                                                        69.5 68.1
+
+                 System 1           System 2
+              Peak Area RSD%     Peak Area RSD%
+ C16:0              0.91               3.54
+
+ C16:1              1.11               5.34
+
+
+
+
+                                                  Percent
+ C17:0              3.01               3.62
+
+ C18:0              0.70               1.87
+
+ C18:1 cis          0.64               1.67
+
+ c18:2 cis          0.75               3.06                        16.8 15.3
+ C18:3n3            2.37               4.31
+                                                                                                                                 8.9   8.9
+ C20:0              2.41               2.34
+                                                                                   0.8   0.8                                                            0.8    0.7
+                                                                  Saturated        C16:1                 C18:1 cis               C18:2 cis              C18:3n3
+
+
+                                                            Canola:olive mix                                                                 System 1         System 2
+
+
+                                                                                                      62.8
+                                                                                               61.1
+                                                  Percent
+
+
+
+
+                                                                                                                     18.3 19.1
+
+
+                                                                                                                                       8.9 9.1
+                                                                  6.4 7.1
+
+                                                                               0   0.2                                                                    0.4 0.4
+                                                                Saturated      C16:1           C18:1 cis             C18:2 cis         C18:3n3           C18:3n6
+
+                                                            Hemp oil                                                                         System 1         System 2
+
+
+
+                                                                                                                                 57.6 57.6
+                                                  Percent
+
+
+
+
+                                                                                                                                                        18    18.1
+                                                                                                         12.7 12.8
+                                                                   10.8 10.8
+
+
+                                                                                   0.1   0.1
+                                                                  Saturated        C16:1                 C18:1 cis               C18:2 cis              C18:3n3
+
+                                                   Figure 5. Precision study was carried out on three store-bought oils using M5795-14001 workflow.
+
+
+
+
+    6
+Conclusion                                              References
+In summary, the current study                           1. Godina, L. Analysis of Oil and
+demonstrated excellent reproducibility                     Fat Containing Foods by Fully
+and accuracy using automated sample                        Automated Sample Preparation
+preparation and analysis of FAMEs. Two                     Using a PAL3 Coupled with 7890 GC
+different sample preparation methods                       and a 5977 MSD System According
+were demonstrated, both delivering                         to AOAC 996.01. Agilent Technologies
+comparable and reliable results. The                       application note, 5991‑9107EN, 2018.
+base-catalyzed method enables rapid                     2. Zou, Y. H. Improving the Analysis of
+analysis but is not suitable for samples                   37 Fatty Acid Methyl Esters. Agilent
+containing free fatty acids. In contrast,                  Technologies application note,
+the acid-catalyzed method, while more                      5991‑8706EN, 2023.
+extensive, is compatible with a broader
+range of lipid classes, including free
+fatty acids, phosphoglycerides, and
+triglycerides. The Agilent automated
+sample preparation workflow suite
+of solutions deliver a comprehensive
+package by combining preconfigured
+hardware, optimized analytical methods,
+and the necessary consumables to
+ensure efficient and reliable results.
+
+
+
+
+www.agilent.com
+
+DE-008504
+
+This information is subject to change without notice.
+
+© Agilent Technologies, Inc. 2025
+Printed in the USA, August 1, 2025
+5994-8543EN
+

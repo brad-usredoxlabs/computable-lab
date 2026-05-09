@@ -269,8 +269,8 @@ async function scanVariantArtifacts(
   const coderPatch = fileIfExists(join(artifactRoot, 'code-patches', protocolId, variant, 'result.yaml'));
   const patchReport = fileIfExists(join(artifactRoot, 'patch-reports', `${protocolId}-${variant}.yaml`));
   const coderPatchStatus = coderPatchResultStatus(coderPatch);
-  const criticReport = fileIfExists(join(artifactRoot, 'critic-reports', protocolId, variant, 'report.yaml'))
-    ?? fileIfExists(join(artifactRoot, 'critic-reports', `${protocolId}-${variant}.yaml`));
+  const criticReport = fileIfExists(join(artifactRoot, 'patch-critic', protocolId, variant, 'report.yaml'))
+    ?? fileIfExists(join(artifactRoot, 'patch-critic', `${protocolId}-${variant}.yaml`));
   const patchFailure = fileIfExists(join(artifactRoot, 'patch-failures', `${protocolId}-${variant}.yaml`));
   const rerunReport = fileIfExists(join(artifactRoot, 'rerun', protocolId, variant, 'rerun.yaml'));
   let stallReport = fileIfExists(stallReportPath(artifactRoot, protocolId, variant));
@@ -399,8 +399,8 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
       if (item.status === 'stalled' || item.artifacts.stallReport) continue;
       const adoptionPath = join(ledger.artifact_root, 'adoption', protocol.protocolId, variant, 'adoption.yaml');
       const coderPatchPath = join(ledger.artifact_root, 'code-patches', protocol.protocolId, variant, 'result.yaml');
-      const criticReportPath = join(ledger.artifact_root, 'critic-reports', protocol.protocolId, variant, 'report.yaml');
-      const flatCriticReportPath = join(ledger.artifact_root, 'critic-reports', `${protocol.protocolId}-${variant}.yaml`);
+      const criticReportPath = join(ledger.artifact_root, 'patch-critic', protocol.protocolId, variant, 'report.yaml');
+      const flatCriticReportPath = join(ledger.artifact_root, 'patch-critic', `${protocol.protocolId}-${variant}.yaml`);
       const patchFailurePath = join(ledger.artifact_root, 'patch-failures', `${protocol.protocolId}-${variant}.yaml`);
       const escalationPath = join(ledger.artifact_root, 'patch-escalations', `${protocol.protocolId}-${variant}.yaml`);
       const coderPatchTerminal = coderPatchIsTerminal(coderPatchPath);

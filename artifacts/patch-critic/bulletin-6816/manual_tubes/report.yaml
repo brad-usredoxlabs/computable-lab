@@ -1,0 +1,18 @@
+kind: protocol-foundry-critic-report
+protocolId: bulletin-6816
+variant: manual_tubes
+generated_at: 2026-05-09T00:39:10.722Z
+verdict: pass
+reportPath: /home/brad/git/computable-foundry/artifacts/patch-critic/bulletin-6816/manual_tubes/report.yaml
+reviewDurationMs: 7
+message: "Patch applied: 1 file(s) changed, spec verification passed."
+notes:
+  - No acceptance criteria available for this patch spec
+touchedFiles:
+  - server/src/foundry/ProtocolFoundryCompileRunner.ts
+specVerification:
+  accepted: true
+  criteriaMet: []
+  criteriaFailed: []
+  notes:
+    - All acceptance criteria satisfied
