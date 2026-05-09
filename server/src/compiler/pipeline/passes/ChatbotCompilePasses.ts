@@ -546,146 +546,44 @@ function normalizeUnresolvedRefs(input: unknown): Array<{ kind: string; label: s
 }
 
 function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unknown }): AiPrecompileOutput {
-  let parsed: unknown = input.parsed;
+  let parsedObj: Record<string, unknown> | undefined = input.parsed as Record<string, unknown> | undefined;
 
-  // Try to parse raw string if parsed is not available
-  if (parsed === undefined && typeof input.raw === 'string') {
-    try {
-      parsed = JSON.parse(input.raw);
-    } catch {
-      // Fall through to empty output
-    }
+  // Handle case where parsed is a string (JSON)
+  if (typeof parsedObj === 'string') {
+    try { parsedObj = JSON.parse(parsedObj); } catch { parsedObj = undefined; }
+  }
+  // Fallback to raw if parsed is missing/invalid
+  if (!parsedObj && typeof input.raw === 'string') {
+    try { parsedObj = JSON.parse(input.raw); } catch { parsedObj = undefined; }
   }
 
-  // If raw is an object, use it as parsed
-  if (parsed === undefined && typeof input.raw === 'object' && input.raw !== null) {
-    parsed = input.raw;
+  // Return safe default shape if parsing fails or input is not an object
+  if (!parsedObj || typeof parsedObj !== 'object') {
+    return {
+      candidateEvents: [],
+      candidateLabwares: [],
+      mintMaterials: [],
+      unresolvedRefs: [],
+    };
   }
 
-  // Ensure parsed is an object
-  if (parsed === undefined || typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    parsed = {};
-  }
+  const rawEvents = parsedObj.candidateEvents ?? parsedObj.events ?? parsedObj.actions ?? [];
+  const events = Array.isArray(rawEvents) ? lowerCandidateActionsToEvents(rawEvents) : [];
 
-  const obj = parsed as Record<string, unknown>;
+  const rawLabwares = parsedObj.candidateLabwares ?? parsedObj.labwares ?? [];
+  const labwares = Array.isArray(rawLabwares) ? rawLabwares : [];
 
-  // Extract and normalize mintMaterials
-  const rawMintMaterials = obj.mintMaterials ?? obj.mint_materials ?? obj.materials ?? [];
-  const mintMaterials: Array<{ kind: string; label: string; [key: string]: unknown }> = Array.isArray(rawMintMaterials)
-    ? rawMintMaterials.map((item: unknown) => {
-        if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
-          const typed = item as Record<string, unknown>;
-          return {
-            kind: typeof typed.kind === 'string' ? typed.kind : 'material',
-            label: typeof typed.label === 'string' ? typed.label : 'unknown',
-            ...typed,
-          };
-        }
-        return { kind: 'material', label: 'unknown' };
-      })
-    : [];
+  const rawMaterials = parsedObj.mintMaterials ?? parsedObj.materials ?? [];
+  const materials = Array.isArray(rawMaterials) ? rawMaterials : [];
 
-  // Extract and normalize candidateLabwares
-  const rawCandidateLabwares = obj.candidateLabwares ?? obj.candidate_labwares ?? obj.labwares ?? [];
-  const candidateLabwares: Array<{ kind: string; label: string; [key: string]: unknown }> = Array.isArray(rawCandidateLabwares)
-    ? rawCandidateLabwares.map((item: unknown) => {
-        if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
-          const typed = item as Record<string, unknown>;
-          return {
-            kind: typeof typed.kind === 'string' ? typed.kind : 'labware',
-            label: typeof typed.label === 'string' ? typed.label : 'unknown',
-            ...typed,
-          };
-        }
-        return { kind: 'labware', label: 'unknown' };
-      })
-    : [];
-
-  // Extract and normalize patternEvents
-  const rawPatternEvents = obj.patternEvents ?? obj.pattern_events ?? obj.events ?? [];
-  const patternEvents: Array<{ verb: string; [key: string]: unknown }> = Array.isArray(rawPatternEvents)
-    ? rawPatternEvents.map((item: unknown) => {
-        if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
-          const typed = item as Record<string, unknown>;
-          return {
-            verb: typeof typed.verb === 'string' ? typed.verb : 'unknown',
-            ...typed,
-          };
-        }
-        return { verb: 'unknown' };
-      })
-    : [];
-
-  // Extract and normalize candidateActions
-  const rawCandidateActions = obj.candidateActions ?? obj.candidate_actions ?? obj.actions ?? [];
-  const candidateActions: Array<{ verb: string; [key: string]: unknown }> = Array.isArray(rawCandidateActions)
-    ? rawCandidateActions.map((item: unknown) => {
-        if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
-          const typed = item as Record<string, unknown>;
-          return {
-            verb: typeof typed.verb === 'string' ? typed.verb : 'unknown',
-            ...typed,
-          };
-        }
-        return { verb: 'unknown' };
-      })
-    : [];
-
-  // Extract and normalize unresolvedRefs
-  const rawUnresolvedRefs = obj.unresolvedRefs ?? obj.unresolved_refs ?? obj.unresolvedReferences ?? [];
-  const unresolvedRefs: Array<{ kind: string; label: string; reason: string }> = Array.isArray(rawUnresolvedRefs)
-    ? rawUnresolvedRefs.map((item: unknown) => {
-        if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
-          const typed = item as Record<string, unknown>;
-          return {
-            kind: typeof typed.kind === 'string' ? typed.kind : 'unknown',
-            label: typeof typed.label === 'string' ? typed.label : 'unknown',
-            reason: typeof typed.reason === 'string' ? typed.reason : 'unresolved',
-          };
-        }
-        return { kind: 'unknown', label: 'unknown', reason: 'unresolved' };
-      })
-    : [];
-
-  // Extract and normalize directives
-  const rawDirectives = obj.directives ?? [];
-  const directives: Array<{ type: string; [key: string]: unknown }> = Array.isArray(rawDirectives)
-    ? rawDirectives.map((item: unknown) => {
-        if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
-          const typed = item as Record<string, unknown>;
-          return {
-            type: typeof typed.type === 'string' ? typed.type : 'directive',
-            ...typed,
-          };
-        }
-        return { type: 'directive' };
-      })
-    : [];
-
-  // Extract and normalize taggedPhrases
-  const rawTaggedPhrases = obj.taggedPhrases ?? obj.tagged_phrases ?? [];
-  const taggedPhrases: Array<{ phrase: string; tag: string; [key: string]: unknown }> = Array.isArray(rawTaggedPhrases)
-    ? rawTaggedPhrases.map((item: unknown) => {
-        if (typeof item === 'object' && item !== null && !Array.isArray(item)) {
-          const typed = item as Record<string, unknown>;
-          return {
-            phrase: typeof typed.phrase === 'string' ? typed.phrase : '',
-            tag: typeof typed.tag === 'string' ? typed.tag : 'unknown',
-            ...typed,
-          };
-        }
-        return { phrase: '', tag: 'unknown' };
-      })
-    : [];
+  const rawRefs = parsedObj.unresolvedRefs ?? parsedObj.unresolved_references ?? [];
+  const refs = Array.isArray(rawRefs) ? normalizeUnresolvedRefs(rawRefs) : [];
 
   return {
-    mintMaterials,
-    candidateLabwares,
-    patternEvents,
-    candidateActions,
-    unresolvedRefs,
-    directives,
-    taggedPhrases,
+    candidateEvents: events,
+    candidateLabwares: labwares,
+    mintMaterials: materials,
+    unresolvedRefs: refs,
   };
 }
 
@@ -711,67 +609,35 @@ export interface CreateAiPrecompilePassDeps {
  * legacy LLM candidateEvents/candidateLabwares remain accepted as a fallback.
  */
 export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
-  const { llmClient, registryLoader } = deps;
-
   return {
     id: 'ai_precompile',
-    async run(args: PassRunArgs): Promise<PassResult> {
-      const { state } = args;
-      const prompt = state.input?.prompt;
-      const attachments = state.input?.attachments;
-
-      if (!prompt) {
-        return {
-          ok: false,
-          diagnostics: [{
-            severity: 'error',
-            code: 'ai_precompile_missing_prompt',
-            message: 'ai_precompile requires state.input.prompt',
-          }],
-        };
-      }
-
-      const systemPrompt = getAiPrecompileSystemPrompt();
-      const schema = createAiPrecompileOutputSchema();
+    run: async (args: PassRunArgs): Promise<PassResult> => {
+      const prompt = renderPromptTemplate('ai_precompile', {
+        prompt: args.state.input.prompt,
+        entities: args.state.outputs.extract_entities?.extractedEntities ?? [],
+      });
 
       const messages: ChatMessage[] = [
-        { role: 'system', content: systemPrompt },
+        { role: 'system', content: getAiPrecompileSystemPrompt() },
         { role: 'user', content: prompt },
       ];
 
-      const completionRequest: CompletionRequest = {
-        messages,
-        schema,
-        temperature: 0.2,
-      };
+      const completion = await deps.llmClient.chat({ messages, model: 'default' });
+      const rawContent = completion.content;
 
+      let parsed: unknown;
       try {
-        const response = await llmClient.complete(completionRequest);
-        const rawOutput = response.content;
-
-        // Salvage the output to ensure it conforms to AiPrecompileOutput
-        const output = salvageAiPrecompileOutput({
-          raw: typeof rawOutput === 'string' ? rawOutput : JSON.stringify(rawOutput),
-          parsed: rawOutput,
-        });
-
-        return {
-          ok: true,
-          outputs: {
-            ai_precompile: output,
-          },
-        };
-      } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        return {
-          ok: false,
-          diagnostics: [{
-            severity: 'error',
-            code: 'ai_precompile_llm_error',
-            message: `ai_precompile LLM call failed: ${errorMessage}`,
-          }],
-        };
+        parsed = typeof rawContent === 'string' ? JSON.parse(rawContent) : rawContent;
+      } catch {
+        parsed = undefined;
       }
+
+      const output = salvageAiPrecompileOutput({ raw: rawContent, parsed });
+
+      return {
+        output,
+        diagnostics: [],
+      };
     },
   };
 }
