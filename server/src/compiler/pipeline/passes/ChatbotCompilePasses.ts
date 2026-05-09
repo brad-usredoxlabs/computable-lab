@@ -521,22 +521,38 @@ function normalizeUnresolvedRefs(input: unknown): Array<{ kind: string; label: s
 
 function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unknown }): AiPrecompileOutput {
   let data: Record<string, unknown> = {};
-  if (input.parsed !== undefined) {
-    data = typeof input.parsed === 'object' && input.parsed !== null ? (input.parsed as Record<string, unknown>) : {};
-  } else if (input.raw) {
+  if (input.parsed && typeof input.parsed === 'object' && !Array.isArray(input.parsed)) {
+    data = input.parsed as Record<string, unknown>;
+  } else if (typeof input.raw === 'string') {
     try {
-      const parsed = typeof input.raw === 'string' ? JSON.parse(input.raw) : input.raw;
-      data = typeof parsed === 'object' && parsed !== null ? (parsed as Record<string, unknown>) : {};
+      const parsed = JSON.parse(input.raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        data = parsed as Record<string, unknown>;
+      }
     } catch {
-      data = {};
+      // ignore parse errors
     }
+  } else if (typeof input.raw === 'object' && input.raw !== null) {
+    data = input.raw as Record<string, unknown>;
   }
 
+  const toSafeArray = <T>(val: unknown): T[] => {
+    if (Array.isArray(val)) {
+      return val.filter((item): item is T => item != null && typeof item === 'object') as T[];
+    }
+    if (val && typeof val === 'object') {
+      return [val as T];
+    }
+    return [];
+  };
+
   return {
-    directives: Array.isArray(data.directives) ? data.directives : [],
-    candidateLabwares: Array.isArray(data.candidateLabwares) ? data.candidateLabwares : [],
-    candidateActions: Array.isArray(data.candidateActions) ? data.candidateActions : [],
-    unresolvedRefs: Array.isArray(data.unresolvedRefs) ? data.unresolvedRefs : [],
+    candidateActions: toSafeArray(data.candidateActions),
+    mintMaterials: toSafeArray(data.mintMaterials),
+    candidateLabwares: toSafeArray(data.candidateLabwares),
+    priorLabwareRefs: toSafeArray(data.priorLabwareRefs),
+    patternEvents: toSafeArray(data.patternEvents),
+    unresolvedRefs: toSafeArray(data.unresolvedRefs),
   };
 }
 
