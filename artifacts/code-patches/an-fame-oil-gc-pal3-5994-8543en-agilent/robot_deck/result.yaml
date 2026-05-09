@@ -1,0 +1,10 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: robot_deck
+generated_at: 2026-05-09T19:27:25.387Z
+status: applied
+selectedSpecId: an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-ai-precompile-shape-mismatch
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+commit: 1676bd54e2c6088f85b063a01b5f731cdf514b2e
+message: Patch applied and committed.

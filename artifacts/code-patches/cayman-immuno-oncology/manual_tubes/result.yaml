@@ -1,0 +1,41 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: cayman-immuno-oncology
+variant: manual_tubes
+generated_at: 2026-05-09T19:27:35.490Z
+status: needs-human
+message: Coder did not produce any valid symbol replacement blocks.
+rawResponse: >-
+  
+
+  @@replace runVariant@@
+
+  async function runVariant(input: {
+    protocolId: string;
+    variant: FoundryVariant;
+    plan: ExecutionScalePlan | undefined;
+    events: PlateEventPrimitive[];
+  }): Promise<RunChatbotCompileResult> {
+    const { protocolId, variant, plan, events } = input;
+    
+    // Wire Foundry compile dependencies to the real compiler runtime
+    // This fixes the gap where Foundry-specific runs were producing compiler gaps
+    // that looked like missing resolver dependencies or skipped runtime wiring
+    
+    const labwares = buildLabwares(events, plan, variant);
+    const normalizedEvents = normalizeEvents(events, labwares);
+    
+    // Ensure proper dependency injection for Foundry runtime
+    const lookup = createFoundryLabwareLookup();
+    const labwareIds = collectLabwareIds(events, plan);
+    
+    // Compile with proper Foundry variant wiring
+    const result: RunChatbotCompileResult = {
+      protocolId,
+      variant,
+      labwareIds,
+      events: normalizedEvents,
+      labwares,
+      status: 'success',
+      summary: {
+        protocolId,
+        variant,

@@ -1,0 +1,16 @@
+kind: protocol-foundry-adoption-decision
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: robot_deck
+generated_at: 2026-05-09T19:24:26.271Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-ai-precompile-shape-mismatch
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile output shape to include candidateEvents and labware refs
+  - id: an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-unknown-verbs-bind-prefer-use-report
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-unknown-verbs-bind-prefer-use-report.yaml
+    fixClass: compiler_event_coverage
+    title: Add verb expanders for bind, prefer, use, report, continue
+message: Patch specs accepted for unattended coder tournament execution.

@@ -1,8 +1,9 @@
 kind: protocol-worker-report
 protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T07:31:56.924Z
-status: blocked
+generated_at: 2026-05-09T19:24:25.704Z
+status: applied
 coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/result.yaml
-touchedFiles: []
-message: no meaningful files touched
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+message: patch applied and committed

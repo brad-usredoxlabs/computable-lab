@@ -1,16 +1,16 @@
 kind: protocol-foundry-protocol-quality
-generated_at: 2026-05-09T10:01:36.081Z
+generated_at: 2026-05-09T19:42:53.983Z
 summary:
   protocolCount: 10
   variantTotal: 30
   accepted: 0
-  complete: 0
-  gaps: 25
+  complete: 2
+  gaps: 21
   extractorFailures: 0
   eventTotal: 143
   blockerTotal: 0
   acceptedRate: 0
-  completeRate: 0
+  completeRate: 0.06666666666666667
 protocols:
   - protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
     status: gap
@@ -26,7 +26,7 @@ protocols:
         qualityScore: 0.35
         coverageEstimate: 0.5
       - variant: bench_plate_multichannel
-        status: running
+        status: accepted
         accepted: false
         browserStatus: skipped
         eventCount: 9
@@ -36,7 +36,7 @@ protocols:
         qualityScore: 0.35
         coverageEstimate: 0.45
       - variant: robot_deck
-        status: gap
+        status: accepted
         accepted: false
         browserStatus: skipped
         eventCount: 0
@@ -79,10 +79,10 @@ protocols:
         qualityScore: 0.1
         coverageEstimate: 0.1
   - protocolId: cayman-immuno-oncology
-    status: gap
+    status: blocked
     variants:
       - variant: manual_tubes
-        status: gap
+        status: blocked
         accepted: false
         browserStatus: skipped
         eventCount: 2
@@ -92,7 +92,7 @@ protocols:
         qualityScore: 0.7999999999999999
         coverageEstimate: 0.1
       - variant: bench_plate_multichannel
-        status: gap
+        status: blocked
         accepted: false
         browserStatus: skipped
         eventCount: 11
@@ -102,7 +102,7 @@ protocols:
         qualityScore: 0.7999999999999999
         coverageEstimate: 0.55
       - variant: robot_deck
-        status: gap
+        status: running
         accepted: false
         browserStatus: skipped
         eventCount: 0

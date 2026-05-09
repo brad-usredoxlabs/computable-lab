@@ -1,0 +1,10 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: bench_plate_multichannel
+generated_at: 2026-05-09T19:24:25.703Z
+status: applied
+selectedSpecId: an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-ai-precompile-shape-mismatch
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+commit: aef13c1f71ec649beabc4f4633905bb527b89fc1
+message: Patch applied and committed.

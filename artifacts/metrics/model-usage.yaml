@@ -1,46 +1,29 @@
 kind: protocol-foundry-model-usage
-generated_at: 2026-05-09T10:01:35.985Z
-startedAt: 2026-05-09T08:37:16.655Z
-completedAt: 2026-05-09T10:01:35.363Z
-elapsedSeconds: 5058.708
+generated_at: 2026-05-09T19:42:53.899Z
+startedAt: 2026-05-09T19:19:55.229Z
+completedAt: 2026-05-09T19:42:53.865Z
+elapsedSeconds: 1378.636
 endpoints:
   - role: worker
-    baseUrl: http://thunderbeast:8001/v1
-    start:
-      endpoint: http://thunderbeast:8001/metrics
-      promptTokensTotal: 127043240
-      generationTokensTotal: 845031
-      runningRequests: 1
-      waitingRequests: 0
-      kvCacheUsage: 0.060414788097384986
-    end:
-      endpoint: http://thunderbeast:8001/metrics
-      promptTokensTotal: 128358343
-      generationTokensTotal: 857338
-      runningRequests: 0
-      waitingRequests: 0
-      kvCacheUsage: 0
-    deltaPromptTokens: 1315103
-    deltaGenerationTokens: 12307
-    promptTokensPerSecond: 259.96815787746596
-    generationTokensPerSecond: 2.4328346289210607
+    baseUrl: http://thunderbeast:8888/v1
+    error: "model metrics HTTP 404: ; model metrics HTTP 404: "
   - role: architect
     baseUrl: http://thunderbeast:8000/v1
     start:
       endpoint: http://thunderbeast:8000/metrics
-      promptTokensTotal: 65008875
-      generationTokensTotal: 643056
+      promptTokensTotal: 1747493
+      generationTokensTotal: 14817
       runningRequests: 0
       waitingRequests: 0
       kvCacheUsage: 0
     end:
       endpoint: http://thunderbeast:8000/metrics
-      promptTokensTotal: 65745255
-      generationTokensTotal: 698991
+      promptTokensTotal: 1916356
+      generationTokensTotal: 51318
       runningRequests: 1
       waitingRequests: 0
-      kvCacheUsage: 0.10362694300518138
-    deltaPromptTokens: 736380
-    deltaGenerationTokens: 55935
-    promptTokensPerSecond: 145.5668127118624
-    generationTokensPerSecond: 11.057171119582312
+      kvCacheUsage: 0.078215527230591
+    deltaPromptTokens: 168863
+    deltaGenerationTokens: 36501
+    promptTokensPerSecond: 122.4855581893988
+    generationTokensPerSecond: 26.47616919912145

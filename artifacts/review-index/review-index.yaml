@@ -1,5 +1,5 @@
 kind: protocol-foundry-review-index
-generated_at: 2026-05-09T09:46:26.511Z
+generated_at: 2026-05-09T19:27:45.695Z
 artifactRoot: /home/brad/git/computable-foundry/artifacts
 protocols:
   - protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
@@ -26,7 +26,7 @@ protocols:
         architectStatus: missing
         criticStatus: missing
       - variant: bench_plate_multichannel
-        status: gap
+        status: accepted
         eventCount: 9
         blockerCount: 0
         qualityScore: 0.35
@@ -45,12 +45,14 @@ protocols:
             - patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-labware-resolution-generic-refs.yaml
             - patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-unknown-verbs-scale-wait.yaml
           adoptionDecision: adoption/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/adoption.yaml
+          coderPatch: code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/result.yaml
           patchReport: patch-reports/an-fame-oil-gc-pal3-5994-8543en-agilent-bench_plate_multichannel.yaml
+          criticReport: patch-critic/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/report.yaml
         browserStatus: skipped
         architectStatus: rejected
-        criticStatus: missing
+        criticStatus: present
       - variant: robot_deck
-        status: gap
+        status: accepted
         eventCount: 0
         blockerCount: 0
         qualityScore: 0.1
@@ -67,9 +69,13 @@ protocols:
           patchSpecs:
             - patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-ai-precompile-shape-mismatch.yaml
             - patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-unknown-verbs-bind-prefer-use-report.yaml
+          adoptionDecision: adoption/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/adoption.yaml
+          coderPatch: code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/result.yaml
+          patchReport: patch-reports/an-fame-oil-gc-pal3-5994-8543en-agilent-robot_deck.yaml
+          criticReport: patch-critic/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/report.yaml
         browserStatus: skipped
         architectStatus: rejected
-        criticStatus: missing
+        criticStatus: present
   - protocolId: bulletin-6816
     status: stalled
     variants:
@@ -139,10 +145,10 @@ protocols:
         architectStatus: missing
         criticStatus: present
   - protocolId: cayman-immuno-oncology
-    status: gap
+    status: blocked
     variants:
       - variant: manual_tubes
-        status: gap
+        status: blocked
         eventCount: 2
         blockerCount: 0
         qualityScore: 0.7999999999999999
@@ -162,11 +168,14 @@ protocols:
             - patch-specs/cayman-immuno-oncology/manual_tubes/fix-foundry-runtime-wiring-gap.yaml
             - patch-specs/cayman-immuno-oncology/manual_tubes/fix-labware-alias-resolver-gap.yaml
             - patch-specs/cayman-immuno-oncology/manual_tubes/fix-material-catalog-spec-gap.yaml
+          adoptionDecision: adoption/cayman-immuno-oncology/manual_tubes/adoption.yaml
+          coderPatch: code-patches/cayman-immuno-oncology/manual_tubes/result.yaml
+          patchReport: patch-reports/cayman-immuno-oncology-manual_tubes.yaml
         browserStatus: skipped
         architectStatus: rejected
         criticStatus: missing
       - variant: bench_plate_multichannel
-        status: gap
+        status: blocked
         eventCount: 11
         blockerCount: 0
         qualityScore: 0.7999999999999999
@@ -185,6 +194,9 @@ protocols:
             - patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-foundry-runtime-wiring-gap.yaml
             - patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-labware-alias-resolver-gap.yaml
             - patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-material-catalog-spec-gap.yaml
+          adoptionDecision: adoption/cayman-immuno-oncology/bench_plate_multichannel/adoption.yaml
+          coderPatch: code-patches/cayman-immuno-oncology/bench_plate_multichannel/result.yaml
+          patchReport: patch-reports/cayman-immuno-oncology-bench_plate_multichannel.yaml
         browserStatus: skipped
         architectStatus: rejected
         criticStatus: missing
@@ -207,6 +219,7 @@ protocols:
             - patch-specs/cayman-immuno-oncology/robot_deck/fix-ai-precompile-shape-mismatch.yaml
             - patch-specs/cayman-immuno-oncology/robot_deck/fix-labware-resolution-gaps.yaml
             - patch-specs/cayman-immuno-oncology/robot_deck/fix-unknown-biology-verbs.yaml
+          adoptionDecision: adoption/cayman-immuno-oncology/robot_deck/adoption.yaml
         browserStatus: skipped
         architectStatus: rejected
         criticStatus: missing

@@ -1,6 +1,6 @@
 kind: protocol-foundry-stage-ledger
 generated_at: 2026-05-08T22:13:08.559Z
-updated_at: 2026-05-09T09:46:26.602Z
+updated_at: 2026-05-09T19:27:45.766Z
 artifact_root: /home/brad/git/computable-foundry/artifacts
 protocols:
   - an-fame-oil-gc-pal3-5994-8543en-agilent
@@ -46,8 +46,8 @@ protocol_status:
         failureReason: no meaningful files touched
       bench_plate_multichannel:
         variant: bench_plate_multichannel
-        status: running
-        attempt: 17
+        status: accepted
+        attempt: 21
         artifacts:
           compiler: /home/brad/git/computable-foundry/artifacts/compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
           eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
@@ -59,7 +59,9 @@ protocol_status:
             - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-labware-resolution-generic-refs.yaml
             - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-unknown-verbs-scale-wait.yaml
           adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/adoption.yaml
+          coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/result.yaml
           patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/an-fame-oil-gc-pal3-5994-8543en-agilent-bench_plate_multichannel.yaml
+          criticReport: /home/brad/git/computable-foundry/artifacts/patch-critic/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/report.yaml
         metrics:
           eventCount: 9
           blockerCount: 0
@@ -69,13 +71,13 @@ protocol_status:
           foundryComplete: 0
           qualityScore: 0.35
           coverageEstimate: 0.45
-        startedAt: 2026-05-09T09:46:26.602Z
-        completedAt: 2026-05-09T09:46:26.373Z
-        failureReason: Patch specs accepted for unattended coder tournament execution.
+        startedAt: 2026-05-09T19:24:26.010Z
+        completedAt: 2026-05-09T19:24:26.022Z
+        failureReason: "Patch applied: 1 file(s) changed, spec verification passed."
       robot_deck:
         variant: robot_deck
-        status: gap
-        attempt: 4
+        status: accepted
+        attempt: 7
         artifacts:
           compiler: /home/brad/git/computable-foundry/artifacts/compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
           eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
@@ -85,6 +87,10 @@ protocol_status:
           patchSpecs:
             - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-ai-precompile-shape-mismatch.yaml
             - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-unknown-verbs-bind-prefer-use-report.yaml
+          adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/adoption.yaml
+          coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/result.yaml
+          patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/an-fame-oil-gc-pal3-5994-8543en-agilent-robot_deck.yaml
+          criticReport: /home/brad/git/computable-foundry/artifacts/patch-critic/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/report.yaml
         metrics:
           eventCount: 0
           blockerCount: 0
@@ -94,9 +100,9 @@ protocol_status:
           foundryComplete: 0
           qualityScore: 0.1
           coverageEstimate: 0
-        startedAt: 2026-05-09T08:37:16.985Z
-        completedAt: 2026-05-09T08:43:54.617Z
-        failureReason: browser review skipped by --skip-browser
+        startedAt: 2026-05-09T19:27:25.638Z
+        completedAt: 2026-05-09T19:27:25.648Z
+        failureReason: "Patch applied: 1 file(s) changed, spec verification passed."
   bulletin-6816:
     protocolId: bulletin-6816
     segmentPath: /home/brad/git/computable-foundry/artifacts/segments/bulletin-6816.yaml
@@ -183,12 +189,12 @@ protocol_status:
     protocolId: cayman-immuno-oncology
     segmentPath: /home/brad/git/computable-foundry/artifacts/segments/cayman-immuno-oncology.yaml
     materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/cayman-immuno-oncology.yaml
-    status: gap
+    status: blocked
     variants:
       manual_tubes:
         variant: manual_tubes
-        status: gap
-        attempt: 4
+        status: blocked
+        attempt: 6
         artifacts:
           compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-immuno-oncology/manual_tubes.yaml
           eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-immuno-oncology/manual_tubes.yaml
@@ -201,6 +207,9 @@ protocol_status:
             - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-foundry-runtime-wiring-gap.yaml
             - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-labware-alias-resolver-gap.yaml
             - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-material-catalog-spec-gap.yaml
+          adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/cayman-immuno-oncology/manual_tubes/adoption.yaml
+          coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-immuno-oncology/manual_tubes/result.yaml
+          patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/cayman-immuno-oncology-manual_tubes.yaml
         metrics:
           eventCount: 2
           blockerCount: 0
@@ -210,13 +219,13 @@ protocol_status:
           foundryComplete: 0
           qualityScore: 0.7999999999999999
           coverageEstimate: 0.1
-        startedAt: 2026-05-09T08:37:16.985Z
-        completedAt: 2026-05-09T09:05:59.220Z
-        failureReason: browser review skipped by --skip-browser
+        startedAt: 2026-05-09T19:27:26.076Z
+        completedAt: 2026-05-09T19:27:35.492Z
+        failureReason: no symbol replacements produced
       bench_plate_multichannel:
         variant: bench_plate_multichannel
-        status: gap
-        attempt: 4
+        status: blocked
+        attempt: 6
         artifacts:
           compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-immuno-oncology/bench_plate_multichannel.yaml
           eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-immuno-oncology/bench_plate_multichannel.yaml
@@ -228,6 +237,9 @@ protocol_status:
             - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-foundry-runtime-wiring-gap.yaml
             - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-labware-alias-resolver-gap.yaml
             - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-material-catalog-spec-gap.yaml
+          adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/cayman-immuno-oncology/bench_plate_multichannel/adoption.yaml
+          coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-immuno-oncology/bench_plate_multichannel/result.yaml
+          patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/cayman-immuno-oncology-bench_plate_multichannel.yaml
         metrics:
           eventCount: 11
           blockerCount: 0
@@ -237,13 +249,13 @@ protocol_status:
           foundryComplete: 0
           qualityScore: 0.7999999999999999
           coverageEstimate: 0.55
-        startedAt: 2026-05-09T08:37:16.985Z
-        completedAt: 2026-05-09T08:41:35.555Z
-        failureReason: browser review skipped by --skip-browser
+        startedAt: 2026-05-09T19:27:35.945Z
+        completedAt: 2026-05-09T19:27:45.350Z
+        failureReason: no symbol replacements produced
       robot_deck:
         variant: robot_deck
-        status: gap
-        attempt: 4
+        status: running
+        attempt: 6
         artifacts:
           compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-immuno-oncology/robot_deck.yaml
           eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-immuno-oncology/robot_deck.yaml
@@ -254,6 +266,7 @@ protocol_status:
             - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/robot_deck/fix-ai-precompile-shape-mismatch.yaml
             - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/robot_deck/fix-labware-resolution-gaps.yaml
             - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/robot_deck/fix-unknown-biology-verbs.yaml
+          adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/cayman-immuno-oncology/robot_deck/adoption.yaml
         metrics:
           eventCount: 0
           blockerCount: 0
@@ -263,9 +276,9 @@ protocol_status:
           foundryComplete: 0
           qualityScore: 0.05
           coverageEstimate: 0
-        startedAt: 2026-05-09T08:41:05.870Z
-        completedAt: 2026-05-09T08:46:04.267Z
-        failureReason: browser review skipped by --skip-browser
+        startedAt: 2026-05-09T19:27:45.766Z
+        completedAt: 2026-05-09T19:27:45.565Z
+        failureReason: Patch specs accepted for unattended coder tournament execution.
   cayman-natural-prodccuts:
     protocolId: cayman-natural-prodccuts
     segmentPath: /home/brad/git/computable-foundry/artifacts/segments/cayman-natural-prodccuts.yaml

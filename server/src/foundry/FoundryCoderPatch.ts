@@ -546,10 +546,10 @@ export async function runFoundryCoderPatch(input: {
 
   let baseUrl: string, model: string, timeoutMs: number;
   if (specRecommendedModel && specRecommendedModel.includes('27B')) {
-    // Architect recommends senior coder for difficult task
+    // Architect recommends senior coder for difficult task (reasoning model, slow)
     baseUrl = archBaseUrl;
     model = specRecommendedModel;
-    timeoutMs = 600_000; // 10 min for 27B
+    timeoutMs = 900_000; // 15 min for 27B reasoning model
   } else {
     // Default to speedy coder on :8888
     baseUrl = workerBaseUrl;
