@@ -3289,3 +3289,35 @@ export function createEmitDownstreamQueuePass(): Pass {
     },
   };
 }
+/**
+ * Expander for plate_map / inventory layout verbs.
+ * Converts well-position + compound-name + catalog-number mappings into add_material events.
+ */
+const plateMapExpander: BiologyVerbExpander = {
+  verb: 'plate_map',
+  expand(input: VerbInput): PlateEventPrimitive[] {
+    const events: PlateEventPrimitive[] = [];
+    const params = input.params as {
+      wells?: Array<{ well: string; material: string; catalog_number?: string }>;
+      labwareId?: string;
+    };
+    if (!params.wells || !Array.isArray(params.wells)) {
+      return events;
+    }
+    for (const entry of params.wells) {
+      events.push({
+        eventId: makeEventId('add_material'),
+        event_type: 'add_material',
+        details: {
+          well: entry.well,
+          material: entry.material,
+          catalog_number: entry.catalog_number,
+        },
+        labwareId: params.labwareId,
+      });
+    }
+    return events;
+  },
+};
+
+registerVerbExpander(plateMapExpander);
