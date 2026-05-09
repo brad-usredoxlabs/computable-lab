@@ -520,27 +520,35 @@ function normalizeUnresolvedRefs(input: unknown): Array<{ kind: string; label: s
 }
 
 function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unknown }): AiPrecompileOutput {
-  let data: unknown = input.parsed;
-  if (data == null) {
-    if (typeof input.raw === 'string') {
-      try {
-        data = JSON.parse(input.raw);
-      } catch {
-        data = {};
-      }
-    } else if (input.raw != null) {
-      data = input.raw;
-    } else {
-      data = {};
-    }
+  const parsed = input.parsed as Record<string, unknown> | undefined;
+  if (!parsed || typeof parsed !== 'object') {
+    return {
+      candidateActions: [],
+      candidateLabwares: [],
+      priorLabwareRefs: [],
+      directives: [],
+      mintMaterials: [],
+      patternEvents: [],
+      unresolvedRefs: [],
+    };
   }
 
-  const obj = (data && typeof data === 'object') ? data : {};
-  
+  const extractArray = <T>(keys: string[]): T[] => {
+    for (const key of keys) {
+      const val = parsed[key];
+      if (Array.isArray(val)) return val as T[];
+    }
+    return [];
+  };
+
   return {
-    mintMaterials: Array.isArray(obj.mintMaterials) ? obj.mintMaterials : [],
-    candidateLabwares: Array.isArray(obj.candidateLabwares) ? obj.candidateLabwares : [],
-    patternEvents: Array.isArray(obj.patternEvents) ? obj.patternEvents : [],
+    candidateActions: extractArray<CandidateAction>(['candidateActions', 'candidate_actions']),
+    candidateLabwares: extractArray<CandidateLabware>(['candidateLabwares', 'candidate_labwares']),
+    priorLabwareRefs: extractArray<PriorLabwareRef>(['priorLabwareRefs', 'prior_labware_refs']),
+    directives: extractArray<Directive>(['directives']),
+    mintMaterials: extractArray<MintMaterialsDirective>(['mintMaterials', 'mint_materials']),
+    patternEvents: extractArray<PatternEvent>(['patternEvents', 'pattern_events']),
+    unresolvedRefs: extractArray<{ kind: string; label: string; reason: string }>(['unresolvedRefs', 'unresolved_refs']),
   };
 }
 
