@@ -546,44 +546,30 @@ function normalizeUnresolvedRefs(input: unknown): Array<{ kind: string; label: s
 }
 
 function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unknown }): AiPrecompileOutput {
-  let parsedObj: Record<string, unknown> | undefined = input.parsed as Record<string, unknown> | undefined;
-
-  // Handle case where parsed is a string (JSON)
-  if (typeof parsedObj === 'string') {
-    try { parsedObj = JSON.parse(parsedObj); } catch { parsedObj = undefined; }
-  }
-  // Fallback to raw if parsed is missing/invalid
-  if (!parsedObj && typeof input.raw === 'string') {
-    try { parsedObj = JSON.parse(input.raw); } catch { parsedObj = undefined; }
-  }
-
-  // Return safe default shape if parsing fails or input is not an object
-  if (!parsedObj || typeof parsedObj !== 'object') {
-    return {
-      candidateEvents: [],
-      candidateLabwares: [],
-      mintMaterials: [],
-      unresolvedRefs: [],
-    };
+  let obj: Record<string, unknown> = {};
+  if (input.parsed !== undefined) {
+    obj = (input.parsed && typeof input.parsed === 'object') ? (input.parsed as Record<string, unknown>) : {};
+  } else if (input.raw !== undefined) {
+    try {
+      const parsed = typeof input.raw === 'string' ? JSON.parse(input.raw) : input.raw;
+      obj = (parsed && typeof parsed === 'object') ? (parsed as Record<string, unknown>) : {};
+    } catch {
+      obj = {};
+    }
   }
 
-  const rawEvents = parsedObj.candidateEvents ?? parsedObj.events ?? parsedObj.actions ?? [];
-  const events = Array.isArray(rawEvents) ? lowerCandidateActionsToEvents(rawEvents) : [];
-
-  const rawLabwares = parsedObj.candidateLabwares ?? parsedObj.labwares ?? [];
-  const labwares = Array.isArray(rawLabwares) ? rawLabwares : [];
-
-  const rawMaterials = parsedObj.mintMaterials ?? parsedObj.materials ?? [];
-  const materials = Array.isArray(rawMaterials) ? rawMaterials : [];
-
-  const rawRefs = parsedObj.unresolvedRefs ?? parsedObj.unresolved_references ?? [];
-  const refs = Array.isArray(rawRefs) ? normalizeUnresolvedRefs(rawRefs) : [];
+  const safeArray = (val: unknown): unknown[] => Array.isArray(val) ? val : [];
+  const getArray = (camel: string, snake: string): unknown[] => {
+    const v = obj[camel] ?? obj[snake];
+    return safeArray(v);
+  };
 
   return {
-    candidateEvents: events,
-    candidateLabwares: labwares,
-    mintMaterials: materials,
-    unresolvedRefs: refs,
+    candidateLabwares: getArray('candidateLabwares', 'candidate_labwares') as CandidateLabware[],
+    patternEvents: getArray('patternEvents', 'pattern_events') as PatternEvent[],
+    mintMaterials: getArray('mintMaterials', 'mint_materials') as MintMaterialsDirective[],
+    downstreamCompileJobs: getArray('downstreamCompileJobs', 'downstream_compile_jobs') as DownstreamCompileJob[],
+    unresolvedRefs: normalizeUnresolvedRefs(obj.unresolvedRefs ?? obj.unresolved_refs),
   };
 }
 
