@@ -3021,3 +3021,46 @@ export function createEmitDownstreamQueuePass(): Pass {
     },
   };
 }
+export interface LowerPlateMapPassOutput {
+  eventsAdded: number;
+}
+
+export function createLowerPlateMapPass(): Pass {
+  return {
+    id: 'lower_plate_map',
+    run: async (args: PassRunArgs): Promise<PassResult<LowerPlateMapPassOutput>> => {
+      const { state } = args;
+      const candidates = (state as any).candidates || [];
+      const plateMapCandidates = candidates.filter((c: any) => 
+        c.kind === 'plate-map' || c.kind === 'well-content-table'
+      );
+
+      const newEvents: any[] = [];
+      for (const candidate of plateMapCandidates) {
+        const rows = candidate.data?.rows || candidate.data?.wells || candidate.data?.contents || [];
+        for (const row of rows) {
+          const well = row.well || row.Well || row['Well'];
+          const compound = row.compound || row.Compound || row.contents || row['Item Number'] || row.material;
+          if (well && compound) {
+            newEvents.push({
+              id: `plate_map_dispense_${String(well)}_${String(compound).replace(/\s+/g, '_')}`,
+              type: 'dispense',
+              source: { labware: 'reagent_source', well: 'A1' },
+              destination: { labware: 'target_plate', well: String(well) },
+              volumeUl: row.volumeUl || row.volume || 100,
+              material: String(compound),
+              metadata: { sourceCandidate: candidate.id, originalRow: row }
+            });
+          }
+        }
+      }
+
+      state.events = [...(state.events || []), ...newEvents];
+      return {
+        success: true,
+        output: { eventsAdded: newEvents.length },
+        diagnostics: []
+      };
+    }
+  };
+}
