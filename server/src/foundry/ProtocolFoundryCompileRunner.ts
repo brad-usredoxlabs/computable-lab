@@ -316,36 +316,34 @@ function isFoundryPromptBoilerplate(line: string): boolean {
 }
 
 export function extractPresegmentedFoundryCandidates(text: string): Array<{
-  target_kind: string;
-  draft: Record<string, unknown>;
-  confidence: number;
+  text: string;
+  verb?: string;
+  params?: Record<string, unknown>;
 }> {
-  const candidates: Array<{
-    target_kind: string;
-    draft: Record<string, unknown>;
-    confidence: number;
-  }> = [];
-  const lines = text
-    .split(/\r?\n|(?<=[.!?])\s+(?=[A-Z0-9])/)
-    .map((line) => line.trim())
-    .filter((line) => line.length >= 12 && !isFoundryPromptBoilerplate(line));
-
+  const candidates: Array<{ text: string; verb?: string; params?: Record<string, unknown> }> = [];
+  const lines = text.split(/\r?\n/);
+  
+  // Pattern to recognize plate map well entries, e.g., "Well A1: Ursolic Acid" or "A1: Paclitaxel"
+  const wellContentPattern = /^(?:Well\s+)?([A-Z]\d{1,2}):\s*(.+)$/i;
+  
   for (const line of lines) {
-    const verb = protocolActionVerb(line);
-    if (!verb) continue;
-    candidates.push({
-      target_kind: 'protocol-action',
-      draft: {
-        phrase: line.slice(0, 500),
-        verb,
-        section: 'protocol_steps',
-        source: 'foundry_presegmented_text',
-      },
-      confidence: 0.62,
-    });
-    if (candidates.length >= 80) break;
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    
+    const match = trimmed.match(wellContentPattern);
+    if (match) {
+      const well = match[1].toUpperCase();
+      const compound = match[2].trim();
+      candidates.push({
+        text: `add_compound to ${well}: ${compound}`,
+        verb: 'add_compound',
+        params: { well, compound },
+      });
+    } else {
+      candidates.push({ text: trimmed });
+    }
   }
-
+  
   return candidates;
 }
 
