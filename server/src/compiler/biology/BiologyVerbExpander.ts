@@ -109,3 +109,62 @@ const analyzeExpander: BiologyVerbExpander = {
 };
 
 registerVerbExpander(analyzeExpander);
+import type { PlateEventPrimitive } from '../../biology/BiologyVerbExpander.js';
+
+export function createLowerPlateMapPass(): Pass {
+  return {
+    name: 'lower_plate_map',
+    run: async (args: PassRunArgs): Promise<PassResult> => {
+      const { state } = args;
+      const candidates = (state.candidates || state.extractedEntities || []) as Array<Record<string, unknown>>;
+      const newEvents: PlateEventPrimitive[] = [];
+      const diagnostics: PassDiagnostic[] = [];
+
+      for (const candidate of candidates) {
+        const content = (candidate.content || candidate.text || candidate.raw || '') as string;
+        const type = (candidate.type || candidate.kind || '') as string;
+        
+        // Heuristic: detect plate-map-style candidates
+        // Look for well positions (A1-H12) and compound names/catalog numbers
+        const wellRegex = /[A-H][1-9][0-2]?/g;
+        const wells = content.match(wellRegex) || [];
+        const hasCatalog = /CAT\d{4,}/i.test(content) || /\d{4}-\d{2,4}/.test(content);
+        
+        if ((type === 'plate_map' || type === 'screening_library' || wells.length >= 4 || hasCatalog) && wells.length > 0) {
+          const wellMap: Record<string, unknown> = {};
+          const lines = content.split(/\r?\n/);
+          for (const line of lines) {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 2 && /[A-H][1-9][0-2]?/.test(parts[0])) {
+              wellMap[parts[0]] = {
+                compound: parts[1],
+                catalog: parts[2] || undefined,
+              };
+            }
+          }
+          
+          if (Object.keys(wellMap).length > 0) {
+            newEvents.push({
+              eventId: `evt-plate_map-${Math.random().toString(36).slice(2, 10)}`,
+              event_type: 'load_plate',
+              details: {
+                plate_map: wellMap,
+                source_candidate: candidate.id || candidate.label,
+              },
+            });
+          }
+        }
+      }
+
+      if (newEvents.length > 0) {
+        state.events = [...(state.events || []), ...newEvents];
+        diagnostics.push({
+          level: 'info',
+          message: `Lowered ${newEvents.length} plate map candidate(s) to load_plate events.`,
+        });
+      }
+
+      return { state, diagnostics };
+    },
+  };
+}
