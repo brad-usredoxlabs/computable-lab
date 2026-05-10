@@ -75,63 +75,132 @@ export function createExtractEntitiesPass(
   deps: CreateExtractEntitiesPassDeps
 ): Pass {
   return {
-    name: 'extract_entities',
+    id: 'extract_entities',
+    family: 'parse' as const,
     async run(args: PassRunArgs): Promise<PassResult> {
-      const { state, logger } = args;
-      const prompt = state.input?.prompt;
-      const attachments = state.input?.attachments || [];
-
-      if (!prompt && attachments.length === 0) {
-        return { ok: true, state: { ...state, extractedEntities: [] } };
-      }
-
+      const { state } = args;
+      const pass_id = 'extract_entities';
+      const prompt = typeof state.input?.prompt === 'string' ? state.input.prompt : '';
+      const attachments = Array.isArray(state.input?.attachments) ? state.input.attachments : [];
       const entities: ExtractedEntity[] = [];
+      const diagnostics: PassDiagnostic[] = [];
 
-      try {
-        const extractionResult = await deps.extractionService.run({
-          target_kind: 'tag_prompt',
-          text: prompt || '',
-          source: { kind: 'freetext', id: 'prompt' },
-        });
+      // Helper to convert extraction diagnostics to pass diagnostics
+      const convertDiagnostic = (d: unknown, attachmentName?: string): PassDiagnostic => {
+        const diag = d as Record<string, unknown>;
+        return {
+          severity: (diag.severity as 'info' | 'warning' | 'error') ?? 'warning',
+          code: (diag.code as string) ?? 'EXTRACTION_DIAG',
+          message: (diag.message as string) ?? 'Extraction diagnostic',
+          pass_id,
+          details: {
+            ...(diag.details as Record<string, unknown> ?? {}),
+            ...(attachmentName ? { attachment_name: attachmentName } : {}),
+          },
+        };
+      };
 
-        let parsedData: unknown = extractionResult;
-        if (typeof extractionResult === 'string') {
-          try {
-            parsedData = JSON.parse(extractionResult);
-          } catch (err: any) {
-            if (err instanceof SyntaxError && err.message.includes('Unterminated string')) {
-              // LLM response truncated mid-string; attempt to recover valid JSON
-              const lastBracket = Math.max(extractionResult.lastIndexOf(']'), extractionResult.lastIndexOf('}'));
-              if (lastBracket !== -1) {
-                const repaired = extractionResult.slice(0, lastBracket + 1);
-                try {
-                  parsedData = JSON.parse(repaired);
-                } catch {
-                  parsedData = [];
-                }
-              } else {
-                parsedData = [];
+      // 1. Run extraction on prompt text if non-empty
+      if (prompt.trim().length > 0) {
+        try {
+          const extractionResult = await deps.extractionService.run({
+            target_kind: 'unknown',
+            text: prompt,
+            source: { kind: 'freetext', id: 'prompt' },
+          });
+
+          // Handle ExtractionDraftBody shape
+          if (extractionResult && typeof extractionResult === 'object' && 'candidates' in extractionResult) {
+            const result = extractionResult as { candidates?: unknown[]; diagnostics?: unknown[] };
+            for (const cand of result.candidates ?? []) {
+              const candidate = cand as Record<string, unknown>;
+              entities.push({
+                kind: (candidate.target_kind as string) ?? 'unknown',
+                draft: candidate,
+                ...(typeof candidate.confidence === 'number' ? { confidence: candidate.confidence } : {}),
+                source: 'prompt',
+              });
+            }
+            // Propagate diagnostics
+            if (result.diagnostics) {
+              for (const d of result.diagnostics) {
+                diagnostics.push(convertDiagnostic(d));
               }
-            } else {
-              throw err;
+            }
+          } else if (typeof extractionResult === 'string') {
+            // Legacy string response
+            let parsedData: unknown;
+            try {
+              parsedData = JSON.parse(extractionResult);
+            } catch {
+              parsedData = [];
+            }
+            if (Array.isArray(parsedData)) {
+              for (const item of parsedData) {
+                entities.push({ kind: 'tagged_phrase', draft: item, source: 'prompt' });
+              }
             }
           }
+        } catch (error) {
+          diagnostics.push({
+            severity: 'error',
+            code: 'EXTRACTION_ERROR',
+            message: `Failed to extract from prompt: ${error instanceof Error ? error.message : String(error)}`,
+            pass_id,
+          });
         }
-
-        if (Array.isArray(parsedData)) {
-          for (const item of parsedData) {
-            entities.push({
-              kind: 'tagged_phrase',
-              draft: item,
-              source: 'prompt',
-            });
-          }
-        }
-      } catch (err: any) {
-        logger?.error({ pass: 'extract_entities', error: err.message });
       }
 
-      return { ok: true, state: { ...state, extractedEntities: entities } };
+      // 2. Run extraction on each attachment
+      for (const att of attachments) {
+        const attName = typeof att === 'string' ? att : (att as any).name || 'unknown';
+        const content = typeof att === 'string' ? att : (att as any).content || '';
+        const fileNameLower = attName.toLowerCase();
+
+        let targetKind = 'unknown';
+        if (fileNameLower.endsWith('.pdf')) targetKind = 'protocol';
+        else if (fileNameLower.endsWith('.xlsx') || fileNameLower.endsWith('.xls')) targetKind = 'material';
+        else if (fileNameLower.endsWith('.html') || fileNameLower.endsWith('.htm')) targetKind = 'material';
+
+        const contentText = typeof content === 'string' ? content : String(content);
+
+        try {
+          const result = await deps.extractionService.run({
+            target_kind: targetKind,
+            text: contentText,
+            source: { kind: 'file', id: attName, locator: attName },
+          } as any);
+
+          if (result && typeof result === 'object' && 'candidates' in result) {
+            for (const cand of (result as any).candidates ?? []) {
+              const candidate = cand as Record<string, unknown>;
+              entities.push({
+                kind: (candidate.target_kind as string) ?? targetKind,
+                draft: candidate,
+                ...(typeof candidate.confidence === 'number' ? { confidence: candidate.confidence } : {}),
+                source: 'attachment',
+                attachment_name: attName,
+              });
+            }
+            // Propagate diagnostics
+            if ((result as any).diagnostics) {
+              for (const d of (result as any).diagnostics) {
+                diagnostics.push(convertDiagnostic(d, attName));
+              }
+            }
+          }
+        } catch (error) {
+          diagnostics.push({
+            severity: 'error',
+            code: 'EXTRACTION_ERROR',
+            message: `Failed to extract from attachment ${attName}: ${error instanceof Error ? error.message : String(error)}`,
+            pass_id,
+            details: { attachment_name: attName },
+          });
+        }
+      }
+
+      return { ok: true, output: { entities }, ...(diagnostics.length ? { diagnostics } : {}) };
     },
   };
 }
@@ -396,10 +465,27 @@ function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unkn
   }
 
   const obj = data as Record<string, unknown>;
+  // Extract raw fields
+  const candidateActions: unknown[] | undefined = Array.isArray(obj.candidateActions) ? obj.candidateActions : undefined;
+  const taggedPhrases: unknown[] | undefined = Array.isArray(obj.taggedPhrases) ? obj.taggedPhrases : undefined;
+  
+  // Lower candidateActions into candidateEvents (merge with any existing candidateEvents)
+  const existingEvents = Array.isArray(obj.candidateEvents) ? obj.candidateEvents : [];
+  const loweredEvents = lowerCandidateActionsToEvents(candidateActions);
+  const candidateEvents = [...existingEvents, ...loweredEvents];
+
   return {
+    candidateEvents,
     candidateLabwares: Array.isArray(obj.candidateLabwares) ? obj.candidateLabwares : [],
-    patternEvents: Array.isArray(obj.patternEvents) ? obj.patternEvents : [],
+    unresolvedRefs: normalizeUnresolvedRefs(obj.unresolvedRefs),
+    clarification: typeof obj.clarification === 'string' ? obj.clarification : undefined,
+    candidateActions,
+    taggedPhrases,
+    mintMaterials: Array.isArray(obj.mintMaterials) ? obj.mintMaterials : undefined,
+    priorLabwareRefs: Array.isArray(obj.priorLabwareRefs) ? obj.priorLabwareRefs : undefined,
+    directives: Array.isArray(obj.directives) ? obj.directives : undefined,
     downstreamCompileJobs: Array.isArray(obj.downstreamCompileJobs) ? obj.downstreamCompileJobs : [],
+    patternEvents: Array.isArray(obj.patternEvents) ? obj.patternEvents : [],
   };
 }
 
@@ -427,20 +513,55 @@ export interface CreateAiPrecompilePassDeps {
 export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
   return {
     id: 'ai_precompile',
-    when: () => true,
+    family: 'expand' as const,
     run: async (args: PassRunArgs) => {
       const { state } = args;
-      
-      const response = await deps.llmClient.chat({
+      const raw = await deps.llmClient.complete({
+        model: deps.model ?? 'claude-sonnet-4-6',
         messages: [
           { role: 'system', content: getAiPrecompileSystemPrompt() },
           { role: 'user', content: JSON.stringify(state) }
         ],
-        schema: createAiPrecompileOutputSchema()
-      });
+        response_format: { type: 'json_object' },
+      } as CompletionRequest);
+      const content = raw.choices[0]?.message?.content ?? '';
 
-      const output = salvageAiPrecompileOutput({ raw: response.content, parsed: response.parsed });
-      return { output };
+      // Try to parse JSON
+      let parsed: unknown;
+      try {
+        parsed = typeof content === 'string' ? JSON.parse(content) : content;
+      } catch {
+        // JSON parse failed — return empty output with warning diagnostic
+        return {
+          ok: true,
+          output: salvageAiPrecompileOutput({ raw: '' }),
+          diagnostics: [{
+            severity: 'warning',
+            code: 'ai_precompile_parse_error',
+            message: 'LLM response was not valid JSON',
+            pass_id: 'ai_precompile',
+            details: { raw_preview: content.slice(0, 300) },
+          }],
+        };
+      }
+
+      const output = salvageAiPrecompileOutput({ parsed });
+
+      // Regression detection: warn when LLM emits physical well addresses instead of role coordinates
+      const diagnostics: PassDiagnostic[] = [];
+      const physicalWellCount = output.candidateEvents.filter(
+        e => e.wells || (e.params && e.params.wells)
+      ).length;
+      if (physicalWellCount > 0) {
+        diagnostics.push({
+          severity: 'warning',
+          code: 'ai_precompile_role_regression',
+          message: `${physicalWellCount} events use physical well addresses instead of role coordinates`,
+          pass_id: 'ai_precompile',
+        });
+      }
+
+      return { ok: true, output, ...(diagnostics.length ? { diagnostics } : {}) };
     }
   };
 }

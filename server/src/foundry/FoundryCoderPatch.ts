@@ -782,10 +782,25 @@ export async function runFoundryCoderPatch(input: {
       console.log(`[foundry-coder] compilation ok, ${preExisting} pre-existing error(s) in untouched files ignored`);
     }
 
-    // Run focused tests (warnings only)
+    // Run focused tests (blocking)
     const testsPass = await runVerification(input.repoRoot, touchedFiles);
     if (!testsPass) {
-      console.warn(`[foundry-coder] tests failed for ${selectedSpec.id}, but patch compiles - landing anyway`);
+      console.error(`[foundry-coder] tests failed for ${selectedSpec.id}; reverting and skipping patch`);
+      // Revert changes
+      for (const [file, originalContent] of modifiedFiles) {
+        await writeFile(join(input.repoRoot, file), originalContent, 'utf-8');
+      }
+      await writeYamlFile(resultPath, {
+        kind: 'protocol-foundry-coder-patch-result',
+        protocolId: input.protocolId,
+        variant: input.variant,
+        generated_at: nowIso(),
+        status: 'failed',
+        message: 'Patch applied but verification tests failed; reverted.',
+        touchedFiles,
+        rawResponse: (response.choices[0]?.message.content ?? '').slice(0, 4000),
+      });
+      return { status: 'failed', resultPath, message: 'tests failed', touchedFiles: [] };
     }
 
     // Commit the patch
