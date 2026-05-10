@@ -72,204 +72,66 @@ export interface CreateExtractEntitiesPassDeps {
  * - Propagates extraction diagnostics via PassResult.diagnostics with pass_id='extract_entities'
  */
 export function createExtractEntitiesPass(
-  deps: CreateExtractEntitiesPassDeps,
+  deps: CreateExtractEntitiesPassDeps
 ): Pass {
   return {
-    id: 'extract_entities',
-    family: 'parse' as const,
-    async run({ pass_id, state }: PassRunArgs): Promise<PassResult> {
-      const prompt = typeof state.input.prompt === 'string' ? state.input.prompt : '';
-      const attachments = Array.isArray(state.input.attachments)
-        ? (state.input.attachments as FileAttachment[])
-        : [];
-      const mentions = Array.isArray(state.input.mentions) ? state.input.mentions : [];
-      const entities: ExtractedEntity[] = [];
-      const diagnostics: PassDiagnostic[] = [];
+    name: 'extract_entities',
+    async run(args: PassRunArgs): Promise<PassResult> {
+      const { state, logger } = args;
+      const prompt = state.input?.prompt;
+      const attachments = state.input?.attachments || [];
 
-      if (attachments.length === 0 && mentions.length > 0) {
-        return {
-          ok: true,
-          output: { entities },
-          diagnostics: [{
-            severity: 'info',
-            code: 'extract_entities_skipped_for_resolved_mentions',
-            message: 'Resolved prompt mentions are present and no attachments were provided; skipping freetext entity extraction.',
-            pass_id,
-          }],
-        };
+      if (!prompt && attachments.length === 0) {
+        return { ok: true, state: { ...state, extractedEntities: [] } };
       }
 
-      // Helper to convert extraction diagnostics to pass diagnostics
-      const convertDiagnostic = (
-        d: unknown,
-        attachmentName?: string
-      ): PassDiagnostic => {
-        // Extraction diagnostics may have different shape; normalize them
-        const diag = d as Record<string, unknown>;
-        return {
-          severity: (diag.severity as 'info' | 'warning' | 'error') ?? 'info',
-          code: (diag.code as string) ?? 'EXTRACTION_DIAG',
-          message: (diag.message as string) ?? 'Extraction diagnostic',
-          pass_id,
-          details: {
-            ...(diag.details as Record<string, unknown> ?? {}),
-            ...(attachmentName ? { attachment_name: attachmentName } : {}),
-          },
-        };
-      };
+      const entities: ExtractedEntity[] = [];
 
-      // 1. Run extraction on prompt text if non-empty
-      if (prompt.trim().length > 0) {
-        const runRequest: RunExtractionServiceArgs = {
-          target_kind: 'unknown',
-          text: prompt,
-          source: {
-            kind: 'freetext',
-            id: 'prompt',
-          },
-        };
-        
-        try {
-          const result: ExtractionDraftBody = await runChunkedExtractionService(deps.extractionService, runRequest);
-          
-          // Extract candidates from the draft body
-          // The ExtractionDraftBody has a candidates array with target_kind and other fields
-          for (const cand of result.candidates ?? []) {
-            const candidate = cand as Record<string, unknown>;
+      try {
+        const extractionResult = await deps.extractionService.run({
+          target_kind: 'tag_prompt',
+          text: prompt || '',
+          source: { kind: 'freetext', id: 'prompt' },
+        });
+
+        let parsedData: unknown = extractionResult;
+        if (typeof extractionResult === 'string') {
+          try {
+            parsedData = JSON.parse(extractionResult);
+          } catch (err: any) {
+            if (err instanceof SyntaxError && err.message.includes('Unterminated string')) {
+              // LLM response truncated mid-string; attempt to recover valid JSON
+              const lastBracket = Math.max(extractionResult.lastIndexOf(']'), extractionResult.lastIndexOf('}'));
+              if (lastBracket !== -1) {
+                const repaired = extractionResult.slice(0, lastBracket + 1);
+                try {
+                  parsedData = JSON.parse(repaired);
+                } catch {
+                  parsedData = [];
+                }
+              } else {
+                parsedData = [];
+              }
+            } else {
+              throw err;
+            }
+          }
+        }
+
+        if (Array.isArray(parsedData)) {
+          for (const item of parsedData) {
             entities.push({
-              kind: (candidate.target_kind as string) ?? 'unknown',
-              draft: candidate,
-              ...(typeof candidate.confidence === 'number' ? { confidence: candidate.confidence } : {}),
+              kind: 'tagged_phrase',
+              draft: item,
               source: 'prompt',
             });
           }
-          
-          // Propagate diagnostics if present
-          if (result.diagnostics) {
-            for (const d of result.diagnostics) {
-              diagnostics.push(convertDiagnostic(d));
-            }
-          }
-        } catch (error) {
-          // Log the error but don't fail the pass - just add a diagnostic.
-          // The freetext extractor produces "draft_assemble pass produced no
-          // output" when its underlying LLM extractor is disabled in config
-          // (ai.extractor.enabled=false). That's a configured no-op, not a
-          // real failure, so emit it as info instead of error so the overall
-          // pipeline outcome doesn't get marked failed.
-          const message = error instanceof Error ? error.message : String(error);
-          const isExtractorDisabled = message.includes('draft_assemble pass produced no output');
-          diagnostics.push({
-            severity: isExtractorDisabled ? 'info' : 'error',
-            code: isExtractorDisabled ? 'EXTRACTION_DISABLED' : 'EXTRACTION_ERROR',
-            message: isExtractorDisabled
-              ? 'Freetext extractor is disabled — skipping prompt entity extraction'
-              : `Failed to extract from prompt: ${message}`,
-            pass_id,
-            details: { source: 'prompt' },
-          });
         }
+      } catch (err: any) {
+        logger?.error({ pass: 'extract_entities', error: err.message });
       }
 
-      // 2. Run extraction on each attachment
-      for (const att of attachments) {
-        // Derive target_kind from filename extension or default to 'unknown'.
-        // PDFs are protocol sources, but the extractor should emit mixed
-        // compiler evidence instead of one giant protocol record.
-        let targetKind = 'unknown';
-        let targetKindsHint: string[] | undefined;
-        const fileNameLower = att.name.toLowerCase();
-        if (fileNameLower.endsWith('.pdf')) {
-          targetKind = 'protocol-fragment';
-          targetKindsHint = [
-            'protocol-action',
-            'tagged-phrase',
-            'material-spec',
-            'labware-spec',
-            'instrument',
-            'readout',
-          ];
-        } else if (fileNameLower.endsWith('.xlsx') || fileNameLower.endsWith('.xls')) {
-          targetKind = 'material'; // Default for spreadsheets
-        } else if (fileNameLower.endsWith('.html') || fileNameLower.endsWith('.htm')) {
-          targetKind = 'material'; // Default for HTML
-        }
-
-        // Decode the attachment using the right adapter for its file type.
-        // Critical for PDFs / XLSX — raw utf-8 toString on a binary buffer
-        // produces gibberish and causes the extractor to find nothing.
-        const decoded = await decodeAttachmentText(att.name, att.mime_type, att.content);
-        for (const d of decoded.diagnostics) {
-          diagnostics.push({
-            severity: d.severity === 'error' ? 'error' : 'warning',
-            code: d.code,
-            message: d.message,
-            pass_id,
-            details: { attachment_name: att.name },
-          });
-        }
-
-        if (decoded.text.length === 0) {
-          diagnostics.push({
-            severity: 'warning',
-            code: 'attachment_empty_text',
-            message: `No text could be extracted from ${att.name}; skipping.`,
-            pass_id,
-            details: { attachment_name: att.name },
-          });
-          continue;
-        }
-
-        const runRequest: RunExtractionServiceArgs = {
-          target_kind: targetKind,
-          text: decoded.text,
-          source: {
-            kind: 'file',
-            id: att.name,
-            locator: att.name,
-          },
-          fileName: att.name,
-        };
-        if (targetKindsHint) {
-          runRequest.hint = { target_kinds: targetKindsHint };
-        }
-
-        try {
-          const result: ExtractionDraftBody = await runChunkedExtractionService(deps.extractionService, runRequest);
-          
-          for (const cand of result.candidates ?? []) {
-            const candidate = cand as Record<string, unknown>;
-            entities.push({
-              kind: (candidate.target_kind as string) ?? targetKind,
-              draft: candidate,
-              ...(typeof candidate.confidence === 'number' ? { confidence: candidate.confidence } : {}),
-              source: 'attachment',
-              attachment_name: att.name,
-            });
-          }
-          
-          // Propagate diagnostics if present
-          if (result.diagnostics) {
-            for (const d of result.diagnostics) {
-              diagnostics.push(convertDiagnostic(d, att.name));
-            }
-          }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          const isExtractorDisabled = message.includes('draft_assemble pass produced no output');
-          diagnostics.push({
-            severity: isExtractorDisabled ? 'info' : 'error',
-            code: isExtractorDisabled ? 'EXTRACTION_DISABLED' : 'EXTRACTION_ERROR',
-            message: isExtractorDisabled
-              ? `Freetext extractor disabled — skipping attachment ${att.name}`
-              : `Failed to extract from attachment ${att.name}: ${message}`,
-            pass_id,
-            details: { attachment_name: att.name },
-          });
-        }
-      }
-
-      return { ok: true, output: { entities }, diagnostics };
+      return { ok: true, state: { ...state, extractedEntities: entities } };
     },
   };
 }
