@@ -521,34 +521,23 @@ function normalizeUnresolvedRefs(input: unknown): Array<{ kind: string; label: s
 
 function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unknown }): AiPrecompileOutput {
   const parsed = input.parsed as Record<string, unknown> | undefined;
-  if (!parsed || typeof parsed !== 'object') {
-    return {
-      candidateActions: [],
-      candidateLabwares: [],
-      priorLabwareRefs: [],
-      directives: [],
-      mintMaterials: [],
-      patternEvents: [],
-      unresolvedRefs: [],
-    };
-  }
+  const rawText = typeof input.raw === 'string' ? input.raw : JSON.stringify(input.raw, null, 2);
 
-  const extractArray = <T>(keys: string[]): T[] => {
-    for (const key of keys) {
-      const val = parsed[key];
-      if (Array.isArray(val)) return val as T[];
-    }
+  const toSafeArray = <T = unknown>(val: unknown): T[] => {
+    if (Array.isArray(val)) return val as T[];
+    if (val !== null && typeof val === 'object') return [val as T];
     return [];
   };
 
   return {
-    candidateActions: extractArray<CandidateAction>(['candidateActions', 'candidate_actions']),
-    candidateLabwares: extractArray<CandidateLabware>(['candidateLabwares', 'candidate_labwares']),
-    priorLabwareRefs: extractArray<PriorLabwareRef>(['priorLabwareRefs', 'prior_labware_refs']),
-    directives: extractArray<Directive>(['directives']),
-    mintMaterials: extractArray<MintMaterialsDirective>(['mintMaterials', 'mint_materials']),
-    patternEvents: extractArray<PatternEvent>(['patternEvents', 'pattern_events']),
-    unresolvedRefs: extractArray<{ kind: string; label: string; reason: string }>(['unresolvedRefs', 'unresolved_refs']),
+    raw: rawText,
+    mintMaterials: toSafeArray(parsed?.mintMaterials),
+    directives: toSafeArray(parsed?.directives),
+    candidateLabwares: toSafeArray(parsed?.candidateLabwares),
+    patternEvents: toSafeArray(parsed?.patternEvents),
+    downstreamCompileJobs: toSafeArray(parsed?.downstreamCompileJobs),
+    candidateActions: toSafeArray(parsed?.candidateActions),
+    unresolvedRefs: toSafeArray(parsed?.unresolvedRefs),
   };
 }
 
@@ -574,53 +563,48 @@ export interface CreateAiPrecompilePassDeps {
  * legacy LLM candidateEvents/candidateLabwares remain accepted as a fallback.
  */
 export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
-  return {
-    id: 'ai_precompile',
-    run: async (args: PassRunArgs): Promise<PassResult> => {
-      const { state } = args;
-      const llmClient = deps.llmClient;
-      const prompt = state.input.prompt;
-      const candidates = (state.outputs.extract_entities?.candidates as ExtractedEntity[]) || [];
+  return async (args: PassRunArgs): Promise<PassResult> => {
+    const { state } = args;
+    const prompt = state.input.prompt;
+    
+    const systemPrompt = getAiPrecompileSystemPrompt();
+    const messages: ChatMessage[] = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: prompt }
+    ];
 
-      if (!prompt || candidates.length === 0) {
-        return { outputs: { ai_precompile: salvageAiPrecompileOutput({}) } };
-      }
+    const response = await deps.llmClient.complete({ messages });
+    const rawContent = response.choices?.[0]?.message?.content || '';
+    
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawContent);
+    } catch {
+      parsed = null;
+    }
 
-      const systemPrompt = getAiPrecompileSystemPrompt();
-      const userContent = `Extracted candidates to precompile:\n${JSON.stringify(candidates, null, 2)}`;
+    const output = salvageAiPrecompileOutput({ raw: rawContent, parsed });
 
-      try {
-        const response = await llmClient.chat({
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userContent },
-          ],
-          response_format: { type: 'json_object' },
-        });
+    const diagnostics: PassDiagnostic[] = [];
+    const requiredKeys = ['mintMaterials', 'directives', 'candidateLabwares', 'patternEvents', 'downstreamCompileJobs'];
+    const missingKeys = requiredKeys.filter(k => !(k in output));
+    
+    if (missingKeys.length > 0) {
+      diagnostics.push({
+        severity: 'warning',
+        code: 'ai_precompile_shape_mismatch',
+        message: `ai_precompile output shape mismatch: missing keys ${missingKeys.join(', ')}`,
+        pass_id: 'ai_precompile',
+        details: {}
+      });
+    }
 
-        const rawContent = response.choices?.[0]?.message?.content;
-        if (!rawContent) {
-          return { outputs: { ai_precompile: salvageAiPrecompileOutput({}) } };
-        }
-
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(rawContent);
-        } catch {
-          parsed = rawContent;
-        }
-
-        const output = salvageAiPrecompileOutput({ raw: rawContent, parsed });
-        return { outputs: { ai_precompile: output } };
-      } catch (err) {
-        const diagnostics: PassDiagnostic[] = [{
-          severity: 'warning',
-          code: 'ai_precompile_llm_error',
-          message: `AI precompile LLM call failed: ${err instanceof Error ? err.message : String(err)}`,
-        }];
-        return { outputs: { ai_precompile: salvageAiPrecompileOutput({}) }, diagnostics };
-      }
-    },
+    return {
+      outputs: {
+        ai_precompile: output
+      },
+      diagnostics
+    };
   };
 }
 
