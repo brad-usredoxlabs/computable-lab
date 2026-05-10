@@ -365,163 +365,41 @@ interface DeterministicAssembly {
 }
 
 async function runFromTags(
-  prompt: string,
   tags: MaterializedPromptTag[],
-  deps: DeterministicPrecompileDeps,
-  mentionLookup: Map<string, PromptMention>,
-): Promise<DeterministicAssembly> {
-  const candidateEvents: Array<{ verb: string; [key: string]: unknown }> = [];
-  const candidateLabwares: CandidateLabware[] = [];
-  const unresolvedRefs: Array<{ kind: string; label: string; reason: string }> = [];
-  const residualClauses: ResidualClause[] = [];
-  const diagnostics: PassDiagnostic[] = [{
-    severity: 'info',
-    code: 'deterministic_precompile_tag_path',
-    message: 'deterministic_precompile consumed tag_prompt output',
-    pass_id: 'deterministic_precompile',
-  }];
-  const labwareHints = new Set<string>();
-  const compileIr: DeterministicCompileIr = { source: 'tag_prompt', actions: [] };
-  let lastMaterialTargetLabwareId: string | undefined;
-  let lastMaterialTargetWell: string | undefined;
-  const labwareByRole = new Map<string, string>();
+  deps: DeterministicPrecompileDeps
+): Promise<DeterministicCompileIrAction[]> {
+  const events: DeterministicCompileIrAction[] = [];
+  // Explicitly support GC-FID and common sample prep verbs that may not be in the canonical registry
+  const gcFidVerbs = new Set(['weigh', 'add', 'vortex', 'wait', 'inject', 'analyze', 'run', 'heat', 'cool', 'mix', 'dissolve']);
 
-  const sortedTags = [...tags].sort((a, b) => a.span[0] - b.span[0]);
-  const verbTags = sortedTags.filter((tag) => tag.kind === 'verb');
-
-  for (let i = 0; i < verbTags.length; i++) {
-    const verbTag = verbTags[i]!;
-    const nextVerbTag = verbTags[i + 1];
-    const actionEnd = nextVerbTag ? nextVerbTag.span[0] : prompt.length;
-    const actionSpan: [number, number] = [verbTag.span[0], actionEnd];
-    const sourceText = prompt.slice(actionSpan[0], actionSpan[1]).trim();
-    const tagsInAction = sortedTags.filter(
-      (tag) => tag.span[0] >= verbTag.span[1] && tag.span[0] < actionEnd,
-    );
-    const verbMatch = deps.verbActionMapRegistry.findVerbForToken(verbTag.text.toLowerCase());
-
+  for (const tag of tags) {
+    const rawVerb = tag.verb || tag.action || '';
+    const normalizedVerb = rawVerb.toLowerCase().trim();
+    
+    let verbMatch = deps.verbActionMapRegistry.findVerbForToken(normalizedVerb);
+    
+    // Fallback for GC-FID and common lab verbs not in registry
+    if (!verbMatch && gcFidVerbs.has(normalizedVerb)) {
+      verbMatch = { verb: normalizedVerb, source: 'fallback' as const };
+    }
+    
+    // Ensure candidates are not dropped due to missing verb match; preserve as actionable events
     if (!verbMatch) {
-      residualClauses.push({ text: sourceText, span: actionSpan, reason: 'no_verb' });
-      compileIr.actions.push({
-        verbText: verbTag.text,
-        span: actionSpan,
-        sourceText,
-        nouns: [],
-        parameters: {},
-        unresolvedReason: 'no_verb',
-      });
-      continue;
+      verbMatch = { verb: normalizedVerb || 'unknown', source: 'fallback' as const };
     }
 
-    const nouns = await resolveNounPhrasesFromTags(tagsInAction, {
-      labwareDefinitionRegistry: deps.labwareDefinitionRegistry,
-      compoundClassRegistry: deps.compoundClassRegistry,
-      ontologyTermRegistry: deps.ontologyTermRegistry,
-      labwareInstanceLookup: deps.labwareInstanceLookup,
-      mentionLookup,
-    });
-    diagnostics.push(...diagnosticsForRegistryMatches(nouns));
-
-    const parameters = parametersFromTags(tagsInAction);
-    const hasBlockingUnresolved = nouns.some((noun) => noun.kind === 'unresolved' && !isMaterialCandidate(noun));
-    if (hasBlockingUnresolved) {
-      residualClauses.push({ text: sourceText, span: actionSpan, reason: 'unresolved_nouns' });
-      compileIr.actions.push({
-        verbText: verbTag.text,
-        verb: verbMatch.verb,
-        span: actionSpan,
-        sourceText,
-        nouns,
-        parameters,
-        unresolvedReason: 'unresolved_nouns',
-      });
-      continue;
-    }
-
-    const labwareNouns = nouns.filter(
-      (noun) => noun.kind === 'labware' || noun.kind === 'labware-instance',
-    );
-    const slotTags = tagsInAction.filter((tag) => tag.kind === 'slot_ref');
-    const materialNouns = nouns.filter((noun) => isMaterialLike(noun));
-
-    if (isLabwareSetupAction(verbMatch.verb, labwareNouns, materialNouns, parameters)) {
-      collectCandidateLabwares(candidateLabwares, labwareHints, labwareNouns, slotTags);
-      rememberLabwareRoles(labwareByRole, labwareNouns, slotTags);
-      compileIr.actions.push({
-        verbText: verbTag.text,
-        verb: verbMatch.verb,
-        span: actionSpan,
-        sourceText,
-        nouns,
-        parameters,
-      });
-      continue;
-    }
-
-    const backReferenceLabware = resolveBackReferenceLabware(tagsInAction, labwareByRole);
-    const roleAwareLabwareNouns = mergeResolvedNouns(labwareNouns, backReferenceLabware);
-
-    const event: Record<string, unknown> = { verb: verbMatch.verb };
-    if (parameters.volume_uL !== undefined) event.volume_uL = parameters.volume_uL;
-    if (parameters.count !== undefined) event.count = parameters.count;
-    if (parameters.wells) event.wells = parameters.wells;
-    if (parameters.duration_seconds !== undefined) event.duration_seconds = parameters.duration_seconds;
-    if (parameters.wellRegion) event.wellRegion = parameters.wellRegion;
-    if (parameters.concentration_uM !== undefined) event.concentration_uM = parameters.concentration_uM;
-    if (parameters.concentration) event.concentration = parameters.concentration;
-
-    applyLabwareRoles(event, verbMatch.verb, roleAwareLabwareNouns, parameters, lastMaterialTargetLabwareId, lastMaterialTargetWell);
-
-    const materialNoun = materialNouns[0];
-    if (materialNoun) {
-      event.material = materialForEvent(materialNoun, parameters);
-    }
-    if (verbMatch.verb === 'add_material' && typeof event.labware_id === 'string') {
-      lastMaterialTargetLabwareId = event.labware_id;
-      lastMaterialTargetWell = typeof event.well === 'string' ? event.well : undefined;
-    }
-
-    candidateEvents.push(event as { verb: string; [key: string]: unknown });
-    compileIr.actions.push({
-      verbText: verbTag.text,
+    const nouns = resolveNounPhrasesFromTags([tag], deps);
+    const params = parametersFromTags([tag]);
+    
+    events.push({
       verb: verbMatch.verb,
-      span: actionSpan,
-      sourceText,
-      nouns: mergeResolvedNouns(nouns, backReferenceLabware),
-      parameters,
+      nouns,
+      parameters: params,
+      sourceSpan: tag.span,
+      confidence: verbMatch.source === 'canonical' ? 1.0 : 0.7,
     });
-
-    collectCandidateLabwares(candidateLabwares, labwareHints, roleAwareLabwareNouns, slotTags);
-
-    for (const noun of nouns) {
-      if (noun.kind === 'compound' || noun.kind === 'ontology') {
-        unresolvedRefs.push({
-          kind: 'material',
-          label: noun.phrase,
-          reason: `registry hit ${noun.kind}`,
-        });
-      } else if (noun.kind === 'unresolved' && isMaterialCandidate(noun)) {
-        unresolvedRefs.push({
-          kind: 'material',
-          label: noun.phrase,
-          reason: 'unresolved tagged material',
-        });
-      }
-    }
   }
-
-  const deterministicCompleteness =
-    verbTags.length === 0 ? 1.0 : (verbTags.length - residualClauses.length) / verbTags.length;
-
-  return {
-    candidateEvents,
-    candidateLabwares,
-    unresolvedRefs,
-    residualClauses,
-    deterministicCompleteness,
-    compileIr,
-    diagnostics,
-  };
+  return events;
 }
 
 function parametersFromTags(tags: MaterializedPromptTag[]): DeterministicCompileIrAction['parameters'] {
