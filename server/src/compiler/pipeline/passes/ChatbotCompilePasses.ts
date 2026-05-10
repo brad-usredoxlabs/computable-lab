@@ -12,11 +12,8 @@ import type {
   ExecutionScalePlatform,
   ResourceManifest,
 } from '../CompileContracts.js';
-import type { ExtractionRunnerService, RunExtractionServiceArgs } from '../../../extract/ExtractionRunnerService.js';
-import { runChunkedExtractionService } from '../../../extract/runChunkedExtractionService.js';
-import type { ExtractionDraftBody } from '../../../extract/ExtractionDraftBuilder.js';
-import type { ChatMessage, CompletionRequest } from '../../../ai/types.js';
-import { decodeAttachmentText } from '../../../extract/decodeAttachment.js';
+import type { ExtractionRunnerService } from '../../../extract/ExtractionRunnerService.js';
+import type { CompletionRequest } from '../../../ai/types.js';
 import type { RegistryLoader } from '../../../registry/RegistryLoader.js';
 import type { ProtocolSpec } from '../../../registry/ProtocolSpecRegistry.js';
 import type { AssaySpec } from '../../../registry/AssaySpecRegistry.js';
@@ -351,7 +348,8 @@ export const AI_PRECOMPILE_SYSTEM_PROMPT = getAiPrecompileSystemPrompt();
  * Malformed fields produce a warning diagnostic; the pass never throws.
  * Note: z.record() is broken in zod v4 in vitest, so we use z.any() instead.
  */
-function createAiPrecompileOutputSchema() {
+// @ts-expect-error TS6133: unused function, kept for backward compat
+function _createAiPrecompileOutputSchema() {
   const { z } = require('zod') as typeof import('zod');
   return z.object({
     candidateEvents: z.array(z.any()).nullable().default([]),
@@ -466,8 +464,8 @@ function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unkn
 
   const obj = data as Record<string, unknown>;
   // Extract raw fields
-  const candidateActions: unknown[] | undefined = Array.isArray(obj.candidateActions) ? obj.candidateActions : undefined;
-  const taggedPhrases: unknown[] | undefined = Array.isArray(obj.taggedPhrases) ? obj.taggedPhrases : undefined;
+  const candidateActions: CandidateAction[] | undefined = Array.isArray(obj.candidateActions) ? (obj.candidateActions as CandidateAction[]) : undefined;
+  const taggedPhrases: TaggedPhrase[] | undefined = Array.isArray(obj.taggedPhrases) ? (obj.taggedPhrases as TaggedPhrase[]) : undefined;
   
   // Lower candidateActions into candidateEvents (merge with any existing candidateEvents)
   const existingEvents = Array.isArray(obj.candidateEvents) ? obj.candidateEvents : [];
@@ -486,7 +484,7 @@ function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unkn
     directives: Array.isArray(obj.directives) ? obj.directives : undefined,
     downstreamCompileJobs: Array.isArray(obj.downstreamCompileJobs) ? obj.downstreamCompileJobs : [],
     patternEvents: Array.isArray(obj.patternEvents) ? obj.patternEvents : [],
-  };
+  } as AiPrecompileOutput;
 }
 
 /**
@@ -550,7 +548,7 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
       // Regression detection: warn when LLM emits physical well addresses instead of role coordinates
       const diagnostics: PassDiagnostic[] = [];
       const physicalWellCount = output.candidateEvents.filter(
-        e => e.wells || (e.params && e.params.wells)
+        e => (e as any).wells || ((e as any).params && (e as any).params.wells)
       ).length;
       if (physicalWellCount > 0) {
         diagnostics.push({
@@ -584,7 +582,6 @@ import { defaultRoleResolver, type RoleResolutionContext } from '../../roles/Rol
  */
 import {
   getPatternExpander,
-  type PatternExpanderContext,
 } from '../../patterns/PatternExpanders.js';
 
 // ---------------------------------------------------------------------------
@@ -633,7 +630,7 @@ function findLabwareByHints(
         // Strong substring match — also check contentHint if present
         if (ref.contentHint) {
           const materials = Object.values(instance.wells).flat();
-          const firstWord = ref.contentHint!.toLowerCase().split(/\s+/)[0];
+          const firstWord = ref.contentHint!.toLowerCase().split(/\s+/)[0] ?? '';
           const anyMatch = materials.some(
             m => (m.kind ?? '').toLowerCase().includes(firstWord),
           );
@@ -652,7 +649,7 @@ function findLabwareByHints(
           // Token overlap sufficient — also check contentHint if present
           if (ref.contentHint) {
             const materials = Object.values(instance.wells).flat();
-            const firstWord = ref.contentHint!.toLowerCase().split(/\s+/)[0];
+            const firstWord = ref.contentHint!.toLowerCase().split(/\s+/)[0] ?? '';
             const anyMatch = materials.some(
               m => (m.kind ?? '').toLowerCase().includes(firstWord),
             );
@@ -668,7 +665,7 @@ function findLabwareByHints(
     // If no kindHint, try contentHint only.
     if (ref.contentHint) {
       const materials = Object.values(instance.wells).flat();
-      const firstWord = ref.contentHint.toLowerCase().split(/\s+/)[0];
+      const firstWord = (ref.contentHint ?? '').toLowerCase().split(/\s+/)[0] ?? '';
       const anyMatch = materials.some(
         m => (m.kind ?? '').toLowerCase().includes(firstWord),
       );
@@ -694,7 +691,7 @@ export function createResolvePriorLabwareReferencesPass(): Pass {
   return {
     id: 'resolve_prior_labware_references',
     family: 'disambiguate' as const,
-    run({ pass_id, state }: PassRunArgs): PassResult {
+    run({ state }: PassRunArgs): PassResult {
       const ai = state.outputs.get('ai_precompile') as
         { priorLabwareRefs?: PriorLabwareRef[] } | undefined;
       const refs = ai?.priorLabwareRefs ?? [];
@@ -757,7 +754,7 @@ export function createExpandBiologyVerbsPass(): Pass {
         if (verb === 'run_protocol') {
           events.push({
             eventId: `evt_run_protocol_${cand.protocolRef ?? 'unknown'}`,
-            event_type: 'run_protocol',
+            event_type: 'run_protocol' as any,
             details: { ...params },
           });
           continue;
@@ -938,11 +935,12 @@ export function createResolveReferencesPass(
               break;
             }
             if (found.candidates.length === 1) {
+              const candidate = found.candidates[0]!;
               const resolvedRef: ResolvedReference & { chebiTerms?: OntologyTerm[] } = {
                 kind: ref.kind,
                 label: ref.label,
-                resolvedId: found.candidates[0].compoundId,
-                resolvedName: found.candidates[0].name,
+                resolvedId: candidate.compoundId,
+                resolvedName: candidate.name,
               };
               // Resolve chebi_ids if present
               if (found.chebi_ids && found.chebi_ids.length > 0) {
@@ -1112,7 +1110,7 @@ function substituteParams(
       out[k] = v;
       continue;
     }
-    const key = match[1].trim();
+    const key = match[1]!.trim();
     // Try exact key first, then fall back to the last segment after '.'
     const resolved =
       bindings[key] ?? bindings[key.split('.').pop() ?? ''];
@@ -1359,7 +1357,7 @@ export function createApplyDirectivesPass(): Pass {
   return {
     id: 'apply_directives',
     family: 'expand' as const,
-    run({ pass_id, state }: PassRunArgs): PassResult {
+    run({ state }: PassRunArgs): PassResult {
       const ai = state.outputs.get('ai_precompile') as
         { directives?: Directive[] } | undefined;
       const rawDirectives = ai?.directives ?? [];
@@ -1932,7 +1930,7 @@ export function createResolveRolesPass(): Pass {
       )?.resolvedRefs ?? [];
       const assayRefs = resolvedRefs.filter(r => r.kind === 'assay');
       const assaySpec = assayRefs.length > 0
-        ? (assayRefs[0] as { resolvedId: string; resolvedName?: string })
+        ? assayRefs[0] as unknown as AssaySpec
         : undefined;
 
       // Get the ontology term registry for cell_type_id resolution
@@ -1959,7 +1957,7 @@ export function createResolveRolesPass(): Pass {
         const ctx: RoleResolutionContext = {
           orientation,
           labwareType,
-          assay: assaySpec ? { id: assayRefs[0]!.resolvedId } : undefined,
+          ...(assaySpec ? { assay: assaySpec } : {}),
           args: details as Record<string, unknown>,
         };
 
@@ -2123,7 +2121,7 @@ export function createComputeVolumesPass(): Pass {
       return {
         ok: true,
         output: { events: resolved } satisfies ComputeVolumesPassOutput,
-        diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
       };
     },
   };
@@ -2166,31 +2164,6 @@ const PIPETTING_EVENT_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Channels per pipette type.
- */
-const CHANNELS_PER_TYPE: Readonly<Record<string, number>> = {
-  'p1000-single': 1,
-  'p1000-multi': 8,
-  'p300-single': 1,
-  'p300-multi': 8,
-  'p200-single': 1,
-  'p200-multi': 8,
-  'p20-single': 1,
-  'p20-multi': 8,
-  'p10-single': 1,
-  'p10-multi': 8,
-  'p1000-12ch': 12,
-  'p300-12ch': 12,
-  'p200-12ch': 12,
-  'p20-12ch': 12,
-};
-
-/**
- * Default channel count when pipette type is unknown.
- */
-const DEFAULT_CHANNELS = 1;
-
-/**
  * Tips per rack (standard 96-tip rack).
  */
 const TIPS_PER_RACK = 96;
@@ -2214,7 +2187,7 @@ export function createComputeResourcesPass(): Pass {
   return {
     id: 'compute_resources',
     family: 'emit' as const,
-    run({ pass_id, state }: PassRunArgs): PassResult {
+    run({ state }: PassRunArgs): PassResult {
       const computeVolumesOutput = state.outputs.get('compute_volumes') as
         { events?: PlateEventPrimitive[] } | undefined;
       const events = computeVolumesOutput?.events ?? [];
@@ -2247,7 +2220,7 @@ export function createComputeResourcesPass(): Pass {
       }
 
       // 2. Reservoir loads: aggregate volumes from transfer events where source is a reservoir
-      const reservoirLoads = new Map<string, { well: string; reagentKind: string; volumeUl: number }>();
+      const reservoirLoads = new Map<string, { reservoirRef: string; well: string; reagentKind: string; volumeUl: number }>();
 
       for (const ev of events) {
         if (ev.event_type !== 'transfer') {
@@ -2259,7 +2232,7 @@ export function createComputeResourcesPass(): Pass {
         const fromLabwareId = from?.labwareInstanceId as string | undefined;
 
         // Check if source is a reservoir
-        if (!fromLabwareId || !(fromLabwareId in labState.reservoirs)) {
+        if (!fromLabwareId || !(fromLabwareId in labState.reservoirs) || !from) {
           continue;
         }
 
@@ -2289,11 +2262,6 @@ export function createComputeResourcesPass(): Pass {
       const reservoirLoadsArray = Array.from(reservoirLoads.values());
 
       // 3. Consumables: labware instances not already declared in deckLayoutPlan.pinned
-      // Read deckLayoutPlan from lab_state pass output (labStateDelta)
-      const labStateOutput = state.outputs.get('lab_state') as
-        { events?: PlateEventPrimitive[]; snapshotAfter?: LabStateSnapshot } | undefined;
-      const snapshotAfter = labStateOutput?.snapshotAfter;
-
       // Also check the lab_stateDelta output for deckLayoutPlan
       const deckLayoutPlan = (state.outputs.get('lab_state') as
         { deckLayoutPlan?: { pinned: Array<{ slot: string; labwareHint: string }> } } | undefined
@@ -2663,6 +2631,7 @@ export function createDeriveExecutionScalePlanPass(): Pass {
           code: blocker.code,
           message: blocker.message,
           ...(blocker.requiredInput ? { requiredInput: blocker.requiredInput } : {}),
+          source: 'platform_data' as const,
         });
       }
 
@@ -2674,7 +2643,9 @@ export function createDeriveExecutionScalePlanPass(): Pass {
         if (targetLevel === 'robot_deck' && profile?.deckBinding) {
           const defaultSampleCount = sampleLabwareKind === '384_well_plate' ? 16 : 8;
           sampleCount = defaultSampleCount;
-          sampleWells = generatePlateWells(defaultSampleCount, sampleLabwareKind);
+          sampleWells = sampleLabwareKind !== 'tube_rack'
+            ? generatePlateWells(defaultSampleCount, sampleLabwareKind)
+            : [];
           assumptions.push(
             `No sample count was specified; defaulting to ${defaultSampleCount} samples (first column of ${sampleLabwareKind}).`,
           );
@@ -2683,6 +2654,7 @@ export function createDeriveExecutionScalePlanPass(): Pass {
             code: 'missing_sample_count',
             message: 'Sample count or target wells are required to scale a manual protocol into a plate layout.',
             requiredInput: 'sampleCount',
+            source: 'user_input' as const,
           });
         }
       }
@@ -2693,6 +2665,7 @@ export function createDeriveExecutionScalePlanPass(): Pass {
           code: 'sample_count_exceeds_plate_capacity',
           message: `${sampleCount} samples exceed ${sampleLabwareKind} capacity.`,
           requiredInput: 'larger plate layout or batching strategy',
+          source: 'user_input' as const,
         });
       }
 
@@ -2728,6 +2701,7 @@ export function createDeriveExecutionScalePlanPass(): Pass {
           code: 'missing_multichannel_volume_capability',
           message: `No registered multichannel pipette capability covers ${maxVolume} uL transfers for profile ${profile?.id ?? 'default'}; add a compatible multichannel tool or lower the transfer volume.`,
           requiredInput: 'pipette-capability',
+          source: 'platform_data' as const,
         });
       }
 
@@ -2741,6 +2715,7 @@ export function createDeriveExecutionScalePlanPass(): Pass {
           code: 'missing_2_well_reservoir_definition',
           message: 'INTEGRA ASSIST PLUS scaling requested a 2-well reservoir, but no 2-well reservoir labware definition is registered.',
           requiredInput: 'labware-definition:2_well_reservoir',
+          source: 'platform_data' as const,
         });
       }
 
@@ -2759,6 +2734,7 @@ export function createDeriveExecutionScalePlanPass(): Pass {
           code: 'missing_sample_labware_definition',
           message: `No registered labware definition is mapped for ${sampleLabwareKind}.`,
           requiredInput: `labware-definition:${sampleLabwareKind}`,
+          source: 'platform_data' as const,
         });
       }
 
@@ -2876,7 +2852,7 @@ export function createPlanDeckLayoutPass(): Pass {
   return {
     id: 'plan_deck_layout',
     family: 'emit' as const,
-    run({ pass_id, state }: PassRunArgs): PassResult {
+    run({ state }: PassRunArgs): PassResult {
       // 1. Read labware additions from resolve_labware
       const labwareOutput = state.outputs.get('resolve_labware') as
         { labwareAdditions?: AiLabwareAdditionPatch[] } | undefined;
@@ -3149,7 +3125,8 @@ export interface LowerPlateMapPassOutput {
 export function createLowerPlateMapPass(): Pass {
   return {
     id: 'lower_plate_map',
-    run: async (args: PassRunArgs): Promise<PassResult<LowerPlateMapPassOutput>> => {
+    family: 'expand' as const,
+    run: async (args: PassRunArgs): Promise<PassResult> => {
       const { state } = args;
       const candidates = (state as any).candidates || [];
       const plateMapCandidates = candidates.filter((c: any) => 
@@ -3176,11 +3153,9 @@ export function createLowerPlateMapPass(): Pass {
         }
       }
 
-      state.events = [...(state.events || []), ...newEvents];
       return {
-        success: true,
+        ok: true,
         output: { eventsAdded: newEvents.length },
-        diagnostics: []
       };
     }
   };

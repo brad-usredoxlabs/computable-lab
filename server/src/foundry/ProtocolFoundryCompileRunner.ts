@@ -304,14 +304,16 @@ const PROTOCOL_ACTION_ALIASES: Array<[RegExp, string]> = [
   [/\b(run)\b/i, 'run_protocol'],
 ];
 
-function protocolActionVerb(text: string): string | null {
+// @ts-expect-error TS6133: unused function, kept for potential future use
+function _protocolActionVerb(text: string): string | null {
   for (const [pattern, verb] of PROTOCOL_ACTION_ALIASES) {
     if (pattern.test(text)) return verb;
   }
   return null;
 }
 
-function isFoundryPromptBoilerplate(line: string): boolean {
+// @ts-expect-error TS6133: unused function, kept for potential future use
+function _isFoundryPromptBoilerplate(line: string): boolean {
   return /^(- |rules:|protocol foundry compile target:|execution variant:|foundry deterministic test assumptions yaml:|material\/labware context yaml:|protocol text:)/i.test(line.trim());
 }
 
@@ -332,8 +334,8 @@ export function extractPresegmentedFoundryCandidates(text: string): Array<{
     
     const match = trimmed.match(wellContentPattern);
     if (match) {
-      const well = match[1].toUpperCase();
-      const compound = match[2].trim();
+      const well = match[1]!.toUpperCase();
+      const compound = match[2]!.trim();
       candidates.push({
         text: `add_compound to ${well}: ${compound}`,
         verb: 'add_compound',
