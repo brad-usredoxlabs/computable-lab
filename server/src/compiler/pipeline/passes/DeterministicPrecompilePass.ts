@@ -616,12 +616,76 @@ function extractConcentrationParameters(text: string): Pick<
   };
 }
 
+/**
+ * Deck-slot tokens that look like well addresses but are actually deck
+ * positions (A-D + 1-4).  These are ambiguous with well addresses, so we
+ * only treat them as deck slots when they appear after a placement
+ * preposition in a context where a labware noun was just resolved.
+ */
+const DECK_SLOT_TOKEN_RE = /\b([A-Da-d][1-4])\b/g;
+
+/**
+ * Placement prepositions that signal a deck-slot intent when followed by a
+ * deck-slot token (e.g. "on B2", "onto C3").
+ */
+const PLACEMENT_PREPOSITION_RE = /\b(?:on|onto|in|at)\b/gi;
+
+/**
+ * Extract well addresses from text, but filter out tokens that look like
+ * deck slots (A-D + 1-4) when they follow a placement preposition.
+ *
+ * This prevents "Put a 96-well plate on B2" from treating B2 as a well
+ * address in an add_material event — instead B2 is recognised as a deck
+ * slot for labware placement.
+ */
 function extractNonDeckSlotWells(text: string): ReturnType<typeof extractWellAddresses> {
   const deckSlotSpans = extractDeckSlotSpans(text);
-  if (deckSlotSpans.length === 0) return extractWellAddresses(text);
+  const bareDeckSlotSpans = extractBareDeckSlotSpans(text);
+  const allDeckSpans = [...deckSlotSpans, ...bareDeckSlotSpans];
+
+  if (allDeckSpans.length === 0) return extractWellAddresses(text);
   return extractWellAddresses(text).filter((well) => (
-    !deckSlotSpans.some((span) => spansOverlap(well.span, span))
+    !allDeckSpans.some((span) => spansOverlap(well.span, span))
   ));
+}
+
+/**
+ * Find spans of bare deck-slot tokens (A-D + 1-4) that follow a placement
+ * preposition.  These are ambiguous with well addresses but should be
+ * treated as deck slots in placement contexts.
+ */
+function extractBareDeckSlotSpans(text: string): Array<[number, number]> {
+  const spans: Array<[number, number]> = [];
+  const lower = text.toLowerCase();
+
+  // Find all placement preposition positions
+  const prepPositions: number[] = [];
+  let m: RegExpExecArray | null;
+  PLACEMENT_PREPOSITION_RE.lastIndex = 0;
+  while ((m = PLACEMENT_PREPOSITION_RE.exec(lower)) !== null) {
+    prepPositions.push(m.index);
+  }
+
+  if (prepPositions.length === 0) return spans;
+
+  // Find all deck-slot tokens
+  DECK_SLOT_TOKEN_RE.lastIndex = 0;
+  while ((m = DECK_SLOT_TOKEN_RE.exec(lower)) !== null) {
+    const tokenStart = m.index;
+    // Check if this token follows a placement preposition (within ~30 chars)
+    const precedingPrep = prepPositions.filter((p) => p < tokenStart && (tokenStart - p) <= 30).pop();
+    if (precedingPrep !== undefined) {
+      // Make sure there's no intervening well address or other entity
+      const between = lower.slice(precedingPrep + m[0].length, tokenStart);
+      // If there's a well address pattern between the preposition and the token,
+      // don't treat this as a deck slot
+      if (!/\b[A-H]\d{1,2}\b/.test(between)) {
+        spans.push([tokenStart, tokenStart + m[1]!.length]);
+      }
+    }
+  }
+
+  return spans;
 }
 
 function extractDeckSlotSpans(text: string): Array<[number, number]> {
@@ -1233,7 +1297,24 @@ function inferDeckSlotForMention(
   const before = prompt.slice(Math.max(0, start - 40), start).toLowerCase();
   const forward = firstSlotKeyword(after);
   if (forward) return forward;
+  // Also check for bare deck slot tokens (A-D + 1-4) after placement prepositions
+  const bareSlot = inferBareDeckSlot(after);
+  if (bareSlot) return bareSlot;
   return firstSlotKeyword(before);
+}
+
+/**
+ * Detect a bare deck slot token (A-D + 1-4) that follows a placement
+ * preposition in the text after the given position.
+ */
+function inferBareDeckSlot(text: string): string | undefined {
+  const lower = text.toLowerCase();
+  const prepMatch = lower.match(/\b(?:on|onto|in|at)\b/);
+  if (!prepMatch) return undefined;
+  const afterPrep = lower.slice(prepMatch.index + prepMatch[0].length);
+  const slotMatch = afterPrep.match(/^\s*([A-Da-d][1-4])\b/);
+  if (slotMatch) return slotMatch[1]!.toUpperCase();
+  return undefined;
 }
 
 function substituteInputMentionLabels(
