@@ -1,0 +1,98 @@
+import type { DragEvent } from 'react'
+import type { Labware } from '../../types/labware'
+import { LABWARE_TYPE_ICONS } from '../../types/labware'
+import type { EventEditorPlacement, LabwareOrientation } from '../types'
+
+interface LabwareTileProps {
+  labware: Labware
+  placement: EventEditorPlacement
+  orientation: LabwareOrientation
+  variant: 'slot' | 'lawn'
+  width?: number
+  height?: number
+  onRemove?: () => void
+  onRotate?: () => void
+  onFocus?: () => void
+}
+
+const SLOT_LANDSCAPE = { w: 126, h: 80 }
+const SLOT_PORTRAIT = { w: 80, h: 126 }
+const LAWN_LANDSCAPE = { w: 110, h: 70 }
+const LAWN_PORTRAIT = { w: 70, h: 110 }
+
+export function LabwareTile({
+  labware,
+  placement,
+  orientation,
+  variant,
+  width,
+  height,
+  onRemove,
+  onRotate,
+  onFocus,
+}: LabwareTileProps) {
+  const sized =
+    width && height
+      ? { w: width, h: height }
+      : variant === 'slot'
+        ? orientation === 'portrait'
+          ? SLOT_PORTRAIT
+          : SLOT_LANDSCAPE
+        : orientation === 'portrait'
+          ? LAWN_PORTRAIT
+          : LAWN_LANDSCAPE
+
+  function handleDragStart(event: DragEvent<HTMLDivElement>) {
+    event.dataTransfer.setData(
+      'application/x-event-editor-placement',
+      placement.placementId,
+    )
+    event.dataTransfer.effectAllowed = 'move'
+  }
+
+  return (
+    <div
+      className="tile"
+      data-variant={variant}
+      data-orientation={orientation}
+      draggable
+      onDragStart={handleDragStart}
+      onClick={(event) => {
+        if (!onFocus) return
+        // Ignore clicks that originated on a control button.
+        if ((event.target as HTMLElement).closest('.tile__btn')) return
+        event.stopPropagation()
+        onFocus()
+      }}
+      style={{ width: sized.w, height: sized.h }}
+      title={`${labware.name} · ${labware.labwareType} (${orientation}) — click to focus`}
+    >
+      <span className="tile__icon" aria-hidden>{LABWARE_TYPE_ICONS[labware.labwareType]}</span>
+      <span className="tile__name">{labware.name}</span>
+      <div className="tile__controls" onMouseDown={(e) => e.stopPropagation()}>
+        {onRotate ? (
+          <button
+            type="button"
+            className="tile__btn"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRotate()
+            }}
+            title="Rotate (portrait ↔ landscape)"
+          >⟲</button>
+        ) : null}
+        {onRemove ? (
+          <button
+            type="button"
+            className="tile__btn tile__btn--danger"
+            onClick={(e) => {
+              e.stopPropagation()
+              onRemove()
+            }}
+            title="Remove"
+          >×</button>
+        ) : null}
+      </div>
+    </div>
+  )
+}
