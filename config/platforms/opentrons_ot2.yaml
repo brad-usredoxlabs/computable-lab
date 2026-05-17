@@ -18,6 +18,10 @@ modules:
 variants:
   - id: ot2_standard
     title: Opentrons OT-2
+    sideLawn:
+      widthMm: 400
+      heightMm: 500
+      label: Labware lawn
     slots:
       - { id: "1", kind: standard, row: 4, col: 1, reachable: true }
       - { id: "2", kind: standard, row: 4, col: 2, reachable: true }

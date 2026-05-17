@@ -1,0 +1,55 @@
+kind: protocol-foundry-patch-spec
+id: cayman-immuno-oncology/robot_deck/fix-ai-precompile-shape-mismatch-and-fallback
+protocolId: cayman-immuno-oncology
+variant: robot_deck
+fixClass: precompiler_reference_shape
+title: Fix ai_precompile shape mismatch and ensure candidateEvents are populated
+  from presegmented candidates
+rationale: The compiler diagnostics show 'ai_precompile output shape mismatch,
+  using fallback' and 'candidateEvents evaluated to false', causing all
+  downstream passes (expand_biology_verbs, resolve_labware, mint_materials) to
+  be skipped. The pre-compiler extracted 15 deterministic candidates (9+3+3)
+  from the well-plate mapping table, but the ai_precompile pass failed to
+  convert these into candidateEvents. The root cause is that the ai_precompile
+  pass's output shape doesn't match what downstream passes expect, or the
+  fallback path produces empty candidateEvents. Since this is a screening
+  library plate (96-well with compound mappings), the compiler should generate
+  events for each compound dispensing step. The prior patch touched
+  ChatbotCompilePasses.ts but the issue persists, suggesting the fix was
+  incomplete or the fallback path still produces empty results.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - ai_precompile pass output shape matches expected schema with candidateEvents
+    array populated
+  - candidateEvents contains at least 3 events for the 96-well plate compound
+    dispensing steps
+  - expand_biology_verbs pass is no longer skipped (when condition evaluates to
+    true)
+  - resolve_labware pass is no longer skipped (when condition evaluates to true)
+  - eventCount >= 3 in compiler output
+  - outcome is 'complete' not 'gap'
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 100
+  maxChangedLines: 200
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-immuno-oncology/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-immuno-oncology/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-immuno-oncology/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-immuno-oncology/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-immuno-oncology/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-immuno-oncology/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-immuno-oncology.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-immuno-oncology.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cayman-immuno-oncology.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-immuno-oncology/robot_deck/verdict.yaml

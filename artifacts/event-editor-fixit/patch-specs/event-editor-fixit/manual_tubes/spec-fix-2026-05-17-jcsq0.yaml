@@ -1,0 +1,35 @@
+kind: protocol-foundry-patch-spec
+id: spec-fix-2026-05-17-jcsq0
+source: event-editor-fixit
+generated_at: 2026-05-17T12:10:40.872Z
+fixClass: compiler
+title: Fix deck slot parsing to emit labware placement candidates instead of
+  well addresses for deck-like tokens
+rationale: The compiler incorrectly treats deck-like tokens (e.g., 'B2') as well
+  addresses within liquid handling event parameters when they appear in
+  placement contexts (e.g., 'put a 96-well plate on B2'). This results in empty
+  labwareAdditions and no deck layout plan. The fix must ensure that when a
+  resolved labware noun is associated with a deck slot token, the system emits a
+  labware placement candidate with the deckSlot field populated, rather than
+  parsing the token as a well coordinate in candidateEvents.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+  - server/src/compiler/precompile/NounPhraseResolver.ts
+  - server/src/compiler/pipeline/fixtures/spec-fix-2026-05-17-jcsq0.yaml
+acceptance:
+  - "The prompt 'put a 96-well plate on B2' must result in a labwareAdditions
+    entry with deckSlot: 'B2' and labwareHint: 'lbw-def-generic-96-well-plate'."
+  - "The prompt 'put a 96-well plate on B2' must result in deckLayoutPlan.pinned
+    containing an entry with slot: 'B2' and labwareHint:
+    'lbw-def-generic-96-well-plate'."
+  - The prompt 'put a 96-well plate on B2' must NOT result in candidateEvents
+    containing 'B2' as a well address.
+  - Prompts explicitly referring to wells (e.g., 'add 100ul to well A1') must
+    still parse well addresses correctly and not emit deck placements.
+  - Prompts referring to rows/columns (e.g., 'add to row A') must still parse
+    row/column addresses correctly and not emit deck placements.
+tests:
+  - cd server && npx vitest run
+    src/compiler/pipeline/fixtures/FixItFixtures.test.ts -t
+    'spec-fix-2026-05-17-jcsq0'
+failingPrompt: put a 96-well plate on B2

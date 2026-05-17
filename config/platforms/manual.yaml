@@ -18,3 +18,10 @@ variants:
   - id: manual_collapsed
     title: Manual Technician Mode
     slots: []
+  - id: manual_freeform
+    title: Manual Bench (freeform)
+    slots: []
+    surface:
+      kind: lawn
+      widthMm: 1200
+      heightMm: 800

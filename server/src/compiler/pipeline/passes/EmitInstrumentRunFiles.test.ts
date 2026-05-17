@@ -9,6 +9,7 @@ import { emptyLabState } from '../../state/LabState.js';
 
 // Side-effect import registers emitters for QuantStudio-5, QuantStudio, QS5
 import '../../artifacts/QuantStudioEmitter.js';
+import '../../artifacts/GeminiEmEmitter.js';
 
 describe('createEmitInstrumentRunFilesPass', () => {
   it('pass id is emit_instrument_run_files and family is emit', () => {
@@ -306,5 +307,45 @@ describe('createEmitInstrumentRunFilesPass', () => {
     const output = result.output as { instrumentRunFiles: Array<{ wells: Array<{ well: string }> }> };
     expect(output.instrumentRunFiles).toHaveLength(1);
     expect(output.instrumentRunFiles[0].wells).toHaveLength(96);
+  });
+
+  it('Gemini EM plate-level read produces a 96-well run file', () => {
+    const pass = createEmitInstrumentRunFilesPass();
+
+    const mockState: PipelineState = {
+      input: { labState: emptyLabState() },
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['resolve_roles', {
+          events: [
+            {
+              eventId: 'read-gemini',
+              event_type: 'read',
+              details: {
+                instrument: 'Gemini EM plate reader',
+              },
+              labwareId: 'labware-96-plate',
+            },
+          ],
+        }],
+        ['resolve_references', { resolvedRefs: [] }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'emit_instrument_run_files',
+      state: mockState,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.diagnostics).toEqual([]);
+    const output = result.output as { instrumentRunFiles: Array<{ instrument: string; wells: Array<{ well: string }> }> };
+    expect(output.instrumentRunFiles).toHaveLength(1);
+    expect(output.instrumentRunFiles[0].instrument).toBe('Gemini EM plate reader');
+    expect(output.instrumentRunFiles[0].wells).toHaveLength(96);
+    expect(output.instrumentRunFiles[0].wells[0].well).toBe('A1');
+    expect(output.instrumentRunFiles[0].wells[95].well).toBe('H12');
   });
 });

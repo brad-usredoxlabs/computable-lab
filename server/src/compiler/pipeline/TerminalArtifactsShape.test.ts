@@ -55,7 +55,37 @@ describe('TerminalArtifacts canonical shape', () => {
         consumables: ['tip-rack-p300'],
       },
       executionScalePlan,
+      deterministicProtocolPlan: {
+        kind: 'deterministic-protocol-plan',
+        source: 'deterministic_precompile',
+        steps: [],
+        bindings: { labwareRoles: {}, materialRoles: {} },
+        assumptions: [],
+        blockers: [],
+      },
       instrumentRunFiles: [],
+      instrumentApplianceJobs: [{
+        kind: 'instrument-appliance-job',
+        jobId: 'gemini-em-active-read-1',
+        adapterId: 'molecular_devices_gemini',
+        operation: 'active_read',
+        instrument: 'Gemini EM plate reader',
+        request: {
+          adapterId: 'molecular_devices_gemini',
+          parameters: {},
+        },
+        sourceRunFile: {
+          instrument: 'Gemini EM plate reader',
+          wells: [{ well: 'A1' }],
+        },
+      }],
+      instrumentExecutionReadiness: [{
+        jobId: 'gemini-em-active-read-1',
+        status: 'ready',
+        executionMode: 'simulate',
+        requiresConfirmation: false,
+        blockers: [],
+      }],
       downstreamQueue: [{ kind: 'qPCR', description: 'run qPCR on plate' }],
       validationReport: { findings: [] },
     };
@@ -69,7 +99,10 @@ describe('TerminalArtifacts canonical shape', () => {
     expect(ta.resolvedLabwareRefs).toBeDefined();
     expect(ta.resourceManifest).toBeDefined();
     expect(ta.executionScalePlan).toBeDefined();
+    expect(ta.deterministicProtocolPlan).toBeDefined();
     expect(ta.instrumentRunFiles).toBeDefined();
+    expect(ta.instrumentApplianceJobs).toBeDefined();
+    expect(ta.instrumentExecutionReadiness).toBeDefined();
     expect(ta.downstreamQueue).toBeDefined();
     expect(ta.validationReport).toBeDefined();
   });

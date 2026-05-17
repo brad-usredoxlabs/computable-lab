@@ -4,6 +4,8 @@ import {
   shapeDocumentResult,
   filterAndShapeDocumentResults,
   getCuratedProtocolIdeVendors,
+  protocolIdeDocumentToFoundryPdfCandidate,
+  protocolIdeDocumentsToFoundryPdfCandidates,
 } from './service.js';
 import { PROTOCOL_IDE_VENDORS, isCuratedVendor } from './protocolIdeVendors.js';
 
@@ -205,5 +207,67 @@ describe('document result shaping', () => {
     const shaped = shapeDocumentResult('thermo', 'Test Protocol', 'https://example.com', 'A test');
     const filtered = filterAndShapeDocumentResults('thermo', 'Test Protocol', 'https://example.com', 'A test');
     expect(filtered).toEqual(shaped);
+  });
+
+  it('projects Protocol IDE document results into foundry PDF collection candidates', () => {
+    const document = shapeDocumentResult(
+      'thermo',
+      'DNA Extraction Protocol',
+      'https://example.com/protocol.pdf',
+      'Vendor protocol PDF for extraction.',
+    );
+
+    const candidate = protocolIdeDocumentToFoundryPdfCandidate(document!, {
+      searchQuery: 'dna extraction protocol filetype:pdf',
+      provenance: { testRun: true },
+    });
+
+    expect(candidate).toMatchObject({
+      vendor: 'thermo',
+      title: 'DNA Extraction Protocol',
+      sourceUrl: 'https://example.com/protocol.pdf',
+      searchQuery: 'dna extraction protocol filetype:pdf',
+      documentType: 'protocol',
+      provenance: {
+        source: 'protocol-ide-document-search',
+        source_url_role: 'pdfUrl',
+        landingUrl: 'https://example.com/protocol.pdf',
+        testRun: true,
+      },
+    });
+  });
+
+  it('deduplicates projected foundry PDF candidates and skips non-PDF documents without pdfUrl', () => {
+    const candidates = protocolIdeDocumentsToFoundryPdfCandidates([
+      {
+        vendor: 'sigma',
+        title: 'Assay Protocol',
+        pdfUrl: 'https://example.com/assay.pdf',
+        landingUrl: 'https://example.com/assay',
+        documentType: 'protocol',
+      },
+      {
+        vendor: 'sigma',
+        title: 'Assay Protocol Duplicate',
+        pdfUrl: 'https://example.com/assay.pdf',
+        landingUrl: 'https://example.com/assay-dup',
+        documentType: 'protocol',
+      },
+      {
+        vendor: 'sigma',
+        title: 'Product Landing Page',
+        landingUrl: 'https://example.com/product',
+        documentType: 'other',
+      },
+    ], {
+      searchQuery: 'assay protocol',
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      vendor: 'sigma',
+      title: 'Assay Protocol',
+      sourceUrl: 'https://example.com/assay.pdf',
+    });
   });
 });

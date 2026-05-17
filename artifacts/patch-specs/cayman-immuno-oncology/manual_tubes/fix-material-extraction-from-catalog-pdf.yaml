@@ -1,0 +1,46 @@
+kind: protocol-foundry-patch-spec
+id: cayman-immuno-oncology/manual_tubes/fix-material-extraction-from-catalog-pdf
+protocolId: cayman-immuno-oncology
+variant: manual_tubes
+fixClass: material_catalog_or_spec
+title: Extract compound materials from Cayman catalog PDF text
+rationale: The material context shows empty materials, materialSpecs, and
+  vendorProducts arrays despite the PDF containing a detailed catalog of 48+
+  compounds (PLX4032, I-BET762, IC-87114, etc.) with item numbers. The
+  pre-compiler segments show 'foundry_presegmented_candidates' but the material
+  extraction is not populating the material context. The compiler needs to
+  extract these compounds as materials with their catalog numbers to enable
+  proper material resolution and event generation.
+ownedFiles:
+  - server/src/extract/ExtractionRunnerService.ts
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - Material context contains extracted compounds from the Cayman catalog (e.g.,
+    PLX4032, I-BET762)
+  - Each compound has associated catalog/item number from the PDF
+  - mint_materials pass is triggered and creates material instances for
+    extracted compounds
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 80
+  maxChangedLines: 200
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-immuno-oncology/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-immuno-oncology/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-immuno-oncology/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-immuno-oncology/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-immuno-oncology/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-immuno-oncology/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-immuno-oncology.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-immuno-oncology.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cayman-immuno-oncology.txt
+failureEvidence:
+  eventCount: 2
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-immuno-oncology/manual_tubes/verdict.yaml

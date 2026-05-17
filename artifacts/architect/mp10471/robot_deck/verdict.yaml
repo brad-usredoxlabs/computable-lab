@@ -1,42 +1,43 @@
 kind: protocol-foundry-architect-verdict
 protocolId: mp10471
 variant: robot_deck
-generated_at: 2026-05-09T09:40:13.279Z
+generated_at: 2026-05-09T22:43:30.708Z
 accepted: false
-qualityScore: 0.1
-coverageEstimate: 0.1
+qualityScore: 0.05
+coverageEstimate: 0
 failureClasses:
   - precompiler_reference_shape
-  - compiler_event_coverage
+  - extractor_prompt_contract
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: fix-ai-precompile-shape-mismatch
+  - id: fix-ai-precompile-shape-mismatch-and-fallback
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch to enable downstream passes
-    rationale: The compiler diagnostics show 'ai_precompile output shape mismatch',
-      which causes all downstream passes (mint_materials, apply_directives,
-      resolve_labware, expand_patterns) to be skipped because their 'when'
-      conditions evaluate to false. This is the root cause of the gap outcome.
-      The ai_precompile pass in ChatbotCompilePasses.ts is producing output that
-      doesn't match the expected AiPrecompileOutput type schema, preventing the
-      compiler from extracting candidates, labwares, and directives needed to
-      generate meaningful events.
+    title: Fix ai_precompile shape mismatch fallback to preserve candidateEvents
+    rationale: The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
+      LLM's precompile output did not match the expected AiPrecompileOutput
+      schema. The current fallback produces an empty output (no candidateEvents,
+      no candidateLabwares), causing all downstream passes
+      (expand_biology_verbs, resolve_labware, mint_materials) to be skipped.
+      This results in eventCount=0 despite the PDF containing clear protocol
+      steps. The fallback should preserve any partially parsed data or use a
+      deterministic extraction path instead of returning empty arrays.
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass produces output matching AiPrecompileOutput type
-        schema
-      - No 'ai_precompile_shape_mismatch' warning in diagnostics
-      - Downstream passes (mint_materials, resolve_labware) are no longer
-        skipped due to false when conditions
-      - candidateLabwares and directives fields are populated when present in
-        LLM output
+      - When ai_precompile output has shape mismatch, the fallback must not
+        produce empty candidateEvents if deterministic candidates were extracted
+      - The fallback should merge deterministic presegmented candidates into
+        candidateEvents when LLM output is malformed
+      - eventCount must be >= 3 for protocols with clear procedural steps in PDF
+        text
+      - Downstream passes (expand_biology_verbs, resolve_labware) must not be
+        skipped when candidates exist
     coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: &a1
       compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10471/robot_deck.yaml
@@ -49,7 +50,7 @@ recommendedFixes:
       materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10471.yaml
       text: /home/brad/git/computable-foundry/artifacts/text/mp10471.txt
     failureEvidence: &a2
-      eventCount: 2
+      eventCount: 0
       outcome: gap
     implementationBudget:
       targetChangedFiles: 1
@@ -57,38 +58,69 @@ recommendedFixes:
       targetChangedLines: 60
       maxChangedLines: 150
       requireFocusedFixture: true
-  - id: fix-verb-expansion-for-assay-protocol
-    class: compiler_event_coverage
-    title: Add verb lowering for Fluo-4 assay preparation and loading steps
-    rationale: The PDF describes a calcium assay protocol with clear steps (prepare
-      loading solution, add to cells, incubate, measure fluorescence), but the
-      compiler only produces 2 empty mix events. The BiologyVerbExpander needs
-      to recognize assay preparation verbs like 'prepare loading solution', 'add
-      reagent to cells', 'incubate', and 'measure fluorescence' and lower them
-      to appropriate liquid handling events (dispense, mix, incubate, read).
-      Without these verb mappings, the compiler cannot generate meaningful
-      events from the extracted candidates.
+  - id: fix-tag-prompt-json-parse-error
+    class: extractor_prompt_contract
+    title: Fix tag_prompt JSON parse error from unterminated strings
+    rationale: The tag_prompt pass fails with 'Unterminated string in JSON at
+      position 594', indicating the LLM response contains malformed JSON (likely
+      unescaped quotes or special characters in material names like 'Fluo-4
+      Direct™'). This parse failure contributes to the shape mismatch in
+      ai_precompile. The prompt contract should enforce stricter JSON output or
+      the parser should handle common LLM JSON errors gracefully.
     ownedFiles:
-      - server/src/compiler/biology/BiologyVerbExpander.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+      - server/src/extract/ExtractionRunnerService.ts
     acceptance:
-      - Verb expander recognizes 'prepare loading solution' and lowers to
-        dispense/mix events
-      - Verb expander recognizes 'add reagent to cells' and lowers to dispense
-        events
-      - Verb expander recognizes 'incubate' and lowers to incubate events
-      - Event count increases to at least 5 events for a complete assay protocol
-      - Events include proper labware references (sample_plate,
-        reagent_reservoir)
+      - tag_prompt pass must not fail on valid JSON with special characters in
+        values
+      - Parser should handle or reject malformed JSON gracefully without
+        crashing the pipeline
+      - Material names with special characters (™, °, etc.) should be properly
+        escaped in JSON output
     coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
       targetChangedFiles: 1
       maxChangedFiles: 2
-      targetChangedLines: 80
-      maxChangedLines: 200
+      targetChangedLines: 40
+      maxChangedLines: 100
+      requireFocusedFixture: true
+  - id: fix-deterministic-candidate-to-event-lowering
+    class: compiler_event_coverage
+    title: Lower deterministic presegmented candidates to events when LLM precompile
+      fails
+    rationale: The diagnostics show 8, 10, 24, 25, 1, and 4 deterministic candidates
+      were extracted from presegmented text, but these are never converted to
+      events because the ai_precompile pass fails and returns empty
+      candidateEvents. The compiler should have a fallback path that converts
+      deterministic candidates (which represent protocol steps) into basic
+      events even when the LLM precompile fails. This ensures protocols with
+      clear procedural content produce at least some events.
+    ownedFiles:
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+      - server/src/compiler/biology/BiologyVerbExpander.ts
+    acceptance:
+      - When ai_precompile fails, deterministic candidates should be lowered to
+        basic events
+      - Event graph should contain at least 3 events for protocols with clear
+        procedural steps
+      - Events should reference extracted labware and materials from
+        deterministic candidates
+      - The expand_biology_verbs pass should process deterministic candidates
+        when LLM candidates are empty
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 100
+      maxChangedLines: 220
       requireFocusedFixture: true
 sourceArtifacts: *a1
-architectNotes: "LLM architect analysis: 2 fix recommendations."
+architectNotes: "LLM architect analysis: 3 fix recommendations."

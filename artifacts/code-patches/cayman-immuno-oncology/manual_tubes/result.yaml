@@ -1,41 +1,108 @@
 kind: protocol-foundry-coder-patch-result
 protocolId: cayman-immuno-oncology
 variant: manual_tubes
-generated_at: 2026-05-09T19:27:35.490Z
-status: needs-human
-message: Coder did not produce any valid symbol replacement blocks.
+generated_at: 2026-05-11T22:50:50.036Z
+status: failed
+message: Patch applied but verification tests failed; reverted.
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
 rawResponse: >-
-  
+  @@replace salvageAiPrecompileOutput@@
 
-  @@replace runVariant@@
+  function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?:
+  unknown }): AiPrecompileOutput {
+    // If we have a structured parsed object, use it.
+    if (input.parsed && typeof input.parsed === 'object') {
+      const parsed = input.parsed as Record<string, unknown>;
+      
+      // Extract candidates
+      const rawCandidates = parsed.candidates as unknown[] | undefined;
+      const candidates = lowerCandidateActionsToEvents(rawCandidates);
 
-  async function runVariant(input: {
-    protocolId: string;
-    variant: FoundryVariant;
-    plan: ExecutionScalePlan | undefined;
-    events: PlateEventPrimitive[];
-  }): Promise<RunChatbotCompileResult> {
-    const { protocolId, variant, plan, events } = input;
-    
-    // Wire Foundry compile dependencies to the real compiler runtime
-    // This fixes the gap where Foundry-specific runs were producing compiler gaps
-    // that looked like missing resolver dependencies or skipped runtime wiring
-    
-    const labwares = buildLabwares(events, plan, variant);
-    const normalizedEvents = normalizeEvents(events, labwares);
-    
-    // Ensure proper dependency injection for Foundry runtime
-    const lookup = createFoundryLabwareLookup();
-    const labwareIds = collectLabwareIds(events, plan);
-    
-    // Compile with proper Foundry variant wiring
-    const result: RunChatbotCompileResult = {
-      protocolId,
-      variant,
-      labwareIds,
-      events: normalizedEvents,
-      labwares,
-      status: 'success',
-      summary: {
-        protocolId,
-        variant,
+      // Extract labware hints
+      const rawLabware = parsed.labware as unknown[] | undefined;
+      const labware = rawLabware?.map((item: unknown) => {
+        if (typeof item === 'object' && item !== null) {
+          const obj = item as Record<string, unknown>;
+          return {
+            kind: typeof obj.kind === 'string' ? obj.kind : 'unknown',
+            label: typeof obj.label === 'string' ? obj.label : 'unknown',
+            reason: typeof obj.reason === 'string' ? obj.reason : 'inferred',
+          };
+        }
+        return { kind: 'unknown', label: String(item), reason: 'inferred' };
+      }) || [];
+
+      // Extract directives
+      const rawDirectives = parsed.directives as unknown[] | undefined;
+      const directives = rawDirectives?.map((item: unknown) => {
+        if (typeof item === 'object' && item !== null) {
+          const obj = item as Record<string, unknown>;
+          return {
+            kind: typeof obj.kind === 'string' ? obj.kind : 'unknown',
+            label: typeof obj.label === 'string' ? obj.label : 'unknown',
+            params: obj.params as Record<string, unknown> || {},
+          };
+        }
+        return { kind: 'unknown', label: String(item), params: {} };
+      }) || [];
+
+      // Extract patterns
+      const rawPatterns = parsed.patterns as unknown[] | undefined;
+      const patterns = rawPatterns?.map((item: unknown) => {
+        if (typeof item === 'object' && item !== null) {
+          const obj = item as Record<string, unknown>;
+          return {
+            phrase: typeof obj.phrase === 'string' ? obj.phrase : 'unknown',
+            type: typeof obj.type === 'string' ? obj.type : 'unknown',
+          };
+        }
+        return { phrase: String(item), type: 'unknown' };
+      }) || [];
+
+      // Extract downstream jobs
+      const rawJobs = parsed.downstreamJobs as unknown[] | undefined;
+      const downstreamJobs = rawJobs?.map((item: unknown) => {
+        if (typeof item === 'object' && item !== null) {
+          const obj = item as Record<string, unknown>;
+          return {
+            kind: typeof obj.kind === 'string' ? obj.kind : 'unknown',
+            label: typeof obj.label === 'string' ? obj.label : 'unknown',
+          };
+        }
+        return { kind: 'unknown', label: String(item) };
+      }) || [];
+
+      return {
+        candidates,
+        labware,
+        directives,
+        patterns,
+        downstreamJobs,
+      };
+    }
+
+    // Fallback: if we have raw text, try to parse it as JSON, otherwise return empty structure
+    if (input.raw) {
+      try {
+        const text = typeof input.raw === 'string' ? input.raw : JSON.stringify(input.raw);
+        const parsed = JSON.parse(text);
+        if (parsed && typeof parsed === 'object') {
+          return salvageAiPrecompileOutput({ parsed });
+        }
+      } catch (e) {
+        // If parsing fails, return empty structure
+      }
+    }
+
+    // Return empty structure if nothing could be salvaged
+    return {
+      candidates: [],
+      labware: [],
+      directives: [],
+      patterns: [],
+      downstreamJobs: [],
+    };
+  }
+
+  @@end@@

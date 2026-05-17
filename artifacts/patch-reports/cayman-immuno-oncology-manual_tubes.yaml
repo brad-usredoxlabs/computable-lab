@@ -1,8 +1,8 @@
 kind: protocol-worker-report
 protocolId: cayman-immuno-oncology
 variant: manual_tubes
-generated_at: 2026-05-09T19:27:35.491Z
-status: needs-human
+generated_at: 2026-05-11T22:50:50.038Z
+status: failed
 coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-immuno-oncology/manual_tubes/result.yaml
 touchedFiles: []
-message: no symbol replacements produced
+message: tests failed

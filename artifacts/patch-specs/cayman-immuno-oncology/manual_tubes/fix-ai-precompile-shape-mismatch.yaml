@@ -1,0 +1,46 @@
+kind: protocol-foundry-patch-spec
+id: cayman-immuno-oncology/manual_tubes/fix-ai-precompile-shape-mismatch
+protocolId: cayman-immuno-oncology
+variant: manual_tubes
+fixClass: precompiler_reference_shape
+title: Fix ai_precompile output shape mismatch causing downstream pass skips
+rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch' warning,
+  which causes all downstream passes (mint_materials, apply_directives,
+  resolve_labware, expand_patterns) to be skipped because their 'when'
+  conditions evaluate to false. The ai_precompile pass in
+  ChatbotCompilePasses.ts is not producing the expected output shape, preventing
+  the compiler from extracting protocol actions from the PDF text. This is the
+  root cause of the low event count (2) and the 'gap' outcome.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - ai_precompile pass produces output with correct shape including
+    candidateLabwares, mintMaterials, directives, and patternEvents fields
+  - Downstream passes (mint_materials, resolve_labware, expand_patterns) are no
+    longer skipped due to false 'when' conditions
+  - Compiler event count increases from 2 to at least 3 for protocols with
+    extractable steps
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 60
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-immuno-oncology/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-immuno-oncology/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-immuno-oncology/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-immuno-oncology/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-immuno-oncology/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-immuno-oncology/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-immuno-oncology.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-immuno-oncology.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cayman-immuno-oncology.txt
+failureEvidence:
+  eventCount: 2
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-immuno-oncology/manual_tubes/verdict.yaml

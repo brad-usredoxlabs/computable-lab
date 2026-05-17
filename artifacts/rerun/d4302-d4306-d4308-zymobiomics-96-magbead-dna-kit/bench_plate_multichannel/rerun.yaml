@@ -1,0 +1,10 @@
+kind: protocol-foundry-rerun-report
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: bench_plate_multichannel
+generated_at: 2026-05-09T22:04:26.271Z
+compilerArtifact: /home/brad/git/computable-foundry/artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+eventGraphArtifact: /home/brad/git/computable-foundry/artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+executionScaleArtifact: /home/brad/git/computable-foundry/artifacts/execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+outcome: gap
+eventCount: 0
+blockerCount: 0

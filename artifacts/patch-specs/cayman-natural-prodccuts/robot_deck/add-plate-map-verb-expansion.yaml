@@ -1,0 +1,49 @@
+kind: protocol-foundry-patch-spec
+id: cayman-natural-prodccuts/robot_deck/add-plate-map-verb-expansion
+protocolId: cayman-natural-prodccuts
+variant: robot_deck
+fixClass: compiler_event_coverage
+title: Add verb expansion for plate map content items
+rationale: The PDF text contains a plate map with compounds (e.g., 'Ursolic
+  Acid', 'Paclitaxel') in specific wells. The current `PROTOCOL_ACTION_ALIASES`
+  in `ProtocolFoundryCompileRunner.ts` only matches action verbs like 'add',
+  'mix', etc. It does not recognize 'plate map' or 'well content' as a protocol
+  step. The `BiologyVerbExpander` needs a new verb or pattern to handle
+  'load_plate' or 'add_compound_to_well' from plate map data. Alternatively, the
+  presegmented extractor should generate candidates for each well content as an
+  'add_compound' action. Since the presegmented extractor is deterministic and
+  simple, it's better to enhance it to recognize plate map lines and generate
+  'add_compound' candidates.
+ownedFiles:
+  - server/src/foundry/ProtocolFoundryCompileRunner.ts
+  - server/src/compiler/biology/BiologyVerbExpander.ts
+acceptance:
+  - Presegmented extractor generates candidates for plate map entries.
+  - Compiler produces 'add_compound' or 'load_plate' events for each well
+    content.
+  - Event graph includes labware references for the source plate and destination
+    wells.
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 80
+  maxChangedLines: 200
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-natural-prodccuts/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-natural-prodccuts/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-natural-prodccuts/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-natural-prodccuts/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-natural-prodccuts/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-natural-prodccuts/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-natural-prodccuts.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-natural-prodccuts.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cayman-natural-prodccuts.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-natural-prodccuts/robot_deck/verdict.yaml

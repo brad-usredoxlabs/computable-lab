@@ -34,6 +34,8 @@ import {
   createLibraryHandlers,
   createOntologyHandlers,
   createAIHandlers,
+  createDeterministicOnlyAIHandlers,
+  createEventEditorFixHandlers,
   createMetaHandlers,
   ConfigHandlers,
   createProtocolHandlers,
@@ -100,6 +102,7 @@ import { ArtifactBlobStore } from './ingestion/ArtifactBlobStore.js';
 import { LifecycleEngine, loadLifecyclesFromDir } from './lifecycle/index.js';
 import { PolicyBundleService } from './policy/PolicyBundleService.js';
 import { createLabwareLookup } from './ai/compiler/labwareLookup.js';
+import { runChatbotCompile } from './ai/runChatbotCompile.js';
 import type { ExtractorAdapter } from './extract/ExtractorAdapter.js';
 
 /**
@@ -642,29 +645,46 @@ export async function createServer(
       : 'AI is currently unavailable. Check provider, model, API key, and endpoint.';
   };
 
+  // Deterministic-only fallback: lets the /event-editor "Precompile" mode
+  // reach the chatbot-compile pipeline even when no LLM is configured.
+  const deterministicAiHandlers = createDeterministicOnlyAIHandlers({
+    unavailableMessage: aiUnavailableMessage,
+    runDeterministic: async ({ prompt, context, attachments, onEvent }) => {
+      const ctxMentions = Array.isArray(context?.mentions) ? context.mentions : undefined;
+      const ctxLabwares = Array.isArray(context?.labwares) ? context.labwares : undefined;
+      return runChatbotCompile({
+        prompt,
+        ...(attachments ? { attachments } : {}),
+        ...(ctxMentions ? { mentions: ctxMentions } : {}),
+        ...(ctxLabwares ? { editorLabwares: ctxLabwares } : {}),
+        deterministicOnly: true,
+        deps: {
+          extractionService: runner,
+          llmClient: null,
+          searchLabwareByHint: createLabwareLookup(ctx.store),
+        },
+        onPassEvent: (event) => {
+          if (event.type !== 'pass_started') return;
+          try {
+            onEvent({ type: 'status', message: `Running ${event.pass_id}…` });
+          } catch { /* ignore */ }
+        },
+      });
+    },
+  });
+
   const aiHandlers: AIHandlers = {
     async draftEvents(request, reply) {
-      if (!aiHandlersImpl) {
-        reply.status(503);
-        return { error: 'AI_UNAVAILABLE', message: aiUnavailableMessage() };
-      }
-      return aiHandlersImpl.draftEvents(request, reply);
+      const impl = aiHandlersImpl ?? deterministicAiHandlers;
+      return impl.draftEvents(request, reply);
     },
     async draftEventsStream(request, reply) {
-      if (!aiHandlersImpl) {
-        reply.status(503);
-        await reply.send({ error: 'AI_UNAVAILABLE', message: aiUnavailableMessage() });
-        return;
-      }
-      return aiHandlersImpl.draftEventsStream(request, reply);
+      const impl = aiHandlersImpl ?? deterministicAiHandlers;
+      return impl.draftEventsStream(request, reply);
     },
     async assistStream(request, reply) {
-      if (!aiHandlersImpl) {
-        reply.status(503);
-        await reply.send({ error: 'AI_UNAVAILABLE', message: aiUnavailableMessage() });
-        return;
-      }
-      return aiHandlersImpl.assistStream(request, reply);
+      const impl = aiHandlersImpl ?? deterministicAiHandlers;
+      return impl.assistStream(request, reply);
     },
   };
 
@@ -779,6 +799,13 @@ export async function createServer(
       uiSpecCount: () => ctx.uiSpecLoader.size(),
     };
     routeOpts.aiHandlers = aiHandlers;
+    // Phase-1 fix-it chat: streams worker-Qwen-backed diagnoses for AI
+    // previews the user thinks are wrong. Always mounted — config (worker
+    // base URL / model) is read per-request from env, so this works without
+    // an AI runtime configured for the main draft loop.
+    routeOpts.eventEditorFixHandlers = createEventEditorFixHandlers({
+      workspaceRoot: ctx.workspaceRoot,
+    });
     routeOpts.knowledgeAIHandlers = knowledgeAIHandlers;
     routeOpts.ingestionAIHandlers = ingestionAIHandlersImpl;
     routeOpts.aiIngestionHandlers = aiIngestionHandlersImpl;

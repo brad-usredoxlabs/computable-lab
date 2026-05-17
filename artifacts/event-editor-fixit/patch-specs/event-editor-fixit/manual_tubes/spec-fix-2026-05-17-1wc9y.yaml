@@ -1,0 +1,34 @@
+kind: protocol-foundry-patch-spec
+id: spec-fix-2026-05-17-1wc9y
+source: event-editor-fixit
+generated_at: 2026-05-17T00:28:25.222Z
+fixClass: compiler
+title: Fix parameter-grammar to emit deck placement instead of well address for
+  'put labware on slot' prompts
+rationale: The deterministic precompile pass incorrectly interprets the locative
+  phrase 'on B2' following a labware noun as a well address within an
+  'add_material' event, rather than as a deck slot for labware placement. This
+  results in zero placements and an erroneous liquid-handling event. The fix
+  must be in the compiler's parameter grammar/lowering logic to detect deck-like
+  tokens in placement contexts and emit a labware addition with a deckSlot,
+  removing the token from event wells.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+  - server/src/compiler/precompile/PromptTagger.ts
+  - server/src/compiler/pipeline/fixtures/spec-fix-2026-05-17-1wc9y.yaml
+acceptance:
+  - The prompt 'put a 96-well plate on B2' must result in a labware addition
+    with deckSlot 'B2' and labwareHint 'lbw-def-generic-96-well-plate'.
+  - The prompt 'put a 96-well plate on B2' must NOT produce an 'add_material'
+    event with wells containing 'B2'.
+  - The prompt 'put a 96-well plate on B2' must result in a
+    deckLayoutPlan.pinned entry for slot B2.
+  - Prompts explicitly referring to wells (e.g., 'add 10uL to well A1') must
+    still resolve 'A1' as a well address, not a deck slot.
+  - Prompts referring to rows/columns (e.g., 'add to row A') must still resolve
+    to intra-labware locations.
+tests:
+  - cd server && npx vitest run
+    src/compiler/pipeline/fixtures/FixItFixtures.test.ts -t
+    'spec-fix-2026-05-17-1wc9y'
+failingPrompt: put a 96-well plate on B2

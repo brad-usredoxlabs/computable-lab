@@ -1,0 +1,10 @@
+kind: protocol-foundry-rerun-report
+protocolId: mp10471
+variant: bench_plate_multichannel
+generated_at: 2026-05-09T22:08:44.320Z
+compilerArtifact: /home/brad/git/computable-foundry/artifacts/compiler/mp10471/bench_plate_multichannel.yaml
+eventGraphArtifact: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10471/bench_plate_multichannel.yaml
+executionScaleArtifact: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10471/bench_plate_multichannel.yaml
+outcome: gap
+eventCount: 0
+blockerCount: 0

@@ -215,6 +215,10 @@ function artifactNewerThan(path: string | undefined, otherPath: string | undefin
   return artifactMtime(path) > artifactMtime(otherPath);
 }
 
+function anyArtifactNewerThan(paths: string[], otherPath: string | undefined): boolean {
+  return paths.some((path) => artifactNewerThan(path, otherPath));
+}
+
 function runningStale(previous: FoundryVariantLedger): boolean {
   if (previous.status !== 'running') return false;
   if (!previous.startedAt) return true;
@@ -275,6 +279,7 @@ async function scanVariantArtifacts(
   const rerunReport = fileIfExists(join(artifactRoot, 'rerun', protocolId, variant, 'rerun.yaml'));
   let stallReport = fileIfExists(stallReportPath(artifactRoot, protocolId, variant));
   const currentPatchSpecs = patchSpecPaths(artifactRoot, protocolId, variant);
+  const patchSpecsNewerThanCoderPatch = anyArtifactNewerThan(currentPatchSpecs, coderPatch);
   const metrics = await compilerMetrics(compiler);
   const accepted = await architectAccepted(architectVerdict);
   const browserStale = eventGraph ? artifactNewerThan(eventGraph, browserReport) : false;
@@ -324,6 +329,7 @@ async function scanVariantArtifacts(
     stallReport ? 'stalled' :
     patchFailure ? 'blocked' :
     rerunReport && metrics.foundryComplete !== 1 ? 'gap' :
+    patchSpecsNewerThanCoderPatch ? 'gap' :
     coderPatchStatus === 'applied' ? 'accepted' :
     coderPatchStatus === 'skipped' || coderPatchStatus === 'needs-human' ? 'blocked' :
     coderPatch ? 'gap' :
@@ -405,7 +411,8 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
       const escalationPath = join(ledger.artifact_root, 'patch-escalations', `${protocol.protocolId}-${variant}.yaml`);
       const coderPatchTerminal = coderPatchIsTerminal(coderPatchPath);
       const coderPatchSkipped = coderPatchIsSkipped(coderPatchPath);
-      const hasPatchSpecs = patchSpecPaths(ledger.artifact_root, protocol.protocolId, variant).length > 0;
+      const patchSpecFiles = patchSpecPaths(ledger.artifact_root, protocol.protocolId, variant);
+      const hasPatchSpecs = patchSpecFiles.length > 0;
       const rerunPath = join(ledger.artifact_root, 'rerun', protocol.protocolId, variant, 'rerun.yaml');
       const assumptionsPath = join(ledger.artifact_root, 'assumptions', protocol.protocolId, `${variant}.yaml`);
       const browserStale = item.artifacts.eventGraph
@@ -418,8 +425,10 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
           artifactNewerThan(item.artifacts.browserReport, item.artifacts.architectVerdict)
         ),
       );
-      const adoptionStale = artifactNewerThan(item.artifacts.architectVerdict, adoptionPath);
-      const coderPatchStale = artifactNewerThan(adoptionPath, coderPatchPath);
+      const patchSpecsNewerThanAdoption = anyArtifactNewerThan(patchSpecFiles, adoptionPath);
+      const patchSpecsNewerThanCoderPatch = anyArtifactNewerThan(patchSpecFiles, coderPatchPath);
+      const adoptionStale = artifactNewerThan(item.artifacts.architectVerdict, adoptionPath) || patchSpecsNewerThanAdoption;
+      const coderPatchStale = artifactNewerThan(adoptionPath, coderPatchPath) || patchSpecsNewerThanCoderPatch;
       const rerunStale = artifactNewerThan(coderPatchPath, rerunPath);
       const criticPath = existsSync(criticReportPath) ? criticReportPath : flatCriticReportPath;
       const criticPassed = criticVerdict(criticPath) === 'pass';
@@ -443,9 +452,9 @@ export function readyTasks(ledger: FoundryLedger): FoundryReadyTask[] {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'coder_patch' });
       } else if (item.artifacts.architectVerdict && (!existsSync(adoptionPath) || adoptionStale)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'patch_adoption' });
-      } else if (existsSync(adoptionPath) && hasPatchSpecs && !coderPatchSkipped && (!coderPatchTerminal || coderPatchStale)) {
+      } else if (existsSync(adoptionPath) && hasPatchSpecs && (!coderPatchSkipped || patchSpecsNewerThanCoderPatch) && (!coderPatchTerminal || coderPatchStale)) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'coder_patch' });
-      } else if (existsSync(adoptionPath) && (!hasPatchSpecs || coderPatchSkipped)) {
+      } else if (existsSync(adoptionPath) && (!hasPatchSpecs || (coderPatchSkipped && !patchSpecsNewerThanCoderPatch))) {
         continue;
       } else if (existsSync(adoptionPath) && coderPatchTerminal && (!existsSync(criticPath) || artifactNewerThan(coderPatchPath, criticPath))) {
         tasks.push({ protocolId: protocol.protocolId, variant, stage: 'patch_critic' });

@@ -1,0 +1,36 @@
+kind: protocol-foundry-patch-spec
+id: spec-fix-2026-05-17-5g81e
+source: event-editor-fixit
+generated_at: 2026-05-17T00:43:59.419Z
+fixClass: compiler
+title: Fix deterministic precompile to emit labware placement for deck-slot
+  targets instead of well-addressed events
+rationale: The compiler trace shows that the prompt 'put a 96-well plate on B2'
+  resulted in an 'add_material' event with 'B2' listed in 'parameters.wells'.
+  This indicates the deterministic_precompile pass incorrectly parsed the deck
+  slot 'B2' as a well address for liquid handling, rather than recognizing the
+  'put ... on <deck-slot>' pattern as a labware placement instruction. The fix
+  must be in the compiler's semantic parsing/lowering logic to detect when a
+  locative phrase refers to a deck slot (validated against known slots) and emit
+  a placement candidate with a deckSlot field, rather than a well-addressed
+  event.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+  - server/src/compiler/pipeline/fixtures/spec-fix-2026-05-17-5g81e.yaml
+acceptance:
+  - The prompt 'put a 96-well plate on B2' must result in a labware placement
+    candidate for 'lbw-def-generic-96-well-plate' at deckSlot 'B2'.
+  - The resulting terminalArtifacts.deckLayoutPlan.pinned must contain an entry
+    with slot 'B2' and labwareHint 'lbw-def-generic-96-well-plate'.
+  - The resulting terminalArtifacts.events must be empty (or contain no
+    'add_material' events targeting well 'B2' for this labware), as the action
+    is a placement, not a liquid handling event.
+  - "Guardrail: The prompt 'add 100ul to well A1 of a 96-well plate' must still
+    resolve to a liquid handling event targeting well 'A1', not a placement."
+  - "Guardrail: The prompt 'put a tip rack on A1' must result in a placement at
+    deckSlot 'A1', not a well address."
+tests:
+  - cd server && npx vitest run
+    src/compiler/pipeline/fixtures/FixItFixtures.test.ts -t
+    'spec-fix-2026-05-17-5g81e'
+failingPrompt: put a 96-well plate on B2

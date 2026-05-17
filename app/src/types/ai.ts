@@ -170,6 +170,64 @@ export interface ExecutionScalePlan {
   blockers: Array<{ code: string; message: string; requiredInput?: string }>
 }
 
+export interface InstrumentRunFileWell {
+  well: string
+  channelMap?: Record<string, string>
+  sample?: string
+  target?: string
+}
+
+export interface InstrumentRunFile {
+  instrument: string
+  wells: InstrumentRunFileWell[]
+  runParameters?: Record<string, unknown>
+  analysisRules?: unknown[]
+}
+
+export interface InstrumentApplianceJob {
+  kind: 'instrument-appliance-job'
+  jobId: string
+  adapterId: 'molecular_devices_gemini'
+  operation: 'active_read'
+  instrument: string
+  request: {
+    adapterId: 'molecular_devices_gemini'
+    instrumentRef?: Record<string, unknown>
+    outputPath?: string
+    parameters: {
+      simulate?: boolean
+      mode?: 'fluorescence' | 'absorbance' | 'luminescence'
+      wavelengthNm?: number
+      integrationMs?: number
+    }
+  }
+  sourceRunFile: InstrumentRunFile
+  executionReadiness?: InstrumentExecutionReadiness
+}
+
+export interface InstrumentExecutionReadinessBlocker {
+  code: string
+  message: string
+  details?: Record<string, unknown>
+}
+
+export interface InstrumentExecutionReadiness {
+  jobId: string
+  status: 'ready' | 'blocked'
+  executionMode?: 'simulate' | 'live'
+  requiresConfirmation: boolean
+  blockers: InstrumentExecutionReadinessBlocker[]
+}
+
+export interface InstrumentApplianceJobExecutionResult {
+  success: boolean
+  jobId?: string
+  measurementId?: string
+  logId?: string
+  rawDataPath?: string
+  applianceExecutionRecordPath?: string
+}
+
 export interface AiAgentResult {
   success: boolean
   events: PlateEvent[]
@@ -180,6 +238,7 @@ export interface AiAgentResult {
   error?: string
   labwareAdditions?: AiLabwareAddition[]
   executionScalePlan?: ExecutionScalePlan
+  instrumentApplianceJobs?: InstrumentApplianceJob[]
   usage?: {
     inputTokens?: number
     outputTokens?: number
@@ -219,6 +278,8 @@ export interface ChatMessage {
   labwareAdditions?: AiLabwareAddition[]
   /** Deterministic execution scaling handoff from the compiler */
   executionScalePlan?: ExecutionScalePlan
+  /** Appliance active-control jobs emitted by the compiler */
+  instrumentApplianceJobs?: InstrumentApplianceJob[]
   /** True when this assistant message is a doc-discussion answer (prose only, no events) eligible for "Apply to graph". */
   docDiscussion?: boolean
 }

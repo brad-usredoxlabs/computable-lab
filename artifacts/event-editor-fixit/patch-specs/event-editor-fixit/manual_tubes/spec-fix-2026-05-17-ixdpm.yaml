@@ -1,0 +1,31 @@
+kind: protocol-foundry-patch-spec
+id: spec-fix-2026-05-17-ixdpm
+source: event-editor-fixit
+generated_at: 2026-05-17T02:58:49.826Z
+fixClass: compiler
+title: Route deck slot tokens to labware placement candidates instead of well
+  parameters
+rationale: The deterministic precompile pass incorrectly treats deck slot tokens
+  (like 'B2') as well addresses when they follow a labware noun. The trace shows
+  'B2' appearing in parameters.wells and candidateEvents.wells, leading to empty
+  labwareAdditions and no deck placements. The fix must detect deck-like tokens
+  in locative contexts and emit them as deckSlot targets on the candidate
+  labware, ensuring resolve_labware generates the correct placement.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+  - server/src/compiler/precompile/NounPhraseResolver.ts
+  - server/src/compiler/pipeline/fixtures/spec-fix-2026-05-17-ixdpm.yaml
+acceptance:
+  - The prompt 'Put a 96-well pate on B2' must result in a labware placement for
+    the resolved labware (lbw-def-generic-96-well-plate) at deck slot B2.
+  - The terminal artifact deckLayoutPlan.pinned must contain an entry with slot
+    'B2' and labwareHint 'lbw-def-generic-96-well-plate'.
+  - The parameter wells list for the event must NOT contain 'B2' as a well
+    address; 'B2' is a deck slot, not a well.
+  - Prompts explicitly referring to wells (e.g., 'Add liquid to well A1') must
+    still resolve 'A1' as a well address within the labware, not as a deck slot.
+tests:
+  - cd server && npx vitest run
+    src/compiler/pipeline/fixtures/FixItFixtures.test.ts -t
+    'spec-fix-2026-05-17-ixdpm'
+failingPrompt: Put a 96-well pate on B2

@@ -12,10 +12,24 @@ export interface PlatformSlotManifest {
   stagingOnly?: boolean;
 }
 
+export interface PlatformLawnSurface {
+  kind: 'lawn';
+  widthMm: number;
+  heightMm: number;
+}
+
+export interface PlatformSideLawn {
+  widthMm: number;
+  heightMm: number;
+  label?: string;
+}
+
 export interface PlatformVariantManifest {
   id: string;
   title: string;
   slots: PlatformSlotManifest[];
+  surface?: PlatformLawnSurface;
+  sideLawn?: PlatformSideLawn;
 }
 
 export interface PlatformModuleManifest {

@@ -8,9 +8,13 @@
 
 import type { PlateEventPrimitive } from '../biology/BiologyVerbExpander.js';
 import type { DirectiveNode } from '../directives/Directive.js';
+import type { ProtocolIntent } from '../protocolIntent/ProtocolIntent.js';
+import type { ProtocolIntentLoweringOutput } from '../protocolIntent/ProtocolIntentLowering.js';
+import type { ProtocolIntentStatePlan } from '../protocolIntent/ProtocolIntentStatePlanner.js';
+import type { ProtocolIntentValidationOutput } from '../protocolIntent/ProtocolIntentValidation.js';
 import type { PassDiagnostic } from './types.js';
 import type { ValidationReport } from '../validation/ValidationReport.js';
-import type { DownstreamCompileJob } from './passes/ChatbotCompilePasses.js';
+import type { DeterministicProtocolPlan, DownstreamCompileJob } from './passes/ChatbotCompilePasses.js';
 
 // ---------------------------------------------------------------------------
 // LabStateSnapshot — re-exported from the canonical state module
@@ -21,6 +25,9 @@ export type { LabStateSnapshot };
 
 import type { InstrumentRunFile } from '../artifacts/InstrumentRunFile.js';
 export type { InstrumentRunFile };
+import type { InstrumentApplianceJob } from '../artifacts/InstrumentApplianceJob.js';
+import type { InstrumentExecutionReadiness } from '../artifacts/InstrumentApplianceJob.js';
+export type { InstrumentApplianceJob, InstrumentExecutionReadiness };
 
 // ---------------------------------------------------------------------------
 // ConversationHistoryMessage
@@ -278,8 +285,22 @@ export interface TerminalArtifacts {
   resourceManifest?: ResourceManifest;
   /** Execution scaling plan from semantic protocol to bench/robot shape. */
   executionScalePlan?: ExecutionScalePlan;
+  /** Second-pass deterministic protocol plan before event lowering. */
+  deterministicProtocolPlan?: DeterministicProtocolPlan;
+  /** Natural-language protocol intent before deterministic event lowering. */
+  protocolIntent?: ProtocolIntent;
+  /** Deterministic state fold over ProtocolIntent resources and operations. */
+  protocolIntentStatePlan?: ProtocolIntentStatePlan;
+  /** Validation findings for ProtocolIntent reference integrity and lowerability. */
+  protocolIntentValidation?: ProtocolIntentValidationOutput;
+  /** Primitive compiler inputs lowered from ProtocolIntent. */
+  protocolIntentLowering?: ProtocolIntentLoweringOutput;
   /** Per-instrument run-file artifacts. Spec-038. */
   instrumentRunFiles?: InstrumentRunFile[];
+  /** Appliance-side active-control jobs derived from instrument artifacts. */
+  instrumentApplianceJobs?: InstrumentApplianceJob[];
+  /** Readiness gates for appliance-side active-control jobs. */
+  instrumentExecutionReadiness?: InstrumentExecutionReadiness[];
   /** Future compile targets declared by the user. Spec-039. */
   downstreamQueue?: DownstreamCompileJob[];
   /** Aggregated validation findings. Spec-034. */

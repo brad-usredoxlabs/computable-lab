@@ -1,0 +1,16 @@
+name: spec-fix-2026-05-16-zjfsp
+description: Verify bare slot token 'B2' is recognized after preposition 'on' for placement
+deterministicOnly: true
+input:
+  prompt: Place a 96-well plate on B2
+expected:
+  outcome: complete
+  terminalArtifacts:
+    deckLayoutPlan:
+      pinned:
+        - labwareId: generic-96-well-plate
+          slot: B2
+    events:
+      - type: place
+        labwareId: generic-96-well-plate
+        targetSlot: B2

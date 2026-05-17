@@ -313,4 +313,96 @@ describe('resolveNounPhrases', () => {
     expect(result[2].phrase).toBe('gamma');
     expect(result[3].phrase).toBe('delta');
   });
+
+  it('strips leading concentration before resolving a compound', async () => {
+    const deps: NounResolverDeps = {
+      labwareDefinitionRegistry: { findByName: () => undefined },
+      compoundClassRegistry: {
+        findByName: (n: string) => (n === 'clofibrate' ? { recordId: 'compound-clofibrate' } : undefined),
+      },
+      ontologyTermRegistry: { searchLabel: () => [] },
+      labwareInstanceLookup: async () => [],
+    };
+
+    const clause = makeClause('add 120uL of 1mM clofibrate to well A1', 0);
+    const verbMatch = makeVerbMatch('add_material', 0, [0, 3]);
+
+    const result = await resolveNounPhrases(clause, verbMatch, deps);
+
+    expect(result).toEqual([
+      {
+        phrase: 'clofibrate',
+        span: [13, 27],
+        kind: 'compound',
+        recordId: 'compound-clofibrate',
+        confidence: 1.0,
+      },
+    ]);
+  });
+
+  it('drops well-region phrases while keeping the destination labware noun', async () => {
+    const deps: NounResolverDeps = {
+      labwareDefinitionRegistry: {
+        findByName: (n: string) => (n === '96-well plate' ? { recordId: 'labware-96-plate' } : undefined),
+      },
+      compoundClassRegistry: { findByName: () => undefined },
+      ontologyTermRegistry: { searchLabel: () => [] },
+      labwareInstanceLookup: async () => [],
+    };
+
+    const clause = makeClause('transfer 100uL of it to each well in column 1 of the 96-well plate', 0);
+    const verbMatch = makeVerbMatch('transfer', 0, [0, 8]);
+
+    const result = await resolveNounPhrases(clause, verbMatch, deps);
+
+    expect(result).toEqual([
+      {
+        phrase: '96-well plate',
+        span: [49, 66],
+        kind: 'labware',
+        recordId: 'labware-96-plate',
+        confidence: 1.0,
+      },
+    ]);
+  });
+
+  it('drops instrument phrases with read parameters instead of treating plate reader as labware', async () => {
+    const deps: NounResolverDeps = {
+      labwareDefinitionRegistry: { findByName: () => undefined },
+      compoundClassRegistry: { findByName: () => undefined },
+      ontologyTermRegistry: { searchLabel: () => [] },
+      labwareInstanceLookup: async () => [],
+    };
+
+    const clause = makeClause('read it on the Gemini EM plate reader in luminescence mode as a simulation', 0);
+    const verbMatch = makeVerbMatch('read', 0, [0, 4]);
+
+    const result = await resolveNounPhrases(clause, verbMatch, deps);
+
+    expect(result).toEqual([]);
+  });
+
+  it('drops deck slot phrases instead of treating deck slots as wells or nouns', async () => {
+    const deps: NounResolverDeps = {
+      labwareDefinitionRegistry: {
+        findByName: (n: string) => (n === '96-well plate' ? { recordId: 'labware-96-plate' } : undefined),
+      },
+      compoundClassRegistry: { findByName: () => undefined },
+      ontologyTermRegistry: { searchLabel: () => [] },
+      labwareInstanceLookup: async () => [],
+    };
+
+    const clause = makeClause('place a 96-well plate on deck slot B2', 0);
+    const verbMatch = makeVerbMatch('add_material', 0, [0, 5]);
+
+    const result = await resolveNounPhrases(clause, verbMatch, deps);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        phrase: '96-well plate',
+        kind: 'labware',
+        recordId: 'labware-96-plate',
+      }),
+    ]);
+  });
 });

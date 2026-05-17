@@ -1,0 +1,48 @@
+kind: protocol-foundry-patch-spec
+id: man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/fix-tag-prompt-json-parse-error
+protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+variant: robot_deck
+fixClass: extractor_prompt_contract
+title: Fix tag_prompt JSON parse error from unterminated string in LLM response
+rationale: "The diagnostics show 'tag_prompt response was not valid JSON:
+  Unterminated string in JSON at position 645' with a raw_preview showing the
+  response was cut off mid-JSON. This truncation likely causes the ai_precompile
+  pass to receive incomplete or malformed input, contributing to the shape
+  mismatch. The tag_prompt pass needs to handle truncated LLM responses more
+  gracefully — either by retrying with a smaller chunk, by repairing the JSON
+  (closing unclosed strings/brackets), or by falling back to deterministic
+  extraction when the LLM response is malformed. This is a secondary fix that
+  improves robustness of the pre-compiler pipeline."
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - When tag_prompt receives a truncated JSON response, the pass should either
+    repair the JSON or fall back to deterministic candidates without crashing.
+  - No 'tag_prompt_parse_error' warnings should result in complete loss of
+    candidate extraction.
+  - The ai_precompile pass should receive valid input even when tag_prompt
+    output is partially malformed.
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 40
+  maxChangedLines: 100
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011593-nabspincolumn-5ml-antibody-purifi-ug.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/verdict.yaml

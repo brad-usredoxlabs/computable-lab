@@ -1,0 +1,10 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: mp10471
+variant: bench_plate_multichannel
+generated_at: 2026-05-09T21:53:00.961Z
+status: applied
+selectedSpecId: mp10471/bench_plate_multichannel/fix-ai-precompile-shape-mismatch
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+commit: 12c039f7316980ca7b4cfedf0c76a673818440cf
+message: Patch applied and committed.

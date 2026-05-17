@@ -1,42 +1,44 @@
 kind: protocol-foundry-architect-verdict
 protocolId: mp10422
 variant: manual_tubes
-generated_at: 2026-05-09T09:34:25.433Z
+generated_at: 2026-05-09T22:41:21.899Z
 accepted: false
-qualityScore: 0.35
-coverageEstimate: 0.3
+qualityScore: 0.05
+coverageEstimate: 0
 failureClasses:
   - precompiler_reference_shape
-  - material_catalog_or_spec
+  - extractor_prompt_contract
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: fix-ai-precompile-shape-mismatch
+  - id: fix-ai-precompile-shape-mismatch-and-fallback
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch to enable downstream passes
-    rationale: "The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
-      AI precompile pass produced output that doesn't match the expected schema.
-      This caused critical downstream passes to be skipped: mint_materials,
-      apply_directives, resolve_labware, resolve_prior_labware_references, and
-      expand_patterns. Without these passes, materials like CellROX reagents are
-      not minted, labware is not resolved, and the event graph contains generic
-      placeholders (stain_agent, fix_agent) instead of specific reagents. The
-      root cause is in ChatbotCompilePasses.ts where createAiPrecompilePass
-      validates or transforms the LLM output."
+    title: Fix ai_precompile shape mismatch and ensure candidateEvents are populated
+      from presegmented candidates
+    rationale: The compiler diagnostics show 'ai_precompile output shape mismatch,
+      using fallback' and subsequently all downstream passes
+      (expand_biology_verbs, resolve_labware, mint_materials) are skipped
+      because outputs.ai_precompile.candidateEvents evaluated to false. The
+      pre-compiler supplied 26 total deterministic candidates across chunks
+      (8+4+3+6+4+1), but the ai_precompile pass failed to shape them correctly,
+      causing the fallback to produce an empty candidateEvents array. This
+      results in eventCount=0 despite clear protocol content. The prior patch
+      touched ChatbotCompilePasses.ts but the issue persists, indicating the
+      shape validation or fallback logic still doesn't properly recover
+      candidates from presegmented text.
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile_shape_mismatch warning no longer appears in diagnostics
-        for mp10422
-      - mint_materials pass is no longer skipped
-        (outputs.ai_precompile.mintMaterials evaluates to true)
-      - resolve_labware pass is no longer skipped
-        (outputs.ai_precompile.candidateLabwares evaluates to true)
-      - Event graph events reference specific materials (e.g.,
-        CellROX_Green_Reagent) instead of generic placeholders (stain_agent)
+      - ai_precompile pass must not emit 'ai_precompile_shape_mismatch' warning
+        when presegmented candidates are present
+      - outputs.ai_precompile.candidateEvents must be a non-empty array when
+        presegmented candidates exist
+      - Downstream passes (expand_biology_verbs, resolve_labware) must not be
+        skipped when candidateEvents are populated
+      - eventCount must be >= 3 for protocols with clear procedural steps
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -51,48 +53,43 @@ recommendedFixes:
       materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10422.yaml
       text: /home/brad/git/computable-foundry/artifacts/text/mp10422.txt
     failureEvidence: &a2
-      eventCount: 6
+      eventCount: 0
       outcome: gap
+    implementationBudget:
+      targetChangedFiles: 1
+      maxChangedFiles: 2
+      targetChangedLines: 120
+      maxChangedLines: 250
+      requireFocusedFixture: true
+  - id: fix-tag-prompt-json-parse-error
+    class: extractor_prompt_contract
+    title: Fix tag_prompt JSON parse error from unterminated string
+    rationale: "The diagnostics show 'tag_prompt response was not valid JSON:
+      Unterminated string in JSON at position 741' with a raw_preview showing
+      the JSON was cut off mid-string ('CellRO'). This indicates the LLM
+      response for tag_prompt is being truncated, likely due to output token
+      limits or improper response handling. This parse failure may contribute to
+      the ai_precompile shape mismatch if tag_prompt output is consumed by
+      ai_precompile. The fix should add robust JSON parsing with truncation
+      recovery or increase the response buffer for tag_prompt."
+    ownedFiles:
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+    acceptance:
+      - tag_prompt pass must not emit 'tag_prompt_parse_error' warnings
+      - JSON responses from tag_prompt must be fully parsed even when LLM output
+        is truncated
+      - taggedPhrases must be extracted from partial JSON responses using
+        recovery parsing
+    coderModelProfile:
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
     implementationBudget:
       targetChangedFiles: 1
       maxChangedFiles: 2
       targetChangedLines: 60
       maxChangedLines: 150
-      requireFocusedFixture: true
-  - id: fix-material-catalog-cellrox-reagents
-    class: material_catalog_or_spec
-    title: Add CellROX reagent material records to enable proper material resolution
-    rationale: The material context shows empty materials, materialSpecs, and
-      vendorProducts arrays. The PDF clearly specifies CellROX Deep Red
-      (C10422), Orange (C10443), Green (C10444), and Variety Pack (C10448)
-      reagents with specific concentrations (2.5 mM in DMSO), storage
-      conditions, and excitation/emission spectra. Without these material
-      records, the compiler cannot resolve reagent references and falls back to
-      generic placeholders. The mint_materials pass was skipped due to the shape
-      mismatch, but even if it ran, the material catalog needs these specific
-      reagent definitions.
-    ownedFiles:
-      - server/src/registry/CompoundClassRegistry.ts
-      - server/src/registry/LabwareDefinitionRegistry.ts
-    acceptance:
-      - CellROX Green Reagent (C10444) is resolvable as a material with
-        concentration 2.5 mM in DMSO
-      - CellROX Orange Reagent (C10443) is resolvable as a material
-      - CellROX Deep Red Reagent (C10422) is resolvable as a material
-      - Event graph events reference these specific materials instead of generic
-        stain_agent/fix_agent placeholders
-      - Material specs include storage conditions (≤-20°C, protect from light,
-        desiccate)
-    coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
-    implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
-      targetChangedLines: 80
-      maxChangedLines: 200
       requireFocusedFixture: true
 sourceArtifacts: *a1
 architectNotes: "LLM architect analysis: 2 fix recommendations."

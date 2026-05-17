@@ -1,0 +1,39 @@
+kind: protocol-foundry-patch-spec
+id: spec-fix-2026-05-17-a4xde
+source: event-editor-fixit
+generated_at: 2026-05-17T12:02:58.248Z
+fixClass: compiler
+title: Fix deterministic precompile to emit labware placement candidates for
+  deck slots instead of treating them as well addresses
+rationale: The deterministic_precompile pass incorrectly lowers the
+  prepositional phrase 'on B2' into a 'wells' parameter for an 'add_material'
+  event when the target noun is a labware definition. This causes the
+  resolve_labware pass to produce an empty labwareAdditions list because no
+  placement slot is requested. The fix must detect when a locative phrase
+  matches a known deck slot (from prompt_scan.deckLikeTokens) and the resolved
+  noun is labware, and instead emit a candidateLabware with a deckSlot and a
+  placement-appropriate verb (e.g., place_labware), ensuring the labware is
+  pinned in the deck layout.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+  - server/src/compiler/precompile/NounPhraseResolver.ts
+  - server/src/compiler/pipeline/fixtures/spec-fix-2026-05-17-a4xde.yaml
+acceptance:
+  - "The prompt 'put a 96-well plate on B2' must result in a candidateLabware
+    with deckSlot: 'B2' and labwareHint: '96-well plate' (or resolved
+    recordId)."
+  - "The resulting protocol plan must include a step that places the labware on
+    deck slot B2, reflected in terminalArtifacts.deckLayoutPlan.pinned
+    containing { slot: 'B2', labwareHint: 'lbw-def-generic-96-well-plate' }."
+  - The terminalArtifacts.events must not contain an 'add_material' event
+    targeting well 'B2' for this prompt.
+  - Prompts that explicitly refer to wells (e.g., 'add 100uL to well A1 of the
+    96-well plate') must still parse 'A1' as a well address and emit liquid
+    handling events, not deck placements.
+  - Prompts that refer to intra-labware locations (e.g., 'mix row A of the
+    plate') must target the labware's internal coordinates, not the deck slot.
+tests:
+  - cd server && npx vitest run
+    src/compiler/pipeline/fixtures/FixItFixtures.test.ts -t
+    'spec-fix-2026-05-17-a4xde'
+failingPrompt: put a 96-well plate on B2

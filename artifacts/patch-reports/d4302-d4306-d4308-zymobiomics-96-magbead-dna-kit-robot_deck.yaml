@@ -1,0 +1,9 @@
+kind: protocol-worker-report
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: robot_deck
+generated_at: 2026-05-09T21:07:41.950Z
+status: applied
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/result.yaml
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+message: patch applied and committed

@@ -3,37 +3,31 @@ id: man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/fix-ai-precompi
 protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
 variant: manual_tubes
 fixClass: precompiler_reference_shape
-title: Fix ai_precompile output shape mismatch causing downstream pass skips
-rationale: The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
-  AI pre-compiler output does not match the expected schema. This causes
-  critical downstream passes (mint_materials, resolve_labware, expand_patterns)
-  to be skipped because their 'when' conditions evaluate to false (e.g.,
-  'outputs.ai_precompile.mintMaterials' is false/missing). The PDF contains
-  clear protocol steps (centrifugation, binding, elution) and materials (Binding
-  Buffer, Elution Buffer, Neutralization Buffer), but only 1 event was produced.
-  The root cause is the ai_precompile pass in ChatbotCompilePasses.ts producing
-  malformed or incomplete output, preventing the compiler from extracting
-  candidates, materials, and labware references.
+title: Fix ai_precompile shape mismatch to allow downstream passes to run
+rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch' warning.
+  This causes the ai_precompile output to be malformed or empty, which triggers
+  the 'when' conditions for downstream passes (mint_materials, resolve_labware,
+  expand_patterns) to evaluate to false, causing them to be skipped. As a
+  result, only 1 event is produced (a default centrifuge event) instead of the
+  full protocol steps. The salvageAiPrecompileOutput function in
+  ChatbotCompilePasses.ts needs to be more robust in handling malformed LLM
+  output, or the LLM prompt/schema needs to be fixed to ensure correct output
+  shape.
 ownedFiles:
   - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
 acceptance:
-  - ai_precompile pass output matches expected AiPrecompileOutput schema with
-    candidateEvents, mintMaterials, candidateLabwares, and patternEvents fields
-    populated when PDF text contains protocol steps
-  - Downstream passes (mint_materials, resolve_labware, expand_patterns) are no
-    longer skipped due to false 'when' conditions when PDF has actionable
-    content
-  - eventCount >= 3 for protocols with clear multi-step procedures like antibody
-    purification
-  - No 'ai_precompile_shape_mismatch' warning in diagnostics for this protocol
+  - ai_precompile pass no longer emits 'ai_precompile_shape_mismatch' diagnostic
+  - mint_materials, resolve_labware, and expand_patterns passes are no longer
+    skipped due to false 'when' conditions
+  - eventCount >= 3 for protocols with clear procedural steps
 implementationBudget:
   targetChangedFiles: 1
   maxChangedFiles: 2
-  targetChangedLines: 100
-  maxChangedLines: 250
+  targetChangedLines: 60
+  maxChangedLines: 150
   requireFocusedFixture: true
 coderModelProfile:
-  model: Qwen/Qwen3.6-27B-FP8
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
   guidance: Narrow ownership, concrete evidence, one behavior change.
 sourceArtifacts:
   compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
@@ -48,5 +42,5 @@ sourceArtifacts:
 failureEvidence:
   eventCount: 1
   outcome: gap
-architectNotes: "LLM architect analysis: 2 fix recommendations."
+architectNotes: "LLM architect analysis: 3 fix recommendations."
 sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/verdict.yaml

@@ -1,0 +1,24 @@
+kind: protocol-foundry-adoption-decision
+protocolId: cellrox-oxidative-stress-qr
+variant: robot_deck
+generated_at: 2026-05-09T20:56:47.990Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: cellrox-oxidative-stress-qr/robot_deck/add-analyze-verb-expander
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/add-analyze-verb-expander.yaml
+    fixClass: compiler_event_coverage
+    title: Add biology verb expander for 'analyze' to handle analysis/readout steps
+  - id: cellrox-oxidative-stress-qr/robot_deck/add-remove-verb-expander
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/add-remove-verb-expander.yaml
+    fixClass: compiler_event_coverage
+    title: Add biology verb expander for 'remove' to handle medium removal steps
+  - id: cellrox-oxidative-stress-qr/robot_deck/add-treat-verb-expander
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/add-treat-verb-expander.yaml
+    fixClass: compiler_event_coverage
+    title: Add biology verb expander for 'treat' to handle cell treatment steps
+  - id: cellrox-oxidative-stress-qr/robot_deck/fix-ai-precompile-shape-mismatch
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch to enable downstream passes
+message: Patch specs accepted for unattended coder tournament execution.

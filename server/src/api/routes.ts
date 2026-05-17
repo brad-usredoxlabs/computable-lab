@@ -16,6 +16,7 @@ import type { TreeHandlers } from './handlers/TreeHandlers.js';
 import type { LibraryHandlers } from './handlers/LibraryHandlers.js';
 import type { OntologyHandlers } from './handlers/OntologyHandlers.js';
 import type { AIHandlers } from './handlers/AIHandlers.js';
+import type { EventEditorFixHandlers } from './handlers/EventEditorFixHandlers.js';
 import type { ConfigHandlers } from './handlers/configHandlers.js';
 import type { MetaHandlers } from './handlers/metaHandlers.js';
 import type { ProtocolHandlers } from './handlers/ProtocolHandlers.js';
@@ -66,6 +67,7 @@ export interface RouteOptions {
   libraryHandlers?: LibraryHandlers;
   ontologyHandlers?: OntologyHandlers;
   aiHandlers?: AIHandlers;
+  eventEditorFixHandlers?: EventEditorFixHandlers;
   configHandlers?: ConfigHandlers;
   metaHandlers?: MetaHandlers;
   protocolHandlers?: ProtocolHandlers;
@@ -482,6 +484,26 @@ export function registerRoutes(
     fastify.post('/ai/assist/stream', aiHandlers.assistStream.bind(aiHandlers));
   }
 
+  const { eventEditorFixHandlers } = options;
+  if (eventEditorFixHandlers) {
+    fastify.post(
+      '/event-editor/fix/chat/stream',
+      eventEditorFixHandlers.chatStream.bind(eventEditorFixHandlers),
+    );
+    fastify.post(
+      '/event-editor/fix/synthesize-spec',
+      eventEditorFixHandlers.synthesizeSpec.bind(eventEditorFixHandlers),
+    );
+    fastify.post(
+      '/event-editor/fix/apply/stream',
+      eventEditorFixHandlers.applyFixStream.bind(eventEditorFixHandlers),
+    );
+    fastify.get(
+      '/event-editor/fix/health',
+      eventEditorFixHandlers.health.bind(eventEditorFixHandlers),
+    );
+  }
+
   const { aiRecordDraftHandlers } = options;
 
   if (aiRecordDraftHandlers) {
@@ -552,6 +574,16 @@ export function registerRoutes(
   const { protocolIdeHandlers } = options;
 
   if (protocolIdeHandlers) {
+    fastify.get('/protocol-ide/foundry/status', protocolIdeHandlers.getFoundryStatus.bind(protocolIdeHandlers));
+    fastify.get('/protocol-ide/foundry/reviews', protocolIdeHandlers.listFoundryReviews.bind(protocolIdeHandlers));
+    fastify.get('/protocol-ide/foundry/:protocolId/:variant/review-context', protocolIdeHandlers.getFoundryReviewContext.bind(protocolIdeHandlers));
+    fastify.get('/protocol-ide/foundry/:protocolId/:variant/event-graph', protocolIdeHandlers.getFoundryEventGraph.bind(protocolIdeHandlers));
+    fastify.post('/protocol-ide/foundry/:protocolId/:variant/chat', protocolIdeHandlers.chatFoundryReview.bind(protocolIdeHandlers));
+    fastify.post('/protocol-ide/foundry/:protocolId/:variant/inner-loop', protocolIdeHandlers.runFoundryInnerLoop.bind(protocolIdeHandlers));
+    fastify.post('/protocol-ide/foundry/:protocolId/:variant/promote-draft', protocolIdeHandlers.promoteFoundryDraft.bind(protocolIdeHandlers));
+    fastify.post('/protocol-ide/foundry/:protocolId/:variant/synthesize-spec', protocolIdeHandlers.synthesizeFoundrySpec.bind(protocolIdeHandlers));
+    fastify.post('/protocol-ide/foundry/:protocolId/:variant/reject', protocolIdeHandlers.rejectFoundryReview.bind(protocolIdeHandlers));
+    fastify.post('/protocol-ide/foundry/:protocolId/:variant/reopen', protocolIdeHandlers.reopenFoundryReview.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions', protocolIdeHandlers.createSession.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/stream', protocolIdeHandlers.createSessionStream.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/:sessionId/rerun', protocolIdeHandlers.rerunSession.bind(protocolIdeHandlers));
@@ -561,6 +593,7 @@ export function registerRoutes(
     fastify.post('/protocol-ide/sessions/:sessionId/generate-issue-cards', protocolIdeHandlers.generateIssueCards.bind(protocolIdeHandlers));
     fastify.get('/protocol-ide/sessions/:sessionId/issue-cards', protocolIdeHandlers.getIssueCards.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/:sessionId/export-issue-cards', protocolIdeHandlers.exportIssueCards.bind(protocolIdeHandlers));
+    fastify.post('/protocol-ide/sessions/:sessionId/reject-issue-cards', protocolIdeHandlers.rejectIssueCards.bind(protocolIdeHandlers));
     fastify.get('/protocol-ide/sessions/:sessionId/can-export', protocolIdeHandlers.canExport.bind(protocolIdeHandlers));
     fastify.get('/protocol-ide/sessions/:sessionId/overlay-summaries', protocolIdeHandlers.getOverlaySummaries.bind(protocolIdeHandlers));
     fastify.get('/protocol-ide/sessions/:sessionId/event-graph', protocolIdeHandlers.getEventGraph.bind(protocolIdeHandlers));
@@ -695,6 +728,7 @@ export function registerRoutes(
   if (measurementHandlers) {
     fastify.post('/measurements/upload-raw', measurementHandlers.uploadRawMeasurementFile.bind(measurementHandlers));
     fastify.post('/measurements/ingest', measurementHandlers.ingestMeasurement.bind(measurementHandlers));
+    fastify.post('/measurements/appliance-jobs/execute', measurementHandlers.executeInstrumentApplianceJob.bind(measurementHandlers));
     fastify.post('/measurements/active-read', measurementHandlers.activeReadMeasurement.bind(measurementHandlers));
     fastify.get('/measurements/active-read/schema', measurementHandlers.getActiveReadSchemas.bind(measurementHandlers));
     fastify.post('/measurements/active-read/validate', measurementHandlers.validateActiveRead.bind(measurementHandlers));

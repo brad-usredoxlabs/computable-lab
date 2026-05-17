@@ -1,0 +1,10 @@
+kind: protocol-foundry-rerun-report
+protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+variant: robot_deck
+generated_at: 2026-05-09T22:05:41.963Z
+compilerArtifact: /home/brad/git/computable-foundry/artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+eventGraphArtifact: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+executionScaleArtifact: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+outcome: gap
+eventCount: 0
+blockerCount: 0

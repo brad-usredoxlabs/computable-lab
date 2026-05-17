@@ -1,0 +1,9 @@
+kind: protocol-worker-report
+protocolId: cayman-natural-prodccuts
+variant: robot_deck
+generated_at: 2026-05-10T12:53:33.058Z
+status: applied
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-natural-prodccuts/robot_deck/result.yaml
+touchedFiles:
+  - server/src/foundry/ProtocolFoundryCompileRunner.ts
+message: patch applied and committed

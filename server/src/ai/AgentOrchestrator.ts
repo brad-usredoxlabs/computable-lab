@@ -202,12 +202,12 @@ export function createAgentOrchestrator(
 
   return {
     async run(request: AgentRequest): Promise<AgentResult> {
-      const { prompt, context, history, surface, toolFilter, onEvent, attachments, enableThinking } = request;
+      const { prompt, context, history, surface, toolFilter, onEvent, attachments, enableThinking, deterministicOnly } = request;
       const tid = traceId();
       const t0 = Date.now();
       const surfaceName = surface ?? 'default';
       const model = inferenceConfig.model;
-      console.log(`[agent ${tid}] start surface=${surfaceName} model=${model} promptLen=${prompt.length} historyLen=${Array.isArray(history) ? history.length : 0} attachments=${attachments?.length ?? 0}`);
+      console.log(`[agent ${tid}] start surface=${surfaceName} model=${model} promptLen=${prompt.length} historyLen=${Array.isArray(history) ? history.length : 0} attachments=${attachments?.length ?? 0} deterministicOnly=${Boolean(deterministicOnly)}`);
 
       // Instrumentation tracking
       const turnStats: TurnStats[] = [];
@@ -238,10 +238,11 @@ export function createAgentOrchestrator(
         ...(ctxLabwares ? { editorLabwares: ctxLabwares } : {}),
         deps: {
           extractionService: deps.extractionService!,
-          llmClient: deps.llmClient!,
+          llmClient: deps.llmClient ?? null,
           searchLabwareByHint: deps.searchLabwareByHint!,
           labStateCache: getDefaultLabStateCache(),
         },
+        ...(deterministicOnly ? { deterministicOnly: true } : {}),
         ...(inferenceConfig.model ? { model: inferenceConfig.model } : {}),
         onPassEvent: (event: PassProgressEvent) => {
           if (event.type !== 'pass_started') return;
@@ -261,9 +262,11 @@ export function createAgentOrchestrator(
         compileResult.terminalArtifacts.gaps.length > 0;
 
       const shouldShortCircuit =
-        hasArtifacts && (
-          compileResult.outcome === 'complete' ||
-          compileResult.outcome === 'gap'
+        deterministicOnly || (
+          hasArtifacts && (
+            compileResult.outcome === 'complete' ||
+            compileResult.outcome === 'gap'
+          )
         );
 
       if (shouldShortCircuit) {
@@ -338,6 +341,7 @@ export function createAgentOrchestrator(
           ...(clarification ? { clarification: { prompt: clarification, entityType: 'general', options: [] } } : {}),
           ...(compileResult.terminalArtifacts.downstreamQueue?.length ? { downstreamQueue: compileResult.terminalArtifacts.downstreamQueue } : {}),
           ...(compileResult.terminalArtifacts.executionScalePlan ? { executionScalePlan: compileResult.terminalArtifacts.executionScalePlan } : {}),
+          ...(compileResult.terminalArtifacts.instrumentApplianceJobs?.length ? { instrumentApplianceJobs: compileResult.terminalArtifacts.instrumentApplianceJobs } : {}),
           usage: {
             promptTokens: 0,
             completionTokens: 0,

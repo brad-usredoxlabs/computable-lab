@@ -1,0 +1,10 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: cayman-natural-prodccuts
+variant: manual_tubes
+generated_at: 2026-05-10T12:45:46.674Z
+status: applied
+selectedSpecId: cayman-natural-prodccuts/manual_tubes/add-plate-map-lowering-pass
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+commit: facf124419607b42511fa44bee5b914240c1f946
+message: Patch applied and committed.

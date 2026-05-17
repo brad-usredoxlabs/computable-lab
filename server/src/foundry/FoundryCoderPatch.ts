@@ -1,12 +1,14 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { Project } from 'ts-morph';
 import { createInferenceClient } from '../ai/InferenceClient.js';
+import type { CompletionRequest } from '../ai/types.js';
 import type { InferenceConfig } from '../config/types.js';
 import { asRecord, nowIso, readYamlFile, writeYamlFile } from './FoundryArtifacts.js';
+import { runFoundryToolAgent } from './FoundryToolAgent.js';
 import type { FoundryVariant } from './ProtocolFoundryCompileRunner.js';
 
 const execFileAsync = promisify(execFile);
@@ -14,6 +16,7 @@ const MAX_CONTEXT_CHARS = 6_000;
 const MAX_FILE_CHARS = 3_000;
 const MAX_ARTIFACT_CONTEXT_CHARS = 3_000;
 const MAX_SCHEMA_CONTEXT_CHARS = 3_000;
+export const TOOL_AGENT_MAX_TURNS = 120;
 
 type CoderPatchStatus = 'applied' | 'blocked' | 'failed' | 'skipped' | 'stale' | 'needs-human';
 
@@ -22,6 +25,16 @@ export interface FoundryCoderPatchResult {
   resultPath: string;
   message: string;
   touchedFiles: string[];
+}
+
+export type FoundryCoderRole = 'junior' | 'senior';
+export type FoundryCoderEngine = 'symbol-patch' | 'tool-agent';
+
+export interface FoundryCoderPatchProgressEvent {
+  source: 'coder';
+  phase: string;
+  message: string;
+  details?: Record<string, unknown>;
 }
 
 export interface PatchSpec {
@@ -408,6 +421,57 @@ function defaultVerificationArgs(touchedFiles: string[]): string[][] {
   return [['npm', 'test', '--', '--run', ...Array.from(tests)]];
 }
 
+async function snapshotOwnedFiles(repoRoot: string, spec: PatchSpec): Promise<Map<string, string | null>> {
+  const snapshot = new Map<string, string | null>();
+  for (const ownedPath of Array.from(new Set(spec.ownedFiles))) {
+    const fullPath = join(repoRoot, ownedPath);
+    const files = await walkFiles(repoRoot, fullPath, 24);
+    if (files.length === 0 && !existsSync(fullPath)) {
+      snapshot.set(ownedPath, null);
+      continue;
+    }
+    for (const file of files.length > 0 ? files : [fullPath]) {
+      const rel = relative(repoRoot, file);
+      try {
+        snapshot.set(rel, await readFile(file, 'utf-8'));
+      } catch {
+        snapshot.set(rel, null);
+      }
+    }
+  }
+  return snapshot;
+}
+
+async function changedOwnedFiles(repoRoot: string, before: Map<string, string | null>): Promise<string[]> {
+  const changed: string[] = [];
+  for (const [rel, original] of before) {
+    const fullPath = join(repoRoot, rel);
+    let current: string | null = null;
+    try {
+      current = await readFile(fullPath, 'utf-8');
+    } catch {
+      current = null;
+    }
+    if (current !== original) changed.push(rel);
+  }
+  return changed.sort();
+}
+
+async function restoreSnapshot(repoRoot: string, before: Map<string, string | null>, files: string[]): Promise<void> {
+  for (const file of files) {
+    if (!before.has(file)) continue;
+    const original = before.get(file);
+    if (original === undefined) {
+      continue;
+    }
+    if (original === null) {
+      await unlink(join(repoRoot, file)).catch(() => undefined);
+    } else {
+      await writeFile(join(repoRoot, file), original, 'utf-8');
+    }
+  }
+}
+
 async function runVerification(repoRoot: string, touchedFiles: string[]): Promise<boolean> {
   for (const args of defaultVerificationArgs(touchedFiles)) {
     const [command, ...rest] = args;
@@ -423,6 +487,52 @@ async function runVerification(repoRoot: string, touchedFiles: string[]): Promis
     }
   }
   return true;
+}
+
+function toolAgentPrompt(input: {
+  selectedSpec: PatchSpec;
+  context: string;
+  revisionFeedback?: string;
+}): string {
+  const tests = asStringArray(input.selectedSpec.raw['tests']);
+  return [
+    `## Patch Spec`,
+    `ID: ${input.selectedSpec.id}`,
+    `Title: ${input.selectedSpec.title}`,
+    `Fix class: ${input.selectedSpec.fixClass}`,
+    ``,
+    `Rationale:`,
+    input.selectedSpec.rationale || '(none)',
+    ``,
+    `Acceptance criteria:`,
+    input.selectedSpec.acceptance.length
+      ? input.selectedSpec.acceptance.map((item) => `- ${item}`).join('\n')
+      : '(none)',
+    ``,
+    `Owned files:`,
+    input.selectedSpec.ownedFiles.length
+      ? input.selectedSpec.ownedFiles.map((item) => `- ${item}`).join('\n')
+      : '(none)',
+    ``,
+    `Verification commands:`,
+    tests.length ? tests.map((item) => `- ${item}`).join('\n') : '(none declared)',
+    ``,
+    `Relevant context:`,
+    input.context.slice(0, 12_000),
+    ...(input.revisionFeedback
+      ? [
+          ``,
+          `## Critic Revision Feedback`,
+          input.revisionFeedback,
+        ]
+      : []),
+    ``,
+    `Instructions:`,
+    `- Use tools to inspect and edit the repository.`,
+    `- Keep edits within the owned files unless a directly necessary adjacent test/fixture change is required.`,
+    `- Run the declared verification command when one is provided.`,
+    `- Do not claim completion until the acceptance criteria are satisfied or you have made the narrowest possible fix and run verification.`,
+  ].join('\n');
 }
 
 async function existingAppliedSpecIds(artifactRoot: string): Promise<Set<string>> {
@@ -492,14 +602,38 @@ export async function runFoundryCoderPatch(input: {
   dryRun?: boolean;
   autoCommit?: boolean;
   autoPush?: boolean;
+  attempt?: number;
+  coderRole?: FoundryCoderRole;
+  coderEngine?: FoundryCoderEngine;
+  workerInference?: Partial<InferenceConfig>;
   revisionFeedback?: string;
+  onProgress?: (event: FoundryCoderPatchProgressEvent) => void | Promise<void>;
+  /**
+   * When set, the coder uses this exact patch-spec YAML instead of scanning
+   * the executable queue. The already-applied filter is also bypassed so the
+   * inner loop can re-apply a draft spec freely.
+   */
+  forcedSpecPath?: string;
 }): Promise<FoundryCoderPatchResult> {
+  const progress = async (
+    event: Omit<FoundryCoderPatchProgressEvent, 'source'>,
+  ) => {
+    await input.onProgress?.({ source: 'coder', ...event });
+  };
   const resultRoot = join(input.artifactRoot, 'code-patches', input.protocolId, input.variant);
   const resultPath = join(resultRoot, 'result.yaml');
-  const specPaths = await listPatchSpecs(input.artifactRoot, input.protocolId, input.variant);
-  const allSpecs = await Promise.all(specPaths.map(readPatchSpec));
-  const alreadyAppliedSpecIds = await existingAppliedSpecIds(input.artifactRoot);
-  const pendingSpecs = allSpecs.filter((spec) => !alreadyAppliedSpecIds.has(spec.id));
+  let allSpecs: PatchSpec[];
+  let pendingSpecs: PatchSpec[];
+  if (input.forcedSpecPath) {
+    const forced = await readPatchSpec(input.forcedSpecPath);
+    allSpecs = [forced];
+    pendingSpecs = [forced];
+  } else {
+    const specPaths = await listPatchSpecs(input.artifactRoot, input.protocolId, input.variant);
+    allSpecs = await Promise.all(specPaths.map(readPatchSpec));
+    const alreadyAppliedSpecIds = await existingAppliedSpecIds(input.artifactRoot);
+    pendingSpecs = allSpecs.filter((spec) => !alreadyAppliedSpecIds.has(spec.id));
+  }
 
   if (allSpecs.length === 0) {
     await writeYamlFile(resultPath, {
@@ -529,44 +663,70 @@ export async function runFoundryCoderPatch(input: {
   if (!selectedSpec) {
     return { status: 'skipped', resultPath, message: 'no selectable patch spec', touchedFiles: [] };
   }
+  await progress({
+    phase: 'selected_spec',
+    message: `Selected patch spec ${selectedSpec.id}`,
+    details: { specId: selectedSpec.id, title: selectedSpec.title, fixClass: selectedSpec.fixClass },
+  });
 
-  // ── Dual-coder routing: respect architect's coderModelProfile recommendation ──
-  // The architect specifies which model to use per spec in coderModelProfile.model.
-  //   Kbenkhaled/Qwen3.5-35B-3A-NVFP4 on :8888  → speedy coder (default, fast)
-  //   Qwen/Qwen3.6-27B-FP8 on :8000              → senior coder for "difficult" tasks (longer timeout)
+  // ── Ralph coder routing ──
+  // Attempt 1 should normally run against the junior worker. Revision attempts
+  // are explicitly escalated by the runner/supervisor to the senior endpoint.
   const specModelProfile = typeof selectedSpec.raw['coderModelProfile'] === 'object'
     && selectedSpec.raw['coderModelProfile'] !== null
       ? selectedSpec.raw['coderModelProfile'] as Record<string, unknown>
       : null;
   const specRecommendedModel = typeof specModelProfile?.['model'] === 'string' ? specModelProfile['model'] : undefined;
 
-  const archBaseUrl = input.inference?.baseUrl ?? process.env['PI_ARCHITECT_BASE_URL'] ?? process.env['OPENAI_BASE_URL'] ?? 'http://localhost:8000/v1';
-  const workerBaseUrl = process.env['PI_WORKER_BASE_URL'] ?? 'http://localhost:8888/v1';
-  const speedyCoderModel = process.env['PI_WORKER_MODEL'] ?? 'Kbenkhaled/Qwen3.5-35B-3A-NVFP4';
+  const archBaseUrl = input.inference?.baseUrl ?? process.env['PI_ARCHITECT_BASE_URL'] ?? process.env['OPENAI_BASE_URL'] ?? 'http://thunderbeast:8000/v1';
+  const seniorCoderModel = input.inference?.model ?? process.env['PI_ARCHITECT_MODEL'] ?? process.env['OPENAI_MODEL'] ?? specRecommendedModel ?? 'Qwen/Qwen3.6-27B-FP8';
+  const workerBaseUrl = input.workerInference?.baseUrl ?? process.env['PI_WORKER_BASE_URL'] ?? 'http://thunderbeast:8001/v1';
+  const speedyCoderModel = input.workerInference?.model ?? process.env['PI_WORKER_MODEL'] ?? 'Qwen/Qwen3.6-35B-A3B-FP8';
+  const coderRole: FoundryCoderRole = input.coderRole ?? (specRecommendedModel?.includes('27B') ? 'senior' : 'junior');
+  const coderEngine: FoundryCoderEngine = input.coderEngine ?? 'symbol-patch';
 
   let baseUrl: string, model: string, timeoutMs: number;
-  if (specRecommendedModel && specRecommendedModel.includes('27B')) {
-    // Architect recommends senior coder for difficult task (reasoning model, slow)
+  if (coderRole === 'senior') {
     baseUrl = archBaseUrl;
-    model = specRecommendedModel;
-    timeoutMs = 1200_000; // 20 min for 27B reasoning model
+    model = seniorCoderModel;
+    timeoutMs = 1200_000;
   } else {
-    // Default to speedy coder on :8888
     baseUrl = workerBaseUrl;
     model = speedyCoderModel;
-    timeoutMs = 300_000; // 5 min for speedy coder
+    timeoutMs = 300_000;
   }
 
   if (!baseUrl || !model || input.dryRun) {
     return { status: 'blocked', resultPath, message: 'coder not configured', touchedFiles: [] };
   }
-  console.log(`[foundry-coder] routing: model=${model}, endpoint=${baseUrl}, timeout=${timeoutMs / 1000}s`);
+  console.log(`[foundry-coder] routing: role=${coderRole}, engine=${coderEngine}, attempt=${input.attempt ?? 1}, model=${model}, endpoint=${baseUrl}, timeout=${timeoutMs / 1000}s`);
+  await progress({
+    phase: 'routing',
+    message: `Running ${coderRole} ${coderEngine} coder attempt ${input.attempt ?? 1}`,
+    details: { coderRole, coderEngine, attempt: input.attempt ?? 1, model, endpoint: baseUrl },
+  });
+  const coderRunMetadata = {
+    attempt: input.attempt ?? 1,
+    coderRole,
+    coderEngine,
+    endpoint: baseUrl,
+    model,
+  };
 
   const [ownedContext, artifactContext, schemaContext] = await Promise.all([
     collectOwnedContext(input.repoRoot, [selectedSpec]),
     collectSpecArtifactContext(input.artifactRoot, [selectedSpec]),
     collectSchemaContext(input.repoRoot, selectedSpec.fixClass),
   ]);
+  await progress({
+    phase: 'context_ready',
+    message: 'Collected owned-file, artifact, and schema context',
+    details: {
+      ownedContextBytes: ownedContext.length,
+      artifactContextBytes: artifactContext.length,
+      schemaContextBytes: schemaContext.length,
+    },
+  });
 
   const context = [
     'Repository context:',
@@ -588,6 +748,195 @@ export async function runFoundryCoderPatch(input: {
   });
 
   await mkdir(resultRoot, { recursive: true });
+
+  if (coderEngine === 'tool-agent') {
+    const before = await snapshotOwnedFiles(input.repoRoot, selectedSpec);
+    const tracePath = join(resultRoot, `tool-agent-${coderRole}-attempt-${input.attempt ?? 1}.jsonl`);
+    await progress({
+      phase: 'tool_agent_started',
+      message: 'Starting tool-agent coder',
+      details: { tracePath },
+    });
+    const agentResult = await runFoundryToolAgent({
+      client,
+      model,
+      workdir: input.repoRoot,
+      systemPrompt: [
+        'You are the Protocol Foundry coder.',
+        'Fix the compiler issue described by the patch spec.',
+        'Use tools to inspect, edit, and verify the repository.',
+        'Do not include private chain-of-thought in your final answer.',
+      ].join('\n'),
+      prompt: toolAgentPrompt({
+        selectedSpec,
+        context,
+        ...(input.revisionFeedback ? { revisionFeedback: input.revisionFeedback } : {}),
+      }),
+      tracePath,
+      maxTurns: TOOL_AGENT_MAX_TURNS,
+      maxTokens: 16_384,
+      temperature: 0.1,
+      onProgress: async (event) => {
+        await progress({
+          phase: event.phase,
+          message: event.message,
+          ...(event.details ? { details: event.details } : {}),
+        });
+      },
+    });
+
+    if (agentResult.status !== 'complete') {
+      await writeYamlFile(resultPath, {
+        kind: 'protocol-foundry-coder-patch-result',
+        protocolId: input.protocolId,
+        variant: input.variant,
+        generated_at: nowIso(),
+        ...coderRunMetadata,
+        status: agentResult.status === 'failed' ? 'failed' : 'needs-human',
+        selectedSpecId: selectedSpec.id,
+        message: `Tool agent did not complete: ${agentResult.status}`,
+        tracePath,
+        finalText: agentResult.finalText.slice(0, 4000),
+      });
+      return {
+        status: agentResult.status === 'failed' ? 'failed' : 'needs-human',
+        resultPath,
+        message: `tool agent did not complete: ${agentResult.status}`,
+        touchedFiles: [],
+      };
+    }
+
+    const touchedFiles = await changedOwnedFiles(input.repoRoot, before);
+    await progress({
+      phase: 'files_written',
+      message: `Tool agent changed ${touchedFiles.length} owned file(s)`,
+      details: { touchedFiles },
+    });
+
+    const meaningfulFiles = meaningfulPatchFiles(touchedFiles);
+    if (meaningfulFiles.length === 0) {
+      await writeYamlFile(resultPath, {
+        kind: 'protocol-foundry-coder-patch-result',
+        protocolId: input.protocolId,
+        variant: input.variant,
+        generated_at: nowIso(),
+        ...coderRunMetadata,
+        status: 'blocked',
+        selectedSpecId: selectedSpec.id,
+        message: 'Tool agent completed but changed no meaningful compiler/schema/record files.',
+        touchedFiles,
+        tracePath,
+        finalText: agentResult.finalText.slice(0, 4000),
+      });
+      return { status: 'blocked', resultPath, message: 'no meaningful files touched', touchedFiles: [] };
+    }
+
+    try {
+      let tscOutput = '';
+      await progress({ phase: 'typecheck_started', message: 'Running TypeScript check for touched files' });
+      try {
+        const result = await execFileAsync('npx', ['tsc', '--noEmit', '--pretty', 'false'], {
+          cwd: join(input.repoRoot, 'server'),
+          maxBuffer: 1024 * 1024 * 12,
+          timeout: 120_000,
+        });
+        tscOutput = result.stdout + result.stderr;
+      } catch (err: any) {
+        tscOutput = (err.stdout || '') + (err.stderr || '');
+      }
+
+      const touchedBases = touchedFiles.map((f) => f.startsWith('src/') ? f.slice(4) : f);
+      const relevantErrors = tscOutput.split('\n').filter((line) => {
+        if (!line.includes(' error TS')) return false;
+        return touchedBases.some((t) => line.includes(t));
+      });
+
+      if (relevantErrors.length > 0) {
+        await progress({
+          phase: 'typecheck_failed',
+          message: `Typecheck found ${relevantErrors.length} error(s) in touched files`,
+          details: { errorCount: relevantErrors.length },
+        });
+        await restoreSnapshot(input.repoRoot, before, touchedFiles);
+        await writeYamlFile(resultPath, {
+          kind: 'protocol-foundry-coder-patch-result',
+          protocolId: input.protocolId,
+          variant: input.variant,
+          generated_at: nowIso(),
+          ...coderRunMetadata,
+          status: 'failed',
+          selectedSpecId: selectedSpec.id,
+          message: 'Tool agent patch failed TypeScript check; reverted.',
+          touchedFiles,
+          tracePath,
+          tscOutput: relevantErrors.join('\n').slice(0, 4000),
+          finalText: agentResult.finalText.slice(0, 4000),
+        });
+        return { status: 'failed', resultPath, message: 'compilation failed', touchedFiles: [] };
+      }
+
+      await progress({ phase: 'typecheck_passed', message: 'Typecheck passed for touched files' });
+      await progress({ phase: 'tests_started', message: 'Running focused verification tests' });
+      const testsPass = await runVerification(input.repoRoot, touchedFiles);
+      if (!testsPass) {
+        await progress({ phase: 'tests_failed', message: 'Focused verification tests failed; reverting patch' });
+        await restoreSnapshot(input.repoRoot, before, touchedFiles);
+        await writeYamlFile(resultPath, {
+          kind: 'protocol-foundry-coder-patch-result',
+          protocolId: input.protocolId,
+          variant: input.variant,
+          generated_at: nowIso(),
+          ...coderRunMetadata,
+          status: 'failed',
+          selectedSpecId: selectedSpec.id,
+          message: 'Tool agent patch failed verification tests; reverted.',
+          touchedFiles,
+          tracePath,
+          finalText: agentResult.finalText.slice(0, 4000),
+        });
+        return { status: 'failed', resultPath, message: 'tests failed', touchedFiles: [] };
+      }
+
+      await progress({ phase: 'tests_passed', message: 'Focused verification tests passed' });
+      const commit = await maybeCommit(input.repoRoot, touchedFiles, selectedSpec.title, input.autoCommit);
+      const message = commit ? 'Patch applied and committed.' : 'Patch applied.';
+      await writeYamlFile(resultPath, {
+        kind: 'protocol-foundry-coder-patch-result',
+        protocolId: input.protocolId,
+        variant: input.variant,
+        generated_at: nowIso(),
+        ...coderRunMetadata,
+        status: 'applied',
+        selectedSpecId: selectedSpec.id,
+        touchedFiles,
+        ...(commit ? { commit } : {}),
+        message,
+        tracePath,
+        finalText: agentResult.finalText.slice(0, 4000),
+      });
+      await progress({
+        phase: 'result',
+        message: `Tool-agent patch applied to ${touchedFiles.length} file(s)`,
+        details: { status: 'applied', touchedFiles },
+      });
+      return { status: 'applied', resultPath, message, touchedFiles };
+    } catch (error) {
+      await restoreSnapshot(input.repoRoot, before, touchedFiles).catch(() => undefined);
+      await writeYamlFile(resultPath, {
+        kind: 'protocol-foundry-coder-patch-result',
+        protocolId: input.protocolId,
+        variant: input.variant,
+        generated_at: nowIso(),
+        ...coderRunMetadata,
+        status: 'failed',
+        selectedSpecId: selectedSpec.id,
+        message: error instanceof Error ? error.message : String(error),
+        touchedFiles,
+        tracePath,
+      });
+      return { status: 'failed', resultPath, message: error instanceof Error ? error.message : String(error), touchedFiles: [] };
+    }
+  }
 
   // Collect the full target file(s) for symbol replacement
   const owned = Array.from(new Set(selectedSpec.ownedFiles)).slice(0, 6);
@@ -611,14 +960,22 @@ export async function runFoundryCoderPatch(input: {
       }
     }
   }
+  await progress({
+    phase: 'targets_ready',
+    message: `Found ${targetFiles.length} candidate target file(s)`,
+    details: { targetFiles: targetFiles.map((f) => f.path) },
+  });
 
   // Build symbol list for the prompt
   const symbolList = targetFiles.map((tf) =>
     [tf.path, tf.symbols.map((s) => `  ${s.declaration}`).join('\n')].join('\n'),
   ).join('\n\n');
 
-  // Single direct attempt: ask coder for symbol replacements
-  const response = await client.complete({
+  // Single direct attempt: ask coder for symbol replacements. Stream the
+  // public WORKLOG lines as they arrive, then parse the complete response for
+  // symbol replacement blocks exactly as before.
+  await progress({ phase: 'llm_started', message: 'Asking coder model for symbol replacements' });
+  const completionRequest: CompletionRequest = {
     model,
     temperature: 0.1,
     max_tokens: 16384,
@@ -641,6 +998,10 @@ export async function runFoundryCoderPatch(input: {
           '  @@end@@',
           '',
           'Rules:',
+          '- Emit frequent short public progress notes as lines starting with "WORKLOG:".',
+          '- WORKLOG lines should describe observable work only: file choice, hypothesis, patch area, verification step.',
+          '- Emit a WORKLOG line before choosing target symbols, before generating replacements, and before verification assumptions.',
+          '- Do NOT include private chain-of-thought or hidden reasoning in WORKLOG lines.',
           '- For @@replace: output the COMPLETE function body, including the function declaration line',
           '- For @@add: output new functions/code to append at end of the target file',
           '- Include necessary imports if adding new functions (as @@add@@ blocks)',
@@ -667,20 +1028,112 @@ export async function runFoundryCoderPatch(input: {
           ...(input.revisionFeedback ? [`
 ## CRITIC REVISION FEEDBACK`, input.revisionFeedback] : []),
           ``,
-          `Produce symbol replacement blocks that fix this issue.`,
+          `Produce concise WORKLOG lines while you work, then symbol replacement blocks that fix this issue.`,
         ].join('\n'),
       },
     ],
-  });
+  };
 
-  const aiContent = response.choices[0]?.message.content ?? '';
+  let aiContent = '';
+  let reasoningChars = 0;
+  let visibleOutputChars = 0;
+  let worklogBuffer = '';
+  const emittedWorklog = new Set<string>();
+  const firstString = (...values: unknown[]): string | undefined => {
+    for (const value of values) {
+      if (typeof value === 'string' && value.length > 0) return value;
+    }
+    return undefined;
+  };
+  const snippet = (value: string): string =>
+    value.replace(/\s+/g, ' ').trim().slice(0, 240);
+  const emitWorklogLines = async (text: string, flush = false): Promise<string> => {
+    const lines = text.split('\n');
+    const tail = flush ? '' : lines.pop() ?? '';
+    const completeLines = flush ? lines : lines;
+    for (const line of completeLines) {
+      const match = line.match(/^\s*WORKLOG:\s*(.+?)\s*$/i);
+      if (!match) continue;
+      const note = match[1]!;
+      if (emittedWorklog.has(note)) continue;
+      emittedWorklog.add(note);
+      await progress({
+        phase: 'worklog',
+        message: note,
+      });
+    }
+    return tail;
+  };
+
+  for await (const chunk of client.completeStream(completionRequest)) {
+    const rawDelta = chunk.choices?.[0]?.delta as Record<string, unknown> | undefined;
+    if (!rawDelta) continue;
+
+    const reasoningDelta = firstString(rawDelta['reasoning'], rawDelta['reasoning_content']);
+    if (reasoningDelta) {
+      reasoningChars += reasoningDelta.length;
+      await progress({
+        phase: 'reasoning_activity',
+        message: `Model reasoning stream active (+${reasoningDelta.length} chars, ${reasoningChars} total)`,
+        details: {
+          deltaChars: reasoningDelta.length,
+          totalChars: reasoningChars,
+          rawReasoning: reasoningDelta,
+        },
+      });
+    }
+
+    let contentDelta = firstString(rawDelta['content']);
+    // InferenceClient preserves provider reasoning fields, but may also
+    // normalize reasoning into content for older callers. Do not treat that
+    // normalized hidden reasoning as patch output.
+    if (reasoningDelta && contentDelta === reasoningDelta) {
+      contentDelta = undefined;
+    }
+    if (!contentDelta) continue;
+
+    // Diagnostics on first visible content: report whether reasoning was seen.
+    if (visibleOutputChars === 0) {
+      await progress({
+        phase: 'llm_status',
+        message: reasoningChars > 0
+          ? `Model streaming — reasoning active (${reasoningChars} chars so far)`
+          : 'Model streaming — no reasoning field detected (model may not support it)',
+        details: { hasReasoning: reasoningChars > 0, reasoningChars },
+      });
+    }
+
+    visibleOutputChars += contentDelta.length;
+    aiContent += contentDelta;
+    const contentSnippet = snippet(contentDelta);
+    if (contentSnippet) {
+      await progress({
+        phase: 'model_output',
+        message: contentSnippet,
+        details: { deltaChars: contentDelta.length, totalChars: visibleOutputChars },
+      });
+    }
+    worklogBuffer = await emitWorklogLines(worklogBuffer + contentDelta);
+  }
+  await emitWorklogLines(worklogBuffer, true);
+  await progress({
+    phase: 'llm_finished',
+    message: `Coder model returned ${aiContent.length} visible character(s); reasoning stream produced ${reasoningChars} character(s)`,
+    details: { responseChars: aiContent.length, reasoningChars },
+  });
   const replacements = parseSymbolResponse(aiContent);
+  await progress({
+    phase: 'replacements_parsed',
+    message: `Parsed ${replacements.length} symbol replacement block(s)`,
+    details: { replacementCount: replacements.length },
+  });
   if (replacements.length === 0) {
     await writeYamlFile(resultPath, {
       kind: 'protocol-foundry-coder-patch-result',
       protocolId: input.protocolId,
       variant: input.variant,
       generated_at: nowIso(),
+      ...coderRunMetadata,
       status: 'needs-human',
       message: 'Coder did not produce any valid symbol replacement blocks.',
       rawResponse: aiContent.slice(0, 4000),
@@ -718,6 +1171,11 @@ export async function runFoundryCoderPatch(input: {
       touchedFiles.push(tf.path);
     }
   }
+  await progress({
+    phase: 'files_written',
+    message: `Wrote ${touchedFiles.length} changed file(s)`,
+    details: { touchedFiles },
+  });
 
   const meaningfulFiles = meaningfulPatchFiles(touchedFiles);
   if (meaningfulFiles.length === 0) {
@@ -726,6 +1184,7 @@ export async function runFoundryCoderPatch(input: {
       protocolId: input.protocolId,
       variant: input.variant,
       generated_at: nowIso(),
+      ...coderRunMetadata,
       status: 'blocked',
       message: 'Patch touches no meaningful compiler/schema/record files.',
       touchedFiles,
@@ -736,6 +1195,7 @@ export async function runFoundryCoderPatch(input: {
   try {
     // Verify it compiles — only check errors in files we actually touched
     let tscOutput = '';
+    await progress({ phase: 'typecheck_started', message: 'Running TypeScript check for touched files' });
     try {
       const result = await execFileAsync('npx', ['tsc', '--noEmit', '--pretty', 'false'], {
         cwd: join(input.repoRoot, 'server'),
@@ -755,9 +1215,14 @@ export async function runFoundryCoderPatch(input: {
     });
 
     if (relevantErrors.length > 0) {
+      await progress({
+        phase: 'typecheck_failed',
+        message: `Typecheck found ${relevantErrors.length} error(s) in touched files`,
+        details: { errorCount: relevantErrors.length },
+      });
       // Save debug info before reverting
       await writeFile(join(resultRoot, 'debug_tsc_output.txt'), tscOutput.slice(0, 8000), 'utf-8');
-      await writeFile(join(resultRoot, 'debug_ai_response.txt'), (response.choices[0]?.message.content ?? '').slice(0, 8000), 'utf-8');
+      await writeFile(join(resultRoot, 'debug_ai_response.txt'), aiContent.slice(0, 8000), 'utf-8');
       // Revert changes
       for (const [file, originalContent] of modifiedFiles) {
         await writeFile(join(input.repoRoot, file), originalContent, 'utf-8');
@@ -767,11 +1232,12 @@ export async function runFoundryCoderPatch(input: {
         protocolId: input.protocolId,
         variant: input.variant,
         generated_at: nowIso(),
+        ...coderRunMetadata,
         status: 'failed',
         message: 'Patch applied but compilation failed; reverted.',
         touchedFiles,
         tscOutput: relevantErrors.join('\n').slice(0, 4000),
-        rawResponse: (response.choices[0]?.message.content ?? '').slice(0, 4000),
+        rawResponse: aiContent.slice(0, 4000),
       });
       return { status: 'failed', resultPath, message: 'compilation failed', touchedFiles: [] };
     }
@@ -781,10 +1247,16 @@ export async function runFoundryCoderPatch(input: {
       const preExisting = tscOutput.split('\n').filter((l) => l.includes('error TS')).length;
       console.log(`[foundry-coder] compilation ok, ${preExisting} pre-existing error(s) in untouched files ignored`);
     }
+    await progress({
+      phase: 'typecheck_passed',
+      message: 'Typecheck passed for touched files',
+    });
 
     // Run focused tests (blocking)
+    await progress({ phase: 'tests_started', message: 'Running focused verification tests' });
     const testsPass = await runVerification(input.repoRoot, touchedFiles);
     if (!testsPass) {
+      await progress({ phase: 'tests_failed', message: 'Focused verification tests failed; reverting patch' });
       console.error(`[foundry-coder] tests failed for ${selectedSpec.id}; reverting and skipping patch`);
       // Revert changes
       for (const [file, originalContent] of modifiedFiles) {
@@ -795,32 +1267,46 @@ export async function runFoundryCoderPatch(input: {
         protocolId: input.protocolId,
         variant: input.variant,
         generated_at: nowIso(),
+        ...coderRunMetadata,
         status: 'failed',
         message: 'Patch applied but verification tests failed; reverted.',
         touchedFiles,
-        rawResponse: (response.choices[0]?.message.content ?? '').slice(0, 4000),
+        rawResponse: aiContent.slice(0, 4000),
       });
       return { status: 'failed', resultPath, message: 'tests failed', touchedFiles: [] };
     }
+    await progress({ phase: 'tests_passed', message: 'Focused verification tests passed' });
 
     // Commit the patch
     const commit = await maybeCommit(input.repoRoot, touchedFiles, selectedSpec.title, input.autoCommit);
+    const message = commit ? 'Patch applied and committed.' : 'Patch applied.';
 
     await writeYamlFile(resultPath, {
       kind: 'protocol-foundry-coder-patch-result',
       protocolId: input.protocolId,
       variant: input.variant,
       generated_at: nowIso(),
+      ...coderRunMetadata,
       status: 'applied',
       selectedSpecId: selectedSpec.id,
       touchedFiles,
       ...(commit ? { commit } : {}),
-      message: 'Patch applied and committed.',
+      message,
+    });
+    await progress({
+      phase: 'result',
+      message: `Coder patch applied to ${touchedFiles.length} file(s)`,
+      details: { status: 'applied', touchedFiles },
     });
 
-    return { status: 'applied', resultPath, message: 'patch applied and committed', touchedFiles };
+    return { status: 'applied', resultPath, message, touchedFiles };
 
   } catch (error) {
+    await progress({
+      phase: 'result',
+      message: `Coder patch failed: ${error instanceof Error ? error.message : String(error)}`,
+      details: { status: 'failed' },
+    });
     // Ensure clean state on any failure
     await runGit(input.repoRoot, ['checkout', '--', ...touchedFiles]).catch(() => {});
     await runGit(input.repoRoot, ['reset', '--hard', 'HEAD']).catch(() => {});
@@ -830,6 +1316,7 @@ export async function runFoundryCoderPatch(input: {
       protocolId: input.protocolId,
       variant: input.variant,
       generated_at: nowIso(),
+      ...coderRunMetadata,
       status: 'failed',
       message: error instanceof Error ? error.message : String(error),
       touchedFiles,

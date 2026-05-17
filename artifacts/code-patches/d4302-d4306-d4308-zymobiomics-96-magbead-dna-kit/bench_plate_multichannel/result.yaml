@@ -1,0 +1,10 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: bench_plate_multichannel
+generated_at: 2026-05-09T21:02:55.369Z
+status: applied
+selectedSpecId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-ai-precompile-shape-mismatch
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+commit: a1ba7c9d8114cefaf20ad9248330c853474a9936
+message: Patch applied and committed.

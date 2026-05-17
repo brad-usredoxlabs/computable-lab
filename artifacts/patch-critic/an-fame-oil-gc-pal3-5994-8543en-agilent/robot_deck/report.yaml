@@ -1,7 +1,7 @@
 kind: protocol-foundry-critic-report
 protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
 variant: robot_deck
-generated_at: 2026-05-09T19:27:25.648Z
+generated_at: 2026-05-10T12:24:27.420Z
 verdict: pass
 reportPath: /home/brad/git/computable-foundry/artifacts/patch-critic/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/report.yaml
 reviewDurationMs: 8
@@ -9,7 +9,7 @@ message: "Patch applied: 1 file(s) changed, spec verification passed."
 notes:
   - No acceptance criteria available for this patch spec
 touchedFiles:
-  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
 specVerification:
   accepted: true
   criteriaMet: []

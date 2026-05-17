@@ -1,0 +1,86 @@
+kind: protocol-foundry-variant-manifest
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: robot_deck
+generated_at: 2026-05-16T01:29:11.936Z
+status: gap
+metrics:
+  eventCount: 0
+  blockerCount: 0
+  diagnosticCount: 15
+  extractorRepairExhaustedCount: 0
+  outcome: gap
+  foundryComplete: 0
+  qualityScore: 0.1
+  coverageEstimate: 0
+artifacts:
+  pdf:
+    path: pdfs/an-fame-oil-gc-pal3-5994-8543en-agilent.pdf
+    exists: true
+    status: present
+  pdfMetadata:
+    path: pdfs/an-fame-oil-gc-pal3-5994-8543en-agilent.pdf.procurement.yaml
+    exists: false
+    missingReason: PDF provenance sidecar not found
+  extractedText:
+    path: text/an-fame-oil-gc-pal3-5994-8543en-agilent.txt
+    exists: true
+    status: present
+  segment:
+    path: segments/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+    exists: true
+    status: present
+  materialContext:
+    path: material-context/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+    exists: true
+    status: present
+  compiler:
+    path: compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+    exists: true
+    status: gap
+  eventGraph:
+    path: event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+    exists: true
+    status: blocked
+  executionScale:
+    path: execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+    exists: true
+    status: ready
+  browserReport:
+    path: browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/report.yaml
+    exists: true
+    status: skipped
+  architectVerdict:
+    path: architect/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/verdict.yaml
+    exists: true
+    status: gap
+  patchSpecs:
+    - path: patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-ai-precompile-shape-mismatch-and-empty-events.yaml
+      exists: true
+      status: present
+    - path: patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-presegmented-candidate-extraction.yaml
+      exists: true
+      status: present
+  adoptionDecision:
+    path: adoption/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/adoption.yaml
+    exists: true
+    status: accepted
+  coderPatch:
+    path: code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/result.yaml
+    exists: true
+    status: applied
+  criticReport:
+    path: patch-critic/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/report.yaml
+    exists: true
+    status: present
+  rerunReport:
+    path: rerun/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/rerun.yaml
+    exists: true
+    status: gap
+missingArtifacts:
+  - key: pdfMetadata
+    reason: PDF provenance sidecar not found
+humanReview:
+  status: unreviewed
+  reviewPath: human-review/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/review.yaml
+nextActions:
+  - Open in Protocol IDE Foundry inbox for human/AI review.

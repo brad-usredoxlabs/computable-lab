@@ -1,0 +1,10 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: mp10422
+variant: robot_deck
+generated_at: 2026-05-09T21:40:30.883Z
+status: applied
+selectedSpecId: mp10422/robot_deck/fix-ai-precompile-shape-mismatch
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+commit: 663dda72ef73f1d45672c8d847e364a8ae0875fc
+message: Patch applied and committed.

@@ -1,0 +1,77 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+variant: manual_tubes
+generated_at: 2026-05-09T21:12:02.211Z
+status: needs-human
+message: Coder did not produce any valid symbol replacement blocks.
+rawResponse: >-
+  
+
+  @@replace salvageAiPrecompileOutput@@
+
+  function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?:
+  unknown }): AiPrecompileOutput {
+    let parsed: unknown = input.parsed;
+    if (parsed === undefined && input.raw !== undefined) {
+      if (typeof input.raw === 'string') {
+        try {
+          parsed = JSON.parse(input.raw);
+        } catch {
+          parsed = {};
+        }
+      } else {
+        parsed = input.raw;
+      }
+    }
+
+    if (typeof parsed !== 'object' || parsed === null) {
+      parsed = {};
+    }
+
+    const obj = parsed as Record<string, unknown>;
+
+    return {
+      candidateActions: Array.isArray(obj.candidateActions) ? obj.candidateActions : [],
+      mintMaterials: Array.isArray(obj.mintMaterials) ? obj.mintMaterials : [],
+      candidateLabwares: Array.isArray(obj.candidateLabwares) ? obj.candidateLabwares : [],
+      patternEvents: Array.isArray(obj.patternEvents) ? obj.patternEvents : [],
+      unresolvedRefs: Array.isArray(obj.unresolvedRefs) ? obj.unresolvedRefs : [],
+    };
+  }
+
+
+  @@replace createAiPrecompilePass@@
+
+  export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass
+  {
+    return async (args: PassRunArgs): Promise<PassResult> => {
+      try {
+        const response = await deps.llmClient.chat({
+          messages: args.state.input.messages,
+          schema: createAiPrecompileOutputSchema(),
+        });
+
+        const output = salvageAiPrecompileOutput({
+          raw: response.content,
+          parsed: response.parsed,
+        });
+
+        return {
+          output: { ai_precompile: output },
+          diagnostics: [],
+        };
+      } catch (err) {
+        const fallback = salvageAiPrecompileOutput({ raw: '', parsed: null });
+        return {
+          output: { ai_precompile: fallback },
+          diagnostics: [{
+            severity: 'warning',
+            code: 'ai_precompile_fallback',
+            message: 'AI precompile failed, using fallback empty output',
+            pass_id: 'ai_precompile',
+            details: { error: String(err) },
+          }],
+        };
+      }
+    };
+  }

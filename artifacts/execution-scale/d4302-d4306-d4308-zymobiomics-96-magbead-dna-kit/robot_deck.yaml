@@ -23,19 +23,14 @@ sampleLayout:
         - A2
         - B2
 reagentLayout:
-  - materialRole: transfer_reagent
-    sourceLabwareRole: reagent_source
+  - materialRole: reagent
+    sourceLabwareRole: reagent_reservoir
     sourceLabwareKind: 1_well_reservoir
+    sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
     sourceWells:
       - "1"
-    reason: inferred from liquid-handling events without creating material instances
-    sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
-pipettingStrategy:
-  pipetteMode: single_channel
-  channels: 1
-  laneStrategy: sequential_lanes
-  channelization: single_channel
-  batching: none
+    reason: prompt mentions reagents but compiled events did not identify concrete
+      reagent roles
 deckBinding:
   platform: integra_assist
   requiredLabwareDefinitions:
@@ -45,6 +40,7 @@ deckBinding:
     - pipette-capability/p20-multi-8
     - pipette-capability/p1000-single
 assumptions:
+  - Reagent source role is provisional until material roles are resolved.
   - Samples are mapped down plate columns in row order.
   - Manual tube operations preserve biological intent when lifted to plate wells
     and shared reagent reservoirs.

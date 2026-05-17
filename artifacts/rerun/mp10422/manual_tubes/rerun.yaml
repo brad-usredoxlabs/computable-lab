@@ -1,0 +1,10 @@
+kind: protocol-foundry-rerun-report
+protocolId: mp10422
+variant: manual_tubes
+generated_at: 2026-05-09T22:06:57.531Z
+compilerArtifact: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/manual_tubes.yaml
+eventGraphArtifact: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10422/manual_tubes.yaml
+executionScaleArtifact: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10422/manual_tubes.yaml
+outcome: gap
+eventCount: 0
+blockerCount: 0

@@ -4,6 +4,10 @@ import { getPlatformManifest, getVariantManifest } from '../../shared/lib/platfo
 import { resolveOrientation, validatePlacement } from '../lib/placementRules'
 import { AddLabwareDialog } from './AddLabwareDialog'
 import { LabwareTile } from './LabwareTile'
+import {
+  buildPreviewWellIndex,
+  previewLawnPlacements,
+} from '../lib/previewProjection'
 import type { Labware } from '../../types/labware'
 import type { EventEditorPlacement } from '../types'
 
@@ -47,6 +51,16 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
           p.location.kind === 'lawn',
       ),
     [state.placements],
+  )
+
+  const previewIndex = useMemo(() => buildPreviewWellIndex(state.preview), [state.preview])
+  const ghostLawnPlacements = useMemo(
+    () =>
+      previewLawnPlacements(state.preview).filter(
+        (p): p is EventEditorPlacement & { location: { kind: 'lawn'; xMm: number; yMm: number } } =>
+          p.location.kind === 'lawn',
+      ),
+    [state.preview],
   )
 
   const screenToLawnMm = useCallback(
@@ -186,6 +200,7 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
           const topPx = Math.round(placement.location.yMm / scale)
           const widthTilePx = Math.round(tileWmm / scale)
           const heightTilePx = Math.round(tileHmm / scale)
+          const affected = previewIndex.byLabware.has(placement.labwareId)
           return (
             <div
               key={placement.placementId}
@@ -199,6 +214,7 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
                 variant="lawn"
                 width={widthTilePx}
                 height={heightTilePx}
+                affected={affected}
                 onRemove={() => actions.removePlacement(placement.placementId)}
                 onFocus={() => actions.setFocus(placement.placementId)}
                 onRotate={() => {
@@ -221,6 +237,37 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
                     resolveOrientation(validation, next, labware),
                   )
                 }}
+              />
+            </div>
+          )
+        })}
+        {ghostLawnPlacements.map((placement) => {
+          const labware = state.preview?.previewLabwares[placement.labwareId]
+            ?? state.labwares[placement.labwareId]
+            ?? null
+          if (!labware) return null
+          const isPortrait = placement.orientation === 'portrait'
+          const tileWmm = isPortrait ? TILE_MM_WIDTH_PORTRAIT : TILE_MM_WIDTH
+          const tileHmm = isPortrait ? TILE_MM_HEIGHT_PORTRAIT : TILE_MM_HEIGHT
+          const leftPx = Math.round(placement.location.xMm / scale)
+          const topPx = Math.round(placement.location.yMm / scale)
+          const widthTilePx = Math.round(tileWmm / scale)
+          const heightTilePx = Math.round(tileHmm / scale)
+          return (
+            <div
+              key={`ghost-${placement.placementId}`}
+              className="lawn__tile-anchor"
+              style={{ left: leftPx, top: topPx }}
+            >
+              <LabwareTile
+                labware={labware}
+                placement={placement}
+                orientation={placement.orientation}
+                variant="lawn"
+                width={widthTilePx}
+                height={heightTilePx}
+                ghost
+                onFocus={() => actions.setFocus(placement.placementId)}
               />
             </div>
           )

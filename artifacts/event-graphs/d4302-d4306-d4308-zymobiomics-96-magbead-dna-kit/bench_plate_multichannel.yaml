@@ -15,118 +15,27 @@ eventGraph:
     d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit (bench_plate_multichannel).
   status: draft
   protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
-  events: &a1
-    - eventId: evt-spin-dy8p5n19
-      event_type: centrifuge
-      details: &a2
-        rpm: 300
-        duration: PT5M
-      labwareId: sample_plate
-    - eventId: evt-mix-u2sp819h
-      event_type: mix
-      details: &a3 {}
-      labwareId: sample_plate
-    - eventId: evt-spin-6r4i368d
-      event_type: centrifuge
-      details: &a4
-        rpm: 300
-        duration: PT5M
-      labwareId: sample_plate
-    - eventId: evt-harvest-trypsin-yjvhf3o5
-      event_type: add_material
-      details: &a5
-        material_ref: trypsin-EDTA-0.25%
-        volume:
-          value: 50
-          unit: uL
-        wells: []
-      labwareId: sample_plate
-    - eventId: evt-harvest-incubate-uxphk8pu
-      event_type: incubate
-      details: &a6
-        duration: PT5M
-        temperature: 37
-      t_offset: PT5M
-      labwareId: sample_plate
-    - eventId: evt-harvest-transfer-5xmuogo3
-      event_type: transfer
-      details: &a7
-        wells: []
-      labwareId: sample_plate
+  events: &a1 []
   labwares:
     - labwareId: sample_plate
       labwareType: plate_96
       name: sample plate
-    - labwareId: reagent_source
+    - labwareId: reagent_reservoir
       labwareType: reservoir_1
-      name: reagent source
+      name: reagent reservoir
   tags:
     - protocol-foundry
     - bench_plate_multichannel
 terminalArtifacts:
   events: *a1
-  directives:
-    - directiveId: dir_1
-      kind: mount_pipette
-      params:
-        mountSide: right
-        pipetteType: 8_channel_multichannel
-  gaps:
-    - kind: unresolved_ref
-      message: resuspend (registry hit ontology)
-      details:
-        kind: material
-        label: resuspend
-        reason: registry hit ontology
-    - kind: unresolved_ref
-      message: resuspend (kind material not handled by resolve_references)
-      details:
-        kind: material
-        label: resuspend
-        reason: kind material not handled by resolve_references
-    - kind: unresolved_ref
-      message: generic_96_well_plate (no matching labware in prior snapshot)
-      details:
-        hint: generic_96_well_plate
-        reason: no matching labware in prior snapshot
-    - kind: unresolved_ref
-      message: generic_12_well_reservoir (no matching labware in prior snapshot)
-      details:
-        hint: generic_12_well_reservoir
-        reason: no matching labware in prior snapshot
-    - kind: unresolved_ref
-      message: generic_24x1_5ml_tube_rack (no matching labware in prior snapshot)
-      details:
-        hint: generic_24x1_5ml_tube_rack
-        reason: no matching labware in prior snapshot
+  directives: []
+  gaps: []
   resolvedRefs: []
   labStateDelta:
-    events:
-      - eventId: evt-spin-dy8p5n19
-        event_type: centrifuge
-        details: *a2
-      - eventId: evt-mix-u2sp819h
-        event_type: mix
-        details: *a3
-      - eventId: evt-spin-6r4i368d
-        event_type: centrifuge
-        details: *a4
-      - eventId: evt-harvest-trypsin-yjvhf3o5
-        event_type: add_material
-        details: *a5
-      - eventId: evt-harvest-incubate-uxphk8pu
-        event_type: incubate
-        details: *a6
-        t_offset: PT5M
-      - eventId: evt-harvest-transfer-5xmuogo3
-        event_type: transfer
-        details: *a7
+    events: []
     snapshotAfter:
       deck: []
-      mountedPipettes:
-        - mountSide: right
-          pipetteType: 8_channel_multichannel
-          maxVolumeUl: 50
+      mountedPipettes: []
       labware: {}
       reservoirs: {}
       mintCounter: 0
@@ -134,15 +43,10 @@ terminalArtifacts:
   resolvedLabwareRefs: []
   deckLayoutPlan:
     pinned: []
-    autoFilled:
-      - slot: A1
-        labwareHint: unknown
-        reason: tipRack
+    autoFilled: []
     conflicts: []
   resourceManifest:
-    tipRacks:
-      - pipetteType: unknown
-        rackCount: 1
+    tipRacks: []
     reservoirLoads: []
     consumables: []
   executionScalePlan:
@@ -171,13 +75,14 @@ terminalArtifacts:
             - A2
             - B2
     reagentLayout:
-      - materialRole: transfer_reagent
-        sourceLabwareRole: reagent_source
+      - materialRole: reagent
+        sourceLabwareRole: reagent_reservoir
         sourceLabwareKind: 1_well_reservoir
+        sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
         sourceWells:
           - "1"
-        reason: inferred from liquid-handling events without creating material instances
-        sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
+        reason: prompt mentions reagents but compiled events did not identify concrete
+          reagent roles
     pipettingStrategy:
       pipetteMode: multi_channel_parallel
       channels: 8
@@ -192,21 +97,18 @@ terminalArtifacts:
       requiredTools:
         - pipette-capability/p20-multi-8
     assumptions:
+      - Reagent source role is provisional until material roles are resolved.
       - Samples are mapped down plate columns in row order.
       - Manual tube operations preserve biological intent when lifted to plate
         wells and shared reagent reservoirs.
       - ASSIST PLUS lowering uses the same plate and lane semantics as bench
         multichannel planning, then binds them to deck-compatible labware and
         tool profiles.
-    blockers: &a8 []
+    blockers: &a2 []
   validationReport:
     findings: []
   instrumentRunFiles: []
-  downstreamQueue:
-    - kind: readout
-      description: Quantify DNA yield and assess purity
-      params:
-        method: spectrophotometry
+  downstreamQueue: []
 diagnostics:
   - severity: info
     code: foundry_presegmented_candidates
@@ -263,8 +165,34 @@ diagnostics:
     pass_id: extract_entities
     details: {}
   - severity: warning
+    code: tag_prompt_parse_error
+    message: |-
+      tag_prompt response was not valid JSON: Unexpected token 'B', "
+
+      Based on t"... is not valid JSON
+    pass_id: tag_prompt
+    details:
+      raw_preview: >
+        
+
+        Based on the provided text, here is the extracted JSON object containing
+        the tagged phrases, candidate actions, and directives derived from the
+        protocol text.
+
+
+        ```json
+
+        {
+          "taggedPhrases": [
+            {
+              "phrase": "96-well plate",
+              "tag": "labware",
+              "value": "96-well plate"
+            },
+            {
+  - severity: warning
     code: ai_precompile_shape_mismatch
-    message: ai_precompile output shape mismatch
+    message: ai_precompile output shape mismatch, using fallback
     pass_id: ai_precompile
   - severity: info
     code: pass_skipped_by_when
@@ -273,14 +201,34 @@ diagnostics:
     pass_id: mint_materials
   - severity: info
     code: pass_skipped_by_when
+    message: "Pass 'apply_directives' skipped: when condition
+      'outputs.ai_precompile.directives' evaluated to false"
+    pass_id: apply_directives
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_biology_verbs' skipped: when condition
+      'outputs.ai_precompile.candidateEvents' evaluated to false"
+    pass_id: expand_biology_verbs
+  - severity: info
+    code: pass_skipped_by_when
     message: "Pass 'resolve_labware' skipped: when condition
       'outputs.ai_precompile.candidateLabwares' evaluated to false"
     pass_id: resolve_labware
   - severity: info
     code: pass_skipped_by_when
+    message: "Pass 'resolve_prior_labware_references' skipped: when condition
+      'outputs.ai_precompile.priorLabwareRefs' evaluated to false"
+    pass_id: resolve_prior_labware_references
+  - severity: info
+    code: pass_skipped_by_when
     message: "Pass 'expand_patterns' skipped: when condition
       'outputs.ai_precompile.patternEvents' evaluated to false"
     pass_id: expand_patterns
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'emit_downstream_queue' skipped: when condition
+      'outputs.ai_precompile.downstreamCompileJobs' evaluated to false"
+    pass_id: emit_downstream_queue
   - severity: info
     code: execution_scale_plan_ready
     message: Execution scaling plan is ready for robot_deck.
@@ -289,7 +237,7 @@ diagnostics:
       sourceLevel: manual_tubes
       targetLevel: robot_deck
       profileId: robot-assist-plus-96
-      blockers: *a8
+      blockers: *a2
 foundryTestAssumptions:
   kind: protocol-foundry-test-assumption-profile
   protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit

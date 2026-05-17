@@ -33,6 +33,7 @@ import {
   type ReagentsConcentrationsSummary,
   type BudgetCostSummary,
   type EventGraphData,
+  type CommentAnchor,
 } from './ProtocolIdeGraphReviewSurface'
 import { ProtocolIdeActionRail } from './ProtocolIdeActionRail'
 import { ProtocolIdeExportActions } from './ProtocolIdeExportActions'
@@ -48,6 +49,7 @@ import type {
   ReagentsSummary,
   BudgetSummary,
 } from './overlaySummaries.types'
+import type { FoundryReviewContext } from '../shared/api/client'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -74,6 +76,8 @@ export interface ProtocolIdeShellProps {
   isRefreshing?: boolean
   /** Live progress messages streamed during session creation / rerun. */
   progressMessages?: Array<{ id: string; severity: 'info' | 'warning' | 'error'; text: string }>
+  /** Exact Foundry review context for a selected protocol/variant. */
+  foundryReviewContext?: FoundryReviewContext | null
 
 }
 
@@ -140,13 +144,48 @@ function IntakePane({
 
 function SourcePane({
   session,
+  foundryReviewContext,
   highlightedEvidenceRefId,
   onCitationClick,
 }: {
   session: ProtocolIdeSession
+  foundryReviewContext?: FoundryReviewContext | null
   highlightedEvidenceRefId?: string | null
   onCitationClick?: (citation: EvidenceCitation) => void
 }): JSX.Element {
+  if (foundryReviewContext) {
+    return (
+      <div className="protocol-ide-source-pane" data-testid="protocol-ide-source-pane">
+        <div className="protocol-ide-source-pane__header">
+          <h2>Foundry Context</h2>
+          <p>{foundryReviewContext.protocolId} / {foundryReviewContext.variant}</p>
+        </div>
+        <div className="protocol-ide-source-pane__section">
+          <h3>Semantic Contract</h3>
+          <p>{foundryReviewContext.semanticContract.dataFirst}</p>
+          <p>{foundryReviewContext.semanticContract.ontologyAware}</p>
+        </div>
+        <div className="protocol-ide-source-pane__section">
+          <h3>Artifact Refs</h3>
+          <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: '0.72rem' }}>
+            {JSON.stringify(foundryReviewContext.artifactRefs, null, 2)}
+          </pre>
+        </div>
+        <div className="protocol-ide-source-pane__section">
+          <h3>Knowledge Layer</h3>
+          <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: '0.72rem' }}>
+            {JSON.stringify(foundryReviewContext.knowledgeLayer, null, 2)}
+          </pre>
+        </div>
+        <div className="protocol-ide-source-pane__section">
+          <h3>Extracted Text</h3>
+          <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: '0.72rem' }}>
+            {(foundryReviewContext.source.extractedText ?? 'No extracted text artifact found.').slice(0, 12000)}
+          </pre>
+        </div>
+      </div>
+    )
+  }
   return (
     <ProtocolIdeSourcePane
       session={session}
@@ -272,6 +311,26 @@ function buildEventGraphData(
   }
 }
 
+function foundryEventGraphData(
+  context?: FoundryReviewContext | null,
+): EventGraphData | null {
+  const raw = context?.artifacts.eventGraph
+  if (!raw || typeof raw !== 'object') return null
+  const record = raw as Record<string, unknown>
+  const events = Array.isArray(record.events) ? record.events : []
+  const labwares = Array.isArray(record.labwares) ? record.labwares : []
+  const deckPlacements = Array.isArray(record.deckPlacements)
+    ? record.deckPlacements
+    : Array.isArray(record.deck_placements)
+      ? record.deck_placements
+      : []
+  return {
+    events: events as EventGraphData['events'],
+    labwares: labwares as EventGraphData['labwares'],
+    deckPlacements: deckPlacements as EventGraphData['deckPlacements'],
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Event-graph review surface (center — primary)
 // ---------------------------------------------------------------------------
@@ -279,12 +338,14 @@ function buildEventGraphData(
 function EventGraphSurface({
   session,
   versionCounter,
+  foundryReviewContext,
   highlightedEvidenceRefId,
   onEvidenceClick,
   onIssueCardClick,
 }: {
   session: ProtocolIdeSession
   versionCounter: number
+  foundryReviewContext?: FoundryReviewContext | null
   highlightedEvidenceRefId?: string | null
   onEvidenceClick?: (evidenceRefId: string) => void
   onIssueCardClick?: (card: IssueCardRef) => void
@@ -300,6 +361,7 @@ function EventGraphSurface({
 
   // Fetch overlay summaries when the session has a projection
   useEffect(() => {
+    if (foundryReviewContext) return
     const ref = session.latestEventGraphRef
     if (!ref || !ref.id) return
 
@@ -316,10 +378,14 @@ function EventGraphSurface({
       .catch(() => {
         // Network error — summaries stay null, no console error
       })
-  }, [session.recordId, versionCounter])
+  }, [session.recordId, versionCounter, foundryReviewContext])
 
   // Fetch event-graph data when the session has a projection
   useEffect(() => {
+    if (foundryReviewContext) {
+      setEventGraphData(foundryEventGraphData(foundryReviewContext))
+      return
+    }
     const ref = session.latestEventGraphRef
     if (!ref || !ref.id) return
 
@@ -335,7 +401,7 @@ function EventGraphSurface({
       .catch(() => {
         // Network error — graph data stays null, no console error
       })
-  }, [session.recordId, versionCounter])
+  }, [session.recordId, versionCounter, foundryReviewContext])
 
   const issueCards = sessionIssueCardsToIssueCardRefs(session)
   const deckLabwareSummary = deckSummaryToDeckLabwareSummary(overlaySummaries?.deck ?? null)
@@ -368,10 +434,14 @@ function ActionRailPane({
   session,
   versionCounter,
   onVersionIncrement,
+  foundryReviewContext,
+  onFoundryReviewChanged,
 }: {
   session: ProtocolIdeSession
   versionCounter: number
   onVersionIncrement: () => void
+  foundryReviewContext?: FoundryReviewContext | null
+  onFoundryReviewChanged?: () => void
 }): JSX.Element {
   const [directiveText, setDirectiveText] = useState(session.latestDirectiveText ?? '')
   const [commentText, setCommentText] = useState('')
@@ -425,11 +495,11 @@ function ActionRailPane({
     setCommentText(text)
   }, [])
 
-  const handleSubmitFeedback = useCallback(async (comment: { text: string; anchors: Array<{ kind: string; semanticKey?: string; phaseId?: string; documentRef?: string; page?: number }> }) => {
+  const handleSubmitFeedback = useCallback(async (comment: { text: string; anchors: CommentAnchor[] }) => {
     if (!comment.text.trim()) return
     try {
       await apiClient.submitProtocolIdeFeedback(session.recordId, {
-        text: comment.text.trim(),
+        body: comment.text.trim(),
         anchors: comment.anchors,
       })
       setCommentText('')
@@ -501,7 +571,13 @@ function ActionRailPane({
       />
       <ProtocolIdeExportActions
         sessionId={session.recordId}
-        issueCardCount={issueCards.length}
+        issueCardCount={foundryReviewContext ? 1 : issueCards.length}
+        foundryReview={foundryReviewContext ? {
+          protocolId: foundryReviewContext.protocolId,
+          variant: foundryReviewContext.variant,
+        } : null}
+        foundryReviewStatus={foundryReviewContext?.status ?? null}
+        onFoundryReviewChanged={onFoundryReviewChanged}
       />
       {/* Plan execution button (spec-034) */}
       <div className="action-rail-section" data-testid="protocol-ide-plan-execution-section">
@@ -544,6 +620,7 @@ export function ProtocolIdeShell({
   onRefresh,
   isRefreshing,
   progressMessages,
+  foundryReviewContext,
 }: ProtocolIdeShellProps): JSX.Element {
   const hasSession = !!session
   const [versionCounter, setVersionCounter] = useState(0)
@@ -644,6 +721,7 @@ export function ProtocolIdeShell({
           {hasSession ? (
             <SourcePane
               session={session}
+              foundryReviewContext={foundryReviewContext}
               highlightedEvidenceRefId={selectedEvidenceRefId}
               onCitationClick={handleCitationClick}
             />
@@ -664,6 +742,7 @@ export function ProtocolIdeShell({
               <EventGraphSurface
                 session={session}
                 versionCounter={versionCounter}
+                foundryReviewContext={foundryReviewContext}
                 highlightedEvidenceRefId={selectedEvidenceRefId}
                 onEvidenceClick={handleEvidenceClick}
                 onIssueCardClick={handleIssueCardClick}
@@ -702,7 +781,13 @@ export function ProtocolIdeShell({
         {/* Right: summary / actions rail (secondary) */}
         {hasSession && (
           <div className="protocol-ide-right-pane" data-testid="protocol-ide-right-pane">
-            <ActionRailPane session={session} versionCounter={versionCounter} onVersionIncrement={() => setVersionCounter((v) => v + 1)} />
+            <ActionRailPane
+              session={session}
+              versionCounter={versionCounter}
+              onVersionIncrement={() => setVersionCounter((v) => v + 1)}
+              foundryReviewContext={foundryReviewContext}
+              onFoundryReviewChanged={onRefresh}
+            />
           </div>
         )}
       </div>

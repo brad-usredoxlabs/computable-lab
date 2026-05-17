@@ -1,0 +1,58 @@
+kind: protocol-foundry-patch-spec
+id: man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-ai-precompile-shape-and-fallback
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: bench_plate_multichannel
+fixClass: precompiler_reference_shape
+title: Fix ai_precompile shape mismatch and ensure candidateEvents are produced
+  from presegmented candidates
+rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch' and all
+  downstream passes (expand_biology_verbs, resolve_labware, mint_materials,
+  apply_directives) were skipped because outputs.ai_precompile.candidateEvents
+  evaluated to false. The pre-compiler supplied 10+43+12 deterministic
+  candidates from presegmented text, but the ai_precompile pass failed to
+  produce valid output (shape mismatch), causing the fallback path to produce
+  zero candidateEvents. The tag_prompt also had a JSON parse error
+  ('Unterminated string in JSON at position 769'), suggesting the LLM response
+  was truncated or malformed. The root cause is that createAiPrecompilePass in
+  ChatbotCompilePasses.ts either (1) produces output that doesn't match the
+  expected AiPrecompileOutput shape, or (2) the fallback when shape mismatches
+  produces empty candidateEvents instead of attempting to extract from the
+  presegmented candidates. Since presegmented candidates exist (55 total across
+  chunks), the compiler should be able to lower these to events even if the
+  LLM-based ai_precompile fails.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - ai_precompile pass no longer emits 'ai_precompile_shape_mismatch' warning
+    for this protocol
+  - outputs.ai_precompile.candidateEvents is a non-empty array when presegmented
+    candidates exist
+  - expand_biology_verbs pass is no longer skipped (when condition evaluates to
+    true)
+  - eventCount >= 3 for this protocol after the fix
+  - tag_prompt JSON parse errors are handled gracefully with retry or fallback
+    parsing
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 120
+  maxChangedLines: 250
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011863-memper-plus-memb-protein-extract-ug.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/verdict.yaml

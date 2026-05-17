@@ -1,0 +1,47 @@
+kind: protocol-foundry-patch-spec
+id: man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/fix-tag-prompt-json-resilience
+protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+variant: bench_plate_multichannel
+fixClass: extractor_prompt_contract
+title: Make tag_prompt LLM response parsing resilient to truncated/malformed JSON
+rationale: The tag_prompt pass fails with 'Unterminated string in JSON at
+  position 669', indicating the LLM response was truncated or contained
+  unescaped characters. This malformed JSON causes the entire ai_precompile
+  output to be invalid, triggering the shape mismatch fallback. The fix should
+  add JSON repair logic (e.g., attempting to close unclosed strings/arrays, or
+  using a lenient JSON parser) before declaring the response invalid. This
+  prevents cascading failures where a single malformed LLM response nullifies
+  all deterministic candidate extraction.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - tag_prompt pass must not emit 'tag_prompt_parse_error' warnings for
+    recoverable JSON truncation
+  - Partial but valid tagged phrases should be extracted even if the JSON is
+    truncated mid-string
+  - The ai_precompile pass should receive valid structured output from
+    tag_prompt even when the LLM response is imperfect
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 40
+  maxChangedLines: 100
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011593-nabspincolumn-5ml-antibody-purifi-ug.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/verdict.yaml

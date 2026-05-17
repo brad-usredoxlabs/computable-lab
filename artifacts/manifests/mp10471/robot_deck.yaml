@@ -1,0 +1,89 @@
+kind: protocol-foundry-variant-manifest
+protocolId: mp10471
+variant: robot_deck
+generated_at: 2026-05-16T01:29:12.166Z
+status: gap
+metrics:
+  eventCount: 0
+  blockerCount: 0
+  diagnosticCount: 17
+  extractorRepairExhaustedCount: 0
+  outcome: gap
+  foundryComplete: 0
+  qualityScore: 0.05
+  coverageEstimate: 0
+artifacts:
+  pdf:
+    path: pdfs/mp10471.pdf
+    exists: true
+    status: present
+  pdfMetadata:
+    path: pdfs/mp10471.pdf.procurement.yaml
+    exists: false
+    missingReason: PDF provenance sidecar not found
+  extractedText:
+    path: text/mp10471.txt
+    exists: true
+    status: present
+  segment:
+    path: segments/mp10471.yaml
+    exists: true
+    status: present
+  materialContext:
+    path: material-context/mp10471.yaml
+    exists: true
+    status: present
+  compiler:
+    path: compiler/mp10471/robot_deck.yaml
+    exists: true
+    status: gap
+  eventGraph:
+    path: event-graphs/mp10471/robot_deck.yaml
+    exists: true
+    status: blocked
+  executionScale:
+    path: execution-scale/mp10471/robot_deck.yaml
+    exists: true
+    status: ready
+  browserReport:
+    path: browser-review/mp10471/robot_deck/report.yaml
+    exists: true
+    status: skipped
+  architectVerdict:
+    path: architect/mp10471/robot_deck/verdict.yaml
+    exists: true
+    status: gap
+  patchSpecs:
+    - path: patch-specs/mp10471/robot_deck/fix-ai-precompile-shape-mismatch-and-fallback.yaml
+      exists: true
+      status: present
+    - path: patch-specs/mp10471/robot_deck/fix-deterministic-candidate-to-event-lowering.yaml
+      exists: true
+      status: present
+    - path: patch-specs/mp10471/robot_deck/fix-tag-prompt-json-parse-error.yaml
+      exists: true
+      status: present
+  adoptionDecision:
+    path: adoption/mp10471/robot_deck/adoption.yaml
+    exists: true
+    status: accepted
+  coderPatch:
+    path: code-patches/mp10471/robot_deck/result.yaml
+    exists: true
+    status: applied
+  criticReport:
+    path: patch-critic/mp10471/robot_deck/report.yaml
+    exists: true
+    status: present
+  rerunReport:
+    path: rerun/mp10471/robot_deck/rerun.yaml
+    exists: true
+    status: gap
+missingArtifacts:
+  - key: pdfMetadata
+    reason: PDF provenance sidecar not found
+humanReview:
+  status: unreviewed
+  reviewPath: human-review/mp10471/robot_deck/review.yaml
+nextActions:
+  - Open in Protocol IDE Foundry inbox for human/AI review.

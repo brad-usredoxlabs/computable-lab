@@ -13,15 +13,7 @@ eventGraph:
   description: Protocol Foundry preview graph for mp10471 (manual_tubes).
   status: draft
   protocolId: mp10471
-  events: &a1
-    - eventId: evt-mix-rrr68fam
-      event_type: mix
-      details: &a2 {}
-      labwareId: sample_plate
-    - eventId: evt-mix-ho5op84g
-      event_type: mix
-      details: &a3 {}
-      labwareId: sample_plate
+  events: &a1 []
   labwares:
     - labwareId: sample_plate
       labwareType: plate_96
@@ -35,26 +27,10 @@ eventGraph:
 terminalArtifacts:
   events: *a1
   directives: []
-  gaps:
-    - kind: unresolved_ref
-      message: generic_96_well_plate (no matching labware in prior snapshot)
-      details:
-        hint: generic_96_well_plate
-        reason: no matching labware in prior snapshot
-    - kind: unresolved_ref
-      message: generic_24x1_5ml_tube_rack (no matching labware in prior snapshot)
-      details:
-        hint: generic_24x1_5ml_tube_rack
-        reason: no matching labware in prior snapshot
+  gaps: []
   resolvedRefs: []
   labStateDelta:
-    events:
-      - eventId: evt-mix-rrr68fam
-        event_type: mix
-        details: *a2
-      - eventId: evt-mix-ho5op84g
-        event_type: mix
-        details: *a3
+    events: []
     snapshotAfter:
       deck: []
       mountedPipettes: []
@@ -65,15 +41,10 @@ terminalArtifacts:
   resolvedLabwareRefs: []
   deckLayoutPlan:
     pinned: []
-    autoFilled:
-      - slot: A1
-        labwareHint: unknown
-        reason: tipRack
+    autoFilled: []
     conflicts: []
   resourceManifest:
-    tipRacks:
-      - pipetteType: unknown
-        rackCount: 1
+    tipRacks: []
     reservoirLoads: []
     consumables: []
   executionScalePlan:
@@ -131,16 +102,11 @@ terminalArtifacts:
       - ASSIST PLUS lowering uses the same plate and lane semantics as bench
         multichannel planning, then binds them to deck-compatible labware and
         tool profiles.
-    blockers: &a4 []
+    blockers: &a2 []
   validationReport:
     findings: []
   instrumentRunFiles: []
-  downstreamQueue:
-    - kind: readout
-      description: Fluorescence readout for calcium signaling assay
-      params:
-        excitation: 494
-        emission: 516
+  downstreamQueue: []
 diagnostics:
   - severity: info
     code: foundry_presegmented_candidates
@@ -185,8 +151,41 @@ diagnostics:
     pass_id: extract_entities
     details: {}
   - severity: warning
+    code: tag_prompt_parse_error
+    message: "tag_prompt response was not valid JSON: Unexpected end of JSON input"
+    pass_id: tag_prompt
+    details:
+      raw_preview: "
+
+
+        {
+
+        \  \"taggedPhrases\": [
+
+        \    {
+
+        \      \"phrase\": \"Fluo-4 Direct™ Calcium Assay Kits\",
+
+        \      \"tag\": \"material\",
+
+        \      \"value\": \"Fluo-4 Direct Calcium Assay Kits\"
+
+        \    },
+
+        \    {
+
+        \      \"phrase\": \"Catalog nos. F10471, F10472, F10473\",
+
+        \      \"tag\": \"material\",
+
+        \      \"value\": \"F10471, F10472, F10473\"
+
+        \    },
+
+        \ "
+  - severity: warning
     code: ai_precompile_shape_mismatch
-    message: ai_precompile output shape mismatch
+    message: ai_precompile output shape mismatch, using fallback
     pass_id: ai_precompile
   - severity: info
     code: pass_skipped_by_when
@@ -200,14 +199,29 @@ diagnostics:
     pass_id: apply_directives
   - severity: info
     code: pass_skipped_by_when
+    message: "Pass 'expand_biology_verbs' skipped: when condition
+      'outputs.ai_precompile.candidateEvents' evaluated to false"
+    pass_id: expand_biology_verbs
+  - severity: info
+    code: pass_skipped_by_when
     message: "Pass 'resolve_labware' skipped: when condition
       'outputs.ai_precompile.candidateLabwares' evaluated to false"
     pass_id: resolve_labware
   - severity: info
     code: pass_skipped_by_when
+    message: "Pass 'resolve_prior_labware_references' skipped: when condition
+      'outputs.ai_precompile.priorLabwareRefs' evaluated to false"
+    pass_id: resolve_prior_labware_references
+  - severity: info
+    code: pass_skipped_by_when
     message: "Pass 'expand_patterns' skipped: when condition
       'outputs.ai_precompile.patternEvents' evaluated to false"
     pass_id: expand_patterns
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'emit_downstream_queue' skipped: when condition
+      'outputs.ai_precompile.downstreamCompileJobs' evaluated to false"
+    pass_id: emit_downstream_queue
   - severity: info
     code: execution_scale_plan_ready
     message: Execution scaling plan is ready for robot_deck.
@@ -216,7 +230,7 @@ diagnostics:
       sourceLevel: manual_tubes
       targetLevel: robot_deck
       profileId: robot-assist-plus-96
-      blockers: *a4
+      blockers: *a2
 foundryTestAssumptions:
   kind: protocol-foundry-test-assumption-profile
   protocolId: mp10471

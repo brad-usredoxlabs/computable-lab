@@ -15,8 +15,10 @@ import { runFoundryArchitectReview } from './FoundryArchitect.js';
 import { runPatchAdoption } from './FoundryImprovement.js';
 import { runFoundryCoderPatch } from './FoundryCoderPatch.js';
 import { runFoundryPatchCritic } from './FoundryCritic.js';
+import { syncFoundryReviewImplementationStatus } from './FoundryHumanReview.js';
 import { ingestFoundryPdfs } from './FoundryPdfIntake.js';
 import { writeFoundryReviewIndex } from './FoundryReviewIndex.js';
+import { writeFoundryManifests, writeFoundryOperationalStatus } from './FoundryManifest.js';
 import {
   fetchModelEndpointUsage,
   writeAllFoundryMetrics,
@@ -375,11 +377,15 @@ async function runCoderPatchTask(options: FoundryLoopOptions, ledger: FoundryLed
 
   // Load revision feedback if this is a revision run
   let revisionFeedback: string | undefined;
+  let attempt = 1;
   if (task.revisionMode) {
     const coderPatchPath = join(options.artifactRoot, 'code-patches', task.protocolId, task.variant, 'result.yaml');
     const existing = asRecord(await readYamlFile(coderPatchPath));
     revisionFeedback = (existing['revisionFeedback'] as string) || undefined;
+    const previousAttempt = typeof existing['attempt'] === 'number' ? existing['attempt'] : 1;
+    attempt = Math.min(previousAttempt + 1, 3);
   }
+  const coderRole = attempt === 1 ? 'junior' : 'senior';
 
   const result = await runFoundryCoderPatch({
     artifactRoot: options.artifactRoot,
@@ -394,6 +400,12 @@ async function runCoderPatchTask(options: FoundryLoopOptions, ledger: FoundryLed
       ...(options.architectBaseUrl ? { baseUrl: options.architectBaseUrl } : {}),
       ...(options.architectModel ? { model: options.architectModel } : {}),
     },
+    workerInference: {
+      ...(options.workerBaseUrl ? { baseUrl: options.workerBaseUrl } : {}),
+      ...(options.workerModel ? { model: options.workerModel } : {}),
+    },
+    attempt,
+    coderRole,
     ...(options.autoCommitPatches !== undefined ? { autoCommit: options.autoCommitPatches } : {}),
     ...(options.autoPushPatches !== undefined ? { autoPush: options.autoPushPatches } : {}),
     ...(revisionFeedback ? { revisionFeedback } : {}),
@@ -439,6 +451,10 @@ async function runPatchCriticTask(options: FoundryLoopOptions, ledger: FoundryLe
     protocolId: task.protocolId,
     variant: task.variant,
     repoRoot: options.repoRoot,
+    inference: {
+      ...(options.architectBaseUrl ? { baseUrl: options.architectBaseUrl } : {}),
+      ...(options.architectModel ? { model: options.architectModel } : {}),
+    },
   });
 
   // Clear patch_critic task from ledger to prevent re-selection.
@@ -457,21 +473,40 @@ async function runPatchCriticTask(options: FoundryLoopOptions, ledger: FoundryLe
 
   // If revision is needed, set the flag and write feedback to the coder patch result.
   // The next cycle will inject a revision coder_patch via readyTasks.
-  if (result.verdict === 'revision' && result.revisionFeedback) {
+  if (result.verdict !== 'pass') {
     const coderPatchPath = join(options.artifactRoot, 'code-patches', task.protocolId, task.variant, 'result.yaml');
     const existing = asRecord(await readYamlFile(coderPatchPath));
-    existing['revisionFeedback'] = result.revisionFeedback;
+    const attempt = typeof existing['attempt'] === 'number' ? existing['attempt'] : 1;
+    existing['revisionFeedback'] = result.revisionFeedback ?? [
+      'CRITIC REVISION FEEDBACK:',
+      '',
+      result.message,
+      '',
+      ...result.notes.map((note) => `- ${note}`),
+    ].join('\n');
     await writeYamlFile(coderPatchPath, existing);
 
     const protocol = ledger.protocol_status[task.protocolId];
     const item = protocol?.variants[task.variant];
     if (item) {
-      item.patchRevision = true;
+      item.patchRevision = attempt < 3;
+      await syncFoundryReviewImplementationStatus({
+        artifactRoot: options.artifactRoot,
+        protocolId: task.protocolId,
+        variant: task.variant,
+        workspaceRoot: options.repoRoot,
+      });
       await saveFoundryLedger(ledger);
       return;
     }
   }
 
+  await syncFoundryReviewImplementationStatus({
+    artifactRoot: options.artifactRoot,
+    protocolId: task.protocolId,
+    variant: task.variant,
+    workspaceRoot: options.repoRoot,
+  });
   await saveFoundryLedger(ledger);
 }
 
@@ -522,6 +557,12 @@ async function runRerunTask(options: FoundryLoopOptions, ledger: FoundryLedger, 
       eventCount: variantSummary.eventCount,
       blockerCount: variantSummary.blockerCount,
     },
+  });
+  await syncFoundryReviewImplementationStatus({
+    artifactRoot: options.artifactRoot,
+    protocolId: task.protocolId,
+    variant: task.variant,
+    workspaceRoot: options.repoRoot,
   });
   await saveFoundryLedger(ledger);
 }
@@ -617,6 +658,8 @@ export async function runFoundryLoop(options: FoundryLoopOptions): Promise<Found
       const limitedTasks = otherTasks.concat(coderPatchTasks.slice(0, 1));
       if (runnableTasks.length === 0) {
         await writeAllFoundryMetrics(ledger);
+        await writeFoundryManifests(ledger);
+        await writeFoundryOperationalStatus(ledger, tasks);
         if (options.writeReviewIndex !== false) await writeFoundryReviewIndex(ledger);
         if (!options.watch) break;
         await sleep(options.pollMs ?? 30_000);
@@ -628,6 +671,8 @@ export async function runFoundryLoop(options: FoundryLoopOptions): Promise<Found
       });
       ledger = await scanFoundryLedger(options.artifactRoot);
       await writeAllFoundryMetrics(ledger);
+      await writeFoundryManifests(ledger);
+      await writeFoundryOperationalStatus(ledger, tasks);
       if (options.writeReviewIndex !== false) await writeFoundryReviewIndex(ledger);
       if (!options.watch && cycles >= maxCycles) break;
     }

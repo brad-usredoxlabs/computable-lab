@@ -1,0 +1,9 @@
+kind: protocol-worker-report
+protocolId: cayman-natural-prodccuts
+variant: bench_plate_multichannel
+generated_at: 2026-05-10T12:50:25.735Z
+status: applied
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-natural-prodccuts/bench_plate_multichannel/result.yaml
+touchedFiles:
+  - server/src/compiler/biology/BiologyVerbExpander.ts
+message: patch applied and committed

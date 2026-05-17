@@ -22,6 +22,10 @@ modules:
 variants:
   - id: ot3_standard
     title: Opentrons Flex
+    sideLawn:
+      widthMm: 400
+      heightMm: 500
+      label: Labware lawn
     slots:
       - { id: A1, kind: standard, row: 1, col: 1, reachable: true }
       - { id: A2, kind: standard, row: 1, col: 2, reachable: true }

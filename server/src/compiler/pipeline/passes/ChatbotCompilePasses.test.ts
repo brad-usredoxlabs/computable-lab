@@ -26,6 +26,7 @@ import {
 } from './ChatbotCompilePasses.js';
 import type { PipelineState } from '../types.js';
 import type { CompletionRequest } from '../../../ai/types.js';
+import { PROTOCOL_INTENT_KIND, PROTOCOL_INTENT_VERSION } from '../../protocolIntent/ProtocolIntent.js';
 
 describe('createExtractEntitiesPass', () => {
   it('prompt-only input produces entities from single ExtractionRunnerService call', async () => {
@@ -260,6 +261,8 @@ describe('createAiPrecompilePass', () => {
     const callArg = (mockLlmClient.complete as Mock).mock.calls[0][0] as CompletionRequest;
     expect(callArg.model).toBe('test-model');
     expect(callArg.response_format).toEqual({ type: 'json_object' });
+    expect(callArg.messages[0]?.content).toContain('"protocolIntent"');
+    expect(callArg.messages[0]?.content).toContain('protocolIntent is the primary output');
   });
 
   it('invalid JSON produces warning diagnostic + empty output', async () => {
@@ -305,6 +308,71 @@ describe('createAiPrecompilePass', () => {
       code: 'ai_precompile_parse_error',
     });
     expect(result.diagnostics![0].message).toContain('LLM response was not valid JSON');
+  });
+
+  it('preserves partial protocolIntent from LLM JSON as a normalized pre-lowering plan', async () => {
+    const llmOutput = {
+      candidateEvents: [],
+      candidateLabwares: [],
+      unresolvedRefs: [],
+      protocolIntent: {
+        intentId: 'fire-assay',
+        steps: [{ id: 'step-1', index: 1, text: 'Place a 96 well TC-coated plate on deck slot D.' }],
+        resources: {
+          labwareInstances: [
+            {
+              id: 'plate_D',
+              labwareHint: '96 well TC-coated plate',
+              deckSlot: 'D',
+              initialOrientation: 'landscape',
+            },
+          ],
+          materialDefinitions: [],
+        },
+        operations: [
+          { id: 'op-place-plate', kind: 'place_labware', labware: 'plate_D' },
+        ],
+      },
+    };
+
+    const mockLlmClient = {
+      complete: vi.fn().mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify(llmOutput) } }],
+      }),
+    } as unknown as LlmClient;
+
+    const pass = createAiPrecompilePass({ llmClient: mockLlmClient });
+    const result = await pass.run({
+      pass_id: 'ai_precompile',
+      state: {
+        input: { prompt: 'Place a 96 well TC-coated plate on deck slot D.', attachments: [] },
+        context: {},
+        meta: {},
+        outputs: new Map(),
+        diagnostics: [],
+      },
+    });
+
+    const output = result.output as AiPrecompileOutput;
+    expect(output.protocolIntent).toMatchObject({
+      kind: PROTOCOL_INTENT_KIND,
+      version: PROTOCOL_INTENT_VERSION,
+      intentId: 'fire-assay',
+      resources: {
+        labwareInstances: [{ id: 'plate_D', deckSlot: 'D' }],
+        materialDefinitions: [],
+        materialFormulations: [],
+        materialAliquots: [],
+        pipettes: [],
+        tips: [],
+        waste: [],
+      },
+      operations: [{ id: 'op-place-plate', kind: 'place_labware' }],
+      patterns: [],
+      assumptions: [],
+      unresolved: [],
+    });
+    expect(output.candidateEvents).toEqual([]);
   });
 
   it('missing upstream entities is tolerated (treated as [])', async () => {
@@ -937,6 +1005,45 @@ describe('createLabwareResolvePass', () => {
     expect(mockSearchLabwareByHint).toHaveBeenCalledWith('custom reservoir');
   });
 
+  it('includes labware candidates lowered from ProtocolIntent resources', async () => {
+    const mockSearchLabwareByHint = vi.fn().mockResolvedValue([]);
+
+    const pass = createLabwareResolvePass({
+      searchLabwareByHint: mockSearchLabwareByHint,
+    });
+
+    const mockState: PipelineState = {
+      input: {},
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['ai_precompile', { candidateLabwares: [] }],
+        ['lower_protocol_intent', {
+          candidateLabwares: [
+            { hint: '96 well TC-coated plate', reason: 'ProtocolIntent labware resource plate_D', deckSlot: 'D' },
+          ],
+        }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = await pass.run({
+      pass_id: 'resolve_labware',
+      state: mockState,
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as LabwareResolveOutput;
+    expect(output.labwareAdditions).toEqual([
+      {
+        recordId: '96 well TC-coated plate',
+        reason: 'ProtocolIntent labware resource plate_D',
+        deckSlot: 'D',
+      },
+    ]);
+    expect(mockSearchLabwareByHint).toHaveBeenCalledWith('96 well TC-coated plate');
+  });
+
   it('zero matches without reason uses default reason', async () => {
     const mockSearchLabwareByHint = vi.fn().mockResolvedValue([]);
 
@@ -1561,6 +1668,40 @@ describe('createApplyDirectivesPass', () => {
     expect(syncResult.output.directives).toHaveLength(2);
     expect(syncResult.output.directives[0]!.directiveId).toBe('dir_1');
     expect(syncResult.output.directives[1]!.directiveId).toBe('dir_2');
+  });
+
+  it('includes directives lowered from ProtocolIntent operations', () => {
+    const pass = createApplyDirectivesPass();
+
+    const mockState: PipelineState = {
+      input: {},
+      context: {},
+      meta: {},
+      outputs: new Map([
+        ['ai_precompile', { directives: [] }],
+        ['lower_protocol_intent', {
+          directives: [
+            { kind: 'reorient_labware', params: { labwareInstanceId: 'plate_D', orientation: 'portrait' } },
+          ],
+        }],
+      ]),
+      diagnostics: [],
+    };
+
+    const result = pass.run({
+      pass_id: 'apply_directives',
+      state: mockState,
+    });
+
+    const syncResult = result as { ok: boolean; output: ApplyDirectivesPassOutput };
+    expect(syncResult.ok).toBe(true);
+    expect(syncResult.output.directives).toEqual([
+      {
+        directiveId: 'dir_1',
+        kind: 'reorient_labware',
+        params: { labwareInstanceId: 'plate_D', orientation: 'portrait' },
+      },
+    ]);
   });
 
   it('empty directives produces empty array', () => {

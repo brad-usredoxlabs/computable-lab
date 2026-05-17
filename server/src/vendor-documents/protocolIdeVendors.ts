@@ -24,6 +24,15 @@ export type ProtocolIdeVendorId =
   | 'cayman'
   | 'thomas';
 
+export const PROTOCOL_IDE_VENDORS = [
+  'cayman',
+  'fisher',
+  'sigma',
+  'thermo',
+  'thomas',
+  'vwr',
+] as const satisfies readonly ProtocolIdeVendorId[];
+
 // ---------------------------------------------------------------------------
 // Document-oriented result shape for Protocol IDE picker.
 // ---------------------------------------------------------------------------

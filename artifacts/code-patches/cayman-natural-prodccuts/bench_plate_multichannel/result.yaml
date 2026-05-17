@@ -1,0 +1,10 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: cayman-natural-prodccuts
+variant: bench_plate_multichannel
+generated_at: 2026-05-10T12:50:25.734Z
+status: applied
+selectedSpecId: cayman-natural-prodccuts/bench_plate_multichannel/add-plate-map-verb-lowering
+touchedFiles:
+  - server/src/compiler/biology/BiologyVerbExpander.ts
+commit: 5160fa87d07efc44e77b9bb3e7ab8b1a48616bc9
+message: Patch applied and committed.

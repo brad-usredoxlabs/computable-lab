@@ -1,0 +1,34 @@
+kind: protocol-foundry-patch-spec
+id: spec-fix-2026-05-17-x1hmb
+source: event-editor-fixit
+generated_at: 2026-05-17T12:24:37.628Z
+fixClass: compiler
+title: Fix deterministic precompile to emit deck placement for 'put [labware] on
+  [slot]' instead of treating slot as a well address
+rationale: "The compiler trace shows that the noun '96-well plate' was correctly
+  resolved to a labware definition, but the locative phrase 'on B2' was
+  incorrectly parsed as a well address (parameters.wells: ['B2']) rather than a
+  deck slot. This caused the resolve_labware pass to produce no
+  labwareAdditions, resulting in zero placements. The fix must be in the
+  deterministic precompile grammar/lowering logic to detect when a resolved
+  labware noun is followed by a deck slot token and emit a placement candidate
+  with deckSlot instead of a liquid handling event with wells."
+ownedFiles:
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+  - server/src/compiler/precompile/NounPhraseResolver.ts
+  - server/src/compiler/pipeline/fixtures/spec-fix-2026-05-17-x1hmb.yaml
+acceptance:
+  - The prompt 'put a 96-well plate on B2' must result in a labware addition for
+    'lbw-def-generic-96-well-plate' with deckSlot 'B2'.
+  - "The resulting deckLayoutPlan.pinned must contain an entry with slot: 'B2'
+    and labwareHint: 'lbw-def-generic-96-well-plate'."
+  - The prompt must NOT generate any liquid handling events (e.g., add_material)
+    for this input.
+  - "Guardrail: A prompt like 'add 100ul to well A1 of the 96-well plate' must
+    still resolve 'A1' as a well address and generate an add_material event, not
+    a placement."
+tests:
+  - cd server && npx vitest run
+    src/compiler/pipeline/fixtures/FixItFixtures.test.ts -t
+    'spec-fix-2026-05-17-x1hmb'
+failingPrompt: put a 96-well plate on B2

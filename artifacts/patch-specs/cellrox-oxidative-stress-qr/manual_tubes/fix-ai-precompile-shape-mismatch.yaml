@@ -1,0 +1,51 @@
+kind: protocol-foundry-patch-spec
+id: cellrox-oxidative-stress-qr/manual_tubes/fix-ai-precompile-shape-mismatch
+protocolId: cellrox-oxidative-stress-qr
+variant: manual_tubes
+fixClass: precompiler_reference_shape
+title: Fix ai_precompile output shape mismatch to enable labware/material
+  resolution passes
+rationale: The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
+  ai_precompile pass output does not match the expected schema. This causes
+  downstream passes (resolve_labware, resolve_prior_labware_references,
+  mint_materials, apply_directives, expand_patterns) to be skipped because their
+  'when' conditions evaluate to false (e.g.,
+  'outputs.ai_precompile.candidateLabwares' is false/missing). The pre-compiler
+  segments show no candidates, entities, or labware hints were extracted,
+  meaning the ai_precompile pass either produced an empty or malformed output.
+  This is the root cause of missing labware resolution and material context.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - ai_precompile pass output matches the expected AiPrecompileOutput schema
+    with candidateLabwares, mintMaterials, directives, priorLabwareRefs, and
+    patternEvents fields
+  - resolve_labware pass is no longer skipped for protocols with labware
+    references in PDF text
+  - mint_materials pass is no longer skipped when materials are detected in
+    protocol text
+  - No 'ai_precompile_shape_mismatch' warning in diagnostics for this protocol
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 60
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cellrox-oxidative-stress-qr/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cellrox-oxidative-stress-qr/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cellrox-oxidative-stress-qr/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cellrox-oxidative-stress-qr/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cellrox-oxidative-stress-qr/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cellrox-oxidative-stress-qr/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cellrox-oxidative-stress-qr.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cellrox-oxidative-stress-qr.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cellrox-oxidative-stress-qr.txt
+failureEvidence:
+  eventCount: 10
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cellrox-oxidative-stress-qr/manual_tubes/verdict.yaml

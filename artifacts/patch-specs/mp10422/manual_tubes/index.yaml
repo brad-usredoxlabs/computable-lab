@@ -2,5 +2,5 @@ kind: protocol-foundry-patch-spec-index
 protocolId: mp10422
 variant: manual_tubes
 patchSpecs:
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/manual_tubes/fix-material-catalog-cellrox-reagents.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/manual_tubes/fix-ai-precompile-shape-mismatch-and-fallback.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/manual_tubes/fix-tag-prompt-json-parse-error.yaml

@@ -1,0 +1,54 @@
+kind: protocol-foundry-patch-spec
+id: man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-deterministic-candidate-to-event-lowering
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: robot_deck
+fixClass: compiler_event_coverage
+title: Lower deterministic presegmented candidates to candidateEvents when
+  ai_precompile fails
+rationale: The diagnostics show 66 deterministic candidates were extracted
+  (11+43+12) but none were converted to events because the ai_precompile pass
+  failed to produce candidateEvents. The compiler has a fallback mechanism but
+  it appears to produce an empty candidateEvents array. We need to ensure that
+  when ai_precompile fails, the deterministic candidates (which contain
+  protocol-action evidence) are automatically lowered to candidateEvents using
+  the BiologyVerbExpander. This requires wiring the deterministic candidate
+  output to the candidateEvents field in the fallback AiPrecompileOutput, and
+  ensuring the expand_biology_verbs pass can process these candidates.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+  - server/src/compiler/biology/BiologyVerbExpander.ts
+acceptance:
+  - When ai_precompile produces no candidateEvents, deterministic candidates
+    from extract_entities pass are used as fallback
+  - Deterministic candidates with protocol-action evidence are converted to
+    candidateEvents with appropriate verb types
+  - The expand_biology_verbs pass processes these fallback candidateEvents and
+    produces concrete events
+  - eventCount >= 3 for the Mem-PER Plus protocol which has clear
+    centrifugation, resuspension, and incubation steps
+  - Labware references (5mL microcentrifuge tubes, cell scraper) are resolved
+    from deterministic candidates
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 150
+  maxChangedLines: 300
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011863-memper-plus-memb-protein-extract-ug.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/verdict.yaml

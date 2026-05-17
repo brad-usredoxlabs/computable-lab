@@ -1,22 +1,17 @@
 kind: protocol-foundry-adoption-decision
 protocolId: cayman-immuno-oncology
 variant: robot_deck
-generated_at: 2026-05-09T19:27:45.565Z
+generated_at: 2026-05-10T12:38:27.217Z
 status: accepted
 applyPatches: true
 patchSpecs:
-  - id: cayman-immuno-oncology/robot_deck/fix-ai-precompile-shape-mismatch
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+  - id: cayman-immuno-oncology/robot_deck/fix-ai-precompile-shape-mismatch-and-fallback
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/robot_deck/fix-ai-precompile-shape-mismatch-and-fallback.yaml
     fixClass: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch to enable downstream passes
-  - id: cayman-immuno-oncology/robot_deck/fix-labware-resolution-gaps
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/robot_deck/fix-labware-resolution-gaps.yaml
-    fixClass: labware_alias_or_resolver
-    title: Resolve generic_96_well_plate, generic_12_well_reservoir,
-      generic_96_tip_rack labware references
-  - id: cayman-immuno-oncology/robot_deck/fix-unknown-biology-verbs
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/robot_deck/fix-unknown-biology-verbs.yaml
-    fixClass: compiler_event_coverage
-    title: Register expanders for bind, prefer, use, report verbs in
-      BiologyVerbExpander
+    title: Fix ai_precompile shape mismatch and ensure candidateEvents are populated
+      from presegmented candidates
+  - id: cayman-immuno-oncology/robot_deck/fix-tag-prompt-json-parse-error
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/robot_deck/fix-tag-prompt-json-parse-error.yaml
+    fixClass: extractor_prompt_contract
+    title: Fix tag_prompt JSON parse error from unterminated string
 message: Patch specs accepted for unattended coder tournament execution.

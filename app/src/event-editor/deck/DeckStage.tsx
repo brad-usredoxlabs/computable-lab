@@ -3,6 +3,7 @@ import { getPlatformManifest, getVariantManifest } from '../../shared/lib/platfo
 import { DeckGrid } from './DeckGrid'
 import { LawnSurface } from './LawnSurface'
 import { LabwareFocus } from '../focus/LabwareFocus'
+import { PreviewActionBar } from './PreviewActionBar'
 
 export function DeckStage() {
   const { state } = useEventEditor()
@@ -13,6 +14,7 @@ export function DeckStage() {
     return (
       <main className="stage" aria-label="Deck stage">
         <div className="stage__placeholder">No deck variant resolved.</div>
+        <PreviewActionBar />
       </main>
     )
   }
@@ -21,6 +23,7 @@ export function DeckStage() {
     return (
       <main className="stage" aria-label="Labware focus">
         <LabwareFocus />
+        <PreviewActionBar />
       </main>
     )
   }
@@ -36,6 +39,7 @@ export function DeckStage() {
           <strong>{platform.label}</strong>
           {variant.title} has no deck slots and no freeform surface yet.
         </div>
+        <PreviewActionBar />
       </main>
     )
   }
@@ -58,6 +62,7 @@ export function DeckStage() {
           title={sideLawn.label ?? 'Labware lawn'}
         />
       ) : null}
+      <PreviewActionBar />
     </main>
   )
 }

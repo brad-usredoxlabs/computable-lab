@@ -1,0 +1,9 @@
+kind: protocol-worker-report
+protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+variant: bench_plate_multichannel
+generated_at: 2026-05-09T21:16:08.040Z
+status: applied
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/result.yaml
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+message: patch applied and committed

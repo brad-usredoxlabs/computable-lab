@@ -2,8 +2,8 @@ kind: protocol-foundry-compiler-result
 protocolId: mp10471
 variant: robot_deck
 outcome: gap
-rawOutcome: gap
-eventCount: 2
+rawOutcome: complete
+eventCount: 0
 diagnostics:
   - severity: info
     code: foundry_presegmented_candidates
@@ -48,8 +48,42 @@ diagnostics:
     pass_id: extract_entities
     details: {}
   - severity: warning
+    code: tag_prompt_parse_error
+    message: "tag_prompt response was not valid JSON: Unterminated string in JSON at
+      position 594"
+    pass_id: tag_prompt
+    details:
+      raw_preview: "
+
+
+        {
+
+        \  \"taggedPhrases\": [
+
+        \    {
+
+        \      \"phrase\": \"Fluo-4 Direct™ Calcium Assay Kits\",
+
+        \      \"tag\": \"material\",
+
+        \      \"value\": \"Fluo-4 Direct Calcium Assay Kits\"
+
+        \    },
+
+        \    {
+
+        \      \"phrase\": \"Catalog nos. F10471, F10472, F10473\",
+
+        \      \"tag\": \"material\",
+
+        \      \"value\": \"F10471, F10472, F10473\"
+
+        \    },
+
+        \ "
+  - severity: warning
     code: ai_precompile_shape_mismatch
-    message: ai_precompile output shape mismatch
+    message: ai_precompile output shape mismatch, using fallback
     pass_id: ai_precompile
   - severity: info
     code: pass_skipped_by_when
@@ -61,6 +95,11 @@ diagnostics:
     message: "Pass 'apply_directives' skipped: when condition
       'outputs.ai_precompile.directives' evaluated to false"
     pass_id: apply_directives
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_biology_verbs' skipped: when condition
+      'outputs.ai_precompile.candidateEvents' evaluated to false"
+    pass_id: expand_biology_verbs
   - severity: info
     code: pass_skipped_by_when
     message: "Pass 'resolve_labware' skipped: when condition
@@ -77,6 +116,11 @@ diagnostics:
       'outputs.ai_precompile.patternEvents' evaluated to false"
     pass_id: expand_patterns
   - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'emit_downstream_queue' skipped: when condition
+      'outputs.ai_precompile.downstreamCompileJobs' evaluated to false"
+    pass_id: emit_downstream_queue
+  - severity: info
     code: execution_scale_plan_ready
     message: Execution scaling plan is ready for robot_deck.
     pass_id: derive_execution_scale_plan
@@ -86,15 +130,6 @@ diagnostics:
       profileId: robot-assist-plus-96
       blockers: []
 extractorRepairExhaustedCount: 0
-gaps:
-  - kind: clarification
-    message: The prompt contains execution configuration instructions ('Bind the
-      plate/multichannel plan...', 'Prefer ASSIST PLUS...', 'report blockers')
-      and a full vendor protocol text, but lacks a specific biological
-      experiment step description to compile into liquid handling events. The
-      deterministic assumptions provide test data, but no explicit action
-      command (e.g., 'Run the Fluo-4 assay') was provided in the user's
-      freetext. Please specify the experiment step to compile (e.g., 'Prepare
-      the 2X loading solution' or 'Add loading solution to cells').
+gaps: []
 foundryTestAssumptionsRef: /home/brad/git/computable-foundry/artifacts/assumptions/mp10471/robot_deck.yaml
 terminalArtifactsRef: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10471/robot_deck.yaml

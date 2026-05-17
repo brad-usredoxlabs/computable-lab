@@ -1,0 +1,51 @@
+kind: protocol-foundry-patch-spec
+id: an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-ai-precompile-shape-mismatch-and-fallback
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: bench_plate_multichannel
+fixClass: precompiler_reference_shape
+title: Fix ai_precompile shape mismatch and ensure fallback produces candidateEvents
+rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch' and
+  'tag_prompt_parse_error' (Unterminated string in JSON). The ai_precompile pass
+  failed to produce valid output, and the fallback path produced empty
+  candidateEvents, causing all downstream passes (expand_biology_verbs,
+  resolve_labware, etc.) to be skipped. The PDF contains clear protocol steps
+  (weigh 100mg, add heptane/hexane 5mL, add KOH 200uL, vortex, wait, GC
+  analysis) that should have been extracted. The root cause is that the
+  ai_precompile pass's JSON parsing is fragile and the fallback doesn't attempt
+  deterministic extraction from the presegmented candidates (7+12+2+1=22
+  candidates were supplied by Foundry).
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - ai_precompile pass must handle JSON parse errors gracefully without crashing
+    the pipeline
+  - When ai_precompile output shape mismatches, the fallback must attempt to use
+    presegmented candidates to produce candidateEvents
+  - For this protocol, at least 5 candidate events should be produced
+    (weigh_sample, add_solvent, add_reagent, vortex, wait, gc_inject)
+  - Downstream passes (expand_biology_verbs, resolve_labware) must not be
+    skipped when candidateEvents are present
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 120
+  maxChangedLines: 250
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/an-fame-oil-gc-pal3-5994-8543en-agilent.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/verdict.yaml

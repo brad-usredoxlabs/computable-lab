@@ -8,6 +8,10 @@ import {
 } from '../foundry/FoundryLedger.js';
 import type { FoundryWorkStage, FoundryWorkStatus } from '../foundry/FoundryArtifacts.js';
 import type { FoundryVariant } from '../foundry/ProtocolFoundryCompileRunner.js';
+import {
+  writeFoundryManifests,
+  writeFoundryOperationalStatus,
+} from '../foundry/FoundryManifest.js';
 
 function readArg(name: string, args: string[]): string | undefined {
   const index = args.indexOf(name);
@@ -22,6 +26,8 @@ function usage(): string {
     '',
     'Commands:',
     '  scan                         Scan durable artifacts and update queues/stage-ledger.yaml.',
+    '  manifest                     Write per-protocol/variant manifests and manifests/index.yaml.',
+    '  status                       Write and print operational status rollups.',
     '  summary                      Print protocol/variant status counts.',
     '  next                         Print currently runnable tasks.',
     '  mark --protocol-id <id> --variant <variant> --stage <stage> --status <status>',
@@ -43,7 +49,32 @@ async function main(): Promise<number> {
 
   if (command === 'scan') {
     const ledger = await scanFoundryLedger(artifactRoot);
-    console.log(JSON.stringify({ ledger: `${artifactRoot}/queues/stage-ledger.yaml`, protocols: ledger.protocols.length }, null, 2));
+    await writeFoundryManifests(ledger);
+    await writeFoundryOperationalStatus(ledger, readyTasks(ledger));
+    console.log(JSON.stringify({
+      ledger: `${artifactRoot}/queues/stage-ledger.yaml`,
+      manifests: `${artifactRoot}/manifests/index.yaml`,
+      status: `${artifactRoot}/manifests/status.yaml`,
+      protocols: ledger.protocols.length,
+    }, null, 2));
+    return 0;
+  }
+
+  if (command === 'manifest') {
+    const ledger = await scanFoundryLedger(artifactRoot);
+    const index = await writeFoundryManifests(ledger);
+    console.log(JSON.stringify({
+      path: `${artifactRoot}/manifests/index.yaml`,
+      protocolCount: index.protocolCount,
+      variantCount: index.variantCount,
+    }, null, 2));
+    return 0;
+  }
+
+  if (command === 'status') {
+    const ledger = await scanFoundryLedger(artifactRoot);
+    const status = await writeFoundryOperationalStatus(ledger, readyTasks(ledger));
+    console.log(JSON.stringify(status, null, 2));
     return 0;
   }
 

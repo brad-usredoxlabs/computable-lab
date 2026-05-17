@@ -1,0 +1,55 @@
+kind: protocol-foundry-patch-spec
+id: man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-deterministic-fallback-from-presegmented
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: bench_plate_multichannel
+fixClass: compiler_event_coverage
+title: Add deterministic fallback to lower presegmented candidates to events
+  when ai_precompile fails
+rationale: Even after fixing the shape mismatch, the ai_precompile pass may
+  still fail for edge cases. The compiler currently has no deterministic
+  fallback path to convert presegmented candidates (which are already extracted
+  entities with protocol-action evidence) into candidateEvents. The diagnostics
+  show 55 deterministic candidates were supplied across chunks, but these are
+  never converted to events because the ai_precompile pass is the sole gate. A
+  deterministic fallback in ChatbotCompilePasses.ts should detect when
+  ai_precompile produces empty candidateEvents and presegmented candidates
+  exist, then use DeterministicPrecompilePass logic to lower those candidates to
+  basic events (e.g., aspirate, dispense, incubate, centrifuge based on verb
+  patterns in candidate text). This ensures the compiler never produces zero
+  events when presegmented evidence exists.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+acceptance:
+  - When ai_precompile.candidateEvents is empty but presegmented candidates
+    exist, a fallback pass produces at least 3 candidateEvents
+  - eventCount >= 3 for protocols with presegmented candidates but failed
+    ai_precompile
+  - Fallback events include correct verb types (aspirate, dispense, incubate,
+    centrifuge) based on candidate text patterns
+  - "No regression: protocols with successful ai_precompile continue to use
+    ai_precompile output"
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 150
+  maxChangedLines: 300
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011863-memper-plus-memb-protein-extract-ug.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/verdict.yaml

@@ -2,7 +2,7 @@ kind: protocol-foundry-compiler-result
 protocolId: cayman-natural-prodccuts
 variant: manual_tubes
 outcome: gap
-rawOutcome: gap
+rawOutcome: complete
 eventCount: 0
 diagnostics:
   - severity: info
@@ -186,8 +186,28 @@ diagnostics:
     pass_id: extract_entities
     details: {}
   - severity: warning
+    code: tag_prompt_parse_error
+    message: "tag_prompt response was not valid JSON: Expected property name or '}'
+      in JSON at position 690"
+    pass_id: tag_prompt
+    details:
+      raw_preview: |-
+        
+
+        {
+          "taggedPhrases": [
+            {
+              "phrase": "Protocol Foundry compile target",
+              "tag": "protocol",
+              "value": "cayman-natural-prodccuts"
+            },
+            {
+              "phrase": "Natural Products Screening Library (96-Well)",
+              "tag": "material",
+              "value": "Natural Products Screening Librar
+  - severity: warning
     code: ai_precompile_shape_mismatch
-    message: ai_precompile output shape mismatch
+    message: ai_precompile output shape mismatch, using fallback
     pass_id: ai_precompile
   - severity: info
     code: pass_skipped_by_when
@@ -234,13 +254,6 @@ diagnostics:
       profileId: robot-assist-plus-96
       blockers: []
 extractorRepairExhaustedCount: 0
-gaps:
-  - kind: clarification
-    message: The provided protocol text is a library inventory list (Natural
-      Products Screening Library) and does not contain specific experimental
-      steps, liquid handling instructions, or reagent preparation details. It
-      lists 96-well plate contents by item number and well position but lacks
-      actions such as 'reconstitute', 'dilute', 'transfer', or 'incubate'.
-      Please provide the specific experimental protocol steps to compile.
+gaps: []
 foundryTestAssumptionsRef: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-natural-prodccuts/manual_tubes.yaml
 terminalArtifactsRef: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-natural-prodccuts/manual_tubes.yaml

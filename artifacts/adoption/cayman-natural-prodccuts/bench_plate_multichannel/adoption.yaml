@@ -1,0 +1,17 @@
+kind: protocol-foundry-adoption-decision
+protocolId: cayman-natural-prodccuts
+variant: bench_plate_multichannel
+generated_at: 2026-05-10T12:45:47.393Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: cayman-natural-prodccuts/bench_plate_multichannel/add-plate-map-verb-lowering
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/bench_plate_multichannel/add-plate-map-verb-lowering.yaml
+    fixClass: compiler_event_coverage
+    title: Add plate-map verb lowering for 96-well screening library protocols
+  - id: cayman-natural-prodccuts/bench_plate_multichannel/fix-precompiler-plate-map-candidate-shape
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/bench_plate_multichannel/fix-precompiler-plate-map-candidate-shape.yaml
+    fixClass: precompiler_reference_shape
+    title: Ensure pre-compiler emits structured plate-map candidates with well
+      positions and compound names
+message: Patch specs accepted for unattended coder tournament execution.

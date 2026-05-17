@@ -1,0 +1,49 @@
+kind: protocol-foundry-patch-spec
+id: mp10422/robot_deck/fix-tag-prompt-json-parsing
+protocolId: mp10422
+variant: robot_deck
+fixClass: precompiler_reference_shape
+title: Fix tag_prompt JSON parsing to handle markdown code fences
+rationale: "The compiler diagnostic 'tag_prompt response was not valid JSON:
+  Unexpected token 'B', \"\\n\\nBased on t\"...' shows that the LLM returned a
+  markdown-wrapped JSON response (starting with prose and ```json fences), but
+  the parser tried to parse the raw string directly. This caused the tag_prompt
+  pass to fail, which cascaded into ai_precompile_shape_mismatch because the
+  downstream ai_precompile pass depends on properly tagged entities. The fix
+  must strip markdown code fences and prose before JSON.parse in the tag_prompt
+  pass."
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - tag_prompt pass successfully parses LLM responses that include markdown code
+    fences (```json ... ```)
+  - tag_prompt pass handles LLM responses with leading prose before the JSON
+    block
+  - ai_precompile_shape_mismatch warning no longer appears for protocols with
+    valid LLM JSON output
+  - candidateEvents are populated from the tag_prompt output instead of being
+    empty
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 40
+  maxChangedLines: 100
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10422/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10422/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10422/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/mp10422/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/mp10422/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/mp10422.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10422.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/mp10422.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10422/robot_deck/verdict.yaml

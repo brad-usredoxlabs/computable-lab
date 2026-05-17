@@ -1,0 +1,48 @@
+kind: protocol-foundry-patch-spec
+id: an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-presegmented-candidate-extraction
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: robot_deck
+fixClass: extractor_prompt_contract
+title: Improve presegmented candidate extraction for GC-FID protocols
+rationale: The pre-compiler extracted 8+12+2+1=23 deterministic candidates, but
+  these were not converted into actionable events. The PDF text contains clear
+  protocol steps (weigh sample, add heptane/hexane, add KOH in MeOH, vortex,
+  wait, GC analysis) that should be extracted as candidate events. The
+  extraction service or prompt contract needs to be improved to recognize GC-FID
+  sample preparation workflows and extract the key verbs (weigh, add, vortex,
+  wait, inject) as protocol actions.
+ownedFiles:
+  - server/src/extract/ExtractionRunnerService.ts
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+acceptance:
+  - Pre-compiler extracts at least 5 candidate events from the FAMEs protocol
+    text
+  - "Extracted events include key verbs: weigh, add, vortex, wait, inject"
+  - Candidate events include volume and reagent information (e.g., 200 µL KOH in
+    MeOH, 5 mL heptane/hexane)
+  - Extraction works for both base-catalyzed (M5795-14000) and acid-base
+    catalyzed (M5795-14001) workflows
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 120
+  maxChangedLines: 300
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/an-fame-oil-gc-pal3-5994-8543en-agilent.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/verdict.yaml

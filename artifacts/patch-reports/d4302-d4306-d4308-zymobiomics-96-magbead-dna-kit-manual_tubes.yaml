@@ -1,0 +1,9 @@
+kind: protocol-worker-report
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: manual_tubes
+generated_at: 2026-05-09T21:00:47.481Z
+status: applied
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/result.yaml
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+message: patch applied and committed

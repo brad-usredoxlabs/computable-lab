@@ -1,0 +1,27 @@
+kind: protocol-foundry-patch-spec
+id: spec-fix-2026-05-16-zjfsp
+source: event-editor-fixit
+generated_at: 2026-05-16T23:21:57.831Z
+fixClass: compiler
+title: Fix slot inference for bare slot tokens following prepositions in
+  DeterministicPrecompilePass
+rationale: The DeterministicPrecompilePass currently uses a strict regex
+  requiring the word 'slot' to identify slot references. This causes bare slot
+  tokens (e.g., 'B2') following prepositions like 'on' to be ignored, resulting
+  in no placement events. The fix extends the slot extraction logic in
+  DeterministicPrecompilePass to recognize bare slot tokens when they appear
+  after specific prepositions.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+  - server/src/compiler/pipeline/fixtures/spec-fix-2026-05-16-zjfsp.yaml
+acceptance:
+  - The prompt 'Place a 96-well plate on B2' results in a placement event for
+    the 96-well plate.
+  - The placement event targets slot B2.
+  - The deck layout includes the Generic 96-Well Plate in slot B2.
+  - No skips or errors are generated for this prompt.
+tests:
+  - cd server && npx vitest run
+    src/compiler/pipeline/fixtures/FixItFixtures.test.ts -t
+    'spec-fix-2026-05-16-zjfsp'
+failingPrompt: Place a 96-well plate on B2

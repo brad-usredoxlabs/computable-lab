@@ -1,0 +1,42 @@
+kind: protocol-foundry-patch-spec
+id: man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-labware-resolution-for-tubes
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: manual_tubes
+fixClass: labware_alias_or_resolver
+title: Resolve 2mL centrifuge tube labware reference
+rationale: The compiler reports an unresolved_ref gap for '2mL centrifuge tube'
+  with 'no matching labware in prior snapshot'. The PDF explicitly requires '5mL
+  microcentrifuge tubes' and '2mL Dounce Tissue Grinder'. The labware resolver
+  should map these common labware types to existing definitions in the
+  LabwareDefinitionRegistry, or create aliases for them.
+ownedFiles:
+  - server/src/registry/LabwareDefinitionRegistry.ts
+acceptance:
+  - Labware resolver successfully maps '2mL centrifuge tube' and '5mL
+    microcentrifuge tube' to existing labware definitions
+  - No 'unresolved_ref' gaps for common tube types in compiler output
+  - Event graph includes proper labware references for tube-based operations
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 40
+  maxChangedLines: 100
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011863-memper-plus-memb-protein-extract-ug.txt
+failureEvidence:
+  eventCount: 5
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/verdict.yaml

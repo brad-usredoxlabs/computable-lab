@@ -21,8 +21,11 @@ function renderExportActions(opts?: {
   sessionId?: string
   issueCardCount?: number
   disabled?: boolean
+  foundryReview?: { protocolId: string; variant: string } | null
+  foundryReviewStatus?: string | null
   onExportSuccess?: (bundle: ExportBundleSummary) => void
   onExportError?: (error: string) => void
+  onFoundryReviewChanged?: () => void
 }) {
   return render(
     <MemoryRouter>
@@ -30,8 +33,11 @@ function renderExportActions(opts?: {
         sessionId={opts?.sessionId ?? 'PIS-001'}
         issueCardCount={opts?.issueCardCount ?? 0}
         disabled={opts?.disabled}
+        foundryReview={opts?.foundryReview}
+        foundryReviewStatus={opts?.foundryReviewStatus}
         onExportSuccess={opts?.onExportSuccess}
         onExportError={opts?.onExportError}
+        onFoundryReviewChanged={opts?.onFoundryReviewChanged}
       />
     </MemoryRouter>
   )
@@ -62,7 +68,12 @@ describe('ProtocolIdeExportActions — button rendering', () => {
 
   it('shows the export label', () => {
     renderExportActions({ issueCardCount: 3 })
-    expect(screen.getByText('Export to Ralph')).toBeTruthy()
+    expect(screen.getByText('Submit to queue')).toBeTruthy()
+  })
+
+  it('renders the reject button', () => {
+    renderExportActions({ issueCardCount: 3 })
+    expect(screen.getByTestId('reject-issue-cards-button')).toBeTruthy()
   })
 
   it('is disabled when issueCardCount is 0', () => {
@@ -90,6 +101,17 @@ describe('ProtocolIdeExportActions — button rendering', () => {
   it('does NOT show card count badge when no cards', () => {
     renderExportActions({ issueCardCount: 0 })
     expect(screen.queryByTestId('export-card-count')).toBeNull()
+  })
+
+  it('shows reopen for rejected Foundry reviews', () => {
+    renderExportActions({
+      issueCardCount: 1,
+      foundryReview: { protocolId: 'demo-protocol', variant: 'manual_tubes' },
+      foundryReviewStatus: 'rejected',
+    })
+    expect(screen.getByTestId('reopen-foundry-review-button')).toBeTruthy()
+    expect((screen.getByTestId('export-issue-cards-button') as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByTestId('reject-issue-cards-button') as HTMLButtonElement).disabled).toBe(true)
   })
 })
 
@@ -171,7 +193,7 @@ describe('ProtocolIdeExportActions — export action', () => {
 
     // Spinner should appear
     expect(screen.getByTestId('export-spinner')).toBeTruthy()
-    expect(screen.getByText('Exporting…')).toBeTruthy()
+    expect(screen.getByText('Submitting…')).toBeTruthy()
   })
 
   it('shows success state with bundle summary after export', async () => {
@@ -199,8 +221,36 @@ describe('ProtocolIdeExportActions — export action', () => {
     })
 
     expect(screen.getByTestId('export-success-icon')).toBeTruthy()
-    expect(screen.getByText(/Exported 3 card\(s\) → 3 spec draft\(s\)/)).toBeTruthy()
+    expect(screen.getByText(/Submitted 3 card\(s\) as 3 queued spec draft\(s\)/)).toBeTruthy()
     expect(screen.getByTestId('export-bundle-id')).toHaveTextContent('ralph-export-abc123')
+  })
+
+  it('calls the reject API when reject is clicked', async () => {
+    const mockFetch = global.fetch as ReturnType<typeof vi.fn>
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        rejectedCardCount: 3,
+        rejectedAt: new Date().toISOString(),
+      }),
+    })
+
+    renderExportActions({ issueCardCount: 3 })
+
+    const button = screen.getByTestId('reject-issue-cards-button')
+    fireEvent.click(button)
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/protocol-ide/sessions/PIS-001/reject-issue-cards',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      )
+    })
+    expect(screen.getByTestId('export-rejected')).toBeTruthy()
   })
 
   it('calls onExportSuccess callback with bundle data', async () => {
@@ -299,6 +349,39 @@ describe('ProtocolIdeExportActions — export action', () => {
     })
 
     expect(mockOnExportError).toHaveBeenCalledWith('Network error')
+  })
+
+  it('reopens rejected Foundry reviews and refreshes parent state', async () => {
+    const mockFetch = global.fetch as ReturnType<typeof vi.fn>
+    const mockChanged = vi.fn()
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        status: 'reviewing',
+        reviewPath: '/tmp/review.yaml',
+        reopenedAt: new Date().toISOString(),
+        reason: 'Reopened by human reviewer',
+      }),
+    })
+
+    renderExportActions({
+      issueCardCount: 1,
+      foundryReview: { protocolId: 'demo-protocol', variant: 'manual_tubes' },
+      foundryReviewStatus: 'rejected',
+      onFoundryReviewChanged: mockChanged,
+    })
+
+    fireEvent.click(screen.getByTestId('reopen-foundry-review-button'))
+
+    await waitFor(() => {
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/protocol-ide/foundry/demo-protocol/manual_tubes/reopen',
+        expect.objectContaining({ method: 'POST' }),
+      )
+    })
+    expect(mockChanged).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('export-reopened')).toBeTruthy()
   })
 })
 

@@ -1,0 +1,47 @@
+kind: protocol-foundry-patch-spec
+id: man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-protocol-branch-selection
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: manual_tubes
+fixClass: compiler_event_coverage
+title: Add protocol branch selection for multi-protocol vendor manuals
+rationale: "The PDF contains 4 distinct protocols (adherent cells, suspension
+  cells, soft tissue, hard tissue) but the compiler produces a generic gap
+  asking which protocol to compile. The pre-compiler should either: (1) extract
+  all protocol variants and create separate event graphs, or (2) default to the
+  first/most common protocol (adherent cells) and document the assumption.
+  Currently, the compiler fails to lower any of the specific protocol steps
+  because it cannot resolve the ambiguity."
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+  - server/src/foundry/ProtocolFoundryCompileRunner.ts
+acceptance:
+  - Compiler produces at least one complete event graph for the 'adherent
+    mammalian cells' protocol variant
+  - "Event graph includes specific steps: cell scraping, centrifugation, wash,
+    permeabilization, solubilization"
+  - No 'clarification' gap about sample type selection when a default protocol
+    is chosen
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 120
+  maxChangedLines: 250
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011863-memper-plus-memb-protein-extract-ug.txt
+failureEvidence:
+  eventCount: 5
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/verdict.yaml

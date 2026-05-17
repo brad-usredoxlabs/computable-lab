@@ -1,0 +1,43 @@
+kind: protocol-foundry-patch-spec
+id: mp10471/bench_plate_multichannel/fix-tag-prompt-json-parse-error
+protocolId: mp10471
+variant: bench_plate_multichannel
+fixClass: extractor_prompt_contract
+title: Fix tag_prompt JSON parsing to handle truncated or malformed LLM responses
+rationale: The tag_prompt pass failed with 'Unterminated string in JSON at
+  position 705', indicating the LLM response was truncated or malformed. This
+  prevents proper entity tagging (materials, labware, etc.) which feeds into the
+  ai_precompile pass. The fix should add robust JSON parsing with fallback
+  recovery (e.g., attempting to parse partial JSON, or using a more lenient
+  parser) and ensure the prompt contract enforces complete JSON output.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - tag_prompt pass does not fail on truncated JSON responses
+  - Partial JSON responses are recovered or gracefully degraded
+  - Entity tagging (materials, labware) proceeds even with imperfect LLM output
+  - No 'tag_prompt_parse_error' warnings in diagnostics
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 60
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10471/bench_plate_multichannel.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10471/bench_plate_multichannel.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10471/bench_plate_multichannel.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10471/bench_plate_multichannel/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/mp10471/bench_plate_multichannel/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/mp10471/bench_plate_multichannel.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/mp10471.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10471.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/mp10471.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10471/bench_plate_multichannel/verdict.yaml

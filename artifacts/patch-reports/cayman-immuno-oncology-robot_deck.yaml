@@ -1,0 +1,9 @@
+kind: protocol-worker-report
+protocolId: cayman-immuno-oncology
+variant: robot_deck
+generated_at: 2026-05-10T12:43:02.314Z
+status: applied
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-immuno-oncology/robot_deck/result.yaml
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+message: patch applied and committed

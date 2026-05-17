@@ -1,0 +1,52 @@
+kind: protocol-foundry-patch-spec
+id: mp10471/manual_tubes/fix-ai-precompile-shape-mismatch-and-candidate-events
+protocolId: mp10471
+variant: manual_tubes
+fixClass: precompiler_reference_shape
+title: Fix ai_precompile shape mismatch to produce candidateEvents for Fluo-4
+  Direct protocol
+rationale: The compiler diagnostics show 'ai_precompile output shape mismatch,
+  using fallback' and subsequently all downstream passes are skipped because
+  'outputs.ai_precompile.candidateEvents evaluated to false'. The pre-compiler
+  extracted 66+ deterministic candidates (6+10+24+25+1+4) but the ai_precompile
+  pass failed to shape them into the expected AiPrecompileOutput structure with
+  candidateEvents. The tag_prompt also had a JSON parse error ('Unexpected end
+  of JSON input'), suggesting the LLM response was truncated or malformed. The
+  root cause is that createAiPrecompilePass in ChatbotCompilePasses.ts either
+  has a shape validation that is too strict, or the fallback path produces an
+  empty/invalid structure that causes candidateEvents to be falsy. This results
+  in 0 events despite clear protocol steps in the PDF (cell seeding, reagent
+  preparation, incubation, measurement).
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - ai_precompile pass produces valid AiPrecompileOutput with non-empty
+    candidateEvents array for mp10471
+  - No 'ai_precompile_shape_mismatch' warning in diagnostics for mp10471
+  - Downstream passes (expand_biology_verbs, resolve_labware, mint_materials)
+    are no longer skipped due to falsy candidateEvents
+  - eventCount >= 3 in compiler output for mp10471/manual_tubes
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 60
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10471/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10471/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10471/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10471/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/mp10471/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/mp10471/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/mp10471.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10471.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/mp10471.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10471/manual_tubes/verdict.yaml

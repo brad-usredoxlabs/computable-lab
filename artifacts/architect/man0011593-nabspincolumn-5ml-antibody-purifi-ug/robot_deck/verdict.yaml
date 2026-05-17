@@ -1,41 +1,49 @@
 kind: protocol-foundry-architect-verdict
 protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
 variant: robot_deck
-generated_at: 2026-05-09T09:22:54.944Z
+generated_at: 2026-05-09T22:32:20.794Z
 accepted: false
-qualityScore: 0.15
-coverageEstimate: 0.1
+qualityScore: 0.05
+coverageEstimate: 0
 failureClasses:
   - precompiler_reference_shape
-  - compiler_event_coverage
+  - extractor_prompt_contract
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: fix-ai-precompile-shape-mismatch
+  - id: fix-ai-precompile-shape-mismatch-and-fallback
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch to enable downstream passes
-    rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch', which
-      caused all downstream passes (mint_materials, resolve_labware,
-      resolve_prior_labware_references, expand_patterns) to be skipped. This is
-      the root cause of the low event count (1 event instead of the expected 10+
-      for an antibody purification protocol). The ai_precompile pass in
-      ChatbotCompilePasses.ts is producing output that doesn't match the
-      expected AiPrecompileOutput schema, causing the when conditions for
-      subsequent passes to evaluate to false.
+    title: Fix ai_precompile shape mismatch fallback to produce candidateEvents from
+      deterministic candidates
+    rationale: The compiler diagnostics show 'ai_precompile output shape mismatch,
+      using fallback' followed by all downstream passes being skipped because
+      outputs.ai_precompile.candidateEvents evaluated to false. The pre-compiler
+      supplied 13+6+16+5=40 deterministic candidates across chunks, but the
+      ai_precompile pass failed to shape them into the expected output
+      structure. The fallback path produces an empty or malformed
+      AiPrecompileOutput, causing candidateEvents to be falsy. This means the
+      compiler never reaches expand_biology_verbs, resolve_labware, or any
+      event-producing pass. The root cause is in ChatbotCompilePasses.ts where
+      createAiPrecompilePass handles shape mismatches — the fallback must
+      synthesize candidateEvents from the deterministic candidates that were
+      already extracted, rather than returning an empty structure.
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass produces output matching AiPrecompileOutput schema
-        with candidateLabwares, mintMaterials, and patternEvents fields
-      - Downstream passes (mint_materials, resolve_labware, expand_patterns) are
-        no longer skipped due to false when conditions
-      - No 'ai_precompile_shape_mismatch' warning in diagnostics for protocols
-        with extractable content
+      - When ai_precompile output has a shape mismatch, the fallback path must
+        produce a valid AiPrecompileOutput with candidateEvents populated from
+        deterministic candidates.
+      - The expand_biology_verbs pass must no longer be skipped when
+        deterministic candidates exist.
+      - eventCount must be >= 3 for protocols with clear procedural steps in the
+        PDF text.
+      - The ai_precompile_shape_mismatch warning should still be emitted but
+        should not result in zero events when candidates are available.
     coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: &a1
       compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
@@ -48,7 +56,7 @@ recommendedFixes:
       materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
       text: /home/brad/git/computable-foundry/artifacts/text/man0011593-nabspincolumn-5ml-antibody-purifi-ug.txt
     failureEvidence: &a2
-      eventCount: 1
+      eventCount: 0
       outcome: gap
     implementationBudget:
       targetChangedFiles: 1
@@ -56,36 +64,38 @@ recommendedFixes:
       targetChangedLines: 60
       maxChangedLines: 150
       requireFocusedFixture: true
-  - id: fix-antibody-purification-verb-coverage
-    class: compiler_event_coverage
-    title: Add verb lowering for antibody purification protocol steps
-    rationale: The PDF describes a multi-step antibody purification protocol
-      (equilibration, sample loading, washing, elution, neutralization, column
-      storage) but only 1 centrifuge event was generated. The compiler lacks
-      verb expanders for key biology operations like 'bind', 'wash', 'elute',
-      'neutralize', and 'store' in the context of spin column purification.
-      BiologyVerbExpander.ts needs to recognize these operations and lower them
-      to appropriate pipette/centrifuge events.
+  - id: fix-tag-prompt-json-parse-error
+    class: extractor_prompt_contract
+    title: Fix tag_prompt JSON parse error from unterminated string in LLM response
+    rationale: "The diagnostics show 'tag_prompt response was not valid JSON:
+      Unterminated string in JSON at position 645' with a raw_preview showing
+      the response was cut off mid-JSON. This truncation likely causes the
+      ai_precompile pass to receive incomplete or malformed input, contributing
+      to the shape mismatch. The tag_prompt pass needs to handle truncated LLM
+      responses more gracefully — either by retrying with a smaller chunk, by
+      repairing the JSON (closing unclosed strings/brackets), or by falling back
+      to deterministic extraction when the LLM response is malformed. This is a
+      secondary fix that improves robustness of the pre-compiler pipeline."
     ownedFiles:
-      - server/src/compiler/biology/BiologyVerbExpander.ts
-      - server/src/compiler/biology/BiologyVerbExpander.test.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - BiologyVerbExpander recognizes 'bind', 'wash', 'elute', 'neutralize' as
-        valid biology verbs for spin column protocols
-      - Each verb lowers to appropriate pipette transfer and centrifuge events
-        with correct volumes and labware references
-      - Test coverage includes spin column antibody purification workflow with
-        at least 8 events
+      - When tag_prompt receives a truncated JSON response, the pass should
+        either repair the JSON or fall back to deterministic candidates without
+        crashing.
+      - No 'tag_prompt_parse_error' warnings should result in complete loss of
+        candidate extraction.
+      - The ai_precompile pass should receive valid input even when tag_prompt
+        output is partially malformed.
     coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
-      targetChangedLines: 100
-      maxChangedLines: 220
+      targetChangedFiles: 1
+      maxChangedFiles: 2
+      targetChangedLines: 40
+      maxChangedLines: 100
       requireFocusedFixture: true
 sourceArtifacts: *a1
 architectNotes: "LLM architect analysis: 2 fix recommendations."

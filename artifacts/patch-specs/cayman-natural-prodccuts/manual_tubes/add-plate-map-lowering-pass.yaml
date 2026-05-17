@@ -3,33 +3,31 @@ id: cayman-natural-prodccuts/manual_tubes/add-plate-map-lowering-pass
 protocolId: cayman-natural-prodccuts
 variant: manual_tubes
 fixClass: compiler_event_coverage
-title: Add compiler lowering for plate-map/inventory PDFs to produce
-  material-placement events
-rationale: "The compiler currently treats this PDF as a 'library inventory list'
-  and produces zero events because it expects procedural steps (reconstitute,
-  dilute, transfer). However, a 96-well plate map IS a valid protocol: it
-  defines the material layout of a screening library plate. The compiler needs a
-  new lowering path that converts plate-map candidates (well-position +
-  compound-name + catalog-number) into material-placement or plate-population
-  events. This would produce events like 'populate well A2 with Ursolic Acid
-  (10072)' for each mapped well, giving a non-empty event graph that can be
-  executed as a plate preparation protocol."
+title: Add plate-map lowering pass to convert well-content tables into dispense events
+rationale: The PDF contains a structured 96-well plate map
+  (Plate/Well/Contents/Item Number) with ~40+ compounds. The pre-compiler
+  extracted 29+ candidate groups, but the compiler produced 0 events because
+  there is no lowering pass that recognizes 'plate-map' or 'well-content-table'
+  candidates and converts them into dispense/transfer events. The prior patch
+  touched ChatbotCompilePasses.ts but the event graph is still empty, meaning
+  the lowering logic was either not added, not wired, or produced no events. The
+  compiler needs a deterministic pass that iterates over well-content candidates
+  and emits dispense events for each compound-to-well mapping.
 ownedFiles:
   - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
-  - server/src/compiler/biology/BiologyVerbExpander.ts
 acceptance:
-  - Compiler produces >= 20 events for a plate-map PDF with 20+ mapped wells
-  - Each event references a specific well position (e.g., A2, B3) and compound
-    name
-  - Event graph status changes from 'blocked' to 'draft' with populated events
-    array
-  - Gap message about 'library inventory list' no longer appears for plate-map
-    protocols
+  - eventCount >= 20 for this protocol (one dispense event per non-Unused well)
+  - Each event references a compound name from the PDF (e.g., Ursolic Acid,
+    Paclitaxel)
+  - Each event references a well position (e.g., A2, A3, B2)
+  - Events are of type 'dispense' or 'transfer' with source=compound and
+    target=well
+  - Compiler outcome changes from 'gap' to 'complete'
 implementationBudget:
-  targetChangedFiles: 2
-  maxChangedFiles: 3
+  targetChangedFiles: 1
+  maxChangedFiles: 2
   targetChangedLines: 120
-  maxChangedLines: 220
+  maxChangedLines: 250
   requireFocusedFixture: true
 coderModelProfile:
   model: Qwen/Qwen3.6-27B-FP8

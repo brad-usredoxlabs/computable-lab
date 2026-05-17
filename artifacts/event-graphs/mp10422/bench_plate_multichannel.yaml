@@ -13,285 +13,38 @@ eventGraph:
   description: Protocol Foundry preview graph for mp10422 (bench_plate_multichannel).
   status: draft
   protocolId: mp10422
-  events: &a2
-    - eventId: evt-mint-container-generic_96_well_plate
-      event_type: create_container
-      details: &a3
-        labwareType: generic_96_well_plate
-        slot: auto
-        instanceId: generic_96_well_plate
-      labwareId: sample_plate
-    - eventId: evt-mint-synthetic_foundry_sample-1
-      event_type: add_material
-      details: &a4
-        labwareInstanceId: generic_96_well_plate
-        well: A1
-        material:
-          materialId: sample_1
-          kind: synthetic_foundry_sample
-          properties: &a1
-            provenanceId: SYNTHETIC-FOUNDRY-SAMPLE-SET-mp10422
-            lot: SYNTHETIC-LOT-FOUNDRY-TEST
-      labwareId: sample_plate
-    - eventId: evt-mint-synthetic_foundry_sample-2
-      event_type: add_material
-      details: &a5
-        labwareInstanceId: generic_96_well_plate
-        well: A2
-        material:
-          materialId: sample_2
-          kind: synthetic_foundry_sample
-          properties: *a1
-      labwareId: sample_plate
-    - eventId: evt-mint-synthetic_foundry_sample-3
-      event_type: add_material
-      details: &a6
-        labwareInstanceId: generic_96_well_plate
-        well: A3
-        material:
-          materialId: sample_3
-          kind: synthetic_foundry_sample
-          properties: *a1
-      labwareId: sample_plate
-    - eventId: evt-mint-synthetic_foundry_sample-4
-      event_type: add_material
-      details: &a7
-        labwareInstanceId: generic_96_well_plate
-        well: A4
-        material:
-          materialId: sample_4
-          kind: synthetic_foundry_sample
-          properties: *a1
-      labwareId: sample_plate
-    - eventId: evt-mint-synthetic_foundry_sample-5
-      event_type: add_material
-      details: &a8
-        labwareInstanceId: generic_96_well_plate
-        well: A5
-        material:
-          materialId: sample_5
-          kind: synthetic_foundry_sample
-          properties: *a1
-      labwareId: sample_plate
-    - eventId: evt-mint-synthetic_foundry_sample-6
-      event_type: add_material
-      details: &a9
-        labwareInstanceId: generic_96_well_plate
-        well: A6
-        material:
-          materialId: sample_6
-          kind: synthetic_foundry_sample
-          properties: *a1
-      labwareId: sample_plate
-    - eventId: evt-mint-synthetic_foundry_sample-7
-      event_type: add_material
-      details: &a10
-        labwareInstanceId: generic_96_well_plate
-        well: A7
-        material:
-          materialId: sample_7
-          kind: synthetic_foundry_sample
-          properties: *a1
-      labwareId: sample_plate
-    - eventId: evt-mint-synthetic_foundry_sample-8
-      event_type: add_material
-      details: &a11
-        labwareInstanceId: generic_96_well_plate
-        well: A8
-        material:
-          materialId: sample_8
-          kind: synthetic_foundry_sample
-          properties: *a1
-      labwareId: sample_plate
-    - eventId: evt-stain_add-i28b5ekc
-      event_type: add_material
-      details: &a12
-        material: stain_agent
-      labwareId: sample_plate
-    - eventId: evt-stain_incubate-7ylh6cnv
-      event_type: incubate
-      details: &a13
-        duration: PT15M
-        temperature: 37
-      labwareId: sample_plate
-      t_offset: PT15M
-    - eventId: evt-fix_add-ibr98c67
-      event_type: add_material
-      details: &a14
-        material: fix_agent
-      labwareId: sample_plate
-    - eventId: evt-fix_incubate-20xb4yxp
-      event_type: incubate
-      details: &a15
-        duration: PT15M
-        temperature: 4
-      labwareId: sample_plate
-      t_offset: PT15M
-    - eventId: evt-stain_add-4rae42wj
-      event_type: add_material
-      details: &a16
-        material: stain_agent
-      labwareId: sample_plate
-    - eventId: evt-stain_incubate-pi46yhi8
-      event_type: incubate
-      details: &a17
-        duration: PT15M
-        temperature: 37
-      labwareId: sample_plate
-      t_offset: PT15M
+  events: &a1 []
   labwares:
     - labwareId: sample_plate
       labwareType: plate_96
       name: sample plate
-    - labwareId: reagent_source
+    - labwareId: reagent_reservoir
       labwareType: reservoir_1
-      name: reagent source
+      name: reagent reservoir
   tags:
     - protocol-foundry
     - bench_plate_multichannel
 terminalArtifacts:
-  events: *a2
+  events: *a1
   directives: []
-  gaps:
-    - kind: unresolved_ref
-      message: generic_96_well_plate (no matching labware in prior snapshot)
-      details:
-        hint: generic_96_well_plate
-        reason: no matching labware in prior snapshot
-    - kind: unresolved_ref
-      message: generic_12_well_reservoir (no matching labware in prior snapshot)
-      details:
-        hint: generic_12_well_reservoir
-        reason: no matching labware in prior snapshot
-    - kind: unresolved_ref
-      message: generic_96_tip_rack (no matching labware in prior snapshot)
-      details:
-        hint: generic_96_tip_rack
-        reason: no matching labware in prior snapshot
+  gaps: []
   resolvedRefs: []
   labStateDelta:
-    events:
-      - eventId: evt-mint-container-generic_96_well_plate
-        event_type: create_container
-        details: *a3
-      - eventId: evt-mint-synthetic_foundry_sample-1
-        event_type: add_material
-        details: *a4
-      - eventId: evt-mint-synthetic_foundry_sample-2
-        event_type: add_material
-        details: *a5
-      - eventId: evt-mint-synthetic_foundry_sample-3
-        event_type: add_material
-        details: *a6
-      - eventId: evt-mint-synthetic_foundry_sample-4
-        event_type: add_material
-        details: *a7
-      - eventId: evt-mint-synthetic_foundry_sample-5
-        event_type: add_material
-        details: *a8
-      - eventId: evt-mint-synthetic_foundry_sample-6
-        event_type: add_material
-        details: *a9
-      - eventId: evt-mint-synthetic_foundry_sample-7
-        event_type: add_material
-        details: *a10
-      - eventId: evt-mint-synthetic_foundry_sample-8
-        event_type: add_material
-        details: *a11
-      - eventId: evt-stain_add-i28b5ekc
-        event_type: add_material
-        details: *a12
-      - eventId: evt-stain_incubate-7ylh6cnv
-        event_type: incubate
-        details: *a13
-        t_offset: PT15M
-      - eventId: evt-fix_add-ibr98c67
-        event_type: add_material
-        details: *a14
-      - eventId: evt-fix_incubate-20xb4yxp
-        event_type: incubate
-        details: *a15
-        t_offset: PT15M
-      - eventId: evt-stain_add-4rae42wj
-        event_type: add_material
-        details: *a16
-      - eventId: evt-stain_incubate-pi46yhi8
-        event_type: incubate
-        details: *a17
-        t_offset: PT15M
+    events: []
     snapshotAfter:
-      deck:
-        - slot: auto
-          labwareInstanceId: generic_96_well_plate
+      deck: []
       mountedPipettes: []
-      labware:
-        generic_96_well_plate:
-          instanceId: generic_96_well_plate
-          labwareType: generic_96_well_plate
-          slot: auto
-          orientation: landscape
-          wells:
-            A1:
-              - materialId: sample_1
-                kind: synthetic_foundry_sample
-                properties:
-                  provenanceId: SYNTHETIC-FOUNDRY-SAMPLE-SET-mp10422
-                  lot: SYNTHETIC-LOT-FOUNDRY-TEST
-            A2:
-              - materialId: sample_2
-                kind: synthetic_foundry_sample
-                properties:
-                  provenanceId: SYNTHETIC-FOUNDRY-SAMPLE-SET-mp10422
-                  lot: SYNTHETIC-LOT-FOUNDRY-TEST
-            A3:
-              - materialId: sample_3
-                kind: synthetic_foundry_sample
-                properties:
-                  provenanceId: SYNTHETIC-FOUNDRY-SAMPLE-SET-mp10422
-                  lot: SYNTHETIC-LOT-FOUNDRY-TEST
-            A4:
-              - materialId: sample_4
-                kind: synthetic_foundry_sample
-                properties:
-                  provenanceId: SYNTHETIC-FOUNDRY-SAMPLE-SET-mp10422
-                  lot: SYNTHETIC-LOT-FOUNDRY-TEST
-            A5:
-              - materialId: sample_5
-                kind: synthetic_foundry_sample
-                properties:
-                  provenanceId: SYNTHETIC-FOUNDRY-SAMPLE-SET-mp10422
-                  lot: SYNTHETIC-LOT-FOUNDRY-TEST
-            A6:
-              - materialId: sample_6
-                kind: synthetic_foundry_sample
-                properties:
-                  provenanceId: SYNTHETIC-FOUNDRY-SAMPLE-SET-mp10422
-                  lot: SYNTHETIC-LOT-FOUNDRY-TEST
-            A7:
-              - materialId: sample_7
-                kind: synthetic_foundry_sample
-                properties:
-                  provenanceId: SYNTHETIC-FOUNDRY-SAMPLE-SET-mp10422
-                  lot: SYNTHETIC-LOT-FOUNDRY-TEST
-            A8:
-              - materialId: sample_8
-                kind: synthetic_foundry_sample
-                properties: *a1
+      labware: {}
       reservoirs: {}
       mintCounter: 0
       turnIndex: 1
   resolvedLabwareRefs: []
   deckLayoutPlan:
     pinned: []
-    autoFilled:
-      - slot: A1
-        labwareHint: unknown
-        reason: tipRack
+    autoFilled: []
     conflicts: []
   resourceManifest:
-    tipRacks:
-      - pipetteType: unknown
-        rackCount: 1
+    tipRacks: []
     reservoirLoads: []
     consumables: []
   executionScalePlan:
@@ -310,70 +63,22 @@ terminalArtifacts:
         - groupId: samples
           wells:
             - A1
-            - A2
-            - A3
-            - A4
-            - A5
-            - A6
-            - A7
-            - A8
+            - B1
+            - C1
+            - D1
+            - E1
+            - F1
+            - G1
+            - H1
     reagentLayout:
-      - materialRole: synthetic_foundry_sample
-        sourceLabwareRole: reagent_source
+      - materialRole: reagent
+        sourceLabwareRole: reagent_reservoir
         sourceLabwareKind: 1_well_reservoir
-        sourceWells:
-          - A1
-        reason: inferred from liquid-handling events without creating material instances
         sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
-      - materialRole: synthetic_foundry_sample
-        sourceLabwareRole: reagent_source
-        sourceLabwareKind: 1_well_reservoir
         sourceWells:
-          - A2
-        reason: inferred from liquid-handling events without creating material instances
-        sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
-      - materialRole: synthetic_foundry_sample
-        sourceLabwareRole: reagent_source
-        sourceLabwareKind: 1_well_reservoir
-        sourceWells:
-          - A3
-        reason: inferred from liquid-handling events without creating material instances
-        sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
-      - materialRole: synthetic_foundry_sample
-        sourceLabwareRole: reagent_source
-        sourceLabwareKind: 1_well_reservoir
-        sourceWells:
-          - A4
-        reason: inferred from liquid-handling events without creating material instances
-        sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
-      - materialRole: synthetic_foundry_sample
-        sourceLabwareRole: reagent_source
-        sourceLabwareKind: 1_well_reservoir
-        sourceWells:
-          - A5
-        reason: inferred from liquid-handling events without creating material instances
-        sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
-      - materialRole: synthetic_foundry_sample
-        sourceLabwareRole: reagent_source
-        sourceLabwareKind: 1_well_reservoir
-        sourceWells:
-          - A6
-        reason: inferred from liquid-handling events without creating material instances
-        sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
-      - materialRole: synthetic_foundry_sample
-        sourceLabwareRole: reagent_source
-        sourceLabwareKind: 1_well_reservoir
-        sourceWells:
-          - A7
-        reason: inferred from liquid-handling events without creating material instances
-        sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
-      - materialRole: synthetic_foundry_sample
-        sourceLabwareRole: reagent_source
-        sourceLabwareKind: 1_well_reservoir
-        sourceWells:
-          - A8
-        reason: inferred from liquid-handling events without creating material instances
-        sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
+          - "1"
+        reason: prompt mentions reagents but compiled events did not identify concrete
+          reagent roles
     pipettingStrategy:
       pipetteMode: multi_channel_parallel
       channels: 8
@@ -388,25 +93,20 @@ terminalArtifacts:
       requiredTools:
         - pipette-capability/p20-multi-8
     assumptions:
+      - No sample count was specified; defaulting to 8 samples (first column of
+        96_well_plate).
+      - Reagent source role is provisional until material roles are resolved.
+      - Samples are mapped down plate columns in row order.
       - Manual tube operations preserve biological intent when lifted to plate
         wells and shared reagent reservoirs.
       - ASSIST PLUS lowering uses the same plate and lane semantics as bench
         multichannel planning, then binds them to deck-compatible labware and
         tool profiles.
-    blockers: &a18 []
+    blockers: &a2 []
   validationReport:
     findings: []
   instrumentRunFiles: []
-  downstreamQueue:
-    - kind: readout
-      description: Fluorescence readout for ROS detection using CellROX reagents (Deep
-        Red, Orange, Green)
-      params:
-        platform: multiplex_fluorescence
-        wavelengths:
-          - 640/665
-          - 545/565
-          - 485/520
+  downstreamQueue: []
 diagnostics:
   - severity: info
     code: foundry_presegmented_candidates
@@ -451,9 +151,40 @@ diagnostics:
     pass_id: extract_entities
     details: {}
   - severity: warning
+    code: tag_prompt_parse_error
+    message: |-
+      tag_prompt response was not valid JSON: Unexpected token 'B', "
+
+      Based on t"... is not valid JSON
+    pass_id: tag_prompt
+    details:
+      raw_preview: >-
+        
+
+        Based on the provided text, here is the extracted JSON object containing
+        the tagged phrases, candidate actions, and directives.
+
+
+        ```json
+
+        {
+          "taggedPhrases": [
+            {
+              "phrase": "CellROX® Deep Red Reagent",
+              "tag": "material",
+              "value": "CellROX Deep Red Reagent"
+            },
+            {
+              "
+  - severity: warning
     code: ai_precompile_shape_mismatch
-    message: ai_precompile output shape mismatch
+    message: ai_precompile output shape mismatch, using fallback
     pass_id: ai_precompile
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'mint_materials' skipped: when condition
+      'outputs.ai_precompile.mintMaterials' evaluated to false"
+    pass_id: mint_materials
   - severity: info
     code: pass_skipped_by_when
     message: "Pass 'apply_directives' skipped: when condition
@@ -461,13 +192,29 @@ diagnostics:
     pass_id: apply_directives
   - severity: info
     code: pass_skipped_by_when
+    message: "Pass 'expand_biology_verbs' skipped: when condition
+      'outputs.ai_precompile.candidateEvents' evaluated to false"
+    pass_id: expand_biology_verbs
+  - severity: info
+    code: pass_skipped_by_when
     message: "Pass 'resolve_labware' skipped: when condition
       'outputs.ai_precompile.candidateLabwares' evaluated to false"
     pass_id: resolve_labware
-  - severity: warning
-    code: unknown_pattern
-    message: "Unknown stamp pattern: multi_well_stain_and_wash"
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_prior_labware_references' skipped: when condition
+      'outputs.ai_precompile.priorLabwareRefs' evaluated to false"
+    pass_id: resolve_prior_labware_references
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_patterns' skipped: when condition
+      'outputs.ai_precompile.patternEvents' evaluated to false"
     pass_id: expand_patterns
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'emit_downstream_queue' skipped: when condition
+      'outputs.ai_precompile.downstreamCompileJobs' evaluated to false"
+    pass_id: emit_downstream_queue
   - severity: info
     code: execution_scale_plan_ready
     message: Execution scaling plan is ready for robot_deck.
@@ -476,7 +223,7 @@ diagnostics:
       sourceLevel: manual_tubes
       targetLevel: robot_deck
       profileId: robot-assist-plus-96
-      blockers: *a18
+      blockers: *a2
 foundryTestAssumptions:
   kind: protocol-foundry-test-assumption-profile
   protocolId: mp10422

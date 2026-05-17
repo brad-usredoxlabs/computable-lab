@@ -1,0 +1,8 @@
+kind: protocol-worker-report
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: manual_tubes
+generated_at: 2026-05-09T21:20:10.158Z
+status: needs-human
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/result.yaml
+touchedFiles: []
+message: no symbol replacements produced

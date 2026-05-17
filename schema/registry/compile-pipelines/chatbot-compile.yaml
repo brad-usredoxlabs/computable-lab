@@ -20,9 +20,17 @@ passes:
     depends_on: []
     description: Deterministic clause-level precompile using verb-action-map and registries. Produces candidateEvents directly; only residual clauses go to ai_precompile.
 
+  - id: deterministic_plan_consolidation
+    family: parse
+    depends_on: [deterministic_precompile]
+    description: >
+      Second deterministic pass that stitches clause-local action frames into a
+      protocol plan, resolving simple discourse roles, dependencies, and blockers
+      before ai_precompile can supplement unresolved portions.
+
   - id: ai_precompile
     family: expand
-    depends_on: [extract_entities, deterministic_precompile]
+    depends_on: [extract_entities, deterministic_plan_consolidation]
     description: >
       LLM-backed pass that turns prompt + extracted entities into candidate events,
       candidate labwares, and unresolved refs.
@@ -32,6 +40,32 @@ passes:
       without calling the LLM. Otherwise it proceeds with the LLM call, including the
       deterministic plan as context in the user message.
 
+  - id: protocol_intent_state_plan
+    family: expand
+    depends_on: [ai_precompile]
+    when: outputs.ai_precompile.protocolIntent
+    description: Fold ai_precompile.protocolIntent into deterministic labware, material, pipette, tip, orientation, and pending-operation state before pattern lowering.
+
+  - id: validate_protocol_intent
+    family: validate
+    depends_on: [ai_precompile]
+    description: >
+      Validate ProtocolIntent reference integrity and lowerability before event
+      graph expansion.
+
+  - id: lower_protocol_intent
+    family: expand
+    depends_on: [validate_protocol_intent]
+    description: >
+      Lower ProtocolIntent resources and simple operations into legacy compiler
+      inputs including candidate labware placements, directives, and primitive events.
+
+  - id: expand_protocol_intent_patterns
+    family: expand
+    depends_on: [protocol_intent_state_plan, validate_protocol_intent]
+    when: outputs.protocol_intent_state_plan.protocolIntentStatePlan
+    description: Expand ProtocolIntent patterns such as media swaps, duplicate columns, serial dilutions, and row repeats into primitive transfer/mix events.
+
   - id: mint_materials
     family: expand
     depends_on: [ai_precompile]
@@ -40,9 +74,8 @@ passes:
 
   - id: apply_directives
     family: expand
-    depends_on: [ai_precompile]
-    when: outputs.ai_precompile.directives
-    description: Turn ai_precompile.directives entries into DirectiveNode[] with generated directiveIds.
+    depends_on: [lower_protocol_intent]
+    description: Turn ai_precompile.directives and lower_protocol_intent.directives entries into DirectiveNode[] with generated directiveIds.
 
   - id: expand_biology_verbs
     family: expand
@@ -52,9 +85,8 @@ passes:
 
   - id: resolve_labware
     family: disambiguate
-    depends_on: [ai_precompile]
-    when: outputs.ai_precompile.candidateLabwares
-    description: Resolve labware hints to existing labware-instance records via searchLabwareByHint; emit AiLabwareAddition entries for unmatched hints.
+    depends_on: [lower_protocol_intent]
+    description: Resolve labware hints from ai_precompile and lower_protocol_intent to existing labware-instance records via searchLabwareByHint; emit AiLabwareAddition entries for unmatched hints.
 
   - id: resolve_references
     family: disambiguate
@@ -86,7 +118,13 @@ passes:
   - id: resolve_roles
     family: expand
     depends_on: [fallback_side_evidence_events]
-    description: Map role coordinates to concrete well addresses under current orientation. Reads events from expand_biology_verbs / expand_patterns / mint_materials / expand_protocol / fallback_side_evidence_events via state.outputs (those passes are conditional, so they cannot be hard dependencies — depending on a `when`-skipped pass would cascade-skip resolve_roles).
+    description: >
+      Map role coordinates to concrete well addresses under current orientation.
+      Reads events from lower_protocol_intent / expand_biology_verbs /
+      expand_patterns / mint_materials / expand_protocol /
+      fallback_side_evidence_events via state.outputs. Some of those passes are
+      conditional, so they cannot be hard dependencies; depending on a
+      when-skipped pass would cascade-skip resolve_roles.
 
   - id: compute_volumes
     family: expand
@@ -120,6 +158,16 @@ passes:
     family: emit
     depends_on: [resolve_roles]
     description: Generate InstrumentRunFile artifacts for each read-event instrument group.
+
+  - id: emit_instrument_appliance_jobs
+    family: emit
+    depends_on: [emit_instrument_run_files]
+    description: Lower supported instrument run-files into appliance active-control jobs.
+
+  - id: evaluate_instrument_execution_readiness
+    family: validate
+    depends_on: [emit_instrument_appliance_jobs]
+    description: Gate instrument appliance jobs for explicit execution mode, required read parameters, valid wells, and live-run confirmation requirements.
 
   - id: emit_downstream_queue
     family: emit

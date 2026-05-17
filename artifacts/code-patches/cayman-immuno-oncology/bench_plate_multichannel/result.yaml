@@ -1,41 +1,72 @@
 kind: protocol-foundry-coder-patch-result
 protocolId: cayman-immuno-oncology
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T19:27:45.347Z
-status: needs-human
-message: Coder did not produce any valid symbol replacement blocks.
+generated_at: 2026-05-11T22:51:06.198Z
+status: failed
+message: Patch applied but verification tests failed; reverted.
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
 rawResponse: >-
-  
+  @@replace salvageAiPrecompileOutput@@
 
-  @@replace runVariant@@
+  function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?:
+  unknown }): AiPrecompileOutput {
+    // Default empty output to prevent shape mismatch
+    const emptyOutput: AiPrecompileOutput = {
+      candidateLabwares: [],
+      patternEvents: [],
+      downstreamCompileJobs: [],
+    };
 
-  async function runVariant(input: {
-    protocolId: string;
-    variant: FoundryVariant;
-    plan: ExecutionScalePlan | undefined;
-    events: PlateEventPrimitive[];
-  }): Promise<RunChatbotCompileResult> {
-    const { protocolId, variant, plan, events } = input;
-    
-    // Wire Foundry compile dependencies to the real compiler runtime
-    // This fixes the gap where Foundry-specific runs were producing compiler gaps
-    // that looked like missing resolver dependencies or skipped runtime wiring
-    
-    const labwares = buildLabwares(events, plan, variant);
-    const normalizedEvents = normalizeEvents(events, labwares);
-    
-    // Ensure proper dependency injection for Foundry runtime
-    const lookup = createFoundryLabwareLookup();
-    const labwareIds = collectLabwareIds(events, plan);
-    
-    // Compile with proper Foundry variant wiring
-    const result: RunChatbotCompileResult = {
-      protocolId,
-      variant,
-      labwareIds,
-      events: normalizedEvents,
-      labwares,
-      status: 'success',
-      summary: {
-        protocolId,
-        variant,
+    if (!input.raw && !input.parsed) {
+      return emptyOutput;
+    }
+
+    let parsed: unknown;
+
+    // If raw is a string, try to parse it as JSON
+    if (typeof input.raw === 'string') {
+      try {
+        parsed = JSON.parse(input.raw);
+      } catch (e) {
+        // If parsing fails, treat as invalid input
+        return emptyOutput;
+      }
+    } else if (input.raw && typeof input.raw === 'object') {
+      parsed = input.raw;
+    } else if (input.parsed) {
+      parsed = input.parsed;
+    } else {
+      return emptyOutput;
+    }
+
+    // If parsed is not an object, return empty output
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return emptyOutput;
+    }
+
+    const obj = parsed as Record<string, unknown>;
+
+    // Extract candidateLabwares
+    const candidateLabwares = Array.isArray(obj.candidateLabwares)
+      ? obj.candidateLabwares as CandidateLabware[]
+      : [];
+
+    // Extract patternEvents
+    const patternEvents = Array.isArray(obj.patternEvents)
+      ? obj.patternEvents as PatternEvent[]
+      : [];
+
+    // Extract downstreamCompileJobs
+    const downstreamCompileJobs = Array.isArray(obj.downstreamCompileJobs)
+      ? obj.downstreamCompileJobs as DownstreamCompileJob[]
+      : [];
+
+    return {
+      candidateLabwares,
+      patternEvents,
+      downstreamCompileJobs,
+    };
+  }
+
+  @@end@@

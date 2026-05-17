@@ -43,6 +43,10 @@ import type {
   ComponentSuggestionResponse,
 } from '../../types/componentGraph'
 import type { CompositionEntryValue, ConcentrationValue } from '../../types/material'
+import type {
+  InstrumentApplianceJob,
+  InstrumentApplianceJobExecutionResult,
+} from '../../types/ai'
 import type { DeckSummary, ToolsSummary, ReagentsSummary, BudgetSummary } from '../../protocol-ide/overlaySummaries.types'
 import { ApiError, NetworkError } from './errors'
 import { API_BASE } from './base'
@@ -1020,6 +1024,226 @@ export type ProtocolIdeStreamEvent =
   | { type: 'done'; result: ProtocolIdeSessionCreateResult }
   | { type: 'error'; message: string }
 
+export type FoundryReviewStatus =
+  | 'unreviewed'
+  | 'reviewing'
+  | 'queued'
+  | 'rejected'
+  | 'implemented'
+  | 'failed'
+  | 'blocked'
+
+export interface FoundryReviewSummary {
+  protocolId: string
+  variant: string
+  status: FoundryReviewStatus
+  title?: string
+  vendor?: string
+  eventCount?: number
+  architectVerdict?: string
+  patchSpecCount: number
+  fixClassification: string
+  updatedAt?: string
+  lastInnerLoopAt?: string
+  artifacts: Record<string, string | string[] | undefined>
+}
+
+export const FOUNDRY_REJECTION_REASON_CLASSES = [
+  'redundant',
+  'out_of_scope',
+  'evidence_insufficient',
+  'bad_event_graph',
+  'other',
+] as const
+
+export type FoundryRejectionReasonClass = (typeof FOUNDRY_REJECTION_REASON_CLASSES)[number]
+
+export const FOUNDRY_REJECTION_REASON_LABELS: Record<FoundryRejectionReasonClass, string> = {
+  redundant: 'Redundant — already covered by another spec',
+  out_of_scope: 'Out of scope for this protocol/variant',
+  evidence_insufficient: 'Evidence insufficient — needs more PDF/source context',
+  bad_event_graph: 'Bad event graph — compiler needs to be fixed first',
+  other: 'Other',
+}
+
+export interface FoundryReviewContext {
+  kind: 'protocol-foundry-review-context'
+  protocolId: string
+  variant: string
+  generatedAt: string
+  status: FoundryReviewStatus
+  semanticContract: Record<string, string>
+  source: {
+    title?: string
+    vendor?: string
+    pdf?: string
+    procurement?: unknown
+    extractedText?: string
+    extractedTextPath?: string
+    pageImages: string[]
+  }
+  artifacts: {
+    segment?: unknown
+    materialContext?: unknown
+    compiler?: unknown
+    eventGraph?: unknown
+    executionScale?: unknown
+    browserReview?: unknown
+    architectVerdict?: unknown
+    patchSpecs: unknown[]
+    adoptionDecision?: unknown
+    humanReview?: unknown
+  }
+  artifactRefs: Record<string, string | string[] | undefined>
+  semantic: {
+    eventSemanticKeys: string[]
+    graphAnchors: string[]
+    materialLayerDecisions: string[]
+    ontologyRefs: string[]
+    ontologyBackfillNeeds: string[]
+    fixClassification: string
+  }
+  knowledgeLayer: {
+    contextRefs: unknown[]
+    claimRefs: unknown[]
+    assertionRefs: unknown[]
+    evidenceRefs: unknown[]
+    paths?: Record<string, string>
+  }
+}
+
+export interface FoundryChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  at?: string
+}
+
+export type FoundryReviewChatEvent =
+  | { type: 'status'; message: string }
+  | { type: 'text_delta'; delta: string }
+  | {
+      type: 'done'
+      result: {
+        success: true
+        events: unknown[]
+        notes: unknown[]
+        clarificationNeeded?: string
+      }
+    }
+  | { type: 'error'; message: string }
+
+export interface FoundryInnerLoopDiffEntry {
+  key: string
+  eventId?: string
+  semanticKey?: string
+  eventType?: string
+  before?: unknown
+  after?: unknown
+}
+
+export interface FoundryInnerLoopTrace {
+  kind: 'protocol-foundry-review-inner-loop-trace'
+  id: string
+  protocolId: string
+  variant: string
+  generatedAt: string
+  prompt: string
+  draftSpec: {
+    id: string
+    draftPath: string
+    title: string
+    fixClass: string
+  }
+  coder?: {
+    status: string
+    message?: string
+    touchedFiles?: string[]
+    resultPath?: string
+  }
+  recompile?: {
+    outcome: string
+    eventCount?: number
+    eventGraphPath?: string
+    beforeEventGraphPath?: string
+  }
+  diff?: {
+    added: FoundryInnerLoopDiffEntry[]
+    removed: FoundryInnerLoopDiffEntry[]
+    changed: FoundryInnerLoopDiffEntry[]
+  }
+  durationMs?: number
+  status: 'completed' | 'failed'
+  criticInvoked?: boolean
+  promotedAt?: string
+  error?: string
+}
+
+export type FoundryInnerLoopEvent =
+  | {
+      type: 'status'
+      stage: 'snapshotting' | 'synthesizing' | 'applying' | 'recompiling' | 'diffing'
+      message?: string
+    }
+  | { type: 'done'; trace: FoundryInnerLoopTrace; tracePath: string }
+  | { type: 'error'; message: string }
+
+export interface FoundryOperationalStatus {
+  kind: 'protocol-foundry-operational-status'
+  generated_at: string
+  artifactRoot: string
+  protocolCount: number
+  variantCount: number
+  loop: {
+    metadataPath: string
+    running: boolean
+    status: 'running' | 'completed' | 'failed' | 'stopped' | 'missing' | 'stale'
+    pid?: number
+    startedAt?: string
+    updatedAt?: string
+    completedAt?: string
+    logPath?: string
+    command?: string
+    error?: string
+  }
+  counts: {
+    collected: number
+    extractedText: number
+    compiled: number
+    architectReviewed: number
+    awaitingHumanReview: number
+    reviewing: number
+    queued: number
+    patching: number
+    implemented: number
+    rejected: number
+    failed: number
+  }
+  latestErrors: Array<{
+    protocolId: string
+    variant: string
+    category: string
+    message: string
+    artifact?: string
+  }>
+  nextTasks: Array<{ protocolId: string; variant: string; stage: string }>
+}
+
+export interface FoundryManifestIndex {
+  kind: 'protocol-foundry-manifest-index'
+  generated_at: string
+  artifactRoot: string
+  protocolCount: number
+  variantCount: number
+  manifests: Array<{
+    protocolId: string
+    variant: string
+    status: string
+    path: string
+    missingArtifactCount: number
+    humanReviewStatus: string
+  }>
+}
+
 /**
  * API client methods for kernel endpoints.
  */
@@ -1620,6 +1844,19 @@ export const apiClient = {
     return request('/measurements/ingest', {
       method: 'POST',
       body: JSON.stringify(body),
+    })
+  },
+
+  async executeInstrumentApplianceJob(
+    job: InstrumentApplianceJob,
+    options?: { confirmLiveExecution?: boolean },
+  ): Promise<InstrumentApplianceJobExecutionResult> {
+    return request('/measurements/appliance-jobs/execute', {
+      method: 'POST',
+      body: JSON.stringify({
+        job,
+        ...(options?.confirmLiveExecution === true ? { confirmLiveExecution: true } : {}),
+      }),
     })
   },
 
@@ -2583,6 +2820,225 @@ export const apiClient = {
     })
   },
 
+  async listFoundryReviews(): Promise<FoundryReviewSummary[]> {
+    const response = await request<{ success: true; reviews: FoundryReviewSummary[] }>('/protocol-ide/foundry/reviews')
+    return response.reviews
+  },
+
+  async getFoundryStatus(): Promise<{ status: FoundryOperationalStatus; index: FoundryManifestIndex }> {
+    const response = await request<{ success: true; status: FoundryOperationalStatus; index: FoundryManifestIndex }>('/protocol-ide/foundry/status')
+    return {
+      status: response.status,
+      index: response.index,
+    }
+  },
+
+  async getFoundryReviewContext(
+    protocolId: string,
+    variant: string,
+  ): Promise<FoundryReviewContext> {
+    const response = await request<{ success: true; context: FoundryReviewContext }>(
+      `/protocol-ide/foundry/${encodeURIComponent(protocolId)}/${encodeURIComponent(variant)}/review-context`,
+    )
+    return response.context
+  },
+
+  async getFoundryEventGraph(
+    protocolId: string,
+    variant: string,
+  ): Promise<{
+    success: true
+    events: unknown[]
+    labwares: unknown[]
+    deckPlacements: unknown[]
+  }> {
+    return request(
+      `/protocol-ide/foundry/${encodeURIComponent(protocolId)}/${encodeURIComponent(variant)}/event-graph`,
+    )
+  },
+
+  async *streamFoundryReviewChat(
+    protocolId: string,
+    variant: string,
+    prompt: string,
+    history: FoundryChatMessage[] = [],
+    signal?: AbortSignal,
+  ): AsyncGenerator<FoundryReviewChatEvent> {
+    const response = await fetch(
+      `${API_BASE}/protocol-ide/foundry/${encodeURIComponent(protocolId)}/${encodeURIComponent(variant)}/chat`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, history }),
+        ...(signal ? { signal } : {}),
+      },
+    )
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      yield { type: 'error', message: `Server ${response.status}: ${text || response.statusText}` }
+      return
+    }
+    if (!response.body) {
+      yield { type: 'error', message: 'No response body (streaming not supported)' }
+      return
+    }
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ''
+        for (const part of parts) {
+          const trimmed = part.trim()
+          if (!trimmed.startsWith('data:')) continue
+          const json = trimmed.replace(/^data:\s*/, '')
+          try {
+            yield JSON.parse(json) as FoundryReviewChatEvent
+          } catch {
+            // Malformed event — skip
+          }
+        }
+      }
+      if (buffer.trim().startsWith('data:')) {
+        const json = buffer.trim().replace(/^data:\s*/, '')
+        try {
+          yield JSON.parse(json) as FoundryReviewChatEvent
+        } catch { /* swallow */ }
+      }
+    } finally {
+      reader.releaseLock()
+    }
+  },
+
+  async synthesizeFoundrySpec(
+    protocolId: string,
+    variant: string,
+    humanInstruction?: string,
+  ): Promise<{
+    success: true
+    status: 'queued' | 'blocked'
+    queuePath?: string
+    markdownPath?: string
+    patchSpecPath?: string
+    adoptionPath?: string
+    reviewPath: string
+  }> {
+    return request(`/protocol-ide/foundry/${encodeURIComponent(protocolId)}/${encodeURIComponent(variant)}/synthesize-spec`, {
+      method: 'POST',
+      body: JSON.stringify({ humanInstruction }),
+    })
+  },
+
+  async *streamFoundryInnerLoop(
+    protocolId: string,
+    variant: string,
+    prompt: string,
+    options?: { runCritic?: boolean; signal?: AbortSignal },
+  ): AsyncGenerator<FoundryInnerLoopEvent> {
+    const response = await fetch(
+      `${API_BASE}/protocol-ide/foundry/${encodeURIComponent(protocolId)}/${encodeURIComponent(variant)}/inner-loop`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, runCritic: Boolean(options?.runCritic) }),
+        ...(options?.signal ? { signal: options.signal } : {}),
+      },
+    )
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      yield { type: 'error', message: `Server ${response.status}: ${text || response.statusText}` }
+      return
+    }
+    if (!response.body) {
+      yield { type: 'error', message: 'No response body (streaming not supported)' }
+      return
+    }
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ''
+        for (const part of parts) {
+          const trimmed = part.trim()
+          if (!trimmed.startsWith('data:')) continue
+          const json = trimmed.replace(/^data:\s*/, '')
+          try {
+            yield JSON.parse(json) as FoundryInnerLoopEvent
+          } catch {
+            // skip malformed
+          }
+        }
+      }
+      if (buffer.trim().startsWith('data:')) {
+        const json = buffer.trim().replace(/^data:\s*/, '')
+        try {
+          yield JSON.parse(json) as FoundryInnerLoopEvent
+        } catch { /* swallow */ }
+      }
+    } finally {
+      reader.releaseLock()
+    }
+  },
+
+  async promoteFoundryDraftSpec(
+    protocolId: string,
+    variant: string,
+    draftId: string,
+  ): Promise<{
+    success: true
+    status: 'queued'
+    queuePath: string
+    patchSpecPath: string
+    adoptionPath: string
+    reviewPath: string
+  }> {
+    return request(`/protocol-ide/foundry/${encodeURIComponent(protocolId)}/${encodeURIComponent(variant)}/promote-draft`, {
+      method: 'POST',
+      body: JSON.stringify({ draftId }),
+    })
+  },
+
+  async rejectFoundryReview(
+    protocolId: string,
+    variant: string,
+    options?: { reason?: string; reasonClass?: FoundryRejectionReasonClass },
+  ): Promise<{
+    success: true
+    status: 'rejected'
+    reviewPath: string
+    rejectedAt: string
+    reason: string
+    reasonClass: FoundryRejectionReasonClass
+  }> {
+    return request(`/protocol-ide/foundry/${encodeURIComponent(protocolId)}/${encodeURIComponent(variant)}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({
+        ...(options?.reason !== undefined ? { reason: options.reason } : {}),
+        ...(options?.reasonClass !== undefined ? { reasonClass: options.reasonClass } : {}),
+      }),
+    })
+  },
+
+  async reopenFoundryReview(
+    protocolId: string,
+    variant: string,
+    reason?: string,
+  ): Promise<{ success: true; status: 'reviewing'; reviewPath: string; reopenedAt: string; reason: string }> {
+    return request(`/protocol-ide/foundry/${encodeURIComponent(protocolId)}/${encodeURIComponent(variant)}/reopen`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    })
+  },
+
   /**
    * Create a Protocol IDE session and stream per-phase progress as SSE.
    * Returns an async generator of progress events; consumers update UI per
@@ -2702,14 +3158,14 @@ export const apiClient = {
   async submitProtocolIdeFeedback(
     sessionId: string,
     body: {
-      text: string
-      anchors: Array<
+      body: string
+      anchors?: Array<
         | { kind: 'node'; semanticKey: string; instanceId?: string; snapshot?: Record<string, unknown> }
         | { kind: 'source'; documentRef: string; page: number; region?: { x: number; y: number; width: number; height: number } }
         | { kind: 'phase'; phaseId: string }
       >
     },
-  ): Promise<{ success: true; commentId: string; rollingSummary: string }> {
+  ): Promise<{ success: true; feedbackId: string; rollingSummary: { summary: string; updatedAt: string; commentCount: number } }> {
     return request(`/protocol-ide/sessions/${encodeURIComponent(sessionId)}/feedback`, {
       method: 'POST',
       body: JSON.stringify(body),

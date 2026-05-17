@@ -1,0 +1,10 @@
+kind: protocol-foundry-rerun-report
+protocolId: cayman-natural-prodccuts
+variant: manual_tubes
+generated_at: 2026-05-09T22:00:30.037Z
+compilerArtifact: /home/brad/git/computable-foundry/artifacts/compiler/cayman-natural-prodccuts/manual_tubes.yaml
+eventGraphArtifact: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-natural-prodccuts/manual_tubes.yaml
+executionScaleArtifact: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-natural-prodccuts/manual_tubes.yaml
+outcome: gap
+eventCount: 0
+blockerCount: 0

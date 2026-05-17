@@ -13,11 +13,13 @@
  * v1 is review-only: no direct graph editing, no mutation of graph structure.
  */
 
-import { type ReactNode } from 'react'
+import { useEffect, useMemo, type ReactNode } from 'react'
 import type { ProtocolIdeSession } from './types'
 import type { DeckPlacement } from '../graph/labware/DeckVisualizationPanel'
-import type { Labware } from '../types/labware'
+import { createLabware, normalizeLabwareWithDefinition, pickEditorLabwareType, type Labware, type LabwareType } from '../types/labware'
 import type { PlateEvent } from '../types/events'
+import { DualLabwarePane } from '../graph/labware/DualLabwarePane'
+import { useOptionalLabwareEditor, type LabwareEditorState } from '../graph/context/LabwareEditorContext'
 import { CommentBadge } from './CommentBadge'
 
 // ---------------------------------------------------------------------------
@@ -121,6 +123,10 @@ export interface ProtocolIdeGraphReviewSurfaceProps {
   onEvidenceClick?: (evidenceRefId: string) => void
   /** When set, highlights the matching graph node. */
   highlightedEvidenceRefId?: string | null
+  /** Optional comparison ("before") event-graph data; renders a diff strip. */
+  comparisonEventGraphData?: EventGraphData | null
+  /** Optional label for the comparison strip (e.g. trace id). */
+  comparisonLabel?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -559,6 +565,261 @@ function BudgetCostSummaryView({
 // Event graph canvas (review-only — reuses existing graph primitives)
 // ---------------------------------------------------------------------------
 
+type RawLabware = Partial<Labware> & {
+  instanceId?: string
+  slot?: string
+  orientation?: 'portrait' | 'landscape'
+  wells?: Record<string, unknown>
+  labwareType?: string
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined
+}
+
+function inferEditorLabwareType(raw: RawLabware): LabwareType {
+  const payload = {
+    kind: 'labware' as const,
+    recordId: raw.labwareId ?? raw.instanceId ?? raw.name ?? 'compiler-labware',
+    name: raw.name ?? raw.labwareType ?? raw.instanceId ?? raw.labwareId ?? 'Labware',
+    aliases: [raw.labwareType, raw.definitionId, raw.renderProfile].filter(Boolean) as string[],
+    format: {},
+  }
+  return pickEditorLabwareType({
+    ...payload,
+    ...(raw.labwareType ? { labwareType: raw.labwareType } : {}),
+  })
+}
+
+function normalizeRawGeometry(raw: RawLabware, fallback: Labware['geometry']): Labware['geometry'] {
+  const geometry = (raw.geometry ?? {}) as Record<string, unknown>
+  const maxVolume =
+    typeof geometry.maxVolume_uL === 'number'
+      ? geometry.maxVolume_uL
+      : typeof geometry.maxVolumeUL === 'number'
+        ? geometry.maxVolumeUL
+        : typeof geometry.wellVolumeUL === 'number'
+          ? geometry.wellVolumeUL
+          : fallback.maxVolume_uL
+  const minVolume =
+    typeof geometry.minVolume_uL === 'number'
+      ? geometry.minVolume_uL
+      : typeof geometry.minVolumeUL === 'number'
+        ? geometry.minVolumeUL
+        : fallback.minVolume_uL
+  return {
+    ...fallback,
+    maxVolume_uL: maxVolume,
+    minVolume_uL: minVolume,
+    ...(geometry.wellShape ? { wellShape: geometry.wellShape as Labware['geometry']['wellShape'] } : {}),
+  }
+}
+
+function toEditorLabware(raw: unknown): Labware | null {
+  if (!raw || typeof raw !== 'object') return null
+  const candidate = raw as RawLabware
+  const labwareId = candidate.labwareId ?? candidate.instanceId
+  if (!labwareId) return null
+  const labwareType = inferEditorLabwareType(candidate)
+  const name = candidate.name ?? candidate.labwareType ?? labwareId
+  const fallback = createLabware(labwareType, name)
+  return normalizeLabwareWithDefinition({
+    ...fallback,
+    ...candidate,
+    labwareId,
+    labwareType,
+    name,
+    addressing: candidate.addressing?.type ? candidate.addressing : fallback.addressing,
+    geometry: normalizeRawGeometry(candidate, fallback.geometry),
+  })
+}
+
+function extractEventSourceLabwareId(event: PlateEvent): string | undefined {
+  const details = (event.details ?? {}) as Record<string, unknown>
+  const source = details.source as Record<string, unknown> | undefined
+  return readString(details.sourceLabwareId)
+    ?? readString(details.source_labwareId)
+    ?? readString(source?.labwareInstanceId)
+    ?? readString(source?.labwareId)
+}
+
+function extractEventTargetLabwareId(event: PlateEvent): string | undefined {
+  const details = (event.details ?? {}) as Record<string, unknown>
+  const target = details.target as Record<string, unknown> | undefined
+  return readString(details.targetLabwareId)
+    ?? readString(details.destLabwareId)
+    ?? readString(details.dest_labwareId)
+    ?? readString(target?.labwareInstanceId)
+    ?? readString(target?.labwareId)
+}
+
+function chooseDefaultPaneLabwares(events: PlateEvent[], labwares: Labware[]): {
+  sourceLabwareId: string | null
+  targetLabwareId: string | null
+} {
+  const ids = new Set(labwares.map((labware) => labware.labwareId))
+  for (const event of events) {
+    const source = extractEventSourceLabwareId(event)
+    const target = extractEventTargetLabwareId(event)
+    if (source && target && ids.has(source) && ids.has(target)) {
+      return { sourceLabwareId: source, targetLabwareId: target }
+    }
+  }
+  if (labwares.length === 1) {
+    return { sourceLabwareId: labwares[0]!.labwareId, targetLabwareId: labwares[0]!.labwareId }
+  }
+  return {
+    sourceLabwareId: labwares[0]?.labwareId ?? null,
+    targetLabwareId: labwares[1]?.labwareId ?? labwares[0]?.labwareId ?? null,
+  }
+}
+
+function createSelections(labwares: Labware[]): LabwareEditorState['selections'] {
+  return new Map(
+    labwares.map((labware) => [
+      labware.labwareId,
+      { selectedWells: new Set(), highlightedWells: new Set(), lastClickedWell: null },
+    ]),
+  ) as LabwareEditorState['selections']
+}
+
+function ProtocolIdeLabwareReviewContent({
+  eventGraphData,
+  issueCards,
+  highlightedEvidenceRefId,
+}: {
+  eventGraphData?: EventGraphData | null
+  issueCards?: IssueCardRef[]
+  highlightedEvidenceRefId?: string | null
+}): JSX.Element {
+  const editor = useOptionalLabwareEditor()
+  const dispatch = editor?.dispatch
+  const events = useMemo(() => eventGraphData?.events ?? [], [eventGraphData?.events])
+  const labwares = useMemo(
+    () => (eventGraphData?.labwares ?? []).map(toEditorLabware).filter((labware): labware is Labware => labware !== null),
+    [eventGraphData?.labwares],
+  )
+  const defaults = useMemo(() => chooseDefaultPaneLabwares(events, labwares), [events, labwares])
+  const labwareMap = useMemo(
+    () => new Map(labwares.map((labware) => [labware.labwareId, labware])),
+    [labwares],
+  )
+
+  useEffect(() => {
+    if (!dispatch || labwares.length === 0) return
+    dispatch({
+      type: 'LOAD_STATE',
+      state: {
+        labwares: labwareMap,
+        selections: createSelections(labwares),
+        events,
+        activeLabwareId: defaults.sourceLabwareId ?? defaults.targetLabwareId,
+        sourceLabwareId: defaults.sourceLabwareId,
+        targetLabwareId: defaults.targetLabwareId,
+        selectedEventId: null,
+        editingEventId: null,
+        isDirty: false,
+      },
+    })
+  }, [defaults.sourceLabwareId, defaults.targetLabwareId, dispatch, events, labwareMap, labwares])
+
+  if (events.length === 0) {
+    return (
+      <div className="protocol-ide-event-graph-empty" data-testid="event-graph-empty">
+        <p>No events in the latest compiler output.</p>
+        <p className="protocol-ide-event-graph-empty__hint">
+          Run the compiler pipeline to generate events.
+        </p>
+      </div>
+    )
+  }
+
+  const sourceValue = editor?.state.sourceLabwareId ?? defaults.sourceLabwareId ?? ''
+  const targetValue = editor?.state.targetLabwareId ?? defaults.targetLabwareId ?? ''
+
+  return (
+    <>
+      <div className="protocol-ide-event-graph-header">
+        <span className="protocol-ide-event-graph-count">
+          {events.length} event{events.length !== 1 ? 's' : ''}
+        </span>
+        <span className="protocol-ide-event-graph-labware-count">
+          {labwares.length} labware
+        </span>
+      </div>
+
+      {editor && labwares.length > 0 ? (
+        <div className="protocol-ide-labware-review" data-testid="protocol-ide-labware-review">
+          <div className="protocol-ide-labware-review__toolbar">
+            <label>
+              <span>Source</span>
+              <select
+                data-testid="protocol-ide-source-labware-select"
+                value={sourceValue}
+                onChange={(event) => editor.setSourceLabware(event.target.value || null)}
+              >
+                {labwares.map((labware) => (
+                  <option key={labware.labwareId} value={labware.labwareId}>
+                    {labware.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Target</span>
+              <select
+                data-testid="protocol-ide-target-labware-select"
+                value={targetValue}
+                onChange={(event) => editor.setTargetLabware(event.target.value || null)}
+              >
+                {labwares.map((labware) => (
+                  <option key={labware.labwareId} value={labware.labwareId}>
+                    {labware.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <DualLabwarePane
+            mode="plan"
+            events={events}
+            playbackPosition={events.length}
+            lockLandscapeTipracks
+          />
+        </div>
+      ) : (
+        <div className="protocol-ide-labware-review protocol-ide-labware-review--empty" data-testid="protocol-ide-labware-review-empty">
+          No labware in the latest compiler output.
+        </div>
+      )}
+
+      <div className="protocol-ide-event-list" data-testid="event-list">
+        {events.map((event, i) => {
+          const cardForEvent = issueCards?.find((card) => card.graphRegionId === event.eventId)
+          const isHighlighted =
+            highlightedEvidenceRefId !== null &&
+            highlightedEvidenceRefId !== undefined &&
+            cardForEvent?.evidenceRefId === highlightedEvidenceRefId
+          return (
+            <div
+              key={event.eventId || `event-${i}`}
+              className={`protocol-ide-event-item${isHighlighted ? ' protocol-ide-graph-node-highlighted' : ''}`}
+              data-testid={`event-item-${i}`}
+            >
+              <span className="protocol-ide-event-item__type">{event.event_type}</span>
+              <span className="protocol-ide-event-item__summary">
+                {event.event_type === 'transfer'
+                  ? `transfer -> ${JSON.stringify((event.details as Record<string, unknown> | undefined)?.wells ?? [])}`
+                  : JSON.stringify(event.details ?? {})}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </>
+  )
+}
+
 function EventGraphCanvas({
   eventGraphData,
   issueCards,
@@ -572,9 +833,6 @@ function EventGraphCanvas({
   onEvidenceClick?: (evidenceRefId: string) => void
   highlightedEvidenceRefId?: string | null
 }): JSX.Element {
-  const events = eventGraphData?.events ?? []
-  const labwares = eventGraphData?.labwares ?? []
-
   return (
     <div
       className="protocol-ide-event-graph-canvas"
@@ -597,49 +855,11 @@ function EventGraphCanvas({
 
       {/* Event graph content — review-only */}
       <div className="protocol-ide-event-graph-content" data-testid="event-graph-content">
-        {events.length > 0 ? (
-          <>
-            <div className="protocol-ide-event-graph-header">
-              <span className="protocol-ide-event-graph-count">
-                {events.length} event{events.length !== 1 ? 's' : ''}
-              </span>
-              <span className="protocol-ide-event-graph-labware-count">
-                {labwares.length} labware
-              </span>
-            </div>
-            <div className="protocol-ide-event-list" data-testid="event-list">
-              {events.map((event, i) => {
-                const cardForEvent = issueCards?.find(
-                  (c) => c.graphRegionId === event.eventId
-                )
-                const isHighlighted =
-                  highlightedEvidenceRefId !== null &&
-                  cardForEvent?.evidenceRefId === highlightedEvidenceRefId
-                return (
-                  <div
-                    key={event.eventId || `event-${i}`}
-                    className={`protocol-ide-event-item${isHighlighted ? ' protocol-ide-graph-node-highlighted' : ''}`}
-                    data-testid={`event-item-${i}`}
-                  >
-                    <span className="protocol-ide-event-item__type">{event.event_type}</span>
-                    <span className="protocol-ide-event-item__summary">
-                      {event.event_type === 'transfer'
-                        ? `transfer → ${JSON.stringify(event.details?.wells ?? [])}`
-                        : JSON.stringify(event.details ?? {})}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          </>
-        ) : (
-          <div className="protocol-ide-event-graph-empty" data-testid="event-graph-empty">
-            <p>No events in the latest compiler output.</p>
-            <p className="protocol-ide-event-graph-empty__hint">
-              Run the compiler pipeline to generate events.
-            </p>
-          </div>
-        )}
+        <ProtocolIdeLabwareReviewContent
+          eventGraphData={eventGraphData}
+          issueCards={issueCards}
+          highlightedEvidenceRefId={highlightedEvidenceRefId}
+        />
       </div>
 
       {/* Issue card badges on graph regions */}
@@ -689,6 +909,50 @@ function EventGraphCanvas({
           padding: 0.4rem 0;
           margin-bottom: 0.5rem;
           border-bottom: 1px solid #e9ecef;
+        }
+        .protocol-ide-labware-review {
+          min-height: 420px;
+          display: flex;
+          flex-direction: column;
+          gap: 0.6rem;
+          margin-bottom: 0.75rem;
+        }
+        .protocol-ide-labware-review--empty {
+          min-height: 220px;
+          align-items: center;
+          justify-content: center;
+          color: #64748b;
+          border: 1px dashed #cbd5e1;
+          border-radius: 8px;
+          background: #f8fafc;
+        }
+        .protocol-ide-labware-review__toolbar {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.75rem;
+          align-items: center;
+          padding: 0.5rem;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          background: #f8fafc;
+        }
+        .protocol-ide-labware-review__toolbar label {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.4rem;
+          font-size: 0.78rem;
+          color: #475569;
+          font-weight: 600;
+        }
+        .protocol-ide-labware-review__toolbar select {
+          min-width: 180px;
+          max-width: 280px;
+          height: 30px;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          background: #fff;
+          color: #0f172a;
+          font-size: 0.78rem;
         }
         .protocol-ide-event-graph-count,
         .protocol-ide-event-graph-labware-count {
@@ -765,9 +1029,12 @@ export function ProtocolIdeGraphReviewSurface({
   onIssueCardClick,
   onEvidenceClick,
   highlightedEvidenceRefId,
+  comparisonEventGraphData,
+  comparisonLabel,
 }: ProtocolIdeGraphReviewSurfaceProps): JSX.Element {
   const hasIssueCards = issueCards.length > 0
   const hasComments = comments.length > 0
+  const hasComparison = Boolean(comparisonEventGraphData)
 
   return (
     <div
@@ -812,6 +1079,22 @@ export function ProtocolIdeGraphReviewSurface({
           )}
         </div>
       </header>
+
+      {hasComparison && (
+        <div
+          className="protocol-ide-review-compare"
+          data-testid="review-graph-compare"
+          role="status"
+        >
+          <span className="protocol-ide-review-compare__label">
+            Comparing against prior event graph
+            {comparisonLabel ? ` (${comparisonLabel})` : ''}
+          </span>
+          <span className="protocol-ide-review-compare__counts">
+            after {eventGraphData?.events?.length ?? 0} events vs before {comparisonEventGraphData?.events?.length ?? 0}
+          </span>
+        </div>
+      )}
 
       {/* Main layout: graph canvas (center) + summary panels (right) */}
       <div className="protocol-ide-review-body" data-testid="review-body">
@@ -870,6 +1153,19 @@ export function ProtocolIdeGraphReviewSurface({
           display: flex;
           align-items: center;
           gap: 0.75rem;
+        }
+        .protocol-ide-review-compare {
+          display: flex;
+          justify-content: space-between;
+          gap: 0.75rem;
+          padding: 0.4rem 1rem;
+          background: #fef3c7;
+          border-bottom: 1px solid #fde68a;
+          font-size: 0.78rem;
+          color: #92400e;
+        }
+        .protocol-ide-review-compare__counts {
+          font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         }
         .protocol-ide-review-title {
           font-size: 1rem;

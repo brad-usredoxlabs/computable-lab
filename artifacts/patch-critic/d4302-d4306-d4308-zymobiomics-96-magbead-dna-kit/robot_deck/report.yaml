@@ -1,0 +1,18 @@
+kind: protocol-foundry-critic-report
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: robot_deck
+generated_at: 2026-05-09T21:07:42.287Z
+verdict: pass
+reportPath: /home/brad/git/computable-foundry/artifacts/patch-critic/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/report.yaml
+reviewDurationMs: 8
+message: "Patch applied: 1 file(s) changed, spec verification passed."
+notes:
+  - No acceptance criteria available for this patch spec
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+specVerification:
+  accepted: true
+  criteriaMet: []
+  criteriaFailed: []
+  notes:
+    - All acceptance criteria satisfied

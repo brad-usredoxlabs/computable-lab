@@ -97,7 +97,7 @@ mappings:
     exact_id: "EXACT:Class_9"
     obi_id: "OBI:0000652"
     notes: "Introduce reagent or material"
-    synonyms: [add, dispense, deliver]
+    synonyms: [add, dispense, deliver, place, load, put, set, mount]
   - verb: create_container
     notes: "no canonical mapping"
     synonyms: [make, build]

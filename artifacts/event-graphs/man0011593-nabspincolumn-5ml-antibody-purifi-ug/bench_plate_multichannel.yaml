@@ -15,13 +15,7 @@ eventGraph:
     man0011593-nabspincolumn-5ml-antibody-purifi-ug (bench_plate_multichannel).
   status: draft
   protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
-  events: &a1
-    - eventId: evt-spin-tatfolde
-      event_type: centrifuge
-      details: &a2
-        rpm: 300
-        duration: PT5M
-      labwareId: sample_plate
+  events: &a1 []
   labwares:
     - labwareId: sample_plate
       labwareType: plate_96
@@ -34,51 +28,14 @@ eventGraph:
     - bench_plate_multichannel
 terminalArtifacts:
   events: *a1
-  directives:
-    - directiveId: dir_1
-      kind: mount_pipette
-      params:
-        mountSide: right
-        pipetteType: 8_channel_multichannel
-  gaps:
-    - kind: clarification
-      message: The protocol specifies '3 washes' total (step 7) and '3 fractions' of
-        elution (step 9). The current tagging captures the actions but relies on
-        the compiler to resolve the repetition count based on the residual
-        clause 'Repeat this step 2 times'. Confirm if 'Repeat wash 2 additional
-        times' implies 3 total washes.
-    - kind: unresolved_ref
-      message: generic_96_well_plate (no matching labware in prior snapshot)
-      details:
-        hint: generic_96_well_plate
-        reason: no matching labware in prior snapshot
-    - kind: unresolved_ref
-      message: generic_12_well_reservoir (no matching labware in prior snapshot)
-      details:
-        hint: generic_12_well_reservoir
-        reason: no matching labware in prior snapshot
-    - kind: unresolved_ref
-      message: generic_24x1_5ml_tube_rack (no matching labware in prior snapshot)
-      details:
-        hint: generic_24x1_5ml_tube_rack
-        reason: no matching labware in prior snapshot
-    - kind: unresolved_ref
-      message: generic_4x50ml_tube_rack (no matching labware in prior snapshot)
-      details:
-        hint: generic_4x50ml_tube_rack
-        reason: no matching labware in prior snapshot
+  directives: []
+  gaps: []
   resolvedRefs: []
   labStateDelta:
-    events:
-      - eventId: evt-spin-tatfolde
-        event_type: centrifuge
-        details: *a2
+    events: []
     snapshotAfter:
       deck: []
-      mountedPipettes:
-        - mountSide: right
-          pipetteType: 8_channel_multichannel
-          maxVolumeUl: 50
+      mountedPipettes: []
       labware: {}
       reservoirs: {}
       mintCounter: 0
@@ -147,7 +104,7 @@ terminalArtifacts:
       - ASSIST PLUS lowering uses the same plate and lane semantics as bench
         multichannel planning, then binds them to deck-compatible labware and
         tool profiles.
-    blockers: &a3 []
+    blockers: &a2 []
   validationReport:
     findings: []
   instrumentRunFiles: []
@@ -184,8 +141,32 @@ diagnostics:
     pass_id: extract_entities
     details: {}
   - severity: warning
+    code: tag_prompt_parse_error
+    message: "tag_prompt response was not valid JSON: Unterminated string in JSON at
+      position 669"
+    pass_id: tag_prompt
+    details:
+      raw_preview: |-
+        
+
+        {
+          "taggedPhrases": [
+            {
+              "phrase": "NAb™ Spin Columns, 5 mL",
+              "tag": "labware",
+              "value": "spin_column"
+            },
+            {
+              "phrase": "5 mL",
+              "tag": "quantity",
+              "value": "5 mL"
+            },
+            {
+              "phrase": "Catalog Numbers 89960, 89961, 89962, and 89963",
+              "tag
+  - severity: warning
     code: ai_precompile_shape_mismatch
-    message: ai_precompile output shape mismatch
+    message: ai_precompile output shape mismatch, using fallback
     pass_id: ai_precompile
   - severity: info
     code: pass_skipped_by_when
@@ -194,9 +175,24 @@ diagnostics:
     pass_id: mint_materials
   - severity: info
     code: pass_skipped_by_when
+    message: "Pass 'apply_directives' skipped: when condition
+      'outputs.ai_precompile.directives' evaluated to false"
+    pass_id: apply_directives
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_biology_verbs' skipped: when condition
+      'outputs.ai_precompile.candidateEvents' evaluated to false"
+    pass_id: expand_biology_verbs
+  - severity: info
+    code: pass_skipped_by_when
     message: "Pass 'resolve_labware' skipped: when condition
       'outputs.ai_precompile.candidateLabwares' evaluated to false"
     pass_id: resolve_labware
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_prior_labware_references' skipped: when condition
+      'outputs.ai_precompile.priorLabwareRefs' evaluated to false"
+    pass_id: resolve_prior_labware_references
   - severity: info
     code: pass_skipped_by_when
     message: "Pass 'expand_patterns' skipped: when condition
@@ -215,7 +211,7 @@ diagnostics:
       sourceLevel: manual_tubes
       targetLevel: robot_deck
       profileId: robot-assist-plus-96
-      blockers: *a3
+      blockers: *a2
 foundryTestAssumptions:
   kind: protocol-foundry-test-assumption-profile
   protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug

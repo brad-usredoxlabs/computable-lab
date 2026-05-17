@@ -1,0 +1,10 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: cayman-immuno-oncology
+variant: robot_deck
+generated_at: 2026-05-10T12:43:02.313Z
+status: applied
+selectedSpecId: cayman-immuno-oncology/robot_deck/fix-tag-prompt-json-parse-error
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+commit: 9574fcdc1533b955d2e49f9303e5d965afdf5ac0
+message: Patch applied and committed.

@@ -1,0 +1,88 @@
+kind: protocol-foundry-patch-spec
+id: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-foundry-runtime-wiring-gap
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: bench_plate_multichannel
+fixClass: foundry_runtime_wiring_gap
+title: Wire Foundry compile dependencies to the real compiler runtime
+rationale: Foundry-specific runs are producing compiler gaps that look like
+  missing resolver dependencies or skipped runtime wiring rather than missing
+  protocol records. The architect may patch Foundry harness wiring, dependency
+  injection, and focused Foundry regressions.
+ownedFiles:
+  - server/src/foundry/ProtocolFoundryCompileRunner.ts
+  - server/src/foundry/ProtocolFoundryCompileRunner.test.ts
+  - server/src/tools/protocolFoundryCompile.ts
+  - server/src/tools/protocolFoundryLoop.ts
+  - server/src/ai/runChatbotCompile.ts
+  - server/src/ai/compiler/labwareLookup.ts
+  - server/src/ai/compiler/labwareLookup.test.ts
+acceptance:
+  - Foundry compile runs use the same real lookup/resolver dependencies as the
+    main app when local seed records exist.
+  - Does not hard-code one protocol ID or one vendor PDF.
+  - Adds a focused regression proving a Foundry compile dependency is no longer
+    stubbed or empty when seed data can satisfy it.
+  - Compiler diagnostics for the source protocol lose at least one
+    resolver/wiring gap, or the remaining gap is classified more specifically.
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 3
+  targetChangedLines: 80
+  maxChangedLines: 220
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+contextHints:
+  - This lane is for the Foundry harness around the compiler, not for adding new
+    biology data records.
+  - A likely failure pattern is a Foundry runner passing an always-empty lookup
+    function where the main app uses a real RecordStore-backed lookup.
+  - Patch dependency wiring before adding YAML. Existing records should be found
+    before new records are minted.
+  - Keep changes local to Foundry runtime wiring unless the regression proves a
+    shared compiler API needs a small extension.
+doNotTouch:
+  - Do not rewrite the pipeline end to end.
+  - Do not create real material-instance, aliquot, or physical inventory records
+    from vendor PDF evidence.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.txt
+failureEvidence:
+  outcome: gap
+  eventCount: 0
+  minUsefulEvents: 5
+  diagnosticCodes:
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_candidates
+    - foundry_presegmented_no_actionable_candidates
+    - tag_prompt_parse_error
+    - ai_precompile_shape_mismatch
+    - pass_skipped_by_when
+    - pass_skipped_by_when
+    - pass_skipped_by_when
+    - pass_skipped_by_when
+    - pass_skipped_by_when
+    - pass_skipped_by_when
+    - pass_skipped_by_when
+    - execution_scale_plan_ready
+  extractorRepairExhaustedCount: 0
+  blockerCount: 0
+  gapCount: 0
+  browserStatus: skipped
+architectNotes: "Deterministic fallback: 4 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/verdict.yaml

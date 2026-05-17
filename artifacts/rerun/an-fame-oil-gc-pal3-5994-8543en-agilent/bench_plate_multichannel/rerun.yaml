@@ -1,0 +1,10 @@
+kind: protocol-foundry-rerun-report
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: bench_plate_multichannel
+generated_at: 2026-05-09T21:57:35.762Z
+compilerArtifact: /home/brad/git/computable-foundry/artifacts/compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+eventGraphArtifact: /home/brad/git/computable-foundry/artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+executionScaleArtifact: /home/brad/git/computable-foundry/artifacts/execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+outcome: gap
+eventCount: 0
+blockerCount: 0

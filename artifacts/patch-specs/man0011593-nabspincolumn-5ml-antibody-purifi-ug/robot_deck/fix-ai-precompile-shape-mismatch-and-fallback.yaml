@@ -1,0 +1,55 @@
+kind: protocol-foundry-patch-spec
+id: man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/fix-ai-precompile-shape-mismatch-and-fallback
+protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+variant: robot_deck
+fixClass: precompiler_reference_shape
+title: Fix ai_precompile shape mismatch fallback to produce candidateEvents from
+  deterministic candidates
+rationale: The compiler diagnostics show 'ai_precompile output shape mismatch,
+  using fallback' followed by all downstream passes being skipped because
+  outputs.ai_precompile.candidateEvents evaluated to false. The pre-compiler
+  supplied 13+6+16+5=40 deterministic candidates across chunks, but the
+  ai_precompile pass failed to shape them into the expected output structure.
+  The fallback path produces an empty or malformed AiPrecompileOutput, causing
+  candidateEvents to be falsy. This means the compiler never reaches
+  expand_biology_verbs, resolve_labware, or any event-producing pass. The root
+  cause is in ChatbotCompilePasses.ts where createAiPrecompilePass handles shape
+  mismatches — the fallback must synthesize candidateEvents from the
+  deterministic candidates that were already extracted, rather than returning an
+  empty structure.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - When ai_precompile output has a shape mismatch, the fallback path must
+    produce a valid AiPrecompileOutput with candidateEvents populated from
+    deterministic candidates.
+  - The expand_biology_verbs pass must no longer be skipped when deterministic
+    candidates exist.
+  - eventCount must be >= 3 for protocols with clear procedural steps in the PDF
+    text.
+  - The ai_precompile_shape_mismatch warning should still be emitted but should
+    not result in zero events when candidates are available.
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 60
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011593-nabspincolumn-5ml-antibody-purifi-ug.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/verdict.yaml

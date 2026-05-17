@@ -1,0 +1,22 @@
+kind: protocol-foundry-adoption-decision
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: robot_deck
+generated_at: 2026-05-09T21:23:59.157Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-ai-precompile-shape-mismatch-salvage
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-ai-precompile-shape-mismatch-salvage.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile shape mismatch by improving salvage logic for malformed
+      LLM output
+  - id: man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-labware-resolution-generic-aliases
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-labware-resolution-generic-aliases.yaml
+    fixClass: labware_alias_or_resolver
+    title: Resolve generic labware aliases (generic_96_well_plate,
+      generic_24x1_5ml_tube_rack, generic_12_well_reservoir) in Foundry runtime
+  - id: man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-resolve-references-unknown-kind
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-resolve-references-unknown-kind.yaml
+    fixClass: precompiler_reference_shape
+    title: Handle 'unknown' kind refs in resolve_references pass
+message: Patch specs accepted for unattended coder tournament execution.

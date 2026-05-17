@@ -1,0 +1,47 @@
+kind: protocol-foundry-patch-spec
+id: man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/fix-deterministic-precompile-coverage
+protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+variant: manual_tubes
+fixClass: compiler_event_coverage
+title: Ensure deterministic_precompile extracts protocol steps from vendor PDF text
+rationale: The PDF text contains clear protocol steps (e.g., 'Centrifuge set to
+  1,000 x g for all centrifugation steps', binding buffer preparation, elution
+  steps), but the compiler only produced 1 event. The deterministic_precompile
+  pass should be able to extract these steps without relying on the LLM
+  ai_precompile pass. The TextSegmenter, VerbMatcher, and ParameterGrammar need
+  to correctly parse the vendor protocol text into candidate events.
+  Additionally, the ai_precompile pass should fall back to deterministic output
+  when the LLM output is malformed.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - deterministic_precompile pass extracts >= 3 candidate events from the vendor
+    PDF text
+  - candidateEvents are correctly lowered to PlateEventPrimitive events by
+    expand_biology_verbs pass
+  - eventCount >= 3 in final compiler output
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 100
+  maxChangedLines: 220
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011593-nabspincolumn-5ml-antibody-purifi-ug.txt
+failureEvidence:
+  eventCount: 1
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/verdict.yaml

@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import YAML from 'yaml';
 import { PlatformRegistry } from './PlatformRegistry.js';
 import { DEFAULT_PLATFORM_MANIFESTS } from './defaultManifests.js';
-import type { PlatformManifest } from './types.js';
+import type { PlatformLawnSurface, PlatformManifest, PlatformSideLawn } from './types.js';
 
 type IndexFile = {
   platforms?: string[];
@@ -11,6 +11,25 @@ type IndexFile = {
 
 function toStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+}
+
+function normalizeSurface(input: unknown): PlatformLawnSurface | null {
+  if (!input || typeof input !== 'object') return null;
+  const obj = input as Record<string, unknown>;
+  if (obj.kind !== 'lawn') return null;
+  if (typeof obj.widthMm !== 'number' || typeof obj.heightMm !== 'number') return null;
+  return { kind: 'lawn', widthMm: obj.widthMm, heightMm: obj.heightMm };
+}
+
+function normalizeSideLawn(input: unknown): PlatformSideLawn | null {
+  if (!input || typeof input !== 'object') return null;
+  const obj = input as Record<string, unknown>;
+  if (typeof obj.widthMm !== 'number' || typeof obj.heightMm !== 'number') return null;
+  return {
+    widthMm: obj.widthMm,
+    heightMm: obj.heightMm,
+    ...(typeof obj.label === 'string' ? { label: obj.label } : {}),
+  };
 }
 
 function normalizeManifest(input: unknown): PlatformManifest {
@@ -30,25 +49,31 @@ function normalizeManifest(input: unknown): PlatformManifest {
     ? obj.variants
         .map((variant) => variant as Record<string, unknown>)
         .filter((variant) => typeof variant.id === 'string' && typeof variant.title === 'string')
-        .map((variant) => ({
-          id: String(variant.id),
-          title: String(variant.title),
-          slots: Array.isArray(variant.slots)
-            ? variant.slots
-                .map((slot) => slot as Record<string, unknown>)
-                .filter((slot) => typeof slot.id === 'string' && typeof slot.kind === 'string')
-                .map((slot) => ({
-                  id: String(slot.id),
-                  kind: slot.kind as 'standard' | 'trash' | 'module' | 'special',
-                  ...(typeof slot.label === 'string' ? { label: slot.label } : {}),
-                  ...(typeof slot.orientationMode === 'string' ? { orientationMode: slot.orientationMode as 'flippable' | 'locked_portrait' | 'locked_landscape' | 'not_applicable' } : {}),
-                  ...(typeof slot.row === 'number' ? { row: slot.row } : {}),
-                  ...(typeof slot.col === 'number' ? { col: slot.col } : {}),
-                  ...(typeof slot.reachable === 'boolean' ? { reachable: slot.reachable } : {}),
-                  ...(typeof slot.stagingOnly === 'boolean' ? { stagingOnly: slot.stagingOnly } : {}),
-                }))
-            : [],
-        }))
+        .map((variant) => {
+          const surface = normalizeSurface(variant.surface);
+          const sideLawn = normalizeSideLawn(variant.sideLawn);
+          return {
+            id: String(variant.id),
+            title: String(variant.title),
+            slots: Array.isArray(variant.slots)
+              ? variant.slots
+                  .map((slot) => slot as Record<string, unknown>)
+                  .filter((slot) => typeof slot.id === 'string' && typeof slot.kind === 'string')
+                  .map((slot) => ({
+                    id: String(slot.id),
+                    kind: slot.kind as 'standard' | 'trash' | 'module' | 'special',
+                    ...(typeof slot.label === 'string' ? { label: slot.label } : {}),
+                    ...(typeof slot.orientationMode === 'string' ? { orientationMode: slot.orientationMode as 'flippable' | 'locked_portrait' | 'locked_landscape' | 'not_applicable' } : {}),
+                    ...(typeof slot.row === 'number' ? { row: slot.row } : {}),
+                    ...(typeof slot.col === 'number' ? { col: slot.col } : {}),
+                    ...(typeof slot.reachable === 'boolean' ? { reachable: slot.reachable } : {}),
+                    ...(typeof slot.stagingOnly === 'boolean' ? { stagingOnly: slot.stagingOnly } : {}),
+                  }))
+              : [],
+            ...(surface ? { surface } : {}),
+            ...(sideLawn ? { sideLawn } : {}),
+          };
+        })
     : [];
 
   if (!id || !defaultVariant || variants.length === 0) {

@@ -1,45 +1,43 @@
 kind: protocol-foundry-architect-verdict
 protocolId: mp10422
 variant: robot_deck
-generated_at: 2026-05-09T09:37:24.042Z
+generated_at: 2026-05-09T22:43:14.106Z
 accepted: false
-qualityScore: 0.35
-coverageEstimate: 0.3
+qualityScore: 0.05
+coverageEstimate: 0
 failureClasses:
   - precompiler_reference_shape
-  - material_catalog_or_spec
+  - extractor_prompt_contract
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: fix-ai-precompile-shape-mismatch
+  - id: fix-tag-prompt-json-parsing
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch to enable material and labware
-      resolution passes
-    rationale: The compiler diagnostics show 'ai_precompile output shape mismatch'
-      warning, and subsequent passes (mint_materials, resolve_labware,
-      resolve_prior_labware_references, expand_patterns) are all skipped because
-      their 'when' conditions evaluate to false. This means the ai_precompile
-      pass is producing output that doesn't match the expected
-      AiPrecompileOutput type schema, causing the compiler to skip critical
-      resolution steps. The resulting event graph uses generic 'stain_agent' and
-      'fix_agent' materials instead of the specific CellROX reagents (C10422,
-      C10443, C10444) mentioned in the PDF.
+    title: Fix tag_prompt JSON parsing to handle markdown code fences
+    rationale: "The compiler diagnostic 'tag_prompt response was not valid JSON:
+      Unexpected token 'B', \"\\n\\nBased on t\"...' shows that the LLM returned
+      a markdown-wrapped JSON response (starting with prose and ```json fences),
+      but the parser tried to parse the raw string directly. This caused the
+      tag_prompt pass to fail, which cascaded into ai_precompile_shape_mismatch
+      because the downstream ai_precompile pass depends on properly tagged
+      entities. The fix must strip markdown code fences and prose before
+      JSON.parse in the tag_prompt pass."
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass output matches AiPrecompileOutput type schema without
-        shape mismatch warnings
-      - mint_materials pass is no longer skipped when candidate materials are
-        present
-      - resolve_labware pass is no longer skipped when candidate labwares are
-        present
-      - Compiler diagnostics no longer contain 'ai_precompile_shape_mismatch'
-        warnings
+      - tag_prompt pass successfully parses LLM responses that include markdown
+        code fences (```json ... ```)
+      - tag_prompt pass handles LLM responses with leading prose before the JSON
+        block
+      - ai_precompile_shape_mismatch warning no longer appears for protocols
+        with valid LLM JSON output
+      - candidateEvents are populated from the tag_prompt output instead of
+        being empty
     coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: &a1
       compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/robot_deck.yaml
@@ -52,45 +50,79 @@ recommendedFixes:
       materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10422.yaml
       text: /home/brad/git/computable-foundry/artifacts/text/mp10422.txt
     failureEvidence: &a2
-      eventCount: 6
+      eventCount: 0
       outcome: gap
-    implementationBudget:
-      targetChangedFiles: 1
-      maxChangedFiles: 2
-      targetChangedLines: 60
-      maxChangedLines: 150
-      requireFocusedFixture: true
-  - id: fix-material-catalog-cellrox-reagents
-    class: material_catalog_or_spec
-    title: Add CellROX reagent material records for C10422, C10443, C10444, C10448
-    rationale: The material context shows empty materials, materialSpecs, and
-      vendorProducts arrays. The PDF clearly specifies CellROX Deep Red
-      (C10422), Orange (C10443), Green (C10444), and Variety Pack (C10448)
-      reagents with specific concentrations (2.5 mM in DMSO), storage conditions
-      (-20°C, protect from light), and excitation/emission wavelengths. Without
-      these material records, the compiler cannot resolve specific reagent
-      roles, resulting in generic 'stain_agent' placeholders in the event graph.
-    ownedFiles:
-      - server/src/registry/CompoundClassRegistry.ts
-    acceptance:
-      - Material records exist for CellROX Deep Red (C10422), Orange (C10443),
-        Green (C10444), and Variety Pack (C10448)
-      - Material specs include concentration (2.5 mM), solvent (DMSO), and
-        storage conditions
-      - Compiler can resolve CellROX reagent catalog numbers to material roles
-        in event graph
-      - Event graph events reference specific CellROX materials instead of
-        generic 'stain_agent'
-    coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
     implementationBudget:
       targetChangedFiles: 1
       maxChangedFiles: 2
       targetChangedLines: 40
       maxChangedLines: 100
       requireFocusedFixture: true
+  - id: fix-ai-precompile-fallback-empty-candidates
+    class: precompiler_reference_shape
+    title: Ensure ai_precompile fallback populates candidateEvents from
+      deterministic candidates
+    rationale: The diagnostics show 'ai_precompile output shape mismatch, using
+      fallback' followed by all downstream passes being skipped because
+      'outputs.ai_precompile.candidateEvents evaluated to false'. The fallback
+      path in createAiPrecompilePass must extract candidateEvents from the
+      deterministic presegmented candidates (10 + 4 + 3 + 6 + 4 + 1 = 28
+      candidates were found) instead of returning an empty object. Without
+      candidateEvents, expand_biology_verbs is skipped and no events are
+      generated.
+    ownedFiles:
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+    acceptance:
+      - When ai_precompile shape mismatch occurs, the fallback output includes
+        candidateEvents derived from deterministic presegmented candidates
+      - expand_biology_verbs pass is no longer skipped when deterministic
+        candidates exist
+      - eventCount >= 3 for protocols with clear protocol steps in the PDF text
+      - The ai_precompile fallback preserves candidateLabwares and directives
+        from deterministic extraction
+    coderModelProfile:
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 1
+      maxChangedFiles: 2
+      targetChangedLines: 60
+      maxChangedLines: 150
+      requireFocusedFixture: true
+  - id: fix-extractor-candidate-to-event-lowering
+    class: compiler_event_coverage
+    title: Add lowering from deterministic candidates to candidateEvents in
+      ai_precompile
+    rationale: The pre-compiler successfully extracted 28 deterministic candidates
+      across multiple chunks, but these candidates are not being converted into
+      candidateEvents that the compiler can lower to actual events. The
+      ai_precompile pass needs to map deterministic candidates (which have
+      action verbs, materials, and parameters) into the candidateEvents schema
+      expected by expand_biology_verbs. This is a wiring issue between the
+      deterministic extraction output and the ai_precompile output shape.
+    ownedFiles:
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+      - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+    acceptance:
+      - Deterministic candidates from presegmented text are mapped to
+        candidateEvents in ai_precompile output
+      - Each candidateEvent includes verb, target labware, source labware, and
+        volume parameters
+      - expand_biology_verbs receives non-empty candidateEvents and produces
+        pipette/incubate events
+      - eventCount >= 3 for mp10422 protocol after fix
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 80
+      maxChangedLines: 200
+      requireFocusedFixture: true
 sourceArtifacts: *a1
-architectNotes: "LLM architect analysis: 2 fix recommendations."
+architectNotes: "LLM architect analysis: 3 fix recommendations."

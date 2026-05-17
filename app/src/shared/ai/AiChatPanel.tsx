@@ -273,11 +273,13 @@ export function AiChatPanel() {
             {/* Messages */}
             <ChatMessageList
               messages={chat.messages}
+              executingApplianceJobIds={chat.executingApplianceJobIds}
               onPickClarification={(entityType, optionId, optionLabel) => {
                 const token = `[[${entityType}:${optionId}|${optionLabel}]]`
                 chat.sendPrompt(`Use ${token} — continue.`)
               }}
               onApplyToGraph={chat.applyToGraph}
+              onExecuteInstrumentApplianceJob={chat.executeInstrumentApplianceJob}
             />
 
             {/* Preview details and accept/reject controls */}

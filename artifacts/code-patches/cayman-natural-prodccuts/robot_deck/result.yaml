@@ -1,0 +1,10 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: cayman-natural-prodccuts
+variant: robot_deck
+generated_at: 2026-05-10T12:53:33.057Z
+status: applied
+selectedSpecId: cayman-natural-prodccuts/robot_deck/add-plate-map-verb-expansion
+touchedFiles:
+  - server/src/foundry/ProtocolFoundryCompileRunner.ts
+commit: f185f64de17cc4132becb404be519a854298efac
+message: Patch applied and committed.

@@ -1,0 +1,16 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: event-editor-fixit
+variant: manual_tubes
+generated_at: 2026-05-17T13:43:18.659Z
+attempt: 1
+coderRole: junior
+coderEngine: tool-agent
+endpoint: http://thunderbeast:8001/v1
+model: Qwen/Qwen3.6-35B-A3B-FP8
+status: applied
+selectedSpecId: spec-fix-2026-05-17-vu2w1
+touchedFiles:
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+message: Patch applied.
+tracePath: /home/brad/git/computable-foundry/artifacts/event-editor-fixit/code-patches/event-editor-fixit/manual_tubes/tool-agent-junior-attempt-1.jsonl
+finalText: <promise>COMPLETE</promise>

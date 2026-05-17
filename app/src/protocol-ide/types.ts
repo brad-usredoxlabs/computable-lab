@@ -81,6 +81,8 @@ export interface ProtocolIdeSession {
   latestProtocolRef?: Ref
   latestEventGraphRef?: Ref
   latestEventGraphCacheKey?: string
+  latestTerminalArtifacts?: Record<string, unknown>
+  latestLabState?: Record<string, unknown>
 
   // Latest overlay summaries
   latestDeckSummaryRef?: Ref
@@ -120,4 +122,14 @@ export interface ProtocolIdeSession {
   // ── Extraction variant selection (spec-029) ─────────────────────────
   /** Zero-based index of the extraction variant selected by the user. */
   selectedVariantIndex?: number
+
+  // ── Foundry human review bridge ────────────────────────────────────
+  foundryReview?: {
+    protocolId: string
+    variant: string
+    status: string
+    fixClassification?: string
+    eventCount?: number
+    patchSpecCount?: number
+  }
 }

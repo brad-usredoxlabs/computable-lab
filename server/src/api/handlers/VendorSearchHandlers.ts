@@ -1,9 +1,13 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiError } from '../types.js';
 import { parseConcentration, type Concentration } from '../../materials/concentration.js';
-import type { ProtocolIdeDocumentResult, ProtocolIdeVendorId } from '../../vendor-documents/protocolIdeVendors.js';
+import type { ProtocolIdeDocumentResult } from '../../vendor-documents/protocolIdeVendors.js';
 import { isCuratedVendor } from '../../vendor-documents/protocolIdeVendors.js';
-import { shapeDocumentResult } from '../../vendor-documents/service.js';
+import {
+  protocolIdeDocumentsToFoundryPdfCandidates,
+  shapeDocumentResult,
+} from '../../vendor-documents/service.js';
+import type { FoundryPdfCollectionCandidate } from '../../foundry/FoundryPdfCollector.js';
 
 export type VendorName = 'thermo' | 'sigma' | 'fisher' | 'vwr' | 'cayman' | 'thomas';
 
@@ -30,6 +34,7 @@ export interface VendorSearchResponse {
 
 export interface ProtocolIdeDocumentSearchResponse {
   items: ProtocolIdeDocumentResult[];
+  foundryCandidates: FoundryPdfCollectionCandidate[];
   vendors: Array<{
     vendor: VendorName;
     success: boolean;
@@ -454,7 +459,7 @@ export function createVendorSearchHandlers() {
       // Only search curated vendors for Protocol IDE
       const curatedVendors = vendors.filter((v): v is VendorName => isCuratedVendor(v));
       if (curatedVendors.length === 0) {
-        return { items: [], vendors: [] };
+        return { items: [], foundryCandidates: [], vendors: [] };
       }
 
       const results: Array<VendorStatus & { items: VendorSearchResultItem[] }> = await Promise.all(
@@ -505,6 +510,13 @@ export function createVendorSearchHandlers() {
 
       return {
         items,
+        foundryCandidates: protocolIdeDocumentsToFoundryPdfCandidates(items, {
+          searchQuery: q,
+          provenance: {
+            endpoint: 'protocol-ide-document-search',
+            vendors: curatedVendors,
+          },
+        }),
         vendors: vendorStatuses,
       };
     },

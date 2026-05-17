@@ -1,0 +1,9 @@
+kind: protocol-worker-report
+protocolId: cayman-natural-prodccuts
+variant: manual_tubes
+generated_at: 2026-05-10T12:45:46.676Z
+status: applied
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-natural-prodccuts/manual_tubes/result.yaml
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+message: patch applied and committed

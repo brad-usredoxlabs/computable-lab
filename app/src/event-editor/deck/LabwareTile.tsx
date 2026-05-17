@@ -10,6 +10,14 @@ interface LabwareTileProps {
   variant: 'slot' | 'lawn'
   width?: number
   height?: number
+  /** True when this tile is a proposed AI placement (rendered as a ghost). */
+  ghost?: boolean
+  /**
+   * True when this committed tile is targeted by a preview event — used to
+   * draw attention to the labware the user should drill into to inspect the
+   * proposal before accepting.
+   */
+  affected?: boolean
   onRemove?: () => void
   onRotate?: () => void
   onFocus?: () => void
@@ -27,6 +35,8 @@ export function LabwareTile({
   variant,
   width,
   height,
+  ghost = false,
+  affected = false,
   onRemove,
   onRotate,
   onFocus,
@@ -50,13 +60,21 @@ export function LabwareTile({
     event.dataTransfer.effectAllowed = 'move'
   }
 
+  const tileTitle = ghost
+    ? `${labware.name} · proposed — click to drill in and inspect, then Accept to keep`
+    : affected
+      ? `${labware.name} · affected by preview — click to inspect`
+      : `${labware.name} · ${labware.labwareType} (${orientation}) — click to focus`
+
   return (
     <div
       className="tile"
       data-variant={variant}
       data-orientation={orientation}
-      draggable
-      onDragStart={handleDragStart}
+      data-ghost={ghost ? 'true' : 'false'}
+      data-affected={affected && !ghost ? 'true' : 'false'}
+      draggable={!ghost}
+      onDragStart={ghost ? undefined : handleDragStart}
       onClick={(event) => {
         if (!onFocus) return
         // Ignore clicks that originated on a control button.
@@ -65,34 +83,38 @@ export function LabwareTile({
         onFocus()
       }}
       style={{ width: sized.w, height: sized.h }}
-      title={`${labware.name} · ${labware.labwareType} (${orientation}) — click to focus`}
+      title={tileTitle}
     >
       <span className="tile__icon" aria-hidden>{LABWARE_TYPE_ICONS[labware.labwareType]}</span>
       <span className="tile__name">{labware.name}</span>
-      <div className="tile__controls" onMouseDown={(e) => e.stopPropagation()}>
-        {onRotate ? (
-          <button
-            type="button"
-            className="tile__btn"
-            onClick={(e) => {
-              e.stopPropagation()
-              onRotate()
-            }}
-            title="Rotate (portrait ↔ landscape)"
-          >⟲</button>
-        ) : null}
-        {onRemove ? (
-          <button
-            type="button"
-            className="tile__btn tile__btn--danger"
-            onClick={(e) => {
-              e.stopPropagation()
-              onRemove()
-            }}
-            title="Remove"
-          >×</button>
-        ) : null}
-      </div>
+      {ghost ? <span className="tile__ghost-tag">Proposed</span> : null}
+      {!ghost && affected ? <span className="tile__affected-tag">Preview</span> : null}
+      {!ghost ? (
+        <div className="tile__controls" onMouseDown={(e) => e.stopPropagation()}>
+          {onRotate ? (
+            <button
+              type="button"
+              className="tile__btn"
+              onClick={(e) => {
+                e.stopPropagation()
+                onRotate()
+              }}
+              title="Rotate (portrait ↔ landscape)"
+            >⟲</button>
+          ) : null}
+          {onRemove ? (
+            <button
+              type="button"
+              className="tile__btn tile__btn--danger"
+              onClick={(e) => {
+                e.stopPropagation()
+                onRemove()
+              }}
+              title="Remove"
+            >×</button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }

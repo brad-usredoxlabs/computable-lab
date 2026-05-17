@@ -1,0 +1,17 @@
+kind: protocol-foundry-adoption-decision
+protocolId: mp10422
+variant: bench_plate_multichannel
+generated_at: 2026-05-09T21:34:18.934Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: mp10422/bench_plate_multichannel/fix-ai-precompile-shape-mismatch
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch to enable downstream passes
+  - id: mp10422/bench_plate_multichannel/fix-labware-resolution-for-generic-refs
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/bench_plate_multichannel/fix-labware-resolution-for-generic-refs.yaml
+    fixClass: labware_alias_or_resolver
+    title: Resolve generic labware references (96_well_plate, 12_well_reservoir,
+      96_tip_rack) in compiler
+message: Patch specs accepted for unattended coder tournament execution.

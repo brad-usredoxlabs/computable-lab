@@ -1,0 +1,16 @@
+kind: protocol-foundry-adoption-decision
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: bench_plate_multichannel
+generated_at: 2026-05-09T21:20:10.405Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-ai-precompile-shape-mismatch
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch to enable downstream passes
+  - id: man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-labware-resolution-gaps
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-labware-resolution-gaps.yaml
+    fixClass: labware_alias_or_resolver
+    title: Resolve unresolved labware refs for 96-well plate and 12-well reservoir
+message: Patch specs accepted for unattended coder tournament execution.

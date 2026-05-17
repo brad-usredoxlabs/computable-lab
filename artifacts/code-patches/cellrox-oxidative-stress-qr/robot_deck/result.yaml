@@ -1,0 +1,10 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: cellrox-oxidative-stress-qr
+variant: robot_deck
+generated_at: 2026-05-09T20:57:02.329Z
+status: applied
+selectedSpecId: cellrox-oxidative-stress-qr/robot_deck/add-analyze-verb-expander
+touchedFiles:
+  - server/src/compiler/biology/BiologyVerbExpander.ts
+commit: 492ab264fbe826665074ad6473a51d49e449c918
+message: Patch applied and committed.

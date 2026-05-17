@@ -11,19 +11,27 @@ import { CompactStreamIndicator } from './CompactStreamIndicator'
 import { AttachmentChip } from './AttachmentChip'
 import { ImageLightbox } from './ImageLightbox'
 import { isImageFile } from '../../types/aiContext'
-import type { ChatMessage } from '../../types/ai'
+import type { ChatMessage, InstrumentApplianceJob } from '../../types/ai'
 
 interface ChatMessageListProps {
   messages: ChatMessage[]
+  executingApplianceJobIds?: ReadonlySet<string>
   onPickClarification?: (
     entityType: string,
     optionId: string,
     optionLabel: string,
   ) => void
   onApplyToGraph?: (message: ChatMessage) => void
+  onExecuteInstrumentApplianceJob?: (job: InstrumentApplianceJob) => void
 }
 
-export function ChatMessageList({ messages, onPickClarification, onApplyToGraph }: ChatMessageListProps) {
+export function ChatMessageList({
+  messages,
+  executingApplianceJobIds,
+  onPickClarification,
+  onApplyToGraph,
+  onExecuteInstrumentApplianceJob,
+}: ChatMessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom on new messages
@@ -54,8 +62,10 @@ export function ChatMessageList({ messages, onPickClarification, onApplyToGraph 
         <MessageBubble
           key={msg.id}
           message={msg}
+          executingApplianceJobIds={executingApplianceJobIds}
           onPickClarification={onPickClarification}
           onApplyToGraph={onApplyToGraph}
+          onExecuteInstrumentApplianceJob={onExecuteInstrumentApplianceJob}
         />
       ))}
       <div ref={bottomRef} />
@@ -187,6 +197,62 @@ function ChatMessageStyles() {
         .chat-msg__scale-plan-detail {
           margin-top: 0.2rem;
           color: #64748b;
+        }
+
+        .chat-msg__appliance-jobs {
+          margin-top: 0.45rem;
+          display: flex;
+          flex-direction: column;
+          gap: 0.35rem;
+        }
+
+        .chat-msg__appliance-job {
+          padding: 0.45rem 0.55rem;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          background: #f8fafc;
+          color: #334155;
+          font-size: 0.74rem;
+          line-height: 1.35;
+        }
+
+        .chat-msg__appliance-job-main {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.5rem;
+        }
+
+        .chat-msg__appliance-job-title {
+          font-weight: 700;
+        }
+
+        .chat-msg__appliance-job-detail {
+          margin-top: 0.2rem;
+          color: #64748b;
+        }
+
+        .chat-msg__appliance-job-blockers {
+          margin: 0.3rem 0 0;
+          padding-left: 1rem;
+          color: #991b1b;
+        }
+
+        .chat-msg__appliance-job-btn {
+          flex: 0 0 auto;
+          padding: 3px 9px;
+          border: 1px solid #0f766e;
+          border-radius: 4px;
+          background: #ecfdf5;
+          color: #0f766e;
+          font-size: 0.72rem;
+          font-weight: 700;
+          cursor: pointer;
+        }
+
+        .chat-msg__appliance-job-btn:disabled {
+          cursor: default;
+          opacity: 0.6;
         }
 
         .chat-msg__actions {
@@ -358,16 +424,20 @@ function formatScaleLevel(level: string): string {
 
 function MessageBubble({
   message,
+  executingApplianceJobIds,
   onPickClarification,
   onApplyToGraph,
+  onExecuteInstrumentApplianceJob,
 }: {
   message: ChatMessage
+  executingApplianceJobIds?: ReadonlySet<string>
   onPickClarification?: (
     entityType: string,
     optionId: string,
     optionLabel: string,
   ) => void
   onApplyToGraph?: (message: ChatMessage) => void
+  onExecuteInstrumentApplianceJob?: (job: InstrumentApplianceJob) => void
 }) {
   const { role, content, streamEvents, events, isStreaming, attachments } = message
   const [lightboxSrc, setLightboxSrc] = useState<{ src: string; alt: string } | null>(null)
@@ -472,6 +542,51 @@ function MessageBubble({
                 ? ` · ${message.executionScalePlan.blockers.length} blocker${message.executionScalePlan.blockers.length !== 1 ? 's' : ''}`
                 : ''}
             </div>
+          </div>
+        )}
+        {message.instrumentApplianceJobs && message.instrumentApplianceJobs.length > 0 && !isStreaming && (
+          <div className="chat-msg__appliance-jobs">
+            {message.instrumentApplianceJobs.map((job) => {
+              const isExecuting = executingApplianceJobIds?.has(job.jobId) ?? false
+              const readiness = job.executionReadiness
+              const isBlocked = readiness?.status === 'blocked'
+              const executionLabel = readiness?.executionMode === 'live'
+                ? 'live'
+                : readiness?.executionMode === 'simulate'
+                  ? 'simulation'
+                  : 'mode pending'
+              return (
+                <div className="chat-msg__appliance-job" key={job.jobId}>
+                  <div className="chat-msg__appliance-job-main">
+                    <span className="chat-msg__appliance-job-title">
+                      {job.instrument} {job.operation}
+                    </span>
+                    {onExecuteInstrumentApplianceJob && (
+                      <button
+                        type="button"
+                        className="chat-msg__appliance-job-btn"
+                        disabled={isExecuting || isBlocked}
+                        onClick={() => onExecuteInstrumentApplianceJob(job)}
+                      >
+                        {isBlocked ? 'Blocked' : isExecuting ? 'Executing' : 'Execute'}
+                      </button>
+                    )}
+                  </div>
+                  <div className="chat-msg__appliance-job-detail">
+                    {job.sourceRunFile.wells.length} well{job.sourceRunFile.wells.length !== 1 ? 's' : ''}
+                    {` · ${readiness?.status ?? 'readiness pending'} · ${executionLabel}`}
+                    {job.request.outputPath ? ` -> ${job.request.outputPath}` : ''}
+                  </div>
+                  {isBlocked && readiness.blockers.length > 0 && (
+                    <ul className="chat-msg__appliance-job-blockers">
+                      {readiness.blockers.map((blocker) => (
+                        <li key={blocker.code}>{blocker.message}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
         {role === 'assistant' && !isStreaming && message.docDiscussion === true && onApplyToGraph && (

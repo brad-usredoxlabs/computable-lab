@@ -192,29 +192,35 @@ describe('ProtocolIdeFeedbackService — anchored feedback', () => {
 // ---------------------------------------------------------------------------
 
 describe('ProtocolIdeFeedbackService — unanchored session-level feedback', () => {
-  it('rejects submission with empty anchors array', async () => {
+  it('accepts submission with empty anchors array', async () => {
     const envelope = makeSessionEnvelope('PIS-001');
     const store = makeMockStore(envelope);
     const service = new ProtocolIdeFeedbackService(store);
 
-    await expect(
-      service.submitFeedback('PIS-001', {
-        body: 'This should be in a 96-well plate layout',
-        anchors: [],
-      }),
-    ).rejects.toThrow('Feedback must include at least one anchor');
+    const result = await service.submitFeedback('PIS-001', {
+      body: 'This should be in a 96-well plate layout',
+      anchors: [],
+    });
+
+    expect(result.success).toBe(true);
+    const call = store.update.mock.calls[0][0];
+    const comments = call.envelope.payload.feedbackComments as FeedbackComment[];
+    expect(comments[0].anchors).toEqual([]);
   });
 
-  it('rejects submission with undefined anchors', async () => {
+  it('accepts submission with undefined anchors', async () => {
     const envelope = makeSessionEnvelope('PIS-001');
     const store = makeMockStore(envelope);
     const service = new ProtocolIdeFeedbackService(store);
 
-    await expect(
-      service.submitFeedback('PIS-001', {
-        body: 'This should be in a 96-well plate layout',
-      } as unknown as SubmitFeedbackRequest),
-    ).rejects.toThrow('Feedback must include at least one anchor');
+    const result = await service.submitFeedback('PIS-001', {
+      body: 'This should be in a 96-well plate layout',
+    });
+
+    expect(result.success).toBe(true);
+    const call = store.update.mock.calls[0][0];
+    const comments = call.envelope.payload.feedbackComments as FeedbackComment[];
+    expect(comments[0].anchors).toEqual([]);
   });
 
   it('preserves anchored comments alongside other anchored ones', async () => {

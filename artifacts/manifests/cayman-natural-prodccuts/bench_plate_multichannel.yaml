@@ -1,0 +1,88 @@
+kind: protocol-foundry-variant-manifest
+protocolId: cayman-natural-prodccuts
+variant: bench_plate_multichannel
+generated_at: 2026-05-16T01:29:12.004Z
+status: gap
+metrics:
+  eventCount: 0
+  blockerCount: 0
+  diagnosticCount: 40
+  extractorRepairExhaustedCount: 0
+  outcome: gap
+  foundryComplete: 0
+  qualityScore: 0.05
+  coverageEstimate: 0
+artifacts:
+  pdf:
+    path: pdfs/cayman-natural-prodccuts.pdf
+    exists: false
+    missingReason: source PDF not found
+  pdfMetadata:
+    path: pdfs/cayman-natural-prodccuts.pdf.procurement.yaml
+    exists: false
+    missingReason: PDF provenance sidecar not found
+  extractedText:
+    path: text/cayman-natural-prodccuts.txt
+    exists: true
+    status: present
+  segment:
+    path: segments/cayman-natural-prodccuts.yaml
+    exists: true
+    status: present
+  materialContext:
+    path: material-context/cayman-natural-prodccuts.yaml
+    exists: true
+    status: present
+  compiler:
+    path: compiler/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+    exists: true
+    status: gap
+  eventGraph:
+    path: event-graphs/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+    exists: true
+    status: blocked
+  executionScale:
+    path: execution-scale/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+    exists: true
+    status: ready
+  browserReport:
+    path: browser-review/cayman-natural-prodccuts/bench_plate_multichannel/report.yaml
+    exists: true
+    status: skipped
+  architectVerdict:
+    path: architect/cayman-natural-prodccuts/bench_plate_multichannel/verdict.yaml
+    exists: true
+    status: gap
+  patchSpecs:
+    - path: patch-specs/cayman-natural-prodccuts/bench_plate_multichannel/add-plate-map-verb-lowering.yaml
+      exists: true
+      status: present
+    - path: patch-specs/cayman-natural-prodccuts/bench_plate_multichannel/fix-precompiler-plate-map-candidate-shape.yaml
+      exists: true
+      status: present
+  adoptionDecision:
+    path: adoption/cayman-natural-prodccuts/bench_plate_multichannel/adoption.yaml
+    exists: true
+    status: accepted
+  coderPatch:
+    path: code-patches/cayman-natural-prodccuts/bench_plate_multichannel/result.yaml
+    exists: true
+    status: applied
+  criticReport:
+    path: patch-critic/cayman-natural-prodccuts/bench_plate_multichannel/report.yaml
+    exists: true
+    status: present
+  rerunReport:
+    path: rerun/cayman-natural-prodccuts/bench_plate_multichannel/rerun.yaml
+    exists: true
+    status: gap
+missingArtifacts:
+  - key: pdf
+    reason: source PDF not found
+  - key: pdfMetadata
+    reason: PDF provenance sidecar not found
+humanReview:
+  status: unreviewed
+  reviewPath: human-review/cayman-natural-prodccuts/bench_plate_multichannel/review.yaml
+nextActions:
+  - Open in Protocol IDE Foundry inbox for human/AI review.

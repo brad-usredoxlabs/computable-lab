@@ -1,40 +1,44 @@
 kind: protocol-foundry-architect-verdict
 protocolId: mp10422
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T09:35:05.463Z
+generated_at: 2026-05-09T22:42:10.330Z
 accepted: false
-qualityScore: 0.35
-coverageEstimate: 0.75
+qualityScore: 0.05
+coverageEstimate: 0
 failureClasses:
   - precompiler_reference_shape
-  - labware_alias_or_resolver
+  - extractor_prompt_contract
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: fix-ai-precompile-shape-mismatch
+  - id: fix-ai-precompile-fallback-shape
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch to enable downstream passes
-    rationale: The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
-      ai_precompile pass produced output that doesn't match the expected
-      AiPrecompileOutput schema. This caused 'apply_directives' and
-      'resolve_labware' passes to be skipped (their 'when' conditions evaluated
-      to false because outputs.ai_precompile.directives and
-      outputs.ai_precompile.candidateLabwares were missing or malformed).
-      Without labware resolution, generic labware references remain unresolved,
-      creating gaps.
+    title: Fix ai_precompile fallback to produce non-empty candidateEvents when
+      tag_prompt fails
+    rationale: The compiler diagnostics show 'ai_precompile output shape mismatch,
+      using fallback' followed by all downstream passes being skipped because
+      outputs.ai_precompile.candidateEvents evaluated to false. The tag_prompt
+      pass failed with a JSON parse error (Unexpected token 'B'), and the
+      fallback path in createAiPrecompilePass produces an empty candidateEvents
+      array. This causes eventCount=0. The fix must ensure the fallback path
+      either retries the LLM call with a stricter JSON schema or produces a
+      minimal valid candidateEvents structure from the presegmented candidates
+      (9+4+3+6+4+1=27 candidates were extracted).
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass produces output matching AiPrecompileOutput type with
-        directives and candidateLabwares fields
-      - apply_directives and resolve_labware passes are no longer skipped due to
-        missing ai_precompile output
-      - No 'ai_precompile_shape_mismatch' warning in diagnostics for mp10422
+      - When tag_prompt returns invalid JSON, the ai_precompile pass must not
+        produce an empty candidateEvents array if presegmented candidates exist.
+      - The fallback path must map presegmented candidates to candidateEvents
+        with at least basic verb/subject/object structure.
+      - eventCount must be >= 3 for protocols with clear procedural text.
+      - The 'ai_precompile_shape_mismatch' warning should be accompanied by a
+        recovery attempt, not silent fallback to empty.
     coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: &a1
       compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/bench_plate_multichannel.yaml
@@ -47,7 +51,7 @@ recommendedFixes:
       materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10422.yaml
       text: /home/brad/git/computable-foundry/artifacts/text/mp10422.txt
     failureEvidence: &a2
-      eventCount: 15
+      eventCount: 0
       outcome: gap
     implementationBudget:
       targetChangedFiles: 1
@@ -55,30 +59,32 @@ recommendedFixes:
       targetChangedLines: 60
       maxChangedLines: 150
       requireFocusedFixture: true
-  - id: fix-labware-resolution-for-generic-refs
-    class: labware_alias_or_resolver
-    title: Resolve generic labware references (96_well_plate, 12_well_reservoir,
-      96_tip_rack) in compiler
-    rationale: Three unresolved_ref gaps exist for generic_96_well_plate,
-      generic_12_well_reservoir, and generic_96_tip_rack. The
-      LabwareDefinitionRegistry likely contains these definitions but the
-      compiler's resolve_labware pass (skipped due to ai_precompile shape
-      mismatch) cannot find them. Once the ai_precompile shape is fixed, the
-      resolve_labware pass should be able to match these generic references to
-      existing labware definitions. If definitions are missing, they need to be
-      added to the registry.
+  - id: fix-tag-prompt-json-schema
+    class: extractor_prompt_contract
+    title: Enforce strict JSON output from tag_prompt LLM call to prevent parse
+      failures
+    rationale: "The tag_prompt pass failed because the LLM returned markdown-wrapped
+      JSON ('```json\\n{...}') instead of raw JSON. The parser encountered
+      'Based on the provided text...' preamble text before the JSON block. The
+      fix should either: (1) add a response format constraint to the LLM prompt
+      requesting raw JSON only, (2) add a post-processing step to extract JSON
+      from markdown code blocks, or (3) use a JSON schema validation library to
+      parse and extract the JSON object from the response. This is a root cause
+      of the ai_precompile shape mismatch."
     ownedFiles:
-      - server/src/registry/LabwareDefinitionRegistry.ts
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+      - server/src/extract/ExtractionRunnerService.ts
     acceptance:
-      - No unresolved_ref gaps for generic_96_well_plate,
-        generic_12_well_reservoir, generic_96_tip_rack
-      - LabwareDefinitionRegistry contains definitions for all three generic
-        labware types
-      - resolve_labware pass successfully resolves these references when
-        ai_precompile output is valid
+      - tag_prompt responses wrapped in markdown code blocks must be correctly
+        parsed.
+      - tag_prompt responses with preamble text must have the JSON object
+        extracted.
+      - The tag_prompt pass should not produce 'tag_prompt_parse_error' warnings
+        for valid JSON responses wrapped in markdown.
+      - Integration test with a sample LLM response containing markdown wrapping
+        should pass.
     coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
@@ -86,7 +92,7 @@ recommendedFixes:
       targetChangedFiles: 1
       maxChangedFiles: 3
       targetChangedLines: 40
-      maxChangedLines: 120
+      maxChangedLines: 100
       requireFocusedFixture: true
 sourceArtifacts: *a1
 architectNotes: "LLM architect analysis: 2 fix recommendations."

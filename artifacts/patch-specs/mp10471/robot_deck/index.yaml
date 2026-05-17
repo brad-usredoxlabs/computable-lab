@@ -2,5 +2,6 @@ kind: protocol-foundry-patch-spec-index
 protocolId: mp10471
 variant: robot_deck
 patchSpecs:
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/robot_deck/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/robot_deck/fix-verb-expansion-for-assay-protocol.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/robot_deck/fix-ai-precompile-shape-mismatch-and-fallback.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/robot_deck/fix-tag-prompt-json-parse-error.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/robot_deck/fix-deterministic-candidate-to-event-lowering.yaml

@@ -6,12 +6,17 @@
  * the empty intake state.
  */
 
-import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { apiClient } from '../shared/api/client'
+import { useRegisterAiChat } from '../shared/context/AiPanelContext'
+import { useAiChat } from '../shared/hooks/useAiChat'
 import { ProtocolIdeShell } from './ProtocolIdeShell'
+import { FoundryReviewInbox } from './FoundryReviewInbox'
 import type { ProtocolIdeSession } from './types'
 import type { IntakePayload } from './ProtocolIdeIntakePane'
+import type { AiContext } from '../types/aiContext'
+import type { FoundryReviewContext, FoundryReviewSummary } from '../shared/api/client'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -46,13 +51,175 @@ async function fetchProtocolIdeSession(
 export function ProtocolIdePage(): JSX.Element {
   const { sessionId } = useParams<{ sessionId?: string }>()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const selectedFoundryProtocolId = searchParams.get('protocolId')
+  const selectedFoundryVariant = searchParams.get('variant')
 
   const [session, setSession] = useState<ProtocolIdeSession | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [foundryReviews, setFoundryReviews] = useState<FoundryReviewSummary[]>([])
+  const [foundryContext, setFoundryContext] = useState<FoundryReviewContext | null>(null)
+  const [foundryLoading, setFoundryLoading] = useState(false)
+  const [foundryError, setFoundryError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const foundrySession = useMemo<ProtocolIdeSession | null>(() => {
+    if (!foundryContext) return null
+    const title = foundryContext.source.title ?? foundryContext.protocolId
+    return {
+      kind: 'protocol-ide-session',
+      recordId: `PIS-FOUNDRY-${foundryContext.protocolId}-${foundryContext.variant}`,
+      sourceMode: 'directive',
+      title,
+      vendor: foundryContext.source.vendor,
+      pdfUrl: foundryContext.source.pdf,
+      latestDirectiveText: `Review Foundry compiler output for ${foundryContext.protocolId}/${foundryContext.variant}`,
+      latestEventGraphRef: {
+        kind: 'record',
+        id: `${foundryContext.protocolId}:${foundryContext.variant}`,
+        type: 'event-graph',
+        label: title,
+      },
+      evidenceRefs: [
+        ...(foundryContext.source.extractedTextPath ? [{
+          kind: 'record' as const,
+          id: foundryContext.source.extractedTextPath,
+          type: 'evidence',
+          label: 'Extracted protocol text',
+        }] : []),
+        ...foundryContext.source.pageImages.slice(0, 8).map((path, index) => ({
+          kind: 'record' as const,
+          id: path,
+          type: 'evidence',
+          label: `Page image ${index + 1}`,
+        })),
+      ],
+      issueCardRefs: foundryContext.artifacts.patchSpecs.map((_, index) => ({
+        kind: 'record' as const,
+        id: `foundry-spec-${index + 1}`,
+        type: 'protocol-ide-issue-card',
+        label: `Architect spec ${index + 1}`,
+      })),
+      status: 'reviewing',
+      foundryReview: {
+        protocolId: foundryContext.protocolId,
+        variant: foundryContext.variant,
+        status: foundryContext.status,
+        fixClassification: foundryContext.semantic.fixClassification,
+        eventCount: foundryContext.semantic.eventSemanticKeys.length,
+        patchSpecCount: foundryContext.artifacts.patchSpecs.length,
+      },
+    }
+  }, [foundryContext])
+  const effectiveSession = session ?? foundrySession
+  const aiContext = useMemo<AiContext>(() => ({
+    surface: 'protocol-ide',
+    summary: effectiveSession
+      ? `Reviewing Protocol IDE session ${effectiveSession.recordId}${effectiveSession.title ? `: ${effectiveSession.title}` : ''}`
+      : 'Protocol IDE intake and review workspace',
+    surfaceContext: {
+      reviewMode: 'human-in-the-loop protocol compiler review',
+      session: effectiveSession
+        ? {
+            recordId: effectiveSession.recordId,
+            title: effectiveSession.title,
+            status: effectiveSession.status,
+            sourceMode: effectiveSession.sourceMode,
+            vendor: effectiveSession.vendor,
+            pdfUrl: effectiveSession.pdfUrl,
+            landingUrl: effectiveSession.landingUrl,
+            latestDirectiveText: effectiveSession.latestDirectiveText,
+            rollingIssueSummary: effectiveSession.rollingIssueSummary,
+            labContext: effectiveSession.labContext,
+          }
+        : null,
+      foundryReview: foundryContext
+        ? {
+            protocolId: foundryContext.protocolId,
+            variant: foundryContext.variant,
+            status: foundryContext.status,
+            fixClassification: foundryContext.semantic.fixClassification,
+            artifactRefs: foundryContext.artifactRefs,
+          }
+        : null,
+      sourceArtifacts: effectiveSession
+        ? {
+            vendorDocumentRef: effectiveSession.vendorDocumentRef,
+            ingestionJobRef: effectiveSession.ingestionJobRef,
+            protocolImportRef: effectiveSession.protocolImportRef,
+            extractedTextRef: effectiveSession.extractedTextRef,
+            evidenceRefs: effectiveSession.evidenceRefs ?? [],
+            uploadedAssetRef: effectiveSession.uploadedAssetRef,
+          }
+        : null,
+      compilerArtifacts: effectiveSession
+        ? {
+            latestProtocolRef: effectiveSession.latestProtocolRef,
+            latestEventGraphRef: effectiveSession.latestEventGraphRef,
+            latestEventGraphCacheKey: effectiveSession.latestEventGraphCacheKey,
+            latestTerminalArtifacts: effectiveSession.latestTerminalArtifacts,
+            latestLabState: effectiveSession.latestLabState,
+          }
+        : null,
+      reviewArtifacts: effectiveSession
+        ? {
+            issueCardRefs: effectiveSession.issueCardRefs ?? [],
+            lastExportAt: effectiveSession.lastExportAt,
+            lastExportBundleRef: effectiveSession.lastExportBundleRef,
+          }
+        : null,
+      workflow: {
+        goal: 'Compare the vendor protocol text/PDF evidence with the compiler event graph and produce one narrow, patchable spec or reject redundant specs.',
+        breadthFirst: true,
+        queueTarget: 'artifacts/ralph-queue',
+      },
+    },
+  }), [effectiveSession, foundryContext])
+  const aiChat = useAiChat({ aiContext })
+  useRegisterAiChat(aiChat)
+
+  useEffect(() => {
+    let cancelled = false
+    setFoundryLoading(true)
+    apiClient.listFoundryReviews()
+      .then((reviews) => {
+        if (!cancelled) setFoundryReviews(reviews)
+      })
+      .catch((err) => {
+        if (!cancelled) setFoundryError(err instanceof Error ? err.message : String(err))
+      })
+      .finally(() => {
+        if (!cancelled) setFoundryLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!selectedFoundryProtocolId || !selectedFoundryVariant) {
+      setFoundryContext(null)
+      return
+    }
+    setFoundryLoading(true)
+    setFoundryError(null)
+    apiClient.getFoundryReviewContext(selectedFoundryProtocolId, selectedFoundryVariant)
+      .then((context) => {
+        if (!cancelled) setFoundryContext(context)
+      })
+      .catch((err) => {
+        if (!cancelled) setFoundryError(err instanceof Error ? err.message : String(err))
+      })
+      .finally(() => {
+        if (!cancelled) setFoundryLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selectedFoundryProtocolId, selectedFoundryVariant])
 
   // Load session when sessionId is present
   useEffect(() => {
@@ -85,7 +252,24 @@ export function ProtocolIdePage(): JSX.Element {
 
   // Manual refresh + tab-visible refresh handler.
   const handleRefresh = async () => {
-    if (!sessionId) return
+    if (!sessionId) {
+      if (selectedFoundryProtocolId && selectedFoundryVariant) {
+        setRefreshing(true)
+        void Promise.all([
+          apiClient.listFoundryReviews(),
+          apiClient.getFoundryReviewContext(selectedFoundryProtocolId, selectedFoundryVariant),
+        ])
+          .then(([reviews, context]) => {
+            setFoundryReviews(reviews)
+            setFoundryContext(context)
+          })
+          .catch((err) => {
+            setFoundryError(err instanceof Error ? err.message : String(err))
+          })
+          .finally(() => setRefreshing(false))
+      }
+      return
+    }
     setRefreshing(true)
     try {
       const data = await fetchProtocolIdeSession(sessionId)
@@ -107,6 +291,21 @@ export function ProtocolIdePage(): JSX.Element {
     return () => clearInterval(handle)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, session?.status])
+
+  // Poll the Foundry inbox while the selected review is in a non-terminal
+  // workflow state (queued / reviewing) so the user sees coder/critic/rerun
+  // transitions without manually reloading.
+  useEffect(() => {
+    if (sessionId) return
+    if (!selectedFoundryProtocolId || !selectedFoundryVariant) return
+    const transient = new Set(['queued', 'reviewing'])
+    if (!foundryContext || !transient.has(foundryContext.status)) return
+    const handle = setInterval(() => {
+      void handleRefresh()
+    }, 5000)
+    return () => clearInterval(handle)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, selectedFoundryProtocolId, selectedFoundryVariant, foundryContext?.status])
 
   // Live progress messages streamed from /protocol-ide/sessions/stream during
   // session creation. Cleared when a new session is loaded.
@@ -164,10 +363,15 @@ export function ProtocolIdePage(): JSX.Element {
 
   // Navigate away from the Protocol IDE
   const handleNavigateAway = () => {
+    if (foundryContext) {
+      setFoundryContext(null)
+      setSearchParams({})
+      return
+    }
     navigate('/browser')
   }
 
-  if (loading) {
+  if (loading || (selectedFoundryProtocolId && selectedFoundryVariant && foundryLoading && !foundryContext)) {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
         Loading Protocol IDE…
@@ -184,9 +388,37 @@ export function ProtocolIdePage(): JSX.Element {
     )
   }
 
+  if (!sessionId) {
+    return (
+      <FoundryReviewInbox
+        reviews={foundryReviews}
+        selected={selectedFoundryProtocolId && selectedFoundryVariant ? {
+          protocolId: selectedFoundryProtocolId,
+          variant: selectedFoundryVariant,
+        } : null}
+        context={foundryContext}
+        loading={foundryLoading}
+        error={foundryError}
+        onSelect={(review) => {
+          setSearchParams({ protocolId: review.protocolId, variant: review.variant })
+        }}
+        onContextChanged={() => { void handleRefresh() }}
+      />
+    )
+  }
+
+  if (!effectiveSession) {
+    return (
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <p>Session not found.</p>
+        <button onClick={() => navigate('/protocol-ide')}>Back to Foundry Inbox</button>
+      </div>
+    )
+  }
+
   return (
     <ProtocolIdeShell
-      session={session}
+      session={effectiveSession}
       onCreateSession={handleCreateSession}
       submitError={submitError}
       isSubmitting={submitting}
@@ -194,6 +426,7 @@ export function ProtocolIdePage(): JSX.Element {
       onRefresh={handleRefresh}
       isRefreshing={refreshing}
       progressMessages={progressMessages}
+      foundryReviewContext={foundryContext}
     />
   )
 }

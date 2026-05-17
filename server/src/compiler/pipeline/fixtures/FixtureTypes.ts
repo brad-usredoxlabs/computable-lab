@@ -40,7 +40,20 @@ export interface Fixture {
   name: string;
   description?: string;
   input: FixtureInput;
-  mocked_ai_precompile_output: AiPrecompileOutput;
+  /**
+   * Replaces the LLM-backed ai_precompile pass with these candidate
+   * events/labwares. Required when `deterministicOnly` is false or absent —
+   * skipped when `deterministicOnly: true` (the deterministic precompile
+   * does the work).
+   */
+  mocked_ai_precompile_output?: AiPrecompileOutput;
+  /**
+   * When true, the runner sets deterministicOnly on runChatbotCompile so the
+   * deterministic precompile is the only source of candidate events/labwares.
+   * Used by event-editor fix-it fixtures that capture "this prompt should
+   * produce that ghost preview without any LLM in the loop."
+   */
+  deterministicOnly?: boolean;
   expected: FixtureExpected;
 }
 
@@ -99,8 +112,12 @@ export function parseFixture(yamlText: string): Fixture {
     throw new Error('Fixture input must have a non-empty "prompt" string');
   }
 
-  if (typeof obj.mocked_ai_precompile_output !== 'object' || obj.mocked_ai_precompile_output === null) {
-    throw new Error('Fixture must have a "mocked_ai_precompile_output" mapping');
+  const deterministicOnly = obj.deterministicOnly === true;
+
+  if (!deterministicOnly) {
+    if (typeof obj.mocked_ai_precompile_output !== 'object' || obj.mocked_ai_precompile_output === null) {
+      throw new Error('Fixture must have a "mocked_ai_precompile_output" mapping (omit only when deterministicOnly: true)');
+    }
   }
 
   if (typeof obj.expected !== 'object' || obj.expected === null) {
@@ -127,7 +144,10 @@ export function parseFixture(yamlText: string): Fixture {
         : undefined,
       conversationId: typeof input.conversationId === 'string' ? input.conversationId : undefined,
     },
-    mocked_ai_precompile_output: obj.mocked_ai_precompile_output as AiPrecompileOutput,
+    ...(deterministicOnly ? { deterministicOnly: true } : {}),
+    ...(obj.mocked_ai_precompile_output
+      ? { mocked_ai_precompile_output: obj.mocked_ai_precompile_output as AiPrecompileOutput }
+      : {}),
     expected: obj.expected as FixtureExpected,
   };
 }

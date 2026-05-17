@@ -1,0 +1,51 @@
+kind: protocol-foundry-patch-spec
+id: cellrox-oxidative-stress-qr/robot_deck/fix-ai-precompile-json-parse-and-fallback
+protocolId: cellrox-oxidative-stress-qr
+variant: robot_deck
+fixClass: precompiler_reference_shape
+title: Fix ai_precompile JSON parse error and ensure fallback produces candidateEvents
+rationale: "The compiler diagnostics show 'tag_prompt response was not valid
+  JSON: Unterminated string in JSON at position 661' followed by 'ai_precompile
+  output shape mismatch, using fallback'. The fallback path produced zero
+  candidateEvents, causing all downstream passes (expand_biology_verbs,
+  resolve_labware, mint_materials) to be skipped. The root cause is that the
+  ai_precompile pass's fallback does not produce a valid AiPrecompileOutput with
+  candidateEvents when the LLM response is malformed. The PDF has 8 clear
+  protocol steps that should be extracted. The fix must make the fallback path
+  produce at least a minimal set of candidateEvents from the deterministic
+  candidates (12 were supplied by presegmented text), or fix the JSON parsing to
+  handle the truncated response."
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - ai_precompile pass no longer emits 'ai_precompile_shape_mismatch' warning
+    for this protocol
+  - outputs.ai_precompile.candidateEvents is non-empty (at least 4 events from
+    the 8 protocol steps)
+  - expand_biology_verbs pass is no longer skipped (when condition evaluates to
+    true)
+  - eventCount >= 3 in the final compiler output
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 60
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cellrox-oxidative-stress-qr/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cellrox-oxidative-stress-qr/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cellrox-oxidative-stress-qr/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cellrox-oxidative-stress-qr/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cellrox-oxidative-stress-qr/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cellrox-oxidative-stress-qr/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cellrox-oxidative-stress-qr.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cellrox-oxidative-stress-qr.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cellrox-oxidative-stress-qr.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cellrox-oxidative-stress-qr/robot_deck/verdict.yaml

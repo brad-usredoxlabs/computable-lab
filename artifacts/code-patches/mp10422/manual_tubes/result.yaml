@@ -1,0 +1,10 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: mp10422
+variant: manual_tubes
+generated_at: 2026-05-09T21:34:18.382Z
+status: applied
+selectedSpecId: mp10422/manual_tubes/fix-ai-precompile-shape-mismatch
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+commit: 30885cb24331c1f1185e2480d2bd651ddbb103d6
+message: Patch applied and committed.

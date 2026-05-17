@@ -1,0 +1,18 @@
+kind: protocol-foundry-critic-report
+protocolId: mp10422
+variant: bench_plate_multichannel
+generated_at: 2026-05-09T21:37:14.479Z
+verdict: pass
+reportPath: /home/brad/git/computable-foundry/artifacts/patch-critic/mp10422/bench_plate_multichannel/report.yaml
+reviewDurationMs: 10
+message: "Patch applied: 1 file(s) changed, spec verification passed."
+notes:
+  - No acceptance criteria available for this patch spec
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+specVerification:
+  accepted: true
+  criteriaMet: []
+  criteriaFailed: []
+  notes:
+    - All acceptance criteria satisfied

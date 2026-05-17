@@ -1,0 +1,46 @@
+kind: protocol-foundry-patch-spec
+id: cayman-immuno-oncology/manual_tubes/fix-labware-resolution-for-generic-plates
+protocolId: cayman-immuno-oncology
+variant: manual_tubes
+fixClass: labware_alias_or_resolver
+title: Resolve generic_96_well_plate and generic_24x1_5ml_tube_rack labware references
+rationale: "The compiler output shows two unresolved labware references:
+  'generic_96_well_plate' and 'generic_24x1_5ml_tube_rack' with reason 'no
+  matching labware in prior snapshot'. The LabwareDefinitionRegistry.ts needs to
+  include these generic labware definitions or the resolver needs to map these
+  hints to existing definitions. The execution scale plan references
+  'lbw-def-generic-96-well-plate' and 'lbw-def-generic-reservoir-1-v1',
+  suggesting these definitions should exist but aren't being resolved during
+  compilation."
+ownedFiles:
+  - server/src/registry/LabwareDefinitionRegistry.ts
+acceptance:
+  - generic_96_well_plate resolves to an existing labware definition (e.g.,
+    lbw-def-generic-96-well-plate)
+  - generic_24x1_5ml_tube_rack resolves to an existing labware definition or is
+    added to the registry
+  - No unresolved_ref gaps for these labware hints in compiler output
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 40
+  maxChangedLines: 100
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-immuno-oncology/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-immuno-oncology/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-immuno-oncology/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-immuno-oncology/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-immuno-oncology/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-immuno-oncology/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-immuno-oncology.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-immuno-oncology.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cayman-immuno-oncology.txt
+failureEvidence:
+  eventCount: 2
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-immuno-oncology/manual_tubes/verdict.yaml

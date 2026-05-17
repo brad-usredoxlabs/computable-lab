@@ -1,0 +1,46 @@
+kind: protocol-foundry-patch-spec
+id: cayman-immuno-oncology/robot_deck/fix-tag-prompt-json-parse-error
+protocolId: cayman-immuno-oncology
+variant: robot_deck
+fixClass: extractor_prompt_contract
+title: Fix tag_prompt JSON parse error from unterminated string
+rationale: "The diagnostics show 'tag_prompt response was not valid JSON:
+  Unterminated string in JSON at position 731'. This indicates the LLM response
+  for tagging phrases is being truncated or contains malformed JSON. This parse
+  error likely contributes to the ai_precompile shape mismatch downstream, as
+  the tag_prompt output feeds into the precompile pipeline. The raw_preview
+  shows the JSON was cut off mid-string at 'Safety Data ', suggesting either a
+  token limit issue or improper response handling. This needs to be fixed to
+  ensure reliable entity extraction."
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+  - server/src/extract/ExtractionRunnerService.ts
+acceptance:
+  - tag_prompt pass no longer produces JSON parse errors
+  - tag_prompt response is properly validated and repaired if truncated
+  - taggedPhrases are correctly extracted from the PDF text
+  - No 'tag_prompt_parse_error' warnings in diagnostics
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 60
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-immuno-oncology/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-immuno-oncology/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-immuno-oncology/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-immuno-oncology/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-immuno-oncology/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-immuno-oncology/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-immuno-oncology.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-immuno-oncology.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cayman-immuno-oncology.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-immuno-oncology/robot_deck/verdict.yaml

@@ -1,0 +1,18 @@
+kind: protocol-foundry-adoption-decision
+protocolId: cayman-natural-prodccuts
+variant: manual_tubes
+generated_at: 2026-05-10T12:43:02.884Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: cayman-natural-prodccuts/manual_tubes/add-plate-map-lowering-pass
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/manual_tubes/add-plate-map-lowering-pass.yaml
+    fixClass: compiler_event_coverage
+    title: Add plate-map lowering pass to convert well-content tables into dispense
+      events
+  - id: cayman-natural-prodccuts/manual_tubes/wire-presegmented-candidates-to-lowering
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/manual_tubes/wire-presegmented-candidates-to-lowering.yaml
+    fixClass: precompiler_reference_shape
+    title: Ensure presegmented candidates are passed through to the lowering pass
+      with correct shape
+message: Patch specs accepted for unattended coder tournament execution.

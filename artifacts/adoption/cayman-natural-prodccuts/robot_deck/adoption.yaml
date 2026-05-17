@@ -1,0 +1,16 @@
+kind: protocol-foundry-adoption-decision
+protocolId: cayman-natural-prodccuts
+variant: robot_deck
+generated_at: 2026-05-10T12:50:26.367Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: cayman-natural-prodccuts/robot_deck/add-plate-map-verb-expansion
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/robot_deck/add-plate-map-verb-expansion.yaml
+    fixClass: compiler_event_coverage
+    title: Add verb expansion for plate map content items
+  - id: cayman-natural-prodccuts/robot_deck/wire-presegmented-candidates-to-compiler-state
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/robot_deck/wire-presegmented-candidates-to-compiler-state.yaml
+    fixClass: foundry_runtime_wiring
+    title: Wire presegmented candidates into compiler state so events are generated
+message: Patch specs accepted for unattended coder tournament execution.

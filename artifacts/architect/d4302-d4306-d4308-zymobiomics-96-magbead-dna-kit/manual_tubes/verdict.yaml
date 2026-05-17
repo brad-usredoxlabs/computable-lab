@@ -1,43 +1,48 @@
 kind: protocol-foundry-architect-verdict
 protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
 variant: manual_tubes
-generated_at: 2026-05-09T09:17:52.749Z
+generated_at: 2026-05-09T22:25:31.966Z
 accepted: false
-qualityScore: 0.15
-coverageEstimate: 0.3
+qualityScore: 0.05
+coverageEstimate: 0
 failureClasses:
   - precompiler_reference_shape
-  - labware_alias_or_resolver
-  - material_catalog_or_spec
+  - extractor_prompt_contract
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: fix-ai-precompile-shape-mismatch
+  - id: fix-ai-precompile-json-parse-and-shape
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch to enable downstream passes
-    rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch', which
-      caused critical downstream passes (mint_materials, apply_directives,
-      resolve_labware, expand_patterns) to be skipped. This is the root cause of
-      the gap outcome. The ai_precompile pass in ChatbotCompilePasses.ts is
-      producing output that doesn't match the expected AiPrecompileOutput
-      schema, causing the when conditions for subsequent passes to evaluate to
-      false. Without these passes, materials aren't minted, labware isn't
-      resolved, and patterns aren't expanded.
+    title: Fix ai_precompile JSON parse error and shape mismatch to produce
+      candidateEvents
+    rationale: "The compiler diagnostics show two critical failures: (1) 'tag_prompt
+      response was not valid JSON: Unterminated string in JSON at position 683'
+      and (2) 'ai_precompile output shape mismatch, using fallback'. The
+      tag_prompt JSON parse error causes the ai_precompile pass to receive
+      malformed input or produce malformed output, triggering the shape
+      mismatch. As a result, the fallback produces empty candidateEvents,
+      causing all downstream passes (expand_biology_verbs, resolve_labware,
+      mint_materials) to be skipped. This leads to eventCount=0 despite 107
+      deterministic candidates being extracted from the PDF text. The fix must
+      make the ai_precompile pass resilient to JSON parse errors and ensure the
+      output shape always matches the expected AiPrecompileOutput interface with
+      at least empty arrays instead of undefined fields."
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass produces output matching AiPrecompileOutput schema
-        with mintMaterials, directives, candidateLabwares, and patternEvents
-        fields
-      - Downstream passes (mint_materials, apply_directives, resolve_labware,
-        expand_patterns) are no longer skipped due to false when conditions
-      - Compiler outcome changes from 'gap' to 'complete' or 'error' with
-        specific error messages instead of generic shape mismatch
+      - ai_precompile pass no longer emits 'ai_precompile_shape_mismatch'
+        warning when tag_prompt JSON is malformed
+      - AiPrecompileOutput always has defined arrays for candidateEvents,
+        candidateLabwares, mintMaterials, directives, patternEvents,
+        priorLabwareRefs, downstreamCompileJobs (empty arrays if no content)
+      - eventCount >= 3 for protocols with clear protocol steps in PDF text
+      - expand_biology_verbs pass is no longer skipped when candidateEvents are
+        present
     coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: &a1
       compiler: /home/brad/git/computable-foundry/artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
@@ -50,75 +55,45 @@ recommendedFixes:
       materialContext: /home/brad/git/computable-foundry/artifacts/material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
       text: /home/brad/git/computable-foundry/artifacts/text/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.txt
     failureEvidence: &a2
-      eventCount: 6
+      eventCount: 0
       outcome: gap
-    implementationBudget:
-      targetChangedFiles: 1
-      maxChangedFiles: 2
-      targetChangedLines: 100
-      maxChangedLines: 200
-      requireFocusedFixture: true
-  - id: fix-labware-resolution-for-zymobiomics
-    class: labware_alias_or_resolver
-    title: Add labware resolution for ZymoBIOMICS specific labware types
-    rationale: "The compiler gaps show unresolved labware references: 'ZR
-      BashingBead™ Lysis Tubes (0.1 & 0.5 mm)', 'ZymoBIOMICS™ BashingBead™ Lysis
-      Rack (0.1 & 0.5 mm)', 'generic_96_well_plate', and 'elution plate or
-      tube'. These are specific to the ZymoBIOMICS protocol but the labware
-      resolver cannot find matching definitions. The
-      LabwareDefinitionRegistry.ts needs to either have these definitions added
-      or the resolver needs to be updated to handle these specific labware types
-      with appropriate aliases."
-    ownedFiles:
-      - server/src/registry/LabwareDefinitionRegistry.ts
-    acceptance:
-      - ZR BashingBead™ Lysis Tubes (0.1 & 0.5 mm) resolves to a valid labware
-        definition
-      - ZymoBIOMICS™ BashingBead™ Lysis Rack (0.1 & 0.5 mm) resolves to a valid
-        labware definition
-      - generic_96_well_plate resolves to a valid labware definition
-      - elution plate or tube resolves to a valid labware definition
-      - No unresolved_ref gaps for labware in compiler output
-    coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
     implementationBudget:
       targetChangedFiles: 1
       maxChangedFiles: 2
       targetChangedLines: 60
       maxChangedLines: 150
       requireFocusedFixture: true
-  - id: fix-material-resolution-for-resuspend
-    class: material_catalog_or_spec
-    title: Resolve 'resuspend' material reference in compiler
-    rationale: The compiler gaps show 'resuspend' as an unresolved material
-      reference with 'registry hit ontology' and 'kind material not handled by
-      resolve_references'. This indicates that 'resuspend' is being treated as a
-      material when it should be treated as an action/verb. The
-      resolve_references function in the compiler needs to be updated to handle
-      this case, either by recognizing 'resuspend' as a verb that should trigger
-      a mix/resuspend event rather than a material lookup, or by adding it to
-      the material catalog with appropriate handling.
+  - id: fix-tag-prompt-json-resilience
+    class: extractor_prompt_contract
+    title: Make tag_prompt LLM response parsing resilient to unterminated JSON strings
+    rationale: The tag_prompt pass receives LLM output with unterminated JSON
+      strings (e.g., trailing quotes or missing closing braces). The current
+      parser fails hard on this, producing a warning and likely empty/undefined
+      taggedPhrases. This cascades to ai_precompile which depends on tagged
+      phrases for entity resolution. The fix should add JSON repair logic (e.g.,
+      try parsing, then attempt to fix common issues like unterminated strings,
+      missing commas, trailing content) before passing to downstream passes.
+      This is a separate fix from the shape mismatch because it addresses the
+      root cause of malformed input rather than just the output shape.
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
-      - server/src/compiler/biology/BiologyVerbExpander.ts
     acceptance:
-      - "'resuspend' is no longer reported as an unresolved material reference"
-      - Resuspend operations are correctly lowered to mix or resuspend events in
-        the event graph
-      - No unresolved_ref gaps for 'resuspend' in compiler output
+      - tag_prompt pass no longer emits 'tag_prompt_parse_error' warning for
+        common JSON formatting issues
+      - taggedPhrases are extracted even when LLM output has minor JSON
+        formatting errors
+      - Compiler can proceed to ai_precompile with valid tagged phrases from
+        repaired JSON
     coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
       targetChangedFiles: 1
       maxChangedFiles: 2
-      targetChangedLines: 50
-      maxChangedLines: 120
+      targetChangedLines: 40
+      maxChangedLines: 100
       requireFocusedFixture: true
 sourceArtifacts: *a1
-architectNotes: "LLM architect analysis: 3 fix recommendations."
+architectNotes: "LLM architect analysis: 2 fix recommendations."

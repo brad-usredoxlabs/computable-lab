@@ -16,9 +16,13 @@
     "mcp": "npx tsx src/mcp-stdio.ts",
     "import:opentrons-labware": "npx tsx src/tools/importOpentronsLabware.ts",
     "compile:fixtures": "npx tsx scripts/run-compile-fixtures.ts",
+    "foundry:collect": "npx tsx src/tools/protocolFoundryCollect.ts",
     "foundry:compile": "npx tsx src/tools/protocolFoundryCompile.ts",
     "foundry:ledger": "npx tsx src/tools/protocolFoundryLedger.ts",
-    "foundry:loop": "npx tsx src/tools/protocolFoundryLoop.ts"
+    "foundry:loop": "npx tsx src/tools/protocolFoundryLoop.ts",
+    "foundry:loop-control": "npx tsx src/tools/protocolFoundryLoopControl.ts",
+    "foundry:reviewed-spec-run": "npx tsx src/tools/protocolFoundryReviewedSpecRun.ts",
+    "foundry:small-batch": "npx tsx src/tools/protocolFoundrySmallBatch.ts"
   },
   "keywords": [
     "lab",

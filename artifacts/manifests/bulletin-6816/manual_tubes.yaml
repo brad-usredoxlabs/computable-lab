@@ -1,0 +1,77 @@
+kind: protocol-foundry-variant-manifest
+protocolId: bulletin-6816
+variant: manual_tubes
+generated_at: 2026-05-16T01:29:11.942Z
+status: stalled
+metrics:
+  eventCount: 1
+  diagnosticCount: 10
+  extractorRepairExhaustedCount: 0
+  outcome: gap
+  foundryComplete: 0
+  qualityScore: 0.7999999999999999
+  coverageEstimate: 0.1
+artifacts:
+  pdf:
+    path: pdfs/bulletin-6816.pdf
+    exists: false
+    missingReason: source PDF not found
+  pdfMetadata:
+    path: pdfs/bulletin-6816.pdf.procurement.yaml
+    exists: false
+    missingReason: PDF provenance sidecar not found
+  extractedText:
+    path: text/bulletin-6816.txt
+    exists: true
+    status: present
+  segment:
+    path: segments/bulletin-6816.yaml
+    exists: true
+    status: present
+  materialContext:
+    path: material-context/bulletin-6816.yaml
+    exists: true
+    status: present
+  compiler:
+    path: compiler/bulletin-6816/manual_tubes.yaml
+    exists: true
+    status: gap
+  eventGraph:
+    path: event-graphs/bulletin-6816/manual_tubes.yaml
+    exists: true
+    status: blocked
+  executionScale:
+    path: execution-scale/bulletin-6816/manual_tubes.yaml
+    exists: true
+    status: ready
+  browserReport:
+    path: browser-review/bulletin-6816/manual_tubes/report.yaml
+    exists: true
+    status: skipped
+  patchSpecs: []
+  adoptionDecision:
+    path: adoption/bulletin-6816/manual_tubes/adoption.yaml
+    exists: true
+    status: accepted
+  criticReport:
+    path: patch-critic/bulletin-6816/manual_tubes/report.yaml
+    exists: true
+    status: present
+missingArtifacts:
+  - key: pdf
+    reason: source PDF not found
+  - key: pdfMetadata
+    reason: PDF provenance sidecar not found
+  - key: architectVerdict
+    reason: artifact reference not present in ledger or convention
+  - key: patchSpecs
+    reason: artifact list is empty
+  - key: coderPatch
+    reason: artifact reference not present in ledger or convention
+  - key: rerunReport
+    reason: artifact reference not present in ledger or convention
+humanReview:
+  status: unreviewed
+  reviewPath: human-review/bulletin-6816/manual_tubes/review.yaml
+nextActions:
+  - Run architect review to produce a focused patch spec.

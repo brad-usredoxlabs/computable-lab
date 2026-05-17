@@ -1,0 +1,46 @@
+kind: protocol-foundry-patch-spec
+id: man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/fix-labware-resolution-gaps
+protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+variant: manual_tubes
+fixClass: labware_alias_or_resolver
+title: Resolve generic tube rack labware references
+rationale: "The compiler output shows 3 unresolved labware references:
+  generic_24x1_5ml_tube_rack, generic_6x15ml_tube_rack, and
+  generic_4x50ml_tube_rack. These are standard labware types that should be
+  resolvable from the LabwareDefinitionRegistry. The resolve_labware pass is
+  being skipped due to the ai_precompile shape mismatch, but even when it runs,
+  it needs to correctly match these generic labware hints to registry
+  definitions."
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+  - server/src/registry/LabwareDefinitionRegistry.ts
+acceptance:
+  - generic_24x1_5ml_tube_rack, generic_6x15ml_tube_rack, and
+    generic_4x50ml_tube_rack are resolved to valid labware definitions
+  - No unresolved_ref gaps remain in compiler output for these labware types
+  - resolve_labware pass successfully matches generic tube rack hints to
+    registry entries
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 40
+  maxChangedLines: 100
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/man0011593-nabspincolumn-5ml-antibody-purifi-ug.txt
+failureEvidence:
+  eventCount: 1
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/verdict.yaml

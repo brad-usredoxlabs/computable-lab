@@ -1,0 +1,17 @@
+kind: protocol-foundry-adoption-decision
+protocolId: mp10422
+variant: robot_deck
+generated_at: 2026-05-09T21:37:14.712Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: mp10422/robot_deck/fix-ai-precompile-shape-mismatch
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch to enable material and labware
+      resolution passes
+  - id: mp10422/robot_deck/fix-material-catalog-cellrox-reagents
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/robot_deck/fix-material-catalog-cellrox-reagents.yaml
+    fixClass: material_catalog_or_spec
+    title: Add CellROX reagent material records for C10422, C10443, C10444, C10448
+message: Patch specs accepted for unattended coder tournament execution.

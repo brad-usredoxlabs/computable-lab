@@ -2,6 +2,5 @@ kind: protocol-foundry-patch-spec-index
 protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
 variant: manual_tubes
 patchSpecs:
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-labware-resolution-for-zymobiomics.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-material-resolution-for-resuspend.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-ai-precompile-json-parse-and-shape.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-tag-prompt-json-resilience.yaml

@@ -29,7 +29,8 @@ describe('PromptTemplateHandlers', () => {
     expect((result as any).id).toBe('chatbot-compile.precompile.system');
     expect((result as any).prompt_kind).toBe('compiler.precompile.system');
     expect((result as any).content_format).toBe('markdown');
-    expect((result as any).content).toContain('You are the AI-precompile stage');
+    expect((result as any).content).toContain('ProtocolIntent-normalizing AI-precompile stage');
+    expect((result as any).content).toContain('"protocolIntent"');
     expect(mockReply.status).not.toHaveBeenCalled();
   });
 

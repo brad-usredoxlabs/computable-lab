@@ -26,6 +26,12 @@ interface WellGridProps {
   size: number // long-edge size in CSS pixels
   hoveredWellId: WellId | null
   selectedWellIds: ReadonlySet<WellId>
+  /**
+   * Wells that are written/read by AI-proposed preview events. Rendered with
+   * a purple "ghost" overlay so the user can see at the well level which
+   * cells the floating Accept button will commit.
+   */
+  previewWellIds?: ReadonlySet<WellId>
   onHover: (wellId: WellId | null, event: React.MouseEvent | null) => void
   onWellClick?: (wellId: WellId, event: React.MouseEvent) => void
   onWellContextMenu?: (wellId: WellId, event: React.MouseEvent) => void
@@ -37,12 +43,15 @@ const FRAME_LONG_MM = 127
 const FRAME_SHORT_MM = 85
 const FRAME_PADDING_MM = 8
 
+const EMPTY_WELLS: ReadonlySet<WellId> = new Set()
+
 export function WellGrid({
   labware,
   orientation,
   size,
   hoveredWellId,
   selectedWellIds,
+  previewWellIds = EMPTY_WELLS,
   onHover,
   onWellClick,
   onWellContextMenu,
@@ -74,11 +83,13 @@ export function WellGrid({
       {layout.wells.map((well) => {
         const hovered = well.wellId === hoveredWellId
         const selected = selectedWellIds.has(well.wellId)
+        const previewed = previewWellIds.has(well.wellId)
         const interactive: CSSProperties = onWellClick ? { cursor: 'pointer' } : {}
         const common = {
           'data-well-id': well.wellId,
           'data-hovered': hovered ? 'true' : 'false',
           'data-selected': selected ? 'true' : 'false',
+          'data-preview': previewed ? 'true' : 'false',
           'data-tip': isTipRack ? 'true' : 'false',
           onMouseEnter: (event: React.MouseEvent) => onHover(well.wellId, event),
           onMouseMove: (event: React.MouseEvent) => onHover(well.wellId, event),

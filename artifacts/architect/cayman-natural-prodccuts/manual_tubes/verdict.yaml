@@ -1,9 +1,9 @@
 kind: protocol-foundry-architect-verdict
 protocolId: cayman-natural-prodccuts
 variant: manual_tubes
-generated_at: 2026-05-09T08:55:38.231Z
+generated_at: 2026-05-09T22:14:28.243Z
 accepted: false
-qualityScore: 0
+qualityScore: 0.05
 coverageEstimate: 0
 failureClasses:
   - compiler_event_coverage
@@ -16,28 +16,29 @@ badScalingAssumptions: []
 recommendedFixes:
   - id: add-plate-map-lowering-pass
     class: compiler_event_coverage
-    title: Add compiler lowering for plate-map/inventory PDFs to produce
-      material-placement events
-    rationale: "The compiler currently treats this PDF as a 'library inventory list'
-      and produces zero events because it expects procedural steps
-      (reconstitute, dilute, transfer). However, a 96-well plate map IS a valid
-      protocol: it defines the material layout of a screening library plate. The
-      compiler needs a new lowering path that converts plate-map candidates
-      (well-position + compound-name + catalog-number) into material-placement
-      or plate-population events. This would produce events like 'populate well
-      A2 with Ursolic Acid (10072)' for each mapped well, giving a non-empty
-      event graph that can be executed as a plate preparation protocol."
+    title: Add plate-map lowering pass to convert well-content tables into dispense
+      events
+    rationale: The PDF contains a structured 96-well plate map
+      (Plate/Well/Contents/Item Number) with ~40+ compounds. The pre-compiler
+      extracted 29+ candidate groups, but the compiler produced 0 events because
+      there is no lowering pass that recognizes 'plate-map' or
+      'well-content-table' candidates and converts them into dispense/transfer
+      events. The prior patch touched ChatbotCompilePasses.ts but the event
+      graph is still empty, meaning the lowering logic was either not added, not
+      wired, or produced no events. The compiler needs a deterministic pass that
+      iterates over well-content candidates and emits dispense events for each
+      compound-to-well mapping.
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
-      - server/src/compiler/biology/BiologyVerbExpander.ts
     acceptance:
-      - Compiler produces >= 20 events for a plate-map PDF with 20+ mapped wells
-      - Each event references a specific well position (e.g., A2, B3) and
-        compound name
-      - Event graph status changes from 'blocked' to 'draft' with populated
-        events array
-      - Gap message about 'library inventory list' no longer appears for
-        plate-map protocols
+      - eventCount >= 20 for this protocol (one dispense event per non-Unused
+        well)
+      - Each event references a compound name from the PDF (e.g., Ursolic Acid,
+        Paclitaxel)
+      - Each event references a well position (e.g., A2, A3, B2)
+      - Events are of type 'dispense' or 'transfer' with source=compound and
+        target=well
+      - Compiler outcome changes from 'gap' to 'complete'
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -55,44 +56,44 @@ recommendedFixes:
       eventCount: 0
       outcome: gap
     implementationBudget:
-      targetChangedFiles: 2
-      maxChangedFiles: 3
+      targetChangedFiles: 1
+      maxChangedFiles: 2
       targetChangedLines: 120
-      maxChangedLines: 220
+      maxChangedLines: 250
       requireFocusedFixture: true
-  - id: fix-precompiler-plate-map-candidate-shape
+  - id: wire-presegmented-candidates-to-lowering
     class: precompiler_reference_shape
-    title: Ensure precompiler extracts structured plate-map candidates with
-      well-position and compound fields
-    rationale: "The precompiler diagnostics show many
-      'foundry_presegmented_candidates' messages but the candidates are not
-      being lowered to events. The precompiler needs to explicitly tag
-      candidates with a 'plateMapEntry' kind that includes structured fields:
-      wellPosition (e.g., 'A2'), compoundName (e.g., 'Ursolic Acid'), and
-      catalogNumber (e.g., '10072'). Currently the candidates appear to be
-      unstructured text fragments that the compiler cannot match to any known
-      verb pattern. Adding explicit candidate typing will allow the compiler's
-      new plate-map lowering pass to consume them correctly."
+    title: Ensure presegmented candidates are passed through to the lowering pass
+      with correct shape
+    rationale: The diagnostics show 29+ 'foundry_presegmented_candidates' info
+      messages, meaning the pre-compiler successfully extracted candidates.
+      However, the event graph is empty, indicating these candidates are not
+      being consumed by any lowering pass. The candidates likely have a shape
+      that the compiler's lowering passes don't recognize (e.g., missing 'verb'
+      field, wrong 'candidateType', or not being merged into the main candidate
+      list). The ChatbotCompilePasses.ts createAiPrecompilePass or the
+      deterministic precompile pass needs to ensure candidates are shaped
+      correctly (with verb='dispense' or candidateType='plate-map') so the
+      lowering pass can process them.
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
       - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
     acceptance:
-      - "Precompiler output includes candidates with kind='plateMapEntry' and
-        fields: wellPosition, compoundName, catalogNumber"
-      - At least 20 plateMapEntry candidates are extracted from the Cayman
-        plate-map PDF
-      - Compiler diagnostics show successful matching of plateMapEntry
-        candidates to lowering rules
-      - No 'ai_precompile_shape_mismatch' warnings for plate-map protocols
+      - Presegmented candidates appear in the compiler's internal candidate list
+        with verb='dispense' or candidateType='plate-map'
+      - No 'shape mismatch' or 'unresolved ref' warnings in diagnostics
+      - Candidates from presegmented extraction are not filtered out before
+        lowering
+      - The lowering pass receives candidates and produces events
     coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
-      targetChangedFiles: 2
+      targetChangedFiles: 1
       maxChangedFiles: 3
-      targetChangedLines: 80
+      targetChangedLines: 60
       maxChangedLines: 150
       requireFocusedFixture: true
 sourceArtifacts: *a1

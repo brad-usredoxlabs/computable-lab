@@ -19,6 +19,7 @@ import {
   type EventGraphData,
 } from './ProtocolIdeGraphReviewSurface'
 import type { ProtocolIdeSession } from './types'
+import { LabwareEditorProvider } from '../graph/context/LabwareEditorContext'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -122,8 +123,7 @@ function makeEventGraphData(): EventGraphData {
         details: {
           labwareId: 'lw-001',
           wells: ['A1'],
-          volume: 10,
-          unit: 'uL',
+          volume: { value: 10, unit: 'uL' },
         },
       },
       {
@@ -132,8 +132,7 @@ function makeEventGraphData(): EventGraphData {
         details: {
           source_wells: ['A1'],
           dest_wells: ['B1'],
-          volume: 5,
-          unit: 'uL',
+          volume: { value: 5, unit: 'uL' },
         },
       },
     ],
@@ -141,9 +140,9 @@ function makeEventGraphData(): EventGraphData {
       {
         labwareId: 'lw-001',
         name: '96-plate',
-        labwareType: 'cor_96_wellplate_150ul_flat',
+        labwareType: 'plate_96',
         addressing: { type: 'grid', rows: 8, columns: 12, rowLabels: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'], columnLabels: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'] },
-        geometry: { wellDepthMM: 4.5, wellVolumeUL: 150 },
+        geometry: { maxVolume_uL: 150, minVolume_uL: 1 },
       },
     ],
     deckPlacements: [
@@ -165,17 +164,19 @@ function renderSurface(opts?: {
 }) {
   return render(
     <MemoryRouter>
-      <ProtocolIdeGraphReviewSurface
-        session={opts?.session ?? makeSession()}
-        eventGraphData={opts?.eventGraphData}
-        deckLabwareSummary={opts?.deckLabwareSummary}
-        toolsInstrumentsSummary={opts?.toolsInstrumentsSummary}
-        reagentsConcentrationsSummary={opts?.reagentsConcentrationsSummary}
-        budgetCostSummary={opts?.budgetCostSummary}
-        issueCards={opts?.issueCards}
-        onIssueCardClick={opts?.onIssueCardClick ?? vi.fn()}
-        onEvidenceClick={opts?.onEvidenceClick ?? vi.fn()}
-      />
+      <LabwareEditorProvider>
+        <ProtocolIdeGraphReviewSurface
+          session={opts?.session ?? makeSession()}
+          eventGraphData={opts?.eventGraphData}
+          deckLabwareSummary={opts?.deckLabwareSummary}
+          toolsInstrumentsSummary={opts?.toolsInstrumentsSummary}
+          reagentsConcentrationsSummary={opts?.reagentsConcentrationsSummary}
+          budgetCostSummary={opts?.budgetCostSummary}
+          issueCards={opts?.issueCards}
+          onIssueCardClick={opts?.onIssueCardClick ?? vi.fn()}
+          onEvidenceClick={opts?.onEvidenceClick ?? vi.fn()}
+        />
+      </LabwareEditorProvider>
     </MemoryRouter>
   )
 }
@@ -240,6 +241,18 @@ describe('ProtocolIdeGraphReviewSurface — review-only graph rendering', () => 
       eventGraphData: makeEventGraphData(),
     })
     expect(screen.getByText('1 labware')).toBeTruthy()
+  })
+
+  it('renders the side-by-side labware review as the primary graph view', async () => {
+    renderSurface({
+      eventGraphData: makeEventGraphData(),
+    })
+    expect(screen.getByTestId('protocol-ide-labware-review')).toBeTruthy()
+    expect(screen.getByTestId('protocol-ide-source-labware-select')).toBeTruthy()
+    expect(screen.getByTestId('protocol-ide-target-labware-select')).toBeTruthy()
+    await waitFor(() => {
+      expect(document.querySelector('.dual-labware-pane')).toBeTruthy()
+    })
   })
 
   it('shows empty state when no events', () => {

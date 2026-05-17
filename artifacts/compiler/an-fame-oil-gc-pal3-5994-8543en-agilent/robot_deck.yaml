@@ -36,56 +36,47 @@ diagnostics:
     pass_id: extract_entities
     details: {}
   - severity: warning
+    code: tag_prompt_parse_error
+    message: "tag_prompt response was not valid JSON: Unterminated string in JSON at
+      position 685"
+    pass_id: tag_prompt
+    details:
+      raw_preview: |-
+        
+
+        {
+          "taggedPhrases": [
+            {
+              "phrase": "FAMEs Analysis of Oils by GC‑FID",
+              "tag": "protocol",
+              "value": "FAMEs Analysis of Oils by GC-FID"
+            },
+            {
+              "phrase": "PAL3 Series 2 RTC",
+              "tag": "instrument",
+              "value": "PAL3 Series 2 RTC"
+            },
+            {
+              "phrase": "
+  - severity: warning
     code: ai_precompile_shape_mismatch
-    message: ai_precompile output shape mismatch
+    message: ai_precompile output shape mismatch, using fallback
     pass_id: ai_precompile
   - severity: info
     code: pass_skipped_by_when
     message: "Pass 'mint_materials' skipped: when condition
       'outputs.ai_precompile.mintMaterials' evaluated to false"
     pass_id: mint_materials
-  - severity: warning
-    code: unknown_biology_verb
-    message: No expander registered for verb 'bind'; dropping candidate event.
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'apply_directives' skipped: when condition
+      'outputs.ai_precompile.directives' evaluated to false"
+    pass_id: apply_directives
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_biology_verbs' skipped: when condition
+      'outputs.ai_precompile.candidateEvents' evaluated to false"
     pass_id: expand_biology_verbs
-    details:
-      verb: bind
-  - severity: warning
-    code: unknown_biology_verb
-    message: No expander registered for verb 'prefer'; dropping candidate event.
-    pass_id: expand_biology_verbs
-    details:
-      verb: prefer
-  - severity: warning
-    code: unknown_biology_verb
-    message: No expander registered for verb 'use'; dropping candidate event.
-    pass_id: expand_biology_verbs
-    details:
-      verb: use
-  - severity: warning
-    code: unknown_biology_verb
-    message: No expander registered for verb 'report'; dropping candidate event.
-    pass_id: expand_biology_verbs
-    details:
-      verb: report
-  - severity: warning
-    code: unknown_biology_verb
-    message: No expander registered for verb 'use'; dropping candidate event.
-    pass_id: expand_biology_verbs
-    details:
-      verb: use
-  - severity: warning
-    code: unknown_biology_verb
-    message: No expander registered for verb 'use'; dropping candidate event.
-    pass_id: expand_biology_verbs
-    details:
-      verb: use
-  - severity: warning
-    code: unknown_biology_verb
-    message: No expander registered for verb 'continue'; dropping candidate event.
-    pass_id: expand_biology_verbs
-    details:
-      verb: continue
   - severity: info
     code: pass_skipped_by_when
     message: "Pass 'resolve_labware' skipped: when condition
@@ -101,6 +92,11 @@ diagnostics:
     message: "Pass 'expand_patterns' skipped: when condition
       'outputs.ai_precompile.patternEvents' evaluated to false"
     pass_id: expand_patterns
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'emit_downstream_queue' skipped: when condition
+      'outputs.ai_precompile.downstreamCompileJobs' evaluated to false"
+    pass_id: emit_downstream_queue
   - severity: info
     code: execution_scale_plan_ready
     message: Execution scaling plan is ready for robot_deck.

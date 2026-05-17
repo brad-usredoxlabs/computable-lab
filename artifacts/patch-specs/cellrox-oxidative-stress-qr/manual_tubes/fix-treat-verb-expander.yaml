@@ -1,0 +1,45 @@
+kind: protocol-foundry-patch-spec
+id: cellrox-oxidative-stress-qr/manual_tubes/fix-treat-verb-expander
+protocolId: cellrox-oxidative-stress-qr
+variant: manual_tubes
+fixClass: compiler_event_coverage
+title: Add biology verb expander for 'treat' verb
+rationale: The compiler diagnostic 'unknown_biology_verb' for verb 'treat'
+  indicates no expander is registered for this common biology verb. Step 1 of
+  the protocol ('Treat the cells with the test compound or drug') is dropped
+  because of this. The 'treat' verb should be expanded to an add_material or
+  incubate event depending on context. This is a missing verb lowering issue in
+  the BiologyVerbExpander.
+ownedFiles:
+  - server/src/compiler/biology/BiologyVerbExpander.ts
+acceptance:
+  - Verb 'treat' is registered in the BiologyVerbExpander with appropriate
+    lowering logic
+  - Protocol step 'Treat the cells with the test compound or drug' produces an
+    add_material or incubate event
+  - No 'unknown_biology_verb' warning for 'treat' in diagnostics
+  - BiologyVerbExpander.test.ts includes test cases for 'treat' verb expansion
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 40
+  maxChangedLines: 100
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cellrox-oxidative-stress-qr/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cellrox-oxidative-stress-qr/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cellrox-oxidative-stress-qr/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cellrox-oxidative-stress-qr/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cellrox-oxidative-stress-qr/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cellrox-oxidative-stress-qr/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cellrox-oxidative-stress-qr.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cellrox-oxidative-stress-qr.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cellrox-oxidative-stress-qr.txt
+failureEvidence:
+  eventCount: 10
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cellrox-oxidative-stress-qr/manual_tubes/verdict.yaml

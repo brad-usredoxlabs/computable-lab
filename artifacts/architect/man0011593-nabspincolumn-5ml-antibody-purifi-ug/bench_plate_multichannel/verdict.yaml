@@ -1,43 +1,49 @@
 kind: protocol-foundry-architect-verdict
 protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T09:21:21.135Z
+generated_at: 2026-05-09T22:30:25.635Z
 accepted: false
-qualityScore: 0.15
-coverageEstimate: 0.1
+qualityScore: 0.05
+coverageEstimate: 0
 failureClasses:
   - precompiler_reference_shape
-  - labware_alias_or_resolver
+  - extractor_prompt_contract
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: fix-ai-precompile-shape-mismatch
+  - id: fix-ai-precompile-fallback-shape
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch to enable downstream passes
-    rationale: The compiler diagnostics show 'ai_precompile output shape mismatch',
-      which causes all downstream passes (mint_materials, resolve_labware,
-      expand_patterns) to be skipped because their when conditions evaluate to
-      false. This is the root cause of eventCount=1. The ai_precompile pass in
-      ChatbotCompilePasses.ts is producing output that doesn't match the
-      expected AiPrecompileOutput schema, so candidateLabwares, patternEvents,
-      and mintMaterials are all falsy/missing. The pre-compiler extracted 12+
-      candidates but the compiler couldn't use them due to this shape error.
+    title: Fix ai_precompile fallback to produce non-empty candidateEvents when
+      tag_prompt JSON fails
+    rationale: The compiler diagnostics show 'ai_precompile output shape mismatch,
+      using fallback' followed by all downstream passes being skipped because
+      outputs.ai_precompile.candidateEvents evaluated to false. The root cause
+      is that when the tag_prompt LLM response is malformed JSON (Unterminated
+      string), the ai_precompile pass falls back to an empty/default shape
+      instead of attempting to recover candidates from the deterministic
+      presegmented text. The pre-compiler already supplied 12+6+16+5=39
+      deterministic candidates, but the ai_precompile pass's fallback path
+      produces an empty candidateEvents array, causing all verb expansion,
+      labware resolution, and pattern expansion passes to be skipped. The fix
+      must ensure the fallback path in createAiPrecompilePass still populates
+      candidateEvents from the deterministic candidates when the LLM response is
+      invalid.
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass no longer emits 'ai_precompile_shape_mismatch' warning
-      - outputs.ai_precompile.candidateLabwares is a non-empty array when
-        labware hints exist in segments
-      - outputs.ai_precompile.patternEvents is populated when candidate events
-        are present
-      - Downstream passes (resolve_labware, expand_patterns) are no longer
-        skipped by when conditions
-      - eventCount increases from 1 to at least 5 for this protocol
+      - When tag_prompt returns invalid JSON, the ai_precompile fallback must
+        still produce candidateEvents from deterministic presegmented candidates
+      - eventCount must be >= 3 for protocols with clear procedural steps in the
+        PDF text
+      - The 'expand_biology_verbs' pass must not be skipped when deterministic
+        candidates exist
+      - The 'resolve_labware' pass must not be skipped when candidateLabwares
+        can be derived from deterministic candidates
     coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: &a1
       compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml
@@ -50,7 +56,7 @@ recommendedFixes:
       materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
       text: /home/brad/git/computable-foundry/artifacts/text/man0011593-nabspincolumn-5ml-antibody-purifi-ug.txt
     failureEvidence: &a2
-      eventCount: 1
+      eventCount: 0
       outcome: gap
     implementationBudget:
       targetChangedFiles: 1
@@ -58,30 +64,28 @@ recommendedFixes:
       targetChangedLines: 60
       maxChangedLines: 150
       requireFocusedFixture: true
-  - id: fix-generic-labware-resolution
-    class: labware_alias_or_resolver
-    title: Resolve generic labware refs (96_well_plate, reservoir, tube_racks) in
-      LabwareDefinitionRegistry
-    rationale: The compiler output shows 4 unresolved_ref gaps for
-      generic_96_well_plate, generic_12_well_reservoir,
-      generic_24x1_5ml_tube_rack, and generic_4x50ml_tube_rack. The execution
-      scale plan references lbw-def-generic-96-well-plate and
-      lbw-def-generic-reservoir-1-v1, suggesting these definitions should exist
-      but the resolver can't find them. The LabwareDefinitionRegistry needs to
-      either (a) have these generic definitions registered, or (b) the resolver
-      needs to map the compiler's generic hints to existing definitions. Since
-      the execution scale plan already references these definitions, the issue
-      is likely in the resolver mapping layer.
+  - id: fix-tag-prompt-json-resilience
+    class: extractor_prompt_contract
+    title: Make tag_prompt LLM response parsing resilient to truncated/malformed JSON
+    rationale: The tag_prompt pass fails with 'Unterminated string in JSON at
+      position 669', indicating the LLM response was truncated or contained
+      unescaped characters. This malformed JSON causes the entire ai_precompile
+      output to be invalid, triggering the shape mismatch fallback. The fix
+      should add JSON repair logic (e.g., attempting to close unclosed
+      strings/arrays, or using a lenient JSON parser) before declaring the
+      response invalid. This prevents cascading failures where a single
+      malformed LLM response nullifies all deterministic candidate extraction.
     ownedFiles:
-      - server/src/registry/LabwareDefinitionRegistry.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - generic_96_well_plate resolves to lbw-def-generic-96-well-plate
-      - generic_12_well_reservoir resolves to an existing reservoir definition
-      - generic_24x1_5ml_tube_rack resolves to an existing tube rack definition
-      - generic_4x50ml_tube_rack resolves to an existing tube rack definition
-      - No unresolved_ref gaps for these labware types in compiler output
+      - tag_prompt pass must not emit 'tag_prompt_parse_error' warnings for
+        recoverable JSON truncation
+      - Partial but valid tagged phrases should be extracted even if the JSON is
+        truncated mid-string
+      - The ai_precompile pass should receive valid structured output from
+        tag_prompt even when the LLM response is imperfect
     coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2

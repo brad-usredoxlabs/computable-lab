@@ -1,38 +1,41 @@
 kind: protocol-foundry-architect-verdict
 protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
 variant: robot_deck
-generated_at: 2026-05-09T08:43:54.610Z
+generated_at: 2026-05-09T22:14:08.292Z
 accepted: false
 qualityScore: 0.1
 coverageEstimate: 0
 failureClasses:
   - precompiler_reference_shape
-  - compiler_event_coverage
+  - extractor_prompt_contract
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: fix-ai-precompile-shape-mismatch
+  - id: fix-ai-precompile-shape-mismatch-and-empty-events
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape to include candidateEvents and labware refs
-    rationale: The compiler reports 'ai_precompile_shape_mismatch' and subsequent
-      passes (mint_materials, resolve_labware, expand_patterns) are skipped
-      because their 'when' conditions evaluate to false. The ai_precompile pass
-      in ChatbotCompilePasses.ts is not producing the expected output shape with
-      candidateEvents, candidateLabwares, or mintMaterials. This causes all
-      downstream event generation to fail, resulting in eventCount=0.
+    title: Fix ai_precompile shape mismatch and empty candidateEvents
+    rationale: The compiler output shows 'ai_precompile_shape_mismatch' warning,
+      causing the fallback to produce empty candidateEvents. This results in all
+      downstream passes (expand_biology_verbs, resolve_labware, etc.) being
+      skipped, leading to eventCount=0. The root cause is in
+      ChatbotCompilePasses.ts where the ai_precompile pass fails to parse or
+      validate the LLM output shape correctly. Additionally, the tag_prompt has
+      a JSON parse error ('Unterminated string in JSON'), suggesting the
+      pre-compiler extraction is producing malformed JSON that the ai_precompile
+      pass cannot handle.
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass outputs an object with candidateEvents array when
-        protocol text contains actionable steps
-      - ai_precompile pass outputs candidateLabwares when labware is mentioned
-        in text
-      - resolve_labware pass is no longer skipped when labware hints exist
-      - eventCount >= 3 for protocols with clear procedural steps
-      - ai_precompile_shape_mismatch warning is eliminated from diagnostics
+      - ai_precompile pass successfully parses LLM output without shape mismatch
+        warnings
+      - candidateEvents array is populated with at least 3 events from the FAMEs
+        protocol steps
+      - tag_prompt JSON parsing errors are resolved or gracefully handled
+      - Downstream passes (expand_biology_verbs, resolve_labware) are no longer
+        skipped due to empty candidateEvents
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -52,40 +55,40 @@ recommendedFixes:
     implementationBudget:
       targetChangedFiles: 1
       maxChangedFiles: 2
-      targetChangedLines: 120
+      targetChangedLines: 100
       maxChangedLines: 250
       requireFocusedFixture: true
-  - id: fix-unknown-verbs-bind-prefer-use-report
-    class: compiler_event_coverage
-    title: Add verb expanders for bind, prefer, use, report, continue
-    rationale: The compiler drops candidate events because verbs 'bind', 'prefer',
-      'use', 'report', and 'continue' have no registered expanders in
-      BiologyVerbExpander.ts. These are common verbs in GC-FID protocols (e.g.,
-      'use PAL3 autosampler', 'bind column', 'report results'). Without
-      expanders, all candidates using these verbs are discarded, contributing to
-      eventCount=0.
+  - id: fix-presegmented-candidate-extraction
+    class: extractor_prompt_contract
+    title: Improve presegmented candidate extraction for GC-FID protocols
+    rationale: The pre-compiler extracted 8+12+2+1=23 deterministic candidates, but
+      these were not converted into actionable events. The PDF text contains
+      clear protocol steps (weigh sample, add heptane/hexane, add KOH in MeOH,
+      vortex, wait, GC analysis) that should be extracted as candidate events.
+      The extraction service or prompt contract needs to be improved to
+      recognize GC-FID sample preparation workflows and extract the key verbs
+      (weigh, add, vortex, wait, inject) as protocol actions.
     ownedFiles:
-      - server/src/compiler/biology/BiologyVerbExpander.ts
+      - server/src/extract/ExtractionRunnerService.ts
+      - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
     acceptance:
-      - Verb 'use' maps to a pipette or instrument configuration event
-      - Verb 'bind' maps to a labware mounting or column installation event
-      - Verb 'prefer' is handled as a no-op or configuration hint without
-        dropping the event
-      - Verb 'report' maps to a data acquisition or analysis event
-      - Verb 'continue' is handled as a no-op or sequence continuation without
-        dropping the event
-      - unknown_biology_verb warnings for these verbs are eliminated from
-        diagnostics
+      - Pre-compiler extracts at least 5 candidate events from the FAMEs
+        protocol text
+      - "Extracted events include key verbs: weigh, add, vortex, wait, inject"
+      - Candidate events include volume and reagent information (e.g., 200 µL
+        KOH in MeOH, 5 mL heptane/hexane)
+      - Extraction works for both base-catalyzed (M5795-14000) and acid-base
+        catalyzed (M5795-14001) workflows
     coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
+      model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
-      targetChangedFiles: 1
-      maxChangedFiles: 2
-      targetChangedLines: 80
-      maxChangedLines: 180
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 120
+      maxChangedLines: 300
       requireFocusedFixture: true
 sourceArtifacts: *a1
 architectNotes: "LLM architect analysis: 2 fix recommendations."

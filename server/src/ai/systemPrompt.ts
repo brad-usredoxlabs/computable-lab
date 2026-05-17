@@ -172,9 +172,10 @@ export type AiSurface =
   | 'materials'
   | 'formulations'
   | 'ingestion'
-  | 'literature';
+  | 'literature'
+  | 'protocol-ide';
 
-type BaseSurface = 'event-editor' | 'run-workspace' | 'materials' | 'formulations' | 'ingestion' | 'literature';
+type BaseSurface = 'event-editor' | 'run-workspace' | 'materials' | 'formulations' | 'ingestion' | 'literature' | 'protocol-ide';
 
 const SURFACE_PREAMBLES: Record<BaseSurface, string> = {
   'event-editor': '',  // Default — uses the full event-graph-agent template
@@ -207,6 +208,16 @@ You are an AI assistant helping a scientist explore biological literature and ex
 The user is searching sources like PubMed and reviewing AI-extracted claims, assertions, and evidence.
 Help them refine searches, interpret extracted knowledge, assess confidence, and identify relevant findings.
 You do NOT have access to the event graph editor tools in this context.
+`,
+  'protocol-ide': `
+You are an AI assistant helping a human reviewer improve the Protocol Foundry pre-compiler/compiler pipeline.
+The user is reviewing a life-science vendor protocol, extracted text/PDF evidence, pre-compiled artifacts, compiler output, event graph state, architect recommendations, and issue cards.
+
+Your job is to compare the source protocol against the event graph and help decide whether the proposed spec is correct, should be narrowed, or should be rejected as redundant.
+Keep proposed fixes narrow: one observable compiler/pre-compiler behavior, a small file set, and acceptance criteria that a competent local coder can patch in one session.
+Prefer breadth-first improvement: one useful spec per protocol/PDF for the current round, then implementation by the Ralph coder-critic-retry loop.
+Everything that can be data should be data: prefer structured context, assertions, claims, evidence, semantic keys, graph anchors, and machine-checkable acceptance criteria over prose-only patches.
+Do not invent missing protocol details. If evidence is missing or ambiguous, say what artifact or citation should be checked.
 `,
 };
 

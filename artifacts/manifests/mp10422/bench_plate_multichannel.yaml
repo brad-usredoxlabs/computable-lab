@@ -1,0 +1,86 @@
+kind: protocol-foundry-variant-manifest
+protocolId: mp10422
+variant: bench_plate_multichannel
+generated_at: 2026-05-16T01:29:12.133Z
+status: gap
+metrics:
+  eventCount: 0
+  blockerCount: 0
+  diagnosticCount: 17
+  extractorRepairExhaustedCount: 0
+  outcome: gap
+  foundryComplete: 0
+  qualityScore: 0.05
+  coverageEstimate: 0
+artifacts:
+  pdf:
+    path: pdfs/mp10422.pdf
+    exists: true
+    status: present
+  pdfMetadata:
+    path: pdfs/mp10422.pdf.procurement.yaml
+    exists: false
+    missingReason: PDF provenance sidecar not found
+  extractedText:
+    path: text/mp10422.txt
+    exists: true
+    status: present
+  segment:
+    path: segments/mp10422.yaml
+    exists: true
+    status: present
+  materialContext:
+    path: material-context/mp10422.yaml
+    exists: true
+    status: present
+  compiler:
+    path: compiler/mp10422/bench_plate_multichannel.yaml
+    exists: true
+    status: gap
+  eventGraph:
+    path: event-graphs/mp10422/bench_plate_multichannel.yaml
+    exists: true
+    status: blocked
+  executionScale:
+    path: execution-scale/mp10422/bench_plate_multichannel.yaml
+    exists: true
+    status: ready
+  browserReport:
+    path: browser-review/mp10422/bench_plate_multichannel/report.yaml
+    exists: true
+    status: skipped
+  architectVerdict:
+    path: architect/mp10422/bench_plate_multichannel/verdict.yaml
+    exists: true
+    status: gap
+  patchSpecs:
+    - path: patch-specs/mp10422/bench_plate_multichannel/fix-ai-precompile-fallback-shape.yaml
+      exists: true
+      status: present
+    - path: patch-specs/mp10422/bench_plate_multichannel/fix-tag-prompt-json-schema.yaml
+      exists: true
+      status: present
+  adoptionDecision:
+    path: adoption/mp10422/bench_plate_multichannel/adoption.yaml
+    exists: true
+    status: accepted
+  coderPatch:
+    path: code-patches/mp10422/bench_plate_multichannel/result.yaml
+    exists: true
+    status: applied
+  criticReport:
+    path: patch-critic/mp10422/bench_plate_multichannel/report.yaml
+    exists: true
+    status: present
+  rerunReport:
+    path: rerun/mp10422/bench_plate_multichannel/rerun.yaml
+    exists: true
+    status: gap
+missingArtifacts:
+  - key: pdfMetadata
+    reason: PDF provenance sidecar not found
+humanReview:
+  status: unreviewed
+  reviewPath: human-review/mp10422/bench_plate_multichannel/review.yaml
+nextActions:
+  - Open in Protocol IDE Foundry inbox for human/AI review.

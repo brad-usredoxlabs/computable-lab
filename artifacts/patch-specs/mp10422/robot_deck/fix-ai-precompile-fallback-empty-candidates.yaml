@@ -1,0 +1,48 @@
+kind: protocol-foundry-patch-spec
+id: mp10422/robot_deck/fix-ai-precompile-fallback-empty-candidates
+protocolId: mp10422
+variant: robot_deck
+fixClass: precompiler_reference_shape
+title: Ensure ai_precompile fallback populates candidateEvents from
+  deterministic candidates
+rationale: The diagnostics show 'ai_precompile output shape mismatch, using
+  fallback' followed by all downstream passes being skipped because
+  'outputs.ai_precompile.candidateEvents evaluated to false'. The fallback path
+  in createAiPrecompilePass must extract candidateEvents from the deterministic
+  presegmented candidates (10 + 4 + 3 + 6 + 4 + 1 = 28 candidates were found)
+  instead of returning an empty object. Without candidateEvents,
+  expand_biology_verbs is skipped and no events are generated.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - When ai_precompile shape mismatch occurs, the fallback output includes
+    candidateEvents derived from deterministic presegmented candidates
+  - expand_biology_verbs pass is no longer skipped when deterministic candidates
+    exist
+  - eventCount >= 3 for protocols with clear protocol steps in the PDF text
+  - The ai_precompile fallback preserves candidateLabwares and directives from
+    deterministic extraction
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 60
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10422/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10422/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10422/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/mp10422/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/mp10422/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/mp10422.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10422.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/mp10422.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10422/robot_deck/verdict.yaml

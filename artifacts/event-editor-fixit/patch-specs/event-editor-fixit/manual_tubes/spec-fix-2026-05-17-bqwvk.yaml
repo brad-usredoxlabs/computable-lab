@@ -1,0 +1,41 @@
+kind: protocol-foundry-patch-spec
+id: spec-fix-2026-05-17-bqwvk
+source: event-editor-fixit
+generated_at: 2026-05-17T02:46:58.884Z
+fixClass: compiler
+title: Fix deterministic precompile to emit deck placement for labware nouns
+  with deck slot locatives instead of treating deck tokens as well addresses
+rationale: "The compiler trace shows that the noun '96-well plate' was correctly
+  resolved to a labware recordId, but the locative phrase 'on B2' was
+  incorrectly lowered into the parameters of an 'add_material' event as a well
+  address (wells: ['B2']). This caused the resolve_labware pass to produce an
+  empty labwareAdditions list and the plan_deck_layout pass to have no pinned
+  slots. The fix must be in the deterministic precompile pass (specifically the
+  grammar/lowering logic) to recognize that when a labware noun is followed by a
+  deck slot token (like B2), it should generate a labware placement candidate
+  with a deckSlot, rather than treating the deck slot as a well within the
+  labware."
+ownedFiles:
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+  - server/src/compiler/precompile/NounPhraseResolver.ts
+  - server/src/compiler/precompile/PromptTagger.ts
+  - server/src/compiler/pipeline/fixtures/spec-fix-2026-05-17-bqwvk.yaml
+acceptance:
+  - The prompt 'Put a 96-well plate on B2' must result in a labware placement
+    candidate with deckSlot 'B2' and labwareHint '96-well plate'.
+  - The prompt 'Put a 96-well plate on B2' must NOT result in an 'add_material'
+    event with wells containing 'B2'.
+  - The prompt 'Put a 96-well plate on B2' must result in
+    terminalArtifacts.deckLayoutPlan.pinned containing an entry with slot 'B2'
+    and labwareHint 'lbw-def-generic-96-well-plate'.
+  - Prompts that explicitly refer to wells (e.g., 'Add 100ul to well A1 of the
+    96-well plate') must still parse 'A1' as a well address and not as a deck
+    slot.
+  - Prompts that explicitly refer to rows or columns (e.g., 'Mix row A of the
+    96-well plate') must still parse 'row A' as an intra-labware location and
+    not as a deck slot.
+tests:
+  - cd server && npx vitest run
+    src/compiler/pipeline/fixtures/FixItFixtures.test.ts -t
+    'spec-fix-2026-05-17-bqwvk'
+failingPrompt: Put a 96-well plate on B2

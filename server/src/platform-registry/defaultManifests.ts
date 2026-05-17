@@ -52,6 +52,12 @@ export const DEFAULT_PLATFORM_MANIFESTS: PlatformManifest[] = [
         title: 'Manual Technician Mode',
         slots: [],
       },
+      {
+        id: 'manual_freeform',
+        title: 'Manual Bench (freeform)',
+        slots: [],
+        surface: { kind: 'lawn', widthMm: 1200, heightMm: 800 },
+      },
     ],
   },
   {
@@ -70,6 +76,7 @@ export const DEFAULT_PLATFORM_MANIFESTS: PlatformManifest[] = [
       {
         id: 'assist_plus_3pos',
         title: 'Integra Assist Plus (3-position universal)',
+        sideLawn: { widthMm: 600, heightMm: 400, label: 'Labware lawn' },
         slots: [
           { id: 'A', kind: 'special', label: 'Pipette head park', orientationMode: 'flippable', row: 1, col: 1, reachable: false },
           { id: 'B', kind: 'standard', label: 'Portrait SBS slot', orientationMode: 'locked_portrait', row: 1, col: 2, reachable: true },
@@ -81,6 +88,7 @@ export const DEFAULT_PLATFORM_MANIFESTS: PlatformManifest[] = [
       {
         id: 'assist_plus_4pos_portrait',
         title: 'Integra Assist Plus (4-position portrait)',
+        sideLawn: { widthMm: 600, heightMm: 400, label: 'Labware lawn' },
         slots: [
           { id: 'A', kind: 'special', label: 'Pipette head park', orientationMode: 'flippable', row: 1, col: 1, reachable: false },
           { id: 'B', kind: 'standard', label: 'Portrait SBS slot', orientationMode: 'locked_portrait', row: 1, col: 2, reachable: true },
@@ -108,6 +116,7 @@ export const DEFAULT_PLATFORM_MANIFESTS: PlatformManifest[] = [
       {
         id: 'ot2_standard',
         title: 'Opentrons OT-2',
+        sideLawn: { widthMm: 400, heightMm: 500, label: 'Labware lawn' },
         slots: [
           { id: '1', kind: 'standard', row: 4, col: 1, reachable: true },
           { id: '2', kind: 'standard', row: 4, col: 2, reachable: true },
@@ -143,6 +152,7 @@ export const DEFAULT_PLATFORM_MANIFESTS: PlatformManifest[] = [
       {
         id: 'ot3_standard',
         title: 'Opentrons Flex',
+        sideLawn: { widthMm: 400, heightMm: 500, label: 'Labware lawn' },
         slots: [
           { id: 'A1', kind: 'standard', row: 1, col: 1, reachable: true },
           { id: 'A2', kind: 'standard', row: 1, col: 2, reachable: true },

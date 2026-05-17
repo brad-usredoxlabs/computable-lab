@@ -1,0 +1,9 @@
+kind: protocol-worker-report
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: bench_plate_multichannel
+generated_at: 2026-05-09T21:23:58.605Z
+status: applied
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/result.yaml
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+message: patch applied and committed

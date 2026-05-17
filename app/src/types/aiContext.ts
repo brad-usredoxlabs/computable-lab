@@ -13,6 +13,7 @@ export type AiSurface =
   | 'formulations'
   | 'ingestion'
   | 'literature'
+  | 'protocol-ide'
 
 export interface AiContext {
   /** Which page surface is providing context. */

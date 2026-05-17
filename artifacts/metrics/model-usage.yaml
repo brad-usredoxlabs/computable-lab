@@ -1,29 +1,18 @@
 kind: protocol-foundry-model-usage
-generated_at: 2026-05-09T19:42:53.899Z
-startedAt: 2026-05-09T19:19:55.229Z
-completedAt: 2026-05-09T19:42:53.865Z
-elapsedSeconds: 1378.636
+generated_at: 2026-05-11T22:51:06.725Z
+startedAt: 2026-05-11T22:50:27.530Z
+completedAt: 2026-05-11T22:51:06.716Z
+elapsedSeconds: 39.186
 endpoints:
   - role: worker
-    baseUrl: http://thunderbeast:8888/v1
-    error: "model metrics HTTP 404: ; model metrics HTTP 404: "
+    baseUrl: http://thunderbeast:8000/v1
+    start:
+      endpoint: http://thunderbeast:8000/metrics
+    end:
+      endpoint: http://thunderbeast:8000/metrics
   - role: architect
     baseUrl: http://thunderbeast:8000/v1
     start:
       endpoint: http://thunderbeast:8000/metrics
-      promptTokensTotal: 1747493
-      generationTokensTotal: 14817
-      runningRequests: 0
-      waitingRequests: 0
-      kvCacheUsage: 0
     end:
       endpoint: http://thunderbeast:8000/metrics
-      promptTokensTotal: 1916356
-      generationTokensTotal: 51318
-      runningRequests: 1
-      waitingRequests: 0
-      kvCacheUsage: 0.078215527230591
-    deltaPromptTokens: 168863
-    deltaGenerationTokens: 36501
-    promptTokensPerSecond: 122.4855581893988
-    generationTokensPerSecond: 26.47616919912145

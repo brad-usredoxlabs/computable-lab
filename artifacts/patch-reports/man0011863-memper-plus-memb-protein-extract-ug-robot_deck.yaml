@@ -1,0 +1,9 @@
+kind: protocol-worker-report
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: robot_deck
+generated_at: 2026-05-09T21:26:32.337Z
+status: applied
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/result.yaml
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+message: patch applied and committed

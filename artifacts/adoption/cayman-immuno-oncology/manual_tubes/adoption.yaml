@@ -1,29 +1,21 @@
 kind: protocol-foundry-adoption-decision
 protocolId: cayman-immuno-oncology
 variant: manual_tubes
-generated_at: 2026-05-09T19:27:25.859Z
+generated_at: 2026-05-11T22:50:27.849Z
 status: accepted
 applyPatches: true
 patchSpecs:
-  - id: cayman-immuno-oncology/manual_tubes/fix-browser-rendering
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-browser-rendering.yaml
-    fixClass: browser_or_labware_rendering
-    title: Make event graph render and play in labware-editor
-  - id: cayman-immuno-oncology/manual_tubes/fix-event-graph-coverage-wash
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-event-graph-coverage-wash.yaml
-    fixClass: compiler_event_coverage_wash
-    title: Expand tiny event graphs with wash/aspirate actions
-  - id: cayman-immuno-oncology/manual_tubes/fix-foundry-runtime-wiring-gap
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-foundry-runtime-wiring-gap.yaml
-    fixClass: foundry_runtime_wiring_gap
-    title: Wire Foundry compile dependencies to the real compiler runtime
-  - id: cayman-immuno-oncology/manual_tubes/fix-labware-alias-resolver-gap
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-labware-alias-resolver-gap.yaml
-    fixClass: labware_alias_or_resolver_gap
-    title: Resolve existing labware definitions through compiler aliases or Foundry
-      lookup wiring
-  - id: cayman-immuno-oncology/manual_tubes/fix-material-catalog-spec-gap
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-material-catalog-spec-gap.yaml
-    fixClass: material_catalog_or_spec_gap
-    title: Resolve protocol materials as catalog/spec data without inventing inventory
+  - id: cayman-immuno-oncology/manual_tubes/fix-ai-precompile-shape-mismatch
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch causing downstream pass skips
+  - id: cayman-immuno-oncology/manual_tubes/fix-labware-resolution-for-generic-plates
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-labware-resolution-for-generic-plates.yaml
+    fixClass: labware_alias_or_resolver
+    title: Resolve generic_96_well_plate and generic_24x1_5ml_tube_rack labware
+      references
+  - id: cayman-immuno-oncology/manual_tubes/fix-material-extraction-from-catalog-pdf
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-material-extraction-from-catalog-pdf.yaml
+    fixClass: material_catalog_or_spec
+    title: Extract compound materials from Cayman catalog PDF text
 message: Patch specs accepted for unattended coder tournament execution.

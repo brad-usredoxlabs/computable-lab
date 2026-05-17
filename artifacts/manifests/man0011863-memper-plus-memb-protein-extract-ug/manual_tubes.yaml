@@ -1,0 +1,87 @@
+kind: protocol-foundry-variant-manifest
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: manual_tubes
+generated_at: 2026-05-16T01:29:12.104Z
+status: gap
+metrics:
+  eventCount: 5
+  blockerCount: 0
+  diagnosticCount: 10
+  extractorRepairExhaustedCount: 0
+  outcome: gap
+  foundryComplete: 0
+  qualityScore: 0.15
+  coverageEstimate: 0.25
+artifacts:
+  pdf:
+    path: pdfs/man0011863-memper-plus-memb-protein-extract-ug.pdf
+    exists: false
+    missingReason: source PDF not found
+  pdfMetadata:
+    path: pdfs/man0011863-memper-plus-memb-protein-extract-ug.pdf.procurement.yaml
+    exists: false
+    missingReason: PDF provenance sidecar not found
+  extractedText:
+    path: text/man0011863-memper-plus-memb-protein-extract-ug.txt
+    exists: true
+    status: present
+  segment:
+    path: segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
+    exists: true
+    status: present
+  materialContext:
+    path: material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
+    exists: true
+    status: present
+  compiler:
+    path: compiler/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+    exists: true
+    status: gap
+  eventGraph:
+    path: event-graphs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+    exists: true
+    status: blocked
+  executionScale:
+    path: execution-scale/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+    exists: true
+    status: ready
+  browserReport:
+    path: browser-review/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/report.yaml
+    exists: true
+    status: skipped
+  architectVerdict:
+    path: architect/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/verdict.yaml
+    exists: true
+    status: gap
+  patchSpecs:
+    - path: patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+      exists: true
+      status: present
+    - path: patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-labware-resolution-for-tubes.yaml
+      exists: true
+      status: present
+    - path: patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-protocol-branch-selection.yaml
+      exists: true
+      status: present
+  adoptionDecision:
+    path: adoption/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/adoption.yaml
+    exists: true
+    status: accepted
+  coderPatch:
+    path: code-patches/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/result.yaml
+    exists: true
+    status: needs-human
+missingArtifacts:
+  - key: pdf
+    reason: source PDF not found
+  - key: pdfMetadata
+    reason: PDF provenance sidecar not found
+  - key: criticReport
+    reason: artifact reference not present in ledger or convention
+  - key: rerunReport
+    reason: artifact reference not present in ledger or convention
+humanReview:
+  status: unreviewed
+  reviewPath: human-review/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/review.yaml
+nextActions:
+  - Open in Protocol IDE Foundry inbox for human/AI review.

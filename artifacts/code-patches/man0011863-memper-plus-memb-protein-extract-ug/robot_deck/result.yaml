@@ -1,0 +1,10 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: robot_deck
+generated_at: 2026-05-09T21:26:32.336Z
+status: applied
+selectedSpecId: man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-ai-precompile-shape-mismatch-salvage
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+commit: 59261eadb1c2adf953aefafb457efcc5f01b59f5
+message: Patch applied and committed.

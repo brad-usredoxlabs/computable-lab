@@ -1,13 +1,13 @@
 kind: protocol-foundry-architect-verdict
 protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
 variant: manual_tubes
-generated_at: 2026-05-09T09:32:09.742Z
+generated_at: 2026-05-09T22:40:09.282Z
 accepted: false
 qualityScore: 0.15
 coverageEstimate: 0.1
 failureClasses:
   - precompiler_reference_shape
-  - labware_alias_or_resolver
+  - compiler_event_coverage
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
@@ -16,33 +16,26 @@ badScalingAssumptions: []
 recommendedFixes:
   - id: fix-ai-precompile-shape-mismatch
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch causing downstream pass skips
-    rationale: The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
-      AI pre-compiler output does not match the expected schema. This causes
-      critical downstream passes (mint_materials, resolve_labware,
-      expand_patterns) to be skipped because their 'when' conditions evaluate to
-      false (e.g., 'outputs.ai_precompile.mintMaterials' is false/missing). The
-      PDF contains clear protocol steps (centrifugation, binding, elution) and
-      materials (Binding Buffer, Elution Buffer, Neutralization Buffer), but
-      only 1 event was produced. The root cause is the ai_precompile pass in
-      ChatbotCompilePasses.ts producing malformed or incomplete output,
-      preventing the compiler from extracting candidates, materials, and labware
-      references.
+    title: Fix ai_precompile shape mismatch to allow downstream passes to run
+    rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch' warning.
+      This causes the ai_precompile output to be malformed or empty, which
+      triggers the 'when' conditions for downstream passes (mint_materials,
+      resolve_labware, expand_patterns) to evaluate to false, causing them to be
+      skipped. As a result, only 1 event is produced (a default centrifuge
+      event) instead of the full protocol steps. The salvageAiPrecompileOutput
+      function in ChatbotCompilePasses.ts needs to be more robust in handling
+      malformed LLM output, or the LLM prompt/schema needs to be fixed to ensure
+      correct output shape.
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass output matches expected AiPrecompileOutput schema
-        with candidateEvents, mintMaterials, candidateLabwares, and
-        patternEvents fields populated when PDF text contains protocol steps
-      - Downstream passes (mint_materials, resolve_labware, expand_patterns) are
-        no longer skipped due to false 'when' conditions when PDF has actionable
-        content
-      - eventCount >= 3 for protocols with clear multi-step procedures like
-        antibody purification
-      - No 'ai_precompile_shape_mismatch' warning in diagnostics for this
-        protocol
+      - ai_precompile pass no longer emits 'ai_precompile_shape_mismatch'
+        diagnostic
+      - mint_materials, resolve_labware, and expand_patterns passes are no
+        longer skipped due to false 'when' conditions
+      - eventCount >= 3 for protocols with clear procedural steps
     coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: &a1
       compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
@@ -60,42 +53,70 @@ recommendedFixes:
     implementationBudget:
       targetChangedFiles: 1
       maxChangedFiles: 2
-      targetChangedLines: 100
-      maxChangedLines: 250
+      targetChangedLines: 60
+      maxChangedLines: 150
       requireFocusedFixture: true
-  - id: fix-labware-resolution-for-generic-racks
-    class: labware_alias_or_resolver
-    title: Resolve generic tube rack labware references in LabwareDefinitionRegistry
-    rationale: The compiler output shows 3 unresolved_ref gaps for
-      generic_24x1_5ml_tube_rack, generic_6x15ml_tube_rack, and
-      generic_4x50ml_tube_rack. These are standard labware types mentioned in
-      the PDF (50 mL collection tubes, spin columns). The
-      LabwareDefinitionRegistry likely lacks definitions or aliases for these
-      generic rack types, or the resolver cannot map the pre-compiler's labware
-      hints to existing registry entries. This blocks proper labware resolution
-      and event graph completeness.
+  - id: fix-deterministic-precompile-coverage
+    class: compiler_event_coverage
+    title: Ensure deterministic_precompile extracts protocol steps from vendor PDF
+      text
+    rationale: The PDF text contains clear protocol steps (e.g., 'Centrifuge set to
+      1,000 x g for all centrifugation steps', binding buffer preparation,
+      elution steps), but the compiler only produced 1 event. The
+      deterministic_precompile pass should be able to extract these steps
+      without relying on the LLM ai_precompile pass. The TextSegmenter,
+      VerbMatcher, and ParameterGrammar need to correctly parse the vendor
+      protocol text into candidate events. Additionally, the ai_precompile pass
+      should fall back to deterministic output when the LLM output is malformed.
     ownedFiles:
+      - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+    acceptance:
+      - deterministic_precompile pass extracts >= 3 candidate events from the
+        vendor PDF text
+      - candidateEvents are correctly lowered to PlateEventPrimitive events by
+        expand_biology_verbs pass
+      - eventCount >= 3 in final compiler output
+    coderModelProfile:
+      model: Qwen/Qwen3.6-27B-FP8
+      guidance: Narrow ownership, concrete evidence, one behavior change.
+    sourceArtifacts: *a1
+    failureEvidence: *a2
+    implementationBudget:
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 100
+      maxChangedLines: 220
+      requireFocusedFixture: true
+  - id: fix-labware-resolution-gaps
+    class: labware_alias_or_resolver
+    title: Resolve generic tube rack labware references
+    rationale: "The compiler output shows 3 unresolved labware references:
+      generic_24x1_5ml_tube_rack, generic_6x15ml_tube_rack, and
+      generic_4x50ml_tube_rack. These are standard labware types that should be
+      resolvable from the LabwareDefinitionRegistry. The resolve_labware pass is
+      being skipped due to the ai_precompile shape mismatch, but even when it
+      runs, it needs to correctly match these generic labware hints to registry
+      definitions."
+    ownedFiles:
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
       - server/src/registry/LabwareDefinitionRegistry.ts
     acceptance:
-      - LabwareDefinitionRegistry contains definitions or aliases for
-        generic_24x1_5ml_tube_rack, generic_6x15ml_tube_rack, and
-        generic_4x50ml_tube_rack
-      - Compiler resolve_labware pass successfully resolves these references
-        without producing unresolved_ref gaps
-      - Event graph labwares section includes properly resolved tube rack
-        definitions
-      - No unresolved_ref gaps in compiler output for standard generic labware
-        types
+      - generic_24x1_5ml_tube_rack, generic_6x15ml_tube_rack, and
+        generic_4x50ml_tube_rack are resolved to valid labware definitions
+      - No unresolved_ref gaps remain in compiler output for these labware types
+      - resolve_labware pass successfully matches generic tube rack hints to
+        registry entries
     coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
       targetChangedFiles: 1
       maxChangedFiles: 2
-      targetChangedLines: 50
-      maxChangedLines: 120
+      targetChangedLines: 40
+      maxChangedLines: 100
       requireFocusedFixture: true
 sourceArtifacts: *a1
-architectNotes: "LLM architect analysis: 2 fix recommendations."
+architectNotes: "LLM architect analysis: 3 fix recommendations."

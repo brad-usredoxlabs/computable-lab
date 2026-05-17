@@ -1,0 +1,45 @@
+kind: protocol-foundry-patch-spec
+id: mp10471/robot_deck/fix-tag-prompt-json-parse-error
+protocolId: mp10471
+variant: robot_deck
+fixClass: extractor_prompt_contract
+title: Fix tag_prompt JSON parse error from unterminated strings
+rationale: The tag_prompt pass fails with 'Unterminated string in JSON at
+  position 594', indicating the LLM response contains malformed JSON (likely
+  unescaped quotes or special characters in material names like 'Fluo-4
+  Direct™'). This parse failure contributes to the shape mismatch in
+  ai_precompile. The prompt contract should enforce stricter JSON output or the
+  parser should handle common LLM JSON errors gracefully.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+  - server/src/extract/ExtractionRunnerService.ts
+acceptance:
+  - tag_prompt pass must not fail on valid JSON with special characters in values
+  - Parser should handle or reject malformed JSON gracefully without crashing
+    the pipeline
+  - Material names with special characters (™, °, etc.) should be properly
+    escaped in JSON output
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 40
+  maxChangedLines: 100
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10471/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10471/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10471/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10471/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/mp10471/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/mp10471/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/mp10471.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10471.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/mp10471.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 3 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10471/robot_deck/verdict.yaml

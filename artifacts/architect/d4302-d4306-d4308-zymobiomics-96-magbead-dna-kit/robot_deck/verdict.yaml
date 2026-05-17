@@ -1,41 +1,50 @@
 kind: protocol-foundry-architect-verdict
 protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
 variant: robot_deck
-generated_at: 2026-05-09T09:18:23.059Z
+generated_at: 2026-05-09T22:27:31.846Z
 accepted: false
-qualityScore: 0.15
-coverageEstimate: 0.3
+qualityScore: 0.05
+coverageEstimate: 0
 failureClasses:
   - precompiler_reference_shape
-  - labware_alias_or_resolver
-  - material_catalog_or_spec
+  - extractor_prompt_contract
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: fix-ai-precompile-shape-mismatch
+  - id: fix-tag-prompt-json-parse-and-shape-mismatch
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch to enable downstream passes
-    rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch', which
-      caused critical downstream passes (mint_materials, resolve_labware,
-      expand_patterns) to be skipped because their 'when' conditions evaluated
-      to false. This is the root cause of the gap outcome. The ai_precompile
-      pass in ChatbotCompilePasses.ts is producing output that doesn't match the
-      expected AiPrecompileOutput schema, preventing the compiler from
-      extracting candidate events, labwares, and materials.
+    title: Fix tag_prompt JSON parsing to handle markdown code fences and ensure
+      ai_precompile shape compatibility
+    rationale: "The compiler diagnostics show two critical failures: (1)
+      'tag_prompt_parse_error' with raw_preview showing the LLM returned
+      markdown-wrapped JSON ('```json\\n{...}'), which the parser rejects as
+      invalid JSON starting with 'B' from the preamble text. (2)
+      'ai_precompile_shape_mismatch' causing the fallback path that produces
+      zero candidateEvents. This cascades into all downstream passes being
+      skipped (mint_materials, apply_directives, expand_biology_verbs,
+      resolve_labware, etc.), resulting in eventCount=0. The root cause is that
+      the tag_prompt pass in ChatbotCompilePasses.ts does not strip markdown
+      code fences before JSON.parse, and the ai_precompile pass output shape
+      does not match the expected AiPrecompileOutput interface, triggering the
+      fallback that produces empty results."
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass produces output matching AiPrecompileOutput schema
-        with candidateEvents, candidateLabwares, and mintMaterials fields
-      - Downstream passes (mint_materials, resolve_labware, expand_patterns) are
-        no longer skipped due to false when conditions
-      - Compiler outcome changes from 'gap' to 'complete' or 'error' with
-        specific diagnostics
+      - tag_prompt pass successfully parses LLM responses wrapped in ```json
+        code fences by stripping markdown before JSON.parse
+      - ai_precompile pass output shape matches AiPrecompileOutput interface
+        without triggering shape_mismatch warning
+      - candidateEvents array is populated with at least 3 events from the
+        ZymoBIOMICS protocol text
+      - expand_biology_verbs pass is no longer skipped due to empty
+        candidateEvents
+      - resolve_labware pass is no longer skipped due to empty candidateLabwares
+      - eventCount >= 3 in compiler output for this protocol
     coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: &a1
       compiler: /home/brad/git/computable-foundry/artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
@@ -48,7 +57,7 @@ recommendedFixes:
       materialContext: /home/brad/git/computable-foundry/artifacts/material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
       text: /home/brad/git/computable-foundry/artifacts/text/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.txt
     failureEvidence: &a2
-      eventCount: 6
+      eventCount: 0
       outcome: gap
     implementationBudget:
       targetChangedFiles: 1
@@ -56,53 +65,39 @@ recommendedFixes:
       targetChangedLines: 60
       maxChangedLines: 150
       requireFocusedFixture: true
-  - id: fix-labware-resolution-for-zymo-labware
-    class: labware_alias_or_resolver
-    title: Add labware resolution for ZymoBIOMICS-specific labware
-    rationale: "Multiple unresolved_ref gaps exist for ZymoBIOMICS-specific labware:
-      'ZR BashingBead™ Lysis Tubes', 'BashingBead™ Lysis Module',
-      'generic_96_well_plate', 'generic_24x1_5ml_tube_rack',
-      'generic_6x15ml_tube_rack', 'generic_4x50ml_tube_rack'. The labware
-      resolver cannot find these in the registry. Need to add aliases or
-      mappings for these Zymo-specific labware items to existing generic labware
-      definitions."
+  - id: fix-presegmented-candidate-extraction-for-zymobiomics
+    class: extractor_prompt_contract
+    title: Ensure presegmented extraction produces actionable candidates from
+      ZymoBIOMICS protocol text
+    rationale: The diagnostics show multiple 'foundry_presegmented_candidates' info
+      messages (10, 5, 33, 15, 28, 17, 6, 1 candidates across chunks) but also
+      one 'foundry_presegmented_no_actionable_candidates' warning. Despite 115
+      total candidates being extracted, the ai_precompile shape mismatch caused
+      all candidates to be discarded in the fallback path. Once the shape
+      mismatch is fixed, the presegmented candidates should flow through to
+      candidateEvents. However, the extraction service may need to ensure that
+      candidates from the ZymoBIOMICS protocol (which contains specific steps
+      like bead-beating, binding, washing, elution) are properly tagged as
+      protocol-action evidence rather than just material references. The
+      ExtractionRunnerService and presegmented extraction logic should verify
+      that candidates include verb-action pairs (e.g., 'add Lysis Solution',
+      'incubate', 'magnetic separation', 'wash with MagWash 1', 'elute with
+      DNase/RNase Free Water').
     ownedFiles:
-      - server/src/registry/LabwareDefinitionRegistry.ts
-    acceptance:
-      - ZR BashingBead™ Lysis Tubes resolves to an existing labware definition
-        or new definition is created
-      - BashingBead™ Lysis Module resolves to an existing labware definition
-      - generic_96_well_plate resolves to lbw-def-generic-96-well-plate
-      - No unresolved_ref gaps for Zymo-specific labware in compiler output
-    coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
-    implementationBudget:
-      targetChangedFiles: 1
-      maxChangedFiles: 2
-      targetChangedLines: 40
-      maxChangedLines: 100
-      requireFocusedFixture: true
-  - id: fix-material-resolution-for-zymo-reagents
-    class: material_catalog_or_spec
-    title: Add material resolution for ZymoBIOMICS reagents
-    rationale: "The material context is empty (materials: [], materialSpecs: [],
-      vendorProducts: []). The PDF lists specific reagents: ZymoBIOMICS™ Lysis
-      Solution, DNA/RNA Shield™, ZymoBIOMICS™ MagBinding Buffer, ZymoBIOMICS™
-      MagWash 1, ZymoBIOMICS™ MagWash 2, ZymoBIOMICS™ DNase/RNase Free Water,
-      ZymoBIOMICS™ MagBinding Beads. These need to be added to the material
-      catalog or the compiler needs to be able to create material instances from
-      the PDF text."
-    ownedFiles:
-      - server/src/registry/CompoundClassRegistry.ts
+      - server/src/extract/ExtractionRunnerService.ts
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ZymoBIOMICS reagents are resolved to material instances in the compiler
-        output
-      - mint_materials pass is no longer skipped
-      - Event graph includes proper material references for Zymo reagents
+      - Presegmented extraction produces candidates with verb-action pairs for
+        ZymoBIOMICS protocol steps (lysis, binding, washing, elution)
+      - No 'foundry_presegmented_no_actionable_candidates' warnings for chunks
+        containing protocol steps
+      - "candidateEvents includes events for: add lysis solution,
+        bead-beat/incubate, add MagBinding Buffer, magnetic separation, wash
+        with MagWash 1, wash with MagWash 2, elute DNA"
+      - Labware references (96-well plate, magnetic separation rack, reservoirs)
+        are extracted from candidates
+      - Material references (Lysis Solution, MagBinding Buffer, MagWash 1,
+        MagWash 2, DNase/RNase Free Water, MagBinding Beads) are resolved
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -115,4 +110,4 @@ recommendedFixes:
       maxChangedLines: 200
       requireFocusedFixture: true
 sourceArtifacts: *a1
-architectNotes: "LLM architect analysis: 3 fix recommendations."
+architectNotes: "LLM architect analysis: 2 fix recommendations."

@@ -3,23 +3,28 @@ id: cayman-natural-prodccuts/bench_plate_multichannel/add-plate-map-verb-lowerin
 protocolId: cayman-natural-prodccuts
 variant: bench_plate_multichannel
 fixClass: compiler_event_coverage
-title: Add 'plate_map' verb lowering for 96-well library plate maps
-rationale: The PDF is a 96-well plate map (Cayman Natural Products Screening
-  Library). The pre-compiler extracted 22+ candidate groups, but the compiler
-  produced 0 events because it has no verb lowering path for 'plate_map' or
-  'library_plate' content types. The compiler needs a verb expander that
-  recognizes plate-map-style text (well-position + compound-name +
-  catalog-number tables) and lowers them to 'load_plate' or 'set_well_contents'
-  events.
+title: Add plate-map verb lowering for 96-well screening library protocols
+rationale: The PDF is a Cayman Chemical Natural Products Screening Library plate
+  map (96-well). The pre-compiler extracted 23+ candidate segments
+  (deterministic candidates from presegmented text), but the compiler produced 0
+  events. The compiler lacks a verb/action mapping for 'plate_map' or
+  'screening_library' content types. The prior patch touched
+  BiologyVerbExpander.ts but the event graph is still empty, meaning the verb
+  lowering path was not triggered or the candidates were not shaped correctly
+  for the compiler to consume. The compiler needs a dedicated lowering pass that
+  recognizes plate-map-style candidates (well-position + compound-name +
+  catalog-number) and emits 'load_plate' or 'map_compounds' events.
 ownedFiles:
   - server/src/compiler/biology/BiologyVerbExpander.ts
   - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
 acceptance:
-  - Compiler produces >= 1 event for a plate-map-style PDF with
-    well-position/compound tables
-  - Events include well positions (e.g., A2, A3) and compound identifiers from
-    the plate map
-  - eventCount > 0 for this protocol variant
+  - Compiler produces >= 1 event for a plate-map protocol with
+    well-position/compound/catalog-number candidates
+  - Event graph contains events with verb 'load_plate' or 'map_compounds'
+    referencing the 96-well plate labware
+  - Each compound from the plate map (e.g., Ursolic Acid, Paclitaxel) is
+    represented as a material reference in at least one event
+  - eventCount >= 3 for this protocol variant
 implementationBudget:
   targetChangedFiles: 2
   maxChangedFiles: 3
@@ -42,5 +47,5 @@ sourceArtifacts:
 failureEvidence:
   eventCount: 0
   outcome: gap
-architectNotes: "LLM architect analysis: 3 fix recommendations."
+architectNotes: "LLM architect analysis: 2 fix recommendations."
 sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-natural-prodccuts/bench_plate_multichannel/verdict.yaml

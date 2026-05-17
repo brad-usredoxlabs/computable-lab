@@ -6,7 +6,14 @@ import {
   extractUnifiedDiff,
   meaningfulPatchFiles,
   selectPatchSpecIdForRun,
+  TOOL_AGENT_MAX_TURNS,
 } from './FoundryCoderPatch.js';
+
+describe('TOOL_AGENT_MAX_TURNS', () => {
+  it('gives the fast local coder enough room to finish verification loops', () => {
+    expect(TOOL_AGENT_MAX_TURNS).toBe(120);
+  });
+});
 
 describe('meaningfulPatchFiles', () => {
   it('filters only compiler/schema/record files', () => {

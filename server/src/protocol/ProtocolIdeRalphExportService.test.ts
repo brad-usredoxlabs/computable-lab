@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { mkdtemp, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { RecordStore, RecordEnvelope } from '../../store/types.js';
 import { ProtocolIdeRalphExportService } from './ProtocolIdeRalphExportService.js';
 import type { IssueCard } from './ProtocolIdeIssueCardService.js';
@@ -342,6 +345,64 @@ describe('ProtocolIdeRalphExportService — clearing cards after export', () => 
     await expect(service.exportIssueCards('PIS-001')).rejects.toThrow(
       'Failed to persist export metadata for session PIS-001',
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// exportIssueCards — Ralph queue persistence
+// ---------------------------------------------------------------------------
+
+describe('ProtocolIdeRalphExportService — queue persistence', () => {
+  it('writes submitted specs and an index to the Ralph queue', async () => {
+    const queueRoot = await mkdtemp(join(tmpdir(), 'protocol-ide-ralph-queue-'));
+    const mockEnvelope: RecordEnvelope = makeSessionEnvelope(makeIssueCards());
+    const store = makeMockStore(mockEnvelope, { success: true });
+    const service = new ProtocolIdeRalphExportService(store, { queueRoot });
+
+    const result = await service.exportIssueCards('PIS-001');
+
+    expect(result.bundle.queue).toBeDefined();
+    expect(result.bundle.queue!.queueRoot).toBe(queueRoot);
+    expect(result.bundle.queue!.draftPaths.length).toBe(3);
+
+    const firstDraftPath = result.bundle.queue!.draftPaths[0].path;
+    const firstDraft = await readFile(firstDraftPath, 'utf-8');
+    expect(firstDraft).toContain('Pipette too coarse for single-well transfer');
+
+    const index = await readFile(result.bundle.queue!.indexPath, 'utf-8');
+    expect(index).toContain('protocol-ide-ralph-queue-submission');
+    expect(index).toContain(result.bundle.bundleId);
+    expect(index).toContain('PIS-001');
+
+    const updateCall = (store.update as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const persistedPayload = updateCall.envelope.payload as Record<string, unknown>;
+    expect(persistedPayload.lastRalphQueueSubmission).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rejectIssueCards
+// ---------------------------------------------------------------------------
+
+describe('ProtocolIdeRalphExportService — rejectIssueCards', () => {
+  it('clears issue cards and records the rejection reason', async () => {
+    const mockEnvelope: RecordEnvelope = makeSessionEnvelope(makeIssueCards());
+    const store = makeMockStore(mockEnvelope, { success: true });
+    const service = new ProtocolIdeRalphExportService(store);
+
+    const result = await service.rejectIssueCards('PIS-001', 'redundant with existing patch');
+
+    expect(result.success).toBe(true);
+    expect(result.rejectedCardCount).toBe(3);
+    expect(result.reason).toBe('redundant with existing patch');
+
+    const updateCall = (store.update as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    const persistedPayload = updateCall.envelope.payload as Record<string, unknown>;
+    expect(persistedPayload.issueCards).toEqual([]);
+    expect(persistedPayload.lastIssueCardRejection).toMatchObject({
+      rejectedCardCount: 3,
+      reason: 'redundant with existing patch',
+    });
   });
 });
 

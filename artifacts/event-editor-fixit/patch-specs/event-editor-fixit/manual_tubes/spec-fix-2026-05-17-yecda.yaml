@@ -1,0 +1,35 @@
+kind: protocol-foundry-patch-spec
+id: spec-fix-2026-05-17-yecda
+source: event-editor-fixit
+generated_at: 2026-05-17T12:17:58.991Z
+fixClass: compiler
+title: Fix deterministic precompile to emit deck placement for 'Put [labware] on
+  [slot]' prompts
+rationale: The compiler trace shows that the deck token 'B2' was incorrectly
+  parsed as a well address (parameters.wells) instead of a deck slot. This
+  caused the candidate labware to lack a deckSlot, resulting in empty
+  labwareAdditions and no placement events. The fix must be in the deterministic
+  precompile pass to correctly identify deck-like tokens in placement contexts
+  and attach them to the candidate labware, preventing them from being treated
+  as well coordinates.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+  - server/src/compiler/precompile/NounPhraseResolver.ts
+  - server/src/compiler/pipeline/fixtures/spec-fix-2026-05-17-yecda.yaml
+acceptance:
+  - The prompt 'Put a 96-well plate on B2' must result in a labware addition for
+    'lbw-def-generic-96-well-plate' pinned to deck slot 'B2'.
+  - The terminal artifact deckLayoutPlan.pinned must contain an entry with slot
+    'B2' and labwareHint 'lbw-def-generic-96-well-plate'.
+  - The deck token 'B2' must NOT appear in any event's well coordinates or
+    parameters.wells for this prompt.
+  - The verb 'Put' in this context must not generate a liquid handling event
+    (e.g., add_material) targeting the deck slot.
+  - "Guardrail: Prompts explicitly referring to wells (e.g., 'Add 10uL to well
+    A1') must still parse well addresses correctly and not treat them as deck
+    slots."
+tests:
+  - cd server && npx vitest run
+    src/compiler/pipeline/fixtures/FixItFixtures.test.ts -t
+    'spec-fix-2026-05-17-yecda'
+failingPrompt: Put a 96-well plate on B2

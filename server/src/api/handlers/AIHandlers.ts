@@ -10,13 +10,19 @@ import type {
   ConversationHistoryMessage,
   FileAttachment,
 } from '../../ai/types.js';
-import { extractFileContent, type UploadedFile, type ExtractedFile } from '../../ai/FileContentExtractor.js';
+import { type UploadedFile } from '../../ai/FileContentExtractor.js';
 
 export interface DraftEventsBody {
   prompt: string;
   context: EditorContext;
   history?: ConversationHistoryMessage[];
   attachments?: FileAttachment[];
+  /**
+   * When true, only the deterministic pipeline runs (no LLM call).
+   * Used by the event-editor dock's Precompile mode and required when AI is
+   * not configured.
+   */
+  deterministicOnly?: boolean;
 }
 
 export type AiSurface =
@@ -25,7 +31,8 @@ export type AiSurface =
   | 'materials'
   | 'formulations'
   | 'ingestion'
-  | 'literature';
+  | 'literature'
+  | 'protocol-ide';
 
 export interface AssistBody {
   prompt: string;
@@ -59,7 +66,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
       request: FastifyRequest<{ Body: DraftEventsBody }>,
       reply: FastifyReply,
     ) {
-      const { prompt, context, history, attachments } = request.body;
+      const { prompt, context, history, attachments, deterministicOnly } = request.body;
 
       if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
         reply.status(400);
@@ -72,6 +79,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
           context,
           ...(history ? { history } : {}),
           ...(attachments ? { attachments } : {}),
+          ...(deterministicOnly ? { deterministicOnly: true } : {}),
         });
         return result;
       } catch (err) {
@@ -95,6 +103,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
       let context: EditorContext;
       let history: ConversationHistoryMessage[] | undefined;
       let attachments: FileAttachment[] | undefined;
+      let deterministicOnly: boolean | undefined;
 
       if (contentType.includes('multipart/form-data')) {
         // Parse multipart form-data so the event-editor surface can send
@@ -122,12 +131,14 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
         attachments = files.length > 0
           ? files.map((f) => ({ name: f.originalName, mime_type: f.mimeType, content: f.buffer }))
           : undefined;
+        deterministicOnly = fields['deterministicOnly'] === 'true' ? true : undefined;
       } else {
         const body = request.body;
         prompt = body.prompt;
         context = body.context;
         history = body.history;
         attachments = body.attachments;
+        deterministicOnly = body.deterministicOnly;
       }
 
       reply.raw.writeHead(200, {
@@ -150,6 +161,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
           context,
           ...(history ? { history } : {}),
           ...(attachments ? { attachments } : {}),
+          ...(deterministicOnly ? { deterministicOnly: true } : {}),
           onEvent: sendEvent,
         });
 
@@ -283,6 +295,143 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
       } finally {
         reply.raw.end();
       }
+    },
+  };
+}
+
+/**
+ * Build a draft-events handler that only runs the deterministic portion of the
+ * chatbot-compile pipeline (no LLM). Used when AI is not configured so the
+ * event-editor's Precompile mode still works.
+ *
+ * The returned handlers reject any request without `deterministicOnly: true`
+ * via the supplied `unavailableMessage` (the AI-unavailable 503).
+ */
+export function createDeterministicOnlyAIHandlers(deps: {
+  runDeterministic: (args: {
+    prompt: string;
+    context: EditorContext;
+    history?: ConversationHistoryMessage[];
+    attachments?: FileAttachment[];
+    onEvent: (event: AgentEvent) => void;
+  }) => Promise<unknown>;
+  unavailableMessage: () => string;
+}): AIHandlers {
+  const aiUnavailable = (reply: FastifyReply) => {
+    reply.status(503);
+    return { error: 'AI_UNAVAILABLE', message: deps.unavailableMessage() };
+  };
+
+  return {
+    async draftEvents(request, reply) {
+      const body = request.body;
+      if (!body?.deterministicOnly) return aiUnavailable(reply);
+      if (!body.prompt || typeof body.prompt !== 'string' || body.prompt.trim().length === 0) {
+        reply.status(400);
+        return { error: 'INVALID_REQUEST', message: 'prompt is required' };
+      }
+      try {
+        const events: AgentEvent[] = [];
+        const result = await deps.runDeterministic({
+          prompt: body.prompt,
+          context: body.context,
+          ...(body.history ? { history: body.history } : {}),
+          ...(body.attachments ? { attachments: body.attachments } : {}),
+          onEvent: (event) => events.push(event),
+        });
+        return { ...(result as object), events };
+      } catch (err) {
+        reply.status(500);
+        return { error: 'PIPELINE_ERROR', message: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    async draftEventsStream(request, reply) {
+      const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '*';
+      const contentType = request.headers['content-type'] ?? '';
+
+      let prompt: string;
+      let context: EditorContext;
+      let history: ConversationHistoryMessage[] | undefined;
+      let attachments: FileAttachment[] | undefined;
+      let deterministicOnly: boolean | undefined;
+
+      if (contentType.includes('multipart/form-data')) {
+        const parts = request.parts();
+        const fields: Record<string, string> = {};
+        const files: UploadedFile[] = [];
+        for await (const part of parts) {
+          if (part.type === 'field') {
+            fields[part.fieldname] = part.value as string;
+          } else if (part.type === 'file') {
+            const chunks: Buffer[] = [];
+            for await (const chunk of part.file) chunks.push(chunk);
+            files.push({
+              originalName: part.filename ?? 'unknown',
+              mimeType: part.mimetype ?? 'application/octet-stream',
+              sizeBytes: Buffer.concat(chunks).length,
+              buffer: Buffer.concat(chunks),
+            });
+          }
+        }
+        prompt = fields['prompt'] ?? '';
+        context = fields['context'] ? JSON.parse(fields['context']) as EditorContext : ({} as EditorContext);
+        history = fields['history'] ? JSON.parse(fields['history']) as ConversationHistoryMessage[] : undefined;
+        attachments = files.length > 0
+          ? files.map((f) => ({ name: f.originalName, mime_type: f.mimeType, content: f.buffer }))
+          : undefined;
+        deterministicOnly = fields['deterministicOnly'] === 'true' ? true : undefined;
+      } else {
+        const body = request.body;
+        prompt = body.prompt;
+        context = body.context;
+        history = body.history;
+        attachments = body.attachments;
+        deterministicOnly = body.deterministicOnly;
+      }
+
+      if (!deterministicOnly) {
+        reply.status(503);
+        await reply.send({ error: 'AI_UNAVAILABLE', message: deps.unavailableMessage() });
+        return;
+      }
+
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': origin,
+        'Vary': 'Origin',
+      });
+
+      const sendEvent = (event: AgentEvent) => {
+        reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+      };
+
+      sendEvent({ type: 'status', message: 'Received — running deterministic precompile…' });
+
+      try {
+        const result = await deps.runDeterministic({
+          prompt,
+          context,
+          ...(history ? { history } : {}),
+          ...(attachments ? { attachments } : {}),
+          onEvent: sendEvent,
+        });
+        sendEvent({ type: 'done', result: result as never });
+      } catch (err) {
+        sendEvent({
+          type: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        reply.raw.end();
+      }
+    },
+
+    async assistStream(_request, reply) {
+      reply.status(503);
+      await reply.send({ error: 'AI_UNAVAILABLE', message: deps.unavailableMessage() });
     },
   };
 }

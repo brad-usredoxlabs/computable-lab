@@ -1,0 +1,88 @@
+kind: protocol-foundry-variant-manifest
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: manual_tubes
+generated_at: 2026-05-16T01:29:12.057Z
+status: gap
+metrics:
+  eventCount: 0
+  blockerCount: 0
+  diagnosticCount: 19
+  extractorRepairExhaustedCount: 0
+  outcome: gap
+  foundryComplete: 0
+  qualityScore: 0.05
+  coverageEstimate: 0
+artifacts:
+  pdf:
+    path: pdfs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.pdf
+    exists: false
+    missingReason: source PDF not found
+  pdfMetadata:
+    path: pdfs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.pdf.procurement.yaml
+    exists: false
+    missingReason: PDF provenance sidecar not found
+  extractedText:
+    path: text/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.txt
+    exists: true
+    status: present
+  segment:
+    path: segments/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+    exists: true
+    status: present
+  materialContext:
+    path: material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+    exists: true
+    status: present
+  compiler:
+    path: compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+    exists: true
+    status: gap
+  eventGraph:
+    path: event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+    exists: true
+    status: blocked
+  executionScale:
+    path: execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+    exists: true
+    status: ready
+  browserReport:
+    path: browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/report.yaml
+    exists: true
+    status: skipped
+  architectVerdict:
+    path: architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/verdict.yaml
+    exists: true
+    status: gap
+  patchSpecs:
+    - path: patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-ai-precompile-json-parse-and-shape.yaml
+      exists: true
+      status: present
+    - path: patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-tag-prompt-json-resilience.yaml
+      exists: true
+      status: present
+  adoptionDecision:
+    path: adoption/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/adoption.yaml
+    exists: true
+    status: accepted
+  coderPatch:
+    path: code-patches/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/result.yaml
+    exists: true
+    status: applied
+  criticReport:
+    path: patch-critic/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/report.yaml
+    exists: true
+    status: present
+  rerunReport:
+    path: rerun/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/rerun.yaml
+    exists: true
+    status: gap
+missingArtifacts:
+  - key: pdf
+    reason: source PDF not found
+  - key: pdfMetadata
+    reason: PDF provenance sidecar not found
+humanReview:
+  status: unreviewed
+  reviewPath: human-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/review.yaml
+nextActions:
+  - Open in Protocol IDE Foundry inbox for human/AI review.

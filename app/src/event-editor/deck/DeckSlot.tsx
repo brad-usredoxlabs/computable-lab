@@ -1,10 +1,14 @@
-import { useState, type DragEvent } from 'react'
+import { useMemo, useState, type DragEvent } from 'react'
 import { getDeckSlotLockedOrientation, getPlatformManifest, getVariantManifest } from '../../shared/lib/platformRegistry'
 import type { PlatformSlotManifest } from '../../types/platformRegistry'
 import { useEventEditor } from '../EventEditorContext'
 import { resolveOrientation, validatePlacement } from '../lib/placementRules'
 import { AddLabwareDialog } from './AddLabwareDialog'
 import { LabwareTile } from './LabwareTile'
+import {
+  buildPreviewWellIndex,
+  previewPlacementForSlot,
+} from '../lib/previewProjection'
 import type { EventEditorPlacement, LabwareOrientation } from '../types'
 import type { Labware } from '../../types/labware'
 
@@ -32,6 +36,16 @@ export function DeckSlot({ slot }: DeckSlotProps) {
 
   const platform = getPlatformManifest(state.platforms, state.platformId)
   const variant = getVariantManifest(state.platforms, state.platformId, state.variantId)
+
+  const previewPlacement = previewPlacementForSlot(state.preview, slot.id)
+  const previewLabware = previewPlacement
+    ? state.preview?.previewLabwares[previewPlacement.labwareId]
+      ?? state.labwares[previewPlacement.labwareId]
+      ?? null
+    : null
+  const previewIndex = useMemo(() => buildPreviewWellIndex(state.preview), [state.preview])
+  const committedAffected =
+    placement != null && previewIndex.byLabware.has(placement.labwareId)
 
   const title = [
     `Slot ${slot.id}`,
@@ -135,6 +149,7 @@ export function DeckSlot({ slot }: DeckSlotProps) {
       data-orientation={slot.orientationMode ?? 'flippable'}
       data-occupied={placement ? 'true' : 'false'}
       data-dragover={isDragOver ? 'true' : 'false'}
+      data-preview={previewPlacement && !placement ? 'true' : 'false'}
       style={{ gridRow: slot.row, gridColumn: slot.col }}
       title={title}
       onClick={handleClick}
@@ -149,9 +164,19 @@ export function DeckSlot({ slot }: DeckSlotProps) {
           placement={placement}
           orientation={placement.orientation}
           variant="slot"
+          affected={committedAffected}
           onRemove={handleRemove}
           onRotate={!orientationLock ? handleRotate : undefined}
           onFocus={() => actions.setFocus(placement.placementId)}
+        />
+      ) : previewPlacement && previewLabware ? (
+        <LabwareTile
+          labware={previewLabware}
+          placement={previewPlacement}
+          orientation={previewPlacement.orientation}
+          variant="slot"
+          ghost
+          onFocus={() => actions.setFocus(previewPlacement.placementId)}
         />
       ) : (
         <>

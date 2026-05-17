@@ -1,0 +1,74 @@
+kind: protocol-foundry-variant-manifest
+protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+variant: manual_tubes
+generated_at: 2026-05-16T01:29:11.920Z
+status: stalled
+metrics:
+  eventCount: 10
+  blockerCount: 0
+  diagnosticCount: 17
+  extractorRepairExhaustedCount: 0
+  outcome: gap
+  foundryComplete: 0
+  qualityScore: 0.35
+  coverageEstimate: 0.5
+artifacts:
+  pdf:
+    path: pdfs/an-fame-oil-gc-pal3-5994-8543en-agilent.pdf
+    exists: true
+    status: present
+  pdfMetadata:
+    path: pdfs/an-fame-oil-gc-pal3-5994-8543en-agilent.pdf.procurement.yaml
+    exists: false
+    missingReason: PDF provenance sidecar not found
+  extractedText:
+    path: text/an-fame-oil-gc-pal3-5994-8543en-agilent.txt
+    exists: true
+    status: present
+  segment:
+    path: segments/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+    exists: true
+    status: present
+  materialContext:
+    path: material-context/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+    exists: true
+    status: present
+  compiler:
+    path: compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+    exists: true
+    status: gap
+  eventGraph:
+    path: event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+    exists: true
+    status: blocked
+  executionScale:
+    path: execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+    exists: true
+    status: ready
+  browserReport:
+    path: browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/report.yaml
+    exists: true
+    status: skipped
+  patchSpecs: []
+  adoptionDecision:
+    path: adoption/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/adoption.yaml
+    exists: true
+    status: accepted
+missingArtifacts:
+  - key: pdfMetadata
+    reason: PDF provenance sidecar not found
+  - key: architectVerdict
+    reason: artifact reference not present in ledger or convention
+  - key: patchSpecs
+    reason: artifact list is empty
+  - key: coderPatch
+    reason: artifact reference not present in ledger or convention
+  - key: criticReport
+    reason: artifact reference not present in ledger or convention
+  - key: rerunReport
+    reason: artifact reference not present in ledger or convention
+humanReview:
+  status: unreviewed
+  reviewPath: human-review/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/review.yaml
+nextActions:
+  - Run architect review to produce a focused patch spec.

@@ -26,6 +26,7 @@ export interface InstrumentRunFileWell {
 export interface InstrumentRunFile {
   instrument: string;
   wells: InstrumentRunFileWell[];
+  runParameters?: Record<string, unknown>;
   analysisRules?: unknown[];
 }
 

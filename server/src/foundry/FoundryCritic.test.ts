@@ -64,6 +64,46 @@ describe('FoundryCritic', () => {
     expect(result.specVerification?.criteriaFailed.length).toBeGreaterThan(0);
   });
 
+  it('returns revision when the generated spec test fails', async () => {
+    const artifactRoot = await createArtifactRoot();
+    const patchResultPath = join(artifactRoot, 'code-patches', 'test-protocol', 'standard', 'result.yaml');
+    const specPath = join(artifactRoot, 'patch-specs', 'test-protocol', 'standard', 'fix-fixture.yaml');
+    await mkdir(join(artifactRoot, 'code-patches', 'test-protocol', 'standard'), { recursive: true });
+    await mkdir(join(artifactRoot, 'patch-specs', 'test-protocol', 'standard'), { recursive: true });
+    await writeFile(patchResultPath, 'status: applied\ntouchedFiles:\n  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts\nselectedSpecId: fix-fixture\n', 'utf-8');
+    await writeFile(
+      specPath,
+      [
+        'id: fix-fixture',
+        'rationale: The generated fixture is the source of truth.',
+        'acceptance: []',
+        'tests:',
+        "  - cd server && npx vitest run src/compiler/pipeline/fixtures/FixItFixtures.test.ts -t 'fix-fixture'",
+        '',
+      ].join('\n'),
+      'utf-8',
+    );
+
+    const result = await runFoundryPatchCritic({
+      artifactRoot,
+      protocolId: 'test-protocol',
+      variant: 'standard',
+      specTestRunner: async (command) => ({
+        command,
+        status: 'failed',
+        output: 'expected pinned placement, got []',
+      }),
+    });
+
+    expect(result.verdict).toBe('revision');
+    expect(result.specVerification?.accepted).toBe(false);
+    expect(result.specVerification?.criteriaFailed).toContain(
+      "Regression test failed: cd server && npx vitest run src/compiler/pipeline/fixtures/FixItFixtures.test.ts -t 'fix-fixture'",
+    );
+    expect(result.notes).toContain('AI critic skipped because one or more generated regression tests failed.');
+    expect(result.revisionFeedback).toContain('expected pinned placement, got []');
+  });
+
   it('blocks when patch is failed', async () => {
     const artifactRoot = await createArtifactRoot();
     const patchResultPath = join(artifactRoot, 'code-patches', 'test-protocol', 'standard', 'result.yaml');

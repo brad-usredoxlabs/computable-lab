@@ -2,7 +2,7 @@ kind: protocol-foundry-compiler-result
 protocolId: cayman-natural-prodccuts
 variant: bench_plate_multichannel
 outcome: gap
-rawOutcome: gap
+rawOutcome: complete
 eventCount: 0
 diagnostics:
   - severity: info
@@ -186,25 +186,58 @@ diagnostics:
     pass_id: extract_entities
     details: {}
   - severity: warning
+    code: tag_prompt_parse_error
+    message: |-
+      tag_prompt response was not valid JSON: Unexpected token 'B', "
+
+      Based on t"... is not valid JSON
+    pass_id: tag_prompt
+    details:
+      raw_preview: >-
+        
+
+        Based on the provided text, here is the extracted JSON object containing
+        the relevant biological protocol entities, reagents, and product
+        information.
+
+
+        ```json
+
+        {
+          "taggedPhrases": [
+            {
+              "phrase": "Natural Products Screening Library (96-Well)",
+              "tag": "material",
+              "value": "Natu
+  - severity: warning
     code: ai_precompile_shape_mismatch
-    message: ai_precompile output shape mismatch
+    message: ai_precompile output shape mismatch, using fallback
     pass_id: ai_precompile
   - severity: info
     code: pass_skipped_by_when
     message: "Pass 'mint_materials' skipped: when condition
       'outputs.ai_precompile.mintMaterials' evaluated to false"
     pass_id: mint_materials
-  - severity: warning
-    code: unknown_biology_verb
-    message: No expander registered for verb 'scale'; dropping candidate event.
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'apply_directives' skipped: when condition
+      'outputs.ai_precompile.directives' evaluated to false"
+    pass_id: apply_directives
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_biology_verbs' skipped: when condition
+      'outputs.ai_precompile.candidateEvents' evaluated to false"
     pass_id: expand_biology_verbs
-    details:
-      verb: scale
   - severity: info
     code: pass_skipped_by_when
     message: "Pass 'resolve_labware' skipped: when condition
       'outputs.ai_precompile.candidateLabwares' evaluated to false"
     pass_id: resolve_labware
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_prior_labware_references' skipped: when condition
+      'outputs.ai_precompile.priorLabwareRefs' evaluated to false"
+    pass_id: resolve_prior_labware_references
   - severity: info
     code: pass_skipped_by_when
     message: "Pass 'expand_patterns' skipped: when condition
@@ -225,21 +258,6 @@ diagnostics:
       profileId: robot-assist-plus-96
       blockers: []
 extractorRepairExhaustedCount: 0
-gaps:
-  - kind: unresolved_ref
-    message: generic_96_well_plate (no matching labware in prior snapshot)
-    details:
-      hint: generic_96_well_plate
-      reason: no matching labware in prior snapshot
-  - kind: unresolved_ref
-    message: generic_12_well_reservoir (no matching labware in prior snapshot)
-    details:
-      hint: generic_12_well_reservoir
-      reason: no matching labware in prior snapshot
-  - kind: unresolved_ref
-    message: generic_96_tip_rack (no matching labware in prior snapshot)
-    details:
-      hint: generic_96_tip_rack
-      reason: no matching labware in prior snapshot
+gaps: []
 foundryTestAssumptionsRef: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-natural-prodccuts/bench_plate_multichannel.yaml
 terminalArtifactsRef: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-natural-prodccuts/bench_plate_multichannel.yaml

@@ -24,6 +24,7 @@ import { getOntologyTermRegistry } from '../../../registry/OntologyTermRegistry.
 import type { LabStateSnapshot } from '../../../compiler/state/LabState.js';
 import { applyEventToLabState, emptyLabState } from '../../../compiler/state/LabState.js';
 import { applyDirectiveToLabState, type DirectiveNode } from '../../../compiler/directives/Directive.js';
+import { normalizeProtocolIntent, type ProtocolIntent } from '../../../compiler/protocolIntent/ProtocolIntent.js';
 import { getValidationChecks } from '../../../compiler/validation/ValidationCheck.js';
 import { renderPromptTemplate } from '../../../registry/PromptTemplateRegistry.js';
 import {
@@ -287,6 +288,7 @@ export interface AiLabwareAdditionPatch {
 export interface AiPrecompileOutput {
   candidateActions?: CandidateAction[];
   taggedPhrases?: TaggedPhrase[];
+  protocolIntent?: ProtocolIntent;
   candidateEvents: Array<{ verb: string; [key: string]: unknown }>;
   candidateLabwares: CandidateLabware[];
   unresolvedRefs: Array<{ kind: string; label: string; reason: string }>;
@@ -363,6 +365,7 @@ function _createAiPrecompileOutputSchema() {
     directives: z.array(z.any()).optional(),
     downstreamCompileJobs: z.array(z.any()).optional(),
     patternEvents: z.array(z.any()).optional(),
+    protocolIntent: z.any().optional(),
   });
 }
 
@@ -479,6 +482,7 @@ function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unkn
     clarification: typeof obj.clarification === 'string' ? obj.clarification : undefined,
     candidateActions,
     taggedPhrases,
+    protocolIntent: normalizeProtocolIntent(obj.protocolIntent),
     mintMaterials: Array.isArray(obj.mintMaterials) ? obj.mintMaterials : undefined,
     priorLabwareRefs: Array.isArray(obj.priorLabwareRefs) ? obj.priorLabwareRefs : undefined,
     directives: Array.isArray(obj.directives) ? obj.directives : undefined,
@@ -493,6 +497,342 @@ function salvageAiPrecompileOutput(input: { raw?: string | object; parsed?: unkn
 export interface CreateAiPrecompilePassDeps {
   llmClient: LlmClient;
   model?: string;
+}
+
+type DeterministicPlanFrame = {
+  verbText?: string;
+  verb: string;
+  span?: [number, number];
+  sourceText?: string;
+  parameters?: Record<string, unknown>;
+  roles?: Record<string, unknown>;
+  links?: Record<string, unknown>;
+  diagnostics?: PassDiagnostic[];
+};
+
+export interface DeterministicProtocolPlanStep {
+  stepId: string;
+  verb: string;
+  sourceText: string;
+  roles: Record<string, unknown>;
+  parameters: Record<string, unknown>;
+  dependsOn: string[];
+  status: 'ready' | 'blocked';
+  blockers: Array<{ code: string; message: string; details?: Record<string, unknown> }>;
+}
+
+export interface DeterministicProtocolPlan {
+  kind: 'deterministic-protocol-plan';
+  source: 'deterministic_precompile';
+  steps: DeterministicProtocolPlanStep[];
+  bindings: {
+    labwareRoles: Record<string, string>;
+    materialRoles: Record<string, unknown>;
+  };
+  assumptions: string[];
+  blockers: Array<{ stepId: string; code: string; message: string; details?: Record<string, unknown> }>;
+}
+
+export interface DeterministicPlanConsolidationOutput extends AiPrecompileOutput {
+  deterministicCompleteness: number;
+  residualClauses: unknown[];
+  protocolPlan: DeterministicProtocolPlan;
+  aiPrecompile: AiPrecompileOutput;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function textMentions(text: string, words: string[]): boolean {
+  const lower = text.toLowerCase();
+  return words.some((word) => lower.includes(word));
+}
+
+function cloneEvent(event: Record<string, unknown> | undefined): Record<string, unknown> {
+  return { ...(event ?? {}) };
+}
+
+function setIfMissing(target: Record<string, unknown>, key: string, value: string | undefined): boolean {
+  if (typeof target[key] === 'string' || !value) return false;
+  target[key] = value;
+  return true;
+}
+
+function eventParameters(event: Record<string, unknown>): Record<string, unknown> {
+  const parameters: Record<string, unknown> = {};
+  for (const key of ['volume_uL', 'count', 'wells', 'duration_seconds', 'concentration_uM', 'concentration']) {
+    if (event[key] !== undefined) parameters[key] = event[key];
+  }
+  return parameters;
+}
+
+function eventRoles(event: Record<string, unknown>): Record<string, unknown> {
+  const roles: Record<string, unknown> = {};
+  for (const key of [
+    'labware_id',
+    'source_labware_id',
+    'target_labware_id',
+    'source_well',
+    'target_wells',
+    'well',
+    'source',
+    'destination',
+    'material',
+    'source_material_ref',
+    'instrument',
+  ]) {
+    if (event[key] !== undefined) roles[key] = event[key];
+  }
+  return roles;
+}
+
+function stepBlocker(code: string, message: string, details?: Record<string, unknown>) {
+  return {
+    code,
+    message,
+    ...(details ? { details } : {}),
+  };
+}
+
+function lowerConsolidatedCandidateEvent(
+  event: Record<string, unknown>,
+  roles: Record<string, unknown>,
+): Record<string, unknown> {
+  const next = { ...event };
+  Object.assign(next, roles);
+  return next;
+}
+
+function isLabwareSetupStep(verb: string, sourceText: string, roles: Record<string, unknown>): boolean {
+  return verb === 'add_material'
+    && typeof roles.labware_id === 'string'
+    && !roles.material
+    && textMentions(sourceText, ['plate', 'reservoir', 'tube', 'target position', 'source position']);
+}
+
+/**
+ * Creates the deterministic_plan_consolidation pass.
+ *
+ * This is the second deterministic pass: it takes clause-local action frames
+ * from deterministic_precompile and stitches them into an ordered protocol
+ * plan with cross-clause labware bindings, simple pronoun/role resolution,
+ * dependencies, and explicit blockers.
+ */
+export function createDeterministicPlanConsolidationPass(): Pass {
+  return {
+    id: 'deterministic_plan_consolidation',
+    family: 'parse' as const,
+    run({ pass_id, state }: PassRunArgs): PassResult {
+      const deterministic = state.outputs.get('deterministic_precompile') as
+        | (Partial<AiPrecompileOutput> & {
+            deterministicCompleteness?: number;
+            residualClauses?: unknown[];
+            compileIr?: {
+              actionFrames?: DeterministicPlanFrame[];
+            };
+          })
+        | undefined;
+
+      const candidateEvents = (deterministic?.candidateEvents ?? []) as Array<Record<string, unknown>>;
+      const frames = deterministic?.compileIr?.actionFrames ?? [];
+      const candidateLabwares = deterministic?.candidateLabwares ?? [];
+      const unresolvedRefs = deterministic?.unresolvedRefs ?? [];
+      const residualClauses = deterministic?.residualClauses ?? [];
+      const deterministicCompleteness = typeof deterministic?.deterministicCompleteness === 'number'
+        ? deterministic.deterministicCompleteness
+        : 0;
+
+      const labwareRoles = new Map<string, string>();
+      const materialRoles = new Map<string, unknown>();
+      const assumptions: string[] = [];
+      const blockers: DeterministicProtocolPlan['blockers'] = [];
+      const diagnostics: PassDiagnostic[] = [];
+      const consolidatedEvents: Array<{ verb: string; [key: string]: unknown }> = [];
+      const steps: DeterministicProtocolPlanStep[] = [];
+      const lastMutationByLabware = new Map<string, string>();
+      let lastLabwareId: string | undefined;
+      let lastMaterial: unknown;
+
+      frames.forEach((frame, index) => {
+        const event = cloneEvent(candidateEvents[index]);
+        if (!event.verb) event.verb = frame.verb;
+        const verb = stringValue(event.verb) ?? frame.verb;
+        const sourceText = frame.sourceText ?? '';
+        const roles = { ...eventRoles(event), ...(frame.roles ?? {}) };
+        const stepId = `det-step-${index + 1}`;
+        const dependsOn = new Set<string>();
+
+        const currentTarget = labwareRoles.get('target') ?? labwareRoles.get('plate') ?? lastLabwareId;
+        const currentSource = labwareRoles.get('source') ?? labwareRoles.get('reservoir');
+
+        if (verb === 'read') {
+          const resolved = currentTarget;
+          if (setIfMissing(roles, 'labware_id', resolved)) {
+            assumptions.push(`${stepId}: resolved read labware from current target/plate context.`);
+          }
+        }
+        if (verb === 'add_material') {
+          const resolved = textMentions(sourceText, ['it', 'target', 'plate']) ? currentTarget : undefined;
+          if (setIfMissing(roles, 'labware_id', resolved)) {
+            assumptions.push(`${stepId}: resolved add-material target from current target/plate context.`);
+          }
+        }
+        if (verb === 'transfer') {
+          if (setIfMissing(roles, 'source_labware_id', currentSource)) {
+            assumptions.push(`${stepId}: resolved transfer source from current source/reservoir context.`);
+          }
+          if (setIfMissing(roles, 'target_labware_id', currentTarget)) {
+            assumptions.push(`${stepId}: resolved transfer target from current target/plate context.`);
+          }
+        }
+
+        const labwareId = stringValue(roles.labware_id);
+        const sourceLabwareId = stringValue(roles.source_labware_id);
+        const targetLabwareId = stringValue(roles.target_labware_id);
+        const mutatesLabwareId = verb === 'transfer' ? targetLabwareId : labwareId;
+        const readsLabwareId = verb === 'read' ? labwareId : undefined;
+
+        if (readsLabwareId) {
+          const upstream = lastMutationByLabware.get(readsLabwareId);
+          if (upstream) dependsOn.add(upstream);
+        }
+        if (sourceLabwareId) {
+          const upstream = lastMutationByLabware.get(sourceLabwareId);
+          if (upstream) dependsOn.add(upstream);
+        }
+        if (targetLabwareId) {
+          const upstream = lastMutationByLabware.get(targetLabwareId);
+          if (upstream) dependsOn.add(upstream);
+        }
+
+        const stepBlockers: DeterministicProtocolPlanStep['blockers'] = [];
+        if (verb === 'read') {
+          if (!roles.labware_id) {
+            stepBlockers.push(stepBlocker('missing_read_labware', 'Read step has no resolved labware.'));
+          }
+          if (!roles.instrument) {
+            stepBlockers.push(stepBlocker('missing_read_instrument', 'Read step has no resolved instrument.'));
+          }
+        }
+        if (verb === 'add_material') {
+          if (!roles.labware_id) {
+            stepBlockers.push(stepBlocker('missing_add_material_target', 'Add-material step has no resolved target labware.'));
+          }
+          if (!roles.material && !isLabwareSetupStep(verb, sourceText, roles)) {
+            stepBlockers.push(stepBlocker('missing_add_material_material', 'Add-material step has no resolved material/source.'));
+          }
+        }
+        if (verb === 'transfer') {
+          if (!roles.source_labware_id) {
+            stepBlockers.push(stepBlocker('missing_transfer_source_labware', 'Transfer step has no resolved source labware.'));
+          }
+          if (!roles.target_labware_id) {
+            stepBlockers.push(stepBlocker('missing_transfer_target_labware', 'Transfer step has no resolved target labware.'));
+          }
+        }
+
+        if (stepBlockers.length > 0) {
+          for (const blocker of stepBlockers) {
+            blockers.push({ stepId, ...blocker });
+            diagnostics.push({
+              severity: 'warning',
+              code: `deterministic_plan_${blocker.code}`,
+              message: blocker.message,
+              pass_id,
+              details: { stepId, verb, sourceText },
+            });
+          }
+        }
+
+        if (labwareId) {
+          lastLabwareId = labwareId;
+          if (textMentions(sourceText, ['target', 'destination'])) labwareRoles.set('target', labwareId);
+          if (textMentions(sourceText, ['plate'])) labwareRoles.set('plate', labwareId);
+          if (textMentions(sourceText, ['source', 'reservoir'])) labwareRoles.set('source', labwareId);
+          if (textMentions(sourceText, ['reservoir'])) labwareRoles.set('reservoir', labwareId);
+        }
+        if (sourceLabwareId && textMentions(sourceText, ['source', 'reservoir'])) {
+          labwareRoles.set('source', sourceLabwareId);
+          if (textMentions(sourceText, ['reservoir'])) labwareRoles.set('reservoir', sourceLabwareId);
+        }
+        if (targetLabwareId && textMentions(sourceText, ['target', 'destination', 'plate'])) {
+          labwareRoles.set('target', targetLabwareId);
+          if (textMentions(sourceText, ['plate'])) labwareRoles.set('plate', targetLabwareId);
+        }
+        if (roles.material !== undefined) {
+          lastMaterial = roles.material;
+          materialRoles.set('last', roles.material);
+        } else if (lastMaterial !== undefined && textMentions(sourceText, ['it', 'same material', 'that material'])) {
+          roles.material = lastMaterial;
+          materialRoles.set('last', lastMaterial);
+          assumptions.push(`${stepId}: resolved material back-reference from prior material.`);
+        }
+
+        if (mutatesLabwareId) lastMutationByLabware.set(mutatesLabwareId, stepId);
+
+        consolidatedEvents.push(lowerConsolidatedCandidateEvent(event, roles) as { verb: string; [key: string]: unknown });
+        steps.push({
+          stepId,
+          verb,
+          sourceText,
+          roles,
+          parameters: { ...eventParameters(event), ...(frame.parameters ?? {}) },
+          dependsOn: Array.from(dependsOn),
+          status: stepBlockers.length > 0 ? 'blocked' : 'ready',
+          blockers: stepBlockers,
+        });
+      });
+
+      if (frames.length === 0 && candidateEvents.length > 0) {
+        for (const [index, event] of candidateEvents.entries()) {
+          consolidatedEvents.push(event as { verb: string; [key: string]: unknown });
+          steps.push({
+            stepId: `det-step-${index + 1}`,
+            verb: stringValue(event.verb) ?? 'unknown',
+            sourceText: '',
+            roles: eventRoles(event),
+            parameters: eventParameters(event),
+            dependsOn: [],
+            status: 'ready',
+            blockers: [],
+          });
+        }
+      }
+
+      const protocolPlan: DeterministicProtocolPlan = {
+        kind: 'deterministic-protocol-plan',
+        source: 'deterministic_precompile',
+        steps,
+        bindings: {
+          labwareRoles: Object.fromEntries(labwareRoles),
+          materialRoles: Object.fromEntries(materialRoles),
+        },
+        assumptions,
+        blockers,
+      };
+      const aiPrecompile: AiPrecompileOutput = {
+        candidateEvents: consolidatedEvents,
+        candidateLabwares,
+        unresolvedRefs,
+        downstreamCompileJobs: [],
+        patternEvents: [],
+      };
+
+      return {
+        ok: true,
+        output: {
+          ...aiPrecompile,
+          deterministicCompleteness,
+          residualClauses,
+          protocolPlan,
+          aiPrecompile,
+        } satisfies DeterministicPlanConsolidationOutput,
+        secondaryOutputs: { ai_precompile: aiPrecompile },
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
+      };
+    },
+  };
 }
 
 /**
@@ -514,6 +854,17 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
     family: 'expand' as const,
     run: async (args: PassRunArgs) => {
       const { state } = args;
+      const consolidated = state.outputs.get('deterministic_plan_consolidation') as
+        | DeterministicPlanConsolidationOutput
+        | undefined;
+      if (
+        consolidated
+        && consolidated.deterministicCompleteness >= 0.9
+        && consolidated.residualClauses.length === 0
+      ) {
+        return { ok: true, output: consolidated.aiPrecompile };
+      }
+
       const raw = await deps.llmClient.complete({
         model: deps.model ?? 'claude-sonnet-4-6',
         messages: [
@@ -532,7 +883,7 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
         // JSON parse failed — return empty output with warning diagnostic
         return {
           ok: true,
-          output: salvageAiPrecompileOutput({ raw: '' }),
+          output: consolidated?.aiPrecompile ?? salvageAiPrecompileOutput({ raw: '' }),
           diagnostics: [{
             severity: 'warning',
             code: 'ai_precompile_parse_error',
@@ -544,6 +895,14 @@ export function createAiPrecompilePass(deps: CreateAiPrecompilePassDeps): Pass {
       }
 
       const output = salvageAiPrecompileOutput({ parsed });
+      if (consolidated?.aiPrecompile.candidateEvents.length) {
+        output.candidateEvents = consolidated.aiPrecompile.candidateEvents;
+        output.candidateLabwares = consolidated.aiPrecompile.candidateLabwares;
+        output.unresolvedRefs = [
+          ...consolidated.aiPrecompile.unresolvedRefs,
+          ...output.unresolvedRefs,
+        ];
+      }
 
       // Regression detection: warn when LLM emits physical well addresses instead of role coordinates
       const diagnostics: PassDiagnostic[] = [];
@@ -1202,7 +1561,11 @@ export function createLabwareResolvePass(
     family: 'disambiguate' as const,
     async run({ pass_id, state }: PassRunArgs): Promise<PassResult> {
       const ai = state.outputs.get('ai_precompile') as { candidateLabwares?: CandidateLabware[] } | undefined;
-      const candidates = ai?.candidateLabwares ?? [];
+      const lowered = state.outputs.get('lower_protocol_intent') as { candidateLabwares?: CandidateLabware[] } | undefined;
+      const candidates = [
+        ...(ai?.candidateLabwares ?? []),
+        ...(lowered?.candidateLabwares ?? []),
+      ];
       const labwareAdditions: AiLabwareAdditionPatch[] = [];
       const resolvedLabwares: ResolvedLabware[] = [];
       const diagnostics: PassDiagnostic[] = [];
@@ -1238,7 +1601,7 @@ export function createLabwareResolvePass(
         if (runtimeMentionLabwareIds.has(hint)) continue;
 
         const matches = await deps.searchLabwareByHint(hint);
-        
+
         if (matches.length === 0) {
           // Zero matches: propose a new labware addition
           labwareAdditions.push({
@@ -1249,9 +1612,25 @@ export function createLabwareResolvePass(
         } else if (matches.length === 1) {
           // One match: resolve directly
           resolvedLabwares.push({ hint, recordId: matches[0]!.recordId, title: matches[0]!.title });
+          // When the prompt named a deck slot, also surface a placement so
+          // the editor puts the resolved labware on that slot.
+          if (cand.deckSlot) {
+            labwareAdditions.push({
+              recordId: matches[0]!.recordId,
+              reason: cand.reason ?? 'placed via prompt',
+              deckSlot: cand.deckSlot,
+            });
+          }
         } else {
           // Multi-match: pick top, emit info diagnostic so the UI can prompt the user
           resolvedLabwares.push({ hint, recordId: matches[0]!.recordId, title: matches[0]!.title });
+          if (cand.deckSlot) {
+            labwareAdditions.push({
+              recordId: matches[0]!.recordId,
+              reason: cand.reason ?? 'placed via prompt',
+              deckSlot: cand.deckSlot,
+            });
+          }
           diagnostics.push({
             severity: 'info' as const,
             code: 'ambiguous_labware_hint',
@@ -1360,7 +1739,12 @@ export function createApplyDirectivesPass(): Pass {
     run({ state }: PassRunArgs): PassResult {
       const ai = state.outputs.get('ai_precompile') as
         { directives?: Directive[] } | undefined;
-      const rawDirectives = ai?.directives ?? [];
+      const lowered = state.outputs.get('lower_protocol_intent') as
+        { directives?: Directive[] } | undefined;
+      const rawDirectives = [
+        ...(ai?.directives ?? []),
+        ...(lowered?.directives ?? []),
+      ];
       const directives: DirectiveNode[] = [];
 
       for (let i = 0; i < rawDirectives.length; i++) {
@@ -1802,6 +2186,10 @@ export interface ResolveRolesOutput {
 function collectEventsToResolve(state: PipelineState): PlateEventPrimitive[] {
   const mintOutput = state.outputs.get('mint_materials') as
     { events?: PlateEventPrimitive[] } | undefined;
+  const lowerProtocolIntentOutput = state.outputs.get('lower_protocol_intent') as
+    { events?: PlateEventPrimitive[] } | undefined;
+  const protocolIntentPatternsOutput = state.outputs.get('expand_protocol_intent_patterns') as
+    { events?: PlateEventPrimitive[] } | undefined;
   const patternsOutput = state.outputs.get('expand_patterns') as
     { events?: PlateEventPrimitive[] } | undefined;
   const verbsOutput = state.outputs.get('expand_biology_verbs') as
@@ -1813,6 +2201,8 @@ function collectEventsToResolve(state: PipelineState): PlateEventPrimitive[] {
 
   return [
     ...(mintOutput?.events ?? []),
+    ...(lowerProtocolIntentOutput?.events ?? []),
+    ...(protocolIntentPatternsOutput?.events ?? []),
     ...(patternsOutput?.events ?? []),
     ...(verbsOutput?.events ?? []),
     ...(protocolOutput?.events ?? []),
@@ -2995,6 +3385,13 @@ import {
   getInstrumentEmitter,
   type InstrumentRunFile,
 } from '../../artifacts/InstrumentRunFile.js';
+import {
+  createGeminiEmActiveReadJob,
+  evaluateInstrumentExecutionReadiness,
+  isGeminiEmInstrument,
+  type InstrumentExecutionReadiness,
+  type InstrumentApplianceJob,
+} from '../../artifacts/InstrumentApplianceJob.js';
 
 /**
  * Output shape for the emit_instrument_run_files pass.
@@ -3080,6 +3477,112 @@ export function createEmitInstrumentRunFilesPass(): Pass {
         ok: true,
         output: { instrumentRunFiles } satisfies EmitInstrumentRunFilesOutput,
         diagnostics,
+      };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// emit_instrument_appliance_jobs pass
+// ---------------------------------------------------------------------------
+
+/**
+ * Output shape for the emit_instrument_appliance_jobs pass.
+ */
+export interface EmitInstrumentApplianceJobsOutput {
+  instrumentApplianceJobs: InstrumentApplianceJob[];
+}
+
+/**
+ * Creates the emit_instrument_appliance_jobs pass that lowers instrument
+ * run-file artifacts into active-control request jobs.
+ *
+ * This pass:
+ * - Reads InstrumentRunFile artifacts from emit_instrument_run_files
+ * - Emits MeasurementActiveControlService-compatible jobs for supported appliances
+ * - Preserves the source run-file so plate/well selection stays explicit
+ * - Output: { instrumentApplianceJobs: InstrumentApplianceJob[] }
+ */
+export function createEmitInstrumentApplianceJobsPass(): Pass {
+  return {
+    id: 'emit_instrument_appliance_jobs',
+    family: 'emit' as const,
+    run({ pass_id, state }: PassRunArgs): PassResult {
+      const runFilesOutput = state.outputs.get('emit_instrument_run_files') as
+        { instrumentRunFiles?: InstrumentRunFile[] } | undefined;
+      const runFiles = runFilesOutput?.instrumentRunFiles ?? [];
+      const diagnostics: PassDiagnostic[] = [];
+      const instrumentApplianceJobs: InstrumentApplianceJob[] = [];
+
+      runFiles.forEach((runFile) => {
+        if (!isGeminiEmInstrument(runFile.instrument)) return;
+        if (runFile.wells.length === 0) {
+          diagnostics.push({
+            severity: 'warning',
+            code: 'empty_gemini_em_run_file',
+            message: `Gemini EM run-file '${runFile.instrument}' has no wells; appliance job will be emitted but is likely not executable.`,
+            pass_id,
+            details: { instrument: runFile.instrument },
+          });
+        }
+        instrumentApplianceJobs.push(createGeminiEmActiveReadJob(runFile, instrumentApplianceJobs.length));
+      });
+
+      return {
+        ok: true,
+        output: { instrumentApplianceJobs } satisfies EmitInstrumentApplianceJobsOutput,
+        diagnostics,
+      };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// evaluate_instrument_execution_readiness pass
+// ---------------------------------------------------------------------------
+
+export interface EvaluateInstrumentExecutionReadinessOutput {
+  instrumentApplianceJobs: InstrumentApplianceJob[];
+  instrumentExecutionReadiness: InstrumentExecutionReadiness[];
+}
+
+/**
+ * Creates the evaluate_instrument_execution_readiness pass that gates
+ * appliance jobs before runtime execution can be requested.
+ */
+export function createEvaluateInstrumentExecutionReadinessPass(): Pass {
+  return {
+    id: 'evaluate_instrument_execution_readiness',
+    family: 'validate' as const,
+    run({ pass_id, state }: PassRunArgs): PassResult {
+      const jobsOutput = state.outputs.get('emit_instrument_appliance_jobs') as
+        { instrumentApplianceJobs?: InstrumentApplianceJob[] } | undefined;
+      const jobs = jobsOutput?.instrumentApplianceJobs ?? [];
+      const instrumentExecutionReadiness = jobs.map(evaluateInstrumentExecutionReadiness);
+      const instrumentApplianceJobs = jobs.map((job, index) => ({
+        ...job,
+        executionReadiness: instrumentExecutionReadiness[index]!,
+      }));
+      const diagnostics: PassDiagnostic[] = instrumentExecutionReadiness
+        .filter((readiness) => readiness.status === 'blocked')
+        .map((readiness) => ({
+          severity: 'warning',
+          code: 'instrument_execution_blocked',
+          message: `Instrument appliance job '${readiness.jobId}' is blocked from execution.`,
+          pass_id,
+          details: {
+            jobId: readiness.jobId,
+            blockers: readiness.blockers,
+          },
+        }));
+
+      return {
+        ok: true,
+        output: {
+          instrumentApplianceJobs,
+          instrumentExecutionReadiness,
+        } satisfies EvaluateInstrumentExecutionReadinessOutput,
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
       };
     },
   };

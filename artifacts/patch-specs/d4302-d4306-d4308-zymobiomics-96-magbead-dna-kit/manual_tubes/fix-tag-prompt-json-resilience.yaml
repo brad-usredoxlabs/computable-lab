@@ -1,0 +1,48 @@
+kind: protocol-foundry-patch-spec
+id: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-tag-prompt-json-resilience
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: manual_tubes
+fixClass: extractor_prompt_contract
+title: Make tag_prompt LLM response parsing resilient to unterminated JSON strings
+rationale: The tag_prompt pass receives LLM output with unterminated JSON
+  strings (e.g., trailing quotes or missing closing braces). The current parser
+  fails hard on this, producing a warning and likely empty/undefined
+  taggedPhrases. This cascades to ai_precompile which depends on tagged phrases
+  for entity resolution. The fix should add JSON repair logic (e.g., try
+  parsing, then attempt to fix common issues like unterminated strings, missing
+  commas, trailing content) before passing to downstream passes. This is a
+  separate fix from the shape mismatch because it addresses the root cause of
+  malformed input rather than just the output shape.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - tag_prompt pass no longer emits 'tag_prompt_parse_error' warning for common
+    JSON formatting issues
+  - taggedPhrases are extracted even when LLM output has minor JSON formatting
+    errors
+  - Compiler can proceed to ai_precompile with valid tagged phrases from
+    repaired JSON
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 40
+  maxChangedLines: 100
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/verdict.yaml

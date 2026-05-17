@@ -177,6 +177,50 @@ describe('runChatbotCompile', () => {
     expect(searchLabwareByHint).not.toHaveBeenCalled();
   });
 
+  it('compiles a plain deck slot labware placement into a pinned labware addition', async () => {
+    const mockExtractionService: ExtractionRunnerService = {
+      run: vi.fn(async (req: RunExtractionServiceArgs) => ({
+        target_kind: req.target_kind,
+        source: req.source,
+        candidates: [],
+        diagnostics: [],
+      })),
+    } as unknown as ExtractionRunnerService;
+
+    const mockLlmClient: LlmClient = {
+      complete: vi
+        .fn()
+        .mockResolvedValueOnce(completionResponse(JSON.stringify({ tags: [] })))
+        .mockImplementation(async () => {
+          throw new Error('ai_precompile should be gated for deterministic deck placement');
+        }),
+    } as unknown as LlmClient;
+    const searchLabwareByHint = vi.fn(async (_hint: string) => []);
+
+    const result = await runChatbotCompile({
+      prompt: 'Place a 96-well plate on deck slot B2.',
+      deps: {
+        extractionService: mockExtractionService,
+        llmClient: mockLlmClient,
+        searchLabwareByHint,
+      },
+    });
+
+    expect(mockLlmClient.complete).toHaveBeenCalledTimes(1);
+    expect(result.outcome).toBe('complete');
+    expect(result.labwareAdditions).toEqual([
+      expect.objectContaining({
+        recordId: '96-well plate',
+        deckSlot: 'B2',
+      }),
+    ]);
+    expect(result.terminalArtifacts.deckLayoutPlan?.pinned).toContainEqual({
+      slot: 'B2',
+      labwareHint: '96-well plate',
+    });
+    expect(result.events.map((event) => event.event_type)).toEqual(['add_material']);
+  });
+
   it('compiles resolved labware and aliquot mentions into reservoir add-material and plate transfer events without the LLM planner', async () => {
     const mockExtractionService: ExtractionRunnerService = {
       run: vi.fn(async (req: RunExtractionServiceArgs) => ({

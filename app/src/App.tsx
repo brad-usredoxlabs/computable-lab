@@ -21,7 +21,9 @@ const FormulationsPage = lazy(async () => import('./editor/FormulationsPage').th
 const MaterialsPage = lazy(async () => import('./editor/MaterialsPage').then((module) => ({ default: module.MaterialsPage })))
 const LabwareTestPage = lazy(async () => import('./pages/LabwareTestPage').then((module) => ({ default: module.default })))
 const ProtocolIdePage = lazy(async () => import('./protocol-ide/ProtocolIdePage').then((module) => ({ default: module.ProtocolIdePage })))
+const FoundryStatusPanel = lazy(async () => import('./protocol-ide/FoundryStatusPanel').then((module) => ({ default: module.FoundryStatusPanel })))
 const RunEditorRouter = lazy(async () => import('./graph/RunEditorRouter').then((module) => ({ default: module.RunEditorRouter })))
+const EventEditorPage = lazy(async () => import('./event-editor/EventEditorPage').then((module) => ({ default: module.EventEditorPage })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -32,6 +34,17 @@ export function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <Routes>
+          {/* New minimalistic event editor — mounted outside the standard Layout
+              so it gets its own chrome and isn't constrained by the global nav. */}
+          <Route
+            path="/event-editor"
+            element={<DeferredRoute><EventEditorPage /></DeferredRoute>}
+          />
+          <Route
+            path="/runs/:runId/event-editor"
+            element={<DeferredRoute><EventEditorPage /></DeferredRoute>}
+          />
+
           <Route path="/" element={<Layout />}>
             {/* Redirect root to browser */}
             <Route index element={<Navigate to="/browser" replace />} />
@@ -89,6 +102,7 @@ export function App() {
             <Route path="extraction/review/:recordId" element={<ExtractionReviewPage />} />
 
             {/* Protocol IDE */}
+            <Route path="protocol-ide/foundry/status" element={<DeferredRoute><FoundryStatusPanel /></DeferredRoute>} />
             <Route path="protocol-ide" element={<DeferredRoute><ProtocolIdePage /></DeferredRoute>} />
             <Route path="protocol-ide/:sessionId" element={<DeferredRoute><ProtocolIdePage /></DeferredRoute>} />
           </Route>

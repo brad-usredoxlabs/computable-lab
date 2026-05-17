@@ -1,0 +1,18 @@
+kind: protocol-foundry-critic-report
+protocolId: cayman-natural-prodccuts
+variant: robot_deck
+generated_at: 2026-05-10T12:53:33.468Z
+verdict: pass
+reportPath: /home/brad/git/computable-foundry/artifacts/patch-critic/cayman-natural-prodccuts/robot_deck/report.yaml
+reviewDurationMs: 9
+message: "Patch applied: 1 file(s) changed, spec verification passed."
+notes:
+  - No acceptance criteria available for this patch spec
+touchedFiles:
+  - server/src/foundry/ProtocolFoundryCompileRunner.ts
+specVerification:
+  accepted: true
+  criteriaMet: []
+  criteriaFailed: []
+  notes:
+    - All acceptance criteria satisfied

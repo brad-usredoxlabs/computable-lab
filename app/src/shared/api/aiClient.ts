@@ -29,12 +29,18 @@ export async function* streamDraftEvents(
   prompt: string,
   context: AiRequestContext,
   history: AiConversationMessage[] = [],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: { deterministicOnly?: boolean },
 ): AsyncGenerator<AiStreamEvent> {
   const response = await fetch(`${API_BASE}/ai/draft-events/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, context, history }),
+    body: JSON.stringify({
+      prompt,
+      context,
+      history,
+      ...(options?.deterministicOnly ? { deterministicOnly: true } : {}),
+    }),
     signal,
   })
 
@@ -162,6 +168,59 @@ export async function* streamAssist(
   files?: File[],
   enableThinking?: boolean,
 ): AsyncGenerator<AiStreamEvent> {
+  const foundryReview = context.foundryReview as { protocolId?: unknown; variant?: unknown } | undefined
+  const foundryProtocolId = typeof foundryReview?.protocolId === 'string' ? foundryReview.protocolId : null
+  const foundryVariant = typeof foundryReview?.variant === 'string' ? foundryReview.variant : null
+  if (surface === 'protocol-ide' && foundryProtocolId && foundryVariant && (!files || files.length === 0)) {
+    const response = await fetch(
+      `${API_BASE}/protocol-ide/foundry/${encodeURIComponent(foundryProtocolId)}/${encodeURIComponent(foundryVariant)}/chat`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, history }),
+        signal,
+      },
+    )
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      yield {
+        type: 'error',
+        message: `Server returned ${response.status}: ${text || response.statusText}`,
+      }
+      return
+    }
+
+    if (!response.body) {
+      yield { type: 'error', message: 'No response body (streaming not supported)' }
+      return
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() || ''
+        for (const part of parts) {
+          const event = parseSSEBlock(part)
+          if (event) yield event
+        }
+      }
+      if (buffer.trim()) {
+        const event = parseSSEBlock(buffer)
+        if (event) yield event
+      }
+    } finally {
+      reader.releaseLock()
+    }
+    return
+  }
+
   // For event-editor surface, use the existing endpoint for backward compatibility
   const endpoint = surface === 'event-editor'
     ? `${API_BASE}/ai/draft-events/stream`

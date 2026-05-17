@@ -1,0 +1,146 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/protocol-foundry-review-inner-loop-trace.schema.yaml"
+title: "ProtocolFoundryReviewInnerLoopTrace"
+description: >
+  Durable record of one human-driven Protocol Foundry inner-loop turn.
+  Captures the prompt, the synthesized draft spec, the coder patch result,
+  the recompile outcome, and the node-level event-graph diff so the loop
+  is auditable as data.
+
+type: object
+additionalProperties: false
+
+required:
+- kind
+- id
+- protocolId
+- variant
+- generatedAt
+- prompt
+- draftSpec
+- status
+
+properties:
+  kind:
+    const: "protocol-foundry-review-inner-loop-trace"
+
+  id:
+    type: string
+    pattern: '^TRC-[A-Za-z0-9_-]+$'
+    description: "Trace record id (TRC-*)."
+
+  protocolId:
+    type: string
+    minLength: 1
+
+  variant:
+    type: string
+    enum: [ manual_tubes, bench_plate_multichannel, robot_deck ]
+
+  generatedAt:
+    type: string
+    format: date-time
+
+  prompt:
+    type: string
+    description: "Human-typed prompt fed to the local review model for this turn."
+
+  draftSpec:
+    type: object
+    additionalProperties: false
+    required: [ id, draftPath ]
+    properties:
+      id:
+        type: string
+      draftPath:
+        type: string
+      title:
+        type: string
+      fixClass:
+        type: string
+
+  coder:
+    type: object
+    additionalProperties: false
+    required: [ status ]
+    properties:
+      status:
+        type: string
+        enum: [ applied, skipped, blocked, error, needs-human, stale ]
+      message:
+        type: string
+      touchedFiles:
+        type: array
+        items:
+          type: string
+      resultPath:
+        type: string
+
+  recompile:
+    type: object
+    additionalProperties: false
+    properties:
+      outcome:
+        type: string
+      eventCount:
+        type: integer
+      eventGraphPath:
+        type: string
+      beforeEventGraphPath:
+        type: string
+
+  diff:
+    type: object
+    additionalProperties: false
+    properties:
+      added:
+        type: array
+        items:
+          $ref: "#/$defs/DiffEntry"
+      removed:
+        type: array
+        items:
+          $ref: "#/$defs/DiffEntry"
+      changed:
+        type: array
+        items:
+          $ref: "#/$defs/DiffEntry"
+
+  durationMs:
+    type: integer
+    minimum: 0
+
+  status:
+    type: string
+    enum: [ completed, failed ]
+
+  criticInvoked:
+    type: boolean
+
+  promotedAt:
+    type: string
+    format: date-time
+    description: "Set when the draft was promoted to the executable queue."
+
+  error:
+    type: string
+
+$defs:
+  DiffEntry:
+    type: object
+    additionalProperties: false
+    required: [ key ]
+    properties:
+      key:
+        type: string
+        description: "Either the semanticKey (preferred) or the eventId."
+      eventId:
+        type: string
+      semanticKey:
+        type: string
+      eventType:
+        type: string
+      before:
+        description: "Snapshot of the prior node, when present."
+      after:
+        description: "Snapshot of the new node, when present."

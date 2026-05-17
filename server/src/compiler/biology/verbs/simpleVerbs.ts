@@ -34,7 +34,7 @@ function addMaterialAndIncubate(
       material: materialName,
       ...(volume ? { volume } : {}),
     },
-    labwareId: params.labware_id as string | undefined,
+    ...((params.labware_id as string | undefined) ? { labwareId: params.labware_id as string } : {}),
   });
   
   // incubate event
@@ -46,7 +46,7 @@ function addMaterialAndIncubate(
       temperature: temp,
       ...(params.atmosphere ? { atmosphere: params.atmosphere } : {}),
     },
-    labwareId: params.labware_id as string | undefined,
+    ...((params.labware_id as string | undefined) ? { labwareId: params.labware_id as string } : {}),
     t_offset: duration,
   });
   
@@ -278,10 +278,20 @@ export const readExpander: BiologyVerbExpander = {
     const instrument = params.instrument as string | undefined;
     const assayId = params.assayId as string | undefined;
     const well = params.well as string | undefined;
+    const wells = params.wells as string[] | undefined;
+    const mode = params.mode as string | undefined;
+    const wavelengthNm = params.wavelengthNm as number | undefined;
+    const integrationMs = params.integrationMs as number | undefined;
+    const simulate = params.simulate as boolean | undefined;
 
     const details: Record<string, unknown> = {
       ...(instrument ? { instrument } : {}),
       ...(well ? { well } : {}),
+      ...(wells ? { wells } : {}),
+      ...(mode ? { mode } : {}),
+      ...(wavelengthNm !== undefined ? { wavelengthNm } : {}),
+      ...(integrationMs !== undefined ? { integrationMs } : {}),
+      ...(simulate !== undefined ? { simulate } : {}),
     };
 
     // Optional: resolve assay-spec to populate channelMap and analysisRules
@@ -322,6 +332,14 @@ export const addMaterialExpander: BiologyVerbExpander = {
     const material = params.material as Record<string, unknown> | string | undefined;
     const wells = params.wells as string[] | undefined;
     const materialKind = params.materialKind as string | undefined;
+    const volumeUl =
+      typeof params.volume_uL === 'number'
+        ? params.volume_uL
+        : typeof params.volume_ul === 'number'
+          ? params.volume_ul
+          : typeof material === 'object' && material !== null && typeof material.volume_uL === 'number'
+            ? material.volume_uL
+            : undefined;
 
     const events: PlateEventPrimitive[] = [];
 
@@ -332,11 +350,13 @@ export const addMaterialExpander: BiologyVerbExpander = {
           eventId: makeEventId('add_material'),
           event_type: 'add_material',
           details: {
+            well: w,
             material: typeof material === 'string' ? material : undefined,
             ...(typeof material === 'object' && material !== null ? material : {}),
             ...(materialKind ? { materialKind } : {}),
+            ...(typeof volumeUl === 'number' ? { volumeUl, volume: { value: volumeUl, unit: 'uL' } } : {}),
           },
-          labwareId,
+          ...(labwareId ? { labwareId } : {}),
         });
       }
     } else {
@@ -349,8 +369,9 @@ export const addMaterialExpander: BiologyVerbExpander = {
           ...(typeof material === 'object' && material !== null ? material : {}),
           ...(typeof material === 'string' ? { material } : {}),
           ...(materialKind ? { materialKind } : {}),
+          ...(typeof volumeUl === 'number' ? { volumeUl, volume: { value: volumeUl, unit: 'uL' } } : {}),
         },
-        labwareId,
+        ...(labwareId ? { labwareId } : {}),
       });
     }
 
@@ -413,7 +434,7 @@ export const transferExpander: BiologyVerbExpander = {
         ...(sourceWells ? { source_wells: sourceWells } : {}),
         ...(targetWell ? { well: targetWell } : {}),
         ...(targetWells ? { wells: targetWells } : {}),
-        ...(typeof volume_uL === 'number' ? { volume: { value: volume_uL, unit: 'uL' } } : {}),
+        ...(typeof volume_uL === 'number' ? { volumeUl: volume_uL, volume: { value: volume_uL, unit: 'uL' } } : {}),
         ...(volume && typeof volume === 'object' ? { volume } : {}),
         ...(materialRef ? { source_material_ref: materialRef } : {}),
       },

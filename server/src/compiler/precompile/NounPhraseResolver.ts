@@ -72,7 +72,7 @@ const STOPWORDS = new Set([
 // Add `of` to the split set so phrases like "well A1 of the 12-well reservoir"
 // break into "well A1" + "the 12-well reservoir" — otherwise the labware
 // reference is hidden inside a larger string that no registry can match.
-const NP_SPLIT_RE = /,\s*|\s+and\s+|\s+to\s+|\s+from\s+|\s+into\s+|\s+onto\s+|\s+of\s+/i;
+const NP_SPLIT_RE = /,\s*|\s+and\s+|\s+to\s+|\s+from\s+|\s+into\s+|\s+onto\s+|\s+of\s+|\s+on\s+|\s+using\s+|\s+with\s+/i;
 const PURE_NUMERIC_RE = /^\d+(\.\d+)?$/;
 const LEADING_STOPWORD_RE = /^(?:the|a|an|some|this|that|these|those)\s+/i;
 // Phrases that are *only* a well address (or row/col label) — these are
@@ -81,10 +81,17 @@ const LEADING_STOPWORD_RE = /^(?:the|a|an|some|this|that|these|those)\s+/i;
 const WELL_ONLY_RE =
   /^(?:wells?\s+)?[A-H]\d{1,2}(?:\s*[,–-]\s*[A-H]\d{1,2})*$/i;
 const ROW_COL_ONLY_RE = /^(?:row|col|column)\s+[A-Z0-9]+$/i;
+const WELL_REGION_ONLY_RE = /^(?:(?:each|every|all)\s+)?wells?\s+(?:in\s+)?(?:row\s+[A-H]|(?:col|column)\s+\d{1,2})$/i;
+const DECK_SLOT_ONLY_RE = /^(?:deck\s+)?slot\s+[A-D][1-4]$/i;
+const ROLE_LOCATION_ONLY_RE = /^(?:source|target|destination)\s+(?:location|position|slot|destination)$/i;
+const INSTRUMENT_ONLY_RE = /^(?:(?:gemini\s+em|gemini)(?:\s+plate\s+reader)?|[a-z0-9][a-z0-9\s-]*(?:plate reader|reader|spectrophotometer|fluorometer|luminometer))$/i;
+const INSTRUMENT_FRAGMENT_RE = /^(?:(?:gemini\s+em|gemini)(?:\s+plate\s+reader)?|[a-z0-9][a-z0-9\s-]*(?:plate reader|reader|spectrophotometer|fluorometer|luminometer))(?:\s+(?:in|with|at|as)\b.*)?$/i;
 // Phrases that are *only* a quantity with a unit — volume, count, or duration.
 // Captured by ParameterGrammar; treating them as unresolved nouns would
 // falsely flag clauses with literal volumes/counts as residual.
 const VOLUME_ONLY_RE = /^\d+(?:\.\d+)?\s*(?:[µμ]L|uL|microliters?|mL|ml|milliliters?|L|liters?)$/i;
+const CONCENTRATION_ONLY_RE = /^\d+(?:\.\d+)?\s*(?:nM|uM|µM|μM|mM|M)$/i;
+const LEADING_CONCENTRATION_RE = /^\d+(?:\.\d+)?\s*(?:nM|uM|µM|μM|mM|M)\s+/i;
 const DURATION_ONLY_RE = /^\d+(?:\.\d+)?\s*(?:s|sec|seconds?|m|min|minutes?|h|hr|hours?|d|days?)$/i;
 const COUNT_ONLY_RE = /^\d+\s*(?:cells?|copies|colonies)$/i;
 // Tokenizer matching TextSegmenter's split set, used for fuzzy back-reference
@@ -133,6 +140,10 @@ function extractNounPhraseCandidates(
     // Strip a leading determiner ("the 12-well reservoir" → "12-well reservoir")
     // so registry/mention lookups see the actual entity tokens.
     trimmed = trimmed.replace(LEADING_STOPWORD_RE, '');
+    // Strip a leading concentration ("1mM clofibrate" → "clofibrate").
+    // Concentrations are event parameters, while the remaining phrase is the
+    // entity that should resolve against compound/material registries.
+    trimmed = trimmed.replace(LEADING_CONCENTRATION_RE, '');
     if (trimmed.length === 0) continue;
 
     // Drop single stopwords
@@ -148,7 +159,13 @@ function extractNounPhraseCandidates(
     if (
       WELL_ONLY_RE.test(trimmed) ||
       ROW_COL_ONLY_RE.test(trimmed) ||
+      WELL_REGION_ONLY_RE.test(trimmed) ||
+      DECK_SLOT_ONLY_RE.test(trimmed) ||
+      ROLE_LOCATION_ONLY_RE.test(trimmed) ||
+      INSTRUMENT_ONLY_RE.test(trimmed) ||
+      INSTRUMENT_FRAGMENT_RE.test(trimmed) ||
       VOLUME_ONLY_RE.test(trimmed) ||
+      CONCENTRATION_ONLY_RE.test(trimmed) ||
       DURATION_ONLY_RE.test(trimmed) ||
       COUNT_ONLY_RE.test(trimmed)
     ) continue;

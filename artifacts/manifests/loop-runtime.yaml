@@ -1,0 +1,41 @@
+kind: protocol-foundry-loop-runtime
+artifactRoot: /home/brad/git/computable-foundry/artifacts
+repoRoot: /home/brad/git/computable-foundry
+pid: 3868872
+startedAt: 2026-05-11T22:50:27.526Z
+updatedAt: 2026-05-11T22:51:06.726Z
+status: completed
+args:
+  - --artifact-root
+  - /home/brad/git/computable-foundry/artifacts
+  - --repo-root
+  - /home/brad/git/computable-foundry
+  - --architect-base-url
+  - http://thunderbeast:8000/v1
+  - --architect-model
+  - RedHatAI/Qwen3.6-35B-A3B-NVFP4
+  - --worker-base-url
+  - http://thunderbeast:8000/v1
+  - --worker-model
+  - RedHatAI/Qwen3.6-35B-A3B-NVFP4
+  - --improvement-mode
+  - --apply-patches
+  - --skip-browser
+  - --max-cycles
+  - "4"
+  - --max-concurrency
+  - "1"
+  - --pdf-intake-batch-size
+  - "1"
+  - --log-path
+  - /tmp/foundry-live-launch.log
+command: protocolFoundryLoop.ts --artifact-root
+  /home/brad/git/computable-foundry/artifacts --repo-root
+  /home/brad/git/computable-foundry --architect-base-url
+  http://thunderbeast:8000/v1 --architect-model RedHatAI/Qwen3.6-35B-A3B-NVFP4
+  --worker-base-url http://thunderbeast:8000/v1 --worker-model
+  RedHatAI/Qwen3.6-35B-A3B-NVFP4 --improvement-mode --apply-patches
+  --skip-browser --max-cycles 4 --max-concurrency 1 --pdf-intake-batch-size 1
+  --log-path /tmp/foundry-live-launch.log
+logPath: /tmp/foundry-live-launch.log
+completedAt: 2026-05-11T22:51:06.726Z

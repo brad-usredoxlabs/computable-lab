@@ -2,24 +2,10 @@ kind: protocol-foundry-compile-summary
 protocolId: mp10422
 artifactRoot: /home/brad/git/computable-foundry/artifacts
 variants:
-  - variant: manual_tubes
-    outcome: complete
-    eventGraphArtifact: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10422/manual_tubes.yaml
-    executionScaleArtifact: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10422/manual_tubes.yaml
-    compilerArtifact: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/manual_tubes.yaml
-    eventCount: 6
-    blockerCount: 0
-  - variant: bench_plate_multichannel
-    outcome: gap
-    eventGraphArtifact: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10422/bench_plate_multichannel.yaml
-    executionScaleArtifact: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10422/bench_plate_multichannel.yaml
-    compilerArtifact: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/bench_plate_multichannel.yaml
-    eventCount: 15
-    blockerCount: 0
   - variant: robot_deck
-    outcome: complete
+    outcome: gap
     eventGraphArtifact: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10422/robot_deck.yaml
     executionScaleArtifact: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10422/robot_deck.yaml
     compilerArtifact: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/robot_deck.yaml
-    eventCount: 6
+    eventCount: 0
     blockerCount: 0

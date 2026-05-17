@@ -3,6 +3,7 @@ import { VocabSwitcher } from './VocabSwitcher'
 import { ToolSwitcher } from './ToolSwitcher'
 import { TipChip } from './TipChip'
 import { NavLinks } from './NavLinks'
+import { ThemeToggle } from './ThemeToggle'
 
 export function TopBar() {
   return (
@@ -16,6 +17,7 @@ export function TopBar() {
         <TipChip />
       </div>
       <span className="topbar__spacer" />
+      <ThemeToggle />
       <NavLinks />
     </header>
   )

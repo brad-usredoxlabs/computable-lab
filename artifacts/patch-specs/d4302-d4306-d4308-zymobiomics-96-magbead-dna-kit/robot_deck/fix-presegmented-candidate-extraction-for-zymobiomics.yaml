@@ -1,0 +1,59 @@
+kind: protocol-foundry-patch-spec
+id: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/fix-presegmented-candidate-extraction-for-zymobiomics
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: robot_deck
+fixClass: extractor_prompt_contract
+title: Ensure presegmented extraction produces actionable candidates from
+  ZymoBIOMICS protocol text
+rationale: The diagnostics show multiple 'foundry_presegmented_candidates' info
+  messages (10, 5, 33, 15, 28, 17, 6, 1 candidates across chunks) but also one
+  'foundry_presegmented_no_actionable_candidates' warning. Despite 115 total
+  candidates being extracted, the ai_precompile shape mismatch caused all
+  candidates to be discarded in the fallback path. Once the shape mismatch is
+  fixed, the presegmented candidates should flow through to candidateEvents.
+  However, the extraction service may need to ensure that candidates from the
+  ZymoBIOMICS protocol (which contains specific steps like bead-beating,
+  binding, washing, elution) are properly tagged as protocol-action evidence
+  rather than just material references. The ExtractionRunnerService and
+  presegmented extraction logic should verify that candidates include
+  verb-action pairs (e.g., 'add Lysis Solution', 'incubate', 'magnetic
+  separation', 'wash with MagWash 1', 'elute with DNase/RNase Free Water').
+ownedFiles:
+  - server/src/extract/ExtractionRunnerService.ts
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - Presegmented extraction produces candidates with verb-action pairs for
+    ZymoBIOMICS protocol steps (lysis, binding, washing, elution)
+  - No 'foundry_presegmented_no_actionable_candidates' warnings for chunks
+    containing protocol steps
+  - "candidateEvents includes events for: add lysis solution,
+    bead-beat/incubate, add MagBinding Buffer, magnetic separation, wash with
+    MagWash 1, wash with MagWash 2, elute DNA"
+  - Labware references (96-well plate, magnetic separation rack, reservoirs) are
+    extracted from candidates
+  - Material references (Lysis Solution, MagBinding Buffer, MagWash 1, MagWash
+    2, DNase/RNase Free Water, MagBinding Beads) are resolved
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 80
+  maxChangedLines: 200
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/verdict.yaml

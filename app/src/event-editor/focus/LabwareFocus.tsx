@@ -15,6 +15,10 @@ import {
 } from '../lib/pipetteSelection'
 import { ContextMenu, type ContextMenuItem } from '../menus/ContextMenu'
 import { buildWellMenuItems } from '../menus/wellMenuItems'
+import {
+  buildPreviewWellIndex,
+  previewWellsForLabware,
+} from '../lib/previewProjection'
 import type { LabwareOrientation, WellSelection } from '../types'
 
 const FOCUS_SIZE_PX = 720
@@ -22,8 +26,21 @@ const FOCUS_SIZE_PX = 720
 export function LabwareFocus() {
   const { state, actions } = useEventEditor()
   const placementId = state.focusPlacementId
-  const placement = placementId ? state.placements.find((p) => p.placementId === placementId) : null
-  const labware: Labware | null = placement ? state.labwares[placement.labwareId] ?? null : null
+  // Look for the focused placement in committed state first, then in the
+  // current preview so a click on a ghost tile drills into the proposed
+  // labware just like a committed one would.
+  const placement =
+    (placementId
+      ? state.placements.find((p) => p.placementId === placementId)
+        ?? state.preview?.previewPlacements.find((p) => p.placementId === placementId)
+      : null) ?? null
+  const isPreviewPlacement =
+    placement != null && !state.placements.includes(placement)
+  const labware: Labware | null = placement
+    ? state.labwares[placement.labwareId]
+      ?? state.preview?.previewLabwares[placement.labwareId]
+      ?? null
+    : null
 
   const platform = getPlatformManifest(state.platforms, state.platformId)
   const variant = getVariantManifest(state.platforms, state.platformId, state.variantId)
@@ -48,6 +65,17 @@ export function LabwareFocus() {
     for (const lw of Object.values(state.labwares)) labwareMap.set(lw.labwareId, lw)
     return computeLabwareStates(state.events, labwareMap)
   }, [labware, state.labwares, state.events])
+
+  const previewIndex = useMemo(() => buildPreviewWellIndex(state.preview), [state.preview])
+  const previewWells = useMemo(
+    () =>
+      labware ? new Set<WellId>(previewWellsForLabware(previewIndex, labware.labwareId)) : EMPTY_SET,
+    [previewIndex, labware],
+  )
+  const previewEventsForLabware = useMemo(
+    () => (labware ? previewIndex.eventsByLabware.get(labware.labwareId) ?? [] : []),
+    [previewIndex, labware],
+  )
 
   // ESC: first press clears selection (if any), second press exits focus.
   useEffect(() => {
@@ -184,19 +212,24 @@ export function LabwareFocus() {
         <header className="focus__header">
           <span className="focus__icon" aria-hidden>{LABWARE_TYPE_ICONS[labware.labwareType]}</span>
           <div className="focus__title-block">
-            <div className="focus__name">{labware.name}</div>
+            <div className="focus__name">
+              {labware.name}
+              {isPreviewPlacement ? <span className="focus__preview-tag">Proposed</span> : null}
+            </div>
             <div className="focus__meta">
               {LABWARE_TYPE_LABELS[labware.labwareType]} · {locationLabel} · {placement.orientation}
               {activePipette ? ` · tool: ${activePipette.label}` : ''}
             </div>
           </div>
-          <button
-            type="button"
-            className="focus__btn"
-            disabled={Boolean(rotateLocked)}
-            onClick={handleRotate}
-            title="Rotate"
-          >⟲ Rotate</button>
+          {!isPreviewPlacement ? (
+            <button
+              type="button"
+              className="focus__btn"
+              disabled={Boolean(rotateLocked)}
+              onClick={handleRotate}
+              title="Rotate"
+            >⟲ Rotate</button>
+          ) : null}
           <button
             type="button"
             className="focus__btn focus__btn--ghost"
@@ -211,6 +244,7 @@ export function LabwareFocus() {
             size={FOCUS_SIZE_PX}
             hoveredWellId={hover?.wellId ?? null}
             selectedWellIds={selectedSet}
+            previewWellIds={previewWells}
             onHover={(wellId, event) => {
               if (!wellId || !event) {
                 setHover(null)
@@ -254,6 +288,12 @@ export function LabwareFocus() {
           })()
         ) : null}
         <footer className="focus__footer">
+          {previewEventsForLabware.length > 0 ? (
+            <span className="focus__preview-summary" title="Use the floating Accept button on the deck to commit.">
+              {previewEventsForLabware.length} proposed event
+              {previewEventsForLabware.length === 1 ? '' : 's'} touch this labware
+            </span>
+          ) : null}
           {selectionCount > 0 ? (
             <>
               <span className="focus__selection-count">

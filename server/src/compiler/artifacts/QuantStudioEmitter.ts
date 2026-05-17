@@ -24,8 +24,8 @@ const quantStudioEmitter: InstrumentEmitter = (events, resolvedRefs) => {
       };
       return {
         well: d.well ?? '?',
-        channelMap: d.channelMap,
-        target: d.target,
+        ...(d.channelMap ? { channelMap: d.channelMap } : {}),
+        ...(d.target ? { target: d.target } : {}),
       };
     });
 
@@ -33,7 +33,7 @@ const quantStudioEmitter: InstrumentEmitter = (events, resolvedRefs) => {
   return {
     instrument: 'QuantStudio-5',
     wells,
-    analysisRules: assayRef ? [] : undefined,
+    ...(assayRef ? { analysisRules: [] } : {}),
   };
 };
 

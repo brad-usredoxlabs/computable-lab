@@ -1,0 +1,14 @@
+name: spec-fix-2026-05-17-ixdpm
+description: Deck slot B2 should be treated as a labware placement target, not a
+  well address
+deterministicOnly: true
+input:
+  prompt: Put a 96-well pate on B2
+expected:
+  outcome: complete
+  terminalArtifacts:
+    deckLayoutPlan:
+      pinned:
+        - slot: B2
+          labwareHint: lbw-def-generic-96-well-plate
+    events: []

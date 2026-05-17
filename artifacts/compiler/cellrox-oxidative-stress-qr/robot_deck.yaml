@@ -1,9 +1,9 @@
 kind: protocol-foundry-compiler-result
 protocolId: cellrox-oxidative-stress-qr
 variant: robot_deck
-outcome: complete
+outcome: gap
 rawOutcome: complete
-eventCount: 10
+eventCount: 0
 diagnostics:
   - severity: info
     code: foundry_presegmented_candidates
@@ -12,8 +12,31 @@ diagnostics:
     pass_id: extract_entities
     details: {}
   - severity: warning
+    code: tag_prompt_parse_error
+    message: "tag_prompt response was not valid JSON: Unterminated string in JSON at
+      position 661"
+    pass_id: tag_prompt
+    details:
+      raw_preview: |-
+        
+
+        {
+          "taggedPhrases": [
+            {
+              "phrase": "CellROX® Oxidative Stress Reagents",
+              "tag": "material",
+              "value": "reagent"
+            },
+            {
+              "phrase": "Cat. Nos. C10422, C10443, C10444, C10448",
+              "tag": "material",
+              "value": "catalog_numbers"
+            },
+            {
+              "phrase": "Pub.
+  - severity: warning
     code: ai_precompile_shape_mismatch
-    message: ai_precompile output shape mismatch
+    message: ai_precompile output shape mismatch, using fallback
     pass_id: ai_precompile
   - severity: info
     code: pass_skipped_by_when
@@ -25,24 +48,11 @@ diagnostics:
     message: "Pass 'apply_directives' skipped: when condition
       'outputs.ai_precompile.directives' evaluated to false"
     pass_id: apply_directives
-  - severity: warning
-    code: unknown_biology_verb
-    message: No expander registered for verb 'treat'; dropping candidate event.
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_biology_verbs' skipped: when condition
+      'outputs.ai_precompile.candidateEvents' evaluated to false"
     pass_id: expand_biology_verbs
-    details:
-      verb: treat
-  - severity: warning
-    code: unknown_biology_verb
-    message: No expander registered for verb 'remove'; dropping candidate event.
-    pass_id: expand_biology_verbs
-    details:
-      verb: remove
-  - severity: warning
-    code: unknown_biology_verb
-    message: No expander registered for verb 'analyze'; dropping candidate event.
-    pass_id: expand_biology_verbs
-    details:
-      verb: analyze
   - severity: info
     code: pass_skipped_by_when
     message: "Pass 'resolve_labware' skipped: when condition
@@ -58,6 +68,11 @@ diagnostics:
     message: "Pass 'expand_patterns' skipped: when condition
       'outputs.ai_precompile.patternEvents' evaluated to false"
     pass_id: expand_patterns
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'emit_downstream_queue' skipped: when condition
+      'outputs.ai_precompile.downstreamCompileJobs' evaluated to false"
+    pass_id: emit_downstream_queue
   - severity: info
     code: execution_scale_plan_ready
     message: Execution scaling plan is ready for robot_deck.

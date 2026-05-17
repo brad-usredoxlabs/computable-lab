@@ -1,0 +1,10 @@
+kind: protocol-foundry-coder-patch-result
+protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+variant: bench_plate_multichannel
+generated_at: 2026-05-09T21:16:08.039Z
+status: applied
+selectedSpecId: man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/fix-ai-precompile-shape-mismatch
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+commit: e4472a089a897a7658eb9497eacb5f74712716d1
+message: Patch applied and committed.

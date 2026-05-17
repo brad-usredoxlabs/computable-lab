@@ -1,0 +1,18 @@
+kind: protocol-foundry-critic-report
+protocolId: cellrox-oxidative-stress-qr
+variant: robot_deck
+generated_at: 2026-05-09T20:57:02.557Z
+verdict: pass
+reportPath: /home/brad/git/computable-foundry/artifacts/patch-critic/cellrox-oxidative-stress-qr/robot_deck/report.yaml
+reviewDurationMs: 11
+message: "Patch applied: 1 file(s) changed, spec verification passed."
+notes:
+  - No acceptance criteria available for this patch spec
+touchedFiles:
+  - server/src/compiler/biology/BiologyVerbExpander.ts
+specVerification:
+  accepted: true
+  criteriaMet: []
+  criteriaFailed: []
+  notes:
+    - All acceptance criteria satisfied

@@ -1,0 +1,8 @@
+kind: protocol-worker-report
+protocolId: cellrox-oxidative-stress-qr
+variant: bench_plate_multichannel
+generated_at: 2026-05-09T20:56:47.765Z
+status: needs-human
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cellrox-oxidative-stress-qr/bench_plate_multichannel/result.yaml
+touchedFiles: []
+message: no symbol replacements produced

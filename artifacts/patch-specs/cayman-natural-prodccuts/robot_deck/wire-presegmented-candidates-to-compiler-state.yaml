@@ -1,0 +1,51 @@
+kind: protocol-foundry-patch-spec
+id: cayman-natural-prodccuts/robot_deck/wire-presegmented-candidates-to-compiler-state
+protocolId: cayman-natural-prodccuts
+variant: robot_deck
+fixClass: foundry_runtime_wiring
+title: Wire presegmented candidates into compiler state so events are generated
+rationale: The compiler output shows 'foundry_presegmented_candidates'
+  diagnostics, meaning the presegmented extraction service ran and found
+  candidates. However, eventCount is 0. The root cause is that
+  `presegmentedExtractionService` in `ProtocolFoundryCompileRunner.ts` returns
+  candidates, but the `runChatbotCompile` function (in
+  `server/src/ai/runChatbotCompile.ts`) likely does not inject these candidates
+  into the compiler state's `extract_entities` pass result. The compiler
+  pipeline expects `state['extract_entities']` to contain `candidateEvents`. If
+  this state key is missing or empty, the subsequent `ai_precompile` pass (in
+  `ChatbotCompilePasses.ts`) has no candidates to process, resulting in 0
+  events. The fix is to ensure the extraction service result is properly merged
+  into the compiler state before the pipeline runs.
+ownedFiles:
+  - server/src/ai/runChatbotCompile.ts
+  - server/src/foundry/ProtocolFoundryCompileRunner.ts
+acceptance:
+  - Compiler output eventCount > 0 for protocols with presegmented candidates.
+  - Diagnostics no longer show 'extractor_repair_exhausted' or
+    'ai_precompile_shape_mismatch' for this protocol.
+  - Event graph contains at least one event derived from the presegmented
+    candidates.
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 50
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-natural-prodccuts/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-natural-prodccuts/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-natural-prodccuts/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-natural-prodccuts/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-natural-prodccuts/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-natural-prodccuts/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-natural-prodccuts.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-natural-prodccuts.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cayman-natural-prodccuts.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-natural-prodccuts/robot_deck/verdict.yaml

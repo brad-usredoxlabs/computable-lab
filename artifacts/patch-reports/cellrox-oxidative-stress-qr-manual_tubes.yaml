@@ -1,0 +1,8 @@
+kind: protocol-worker-report
+protocolId: cellrox-oxidative-stress-qr
+variant: manual_tubes
+generated_at: 2026-05-09T20:56:37.899Z
+status: needs-human
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cellrox-oxidative-stress-qr/manual_tubes/result.yaml
+touchedFiles: []
+message: no symbol replacements produced

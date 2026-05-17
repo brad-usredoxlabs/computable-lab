@@ -2,8 +2,8 @@ kind: protocol-foundry-compiler-result
 protocolId: mp10471
 variant: manual_tubes
 outcome: gap
-rawOutcome: gap
-eventCount: 2
+rawOutcome: complete
+eventCount: 0
 diagnostics:
   - severity: info
     code: foundry_presegmented_candidates
@@ -48,8 +48,41 @@ diagnostics:
     pass_id: extract_entities
     details: {}
   - severity: warning
+    code: tag_prompt_parse_error
+    message: "tag_prompt response was not valid JSON: Unexpected end of JSON input"
+    pass_id: tag_prompt
+    details:
+      raw_preview: "
+
+
+        {
+
+        \  \"taggedPhrases\": [
+
+        \    {
+
+        \      \"phrase\": \"Fluo-4 Direct™ Calcium Assay Kits\",
+
+        \      \"tag\": \"material\",
+
+        \      \"value\": \"Fluo-4 Direct Calcium Assay Kits\"
+
+        \    },
+
+        \    {
+
+        \      \"phrase\": \"Catalog nos. F10471, F10472, F10473\",
+
+        \      \"tag\": \"material\",
+
+        \      \"value\": \"F10471, F10472, F10473\"
+
+        \    },
+
+        \ "
+  - severity: warning
     code: ai_precompile_shape_mismatch
-    message: ai_precompile output shape mismatch
+    message: ai_precompile output shape mismatch, using fallback
     pass_id: ai_precompile
   - severity: info
     code: pass_skipped_by_when
@@ -63,14 +96,29 @@ diagnostics:
     pass_id: apply_directives
   - severity: info
     code: pass_skipped_by_when
+    message: "Pass 'expand_biology_verbs' skipped: when condition
+      'outputs.ai_precompile.candidateEvents' evaluated to false"
+    pass_id: expand_biology_verbs
+  - severity: info
+    code: pass_skipped_by_when
     message: "Pass 'resolve_labware' skipped: when condition
       'outputs.ai_precompile.candidateLabwares' evaluated to false"
     pass_id: resolve_labware
   - severity: info
     code: pass_skipped_by_when
+    message: "Pass 'resolve_prior_labware_references' skipped: when condition
+      'outputs.ai_precompile.priorLabwareRefs' evaluated to false"
+    pass_id: resolve_prior_labware_references
+  - severity: info
+    code: pass_skipped_by_when
     message: "Pass 'expand_patterns' skipped: when condition
       'outputs.ai_precompile.patternEvents' evaluated to false"
     pass_id: expand_patterns
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'emit_downstream_queue' skipped: when condition
+      'outputs.ai_precompile.downstreamCompileJobs' evaluated to false"
+    pass_id: emit_downstream_queue
   - severity: info
     code: execution_scale_plan_ready
     message: Execution scaling plan is ready for robot_deck.
@@ -81,16 +129,6 @@ diagnostics:
       profileId: robot-assist-plus-96
       blockers: []
 extractorRepairExhaustedCount: 0
-gaps:
-  - kind: unresolved_ref
-    message: generic_96_well_plate (no matching labware in prior snapshot)
-    details:
-      hint: generic_96_well_plate
-      reason: no matching labware in prior snapshot
-  - kind: unresolved_ref
-    message: generic_24x1_5ml_tube_rack (no matching labware in prior snapshot)
-    details:
-      hint: generic_24x1_5ml_tube_rack
-      reason: no matching labware in prior snapshot
+gaps: []
 foundryTestAssumptionsRef: /home/brad/git/computable-foundry/artifacts/assumptions/mp10471/manual_tubes.yaml
 terminalArtifactsRef: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10471/manual_tubes.yaml

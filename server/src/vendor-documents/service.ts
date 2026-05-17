@@ -11,6 +11,7 @@ import { extractVendorFormulationHtml } from '../ingestion/adapters/vendorFormul
 import type { ProtocolIdeDocumentResult, ProtocolIdeVendorId } from './protocolIdeVendors.js';
 import { isCuratedVendor } from './protocolIdeVendors.js';
 import { getCuratedVendorRegistry } from '../registry/CuratedVendorRegistry.js';
+import type { FoundryPdfCollectionCandidate } from '../foundry/FoundryPdfCollector.js';
 
 const execFileAsync = promisify(execFile);
 const SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml';
@@ -49,6 +50,11 @@ export type VendorDocumentExtractionResult = {
   draft?: Record<string, unknown>;
   drafts?: Record<string, unknown>[];
 };
+
+export interface FoundryPdfCandidateProjectionOptions {
+  searchQuery: string;
+  provenance?: Record<string, unknown>;
+}
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
@@ -463,16 +469,69 @@ export function shapeDocumentResult(
 
   const snippet = description ? excerpt(description) : undefined;
   const documentType = inferDocumentType(name, description);
-
-  return {
+  const result: ProtocolIdeDocumentResult = {
     vendor,
     title: name,
-    pdfUrl: productUrl,
     landingUrl: productUrl ?? '',
-    snippet,
     documentType,
-    sessionIdHint: `${vendor}::${name}`,
   };
+  if (productUrl) result.pdfUrl = productUrl;
+  if (snippet) result.snippet = snippet;
+  result.sessionIdHint = `${vendor}::${name}`;
+  return result;
+}
+
+function looksLikePdfUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return /\.pdf$/i.test(parsed.pathname);
+  } catch {
+    return /\.pdf(?:$|[?#])/i.test(value);
+  }
+}
+
+export function protocolIdeDocumentToFoundryPdfCandidate(
+  document: ProtocolIdeDocumentResult,
+  options: FoundryPdfCandidateProjectionOptions,
+): FoundryPdfCollectionCandidate | null {
+  const pdfUrl = stringValue(document.pdfUrl);
+  const landingUrl = stringValue(document.landingUrl);
+  const sourceUrl = pdfUrl ?? (landingUrl && looksLikePdfUrl(landingUrl) ? landingUrl : undefined);
+  if (!sourceUrl) return null;
+  const provenance: Record<string, unknown> = {
+    source: 'protocol-ide-document-search',
+    source_url_role: pdfUrl ? 'pdfUrl' : 'landingUrl',
+    document_type: document.documentType,
+    ...(document.sessionIdHint ? { sessionIdHint: document.sessionIdHint } : {}),
+    ...(landingUrl ? { landingUrl } : {}),
+    ...(document.snippet ? { snippet: document.snippet } : {}),
+    ...(options.provenance ?? {}),
+  };
+  return {
+    vendor: document.vendor,
+    title: document.title,
+    sourceUrl,
+    searchQuery: options.searchQuery,
+    documentType: document.documentType,
+    provenance,
+  };
+}
+
+export function protocolIdeDocumentsToFoundryPdfCandidates(
+  documents: readonly ProtocolIdeDocumentResult[],
+  options: FoundryPdfCandidateProjectionOptions,
+): FoundryPdfCollectionCandidate[] {
+  const seen = new Set<string>();
+  const candidates: FoundryPdfCollectionCandidate[] = [];
+  for (const document of documents) {
+    const candidate = protocolIdeDocumentToFoundryPdfCandidate(document, options);
+    if (!candidate) continue;
+    const key = `${candidate.vendor}::${candidate.sourceUrl}`.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    candidates.push(candidate);
+  }
+  return candidates;
 }
 
 /**

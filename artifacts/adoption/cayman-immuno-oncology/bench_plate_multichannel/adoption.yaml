@@ -1,25 +1,23 @@
 kind: protocol-foundry-adoption-decision
 protocolId: cayman-immuno-oncology
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T19:27:35.730Z
+generated_at: 2026-05-11T22:50:50.787Z
 status: accepted
 applyPatches: true
 patchSpecs:
-  - id: cayman-immuno-oncology/bench_plate_multichannel/fix-browser-rendering
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-browser-rendering.yaml
-    fixClass: browser_or_labware_rendering
-    title: Make event graph render and play in labware-editor
-  - id: cayman-immuno-oncology/bench_plate_multichannel/fix-foundry-runtime-wiring-gap
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-foundry-runtime-wiring-gap.yaml
-    fixClass: foundry_runtime_wiring_gap
-    title: Wire Foundry compile dependencies to the real compiler runtime
-  - id: cayman-immuno-oncology/bench_plate_multichannel/fix-labware-alias-resolver-gap
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-labware-alias-resolver-gap.yaml
-    fixClass: labware_alias_or_resolver_gap
-    title: Resolve existing labware definitions through compiler aliases or Foundry
-      lookup wiring
-  - id: cayman-immuno-oncology/bench_plate_multichannel/fix-material-catalog-spec-gap
-    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-material-catalog-spec-gap.yaml
-    fixClass: material_catalog_or_spec_gap
-    title: Resolve protocol materials as catalog/spec data without inventing inventory
+  - id: cayman-immuno-oncology/bench_plate_multichannel/fix-ai-precompile-shape-mismatch
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch to enable labware and pattern
+      passes
+  - id: cayman-immuno-oncology/bench_plate_multichannel/fix-labware-resolver-wiring
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-labware-resolver-wiring.yaml
+    fixClass: labware_alias_or_resolver
+    title: Wire generic labware definitions to resolver for 96-well plate,
+      reservoirs, tip racks, and tube racks
+  - id: cayman-immuno-oncology/bench_plate_multichannel/fix-scale-verb-expander
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-scale-verb-expander.yaml
+    fixClass: compiler_event_coverage
+    title: Add 'scale' verb expander to BiologyVerbExpander to handle
+      concentration/volume scaling events
 message: Patch specs accepted for unattended coder tournament execution.

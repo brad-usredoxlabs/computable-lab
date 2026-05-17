@@ -1,0 +1,53 @@
+kind: protocol-foundry-patch-spec
+id: cayman-natural-prodccuts/bench_plate_multichannel/fix-precompiler-plate-map-candidate-shape
+protocolId: cayman-natural-prodccuts
+variant: bench_plate_multichannel
+fixClass: precompiler_reference_shape
+title: Ensure pre-compiler emits structured plate-map candidates with well
+  positions and compound names
+rationale: "The diagnostics show 'foundry_presegmented_candidates' messages but
+  the candidates are not being converted to events. The pre-compiler likely
+  extracts raw text segments without structuring them into the shape the
+  compiler expects (e.g., {well: 'A2', compound: 'Ursolic Acid', catalogNumber:
+  '10072'}). The compiler's extract_entities pass sees candidates but cannot
+  match them to any known verb because the candidate shape doesn't include the
+  semantic fields needed for plate-map lowering. The pre-compiler
+  (DeterministicPrecompilePass.ts or the extraction service) needs to parse the
+  tabular plate map format and emit structured candidates with well positions,
+  compound names, and catalog numbers."
+ownedFiles:
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+  - server/src/extract/ExtractionRunnerService.ts
+acceptance:
+  - "Pre-compiler output includes candidates with fields: well (e.g., 'A2'),
+    compound (e.g., 'Ursolic Acid'), catalogNumber (e.g., '10072')"
+  - Candidates are not just raw text segments but structured objects the
+    compiler can match to plate-map verbs
+  - Compiler diagnostics no longer show 'foundry_presegmented_candidates' as the
+    only signal without subsequent event generation
+  - At least 20 structured candidates are emitted for the Cayman plate map
+    (matching the visible wells in the PDF)
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 100
+  maxChangedLines: 200
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-natural-prodccuts/bench_plate_multichannel/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-natural-prodccuts/bench_plate_multichannel/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-natural-prodccuts.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-natural-prodccuts.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cayman-natural-prodccuts.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-natural-prodccuts/bench_plate_multichannel/verdict.yaml

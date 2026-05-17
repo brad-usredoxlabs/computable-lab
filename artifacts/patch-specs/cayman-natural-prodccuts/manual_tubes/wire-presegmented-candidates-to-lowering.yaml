@@ -1,0 +1,49 @@
+kind: protocol-foundry-patch-spec
+id: cayman-natural-prodccuts/manual_tubes/wire-presegmented-candidates-to-lowering
+protocolId: cayman-natural-prodccuts
+variant: manual_tubes
+fixClass: precompiler_reference_shape
+title: Ensure presegmented candidates are passed through to the lowering pass
+  with correct shape
+rationale: The diagnostics show 29+ 'foundry_presegmented_candidates' info
+  messages, meaning the pre-compiler successfully extracted candidates. However,
+  the event graph is empty, indicating these candidates are not being consumed
+  by any lowering pass. The candidates likely have a shape that the compiler's
+  lowering passes don't recognize (e.g., missing 'verb' field, wrong
+  'candidateType', or not being merged into the main candidate list). The
+  ChatbotCompilePasses.ts createAiPrecompilePass or the deterministic precompile
+  pass needs to ensure candidates are shaped correctly (with verb='dispense' or
+  candidateType='plate-map') so the lowering pass can process them.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+acceptance:
+  - Presegmented candidates appear in the compiler's internal candidate list
+    with verb='dispense' or candidateType='plate-map'
+  - No 'shape mismatch' or 'unresolved ref' warnings in diagnostics
+  - Candidates from presegmented extraction are not filtered out before lowering
+  - The lowering pass receives candidates and produces events
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 3
+  targetChangedLines: 60
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-natural-prodccuts/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-natural-prodccuts/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-natural-prodccuts/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-natural-prodccuts/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-natural-prodccuts/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cayman-natural-prodccuts/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cayman-natural-prodccuts.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cayman-natural-prodccuts.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cayman-natural-prodccuts.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-natural-prodccuts/manual_tubes/verdict.yaml

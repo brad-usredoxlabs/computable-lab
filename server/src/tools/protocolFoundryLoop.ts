@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 import { resolve } from 'node:path';
 import { runFoundryLoop } from '../foundry/FoundrySupervisor.js';
+import {
+  writeFoundryLoopRuntimeStart,
+  writeFoundryLoopRuntimeStop,
+} from '../foundry/FoundryManifest.js';
 
 function readArg(name: string, args: string[]): string | undefined {
   const index = args.indexOf(name);
@@ -19,16 +23,17 @@ function usage(): string {
     '',
     'Options:',
     '  --workbench-root <dir>       agent-workbench root for browser review script.',
-    '  --worker-base-url <url>      OpenAI-compatible worker/coder endpoint.',
-    '  --worker-model <model>       Worker/coder model.',
-    '  --architect-base-url <url>   OpenAI-compatible architect endpoint.',
-    '  --architect-model <model>    Architect model.',
+    '  --worker-base-url <url>      Junior coder endpoint. Default env PI_WORKER_BASE_URL.',
+    '  --worker-model <model>       Junior coder model. Default env PI_WORKER_MODEL.',
+    '  --architect-base-url <url>   Architect, critic, and senior coder endpoint.',
+    '  --architect-model <model>    Architect, critic, and senior coder model.',
     '  --api-base <url>             computable-lab API base for browser review.',
     '  --app-base <url>             computable-lab app base for browser review.',
     '  --max-concurrency <n>        Default 4.',
     '  --max-cycles <n>             Default 1 unless --watch.',
     '  --watch                      Keep polling for new ready work.',
     '  --poll-ms <n>                Poll interval for --watch. Default 30000.',
+    '  --log-path <path>            Log file path for status visibility when launched with redirection.',
     '  --skip-browser               Mark browser review skipped instead of launching Playwright.',
   '  --improvement-mode           Run patch adoption and affected-protocol rerun stages.',
   '  --apply-patches              Let the coder endpoint apply guarded source patches from architect specs.',
@@ -58,6 +63,7 @@ async function main(): Promise<number> {
   const workerModel = readArg('--worker-model', args) ?? process.env['PI_WORKER_MODEL'] ?? process.env['OPENAI_MODEL'];
   const architectBaseUrl = readArg('--architect-base-url', args) ?? process.env['PI_ARCHITECT_BASE_URL'];
   const architectModel = readArg('--architect-model', args) ?? process.env['PI_ARCHITECT_MODEL'];
+  const logPath = readArg('--log-path', args) ?? process.env['FOUNDRY_LOOP_LOG_PATH'];
 
   // Export env vars so downstream modules (coder patch) can read them
   if (workerBaseUrl) process.env['PI_WORKER_BASE_URL'] = workerBaseUrl;
@@ -70,32 +76,49 @@ async function main(): Promise<number> {
   const pollMs = readArg('--poll-ms', args);
   const pdfIntakeBatchSize = readArg('--pdf-intake-batch-size', args);
 
-  const summary = await runFoundryLoop({
+  await writeFoundryLoopRuntimeStart({
     artifactRoot,
     repoRoot,
-    ...(workbenchRoot ? { workbenchRoot } : {}),
-    ...(workerBaseUrl ? { workerBaseUrl } : {}),
-    ...(workerModel ? { workerModel } : {}),
-    ...(architectBaseUrl ? { architectBaseUrl } : {}),
-    ...(architectModel ? { architectModel } : {}),
-    ...(apiBase ? { apiBase } : {}),
-    ...(appBase ? { appBase } : {}),
-    maxConcurrency: Number(readArg('--max-concurrency', args) ?? 4),
-    ...(maxCycles ? { maxCycles: Number(maxCycles) } : {}),
-    watch: hasFlag('--watch', args),
-    ...(pollMs ? { pollMs: Number(pollMs) } : {}),
-    dryRun: hasFlag('--dry-run', args),
-    skipBrowser: hasFlag('--skip-browser', args),
-    improvementMode: hasFlag('--improvement-mode', args),
-    applyPatches: hasFlag('--apply-patches', args),
-    autoCommitPatches: hasFlag('--auto-commit-patches', args) || hasFlag('--auto-push-patches', args),
-    autoPushPatches: hasFlag('--auto-push-patches', args),
-    writeReviewIndex: !hasFlag('--no-review-index', args),
-    intakePdfs: !hasFlag('--no-pdf-intake', args),
-    ...(pdfIntakeBatchSize ? { pdfIntakeBatchSize: Number(pdfIntakeBatchSize) } : {}),
+    args,
+    ...(logPath ? { logPath } : {}),
   });
-  console.log(JSON.stringify(summary, null, 2));
-  return 0;
+
+  try {
+    const summary = await runFoundryLoop({
+      artifactRoot,
+      repoRoot,
+      ...(workbenchRoot ? { workbenchRoot } : {}),
+      ...(workerBaseUrl ? { workerBaseUrl } : {}),
+      ...(workerModel ? { workerModel } : {}),
+      ...(architectBaseUrl ? { architectBaseUrl } : {}),
+      ...(architectModel ? { architectModel } : {}),
+      ...(apiBase ? { apiBase } : {}),
+      ...(appBase ? { appBase } : {}),
+      maxConcurrency: Number(readArg('--max-concurrency', args) ?? 4),
+      ...(maxCycles ? { maxCycles: Number(maxCycles) } : {}),
+      watch: hasFlag('--watch', args),
+      ...(pollMs ? { pollMs: Number(pollMs) } : {}),
+      dryRun: hasFlag('--dry-run', args),
+      skipBrowser: hasFlag('--skip-browser', args),
+      improvementMode: hasFlag('--improvement-mode', args),
+      applyPatches: hasFlag('--apply-patches', args),
+      autoCommitPatches: hasFlag('--auto-commit-patches', args) || hasFlag('--auto-push-patches', args),
+      autoPushPatches: hasFlag('--auto-push-patches', args),
+      writeReviewIndex: !hasFlag('--no-review-index', args),
+      intakePdfs: !hasFlag('--no-pdf-intake', args),
+      ...(pdfIntakeBatchSize ? { pdfIntakeBatchSize: Number(pdfIntakeBatchSize) } : {}),
+    });
+    await writeFoundryLoopRuntimeStop(artifactRoot, 'completed');
+    console.log(JSON.stringify(summary, null, 2));
+    return 0;
+  } catch (err) {
+    await writeFoundryLoopRuntimeStop(
+      artifactRoot,
+      'failed',
+      err instanceof Error ? err.message : String(err),
+    );
+    throw err;
+  }
 }
 
 main().then(

@@ -1,0 +1,46 @@
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/workflow/protocol-foundry-review-inner-loop-trace.schema.yaml"
+
+rules:
+- id: prompt-non-empty
+  title: "prompt-non-empty"
+  description: >
+    Every trace must record the prompt that drove the turn. An empty
+    prompt makes the trace impossible to reproduce.
+  severity: error
+  scope: record
+  assert:
+    predicate: nonEmpty
+    args: ["prompt"]
+  message:
+    template: "Inner-loop trace must record the prompt that drove this turn"
+
+- id: draft-spec-path-required
+  title: "draft-spec-path-required"
+  description: >
+    The trace must reference the durable draft spec it produced so the
+    user can re-open or promote it later.
+  severity: error
+  scope: record
+  assert:
+    predicate: nonEmpty
+    args: ["draftSpec.draftPath"]
+  message:
+    template: "Inner-loop trace must include a draftSpec.draftPath"
+
+- id: failed-trace-has-error
+  title: "failed-trace-has-error"
+  description: >
+    A failed inner-loop trace must carry an explanation of what failed
+    so the human reviewer can decide whether to retry.
+  severity: error
+  scope: record
+  assert:
+    op: any
+    predicates:
+    - predicate: notEquals
+      args: ["status", "failed"]
+    - predicate: nonEmpty
+      args: ["error"]
+  message:
+    template: "status=failed traces must populate the 'error' field"

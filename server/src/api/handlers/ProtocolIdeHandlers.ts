@@ -11,6 +11,7 @@
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { join } from 'node:path';
 import type { AppContext } from '../../server.js';
 import type { ApiError } from '../types.js';
 import type { RecordEnvelope } from '../../store/types.js';
@@ -31,6 +32,7 @@ import {
   ProtocolIdeRalphExportService,
   type ExportIssueCardsResponse,
   type CanExportResponse,
+  type RejectIssueCardsResponse,
 } from '../../protocol/ProtocolIdeRalphExportService.js';
 import {
   ProtocolIdeSourceImportService,
@@ -56,6 +58,17 @@ import { ExtractionMetrics } from '../../extract/ExtractionMetrics.js';
 import { runChatbotCompile } from '../../ai/runChatbotCompile.js';
 import type { LlmClient } from '../../compiler/pipeline/passes/ChatbotCompilePasses.js';
 import { createLabwareLookup } from '../../ai/compiler/labwareLookup.js';
+import {
+  FoundryHumanReviewService,
+  isFoundryRejectionReasonClass,
+  type FoundryRejectionReasonClass,
+} from '../../foundry/FoundryHumanReview.js';
+import { readyTasks, scanFoundryLedger } from '../../foundry/FoundryLedger.js';
+import {
+  writeFoundryManifests,
+  writeFoundryOperationalStatus,
+} from '../../foundry/FoundryManifest.js';
+import type { ConversationHistoryMessage } from '../../ai/types.js';
 
 // ---------------------------------------------------------------------------
 // AI runtime deps (set after AI runtime initializes; nullable until then)
@@ -209,10 +222,397 @@ export function createProtocolIdeHandlers(
   const projectionService = new ProtocolIdeProjectionService(ctx.store, projectionDeps);
   const feedbackService = new ProtocolIdeFeedbackService(ctx.store);
   const issueCardService = new ProtocolIdeIssueCardService(ctx.store);
-  const exportService = new ProtocolIdeRalphExportService(ctx.store);
+  const exportService = new ProtocolIdeRalphExportService(ctx.store, {
+    queueRoot: join(ctx.workspaceRoot, 'artifacts', 'ralph-queue'),
+  });
   const overlayService = new ProtocolIdeOverlaySummaryService();
+  const foundryReviewService = new FoundryHumanReviewService({
+    artifactRoot: join(ctx.workspaceRoot, 'artifacts'),
+    workspaceRoot: ctx.workspaceRoot,
+  });
 
   return {
+    /**
+     * GET /protocol-ide/foundry/status
+     *
+     * Refresh and return the same durable Foundry rollups written under
+     * artifacts/manifests so the web app can monitor loop progress without
+     * embedding operational logic in the UI.
+     */
+    async getFoundryStatus(
+      _request: FastifyRequest,
+      reply: FastifyReply,
+    ): Promise<unknown | ApiError> {
+      try {
+        const artifactRoot = join(ctx.workspaceRoot, 'artifacts');
+        const ledger = await scanFoundryLedger(artifactRoot);
+        const index = await writeFoundryManifests(ledger);
+        const status = await writeFoundryOperationalStatus(ledger, readyTasks(ledger));
+        reply.status(200);
+        return {
+          success: true,
+          status,
+          index,
+        };
+      } catch (err) {
+        reply.status(500);
+        return {
+          error: 'FOUNDRY_STATUS_FAILED',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
+     * GET /protocol-ide/foundry/reviews
+     *
+     * List reviewable Protocol Foundry protocol/variant artifacts.
+     */
+    async listFoundryReviews(
+      _request: FastifyRequest,
+      reply: FastifyReply,
+    ): Promise<unknown | ApiError> {
+      try {
+        const result = await foundryReviewService.listReviews();
+        reply.status(200);
+        return result;
+      } catch (err) {
+        reply.status(500);
+        return {
+          error: 'FOUNDRY_REVIEWS_FAILED',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
+     * GET /protocol-ide/foundry/:protocolId/:variant/review-context
+     *
+     * Return the exact one-protocol/variant artifact bundle for human/AI
+     * review. This is intentionally separate from the generic Protocol IDE
+     * chat context so unrelated protocol artifacts cannot leak into review.
+     */
+    async getFoundryReviewContext(
+      request: FastifyRequest<{
+        Params: { protocolId: string; variant: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<unknown | ApiError> {
+      try {
+        const result = await foundryReviewService.getReviewContext(
+          request.params.protocolId,
+          request.params.variant,
+        );
+        reply.status(200);
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        reply.status(message.includes('Unknown Foundry') ? 404 : 500);
+        return {
+          error: message.includes('Unknown Foundry') ? 'FOUNDRY_REVIEW_NOT_FOUND' : 'FOUNDRY_REVIEW_CONTEXT_FAILED',
+          message,
+        };
+      }
+    },
+
+    /**
+     * GET /protocol-ide/foundry/:protocolId/:variant/event-graph
+     *
+     * Return the labware-style event-graph payload for a Foundry protocol/variant
+     * so the review surface can render the same DualLabwarePane used by sessions.
+     */
+    async getFoundryEventGraph(
+      request: FastifyRequest<{
+        Params: { protocolId: string; variant: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<unknown | ApiError> {
+      try {
+        const result = await foundryReviewService.getReviewEventGraph(
+          request.params.protocolId,
+          request.params.variant,
+        );
+        reply.status(200);
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        reply.status(message.includes('Unknown Foundry') ? 404 : 500);
+        return {
+          error: message.includes('Unknown Foundry') ? 'FOUNDRY_REVIEW_NOT_FOUND' : 'FOUNDRY_EVENT_GRAPH_FAILED',
+          message,
+        };
+      }
+    },
+
+    /**
+     * POST /protocol-ide/foundry/:protocolId/:variant/chat
+     *
+     * Dedicated Foundry review chat. This bypasses the generic chatbot compile
+     * pre-pass and sends only the selected protocol/variant review context to
+     * the configured local review model.
+     */
+    async chatFoundryReview(
+      request: FastifyRequest<{
+        Params: { protocolId: string; variant: string };
+        Body: {
+          prompt?: string;
+          history?: ConversationHistoryMessage[];
+        };
+      }>,
+      reply: FastifyReply,
+    ): Promise<void> {
+      const prompt = request.body?.prompt;
+      if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+        reply.status(400).send({ error: 'INVALID_REQUEST', message: 'prompt is required' });
+        return;
+      }
+
+      const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '*';
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': origin,
+        'Vary': 'Origin',
+      });
+
+      const sendEvent = (event: unknown) => {
+        reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+      };
+
+      try {
+        sendEvent({ type: 'status', message: 'Loading exact Foundry review context...' });
+        const result = await foundryReviewService.appendChatTurn({
+          protocolId: request.params.protocolId,
+          variant: request.params.variant,
+          prompt: prompt.trim(),
+          history: Array.isArray(request.body?.history) ? request.body.history : [],
+        });
+        sendEvent({ type: 'text_delta', delta: result.text });
+        sendEvent({
+          type: 'done',
+          result: {
+            success: true,
+            events: [],
+            notes: [],
+            clarificationNeeded: result.text,
+          },
+        });
+      } catch (err) {
+        sendEvent({
+          type: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        reply.raw.end();
+      }
+    },
+
+    /**
+     * POST /protocol-ide/foundry/:protocolId/:variant/inner-loop
+     *
+     * Tight inner-loop iteration: prompt → draft spec → coder patch →
+     * recompile → diff. Streams stage events and concludes with the trace.
+     */
+    async runFoundryInnerLoop(
+      request: FastifyRequest<{
+        Params: { protocolId: string; variant: string };
+        Body: { prompt?: string; runCritic?: boolean };
+      }>,
+      reply: FastifyReply,
+    ): Promise<void> {
+      const prompt = request.body?.prompt;
+      if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+        reply.status(400).send({ error: 'INVALID_REQUEST', message: 'prompt is required' });
+        return;
+      }
+
+      const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '*';
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': origin,
+        'Vary': 'Origin',
+      });
+
+      const sendEvent = (event: unknown) => {
+        reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+      };
+
+      try {
+        const result = await foundryReviewService.runInnerLoop({
+          protocolId: request.params.protocolId,
+          variant: request.params.variant,
+          prompt: prompt.trim(),
+          ...(request.body?.runCritic ? { runCritic: true } : {}),
+          onProgress: (event) => sendEvent({ type: 'status', stage: event.stage, message: event.message }),
+        });
+        sendEvent({ type: 'done', trace: result.trace, tracePath: result.tracePath });
+      } catch (err) {
+        sendEvent({
+          type: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        reply.raw.end();
+      }
+    },
+
+    /**
+     * POST /protocol-ide/foundry/:protocolId/:variant/promote-draft
+     *
+     * Promote an inner-loop draft spec to the executable Foundry queue.
+     */
+    async promoteFoundryDraft(
+      request: FastifyRequest<{
+        Params: { protocolId: string; variant: string };
+        Body: { draftId?: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<unknown | ApiError> {
+      const draftId = request.body?.draftId;
+      if (!draftId || typeof draftId !== 'string') {
+        reply.status(400);
+        return { error: 'INVALID_REQUEST', message: 'draftId is required' };
+      }
+      try {
+        const result = await foundryReviewService.promoteDraftSpec({
+          protocolId: request.params.protocolId,
+          variant: request.params.variant,
+          draftId,
+        });
+        reply.status(200);
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        reply.status(message.includes('not found') ? 404 : 500);
+        return {
+          error: message.includes('not found') ? 'FOUNDRY_DRAFT_NOT_FOUND' : 'FOUNDRY_DRAFT_PROMOTE_FAILED',
+          message,
+        };
+      }
+    },
+
+    /**
+     * POST /protocol-ide/foundry/:protocolId/:variant/synthesize-spec
+     *
+     * Convert the latest human/AI review context into a single structured
+     * Ralph/Foundry queue spec.
+     */
+    async synthesizeFoundrySpec(
+      request: FastifyRequest<{
+        Params: { protocolId: string; variant: string };
+        Body?: { humanInstruction?: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<unknown | ApiError> {
+      try {
+        const input: { protocolId: string; variant: string; humanInstruction?: string } = {
+          protocolId: request.params.protocolId,
+          variant: request.params.variant,
+        };
+        if (typeof request.body?.humanInstruction === 'string') {
+          input.humanInstruction = request.body.humanInstruction;
+        }
+        const result = await foundryReviewService.synthesizeSpec({
+          ...input,
+        });
+        reply.status(200);
+        return result;
+      } catch (err) {
+        reply.status(500);
+        return {
+          error: 'FOUNDRY_SPEC_SYNTHESIS_FAILED',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
+     * POST /protocol-ide/foundry/:protocolId/:variant/reject
+     *
+     * Persist a Foundry-aware rejection so resync does not resurface the same
+     * recommendation as an unreviewed item.
+     */
+    async rejectFoundryReview(
+      request: FastifyRequest<{
+        Params: { protocolId: string; variant: string };
+        Body?: { reason?: string; reasonClass?: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<unknown | ApiError> {
+      const reasonClass = request.body?.reasonClass;
+      if (reasonClass !== undefined && !isFoundryRejectionReasonClass(reasonClass)) {
+        reply.status(400);
+        return {
+          error: 'INVALID_REASON_CLASS',
+          message: `reasonClass must be one of redundant | out_of_scope | evidence_insufficient | bad_event_graph | other`,
+        };
+      }
+      try {
+        const input: {
+          protocolId: string;
+          variant: string;
+          reason?: string;
+          reasonClass?: FoundryRejectionReasonClass;
+        } = {
+          protocolId: request.params.protocolId,
+          variant: request.params.variant,
+        };
+        if (typeof request.body?.reason === 'string') {
+          input.reason = request.body.reason;
+        }
+        if (reasonClass !== undefined) {
+          input.reasonClass = reasonClass;
+        }
+        const result = await foundryReviewService.reject(input);
+        reply.status(200);
+        return result;
+      } catch (err) {
+        reply.status(500);
+        return {
+          error: 'FOUNDRY_REJECT_FAILED',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
+     * POST /protocol-ide/foundry/:protocolId/:variant/reopen
+     *
+     * Return a rejected Foundry recommendation to the reviewable inbox while
+     * preserving the rejection record as audit data.
+     */
+    async reopenFoundryReview(
+      request: FastifyRequest<{
+        Params: { protocolId: string; variant: string };
+        Body?: { reason?: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<unknown | ApiError> {
+      try {
+        const input: { protocolId: string; variant: string; reason?: string } = {
+          protocolId: request.params.protocolId,
+          variant: request.params.variant,
+        };
+        if (typeof request.body?.reason === 'string') {
+          input.reason = request.body.reason;
+        }
+        const result = await foundryReviewService.reopen({
+          ...input,
+        });
+        reply.status(200);
+        return result;
+      } catch (err) {
+        reply.status(500);
+        return {
+          error: 'FOUNDRY_REOPEN_FAILED',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
     /**
      * POST /protocol-ide/sessions
      *
@@ -526,6 +926,10 @@ export function createProtocolIdeHandlers(
                 status: compileResult.outcome === 'error' ? 'projection_failed' : 'projected',
                 latestEventGraphCacheKey: graphReviewRef,
                 latestEventGraphRef: { kind: 'record', id: graphReviewRef, type: 'event-graph' },
+                latestTerminalArtifacts: compileResult.terminalArtifacts,
+                ...(compileResult.terminalArtifacts.labStateDelta?.snapshotAfter
+                  ? { latestLabState: compileResult.terminalArtifacts.labStateDelta.snapshotAfter }
+                  : {}),
                 updatedAt: now,
               };
               await ctx.store.update({
@@ -791,6 +1195,47 @@ export function createProtocolIdeHandlers(
         reply.status(500);
         return {
           error: 'EXPORT_FAILED',
+          message,
+        };
+      }
+    },
+
+    /**
+     * POST /protocol-ide/sessions/:sessionId/reject-issue-cards
+     *
+     * Reject all current issue cards without submitting them to the Ralph
+     * queue. Used when a human reviewer decides a recommendation is redundant
+     * or otherwise not worth patching this breadth-first round.
+     */
+    async rejectIssueCards(
+      request: FastifyRequest<{
+        Params: { sessionId: string };
+        Body?: { reason?: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<RejectIssueCardsResponse | ApiError> {
+      const { sessionId } = request.params;
+      const reason = typeof request.body?.reason === 'string' ? request.body.reason : undefined;
+
+      try {
+        const result = await exportService.rejectIssueCards(sessionId, reason);
+
+        reply.status(200);
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+
+        if (message.includes('not found')) {
+          reply.status(404);
+          return {
+            error: 'SESSION_NOT_FOUND',
+            message,
+          };
+        }
+
+        reply.status(500);
+        return {
+          error: 'REJECT_ISSUE_CARDS_FAILED',
           message,
         };
       }

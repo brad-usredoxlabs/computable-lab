@@ -1,0 +1,16 @@
+kind: protocol-foundry-adoption-decision
+protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+variant: robot_deck
+generated_at: 2026-05-09T21:16:08.570Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/fix-ai-precompile-shape-mismatch
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch to enable downstream passes
+  - id: man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/fix-antibody-purification-verb-coverage
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/fix-antibody-purification-verb-coverage.yaml
+    fixClass: compiler_event_coverage
+    title: Add verb lowering for antibody purification protocol steps
+message: Patch specs accepted for unattended coder tournament execution.

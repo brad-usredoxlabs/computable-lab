@@ -1,0 +1,16 @@
+kind: protocol-foundry-adoption-decision
+protocolId: mp10422
+variant: manual_tubes
+generated_at: 2026-05-09T21:26:32.905Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: mp10422/manual_tubes/fix-ai-precompile-shape-mismatch
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch to enable downstream passes
+  - id: mp10422/manual_tubes/fix-material-catalog-cellrox-reagents
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/manual_tubes/fix-material-catalog-cellrox-reagents.yaml
+    fixClass: material_catalog_or_spec
+    title: Add CellROX reagent material records to enable proper material resolution
+message: Patch specs accepted for unattended coder tournament execution.

@@ -1,0 +1,33 @@
+kind: protocol-foundry-patch-spec
+id: spec-fix-2026-05-17-s6n85
+source: event-editor-fixit
+generated_at: 2026-05-17T12:47:12.443Z
+fixClass: compiler
+title: Fix deterministic precompile to emit deck placement for labware on deck
+  slots instead of treating deck tokens as well addresses
+rationale: "The compiler trace shows that the prompt 'put a 96-well plate on B2'
+  correctly resolved the labware noun but incorrectly parsed the deck token 'B2'
+  as a well address in the parameters (wells: ['B2']) and count as 96. This
+  caused the placement pass to emit no labware additions and instead generate a
+  liquid handling event targeting a non-existent well. The fix must be in the
+  deterministic precompile pass to recognize locative phrases following labware
+  nouns as deck placement instructions, emitting a candidate labware with a
+  deckSlot instead of a well parameter."
+ownedFiles:
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+  - server/src/compiler/pipeline/fixtures/spec-fix-2026-05-17-s6n85.yaml
+acceptance:
+  - The prompt 'put a 96-well plate on B2' must result in a labware placement on
+    deck slot B2, not a liquid handling event.
+  - The terminal artifact deckLayoutPlan.pinned must contain an entry with slot
+    'B2' and labwareHint 'lbw-def-generic-96-well-plate'.
+  - The terminal artifact events must be empty (no liquid handling primitives
+    emitted for this prompt).
+  - The prompt 'add 100ul to well A1 of the 96-well plate' must still correctly
+    parse 'A1' as a well address and emit a liquid handling event, ensuring the
+    fix does not break explicit well references.
+tests:
+  - cd server && npx vitest run
+    src/compiler/pipeline/fixtures/FixItFixtures.test.ts -t
+    'spec-fix-2026-05-17-s6n85'
+failingPrompt: put a 96-well plate on B2

@@ -1,47 +1,47 @@
 kind: protocol-foundry-architect-verdict
 protocolId: mp10471
 variant: manual_tubes
-generated_at: 2026-05-09T09:38:37.538Z
+generated_at: 2026-05-09T22:43:09.512Z
 accepted: false
-qualityScore: 0.15
-coverageEstimate: 0.1
+qualityScore: 0.05
+coverageEstimate: 0
 failureClasses:
   - precompiler_reference_shape
-  - labware_alias_or_resolver
+  - extractor_prompt_contract
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: fix-ai-precompile-shape-mismatch
+  - id: fix-ai-precompile-shape-mismatch-and-candidate-events
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch causing pass skips
-    rationale: "The compiler diagnostics show 'ai_precompile output shape mismatch'
-      (ai_precompile_shape_mismatch). This caused downstream passes to be
-      skipped: mint_materials, apply_directives, resolve_labware, and
-      expand_patterns all had their 'when' conditions evaluate to false because
-      the ai_precompile output fields (mintMaterials, directives,
-      candidateLabwares, patternEvents) were malformed or missing. The
-      pre-compiler extracted 25+ candidates but the AI precompile pass failed to
-      shape them correctly, resulting in only 2 trivial mix events instead of
-      the full protocol. The fix must ensure createAiPrecompilePass in
-      ChatbotCompilePasses.ts produces a valid AiPrecompileOutput with properly
-      populated fields when candidates exist."
+    title: Fix ai_precompile shape mismatch to produce candidateEvents for Fluo-4
+      Direct protocol
+    rationale: The compiler diagnostics show 'ai_precompile output shape mismatch,
+      using fallback' and subsequently all downstream passes are skipped because
+      'outputs.ai_precompile.candidateEvents evaluated to false'. The
+      pre-compiler extracted 66+ deterministic candidates (6+10+24+25+1+4) but
+      the ai_precompile pass failed to shape them into the expected
+      AiPrecompileOutput structure with candidateEvents. The tag_prompt also had
+      a JSON parse error ('Unexpected end of JSON input'), suggesting the LLM
+      response was truncated or malformed. The root cause is that
+      createAiPrecompilePass in ChatbotCompilePasses.ts either has a shape
+      validation that is too strict, or the fallback path produces an
+      empty/invalid structure that causes candidateEvents to be falsy. This
+      results in 0 events despite clear protocol steps in the PDF (cell seeding,
+      reagent preparation, incubation, measurement).
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile_shape_mismatch warning no longer appears in diagnostics
-        for mp10471
-      - mint_materials, apply_directives, resolve_labware, and expand_patterns
-        passes are no longer skipped due to false when conditions
-      - eventCount increases from 2 to at least 8 events covering the Fluo-4
-        Direct protocol steps (cell plating, reagent prep, loading, incubation,
-        reading)
-      - AiPrecompileOutput fields (mintMaterials, directives, candidateLabwares,
-        patternEvents) are populated when candidates are extracted
+      - ai_precompile pass produces valid AiPrecompileOutput with non-empty
+        candidateEvents array for mp10471
+      - No 'ai_precompile_shape_mismatch' warning in diagnostics for mp10471
+      - Downstream passes (expand_biology_verbs, resolve_labware,
+        mint_materials) are no longer skipped due to falsy candidateEvents
+      - eventCount >= 3 in compiler output for mp10471/manual_tubes
     coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: &a1
       compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10471/manual_tubes.yaml
@@ -54,53 +54,44 @@ recommendedFixes:
       materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10471.yaml
       text: /home/brad/git/computable-foundry/artifacts/text/mp10471.txt
     failureEvidence: &a2
-      eventCount: 2
+      eventCount: 0
       outcome: gap
     implementationBudget:
       targetChangedFiles: 1
       maxChangedFiles: 2
-      targetChangedLines: 120
-      maxChangedLines: 250
+      targetChangedLines: 60
+      maxChangedLines: 150
       requireFocusedFixture: true
-  - id: fix-labware-resolution-gaps
-    class: labware_alias_or_resolver
-    title: Resolve unresolved labware refs for generic_96_well_plate and
-      generic_24x1_5ml_tube_rack
-    rationale: "The compiler output shows two unresolved_ref gaps:
-      'generic_96_well_plate (no matching labware in prior snapshot)' and
-      'generic_24x1_5ml_tube_rack (no matching labware in prior snapshot)'. The
-      execution scale plan references 'lbw-def-generic-96-well-plate' and
-      'lbw-def-generic-reservoir-1-v1' in requiredLabwareDefinitions, suggesting
-      these definitions exist in the registry but the compiler's resolve_labware
-      pass couldn't find them. Since resolve_labware was skipped due to the
-      ai_precompile shape mismatch, this is partially a downstream effect.
-      However, the labware resolution logic may also have issues matching
-      candidate labware hints to registry definitions. The fix should ensure
-      that when labware hints like 'generic_96_well_plate' are extracted, they
-      correctly resolve to existing registry definitions like
-      'lbw-def-generic-96-well-plate'."
+  - id: fix-tag-prompt-json-parse-error
+    class: extractor_prompt_contract
+    title: Fix tag_prompt JSON parse error from truncated LLM response
+    rationale: "The diagnostics show 'tag_prompt response was not valid JSON:
+      Unexpected end of JSON input' with a raw_preview that appears to be a
+      valid JSON object that was cut off. This suggests the LLM response was
+      truncated (possibly due to token limits or streaming issues) before the
+      closing braces. The tag_prompt pass is likely used to extract tagged
+      phrases (materials, labware, etc.) from the protocol text. When this
+      fails, it may contribute to the ai_precompile shape mismatch because the
+      tagged phrases are inputs to the precompile pass. The fix should add
+      robust JSON parsing with truncation recovery (e.g., try to parse
+      progressively shorter prefixes, or add missing closing braces) and/or
+      increase the response token limit for the tag_prompt LLM call."
     ownedFiles:
-      - server/src/registry/LabwareDefinitionRegistry.ts
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - No unresolved_ref gaps for generic_96_well_plate or
-        generic_24x1_5ml_tube_rack in compiler output
-      - Labware hints from pre-compiler candidates correctly resolve to existing
-        registry definitions
-      - Event graph labwares section contains properly resolved labware
-        references with matching definitions
-      - Execution scale plan can bind all required labware definitions without
-        gaps
+      - No 'tag_prompt_parse_error' warning in diagnostics for mp10471
+      - tag_prompt pass successfully extracts tagged phrases from protocol text
+      - JSON parsing handles truncated responses gracefully with recovery logic
     coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
       targetChangedFiles: 1
-      maxChangedFiles: 3
-      targetChangedLines: 60
-      maxChangedLines: 150
+      maxChangedFiles: 2
+      targetChangedLines: 40
+      maxChangedLines: 100
       requireFocusedFixture: true
 sourceArtifacts: *a1
 architectNotes: "LLM architect analysis: 2 fix recommendations."

@@ -1,0 +1,21 @@
+kind: protocol-foundry-adoption-decision
+protocolId: cellrox-oxidative-stress-qr
+variant: manual_tubes
+generated_at: 2026-05-10T12:53:33.781Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: cellrox-oxidative-stress-qr/manual_tubes/fix-ai-precompile-shape-mismatch
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch to enable labware/material
+      resolution passes
+  - id: cellrox-oxidative-stress-qr/manual_tubes/fix-analyze-verb-expander
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/manual_tubes/fix-analyze-verb-expander.yaml
+    fixClass: compiler_event_coverage
+    title: Add biology verb expander for 'analyze' verb
+  - id: cellrox-oxidative-stress-qr/manual_tubes/fix-treat-verb-expander
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/manual_tubes/fix-treat-verb-expander.yaml
+    fixClass: compiler_event_coverage
+    title: Add biology verb expander for 'treat' verb
+message: Patch specs accepted for unattended coder tournament execution.

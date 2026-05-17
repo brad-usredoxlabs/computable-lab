@@ -1,0 +1,54 @@
+kind: protocol-foundry-patch-spec
+id: cellrox-oxidative-stress-qr/robot_deck/fix-deterministic-candidate-to-event-lowering
+protocolId: cellrox-oxidative-stress-qr
+variant: robot_deck
+fixClass: compiler_event_coverage
+title: Add deterministic lowering from presegmented candidates to
+  candidateEvents when ai_precompile fails
+rationale: "The pre-compiler supplied 12 deterministic candidates from
+  presegmented text, but the ai_precompile pass's fallback does not convert
+  these candidates into candidateEvents. The PDF has clear steps: (1) treat
+  cells with compound, (2) add CellROX Reagent at 5 μM, (3) incubate 30 min at
+  37°C, (4) remove medium and wash 3x with PBS, (5) optional fix with 3.7%
+  formaldehyde, (6) optional counterstain, (7) optional permeabilize with 0.5%
+  Triton X-100, (8) analyze cells. The compiler should have a deterministic path
+  that converts numbered protocol steps into candidateEvents with verbs like
+  'add_reagent', 'incubate', 'wash', 'fix', 'stain', 'permeabilize', 'analyze'.
+  The prior patch added an 'analyze' verb expander, but the events never reached
+  the verb expander because candidateEvents was empty. This fix ensures that
+  when ai_precompile fails, the deterministic candidates are still lowered to
+  events."
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+acceptance:
+  - When ai_precompile produces empty candidateEvents, deterministic candidates
+    are converted to at least 4 candidateEvents
+  - Protocol steps with clear verbs (add, incubate, wash, fix, analyze) are
+    recognized as candidateEvents
+  - expand_biology_verbs pass processes these events and produces terminal events
+  - Final eventCount >= 5 for this protocol
+implementationBudget:
+  targetChangedFiles: 2
+  maxChangedFiles: 3
+  targetChangedLines: 100
+  maxChangedLines: 220
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Qwen/Qwen3.6-27B-FP8
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/cellrox-oxidative-stress-qr/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cellrox-oxidative-stress-qr/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cellrox-oxidative-stress-qr/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cellrox-oxidative-stress-qr/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cellrox-oxidative-stress-qr/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/cellrox-oxidative-stress-qr/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/cellrox-oxidative-stress-qr.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cellrox-oxidative-stress-qr.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/cellrox-oxidative-stress-qr.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/cellrox-oxidative-stress-qr/robot_deck/verdict.yaml

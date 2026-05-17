@@ -1,0 +1,17 @@
+kind: protocol-foundry-adoption-decision
+protocolId: mp10471
+variant: manual_tubes
+generated_at: 2026-05-09T21:40:31.493Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: mp10471/manual_tubes/fix-ai-precompile-shape-mismatch
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch causing pass skips
+  - id: mp10471/manual_tubes/fix-labware-resolution-gaps
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/manual_tubes/fix-labware-resolution-gaps.yaml
+    fixClass: labware_alias_or_resolver
+    title: Resolve unresolved labware refs for generic_96_well_plate and
+      generic_24x1_5ml_tube_rack
+message: Patch specs accepted for unattended coder tournament execution.

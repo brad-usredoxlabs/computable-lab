@@ -1,0 +1,34 @@
+kind: protocol-foundry-patch-spec
+id: spec-fix-2026-05-17-vu2w1
+source: event-editor-fixit
+generated_at: 2026-05-17T13:36:01.340Z
+fixClass: compiler
+title: Emit labware placement candidate for deck-like tokens in put/place/add prompts
+rationale: The deterministic precompile pass fails to emit a placement candidate
+  when a resolved labware noun is followed by a deck-like token (e.g., 'B2').
+  The prompt scan correctly identifies 'B2' as a deckLikeToken, and the registry
+  lookup resolves '96-well plate' to a valid labware definition. However, the
+  lowering logic in DeterministicPrecompilePass.ts does not bind the resolved
+  labware to the deck slot, resulting in empty actionFrames and no
+  labwareAdditions. The fix must ensure that locative phrases involving deck
+  slots trigger the creation of a placement candidate with the correct deckSlot.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+  - server/src/compiler/precompile/NounPhraseResolver.ts
+  - server/src/compiler/pipeline/fixtures/spec-fix-2026-05-17-vu2w1.yaml
+acceptance:
+  - The prompt 'put a 96-well plate on B2' results in a non-empty
+    candidateLabwares entry in deterministic_precompile output with a deckSlot
+    of 'B2'.
+  - The resolve_labware pass produces a labwareAddition for the generic 96-well
+    plate pinned to slot B2.
+  - The frontend preview shows 1 placement for the 96-well plate on slot B2.
+  - Prompts explicitly referring to wells (e.g., 'add 100ul to well A1') do not
+    treat 'A1' as a deck slot but as a well address within a labware.
+  - Prompts referring to rows or columns (e.g., 'use row A') do not misinterpret
+    these as deck slots.
+tests:
+  - cd server && npx vitest run
+    src/compiler/pipeline/fixtures/FixItFixtures.test.ts -t
+    'spec-fix-2026-05-17-vu2w1'
+failingPrompt: put a 96-well plate on B2

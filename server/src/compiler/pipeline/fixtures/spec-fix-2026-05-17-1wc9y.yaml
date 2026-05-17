@@ -1,0 +1,14 @@
+name: spec-fix-2026-05-17-1wc9y
+description: Regression test for deck placement vs well address ambiguity in
+  'put labware on slot' prompts
+deterministicOnly: true
+input:
+  prompt: put a 96-well plate on B2
+expected:
+  outcome: complete
+  terminalArtifacts:
+    deckLayoutPlan:
+      pinned:
+        - slot: B2
+          labwareHint: lbw-def-generic-96-well-plate
+    events: []

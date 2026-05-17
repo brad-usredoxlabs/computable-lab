@@ -1,47 +1,51 @@
 kind: protocol-foundry-architect-verdict
 protocolId: man0011863-memper-plus-memb-protein-extract-ug
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T09:30:56.843Z
+generated_at: 2026-05-09T22:39:41.839Z
 accepted: false
-qualityScore: 0.15
-coverageEstimate: 0.25
+qualityScore: 0.05
+coverageEstimate: 0
 failureClasses:
   - precompiler_reference_shape
-  - labware_alias_or_resolver
+  - compiler_event_coverage
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: fix-ai-precompile-shape-mismatch
+  - id: fix-ai-precompile-shape-and-fallback
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch to enable downstream passes
-    rationale: "The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
-      AI precompile pass produced output that doesn't match the expected
-      AiPrecompileOutput schema. This caused three critical downstream passes to
-      be skipped: 'mint_materials' (no materials created), 'resolve_labware' (no
-      labware resolved), and 'expand_patterns' (no pattern events expanded). The
-      PDF contains clear protocol steps (wash, permeabilize, solubilize,
-      centrifuge) but only 5 generic events were produced with empty wells
-      arrays. The root cause is that the ai_precompile pass output shape is
-      malformed, preventing the compiler from extracting candidateLabwares,
-      mintMaterials, and patternEvents needed to build a complete event graph."
+    title: Fix ai_precompile shape mismatch and ensure candidateEvents are produced
+      from presegmented candidates
+    rationale: The compiler diagnostics show 'ai_precompile_shape_mismatch' and all
+      downstream passes (expand_biology_verbs, resolve_labware, mint_materials,
+      apply_directives) were skipped because
+      outputs.ai_precompile.candidateEvents evaluated to false. The pre-compiler
+      supplied 10+43+12 deterministic candidates from presegmented text, but the
+      ai_precompile pass failed to produce valid output (shape mismatch),
+      causing the fallback path to produce zero candidateEvents. The tag_prompt
+      also had a JSON parse error ('Unterminated string in JSON at position
+      769'), suggesting the LLM response was truncated or malformed. The root
+      cause is that createAiPrecompilePass in ChatbotCompilePasses.ts either (1)
+      produces output that doesn't match the expected AiPrecompileOutput shape,
+      or (2) the fallback when shape mismatches produces empty candidateEvents
+      instead of attempting to extract from the presegmented candidates. Since
+      presegmented candidates exist (55 total across chunks), the compiler
+      should be able to lower these to events even if the LLM-based
+      ai_precompile fails.
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass no longer produces 'ai_precompile_shape_mismatch'
+      - ai_precompile pass no longer emits 'ai_precompile_shape_mismatch'
         warning for this protocol
-      - outputs.ai_precompile.candidateLabwares is populated with labware
-        candidates from PDF text
-      - outputs.ai_precompile.mintMaterials is populated with material
-        candidates from PDF text
-      - outputs.ai_precompile.patternEvents is populated with protocol step
-        patterns
-      - Downstream passes mint_materials, resolve_labware, and expand_patterns
-        are no longer skipped
-      - Event count increases from 5 to at least 15 events covering wash,
-        permeabilize, solubilize, and centrifuge steps
+      - outputs.ai_precompile.candidateEvents is a non-empty array when
+        presegmented candidates exist
+      - expand_biology_verbs pass is no longer skipped (when condition evaluates
+        to true)
+      - eventCount >= 3 for this protocol after the fix
+      - tag_prompt JSON parse errors are handled gracefully with retry or
+        fallback parsing
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -56,7 +60,7 @@ recommendedFixes:
       materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
       text: /home/brad/git/computable-foundry/artifacts/text/man0011863-memper-plus-memb-protein-extract-ug.txt
     failureEvidence: &a2
-      eventCount: 5
+      eventCount: 0
       outcome: gap
     implementationBudget:
       targetChangedFiles: 1
@@ -64,43 +68,45 @@ recommendedFixes:
       targetChangedLines: 120
       maxChangedLines: 250
       requireFocusedFixture: true
-  - id: fix-labware-resolution-gaps
-    class: labware_alias_or_resolver
-    title: Resolve unresolved labware refs for 96-well plate and 12-well reservoir
-    rationale: "The compiler output shows two unresolved_ref gaps:
-      'generic_96_well_plate' and 'generic_12_well_reservoir' with 'no matching
-      labware in prior snapshot'. However, the fuzzy_registry_match diagnostic
-      shows '96-well plate' was successfully resolved to
-      'lbw-def-generic-96-well-plate'. The issue is that the labware resolution
-      pass was skipped due to the ai_precompile shape mismatch, so the resolved
-      labware records were never persisted to the snapshot. Additionally, the
-      12-well reservoir (needed for reagent storage) has no matching record. The
-      fix requires ensuring the resolve_labware pass runs correctly and that the
-      labware registry contains entries for common reservoir types used in this
-      protocol."
+  - id: fix-deterministic-fallback-from-presegmented
+    class: compiler_event_coverage
+    title: Add deterministic fallback to lower presegmented candidates to events
+      when ai_precompile fails
+    rationale: Even after fixing the shape mismatch, the ai_precompile pass may
+      still fail for edge cases. The compiler currently has no deterministic
+      fallback path to convert presegmented candidates (which are already
+      extracted entities with protocol-action evidence) into candidateEvents.
+      The diagnostics show 55 deterministic candidates were supplied across
+      chunks, but these are never converted to events because the ai_precompile
+      pass is the sole gate. A deterministic fallback in ChatbotCompilePasses.ts
+      should detect when ai_precompile produces empty candidateEvents and
+      presegmented candidates exist, then use DeterministicPrecompilePass logic
+      to lower those candidates to basic events (e.g., aspirate, dispense,
+      incubate, centrifuge based on verb patterns in candidate text). This
+      ensures the compiler never produces zero events when presegmented evidence
+      exists.
     ownedFiles:
-      - server/src/registry/LabwareDefinitionRegistry.ts
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+      - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
     acceptance:
-      - No unresolved_ref gaps for 'generic_96_well_plate' or
-        'generic_12_well_reservoir' in compiler output
-      - Labware registry contains 'lbw-def-generic-96-well-plate' with correct
-        geometry
-      - Labware registry contains 'lbw-def-generic-12-well-reservoir' or
-        equivalent for reagent storage
-      - Event graph labwares array includes properly resolved labware definitions
-      - Execution scale plan can bind all required labware to robot deck
-        positions
+      - When ai_precompile.candidateEvents is empty but presegmented candidates
+        exist, a fallback pass produces at least 3 candidateEvents
+      - eventCount >= 3 for protocols with presegmented candidates but failed
+        ai_precompile
+      - Fallback events include correct verb types (aspirate, dispense,
+        incubate, centrifuge) based on candidate text patterns
+      - "No regression: protocols with successful ai_precompile continue to use
+        ai_precompile output"
     coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
+      model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
       targetChangedFiles: 2
       maxChangedFiles: 3
-      targetChangedLines: 80
-      maxChangedLines: 180
+      targetChangedLines: 150
+      maxChangedLines: 300
       requireFocusedFixture: true
 sourceArtifacts: *a1
 architectNotes: "LLM architect analysis: 2 fix recommendations."

@@ -1,11 +1,9 @@
 kind: protocol-foundry-run-summary
-generated_at: 2026-05-09T19:42:53.986Z
+generated_at: 2026-05-11T22:51:06.329Z
 artifact_root: /home/brad/git/computable-foundry/artifacts
 protocolCount: 10
 variantCount: 30
 statusCounts:
-  stalled: 4
-  accepted: 2
-  blocked: 2
-  running: 1
-  gap: 21
+  stalled: 5
+  gap: 24
+  accepted: 1

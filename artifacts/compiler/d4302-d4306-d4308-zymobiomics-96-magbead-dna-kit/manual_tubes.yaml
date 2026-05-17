@@ -2,8 +2,8 @@ kind: protocol-foundry-compiler-result
 protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
 variant: manual_tubes
 outcome: gap
-rawOutcome: gap
-eventCount: 6
+rawOutcome: complete
+eventCount: 0
 diagnostics:
   - severity: info
     code: foundry_presegmented_candidates
@@ -60,8 +60,28 @@ diagnostics:
     pass_id: extract_entities
     details: {}
   - severity: warning
+    code: tag_prompt_parse_error
+    message: "tag_prompt response was not valid JSON: Unterminated string in JSON at
+      position 683"
+    pass_id: tag_prompt
+    details:
+      raw_preview: |
+        
+
+        {
+          "taggedPhrases": [
+            {
+              "phrase": "ZymoBIOMICS™ 96 MagBead DNA Kit",
+              "tag": "material",
+              "value": "ZymoBIOMICS 96 MagBead DNA Kit"
+            },
+            {
+              "phrase": "ZymoBIOMICS™ Microbial Community Standard",
+              "tag": "material",
+              "value": "Microbial Community Standard"
+  - severity: warning
     code: ai_precompile_shape_mismatch
-    message: ai_precompile output shape mismatch
+    message: ai_precompile output shape mismatch, using fallback
     pass_id: ai_precompile
   - severity: info
     code: pass_skipped_by_when
@@ -75,14 +95,29 @@ diagnostics:
     pass_id: apply_directives
   - severity: info
     code: pass_skipped_by_when
+    message: "Pass 'expand_biology_verbs' skipped: when condition
+      'outputs.ai_precompile.candidateEvents' evaluated to false"
+    pass_id: expand_biology_verbs
+  - severity: info
+    code: pass_skipped_by_when
     message: "Pass 'resolve_labware' skipped: when condition
       'outputs.ai_precompile.candidateLabwares' evaluated to false"
     pass_id: resolve_labware
   - severity: info
     code: pass_skipped_by_when
+    message: "Pass 'resolve_prior_labware_references' skipped: when condition
+      'outputs.ai_precompile.priorLabwareRefs' evaluated to false"
+    pass_id: resolve_prior_labware_references
+  - severity: info
+    code: pass_skipped_by_when
     message: "Pass 'expand_patterns' skipped: when condition
       'outputs.ai_precompile.patternEvents' evaluated to false"
     pass_id: expand_patterns
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'emit_downstream_queue' skipped: when condition
+      'outputs.ai_precompile.downstreamCompileJobs' evaluated to false"
+    pass_id: emit_downstream_queue
   - severity: info
     code: execution_scale_plan_ready
     message: Execution scaling plan is ready for robot_deck.
@@ -93,40 +128,6 @@ diagnostics:
       profileId: robot-assist-plus-96
       blockers: []
 extractorRepairExhaustedCount: 0
-gaps:
-  - kind: unresolved_ref
-    message: resuspend (registry hit ontology)
-    details:
-      kind: material
-      label: resuspend
-      reason: registry hit ontology
-  - kind: unresolved_ref
-    message: resuspend (kind material not handled by resolve_references)
-    details:
-      kind: material
-      label: resuspend
-      reason: kind material not handled by resolve_references
-  - kind: unresolved_ref
-    message: ZR BashingBead™ Lysis Tubes (0.1 & 0.5 mm) (no matching labware in
-      prior snapshot)
-    details:
-      hint: ZR BashingBead™ Lysis Tubes (0.1 & 0.5 mm)
-      reason: no matching labware in prior snapshot
-  - kind: unresolved_ref
-    message: ZymoBIOMICS™ BashingBead™ Lysis Rack (0.1 & 0.5 mm) (no matching
-      labware in prior snapshot)
-    details:
-      hint: ZymoBIOMICS™ BashingBead™ Lysis Rack (0.1 & 0.5 mm)
-      reason: no matching labware in prior snapshot
-  - kind: unresolved_ref
-    message: generic_96_well_plate (no matching labware in prior snapshot)
-    details:
-      hint: generic_96_well_plate
-      reason: no matching labware in prior snapshot
-  - kind: unresolved_ref
-    message: elution plate or tube (no matching labware in prior snapshot)
-    details:
-      hint: elution plate or tube
-      reason: no matching labware in prior snapshot
+gaps: []
 foundryTestAssumptionsRef: /home/brad/git/computable-foundry/artifacts/assumptions/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
 terminalArtifactsRef: /home/brad/git/computable-foundry/artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml

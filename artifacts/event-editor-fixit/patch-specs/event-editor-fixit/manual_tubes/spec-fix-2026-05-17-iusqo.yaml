@@ -1,0 +1,38 @@
+kind: protocol-foundry-patch-spec
+id: spec-fix-2026-05-17-iusqo
+source: event-editor-fixit
+generated_at: 2026-05-17T13:22:34.211Z
+fixClass: compiler
+title: Fix deterministic precompile to emit deck placement for 'on <slot>'
+  instead of treating slot as well address
+rationale: The compiler trace shows that the prompt 'Put a 96-well plate on B2'
+  resulted in B2 being parsed as a well address in the parameters of an
+  add_material event, rather than as a deck slot for a labware placement. The
+  noun '96-well plate' was correctly resolved to a labware recordId, but the
+  locative phrase 'on B2' was misrouted into the well parameters of the action
+  frame. The fix must be in the deterministic precompile pass (specifically the
+  grammar/lowering logic) to detect when a deck-like token follows a labware
+  noun in a placement context (e.g., 'on', 'onto') and emit a labwareAddition
+  candidate with the deckSlot, rather than consuming the token as a well
+  coordinate for a liquid handling event.
+ownedFiles:
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+  - server/src/compiler/precompile/NounPhraseResolver.ts
+  - server/src/compiler/precompile/PromptTagger.ts
+  - server/src/compiler/pipeline/fixtures/spec-fix-2026-05-17-iusqo.yaml
+acceptance:
+  - The prompt 'Put a 96-well plate on B2' must result in a labwareAddition
+    candidate with labwareHint '96-well plate' and deckSlot 'B2'.
+  - The prompt 'Put a 96-well plate on B2' must NOT result in an event with
+    wells containing 'B2'.
+  - The prompt 'Add 10uL to well A1 of the 96-well plate' must still resolve
+    'A1' as a well address for the liquid handling event.
+  - The prompt 'Put the plate on B2' (where 'plate' resolves to a known labware)
+    must emit a placement for deck slot B2.
+  - The prompt 'Transfer from well A1 to B2' must treat A1 and B2 as well
+    addresses within the same labware, not as deck slots.
+tests:
+  - cd server && npx vitest run
+    src/compiler/pipeline/fixtures/FixItFixtures.test.ts -t
+    'spec-fix-2026-05-17-iusqo'
+failingPrompt: Put a 96-well plate on B2

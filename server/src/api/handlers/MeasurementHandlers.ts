@@ -14,6 +14,131 @@ import { MeasurementActiveControlService, MeasurementActiveControlError } from '
 import { AdapterParameterError, getActiveReadParameterShape, listActiveReadTargets, validateActiveReadParameters } from '../../execution/adapters/AdapterRuntimeSchemas.js';
 import { PlateMapExporter } from '../../execution/PlateMapExporter.js';
 import { ExecutionError } from '../../execution/ExecutionOrchestrator.js';
+import {
+  GEMINI_EM_ADAPTER_ID,
+  GEMINI_EM_OPERATION,
+  evaluateInstrumentExecutionReadiness,
+  type InstrumentApplianceExecutionRecord,
+  type InstrumentApplianceExecutionStatus,
+  type InstrumentExecutionReadiness,
+  type InstrumentApplianceJob,
+} from '../../compiler/artifacts/InstrumentApplianceJob.js';
+
+type ActiveReadRequestBody = {
+  adapterId: 'molecular_devices_gemini' | 'abi_7500_qpcr' | 'agilent_6890n_gc' | 'metrohm_761_ic';
+  instrumentRef?: unknown;
+  labwareInstanceRef?: unknown;
+  eventGraphRef?: unknown;
+  measurementContextRef?: unknown;
+  readEventRef?: string;
+  timepoint?: string;
+  seriesId?: string;
+  parserId?: string;
+  outputPath?: string;
+  parameters?: Record<string, unknown>;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getJobPayload(body: unknown): unknown {
+  if (isRecord(body) && 'job' in body) return body['job'];
+  return body;
+}
+
+function validateGeminiApplianceJob(body: unknown): InstrumentApplianceJob {
+  const job = getJobPayload(body);
+  if (!isRecord(job)) {
+    throw new MeasurementActiveControlError(
+      'BAD_APPLIANCE_JOB',
+      'Request body must be an instrument appliance job or { job } wrapper.',
+      400,
+    );
+  }
+  const request = job['request'];
+  if (
+    job['kind'] !== 'instrument-appliance-job'
+    || job['adapterId'] !== GEMINI_EM_ADAPTER_ID
+    || job['operation'] !== GEMINI_EM_OPERATION
+    || !isRecord(request)
+    || request['adapterId'] !== GEMINI_EM_ADAPTER_ID
+  ) {
+    throw new MeasurementActiveControlError(
+      'BAD_APPLIANCE_JOB',
+      'Only Gemini EM active_read instrument appliance jobs are executable by this endpoint.',
+      400,
+    );
+  }
+  const parameters = request['parameters'];
+  if (parameters !== undefined && !isRecord(parameters)) {
+    throw new MeasurementActiveControlError(
+      'BAD_APPLIANCE_JOB',
+      'Appliance job request.parameters must be an object when provided.',
+      400,
+    );
+  }
+  return job as unknown as InstrumentApplianceJob;
+}
+
+function safePathSegment(value: string): string {
+  return value
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    || 'instrument-appliance-job';
+}
+
+async function writeInstrumentApplianceExecutionRecord(
+  ctx: AppContext,
+  input: {
+    job: InstrumentApplianceJob;
+    readiness: InstrumentExecutionReadiness;
+    status: InstrumentApplianceExecutionStatus;
+    requestedAt: string;
+    completedAt: string;
+    confirmedLiveExecution: boolean;
+    result?: InstrumentApplianceExecutionRecord['result'];
+    error?: InstrumentApplianceExecutionRecord['error'];
+  },
+): Promise<string> {
+  const timestamp = input.requestedAt.replace(/[:.]/g, '-');
+  const base = `records/instrument-appliance-jobs/${safePathSegment(input.job.jobId)}-${timestamp}`;
+  let path = `${base}.json`;
+  let counter = 1;
+  while (await ctx.repoAdapter.fileExists(path)) {
+    path = `${base}-${counter}.json`;
+    counter += 1;
+  }
+  const executionId = path
+    .replace(/^records\/instrument-appliance-jobs\//, '')
+    .replace(/\.json$/, '');
+  const record: InstrumentApplianceExecutionRecord = {
+    kind: 'instrument-appliance-execution-record',
+    executionId,
+    jobId: input.job.jobId,
+    adapterId: input.job.adapterId,
+    operation: input.job.operation,
+    instrument: input.job.instrument,
+    status: input.status,
+    requestedAt: input.requestedAt,
+    completedAt: input.completedAt,
+    readiness: input.readiness,
+    confirmation: {
+      required: input.readiness.requiresConfirmation,
+      confirmed: input.confirmedLiveExecution,
+    },
+    job: input.job,
+    ...(input.result ? { result: input.result } : {}),
+    ...(input.error ? { error: input.error } : {}),
+  };
+  await ctx.repoAdapter.createFile({
+    path,
+    content: `${JSON.stringify(record, null, 2)}\n`,
+    message: `Record instrument appliance execution ${executionId}`,
+  });
+  return path;
+}
 
 export function createMeasurementHandlers(ctx: AppContext) {
   const service = new MeasurementService(ctx);
@@ -106,6 +231,159 @@ export function createMeasurementHandlers(ctx: AppContext) {
         return {
           error: 'INTERNAL_ERROR',
           message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
+     * POST /measurements/appliance-jobs/execute
+     * Execute a compiled instrument-appliance-job artifact.
+     */
+    async executeInstrumentApplianceJob(
+      request: FastifyRequest<{
+        Body: InstrumentApplianceJob | { job?: InstrumentApplianceJob; confirmLiveExecution?: boolean };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{
+      success: boolean;
+      jobId?: string;
+      measurementId?: string;
+      logId?: string;
+      rawDataPath?: string;
+      applianceExecutionRecordPath?: string;
+    } | ApiError> {
+      let job: InstrumentApplianceJob | undefined;
+      let readiness: InstrumentExecutionReadiness | undefined;
+      let requestedAt: string | undefined;
+      let confirmLiveExecution = false;
+      try {
+        job = validateGeminiApplianceJob(request.body);
+        readiness = evaluateInstrumentExecutionReadiness(job);
+        requestedAt = new Date().toISOString();
+        if (readiness.status !== 'ready') {
+          throw new MeasurementActiveControlError(
+            'EXECUTION_NOT_READY',
+            `Instrument appliance job '${job.jobId}' is not ready for execution: ${readiness.blockers.map((b) => b.message).join('; ')}`,
+            400,
+          );
+        }
+        confirmLiveExecution = isRecord(request.body) && request.body['confirmLiveExecution'] === true;
+        if (readiness.requiresConfirmation && !confirmLiveExecution) {
+          throw new MeasurementActiveControlError(
+            'LIVE_EXECUTION_CONFIRMATION_REQUIRED',
+            `Instrument appliance job '${job.jobId}' targets live execution and requires explicit confirmation.`,
+            409,
+          );
+        }
+        const result = await activeControl.performActiveRead(job.request as ActiveReadRequestBody);
+        const applianceExecutionRecordPath = await writeInstrumentApplianceExecutionRecord(ctx, {
+          job,
+          readiness,
+          status: 'completed',
+          requestedAt,
+          completedAt: new Date().toISOString(),
+          confirmedLiveExecution: confirmLiveExecution,
+          result: {
+            measurementId: result.measurementId,
+            logId: result.logId,
+            rawDataPath: result.rawDataPath,
+          },
+        });
+        reply.status(201);
+        return {
+          success: true,
+          jobId: job.jobId,
+          measurementId: result.measurementId,
+          logId: result.logId,
+          rawDataPath: result.rawDataPath,
+          applianceExecutionRecordPath,
+        };
+      } catch (err) {
+        if (err instanceof MeasurementActiveControlError) {
+          let applianceExecutionRecordPath: string | undefined;
+          if (job && readiness && requestedAt) {
+            const status: InstrumentApplianceExecutionStatus = err.code === 'EXECUTION_NOT_READY'
+              ? 'blocked'
+              : err.code === 'LIVE_EXECUTION_CONFIRMATION_REQUIRED'
+                ? 'rejected'
+                : 'failed';
+            try {
+              applianceExecutionRecordPath = await writeInstrumentApplianceExecutionRecord(ctx, {
+                job,
+                readiness,
+                status,
+                requestedAt,
+                completedAt: new Date().toISOString(),
+                confirmedLiveExecution: confirmLiveExecution,
+                error: {
+                  code: err.code,
+                  message: err.message,
+                  statusCode: err.statusCode,
+                },
+              });
+            } catch {
+              applianceExecutionRecordPath = undefined;
+            }
+          }
+          reply.status(err.statusCode);
+          return {
+            error: err.code,
+            message: err.message,
+            ...(applianceExecutionRecordPath ? { details: { applianceExecutionRecordPath } } : {}),
+          };
+        }
+        if (err instanceof MeasurementServiceError) {
+          let applianceExecutionRecordPath: string | undefined;
+          if (job && readiness && requestedAt) {
+            try {
+              applianceExecutionRecordPath = await writeInstrumentApplianceExecutionRecord(ctx, {
+                job,
+                readiness,
+                status: 'failed',
+                requestedAt,
+                completedAt: new Date().toISOString(),
+                confirmedLiveExecution: confirmLiveExecution,
+                error: {
+                  code: err.code,
+                  message: err.message,
+                  statusCode: err.statusCode,
+                },
+              });
+            } catch {
+              applianceExecutionRecordPath = undefined;
+            }
+          }
+          reply.status(err.statusCode);
+          return {
+            error: err.code,
+            message: err.message,
+            ...(applianceExecutionRecordPath ? { details: { applianceExecutionRecordPath } } : {}),
+          };
+        }
+        let applianceExecutionRecordPath: string | undefined;
+        if (job && readiness && requestedAt) {
+          try {
+            applianceExecutionRecordPath = await writeInstrumentApplianceExecutionRecord(ctx, {
+              job,
+              readiness,
+              status: 'failed',
+              requestedAt,
+              completedAt: new Date().toISOString(),
+              confirmedLiveExecution: confirmLiveExecution,
+              error: {
+                code: 'INTERNAL_ERROR',
+                message: err instanceof Error ? err.message : String(err),
+              },
+            });
+          } catch {
+            applianceExecutionRecordPath = undefined;
+          }
+        }
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+          ...(applianceExecutionRecordPath ? { details: { applianceExecutionRecordPath } } : {}),
         };
       }
     },

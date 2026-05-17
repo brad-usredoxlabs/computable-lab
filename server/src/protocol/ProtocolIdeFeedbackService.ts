@@ -14,7 +14,7 @@
  * - User-editable rolling summaries
  */
 
-import type { RecordStore, StoreResult } from '../store/types.js';
+import type { RecordStore } from '../store/types.js';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 
 // ---------------------------------------------------------------------------
@@ -84,8 +84,8 @@ type CallerAnchor =
 export interface SubmitFeedbackRequest {
   /** Freeform comment body (required) */
   body: string;
-  /** Anchor array (required — must contain at least one anchor) */
-  anchors: CallerAnchor[];
+  /** Optional anchors. Empty/freeform comments attach to the session iteration. */
+  anchors?: CallerAnchor[];
   /** Optional severity */
   severity?: FeedbackSeverity;
 }
@@ -291,11 +291,6 @@ export class ProtocolIdeFeedbackService {
       throw new Error('Feedback body must be a non-empty string');
     }
 
-    // Validate anchors — must be non-empty
-    if (!request.anchors || request.anchors.length === 0) {
-      throw new Error('Feedback must include at least one anchor');
-    }
-
     // Fetch the current session
     const envelope = await this.store.get(sessionId);
     if (!envelope) {
@@ -307,14 +302,14 @@ export class ProtocolIdeFeedbackService {
 
     // Build the anchors array, filling in snapshots for node anchors
     const anchors: Anchor[] = [];
-    for (const callerAnchor of request.anchors) {
+    for (const callerAnchor of request.anchors ?? []) {
         if (callerAnchor.kind === 'node') {
           if (callerAnchor.snapshot) {
             // Caller supplied snapshot — use it directly
             anchors.push({
               kind: 'node',
               semanticKey: callerAnchor.semanticKey,
-              instanceId: callerAnchor.instanceId,
+              ...(callerAnchor.instanceId !== undefined ? { instanceId: callerAnchor.instanceId } : {}),
               snapshot: callerAnchor.snapshot,
             });
           } else {
@@ -332,7 +327,7 @@ export class ProtocolIdeFeedbackService {
             anchors.push({
               kind: 'node',
               semanticKey: callerAnchor.semanticKey,
-              instanceId: callerAnchor.instanceId,
+              ...(callerAnchor.instanceId !== undefined ? { instanceId: callerAnchor.instanceId } : {}),
               snapshot,
             });
           }
@@ -341,7 +336,7 @@ export class ProtocolIdeFeedbackService {
             kind: 'source',
             documentRef: callerAnchor.documentRef,
             page: callerAnchor.page,
-            region: callerAnchor.region,
+            ...(callerAnchor.region !== undefined ? { region: callerAnchor.region } : {}),
           });
         } else if (callerAnchor.kind === 'phase') {
           anchors.push({
@@ -356,7 +351,7 @@ export class ProtocolIdeFeedbackService {
       id: generateFeedbackId(),
       body: request.body.trim(),
       anchors,
-      severity: request.severity,
+      ...(request.severity !== undefined ? { severity: request.severity } : {}),
       submittedAt: new Date().toISOString(),
     };
 
@@ -368,7 +363,7 @@ export class ProtocolIdeFeedbackService {
 
     // Update the session envelope
     const updatedPayload = {
-      ...envelope.payload,
+      ...(envelope.payload as Record<string, unknown>),
       feedbackComments: updatedComments,
       rollingIssueSummary: rollingSummary,
     };

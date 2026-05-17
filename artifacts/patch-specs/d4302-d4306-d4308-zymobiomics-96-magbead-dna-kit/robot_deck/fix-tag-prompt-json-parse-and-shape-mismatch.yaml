@@ -1,0 +1,55 @@
+kind: protocol-foundry-patch-spec
+id: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/fix-tag-prompt-json-parse-and-shape-mismatch
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: robot_deck
+fixClass: precompiler_reference_shape
+title: Fix tag_prompt JSON parsing to handle markdown code fences and ensure
+  ai_precompile shape compatibility
+rationale: "The compiler diagnostics show two critical failures: (1)
+  'tag_prompt_parse_error' with raw_preview showing the LLM returned
+  markdown-wrapped JSON ('```json\\n{...}'), which the parser rejects as invalid
+  JSON starting with 'B' from the preamble text. (2)
+  'ai_precompile_shape_mismatch' causing the fallback path that produces zero
+  candidateEvents. This cascades into all downstream passes being skipped
+  (mint_materials, apply_directives, expand_biology_verbs, resolve_labware,
+  etc.), resulting in eventCount=0. The root cause is that the tag_prompt pass
+  in ChatbotCompilePasses.ts does not strip markdown code fences before
+  JSON.parse, and the ai_precompile pass output shape does not match the
+  expected AiPrecompileOutput interface, triggering the fallback that produces
+  empty results."
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - tag_prompt pass successfully parses LLM responses wrapped in ```json code
+    fences by stripping markdown before JSON.parse
+  - ai_precompile pass output shape matches AiPrecompileOutput interface without
+    triggering shape_mismatch warning
+  - candidateEvents array is populated with at least 3 events from the
+    ZymoBIOMICS protocol text
+  - expand_biology_verbs pass is no longer skipped due to empty candidateEvents
+  - resolve_labware pass is no longer skipped due to empty candidateLabwares
+  - eventCount >= 3 in compiler output for this protocol
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 60
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/verdict.yaml

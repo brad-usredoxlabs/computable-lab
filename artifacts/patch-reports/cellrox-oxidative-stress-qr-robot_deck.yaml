@@ -1,0 +1,9 @@
+kind: protocol-worker-report
+protocolId: cellrox-oxidative-stress-qr
+variant: robot_deck
+generated_at: 2026-05-09T20:57:02.330Z
+status: applied
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cellrox-oxidative-stress-qr/robot_deck/result.yaml
+touchedFiles:
+  - server/src/compiler/biology/BiologyVerbExpander.ts
+message: patch applied and committed

@@ -1,0 +1,18 @@
+kind: protocol-foundry-critic-report
+protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+variant: robot_deck
+generated_at: 2026-05-09T21:20:00.188Z
+verdict: pass
+reportPath: /home/brad/git/computable-foundry/artifacts/patch-critic/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/report.yaml
+reviewDurationMs: 9
+message: "Patch applied: 1 file(s) changed, spec verification passed."
+notes:
+  - No acceptance criteria available for this patch spec
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+specVerification:
+  accepted: true
+  criteriaMet: []
+  criteriaFailed: []
+  notes:
+    - All acceptance criteria satisfied

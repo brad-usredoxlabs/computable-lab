@@ -11,10 +11,13 @@
  * - Retains only summary export metadata on the session
  */
 
-import type { RecordStore, StoreResult } from '../store/types.js';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import type { RecordStore } from '../store/types.js';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import type { IssueCard } from './ProtocolIdeIssueCardService.js';
 import { renderPromptTemplate } from '../registry/PromptTemplateRegistry.js';
+import { writeYamlFile } from '../foundry/FoundryArtifacts.js';
 
 // ---------------------------------------------------------------------------
 // Export types
@@ -45,6 +48,20 @@ export interface RalphSpecDraft {
 }
 
 /**
+ * On-disk queue metadata written for a submitted Ralph bundle.
+ */
+export interface RalphQueueSubmission {
+  kind: 'protocol-ide-ralph-queue-submission';
+  queueRoot: string;
+  bundleDir: string;
+  indexPath: string;
+  draftPaths: Array<{
+    draftId: string;
+    path: string;
+  }>;
+}
+
+/**
  * A complete export bundle containing multiple spec drafts.
  */
 export interface RalphExportBundle {
@@ -60,6 +77,8 @@ export interface RalphExportBundle {
   drafts: RalphSpecDraft[];
   /** ISO 8601 timestamp of export */
   exportedAt: string;
+  /** File queue metadata when the bundle was submitted to an on-disk Ralph queue. */
+  queue?: RalphQueueSubmission;
 }
 
 /**
@@ -79,6 +98,13 @@ export interface CanExportResponse {
   success: true;
   canExport: boolean;
   cardCount: number;
+}
+
+export interface RejectIssueCardsResponse {
+  success: true;
+  rejectedCardCount: number;
+  rejectedAt: string;
+  reason?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,7 +173,10 @@ function buildSpecDraftMarkdown(
 // ---------------------------------------------------------------------------
 
 export class ProtocolIdeRalphExportService {
-  constructor(private store: RecordStore) {}
+  constructor(
+    private store: RecordStore,
+    private options: { queueRoot?: string } = {},
+  ) {}
 
   /**
    * Check whether a session has exportable issue cards.
@@ -207,25 +236,28 @@ export class ProtocolIdeRalphExportService {
     }
 
     // Generate one spec draft per card (multi-spec, not monolithic)
-    const drafts: RalphSpecDraft[] = cards.map((card, index) => ({
-      id: generateDraftId(),
-      title: card.title,
-      priority: index + 1,
-      markdown: buildSpecDraftMarkdown(
-        card,
-        index + 1,
-        sessionId,
-        sourcePdfUrl,
-        latestDirectiveText,
-      ),
-      sourceCardId: card.id,
-      evidenceCitations: card.evidenceCitations.map((c) => ({
+    const drafts: RalphSpecDraft[] = cards.map((card, index) => {
+      const evidenceCitations = card.evidenceCitations.map((c) => ({
         sourceRef: c.sourceRef,
-        snippet: c.snippet,
-        page: c.page,
-      })),
-      generatedAt: new Date().toISOString(),
-    }));
+        ...(c.snippet !== undefined ? { snippet: c.snippet } : {}),
+        ...(c.page !== undefined ? { page: c.page } : {}),
+      }));
+      return {
+        id: generateDraftId(),
+        title: card.title,
+        priority: index + 1,
+        markdown: buildSpecDraftMarkdown(
+          card,
+          index + 1,
+          sessionId,
+          sourcePdfUrl,
+          latestDirectiveText,
+        ),
+        sourceCardId: card.id,
+        evidenceCitations,
+        generatedAt: new Date().toISOString(),
+      };
+    });
 
     // Build the export bundle
     const bundle: RalphExportBundle = {
@@ -236,10 +268,14 @@ export class ProtocolIdeRalphExportService {
       drafts,
       exportedAt: new Date().toISOString(),
     };
+    const queue = await this.writeQueueBundle(bundle);
+    if (queue) {
+      bundle.queue = queue;
+    }
 
     // Clear the current issue-card set from the session
     const clearedPayload = {
-      ...envelope.payload,
+      ...(envelope.payload as Record<string, unknown>),
       issueCards: [],
       lastExportAt: new Date().toISOString(),
       lastExportBundleRef: {
@@ -247,6 +283,7 @@ export class ProtocolIdeRalphExportService {
         id: bundle.bundleId,
         type: 'ralph-export-bundle',
       },
+      ...(queue ? { lastRalphQueueSubmission: queue } : {}),
     };
 
     const clearedEnvelope: RecordEnvelope = {
@@ -293,21 +330,118 @@ export class ProtocolIdeRalphExportService {
 
     const payload = envelope.payload as Record<string, unknown>;
 
-    return {
+    const response: {
+      success: true;
+      lastExportAt?: string;
+      lastExportBundleRef?: { kind: string; id: string; type?: string };
+    } = {
       success: true,
-      lastExportAt:
-        typeof payload.lastExportAt === 'string'
-          ? payload.lastExportAt
-          : undefined,
-      lastExportBundleRef:
-        payload.lastExportBundleRef &&
-        typeof payload.lastExportBundleRef === 'object'
-          ? (payload.lastExportBundleRef as {
-              kind: string;
-              id: string;
-              type?: string;
-            })
-          : undefined,
     };
+    if (typeof payload.lastExportAt === 'string') {
+      response.lastExportAt = payload.lastExportAt;
+    }
+    if (payload.lastExportBundleRef && typeof payload.lastExportBundleRef === 'object') {
+      response.lastExportBundleRef = payload.lastExportBundleRef as {
+        kind: string;
+        id: string;
+        type?: string;
+      };
+    }
+    return response;
+  }
+
+  /**
+   * Reject all current issue cards without queuing them for Ralph.
+   *
+   * This lets a human reviewer discard redundant or incorrect architect/spec
+   * recommendations while preserving an audit marker on the session.
+   */
+  async rejectIssueCards(sessionId: string, reason?: string): Promise<RejectIssueCardsResponse> {
+    const envelope = await this.store.get(sessionId);
+    if (!envelope) {
+      throw new Error(`Session '${sessionId}' not found`);
+    }
+
+    const payload = envelope.payload as Record<string, unknown>;
+    const raw = payload.issueCards;
+    const cards = Array.isArray(raw) ? (raw as IssueCard[]) : [];
+    const rejectedAt = new Date().toISOString();
+    const clearedPayload = {
+      ...payload,
+      issueCards: [],
+      lastIssueCardRejection: {
+        rejectedAt,
+        rejectedCardCount: cards.length,
+        ...(reason && reason.trim() ? { reason: reason.trim() } : {}),
+      },
+    };
+
+    const result = await this.store.update({
+      envelope: {
+        ...envelope,
+        payload: clearedPayload,
+      },
+      message: `Reject ${cards.length} issue card(s) for session ${sessionId}`,
+      skipLint: true,
+    });
+
+    if (!result.success) {
+      throw new Error(
+        `Failed to persist issue-card rejection for session ${sessionId}: ${result.error ?? 'unknown error'}`,
+      );
+    }
+
+    const response: RejectIssueCardsResponse = {
+      success: true,
+      rejectedCardCount: cards.length,
+      rejectedAt,
+    };
+    if (reason && reason.trim()) {
+      response.reason = reason.trim();
+    }
+    return response;
+  }
+
+  private async writeQueueBundle(bundle: RalphExportBundle): Promise<RalphQueueSubmission | undefined> {
+    if (!this.options.queueRoot) return undefined;
+
+    const bundleDir = join(this.options.queueRoot, bundle.bundleId);
+    const draftPaths = bundle.drafts.map((draft) => ({
+      draftId: draft.id,
+      path: join(bundleDir, `${draft.id}.md`),
+    }));
+
+    await mkdir(bundleDir, { recursive: true });
+    for (const draft of bundle.drafts) {
+      const draftPath = draftPaths.find((entry) => entry.draftId === draft.id)?.path;
+      if (!draftPath) continue;
+      await mkdir(dirname(draftPath), { recursive: true });
+      await writeFile(draftPath, draft.markdown, 'utf-8');
+    }
+
+    const indexPath = join(bundleDir, 'index.yaml');
+    const submission: RalphQueueSubmission = {
+      kind: 'protocol-ide-ralph-queue-submission',
+      queueRoot: this.options.queueRoot,
+      bundleDir,
+      indexPath,
+      draftPaths,
+    };
+    await writeYamlFile(indexPath, {
+      kind: submission.kind,
+      bundleId: bundle.bundleId,
+      sessionId: bundle.sessionId,
+      cardCount: bundle.cardCount,
+      draftCount: bundle.draftCount,
+      exportedAt: bundle.exportedAt,
+      drafts: bundle.drafts.map((draft) => ({
+        id: draft.id,
+        title: draft.title,
+        priority: draft.priority,
+        sourceCardId: draft.sourceCardId,
+        path: draftPaths.find((entry) => entry.draftId === draft.id)?.path,
+      })),
+    });
+    return submission;
   }
 }

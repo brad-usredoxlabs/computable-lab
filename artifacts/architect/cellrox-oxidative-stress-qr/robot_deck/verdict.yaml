@@ -1,10 +1,10 @@
 kind: protocol-foundry-architect-verdict
 protocolId: cellrox-oxidative-stress-qr
 variant: robot_deck
-generated_at: 2026-05-09T09:19:44.979Z
+generated_at: 2026-05-09T22:17:11.648Z
 accepted: false
-qualityScore: 0.45
-coverageEstimate: 0.5
+qualityScore: 0.05
+coverageEstimate: 0
 failureClasses:
   - precompiler_reference_shape
   - compiler_event_coverage
@@ -14,30 +14,34 @@ missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: fix-ai-precompile-shape-mismatch
+  - id: fix-ai-precompile-json-parse-and-fallback
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch to enable downstream passes
-    rationale: "The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
-      AI precompile pass produced output that doesn't match the expected schema.
-      This caused critical downstream passes to be skipped: 'mint_materials',
-      'apply_directives', 'resolve_labware', 'resolve_prior_labware_references',
-      and 'expand_patterns'. Without these passes, materials aren't minted,
-      labware isn't resolved, and the event graph lacks proper material
-      references. The fix must ensure the ai_precompile pass outputs a correctly
-      shaped object with fields like mintMaterials, directives,
-      candidateLabwares, priorLabwareRefs, and patternEvents."
+    title: Fix ai_precompile JSON parse error and ensure fallback produces
+      candidateEvents
+    rationale: "The compiler diagnostics show 'tag_prompt response was not valid
+      JSON: Unterminated string in JSON at position 661' followed by
+      'ai_precompile output shape mismatch, using fallback'. The fallback path
+      produced zero candidateEvents, causing all downstream passes
+      (expand_biology_verbs, resolve_labware, mint_materials) to be skipped. The
+      root cause is that the ai_precompile pass's fallback does not produce a
+      valid AiPrecompileOutput with candidateEvents when the LLM response is
+      malformed. The PDF has 8 clear protocol steps that should be extracted.
+      The fix must make the fallback path produce at least a minimal set of
+      candidateEvents from the deterministic candidates (12 were supplied by
+      presegmented text), or fix the JSON parsing to handle the truncated
+      response."
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass outputs an object matching the AiPrecompileOutput
-        type schema
-      - mint_materials pass is no longer skipped when materials are present in
-        the protocol
-      - resolve_labware pass is no longer skipped when labware hints exist
-      - No 'ai_precompile_shape_mismatch' warning in diagnostics for this
-        protocol
+      - ai_precompile pass no longer emits 'ai_precompile_shape_mismatch'
+        warning for this protocol
+      - outputs.ai_precompile.candidateEvents is non-empty (at least 4 events
+        from the 8 protocol steps)
+      - expand_biology_verbs pass is no longer skipped (when condition evaluates
+        to true)
+      - eventCount >= 3 in the final compiler output
     coderModelProfile:
-      model: Qwen/Qwen3.6-27B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: &a1
       compiler: /home/brad/git/computable-foundry/artifacts/compiler/cellrox-oxidative-stress-qr/robot_deck.yaml
@@ -50,7 +54,7 @@ recommendedFixes:
       materialContext: /home/brad/git/computable-foundry/artifacts/material-context/cellrox-oxidative-stress-qr.yaml
       text: /home/brad/git/computable-foundry/artifacts/text/cellrox-oxidative-stress-qr.txt
     failureEvidence: &a2
-      eventCount: 10
+      eventCount: 0
       outcome: gap
     implementationBudget:
       targetChangedFiles: 1
@@ -58,86 +62,44 @@ recommendedFixes:
       targetChangedLines: 60
       maxChangedLines: 150
       requireFocusedFixture: true
-  - id: add-treat-verb-expander
+  - id: fix-deterministic-candidate-to-event-lowering
     class: compiler_event_coverage
-    title: Add biology verb expander for 'treat' to handle cell treatment steps
-    rationale: The compiler dropped the candidate event for 'treat' because no
-      expander is registered for this verb. Step 1 of the protocol ('Treat the
-      cells with the test compound or drug') is a critical biological operation
-      that should be lowered to an event (likely add_material or a specialized
-      treat_cells event). Without this expander, the protocol is incomplete and
-      missing the initial treatment step.
+    title: Add deterministic lowering from presegmented candidates to
+      candidateEvents when ai_precompile fails
+    rationale: "The pre-compiler supplied 12 deterministic candidates from
+      presegmented text, but the ai_precompile pass's fallback does not convert
+      these candidates into candidateEvents. The PDF has clear steps: (1) treat
+      cells with compound, (2) add CellROX Reagent at 5 μM, (3) incubate 30 min
+      at 37°C, (4) remove medium and wash 3x with PBS, (5) optional fix with
+      3.7% formaldehyde, (6) optional counterstain, (7) optional permeabilize
+      with 0.5% Triton X-100, (8) analyze cells. The compiler should have a
+      deterministic path that converts numbered protocol steps into
+      candidateEvents with verbs like 'add_reagent', 'incubate', 'wash', 'fix',
+      'stain', 'permeabilize', 'analyze'. The prior patch added an 'analyze'
+      verb expander, but the events never reached the verb expander because
+      candidateEvents was empty. This fix ensures that when ai_precompile fails,
+      the deterministic candidates are still lowered to events."
     ownedFiles:
-      - server/src/compiler/biology/BiologyVerbExpander.ts
+      - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+      - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
     acceptance:
-      - Verb 'treat' is registered in the BiologyVerbExpander
-      - Candidate events with verb 'treat' are expanded to appropriate event
-        types (e.g., add_material with treatment details)
-      - No 'unknown_biology_verb' warning for 'treat' in diagnostics
-      - Event graph includes a treatment event for step 1 of the protocol
+      - When ai_precompile produces empty candidateEvents, deterministic
+        candidates are converted to at least 4 candidateEvents
+      - Protocol steps with clear verbs (add, incubate, wash, fix, analyze) are
+        recognized as candidateEvents
+      - expand_biology_verbs pass processes these events and produces terminal
+        events
+      - Final eventCount >= 5 for this protocol
     coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
+      model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
-      targetChangedFiles: 1
-      maxChangedFiles: 2
-      targetChangedLines: 40
-      maxChangedLines: 100
-      requireFocusedFixture: true
-  - id: add-remove-verb-expander
-    class: compiler_event_coverage
-    title: Add biology verb expander for 'remove' to handle medium removal steps
-    rationale: The compiler dropped the candidate event for 'remove' because no
-      expander is registered. Step 4 ('Remove medium and wash the cells 3 times
-      with PBS') includes a removal operation that should be lowered to an event
-      (likely aspirate or remove_liquid). Without this expander, the medium
-      removal step is missing from the event graph.
-    ownedFiles:
-      - server/src/compiler/biology/BiologyVerbExpander.ts
-    acceptance:
-      - Verb 'remove' is registered in the BiologyVerbExpander
-      - Candidate events with verb 'remove' are expanded to appropriate event
-        types (e.g., aspirate or remove_liquid)
-      - No 'unknown_biology_verb' warning for 'remove' in diagnostics
-      - Event graph includes a medium removal event for step 4 of the protocol
-    coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
-    implementationBudget:
-      targetChangedFiles: 1
-      maxChangedFiles: 2
-      targetChangedLines: 40
-      maxChangedLines: 100
-      requireFocusedFixture: true
-  - id: add-analyze-verb-expander
-    class: compiler_event_coverage
-    title: Add biology verb expander for 'analyze' to handle analysis/readout steps
-    rationale: The compiler dropped the candidate event for 'analyze' because no
-      expander is registered. Step 8 ('Analyze the cells') is the final readout
-      step that should be lowered to an event (likely measure or analyze).
-      Without this expander, the protocol lacks its terminal analysis step.
-    ownedFiles:
-      - server/src/compiler/biology/BiologyVerbExpander.ts
-    acceptance:
-      - Verb 'analyze' is registered in the BiologyVerbExpander
-      - Candidate events with verb 'analyze' are expanded to appropriate event
-        types (e.g., measure or analyze)
-      - No 'unknown_biology_verb' warning for 'analyze' in diagnostics
-      - Event graph includes an analysis event for step 8 of the protocol
-    coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
-      guidance: Narrow ownership, concrete evidence, one behavior change.
-    sourceArtifacts: *a1
-    failureEvidence: *a2
-    implementationBudget:
-      targetChangedFiles: 1
-      maxChangedFiles: 2
-      targetChangedLines: 40
-      maxChangedLines: 100
+      targetChangedFiles: 2
+      maxChangedFiles: 3
+      targetChangedLines: 100
+      maxChangedLines: 220
       requireFocusedFixture: true
 sourceArtifacts: *a1
-architectNotes: "LLM architect analysis: 4 fix recommendations."
+architectNotes: "LLM architect analysis: 2 fix recommendations."

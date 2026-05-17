@@ -31,9 +31,9 @@ describe('chatbot-compile.yaml', () => {
       expect(spec.entrypoint).toBe('chatbot-compile');
     });
 
-    it('has exactly 22 passes', () => {
+    it('has exactly 29 passes', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
-      expect(spec.passes.length).toBe(22);
+      expect(spec.passes.length).toBe(29);
     });
   });
 
@@ -45,7 +45,12 @@ describe('chatbot-compile.yaml', () => {
         'extract_entities',
         'tag_prompt',
         'deterministic_precompile',
+        'deterministic_plan_consolidation',
         'ai_precompile',
+        'protocol_intent_state_plan',
+        'validate_protocol_intent',
+        'lower_protocol_intent',
+        'expand_protocol_intent_patterns',
         'mint_materials',
         'apply_directives',
         'expand_biology_verbs',
@@ -62,6 +67,8 @@ describe('chatbot-compile.yaml', () => {
         'plan_deck_layout',
         'validate',
         'emit_instrument_run_files',
+        'emit_instrument_appliance_jobs',
+        'evaluate_instrument_execution_readiness',
         'emit_downstream_queue',
         'lab_state',
       ]);
@@ -76,6 +83,11 @@ describe('chatbot-compile.yaml', () => {
         'parse',
         'parse',
         'parse',
+        'parse',
+        'expand',
+        'expand',
+        'validate',
+        'expand',
         'expand',
         'expand',
         'expand',
@@ -93,6 +105,8 @@ describe('chatbot-compile.yaml', () => {
         'emit',
         'validate',
         'emit',
+        'emit',
+        'validate',
         'emit',
         'emit',
       ]);
@@ -123,11 +137,43 @@ describe('chatbot-compile.yaml', () => {
       expect(tagPrompt?.family).toBe('parse');
     });
 
-    it('ai_precompile depends on extract_entities and deterministic_precompile', () => {
+    it('ai_precompile depends on extract_entities and deterministic_plan_consolidation', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const aiPrecompile = spec.passes.find((p) => p.id === 'ai_precompile');
       expect(aiPrecompile).toBeDefined();
-      expect(aiPrecompile?.depends_on).toEqual(['extract_entities', 'deterministic_precompile']);
+      expect(aiPrecompile?.depends_on).toEqual(['extract_entities', 'deterministic_plan_consolidation']);
+    });
+
+    it('protocol_intent_state_plan depends on ai_precompile', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const statePlan = spec.passes.find((p) => p.id === 'protocol_intent_state_plan');
+      expect(statePlan).toBeDefined();
+      expect(statePlan?.depends_on).toEqual(['ai_precompile']);
+      expect(statePlan?.family).toBe('expand');
+    });
+
+    it('validate_protocol_intent depends on ai_precompile', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const validateProtocolIntent = spec.passes.find((p) => p.id === 'validate_protocol_intent');
+      expect(validateProtocolIntent).toBeDefined();
+      expect(validateProtocolIntent?.depends_on).toEqual(['ai_precompile']);
+      expect(validateProtocolIntent?.family).toBe('validate');
+    });
+
+    it('expand_protocol_intent_patterns depends on protocol_intent_state_plan and validate_protocol_intent', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const expandProtocolIntentPatterns = spec.passes.find((p) => p.id === 'expand_protocol_intent_patterns');
+      expect(expandProtocolIntentPatterns).toBeDefined();
+      expect(expandProtocolIntentPatterns?.depends_on).toEqual(['protocol_intent_state_plan', 'validate_protocol_intent']);
+      expect(expandProtocolIntentPatterns?.family).toBe('expand');
+    });
+
+    it('lower_protocol_intent depends on validate_protocol_intent', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const lowerProtocolIntent = spec.passes.find((p) => p.id === 'lower_protocol_intent');
+      expect(lowerProtocolIntent).toBeDefined();
+      expect(lowerProtocolIntent?.depends_on).toEqual(['validate_protocol_intent']);
+      expect(lowerProtocolIntent?.family).toBe('expand');
     });
 
     it('expand_biology_verbs depends on ai_precompile', () => {
@@ -144,11 +190,11 @@ describe('chatbot-compile.yaml', () => {
       expect(mintMaterials?.depends_on).toEqual(['ai_precompile']);
     });
 
-    it('resolve_labware depends on ai_precompile', () => {
+    it('resolve_labware depends on lower_protocol_intent', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const resolveLabware = spec.passes.find((p) => p.id === 'resolve_labware');
       expect(resolveLabware).toBeDefined();
-      expect(resolveLabware?.depends_on).toEqual(['ai_precompile']);
+      expect(resolveLabware?.depends_on).toEqual(['lower_protocol_intent']);
     });
 
     it('resolve_references depends on ai_precompile', () => {
@@ -203,11 +249,39 @@ describe('chatbot-compile.yaml', () => {
       expect(mintMaterials?.when).toBe('outputs.ai_precompile.mintMaterials');
     });
 
-    it('apply_directives has when clause for directives', () => {
+    it('protocol_intent_state_plan has when clause for protocolIntent', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const statePlan = spec.passes.find((p) => p.id === 'protocol_intent_state_plan');
+      expect(statePlan).toBeDefined();
+      expect(statePlan?.when).toBe('outputs.ai_precompile.protocolIntent');
+    });
+
+    it('expand_protocol_intent_patterns has when clause for protocolIntentStatePlan', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const expandProtocolIntentPatterns = spec.passes.find((p) => p.id === 'expand_protocol_intent_patterns');
+      expect(expandProtocolIntentPatterns).toBeDefined();
+      expect(expandProtocolIntentPatterns?.when).toBe('outputs.protocol_intent_state_plan.protocolIntentStatePlan');
+    });
+
+    it('validate_protocol_intent has no when clause', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const validateProtocolIntent = spec.passes.find((p) => p.id === 'validate_protocol_intent');
+      expect(validateProtocolIntent).toBeDefined();
+      expect(validateProtocolIntent?.when).toBeUndefined();
+    });
+
+    it('lower_protocol_intent has no when clause', () => {
+      const spec = loadPipeline(CHATBOT_COMPILE_PATH);
+      const lowerProtocolIntent = spec.passes.find((p) => p.id === 'lower_protocol_intent');
+      expect(lowerProtocolIntent).toBeDefined();
+      expect(lowerProtocolIntent?.when).toBeUndefined();
+    });
+
+    it('apply_directives has no when clause', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const applyDirectives = spec.passes.find((p) => p.id === 'apply_directives');
       expect(applyDirectives).toBeDefined();
-      expect(applyDirectives?.when).toBe('outputs.ai_precompile.directives');
+      expect(applyDirectives?.when).toBeUndefined();
     });
 
     it('expand_biology_verbs has when clause for candidateEvents', () => {
@@ -217,11 +291,11 @@ describe('chatbot-compile.yaml', () => {
       expect(expandBiologyVerbs?.when).toBe('outputs.ai_precompile.candidateEvents');
     });
 
-    it('resolve_labware has when clause for candidateLabwares', () => {
+    it('resolve_labware has no when clause', () => {
       const spec = loadPipeline(CHATBOT_COMPILE_PATH);
       const resolveLabware = spec.passes.find((p) => p.id === 'resolve_labware');
       expect(resolveLabware).toBeDefined();
-      expect(resolveLabware?.when).toBe('outputs.ai_precompile.candidateLabwares');
+      expect(resolveLabware?.when).toBeUndefined();
     });
 
     it('resolve_references has no when clause', () => {

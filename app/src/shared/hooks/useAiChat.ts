@@ -23,6 +23,7 @@ import type {
   OntologyRefProposal,
   AiConversationMessage,
   AiLabwareAddition,
+  InstrumentApplianceJob,
   PromptMention,
 } from '../../types/ai'
 
@@ -107,6 +108,7 @@ export interface UseAiChatReturn {
   previewEvents: PlateEvent[]
   previewLabwareAdditions: AiLabwareAddition[]
   previewEventStates: Map<string, PreviewEventState>
+  executingApplianceJobIds: ReadonlySet<string>
   hasPreview: boolean
   unresolvedRefs: OntologyRefProposal[]
   inputText: string
@@ -120,6 +122,7 @@ export interface UseAiChatReturn {
   commitAcceptedPreviewEvents: () => Promise<void>
   clearHistory: () => void
   applyToGraph: (message: ChatMessage) => void
+  executeInstrumentApplianceJob: (job: InstrumentApplianceJob) => Promise<void>
   aiAvailable: boolean | null
   recheckHealth: () => void
   thinkingMode: boolean
@@ -155,6 +158,7 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
   const [previewLabwareAdditions, setPreviewLabwareAdditions] = useState<AiLabwareAddition[]>([])
   const [previewEventStates, setPreviewEventStatesMap] = useState<Map<string, PreviewEventState>>(new Map())
   const [unresolvedRefs, setUnresolvedRefs] = useState<OntologyRefProposal[]>([])
+  const [executingApplianceJobIds, setExecutingApplianceJobIds] = useState<Set<string>>(() => new Set())
   const [aiAvailable, setAiAvailable] = useState<boolean | null>(null)
   const [inputText, setInputText] = useState('')
 
@@ -385,6 +389,7 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
                       clarification: result.clarification,
                       labwareAdditions: result.labwareAdditions,
                       executionScalePlan: result.executionScalePlan,
+                      instrumentApplianceJobs: result.instrumentApplianceJobs,
                       usage: result.usage,
                       isStreaming: false,
                       docDiscussion:
@@ -398,7 +403,8 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
             // Check for empty-success case: AI completed but proposed nothing
             const hasEvents = (result.events?.length ?? 0) > 0
             const hasLabware = (result.labwareAdditions?.length ?? 0) > 0
-            if (result.success && !hasEvents && !hasLabware) {
+            const hasApplianceJobs = (result.instrumentApplianceJobs?.length ?? 0) > 0
+            if (result.success && !hasEvents && !hasLabware && !hasApplianceJobs) {
               setMessages((prev) => [
                 ...prev,
                 {
@@ -453,6 +459,96 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
     },
     [isStreaming, previewEvents, messages]
   )
+
+  // ------------------------------------------------------------------
+  // Execute a compiled instrument appliance job
+  // ------------------------------------------------------------------
+  const executeInstrumentApplianceJob = useCallback(async (job: InstrumentApplianceJob) => {
+    if (executingApplianceJobIds.has(job.jobId)) return
+
+    const readiness = job.executionReadiness
+    if (readiness?.status === 'blocked') {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: generateMessageId(),
+          role: 'system',
+          content: [
+            `Appliance job ${job.jobId} is blocked from execution.`,
+            ...readiness.blockers.map((blocker) => `- ${blocker.message}`),
+          ].join('\n'),
+          timestamp: Date.now(),
+        },
+      ])
+      return
+    }
+
+    const requiresConfirmation = readiness?.requiresConfirmation === true
+    if (requiresConfirmation) {
+      const confirmed = window.confirm(
+        `Run live Gemini EM job ${job.jobId}? This will control the physical instrument.`,
+      )
+      if (!confirmed) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: generateMessageId(),
+            role: 'system',
+            content: `Live execution cancelled for appliance job ${job.jobId}.`,
+            timestamp: Date.now(),
+          },
+        ])
+        return
+      }
+    }
+
+    setExecutingApplianceJobIds((prev) => new Set(prev).add(job.jobId))
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: generateMessageId(),
+        role: 'system',
+        content: `Executing appliance job ${job.jobId} (${job.instrument}).`,
+        timestamp: Date.now(),
+      },
+    ])
+    try {
+      const result = await apiClient.executeInstrumentApplianceJob(job, {
+        confirmLiveExecution: requiresConfirmation,
+      })
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: generateMessageId(),
+          role: 'system',
+          content: [
+            `Appliance job ${result.jobId ?? job.jobId} completed.`,
+            result.measurementId ? `Measurement: ${result.measurementId}` : '',
+            result.logId ? `Log: ${result.logId}` : '',
+            result.rawDataPath ? `Raw data: ${result.rawDataPath}` : '',
+            result.applianceExecutionRecordPath ? `Execution record: ${result.applianceExecutionRecordPath}` : '',
+          ].filter(Boolean).join('\n'),
+          timestamp: Date.now(),
+        },
+      ])
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: generateMessageId(),
+          role: 'system',
+          content: `Appliance job ${job.jobId} failed: ${(err as Error).message || 'Unknown error'}`,
+          timestamp: Date.now(),
+        },
+      ])
+    } finally {
+      setExecutingApplianceJobIds((prev) => {
+        const next = new Set(prev)
+        next.delete(job.jobId)
+        return next
+      })
+    }
+  }, [executingApplianceJobIds])
 
   // ------------------------------------------------------------------
   // Cancel the current stream
@@ -662,6 +758,7 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
     setPreviewLabwareAdditions([])
     setPreviewEventStatesMap(new Map())
     setUnresolvedRefs([])
+    setExecutingApplianceJobIds(new Set())
   }, [])
 
   // ------------------------------------------------------------------
@@ -686,6 +783,7 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
     previewEvents,
     previewLabwareAdditions,
     previewEventStates,
+    executingApplianceJobIds,
     hasPreview: previewEvents.length > 0,
     unresolvedRefs,
     inputText,
@@ -699,6 +797,7 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
     commitAcceptedPreviewEvents,
     clearHistory,
     applyToGraph,
+    executeInstrumentApplianceJob,
     aiAvailable,
     recheckHealth: checkHealth,
     thinkingMode,

@@ -1,0 +1,32 @@
+kind: protocol-foundry-patch-spec
+id: spec-fix-2026-05-17-2l66p
+source: event-editor-fixit
+generated_at: 2026-05-17T13:02:13.639Z
+fixClass: compiler
+title: Fix deterministic precompile to emit deck placement for 'put <labware> on
+  <deck_slot>' instead of treating deck slot as a well address
+rationale: The compiler trace shows that 'B2' (a deck slot) was incorrectly
+  parsed into parameters.wells for the labware '96well plate', leading to an
+  empty labwareAdditions and no frontend placements. The fix must be in the
+  deterministic_precompile pass to correctly map deck-like tokens to
+  candidateLabwares.deckSlot when the grammar indicates a placement action
+  (put/place/add ... on ...).
+ownedFiles:
+  - server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts
+  - server/src/compiler/pipeline/fixtures/spec-fix-2026-05-17-2l66p.yaml
+acceptance:
+  - The prompt 'put a 96well plate on B2' must result in a labware addition for
+    'lbw-def-generic-96-well-plate' pinned to deck slot 'B2'.
+  - The terminal artifact deckLayoutPlan.pinned must contain an entry with slot
+    'B2' and labwareHint 'lbw-def-generic-96-well-plate'.
+  - The parameters.wells in the compiled IR must NOT contain 'B2' when 'B2' is a
+    deck slot for a labware placement.
+  - Prompts that explicitly refer to wells (e.g., 'add water to well A1 of the
+    plate') must still resolve 'A1' as a well address, not a deck slot.
+  - Prompts that refer to intra-labware locations (e.g., 'mix in row 1') must
+    not be misinterpreted as deck placements.
+tests:
+  - cd server && npx vitest run
+    src/compiler/pipeline/fixtures/FixItFixtures.test.ts -t
+    'spec-fix-2026-05-17-2l66p'
+failingPrompt: put a 96well plate on B2

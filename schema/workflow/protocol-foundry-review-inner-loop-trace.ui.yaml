@@ -1,0 +1,96 @@
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/workflow/protocol-foundry-review-inner-loop-trace.schema.yaml"
+
+display:
+  titleField: "$.id"
+  subtitleField: "$.status"
+  icon: "foundry-inner-loop"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "Trace ID"
+  - path: "$.protocolId"
+    label: "Protocol"
+  - path: "$.variant"
+    label: "Variant"
+  - path: "$.status"
+    label: "Status"
+  - path: "$.generatedAt"
+    label: "Generated"
+  - path: "$.coder.status"
+    label: "Coder"
+  - path: "$.recompile.outcome"
+    label: "Recompile"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Trace"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "Trace ID"
+      readonly: true
+    - path: "$.protocolId"
+      widget: "text"
+      label: "Protocol"
+      readonly: true
+    - path: "$.variant"
+      widget: "text"
+      label: "Variant"
+      readonly: true
+    - path: "$.generatedAt"
+      widget: "text"
+      label: "Generated"
+      readonly: true
+    - path: "$.prompt"
+      widget: "textarea"
+      label: "Prompt"
+      readonly: true
+  - title: "Draft spec"
+    fields:
+    - path: "$.draftSpec.id"
+      widget: "text"
+      label: "Draft ID"
+      readonly: true
+    - path: "$.draftSpec.draftPath"
+      widget: "text"
+      label: "Draft path"
+      readonly: true
+    - path: "$.draftSpec.title"
+      widget: "text"
+      label: "Title"
+      readonly: true
+    - path: "$.draftSpec.fixClass"
+      widget: "text"
+      label: "Fix class"
+      readonly: true
+  - title: "Coder result"
+    fields:
+    - path: "$.coder.status"
+      widget: "text"
+      label: "Status"
+      readonly: true
+    - path: "$.coder.message"
+      widget: "text"
+      label: "Message"
+      readonly: true
+    - path: "$.coder.touchedFiles"
+      widget: "list"
+      label: "Touched files"
+      readonly: true
+  - title: "Recompile"
+    fields:
+    - path: "$.recompile.outcome"
+      widget: "text"
+      label: "Outcome"
+      readonly: true
+    - path: "$.recompile.eventCount"
+      widget: "text"
+      label: "Events"
+      readonly: true
+    - path: "$.recompile.eventGraphPath"
+      widget: "text"
+      label: "Graph path"
+      readonly: true

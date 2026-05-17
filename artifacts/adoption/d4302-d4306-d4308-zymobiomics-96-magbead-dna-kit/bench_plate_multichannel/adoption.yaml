@@ -1,0 +1,21 @@
+kind: protocol-foundry-adoption-decision
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: bench_plate_multichannel
+generated_at: 2026-05-09T21:00:48.026Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-ai-precompile-shape-mismatch
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch to enable downstream passes
+  - id: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-labware-resolution-generic-plates
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-labware-resolution-generic-plates.yaml
+    fixClass: labware_alias_or_resolver
+    title: Add generic labware definitions for 96-well plate, 12-well reservoir, and
+      tube rack
+  - id: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-material-resolution-resuspend
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-material-resolution-resuspend.yaml
+    fixClass: material_catalog_or_spec
+    title: Resolve 'resuspend' material reference and add ZymoBIOMICS kit materials
+message: Patch specs accepted for unattended coder tournament execution.

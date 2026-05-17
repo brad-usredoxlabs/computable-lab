@@ -2,5 +2,5 @@ kind: protocol-foundry-patch-spec-index
 protocolId: mp10471
 variant: bench_plate_multichannel
 patchSpecs:
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
-  - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/bench_plate_multichannel/fix-labware-resolution-for-generic-types.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/bench_plate_multichannel/fix-ai-precompile-shape-mismatch-and-fallback.yaml
+  - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/bench_plate_multichannel/fix-tag-prompt-json-parse-error.yaml

@@ -2,8 +2,8 @@ kind: protocol-foundry-compiler-result
 protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
 variant: bench_plate_multichannel
 outcome: gap
-rawOutcome: gap
-eventCount: 1
+rawOutcome: complete
+eventCount: 0
 diagnostics:
   - severity: info
     code: foundry_presegmented_candidates
@@ -36,8 +36,32 @@ diagnostics:
     pass_id: extract_entities
     details: {}
   - severity: warning
+    code: tag_prompt_parse_error
+    message: "tag_prompt response was not valid JSON: Unterminated string in JSON at
+      position 669"
+    pass_id: tag_prompt
+    details:
+      raw_preview: |-
+        
+
+        {
+          "taggedPhrases": [
+            {
+              "phrase": "NAb™ Spin Columns, 5 mL",
+              "tag": "labware",
+              "value": "spin_column"
+            },
+            {
+              "phrase": "5 mL",
+              "tag": "quantity",
+              "value": "5 mL"
+            },
+            {
+              "phrase": "Catalog Numbers 89960, 89961, 89962, and 89963",
+              "tag
+  - severity: warning
     code: ai_precompile_shape_mismatch
-    message: ai_precompile output shape mismatch
+    message: ai_precompile output shape mismatch, using fallback
     pass_id: ai_precompile
   - severity: info
     code: pass_skipped_by_when
@@ -46,9 +70,24 @@ diagnostics:
     pass_id: mint_materials
   - severity: info
     code: pass_skipped_by_when
+    message: "Pass 'apply_directives' skipped: when condition
+      'outputs.ai_precompile.directives' evaluated to false"
+    pass_id: apply_directives
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_biology_verbs' skipped: when condition
+      'outputs.ai_precompile.candidateEvents' evaluated to false"
+    pass_id: expand_biology_verbs
+  - severity: info
+    code: pass_skipped_by_when
     message: "Pass 'resolve_labware' skipped: when condition
       'outputs.ai_precompile.candidateLabwares' evaluated to false"
     pass_id: resolve_labware
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'resolve_prior_labware_references' skipped: when condition
+      'outputs.ai_precompile.priorLabwareRefs' evaluated to false"
+    pass_id: resolve_prior_labware_references
   - severity: info
     code: pass_skipped_by_when
     message: "Pass 'expand_patterns' skipped: when condition
@@ -69,32 +108,6 @@ diagnostics:
       profileId: robot-assist-plus-96
       blockers: []
 extractorRepairExhaustedCount: 0
-gaps:
-  - kind: clarification
-    message: The protocol specifies '3 washes' total (step 7) and '3 fractions' of
-      elution (step 9). The current tagging captures the actions but relies on
-      the compiler to resolve the repetition count based on the residual clause
-      'Repeat this step 2 times'. Confirm if 'Repeat wash 2 additional times'
-      implies 3 total washes.
-  - kind: unresolved_ref
-    message: generic_96_well_plate (no matching labware in prior snapshot)
-    details:
-      hint: generic_96_well_plate
-      reason: no matching labware in prior snapshot
-  - kind: unresolved_ref
-    message: generic_12_well_reservoir (no matching labware in prior snapshot)
-    details:
-      hint: generic_12_well_reservoir
-      reason: no matching labware in prior snapshot
-  - kind: unresolved_ref
-    message: generic_24x1_5ml_tube_rack (no matching labware in prior snapshot)
-    details:
-      hint: generic_24x1_5ml_tube_rack
-      reason: no matching labware in prior snapshot
-  - kind: unresolved_ref
-    message: generic_4x50ml_tube_rack (no matching labware in prior snapshot)
-    details:
-      hint: generic_4x50ml_tube_rack
-      reason: no matching labware in prior snapshot
+gaps: []
 foundryTestAssumptionsRef: /home/brad/git/computable-foundry/artifacts/assumptions/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml
 terminalArtifactsRef: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml

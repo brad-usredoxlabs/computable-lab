@@ -1,16 +1,16 @@
 kind: protocol-foundry-protocol-quality
-generated_at: 2026-05-09T19:42:53.983Z
+generated_at: 2026-05-11T22:51:06.323Z
 summary:
   protocolCount: 10
   variantTotal: 30
   accepted: 0
-  complete: 2
-  gaps: 21
+  complete: 1
+  gaps: 24
   extractorFailures: 0
-  eventTotal: 143
+  eventTotal: 61
   blockerTotal: 0
   acceptedRate: 0
-  completeRate: 0.06666666666666667
+  completeRate: 0.03333333333333333
 protocols:
   - protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
     status: gap
@@ -26,22 +26,22 @@ protocols:
         qualityScore: 0.35
         coverageEstimate: 0.5
       - variant: bench_plate_multichannel
-        status: accepted
-        accepted: false
-        browserStatus: skipped
-        eventCount: 9
-        blockerCount: 0
-        diagnosticCount: 12
-        extractorRepairExhaustedCount: 0
-        qualityScore: 0.35
-        coverageEstimate: 0.45
-      - variant: robot_deck
-        status: accepted
+        status: stalled
         accepted: false
         browserStatus: skipped
         eventCount: 0
         blockerCount: 0
-        diagnosticCount: 18
+        diagnosticCount: 15
+        extractorRepairExhaustedCount: 0
+        qualityScore: 0.05
+        coverageEstimate: 0
+      - variant: robot_deck
+        status: gap
+        accepted: false
+        browserStatus: skipped
+        eventCount: 0
+        blockerCount: 0
+        diagnosticCount: 15
         extractorRepairExhaustedCount: 0
         qualityScore: 0.1
         coverageEstimate: 0
@@ -79,35 +79,35 @@ protocols:
         qualityScore: 0.1
         coverageEstimate: 0.1
   - protocolId: cayman-immuno-oncology
-    status: blocked
+    status: gap
     variants:
       - variant: manual_tubes
-        status: blocked
+        status: gap
         accepted: false
         browserStatus: skipped
         eventCount: 2
         blockerCount: 0
         diagnosticCount: 11
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.7999999999999999
+        qualityScore: 0.15
         coverageEstimate: 0.1
       - variant: bench_plate_multichannel
-        status: blocked
+        status: gap
         accepted: false
         browserStatus: skipped
         eventCount: 11
         blockerCount: 0
         diagnosticCount: 10
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.7999999999999999
+        qualityScore: 0.35
         coverageEstimate: 0.55
       - variant: robot_deck
-        status: running
+        status: gap
         accepted: false
         browserStatus: skipped
         eventCount: 0
         blockerCount: 0
-        diagnosticCount: 16
+        diagnosticCount: 14
         extractorRepairExhaustedCount: 0
         qualityScore: 0.05
         coverageEstimate: 0
@@ -120,9 +120,9 @@ protocols:
         browserStatus: skipped
         eventCount: 0
         blockerCount: 0
-        diagnosticCount: 39
+        diagnosticCount: 40
         extractorRepairExhaustedCount: 0
-        qualityScore: 0
+        qualityScore: 0.05
         coverageEstimate: 0
       - variant: bench_plate_multichannel
         status: gap
@@ -130,19 +130,19 @@ protocols:
         browserStatus: skipped
         eventCount: 0
         blockerCount: 0
-        diagnosticCount: 37
+        diagnosticCount: 40
         extractorRepairExhaustedCount: 0
-        qualityScore: 0
+        qualityScore: 0.05
         coverageEstimate: 0
       - variant: robot_deck
-        status: gap
+        status: accepted
         accepted: false
         browserStatus: skipped
         eventCount: 0
         blockerCount: 0
         diagnosticCount: 40
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.55
+        qualityScore: 0.1
         coverageEstimate: 0
   - protocolId: cellrox-oxidative-stress-qr
     status: gap
@@ -155,7 +155,7 @@ protocols:
         blockerCount: 0
         diagnosticCount: 10
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.7999999999999999
+        qualityScore: 0.45
         coverageEstimate: 0.5
       - variant: bench_plate_multichannel
         status: gap
@@ -165,18 +165,18 @@ protocols:
         blockerCount: 0
         diagnosticCount: 8
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.7999999999999999
+        qualityScore: 0.35
         coverageEstimate: 0.95
       - variant: robot_deck
         status: gap
         accepted: false
         browserStatus: skipped
-        eventCount: 10
+        eventCount: 0
         blockerCount: 0
         diagnosticCount: 11
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.45
-        coverageEstimate: 0.5
+        qualityScore: 0.05
+        coverageEstimate: 0
   - protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
     status: gap
     variants:
@@ -184,32 +184,32 @@ protocols:
         status: gap
         accepted: false
         browserStatus: skipped
-        eventCount: 6
+        eventCount: 0
         blockerCount: 0
-        diagnosticCount: 15
+        diagnosticCount: 19
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.15
-        coverageEstimate: 0.3
+        qualityScore: 0.05
+        coverageEstimate: 0
       - variant: bench_plate_multichannel
         status: gap
         accepted: false
         browserStatus: skipped
-        eventCount: 6
+        eventCount: 0
         blockerCount: 0
-        diagnosticCount: 14
+        diagnosticCount: 19
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.15
-        coverageEstimate: 0.3
+        qualityScore: 0.55
+        coverageEstimate: 0
       - variant: robot_deck
         status: gap
         accepted: false
         browserStatus: skipped
-        eventCount: 6
+        eventCount: 0
         blockerCount: 0
-        diagnosticCount: 14
+        diagnosticCount: 19
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.15
-        coverageEstimate: 0.3
+        qualityScore: 0.05
+        coverageEstimate: 0
   - protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
     status: gap
     variants:
@@ -227,22 +227,22 @@ protocols:
         status: gap
         accepted: false
         browserStatus: skipped
-        eventCount: 1
+        eventCount: 0
         blockerCount: 0
-        diagnosticCount: 11
+        diagnosticCount: 15
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.15
-        coverageEstimate: 0.1
+        qualityScore: 0.05
+        coverageEstimate: 0
       - variant: robot_deck
         status: gap
         accepted: false
         browserStatus: skipped
-        eventCount: 1
+        eventCount: 0
         blockerCount: 0
-        diagnosticCount: 11
+        diagnosticCount: 15
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.15
-        coverageEstimate: 0.1
+        qualityScore: 0.05
+        coverageEstimate: 0
   - protocolId: man0011863-memper-plus-memb-protein-extract-ug
     status: gap
     variants:
@@ -254,28 +254,28 @@ protocols:
         blockerCount: 0
         diagnosticCount: 10
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.7999999999999999
+        qualityScore: 0.15
         coverageEstimate: 0.25
       - variant: bench_plate_multichannel
         status: gap
         accepted: false
         browserStatus: skipped
-        eventCount: 5
+        eventCount: 0
         blockerCount: 0
-        diagnosticCount: 10
+        diagnosticCount: 15
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.15
-        coverageEstimate: 0.25
+        qualityScore: 0.05
+        coverageEstimate: 0
       - variant: robot_deck
         status: gap
         accepted: false
         browserStatus: skipped
-        eventCount: 5
+        eventCount: 0
         blockerCount: 0
-        diagnosticCount: 9
+        diagnosticCount: 14
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.35
-        coverageEstimate: 0.25
+        qualityScore: 0.05
+        coverageEstimate: 0
   - protocolId: mp10422
     status: gap
     variants:
@@ -283,32 +283,32 @@ protocols:
         status: gap
         accepted: false
         browserStatus: skipped
-        eventCount: 6
+        eventCount: 0
         blockerCount: 0
-        diagnosticCount: 14
+        diagnosticCount: 17
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.35
-        coverageEstimate: 0.3
+        qualityScore: 0.05
+        coverageEstimate: 0
       - variant: bench_plate_multichannel
         status: gap
         accepted: false
         browserStatus: skipped
-        eventCount: 15
+        eventCount: 0
         blockerCount: 0
-        diagnosticCount: 12
+        diagnosticCount: 17
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.35
-        coverageEstimate: 0.75
+        qualityScore: 0.05
+        coverageEstimate: 0
       - variant: robot_deck
         status: gap
         accepted: false
         browserStatus: skipped
-        eventCount: 6
+        eventCount: 0
         blockerCount: 0
-        diagnosticCount: 13
+        diagnosticCount: 17
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.35
-        coverageEstimate: 0.3
+        qualityScore: 0.05
+        coverageEstimate: 0
   - protocolId: mp10471
     status: gap
     variants:
@@ -316,29 +316,29 @@ protocols:
         status: gap
         accepted: false
         browserStatus: skipped
-        eventCount: 2
+        eventCount: 0
         blockerCount: 0
-        diagnosticCount: 13
+        diagnosticCount: 17
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.15
-        coverageEstimate: 0.1
+        qualityScore: 0.05
+        coverageEstimate: 0
       - variant: bench_plate_multichannel
         status: gap
         accepted: false
         browserStatus: skipped
-        eventCount: 2
+        eventCount: 0
         blockerCount: 0
-        diagnosticCount: 12
+        diagnosticCount: 17
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.15
-        coverageEstimate: 0.1
+        qualityScore: 0
+        coverageEstimate: 0
       - variant: robot_deck
         status: gap
         accepted: false
         browserStatus: skipped
-        eventCount: 2
+        eventCount: 0
         blockerCount: 0
-        diagnosticCount: 14
+        diagnosticCount: 17
         extractorRepairExhaustedCount: 0
-        qualityScore: 0.1
-        coverageEstimate: 0.1
+        qualityScore: 0.05
+        coverageEstimate: 0

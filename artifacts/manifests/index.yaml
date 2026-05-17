@@ -1,0 +1,186 @@
+kind: protocol-foundry-manifest-index
+generated_at: 2026-05-16T01:29:12.167Z
+artifactRoot: ../artifacts
+protocolCount: 10
+variantCount: 30
+manifests:
+  - protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+    variant: manual_tubes
+    status: stalled
+    path: manifests/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+    missingArtifactCount: 6
+    humanReviewStatus: unreviewed
+  - protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+    variant: bench_plate_multichannel
+    status: stalled
+    path: manifests/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+    missingArtifactCount: 1
+    humanReviewStatus: unreviewed
+  - protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
+    variant: robot_deck
+    status: gap
+    path: manifests/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+    missingArtifactCount: 1
+    humanReviewStatus: unreviewed
+  - protocolId: bulletin-6816
+    variant: manual_tubes
+    status: stalled
+    path: manifests/bulletin-6816/manual_tubes.yaml
+    missingArtifactCount: 6
+    humanReviewStatus: unreviewed
+  - protocolId: bulletin-6816
+    variant: bench_plate_multichannel
+    status: stalled
+    path: manifests/bulletin-6816/bench_plate_multichannel.yaml
+    missingArtifactCount: 5
+    humanReviewStatus: unreviewed
+  - protocolId: bulletin-6816
+    variant: robot_deck
+    status: stalled
+    path: manifests/bulletin-6816/robot_deck.yaml
+    missingArtifactCount: 5
+    humanReviewStatus: unreviewed
+  - protocolId: cayman-immuno-oncology
+    variant: manual_tubes
+    status: gap
+    path: manifests/cayman-immuno-oncology/manual_tubes.yaml
+    missingArtifactCount: 3
+    humanReviewStatus: unreviewed
+  - protocolId: cayman-immuno-oncology
+    variant: bench_plate_multichannel
+    status: gap
+    path: manifests/cayman-immuno-oncology/bench_plate_multichannel.yaml
+    missingArtifactCount: 3
+    humanReviewStatus: unreviewed
+  - protocolId: cayman-immuno-oncology
+    variant: robot_deck
+    status: gap
+    path: manifests/cayman-immuno-oncology/robot_deck.yaml
+    missingArtifactCount: 2
+    humanReviewStatus: unreviewed
+  - protocolId: cayman-natural-prodccuts
+    variant: manual_tubes
+    status: gap
+    path: manifests/cayman-natural-prodccuts/manual_tubes.yaml
+    missingArtifactCount: 2
+    humanReviewStatus: unreviewed
+  - protocolId: cayman-natural-prodccuts
+    variant: bench_plate_multichannel
+    status: gap
+    path: manifests/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+    missingArtifactCount: 2
+    humanReviewStatus: unreviewed
+  - protocolId: cayman-natural-prodccuts
+    variant: robot_deck
+    status: accepted
+    path: manifests/cayman-natural-prodccuts/robot_deck.yaml
+    missingArtifactCount: 3
+    humanReviewStatus: unreviewed
+  - protocolId: cellrox-oxidative-stress-qr
+    variant: manual_tubes
+    status: gap
+    path: manifests/cellrox-oxidative-stress-qr/manual_tubes.yaml
+    missingArtifactCount: 4
+    humanReviewStatus: unreviewed
+  - protocolId: cellrox-oxidative-stress-qr
+    variant: bench_plate_multichannel
+    status: gap
+    path: manifests/cellrox-oxidative-stress-qr/bench_plate_multichannel.yaml
+    missingArtifactCount: 4
+    humanReviewStatus: unreviewed
+  - protocolId: cellrox-oxidative-stress-qr
+    variant: robot_deck
+    status: gap
+    path: manifests/cellrox-oxidative-stress-qr/robot_deck.yaml
+    missingArtifactCount: 2
+    humanReviewStatus: unreviewed
+  - protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+    variant: manual_tubes
+    status: gap
+    path: manifests/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+    missingArtifactCount: 2
+    humanReviewStatus: unreviewed
+  - protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+    variant: bench_plate_multichannel
+    status: gap
+    path: manifests/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+    missingArtifactCount: 2
+    humanReviewStatus: unreviewed
+  - protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+    variant: robot_deck
+    status: gap
+    path: manifests/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+    missingArtifactCount: 2
+    humanReviewStatus: unreviewed
+  - protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+    variant: manual_tubes
+    status: gap
+    path: manifests/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+    missingArtifactCount: 4
+    humanReviewStatus: unreviewed
+  - protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+    variant: bench_plate_multichannel
+    status: gap
+    path: manifests/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml
+    missingArtifactCount: 2
+    humanReviewStatus: unreviewed
+  - protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+    variant: robot_deck
+    status: gap
+    path: manifests/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+    missingArtifactCount: 2
+    humanReviewStatus: unreviewed
+  - protocolId: man0011863-memper-plus-memb-protein-extract-ug
+    variant: manual_tubes
+    status: gap
+    path: manifests/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+    missingArtifactCount: 4
+    humanReviewStatus: unreviewed
+  - protocolId: man0011863-memper-plus-memb-protein-extract-ug
+    variant: bench_plate_multichannel
+    status: gap
+    path: manifests/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+    missingArtifactCount: 2
+    humanReviewStatus: unreviewed
+  - protocolId: man0011863-memper-plus-memb-protein-extract-ug
+    variant: robot_deck
+    status: gap
+    path: manifests/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+    missingArtifactCount: 2
+    humanReviewStatus: unreviewed
+  - protocolId: mp10422
+    variant: manual_tubes
+    status: gap
+    path: manifests/mp10422/manual_tubes.yaml
+    missingArtifactCount: 1
+    humanReviewStatus: unreviewed
+  - protocolId: mp10422
+    variant: bench_plate_multichannel
+    status: gap
+    path: manifests/mp10422/bench_plate_multichannel.yaml
+    missingArtifactCount: 1
+    humanReviewStatus: unreviewed
+  - protocolId: mp10422
+    variant: robot_deck
+    status: gap
+    path: manifests/mp10422/robot_deck.yaml
+    missingArtifactCount: 1
+    humanReviewStatus: unreviewed
+  - protocolId: mp10471
+    variant: manual_tubes
+    status: gap
+    path: manifests/mp10471/manual_tubes.yaml
+    missingArtifactCount: 1
+    humanReviewStatus: unreviewed
+  - protocolId: mp10471
+    variant: bench_plate_multichannel
+    status: gap
+    path: manifests/mp10471/bench_plate_multichannel.yaml
+    missingArtifactCount: 1
+    humanReviewStatus: unreviewed
+  - protocolId: mp10471
+    variant: robot_deck
+    status: gap
+    path: manifests/mp10471/robot_deck.yaml
+    missingArtifactCount: 1
+    humanReviewStatus: unreviewed

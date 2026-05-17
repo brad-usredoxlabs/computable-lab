@@ -3,7 +3,7 @@ recordId: protocol-event-graph-proposal/man0011593-nabspincolumn-5ml-antibody-pu
 protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
 variant: robot_deck
 targetLevel: robot_deck
-status: ready
+status: blocked
 sourceRefs:
   segment: /home/brad/git/computable-foundry/artifacts/segments/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
   materialContext: /home/brad/git/computable-foundry/artifacts/material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
@@ -14,13 +14,7 @@ eventGraph:
     man0011593-nabspincolumn-5ml-antibody-purifi-ug (robot_deck).
   status: draft
   protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
-  events: &a1
-    - eventId: evt-spin-b9ufbck6
-      event_type: centrifuge
-      details: &a2
-        rpm: 300
-        duration: PT5M
-      labwareId: sample_plate
+  events: &a1 []
   labwares:
     - labwareId: sample_plate
       labwareType: plate_96
@@ -33,25 +27,14 @@ eventGraph:
     - robot_deck
 terminalArtifacts:
   events: *a1
-  directives:
-    - directiveId: dir_1
-      kind: mount_pipette
-      params:
-        mountSide: right
-        pipetteType: 8_channel_multichannel
+  directives: []
   gaps: []
   resolvedRefs: []
   labStateDelta:
-    events:
-      - eventId: evt-spin-b9ufbck6
-        event_type: centrifuge
-        details: *a2
+    events: []
     snapshotAfter:
       deck: []
-      mountedPipettes:
-        - mountSide: right
-          pipetteType: 8_channel_multichannel
-          maxVolumeUl: 50
+      mountedPipettes: []
       labware: {}
       reservoirs: {}
       mintCounter: 0
@@ -120,15 +103,11 @@ terminalArtifacts:
       - ASSIST PLUS lowering uses the same plate and lane semantics as bench
         multichannel planning, then binds them to deck-compatible labware and
         tool profiles.
-    blockers: &a3 []
+    blockers: &a2 []
   validationReport:
     findings: []
   instrumentRunFiles: []
-  downstreamQueue:
-    - kind: readout
-      description: Measure absorbance at 280nm to identify antibody fractions
-      params:
-        wavelength: 280nm
+  downstreamQueue: []
 diagnostics:
   - severity: info
     code: foundry_presegmented_candidates
@@ -161,14 +140,48 @@ diagnostics:
     pass_id: extract_entities
     details: {}
   - severity: warning
+    code: tag_prompt_parse_error
+    message: "tag_prompt response was not valid JSON: Unterminated string in JSON at
+      position 645"
+    pass_id: tag_prompt
+    details:
+      raw_preview: |-
+        
+
+        {
+          "taggedPhrases": [
+            {
+              "phrase": "NAb™ Spin Columns, 5 mL",
+              "tag": "labware",
+              "value": "spin_column"
+            },
+            {
+              "phrase": "5 mL",
+              "tag": "quantity",
+              "value": "5 mL"
+            },
+            {
+              "phrase": "Catalog Numbers 89960, 89961, 89962, and 89963",
+              "tag
+  - severity: warning
     code: ai_precompile_shape_mismatch
-    message: ai_precompile output shape mismatch
+    message: ai_precompile output shape mismatch, using fallback
     pass_id: ai_precompile
   - severity: info
     code: pass_skipped_by_when
     message: "Pass 'mint_materials' skipped: when condition
       'outputs.ai_precompile.mintMaterials' evaluated to false"
     pass_id: mint_materials
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'apply_directives' skipped: when condition
+      'outputs.ai_precompile.directives' evaluated to false"
+    pass_id: apply_directives
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_biology_verbs' skipped: when condition
+      'outputs.ai_precompile.candidateEvents' evaluated to false"
+    pass_id: expand_biology_verbs
   - severity: info
     code: pass_skipped_by_when
     message: "Pass 'resolve_labware' skipped: when condition
@@ -185,6 +198,11 @@ diagnostics:
       'outputs.ai_precompile.patternEvents' evaluated to false"
     pass_id: expand_patterns
   - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'emit_downstream_queue' skipped: when condition
+      'outputs.ai_precompile.downstreamCompileJobs' evaluated to false"
+    pass_id: emit_downstream_queue
+  - severity: info
     code: execution_scale_plan_ready
     message: Execution scaling plan is ready for robot_deck.
     pass_id: derive_execution_scale_plan
@@ -192,7 +210,7 @@ diagnostics:
       sourceLevel: manual_tubes
       targetLevel: robot_deck
       profileId: robot-assist-plus-96
-      blockers: *a3
+      blockers: *a2
 foundryTestAssumptions:
   kind: protocol-foundry-test-assumption-profile
   protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug

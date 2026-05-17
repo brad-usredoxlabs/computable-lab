@@ -1,0 +1,54 @@
+kind: protocol-foundry-patch-spec
+id: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-ai-precompile-json-parse-and-shape
+protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
+variant: manual_tubes
+fixClass: precompiler_reference_shape
+title: Fix ai_precompile JSON parse error and shape mismatch to produce
+  candidateEvents
+rationale: "The compiler diagnostics show two critical failures: (1) 'tag_prompt
+  response was not valid JSON: Unterminated string in JSON at position 683' and
+  (2) 'ai_precompile output shape mismatch, using fallback'. The tag_prompt JSON
+  parse error causes the ai_precompile pass to receive malformed input or
+  produce malformed output, triggering the shape mismatch. As a result, the
+  fallback produces empty candidateEvents, causing all downstream passes
+  (expand_biology_verbs, resolve_labware, mint_materials) to be skipped. This
+  leads to eventCount=0 despite 107 deterministic candidates being extracted
+  from the PDF text. The fix must make the ai_precompile pass resilient to JSON
+  parse errors and ensure the output shape always matches the expected
+  AiPrecompileOutput interface with at least empty arrays instead of undefined
+  fields."
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - ai_precompile pass no longer emits 'ai_precompile_shape_mismatch' warning
+    when tag_prompt JSON is malformed
+  - AiPrecompileOutput always has defined arrays for candidateEvents,
+    candidateLabwares, mintMaterials, directives, patternEvents,
+    priorLabwareRefs, downstreamCompileJobs (empty arrays if no content)
+  - eventCount >= 3 for protocols with clear protocol steps in PDF text
+  - expand_biology_verbs pass is no longer skipped when candidateEvents are
+    present
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 60
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/verdict.yaml

@@ -1,0 +1,46 @@
+kind: protocol-foundry-patch-spec
+id: mp10422/manual_tubes/fix-tag-prompt-json-parse-error
+protocolId: mp10422
+variant: manual_tubes
+fixClass: extractor_prompt_contract
+title: Fix tag_prompt JSON parse error from unterminated string
+rationale: "The diagnostics show 'tag_prompt response was not valid JSON:
+  Unterminated string in JSON at position 741' with a raw_preview showing the
+  JSON was cut off mid-string ('CellRO'). This indicates the LLM response for
+  tag_prompt is being truncated, likely due to output token limits or improper
+  response handling. This parse failure may contribute to the ai_precompile
+  shape mismatch if tag_prompt output is consumed by ai_precompile. The fix
+  should add robust JSON parsing with truncation recovery or increase the
+  response buffer for tag_prompt."
+ownedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+acceptance:
+  - tag_prompt pass must not emit 'tag_prompt_parse_error' warnings
+  - JSON responses from tag_prompt must be fully parsed even when LLM output is
+    truncated
+  - taggedPhrases must be extracted from partial JSON responses using recovery
+    parsing
+implementationBudget:
+  targetChangedFiles: 1
+  maxChangedFiles: 2
+  targetChangedLines: 60
+  maxChangedLines: 150
+  requireFocusedFixture: true
+coderModelProfile:
+  model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
+  guidance: Narrow ownership, concrete evidence, one behavior change.
+sourceArtifacts:
+  compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/manual_tubes.yaml
+  eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10422/manual_tubes.yaml
+  executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10422/manual_tubes.yaml
+  browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10422/manual_tubes/report.yaml
+  coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/mp10422/manual_tubes/result.yaml
+  assumptions: /home/brad/git/computable-foundry/artifacts/assumptions/mp10422/manual_tubes.yaml
+  segment: /home/brad/git/computable-foundry/artifacts/segments/mp10422.yaml
+  materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10422.yaml
+  text: /home/brad/git/computable-foundry/artifacts/text/mp10422.txt
+failureEvidence:
+  eventCount: 0
+  outcome: gap
+architectNotes: "LLM architect analysis: 2 fix recommendations."
+sourceVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10422/manual_tubes/verdict.yaml

@@ -17,6 +17,8 @@ function makeMockVerbRegistry(
     read:      { verb: 'read',         source: 'canonical' },
     mix:       { verb: 'mix',          source: 'canonical' },
     spin:      { verb: 'centrifuge',   source: 'canonical' },
+    place:     { verb: 'add_material', source: 'synonym' },
+    load:      { verb: 'add_material', source: 'synonym' },
   };
   const merged = { ...defaults, ...overrides };
   return {
@@ -94,11 +96,12 @@ describe('DeterministicPrecompilePass', () => {
   const pass = createDeterministicPrecompilePass(deps);
 
   // -----------------------------------------------------------------------
-  // (a) prompt 'add labwares 96-well-plate and reservoir. transfer 5 uL from A1 to B1'
-  //     → 2 candidateEvents (verbs add_material + transfer), candidateLabwares includes both,
+  // (a) prompt 'add 96-well-plate, reservoir. transfer from 96-well-plate to reservoir'
+  //     → first clause is pure labware setup (suppressed as a candidateEvent;
+  //        contributes labwares only); second clause is a transfer event.
   //        residualClauses = [], deterministicCompleteness === 1.0
   // -----------------------------------------------------------------------
-  it('(a) two-clause prompt with labware nouns → 2 candidateEvents, completeness 1.0', async () => {
+  it('(a) two-clause prompt with labware nouns → 1 candidateEvent + 2 candidateLabwares, completeness 1.0', async () => {
     const result = await pass.run({
       pass_id: 'deterministic_precompile',
       state: makeState('add 96-well-plate, reservoir. transfer from 96-well-plate to reservoir'),
@@ -107,10 +110,10 @@ describe('DeterministicPrecompilePass', () => {
     expect(result.ok).toBe(true);
     const output = result.output as DeterministicPrecompileDeps extends { output: infer O } ? O : never;
 
-    // Two clauses → two candidateEvents
-    expect(output.candidateEvents).toHaveLength(2);
-    expect(output.candidateEvents[0]?.verb).toBe('add_material');
-    expect(output.candidateEvents[1]?.verb).toBe('transfer');
+    // First clause is pure labware setup → suppressed.
+    // Second clause has a transfer verb → emits a candidate event.
+    expect(output.candidateEvents).toHaveLength(1);
+    expect(output.candidateEvents[0]?.verb).toBe('transfer');
 
     // candidateLabwares includes both labware hints
     const hints = output.candidateLabwares.map((l) => l.hint);
@@ -278,7 +281,10 @@ describe('DeterministicPrecompilePass', () => {
     expect(result.ok).toBe(true);
     const output = result.output as any;
     expect(output.compileIr.source).toBe('raw_prompt');
-    expect(output.candidateEvents).toHaveLength(1);
+    // "add reservoir" is a pure labware-setup clause — no candidate event,
+    // but the labware is captured for resolve_labware to place/add.
+    expect(output.candidateEvents).toHaveLength(0);
+    expect(output.candidateLabwares.map((c: { hint: string }) => c.hint)).toContain('reservoir');
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({
         code: 'tag_prompt_invalid_for_deterministic_precompile',
@@ -488,5 +494,400 @@ describe('DeterministicPrecompilePass', () => {
         target_wells: ['A1'],
       }),
     ]);
+  });
+
+  it('carries raw-prompt labware roles and material pronouns across dependent steps', async () => {
+    const prompt = 'Add a 12-well reservoir to the source location. Add a 96-well plate to the target position. Add 100uL of clofibrate to well A1 of the reservoir. Transfer 25uL of it to well B2 of the target plate.';
+    const targetPass = createDeterministicPrecompilePass({
+      ...makeMockDeps(),
+      labwareDefinitionRegistry: {
+        findByName: (n: string) => {
+          if (n === '12-well reservoir') return { recordId: 'labware-12-reservoir' };
+          if (n === '96-well plate') return { recordId: 'labware-96-plate' };
+          return undefined;
+        },
+      },
+      compoundClassRegistry: {
+        findByName: (n: string) => n === 'clofibrate' ? { recordId: 'compound-clofibrate' } : undefined,
+      },
+    });
+
+    const result = await targetPass.run({
+      pass_id: 'deterministic_precompile',
+      state: makeState(prompt),
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as any;
+    expect(output.residualClauses).toEqual([]);
+    expect(output.deterministicCompleteness).toBe(1);
+    // The two leading "Add a <plate> to the <role> ..." clauses are pure
+    // labware setup and are suppressed from candidateEvents; the material
+    // add and the transfer remain.
+    expect(output.candidateEvents).toEqual([
+      expect.objectContaining({
+        verb: 'add_material',
+        volume_uL: 100,
+        labware_id: 'labware-12-reservoir',
+        well: 'A1',
+        material: expect.objectContaining({
+          recordId: 'compound-clofibrate',
+          volume_uL: 100,
+        }),
+      }),
+      expect.objectContaining({
+        verb: 'transfer',
+        volume_uL: 25,
+        source_labware_id: 'labware-12-reservoir',
+        source_well: 'A1',
+        target_labware_id: 'labware-96-plate',
+        target_wells: ['B2'],
+        source_material_ref: expect.objectContaining({
+          id: 'compound-clofibrate',
+        }),
+      }),
+    ]);
+    expect(output.compileIr.actionFrames).toEqual([
+      expect.objectContaining({
+        verb: 'add_material',
+        roles: expect.objectContaining({
+          labware_id: 'labware-12-reservoir',
+          well: 'A1',
+          material: expect.objectContaining({
+            recordId: 'compound-clofibrate',
+          }),
+        }),
+      }),
+      expect.objectContaining({
+        verb: 'transfer',
+        roles: expect.objectContaining({
+          source_labware_id: 'labware-12-reservoir',
+          source_well: 'A1',
+          target_labware_id: 'labware-96-plate',
+          target_wells: ['B2'],
+          source_material_ref: expect.objectContaining({
+            id: 'compound-clofibrate',
+          }),
+        }),
+        links: expect.objectContaining({
+          sourceFromPreviousAdd: true,
+          sourceWellFromPreviousAdd: true,
+          sameMaterialAsPrevious: true,
+          labwareRoleRefs: expect.arrayContaining(['target']),
+        }),
+      }),
+    ]);
+  });
+
+  it('treats same-material phrases as material back-references in raw transfer clauses', async () => {
+    const prompt = 'Add a 12-well reservoir to the source location. Add a 96-well plate to the target position. Add 80uL of clofibrate to well A1 of the reservoir. Transfer 20uL of the same material to well C3 of the target plate.';
+    const targetPass = createDeterministicPrecompilePass({
+      ...makeMockDeps(),
+      labwareDefinitionRegistry: {
+        findByName: (n: string) => {
+          if (n === '12-well reservoir') return { recordId: 'labware-12-reservoir' };
+          if (n === '96-well plate') return { recordId: 'labware-96-plate' };
+          return undefined;
+        },
+      },
+      compoundClassRegistry: {
+        findByName: (n: string) => n === 'clofibrate' ? { recordId: 'compound-clofibrate' } : undefined,
+      },
+    });
+
+    const result = await targetPass.run({
+      pass_id: 'deterministic_precompile',
+      state: makeState(prompt),
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as any;
+    expect(output.residualClauses).toEqual([]);
+    expect(output.deterministicCompleteness).toBe(1);
+    expect(output.candidateEvents).toContainEqual(
+      expect.objectContaining({
+        verb: 'transfer',
+        volume_uL: 20,
+        source_labware_id: 'labware-12-reservoir',
+        source_well: 'A1',
+        target_labware_id: 'labware-96-plate',
+        target_wells: ['C3'],
+        source_material_ref: expect.objectContaining({
+          id: 'compound-clofibrate',
+        }),
+      }),
+    );
+    expect(output.compileIr.actionFrames).toContainEqual(
+      expect.objectContaining({
+        verb: 'transfer',
+        links: expect.objectContaining({
+          sameMaterialAsPrevious: true,
+          sourceFromPreviousAdd: true,
+          sourceWellFromPreviousAdd: true,
+        }),
+      }),
+    );
+  });
+
+  it('extracts raw-prompt concentration while resolving the underlying material', async () => {
+    const prompt = 'Add a 12-well reservoir to the source location. Add 120uL of 1mM clofibrate to well A1 of the reservoir.';
+    const targetPass = createDeterministicPrecompilePass({
+      ...makeMockDeps(),
+      labwareDefinitionRegistry: {
+        findByName: (n: string) => n === '12-well reservoir' ? { recordId: 'labware-12-reservoir' } : undefined,
+      },
+      compoundClassRegistry: {
+        findByName: (n: string) => n === 'clofibrate' ? { recordId: 'compound-clofibrate' } : undefined,
+      },
+    });
+
+    const result = await targetPass.run({
+      pass_id: 'deterministic_precompile',
+      state: makeState(prompt),
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as any;
+    expect(output.residualClauses).toEqual([]);
+    expect(output.deterministicCompleteness).toBe(1);
+    expect(output.candidateEvents).toContainEqual(
+      expect.objectContaining({
+        verb: 'add_material',
+        volume_uL: 120,
+        concentration_uM: 1000,
+        labware_id: 'labware-12-reservoir',
+        well: 'A1',
+        material: expect.objectContaining({
+          recordId: 'compound-clofibrate',
+          volume_uL: 120,
+          concentration_uM: 1000,
+          concentration: {
+            raw: '1mM',
+            unit: 'uM',
+            value: 1000,
+          },
+        }),
+      }),
+    );
+    expect(output.compileIr.actionFrames).toContainEqual(
+      expect.objectContaining({
+        verb: 'add_material',
+        parameters: expect.objectContaining({
+          concentration_uM: 1000,
+          concentration: {
+            raw: '1mM',
+            unit: 'uM',
+            value: 1000,
+          },
+        }),
+      }),
+    );
+  });
+
+  it('expands raw-prompt column transfers into target wells', async () => {
+    const prompt = 'Add a 12-well reservoir to the source location. Add a 96-well plate to the target position. Add 12000uL of clofibrate to well A1 of the reservoir. Transfer 100uL of it to each well in column 1 of the 96-well plate.';
+    const targetPass = createDeterministicPrecompilePass({
+      ...makeMockDeps(),
+      labwareDefinitionRegistry: {
+        findByName: (n: string) => {
+          if (n === '12-well reservoir') return { recordId: 'labware-12-reservoir' };
+          if (n === '96-well plate') return { recordId: 'labware-96-plate' };
+          return undefined;
+        },
+      },
+      compoundClassRegistry: {
+        findByName: (n: string) => n === 'clofibrate' ? { recordId: 'compound-clofibrate' } : undefined,
+      },
+    });
+
+    const result = await targetPass.run({
+      pass_id: 'deterministic_precompile',
+      state: makeState(prompt),
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as any;
+    expect(output.residualClauses).toEqual([]);
+    expect(output.candidateEvents).toContainEqual(
+      expect.objectContaining({
+        verb: 'transfer',
+        volume_uL: 100,
+        source_labware_id: 'labware-12-reservoir',
+        source_well: 'A1',
+        target_labware_id: 'labware-96-plate',
+        target_wells: ['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1'],
+        source_material_ref: expect.objectContaining({
+          id: 'compound-clofibrate',
+        }),
+      }),
+    );
+    expect(output.compileIr.actionFrames).toContainEqual(
+      expect.objectContaining({
+        verb: 'transfer',
+        roles: expect.objectContaining({
+          target_wells: ['A1', 'B1', 'C1', 'D1', 'E1', 'F1', 'G1', 'H1'],
+        }),
+      }),
+    );
+  });
+
+  it('resolves read pronouns from labware context without treating the plate reader as labware', async () => {
+    const prompt = 'Add a 96-well plate to the target position. Read it on the Gemini EM plate reader in luminescence mode as a simulation.';
+    const targetPass = createDeterministicPrecompilePass({
+      ...makeMockDeps(),
+      labwareDefinitionRegistry: {
+        findByName: (n: string) => n === '96-well plate' ? { recordId: 'labware-96-plate' } : undefined,
+      },
+    });
+
+    const result = await targetPass.run({
+      pass_id: 'deterministic_precompile',
+      state: makeState(prompt),
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as any;
+    expect(output.residualClauses).toEqual([]);
+    expect(output.candidateEvents).toContainEqual(
+      expect.objectContaining({
+        verb: 'read',
+        labware_id: 'labware-96-plate',
+        instrument: 'Gemini EM plate reader',
+        mode: 'luminescence',
+        simulate: true,
+      }),
+    );
+    // The leading "Add a 96-well plate to the target position." clause is
+    // pure labware setup and is suppressed; the read is the only action frame.
+    expect(output.compileIr.actionFrames[0]).toEqual(
+      expect.objectContaining({
+        verb: 'read',
+        nouns: [
+          expect.objectContaining({
+            phrase: 'it',
+            kind: 'labware',
+            recordId: 'labware-96-plate',
+            source: 'back_reference:target',
+          }),
+        ],
+        roles: expect.objectContaining({
+          labware_id: 'labware-96-plate',
+          instrument: 'Gemini EM plate reader',
+        }),
+        links: expect.objectContaining({
+          labwareRoleRefs: ['target'],
+        }),
+      }),
+    );
+  });
+
+  it('treats deck slot placement as labware setup with a pinned deck slot', async () => {
+    const targetPass = createDeterministicPrecompilePass({
+      ...makeMockDeps(),
+      labwareDefinitionRegistry: {
+        findByName: (n: string) => n === '96-well plate' ? { recordId: 'labware-96-plate' } : undefined,
+      },
+    });
+
+    const result = await targetPass.run({
+      pass_id: 'deterministic_precompile',
+      state: makeState('Place a 96-well plate on deck slot B2.'),
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as any;
+    expect(output.residualClauses).toEqual([]);
+    // Labware setup intent is captured by candidateLabwares (with a pinned
+    // deck slot), not as a spurious add_material candidate event.
+    expect(output.candidateEvents).toEqual([]);
+    expect(output.candidateLabwares).toEqual([
+      {
+        hint: '96-well plate',
+        reason: 'mentioned in clause',
+        deckSlot: 'B2',
+      },
+    ]);
+  });
+
+  it('lowers a Gemini EM target-plate read into a validated read action frame', async () => {
+    const prompt = 'Add a 96-well plate to the target position. Read the target plate on the Gemini EM plate reader.';
+    const targetPass = createDeterministicPrecompilePass({
+      ...makeMockDeps(),
+      labwareDefinitionRegistry: {
+        findByName: (n: string) => n === '96-well plate' ? { recordId: 'labware-96-plate' } : undefined,
+      },
+    });
+
+    const result = await targetPass.run({
+      pass_id: 'deterministic_precompile',
+      state: makeState(prompt),
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as any;
+    expect(output.residualClauses).toEqual([]);
+    // First clause is pure labware setup → suppressed; only the read remains.
+    expect(output.candidateEvents).toEqual([
+      expect.objectContaining({
+        verb: 'read',
+        labware_id: 'labware-96-plate',
+        instrument: 'Gemini EM plate reader',
+      }),
+    ]);
+    expect(output.compileIr.actionFrames[0]).toEqual(
+      expect.objectContaining({
+        verb: 'read',
+        roles: expect.objectContaining({
+          labware_id: 'labware-96-plate',
+          instrument: 'Gemini EM plate reader',
+        }),
+        diagnostics: [],
+      }),
+    );
+    expect(result.diagnostics ?? []).not.toContainEqual(
+      expect.objectContaining({ code: 'action_frame_missing_read_instrument' }),
+    );
+  });
+
+  it('warns when a read action frame is missing an instrument', async () => {
+    const prompt = 'Add a 96-well plate to the target position. Read the target plate.';
+    const targetPass = createDeterministicPrecompilePass({
+      ...makeMockDeps(),
+      labwareDefinitionRegistry: {
+        findByName: (n: string) => n === '96-well plate' ? { recordId: 'labware-96-plate' } : undefined,
+      },
+    });
+
+    const result = await targetPass.run({
+      pass_id: 'deterministic_precompile',
+      state: makeState(prompt),
+    });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as any;
+    // Labware setup clause is suppressed; the read is the only remaining
+    // candidate event and the only action frame.
+    expect(output.candidateEvents[0]).toEqual(
+      expect.objectContaining({
+        verb: 'read',
+        labware_id: 'labware-96-plate',
+      }),
+    );
+    expect(output.compileIr.actionFrames[0]).toEqual(
+      expect.objectContaining({
+        verb: 'read',
+        diagnostics: [
+          expect.objectContaining({
+            code: 'action_frame_missing_read_instrument',
+          }),
+        ],
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        severity: 'warning',
+        code: 'action_frame_missing_read_instrument',
+      }),
+    );
   });
 });

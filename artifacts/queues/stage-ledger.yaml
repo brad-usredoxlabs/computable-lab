@@ -1,7 +1,7 @@
 kind: protocol-foundry-stage-ledger
 generated_at: 2026-05-08T22:13:08.559Z
-updated_at: 2026-05-09T19:27:45.766Z
-artifact_root: /home/brad/git/computable-foundry/artifacts
+updated_at: 2026-05-16T01:29:11.908Z
+artifact_root: ../artifacts
 protocols:
   - an-fame-oil-gc-pal3-5994-8543en-agilent
   - bulletin-6816
@@ -16,8 +16,8 @@ protocols:
 protocol_status:
   an-fame-oil-gc-pal3-5994-8543en-agilent:
     protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
-    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
-    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+    segmentPath: ../artifacts/segments/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
+    materialContextPath: ../artifacts/material-context/an-fame-oil-gc-pal3-5994-8543en-agilent.yaml
     status: gap
     variants:
       manual_tubes:
@@ -25,13 +25,13 @@ protocol_status:
         status: stalled
         attempt: 24
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/report.yaml
-          adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/adoption.yaml
-          patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/an-fame-oil-gc-pal3-5994-8543en-agilent-manual_tubes.yaml
-          stallReport: /home/brad/git/computable-foundry/artifacts/stalled/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/stall.yaml
+          compiler: ../artifacts/compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+          eventGraph: ../artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+          executionScale: ../artifacts/execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes.yaml
+          browserReport: ../artifacts/browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/report.yaml
+          adoptionDecision: ../artifacts/adoption/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/adoption.yaml
+          patchReport: ../artifacts/patch-reports/an-fame-oil-gc-pal3-5994-8543en-agilent-manual_tubes.yaml
+          stallReport: ../artifacts/stalled/an-fame-oil-gc-pal3-5994-8543en-agilent/manual_tubes/stall.yaml
         metrics:
           eventCount: 10
           blockerCount: 0
@@ -46,67 +46,69 @@ protocol_status:
         failureReason: no meaningful files touched
       bench_plate_multichannel:
         variant: bench_plate_multichannel
-        status: accepted
-        attempt: 21
+        status: stalled
+        attempt: 24
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/verdict.yaml
+          compiler: ../artifacts/compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+          eventGraph: ../artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+          executionScale: ../artifacts/execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel.yaml
+          browserReport: ../artifacts/browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/report.yaml
+          architectVerdict: ../artifacts/architect/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-labware-resolution-generic-refs.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-unknown-verbs-scale-wait.yaml
-          adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/adoption.yaml
-          coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/result.yaml
-          patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/an-fame-oil-gc-pal3-5994-8543en-agilent-bench_plate_multichannel.yaml
-          criticReport: /home/brad/git/computable-foundry/artifacts/patch-critic/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/report.yaml
-        metrics:
-          eventCount: 9
-          blockerCount: 0
-          diagnosticCount: 12
-          extractorRepairExhaustedCount: 0
-          outcome: gap
-          foundryComplete: 0
-          qualityScore: 0.35
-          coverageEstimate: 0.45
-        startedAt: 2026-05-09T19:24:26.010Z
-        completedAt: 2026-05-09T19:24:26.022Z
-        failureReason: "Patch applied: 1 file(s) changed, spec verification passed."
-      robot_deck:
-        variant: robot_deck
-        status: accepted
-        attempt: 7
-        artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/verdict.yaml
-          patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-ai-precompile-shape-mismatch.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-unknown-verbs-bind-prefer-use-report.yaml
-          adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/adoption.yaml
-          coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/result.yaml
-          patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/an-fame-oil-gc-pal3-5994-8543en-agilent-robot_deck.yaml
-          criticReport: /home/brad/git/computable-foundry/artifacts/patch-critic/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/report.yaml
+            - ../artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-ai-precompile-shape-mismatch-and-fallback.yaml
+            - ../artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/fix-deterministic-fallback-from-presegmented-candidates.yaml
+          adoptionDecision: ../artifacts/adoption/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/adoption.yaml
+          coderPatch: ../artifacts/code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/result.yaml
+          patchReport: ../artifacts/patch-reports/an-fame-oil-gc-pal3-5994-8543en-agilent-bench_plate_multichannel.yaml
+          criticReport: ../artifacts/patch-critic/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/report.yaml
+          rerunReport: ../artifacts/rerun/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/rerun.yaml
+          stallReport: ../artifacts/stalled/an-fame-oil-gc-pal3-5994-8543en-agilent/bench_plate_multichannel/stall.yaml
         metrics:
           eventCount: 0
           blockerCount: 0
-          diagnosticCount: 18
+          diagnosticCount: 15
+          extractorRepairExhaustedCount: 0
+          outcome: gap
+          foundryComplete: 0
+          qualityScore: 0.05
+          coverageEstimate: 0
+        startedAt: 2026-05-09T22:09:12.921Z
+        completedAt: 2026-05-09T22:11:10.444Z
+        failureReason: browser review skipped by --skip-browser
+      robot_deck:
+        variant: robot_deck
+        status: gap
+        attempt: 14
+        artifacts:
+          compiler: ../artifacts/compiler/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+          eventGraph: ../artifacts/event-graphs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+          executionScale: ../artifacts/execution-scale/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck.yaml
+          browserReport: ../artifacts/browser-review/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/report.yaml
+          architectVerdict: ../artifacts/architect/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/verdict.yaml
+          patchSpecs:
+            - ../artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-ai-precompile-shape-mismatch-and-empty-events.yaml
+            - ../artifacts/patch-specs/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/fix-presegmented-candidate-extraction.yaml
+          adoptionDecision: ../artifacts/adoption/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/adoption.yaml
+          coderPatch: ../artifacts/code-patches/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/result.yaml
+          patchReport: ../artifacts/patch-reports/an-fame-oil-gc-pal3-5994-8543en-agilent-robot_deck.yaml
+          criticReport: ../artifacts/patch-critic/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/report.yaml
+          rerunReport: ../artifacts/rerun/an-fame-oil-gc-pal3-5994-8543en-agilent/robot_deck/rerun.yaml
+        metrics:
+          eventCount: 0
+          blockerCount: 0
+          diagnosticCount: 15
           extractorRepairExhaustedCount: 0
           outcome: gap
           foundryComplete: 0
           qualityScore: 0.1
           coverageEstimate: 0
-        startedAt: 2026-05-09T19:27:25.638Z
-        completedAt: 2026-05-09T19:27:25.648Z
+        startedAt: 2026-05-10T12:24:27.408Z
+        completedAt: 2026-05-10T12:24:27.421Z
         failureReason: "Patch applied: 1 file(s) changed, spec verification passed."
   bulletin-6816:
     protocolId: bulletin-6816
-    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/bulletin-6816.yaml
-    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/bulletin-6816.yaml
+    segmentPath: ../artifacts/segments/bulletin-6816.yaml
+    materialContextPath: ../artifacts/material-context/bulletin-6816.yaml
     status: stalled
     variants:
       manual_tubes:
@@ -114,14 +116,14 @@ protocol_status:
         status: stalled
         attempt: 401
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/manual_tubes.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/manual_tubes.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/bulletin-6816/manual_tubes.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/bulletin-6816/manual_tubes/report.yaml
-          adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/bulletin-6816/manual_tubes/adoption.yaml
-          patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/bulletin-6816-manual_tubes.yaml
-          criticReport: /home/brad/git/computable-foundry/artifacts/patch-critic/bulletin-6816/manual_tubes/report.yaml
-          stallReport: /home/brad/git/computable-foundry/artifacts/stalled/bulletin-6816/manual_tubes/stall.yaml
+          compiler: ../artifacts/compiler/bulletin-6816/manual_tubes.yaml
+          eventGraph: ../artifacts/event-graphs/bulletin-6816/manual_tubes.yaml
+          executionScale: ../artifacts/execution-scale/bulletin-6816/manual_tubes.yaml
+          browserReport: ../artifacts/browser-review/bulletin-6816/manual_tubes/report.yaml
+          adoptionDecision: ../artifacts/adoption/bulletin-6816/manual_tubes/adoption.yaml
+          patchReport: ../artifacts/patch-reports/bulletin-6816-manual_tubes.yaml
+          criticReport: ../artifacts/patch-critic/bulletin-6816/manual_tubes/report.yaml
+          stallReport: ../artifacts/stalled/bulletin-6816/manual_tubes/stall.yaml
         metrics:
           eventCount: 1
           diagnosticCount: 10
@@ -138,15 +140,15 @@ protocol_status:
         status: stalled
         attempt: 24
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/bench_plate_multichannel.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/bench_plate_multichannel.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/bulletin-6816/bench_plate_multichannel.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/bulletin-6816/bench_plate_multichannel/report.yaml
-          adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/bulletin-6816/bench_plate_multichannel/adoption.yaml
-          patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/bulletin-6816-bench_plate_multichannel.yaml
-          criticReport: /home/brad/git/computable-foundry/artifacts/patch-critic/bulletin-6816/bench_plate_multichannel/report.yaml
-          rerunReport: /home/brad/git/computable-foundry/artifacts/rerun/bulletin-6816/bench_plate_multichannel/rerun.yaml
-          stallReport: /home/brad/git/computable-foundry/artifacts/stalled/bulletin-6816/bench_plate_multichannel/stall.yaml
+          compiler: ../artifacts/compiler/bulletin-6816/bench_plate_multichannel.yaml
+          eventGraph: ../artifacts/event-graphs/bulletin-6816/bench_plate_multichannel.yaml
+          executionScale: ../artifacts/execution-scale/bulletin-6816/bench_plate_multichannel.yaml
+          browserReport: ../artifacts/browser-review/bulletin-6816/bench_plate_multichannel/report.yaml
+          adoptionDecision: ../artifacts/adoption/bulletin-6816/bench_plate_multichannel/adoption.yaml
+          patchReport: ../artifacts/patch-reports/bulletin-6816-bench_plate_multichannel.yaml
+          criticReport: ../artifacts/patch-critic/bulletin-6816/bench_plate_multichannel/report.yaml
+          rerunReport: ../artifacts/rerun/bulletin-6816/bench_plate_multichannel/rerun.yaml
+          stallReport: ../artifacts/stalled/bulletin-6816/bench_plate_multichannel/stall.yaml
         metrics:
           eventCount: 1
           diagnosticCount: 11
@@ -164,15 +166,15 @@ protocol_status:
         status: stalled
         attempt: 24
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/bulletin-6816/robot_deck.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/bulletin-6816/robot_deck.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/bulletin-6816/robot_deck.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/bulletin-6816/robot_deck/report.yaml
-          adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/bulletin-6816/robot_deck/adoption.yaml
-          patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/bulletin-6816-robot_deck.yaml
-          criticReport: /home/brad/git/computable-foundry/artifacts/patch-critic/bulletin-6816/robot_deck/report.yaml
-          rerunReport: /home/brad/git/computable-foundry/artifacts/rerun/bulletin-6816/robot_deck/rerun.yaml
-          stallReport: /home/brad/git/computable-foundry/artifacts/stalled/bulletin-6816/robot_deck/stall.yaml
+          compiler: ../artifacts/compiler/bulletin-6816/robot_deck.yaml
+          eventGraph: ../artifacts/event-graphs/bulletin-6816/robot_deck.yaml
+          executionScale: ../artifacts/execution-scale/bulletin-6816/robot_deck.yaml
+          browserReport: ../artifacts/browser-review/bulletin-6816/robot_deck/report.yaml
+          adoptionDecision: ../artifacts/adoption/bulletin-6816/robot_deck/adoption.yaml
+          patchReport: ../artifacts/patch-reports/bulletin-6816-robot_deck.yaml
+          criticReport: ../artifacts/patch-critic/bulletin-6816/robot_deck/report.yaml
+          rerunReport: ../artifacts/rerun/bulletin-6816/robot_deck/rerun.yaml
+          stallReport: ../artifacts/stalled/bulletin-6816/robot_deck/stall.yaml
         metrics:
           eventCount: 1
           diagnosticCount: 10
@@ -187,29 +189,28 @@ protocol_status:
         failureReason: no meaningful files touched
   cayman-immuno-oncology:
     protocolId: cayman-immuno-oncology
-    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/cayman-immuno-oncology.yaml
-    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/cayman-immuno-oncology.yaml
-    status: blocked
+    segmentPath: ../artifacts/segments/cayman-immuno-oncology.yaml
+    materialContextPath: ../artifacts/material-context/cayman-immuno-oncology.yaml
+    status: gap
     variants:
       manual_tubes:
         variant: manual_tubes
-        status: blocked
-        attempt: 6
+        status: gap
+        attempt: 12
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-immuno-oncology/manual_tubes.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-immuno-oncology/manual_tubes.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-immuno-oncology/manual_tubes.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-immuno-oncology/manual_tubes/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-immuno-oncology/manual_tubes/verdict.yaml
+          compiler: ../artifacts/compiler/cayman-immuno-oncology/manual_tubes.yaml
+          eventGraph: ../artifacts/event-graphs/cayman-immuno-oncology/manual_tubes.yaml
+          executionScale: ../artifacts/execution-scale/cayman-immuno-oncology/manual_tubes.yaml
+          browserReport: ../artifacts/browser-review/cayman-immuno-oncology/manual_tubes/report.yaml
+          architectVerdict: ../artifacts/architect/cayman-immuno-oncology/manual_tubes/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-browser-rendering.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-event-graph-coverage-wash.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-foundry-runtime-wiring-gap.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-labware-alias-resolver-gap.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-material-catalog-spec-gap.yaml
-          adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/cayman-immuno-oncology/manual_tubes/adoption.yaml
-          coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-immuno-oncology/manual_tubes/result.yaml
-          patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/cayman-immuno-oncology-manual_tubes.yaml
+            - ../artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+            - ../artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-labware-resolution-for-generic-plates.yaml
+            - ../artifacts/patch-specs/cayman-immuno-oncology/manual_tubes/fix-material-extraction-from-catalog-pdf.yaml
+          adoptionDecision: ../artifacts/adoption/cayman-immuno-oncology/manual_tubes/adoption.yaml
+          coderPatch: ../artifacts/code-patches/cayman-immuno-oncology/manual_tubes/result.yaml
+          patchReport: ../artifacts/patch-reports/cayman-immuno-oncology-manual_tubes.yaml
+          criticReport: ../artifacts/patch-critic/cayman-immuno-oncology/manual_tubes/report.yaml
         metrics:
           eventCount: 2
           blockerCount: 0
@@ -217,29 +218,29 @@ protocol_status:
           extractorRepairExhaustedCount: 0
           outcome: gap
           foundryComplete: 0
-          qualityScore: 0.7999999999999999
+          qualityScore: 0.15
           coverageEstimate: 0.1
-        startedAt: 2026-05-09T19:27:26.076Z
-        completedAt: 2026-05-09T19:27:35.492Z
-        failureReason: no symbol replacements produced
+        startedAt: 2026-05-11T22:50:28.430Z
+        completedAt: 2026-05-11T22:50:50.038Z
+        failureReason: tests failed
       bench_plate_multichannel:
         variant: bench_plate_multichannel
-        status: blocked
-        attempt: 6
+        status: gap
+        attempt: 12
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-immuno-oncology/bench_plate_multichannel.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-immuno-oncology/bench_plate_multichannel.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-immuno-oncology/bench_plate_multichannel.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-immuno-oncology/bench_plate_multichannel/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-immuno-oncology/bench_plate_multichannel/verdict.yaml
+          compiler: ../artifacts/compiler/cayman-immuno-oncology/bench_plate_multichannel.yaml
+          eventGraph: ../artifacts/event-graphs/cayman-immuno-oncology/bench_plate_multichannel.yaml
+          executionScale: ../artifacts/execution-scale/cayman-immuno-oncology/bench_plate_multichannel.yaml
+          browserReport: ../artifacts/browser-review/cayman-immuno-oncology/bench_plate_multichannel/report.yaml
+          architectVerdict: ../artifacts/architect/cayman-immuno-oncology/bench_plate_multichannel/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-browser-rendering.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-foundry-runtime-wiring-gap.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-labware-alias-resolver-gap.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-material-catalog-spec-gap.yaml
-          adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/cayman-immuno-oncology/bench_plate_multichannel/adoption.yaml
-          coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/cayman-immuno-oncology/bench_plate_multichannel/result.yaml
-          patchReport: /home/brad/git/computable-foundry/artifacts/patch-reports/cayman-immuno-oncology-bench_plate_multichannel.yaml
+            - ../artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+            - ../artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-labware-resolver-wiring.yaml
+            - ../artifacts/patch-specs/cayman-immuno-oncology/bench_plate_multichannel/fix-scale-verb-expander.yaml
+          adoptionDecision: ../artifacts/adoption/cayman-immuno-oncology/bench_plate_multichannel/adoption.yaml
+          coderPatch: ../artifacts/code-patches/cayman-immuno-oncology/bench_plate_multichannel/result.yaml
+          patchReport: ../artifacts/patch-reports/cayman-immuno-oncology-bench_plate_multichannel.yaml
+          criticReport: ../artifacts/patch-critic/cayman-immuno-oncology/bench_plate_multichannel/report.yaml
         metrics:
           eventCount: 11
           blockerCount: 0
@@ -247,110 +248,65 @@ protocol_status:
           extractorRepairExhaustedCount: 0
           outcome: gap
           foundryComplete: 0
-          qualityScore: 0.7999999999999999
+          qualityScore: 0.35
           coverageEstimate: 0.55
-        startedAt: 2026-05-09T19:27:35.945Z
-        completedAt: 2026-05-09T19:27:45.350Z
-        failureReason: no symbol replacements produced
+        startedAt: 2026-05-11T22:50:51.396Z
+        completedAt: 2026-05-11T22:51:06.199Z
+        failureReason: tests failed
       robot_deck:
         variant: robot_deck
-        status: running
-        attempt: 6
+        status: gap
+        attempt: 14
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-immuno-oncology/robot_deck.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-immuno-oncology/robot_deck.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-immuno-oncology/robot_deck.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-immuno-oncology/robot_deck/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-immuno-oncology/robot_deck/verdict.yaml
+          compiler: ../artifacts/compiler/cayman-immuno-oncology/robot_deck.yaml
+          eventGraph: ../artifacts/event-graphs/cayman-immuno-oncology/robot_deck.yaml
+          executionScale: ../artifacts/execution-scale/cayman-immuno-oncology/robot_deck.yaml
+          browserReport: ../artifacts/browser-review/cayman-immuno-oncology/robot_deck/report.yaml
+          architectVerdict: ../artifacts/architect/cayman-immuno-oncology/robot_deck/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/robot_deck/fix-ai-precompile-shape-mismatch.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/robot_deck/fix-labware-resolution-gaps.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-immuno-oncology/robot_deck/fix-unknown-biology-verbs.yaml
-          adoptionDecision: /home/brad/git/computable-foundry/artifacts/adoption/cayman-immuno-oncology/robot_deck/adoption.yaml
+            - ../artifacts/patch-specs/cayman-immuno-oncology/robot_deck/fix-ai-precompile-shape-mismatch-and-fallback.yaml
+            - ../artifacts/patch-specs/cayman-immuno-oncology/robot_deck/fix-tag-prompt-json-parse-error.yaml
+          adoptionDecision: ../artifacts/adoption/cayman-immuno-oncology/robot_deck/adoption.yaml
+          coderPatch: ../artifacts/code-patches/cayman-immuno-oncology/robot_deck/result.yaml
+          patchReport: ../artifacts/patch-reports/cayman-immuno-oncology-robot_deck.yaml
+          criticReport: ../artifacts/patch-critic/cayman-immuno-oncology/robot_deck/report.yaml
+          rerunReport: ../artifacts/rerun/cayman-immuno-oncology/robot_deck/rerun.yaml
         metrics:
           eventCount: 0
           blockerCount: 0
-          diagnosticCount: 16
+          diagnosticCount: 14
           extractorRepairExhaustedCount: 0
           outcome: gap
           foundryComplete: 0
           qualityScore: 0.05
           coverageEstimate: 0
-        startedAt: 2026-05-09T19:27:45.766Z
-        completedAt: 2026-05-09T19:27:45.565Z
-        failureReason: Patch specs accepted for unattended coder tournament execution.
+        startedAt: 2026-05-10T12:43:02.622Z
+        completedAt: 2026-05-10T12:43:02.636Z
+        failureReason: "Patch applied: 1 file(s) changed, spec verification passed."
   cayman-natural-prodccuts:
     protocolId: cayman-natural-prodccuts
-    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/cayman-natural-prodccuts.yaml
-    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/cayman-natural-prodccuts.yaml
+    segmentPath: ../artifacts/segments/cayman-natural-prodccuts.yaml
+    materialContextPath: ../artifacts/material-context/cayman-natural-prodccuts.yaml
     status: gap
     variants:
       manual_tubes:
         variant: manual_tubes
         status: gap
-        attempt: 4
+        attempt: 13
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-natural-prodccuts/manual_tubes.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-natural-prodccuts/manual_tubes.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-natural-prodccuts/manual_tubes.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-natural-prodccuts/manual_tubes/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-natural-prodccuts/manual_tubes/verdict.yaml
+          compiler: ../artifacts/compiler/cayman-natural-prodccuts/manual_tubes.yaml
+          eventGraph: ../artifacts/event-graphs/cayman-natural-prodccuts/manual_tubes.yaml
+          executionScale: ../artifacts/execution-scale/cayman-natural-prodccuts/manual_tubes.yaml
+          browserReport: ../artifacts/browser-review/cayman-natural-prodccuts/manual_tubes/report.yaml
+          architectVerdict: ../artifacts/architect/cayman-natural-prodccuts/manual_tubes/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/manual_tubes/add-plate-map-lowering-pass.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/manual_tubes/fix-precompiler-plate-map-candidate-shape.yaml
-        metrics:
-          eventCount: 0
-          blockerCount: 0
-          diagnosticCount: 39
-          extractorRepairExhaustedCount: 0
-          outcome: gap
-          foundryComplete: 0
-          qualityScore: 0
-          coverageEstimate: 0
-        startedAt: 2026-05-09T08:41:35.564Z
-        completedAt: 2026-05-09T08:55:38.240Z
-        failureReason: browser review skipped by --skip-browser
-      bench_plate_multichannel:
-        variant: bench_plate_multichannel
-        status: gap
-        attempt: 4
-        artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-natural-prodccuts/bench_plate_multichannel.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-natural-prodccuts/bench_plate_multichannel.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-natural-prodccuts/bench_plate_multichannel.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-natural-prodccuts/bench_plate_multichannel/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-natural-prodccuts/bench_plate_multichannel/verdict.yaml
-          patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/bench_plate_multichannel/add-plate-map-verb-lowering.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/bench_plate_multichannel/fix-presegmented-candidate-shape.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/bench_plate_multichannel/resolve-generic-labware-refs.yaml
-        metrics:
-          eventCount: 0
-          blockerCount: 0
-          diagnosticCount: 37
-          extractorRepairExhaustedCount: 0
-          outcome: gap
-          foundryComplete: 0
-          qualityScore: 0
-          coverageEstimate: 0
-        startedAt: 2026-05-09T08:43:54.623Z
-        completedAt: 2026-05-09T08:53:32.111Z
-        failureReason: browser review skipped by --skip-browser
-      robot_deck:
-        variant: robot_deck
-        status: gap
-        attempt: 4
-        artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/cayman-natural-prodccuts/robot_deck.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cayman-natural-prodccuts/robot_deck.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cayman-natural-prodccuts/robot_deck.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cayman-natural-prodccuts/robot_deck/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/cayman-natural-prodccuts/robot_deck/verdict.yaml
-          patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/robot_deck/fix-browser-rendering.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/robot_deck/fix-event-graph-empty-general.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/robot_deck/fix-foundry-runtime-wiring-gap.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cayman-natural-prodccuts/robot_deck/fix-material-catalog-spec-gap.yaml
+            - ../artifacts/patch-specs/cayman-natural-prodccuts/manual_tubes/add-plate-map-lowering-pass.yaml
+            - ../artifacts/patch-specs/cayman-natural-prodccuts/manual_tubes/wire-presegmented-candidates-to-lowering.yaml
+          adoptionDecision: ../artifacts/adoption/cayman-natural-prodccuts/manual_tubes/adoption.yaml
+          coderPatch: ../artifacts/code-patches/cayman-natural-prodccuts/manual_tubes/result.yaml
+          patchReport: ../artifacts/patch-reports/cayman-natural-prodccuts-manual_tubes.yaml
+          criticReport: ../artifacts/patch-critic/cayman-natural-prodccuts/manual_tubes/report.yaml
+          rerunReport: ../artifacts/rerun/cayman-natural-prodccuts/manual_tubes/rerun.yaml
         metrics:
           eventCount: 0
           blockerCount: 0
@@ -358,31 +314,93 @@ protocol_status:
           extractorRepairExhaustedCount: 0
           outcome: gap
           foundryComplete: 0
-          qualityScore: 0.55
+          qualityScore: 0.05
           coverageEstimate: 0
-        startedAt: 2026-05-09T08:46:04.273Z
-        completedAt: 2026-05-09T09:14:26.409Z
-        failureReason: browser review skipped by --skip-browser
+        startedAt: 2026-05-10T12:45:47.074Z
+        completedAt: 2026-05-10T12:45:47.089Z
+        failureReason: "Patch applied: 1 file(s) changed, spec verification passed."
+      bench_plate_multichannel:
+        variant: bench_plate_multichannel
+        status: gap
+        attempt: 13
+        artifacts:
+          compiler: ../artifacts/compiler/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+          eventGraph: ../artifacts/event-graphs/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+          executionScale: ../artifacts/execution-scale/cayman-natural-prodccuts/bench_plate_multichannel.yaml
+          browserReport: ../artifacts/browser-review/cayman-natural-prodccuts/bench_plate_multichannel/report.yaml
+          architectVerdict: ../artifacts/architect/cayman-natural-prodccuts/bench_plate_multichannel/verdict.yaml
+          patchSpecs:
+            - ../artifacts/patch-specs/cayman-natural-prodccuts/bench_plate_multichannel/add-plate-map-verb-lowering.yaml
+            - ../artifacts/patch-specs/cayman-natural-prodccuts/bench_plate_multichannel/fix-precompiler-plate-map-candidate-shape.yaml
+          adoptionDecision: ../artifacts/adoption/cayman-natural-prodccuts/bench_plate_multichannel/adoption.yaml
+          coderPatch: ../artifacts/code-patches/cayman-natural-prodccuts/bench_plate_multichannel/result.yaml
+          patchReport: ../artifacts/patch-reports/cayman-natural-prodccuts-bench_plate_multichannel.yaml
+          criticReport: ../artifacts/patch-critic/cayman-natural-prodccuts/bench_plate_multichannel/report.yaml
+          rerunReport: ../artifacts/rerun/cayman-natural-prodccuts/bench_plate_multichannel/rerun.yaml
+        metrics:
+          eventCount: 0
+          blockerCount: 0
+          diagnosticCount: 40
+          extractorRepairExhaustedCount: 0
+          outcome: gap
+          foundryComplete: 0
+          qualityScore: 0.05
+          coverageEstimate: 0
+        startedAt: 2026-05-10T12:50:26.106Z
+        completedAt: 2026-05-10T12:50:26.122Z
+        failureReason: "Patch applied: 1 file(s) changed, spec verification passed."
+      robot_deck:
+        variant: robot_deck
+        status: accepted
+        attempt: 10
+        artifacts:
+          compiler: ../artifacts/compiler/cayman-natural-prodccuts/robot_deck.yaml
+          eventGraph: ../artifacts/event-graphs/cayman-natural-prodccuts/robot_deck.yaml
+          executionScale: ../artifacts/execution-scale/cayman-natural-prodccuts/robot_deck.yaml
+          browserReport: ../artifacts/browser-review/cayman-natural-prodccuts/robot_deck/report.yaml
+          architectVerdict: ../artifacts/architect/cayman-natural-prodccuts/robot_deck/verdict.yaml
+          patchSpecs:
+            - ../artifacts/patch-specs/cayman-natural-prodccuts/robot_deck/add-plate-map-verb-expansion.yaml
+            - ../artifacts/patch-specs/cayman-natural-prodccuts/robot_deck/wire-presegmented-candidates-to-compiler-state.yaml
+          adoptionDecision: ../artifacts/adoption/cayman-natural-prodccuts/robot_deck/adoption.yaml
+          coderPatch: ../artifacts/code-patches/cayman-natural-prodccuts/robot_deck/result.yaml
+          patchReport: ../artifacts/patch-reports/cayman-natural-prodccuts-robot_deck.yaml
+          criticReport: ../artifacts/patch-critic/cayman-natural-prodccuts/robot_deck/report.yaml
+        metrics:
+          eventCount: 0
+          blockerCount: 0
+          diagnosticCount: 40
+          extractorRepairExhaustedCount: 0
+          outcome: gap
+          foundryComplete: 0
+          qualityScore: 0.1
+          coverageEstimate: 0
+        startedAt: 2026-05-10T12:53:33.454Z
+        completedAt: 2026-05-10T12:53:33.468Z
+        failureReason: "Patch applied: 1 file(s) changed, spec verification passed."
   cellrox-oxidative-stress-qr:
     protocolId: cellrox-oxidative-stress-qr
-    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/cellrox-oxidative-stress-qr.yaml
-    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/cellrox-oxidative-stress-qr.yaml
+    segmentPath: ../artifacts/segments/cellrox-oxidative-stress-qr.yaml
+    materialContextPath: ../artifacts/material-context/cellrox-oxidative-stress-qr.yaml
     status: gap
     variants:
       manual_tubes:
         variant: manual_tubes
         status: gap
-        attempt: 4
+        attempt: 9
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/cellrox-oxidative-stress-qr/manual_tubes.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cellrox-oxidative-stress-qr/manual_tubes.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cellrox-oxidative-stress-qr/manual_tubes.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cellrox-oxidative-stress-qr/manual_tubes/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/cellrox-oxidative-stress-qr/manual_tubes/verdict.yaml
+          compiler: ../artifacts/compiler/cellrox-oxidative-stress-qr/manual_tubes.yaml
+          eventGraph: ../artifacts/event-graphs/cellrox-oxidative-stress-qr/manual_tubes.yaml
+          executionScale: ../artifacts/execution-scale/cellrox-oxidative-stress-qr/manual_tubes.yaml
+          browserReport: ../artifacts/browser-review/cellrox-oxidative-stress-qr/manual_tubes/report.yaml
+          architectVerdict: ../artifacts/architect/cellrox-oxidative-stress-qr/manual_tubes/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/manual_tubes/fix-browser-rendering.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/manual_tubes/fix-foundry-runtime-wiring-gap.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/manual_tubes/fix-material-catalog-spec-gap.yaml
+            - ../artifacts/patch-specs/cellrox-oxidative-stress-qr/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+            - ../artifacts/patch-specs/cellrox-oxidative-stress-qr/manual_tubes/fix-analyze-verb-expander.yaml
+            - ../artifacts/patch-specs/cellrox-oxidative-stress-qr/manual_tubes/fix-treat-verb-expander.yaml
+          adoptionDecision: ../artifacts/adoption/cellrox-oxidative-stress-qr/manual_tubes/adoption.yaml
+          coderPatch: ../artifacts/code-patches/cellrox-oxidative-stress-qr/manual_tubes/result.yaml
+          patchReport: ../artifacts/patch-reports/cellrox-oxidative-stress-qr-manual_tubes.yaml
         metrics:
           eventCount: 10
           blockerCount: 0
@@ -390,26 +408,30 @@ protocol_status:
           extractorRepairExhaustedCount: 0
           outcome: complete
           foundryComplete: 1
-          qualityScore: 0.7999999999999999
+          qualityScore: 0.45
           coverageEstimate: 0.5
-        startedAt: 2026-05-09T08:53:32.115Z
-        completedAt: 2026-05-09T09:08:40.117Z
-        failureReason: browser review skipped by --skip-browser
+        startedAt: 2026-05-10T12:53:34.082Z
+        completedAt: 2026-05-10T12:53:33.782Z
+        failureReason: Patch specs accepted for unattended coder tournament execution.
       bench_plate_multichannel:
         variant: bench_plate_multichannel
         status: gap
-        attempt: 4
+        attempt: 7
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/cellrox-oxidative-stress-qr/bench_plate_multichannel.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cellrox-oxidative-stress-qr/bench_plate_multichannel.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cellrox-oxidative-stress-qr/bench_plate_multichannel.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cellrox-oxidative-stress-qr/bench_plate_multichannel/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/cellrox-oxidative-stress-qr/bench_plate_multichannel/verdict.yaml
+          compiler: ../artifacts/compiler/cellrox-oxidative-stress-qr/bench_plate_multichannel.yaml
+          eventGraph: ../artifacts/event-graphs/cellrox-oxidative-stress-qr/bench_plate_multichannel.yaml
+          executionScale: ../artifacts/execution-scale/cellrox-oxidative-stress-qr/bench_plate_multichannel.yaml
+          browserReport: ../artifacts/browser-review/cellrox-oxidative-stress-qr/bench_plate_multichannel/report.yaml
+          architectVerdict: ../artifacts/architect/cellrox-oxidative-stress-qr/bench_plate_multichannel/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/fix-browser-rendering.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/fix-foundry-runtime-wiring-gap.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/fix-labware-alias-resolver-gap.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/fix-material-catalog-spec-gap.yaml
+            - ../artifacts/patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/add-analyze-verb-expander.yaml
+            - ../artifacts/patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/add-configure-verb-expander.yaml
+            - ../artifacts/patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/add-treat-verb-expander.yaml
+            - ../artifacts/patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
+            - ../artifacts/patch-specs/cellrox-oxidative-stress-qr/bench_plate_multichannel/resolve-generic-labware-aliases.yaml
+          adoptionDecision: ../artifacts/adoption/cellrox-oxidative-stress-qr/bench_plate_multichannel/adoption.yaml
+          coderPatch: ../artifacts/code-patches/cellrox-oxidative-stress-qr/bench_plate_multichannel/result.yaml
+          patchReport: ../artifacts/patch-reports/cellrox-oxidative-stress-qr-bench_plate_multichannel.yaml
         metrics:
           eventCount: 19
           blockerCount: 0
@@ -417,249 +439,257 @@ protocol_status:
           extractorRepairExhaustedCount: 0
           outcome: gap
           foundryComplete: 0
-          qualityScore: 0.7999999999999999
+          qualityScore: 0.35
           coverageEstimate: 0.95
-        startedAt: 2026-05-09T08:55:38.245Z
-        completedAt: 2026-05-09T09:10:46.542Z
-        failureReason: browser review skipped by --skip-browser
+        startedAt: 2026-05-09T22:14:28.258Z
+        completedAt: 2026-05-09T22:18:53.299Z
+        failureReason: no symbol replacements produced
       robot_deck:
         variant: robot_deck
         status: gap
-        attempt: 4
+        attempt: 10
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/cellrox-oxidative-stress-qr/robot_deck.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/cellrox-oxidative-stress-qr/robot_deck.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/cellrox-oxidative-stress-qr/robot_deck.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/cellrox-oxidative-stress-qr/robot_deck/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/cellrox-oxidative-stress-qr/robot_deck/verdict.yaml
+          compiler: ../artifacts/compiler/cellrox-oxidative-stress-qr/robot_deck.yaml
+          eventGraph: ../artifacts/event-graphs/cellrox-oxidative-stress-qr/robot_deck.yaml
+          executionScale: ../artifacts/execution-scale/cellrox-oxidative-stress-qr/robot_deck.yaml
+          browserReport: ../artifacts/browser-review/cellrox-oxidative-stress-qr/robot_deck/report.yaml
+          architectVerdict: ../artifacts/architect/cellrox-oxidative-stress-qr/robot_deck/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/add-analyze-verb-expander.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/add-remove-verb-expander.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/add-treat-verb-expander.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+            - ../artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/fix-ai-precompile-json-parse-and-fallback.yaml
+            - ../artifacts/patch-specs/cellrox-oxidative-stress-qr/robot_deck/fix-deterministic-candidate-to-event-lowering.yaml
+          adoptionDecision: ../artifacts/adoption/cellrox-oxidative-stress-qr/robot_deck/adoption.yaml
+          coderPatch: ../artifacts/code-patches/cellrox-oxidative-stress-qr/robot_deck/result.yaml
+          patchReport: ../artifacts/patch-reports/cellrox-oxidative-stress-qr-robot_deck.yaml
+          criticReport: ../artifacts/patch-critic/cellrox-oxidative-stress-qr/robot_deck/report.yaml
+          rerunReport: ../artifacts/rerun/cellrox-oxidative-stress-qr/robot_deck/rerun.yaml
         metrics:
-          eventCount: 10
+          eventCount: 0
           blockerCount: 0
           diagnosticCount: 11
           extractorRepairExhaustedCount: 0
-          outcome: complete
-          foundryComplete: 1
-          qualityScore: 0.45
-          coverageEstimate: 0.5
-        startedAt: 2026-05-09T09:05:59.225Z
-        completedAt: 2026-05-09T09:19:44.988Z
+          outcome: gap
+          foundryComplete: 0
+          qualityScore: 0.05
+          coverageEstimate: 0
+        startedAt: 2026-05-09T22:14:48.943Z
+        completedAt: 2026-05-09T22:17:11.654Z
         failureReason: browser review skipped by --skip-browser
   d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit:
     protocolId: d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit
-    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
-    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+    segmentPath: ../artifacts/segments/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
+    materialContextPath: ../artifacts/material-context/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit.yaml
     status: gap
     variants:
       manual_tubes:
         variant: manual_tubes
         status: gap
-        attempt: 4
+        attempt: 10
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/verdict.yaml
+          compiler: ../artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+          eventGraph: ../artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+          executionScale: ../artifacts/execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes.yaml
+          browserReport: ../artifacts/browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/report.yaml
+          architectVerdict: ../artifacts/architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-labware-resolution-for-zymobiomics.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-material-resolution-for-resuspend.yaml
+            - ../artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-ai-precompile-json-parse-and-shape.yaml
+            - ../artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/fix-tag-prompt-json-resilience.yaml
+          adoptionDecision: ../artifacts/adoption/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/adoption.yaml
+          coderPatch: ../artifacts/code-patches/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/result.yaml
+          patchReport: ../artifacts/patch-reports/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit-manual_tubes.yaml
+          criticReport: ../artifacts/patch-critic/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/report.yaml
+          rerunReport: ../artifacts/rerun/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/manual_tubes/rerun.yaml
         metrics:
-          eventCount: 6
+          eventCount: 0
+          blockerCount: 0
+          diagnosticCount: 19
+          extractorRepairExhaustedCount: 0
+          outcome: gap
+          foundryComplete: 0
+          qualityScore: 0.05
+          coverageEstimate: 0
+        startedAt: 2026-05-09T22:16:04.714Z
+        completedAt: 2026-05-09T22:25:31.974Z
+        failureReason: browser review skipped by --skip-browser
+      bench_plate_multichannel:
+        variant: bench_plate_multichannel
+        status: gap
+        attempt: 10
+        artifacts:
+          compiler: ../artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+          eventGraph: ../artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+          executionScale: ../artifacts/execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
+          browserReport: ../artifacts/browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/report.yaml
+          architectVerdict: ../artifacts/architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/verdict.yaml
+          patchSpecs:
+            - ../artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-browser-rendering.yaml
+            - ../artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-event-graph-empty-general.yaml
+            - ../artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-foundry-runtime-wiring-gap.yaml
+            - ../artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-material-catalog-spec-gap.yaml
+          adoptionDecision: ../artifacts/adoption/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/adoption.yaml
+          coderPatch: ../artifacts/code-patches/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/result.yaml
+          patchReport: ../artifacts/patch-reports/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit-bench_plate_multichannel.yaml
+          criticReport: ../artifacts/patch-critic/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/report.yaml
+          rerunReport: ../artifacts/rerun/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/rerun.yaml
+        metrics:
+          eventCount: 0
+          blockerCount: 0
+          diagnosticCount: 19
+          extractorRepairExhaustedCount: 0
+          outcome: gap
+          foundryComplete: 0
+          qualityScore: 0.55
+          coverageEstimate: 0
+        startedAt: 2026-05-09T22:17:11.662Z
+        completedAt: 2026-05-09T22:39:15.540Z
+        failureReason: browser review skipped by --skip-browser
+      robot_deck:
+        variant: robot_deck
+        status: gap
+        attempt: 10
+        artifacts:
+          compiler: ../artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+          eventGraph: ../artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+          executionScale: ../artifacts/execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
+          browserReport: ../artifacts/browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/report.yaml
+          architectVerdict: ../artifacts/architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/verdict.yaml
+          patchSpecs:
+            - ../artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/fix-presegmented-candidate-extraction-for-zymobiomics.yaml
+            - ../artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/fix-tag-prompt-json-parse-and-shape-mismatch.yaml
+          adoptionDecision: ../artifacts/adoption/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/adoption.yaml
+          coderPatch: ../artifacts/code-patches/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/result.yaml
+          patchReport: ../artifacts/patch-reports/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit-robot_deck.yaml
+          criticReport: ../artifacts/patch-critic/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/report.yaml
+          rerunReport: ../artifacts/rerun/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/rerun.yaml
+        metrics:
+          eventCount: 0
+          blockerCount: 0
+          diagnosticCount: 19
+          extractorRepairExhaustedCount: 0
+          outcome: gap
+          foundryComplete: 0
+          qualityScore: 0.05
+          coverageEstimate: 0
+        startedAt: 2026-05-09T22:18:53.305Z
+        completedAt: 2026-05-09T22:27:31.853Z
+        failureReason: browser review skipped by --skip-browser
+  man0011593-nabspincolumn-5ml-antibody-purifi-ug:
+    protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
+    segmentPath: ../artifacts/segments/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+    materialContextPath: ../artifacts/material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
+    status: gap
+    variants:
+      manual_tubes:
+        variant: manual_tubes
+        status: gap
+        attempt: 7
+        artifacts:
+          compiler: ../artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+          eventGraph: ../artifacts/event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+          executionScale: ../artifacts/execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
+          browserReport: ../artifacts/browser-review/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/report.yaml
+          architectVerdict: ../artifacts/architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/verdict.yaml
+          patchSpecs:
+            - ../artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+            - ../artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/fix-deterministic-precompile-coverage.yaml
+            - ../artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/fix-labware-resolution-gaps.yaml
+          adoptionDecision: ../artifacts/adoption/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/adoption.yaml
+          coderPatch: ../artifacts/code-patches/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/result.yaml
+          patchReport: ../artifacts/patch-reports/man0011593-nabspincolumn-5ml-antibody-purifi-ug-manual_tubes.yaml
+        metrics:
+          eventCount: 1
+          blockerCount: 0
+          diagnosticCount: 10
+          extractorRepairExhaustedCount: 0
+          outcome: gap
+          foundryComplete: 0
+          qualityScore: 0.15
+          coverageEstimate: 0.1
+        startedAt: 2026-05-09T22:25:31.980Z
+        completedAt: 2026-05-09T22:40:09.290Z
+        failureReason: no symbol replacements produced
+      bench_plate_multichannel:
+        variant: bench_plate_multichannel
+        status: gap
+        attempt: 10
+        artifacts:
+          compiler: ../artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml
+          eventGraph: ../artifacts/event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml
+          executionScale: ../artifacts/execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml
+          browserReport: ../artifacts/browser-review/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/report.yaml
+          architectVerdict: ../artifacts/architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/verdict.yaml
+          patchSpecs:
+            - ../artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/fix-ai-precompile-fallback-shape.yaml
+            - ../artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/fix-tag-prompt-json-resilience.yaml
+          adoptionDecision: ../artifacts/adoption/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/adoption.yaml
+          coderPatch: ../artifacts/code-patches/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/result.yaml
+          patchReport: ../artifacts/patch-reports/man0011593-nabspincolumn-5ml-antibody-purifi-ug-bench_plate_multichannel.yaml
+          criticReport: ../artifacts/patch-critic/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/report.yaml
+          rerunReport: ../artifacts/rerun/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/rerun.yaml
+        metrics:
+          eventCount: 0
           blockerCount: 0
           diagnosticCount: 15
           extractorRepairExhaustedCount: 0
           outcome: gap
           foundryComplete: 0
-          qualityScore: 0.15
-          coverageEstimate: 0.3
-        startedAt: 2026-05-09T09:08:40.122Z
-        completedAt: 2026-05-09T09:17:52.759Z
-        failureReason: browser review skipped by --skip-browser
-      bench_plate_multichannel:
-        variant: bench_plate_multichannel
-        status: gap
-        attempt: 4
-        artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/verdict.yaml
-          patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-labware-resolution-generic-plates.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/bench_plate_multichannel/fix-material-resolution-resuspend.yaml
-        metrics:
-          eventCount: 6
-          blockerCount: 0
-          diagnosticCount: 14
-          extractorRepairExhaustedCount: 0
-          outcome: gap
-          foundryComplete: 0
-          qualityScore: 0.15
-          coverageEstimate: 0.3
-        startedAt: 2026-05-09T09:10:46.547Z
-        completedAt: 2026-05-09T09:20:05.264Z
+          qualityScore: 0.05
+          coverageEstimate: 0
+        startedAt: 2026-05-09T22:26:10.701Z
+        completedAt: 2026-05-09T22:30:25.642Z
         failureReason: browser review skipped by --skip-browser
       robot_deck:
         variant: robot_deck
         status: gap
-        attempt: 4
+        attempt: 10
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/verdict.yaml
+          compiler: ../artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+          eventGraph: ../artifacts/event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+          executionScale: ../artifacts/execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
+          browserReport: ../artifacts/browser-review/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/report.yaml
+          architectVerdict: ../artifacts/architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/fix-ai-precompile-shape-mismatch.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/fix-labware-resolution-for-zymo-labware.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/d4302-d4306-d4308-zymobiomics-96-magbead-dna-kit/robot_deck/fix-material-resolution-for-zymo-reagents.yaml
+            - ../artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/fix-ai-precompile-shape-mismatch-and-fallback.yaml
+            - ../artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/fix-tag-prompt-json-parse-error.yaml
+          adoptionDecision: ../artifacts/adoption/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/adoption.yaml
+          coderPatch: ../artifacts/code-patches/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/result.yaml
+          patchReport: ../artifacts/patch-reports/man0011593-nabspincolumn-5ml-antibody-purifi-ug-robot_deck.yaml
+          criticReport: ../artifacts/patch-critic/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/report.yaml
+          rerunReport: ../artifacts/rerun/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/rerun.yaml
         metrics:
-          eventCount: 6
+          eventCount: 0
           blockerCount: 0
-          diagnosticCount: 14
+          diagnosticCount: 15
           extractorRepairExhaustedCount: 0
           outcome: gap
           foundryComplete: 0
-          qualityScore: 0.15
-          coverageEstimate: 0.3
-        startedAt: 2026-05-09T09:14:26.414Z
-        completedAt: 2026-05-09T09:18:23.070Z
-        failureReason: browser review skipped by --skip-browser
-  man0011593-nabspincolumn-5ml-antibody-purifi-ug:
-    protocolId: man0011593-nabspincolumn-5ml-antibody-purifi-ug
-    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
-    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/man0011593-nabspincolumn-5ml-antibody-purifi-ug.yaml
-    status: gap
-    variants:
-      manual_tubes:
-        variant: manual_tubes
-        status: gap
-        attempt: 4
-        artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/verdict.yaml
-          patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/manual_tubes/fix-labware-resolution-for-generic-racks.yaml
-        metrics:
-          eventCount: 1
-          blockerCount: 0
-          diagnosticCount: 10
-          extractorRepairExhaustedCount: 0
-          outcome: gap
-          foundryComplete: 0
-          qualityScore: 0.15
-          coverageEstimate: 0.1
-        startedAt: 2026-05-09T09:17:52.767Z
-        completedAt: 2026-05-09T09:32:09.748Z
-        failureReason: browser review skipped by --skip-browser
-      bench_plate_multichannel:
-        variant: bench_plate_multichannel
-        status: gap
-        attempt: 4
-        artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/verdict.yaml
-          patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/bench_plate_multichannel/fix-generic-labware-resolution.yaml
-        metrics:
-          eventCount: 1
-          blockerCount: 0
-          diagnosticCount: 11
-          extractorRepairExhaustedCount: 0
-          outcome: gap
-          foundryComplete: 0
-          qualityScore: 0.15
-          coverageEstimate: 0.1
-        startedAt: 2026-05-09T09:18:23.077Z
-        completedAt: 2026-05-09T09:21:21.142Z
-        failureReason: browser review skipped by --skip-browser
-      robot_deck:
-        variant: robot_deck
-        status: gap
-        attempt: 4
-        artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/verdict.yaml
-          patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/fix-ai-precompile-shape-mismatch.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011593-nabspincolumn-5ml-antibody-purifi-ug/robot_deck/fix-antibody-purification-verb-coverage.yaml
-        metrics:
-          eventCount: 1
-          blockerCount: 0
-          diagnosticCount: 11
-          extractorRepairExhaustedCount: 0
-          outcome: complete
-          foundryComplete: 1
-          qualityScore: 0.15
-          coverageEstimate: 0.1
-        startedAt: 2026-05-09T09:19:44.995Z
-        completedAt: 2026-05-09T09:22:54.951Z
+          qualityScore: 0.05
+          coverageEstimate: 0
+        startedAt: 2026-05-09T22:27:31.859Z
+        completedAt: 2026-05-09T22:32:20.801Z
         failureReason: browser review skipped by --skip-browser
   man0011863-memper-plus-memb-protein-extract-ug:
     protocolId: man0011863-memper-plus-memb-protein-extract-ug
-    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
-    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
+    segmentPath: ../artifacts/segments/man0011863-memper-plus-memb-protein-extract-ug.yaml
+    materialContextPath: ../artifacts/material-context/man0011863-memper-plus-memb-protein-extract-ug.yaml
     status: gap
     variants:
       manual_tubes:
         variant: manual_tubes
         status: gap
-        attempt: 4
+        attempt: 7
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/verdict.yaml
+          compiler: ../artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+          eventGraph: ../artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+          executionScale: ../artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes.yaml
+          browserReport: ../artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/report.yaml
+          architectVerdict: ../artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-browser-rendering.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-foundry-runtime-wiring-gap.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-labware-alias-resolver-gap.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-material-catalog-spec-gap.yaml
-        metrics:
-          eventCount: 5
-          blockerCount: 0
-          diagnosticCount: 10
-          extractorRepairExhaustedCount: 0
-          outcome: gap
-          foundryComplete: 0
-          qualityScore: 0.7999999999999999
-          coverageEstimate: 0.25
-        startedAt: 2026-05-09T09:20:05.269Z
-        completedAt: 2026-05-09T09:35:13.887Z
-        failureReason: browser review skipped by --skip-browser
-      bench_plate_multichannel:
-        variant: bench_plate_multichannel
-        status: gap
-        attempt: 4
-        artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/verdict.yaml
-          patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-labware-resolution-gaps.yaml
+            - ../artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
+            - ../artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-labware-resolution-for-tubes.yaml
+            - ../artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-protocol-branch-selection.yaml
+          adoptionDecision: ../artifacts/adoption/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/adoption.yaml
+          coderPatch: ../artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/result.yaml
+          patchReport: ../artifacts/patch-reports/man0011863-memper-plus-memb-protein-extract-ug-manual_tubes.yaml
         metrics:
           eventCount: 5
           blockerCount: 0
@@ -669,194 +699,260 @@ protocol_status:
           foundryComplete: 0
           qualityScore: 0.15
           coverageEstimate: 0.25
-        startedAt: 2026-05-09T09:21:21.148Z
-        completedAt: 2026-05-09T09:30:56.849Z
+        startedAt: 2026-05-09T22:30:25.649Z
+        completedAt: 2026-05-09T22:40:57.933Z
+        failureReason: no symbol replacements produced
+      bench_plate_multichannel:
+        variant: bench_plate_multichannel
+        status: gap
+        attempt: 10
+        artifacts:
+          compiler: ../artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+          eventGraph: ../artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+          executionScale: ../artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel.yaml
+          browserReport: ../artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/report.yaml
+          architectVerdict: ../artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/verdict.yaml
+          patchSpecs:
+            - ../artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-ai-precompile-shape-and-fallback.yaml
+            - ../artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/fix-deterministic-fallback-from-presegmented.yaml
+          adoptionDecision: ../artifacts/adoption/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/adoption.yaml
+          coderPatch: ../artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/result.yaml
+          patchReport: ../artifacts/patch-reports/man0011863-memper-plus-memb-protein-extract-ug-bench_plate_multichannel.yaml
+          criticReport: ../artifacts/patch-critic/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/report.yaml
+          rerunReport: ../artifacts/rerun/man0011863-memper-plus-memb-protein-extract-ug/bench_plate_multichannel/rerun.yaml
+        metrics:
+          eventCount: 0
+          blockerCount: 0
+          diagnosticCount: 15
+          extractorRepairExhaustedCount: 0
+          outcome: gap
+          foundryComplete: 0
+          qualityScore: 0.05
+          coverageEstimate: 0
+        startedAt: 2026-05-09T22:32:20.807Z
+        completedAt: 2026-05-09T22:39:41.846Z
         failureReason: browser review skipped by --skip-browser
       robot_deck:
         variant: robot_deck
         status: gap
-        attempt: 4
+        attempt: 10
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/verdict.yaml
+          compiler: ../artifacts/compiler/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+          eventGraph: ../artifacts/event-graphs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+          executionScale: ../artifacts/execution-scale/man0011863-memper-plus-memb-protein-extract-ug/robot_deck.yaml
+          browserReport: ../artifacts/browser-review/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/report.yaml
+          architectVerdict: ../artifacts/architect/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-ai-precompile-shape-mismatch-salvage.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-labware-resolution-generic-aliases.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-resolve-references-unknown-kind.yaml
+            - ../artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-ai-precompile-shape-mismatch-salvage.yaml
+            - ../artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/fix-deterministic-candidate-to-event-lowering.yaml
+          adoptionDecision: ../artifacts/adoption/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/adoption.yaml
+          coderPatch: ../artifacts/code-patches/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/result.yaml
+          patchReport: ../artifacts/patch-reports/man0011863-memper-plus-memb-protein-extract-ug-robot_deck.yaml
+          criticReport: ../artifacts/patch-critic/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/report.yaml
+          rerunReport: ../artifacts/rerun/man0011863-memper-plus-memb-protein-extract-ug/robot_deck/rerun.yaml
         metrics:
-          eventCount: 5
+          eventCount: 0
           blockerCount: 0
-          diagnosticCount: 9
+          diagnosticCount: 14
           extractorRepairExhaustedCount: 0
           outcome: gap
           foundryComplete: 0
-          qualityScore: 0.35
-          coverageEstimate: 0.25
-        startedAt: 2026-05-09T09:22:54.956Z
-        completedAt: 2026-05-09T09:46:26.054Z
+          qualityScore: 0.05
+          coverageEstimate: 0
+        startedAt: 2026-05-09T22:39:15.546Z
+        completedAt: 2026-05-09T22:41:40.326Z
         failureReason: browser review skipped by --skip-browser
   mp10422:
     protocolId: mp10422
-    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/mp10422.yaml
-    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/mp10422.yaml
+    segmentPath: ../artifacts/segments/mp10422.yaml
+    materialContextPath: ../artifacts/material-context/mp10422.yaml
     status: gap
     variants:
       manual_tubes:
         variant: manual_tubes
         status: gap
-        attempt: 4
+        attempt: 10
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/manual_tubes.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10422/manual_tubes.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10422/manual_tubes.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10422/manual_tubes/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10422/manual_tubes/verdict.yaml
+          compiler: ../artifacts/compiler/mp10422/manual_tubes.yaml
+          eventGraph: ../artifacts/event-graphs/mp10422/manual_tubes.yaml
+          executionScale: ../artifacts/execution-scale/mp10422/manual_tubes.yaml
+          browserReport: ../artifacts/browser-review/mp10422/manual_tubes/report.yaml
+          architectVerdict: ../artifacts/architect/mp10422/manual_tubes/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/manual_tubes/fix-material-catalog-cellrox-reagents.yaml
+            - ../artifacts/patch-specs/mp10422/manual_tubes/fix-ai-precompile-shape-mismatch-and-fallback.yaml
+            - ../artifacts/patch-specs/mp10422/manual_tubes/fix-tag-prompt-json-parse-error.yaml
+          adoptionDecision: ../artifacts/adoption/mp10422/manual_tubes/adoption.yaml
+          coderPatch: ../artifacts/code-patches/mp10422/manual_tubes/result.yaml
+          patchReport: ../artifacts/patch-reports/mp10422-manual_tubes.yaml
+          criticReport: ../artifacts/patch-critic/mp10422/manual_tubes/report.yaml
+          rerunReport: ../artifacts/rerun/mp10422/manual_tubes/rerun.yaml
         metrics:
-          eventCount: 6
+          eventCount: 0
           blockerCount: 0
-          diagnosticCount: 14
+          diagnosticCount: 17
           extractorRepairExhaustedCount: 0
-          outcome: complete
-          foundryComplete: 1
-          qualityScore: 0.35
-          coverageEstimate: 0.3
-        startedAt: 2026-05-09T09:30:56.854Z
-        completedAt: 2026-05-09T09:34:25.440Z
+          outcome: gap
+          foundryComplete: 0
+          qualityScore: 0.05
+          coverageEstimate: 0
+        startedAt: 2026-05-09T22:39:41.852Z
+        completedAt: 2026-05-09T22:41:21.906Z
         failureReason: browser review skipped by --skip-browser
       bench_plate_multichannel:
         variant: bench_plate_multichannel
         status: gap
-        attempt: 4
+        attempt: 10
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/bench_plate_multichannel.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10422/bench_plate_multichannel.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10422/bench_plate_multichannel.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10422/bench_plate_multichannel/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10422/bench_plate_multichannel/verdict.yaml
+          compiler: ../artifacts/compiler/mp10422/bench_plate_multichannel.yaml
+          eventGraph: ../artifacts/event-graphs/mp10422/bench_plate_multichannel.yaml
+          executionScale: ../artifacts/execution-scale/mp10422/bench_plate_multichannel.yaml
+          browserReport: ../artifacts/browser-review/mp10422/bench_plate_multichannel/report.yaml
+          architectVerdict: ../artifacts/architect/mp10422/bench_plate_multichannel/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/bench_plate_multichannel/fix-labware-resolution-for-generic-refs.yaml
+            - ../artifacts/patch-specs/mp10422/bench_plate_multichannel/fix-ai-precompile-fallback-shape.yaml
+            - ../artifacts/patch-specs/mp10422/bench_plate_multichannel/fix-tag-prompt-json-schema.yaml
+          adoptionDecision: ../artifacts/adoption/mp10422/bench_plate_multichannel/adoption.yaml
+          coderPatch: ../artifacts/code-patches/mp10422/bench_plate_multichannel/result.yaml
+          patchReport: ../artifacts/patch-reports/mp10422-bench_plate_multichannel.yaml
+          criticReport: ../artifacts/patch-critic/mp10422/bench_plate_multichannel/report.yaml
+          rerunReport: ../artifacts/rerun/mp10422/bench_plate_multichannel/rerun.yaml
         metrics:
-          eventCount: 15
+          eventCount: 0
           blockerCount: 0
-          diagnosticCount: 12
+          diagnosticCount: 17
           extractorRepairExhaustedCount: 0
           outcome: gap
           foundryComplete: 0
-          qualityScore: 0.35
-          coverageEstimate: 0.75
-        startedAt: 2026-05-09T09:32:09.752Z
-        completedAt: 2026-05-09T09:35:05.469Z
+          qualityScore: 0.05
+          coverageEstimate: 0
+        startedAt: 2026-05-09T22:40:09.296Z
+        completedAt: 2026-05-09T22:42:10.338Z
         failureReason: browser review skipped by --skip-browser
       robot_deck:
         variant: robot_deck
         status: gap
-        attempt: 4
+        attempt: 10
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10422/robot_deck.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10422/robot_deck.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10422/robot_deck.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10422/robot_deck/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10422/robot_deck/verdict.yaml
+          compiler: ../artifacts/compiler/mp10422/robot_deck.yaml
+          eventGraph: ../artifacts/event-graphs/mp10422/robot_deck.yaml
+          executionScale: ../artifacts/execution-scale/mp10422/robot_deck.yaml
+          browserReport: ../artifacts/browser-review/mp10422/robot_deck/report.yaml
+          architectVerdict: ../artifacts/architect/mp10422/robot_deck/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/robot_deck/fix-ai-precompile-shape-mismatch.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10422/robot_deck/fix-material-catalog-cellrox-reagents.yaml
+            - ../artifacts/patch-specs/mp10422/robot_deck/fix-ai-precompile-fallback-empty-candidates.yaml
+            - ../artifacts/patch-specs/mp10422/robot_deck/fix-extractor-candidate-to-event-lowering.yaml
+            - ../artifacts/patch-specs/mp10422/robot_deck/fix-tag-prompt-json-parsing.yaml
+          adoptionDecision: ../artifacts/adoption/mp10422/robot_deck/adoption.yaml
+          coderPatch: ../artifacts/code-patches/mp10422/robot_deck/result.yaml
+          patchReport: ../artifacts/patch-reports/mp10422-robot_deck.yaml
+          criticReport: ../artifacts/patch-critic/mp10422/robot_deck/report.yaml
+          rerunReport: ../artifacts/rerun/mp10422/robot_deck/rerun.yaml
         metrics:
-          eventCount: 6
+          eventCount: 0
           blockerCount: 0
-          diagnosticCount: 13
+          diagnosticCount: 17
           extractorRepairExhaustedCount: 0
-          outcome: complete
-          foundryComplete: 1
-          qualityScore: 0.35
-          coverageEstimate: 0.3
-        startedAt: 2026-05-09T09:34:25.446Z
-        completedAt: 2026-05-09T09:37:24.050Z
+          outcome: gap
+          foundryComplete: 0
+          qualityScore: 0.05
+          coverageEstimate: 0
+        startedAt: 2026-05-09T22:40:57.939Z
+        completedAt: 2026-05-09T22:43:14.115Z
         failureReason: browser review skipped by --skip-browser
   mp10471:
     protocolId: mp10471
-    segmentPath: /home/brad/git/computable-foundry/artifacts/segments/mp10471.yaml
-    materialContextPath: /home/brad/git/computable-foundry/artifacts/material-context/mp10471.yaml
+    segmentPath: ../artifacts/segments/mp10471.yaml
+    materialContextPath: ../artifacts/material-context/mp10471.yaml
     status: gap
     variants:
       manual_tubes:
         variant: manual_tubes
         status: gap
-        attempt: 4
+        attempt: 10
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10471/manual_tubes.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10471/manual_tubes.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10471/manual_tubes.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10471/manual_tubes/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10471/manual_tubes/verdict.yaml
+          compiler: ../artifacts/compiler/mp10471/manual_tubes.yaml
+          eventGraph: ../artifacts/event-graphs/mp10471/manual_tubes.yaml
+          executionScale: ../artifacts/execution-scale/mp10471/manual_tubes.yaml
+          browserReport: ../artifacts/browser-review/mp10471/manual_tubes/report.yaml
+          architectVerdict: ../artifacts/architect/mp10471/manual_tubes/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/manual_tubes/fix-ai-precompile-shape-mismatch.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/manual_tubes/fix-labware-resolution-gaps.yaml
+            - ../artifacts/patch-specs/mp10471/manual_tubes/fix-ai-precompile-shape-mismatch-and-candidate-events.yaml
+            - ../artifacts/patch-specs/mp10471/manual_tubes/fix-tag-prompt-json-parse-error.yaml
+          adoptionDecision: ../artifacts/adoption/mp10471/manual_tubes/adoption.yaml
+          coderPatch: ../artifacts/code-patches/mp10471/manual_tubes/result.yaml
+          patchReport: ../artifacts/patch-reports/mp10471-manual_tubes.yaml
+          criticReport: ../artifacts/patch-critic/mp10471/manual_tubes/report.yaml
+          rerunReport: ../artifacts/rerun/mp10471/manual_tubes/rerun.yaml
         metrics:
-          eventCount: 2
+          eventCount: 0
           blockerCount: 0
-          diagnosticCount: 13
+          diagnosticCount: 17
           extractorRepairExhaustedCount: 0
           outcome: gap
           foundryComplete: 0
-          qualityScore: 0.15
-          coverageEstimate: 0.1
-        startedAt: 2026-05-09T09:35:05.475Z
-        completedAt: 2026-05-09T09:38:37.545Z
+          qualityScore: 0.05
+          coverageEstimate: 0
+        startedAt: 2026-05-09T22:41:21.911Z
+        completedAt: 2026-05-09T22:43:09.520Z
         failureReason: browser review skipped by --skip-browser
       bench_plate_multichannel:
         variant: bench_plate_multichannel
         status: gap
-        attempt: 4
+        attempt: 10
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10471/bench_plate_multichannel.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10471/bench_plate_multichannel.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10471/bench_plate_multichannel.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10471/bench_plate_multichannel/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10471/bench_plate_multichannel/verdict.yaml
+          compiler: ../artifacts/compiler/mp10471/bench_plate_multichannel.yaml
+          eventGraph: ../artifacts/event-graphs/mp10471/bench_plate_multichannel.yaml
+          executionScale: ../artifacts/execution-scale/mp10471/bench_plate_multichannel.yaml
+          browserReport: ../artifacts/browser-review/mp10471/bench_plate_multichannel/report.yaml
+          architectVerdict: ../artifacts/architect/mp10471/bench_plate_multichannel/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/bench_plate_multichannel/fix-ai-precompile-shape-mismatch.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/bench_plate_multichannel/fix-labware-resolution-for-generic-types.yaml
+            - ../artifacts/patch-specs/mp10471/bench_plate_multichannel/fix-ai-precompile-shape-mismatch-and-fallback.yaml
+            - ../artifacts/patch-specs/mp10471/bench_plate_multichannel/fix-tag-prompt-json-parse-error.yaml
+          adoptionDecision: ../artifacts/adoption/mp10471/bench_plate_multichannel/adoption.yaml
+          coderPatch: ../artifacts/code-patches/mp10471/bench_plate_multichannel/result.yaml
+          patchReport: ../artifacts/patch-reports/mp10471-bench_plate_multichannel.yaml
+          criticReport: ../artifacts/patch-critic/mp10471/bench_plate_multichannel/report.yaml
+          rerunReport: ../artifacts/rerun/mp10471/bench_plate_multichannel/rerun.yaml
         metrics:
-          eventCount: 2
+          eventCount: 0
           blockerCount: 0
-          diagnosticCount: 12
+          diagnosticCount: 17
           extractorRepairExhaustedCount: 0
           outcome: gap
           foundryComplete: 0
-          qualityScore: 0.15
-          coverageEstimate: 0.1
-        startedAt: 2026-05-09T09:35:13.893Z
-        completedAt: 2026-05-09T09:37:52.997Z
+          qualityScore: 0
+          coverageEstimate: 0
+        startedAt: 2026-05-09T22:41:40.332Z
+        completedAt: 2026-05-09T22:43:05.631Z
         failureReason: browser review skipped by --skip-browser
       robot_deck:
         variant: robot_deck
         status: gap
-        attempt: 4
+        attempt: 10
         artifacts:
-          compiler: /home/brad/git/computable-foundry/artifacts/compiler/mp10471/robot_deck.yaml
-          eventGraph: /home/brad/git/computable-foundry/artifacts/event-graphs/mp10471/robot_deck.yaml
-          executionScale: /home/brad/git/computable-foundry/artifacts/execution-scale/mp10471/robot_deck.yaml
-          browserReport: /home/brad/git/computable-foundry/artifacts/browser-review/mp10471/robot_deck/report.yaml
-          architectVerdict: /home/brad/git/computable-foundry/artifacts/architect/mp10471/robot_deck/verdict.yaml
+          compiler: ../artifacts/compiler/mp10471/robot_deck.yaml
+          eventGraph: ../artifacts/event-graphs/mp10471/robot_deck.yaml
+          executionScale: ../artifacts/execution-scale/mp10471/robot_deck.yaml
+          browserReport: ../artifacts/browser-review/mp10471/robot_deck/report.yaml
+          architectVerdict: ../artifacts/architect/mp10471/robot_deck/verdict.yaml
           patchSpecs:
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/robot_deck/fix-ai-precompile-shape-mismatch.yaml
-            - /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/robot_deck/fix-verb-expansion-for-assay-protocol.yaml
+            - ../artifacts/patch-specs/mp10471/robot_deck/fix-ai-precompile-shape-mismatch-and-fallback.yaml
+            - ../artifacts/patch-specs/mp10471/robot_deck/fix-deterministic-candidate-to-event-lowering.yaml
+            - ../artifacts/patch-specs/mp10471/robot_deck/fix-tag-prompt-json-parse-error.yaml
+          adoptionDecision: ../artifacts/adoption/mp10471/robot_deck/adoption.yaml
+          coderPatch: ../artifacts/code-patches/mp10471/robot_deck/result.yaml
+          patchReport: ../artifacts/patch-reports/mp10471-robot_deck.yaml
+          criticReport: ../artifacts/patch-critic/mp10471/robot_deck/report.yaml
+          rerunReport: ../artifacts/rerun/mp10471/robot_deck/rerun.yaml
         metrics:
-          eventCount: 2
+          eventCount: 0
           blockerCount: 0
-          diagnosticCount: 14
+          diagnosticCount: 17
           extractorRepairExhaustedCount: 0
           outcome: gap
           foundryComplete: 0
-          qualityScore: 0.1
-          coverageEstimate: 0.1
-        startedAt: 2026-05-09T09:37:24.058Z
-        completedAt: 2026-05-09T09:40:13.286Z
+          qualityScore: 0.05
+          coverageEstimate: 0
+        startedAt: 2026-05-09T22:42:10.344Z
+        completedAt: 2026-05-09T22:43:30.715Z
         failureReason: browser review skipped by --skip-browser

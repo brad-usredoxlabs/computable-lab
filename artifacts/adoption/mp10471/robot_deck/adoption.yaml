@@ -1,0 +1,16 @@
+kind: protocol-foundry-adoption-decision
+protocolId: mp10471
+variant: robot_deck
+generated_at: 2026-05-09T21:53:01.537Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: mp10471/robot_deck/fix-ai-precompile-shape-mismatch
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/robot_deck/fix-ai-precompile-shape-mismatch.yaml
+    fixClass: precompiler_reference_shape
+    title: Fix ai_precompile output shape mismatch to enable downstream passes
+  - id: mp10471/robot_deck/fix-verb-expansion-for-assay-protocol
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/mp10471/robot_deck/fix-verb-expansion-for-assay-protocol.yaml
+    fixClass: compiler_event_coverage
+    title: Add verb lowering for Fluo-4 assay preparation and loading steps
+message: Patch specs accepted for unattended coder tournament execution.

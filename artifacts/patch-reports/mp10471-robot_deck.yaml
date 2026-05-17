@@ -1,0 +1,9 @@
+kind: protocol-worker-report
+protocolId: mp10471
+variant: robot_deck
+generated_at: 2026-05-09T21:57:15.856Z
+status: applied
+coderPatch: /home/brad/git/computable-foundry/artifacts/code-patches/mp10471/robot_deck/result.yaml
+touchedFiles:
+  - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
+message: patch applied and committed

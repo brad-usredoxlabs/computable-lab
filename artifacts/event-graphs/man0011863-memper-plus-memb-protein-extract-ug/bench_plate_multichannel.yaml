@@ -15,94 +15,27 @@ eventGraph:
     man0011863-memper-plus-memb-protein-extract-ug (bench_plate_multichannel).
   status: draft
   protocolId: man0011863-memper-plus-memb-protein-extract-ug
-  events: &a1
-    - eventId: evt-aliquot-0-nk37pltz
-      event_type: transfer
-      details: &a2
-        source_well: well-0
-        destination_well: well-0
-      labwareId: sample_plate
-    - eventId: evt-wash-add-c6xc7kra
-      event_type: add_material
-      details: &a3
-        material_ref: wash-buffer
-        volume:
-          value: 100
-          unit: uL
-        wells: []
-      labwareId: sample_plate
-    - eventId: evt-wash-remove-fs1uu5wx
-      event_type: transfer
-      details: &a4
-        wells: []
-      labwareId: sample_plate
-    - eventId: evt-wash-add-1il9mqek
-      event_type: add_material
-      details: &a5
-        material_ref: wash-buffer
-        volume:
-          value: 100
-          unit: uL
-        wells: []
-      labwareId: sample_plate
-    - eventId: evt-wash-remove-z0gocu0f
-      event_type: transfer
-      details: &a6
-        wells: []
-      labwareId: sample_plate
+  events: &a1 []
   labwares:
     - labwareId: sample_plate
       labwareType: plate_96
       name: sample plate
-    - labwareId: reagent_source
+    - labwareId: reagent_reservoir
       labwareType: reservoir_1
-      name: reagent source
+      name: reagent reservoir
   tags:
     - protocol-foundry
     - bench_plate_multichannel
 terminalArtifacts:
   events: *a1
-  directives:
-    - directiveId: dir_1
-      kind: mount_pipette
-      params:
-        mountSide: right
-        pipetteType: 8_channel_multichannel
-  gaps:
-    - kind: unresolved_ref
-      message: generic_96_well_plate (no matching labware in prior snapshot)
-      details:
-        hint: generic_96_well_plate
-        reason: no matching labware in prior snapshot
-    - kind: unresolved_ref
-      message: generic_12_well_reservoir (no matching labware in prior snapshot)
-      details:
-        hint: generic_12_well_reservoir
-        reason: no matching labware in prior snapshot
+  directives: []
+  gaps: []
   resolvedRefs: []
   labStateDelta:
-    events:
-      - eventId: evt-aliquot-0-nk37pltz
-        event_type: transfer
-        details: *a2
-      - eventId: evt-wash-add-c6xc7kra
-        event_type: add_material
-        details: *a3
-      - eventId: evt-wash-remove-fs1uu5wx
-        event_type: transfer
-        details: *a4
-      - eventId: evt-wash-add-1il9mqek
-        event_type: add_material
-        details: *a5
-      - eventId: evt-wash-remove-z0gocu0f
-        event_type: transfer
-        details: *a6
+    events: []
     snapshotAfter:
       deck: []
-      mountedPipettes:
-        - mountSide: right
-          pipetteType: 8_channel_multichannel
-          maxVolumeUl: 50
+      mountedPipettes: []
       labware: {}
       reservoirs: {}
       mintCounter: 0
@@ -110,15 +43,10 @@ terminalArtifacts:
   resolvedLabwareRefs: []
   deckLayoutPlan:
     pinned: []
-    autoFilled:
-      - slot: A1
-        labwareHint: unknown
-        reason: tipRack
+    autoFilled: []
     conflicts: []
   resourceManifest:
-    tipRacks:
-      - pipetteType: unknown
-        rackCount: 1
+    tipRacks: []
     reservoirLoads: []
     consumables: []
   executionScalePlan:
@@ -145,13 +73,14 @@ terminalArtifacts:
             - G1
             - H1
     reagentLayout:
-      - materialRole: transfer_reagent
-        sourceLabwareRole: reagent_source
+      - materialRole: reagent
+        sourceLabwareRole: reagent_reservoir
         sourceLabwareKind: 1_well_reservoir
+        sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
         sourceWells:
           - "1"
-        reason: inferred from liquid-handling events without creating material instances
-        sourceLabwareDefinition: lbw-def-generic-reservoir-1-v1
+        reason: prompt mentions reagents but compiled events did not identify concrete
+          reagent roles
     pipettingStrategy:
       pipetteMode: multi_channel_parallel
       channels: 8
@@ -168,21 +97,18 @@ terminalArtifacts:
     assumptions:
       - No sample count was specified; defaulting to 8 samples (first column of
         96_well_plate).
+      - Reagent source role is provisional until material roles are resolved.
       - Samples are mapped down plate columns in row order.
       - Manual tube operations preserve biological intent when lifted to plate
         wells and shared reagent reservoirs.
       - ASSIST PLUS lowering uses the same plate and lane semantics as bench
         multichannel planning, then binds them to deck-compatible labware and
         tool profiles.
-    blockers: &a7 []
+    blockers: &a2 []
   validationReport:
     findings: []
   instrumentRunFiles: []
-  downstreamQueue:
-    - kind: readout
-      description: Protein quantification using BCA, Micro BCA, or 660nm Protein Assay
-      params:
-        assayType: BCA or Micro BCA or 660nm
+  downstreamQueue: []
 diagnostics:
   - severity: info
     code: foundry_presegmented_candidates
@@ -208,6 +134,27 @@ diagnostics:
       deterministic protocol-action evidence.
     pass_id: extract_entities
     details: {}
+  - severity: warning
+    code: tag_prompt_parse_error
+    message: "tag_prompt response was not valid JSON: Unterminated string in JSON at
+      position 769"
+    pass_id: tag_prompt
+    details:
+      raw_preview: |-
+        
+
+        {
+          "taggedPhrases": [
+            {
+              "phrase": "Mem-PER Plus Membrane Protein Extraction Kit",
+              "tag": "material",
+              "value": "Mem-PER Plus Membrane Protein Extraction Kit"
+            },
+            {
+              "phrase": "Cell Wash Solution",
+              "tag": "material",
+              "value": "Cell Wash Solution"
+            },
   - severity: info
     code: fuzzy_registry_match
     message: Resolved "96-well plate" to registry key "96-well-plate"
@@ -221,7 +168,7 @@ diagnostics:
       distance: 0
   - severity: warning
     code: ai_precompile_shape_mismatch
-    message: ai_precompile output shape mismatch
+    message: ai_precompile output shape mismatch, using fallback
     pass_id: ai_precompile
   - severity: info
     code: pass_skipped_by_when
@@ -230,14 +177,34 @@ diagnostics:
     pass_id: mint_materials
   - severity: info
     code: pass_skipped_by_when
+    message: "Pass 'apply_directives' skipped: when condition
+      'outputs.ai_precompile.directives' evaluated to false"
+    pass_id: apply_directives
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'expand_biology_verbs' skipped: when condition
+      'outputs.ai_precompile.candidateEvents' evaluated to false"
+    pass_id: expand_biology_verbs
+  - severity: info
+    code: pass_skipped_by_when
     message: "Pass 'resolve_labware' skipped: when condition
       'outputs.ai_precompile.candidateLabwares' evaluated to false"
     pass_id: resolve_labware
   - severity: info
     code: pass_skipped_by_when
+    message: "Pass 'resolve_prior_labware_references' skipped: when condition
+      'outputs.ai_precompile.priorLabwareRefs' evaluated to false"
+    pass_id: resolve_prior_labware_references
+  - severity: info
+    code: pass_skipped_by_when
     message: "Pass 'expand_patterns' skipped: when condition
       'outputs.ai_precompile.patternEvents' evaluated to false"
     pass_id: expand_patterns
+  - severity: info
+    code: pass_skipped_by_when
+    message: "Pass 'emit_downstream_queue' skipped: when condition
+      'outputs.ai_precompile.downstreamCompileJobs' evaluated to false"
+    pass_id: emit_downstream_queue
   - severity: info
     code: execution_scale_plan_ready
     message: Execution scaling plan is ready for robot_deck.
@@ -246,7 +213,7 @@ diagnostics:
       sourceLevel: manual_tubes
       targetLevel: robot_deck
       profileId: robot-assist-plus-96
-      blockers: *a7
+      blockers: *a2
 foundryTestAssumptions:
   kind: protocol-foundry-test-assumption-profile
   protocolId: man0011863-memper-plus-memb-protein-extract-ug

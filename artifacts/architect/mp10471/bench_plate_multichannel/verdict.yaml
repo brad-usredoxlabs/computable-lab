@@ -1,39 +1,44 @@
 kind: protocol-foundry-architect-verdict
 protocolId: mp10471
 variant: bench_plate_multichannel
-generated_at: 2026-05-09T09:37:52.990Z
+generated_at: 2026-05-09T22:43:05.617Z
 accepted: false
-qualityScore: 0.15
-coverageEstimate: 0.1
+qualityScore: 0
+coverageEstimate: 0
 failureClasses:
   - precompiler_reference_shape
-  - labware_alias_or_resolver
+  - extractor_prompt_contract
 missingVerbs: []
 missingLabware: []
 missingMaterials: []
 badEvents: []
 badScalingAssumptions: []
 recommendedFixes:
-  - id: fix-ai-precompile-shape-mismatch
+  - id: fix-ai-precompile-shape-mismatch-and-fallback
     class: precompiler_reference_shape
-    title: Fix ai_precompile output shape mismatch to enable downstream passes
-    rationale: "The compiler diagnostic 'ai_precompile_shape_mismatch' indicates the
-      AI precompile pass produced output that doesn't match the expected schema.
-      This caused critical downstream passes to be skipped: 'mint_materials' (no
-      mintMaterials), 'resolve_labware' (no candidateLabwares), and
-      'expand_patterns' (no patternEvents). Without these passes, the compiler
-      cannot extract reagents, resolve labware, or expand protocol patterns,
-      resulting in only 2 trivial mix events instead of a full calcium assay
-      protocol."
+    title: Fix ai_precompile shape mismatch and ensure candidateEvents are populated
+      from deterministic candidates
+    rationale: The compiler output shows 'ai_precompile_shape_mismatch' warning,
+      causing the fallback path to be used. This results in empty
+      candidateEvents, which causes all downstream passes (expand_biology_verbs,
+      resolve_labware, etc.) to be skipped via 'when' conditions. The
+      pre-compiler extracted 70+ deterministic candidates (7+10+24+25+1+4), but
+      these are not being converted into candidateEvents by the ai_precompile
+      pass. The tag_prompt also had a JSON parse error ('Unterminated string'),
+      suggesting the LLM output is malformed. The root cause is that the
+      ai_precompile pass in ChatbotCompilePasses.ts is not correctly shaping its
+      output or handling the deterministic candidates from the presegmented
+      extraction.
     ownedFiles:
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - ai_precompile pass output matches the expected AiPrecompileOutput schema
-        with mintMaterials, candidateLabwares, and patternEvents fields
-      - Downstream passes mint_materials, resolve_labware, and expand_patterns
-        are no longer skipped due to false when conditions
-      - Compiler produces more than 2 events for protocols with clear multi-step
-        procedures
+      - ai_precompile pass produces valid AiPrecompileOutput with non-empty
+        candidateEvents when deterministic candidates exist
+      - No 'ai_precompile_shape_mismatch' warnings in diagnostics when
+        candidates are present
+      - Downstream passes (expand_biology_verbs, resolve_labware) are not
+        skipped when candidateEvents exist
+      - eventCount >= 3 for protocols with clear procedural steps in PDF text
     coderModelProfile:
       model: Qwen/Qwen3.6-27B-FP8
       guidance: Narrow ownership, concrete evidence, one behavior change.
@@ -48,43 +53,42 @@ recommendedFixes:
       materialContext: /home/brad/git/computable-foundry/artifacts/material-context/mp10471.yaml
       text: /home/brad/git/computable-foundry/artifacts/text/mp10471.txt
     failureEvidence: &a2
-      eventCount: 2
+      eventCount: 0
       outcome: gap
     implementationBudget:
       targetChangedFiles: 1
       maxChangedFiles: 2
-      targetChangedLines: 60
-      maxChangedLines: 150
+      targetChangedLines: 100
+      maxChangedLines: 250
       requireFocusedFixture: true
-  - id: fix-labware-resolution-for-generic-types
-    class: labware_alias_or_resolver
-    title: Resolve generic labware references (96-well plate, reservoir, tip rack)
-    rationale: "Three unresolved labware references exist: generic_96_well_plate,
-      generic_12_well_reservoir, and generic_96_tip_rack. The execution scale
-      plan shows these map to lbw-def-generic-96-well-plate and
-      lbw-def-generic-reservoir-1-v1, suggesting the definitions exist but the
-      compiler's labware resolution pass cannot find them. This is likely a
-      wiring issue where the LabwareDefinitionRegistry is not properly queried
-      or the alias mapping is broken."
+  - id: fix-tag-prompt-json-parse-error
+    class: extractor_prompt_contract
+    title: Fix tag_prompt JSON parsing to handle truncated or malformed LLM responses
+    rationale: The tag_prompt pass failed with 'Unterminated string in JSON at
+      position 705', indicating the LLM response was truncated or malformed.
+      This prevents proper entity tagging (materials, labware, etc.) which feeds
+      into the ai_precompile pass. The fix should add robust JSON parsing with
+      fallback recovery (e.g., attempting to parse partial JSON, or using a more
+      lenient parser) and ensure the prompt contract enforces complete JSON
+      output.
     ownedFiles:
-      - server/src/registry/LabwareDefinitionRegistry.ts
       - server/src/compiler/pipeline/passes/ChatbotCompilePasses.ts
     acceptance:
-      - generic_96_well_plate resolves to lbw-def-generic-96-well-plate
-      - generic_12_well_reservoir resolves to lbw-def-generic-reservoir-1-v1 or
-        equivalent
-      - generic_96_tip_rack resolves to an existing tip rack definition
-      - No unresolved_ref gaps for these labware types in compiler output
+      - tag_prompt pass does not fail on truncated JSON responses
+      - Partial JSON responses are recovered or gracefully degraded
+      - Entity tagging (materials, labware) proceeds even with imperfect LLM
+        output
+      - No 'tag_prompt_parse_error' warnings in diagnostics
     coderModelProfile:
-      model: Qwen/Qwen3.6-35B-A3B-FP8
+      model: Kbenkhaled/Qwen3.5-35B-3A-NVFP4
       guidance: Narrow ownership, concrete evidence, one behavior change.
     sourceArtifacts: *a1
     failureEvidence: *a2
     implementationBudget:
       targetChangedFiles: 1
-      maxChangedFiles: 3
-      targetChangedLines: 40
-      maxChangedLines: 120
+      maxChangedFiles: 2
+      targetChangedLines: 60
+      maxChangedLines: 150
       requireFocusedFixture: true
 sourceArtifacts: *a1
 architectNotes: "LLM architect analysis: 2 fix recommendations."

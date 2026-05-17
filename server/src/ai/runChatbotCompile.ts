@@ -11,6 +11,7 @@ import { loadPipeline } from '../compiler/pipeline/PipelineLoader.js';
 import {
   createExtractEntitiesPass,
   createAiPrecompilePass,
+  createDeterministicPlanConsolidationPass,
   createExpandBiologyVerbsPass,
   createMintMaterialsPass,
   createApplyDirectivesPass,
@@ -28,6 +29,8 @@ import {
   createPlanDeckLayoutPass,
   createValidatePass,
   createEmitInstrumentRunFilesPass,
+  createEmitInstrumentApplianceJobsPass,
+  createEvaluateInstrumentExecutionReadinessPass,
   createEmitDownstreamQueuePass,
   type FileAttachment,
   type LlmClient,
@@ -41,13 +44,29 @@ import {
   type ResolveRolesOutput,
   type ComputeResourcesPassOutput,
   type DeriveExecutionScalePlanOutput,
+  type DeterministicPlanConsolidationOutput,
   type PlanDeckLayoutOutput,
   type ValidatePassOutput,
   type EmitInstrumentRunFilesOutput,
+  type EmitInstrumentApplianceJobsOutput,
+  type EvaluateInstrumentExecutionReadinessOutput,
   type EmitDownstreamQueueOutput,
 } from '../compiler/pipeline/passes/ChatbotCompilePasses.js';
 import { createDeterministicPrecompilePass } from '../compiler/pipeline/passes/DeterministicPrecompilePass.js';
 import { createTagPromptPass } from '../compiler/precompile/PromptTagger.js';
+import {
+  createProtocolIntentStatePlanPass,
+  type ProtocolIntentStatePlannerOutput,
+} from '../compiler/protocolIntent/ProtocolIntentStatePlanner.js';
+import {
+  createValidateProtocolIntentPass,
+  type ProtocolIntentValidationOutput,
+} from '../compiler/protocolIntent/ProtocolIntentValidation.js';
+import {
+  createLowerProtocolIntentPass,
+  type ProtocolIntentLoweringOutput,
+} from '../compiler/protocolIntent/ProtocolIntentLowering.js';
+import { createExpandProtocolIntentPatternsPass } from '../compiler/protocolIntent/ProtocolIntentPatternExpanders.js';
 import type { ExtractionRunnerService } from '../extract/ExtractionRunnerService.js';
 import type { PlateEventPrimitive } from '../compiler/biology/BiologyVerbExpander.js';
 import type { PassDiagnostic } from '../compiler/pipeline/types.js';
@@ -75,6 +94,7 @@ import * as path from 'node:path';
 import '../compiler/patterns/index.js'; // registers all pattern expanders
 import '../compiler/validation/checks/index.js'; // registers validation checks (specs 035-036)
 import '../compiler/artifacts/QuantStudioEmitter.js'; // registers QuantStudio instrument emitter (spec-038)
+import '../compiler/artifacts/GeminiEmEmitter.js'; // registers Gemini EM plate-reader emitter
 
 export interface RunChatbotCompileArgs {
   prompt: string;
@@ -93,13 +113,24 @@ export interface RunChatbotCompileArgs {
   priorLabState?: LabStateSnapshot;
   deps: {
     extractionService: ExtractionRunnerService;
-    llmClient: LlmClient;
+    /**
+     * LLM client used by `ai_precompile` and downstream LLM-backed passes.
+     * Nullable so the pipeline can run when no LLM is configured; when null
+     * the LLM passes (`ai_precompile`, `tag_prompt`) are skipped.
+     */
+    llmClient: LlmClient | null;
     searchLabwareByHint: (hint: string) => Promise<Array<{ recordId: string; title: string }>>;
     labStateCache?: LabStateCache;
   };
   /** Optional conversation identifier used to key the lab-state cache. */
   conversationId?: string;
   model?: string;
+  /**
+   * Skip the LLM-backed `ai_precompile` pass even when `llmClient` is
+   * available. Used by the event-editor "Precompile" mode to force a pure
+   * deterministic run.
+   */
+  deterministicOnly?: boolean;
   /** Optional callback invoked at each pass boundary for progress tracking. */
   onPassEvent?: (event: PassProgressEvent) => void;
 }
@@ -138,9 +169,22 @@ export async function runChatbotCompile(
     ?? emptyLabState();
   const compilePrompt = normalizePromptForCompile(args.prompt);
 
+  const llmAvailable = args.deps.llmClient !== null;
+  const useLlmPasses = llmAvailable && !args.deterministicOnly;
+
   const registry = new PassRegistry();
   registry.register(createExtractEntitiesPass({ extractionService: args.deps.extractionService }));
-  registry.register(createTagPromptPass({ llmClient: args.deps.llmClient, ...(args.model ? { model: args.model } : {}) }));
+  if (useLlmPasses) {
+    registry.register(createTagPromptPass({ llmClient: args.deps.llmClient!, ...(args.model ? { model: args.model } : {}) }));
+  } else {
+    // tag_prompt is LLM-backed; register a no-op stub so PipelineRunner's
+    // registration check passes. No downstream pass reads its output.
+    registry.register({
+      id: 'tag_prompt',
+      family: 'parse' as const,
+      run: () => ({ ok: true, output: {} }),
+    });
+  }
   registry.register(createDeterministicPrecompilePass({
     verbActionMapRegistry: getVerbActionMap(),
     labwareDefinitionRegistry: {
@@ -195,7 +239,28 @@ export async function runChatbotCompile(
     },
     labwareInstanceLookup: args.deps.searchLabwareByHint,
   }));
-  registry.register(createAiPrecompilePass({ llmClient: args.deps.llmClient, ...(args.model ? { model: args.model } : {}) }));
+  registry.register(createDeterministicPlanConsolidationPass());
+  if (useLlmPasses) {
+    registry.register(createAiPrecompilePass({ llmClient: args.deps.llmClient!, ...(args.model ? { model: args.model } : {}) }));
+  } else {
+    // Deterministic-only mode: emit the consolidated deterministic plan as
+    // the ai_precompile output so downstream when:-gated passes see the
+    // deterministic candidateEvents/candidateLabwares without any LLM call.
+    registry.register({
+      id: 'ai_precompile',
+      family: 'expand' as const,
+      run: (passArgs) => {
+        const consolidated = passArgs.state.outputs.get('deterministic_plan_consolidation') as
+          | DeterministicPlanConsolidationOutput
+          | undefined;
+        return { ok: true, output: consolidated?.aiPrecompile ?? {} };
+      },
+    });
+  }
+  registry.register(createProtocolIntentStatePlanPass());
+  registry.register(createValidateProtocolIntentPass());
+  registry.register(createLowerProtocolIntentPass());
+  registry.register(createExpandProtocolIntentPatternsPass());
   registry.register(createMintMaterialsPass());
   registry.register(createApplyDirectivesPass());
   registry.register(createExpandBiologyVerbsPass());
@@ -223,6 +288,8 @@ export async function runChatbotCompile(
   registry.register(createPlanDeckLayoutPass());
   registry.register(createValidatePass());
   registry.register(createEmitInstrumentRunFilesPass());
+  registry.register(createEmitInstrumentApplianceJobsPass());
+  registry.register(createEvaluateInstrumentExecutionReadinessPass());
   registry.register(createEmitDownstreamQueuePass());
 
   // Resolve mentions: prefer client-shipped, fall back to a server-side parse
@@ -250,6 +317,10 @@ export async function runChatbotCompile(
   const labStateOutput = (result.outputs.get('lab_state') ?? { events: [], snapshotAfter: emptyLabState() }) as LabStatePassOutput;
   const computeResourcesOutput = (result.outputs.get('compute_resources') ?? { resourceManifest: { tipRacks: [], reservoirLoads: [], consumables: [] } }) as ComputeResourcesPassOutput;
   const executionScaleOutput = (result.outputs.get('derive_execution_scale_plan') ?? {}) as DeriveExecutionScalePlanOutput;
+  const deterministicPlanOutput = (result.outputs.get('deterministic_plan_consolidation') ?? {}) as Partial<DeterministicPlanConsolidationOutput>;
+  const protocolIntentStateOutput = (result.outputs.get('protocol_intent_state_plan') ?? {}) as ProtocolIntentStatePlannerOutput;
+  const protocolIntentValidationOutput = (result.outputs.get('validate_protocol_intent') ?? {}) as Partial<ProtocolIntentValidationOutput>;
+  const protocolIntentLoweringOutput = (result.outputs.get('lower_protocol_intent') ?? {}) as Partial<ProtocolIntentLoweringOutput>;
 
   // Merge events: use resolve_roles output as the definitive event list
   // (it aggregates mint, patterns, verbs, protocol and resolves roles)
@@ -344,12 +415,44 @@ export async function runChatbotCompile(
     terminalArtifacts.executionScalePlan = executionScaleOutput.executionScalePlan;
   }
 
+  if (deterministicPlanOutput.protocolPlan) {
+    terminalArtifacts.deterministicProtocolPlan = deterministicPlanOutput.protocolPlan;
+  }
+  if (ai.protocolIntent) {
+    terminalArtifacts.protocolIntent = ai.protocolIntent;
+  }
+  if (protocolIntentStateOutput.protocolIntentStatePlan) {
+    terminalArtifacts.protocolIntentStatePlan = protocolIntentStateOutput.protocolIntentStatePlan;
+  }
+  if (protocolIntentValidationOutput.findings || protocolIntentValidationOutput.blockers) {
+    terminalArtifacts.protocolIntentValidation = {
+      status: protocolIntentValidationOutput.status ?? 'ready',
+      findings: protocolIntentValidationOutput.findings ?? [],
+      blockers: protocolIntentValidationOutput.blockers ?? [],
+    };
+  }
+  if (protocolIntentLoweringOutput.events || protocolIntentLoweringOutput.candidateLabwares || protocolIntentLoweringOutput.directives) {
+    terminalArtifacts.protocolIntentLowering = {
+      events: protocolIntentLoweringOutput.events ?? [],
+      candidateLabwares: protocolIntentLoweringOutput.candidateLabwares ?? [],
+      directives: protocolIntentLoweringOutput.directives ?? [],
+    };
+  }
+
   // Populate validationReport from validate pass (spec-034)
   terminalArtifacts.validationReport = validationReport as NonNullable<TerminalArtifacts['validationReport']>;
 
   // Populate instrumentRunFiles from emit_instrument_run_files pass (spec-038)
   const emitInstrumentRunFilesOutput = (result.outputs.get('emit_instrument_run_files') ?? { instrumentRunFiles: [] }) as EmitInstrumentRunFilesOutput;
   terminalArtifacts.instrumentRunFiles = emitInstrumentRunFilesOutput.instrumentRunFiles;
+
+  // Populate instrumentApplianceJobs from emit_instrument_appliance_jobs pass.
+  const emitInstrumentApplianceJobsOutput = (result.outputs.get('emit_instrument_appliance_jobs') ?? { instrumentApplianceJobs: [] }) as EmitInstrumentApplianceJobsOutput;
+  const executionReadinessOutput = (result.outputs.get('evaluate_instrument_execution_readiness') ?? {}) as Partial<EvaluateInstrumentExecutionReadinessOutput>;
+  terminalArtifacts.instrumentApplianceJobs = executionReadinessOutput.instrumentApplianceJobs ?? emitInstrumentApplianceJobsOutput.instrumentApplianceJobs;
+  if (executionReadinessOutput.instrumentExecutionReadiness) {
+    terminalArtifacts.instrumentExecutionReadiness = executionReadinessOutput.instrumentExecutionReadiness;
+  }
 
   // Populate downstreamQueue from emit_downstream_queue pass (spec-039)
   const emitDownstreamQueueOutput = (result.outputs.get('emit_downstream_queue') ?? { downstreamQueue: [] }) as EmitDownstreamQueueOutput;

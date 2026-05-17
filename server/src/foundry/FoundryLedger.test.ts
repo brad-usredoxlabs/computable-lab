@@ -549,6 +549,71 @@ describe('FoundryLedger', () => {
     });
   });
 
+  it('reopens coder work when a newer human-reviewed patch spec lands after a skipped coder result', async () => {
+    const root = await makeArtifactRoot();
+    await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-compiler-result',
+      outcome: 'gap',
+      eventCount: 1,
+      diagnostics: [],
+    });
+    await writeYamlFile(join(root, 'event-graphs', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-event-graph-proposal',
+    });
+    await writeYamlFile(join(root, 'execution-scale', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'execution-scale-plan',
+      blockers: [],
+    });
+    await writeYamlFile(join(root, 'assumptions', 'demo-protocol', 'manual_tubes.yaml'), {
+      kind: 'protocol-foundry-test-assumption-profile',
+    });
+    await writeYamlFile(join(root, 'browser-review', 'demo-protocol', 'manual_tubes', 'report.yaml'), {
+      kind: 'protocol-browser-review-report',
+      status: 'pass',
+    });
+    await writeYamlFile(join(root, 'architect', 'demo-protocol', 'manual_tubes', 'verdict.yaml'), {
+      kind: 'protocol-foundry-architect-verdict',
+      accepted: false,
+    });
+    await writeYamlFile(join(root, 'patch-specs', 'demo-protocol', 'manual_tubes', 'fix-extractor.yaml'), {
+      id: 'fix-extractor',
+      fixClass: 'extractor_prompt_contract',
+      ownedFiles: ['server/src/extract'],
+    });
+    await writeYamlFile(join(root, 'adoption', 'demo-protocol', 'manual_tubes', 'adoption.yaml'), {
+      kind: 'protocol-foundry-adoption-decision',
+      status: 'accepted',
+      patchSpecs: [{ id: 'fix-extractor' }],
+    });
+    await writeYamlFile(join(root, 'code-patches', 'demo-protocol', 'manual_tubes', 'result.yaml'), {
+      kind: 'protocol-foundry-coder-patch-result',
+      status: 'skipped',
+    });
+
+    await tick();
+    await writeYamlFile(join(root, 'patch-specs', 'demo-protocol', 'manual_tubes', 'human-reviewed.yaml'), {
+      id: 'human-reviewed',
+      source: 'human-reviewed-foundry-spec',
+      fixClass: 'event_graph_coverage',
+      ownedFiles: ['server/src/compiler'],
+    });
+    await tick();
+    await writeYamlFile(join(root, 'adoption', 'demo-protocol', 'manual_tubes', 'adoption.yaml'), {
+      kind: 'protocol-foundry-adoption-decision',
+      status: 'accepted',
+      applyPatches: true,
+      source: 'human-reviewed-foundry-spec',
+      patchSpecs: [{ id: 'human-reviewed' }],
+    });
+
+    const ledger = await scanFoundryLedger(root);
+    expect(readyTasks(ledger)).toContainEqual({
+      protocolId: 'demo-protocol',
+      variant: 'manual_tubes',
+      stage: 'coder_patch',
+    });
+  });
+
   it('blocks adoption decisions with no patch specs instead of rerunning the compiler', async () => {
     const root = await makeArtifactRoot();
     await writeYamlFile(join(root, 'compiler', 'demo-protocol', 'manual_tubes.yaml'), {

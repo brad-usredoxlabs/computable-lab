@@ -5,7 +5,7 @@
  * agent request/response shapes, and streaming event types.
  */
 
-import type { ExecutionScalePlan } from '../compiler/pipeline/CompileContracts.js';
+import type { ExecutionScalePlan, InstrumentApplianceJob } from '../compiler/pipeline/CompileContracts.js';
 
 // ============================================================================
 // OpenAI-compatible inference types
@@ -145,6 +145,12 @@ export interface AgentRequest {
   attachments?: FileAttachment[];
   /** Per-request override to enable thinking mode on the inference client. */
   enableThinking?: boolean;
+  /**
+   * When true, run only the deterministic portion of the chatbot-compile
+   * pipeline: skip the LLM-backed `ai_precompile` pass and never fall through
+   * to the LLM agent loop. Required when no LLM is configured.
+   */
+  deterministicOnly?: boolean;
 }
 
 /**
@@ -323,6 +329,8 @@ export interface AgentResult {
   downstreamQueue?: Array<{ kind: string; description?: string; params?: Record<string, unknown> }>;
   /** Deterministic execution scaling handoff for bench/robot lowering. */
   executionScalePlan?: ExecutionScalePlan;
+  /** Appliance active-control jobs derived from instrument run files. */
+  instrumentApplianceJobs?: InstrumentApplianceJob[];
 }
 
 export interface PlateEventProposal {

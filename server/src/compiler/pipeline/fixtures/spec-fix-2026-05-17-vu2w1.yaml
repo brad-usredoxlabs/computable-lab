@@ -1,0 +1,14 @@
+name: spec-fix-2026-05-17-vu2w1
+description: Verify that 'put a 96-well plate on B2' correctly pins the plate to
+  slot B2 in the deck layout plan.
+deterministicOnly: true
+input:
+  prompt: put a 96-well plate on B2
+expected:
+  outcome: complete
+  terminalArtifacts:
+    deckLayoutPlan:
+      pinned:
+        - slot: B2
+          labwareHint: lbw-def-generic-96-well-plate
+    events: []

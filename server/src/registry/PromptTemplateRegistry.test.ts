@@ -25,7 +25,7 @@ describe('PromptTemplateRegistry', () => {
     expect(found!.kind).toBe('prompt-template');
     expect(found!.prompt_kind).toBe('compiler.precompile.system');
     expect(found!.content_format).toBe('markdown');
-    expect(found!.content).toContain('You are the AI-precompile stage');
+    expect(found!.content).toContain('ProtocolIntent-normalizing AI-precompile stage');
   });
 
   it('get returns the template by id', () => {
@@ -41,14 +41,16 @@ describe('PromptTemplateRegistry', () => {
 
   it('render with no vars returns content unchanged (no variables template)', () => {
     const content = renderPromptTemplate('chatbot-compile.precompile.system');
-    expect(content).toContain('You are the AI-precompile stage');
+    expect(content).toContain('ProtocolIntent-normalizing AI-precompile stage');
+    expect(content).toContain('"protocolIntent"');
+    expect(content).toContain('protocolIntent is the primary output');
   });
 
   it('render with vars substitutes {{x}} correctly', async () => {
     // Create a temporary template with variables for testing
     const { writeFileSync, unlinkSync } = await import('node:fs');
-    const testDir = '/home/brad/git/computable-lab/schema/registry/prompt-templates';
-    const testFile = `${testDir}/test-vars.yaml`;
+    const { fileURLToPath } = await import('node:url');
+    const testFile = fileURLToPath(new URL('../../../schema/registry/prompt-templates/test-vars.yaml', import.meta.url));
     writeFileSync(
       testFile,
       `kind: prompt-template
@@ -88,8 +90,8 @@ content: Hello {{user}}, you have {{count}} items.
 
   it('render warns and substitutes empty string for missing variable', async () => {
     const { writeFileSync, unlinkSync } = await import('node:fs');
-    const testDir = '/home/brad/git/computable-lab/schema/registry/prompt-templates';
-    const testFile = `${testDir}/test-missing-var.yaml`;
+    const { fileURLToPath } = await import('node:url');
+    const testFile = fileURLToPath(new URL('../../../schema/registry/prompt-templates/test-missing-var.yaml', import.meta.url));
     writeFileSync(
       testFile,
       `kind: prompt-template

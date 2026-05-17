@@ -1,0 +1,25 @@
+kind: protocol-foundry-adoption-decision
+protocolId: man0011863-memper-plus-memb-protein-extract-ug
+variant: manual_tubes
+generated_at: 2026-05-09T21:20:00.427Z
+status: accepted
+applyPatches: true
+patchSpecs:
+  - id: man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-browser-rendering
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-browser-rendering.yaml
+    fixClass: browser_or_labware_rendering
+    title: Make event graph render and play in labware-editor
+  - id: man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-foundry-runtime-wiring-gap
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-foundry-runtime-wiring-gap.yaml
+    fixClass: foundry_runtime_wiring_gap
+    title: Wire Foundry compile dependencies to the real compiler runtime
+  - id: man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-labware-alias-resolver-gap
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-labware-alias-resolver-gap.yaml
+    fixClass: labware_alias_or_resolver_gap
+    title: Resolve existing labware definitions through compiler aliases or Foundry
+      lookup wiring
+  - id: man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-material-catalog-spec-gap
+    path: /home/brad/git/computable-foundry/artifacts/patch-specs/man0011863-memper-plus-memb-protein-extract-ug/manual_tubes/fix-material-catalog-spec-gap.yaml
+    fixClass: material_catalog_or_spec_gap
+    title: Resolve protocol materials as catalog/spec data without inventing inventory
+message: Patch specs accepted for unattended coder tournament execution.
