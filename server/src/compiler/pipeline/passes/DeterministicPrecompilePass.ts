@@ -636,7 +636,7 @@ const DECK_SLOT_TOKEN_RE = /\b([A-Da-d][1-4])\b/g;
  * Placement prepositions that signal a deck-slot intent when followed by a
  * deck-slot token (e.g. "on B2", "onto C3").
  */
-const PLACEMENT_PREPOSITION_RE = /\b(?:on|onto|in|at)\b/gi;
+const PLACEMENT_PREPOSITION_RE = /\b(?:on|onto|in|into|at)\b/gi;
 
 /**
  * Extract well addresses from text, but filter out tokens that look like
@@ -1337,7 +1337,7 @@ function inferDeckSlotForMention(
  */
 function inferBareDeckSlot(text: string): string | undefined {
   const lower = text.toLowerCase();
-  const prepMatch = lower.match(/\b(?:on|onto|in|at)\b/);
+  const prepMatch = lower.match(/\b(?:on|onto|in|into|at)\b/);
   if (!prepMatch) return undefined;
   const afterPrep = lower.slice(prepMatch.index + prepMatch[0].length);
   const slotMatch = afterPrep.match(/^\s*([A-Da-d][1-4])\b/);
