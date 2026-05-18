@@ -36,6 +36,17 @@
   --ee-lawn-highlight: rgba(255, 255, 255, 0.02);
   --ee-lawn-grid-line: rgba(255, 255, 255, 0.03);
 
+  /* Layout dimensions. Overridden in the mobile @media block below so the
+     same rules render correctly on phone viewports. CSS-first responsive
+     adaptation per the mobile UI plan. */
+  --ee-topbar-height: 48px;
+  --ee-stage-padding: 24px;
+  --ee-deck-slot-width: 144px;
+  --ee-deck-slot-height: 96px;
+  --ee-focus-size: 720px;
+  --ee-fixit-width: 420px;
+  --ee-dock-height: 240px;
+
   position: fixed;
   inset: 0;
   display: grid;
@@ -46,6 +57,169 @@
   font-size: 13px;
   line-height: 1.4;
   overflow: hidden;
+}
+
+/* Fix-it route shell — when the panel is hosted as its own page (e.g.,
+ * mobile's second browser tab at /event-editor/fixit), the parent
+ * .event-editor wrapper no longer holds the editor's three-row grid.
+ * Switch to a single-cell layout that lets the fullscreen panel fill
+ * the viewport. */
+.event-editor.event-editor--fixit-route {
+  display: block;
+  overflow: auto;
+}
+
+/* Mobile overrides — narrow viewports get tighter chrome, scaled deck
+ * slots, full-bleed Fix-it panel, and a flexible-height prompt dock.
+ * All layout decisions that can live in CSS go through these tokens; the
+ * React side only branches when a component tree differs (e.g., separate
+ * route for the Fix-it tab). See useViewport() for the JS counterpart. */
+@media (max-width: 768px) {
+  .event-editor {
+    --ee-topbar-height: 40px;
+    --ee-stage-padding: 6px;
+    /* Sized so the typical Opentrons Flex 4-column deck fits in a
+       portrait iPhone (~375 css px). 21vw at 375 = 78px → 4 slots +
+       3 gaps + side padding ≈ 360px. Wider phones get a bit more room. */
+    --ee-deck-slot-width: clamp(64px, 21vw, 100px);
+    --ee-deck-slot-height: calc(var(--ee-deck-slot-width) * 0.667);
+    --ee-focus-size: min(560px, calc(100vw - 16px));
+    --ee-fixit-width: 100vw;
+    --ee-dock-height: 30vh;
+  }
+
+  /* Deck grid: tighter padding + gap so the slots themselves get the
+     space rather than the chrome. */
+  .event-editor .deck__grid {
+    padding: 8px;
+    gap: 6px;
+    border-radius: 8px;
+  }
+
+  /* Mobile topbar collapses to brand + hamburger; everything else
+     (chips, theme toggle, nav links) goes into a slide-down menu
+     rendered by `MobileTopBar`. The hamburger keeps the bar within a
+     phone width without horizontal scroll. */
+  .event-editor .topbar {
+    padding: 4px 10px;
+    gap: 8px;
+    min-width: 0;
+  }
+  /* Pin brand to the left so it never overflows the viewport edge. */
+  .event-editor .topbar__brand {
+    flex-shrink: 0;
+    font-size: 14px;
+  }
+
+  /* (Lawn-hiding lives in its own @media block placed AFTER the base
+     `.lawn` rules so it wins the cascade. See ~line 656.) */
+
+  /* Belt-and-suspenders: prevent the body underneath from picking up
+     a horizontal pan gesture when content inside the editor overflows
+     its scroll container. */
+  .event-editor .stage {
+    overscroll-behavior: contain;
+  }
+}
+
+/* Hamburger button shown only on mobile (TopBar renders MobileTopBar on
+   narrow viewports; the desktop variant doesn't include this element). */
+.event-editor .topbar__hamburger {
+  appearance: none;
+  background: var(--ee-bg-elev-2);
+  border: 1px solid var(--ee-border);
+  color: var(--ee-text);
+  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.event-editor .topbar__hamburger:hover {
+  border-color: var(--ee-border-strong);
+}
+
+/* Slide-down menu: sits below the topbar, slightly elevated above the
+   page. Each chip / nav becomes a full-width row so it's easy to tap. */
+.event-editor .topbar__menu {
+  position: fixed;
+  top: var(--ee-topbar-height);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--ee-bg-elev);
+  border-bottom: 1px solid var(--ee-border);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  max-height: calc(100vh - var(--ee-topbar-height));
+  overflow-y: auto;
+}
+
+.event-editor .topbar__menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.event-editor .topbar__menu-divider {
+  height: 1px;
+  background: var(--ee-border);
+  margin: 2px 0;
+}
+
+/* Menu items stretch to full width and grow tap targets to 44px. The
+   actual topbar elements are `.chip-select` (DeckMode/Vocab/Tool),
+   `.tip-chip` (TipChip), and `.theme-toggle` — not all chips share a
+   common class, so target each by its real selector. */
+.event-editor .topbar__menu .chip-select,
+.event-editor .topbar__menu .tip-chip,
+.event-editor .topbar__menu .theme-toggle {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+/* The select inside a .chip-select should fill the remaining row width
+   and truncate long option text rather than overflow the chip. */
+.event-editor .topbar__menu .chip-select select {
+  flex: 1;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+.event-editor .topbar__menu .tip-chip {
+  flex-wrap: wrap;
+}
+
+/* Nav links: stack vertically with comfortable tap targets. */
+.event-editor .topbar__menu .topbar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--ee-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--ee-bg-elev-2);
+}
+
+.event-editor .topbar__menu .topbar__nav a {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--ee-border);
+  text-decoration: none;
+  color: var(--ee-text);
+}
+
+.event-editor .topbar__menu .topbar__nav a:last-child {
+  border-bottom: none;
 }
 
 .event-editor[data-theme='light'] {
@@ -97,7 +271,7 @@
   padding: 8px 16px;
   background: var(--ee-bg-elev);
   border-bottom: 1px solid var(--ee-border);
-  height: 48px;
+  height: var(--ee-topbar-height);
   flex-shrink: 0;
 }
 
@@ -257,12 +431,17 @@
   align-items: stretch;
   justify-content: center;
   gap: 24px;
-  padding: 24px;
+  padding: var(--ee-stage-padding);
   background:
     radial-gradient(circle at 50% 35%, var(--ee-stage-tint), transparent 60%),
     var(--ee-bg);
   overflow: auto;
   min-height: 0;
+  /* Touch-pannable on phones. Both axes pan; pinch-zoom is left to the
+     browser at the page level. -webkit-overflow-scrolling keeps iOS
+     momentum scrolling. */
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .event-editor .stage__placeholder {
@@ -313,8 +492,8 @@
 
 .event-editor .slot {
   position: relative;
-  width: 144px;
-  height: 96px;
+  width: var(--ee-deck-slot-width);
+  height: var(--ee-deck-slot-height);
   border-radius: 8px;
   background: var(--ee-bg-elev-2);
   border: 1px solid var(--ee-border);
@@ -468,6 +647,27 @@
 @keyframes ee-error-fade {
   0%, 80% { opacity: 1; }
   100% { opacity: 0; }
+}
+
+/* Hide lawn surfaces on mobile. Placed AFTER the base `.lawn` rules
+   above so this override actually wins the cascade — specificity is
+   identical, so source order decides. The mobile scope is read +
+   prompt + Fix-it; lawn-density editing is a desktop feature. */
+@media (max-width: 768px) {
+  .event-editor .lawn,
+  .event-editor .lawn--primary {
+    display: none !important;
+  }
+  /* Float the Fix-it launcher chip just above the dock's top edge so it
+     doesn't overlap the Send button (which sits at the dock's bottom-
+     right on mobile). Sitting at `bottom: var(--ee-dock-height) + 8px`
+     keeps it visually close to the Precompile/AI toggle (which is the
+     dock's top row) without competing for the same pixels. */
+  .event-editor .fixit-launcher {
+    bottom: calc(var(--ee-dock-height) + 8px);
+    right: 10px;
+    padding: 6px 12px;
+  }
 }
 
 /* ---- Slot interactive states ---- */
@@ -714,12 +914,29 @@
 
 /* ---- Fix-it side panel (right drawer) ---- */
 
+/* Fullscreen layout: the Fix-it experience hosted as its own page on
+ * mobile (or any context where it owns the whole viewport). Drops the
+ * fixed positioning + drawer width + drop-shadow so the panel just
+ * fills its parent. The component still uses the same className so all
+ * the inner layout (header / live-status / seed / chat / jobs) keeps
+ * working unchanged. */
+.event-editor .fixit-panel[data-layout='fullscreen'] {
+  position: relative;
+  top: auto;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  height: 100%;
+  border-left: none;
+  box-shadow: none;
+}
+
 .event-editor .fixit-panel {
   position: fixed;
-  top: 48px;             /* topbar height */
+  top: var(--ee-topbar-height);
   right: 0;
   bottom: 0;
-  width: 420px;
+  width: var(--ee-fixit-width);
   display: grid;
   grid-template-rows: auto auto 1fr auto;
   background: var(--ee-bg-elev);
@@ -767,6 +984,72 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* Compact "collapsed" form of the seed — single clickable strip showing
+   only the failing prompt so the deck/lawn underneath is unobstructed. */
+.event-editor .fixit-panel__seed-collapsed {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-bottom: 1px solid var(--ee-border);
+  background: var(--ee-bg-elev-2);
+  color: inherit;
+  font: inherit;
+  padding: 6px 14px;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  cursor: pointer;
+}
+
+.event-editor .fixit-panel__seed-collapsed:hover {
+  background: var(--ee-bg-elev);
+}
+
+.event-editor .fixit-panel__seed-collapsed-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--ee-text-faint);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  flex: 0 0 auto;
+}
+
+.event-editor .fixit-panel__seed-collapsed-prompt {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: var(--ee-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* Collapse / expand button in the header. */
+.event-editor .fixit-panel__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.event-editor .fixit-panel__collapse {
+  appearance: none;
+  border: 1px solid var(--ee-border);
+  background: var(--ee-bg-elev);
+  color: var(--ee-text-dim);
+  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.event-editor .fixit-panel__collapse:hover {
+  color: var(--ee-text);
+  border-color: var(--ee-border-strong);
 }
 
 .event-editor .fixit-panel__seed-label {
@@ -1419,6 +1702,815 @@
   background: rgba(248, 81, 73, 0.12);
 }
 
+/* ---- Fix-it job stack ---- */
+
+.event-editor .fixit-panel__job-stack {
+  margin-top: auto;
+  border-top: 1px solid var(--ee-border);
+  padding-top: 10px;
+}
+
+.event-editor .fixit-panel__job-stack-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--ee-text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.event-editor .fixit-panel__job-refresh,
+.event-editor .fixit-panel__job-complete,
+.event-editor .fixit-panel__job-close {
+  border: 1px solid var(--ee-border);
+  background: var(--ee-bg-elev);
+  color: var(--ee-text-dim);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 7px;
+  cursor: pointer;
+}
+
+.event-editor .fixit-panel__job-refresh:hover,
+.event-editor .fixit-panel__job-complete:hover:not(:disabled),
+.event-editor .fixit-panel__job-close:hover {
+  color: var(--ee-text);
+  border-color: var(--ee-border-strong);
+}
+
+.event-editor .fixit-panel__job-complete:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.event-editor .fixit-panel__job-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.event-editor .fixit-panel__job-row {
+  border: 1px solid var(--ee-border);
+  background: var(--ee-bg-elev);
+  border-radius: 6px;
+  padding: 7px;
+  display: grid;
+  gap: 5px;
+}
+
+.event-editor .fixit-panel__job-row[data-selected='true'] {
+  border-color: var(--ee-accent);
+  box-shadow: inset 3px 0 0 var(--ee-accent);
+}
+
+.event-editor .fixit-panel__job-row[data-status='running'],
+.event-editor .fixit-panel__job-row[data-status='critic'] {
+  border-color: rgba(88, 166, 255, 0.5);
+}
+
+.event-editor .fixit-panel__job-row[data-status='needs-feedback'] {
+  border-color: rgba(210, 153, 34, 0.5);
+}
+
+.event-editor .fixit-panel__job-select {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.event-editor .fixit-panel__job-select:hover .fixit-panel__job-title,
+.event-editor .fixit-panel__job-select:focus-visible .fixit-panel__job-title {
+  color: var(--ee-accent);
+}
+
+.event-editor .fixit-panel__job-select:focus-visible {
+  outline: 1px solid var(--ee-accent);
+  outline-offset: 2px;
+}
+
+.event-editor .fixit-panel__job-main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.event-editor .fixit-panel__job-status {
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--ee-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.event-editor .fixit-panel__job-title {
+  min-width: 0;
+  color: var(--ee-text);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-editor .fixit-panel__job-meta {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ee-text-dim);
+  font-size: 11px;
+}
+
+.event-editor .fixit-panel__job-meta span,
+.event-editor .fixit-panel__job-meta code {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-editor .fixit-panel__job-complete {
+  justify-self: start;
+}
+
+.event-editor .fixit-panel__job-detail {
+  margin: 8px 14px 10px;
+  border: 1px solid var(--ee-border);
+  background: var(--ee-bg-elev-2);
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.event-editor .fixit-panel__job-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.event-editor .fixit-panel__job-detail-label,
+.event-editor .fixit-panel__job-result-title {
+  color: var(--ee-text-faint);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.event-editor .fixit-panel__job-detail-title {
+  color: var(--ee-text);
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.event-editor .fixit-panel__job-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.event-editor .fixit-panel__job-close {
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+  padding: 0;
+}
+
+.event-editor .fixit-panel__job-detail-prompt {
+  color: var(--ee-text);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.event-editor .fixit-panel__job-session {
+  color: var(--ee-text-faint);
+  font-size: 11px;
+}
+
+.event-editor .fixit-panel__job-session code {
+  color: var(--ee-text-dim);
+}
+
+.event-editor .fixit-panel__job-detail-meta {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 8px;
+  margin: 0;
+  font-size: 11px;
+}
+
+.event-editor .fixit-panel__job-detail-meta dt {
+  color: var(--ee-text-faint);
+  font-weight: 600;
+}
+
+.event-editor .fixit-panel__job-detail-meta dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--ee-text-dim);
+}
+
+.event-editor .fixit-panel__job-detail-meta code,
+.event-editor .fixit-panel__job-result code {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-editor .fixit-panel__job-result {
+  border-top: 1px solid var(--ee-border);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--ee-text-dim);
+  font-size: 11.5px;
+}
+
+.event-editor .fixit-panel__job-result p {
+  margin: 0;
+  color: var(--ee-text);
+  line-height: 1.4;
+}
+
+.event-editor .fixit-panel__job-events {
+  border-top: 1px solid var(--ee-border);
+  margin: 0;
+  padding: 8px 0 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.event-editor .fixit-panel__job-event {
+  display: grid;
+  grid-template-columns: 42px 86px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.event-editor .fixit-panel__job-event-phase {
+  min-width: 0;
+  color: var(--ee-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-editor .fixit-panel__job-event-message {
+  min-width: 0;
+  color: var(--ee-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-editor .fixit-panel__job-empty {
+  border-top: 1px solid var(--ee-border);
+  padding-top: 8px;
+  color: var(--ee-text-faint);
+  font-size: 11px;
+}
+
+/* ---- Fix-it launcher (floating reopen button) ----
+ *
+ * Visible when the Fix-it panel is closed AND the server has at least one
+ * non-complete job. Lets the user reopen the panel after a page refresh
+ * without needing an active draft preview.
+ */
+.event-editor .fixit-launcher {
+  position: fixed;
+  bottom: 18px;
+  right: 18px;
+  z-index: 30;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--ee-border-strong);
+  border-radius: 999px;
+  background: var(--ee-bg-elev);
+  color: var(--ee-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.event-editor .fixit-launcher:hover {
+  background: var(--ee-bg-elev-2);
+}
+
+.event-editor .fixit-launcher[data-tone='running'] {
+  border-color: rgba(88, 166, 255, 0.6);
+  background: color-mix(in srgb, rgba(88, 166, 255, 1) 8%, var(--ee-bg-elev));
+}
+
+.event-editor .fixit-launcher[data-tone='attention'] {
+  border-color: rgba(229, 192, 123, 0.75);
+  background: color-mix(in srgb, rgba(229, 192, 123, 1) 14%, var(--ee-bg-elev));
+  color: rgb(210, 153, 34);
+}
+
+.event-editor .fixit-launcher__icon {
+  font-size: 14px;
+  line-height: 1;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.event-editor .fixit-launcher__count {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--ee-bg);
+  border: 1px solid var(--ee-border);
+  min-width: 22px;
+  text-align: center;
+}
+
+.event-editor .fixit-launcher[data-tone='running'] .fixit-launcher__count {
+  color: rgb(88, 166, 255);
+  border-color: rgba(88, 166, 255, 0.6);
+}
+
+.event-editor .fixit-launcher[data-tone='attention'] .fixit-launcher__count {
+  color: rgb(210, 153, 34);
+  border-color: rgba(229, 192, 123, 0.6);
+}
+
+/* No-seed placeholder shown when the panel is opened from the launcher
+ * but no Fix-it session is currently loaded. Tells the user where to go
+ * to start one or pick a running job from the list below. */
+.event-editor .fixit-panel__no-seed {
+  margin: 10px 14px 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--ee-border);
+  border-radius: 6px;
+  background: var(--ee-bg-elev-2);
+  color: var(--ee-text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.event-editor .fixit-panel__no-seed strong {
+  color: var(--ee-text);
+  display: block;
+  margin-bottom: 2px;
+}
+
+/* ---- Fix-it live status strip ---- */
+/*
+ * Always-visible during the apply phase. Tells the user which agent is
+ * running (junior / critic / senior), why we escalated, and the latest
+ * critic verdict + feedback. Survives body-collapse so the user can hide
+ * the chat without losing pulse on the running job.
+ */
+.event-editor .fixit-live {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--ee-border);
+  background: var(--ee-bg-elev-2);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.event-editor .fixit-live[data-agent='junior'] {
+  border-left: 3px solid rgba(88, 166, 255, 0.85);
+}
+.event-editor .fixit-live[data-agent='critic-junior'],
+.event-editor .fixit-live[data-agent='critic-senior'] {
+  border-left: 3px solid rgba(165, 113, 236, 0.85);
+}
+.event-editor .fixit-live[data-agent='senior'] {
+  border-left: 3px solid rgba(229, 192, 123, 0.95);
+  background: color-mix(in srgb, rgba(229, 192, 123, 1) 6%, var(--ee-bg-elev-2));
+}
+
+.event-editor .fixit-live__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.event-editor .fixit-live__agent {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ee-text);
+}
+
+.event-editor .fixit-live__verdict {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ee-bg);
+  border: 1px solid var(--ee-border);
+}
+.event-editor .fixit-live__verdict[data-verdict='pass'] {
+  color: rgb(63, 185, 80);
+  border-color: rgba(63, 185, 80, 0.55);
+}
+.event-editor .fixit-live__verdict[data-verdict='revision'] {
+  color: rgb(210, 153, 34);
+  border-color: rgba(229, 192, 123, 0.6);
+}
+.event-editor .fixit-live__verdict[data-verdict='block'] {
+  color: rgb(248, 81, 73);
+  border-color: rgba(248, 81, 73, 0.55);
+}
+
+.event-editor .fixit-live__reason {
+  color: var(--ee-text-dim);
+  font-style: italic;
+}
+
+.event-editor .fixit-live__feedback {
+  font-size: 12px;
+  color: var(--ee-text);
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, rgba(229, 192, 123, 1) 10%, transparent);
+  border: 1px solid rgba(229, 192, 123, 0.45);
+}
+
+.event-editor .fixit-live__feedback strong {
+  color: rgb(210, 153, 34);
+  margin-right: 4px;
+}
+
+.event-editor .fixit-live__latest {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--ee-text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Jobs section collapse toggle ---- */
+.event-editor .fixit-jobs__toggle {
+  appearance: none;
+  border: 1px solid var(--ee-border);
+  background: var(--ee-bg-elev);
+  color: var(--ee-text-dim);
+  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.event-editor .fixit-jobs__toggle:hover {
+  color: var(--ee-text);
+  border-color: var(--ee-border-strong);
+}
+
+/* ---- Fix-it job cards (redesigned) ---- */
+
+.event-editor .fixit-jobs {
+  margin-top: auto;
+  padding: 12px 14px 14px;
+  border-top: 1px solid var(--ee-border);
+  background: var(--ee-bg-elev-2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.event-editor .fixit-jobs__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.event-editor .fixit-jobs__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ee-text);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.event-editor .fixit-jobs__count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ee-text-faint);
+  background: var(--ee-bg-elev);
+  border: 1px solid var(--ee-border);
+  border-radius: 999px;
+  padding: 1px 8px;
+  min-width: 22px;
+  text-align: center;
+}
+
+.event-editor .fixit-jobs__refresh {
+  appearance: none;
+  margin-left: auto;
+  border: 1px solid var(--ee-border);
+  background: var(--ee-bg-elev);
+  color: var(--ee-text-dim);
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  line-height: 1;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.event-editor .fixit-jobs__refresh:hover {
+  color: var(--ee-text);
+  border-color: var(--ee-border-strong);
+}
+
+.event-editor .fixit-jobs__error {
+  padding: 8px 10px;
+  border-radius: 5px;
+  background: rgba(248, 81, 73, 0.1);
+  border: 1px solid rgba(248, 81, 73, 0.45);
+  color: var(--ee-danger);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.event-editor .fixit-jobs__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Wrapper lets us place the "mark complete" button as a sibling over the
+   card without nesting <button> inside <button>. */
+.event-editor .fixit-job-card-wrap {
+  position: relative;
+}
+
+/* Card body. The whole card is a button so clicking anywhere on it
+   restores the conversation. Status-tinted left border + tinted background
+   for at-a-glance differentiation between running / blocked / failed / etc. */
+.event-editor .fixit-job-card {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--ee-border);
+  border-left-width: 3px;
+  background: var(--ee-bg);
+  color: inherit;
+  font: inherit;
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: background 80ms ease, border-color 80ms ease;
+}
+
+.event-editor .fixit-job-card:hover {
+  border-color: var(--ee-border-strong);
+  background: var(--ee-bg-elev);
+}
+
+.event-editor .fixit-job-card:focus-visible {
+  outline: 2px solid var(--ee-accent);
+  outline-offset: 1px;
+}
+
+.event-editor .fixit-job-card:disabled {
+  cursor: progress;
+  opacity: 0.75;
+}
+
+.event-editor .fixit-job-card[data-current='true'] {
+  border-color: var(--ee-accent);
+  background: color-mix(in srgb, var(--ee-accent) 8%, var(--ee-bg));
+}
+
+/* Status-driven left border + faint background tint. */
+.event-editor .fixit-job-card[data-status='running'],
+.event-editor .fixit-job-card[data-status='queued'] {
+  border-left-color: rgba(88, 166, 255, 0.85);
+  background: color-mix(in srgb, rgba(88, 166, 255, 1) 6%, var(--ee-bg));
+}
+
+.event-editor .fixit-job-card[data-status='critic'] {
+  border-left-color: rgba(165, 113, 236, 0.85);
+  background: color-mix(in srgb, rgba(165, 113, 236, 1) 6%, var(--ee-bg));
+}
+
+.event-editor .fixit-job-card[data-status='needs-feedback'] {
+  border-left-color: rgba(229, 192, 123, 0.9);
+  background: color-mix(in srgb, rgba(229, 192, 123, 1) 7%, var(--ee-bg));
+}
+
+.event-editor .fixit-job-card[data-status='applied'] {
+  border-left-color: rgba(63, 185, 80, 0.9);
+  background: color-mix(in srgb, rgba(63, 185, 80, 1) 6%, var(--ee-bg));
+}
+
+.event-editor .fixit-job-card[data-status='blocked'],
+.event-editor .fixit-job-card[data-status='failed'] {
+  border-left-color: rgba(248, 81, 73, 0.9);
+  background: color-mix(in srgb, rgba(248, 81, 73, 1) 6%, var(--ee-bg));
+}
+
+.event-editor .fixit-job-card[data-status='skipped'] {
+  border-left-color: var(--ee-border-strong);
+}
+
+.event-editor .fixit-job-card__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.event-editor .fixit-job-card__status {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ee-text);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ee-bg-elev);
+  border: 1px solid var(--ee-border);
+}
+
+.event-editor .fixit-job-card__status[data-status='running'],
+.event-editor .fixit-job-card__status[data-status='queued'] {
+  color: rgb(88, 166, 255);
+  border-color: rgba(88, 166, 255, 0.5);
+}
+.event-editor .fixit-job-card__status[data-status='critic'] {
+  color: rgb(165, 113, 236);
+  border-color: rgba(165, 113, 236, 0.55);
+}
+.event-editor .fixit-job-card__status[data-status='needs-feedback'] {
+  color: rgb(210, 153, 34);
+  border-color: rgba(229, 192, 123, 0.6);
+}
+.event-editor .fixit-job-card__status[data-status='applied'] {
+  color: rgb(63, 185, 80);
+  border-color: rgba(63, 185, 80, 0.55);
+}
+.event-editor .fixit-job-card__status[data-status='blocked'],
+.event-editor .fixit-job-card__status[data-status='failed'] {
+  color: rgb(248, 81, 73);
+  border-color: rgba(248, 81, 73, 0.55);
+}
+
+.event-editor .fixit-job-card__current {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ee-accent);
+}
+
+.event-editor .fixit-job-card__restoring {
+  font-size: 11px;
+  color: var(--ee-text-dim);
+  font-style: italic;
+}
+
+.event-editor .fixit-job-card__actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  z-index: 1;
+}
+
+.event-editor .fixit-job-card__complete {
+  appearance: none;
+  border: 1px solid var(--ee-border);
+  background: var(--ee-bg);
+  color: var(--ee-text-faint);
+  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.event-editor .fixit-job-card__complete:hover:not(:disabled) {
+  color: var(--ee-text);
+  border-color: var(--ee-border-strong);
+  background: var(--ee-bg-elev);
+}
+
+.event-editor .fixit-job-card__resume {
+  appearance: none;
+  border: 1px solid rgba(63, 185, 80, 0.6);
+  background: color-mix(in srgb, rgba(63, 185, 80, 1) 10%, var(--ee-bg));
+  color: rgb(63, 185, 80);
+  border-radius: 4px;
+  padding: 2px 10px;
+  height: 22px;
+  line-height: 1;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.event-editor .fixit-job-card__resume:hover:not(:disabled) {
+  border-color: rgb(63, 185, 80);
+  background: color-mix(in srgb, rgba(63, 185, 80, 1) 18%, var(--ee-bg));
+}
+
+.event-editor .fixit-job-card__resume:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.event-editor .fixit-job-card__hint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ee-text-faint);
+  font-style: italic;
+}
+
+.event-editor .fixit-job-card__hint strong {
+  font-style: normal;
+  color: rgb(63, 185, 80);
+}
+
+/* Tint the interrupted status pill so it's clearly a recoverable state. */
+.event-editor .fixit-job-card__status[data-status='interrupted'] {
+  color: var(--ee-text-faint);
+  border-color: var(--ee-border);
+  background: var(--ee-bg-elev-2);
+}
+
+.event-editor .fixit-job-card[data-status='interrupted'] {
+  border-left-color: var(--ee-border-strong);
+  background: color-mix(in srgb, var(--ee-text-faint) 5%, var(--ee-bg));
+}
+
+.event-editor .fixit-job-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ee-text);
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.event-editor .fixit-job-card__subline {
+  font-size: 12px;
+  color: var(--ee-text-dim);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* ---- Add Labware Dialog ---- */
 
 .event-editor .ee-dialog__scrim {
@@ -1563,7 +2655,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--ee-stage-padding);
   background: rgba(14, 17, 22, 0.85);
   backdrop-filter: blur(2px);
 }
@@ -1575,8 +2667,12 @@
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
   display: flex;
   flex-direction: column;
-  max-width: calc(100% - 48px);
-  max-height: calc(100% - 48px);
+  /* Hug the parent inner box with a stage-padding margin on each side.
+     Same effective margins as before on desktop (24px stage-padding →
+     48px total = old calc(100% - 48px)); shrinks proportionally on
+     mobile (8px → 16px total margin). */
+  max-width: calc(100% - var(--ee-stage-padding) * 2);
+  max-height: calc(100% - var(--ee-stage-padding) * 2);
   overflow: hidden;
 }
 
@@ -1644,8 +2740,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--ee-stage-padding);
   overflow: auto;
+  /* Bounds the WellGrid SVG. LabwareFocus reads this rendered width via
+     a ResizeObserver and passes it as the SVG `size` prop, so shrinking
+     the viewport shrinks the grid automatically. */
+  width: min(var(--ee-focus-size), 100%);
+  margin: 0 auto;
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 .event-editor .focus__footer {
@@ -1829,7 +2932,7 @@
 .event-editor .ai-dock {
   background: var(--ee-bg-elev);
   border-top: 1px solid var(--ee-border);
-  height: 240px;
+  height: var(--ee-dock-height);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -1954,6 +3057,7 @@
   gap: 8px;
   padding: 10px 14px;
   border-top: 1px solid var(--ee-border);
+  align-items: flex-end;
 }
 
 .event-editor .ai-dock__input {
@@ -1966,6 +3070,14 @@
   font-size: 13px;
   outline: none;
   font: inherit;
+  /* Textarea-specific: control its own sizing via JS auto-grow (see
+     EventEditorAiDock auto-grow effect), and disable user resize so
+     the layout stays predictable. */
+  resize: none;
+  min-height: 36px;
+  max-height: 140px;
+  line-height: 1.4;
+  overflow-y: auto;
 }
 
 .event-editor .ai-dock__input:focus {
@@ -2019,6 +3131,31 @@
 
 .event-editor .ai-dock__mode-opt + .ai-dock__mode-opt {
   border-left: 1px solid var(--ee-border);
+}
+
+/* Mobile dock: bigger touch targets, stack mode toggle above the input
+   row so the textarea + send fit a phone width without wrapping. iOS
+   Safari zooms when an input's font-size < 16px on focus — bump the
+   textarea to 16px on mobile to suppress that. */
+@media (max-width: 768px) {
+  .event-editor .ai-dock__input-row {
+    flex-wrap: wrap;
+    padding: 8px 10px;
+  }
+  .event-editor .ai-dock__mode {
+    flex-basis: 100%;
+    order: -1;
+  }
+  .event-editor .ai-dock__input {
+    font-size: 16px;
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+  .event-editor .ai-dock__send {
+    padding: 12px 18px;
+    font-size: 15px;
+    min-height: 44px;
+  }
 }
 
 .event-editor .ai-dock__mode-opt[data-active='true'] {
@@ -2183,4 +3320,563 @@
 
 .event-editor .splash--error {
   color: var(--ee-danger);
+}
+
+/* ---- Add Material modal ----
+ *
+ * Portal-rendered above the editor. Uses event-editor design tokens so
+ * the visual language matches the Fix-it panel and the deck chrome.
+ * Mobile-aware via the existing `--ee-*` overrides; the dialog grows
+ * to fill the phone viewport with safe gutters.
+ */
+.add-material-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(14, 17, 22, 0.65);
+  backdrop-filter: blur(2px);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.add-material-dialog {
+  background: var(--ee-bg-elev);
+  color: var(--ee-text);
+  border: 1px solid var(--ee-border-strong);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+  width: min(720px, 100%);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.add-material-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--ee-border);
+}
+
+.add-material-title {
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.add-material-target {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ee-text-dim);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--ee-bg-elev-2);
+  border: 1px solid var(--ee-border);
+}
+
+.add-material-close {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--ee-border);
+  background: transparent;
+  color: var(--ee-text-dim);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.add-material-close:hover {
+  color: var(--ee-text);
+  border-color: var(--ee-border-strong);
+}
+
+.add-material-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.add-material-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.add-material-input {
+  flex: 1;
+  background: var(--ee-bg-elev-2);
+  border: 1px solid var(--ee-border);
+  color: var(--ee-text);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  min-width: 0;
+}
+
+.add-material-input:focus {
+  border-color: var(--ee-accent);
+}
+
+.add-material-spinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--ee-accent);
+  opacity: 0.85;
+  animation: add-material-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes add-material-pulse {
+  from { transform: scale(0.6); opacity: 0.3; }
+  to   { transform: scale(1.0); opacity: 0.9; }
+}
+
+.add-material-hint {
+  color: var(--ee-text-dim);
+  font-size: 12px;
+  padding: 6px 2px;
+  line-height: 1.4;
+}
+
+.add-material-error-inline {
+  background: rgba(248, 81, 73, 0.1);
+  border: 1px solid rgba(248, 81, 73, 0.4);
+  color: var(--ee-danger);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.add-material-results {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.add-material-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.add-material-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ee-text-faint);
+}
+
+.add-material-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.add-material-row {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  background: var(--ee-bg);
+  border: 1px solid var(--ee-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: border-color 80ms ease, background 80ms ease;
+}
+
+.add-material-row:hover {
+  border-color: var(--ee-border-strong);
+  background: var(--ee-bg-elev);
+}
+
+.add-material-row[data-category='saved-stock'] {
+  border-left: 3px solid rgba(88, 166, 255, 0.7);
+}
+
+.add-material-row[data-category='vendor-reagent'] {
+  border-left: 3px solid rgba(63, 185, 80, 0.7);
+}
+
+.add-material-row[data-category='prepared-material'] {
+  border-left: 3px solid rgba(165, 113, 236, 0.7);
+}
+
+.add-material-row[data-category='biological-derived'] {
+  border-left: 3px solid rgba(229, 192, 123, 0.7);
+}
+
+.add-material-row[data-category='ontology'] {
+  border-left: 3px solid rgba(210, 153, 34, 0.8);
+}
+
+.add-material-row-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--ee-text);
+}
+
+.add-material-row-ontology {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ee-text-faint);
+  border: 1px solid var(--ee-border);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+.add-material-row-meta {
+  font-size: 11px;
+  color: var(--ee-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-material-link {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--ee-accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 0;
+}
+
+.add-material-link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.add-material-create-row {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  background: var(--ee-bg-elev-2);
+  border: 1px dashed var(--ee-border-strong);
+  border-radius: 6px;
+  padding: 12px 14px;
+  color: var(--ee-text);
+  font: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.add-material-create-row:hover {
+  border-color: var(--ee-accent);
+  color: var(--ee-accent);
+}
+
+.add-material-create-meta {
+  font-size: 11px;
+  color: var(--ee-text-dim);
+}
+
+.add-material-picked {
+  background: var(--ee-bg-elev-2);
+  border: 1px solid var(--ee-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.add-material-picked-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ee-text-faint);
+}
+
+.add-material-picked-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.add-material-picked-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--ee-text-dim);
+}
+
+.add-material-picked-meta {
+  font-size: 12px;
+  color: var(--ee-text-dim);
+}
+
+.add-material-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.add-material-field-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ee-text);
+}
+
+.add-material-field-hint {
+  font-size: 11px;
+  color: var(--ee-text-dim);
+  line-height: 1.4;
+}
+
+.add-material-footer {
+  display: flex;
+  gap: 8px;
+  padding-top: 4px;
+  justify-content: flex-end;
+}
+
+.add-material-btn {
+  appearance: none;
+  background: var(--ee-bg-elev-2);
+  border: 1px solid var(--ee-border);
+  color: var(--ee-text);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.add-material-btn:hover:not(:disabled) {
+  border-color: var(--ee-border-strong);
+}
+
+.add-material-btn--primary {
+  background: var(--ee-accent);
+  color: var(--ee-on-accent);
+  border-color: var(--ee-accent);
+}
+
+.add-material-btn--primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.add-material-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.add-material-placeholder {
+  border: 1px dashed var(--ee-border);
+  border-radius: 6px;
+  padding: 14px 16px;
+  color: var(--ee-text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.add-material-placeholder strong {
+  color: var(--ee-text);
+}
+
+.add-material-error {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .add-material-scrim {
+    padding: 8px;
+  }
+  .add-material-dialog {
+    max-height: calc(100vh - 16px);
+    width: 100%;
+  }
+  .add-material-input {
+    font-size: 16px;
+  }
+}
+
+/* ---- Add Material builder widgets (Phase 2+) ---- */
+
+.add-material-field--row {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+/* Multi-ontology ref list */
+.add-material-ref-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.add-material-ref-chips {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.add-material-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 8px;
+  border: 1px solid var(--ee-border);
+  border-radius: 999px;
+  background: var(--ee-bg-elev-2);
+  font-size: 12px;
+}
+
+.add-material-ref-namespace {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ee-accent);
+  background: var(--ee-accent-soft);
+  padding: 1px 6px;
+  border-radius: 999px;
+}
+
+.add-material-ref-label {
+  font-weight: 600;
+  color: var(--ee-text);
+}
+
+.add-material-ref-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--ee-text-dim);
+}
+
+.add-material-ref-remove {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--ee-text-faint);
+  cursor: pointer;
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  border-radius: 999px;
+  font-size: 14px;
+}
+
+.add-material-ref-remove:hover {
+  background: var(--ee-bg);
+  color: var(--ee-text);
+}
+
+.add-material-ref-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.add-material-ref-results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+/* Solvent picker — same idiom as ref list but single-valued. */
+.add-material-solvent-picked,
+.add-material-solvent-search {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.add-material-solvent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 10px;
+  border: 1px solid var(--ee-accent);
+  border-radius: 6px;
+  background: var(--ee-accent-soft);
+  align-self: flex-start;
+}
+
+/* Composition editor — rows of {component, role, concentration}. */
+.add-material-composition {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.add-material-composition-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.add-material-composition-row {
+  border: 1px solid var(--ee-border);
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--ee-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.add-material-composition-component {
+  /* Same as the bare solvent picker — local + ChEBI search. */
+}
+
+.add-material-composition-row-bottom {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
 }

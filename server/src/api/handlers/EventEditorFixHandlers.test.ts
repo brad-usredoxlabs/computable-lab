@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { parse as parseYaml } from 'yaml';
 import {
   buildDiagnosticBlock,
@@ -9,6 +12,14 @@ import {
   type FixItSeed,
 } from './EventEditorFixHandlers.js';
 import type { InferenceClient } from '../../ai/types.js';
+import { EventEditorFixItJobManager } from '../../foundry/EventEditorFixItJobManager.js';
+
+const execFileAsync = promisify(execFile);
+
+async function git(cwd: string, args: string[]): Promise<string> {
+  const result = await execFileAsync('git', args, { cwd });
+  return result.stdout;
+}
 
 function makeSeed(): FixItSeed {
   return {
@@ -120,15 +131,13 @@ describe('buildDiagnosticBlock', () => {
     expect(block).toMatch(/recordId:\s*lbw-def-generic-96-well-plate/);
     expect(block).toMatch(/displayName:\s*Generic 96-Well Plate/);
 
-    // And it must expose the placement failure: the labware candidate has
-    // no deckSlot and no pinned deck layout was emitted. Depending on the
-    // current compiler patch attempt, B2 may show up as a misplaced well
-    // parameter or the action may be suppressed entirely; both are upstream
-    // placement-emission failures, not missing-definition failures.
+    // The canonical demo prompt is now fixed: the trace should show that the
+    // deterministic compiler emits the deck slot on the labware candidate and
+    // that downstream labware/deck passes preserve the placement.
     expect(block).toMatch(/candidateLabwares:[^\n]*\n\s+- hint:\s*96-well plate/);
-    expect(block).not.toContain('deckSlot: B2');
-    expect(block).toMatch(/labwareAdditions:\s*\[\]/);
-    expect(block).toMatch(/pinned:\s*\[\]/);
+    expect(block).toContain('deckSlot: B2');
+    expect(block).toMatch(/labwareAdditions:[\s\S]*recordId:\s*lbw-def-generic-96-well-plate/);
+    expect(block).toMatch(/pinned:[\s\S]*slot:\s*B2/);
   });
 
   it('reports verb and noun misses for an unrelated slotless prompt', async () => {
@@ -336,6 +345,124 @@ describe('EventEditorFixHandlers.synthesizeSpec', () => {
 });
 
 describe('EventEditorFixHandlers.applyFixStream', () => {
+  it('runs coder and critic in an isolated worktree, then lands the approved diff', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'fixit-worktree-apply-'));
+    try {
+      await git(tmp, ['init']);
+      await git(tmp, ['config', 'user.email', 'fixit@example.test']);
+      await git(tmp, ['config', 'user.name', 'Fix It Test']);
+      await mkdir(join(tmp, 'server/src'), { recursive: true });
+      await writeFile(join(tmp, 'server/src/base.ts'), 'export const base = true;\n', 'utf-8');
+      await git(tmp, ['add', 'server/src/base.ts']);
+      await git(tmp, ['commit', '-m', 'initial']);
+
+      let coderRepoRoot = '';
+      let criticRepoRoot = '';
+      const runCoderPatch = vi.fn(async (input: {
+        artifactRoot: string;
+        repoRoot: string;
+      }) => {
+        coderRepoRoot = input.repoRoot;
+        await mkdir(join(input.repoRoot, 'server/src'), { recursive: true });
+        await writeFile(join(input.repoRoot, 'server/src/foo.ts'), 'export const foo = 1;\n', 'utf-8');
+        return {
+          status: 'applied' as const,
+          resultPath: join(input.artifactRoot, 'result.yaml'),
+          message: 'patch applied in worktree',
+          touchedFiles: ['server/src/foo.ts'],
+        };
+      });
+      const runPatchCritic = vi.fn(async (input: { repoRoot: string }) => {
+        criticRepoRoot = input.repoRoot;
+        return {
+          kind: 'protocol-foundry-critic-report' as const,
+          protocolId: 'event-editor-fixit',
+          variant: 'manual_tubes',
+          generated_at: '2026-05-17T00:00:00Z',
+          verdict: 'pass' as const,
+          reportPath: '/tmp/report.yaml',
+          reviewDurationMs: 1,
+          message: 'worktree patch passes',
+          notes: [],
+          touchedFiles: ['server/src/foo.ts'],
+          specVerification: {
+            accepted: true,
+            criteriaMet: ['criterion-1'],
+            criteriaFailed: [],
+            notes: [],
+          },
+        };
+      });
+
+      const handlers = createEventEditorFixHandlers({
+        workspaceRoot: tmp,
+        clientFactory: () => ({ complete: vi.fn(), completeStream: vi.fn() } as unknown as InferenceClient),
+        runCoderPatch: runCoderPatch as never,
+        runPatchCritic: runPatchCritic as never,
+      });
+
+      const reply = makeFastifyReply();
+      await handlers.applyFixStream(
+        makeFastifyRequest({
+          specYaml: 'id: spec-fix-W\ntitle: worktree landing\nfixClass: compiler\n',
+          fixtureYaml: 'name: spec-fix-W\ninput:\n  prompt: worktree prompt\n',
+          specId: 'spec-fix-W',
+          fixturePath: 'server/src/compiler/pipeline/fixtures/spec-fix-W.yaml',
+          fixItSessionId: 'fix-session-worktree',
+          sessionSnapshot: {
+            seed: { prompt: 'worktree prompt', fixItSessionId: 'fix-session-worktree' },
+            chat: [{ role: 'assistant', content: 'worktree diagnosis' }],
+            stage: 'applying',
+          },
+        }),
+        reply as never,
+      );
+
+      expect(coderRepoRoot).not.toBe(tmp);
+      expect(criticRepoRoot).toBe(coderRepoRoot);
+      expect(coderRepoRoot).toContain('.fixit-worktrees');
+      await expect(readFile(join(tmp, 'server/src/foo.ts'), 'utf-8')).resolves.toContain('foo = 1');
+
+      const events = parseSseDataLines(reply._stats().writeChunks);
+      const jobProgress = events.find((e): e is {
+        type: 'progress';
+        phase: string;
+        details?: { id?: string; worktreePath?: string };
+      } => (e as { type?: string }).type === 'progress' && (e as { phase?: string }).phase === 'job_started');
+      expect(jobProgress?.details?.id).toBeDefined();
+      expect(jobProgress?.details?.worktreePath).toBe(coderRepoRoot);
+      const jobYaml = await readFile(
+        join(tmp, 'artifacts/event-editor-fixit/jobs', jobProgress!.details!.id!, 'job.yaml'),
+        'utf-8',
+      );
+      expect(jobYaml).toContain('fix-session-worktree');
+      const sessionJson = await readFile(
+        join(tmp, 'artifacts/event-editor-fixit/jobs', jobProgress!.details!.id!, 'session.json'),
+        'utf-8',
+      );
+      expect(sessionJson).toContain('worktree diagnosis');
+      const eventLog = await readFile(
+        join(tmp, 'artifacts/event-editor-fixit/jobs', jobProgress!.details!.id!, 'events.jsonl'),
+        'utf-8',
+      );
+      expect(eventLog).toContain('"phase":"junior_started"');
+      expect(eventLog).toContain('"phase":"committed"');
+      expect(existsSync(coderRepoRoot)).toBe(false);
+
+      const done = events.find((e): e is {
+        type: 'done';
+        result: { status: string; commit?: string; job?: { id: string; worktreePath?: string } };
+      } => (e as { type?: string }).type === 'done');
+      expect(done?.result.status).toBe('applied');
+      expect(done?.result.commit).toBeDefined();
+      expect(done?.result.job?.worktreePath).toBe(coderRepoRoot);
+      const log = await git(tmp, ['log', '-1', '--pretty=%s']);
+      expect(log.trim()).toBe('Event-editor fix-it: worktree landing');
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
   it('writes fixture + spec, runs the coder with autoCommit:false, then commits on critic pass', async () => {
     const tmp = await mkdtemp(join(tmpdir(), 'fixit-apply-'));
     try {
@@ -967,6 +1094,77 @@ describe('EventEditorFixHandlers.applyFixStream', () => {
       const err = events.find((e): e is { type: 'error'; message: string } =>
         (e as { type?: string }).type === 'error');
       expect(err?.message).toMatch(/fixturePath/);
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('EventEditorFixHandlers Fix-it job endpoints', () => {
+  it('lists, reads, and completes durable Fix-it jobs', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'fixit-job-endpoints-'));
+    try {
+      await git(tmp, ['init']);
+      await git(tmp, ['config', 'user.email', 'fixit@example.test']);
+      await git(tmp, ['config', 'user.name', 'Fix It Test']);
+      await writeFile(join(tmp, 'README.md'), 'base\n', 'utf-8');
+      await git(tmp, ['add', 'README.md']);
+      await git(tmp, ['commit', '-m', 'initial']);
+
+      const manager = new EventEditorFixItJobManager({
+        repoRoot: tmp,
+        artifactRoot: join(tmp, 'artifacts'),
+        idFactory: () => 'job-endpoint',
+      });
+      await manager.enqueue({
+        specId: 'spec-endpoint',
+        prompt: 'endpoint prompt',
+        sessionSnapshot: {
+          seed: { prompt: 'endpoint prompt', fixItSessionId: 'fix-endpoint' },
+          chat: [{ role: 'assistant', content: 'endpoint diagnosis' }],
+          stage: 'applying',
+        },
+      });
+      await manager.claimNextQueuedJob();
+      await manager.completeJob('job-endpoint', {
+        status: 'needs-feedback',
+        message: 'waiting for user',
+        result: { status: 'needs-revision', touchedFiles: ['server/src/foo.ts'] },
+        releaseWorktree: false,
+      });
+
+      const handlers = createEventEditorFixHandlers({
+        workspaceRoot: tmp,
+        clientFactory: () => ({ complete: vi.fn(), completeStream: vi.fn() } as unknown as InferenceClient),
+        fixItJobManager: manager,
+      });
+
+      const list = await handlers.listJobs(makeFastifyRequest({}) as never, makeFastifyReply() as never);
+      expect(list.jobs.map((job) => job.id)).toEqual(['job-endpoint']);
+      expect(list.jobs[0]?.status).toBe('needs-feedback');
+
+      const detail = await handlers.getJob(
+        { params: { id: 'job-endpoint' } } as never,
+        makeFastifyReply() as never,
+      );
+      expect('job' in detail ? detail.job.id : '').toBe('job-endpoint');
+      expect('events' in detail ? detail.events.map((event) => event.phase) : []).toContain('completed');
+      expect('sessionSnapshot' in detail ? detail.sessionSnapshot?.['stage'] : '').toBe('failed');
+      const applyResult = 'sessionSnapshot' in detail
+        ? detail.sessionSnapshot?.['applyResult'] as { status?: string } | undefined
+        : undefined;
+      expect(applyResult?.status).toBe('needs-revision');
+      const retainedWorktree = 'job' in detail ? detail.job.worktreePath : undefined;
+      expect(retainedWorktree).toBeDefined();
+      expect(existsSync(retainedWorktree!)).toBe(true);
+
+      const completed = await handlers.completeJob(
+        { params: { id: 'job-endpoint' } } as never,
+        makeFastifyReply() as never,
+      );
+      expect('job' in completed ? completed.job.status : '').toBe('complete');
+      expect(existsSync(retainedWorktree!)).toBe(false);
+      expect('events' in completed ? completed.events.map((event) => event.phase) : []).toContain('marked_complete');
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }

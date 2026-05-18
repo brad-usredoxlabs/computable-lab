@@ -118,6 +118,11 @@ export interface FixItApplyResult {
   status: 'applied' | 'blocked' | 'failed' | 'skipped' | 'stale' | 'needs-human' | 'needs-revision'
   message: string
   touchedFiles: string[]
+  job?: {
+    id: string
+    worktreePath?: string
+    artifactRoot: string
+  }
   commit?: string
   critic?: FixItCriticSummary
 }
@@ -180,6 +185,21 @@ export interface FixItState {
   pendingRetryPrompt: string | null
 }
 
+export type FixItSessionSnapshot = Pick<
+  FixItState,
+  | 'seed'
+  | 'chat'
+  | 'stage'
+  | 'error'
+  | 'spec'
+  | 'applyStage'
+  | 'applyProgress'
+  | 'applyReasoning'
+  | 'applyResult'
+  | 'fixHistory'
+  | 'pendingRetryPrompt'
+>
+
 export interface EventEditorState {
   loadState: LoadState
   loadError: string | null
@@ -233,6 +253,7 @@ type Action =
   | { type: 'clear_preview' }
   | { type: 'commit_preview' }
   | { type: 'open_fixit'; seed: FixItSeed }
+  | { type: 'open_fixit_without_seed' }
   | { type: 'close_fixit' }
   | { type: 'append_fixit_chat'; message: FixItChatMessage }
   | { type: 'update_last_fixit_assistant'; content: string; reasoning?: string }
@@ -242,6 +263,7 @@ type Action =
   | { type: 'edit_fixit_spec'; specYaml: string; fixtureYaml: string }
   | { type: 'clear_fixit_spec' }
   | { type: 'continue_fixit_feedback' }
+  | { type: 'restore_fixit_session'; snapshot: FixItSessionSnapshot }
   | { type: 'set_fixit_stage'; stage: FixItStage; error?: string | null }
   | { type: 'set_fixit_apply_result'; result: FixItApplyResult }
   | { type: 'set_fixit_apply_stage'; applyStage: FixItApplyStage | null }
@@ -613,6 +635,14 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         },
       }
     }
+    case 'open_fixit_without_seed':
+      // Reopening the panel without a fresh seed — used by the floating
+      // launcher button after a page refresh so the user can view running
+      // jobs and restore a session from a job card.
+      return {
+        ...state,
+        fixIt: { ...state.fixIt, isOpen: true },
+      }
     case 'close_fixit':
       // Keep seed + chat + spec around so reopening the same session
       // restores it; a new seed will clear them via `open_fixit` above.
@@ -681,6 +711,16 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
           chat: appendApplyContextMessage(state.fixIt.chat, state.fixIt.applyResult),
           stage: 'chatting',
           error: null,
+          streaming: false,
+        },
+      }
+    case 'restore_fixit_session':
+      return {
+        ...state,
+        fixIt: {
+          ...state.fixIt,
+          ...action.snapshot,
+          isOpen: true,
           streaming: false,
         },
       }
@@ -766,6 +806,13 @@ export interface EventEditorActions {
     wells: WellId[]
     materialRef: string
     volume_uL: number
+    /**
+     * Cell-count payload (cells/well). Set when the picked material has
+     * a `cells` composition role; rides alongside `volume_uL` so the
+     * event graph captures both the liquid and the cell-level metric
+     * for replay (`AddMaterialDetails.count` in `types/events.ts`).
+     */
+    count?: number
   }) => void
   applyAspirate: (input: {
     labwareId: string
@@ -783,6 +830,7 @@ export interface EventEditorActions {
   clearPreview: () => void
   commitPreview: () => void
   openFixIt: (seed: FixItSeed) => void
+  openFixItWithoutSeed: () => void
   closeFixIt: () => void
   appendFixItChat: (message: FixItChatMessage) => void
   updateLastFixItAssistant: (content: string, reasoning?: string) => void
@@ -792,6 +840,7 @@ export interface EventEditorActions {
   editFixItSpec: (specYaml: string, fixtureYaml: string) => void
   clearFixItSpec: () => void
   continueFixItFeedback: () => void
+  restoreFixItSession: (snapshot: FixItSessionSnapshot) => void
   setFixItStage: (stage: FixItStage, error?: string | null) => void
   setFixItApplyResult: (result: FixItApplyResult) => void
   setFixItApplyStage: (applyStage: FixItApplyStage | null) => void
@@ -859,7 +908,7 @@ export function EventEditorProvider({ runId, children }: ProviderProps) {
       setSelection: (selection) => dispatch({ type: 'set_selection', selection }),
       clearSelection: () => dispatch({ type: 'set_selection', selection: null }),
       appendEvent: (event) => dispatch({ type: 'append_event', event }),
-      applyAddMaterial: ({ labwareId, wells, materialRef, volume_uL }) => {
+      applyAddMaterial: ({ labwareId, wells, materialRef, volume_uL, count }) => {
         dispatch({
           type: 'append_event',
           event: {
@@ -870,6 +919,7 @@ export function EventEditorProvider({ runId, children }: ProviderProps) {
               wells,
               material_ref: materialRef,
               volume: { value: volume_uL, unit: 'uL' },
+              ...(typeof count === 'number' && Number.isFinite(count) ? { count } : {}),
             },
           },
         })
@@ -893,6 +943,7 @@ export function EventEditorProvider({ runId, children }: ProviderProps) {
       clearPreview: () => dispatch({ type: 'clear_preview' }),
       commitPreview: () => dispatch({ type: 'commit_preview' }),
       openFixIt: (seed) => dispatch({ type: 'open_fixit', seed }),
+      openFixItWithoutSeed: () => dispatch({ type: 'open_fixit_without_seed' }),
       closeFixIt: () => dispatch({ type: 'close_fixit' }),
       appendFixItChat: (message) => dispatch({ type: 'append_fixit_chat', message }),
       updateLastFixItAssistant: (content, reasoning) =>
@@ -905,6 +956,7 @@ export function EventEditorProvider({ runId, children }: ProviderProps) {
         dispatch({ type: 'edit_fixit_spec', specYaml, fixtureYaml }),
       clearFixItSpec: () => dispatch({ type: 'clear_fixit_spec' }),
       continueFixItFeedback: () => dispatch({ type: 'continue_fixit_feedback' }),
+      restoreFixItSession: (snapshot) => dispatch({ type: 'restore_fixit_session', snapshot }),
       setFixItStage: (stage, error) => dispatch({ type: 'set_fixit_stage', stage, ...(error !== undefined ? { error } : {}) }),
       setFixItApplyResult: (result) => dispatch({ type: 'set_fixit_apply_result', result }),
       setFixItApplyStage: (applyStage) => dispatch({ type: 'set_fixit_apply_stage', applyStage }),

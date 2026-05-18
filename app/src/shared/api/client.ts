@@ -570,6 +570,16 @@ export interface LabSettings {
     level: number
     description?: string
   } | null
+  /**
+   * OLS ontology slugs the editor should search when looking up
+   * materials. When omitted, the editor falls back to
+   * `MATERIAL_OLS_ONTOLOGIES` (chebi/ncbitaxon/uberon/go/ncit/cl) — the
+   * sensible default for a typical lab. Tenants in non-chemistry
+   * domains can drop entries they don't care about or add ontologies
+   * the default list misses (e.g., EFO for clinical work, PO for
+   * plant biology).
+   */
+  searchOntologies?: string[]
 }
 
 export interface FormulationSummary {

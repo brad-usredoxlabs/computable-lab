@@ -1,5 +1,5 @@
 import { API_BASE } from '../../shared/api/base'
-import type { FixItChatMessage, FixItSeed } from '../EventEditorContext'
+import type { FixItChatMessage, FixItSeed, FixItSessionSnapshot } from '../EventEditorContext'
 
 export type FixItStreamEvent =
   | { type: 'text_delta'; delta: string }
@@ -66,6 +66,58 @@ export interface FixItHealthResponse {
   architect: FixItHealthEndpoint
 }
 
+export type FixItJobStatus =
+  | 'queued'
+  | 'running'
+  | 'critic'
+  | 'needs-feedback'
+  | 'accepted'
+  | 'failed'
+  | 'complete'
+  | 'canceled'
+  | 'interrupted'
+
+export interface FixItJobRecord {
+  kind: 'event-editor-fixit-job'
+  id: string
+  status: FixItJobStatus
+  createdAt: string
+  updatedAt: string
+  repoRoot: string
+  artifactRoot: string
+  jobRoot: string
+  worktreeRoot: string
+  baseRef: string
+  worktreePath?: string
+  specId?: string
+  title?: string
+  prompt?: string
+  fixItSessionId?: string
+  specPath?: string
+  fixturePath?: string
+  eventsPath: string
+  result?: Record<string, unknown>
+  message?: string
+}
+
+export interface FixItJobEvent {
+  ts?: string
+  source: 'server' | 'coder' | 'critic' | 'user'
+  phase: string
+  message: string
+  details?: Record<string, unknown>
+}
+
+export interface FixItJobsResponse {
+  jobs: FixItJobRecord[]
+}
+
+export interface FixItJobDetailResponse {
+  job: FixItJobRecord
+  events: FixItJobEvent[]
+  sessionSnapshot?: FixItSessionSnapshot
+}
+
 /**
  * Probe whether the worker (`:8001`) and architect (`:8000`) inference
  * endpoints are reachable. Surfaced as a banner inside the Fix-it panel.
@@ -83,6 +135,60 @@ export async function probeFixItHealth(args: {
   } catch {
     return null
   }
+}
+
+export async function listFixItJobs(args: {
+  signal?: AbortSignal
+} = {}): Promise<FixItJobsResponse> {
+  const response = await fetch(`${API_BASE}/event-editor/fix/jobs`, {
+    method: 'GET',
+    ...(args.signal ? { signal: args.signal } : {}),
+  })
+  if (!response.ok) return { jobs: [] }
+  return (await response.json()) as FixItJobsResponse
+}
+
+export async function getFixItJob(id: string, args: {
+  signal?: AbortSignal
+} = {}): Promise<FixItJobDetailResponse | null> {
+  const response = await fetch(`${API_BASE}/event-editor/fix/jobs/${encodeURIComponent(id)}`, {
+    method: 'GET',
+    ...(args.signal ? { signal: args.signal } : {}),
+  })
+  if (!response.ok) return null
+  return (await response.json()) as FixItJobDetailResponse
+}
+
+export async function completeFixItJob(id: string, args: {
+  signal?: AbortSignal
+} = {}): Promise<FixItJobDetailResponse | null> {
+  const response = await fetch(`${API_BASE}/event-editor/fix/jobs/${encodeURIComponent(id)}/complete`, {
+    method: 'POST',
+    ...(args.signal ? { signal: args.signal } : {}),
+  })
+  if (!response.ok) return null
+  return (await response.json()) as FixItJobDetailResponse
+}
+
+export interface FixItJobSpec {
+  specId: string
+  specYaml: string
+  fixtureYaml: string
+  fixturePath: string
+}
+
+/**
+ * Fetch the saved spec + fixture YAML for a job. Used by the Resume
+ * button on interrupted job cards to feed a fresh apply-stream call.
+ */
+export async function getFixItJobSpec(id: string, args: {
+  signal?: AbortSignal
+} = {}): Promise<FixItJobSpec | null> {
+  const response = await fetch(`${API_BASE}/event-editor/fix/jobs/${encodeURIComponent(id)}/spec`, {
+    ...(args.signal ? { signal: args.signal } : {}),
+  })
+  if (!response.ok) return null
+  return (await response.json()) as FixItJobSpec
 }
 
 export type ApplyFixStageName =
@@ -116,6 +222,11 @@ export type ApplyFixStreamEvent =
         status: string
         message: string
         touchedFiles: string[]
+        job?: {
+          id: string
+          worktreePath?: string
+          artifactRoot: string
+        }
         commit?: string
         critic?: ApplyFixCriticSummary
       }
@@ -131,6 +242,8 @@ export async function* streamApplyFix(args: {
   fixtureYaml: string
   specId: string
   fixturePath: string
+  fixItSessionId?: string
+  sessionSnapshot?: FixItSessionSnapshot
   signal?: AbortSignal
 }): AsyncGenerator<ApplyFixStreamEvent> {
   const response = await fetch(`${API_BASE}/event-editor/fix/apply/stream`, {
@@ -141,6 +254,8 @@ export async function* streamApplyFix(args: {
       fixtureYaml: args.fixtureYaml,
       specId: args.specId,
       fixturePath: args.fixturePath,
+      ...(args.fixItSessionId ? { fixItSessionId: args.fixItSessionId } : {}),
+      ...(args.sessionSnapshot ? { sessionSnapshot: args.sessionSnapshot } : {}),
     }),
     ...(args.signal ? { signal: args.signal } : {}),
   })

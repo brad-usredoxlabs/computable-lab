@@ -15,13 +15,22 @@ import {
 } from '../lib/pipetteSelection'
 import { ContextMenu, type ContextMenuItem } from '../menus/ContextMenu'
 import { buildWellMenuItems } from '../menus/wellMenuItems'
+import { AddMaterialModal } from '../material/AddMaterialModal'
 import {
   buildPreviewWellIndex,
   previewWellsForLabware,
 } from '../lib/previewProjection'
 import type { LabwareOrientation, WellSelection } from '../types'
 
-const FOCUS_SIZE_PX = 720
+/**
+ * Maximum long-edge pixel size for the well-grid SVG. The actual rendered
+ * size is the smaller of this and the available container space — see
+ * the ResizeObserver wiring on `stageRef` below. On mobile the
+ * `--ee-focus-size` CSS token narrows the container, so the SVG shrinks
+ * with the viewport without any media-query duplication here.
+ */
+const MAX_FOCUS_SIZE_PX = 720
+const MIN_FOCUS_SIZE_PX = 200
 
 export function LabwareFocus() {
   const { state, actions } = useEventEditor()
@@ -45,7 +54,10 @@ export function LabwareFocus() {
   const platform = getPlatformManifest(state.platforms, state.platformId)
   const variant = getVariantManifest(state.platforms, state.platformId, state.variantId)
 
-  const [hover, setHover] = useState<{ wellId: WellId; clientX: number; clientY: number } | null>(null)
+  // `pinned` distinguishes a hover that's stuck because the user tapped
+  // (touch UX, no hover) from a hover that follows the mouse. Pinned
+  // tooltips ignore mouseleave-driven clears and auto-dismiss on a timer.
+  const [hover, setHover] = useState<{ wellId: WellId; clientX: number; clientY: number; pinned?: boolean } | null>(null)
   const [menu, setMenu] = useState<{
     open: boolean
     x: number
@@ -53,6 +65,44 @@ export function LabwareFocus() {
     targetWells: WellId[]
   }>({ open: false, x: 0, y: 0, targetWells: [] })
   const canvasRef = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
+  // Rendered size of the well-grid SVG. Tracks the actual width/height of
+  // `.focus__stage` (whose max-width is driven by `--ee-focus-size`) so
+  // the SVG shrinks smoothly with the viewport on mobile and stays at
+  // 720 on desktop.
+  const [focusSize, setFocusSize] = useState(MAX_FOCUS_SIZE_PX)
+
+  // Open state for the AddMaterialModal. The well-context-menu sets
+  // this; the modal owns its own internal state machine and clears
+  // back to null on apply / cancel / escape.
+  const [addMaterialWells, setAddMaterialWells] = useState<WellId[] | null>(null)
+
+  // Auto-dismiss a pinned tooltip after a few seconds — touch users
+  // don't have a "move pointer away" gesture to clear it themselves.
+  useEffect(() => {
+    if (!hover?.pinned) return
+    const timer = window.setTimeout(() => setHover(null), 4000)
+    return () => window.clearTimeout(timer)
+  }, [hover])
+
+  useEffect(() => {
+    const el = stageRef.current
+    if (!el) return
+    const update = () => {
+      const cs = window.getComputedStyle(el)
+      const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
+      const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+      const w = el.clientWidth - padX
+      const h = el.clientHeight - padY
+      const long = Math.max(w, h)
+      const next = Math.max(MIN_FOCUS_SIZE_PX, Math.min(long, MAX_FOCUS_SIZE_PX))
+      setFocusSize((prev) => (Math.abs(prev - next) < 1 ? prev : next))
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   const activePipette = useMemo(
     () => resolveActivePipette(state.toolTypeId, state.assistPipetteId),
@@ -77,10 +127,15 @@ export function LabwareFocus() {
     [previewIndex, labware],
   )
 
-  // ESC: first press clears selection (if any), second press exits focus.
+  // ESC: clear a pinned tooltip first (touch-only state); then selection;
+  // then exit focus. Each press peels one layer of context.
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key !== 'Escape') return
+      if (hover?.pinned) {
+        setHover(null)
+        return
+      }
       if (state.selection && state.selection.wells.length > 0) {
         actions.clearSelection()
       } else {
@@ -89,7 +144,7 @@ export function LabwareFocus() {
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [actions, state.selection])
+  }, [actions, hover, state.selection])
 
   const selectedSet = useMemo(() => {
     if (!state.selection || !labware || state.selection.labwareId !== labware.labwareId) {
@@ -103,6 +158,10 @@ export function LabwareFocus() {
   const handleWellClick = useCallback(
     (wellId: WellId, event: React.MouseEvent) => {
       if (!labware) return
+      // Pin the tooltip on tap. Desktop already shows it on hover but
+      // pinning is harmless there; on touch this is the only way to see
+      // a well's metadata.
+      setHover({ wellId, clientX: event.clientX, clientY: event.clientY, pinned: true })
       const labwareId = labware.labwareId
       const existing: WellSelection | null =
         state.selection && state.selection.labwareId === labwareId ? state.selection : null
@@ -165,7 +224,10 @@ export function LabwareFocus() {
     || slotForLock?.orientationMode === 'locked_landscape'
 
   function handleBackdropClick(event: React.MouseEvent<HTMLDivElement>) {
-    if (canvasRef.current && canvasRef.current.contains(event.target as Node)) return
+    if (canvasRef.current && canvasRef.current.contains(event.target as Node)) {
+      return
+    }
+    setHover(null)
     actions.clearSelection()
     actions.setFocus(null)
   }
@@ -237,17 +299,20 @@ export function LabwareFocus() {
             title="Close (Esc)"
           >Close</button>
         </header>
-        <div className="focus__stage">
+        <div className="focus__stage" ref={stageRef}>
           <WellGrid
             labware={labware}
             orientation={placement.orientation}
-            size={FOCUS_SIZE_PX}
+            size={focusSize}
             hoveredWellId={hover?.wellId ?? null}
             selectedWellIds={selectedSet}
             previewWellIds={previewWells}
             onHover={(wellId, event) => {
               if (!wellId || !event) {
-                setHover(null)
+                // Mouseleave shouldn't dismiss a tooltip that the user
+                // explicitly pinned by tapping. They'll clear it via
+                // tap-elsewhere, the auto-dismiss timer, or Escape.
+                setHover((prev) => (prev?.pinned ? prev : null))
                 return
               }
               setHover({ wellId, clientX: event.clientX, clientY: event.clientY })
@@ -273,6 +338,10 @@ export function LabwareFocus() {
               tip: state.tipState,
               actions,
               onClearSelection: () => actions.clearSelection(),
+              onAddMaterial: (wells) => {
+                setMenu((m) => ({ ...m, open: false }))
+                setAddMaterialWells(wells)
+              },
             })
             const items: ContextMenuItem[] = built.items
             return (
@@ -313,6 +382,12 @@ export function LabwareFocus() {
           )}
         </footer>
       </div>
+      <AddMaterialModal
+        isOpen={addMaterialWells !== null && Boolean(labware)}
+        labware={labware!}
+        wells={addMaterialWells ?? []}
+        onClose={() => setAddMaterialWells(null)}
+      />
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEventEditor, type EventEditorPreview } from '../EventEditorContext'
+import { useViewport } from '../lib/useViewport'
 import { streamDraftEvents, getAiHealth } from '../../shared/api/aiClient'
 import { getPlatformManifest, getVariantManifest } from '../../shared/lib/platformRegistry'
 import {
@@ -170,6 +171,7 @@ function buildPreviewFromDraft({
 
 export function EventEditorAiDock() {
   const { state, actions } = useEventEditor()
+  const { isMobile } = useViewport()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -183,6 +185,7 @@ export function EventEditorAiDock() {
   const [previewMessageId, setPreviewMessageId] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -195,6 +198,15 @@ export function EventEditorAiDock() {
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
   }, [messages])
+
+  // Auto-grow the textarea up to ~5 lines as the user types or pastes.
+  // Cap with a max-height in CSS so it never eats the message log.
+  useEffect(() => {
+    const el = inputRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${Math.min(el.scrollHeight, 140)}px`
+  }, [input])
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
@@ -420,12 +432,23 @@ export function EventEditorAiDock() {
             }
           >AI</button>
         </div>
-        <input
-          type="text"
+        <textarea
+          ref={inputRef}
           className="ai-dock__input"
           placeholder={streaming ? 'Streaming…' : 'Describe what to do…'}
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            // Desktop: Enter submits, Shift+Enter inserts a newline.
+            // Mobile: Enter always inserts a newline; users tap Send.
+            // (On-screen keyboards don't reliably distinguish Shift+Enter
+            // and a "submit on Enter" pattern collides with how users
+            // expect chat composers to behave.)
+            if (e.key !== 'Enter' || e.shiftKey || isMobile) return
+            e.preventDefault()
+            if (input.trim() && !streaming) void send()
+          }}
+          rows={1}
           disabled={streaming}
         />
         {streaming ? (

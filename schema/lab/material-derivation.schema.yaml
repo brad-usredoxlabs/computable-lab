@@ -31,6 +31,13 @@ properties:
       - collection
       - harvest
       - split
+      # Sample-prep workflows produce derived materials whose downstream
+      # use is in qPCR / sequencing / etc. The amounts are usually
+      # arbitrary (1-4 µL aliquots) and often unquantified at prep time.
+      - dna_extraction
+      - rna_extraction
+      - cdna_prep
+      - lysate
       - other
   inputs:
     type: array

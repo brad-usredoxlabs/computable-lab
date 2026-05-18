@@ -24,6 +24,7 @@ const ProtocolIdePage = lazy(async () => import('./protocol-ide/ProtocolIdePage'
 const FoundryStatusPanel = lazy(async () => import('./protocol-ide/FoundryStatusPanel').then((module) => ({ default: module.FoundryStatusPanel })))
 const RunEditorRouter = lazy(async () => import('./graph/RunEditorRouter').then((module) => ({ default: module.RunEditorRouter })))
 const EventEditorPage = lazy(async () => import('./event-editor/EventEditorPage').then((module) => ({ default: module.EventEditorPage })))
+const FixItRoute = lazy(async () => import('./event-editor/fixit-route/FixItRoute').then((module) => ({ default: module.FixItRoute })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -43,6 +44,13 @@ export function App() {
           <Route
             path="/runs/:runId/event-editor"
             element={<DeferredRoute><EventEditorPage /></DeferredRoute>}
+          />
+          {/* Mobile Fix-it tab — fullscreen FixItPanel in its own React
+              tree so the user can run the loop in a separate browser
+              tab from the viewer at /event-editor. */}
+          <Route
+            path="/event-editor/fixit"
+            element={<DeferredRoute><FixItRoute /></DeferredRoute>}
           />
 
           <Route path="/" element={<Layout />}>

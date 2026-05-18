@@ -45,6 +45,50 @@ const ZYMO_SOURCE_TERMS = {
   ],
 } as const;
 
+const GENERIC_SOURCE_TERMS = {
+  materials: [
+    { label: 'lysis buffer', pattern: /\b(?:lysis|extraction)\s+buffer\b/iu, role: 'lysis_reagent' },
+    { label: 'binding buffer', pattern: /\bbinding\s+buffer\b/iu, role: 'binding_buffer' },
+    { label: 'wash buffer', pattern: /\bwash\s+buffer(?:\s+\d+)?\b/iu, role: 'wash_buffer' },
+    { label: 'elution buffer', pattern: /\belution\s+buffer\b/iu, role: 'elution_reagent' },
+    { label: 'elution solution', pattern: /\belution\s+solution\b/iu, role: 'elution_reagent' },
+    { label: 'nuclease-free water', pattern: /\b(?:nuclease|dnase\/rnase|rnase-free)\s+free\s+water\b|\bnuclease-free\s+water\b/iu, role: 'elution_reagent' },
+    { label: 'ethanol', pattern: /\bethanol(?:\s*\([^)]+\)|\s+\d+%|\s+\d+\s*-\s*\d+%)?/iu, role: 'wash_reagent' },
+    { label: 'isopropanol', pattern: /\bisopropanol\b/iu, role: 'precipitation_reagent' },
+    { label: 'proteinase K', pattern: /\bproteinase\s+K\b/iu, role: 'enzyme' },
+    { label: 'magnetic beads', pattern: /\bmagnetic\s+beads?\b|\bmagbeads?\b/iu, role: 'magnetic_beads' },
+    { label: 'PBS', pattern: /\bPBS\b/iu, role: 'buffer' },
+    { label: 'TE buffer', pattern: /\bTE\s+buffer\b/iu, role: 'buffer' },
+  ],
+  labware: [
+    { label: '96-well plate', pattern: /\b96[-\s]?well\s+(?:plate|block)\b/iu, role: 'sample_plate' },
+    { label: '384-well plate', pattern: /\b384[-\s]?well\s+(?:plate|block)\b/iu, role: 'sample_plate' },
+    { label: 'deep-well plate', pattern: /\bdeep[-\s]?well\s+(?:plate|block)\b/iu, role: 'sample_plate' },
+    { label: 'microcentrifuge tube', pattern: /\b(?:microcentrifuge|1\.5\s*ml|2\s*ml)\s+tubes?\b/iu, role: 'tube' },
+    { label: 'collection tube', pattern: /\bcollection\s+tubes?\b/iu, role: 'tube' },
+    { label: 'spin column', pattern: /\bspin\s+columns?\b/iu, role: 'column' },
+    { label: 'reservoir', pattern: /\b(?:reagent\s+)?reservoirs?\b/iu, role: 'reagent_reservoir' },
+    { label: 'PCR plate', pattern: /\bPCR\s+(?:plate|strip|tubes?)\b/iu, role: 'pcr_labware' },
+    { label: 'elution plate', pattern: /\belution\s+plates?\b/iu, role: 'elution_destination' },
+  ],
+  equipment: [
+    { label: 'centrifuge', pattern: /\bcentrifuge|centrifugation|spin\b/iu, role: 'centrifuge' },
+    { label: 'magnetic stand', pattern: /\bmagnetic\s+(?:stand|rack|separator)\b|\bmagnet\b/iu, role: 'magnet' },
+    { label: 'plate shaker', pattern: /\b(?:plate\s+)?shaker\b|\bshake\b/iu, role: 'plate_shaker' },
+    { label: 'vortex mixer', pattern: /\bvortex(?: mixer)?\b/iu, role: 'vortex' },
+    { label: 'heat block', pattern: /\bheat(?:ing)?\s+block\b|\bthermal\s+mixer\b/iu, role: 'heater' },
+    { label: 'incubator', pattern: /\bincubator\b/iu, role: 'incubator' },
+    { label: 'pipette', pattern: /\bpipett?e\b|\bpipett?ing\b/iu, role: 'pipette' },
+    { label: 'plate sealer', pattern: /\b(?:plate\s+)?sealer\b|\bseal(?:ing)?\s+(?:film|foil)\b/iu, role: 'sealer' },
+  ],
+} as const;
+
+const ALL_SOURCE_TERMS = {
+  materials: [...ZYMO_SOURCE_TERMS.materials, ...GENERIC_SOURCE_TERMS.materials],
+  labware: [...ZYMO_SOURCE_TERMS.labware, ...GENERIC_SOURCE_TERMS.labware],
+  equipment: [...ZYMO_SOURCE_TERMS.equipment, ...GENERIC_SOURCE_TERMS.equipment],
+} as const;
+
 const SECTION_HEADINGS: Array<{ kind: VendorProtocolSectionKind; title: string; pattern: RegExp }> = [
   { kind: 'table_of_contents', title: 'Table of Contents', pattern: /^Table of Contents\s*$/imu },
   { kind: 'product_contents', title: 'Product Contents', pattern: /^Product Contents\s*$/imu },
@@ -157,10 +201,12 @@ export function createVendorProtocolDocumentFromText(
   const source: VendorProtocolSource = {
     documentId,
     filename,
-    vendor: options.vendor ?? (title.toLowerCase().includes('zymobiomics') ? 'Zymo Research' : undefined),
     title,
-    version: extractVersion(text),
     pageCount: pages.length,
+    ...(options.vendor || title.toLowerCase().includes('zymobiomics')
+      ? { vendor: options.vendor ?? 'Zymo Research' }
+      : {}),
+    ...(extractVersion(text) ? { version: extractVersion(text)! } : {}),
   };
   const sections = sectionVendorProtocolDocument({ source, text, pages });
   const tables = extractVendorProtocolTables({ source, text, pages, sections });
@@ -269,7 +315,7 @@ export function extractVendorProtocolTables(input: {
           D4302: line.includes('-') ? '-' : line.match(/\b\d+\s*ml(?:\s*x\s*\d)?\b/iu)?.[0] ?? '',
           D4306: '',
           D4308: '',
-        };
+        } as Record<string, string>;
       })
       .filter((row): row is Record<string, string> => Boolean(row));
     if (rows.length > 0) {
@@ -331,22 +377,66 @@ function extractQuantities(text: string, kind: 'volume' | 'duration' | 'temperat
         : match[2]?.toLowerCase().replace('μ', 'u').replace('µ', 'u');
     return {
       raw,
-      ...(Number.isFinite(value) ? { value } : {}),
+      ...(typeof value === 'number' && Number.isFinite(value) ? { value } : {}),
       ...(unit ? { unit } : {}),
     };
   });
 }
 
 function labelsInText<T extends { label: string; pattern: RegExp }>(terms: readonly T[], text: string): string[] {
-  return terms.filter((term) => term.pattern.test(text)).map((term) => term.label);
+  return uniqueStrings(terms.filter((term) => term.pattern.test(text)).map((term) => term.label));
 }
 
 function firstMaterialInText(text: string): string | undefined {
-  return labelsInText(ZYMO_SOURCE_TERMS.materials, text)[0];
+  return labelsInText(ALL_SOURCE_TERMS.materials, text)[0] ?? extractGenericMaterialMentions(text)[0];
 }
 
 function firstEquipmentInText(text: string): string | undefined {
-  return labelsInText(ZYMO_SOURCE_TERMS.equipment, text)[0];
+  return labelsInText(ALL_SOURCE_TERMS.equipment, text)[0];
+}
+
+function uniqueStrings(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const key = normalizeText(value).toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(normalizeText(value));
+  }
+  return out;
+}
+
+function extractGenericMaterialMentions(text: string): string[] {
+  const mentions: string[] = [];
+  const patterns = [
+    /\b(?:Buffer|Solution|Reagent)[ \t]+[A-Z][A-Za-z0-9-]{0,12}\b/gu,
+    /\b[A-Z][A-Za-z0-9-]{1,24}[ \t]+(?:Buffer|Solution|Reagent|Mix|Master Mix|Beads?)(?:[ \t]+\d+)?\b/gu,
+    /\b(?:DNase|RNase|nuclease)[-\s]?free\s+water\b/giu,
+  ];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      if (match[0]) mentions.push(match[0]);
+    }
+  }
+  return uniqueStrings(mentions).slice(0, 12);
+}
+
+function extractGenericLabwareMentions(text: string): string[] {
+  const mentions: string[] = [];
+  const patterns = [
+    /\b\d{1,3}[-\s]?well\s+(?:plate|block)\b/giu,
+    /\b(?:deep[-\s]?well|PCR|elution|collection)\s+(?:plate|block|tube|tubes)\b/giu,
+    /\b(?:microcentrifuge|centrifuge|collection|1\.5\s*ml|2\s*ml|15\s*ml|50\s*ml)\s+tubes?\b/giu,
+    /\bspin\s+columns?\b/giu,
+    /\b(?:reagent\s+)?reservoirs?\b/giu,
+  ];
+  for (const pattern of patterns) {
+    for (const match of text.matchAll(pattern)) {
+      if (match[0]) mentions.push(match[0]);
+    }
+  }
+  return uniqueStrings(mentions).slice(0, 12);
 }
 
 function actionKindForClause(clause: string): ProtocolActionCandidate['actionKind'] {
@@ -354,21 +444,22 @@ function actionKindForClause(clause: string): ProtocolActionCandidate['actionKin
   if (/\bseal\b|sealing foils|heat sealing/iu.test(clause)) return 'seal';
   if (/\bcentrifuge\b/iu.test(clause)) return 'centrifuge';
   if (/\bmagnetic stand\b|beads pellet|magnet/iu.test(clause)) return 'magnetize';
+  if (/\bvortex\b/iu.test(clause)) return 'mix';
   if (/\baspirate\b/iu.test(clause)) return 'aspirate';
-  if (/\bdiscard\b/iu.test(clause)) return 'discard';
+  if (/\bdiscard\b|\bremove\b|\bdecant\b/iu.test(clause)) return 'discard';
   if (/\bdry\b|air dry/iu.test(clause)) return 'dry';
   if (/\belute|eluted DNA/iu.test(clause)) return 'elute';
   if (/\bmix\b|re-suspend|resuspend|shake/iu.test(clause)) return 'mix';
   if (/\btransfer\b|move\b/iu.test(clause)) return 'transfer';
-  if (/\badd\b|\bdispense\b/iu.test(clause)) return 'add';
-  if (/\bincubate\b|stopping point|stored/iu.test(clause)) return 'incubate';
+  if (/\badd\b|\bdispense\b|\bapply\b|\bload\b/iu.test(clause)) return 'add';
+  if (/\bincubate\b|stopping point|stored|hold\b/iu.test(clause)) return 'incubate';
   return 'other';
 }
 
 function splitActionClauses(text: string): string[] {
   return text
     .replace(/\s+/gu, ' ')
-    .split(/(?:\.\s+|;\s+|\bthen\b|,\s*then\b|\band then\b)/iu)
+    .split(/(?:\.\s+|;\s+|\bthen\b|,\s*then\b|\band then\b|\band\s+(?=(?:add|apply|aspirate|centrifuge|decant|discard|dispense|dry|elute|incubate|load|mix|place|remove|seal|shake|transfer|vortex)\b))/iu)
     .map((clause) => clause.trim())
     .filter((clause) => clause.length > 0 && !/^Note:/iu.test(clause));
 }
@@ -452,9 +543,15 @@ function extractProtocolSteps(document: VendorProtocolDocument): ProtocolStepCan
         ...(temperatures.length > 0 ? { temperatures } : {}),
         ...(speeds.length > 0 ? { speeds } : {}),
       },
-      materials: labelsInText(ZYMO_SOURCE_TERMS.materials, sourceText),
-      labware: labelsInText(ZYMO_SOURCE_TERMS.labware, sourceText),
-      equipment: labelsInText(ZYMO_SOURCE_TERMS.equipment, sourceText),
+      materials: uniqueStrings([
+        ...labelsInText(ALL_SOURCE_TERMS.materials, sourceText),
+        ...extractGenericMaterialMentions(sourceText),
+      ]),
+      labware: uniqueStrings([
+        ...labelsInText(ALL_SOURCE_TERMS.labware, sourceText),
+        ...extractGenericLabwareMentions(sourceText),
+      ]),
+      equipment: labelsInText(ALL_SOURCE_TERMS.equipment, sourceText),
       notes: extractNotes(sourceText),
       branches: extractBranches(sourceText),
       provenance,
@@ -468,7 +565,7 @@ function createCandidateItems(
   document: VendorProtocolDocument,
   kind: keyof typeof ZYMO_SOURCE_TERMS,
 ): ExtractedCandidateItem[] {
-  return ZYMO_SOURCE_TERMS[kind].flatMap((term, index) => {
+  const curated = ALL_SOURCE_TERMS[kind].flatMap((term, index) => {
     const section = document.sections.find((candidateSection) => term.pattern.test(candidateSection.sourceText));
     if (!section) {
       return [];
@@ -491,6 +588,56 @@ function createCandidateItems(
       ...(section.kind === 'product_contents' ? { uncertainty: 'table-derived' as const } : {}),
     }];
   });
+  const generic = createGenericCandidateItems(document, kind, curated.map((item) => item.label));
+  return dedupeCandidateItems([...curated, ...generic]);
+}
+
+function createGenericCandidateItems(
+  document: VendorProtocolDocument,
+  kind: keyof typeof ZYMO_SOURCE_TERMS,
+  existingLabels: string[],
+): ExtractedCandidateItem[] {
+  const sections = document.sections.filter((section) => ['product_contents', 'specifications', 'protocol'].includes(section.kind));
+  const existing = new Set(existingLabels.map((label) => normalizeText(label).toLowerCase()));
+  const out: ExtractedCandidateItem[] = [];
+  for (const section of sections) {
+    const labels = kind === 'materials'
+      ? extractGenericMaterialMentions(section.sourceText)
+      : kind === 'labware'
+        ? extractGenericLabwareMentions(section.sourceText)
+        : labelsInText(GENERIC_SOURCE_TERMS.equipment, section.sourceText);
+    for (const label of labels) {
+      const normalized = normalizeText(label);
+      const key = normalized.toLowerCase();
+      if (!key || existing.has(key)) continue;
+      existing.add(key);
+      out.push({
+        id: `${kind}-generic-${out.length + 1}-${slug(normalized)}`,
+        label: normalized,
+        sourceText: normalized,
+        provenance: {
+          documentId: document.source.documentId,
+          pageStart: findPageForText(document.pages, normalized, section.provenance.pageStart),
+          sectionId: section.id,
+        },
+        confidence: 0.65,
+        uncertainty: section.kind === 'product_contents' ? 'table-derived' : 'inferred',
+      });
+    }
+  }
+  return out;
+}
+
+function dedupeCandidateItems(items: ExtractedCandidateItem[]): ExtractedCandidateItem[] {
+  const seen = new Set<string>();
+  const out: ExtractedCandidateItem[] = [];
+  for (const item of items) {
+    const key = normalizeText(item.label).toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out;
 }
 
 function createProtocolDiagnostics(steps: ProtocolStepCandidate[], document: VendorProtocolDocument): ExtractionDiagnostic[] {
@@ -539,7 +686,7 @@ export function extractVendorProtocolCandidate(document: VendorProtocolDocument)
     kind: 'vendor-protocol-candidate',
     source: document.source,
     title,
-    scope: title.toLowerCase().includes('dna') ? 'DNA extraction for microbiome or metagenome analysis' : undefined,
+    ...(title.toLowerCase().includes('dna') ? { scope: 'DNA extraction for microbiome or metagenome analysis' } : {}),
     sections: document.sections
       .filter((section) => ['product_contents', 'specifications', 'protocol'].includes(section.kind))
       .map((section) => ({

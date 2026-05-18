@@ -262,6 +262,14 @@ export function createDeterministicPrecompilePass(
           if (isLabwareSetupContinuationClause(clause, mentionLookup)) {
             continue;
           }
+          // Handle clauses with implicit verbs that contain a resolved labware
+          // hint and a valid deck slot — these are placement intents even
+          // without an explicit verb (e.g. "and a 96-well plate on B2").
+          if (isImplicitVerbPlacementClause(setupLabwareNouns, clause.text)) {
+            collectCandidateLabwaresFromResolved(candidateLabwares, labwareHints, setupLabwareNouns, 'mentioned in implicit-verb placement', clause.text);
+            rememberRawLabwareRoles(labwareByRole, setupLabwareNouns, clause.text);
+            continue;
+          }
           // No verb → residual clause
           residualClauses.push({
             text: clause.text,
@@ -1147,6 +1155,26 @@ function collectCandidateLabwaresFromResolved(
 
 function isLabwareSetupFragment(text: string, labwareNouns: ResolvedNoun[]): boolean {
   return labwareNouns.length > 0 && /\b(?:source|target|destination|location|position)\b/i.test(text);
+}
+
+/**
+ * Detect a clause that has no explicit verb but expresses a labware-placement
+ * intent via a resolved labware noun + a deck-slot token (e.g. "and a
+ * 96-well plate on B2").  These are continuation clauses that inherit the
+ * verb from a preceding clause but must still emit candidateLabwares so that
+ * downstream resolve_labware can produce the correct deck-layout plan.
+ */
+function isImplicitVerbPlacementClause(
+  labwareNouns: ResolvedNoun[],
+  text: string,
+): boolean {
+  // Must have at least one resolved labware noun
+  if (labwareNouns.length === 0) return false;
+  // Must contain a deck-slot token (bare A-D + 1-4 after a placement preposition)
+  const lower = text.toLowerCase();
+  const bareSlot = inferBareDeckSlot(lower);
+  if (!bareSlot) return false;
+  return true;
 }
 
 function rememberRawLabwareRoles(

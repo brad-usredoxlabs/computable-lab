@@ -109,6 +109,59 @@ properties:
         type: number
         minimum: 0
 
+  physical_geometry:
+    type: object
+    additionalProperties: false
+    description: >
+      Optional physical geometry extracted from vendor or platform-native
+      definitions. These fields are used for rendering, platform conversion,
+      collision/clearance checks, and review. Omit unknown values rather than
+      inventing them.
+    properties:
+      overall_dimensions_mm:
+        type: object
+        additionalProperties: false
+        properties:
+          length:
+            type: number
+            exclusiveMinimum: 0
+          width:
+            type: number
+            exclusiveMinimum: 0
+          height:
+            type: number
+            exclusiveMinimum: 0
+      main_material:
+        type: string
+      main_color:
+        type: string
+      bottom_material:
+        type: string
+      bottom_color:
+        type: string
+      bottom_thickness_mm:
+        type: number
+        exclusiveMinimum: 0
+      bottom_shape:
+        type: string
+      well_shape:
+        type: string
+      well_diameter_mm:
+        type: number
+        exclusiveMinimum: 0
+      well_depth_mm:
+        type: number
+        exclusiveMinimum: 0
+      well_length_mm:
+        type: number
+        exclusiveMinimum: 0
+      well_width_mm:
+        type: number
+        exclusiveMinimum: 0
+      deck_height_mm:
+        type: number
+        exclusiveMinimum: 0
+
   aspiration_hints:
     type: object
     additionalProperties: false

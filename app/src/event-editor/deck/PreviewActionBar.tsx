@@ -1,5 +1,17 @@
 import { useEventEditor } from '../EventEditorContext'
 import { buildFixSeed } from '../fix-it/buildFixSeed'
+import { useViewport } from '../lib/useViewport'
+
+function makeFixItSeedKey(): string {
+  // `crypto.randomUUID()` is widely available but not in every browser
+  // — fall back to a timestamp + random suffix that's collision-safe
+  // enough for our cross-tab handoff window (the route deletes the key
+  // immediately on mount).
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
 
 /**
  * Floating control that appears over the deck stage whenever an AI preview
@@ -12,6 +24,7 @@ import { buildFixSeed } from '../fix-it/buildFixSeed'
  */
 export function PreviewActionBar() {
   const { state, actions } = useEventEditor()
+  const { isMobile } = useViewport()
   const preview = state.preview
   if (!preview) return null
 
@@ -45,6 +58,21 @@ export function PreviewActionBar() {
       previewSkips: preview?.sourceSkips ?? [],
       state,
     })
+    if (isMobile) {
+      // Mobile two-tab UX: stash the seed under a unique key, open the
+      // Fix-it route in a new tab. The route reads + deletes the key on
+      // mount and dispatches `openFixIt(seed)` in its own React tree.
+      const key = makeFixItSeedKey()
+      try {
+        window.localStorage.setItem(`fixit-seed-${key}`, JSON.stringify(seed))
+        window.open(`/event-editor/fixit?seed=${encodeURIComponent(key)}`, '_blank')
+      } catch {
+        // localStorage write or window.open blocked — fall back to the
+        // desktop in-place flow so the user isn't stranded.
+        actions.openFixIt(seed)
+      }
+      return
+    }
     actions.openFixIt(seed)
   }
 

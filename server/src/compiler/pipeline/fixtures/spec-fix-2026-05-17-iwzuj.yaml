@@ -1,0 +1,13 @@
+name: spec-fix-2026-05-17-iwzuj
+description: Regression test for placing a 12-well reservoir on deck slot B1
+deterministicOnly: true
+input:
+  prompt: Add a 12-well reservoir to B1
+expected:
+  outcome: complete
+  terminalArtifacts:
+    deckLayoutPlan:
+      pinned:
+        - slot: B1
+          labwareHint: lbw-def-generic-12-well-reservoir
+    events: []

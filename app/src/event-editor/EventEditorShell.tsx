@@ -2,6 +2,7 @@ import { useEventEditor } from './EventEditorContext'
 import { TopBar } from './topbar/TopBar'
 import { DeckStage } from './deck/DeckStage'
 import { EventEditorAiDock } from './ai/EventEditorAiDock'
+import { FixItLauncher } from './fix-it/FixItLauncher'
 import { FixItPanel } from './fix-it/FixItPanel'
 import { useTheme } from './lib/useTheme'
 
@@ -32,6 +33,7 @@ export function EventEditorShell() {
       <TopBar />
       <DeckStage />
       <EventEditorAiDock />
+      <FixItLauncher />
       <FixItPanel />
     </div>
   )

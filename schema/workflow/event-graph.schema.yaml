@@ -13,6 +13,14 @@ required:
 - labwares
 
 properties:
+  kind:
+    const: "event-graph"
+    description: "Record kind discriminator."
+
+  recordId:
+    type: string
+    description: "Canonical record identifier for this event graph."
+
   id:
     type: string
     description: "Unique identifier for this event graph (e.g., EVG-m3abc123-x7f9)."

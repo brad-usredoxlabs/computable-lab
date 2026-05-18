@@ -58,6 +58,7 @@ import {
   createRecordSearchHandlers,
   createOntologyTermHandlers,
   createVerbActionMapHandlers,
+  createFoundryJobHandlers,
 } from './api/handlers/index.js';
 import { createIngestionAIHandlers } from './api/handlers/IngestionAIHandlers.js';
 import { createMaterialAIHandlers } from './api/handlers/MaterialAIHandlers.js';
@@ -160,6 +161,7 @@ export interface AppContext {
   platformRegistry: PlatformRegistry;
   lifecycleEngine: LifecycleEngine;
   policyBundleService: PolicyBundleService;
+  extractionRunner?: ExtractionRunnerService;
 }
 
 /**
@@ -464,6 +466,7 @@ export async function createServer(
       findMatchingLibraryExtractor({ fileName, contentPreview: content }),
     metrics,
   });
+  ctx.extractionRunner = runner;
   const extractHandlers = createExtractHandlers(runner, ctx.store, ctx.schemaRegistry, ctx.validator, metrics);
 
   const ingestionHandlers = createIngestionHandlers(
@@ -506,6 +509,10 @@ export async function createServer(
 
   // Create bio-source proxy handlers (uses populated toolRegistry)
   const biosourceHandlers = createBiosourceHandlers(toolRegistry);
+  const foundryJobHandlers = createFoundryJobHandlers({
+    workspaceRoot: ctx.workspaceRoot,
+    toolRegistry,
+  });
 
   // Initialize AI runtime state and hot-reload on config changes.
   let aiHandlersImpl: ReturnType<typeof createAIHandlers> | undefined;
@@ -789,6 +796,7 @@ export async function createServer(
       executionHandlers,
       measurementHandlers,
       biosourceHandlers,
+      foundryJobHandlers,
       readinessHandlers,
       procurementHandlers,
       promptTemplateHandlers,

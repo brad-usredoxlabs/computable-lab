@@ -41,12 +41,19 @@ export interface FoundryToolAgentInput {
   workdir: string;
   prompt: string;
   systemPrompt?: string;
+  localToolNames?: readonly string[];
+  extraTools?: FoundryToolAgentTool[];
   maxTurns?: number;
   maxTokens?: number;
   temperature?: number;
   tracePath?: string;
   requireCompletionPromise?: boolean;
   onProgress?: (event: FoundryToolAgentProgressEvent) => void | Promise<void>;
+}
+
+export interface FoundryToolAgentTool {
+  definition: ToolDefinition;
+  handler: (args: Record<string, unknown>) => Promise<ToolExecution>;
 }
 
 export interface FoundryToolAgentResult {
@@ -57,7 +64,7 @@ export interface FoundryToolAgentResult {
   tracePath?: string;
 }
 
-interface ToolExecution {
+export interface ToolExecution {
   ok: boolean;
   content: string;
   durationMs: number;
@@ -183,6 +190,10 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
   const workdir = resolve(input.workdir);
   const maxTurns = input.maxTurns ?? DEFAULT_MAX_TURNS;
   const requireCompletionPromise = input.requireCompletionPromise ?? true;
+  const enabledLocalTools = selectBuiltinTools(input.localToolNames);
+  const extraTools = input.extraTools ?? [];
+  const tools = mergeToolDefinitions(enabledLocalTools, extraTools.map((tool) => tool.definition));
+  const extraToolHandlers = new Map(extraTools.map((tool) => [tool.definition.function.name, tool.handler]));
   let finalText = '';
   let toolCalls = 0;
 
@@ -198,7 +209,7 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
       content: [
         input.systemPrompt?.trim() || 'You are a local coding agent.',
         `Working directory: ${workdir}`,
-        `You have these tools: ${BUILTIN_TOOLS.map((tool) => tool.function.name).join(', ')}.`,
+        `You have these tools: ${tools.map((tool) => tool.function.name).join(', ') || '(none)'}.`,
         requireCompletionPromise
           ? `When all acceptance criteria are met, output ${COMPLETE_MARKER} as the absolute last line.`
           : '',
@@ -217,7 +228,7 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
       const request: CompletionRequest = {
         model: input.model,
         messages: messages.map(cloneMessage),
-        tools: BUILTIN_TOOLS,
+        tools,
         tool_choice: 'auto',
         temperature: input.temperature ?? 0.2,
         max_tokens: input.maxTokens ?? 16_384,
@@ -242,7 +253,7 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
             message: `Calling ${call.function.name}`,
             details: { tool: call.function.name, args: summarizeArgs(args) },
           });
-          const execution = await executeToolCall(call, args, { workdir });
+          const execution = await executeToolCall(call, args, { workdir }, extraToolHandlers);
           await progress(input, {
             phase: 'tool_finished',
             message: `${call.function.name} ${execution.ok ? 'finished' : 'failed'} in ${execution.durationMs}ms`,
@@ -377,8 +388,17 @@ function summarizeArgs(args: Record<string, unknown>): Record<string, unknown> {
   return summary;
 }
 
-async function executeToolCall(call: ToolCall, args: Record<string, unknown>, ctx: ToolContext): Promise<ToolExecution> {
+async function executeToolCall(
+  call: ToolCall,
+  args: Record<string, unknown>,
+  ctx: ToolContext,
+  extraToolHandlers: Map<string, FoundryToolAgentTool['handler']> = new Map(),
+): Promise<ToolExecution> {
   const startedAt = Date.now();
+  const extraHandler = extraToolHandlers.get(call.function.name);
+  if (extraHandler) {
+    return extraHandler(args);
+  }
   const handler = TOOL_HANDLERS[call.function.name];
   if (!handler) {
     return { ok: false, content: `error: unknown tool ${call.function.name}`, durationMs: Date.now() - startedAt };
@@ -393,6 +413,24 @@ async function executeToolCall(call: ToolCall, args: Record<string, unknown>, ct
       durationMs: Date.now() - startedAt,
     };
   }
+}
+
+function selectBuiltinTools(localToolNames: readonly string[] | undefined): ToolDefinition[] {
+  if (localToolNames === undefined) return BUILTIN_TOOLS;
+  const allowed = new Set(localToolNames);
+  return BUILTIN_TOOLS.filter((tool) => allowed.has(tool.function.name));
+}
+
+function mergeToolDefinitions(primary: ToolDefinition[], extra: ToolDefinition[]): ToolDefinition[] {
+  const seen = new Set<string>();
+  const merged: ToolDefinition[] = [];
+  for (const tool of [...primary, ...extra]) {
+    const name = tool.function.name;
+    if (seen.has(name)) continue;
+    seen.add(name);
+    merged.push(tool);
+  }
+  return merged;
 }
 
 const TOOL_HANDLERS: Record<string, ToolHandler> = {

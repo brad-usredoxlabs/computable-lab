@@ -13,6 +13,13 @@ interface BuildArgs {
   actions: EventEditorActions
   onClearSelection: () => void
   onInspect?: (wellId: WellId) => void
+  /**
+   * Open the structured Add Material modal for the given wells. The
+   * modal handles search → configure → applyAddMaterial itself; this
+   * callback just signals "open it now". Replaces the prior pair of
+   * window.prompt() calls.
+   */
+  onAddMaterial?: (wells: WellId[]) => void
 }
 
 export function buildWellMenuItems({
@@ -23,6 +30,7 @@ export function buildWellMenuItems({
   actions,
   onClearSelection,
   onInspect,
+  onAddMaterial,
 }: BuildArgs): { title: string; items: ContextMenuItem[] } {
   const labwareId = labware.labwareId
   const single = targetWells.length === 1
@@ -84,18 +92,20 @@ export function buildWellMenuItems({
   })
 
   // ---- Add material ----
+  // Hands off to the structured `AddMaterialModal` (search local DB →
+  // ontology → pick → configure → applyAddMaterial). The legacy two-
+  // prompt fallback was removed entirely; if the caller didn't wire up
+  // onAddMaterial the entry is disabled rather than silently breaking.
   items.push({
     id: 'add-material',
     label: single ? 'Add material…' : 'Add material to all…',
     icon: '💧',
+    disabled: !onAddMaterial,
+    ...(onAddMaterial
+      ? {}
+      : { detail: 'modal not wired' }),
     onSelect: () => {
-      const materialRef = window.prompt(`Material to add to ${title}:`, 'DMEM')
-      if (!materialRef) return
-      const volumeInput = window.prompt('Volume (µL):', '100')
-      if (volumeInput === null) return
-      const volume_uL = Number(volumeInput)
-      if (!Number.isFinite(volume_uL) || volume_uL <= 0) return
-      actions.applyAddMaterial({ labwareId, wells: targetWells, materialRef, volume_uL })
+      onAddMaterial?.(targetWells)
     },
   })
 

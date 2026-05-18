@@ -1,0 +1,16 @@
+name: spec-fix-2026-05-17-0pa16
+description: Verify two labware placements are emitted for a prompt with
+  implicit verb in second clause
+deterministicOnly: true
+input:
+  prompt: Put a 12-well reservoir on B1 and a 96-well plate on B2
+expected:
+  outcome: complete
+  terminalArtifacts:
+    deckLayoutPlan:
+      pinned:
+        - slot: B1
+          labwareHint: lbw-def-generic-12-well-reservoir
+        - slot: B2
+          labwareHint: lbw-def-generic-96-well-plate
+    events: []

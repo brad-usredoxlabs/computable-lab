@@ -48,6 +48,7 @@ import type { ProcurementHandlers } from './handlers/ProcurementHandlers.js';
 import type { PromptTemplateHandlers } from './handlers/PromptTemplateHandlers.js';
 import type { OntologyTermHandlers } from './handlers/OntologyTermHandlers.js';
 import type { VerbActionMapHandlers } from './handlers/VerbActionMapHandlers.js';
+import type { FoundryJobHandlers } from './handlers/FoundryJobHandlers.js';
 import type { ProtocolIdeHandlers } from './handlers/ProtocolIdeHandlers.js';
 import type { PlannedRunHandlers } from './handlers/PlannedRunHandlers.js';
 import type { HealthResponse } from './types.js';
@@ -100,6 +101,7 @@ export interface RouteOptions {
   promptTemplateHandlers?: PromptTemplateHandlers;
   ontologyTermHandlers?: OntologyTermHandlers;
   verbActionMapHandlers?: VerbActionMapHandlers;
+  foundryJobHandlers?: FoundryJobHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -501,6 +503,50 @@ export function registerRoutes(
     fastify.get(
       '/event-editor/fix/health',
       eventEditorFixHandlers.health.bind(eventEditorFixHandlers),
+    );
+    fastify.get(
+      '/event-editor/fix/jobs',
+      eventEditorFixHandlers.listJobs.bind(eventEditorFixHandlers),
+    );
+    fastify.get(
+      '/event-editor/fix/jobs/:id',
+      eventEditorFixHandlers.getJob.bind(eventEditorFixHandlers),
+    );
+    fastify.post(
+      '/event-editor/fix/jobs/:id/complete',
+      eventEditorFixHandlers.completeJob.bind(eventEditorFixHandlers),
+    );
+    fastify.get(
+      '/event-editor/fix/jobs/:id/spec',
+      eventEditorFixHandlers.getJobSpec.bind(eventEditorFixHandlers),
+    );
+  }
+
+  const { foundryJobHandlers } = options;
+  if (foundryJobHandlers) {
+    fastify.post(
+      '/foundry/jobs',
+      foundryJobHandlers.createJob.bind(foundryJobHandlers),
+    );
+    fastify.get(
+      '/foundry/jobs',
+      foundryJobHandlers.listJobs.bind(foundryJobHandlers),
+    );
+    fastify.get(
+      '/foundry/jobs/tools',
+      foundryJobHandlers.tools.bind(foundryJobHandlers),
+    );
+    fastify.get(
+      '/foundry/jobs/:id',
+      foundryJobHandlers.getJob.bind(foundryJobHandlers),
+    );
+    fastify.post(
+      '/foundry/jobs/:id/continue',
+      foundryJobHandlers.continueJob.bind(foundryJobHandlers),
+    );
+    fastify.post(
+      '/foundry/jobs/:id/complete',
+      foundryJobHandlers.completeJob.bind(foundryJobHandlers),
     );
   }
 

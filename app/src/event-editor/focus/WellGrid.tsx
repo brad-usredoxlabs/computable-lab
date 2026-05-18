@@ -4,6 +4,7 @@ import type { Labware } from '../../types/labware'
 import { isTipRackType } from '../../types/labware'
 import type { WellId } from '../../types/plate'
 import type { LabwareOrientation } from '../types'
+import { useLongPress } from '../lib/useLongPress'
 
 interface WellGeometry {
   wellId: WellId
@@ -64,6 +65,20 @@ export function WellGrid({
 
   const isTipRack = isTipRackType(labware.labwareType)
 
+  // Touch long-press → context menu. We attach a single handler at the
+  // SVG level and walk the touch target up to a `[data-well-id]` element
+  // so we don't have to call `useLongPress` per well (hooks can't run
+  // inside .map). Desktop right-click still flows through onContextMenu
+  // on individual wells.
+  const longPress = useLongPress((event) => {
+    if (!onWellContextMenu) return
+    const target = event.target as Element | null
+    const node = target?.closest?.('[data-well-id]') as Element | null
+    const wellId = node?.getAttribute('data-well-id')
+    if (!wellId) return
+    onWellContextMenu(wellId, event as unknown as React.MouseEvent)
+  })
+
   return (
     <svg
       className="well-grid"
@@ -71,6 +86,7 @@ export function WellGrid({
       height={heightPx}
       viewBox={`0 0 ${layout.width} ${layout.height}`}
       onMouseLeave={() => onHover(null, null)}
+      {...longPress.handlers}
     >
       <rect
         x={0.5}
@@ -93,7 +109,18 @@ export function WellGrid({
           'data-tip': isTipRack ? 'true' : 'false',
           onMouseEnter: (event: React.MouseEvent) => onHover(well.wellId, event),
           onMouseMove: (event: React.MouseEvent) => onHover(well.wellId, event),
-          onClick: onWellClick ? (event: React.MouseEvent) => onWellClick(well.wellId, event) : undefined,
+          onClick: onWellClick
+            ? (event: React.MouseEvent) => {
+                // After a long-press, the OS still dispatches a synthetic
+                // click. Drop it so we don't both open the context menu
+                // AND select the well.
+                if (longPress.consumeDidFire()) {
+                  event.preventDefault()
+                  return
+                }
+                onWellClick(well.wellId, event)
+              }
+            : undefined,
           onContextMenu: onWellContextMenu
             ? (event: React.MouseEvent) => {
                 event.preventDefault()
