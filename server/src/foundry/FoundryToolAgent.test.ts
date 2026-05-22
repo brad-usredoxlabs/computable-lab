@@ -241,4 +241,36 @@ describe('FoundryToolAgent', () => {
     }
   });
 
+  it('retries once on a transient "fetch failed" inference error instead of failing', async () => {
+    const workdir = await mkdtemp(join(tmpdir(), 'foundry-tool-agent-transient-'));
+    try {
+      // The architect endpoint dropping an oversized request body — what
+      // killed the senior at turn 73. Must retry, not fail.
+      const complete = vi.fn(async () => {
+        if (complete.mock.calls.length === 1) {
+          throw new Error('Inference fetch failed to http://thunderbeast:8000/v1/chat/completions ("fetch failed", 358431 bytes). request body exceeded server limits.');
+        }
+        return response({ role: 'assistant', content: '<promise>COMPLETE</promise>' }, 'stop');
+      });
+      const client = {
+        complete,
+        completeStream: vi.fn(),
+      } as unknown as InferenceClient;
+
+      const result = await runFoundryToolAgent({
+        client,
+        model: 'mock-model',
+        workdir,
+        prompt: 'fix it',
+        maxTurns: 3,
+      });
+
+      expect(result.status).toBe('complete');
+      expect(complete).toHaveBeenCalledTimes(2);
+      expect(result.turns).toBe(1);
+    } finally {
+      await rm(workdir, { recursive: true, force: true });
+    }
+  });
+
 });

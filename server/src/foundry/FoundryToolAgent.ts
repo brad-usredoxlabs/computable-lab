@@ -283,17 +283,31 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
           enableThinking: false,
         };
       };
+      // One retry for a context-length 400 OR a transient/oversized inference
+      // failure. Both are helped by aggressively compacting (stub all tool
+      // results) — it shrinks an oversized body and recovers a token undershoot.
       let response: CompletionResponse;
-      try {
-        response = await input.client.complete(buildRequest());
-      } catch (err) {
-        const errMessage = err instanceof Error ? err.message : String(err);
-        if (!isContextLengthError(errMessage)) throw err;
-        // Last-resort recovery: the estimate undershot the real token count.
-        // Stub every tool result and retry this turn once before giving up.
-        await trace(input.tracePath, { type: 'context_overflow_retry', turn, error: errMessage });
-        compactTranscript(messages, INPUT_TOKEN_BUDGET, 0);
-        response = await input.client.complete(buildRequest());
+      {
+        let retried = false;
+        for (;;) {
+          try {
+            response = await input.client.complete(buildRequest());
+            break;
+          } catch (err) {
+            const errMessage = err instanceof Error ? err.message : String(err);
+            const recoverable = isContextLengthError(errMessage) || isTransientInferenceError(errMessage);
+            if (retried || !recoverable) throw err;
+            retried = true;
+            await trace(input.tracePath, { type: 'inference_retry', turn, error: errMessage });
+            await progress(input, {
+              phase: 'turn_started',
+              message: 'Inference call failed; compacting transcript and retrying once',
+              details: { turn },
+            });
+            compactTranscript(messages, INPUT_TOKEN_BUDGET, 0);
+            await new Promise((r) => setTimeout(r, 750));
+          }
+        }
       }
       const choice = response.choices[0];
       const assistantMessage = choice?.message;
@@ -455,6 +469,16 @@ function compactTranscript(
 
 function isContextLengthError(message: string): boolean {
   return /maximum context length|context length|input_tokens/i.test(message);
+}
+
+// Transient/oversized inference failures that are worth one retry (not a clean
+// 400 we can reason about). Seen in the wild: the architect endpoint dropping
+// a ~350KB request body with "fetch failed … request body exceeded server
+// limits", which previously killed the run outright.
+function isTransientInferenceError(message: string): boolean {
+  return /fetch failed|exceeded server limits|ECONNRESET|ETIMEDOUT|socket hang up|EPIPE|network|invalid or incomplete response|503|502|429/i.test(
+    message,
+  );
 }
 
 function cloneMessage(message: ChatMessage): ChatMessage {
