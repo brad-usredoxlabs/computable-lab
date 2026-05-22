@@ -50,7 +50,7 @@ export const TEST_LABWARE_ALIAS_MAP: Record<string, string> = {
   generic_96_well_deep_plate: 'lbw-def-generic-96-well-deep-plate',
   generic_1_well_reservoir: 'lbw-def-generic-reservoir-1-v1',
   generic_8_well_reservoir: 'lbw-def-generic-8-reservoir',
-  generic_12_well_reservoir: 'lbw-def-generic-12-reservoir',
+  generic_12_well_reservoir: 'lbw-def-generic-12-well-reservoir',
   generic_2_well_reservoir: 'lbw-def-generic-2-well-reservoir',
   generic_24_well_reservoir: 'lbw-def-generic-24-well-reservoir',
   generic_96_tip_rack: 'lbw-def-generic-96-tip-rack',
