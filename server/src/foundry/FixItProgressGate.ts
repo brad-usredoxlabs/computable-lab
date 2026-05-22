@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -37,6 +38,12 @@ const VERIFY_TIMEOUT_MS = 240_000;
  * a baseline before a coder round and to measure the patch afterward.
  */
 export async function runFixtureVerification(repoRoot: string, specId: string): Promise<FixtureVerification> {
+  // Fail fast (no npx spawn / dependency download) when the harness isn't in
+  // this checkout — e.g. a repo predating it, or a temp test worktree. Callers
+  // treat a throw as "verification unavailable" and degrade gracefully.
+  if (!existsSync(join(repoRoot, 'server', HARNESS_REL))) {
+    throw new Error(`fixture-diff harness not found in ${repoRoot}`);
+  }
   const { stdout } = await execFileAsync('npx', ['tsx', HARNESS_REL, '--target', specId], {
     cwd: join(repoRoot, 'server'),
     timeout: VERIFY_TIMEOUT_MS,

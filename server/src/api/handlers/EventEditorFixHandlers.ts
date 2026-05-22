@@ -25,6 +25,8 @@ import {
 import { runFoundryCoderPatch } from '../../foundry/FoundryCoderPatch.js';
 import { runFoundryPatchCritic } from '../../foundry/FoundryCritic.js';
 import type { FoundryCriticResult } from '../../foundry/FoundryCritic.js';
+import { evaluateProgress, runFixtureVerification } from '../../foundry/FixItProgressGate.js';
+import type { FixtureVerification } from '../../foundry/FixItProgressGate.js';
 import { EventEditorFixItJobManager } from '../../foundry/EventEditorFixItJobManager.js';
 import type {
   EventEditorFixItJobEvent,
@@ -1032,6 +1034,14 @@ export interface CreateEventEditorFixHandlersDeps {
    * background work during construction.
    */
   skipStartupSweep?: boolean;
+  /**
+   * Override for the deterministic fixture verification (incremental-landing
+   * gate). Tests stub this to drive PASS/PROGRESS/STUCK without running the
+   * worktree harness.
+   */
+  verifyFixtures?: typeof runFixtureVerification;
+  /** Max incremental rounds per apply (fix → commit → re-run). Defaults to 3. */
+  maxRounds?: number;
 }
 
 // --- Fix-it driver loop --------------------------------------------------------
@@ -1053,6 +1063,8 @@ interface RunFixItDriverOpts {
   gitOps: GitOps;
   coderPatchRunner: typeof runFoundryCoderPatch;
   criticRunner: typeof runFoundryPatchCritic;
+  verifyFixtures: typeof runFixtureVerification;
+  maxRounds: number;
   request: FastifyRequest;
   onProgress: (event: { source: 'server' | 'coder' | 'critic'; phase: string; message: string; details?: Record<string, unknown> }) => void;
   /** SSE stage / done / heartbeat emitter (no-op safe) */
@@ -1077,6 +1089,7 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
     activeJobRef, executionRootRef, executionArtifactRootRef, jobIdRef, touchedFileSetRef,
     fixItJobManager, gitOps,
     coderPatchRunner, criticRunner,
+    verifyFixtures, maxRounds,
     request,
     onProgress,
     onEvent,
@@ -1149,32 +1162,63 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
 
   checkAbort();
 
-  // 3) Junior coder
-  onEvent({ type: 'stage', stage: 'coder_running' });
-  onProgress({ source: 'server', phase: 'junior_started', message: 'Starting junior coder' });
-  let coderResult = await coderPatchRunner({
-    artifactRoot: executionArtifactRoot,
-    repoRoot: executionRoot,
-    protocolId,
-    variant,
-    forcedSpecPath: patchSpecPath,
-    coderRole: 'junior',
-    coderEngine: 'tool-agent',
-    autoCommit: false,
-    onProgress: (event) => onProgress(event),
-  });
-  onProgress({
-    source: 'server',
-    phase: 'junior_finished',
-    message: `Junior coder finished with status ${coderResult.status}`,
-    details: { status: coderResult.status, touchedFiles: coderResult.touchedFiles },
-  });
-  for (const f of coderResult.touchedFiles) touchedFileSet.add(f);
-  checkAbort();
-
-  // 4) Critic
+  // ── Incremental-landing round loop ──────────────────────────────────────
+  // Each round is a fresh coder crack. We commit a full PASS (done) OR verified
+  // PROGRESS (a partial fix that satisfies strictly more of the fixture with no
+  // regression) and re-run to surface the next bug. STUCK → escalate. This
+  // turns multi-bug prompts from "fix everything in one session or nothing
+  // lands" into "land one safe fix at a time".
   let criticSummary: ApplyFixCriticSummary | undefined;
   let seniorRetryRan = false;
+  let commit: string | undefined;
+  let landedCommits = 0;
+  let lastVerdict: 'pass' | 'progress' | 'stuck' | undefined;
+  let criticVerdictForResult: FoundryCriticResult['verdict'] | undefined;
+  let coderResult!: Awaited<ReturnType<typeof coderPatchRunner>>;
+  let carryForward: string | undefined;
+
+  for (let round = 1; round <= maxRounds; round += 1) {
+    checkAbort();
+    if (round > 1) {
+      onEvent({ type: 'stage', stage: 'coder_running' });
+      onProgress({ source: 'server', phase: 'round_started', message: `Starting fix round ${round}/${maxRounds}`, details: { round } });
+    }
+
+    // Baseline: what the fixtures already satisfy before this round's edits.
+    let baseline: FixtureVerification | null = null;
+    try {
+      baseline = await verifyFixtures(executionRoot, body.specId);
+    } catch (err) {
+      request.log.warn({ err }, 'fix-it: baseline fixture verification unavailable');
+    }
+
+    // 3) Coder crack (junior; carry-forward feedback on later rounds)
+    onEvent({ type: 'stage', stage: 'coder_running' });
+    onProgress({ source: 'server', phase: 'junior_started', message: round > 1 ? `Starting coder (round ${round})` : 'Starting junior coder' });
+    coderResult = await coderPatchRunner({
+      artifactRoot: executionArtifactRoot,
+      repoRoot: executionRoot,
+      protocolId,
+      variant,
+      forcedSpecPath: patchSpecPath,
+      coderRole: 'junior',
+      coderEngine: 'tool-agent',
+      autoCommit: false,
+      ...(carryForward ? { revisionFeedback: carryForward } : {}),
+      ...(round > 1 ? { attempt: round } : {}),
+      onProgress: (event) => onProgress(event),
+    });
+    onProgress({
+      source: 'server',
+      phase: 'junior_finished',
+      message: `Junior coder finished with status ${coderResult.status}`,
+      details: { status: coderResult.status, touchedFiles: coderResult.touchedFiles },
+    });
+    const roundTouched = new Set<string>(coderResult.touchedFiles);
+    for (const f of coderResult.touchedFiles) touchedFileSet.add(f);
+    checkAbort();
+
+  // 4) Critic
   let finalCriticVerdict: FoundryCriticResult['verdict'] | undefined;
   let seniorRevisionFeedback: string | undefined;
   if (coderResult.status === 'applied') {
@@ -1255,7 +1299,7 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
       message: `Senior coder finished with status ${coderResult.status}`,
       details: { status: coderResult.status, touchedFiles: coderResult.touchedFiles },
     });
-    for (const f of coderResult.touchedFiles) touchedFileSet.add(f);
+    for (const f of coderResult.touchedFiles) { touchedFileSet.add(f); roundTouched.add(f); }
     checkAbort();
     if (coderResult.status === 'applied') {
       onEvent({ type: 'stage', stage: 'critic_running' });
@@ -1293,63 +1337,103 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
     }
   }
 
-  // 6) Commit / rollback
-  const touchedFiles = Array.from(touchedFileSet);
-  let commit: string | undefined;
-  if (coderResult.status === 'applied' && touchedFiles.length > 0) {
+    // 6) Gate. A full PASS lands and ends. Otherwise consult the verified
+    // progress gate: PROGRESS (strictly more of the fixture satisfied, no
+    // regression) lands the partial fix and re-runs; STUCK rolls back and
+    // escalates.
+    let post: FixtureVerification | null = null;
+    let verdict: 'pass' | 'progress' | 'stuck';
     if (finalCriticVerdict === 'pass') {
+      verdict = 'pass';
+    } else {
+      try {
+        post = await verifyFixtures(executionRoot, body.specId);
+      } catch (err) {
+        request.log.warn({ err }, 'fix-it: post-round fixture verification unavailable');
+      }
+      verdict = baseline && post ? evaluateProgress(baseline, post) : 'stuck';
+      onProgress({
+        source: 'server',
+        phase: 'progress_gate',
+        message: `Round ${round} gate verdict: ${verdict}`,
+        details: { verdict, round, ...(post?.target ? { missing: post.target.missing } : {}) },
+      });
+    }
+    lastVerdict = verdict;
+    if (finalCriticVerdict !== undefined) criticVerdictForResult = finalCriticVerdict;
+
+    const roundFiles = Array.from(roundTouched);
+    if ((verdict === 'pass' || verdict === 'progress') && roundFiles.length > 0) {
       try {
         onProgress({
           source: 'server',
           phase: 'committing',
           message: activeJobRef.value
-            ? `Landing ${touchedFiles.length} touched file(s) from job worktree`
-            : `Committing ${touchedFiles.length} touched file(s)`,
-          details: { touchedFiles, ...(activeJobRef.value ? { job: activeJobRef.value } : {}) },
+            ? `Landing ${roundFiles.length} file(s) from job worktree (round ${round}, ${verdict})`
+            : `Committing ${roundFiles.length} file(s) (round ${round}, ${verdict})`,
+          details: { touchedFiles: roundFiles, round, verdict, ...(activeJobRef.value ? { job: activeJobRef.value } : {}) },
         });
-        commit = activeJobRef.value?.worktreePath && gitOps.commitFromWorktree
-          ? await gitOps.commitFromWorktree(activeJobRef.value.worktreePath, touchedFiles, specTitle)
-          : await gitOps.commit(touchedFiles, specTitle);
-        onProgress({
-          source: 'server',
-          phase: 'committed',
-          message: `Committed fix ${commit}`,
-          details: { commit },
-        });
+        const title = verdict === 'progress' ? `${specTitle} (round ${round})` : specTitle;
+        const roundCommit = activeJobRef.value?.worktreePath && gitOps.commitFromWorktree
+          ? await gitOps.commitFromWorktree(activeJobRef.value.worktreePath, roundFiles, title)
+          : await gitOps.commit(roundFiles, title);
+        if (roundCommit) {
+          commit = roundCommit;
+          landedCommits += 1;
+        }
+        onProgress({ source: 'server', phase: 'committed', message: `Committed fix ${roundCommit}`, details: { commit: roundCommit, round } });
       } catch (gitErr) {
         request.log.error({ err: gitErr }, 'fix-it commit failed; leaving changes uncommitted');
       }
-    } else if (finalCriticVerdict === 'block' || finalCriticVerdict === 'revision') {
+    } else if (verdict === 'stuck') {
       try {
         onProgress({
           source: 'server',
           phase: 'rolling_back',
           message: activeJobRef.value
-            ? `Critic verdict ${finalCriticVerdict}; preserving main checkout`
-            : `Critic verdict ${finalCriticVerdict}; rolling back uncommitted edits`,
-          details: { touchedFiles, ...(activeJobRef.value ? { job: activeJobRef.value } : {}) },
+            ? `Round ${round} made no safe progress; preserving main checkout`
+            : `Round ${round} made no safe progress; rolling back uncommitted edits`,
+          details: { touchedFiles: roundFiles, round, ...(activeJobRef.value ? { job: activeJobRef.value } : {}) },
         });
-        if (!activeJobRef.value) await gitOps.reset(touchedFiles);
+        if (!activeJobRef.value && roundFiles.length > 0) await gitOps.reset(roundFiles);
       } catch (gitErr) {
         request.log.error({ err: gitErr }, 'fix-it reset failed; working tree may be dirty');
       }
     }
-  }
 
+    if (verdict === 'pass' || verdict === 'stuck') break;
+
+    // PROGRESS → carry the verified state forward so the next round continues
+    // the fix instead of re-deriving it.
+    const remaining = post?.target?.missing ?? [];
+    carryForward = [
+      'A previous round landed a partial fix (already committed in the working tree); the fixture still fails on a different cause.',
+      remaining.length ? `Remaining unsatisfied expected paths: ${remaining.slice(0, 12).join(', ')}` : '',
+      coderResult.finalText
+        ? `Previous round's analysis (a lead — verify against the failing fixture, do not assume it is correct):\n${coderResult.finalText}`
+        : '',
+      'Continue from the committed state: find and fix the NEXT cause, then run the verification command.',
+    ].filter(Boolean).join('\n\n');
+  }
+  // ── end round loop ──────────────────────────────────────────────────────
+
+  const touchedFiles = Array.from(touchedFileSet);
   const effectiveStatus: ApplyFixResultStatus =
-    coderResult.status === 'applied' && finalCriticVerdict === 'revision'
-      ? 'needs-revision'
-      : coderResult.status === 'applied' && finalCriticVerdict === 'block'
-        ? 'blocked'
-        : coderResult.status;
+    lastVerdict === 'pass'
+      ? 'applied'
+      : landedCommits > 0
+        ? 'needs-revision'
+        : criticVerdictForResult === 'block'
+          ? 'blocked'
+          : criticVerdictForResult === 'revision'
+            ? 'needs-revision'
+            : coderResult.status;
   const effectiveMessage =
-    finalCriticVerdict === 'revision'
-      ? criticSummary?.message ?? 'Critic requested revision; patch was not accepted.'
-      : finalCriticVerdict === 'block'
-        ? criticSummary?.message ?? 'Critic blocked the patch; patch was not accepted.'
-        : commit
-          ? `Patch accepted and committed.`
-          : coderResult.message;
+    lastVerdict === 'pass'
+      ? 'Patch accepted and committed.'
+      : landedCommits > 0
+        ? `Landed ${landedCommits} incremental fix(es); the fixture still fails, so more work remains. Re-run to continue.`
+        : criticSummary?.message ?? coderResult.message;
 
   if (activeJobRef.value && fixItJobManager) {
     const releaseWorktree = effectiveStatus !== 'needs-revision';
@@ -1411,6 +1495,8 @@ export function createEventEditorFixHandlers(
 
   const coderPatchRunner = deps.runCoderPatch ?? runFoundryCoderPatch;
   const criticRunner = deps.runPatchCritic ?? runFoundryPatchCritic;
+  const verifyFixtures = deps.verifyFixtures ?? runFixtureVerification;
+  const maxRounds = deps.maxRounds ?? 3;
   const workspaceRoot = deps.workspaceRoot ?? process.cwd();
   const artifactRoot = resolve(workspaceRoot, 'artifacts', 'event-editor-fixit');
   const gitOps = deps.gitOps ?? createGitOps(workspaceRoot);
@@ -1636,6 +1722,8 @@ export function createEventEditorFixHandlers(
           gitOps,
           coderPatchRunner,
           criticRunner,
+          verifyFixtures,
+          maxRounds,
           request,
           onProgress: sendProgress,
           onEvent: send,
@@ -1971,6 +2059,8 @@ export function createEventEditorFixHandlers(
         gitOps,
         coderPatchRunner,
         criticRunner,
+        verifyFixtures,
+        maxRounds,
         request,
         onProgress,
         onEvent: () => {},

@@ -1106,6 +1106,144 @@ describe('EventEditorFixHandlers.applyFixStream', () => {
       await rm(tmp, { recursive: true, force: true });
     }
   });
+
+  it('lands incremental progress across rounds, committing each verified step', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'fixit-rounds-'));
+    try {
+      const runCoderPatch = vi.fn(async (input: { artifactRoot: string }) => ({
+        status: 'applied' as const,
+        resultPath: join(input.artifactRoot, 'result.yaml'),
+        message: 'patch applied',
+        touchedFiles: ['server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts'],
+      }));
+      // Critic never reports a full pass, so the verified gate decides.
+      const runPatchCritic = vi.fn(async () => ({
+        kind: 'protocol-foundry-critic-report' as const,
+        protocolId: 'event-editor-fixit',
+        variant: 'manual_tubes',
+        generated_at: '2026-05-21T00:00:00Z',
+        verdict: 'block' as const,
+        reportPath: '/tmp/r.yaml',
+        reviewDurationMs: 1,
+        message: 'fixture still failing',
+        notes: [],
+        touchedFiles: ['server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts'],
+        specVerification: { accepted: false, criteriaMet: [], criteriaFailed: ['x'], notes: [] },
+      }));
+      const gitOps = {
+        commit: vi.fn(async () => `commit-${gitOps.commit.mock.calls.length}`),
+        reset: vi.fn(async (_files: string[]) => undefined),
+      };
+      // Calls in order: r1 baseline, r1 post, r2 baseline, r2 post.
+      const missingByCall: Record<number, string[]> = { 1: ['a', 'b'], 2: ['b'], 3: ['b'], 4: [] };
+      let call = 0;
+      const verifyFixtures = vi.fn(async () => {
+        call += 1;
+        const missing = missingByCall[call] ?? [];
+        return {
+          target: { name: 'spec-fix-R', passed: missing.length === 0, missing, partial: [], matched: [] },
+          suite: [] as Array<{ name: string; passed: boolean }>,
+        };
+      });
+
+      const handlers = createEventEditorFixHandlers({
+        workspaceRoot: tmp,
+        clientFactory: () => ({ complete: vi.fn(), completeStream: vi.fn() } as unknown as InferenceClient),
+        runCoderPatch: runCoderPatch as never,
+        runPatchCritic: runPatchCritic as never,
+        gitOps,
+        fixItJobManager: null,
+        verifyFixtures: verifyFixtures as never,
+        maxRounds: 3,
+      });
+
+      const reply = makeFastifyReply();
+      await handlers.applyFixStream(
+        makeFastifyRequest({
+          specYaml: 'id: spec-fix-R\ntitle: incremental rounds\nfixClass: compiler\n',
+          fixtureYaml: 'name: spec-fix-R\ninput:\n  prompt: r\n',
+          specId: 'spec-fix-R',
+          fixturePath: 'server/src/compiler/pipeline/fixtures/spec-fix-R.yaml',
+        }),
+        reply as never,
+      );
+
+      // Round 1 PROGRESS + round 2 PASS = two commits.
+      expect(gitOps.commit).toHaveBeenCalledTimes(2);
+      expect(gitOps.reset).not.toHaveBeenCalled();
+      const events = parseSseDataLines(reply._stats().writeChunks);
+      const done = events.find((e): e is { type: 'done'; result: { status: string } } =>
+        (e as { type?: string }).type === 'done');
+      expect(done?.result.status).toBe('applied');
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('does not commit and escalates when a round makes no safe progress', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'fixit-stuck-'));
+    try {
+      const runCoderPatch = vi.fn(async (input: { artifactRoot: string }) => ({
+        status: 'applied' as const,
+        resultPath: join(input.artifactRoot, 'result.yaml'),
+        message: 'patch applied',
+        touchedFiles: ['server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts'],
+      }));
+      const runPatchCritic = vi.fn(async () => ({
+        kind: 'protocol-foundry-critic-report' as const,
+        protocolId: 'event-editor-fixit',
+        variant: 'manual_tubes',
+        generated_at: '2026-05-21T00:00:00Z',
+        verdict: 'block' as const,
+        reportPath: '/tmp/r.yaml',
+        reviewDurationMs: 1,
+        message: 'fixture still failing',
+        notes: [],
+        touchedFiles: ['server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts'],
+        specVerification: { accepted: false, criteriaMet: [], criteriaFailed: ['x'], notes: [] },
+      }));
+      const gitOps = {
+        commit: vi.fn(async () => 'c'),
+        reset: vi.fn(async (_files: string[]) => undefined),
+      };
+      // Same missing before and after → no forward progress → STUCK.
+      const verifyFixtures = vi.fn(async () => ({
+        target: { name: 'spec-fix-S', passed: false, missing: ['a'], partial: [], matched: [] },
+        suite: [] as Array<{ name: string; passed: boolean }>,
+      }));
+
+      const handlers = createEventEditorFixHandlers({
+        workspaceRoot: tmp,
+        clientFactory: () => ({ complete: vi.fn(), completeStream: vi.fn() } as unknown as InferenceClient),
+        runCoderPatch: runCoderPatch as never,
+        runPatchCritic: runPatchCritic as never,
+        gitOps,
+        fixItJobManager: null,
+        verifyFixtures: verifyFixtures as never,
+        maxRounds: 3,
+      });
+
+      const reply = makeFastifyReply();
+      await handlers.applyFixStream(
+        makeFastifyRequest({
+          specYaml: 'id: spec-fix-S\ntitle: stuck\nfixClass: compiler\n',
+          fixtureYaml: 'name: spec-fix-S\ninput:\n  prompt: s\n',
+          specId: 'spec-fix-S',
+          fixturePath: 'server/src/compiler/pipeline/fixtures/spec-fix-S.yaml',
+        }),
+        reply as never,
+      );
+
+      expect(gitOps.commit).not.toHaveBeenCalled();
+      expect(gitOps.reset).toHaveBeenCalledTimes(1);
+      const events = parseSseDataLines(reply._stats().writeChunks);
+      const done = events.find((e): e is { type: 'done'; result: { status: string } } =>
+        (e as { type?: string }).type === 'done');
+      expect(done?.result.status).toBe('blocked');
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('EventEditorFixHandlers Fix-it job endpoints', () => {
