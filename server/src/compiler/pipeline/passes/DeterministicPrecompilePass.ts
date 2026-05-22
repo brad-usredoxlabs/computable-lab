@@ -1142,7 +1142,10 @@ function collectCandidateLabwaresFromResolved(
     // the prompt anchors it to a specific deck slot, in which case
     // resolve_labware turns the candidate into a placement.
     if (n.kind === 'labware-instance' && !deckSlot) continue;
-    const key = n.recordId ?? n.phrase;
+    // Include the deck slot in the dedup key so that the same labware
+    // definition placed on different slots is emitted as separate candidates
+    // (e.g. "a 96-well plate on B1 and a 96-well plate on b2").
+    const key = deckSlot ? `${n.recordId ?? n.phrase}:${deckSlot}` : (n.recordId ?? n.phrase);
     if (labwareHints.has(key)) continue;
     labwareHints.add(key);
     candidateLabwares.push({
