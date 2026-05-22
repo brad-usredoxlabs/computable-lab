@@ -200,6 +200,11 @@ describe('EventEditorFixHandlers.chatStream', () => {
     expect(systemContent).toMatch(/phrase:\s*96-well plate/);
     expect(systemContent).toMatch(/recordId:\s*lbw-def-generic-96-well-plate/);
     expect(systemContent).toMatch(/token:\s+B2/);
+    // Confidence calibration: the diagnosis model must know it lacks source
+    // access and hedge the mechanism rather than assert a confident fix.
+    expect(systemContent).toContain('You have the compiler trace, NOT the source code');
+    expect(systemContent).toContain('Candidate mechanisms (unverified)');
+    expect(systemContent).not.toContain('No "I think"');
   });
 });
 
@@ -815,10 +820,13 @@ describe('EventEditorFixHandlers.applyFixStream', () => {
             resultPath: join(input.artifactRoot, 'result.yaml'),
             message: 'tool agent did not complete: max-turns',
             touchedFiles: [],
+            finalText: 'The kind is labware-instance not labware because the "and a" prefix is kept.',
           };
         }
         expect(input.revisionFeedback).toContain('Junior coder did not produce an accepted patch');
-        expect(input.revisionFeedback).toContain('max-turns');
+        // The junior's diagnosis is forwarded so the senior continues its lead.
+        expect(input.revisionFeedback).toContain("Previous attempt's analysis");
+        expect(input.revisionFeedback).toContain('the "and a" prefix is kept');
         return {
           status: 'applied' as const,
           resultPath: join(input.artifactRoot, 'result.yaml'),
@@ -1165,6 +1173,161 @@ describe('EventEditorFixHandlers Fix-it job endpoints', () => {
       expect('job' in completed ? completed.job.status : '').toBe('complete');
       expect(existsSync(retainedWorktree!)).toBe(false);
       expect('events' in completed ? completed.events.map((event) => event.phase) : []).toContain('marked_complete');
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('startApplyFixJob returns once the job is started and keeps persisting coder/critic progress in the background', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'fixit-start-job-'));
+    try {
+      await git(tmp, ['init']);
+      await git(tmp, ['config', 'user.email', 'fixit@example.test']);
+      await git(tmp, ['config', 'user.name', 'Fix It Test']);
+      await mkdir(join(tmp, 'server/src'), { recursive: true });
+      await writeFile(join(tmp, 'server/src/base.ts'), 'export const base = true;\n', 'utf-8');
+      await git(tmp, ['add', 'server/src/base.ts']);
+      await git(tmp, ['commit', '-m', 'initial']);
+
+      // Gate the coder so the driver is still mid-run when we assert the
+      // handler has already returned. If startApplyFixJob blocked on the
+      // whole driver (the old bug) this test would deadlock and time out.
+      let releaseCoder!: () => void;
+      const coderGate = new Promise<void>((resolve) => { releaseCoder = resolve; });
+      const runCoderPatch = vi.fn(async (input: { repoRoot: string; artifactRoot: string }) => {
+        await coderGate;
+        await mkdir(join(input.repoRoot, 'server/src'), { recursive: true });
+        await writeFile(join(input.repoRoot, 'server/src/foo.ts'), 'export const foo = 1;\n', 'utf-8');
+        return {
+          status: 'applied' as const,
+          resultPath: join(input.artifactRoot, 'result.yaml'),
+          message: 'patch applied',
+          touchedFiles: ['server/src/foo.ts'],
+        };
+      });
+      const runPatchCritic = vi.fn(async () => ({
+        kind: 'protocol-foundry-critic-report' as const,
+        protocolId: 'event-editor-fixit',
+        variant: 'manual_tubes',
+        generated_at: '2026-05-21T00:00:00Z',
+        verdict: 'pass' as const,
+        reportPath: '/tmp/report.yaml',
+        reviewDurationMs: 1,
+        message: 'passes',
+        notes: [],
+        touchedFiles: ['server/src/foo.ts'],
+        specVerification: { accepted: true, criteriaMet: ['criterion-1'], criteriaFailed: [], notes: [] },
+      }));
+      const gitOps = {
+        commit: vi.fn(async () => 'deadbeef'),
+        commitFromWorktree: vi.fn(async () => 'deadbeef'),
+        reset: vi.fn(async () => undefined),
+      };
+      const manager = new EventEditorFixItJobManager({
+        repoRoot: tmp,
+        artifactRoot: join(tmp, 'artifacts'),
+        idFactory: () => 'job-start-test',
+      });
+
+      const handlers = createEventEditorFixHandlers({
+        workspaceRoot: tmp,
+        clientFactory: () => ({ complete: vi.fn(), completeStream: vi.fn() } as unknown as InferenceClient),
+        runCoderPatch: runCoderPatch as never,
+        runPatchCritic: runPatchCritic as never,
+        gitOps,
+        fixItJobManager: manager,
+      });
+
+      const reply = makeFastifyReply();
+      const result = await handlers.startApplyFixJob(
+        makeFastifyRequest({
+          specYaml: 'id: spec-fix-J\ntitle: durable start\nfixClass: compiler\n',
+          fixtureYaml: 'name: spec-fix-J\ninput:\n  prompt: j\n',
+          specId: 'spec-fix-J',
+          fixturePath: 'server/src/compiler/pipeline/fixtures/spec-fix-J.yaml',
+        }),
+        reply as never,
+      );
+
+      // Returned before the gated coder could finish → non-blocking.
+      if ('error' in result) throw new Error(`expected job detail, got: ${result.message}`);
+      expect(result.job.id).toBe('job-start-test');
+      expect(result.job.status).toBe('running');
+      expect(runPatchCritic).not.toHaveBeenCalled();
+
+      // Let the background driver run to completion. Generous deadline: the
+      // driver does real git worktree create/release (I/O-heavy), which slows
+      // under parallel suite load — a tight 5s window was flaky in the full run.
+      releaseCoder();
+      const deadline = Date.now() + 20_000;
+      let finalStatus = result.job.status;
+      while (Date.now() < deadline) {
+        const job = await manager.getJob('job-start-test');
+        finalStatus = job?.status ?? finalStatus;
+        if (finalStatus !== 'running' && finalStatus !== 'critic' && finalStatus !== 'queued') break;
+        await new Promise((r) => setTimeout(r, 25));
+      }
+      // Accepted patches release the worktree, which lands the job in the
+      // terminal 'complete' state (see EventEditorFixItJobManager.completeJob).
+      expect(finalStatus).toBe('complete');
+
+      // Progress was persisted to the durable event log — the channel the
+      // panel tails for live feedback. Without this the job looks frozen
+      // after "Created worktree".
+      const phases = (await manager.readEvents('job-start-test')).map((e) => e.phase);
+      expect(phases).toContain('junior_started');
+      expect(phases).toContain('critic_started');
+      expect(phases).toContain('committed');
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it('streamJobEvents emits a snapshot then done for a terminal job', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'fixit-stream-events-'));
+    try {
+      await git(tmp, ['init']);
+      await git(tmp, ['config', 'user.email', 'fixit@example.test']);
+      await git(tmp, ['config', 'user.name', 'Fix It Test']);
+      await writeFile(join(tmp, 'README.md'), 'base\n', 'utf-8');
+      await git(tmp, ['add', 'README.md']);
+      await git(tmp, ['commit', '-m', 'initial']);
+
+      const manager = new EventEditorFixItJobManager({
+        repoRoot: tmp,
+        artifactRoot: join(tmp, 'artifacts'),
+        idFactory: () => 'job-stream',
+      });
+      await manager.enqueue({ specId: 'spec-stream', prompt: 'stream prompt' });
+      await manager.claimNextQueuedJob();
+      await manager.completeJob('job-stream', {
+        status: 'accepted',
+        message: 'done',
+        result: { status: 'applied', touchedFiles: [] },
+      });
+
+      const handlers = createEventEditorFixHandlers({
+        workspaceRoot: tmp,
+        clientFactory: () => ({ complete: vi.fn(), completeStream: vi.fn() } as unknown as InferenceClient),
+        fixItJobManager: manager,
+      });
+
+      const reply = makeFastifyReply();
+      const raw = { on() { return raw; }, off() { return raw; } };
+      const req = {
+        params: { id: 'job-stream' },
+        headers: {},
+        raw,
+        log: { error: vi.fn(), warn: vi.fn() },
+      };
+      await handlers.streamJobEvents(req as never, reply as never);
+
+      const events = parseSseDataLines(reply._stats().writeChunks);
+      const snapshot = events.find((e): e is { type: 'snapshot'; job: { id: string }; events: unknown[] } =>
+        (e as { type?: string }).type === 'snapshot');
+      expect(snapshot?.job.id).toBe('job-stream');
+      expect(events.some((e) => (e as { type?: string }).type === 'done')).toBe(true);
+      expect(reply._stats().ended).toBe(true);
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }

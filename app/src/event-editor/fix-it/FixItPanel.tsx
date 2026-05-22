@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEventEditor, type FixItSessionSnapshot, type FixItState } from '../EventEditorContext'
 import {
+  cancelFixItJob,
   completeFixItJob,
   getFixItJob,
   getFixItJobSpec,
   listFixItJobs,
   probeFixItHealth,
-  streamApplyFix,
+  startApplyFixJob,
   streamFixChat,
+  streamFixItJobEvents,
   synthesizeFixSpec,
   type FixItHealthResponse,
+  type FixItJobDetailResponse,
+  type FixItJobEvent,
   type FixItJobRecord,
 } from './fixItClient'
 
@@ -48,6 +52,9 @@ export function FixItPanel({ layout = 'drawer' }: { layout?: FixItPanelLayout } 
   const jobSessionSnapshotsRef = useRef<Record<string, FixItSessionSnapshot>>({})
   const currentFixItRef = useRef(fixIt)
   const abortRef = useRef<AbortController | null>(null)
+  const [activeApplyJobId, setActiveApplyJobId] = useState<string | null>(null)
+  const [cancelingApplyJobId, setCancelingApplyJobId] = useState<string | null>(null)
+  const activeApplyEventCountRef = useRef(0)
   const logRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -90,12 +97,20 @@ export function FixItPanel({ layout = 'drawer' }: { layout?: FixItPanelLayout } 
       const localSnapshot = jobSessionSnapshotsRef.current[jobId]
       if (localSnapshot) {
         actions.restoreFixItSession(localSnapshot)
+        if (localSnapshot.stage === 'applying') {
+          activeApplyEventCountRef.current = localSnapshot.applyProgress.length
+          setActiveApplyJobId(jobId)
+        }
         return
       }
       const detail = await getFixItJob(jobId).catch(() => null)
       const snapshot = detail?.sessionSnapshot
       if (snapshot) {
         actions.restoreFixItSession(snapshot)
+        if (snapshot.stage === 'applying') {
+          activeApplyEventCountRef.current = detail?.events.length ?? snapshot.applyProgress.length
+          setActiveApplyJobId(jobId)
+        }
         return
       }
       setRestoreError('No saved session for this job — it was started in a different browser tab.')
@@ -130,20 +145,56 @@ export function FixItPanel({ layout = 'drawer' }: { layout?: FixItPanelLayout } 
   }, [fixIt.isOpen])
 
   // applying flag tracked at the panel level so the Resume button (which
-  // lives outside SpecEditor) can also drive the apply flow.
+  // lives outside SpecEditor) can also drive the durable job launch.
   const [applying, setApplying] = useState(false)
 
   /**
-   * Run the apply pipeline for the given spec. Pipes SSE events back into
-   * the fixIt state via actions. Used by both SpecEditor's Apply button
-   * and the Resume button on interrupted job cards.
+   * Start the durable apply pipeline for the given spec. The server owns
+   * execution after this request returns; this panel only polls persisted
+   * job detail/events to render progress.
    */
+  const appendApplyJobEvent = useCallback((event: FixItJobEvent) => {
+    if (event.source !== 'server' && event.source !== 'coder' && event.source !== 'critic') return
+    const stage = applyStageFromJobEvent(event)
+    if (stage) actions.setFixItApplyStage(stage)
+    actions.appendFixItApplyProgress({
+      source: event.source,
+      phase: event.phase,
+      message: event.message,
+      ...(event.details ? { details: event.details } : {}),
+    })
+    if (event.details?.rawReasoning && typeof event.details.rawReasoning === 'string') {
+      actions.appendFixItApplyReasoning(event.details.rawReasoning)
+    }
+  }, [actions])
+
+  const syncApplyJobDetail = useCallback((detail: FixItJobDetailResponse) => {
+    const events = detail.events ?? []
+    const unseen = events.slice(activeApplyEventCountRef.current)
+    activeApplyEventCountRef.current = events.length
+    for (const event of unseen) {
+      appendApplyJobEvent(event)
+    }
+    const result = applyResultFromJobDetail(detail)
+    if (result) {
+      actions.setFixItApplyResult(result)
+      // Transition stage out of 'applying' so DoneView renders
+      if (result.status === 'applied') {
+        actions.setFixItStage('done', null)
+      } else {
+        actions.setFixItStage('failed', result.message || 'Fix-it pipeline did not complete.')
+      }
+      setActiveApplyJobId(null)
+      setApplying(false)
+    }
+  }, [actions, appendApplyJobEvent])
+
   const applySpec = useCallback(async (args: {
     spec: { specYaml: string; fixtureYaml: string; specId: string; fixturePath: string }
     fixItSessionId?: string
-    sessionSnapshot?: Parameters<typeof streamApplyFix>[0]['sessionSnapshot']
-  }) => {
-    if (applying) return
+    sessionSnapshot?: FixItSessionSnapshot
+  }): Promise<FixItJobRecord | null> => {
+    if (applying) return null
     const { spec, fixItSessionId, sessionSnapshot } = args
     const applySessionId = fixItSessionId
     const isCurrentApplySession = () =>
@@ -152,61 +203,138 @@ export function FixItPanel({ layout = 'drawer' }: { layout?: FixItPanelLayout } 
     setApplying(true)
     actions.setFixItStage('applying', null)
     actions.setFixItApplyStage(null)
-    const controller = new AbortController()
-    abortRef.current = controller
+    activeApplyEventCountRef.current = 0
     try {
-      for await (const ev of streamApplyFix({
+      const result = await startApplyFixJob({
         specYaml: spec.specYaml,
         fixtureYaml: spec.fixtureYaml,
         specId: spec.specId,
         fixturePath: spec.fixturePath,
         ...(fixItSessionId ? { fixItSessionId } : {}),
         ...(sessionSnapshot ? { sessionSnapshot } : {}),
-        signal: controller.signal,
-      })) {
-        if (!isCurrentApplySession()) continue
-        if (ev.type === 'stage') {
-          actions.setFixItApplyStage(ev.stage)
-        } else if (ev.type === 'progress') {
-          actions.appendFixItApplyProgress({
-            source: ev.source,
-            phase: ev.phase,
-            message: ev.message,
-            ...(ev.details ? { details: ev.details } : {}),
-          })
-          if (ev.details?.rawReasoning && typeof ev.details.rawReasoning === 'string') {
-            actions.appendFixItApplyReasoning(ev.details.rawReasoning)
-          }
-        } else if (ev.type === 'done') {
-          actions.setFixItApplyResult({
-            status: ev.result.status as 'applied' | 'blocked' | 'failed' | 'skipped' | 'stale' | 'needs-human' | 'needs-revision',
-            message: ev.result.message,
-            touchedFiles: ev.result.touchedFiles,
-            ...(ev.result.job ? { job: ev.result.job } : {}),
-            ...(ev.result.commit ? { commit: ev.result.commit } : {}),
-            ...(ev.result.critic ? { critic: ev.result.critic } : {}),
-          })
-        } else if (ev.type === 'error') {
-          actions.setFixItStage('failed', ev.message)
+      })
+      if ('error' in result) {
+        if (isCurrentApplySession()) {
+          actions.setFixItStage('failed', result.message)
           actions.setFixItApplyStage(null)
         }
+        return null
       }
+      // The job started server-side regardless of which Fix-it session the UI
+      // is currently showing. Only the UI updates are session-guarded; the
+      // job record is returned either way so callers can do cleanup (e.g.
+      // retiring a superseded job on resume).
+      if (isCurrentApplySession()) {
+        setActiveApplyJobId(result.job.id)
+        syncApplyJobDetail(result)
+      }
+      return result.job
     } catch (err) {
-      const wasAbort = controller.signal.aborted
-        || (err instanceof DOMException && err.name === 'AbortError')
-      if (!isCurrentApplySession()) return
-      if (wasAbort) {
-        actions.setFixItStage('spec-ready', 'Aborted — edit the spec and try again.')
-      } else {
-        const message = err instanceof Error ? err.message : String(err)
-        actions.setFixItStage('failed', message)
-      }
+      if (!isCurrentApplySession()) return null
+      const message = err instanceof Error ? err.message : String(err)
+      actions.setFixItStage('failed', message)
       actions.setFixItApplyStage(null)
+      return null
     } finally {
-      if (abortRef.current === controller) abortRef.current = null
       setApplying(false)
     }
-  }, [actions, applying])
+  }, [actions, applying, syncApplyJobDetail])
+
+  const trackedJobId = currentFixItJobId(fixIt)
+
+  const cancelApplyJob = useCallback(async () => {
+    const jobId = activeApplyJobId ?? trackedJobId
+    if (!jobId || cancelingApplyJobId) return
+    setCancelingApplyJobId(jobId)
+    try {
+      const detail = await cancelFixItJob(jobId).catch(() => null)
+      if (detail) syncApplyJobDetail(detail)
+      void refreshJobs()
+    } finally {
+      setCancelingApplyJobId(null)
+    }
+  }, [activeApplyJobId, cancelingApplyJobId, refreshJobs, syncApplyJobDetail, trackedJobId])
+
+  useEffect(() => {
+    if (fixIt.stage !== 'applying' || !trackedJobId || activeApplyJobId === trackedJobId) return
+    activeApplyEventCountRef.current = fixIt.applyProgress.length
+    setActiveApplyJobId(trackedJobId)
+  }, [activeApplyJobId, fixIt.applyProgress.length, fixIt.stage, trackedJobId])
+
+  useEffect(() => {
+    if (!activeApplyJobId) return
+    let cancelled = false
+    const controller = new AbortController()
+    const pollOnce = async () => {
+      const detail = await getFixItJob(activeApplyJobId).catch(() => null)
+      if (cancelled || !detail) return
+      syncApplyJobDetail(detail)
+      void refreshJobs()
+    }
+    const pollFallback = () => {
+      void pollOnce()
+      return window.setInterval(() => { void pollOnce() }, 2000)
+    }
+    let fallbackInterval: number | null = null
+    void (async () => {
+      const accumulatedEvents: FixItJobEvent[] = []
+      let latestJob: FixItJobRecord | null = null
+      try {
+        for await (const event of streamFixItJobEvents(activeApplyJobId, { signal: controller.signal })) {
+          if (cancelled) break
+          if (event.type === 'snapshot') {
+            accumulatedEvents.splice(0, accumulatedEvents.length, ...event.events)
+            latestJob = event.job
+            syncApplyJobDetail(event)
+          } else if (event.type === 'event') {
+            accumulatedEvents.push(event.event)
+            activeApplyEventCountRef.current += 1
+            appendApplyJobEvent(event.event)
+          } else if (event.type === 'job') {
+            latestJob = event.job
+            const result = applyResultFromJobDetail({ job: event.job, events: accumulatedEvents })
+            if (result) {
+              actions.setFixItApplyResult(result)
+              if (result.status === 'applied') {
+                actions.setFixItStage('done', null)
+              } else {
+                actions.setFixItStage('failed', result.message || 'Fix-it pipeline did not complete.')
+              }
+              setActiveApplyJobId(null)
+              setApplying(false)
+              void refreshJobs()
+            }
+          } else if (event.type === 'error') {
+            fallbackInterval = pollFallback()
+            break
+          } else if (event.type === 'done') {
+            if (latestJob) {
+              const result = applyResultFromJobDetail({ job: latestJob, events: accumulatedEvents })
+              if (result) {
+                actions.setFixItApplyResult(result)
+                if (result.status === 'applied') {
+                  actions.setFixItStage('done', null)
+                } else {
+                  actions.setFixItStage('failed', result.message || 'Fix-it pipeline did not complete.')
+                }
+              }
+            }
+            setActiveApplyJobId(null)
+            setApplying(false)
+            void refreshJobs()
+            break
+          }
+        }
+      } catch {
+        if (!cancelled && !fallbackInterval) fallbackInterval = pollFallback()
+      }
+    })()
+    return () => {
+      cancelled = true
+      controller.abort()
+      if (fallbackInterval !== null) window.clearInterval(fallbackInterval)
+    }
+  }, [actions, activeApplyJobId, appendApplyJobEvent, refreshJobs, syncApplyJobDetail])
 
   /**
    * Resume an interrupted job. Fetches the saved spec from the server,
@@ -223,27 +351,48 @@ export function FixItPanel({ layout = 'drawer' }: { layout?: FixItPanelLayout } 
         setRestoreError('Could not fetch the saved spec for this job.')
         return
       }
+      let restoredSnapshot: FixItSessionSnapshot | null = null
       // Best-effort: also restore the conversation context if we have it.
       const localSnapshot = jobSessionSnapshotsRef.current[jobId]
       if (localSnapshot) {
+        restoredSnapshot = localSnapshot
         actions.restoreFixItSession(localSnapshot)
       } else {
         const detail = await getFixItJob(jobId).catch(() => null)
         if (detail?.sessionSnapshot) {
+          restoredSnapshot = detail.sessionSnapshot
           actions.restoreFixItSession(detail.sessionSnapshot)
         }
       }
+      const sessionSnapshot = restoredSnapshot
+        ? {
+            ...restoredSnapshot,
+            stage: 'applying' as const,
+            spec,
+          }
+        : null
       actions.setFixItSpec({
         specId: spec.specId,
         specYaml: spec.specYaml,
         fixtureYaml: spec.fixtureYaml,
         fixturePath: spec.fixturePath,
       })
-      await applySpec({ spec })
+      const newJob = await applySpec({
+        spec,
+        ...(sessionSnapshot?.seed?.fixItSessionId ? { fixItSessionId: sessionSnapshot.seed.fixItSessionId } : {}),
+        ...(sessionSnapshot ? { sessionSnapshot } : {}),
+      })
+      // Resuming creates a fresh job (the old worktree was already released).
+      // Retire the superseded interrupted job so it stops showing as its own
+      // chip — the new running job takes its place instead of duplicating it.
+      if (newJob && newJob.id !== jobId) {
+        await completeFixItJob(jobId).catch(() => null)
+        void refreshJobs()
+      }
     } finally {
       setRestoringJobId(null)
     }
-  }, [actions, applying, applySpec])
+  }, [actions, applying, applySpec, refreshJobs])
 
   const send = useCallback(async () => {
     const text = input.trim()
@@ -525,7 +674,9 @@ export function FixItPanel({ layout = 'drawer' }: { layout?: FixItPanelLayout } 
           stage={fixIt.applyStage}
           progress={fixIt.applyProgress}
           reasoning={fixIt.applyReasoning}
-          onStop={() => abortRef.current?.abort()}
+          canCancel={Boolean(activeApplyJobId ?? trackedJobId)}
+          canceling={Boolean(cancelingApplyJobId)}
+          onCancel={() => { void cancelApplyJob() }}
         />
       ) : null}
 
@@ -555,6 +706,10 @@ export function FixItPanel({ layout = 'drawer' }: { layout?: FixItPanelLayout } 
         onToggleCollapsed={() => setJobsCollapsed((prev) => !prev)}
         onActivate={(jobId) => { void restoreJobSession(jobId) }}
         onResume={(jobId) => { void resumeJob(jobId) }}
+        onCancel={async (jobId) => {
+          await cancelFixItJob(jobId)
+          await refreshJobs()
+        }}
         onRefresh={() => { void refreshJobs() }}
       />
     </aside>
@@ -567,6 +722,56 @@ const APPLY_STAGE_LABELS: Record<string, string> = {
   coder_running: 'coder running',
   critic_running: 'critic running',
   senior_retry: 'escalating to senior coder',
+}
+
+function applyStageFromJobEvent(event: FixItJobEvent): FixItState['applyStage'] {
+  if (event.phase === 'writing_fixture' || event.phase === 'writing_spec') return event.phase
+  if (event.phase === 'senior_started') return 'senior_retry'
+  if (event.phase === 'critic_started' || event.phase === 'critic_finished') return 'critic_running'
+  if (
+    event.source === 'coder'
+    || event.phase === 'junior_started'
+    || event.phase === 'junior_finished'
+    || event.phase === 'senior_finished'
+  ) {
+    return 'coder_running'
+  }
+  return null
+}
+
+function applyResultFromJobDetail(detail: FixItJobDetailResponse): FixItState['applyResult'] {
+  const result = detail.job.result
+  if (!result) return null
+  const status = typeof result.status === 'string' ? result.status : detail.job.status
+  if (
+    status !== 'applied'
+    && status !== 'blocked'
+    && status !== 'failed'
+    && status !== 'skipped'
+    && status !== 'stale'
+    && status !== 'needs-human'
+    && status !== 'needs-revision'
+    && status !== 'canceled'
+  ) {
+    return null
+  }
+  const touchedFiles = Array.isArray(result.touchedFiles)
+    ? result.touchedFiles.filter((item): item is string => typeof item === 'string')
+    : []
+  return {
+    status,
+    message: typeof result.message === 'string' ? result.message : detail.job.message ?? '',
+    touchedFiles,
+    job: {
+      id: detail.job.id,
+      ...(detail.job.worktreePath ? { worktreePath: detail.job.worktreePath } : {}),
+      artifactRoot: `${detail.job.jobRoot}/artifacts`,
+    },
+    ...(typeof result.commit === 'string' ? { commit: result.commit } : {}),
+    ...(result.critic && typeof result.critic === 'object'
+      ? { critic: result.critic as NonNullable<FixItState['applyResult']>['critic'] }
+      : {}),
+  }
 }
 
 function currentFixItJobId(fixIt: FixItState): string | null {
@@ -606,6 +811,10 @@ function canMarkJobComplete(job: FixItJobRecord): boolean {
   return job.status !== 'complete' && !RUNNING_JOB_STATUSES.has(job.status)
 }
 
+function canCancelJob(job: FixItJobRecord): boolean {
+  return RUNNING_JOB_STATUSES.has(job.status)
+}
+
 function FixItJobStack({
   jobs,
   currentJobId,
@@ -615,6 +824,7 @@ function FixItJobStack({
   onToggleCollapsed,
   onActivate,
   onResume,
+  onCancel,
   onRefresh,
 }: {
   jobs: FixItJobRecord[]
@@ -625,6 +835,7 @@ function FixItJobStack({
   onToggleCollapsed: () => void
   onActivate: (jobId: string) => void
   onResume: (jobId: string) => void
+  onCancel: (jobId: string) => Promise<void>
   onRefresh: () => void
 }) {
   const visible = jobs
@@ -667,6 +878,7 @@ function FixItJobStack({
               isRestoring={job.id === restoringJobId}
               onActivate={onActivate}
               onResume={onResume}
+              onCancel={onCancel}
               onRefresh={onRefresh}
             />
           ))}
@@ -811,6 +1023,7 @@ function FixItJobCard({
   isRestoring,
   onActivate,
   onResume,
+  onCancel,
   onRefresh,
 }: {
   job: FixItJobRecord
@@ -818,11 +1031,14 @@ function FixItJobCard({
   isRestoring: boolean
   onActivate: (jobId: string) => void
   onResume: (jobId: string) => void
+  onCancel: (jobId: string) => Promise<void>
   onRefresh: () => void
 }) {
   const [completing, setCompleting] = useState(false)
+  const [canceling, setCanceling] = useState(false)
   const canComplete = canMarkJobComplete(job)
   const canResume = job.status === 'interrupted'
+  const canCancel = canCancelJob(job)
 
   async function markComplete(event: React.MouseEvent) {
     event.stopPropagation()
@@ -839,6 +1055,18 @@ function FixItJobCard({
   function handleResume(event: React.MouseEvent) {
     event.stopPropagation()
     onResume(job.id)
+  }
+
+  async function handleCancel(event: React.MouseEvent) {
+    event.stopPropagation()
+    if (canceling) return
+    setCanceling(true)
+    try {
+      await onCancel(job.id)
+      onRefresh()
+    } finally {
+      setCanceling(false)
+    }
   }
 
   const headline = job.title ?? job.specId ?? job.id
@@ -888,6 +1116,16 @@ function FixItJobCard({
             aria-label={`Resume job ${headline}`}
           >Resume</button>
         ) : null}
+        {canCancel ? (
+          <button
+            type="button"
+            className="fixit-job-card__resume"
+            onClick={handleCancel}
+            disabled={canceling}
+            title="Request cancellation for this running Fix-it job"
+            aria-label={`Cancel job ${headline}`}
+          >{canceling ? 'Canceling…' : 'Cancel'}</button>
+        ) : null}
         {canComplete ? (
           <button
             type="button"
@@ -924,18 +1162,24 @@ const STATUS_LABELS: Record<string, string> = {
   failed: 'failed',
   skipped: 'skipped',
   complete: 'complete',
+  canceled: 'canceled',
+  interrupted: 'interrupted',
 }
 
 function ApplyingView({
   stage,
   progress,
   reasoning,
-  onStop,
+  canCancel,
+  canceling,
+  onCancel,
 }: {
   stage: 'writing_fixture' | 'writing_spec' | 'coder_running' | 'critic_running' | 'senior_retry' | null
   progress: Array<{ source: 'server' | 'coder' | 'critic'; phase: string; message: string; ts: string }>
   reasoning?: string
-  onStop: () => void
+  canCancel: boolean
+  canceling: boolean
+  onCancel: () => void
 }) {
   return (
     <div className="fixit-panel__applying" aria-live="polite">
@@ -948,9 +1192,10 @@ function ApplyingView({
         <button
           type="button"
           className="fixit-panel__send fixit-panel__send--cancel"
-          onClick={onStop}
-          title="Stop the coder; any uncommitted edits will be rolled back"
-        >Stop</button>
+          onClick={onCancel}
+          disabled={!canCancel || canceling}
+          title="Request cancellation; the job will stop at the next safe checkpoint"
+        >{canceling ? 'Canceling…' : 'Cancel job'}</button>
       </div>
       {reasoning && reasoning.length > 0 ? (
         <details className="fixit-panel__reasoning" open>

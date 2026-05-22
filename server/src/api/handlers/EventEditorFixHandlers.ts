@@ -11,7 +11,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import { stringify as stringifyYaml, parse as parseYaml } from 'yaml';
 import { existsSync } from 'node:fs';
 import { copyFile, mkdir, readFile, writeFile, unlink } from 'node:fs/promises';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createInferenceClient, listInferenceModels } from '../../ai/InferenceClient.js';
@@ -29,6 +29,7 @@ import { EventEditorFixItJobManager } from '../../foundry/EventEditorFixItJobMan
 import type {
   EventEditorFixItJobEvent,
   EventEditorFixItJobRecord,
+  EventEditorFixItJobStatus,
   EventEditorFixItSessionSnapshot,
 } from '../../foundry/EventEditorFixItJobManager.js';
 import { getCompoundClassRegistry } from '../../registry/CompoundClassRegistry.js';
@@ -230,6 +231,10 @@ export interface EventEditorFixHandlers {
     request: FastifyRequest<{ Body: ApplyFixBody }>,
     reply: FastifyReply,
   ): Promise<void>;
+  startApplyFixJob(
+    request: FastifyRequest<{ Body: ApplyFixBody }>,
+    reply: FastifyReply,
+  ): Promise<FixItJobDetailResponse | { error: string; message: string }>;
   health(
     request: FastifyRequest,
     reply: FastifyReply,
@@ -242,6 +247,10 @@ export interface EventEditorFixHandlers {
     request: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply,
   ): Promise<FixItJobDetailResponse | { error: string; message: string }>;
+  streamJobEvents(
+    request: FastifyRequest<{ Params: { id: string } }>,
+    reply: FastifyReply,
+  ): Promise<void>;
   completeJob(
     request: FastifyRequest<{ Params: { id: string } }>,
     reply: FastifyReply,
@@ -300,7 +309,12 @@ You will be given:
   - deck/platform context
   - a server-computed compiler trace with real pass outputs
 
-Do not guess. Use only the supplied trace, draft, skips, and deck context.
+You have the compiler trace, NOT the source code. Be definitive about what the
+trace proves (which stage failed, where data is dropped, the fix class). Be
+explicitly tentative about any code-level mechanism or fix — you cannot see the
+code, so you are guessing how it is implemented. The coder will read the source
+and confirm. Use only the supplied trace, draft, skips, and deck context; do
+not invent trace values.
 
 Core rule:
 Never claim a missing registry definition if any trace field shows the noun
@@ -362,15 +376,23 @@ after location grammar is accounted for.
 
 Output exactly these sections:
 Diagnosis: one concise paragraph naming the first failed stage and citing
-specific trace fields.
+specific trace fields. State the symptom and where in the pipeline the data is
+dropped — not how the code is implemented.
 Evidence: 3-5 bullets with exact trace values.
 Fix class: one of input-boundary, verb-map, noun-resolution, parameter-grammar,
 placement-emission, deck-layout, frontend-validation, mixed.
-Proposed fix: smallest code/data area to inspect, without writing the patch.
-Anti-diagnosis: explicitly state any tempting but false diagnosis ruled out by
-the evidence.
+Where to look first: the suspect pass/file/registry to read first, inferred
+from the trace (e.g. the pass that should have emitted the missing output). Name
+the area; do not assert what the code does.
+Candidate mechanisms (unverified): 1-3 plausible code-level causes, each phrased
+as a hypothesis the coder MUST confirm against the source before editing
+(e.g. "the clause may be mis-classified rather than not parsed"). Do not present
+any as the established cause.
+Anti-diagnosis: tempting but false diagnoses ruled out by the evidence. Only
+rule out a fix class the TRACE actually refutes — do not rule out a layer just
+because an adjacent step (e.g. registry lookup) succeeded.
 
-Be terse. No emoji. No "I think".`;
+Be terse. No emoji. Be definitive about evidence; hedge mechanism explicitly.`;
 
 async function describeSeed(seed: FixItSeed): Promise<string> {
   const draftSummary = [
@@ -669,12 +691,26 @@ two pieces:
   2. "fixture" — a YAML-shaped regression test that captures the failing prompt
      and the expected outcome AFTER the fix
 
+The diagnosis was written from the compiler trace WITHOUT source access. So the
+spec's CONTRACT is its acceptance criteria — concrete, verifiable outcomes (the
+coder reads the code and makes them true). The title and rationale describe the
+goal and a lead; they must NOT prescribe a code mechanism as the objective (the
+coder confirms the mechanism in the source).
+
 The spec must be narrow enough for one local coder session, match the fix class
 that the diagnosis concluded (do not flip a code-fix diagnosis into a registry
 fix or vice versa), and include:
-  - title (one sentence)
+  - title: one sentence describing the OUTCOME the fix must achieve (the symptom
+    to eliminate), NOT a prescribed code mechanism. Good: "Both coordinated
+    placements ('X on B1 and Y on B2') must reach the deck layout, not just the
+    first." Bad: "Add a loop over conjunction clauses in
+    DeterministicPrecompilePass" (prescribes an unverified mechanism).
   - fixClass: one of "data-only" | "registry" | "compiler" | "mixed"
-  - rationale: short paragraph
+  - rationale: short paragraph that SEPARATES what the trace proves (the
+    symptom and where output is dropped — state as fact) from the suspected
+    code mechanism (state as a hypothesis the coder must confirm in the source
+    before editing; the diagnosis was written without code access). Do not
+    present the mechanism as established fact.
   - ownedFiles: array of relative paths the coder may touch. Scope is the
     deterministic precompile + its registries. Pick from these unless absolutely
     necessary:
@@ -998,6 +1034,365 @@ export interface CreateEventEditorFixHandlersDeps {
   skipStartupSweep?: boolean;
 }
 
+// --- Fix-it driver loop --------------------------------------------------------
+
+interface RunFixItDriverOpts {
+  body: ApplyFixBody;
+  workspaceRoot: string;
+  artifactRoot: string;
+  /** Mutable reference for activeJob – callers inspect after driver completes */
+  activeJobRef: { value?: ApplyFixJobSummary | undefined };
+  /** Mutable references for execution roots */
+  executionRootRef: { value: string };
+  executionArtifactRootRef: { value: string };
+  /** Mutable reference to capture the job ID when it's created */
+  jobIdRef: { value?: string | undefined };
+  /** Mutable reference for touched files set */
+  touchedFileSetRef: { value: Set<string> };
+  fixItJobManager?: EventEditorFixItJobManager | null;
+  gitOps: GitOps;
+  coderPatchRunner: typeof runFoundryCoderPatch;
+  criticRunner: typeof runFoundryPatchCritic;
+  request: FastifyRequest;
+  onProgress: (event: { source: 'server' | 'coder' | 'critic'; phase: string; message: string; details?: Record<string, unknown> }) => void;
+  /** SSE stage / done / heartbeat emitter (no-op safe) */
+  onEvent: (event: ApplyFixEvent) => void;
+  /** Abort-check callback (no-op safe; called before coder/critic) */
+  checkAbort: () => void;
+}
+
+interface RunFixItDriverResult {
+  status: ApplyFixResultStatus;
+  message: string;
+  touchedFiles: string[];
+  commit?: string | undefined;
+  criticSummary?: ApplyFixCriticSummary | undefined;
+  seniorRetryRan: boolean;
+  jobId?: string;
+}
+
+async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverResult> {
+  const {
+    body, workspaceRoot, artifactRoot,
+    activeJobRef, executionRootRef, executionArtifactRootRef, jobIdRef, touchedFileSetRef,
+    fixItJobManager, gitOps,
+    coderPatchRunner, criticRunner,
+    request,
+    onProgress,
+    onEvent,
+    checkAbort,
+  } = opts;
+
+  const touchedFileSet = touchedFileSetRef.value;
+  let executionRoot = workspaceRoot;
+  let executionArtifactRoot = artifactRoot;
+
+  // 1) Validate fixture path and write fixture + spec to disk.
+  const fixturesDir = 'server/src/compiler/pipeline/fixtures/';
+  if (!body.fixturePath.startsWith(fixturesDir)) {
+    throw new Error(`fixturePath must start with ${fixturesDir}`);
+  }
+  const specParsed = parseSpecForTitle(body.specYaml);
+  const specTitle = specParsed.title ?? body.specId;
+
+  if (fixItJobManager) {
+    const fixturePrompt = parseFixturePrompt(body.fixtureYaml);
+    const queuedJob = await fixItJobManager.enqueue({
+      specId: body.specId,
+      title: specTitle,
+      specYaml: body.specYaml,
+      fixtureYaml: body.fixtureYaml,
+      ...(fixturePrompt ? { prompt: fixturePrompt } : {}),
+      ...(body.fixItSessionId ? { fixItSessionId: body.fixItSessionId } : {}),
+      ...(body.sessionSnapshot ? { sessionSnapshot: body.sessionSnapshot } : {}),
+    });
+    const runningJob = await fixItJobManager.startJob(queuedJob.id);
+    executionRoot = runningJob.worktreePath ?? workspaceRoot;
+    executionArtifactRoot = join(runningJob.jobRoot, 'artifacts');
+    activeJobRef.value = {
+      id: runningJob.id,
+      ...(runningJob.worktreePath ? { worktreePath: runningJob.worktreePath } : {}),
+      artifactRoot: executionArtifactRoot,
+    };
+    jobIdRef.value = runningJob.id;
+    onProgress({
+      source: 'server',
+      phase: 'job_started',
+      message: `Started isolated Fix-it job ${runningJob.id}`,
+      details: activeJobRef.value as unknown as Record<string, unknown>,
+    });
+  }
+
+  onEvent({ type: 'stage', stage: 'writing_fixture' });
+  onProgress({
+    source: 'server',
+    phase: 'writing_fixture',
+    message: `Writing regression fixture ${body.fixturePath}`,
+  });
+  const absoluteFixturePath = resolve(executionRoot, body.fixturePath);
+  await mkdir(dirname(absoluteFixturePath), { recursive: true });
+  await writeFile(absoluteFixturePath, body.fixtureYaml, 'utf-8');
+
+  onEvent({ type: 'stage', stage: 'writing_spec' });
+  const protocolId = 'event-editor-fixit';
+  const variant = 'manual_tubes' as const;
+  const patchSpecDir = join(executionArtifactRoot, 'patch-specs', protocolId, variant);
+  await mkdir(patchSpecDir, { recursive: true });
+  const patchSpecPath = join(patchSpecDir, `${body.specId}.yaml`);
+  onProgress({
+    source: 'server',
+    phase: 'writing_spec',
+    message: `Writing patch spec ${body.specId}`,
+    details: { patchSpecPath },
+  });
+  await writeFile(patchSpecPath, body.specYaml, 'utf-8');
+
+  checkAbort();
+
+  // 3) Junior coder
+  onEvent({ type: 'stage', stage: 'coder_running' });
+  onProgress({ source: 'server', phase: 'junior_started', message: 'Starting junior coder' });
+  let coderResult = await coderPatchRunner({
+    artifactRoot: executionArtifactRoot,
+    repoRoot: executionRoot,
+    protocolId,
+    variant,
+    forcedSpecPath: patchSpecPath,
+    coderRole: 'junior',
+    coderEngine: 'tool-agent',
+    autoCommit: false,
+    onProgress: (event) => onProgress(event),
+  });
+  onProgress({
+    source: 'server',
+    phase: 'junior_finished',
+    message: `Junior coder finished with status ${coderResult.status}`,
+    details: { status: coderResult.status, touchedFiles: coderResult.touchedFiles },
+  });
+  for (const f of coderResult.touchedFiles) touchedFileSet.add(f);
+  checkAbort();
+
+  // 4) Critic
+  let criticSummary: ApplyFixCriticSummary | undefined;
+  let seniorRetryRan = false;
+  let finalCriticVerdict: FoundryCriticResult['verdict'] | undefined;
+  let seniorRevisionFeedback: string | undefined;
+  if (coderResult.status === 'applied') {
+    onEvent({ type: 'stage', stage: 'critic_running' });
+    if (activeJobRef.value && fixItJobManager)
+      await fixItJobManager.markCriticRunning(activeJobRef.value.id);
+    onProgress({ source: 'server', phase: 'critic_started', message: 'Starting critic review' });
+    const critic1 = await criticRunner({
+      artifactRoot: executionArtifactRoot,
+      protocolId,
+      variant,
+      repoRoot: executionRoot,
+      onProgress: (event) => onProgress(event),
+    });
+    criticSummary = summarizeCritic(critic1, false);
+    finalCriticVerdict = critic1.verdict;
+    onProgress({
+      source: 'server',
+      phase: 'critic_finished',
+      message: `Critic verdict: ${critic1.verdict}`,
+      details: {
+        verdict: critic1.verdict,
+        criteriaMet: critic1.specVerification?.criteriaMet ?? [],
+        criteriaFailed: critic1.specVerification?.criteriaFailed ?? [],
+      },
+    });
+    checkAbort();
+    if (critic1.verdict === 'revision') {
+      seniorRevisionFeedback = critic1.revisionFeedback ?? critic1.message;
+    }
+  } else if (coderResult.status === 'needs-human') {
+    seniorRevisionFeedback = [
+      'Junior coder did not produce an accepted patch (ran out of turns before verifying).',
+      `Junior status: ${coderResult.status}`,
+      // Forward the junior's own diagnosis so the senior CONTINUES its lead
+      // rather than re-deriving the root cause from scratch. The junior often
+      // identifies the real cause but runs out of turns before landing +
+      // verifying the fix. Treat it as a strong hypothesis, not gospel —
+      // verify against the failing fixture before trusting it.
+      ...(coderResult.finalText
+        ? [
+            "Previous attempt's analysis (a strong lead — verify it against the failing fixture, do not assume it is correct):",
+            coderResult.finalText,
+          ]
+        : []),
+      'Its in-progress edits are already in the working tree. Continue from there: confirm or correct the diagnosis, land the fix, and run the verification command.',
+    ].join('\n\n');
+  }
+
+  // 5) Senior escalation
+  if (seniorRevisionFeedback) {
+    onEvent({ type: 'stage', stage: 'senior_retry' });
+    onProgress({
+      source: 'server',
+      phase: 'senior_started',
+      message: finalCriticVerdict === 'revision'
+        ? 'Critic requested a revision; starting senior coder'
+        : 'Junior coder did not complete; starting senior coder',
+      details: { revisionFeedback: seniorRevisionFeedback },
+    });
+    seniorRetryRan = true;
+    coderResult = await coderPatchRunner({
+      artifactRoot: executionArtifactRoot,
+      repoRoot: executionRoot,
+      protocolId,
+      variant,
+      forcedSpecPath: patchSpecPath,
+      coderRole: 'senior',
+      coderEngine: 'tool-agent',
+      autoCommit: false,
+      attempt: 2,
+      revisionFeedback: seniorRevisionFeedback,
+      onProgress: (event) => onProgress(event),
+    });
+    onProgress({
+      source: 'server',
+      phase: 'senior_finished',
+      message: `Senior coder finished with status ${coderResult.status}`,
+      details: { status: coderResult.status, touchedFiles: coderResult.touchedFiles },
+    });
+    for (const f of coderResult.touchedFiles) touchedFileSet.add(f);
+    checkAbort();
+    if (coderResult.status === 'applied') {
+      onEvent({ type: 'stage', stage: 'critic_running' });
+      if (activeJobRef.value && fixItJobManager)
+        await fixItJobManager.markCriticRunning(activeJobRef.value.id);
+      onProgress({
+        source: 'server',
+        phase: 'critic_started',
+        message: 'Starting critic review for senior patch',
+      });
+      const critic2 = await criticRunner({
+        artifactRoot: executionArtifactRoot,
+        protocolId,
+        variant,
+        repoRoot: executionRoot,
+        onProgress: (event) => onProgress(event),
+      });
+      criticSummary = summarizeCritic(critic2, true);
+      finalCriticVerdict = critic2.verdict;
+      onProgress({
+        source: 'server',
+        phase: 'critic_finished',
+        message: `Critic verdict: ${critic2.verdict}`,
+        details: {
+          verdict: critic2.verdict,
+          criteriaMet: critic2.specVerification?.criteriaMet ?? [],
+          criteriaFailed: critic2.specVerification?.criteriaFailed ?? [],
+        },
+      });
+      checkAbort();
+    } else {
+      if (finalCriticVerdict !== 'revision') {
+        criticSummary = undefined;
+      }
+    }
+  }
+
+  // 6) Commit / rollback
+  const touchedFiles = Array.from(touchedFileSet);
+  let commit: string | undefined;
+  if (coderResult.status === 'applied' && touchedFiles.length > 0) {
+    if (finalCriticVerdict === 'pass') {
+      try {
+        onProgress({
+          source: 'server',
+          phase: 'committing',
+          message: activeJobRef.value
+            ? `Landing ${touchedFiles.length} touched file(s) from job worktree`
+            : `Committing ${touchedFiles.length} touched file(s)`,
+          details: { touchedFiles, ...(activeJobRef.value ? { job: activeJobRef.value } : {}) },
+        });
+        commit = activeJobRef.value?.worktreePath && gitOps.commitFromWorktree
+          ? await gitOps.commitFromWorktree(activeJobRef.value.worktreePath, touchedFiles, specTitle)
+          : await gitOps.commit(touchedFiles, specTitle);
+        onProgress({
+          source: 'server',
+          phase: 'committed',
+          message: `Committed fix ${commit}`,
+          details: { commit },
+        });
+      } catch (gitErr) {
+        request.log.error({ err: gitErr }, 'fix-it commit failed; leaving changes uncommitted');
+      }
+    } else if (finalCriticVerdict === 'block' || finalCriticVerdict === 'revision') {
+      try {
+        onProgress({
+          source: 'server',
+          phase: 'rolling_back',
+          message: activeJobRef.value
+            ? `Critic verdict ${finalCriticVerdict}; preserving main checkout`
+            : `Critic verdict ${finalCriticVerdict}; rolling back uncommitted edits`,
+          details: { touchedFiles, ...(activeJobRef.value ? { job: activeJobRef.value } : {}) },
+        });
+        if (!activeJobRef.value) await gitOps.reset(touchedFiles);
+      } catch (gitErr) {
+        request.log.error({ err: gitErr }, 'fix-it reset failed; working tree may be dirty');
+      }
+    }
+  }
+
+  const effectiveStatus: ApplyFixResultStatus =
+    coderResult.status === 'applied' && finalCriticVerdict === 'revision'
+      ? 'needs-revision'
+      : coderResult.status === 'applied' && finalCriticVerdict === 'block'
+        ? 'blocked'
+        : coderResult.status;
+  const effectiveMessage =
+    finalCriticVerdict === 'revision'
+      ? criticSummary?.message ?? 'Critic requested revision; patch was not accepted.'
+      : finalCriticVerdict === 'block'
+        ? criticSummary?.message ?? 'Critic blocked the patch; patch was not accepted.'
+        : commit
+          ? `Patch accepted and committed.`
+          : coderResult.message;
+
+  if (activeJobRef.value && fixItJobManager) {
+    const releaseWorktree = effectiveStatus !== 'needs-revision';
+    await fixItJobManager.completeJob(activeJobRef.value.id, {
+      status: effectiveStatus === 'applied' ? 'accepted' : effectiveStatus === 'needs-revision' ? 'needs-feedback' : 'failed',
+      message: effectiveMessage,
+      result: {
+        status: effectiveStatus,
+        touchedFiles,
+        ...(commit ? { commit } : {}),
+        ...(criticSummary ? { critic: { ...criticSummary, seniorRetryRan } } : {}),
+      },
+      releaseWorktree,
+    });
+  }
+
+  onEvent({
+    type: 'done',
+    result: {
+      status: effectiveStatus,
+      message: effectiveMessage,
+      touchedFiles,
+      ...(activeJobRef.value ? { job: activeJobRef.value } : {}),
+      ...(commit ? { commit } : {}),
+      ...(criticSummary ? { critic: { ...criticSummary, seniorRetryRan } } : {}),
+    },
+  });
+
+  executionRootRef.value = executionRoot;
+  executionArtifactRootRef.value = executionArtifactRoot;
+
+  const result: RunFixItDriverResult = {
+    status: effectiveStatus,
+    message: effectiveMessage,
+    touchedFiles,
+    seniorRetryRan,
+  };
+  if (commit !== undefined) result.commit = commit;
+  if (criticSummary !== undefined) result.criticSummary = criticSummary;
+  if (jobIdRef.value !== undefined) result.jobId = jobIdRef.value;
+  return result;
+}
+
 export function createEventEditorFixHandlers(
   deps: CreateEventEditorFixHandlersDeps = {},
 ): EventEditorFixHandlers {
@@ -1171,6 +1566,7 @@ export function createEventEditorFixHandlers(
       reply.raw.socket?.setNoDelay?.(true);
       reply.raw.write(`: connected (apply-stream-v2)\n\n`);
       let activeJob: ApplyFixJobSummary | undefined;
+      const activeJobRef = { value: activeJob };
       let durableProgressWrite: Promise<void> = Promise.resolve();
       const send = (event: ApplyFixEvent) => {
         reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
@@ -1182,7 +1578,7 @@ export function createEventEditorFixHandlers(
         details?: Record<string, unknown>;
       }) => {
         send({ type: 'progress', ...event });
-        const jobId = activeJob?.id;
+        const jobId = activeJobRef.value?.id;
         if (jobId && fixItJobManager) {
           durableProgressWrite = durableProgressWrite.then(() => fixItJobManager.appendEvent(jobId, event)).catch((err) => {
             request.log.warn({ err }, 'fix-it apply: failed to append durable progress event');
@@ -1221,331 +1617,46 @@ export function createEventEditorFixHandlers(
       };
 
       // Hoisted so the abort/error handler can roll the working tree back.
-      const touchedFileSet = new Set<string>();
-      let executionRoot = workspaceRoot;
-      let executionArtifactRoot = artifactRoot;
+      const executionRootRef = { value: workspaceRoot };
+      const executionArtifactRootRef = { value: artifactRoot };
+      const jobIdRef = { value: undefined as string | undefined };
+      const touchedFileSetRef = { value: new Set<string>() };
 
       try {
-        // 1) Write the fixture YAML into the source tree so the coder's
-        //    test run sees it. We resolve relative to workspaceRoot, then
-        //    sanity-check that the path is INSIDE the fixtures dir to
-        //    prevent the LLM from suggesting some arbitrary location.
-        const fixturesDir = 'server/src/compiler/pipeline/fixtures/';
-        if (!body.fixturePath.startsWith(fixturesDir)) {
-          throw new Error(`fixturePath must start with ${fixturesDir}`);
-        }
-        const specParsed = parseSpecForTitle(body.specYaml);
-        const specTitle = specParsed.title ?? body.specId;
-
-        if (fixItJobManager) {
-          const fixturePrompt = parseFixturePrompt(body.fixtureYaml);
-          const queuedJob = await fixItJobManager.enqueue({
-            specId: body.specId,
-            title: specTitle,
-            specYaml: body.specYaml,
-            fixtureYaml: body.fixtureYaml,
-            ...(fixturePrompt ? { prompt: fixturePrompt } : {}),
-            ...(body.fixItSessionId ? { fixItSessionId: body.fixItSessionId } : {}),
-            ...(body.sessionSnapshot ? { sessionSnapshot: body.sessionSnapshot } : {}),
-          });
-          const runningJob = await fixItJobManager.startJob(queuedJob.id);
-          executionRoot = runningJob.worktreePath ?? workspaceRoot;
-          executionArtifactRoot = join(runningJob.jobRoot, 'artifacts');
-          activeJob = {
-            id: runningJob.id,
-            ...(runningJob.worktreePath ? { worktreePath: runningJob.worktreePath } : {}),
-            artifactRoot: executionArtifactRoot,
-          };
-          sendProgress({
-            source: 'server',
-            phase: 'job_started',
-            message: `Started isolated Fix-it job ${runningJob.id}`,
-            details: activeJob as unknown as Record<string, unknown>,
-          });
-        }
-
-        send({ type: 'stage', stage: 'writing_fixture' });
-        sendProgress({
-          source: 'server',
-          phase: 'writing_fixture',
-          message: `Writing regression fixture ${body.fixturePath}`,
-        });
-        const absoluteFixturePath = resolve(executionRoot, body.fixturePath);
-        await mkdir(dirname(absoluteFixturePath), { recursive: true });
-        await writeFile(absoluteFixturePath, body.fixtureYaml, 'utf-8');
-
-        // 2) Write the spec YAML to the patch-specs queue layout the coder
-        //    scans. Use 'manual_tubes' as the variant (the coder's variant
-        //    is purely a folder name here — fix-it isn't deck-variant
-        //    specific).
-        send({ type: 'stage', stage: 'writing_spec' });
-        const protocolId = 'event-editor-fixit';
-        const variant = 'manual_tubes' as const;
-        const patchSpecDir = join(executionArtifactRoot, 'patch-specs', protocolId, variant);
-        await mkdir(patchSpecDir, { recursive: true });
-        const patchSpecPath = join(patchSpecDir, `${body.specId}.yaml`);
-        sendProgress({
-          source: 'server',
-          phase: 'writing_spec',
-          message: `Writing patch spec ${body.specId}`,
-          details: { patchSpecPath },
-        });
-        await writeFile(patchSpecPath, body.specYaml, 'utf-8');
-
-        checkAbort();
-
-        // 3) Hand the spec to the junior coder. forcedSpecPath bypasses
-        //    the already-applied filter so retries / iterations work.
-        //    autoCommit is OFF — the handler defers the commit (or rollback)
-        //    until after the critic has weighed in.
-        send({ type: 'stage', stage: 'coder_running' });
-        sendProgress({ source: 'server', phase: 'junior_started', message: 'Starting junior coder' });
-        let coderResult = await coderPatchRunner({
-          artifactRoot: executionArtifactRoot,
-          repoRoot: executionRoot,
-          protocolId,
-          variant,
-          forcedSpecPath: patchSpecPath,
-          coderRole: 'junior',
-          coderEngine: 'tool-agent',
-          autoCommit: false,
-          onProgress: (event) => sendProgress(event),
-        });
-        sendProgress({
-          source: 'server',
-          phase: 'junior_finished',
-          message: `Junior coder finished with status ${coderResult.status}`,
-          details: { status: coderResult.status, touchedFiles: coderResult.touchedFiles },
-        });
-        for (const f of coderResult.touchedFiles) touchedFileSet.add(f);
-        checkAbort();
-
-        // 4) If the junior actually applied a patch, run the critic. The
-        //    critic reads the coder's result.yaml from disk, so it must run
-        //    AFTER the coder finishes. If the junior tool-agent times out
-        //    before producing an applied patch, escalate directly to the
-        //    senior coder with the junior outcome as revision feedback.
-        let criticSummary: ApplyFixCriticSummary | undefined;
-        let seniorRetryRan = false;
-        let finalCriticVerdict: FoundryCriticResult['verdict'] | undefined;
-        let seniorRevisionFeedback: string | undefined;
-        if (coderResult.status === 'applied') {
-          send({ type: 'stage', stage: 'critic_running' });
-          if (activeJob && fixItJobManager) await fixItJobManager.markCriticRunning(activeJob.id);
-          sendProgress({ source: 'server', phase: 'critic_started', message: 'Starting critic review' });
-          const critic1 = await criticRunner({
-            artifactRoot: executionArtifactRoot,
-            protocolId,
-            variant,
-            repoRoot: executionRoot,
-            onProgress: (event) => sendProgress(event),
-          });
-          criticSummary = summarizeCritic(critic1, false);
-          finalCriticVerdict = critic1.verdict;
-          sendProgress({
-            source: 'server',
-            phase: 'critic_finished',
-            message: `Critic verdict: ${critic1.verdict}`,
-            details: {
-              verdict: critic1.verdict,
-              criteriaMet: critic1.specVerification?.criteriaMet ?? [],
-              criteriaFailed: critic1.specVerification?.criteriaFailed ?? [],
-            },
-          });
-          checkAbort();
-
-          if (critic1.verdict === 'revision') {
-            seniorRevisionFeedback = critic1.revisionFeedback ?? critic1.message;
-          }
-        } else if (coderResult.status === 'needs-human') {
-          seniorRevisionFeedback = [
-            'Junior coder did not produce an accepted patch.',
-            `Junior status: ${coderResult.status}`,
-            `Junior message: ${coderResult.message}`,
-            'Continue from the same patch spec. Inspect the failing fixture and make a concrete fix.',
-          ].join('\n');
-        }
-
-        // 5) Senior escalation: critic asked for a revision, or the junior
-        //    tool-agent stopped before producing an applied patch. We do this
-        //    exactly once — if the senior also fails, surface that result.
-        if (seniorRevisionFeedback) {
-          send({ type: 'stage', stage: 'senior_retry' });
-          sendProgress({
-            source: 'server',
-            phase: 'senior_started',
-            message: finalCriticVerdict === 'revision'
-              ? 'Critic requested a revision; starting senior coder'
-              : 'Junior coder did not complete; starting senior coder',
-            details: { revisionFeedback: seniorRevisionFeedback },
-          });
-          seniorRetryRan = true;
-          coderResult = await coderPatchRunner({
-            artifactRoot: executionArtifactRoot,
-            repoRoot: executionRoot,
-            protocolId,
-            variant,
-            forcedSpecPath: patchSpecPath,
-            coderRole: 'senior',
-            coderEngine: 'tool-agent',
-            autoCommit: false,
-            attempt: 2,
-            revisionFeedback: seniorRevisionFeedback,
-            onProgress: (event) => sendProgress(event),
-          });
-          sendProgress({
-            source: 'server',
-            phase: 'senior_finished',
-            message: `Senior coder finished with status ${coderResult.status}`,
-            details: { status: coderResult.status, touchedFiles: coderResult.touchedFiles },
-          });
-          for (const f of coderResult.touchedFiles) touchedFileSet.add(f);
-          checkAbort();
-          if (coderResult.status === 'applied') {
-            send({ type: 'stage', stage: 'critic_running' });
-            if (activeJob && fixItJobManager) await fixItJobManager.markCriticRunning(activeJob.id);
-            sendProgress({
-              source: 'server',
-              phase: 'critic_started',
-              message: 'Starting critic review for senior patch',
-            });
-            const critic2 = await criticRunner({
-              artifactRoot: executionArtifactRoot,
-              protocolId,
-              variant,
-              repoRoot: executionRoot,
-              onProgress: (event) => sendProgress(event),
-            });
-            criticSummary = summarizeCritic(critic2, true);
-            finalCriticVerdict = critic2.verdict;
-            sendProgress({
-              source: 'server',
-              phase: 'critic_finished',
-              message: `Critic verdict: ${critic2.verdict}`,
-              details: {
-                verdict: critic2.verdict,
-                criteriaMet: critic2.specVerification?.criteriaMet ?? [],
-                criteriaFailed: critic2.specVerification?.criteriaFailed ?? [],
-              },
-            });
-            checkAbort();
-          } else {
-            // Senior produced no patch. If junior had a revision verdict,
-            // preserve it so uncommitted junior edits are still rolled back.
-            if (finalCriticVerdict !== 'revision') {
-              criticSummary = undefined;
-            }
-          }
-        }
-
-        // 6) Defer-commit decision: commit on pass, reset on
-        //    block/revision, leave it alone if the coder never applied.
-        const touchedFiles = Array.from(touchedFileSet);
-        let commit: string | undefined;
-        if (coderResult.status === 'applied' && touchedFiles.length > 0) {
-          if (finalCriticVerdict === 'pass') {
-            try {
-              sendProgress({
-                source: 'server',
-                phase: 'committing',
-                message: activeJob
-                  ? `Landing ${touchedFiles.length} touched file(s) from job worktree`
-                  : `Committing ${touchedFiles.length} touched file(s)`,
-                details: { touchedFiles, ...(activeJob ? { job: activeJob } : {}) },
-              });
-              commit = activeJob?.worktreePath && gitOps.commitFromWorktree
-                ? await gitOps.commitFromWorktree(activeJob.worktreePath, touchedFiles, specTitle)
-                : await gitOps.commit(touchedFiles, specTitle);
-              sendProgress({
-                source: 'server',
-                phase: 'committed',
-                message: `Committed fix ${commit}`,
-                details: { commit },
-              });
-            } catch (gitErr) {
-              request.log.error({ err: gitErr }, 'fix-it commit failed; leaving changes uncommitted');
-            }
-          } else if (finalCriticVerdict === 'block' || finalCriticVerdict === 'revision') {
-            try {
-              sendProgress({
-                source: 'server',
-                phase: 'rolling_back',
-                message: activeJob
-                  ? `Critic verdict ${finalCriticVerdict}; preserving main checkout`
-                  : `Critic verdict ${finalCriticVerdict}; rolling back uncommitted edits`,
-                details: { touchedFiles, ...(activeJob ? { job: activeJob } : {}) },
-              });
-              if (!activeJob) await gitOps.reset(touchedFiles);
-            } catch (gitErr) {
-              request.log.error({ err: gitErr }, 'fix-it reset failed; working tree may be dirty');
-            }
-          }
-          // If finalCriticVerdict is undefined (critic never ran), the patch
-          // sits uncommitted by design — coderResult.status will surface the
-          // problem and the user can inspect manually.
-        }
-
-        const effectiveStatus: ApplyFixResultStatus =
-          coderResult.status === 'applied' && finalCriticVerdict === 'revision'
-            ? 'needs-revision'
-            : coderResult.status === 'applied' && finalCriticVerdict === 'block'
-              ? 'blocked'
-              : coderResult.status;
-        const effectiveMessage =
-          finalCriticVerdict === 'revision'
-            ? criticSummary?.message ?? 'Critic requested revision; patch was not accepted.'
-            : finalCriticVerdict === 'block'
-              ? criticSummary?.message ?? 'Critic blocked the patch; patch was not accepted.'
-              : commit
-                ? `Patch accepted and committed.`
-                : coderResult.message;
-
-        if (activeJob && fixItJobManager) {
-          const releaseWorktree = effectiveStatus !== 'needs-revision';
-          await fixItJobManager.completeJob(activeJob.id, {
-            status: effectiveStatus === 'applied'
-              ? 'accepted'
-              : effectiveStatus === 'needs-revision'
-                ? 'needs-feedback'
-                : 'failed',
-            message: effectiveMessage,
-            result: {
-              status: effectiveStatus,
-              touchedFiles,
-              ...(commit ? { commit } : {}),
-              ...(criticSummary ? { critic: { ...criticSummary, seniorRetryRan } } : {}),
-            },
-            releaseWorktree,
-          });
-        }
-
-        send({
-          type: 'done',
-          result: {
-            status: effectiveStatus,
-            message: effectiveMessage,
-            touchedFiles,
-            ...(activeJob ? { job: activeJob } : {}),
-            ...(commit ? { commit } : {}),
-            ...(criticSummary ? { critic: { ...criticSummary, seniorRetryRan } } : {}),
-          },
+        await runFixItDriver({
+          body,
+          workspaceRoot,
+          artifactRoot,
+          activeJobRef,
+          touchedFileSetRef,
+          executionRootRef,
+          executionArtifactRootRef,
+          jobIdRef,
+          fixItJobManager,
+          gitOps,
+          coderPatchRunner,
+          criticRunner,
+          request,
+          onProgress: sendProgress,
+          onEvent: send,
+          checkAbort,
         });
       } catch (err) {
         if (err instanceof FixItAbortedError) {
           // Client disconnected — roll back any uncommitted edits so the
           // working tree is clean. No outgoing event (the stream is gone).
           request.log.warn('fix-it apply aborted by client');
-          if (touchedFileSet.size > 0) {
-            const files = Array.from(touchedFileSet);
-            if (!activeJob) await gitOps.reset(files).catch((gitErr) => {
+          const files = Array.from(touchedFileSetRef.value);
+          if (files.length > 0) {
+            if (!activeJobRef.value) await gitOps.reset(files).catch((gitErr) => {
               request.log.error(
                 { err: gitErr },
                 'fix-it apply: reset after abort failed; working tree may be dirty',
               );
             });
           }
-          if (activeJob && fixItJobManager) {
-            await fixItJobManager.completeJob(activeJob.id, {
+          if (activeJobRef.value && fixItJobManager) {
+            await fixItJobManager.completeJob(activeJobRef.value.id, {
               status: 'interrupted',
               message: 'Fix-it apply aborted by client',
             }).catch((jobErr) => {
@@ -1555,8 +1666,8 @@ export function createEventEditorFixHandlers(
         } else {
           const message = err instanceof Error ? err.message : String(err);
           request.log.error({ err }, 'fix-it apply stream failed');
-          if (activeJob && fixItJobManager) {
-            await fixItJobManager.completeJob(activeJob.id, {
+          if (activeJobRef.value && fixItJobManager) {
+            await fixItJobManager.completeJob(activeJobRef.value.id, {
               status: 'failed',
               message,
             }).catch((jobErr) => {
@@ -1628,6 +1739,103 @@ export function createEventEditorFixHandlers(
       };
     },
 
+    async streamJobEvents(request, reply) {
+      if (!fixItJobManager) {
+        reply.status(404);
+        await reply.send({ error: 'FIXIT_JOBS_DISABLED', message: 'Fix-it job manager is not available.' });
+        return;
+      }
+      const jobId = request.params.id;
+      const initialJob = await fixItJobManager.getJob(jobId);
+      if (!initialJob) {
+        reply.status(404);
+        await reply.send({ error: 'FIXIT_JOB_NOT_FOUND', message: `Fix-it job not found: ${jobId}` });
+        return;
+      }
+
+      const origin = typeof request.headers.origin === 'string' ? request.headers.origin : '*';
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+        'Access-Control-Allow-Origin': origin,
+        'Vary': 'Origin',
+      });
+      reply.raw.flushHeaders?.();
+      reply.raw.socket?.setNoDelay?.(true);
+      reply.raw.write(`: connected (job-events-v1)\n\n`);
+      const send = (event: unknown) => {
+        reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+      };
+
+      let closed = false;
+      const onClose = () => {
+        closed = true;
+      };
+      reply.raw.on?.('close', onClose);
+      const heartbeat = setInterval(() => {
+        try {
+          reply.raw.write(`: heartbeat ${Date.now()}\n\n`);
+        } catch {
+          /* connection closed; cleared in finally */
+        }
+      }, 1500);
+
+      const isTerminal = (status: EventEditorFixItJobStatus): boolean =>
+        status !== 'queued' && status !== 'running' && status !== 'critic';
+
+      try {
+        const events0 = await fixItJobManager.readEvents(jobId).catch(() => []);
+        const snapshot0 = await fixItJobManager.readSessionSnapshot(jobId).catch(() => undefined);
+        send({
+          type: 'snapshot',
+          job: initialJob,
+          events: events0,
+          ...(snapshot0 ? { sessionSnapshot: snapshot0 } : {}),
+        });
+        let sentCount = events0.length;
+        let lastStatus: EventEditorFixItJobStatus = initialJob.status;
+
+        if (!isTerminal(initialJob.status)) {
+          // Tail the job's durable event log + status until it reaches a
+          // terminal state or the client disconnects. A 30-minute ceiling
+          // guards against a wedged coder leaving the connection open forever.
+          const MAX_MS = 30 * 60 * 1000;
+          const startedAt = Date.now();
+          while (!closed && Date.now() - startedAt < MAX_MS) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            if (closed) break;
+            const events = await fixItJobManager.readEvents(jobId).catch(() => []);
+            for (let i = sentCount; i < events.length; i += 1) {
+              send({ type: 'event', event: events[i] });
+            }
+            sentCount = Math.max(sentCount, events.length);
+            const job = await fixItJobManager.getJob(jobId).catch(() => undefined);
+            if (job && job.status !== lastStatus) {
+              lastStatus = job.status;
+              send({ type: 'job', job });
+            }
+            if (job && isTerminal(job.status)) break;
+          }
+        }
+
+        if (!closed) send({ type: 'done' });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        request.log.error({ err }, 'fix-it job event stream failed');
+        try {
+          send({ type: 'error', message });
+        } catch {
+          /* connection already gone */
+        }
+      } finally {
+        clearInterval(heartbeat);
+        reply.raw.off?.('close', onClose);
+        reply.raw.end();
+      }
+    },
+
     async getJobSpec(request, reply) {
       if (!fixItJobManager) {
         reply.status(404);
@@ -1647,11 +1855,16 @@ export function createEventEditorFixHandlers(
           readFile(job.specPath, 'utf-8'),
           readFile(job.fixturePath, 'utf-8'),
         ]);
+        // `job.fixturePath` is the manager's INTERNAL copy under the job
+        // root (artifacts/.../jobs/<id>/fixture.yaml). The apply driver
+        // validates `fixturePath` against the source tree, so resuming
+        // with the internal path throws "must start with
+        // server/src/compiler/pipeline/fixtures/". Return the canonical
+        // source-tree path derived from specId — the same convention
+        // `synthesizeSpec` uses when it first generates the fixture.
         return {
           specId: job.specId,
-          fixturePath: job.fixturePath.startsWith(workspaceRoot)
-            ? relative(workspaceRoot, job.fixturePath)
-            : job.fixturePath,
+          fixturePath: `server/src/compiler/pipeline/fixtures/${job.specId}.yaml`,
           specYaml,
           fixtureYaml,
         };
@@ -1685,6 +1898,133 @@ export function createEventEditorFixHandlers(
         reply.status(message.includes('not found') ? 404 : 409);
         return { error: 'FIXIT_JOB_COMPLETE_FAILED', message };
       }
+    },
+    async startApplyFixJob(request, reply) {
+      const body = request.body;
+      if (!body?.specYaml || !body?.fixtureYaml || !body?.specId || !body?.fixturePath) {
+        return { error: 'INVALID_REQUEST', message: 'specYaml, fixtureYaml, specId, and fixturePath required' };
+      }
+
+      if (!fixItJobManager) {
+        reply.status(503);
+        return { error: 'SERVICE_UNAVAILABLE', message: 'Fix-it job manager not configured' };
+      }
+
+      const executionRootRef = { value: workspaceRoot };
+      const executionArtifactRootRef = { value: artifactRoot };
+      const jobIdRef = { value: undefined as string | undefined };
+      const touchedFileSetRef = { value: new Set<string>() };
+      const activeJobRef = { value: undefined as ApplyFixJobSummary | undefined };
+
+      // Persist every coder/critic/server progress event to the job's durable
+      // event log. The frontend tails that log via streamJobEvents, so this is
+      // the ONLY channel for live feedback. Without it the job appears frozen
+      // after "Created worktree" — the symptom this handler used to produce
+      // with no-op onProgress.
+      let durableProgressWrite: Promise<void> = Promise.resolve();
+      const persistProgress = (event: {
+        source: 'server' | 'coder' | 'critic';
+        phase: string;
+        message: string;
+        details?: Record<string, unknown>;
+      }) => {
+        const jobId = jobIdRef.value;
+        if (!jobId) return;
+        durableProgressWrite = durableProgressWrite
+          .then(() => fixItJobManager.appendEvent(jobId, event))
+          .catch((err) => {
+            request.log.warn({ err }, 'fix-it apply job: failed to append durable progress event');
+          });
+      };
+
+      // Resolve the moment the job is enqueued + worktree-ready (its id is
+      // known). The HTTP response returns then; the coder keeps running in the
+      // background. This request must NOT block for the whole job — the old
+      // version did, which is why the frontend never started tailing events.
+      let resolveJobStarted!: () => void;
+      const jobStarted = new Promise<void>((res) => {
+        resolveJobStarted = res;
+      });
+      let startupError: string | undefined;
+
+      const onProgress = (event: {
+        source: 'server' | 'coder' | 'critic';
+        phase: string;
+        message: string;
+        details?: Record<string, unknown>;
+      }) => {
+        persistProgress(event);
+        if (event.phase === 'job_started') resolveJobStarted();
+      };
+
+      // Fire-and-forget. We intentionally do not await this before responding.
+      void runFixItDriver({
+        body,
+        workspaceRoot,
+        artifactRoot,
+        activeJobRef,
+        touchedFileSetRef,
+        executionRootRef,
+        executionArtifactRootRef,
+        jobIdRef,
+        fixItJobManager,
+        gitOps,
+        coderPatchRunner,
+        criticRunner,
+        request,
+        onProgress,
+        onEvent: () => {},
+        checkAbort: () => {},
+      }).then(
+        async () => {
+          await durableProgressWrite.catch(() => {});
+        },
+        async (err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          request.log.error({ err }, 'fix-it apply job driver failed');
+          const jobId = jobIdRef.value;
+          if (jobId) {
+            // Surface the failure on the live event stream, then mark the job
+            // failed so its worktree is released and the UI leaves the
+            // "running" state.
+            await fixItJobManager
+              .appendEvent(jobId, { source: 'server', phase: 'error', message })
+              .catch(() => {});
+            await fixItJobManager
+              .completeJob(jobId, { status: 'failed', message })
+              .catch((jobErr) => {
+                request.log.error({ err: jobErr }, 'fix-it apply job: cleanup after failure failed');
+              });
+          } else {
+            // Driver threw before the job was even registered (e.g. fixturePath
+            // validation). Report it synchronously on the start response.
+            startupError = message;
+          }
+          await durableProgressWrite.catch(() => {});
+          resolveJobStarted();
+        },
+      );
+
+      // Wait only until the job exists (or fails before starting).
+      await jobStarted;
+
+      if (startupError) {
+        reply.status(500);
+        return { error: 'FIXIT_JOB_START_FAILED', message: startupError };
+      }
+      const jobId = jobIdRef.value;
+      if (!jobId) {
+        reply.status(500);
+        return { error: 'FIXIT_JOB_START_FAILED', message: 'Job failed to start before producing a job id.' };
+      }
+      const job = await fixItJobManager.getJob(jobId).catch(() => undefined);
+      if (!job) {
+        reply.status(500);
+        return { error: 'JOB_NOT_FOUND', message: 'Could not retrieve job after start.' };
+      }
+      const events = await fixItJobManager.readEvents(jobId).catch(() => []);
+      const sessionSnapshot = await fixItJobManager.readSessionSnapshot(jobId).catch(() => undefined);
+      return { job, events, ...(sessionSnapshot ? { sessionSnapshot } : {}) };
     },
   };
 }

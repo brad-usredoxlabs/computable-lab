@@ -1,7 +1,10 @@
 {
   "name": "computable",
   "private": true,
-  "workspaces": ["server", "app"],
+  "workspaces": [
+    "server",
+    "app"
+  ],
   "scripts": {
     "dev": "./start-app.sh",
     "dev:server": "npm run dev -w server",
@@ -12,7 +15,13 @@
     "test:unit": "pnpm --filter app exec vitest run",
     "test:spec-029": "pnpm --filter app exec vitest run src/extraction/ExtractionReviewPage.test.tsx",
     "vitest": "npx vitest",
-"vitest:server": "pnpm --filter server exec vitest",
+    "vitest:server": "pnpm --filter server exec vitest",
     "download:ontology": "tsx scripts/download-ontology.ts"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.6"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
   }
 }

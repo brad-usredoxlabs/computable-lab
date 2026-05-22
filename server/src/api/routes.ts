@@ -500,6 +500,10 @@ export function registerRoutes(
       '/event-editor/fix/apply/stream',
       eventEditorFixHandlers.applyFixStream.bind(eventEditorFixHandlers),
     );
+    fastify.post(
+      '/event-editor/fix/jobs/apply',
+      eventEditorFixHandlers.startApplyFixJob.bind(eventEditorFixHandlers),
+    );
     fastify.get(
       '/event-editor/fix/health',
       eventEditorFixHandlers.health.bind(eventEditorFixHandlers),
@@ -511,6 +515,10 @@ export function registerRoutes(
     fastify.get(
       '/event-editor/fix/jobs/:id',
       eventEditorFixHandlers.getJob.bind(eventEditorFixHandlers),
+    );
+    fastify.get(
+      '/event-editor/fix/jobs/:id/events/stream',
+      eventEditorFixHandlers.streamJobEvents.bind(eventEditorFixHandlers),
     );
     fastify.post(
       '/event-editor/fix/jobs/:id/complete',

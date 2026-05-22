@@ -5,6 +5,7 @@ import { promisify } from 'node:util';
 import type {
   ChatMessage,
   CompletionRequest,
+  CompletionResponse,
   InferenceClient,
   ToolCall,
   ToolDefinition,
@@ -45,6 +46,12 @@ export interface FoundryToolAgentInput {
   extraTools?: FoundryToolAgentTool[];
   maxTurns?: number;
   maxTokens?: number;
+  /**
+   * Hard context window of the served model, in tokens. Used to bound the
+   * transcript and size each turn's output budget so prompt + output never
+   * exceeds it. Defaults to 131072.
+   */
+  maxContextTokens?: number;
   temperature?: number;
   tracePath?: string;
   requireCompletionPromise?: boolean;
@@ -95,11 +102,16 @@ const BUILTIN_TOOLS: ToolDefinition[] = [
     type: 'function',
     function: {
       name: 'read_file',
-      description: 'Read a UTF-8 text file from the working directory.',
+      description:
+        'Read a UTF-8 text file from the working directory. Large files are truncated; '
+        + 'use offset/limit to page through a big file (e.g. to reach code past the first '
+        + 'chunk). Content is returned verbatim so you can copy exact text into edit_file.',
       parameters: {
         type: 'object',
         properties: {
           path: { type: 'string', description: 'Relative or absolute path' },
+          offset: { type: 'number', description: '1-based line number to start from. Defaults to 1.' },
+          limit: { type: 'number', description: 'Maximum number of lines to return from offset.' },
         },
         required: ['path'],
       },
@@ -197,6 +209,33 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
   let finalText = '';
   let toolCalls = 0;
 
+  // Late, single-fire "commit an edit" nudge. NOT the old turn-5 hammer
+  // (which caused premature wrong edits) — this fires once, well into the
+  // budget, only if the model has investigated without ever editing. It
+  // breaks the drift-to-the-cap-without-editing failure mode while leaving
+  // ample turns afterward to verify and iterate. Disabled for tiny budgets
+  // (tests) so it never preempts the soft "Continue working" nudge.
+  let hasEdited = false;
+  let editNudged = false;
+  const EDIT_TOOL_NAMES = new Set(['edit_file', 'write_file']);
+  const editNudgeDeadline = maxTurns >= 12 ? Math.floor(maxTurns * 0.6) : Number.POSITIVE_INFINITY;
+  const editNudge = (t: number): string =>
+    `You've used ${t} of ${maxTurns} turns and investigated a lot without editing yet. `
+    + `You very likely have enough context now — commit your single best edit to an owned `
+    + `file and run the verification command, leaving turns to see the result and iterate. `
+    + `Prefer a concrete change over more reading; a critic reviews your diff afterward.`;
+  const editNudgeDue = (turn: number): boolean =>
+    requireCompletionPromise && !hasEdited && !editNudged && turn >= editNudgeDeadline;
+
+  // Context-window guard. The transcript grows every turn (full tool outputs
+  // re-sent each time); without this a long run 400s with "maximum context
+  // length". Keep the estimated input under budget and size each turn's output
+  // to fit, so prompt + output never exceeds the model window.
+  const MODEL_CONTEXT_TOKENS = input.maxContextTokens ?? 131_072;
+  const OUTPUT_TOKEN_BUDGET = input.maxTokens ?? 16_384;
+  const INPUT_TOKEN_BUDGET = Math.max(8_000, MODEL_CONTEXT_TOKENS - OUTPUT_TOKEN_BUDGET - 8_000);
+  const KEEP_RECENT_TOOL_RESULTS = 6;
+
   await progress(input, {
     phase: 'started',
     message: `Tool agent starting in ${workdir}`,
@@ -225,16 +264,37 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
       await progress(input, { phase: 'turn_started', message: `Model turn ${turn}/${maxTurns}`, details: { turn } });
       await trace(input.tracePath, { type: 'turn_started', turn });
 
-      const request: CompletionRequest = {
-        model: input.model,
-        messages: messages.map(cloneMessage),
-        tools,
-        tool_choice: 'auto',
-        temperature: input.temperature ?? 0.2,
-        max_tokens: input.maxTokens ?? 16_384,
-        enableThinking: false,
+      compactTranscript(messages, INPUT_TOKEN_BUDGET, KEEP_RECENT_TOOL_RESULTS);
+      const buildRequest = (): CompletionRequest => {
+        const inputTokensEst = estimateTranscriptTokens(messages);
+        // Even after compaction, never request more output than the window
+        // can hold alongside the current input.
+        const dynamicMaxTokens = Math.max(
+          1_024,
+          Math.min(OUTPUT_TOKEN_BUDGET, MODEL_CONTEXT_TOKENS - inputTokensEst - 2_048),
+        );
+        return {
+          model: input.model,
+          messages: messages.map(cloneMessage),
+          tools,
+          tool_choice: 'auto',
+          temperature: input.temperature ?? 0.2,
+          max_tokens: dynamicMaxTokens,
+          enableThinking: false,
+        };
       };
-      const response = await input.client.complete(request);
+      let response: CompletionResponse;
+      try {
+        response = await input.client.complete(buildRequest());
+      } catch (err) {
+        const errMessage = err instanceof Error ? err.message : String(err);
+        if (!isContextLengthError(errMessage)) throw err;
+        // Last-resort recovery: the estimate undershot the real token count.
+        // Stub every tool result and retry this turn once before giving up.
+        await trace(input.tracePath, { type: 'context_overflow_retry', turn, error: errMessage });
+        compactTranscript(messages, INPUT_TOKEN_BUDGET, 0);
+        response = await input.client.complete(buildRequest());
+      }
       const choice = response.choices[0];
       const assistantMessage = choice?.message;
       if (!assistantMessage) {
@@ -254,6 +314,7 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
             details: { tool: call.function.name, args: summarizeArgs(args) },
           });
           const execution = await executeToolCall(call, args, { workdir }, extraToolHandlers);
+          if (execution.ok && EDIT_TOOL_NAMES.has(call.function.name)) hasEdited = true;
           await progress(input, {
             phase: 'tool_finished',
             message: `${call.function.name} ${execution.ok ? 'finished' : 'failed'} in ${execution.durationMs}ms`,
@@ -278,6 +339,12 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
             content: execution.content,
           });
         }
+        // Late nudge also fires on tool-only turns (the model can ruminate via
+        // read/grep without ever returning bare text).
+        if (editNudgeDue(turn)) {
+          messages.push({ role: 'user', content: editNudge(turn) });
+          editNudged = true;
+        }
         continue;
       }
 
@@ -298,10 +365,15 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
         return result('complete', finalText, turn, toolCalls, input.tracePath);
       }
 
-      messages.push({
-        role: 'user',
-        content: `Continue working. If all acceptance criteria are met, output ${COMPLETE_MARKER} as the final line. Otherwise use tools to make progress.`,
-      });
+      if (editNudgeDue(turn)) {
+        messages.push({ role: 'user', content: editNudge(turn) });
+        editNudged = true;
+      } else {
+        messages.push({
+          role: 'user',
+          content: `Continue working. If the declared verification command passes, output ${COMPLETE_MARKER} as the final line and stop. Otherwise make one targeted edit and re-verify.`,
+        });
+      }
     }
 
     await progress(input, {
@@ -333,6 +405,56 @@ function result(
     toolCalls,
     ...(tracePath ? { tracePath } : {}),
   };
+}
+
+const ELIDED_TOOL_OUTPUT = '[earlier tool output elided to stay within the model context window]';
+
+// Rough token estimate. Deliberately conservative (~3.5 chars/token + a
+// per-message overhead) so we trigger compaction a little early rather than
+// undercount and 400. Exact tokenization isn't worth a dependency here.
+function estimateMessageTokens(message: ChatMessage): number {
+  let chars = typeof message.content === 'string' ? message.content.length : 0;
+  if (message.tool_calls) {
+    for (const call of message.tool_calls) chars += (call.function.arguments?.length ?? 0) + 32;
+  }
+  return Math.ceil(chars / 3.5) + 8;
+}
+
+function estimateTranscriptTokens(messages: ChatMessage[]): number {
+  let total = 0;
+  for (const message of messages) total += estimateMessageTokens(message);
+  return total;
+}
+
+// Bound the transcript so prompt + output stays under the model window. The
+// loop re-sends the full history every turn with no built-in compaction, so a
+// long run (especially repeated shell/test output) grows until the provider
+// 400s with "maximum context length". Stub the oldest tool results first —
+// they're the least relevant — while preserving each tool message (and its
+// tool_call_id) so the assistant/tool pairing the provider requires stays
+// intact. The system prompt, the user task prompt, and assistant turns are
+// never elided.
+function compactTranscript(
+  messages: ChatMessage[],
+  inputTokenBudget: number,
+  keepRecentToolResults: number,
+): void {
+  if (estimateTranscriptTokens(messages) <= inputTokenBudget) return;
+  const toolIndices = messages
+    .map((message, index) => (message.role === 'tool' ? index : -1))
+    .filter((index) => index >= 0);
+  const keepFrom = Math.max(0, toolIndices.length - keepRecentToolResults);
+  // Oldest stubbable first; fall through to the recent ones only if still over.
+  const order = [...toolIndices.slice(0, keepFrom), ...toolIndices.slice(keepFrom)];
+  for (const index of order) {
+    if (estimateTranscriptTokens(messages) <= inputTokenBudget) break;
+    const message = messages[index]!;
+    if (message.content !== ELIDED_TOOL_OUTPUT) message.content = ELIDED_TOOL_OUTPUT;
+  }
+}
+
+function isContextLengthError(message: string): boolean {
+  return /maximum context length|context length|input_tokens/i.test(message);
 }
 
 function cloneMessage(message: ChatMessage): ChatMessage {
@@ -446,9 +568,44 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
   },
 
   read_file: async (args, ctx) => {
-    const path = resolveInsideWorkdir(ctx.workdir, stringArg(args, 'path'));
+    const rel = stringArg(args, 'path');
+    const path = resolveInsideWorkdir(ctx.workdir, rel);
     const content = await readFile(path, 'utf-8');
-    return truncate(content, DEFAULT_MAX_READ_CHARS);
+    const lines = content.split('\n');
+    const total = lines.length;
+    const offset = Math.max(1, Math.floor(numberArg(args, 'offset') ?? 1));
+    const explicitLimit = numberArg(args, 'limit');
+
+    // Page from `offset`, but never return more than the char cap in one call.
+    // A single file can exceed the model context (e.g. 138K-char pass files);
+    // the old behaviour silently returned only the first ~60K chars with no
+    // way to reach the rest, so the model would loop "the file is too long".
+    const startIdx = Math.min(offset - 1, total);
+    const window = explicitLimit !== undefined
+      ? lines.slice(startIdx, startIdx + Math.max(1, Math.floor(explicitLimit)))
+      : lines.slice(startIdx);
+
+    // Return content verbatim (no line-number prefix) so the model can copy
+    // exact text into edit_file. Cap each call at the char budget; the hint
+    // tells the model the line offset to resume from for the rest.
+    const out: string[] = [];
+    let charCount = 0;
+    let lastLine = startIdx - 1; // 0-based index of last included line
+    for (let i = 0; i < window.length; i += 1) {
+      const line = window[i]!;
+      if (charCount + line.length + 1 > DEFAULT_MAX_READ_CHARS && out.length > 0) break;
+      out.push(line);
+      charCount += line.length + 1;
+      lastLine = startIdx + i;
+    }
+
+    let body = out.join('\n');
+    const shownThrough = lastLine + 1; // 1-based last line actually returned
+    if (shownThrough < total) {
+      body += `\n... [showed lines ${offset}-${shownThrough} of ${total}. `
+        + `Read further with read_file(path="${rel}", offset=${shownThrough + 1}).]`;
+    }
+    return body || `(file has ${total} line(s); offset ${offset} is past the end)`;
   },
 
   write_file: async (args, ctx) => {
@@ -519,6 +676,15 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
 function stringArg(args: Record<string, unknown>, key: string): string {
   const value = args[key];
   return typeof value === 'string' ? value : '';
+}
+
+function numberArg(args: Record<string, unknown>, key: string): number | undefined {
+  const value = args[key];
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value))) {
+    return Number(value);
+  }
+  return undefined;
 }
 
 function resolveInsideWorkdir(workdir: string, path: string): string {

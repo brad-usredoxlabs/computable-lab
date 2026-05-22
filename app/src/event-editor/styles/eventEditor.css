@@ -649,13 +649,17 @@
   100% { opacity: 0; }
 }
 
-/* Hide lawn surfaces on mobile. Placed AFTER the base `.lawn` rules
-   above so this override actually wins the cascade — specificity is
-   identical, so source order decides. The mobile scope is read +
-   prompt + Fix-it; lawn-density editing is a desktop feature. */
+/* Hide *secondary* lawn surfaces on mobile. The robot decks (Flex/OT2/
+   etc.) pair a slot grid with a `sideLawn` strip — on a phone the
+   sideLawn dominates the viewport and adds little value, so we hide it.
+   But platforms where the lawn IS the whole stage (Manual Mode, etc.)
+   need the lawn to remain visible or there's nothing to interact with.
+   `LawnSurface` adds the `lawn--primary` modifier when its `primary`
+   prop is set, which DeckStage only passes for the variant's top-level
+   `surface` (not for `sideLawn`). So `:not(.lawn--primary)` correctly
+   targets the side strip only. */
 @media (max-width: 768px) {
-  .event-editor .lawn,
-  .event-editor .lawn--primary {
+  .event-editor .lawn:not(.lawn--primary) {
     display: none !important;
   }
   /* Float the Fix-it launcher chip just above the dock's top edge so it
@@ -3050,6 +3054,34 @@
   font-size: 10px;
   color: var(--ee-warn);
   list-style: disc;
+}
+
+.event-editor .ai-dock__fixit-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.34);
+  border-radius: 6px;
+  color: var(--ee-text-dim);
+  font-size: 11px;
+}
+
+.event-editor .ai-dock__fixit {
+  background: rgba(245, 158, 11, 0.18);
+  color: var(--ee-warn);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.event-editor .ai-dock__fixit:hover {
+  background: rgba(245, 158, 11, 0.26);
 }
 
 .event-editor .ai-dock__input-row {

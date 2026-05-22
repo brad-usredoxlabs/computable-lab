@@ -96,6 +96,7 @@ export interface FixItJobRecord {
   specPath?: string
   fixturePath?: string
   eventsPath: string
+  cancelRequestedAt?: string
   result?: Record<string, unknown>
   message?: string
 }
@@ -117,6 +118,23 @@ export interface FixItJobDetailResponse {
   events: FixItJobEvent[]
   sessionSnapshot?: FixItSessionSnapshot
 }
+
+export interface FixItJobStartError {
+  error: string
+  message: string
+}
+
+export type FixItJobEventStreamEvent =
+  | {
+      type: 'snapshot'
+      job: FixItJobRecord
+      events: FixItJobEvent[]
+      sessionSnapshot?: FixItSessionSnapshot
+    }
+  | { type: 'event'; event: FixItJobEvent }
+  | { type: 'job'; job: FixItJobRecord }
+  | { type: 'done' }
+  | { type: 'error'; message: string }
 
 /**
  * Probe whether the worker (`:8001`) and architect (`:8000`) inference
@@ -159,10 +177,115 @@ export async function getFixItJob(id: string, args: {
   return (await response.json()) as FixItJobDetailResponse
 }
 
+export async function* streamFixItJobEvents(id: string, args: {
+  signal?: AbortSignal
+} = {}): AsyncGenerator<FixItJobEventStreamEvent> {
+  const response = await fetch(`${API_BASE}/event-editor/fix/jobs/${encodeURIComponent(id)}/events/stream`, {
+    method: 'GET',
+    ...(args.signal ? { signal: args.signal } : {}),
+  })
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    yield {
+      type: 'error',
+      message: `Server returned ${response.status}: ${body || response.statusText}`,
+    }
+    return
+  }
+  if (!response.body) {
+    yield { type: 'error', message: 'No response body (streaming not supported)' }
+    return
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const parts = buffer.split('\n\n')
+      buffer = parts.pop() || ''
+      for (const part of parts) {
+        const ev = parseJobEventBlock(part)
+        if (ev) yield ev
+      }
+    }
+    if (buffer.trim()) {
+      const ev = parseJobEventBlock(buffer)
+      if (ev) yield ev
+    }
+  } finally {
+    reader.releaseLock()
+  }
+}
+
+export async function startApplyFixJob(args: {
+  specYaml: string
+  fixtureYaml: string
+  specId: string
+  fixturePath: string
+  fixItSessionId?: string
+  sessionSnapshot?: FixItSessionSnapshot
+  signal?: AbortSignal
+}): Promise<FixItJobDetailResponse | FixItJobStartError> {
+  const response = await fetch(`${API_BASE}/event-editor/fix/jobs/apply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      specYaml: args.specYaml,
+      fixtureYaml: args.fixtureYaml,
+      specId: args.specId,
+      fixturePath: args.fixturePath,
+      ...(args.fixItSessionId ? { fixItSessionId: args.fixItSessionId } : {}),
+      ...(args.sessionSnapshot ? { sessionSnapshot: args.sessionSnapshot } : {}),
+    }),
+    ...(args.signal ? { signal: args.signal } : {}),
+  })
+  const parsed = await response.json().catch(() => null) as unknown
+  if (response.ok && parsed && typeof parsed === 'object' && 'job' in parsed) {
+    return parsed as FixItJobDetailResponse
+  }
+  if (parsed && typeof parsed === 'object' && 'error' in parsed && 'message' in parsed) {
+    return parsed as FixItJobStartError
+  }
+  return {
+    error: 'FIXIT_JOB_START_FAILED',
+    message: `Server returned ${response.status}: ${response.statusText}`,
+  }
+}
+
+function parseJobEventBlock(block: string): FixItJobEventStreamEvent | null {
+  const lines = block.split('\n')
+  let data = ''
+  for (const line of lines) {
+    if (line.startsWith('data: ')) data += line.slice(6)
+    else if (line.startsWith('data:')) data += line.slice(5)
+  }
+  if (!data) return null
+  try {
+    return JSON.parse(data) as FixItJobEventStreamEvent
+  } catch {
+    return null
+  }
+}
+
 export async function completeFixItJob(id: string, args: {
   signal?: AbortSignal
 } = {}): Promise<FixItJobDetailResponse | null> {
   const response = await fetch(`${API_BASE}/event-editor/fix/jobs/${encodeURIComponent(id)}/complete`, {
+    method: 'POST',
+    ...(args.signal ? { signal: args.signal } : {}),
+  })
+  if (!response.ok) return null
+  return (await response.json()) as FixItJobDetailResponse
+}
+
+export async function cancelFixItJob(id: string, args: {
+  signal?: AbortSignal
+} = {}): Promise<FixItJobDetailResponse | null> {
+  const response = await fetch(`${API_BASE}/event-editor/fix/jobs/${encodeURIComponent(id)}/cancel`, {
     method: 'POST',
     ...(args.signal ? { signal: args.signal } : {}),
   })

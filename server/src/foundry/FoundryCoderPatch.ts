@@ -9,6 +9,14 @@ import type { CompletionRequest } from '../ai/types.js';
 import type { InferenceConfig } from '../config/types.js';
 import { asRecord, nowIso, readYamlFile, writeYamlFile } from './FoundryArtifacts.js';
 import { runFoundryToolAgent } from './FoundryToolAgent.js';
+import type { FoundryToolAgentTool } from './FoundryToolAgent.js';
+import {
+  buildLexicalIndex,
+  makeRetrieveTool,
+  makeRetrieveToolFromSidecar,
+  resolveRetrievalConfig,
+  RetrievalSidecar,
+} from './RetrievalIndex.js';
 import type { FoundryVariant } from './ProtocolFoundryCompileRunner.js';
 
 const execFileAsync = promisify(execFile);
@@ -16,7 +24,16 @@ const MAX_CONTEXT_CHARS = 6_000;
 const MAX_FILE_CHARS = 3_000;
 const MAX_ARTIFACT_CONTEXT_CHARS = 3_000;
 const MAX_SCHEMA_CONTEXT_CHARS = 3_000;
-export const TOOL_AGENT_MAX_TURNS = 120;
+// These reasoning models legitimately use a lot of turns on hard, multi-pass
+// bugs (trace the failing output back across passes, locate the real cause,
+// edit, verify, iterate). Observed at 80: the junior edited from turn 45,
+// iterated through 12 edits, and at turn 80 was REMOVING its debug
+// instrumentation to finalize the fix — i.e. it had basically solved it and
+// ran out mid-cleanup. Not a spiral; genuinely close. 100 gives it room to
+// land. Safe: transcript compaction bounds context growth, and the late
+// single-fire nudge (~60% of budget) catches a coder that drifts to the cap
+// without ever editing.
+export const TOOL_AGENT_MAX_TURNS = 100;
 
 type CoderPatchStatus = 'applied' | 'blocked' | 'failed' | 'skipped' | 'stale' | 'needs-human';
 
@@ -25,6 +42,12 @@ export interface FoundryCoderPatchResult {
   resultPath: string;
   message: string;
   touchedFiles: string[];
+  /**
+   * The coder agent's final natural-language output (its diagnosis/reasoning).
+   * Forwarded to the senior on escalation so it continues the junior's lead
+   * instead of re-deriving the root cause from scratch.
+   */
+  finalText?: string;
 }
 
 export type FoundryCoderRole = 'junior' | 'senior';
@@ -44,8 +67,47 @@ export interface PatchSpec {
   rationale: string;
   ownedFiles: string[];
   acceptance: string[];
+  /** Files that are off-limits for editing, beyond the general boundaries. */
+  doNotTouchFiles: string[];
   raw: Record<string, unknown>;
   path: string;
+}
+
+// Patterns for files that the coder MUST NOT edit — ever.
+// These are excluded from ownedFiles and added to the prompt's boundary list.
+const PROTECTED_PATTERNS = [
+  /\.test\.(ts|tsx)$/,          // test files
+  /FixtureRunner\.(ts|js)$/,    // test harness
+  /FixtureDiff\.(ts|js)$/,      // test helpers
+  /FixtureTypes\.(ts|js)$/,     // test type defs
+  /^spec-fix-/,                 // regression fixture files
+] as const;
+
+/** Return true if a file path matches any protected pattern. */
+function isProtectedFile(path: string): boolean {
+  return PROTECTED_PATTERNS.some(
+    (pattern) =>
+      pattern instanceof RegExp
+        ? pattern.test(path)
+        : path.includes(pattern),
+  );
+}
+
+/**
+ * Strip protected files from the owned-files list.
+ * The coder must never be given edit permission on fixtures or test infrastructure.
+ */
+function filterOwnedFiles(ownedFiles: string[]): string[] {
+  return ownedFiles.filter((f) => !isProtectedFile(f));
+}
+
+/**
+ * Extract files listed in the patch spec's doNotTouchFiles array
+ * (populated from the YAML's `doNotTouchFiles` top-level key).
+ */
+function specDoNotTouchFiles(raw: Record<string, unknown>): string[] {
+  const val = raw['doNotTouchFiles'] ?? raw['do_not_touch_files'];
+  return asStringArray(val);
 }
 
 function asStringArray(value: unknown): string[] {
@@ -218,6 +280,7 @@ async function listPatchSpecs(root: string, protocolId: string, variant: Foundry
 
 async function readPatchSpec(path: string): Promise<PatchSpec> {
   const raw = asRecord(await readYamlFile(path));
+  const rawOwned = asStringArray(raw['ownedFiles']);
   return {
     id: typeof raw['id'] === 'string' ? raw['id'] : relative(dirname(path), path),
     fixClass: typeof raw['fixClass'] === 'string'
@@ -227,8 +290,9 @@ async function readPatchSpec(path: string): Promise<PatchSpec> {
         : 'unknown',
     title: typeof raw['title'] === 'string' ? raw['title'] : 'Untitled Foundry fix',
     rationale: typeof raw['rationale'] === 'string' ? raw['rationale'] : '',
-    ownedFiles: asStringArray(raw['ownedFiles']),
+    ownedFiles: filterOwnedFiles(rawOwned),
     acceptance: asStringArray(raw['acceptance']),
+    doNotTouchFiles: specDoNotTouchFiles(raw),
     raw,
     path,
   };
@@ -528,10 +592,23 @@ function toolAgentPrompt(input: {
       : []),
     ``,
     `Instructions:`,
-    `- Use tools to inspect and edit the repository.`,
-    `- Keep edits within the owned files unless a directly necessary adjacent test/fixture change is required.`,
-    `- Run the declared verification command when one is provided.`,
-    `- Do not claim completion until the acceptance criteria are satisfied or you have made the narrowest possible fix and run verification.`,
+    `- Read enough to locate the ACTUAL root cause before editing. The bug is often in a different pass/file than it first appears — trace the failing output back to the code that produces it. read_file pages large files via offset/limit, so read the relevant code in full rather than guessing.`,
+    `- Once you understand the cause, make the smallest coherent edit that fixes it. Avoid speculative refactors and unrelated changes.`,
+    `- After editing, run the declared verification command to check your patch. If it fails, refine and re-run.`,
+    `- A critic reviews your diff and re-runs verification afterward, so you do not need to prove correctness exhaustively yourself — but do confirm your fix targets the real cause, not a symptom.`,
+    ``,
+    `Hard boundaries:`,
+    `- NEVER edit test infrastructure: FixItFixtures.test.ts, FixtureRunner.ts, FixtureDiff.ts, FixtureTypes.ts.`,
+    `- NEVER edit regression fixtures (spec-fix-*.yaml). Changing a fixture to match broken behavior is PROHIBITED.`,
+    `- NEVER edit a .test.ts file.`,
+    ...(input.selectedSpec.doNotTouchFiles.length
+      ? [input.selectedSpec.doNotTouchFiles.map((f) => `- NEVER: ${f}`).join('\n')]
+      : []),
+    `- If a verification test fails, DO NOT adjust expected values in fixtures. The fix must be in the code, not the test.`,
+    ``,
+    `Completion:`,
+    `- The moment the declared verification command passes, output ${'<promise>COMPLETE</promise>'} as the absolute last line and STOP. Nothing may follow it.`,
+    `- Do NOT run the broader test suite and do NOT re-verify a fixture that already passed.`,
   ].join('\n');
 }
 
@@ -757,15 +834,69 @@ export async function runFoundryCoderPatch(input: {
       message: 'Starting tool-agent coder',
       details: { tracePath },
     });
-    const agentResult = await runFoundryToolAgent({
+
+    // Optional code-search tool. Build a lexical index of the worktree so the
+    // coder can locate code by concept ("the pass that emits
+    // deckLayoutPlan.pinned") instead of paging large files. Off unless
+    // AGENT_WORKBENCH_ROOT is set; any failure degrades to read/grep only.
+    const extraTools: FoundryToolAgentTool[] = [];
+    let retrievalAvailable = false;
+    let sidecar: RetrievalSidecar | null = null;
+    const retrievalConfig = resolveRetrievalConfig();
+    if (retrievalConfig) {
+      const indexDir = await buildLexicalIndex(
+        retrievalConfig,
+        input.repoRoot,
+        join(input.artifactRoot, 'retrieval-index'),
+      );
+      if (indexDir) {
+        if (retrievalConfig.rerankModel) {
+          // Tier-2: warm GPU reranker in a persistent sidecar. Falls back to
+          // a lexical (subprocess) retrieve tool if the sidecar can't start.
+          const candidate = new RetrievalSidecar(retrievalConfig, indexDir);
+          if (await candidate.start()) {
+            sidecar = candidate;
+            extraTools.push(makeRetrieveToolFromSidecar(candidate));
+            await progress({ phase: 'context_ready', message: `Code-search (retrieve) ready with GPU reranker ${retrievalConfig.rerankModel}` });
+          } else {
+            candidate.dispose();
+            extraTools.push(makeRetrieveTool(retrievalConfig, indexDir));
+            await progress({ phase: 'context_ready', message: 'GPU reranker unavailable; retrieve using lexical search' });
+          }
+        } else {
+          extraTools.push(makeRetrieveTool(retrievalConfig, indexDir));
+          await progress({ phase: 'context_ready', message: 'Code-search (retrieve) tool ready (lexical)' });
+        }
+        retrievalAvailable = true;
+      } else {
+        await progress({ phase: 'context_ready', message: 'Code-search index unavailable; using read/grep only' });
+      }
+    }
+
+    let agentResult: Awaited<ReturnType<typeof runFoundryToolAgent>>;
+    try {
+      agentResult = await runFoundryToolAgent({
       client,
       model,
       workdir: input.repoRoot,
       systemPrompt: [
-        'You are the Protocol Foundry coder.',
-        'Fix the compiler issue described by the patch spec.',
-        'Use tools to inspect, edit, and verify the repository.',
-        'Do not include private chain-of-thought in your final answer.',
+        'You are the Protocol Foundry coder. Your job is to land a correct, minimal code fix for the declared spec and failing fixture.',
+        '',
+'Find the real root cause, then fix it. The provided context is a starting point, but the bug is often in a different pass/file than it first appears — trace the failing output back to the code that produces it before editing. read_file pages large files via offset/limit, so read the relevant code in full rather than guessing. Then make the smallest coherent edit; avoid speculative refactors.',
+        'The spec\'s rationale was written from the compiler trace WITHOUT source access, so treat its suspected mechanism as a LEAD, not a conclusion: confirm it against the actual code before acting, and if the code says otherwise, follow the code. Trust the trace-level facts (symptom, where output is dropped, fix class); verify the how.',
+        ...(retrievalAvailable
+          ? ['', 'Use the retrieve tool to find code by concept or symbol (e.g. "the pass that emits deckLayoutPlan.pinned") before reading or paging large files — it is faster than scanning.']
+          : []),
+        '',
+        'Debugging: to inspect runtime behavior, write a THROWAWAY script (e.g. shell: `npx tsx /tmp/dbg.ts` or `node -e`) that imports and calls the code — do NOT add console.log/debug statements to the source files you are fixing. Editing the source to instrument it forces a cleanup pass later (removing debug code before you finish), which wastes turns and risks leaving debug cruft in the patch. Keep the owned source files clean: only your actual fix goes there.',
+        '',
+        'A separate critic re-runs verification and reviews your diff AFTER you finish, so you do not need to prove correctness exhaustively yourself — but your edit should target the actual cause, not a symptom. The moment the declared verification command passes, stop.',
+        '',
+        'Hard boundaries:',
+        '- Only touch files in ownedFiles. Everything else is off-limits.',
+        '- Do NOT edit any test file (.test.ts), test harness (FixtureRunner, FixtureDiff, FixtureTypes), or fixture (spec-fix-*.yaml). Changing fixture expected values to match broken behavior is PROHIBITED — the fix must be in the code, not the test.',
+        '- Use the declared verification command to check your patch. You may read/grep to understand the code, but do not run the broad test suite to explore.',
+        '- Do not include private chain-of-thought in your final answer.',
       ].join('\n'),
       prompt: toolAgentPrompt({
         selectedSpec,
@@ -776,6 +907,7 @@ export async function runFoundryCoderPatch(input: {
       maxTurns: TOOL_AGENT_MAX_TURNS,
       maxTokens: 16_384,
       temperature: 0.1,
+      ...(extraTools.length ? { extraTools } : {}),
       onProgress: async (event) => {
         await progress({
           phase: event.phase,
@@ -783,7 +915,11 @@ export async function runFoundryCoderPatch(input: {
           ...(event.details ? { details: event.details } : {}),
         });
       },
-    });
+      });
+    } finally {
+      // Always tear down the GPU sidecar (frees VRAM) once the agent is done.
+      sidecar?.dispose();
+    }
 
     if (agentResult.status !== 'complete') {
       await writeYamlFile(resultPath, {
@@ -803,6 +939,7 @@ export async function runFoundryCoderPatch(input: {
         resultPath,
         message: `tool agent did not complete: ${agentResult.status}`,
         touchedFiles: [],
+        ...(agentResult.finalText.trim() ? { finalText: agentResult.finalText.slice(0, 4000) } : {}),
       };
     }
 

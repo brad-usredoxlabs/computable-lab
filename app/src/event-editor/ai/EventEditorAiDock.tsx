@@ -15,6 +15,7 @@ import type { EventEditorPlacement, PlacementLocation } from '../types'
 import { resolveOrientation, validatePlacement } from '../lib/placementRules'
 import type { Labware } from '../../types/labware'
 import type { PlatformManifest, PlatformVariantManifest } from '../../types/platformRegistry'
+import { buildFixSeed } from '../fix-it/buildFixSeed'
 
 interface ChatMessage {
   id: string
@@ -28,6 +29,10 @@ interface ChatMessage {
    * user sees *why* the deck shows fewer ghosts than the LLM proposed.
    */
   previewSkips?: string[]
+  /** Prompt that produced this assistant draft, retained for Fix-it. */
+  sourcePrompt?: string
+  /** True when this response can start a Fix-it thread from the chat log. */
+  canFixIt?: boolean
 }
 
 // Monotonic counter so message ids stay unique even when multiple status
@@ -37,6 +42,13 @@ let messageSeq = 0
 function makeMsgId(suffix: string): string {
   messageSeq += 1
   return `m-${Date.now()}-${messageSeq}-${suffix}`
+}
+
+function makeFixItSeedKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 type DockMode = 'precompile' | 'ai'
@@ -321,6 +333,8 @@ export function EventEditorAiDock() {
                     content: resultText || summarizeDrafts(drafted, labwareAdditions),
                     draftedEvents: [...drafted],
                     labwareAdditions: [...labwareAdditions],
+                    sourcePrompt: text,
+                    canFixIt: !hasPreview,
                     ...(skips.length > 0 ? { previewSkips: skips } : {}),
                   }
                 : m,
@@ -349,6 +363,25 @@ export function EventEditorAiDock() {
       abortRef.current = null
     }
   }, [actions, input, messages, mode, state, streaming])
+
+  function handleFixItFromMessage(message: ChatMessage) {
+    const seed = buildFixSeed({
+      prompt: message.sourcePrompt ?? '',
+      previewSkips: message.previewSkips ?? [],
+      state,
+    })
+    if (isMobile) {
+      const key = makeFixItSeedKey()
+      try {
+        window.localStorage.setItem(`fixit-seed-${key}`, JSON.stringify(seed))
+        window.open(`/event-editor/fixit?seed=${encodeURIComponent(key)}`, '_blank')
+      } catch {
+        actions.openFixIt(seed)
+      }
+      return
+    }
+    actions.openFixIt(seed)
+  }
 
   // Keep the ref pointing at the latest send closure so the
   // pendingRetryPrompt effect can fire without re-running on every send
@@ -390,6 +423,17 @@ export function EventEditorAiDock() {
                     <li key={i}>Skipped: {skip}</li>
                   ))}
                 </ul>
+              ) : null}
+              {m.role === 'assistant' && m.canFixIt ? (
+                <div className="ai-dock__fixit-row">
+                  <span>No preview was generated.</span>
+                  <button
+                    type="button"
+                    className="ai-dock__fixit"
+                    onClick={() => handleFixItFromMessage(m)}
+                    title="Open Fix-it to diagnose why this prompt produced no preview"
+                  >Fix-it</button>
+                </div>
               ) : null}
             </div>
           </div>

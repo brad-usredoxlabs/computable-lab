@@ -10,8 +10,13 @@ import {
 } from './FoundryCoderPatch.js';
 
 describe('TOOL_AGENT_MAX_TURNS', () => {
-  it('gives the fast local coder enough room to finish verification loops', () => {
-    expect(TOOL_AGENT_MAX_TURNS).toBe(120);
+  it('gives the coder enough budget for hard multi-pass bugs', () => {
+    // These reasoning models legitimately use many turns: trace the cause
+    // across passes, edit, verify, iterate. At 80 the junior had basically
+    // solved it and ran out mid-cleanup (removing debug instrumentation), so
+    // 100. Growth is bounded by transcript compaction, and a late single-fire
+    // nudge stops drift-to-cap-without-editing.
+    expect(TOOL_AGENT_MAX_TURNS).toBe(100);
   });
 });
 

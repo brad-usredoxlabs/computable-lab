@@ -22,6 +22,7 @@ const MaterialsPage = lazy(async () => import('./editor/MaterialsPage').then((mo
 const LabwareTestPage = lazy(async () => import('./pages/LabwareTestPage').then((module) => ({ default: module.default })))
 const ProtocolIdePage = lazy(async () => import('./protocol-ide/ProtocolIdePage').then((module) => ({ default: module.ProtocolIdePage })))
 const FoundryStatusPanel = lazy(async () => import('./protocol-ide/FoundryStatusPanel').then((module) => ({ default: module.FoundryStatusPanel })))
+const FoundryAcquisitionJobsPanel = lazy(async () => import('./protocol-ide/FoundryAcquisitionJobsPanel').then((module) => ({ default: module.FoundryAcquisitionJobsPanel })))
 const RunEditorRouter = lazy(async () => import('./graph/RunEditorRouter').then((module) => ({ default: module.RunEditorRouter })))
 const EventEditorPage = lazy(async () => import('./event-editor/EventEditorPage').then((module) => ({ default: module.EventEditorPage })))
 const FixItRoute = lazy(async () => import('./event-editor/fixit-route/FixItRoute').then((module) => ({ default: module.FixItRoute })))
@@ -111,6 +112,7 @@ export function App() {
 
             {/* Protocol IDE */}
             <Route path="protocol-ide/foundry/status" element={<DeferredRoute><FoundryStatusPanel /></DeferredRoute>} />
+            <Route path="protocol-ide/foundry/jobs" element={<DeferredRoute><FoundryAcquisitionJobsPanel /></DeferredRoute>} />
             <Route path="protocol-ide" element={<DeferredRoute><ProtocolIdePage /></DeferredRoute>} />
             <Route path="protocol-ide/:sessionId" element={<DeferredRoute><ProtocolIdePage /></DeferredRoute>} />
           </Route>

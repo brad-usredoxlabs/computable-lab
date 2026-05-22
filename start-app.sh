@@ -82,10 +82,27 @@ if [[ -d "$WORKSPACE_ROOT" ]]; then
   find "$WORKSPACE_ROOT" -type f \( -name 'index.lock' -o -name 'HEAD.lock' -o -name 'packed-refs.lock' -o -name 'config.lock' \) -print -delete 2>/dev/null || true
 fi
 
+# Path to the agent-workbench repo, used by the Fix-it coder's optional
+# `retrieve` code-search tool. Lexical index needs only python3; if the repo
+# isn't present the tool stays off and the coder falls back to read/grep.
+AGENT_WORKBENCH_ROOT="${AGENT_WORKBENCH_ROOT:-$HOME/git/agent-workbench}"
+
+# Tier-2 (CUDA neural reranker). When set, the retrieve tool reranks lexical
+# candidates with a cross-encoder in a persistent GPU sidecar (uses the
+# agent-workbench .venv python, which has CUDA torch + sentence-transformers).
+# Unset FIXIT_RETRIEVAL_RERANK_MODEL to fall back to lexical-only retrieval;
+# set FIXIT_RETRIEVAL=0 to disable retrieval entirely.
+FIXIT_RETRIEVAL_RERANK_MODEL="${FIXIT_RETRIEVAL_RERANK_MODEL:-BAAI/bge-reranker-v2-m3}"
+FIXIT_RETRIEVAL_USE_GPU="${FIXIT_RETRIEVAL_USE_GPU:-1}"
+
 # Start backend (APP_BASE_PATH points to monorepo root so schema/ and records/ resolve).
 (
   cd "$BACKEND_DIR"
-  APP_BASE_PATH="$ROOT_DIR" nohup npm run dev > "$RUNTIME_DIR/backend.log" 2>&1 &
+  APP_BASE_PATH="$ROOT_DIR" \
+    AGENT_WORKBENCH_ROOT="$AGENT_WORKBENCH_ROOT" \
+    FIXIT_RETRIEVAL_RERANK_MODEL="$FIXIT_RETRIEVAL_RERANK_MODEL" \
+    FIXIT_RETRIEVAL_USE_GPU="$FIXIT_RETRIEVAL_USE_GPU" \
+    nohup npm run dev > "$RUNTIME_DIR/backend.log" 2>&1 &
   echo $! > "$RUNTIME_DIR/backend.pid"
 )
 
