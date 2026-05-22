@@ -17,6 +17,7 @@ import {
   resolveRetrievalConfig,
   RetrievalSidecar,
 } from './RetrievalIndex.js';
+import { makeResolveLabwareTool, makeVerifyTool } from './FixItCoderTools.js';
 import type { FoundryVariant } from './ProtocolFoundryCompileRunner.js';
 
 const execFileAsync = promisify(execFile);
@@ -889,6 +890,15 @@ export async function runFoundryCoderPatch(input: {
       }
     }
 
+    // Event-editor fix-it gets two extra tools: `verify` (run the declared
+    // fixture, see expected-vs-actual per path) and `resolve_labware` (inspect
+    // how a hint resolves). They replace the throwaway-debug-script churn.
+    const fixItTools = input.protocolId === 'event-editor-fixit';
+    if (fixItTools) {
+      extraTools.push(makeVerifyTool(input.repoRoot, selectedSpec.id));
+      extraTools.push(makeResolveLabwareTool(input.repoRoot));
+    }
+
     let agentResult: Awaited<ReturnType<typeof runFoundryToolAgent>>;
     try {
       agentResult = await runFoundryToolAgent({
@@ -903,8 +913,11 @@ export async function runFoundryCoderPatch(input: {
         ...(retrievalAvailable
           ? ['', 'Use the retrieve tool to find code by concept or symbol (e.g. "the pass that emits deckLayoutPlan.pinned") before reading or paging large files — it is faster than scanning.']
           : []),
+        ...(fixItTools
+          ? ['', 'Use the `verify` tool to run the declared fixture and see, for each unsatisfied assertion, the EXPECTED vs ACTUAL value — call it after each edit instead of writing debug scripts or running the test suite by hand. Use `resolve_labware("<hint>")` to see how a labware hint resolves (and the available record IDs) when a labwareHint is wrong.']
+          : []),
         '',
-        'Debugging: to inspect runtime behavior, write a THROWAWAY script (e.g. shell: `npx tsx /tmp/dbg.ts` or `node -e`) that imports and calls the code — do NOT add console.log/debug statements to the source files you are fixing. Editing the source to instrument it forces a cleanup pass later (removing debug code before you finish), which wastes turns and risks leaving debug cruft in the patch. Keep the owned source files clean: only your actual fix goes there.',
+        'Debugging: prefer the `verify` tool over throwaway scripts. If you must inspect something it does not cover, write a THROWAWAY script (shell: `npx tsx /tmp/dbg.ts` or `node -e`) — do NOT add console.log/debug to the source files you are fixing (it forces a cleanup pass and risks debug cruft in the patch). Keep owned source clean: only your actual fix goes there.',
         '',
         'A separate critic re-runs verification and reviews your diff AFTER you finish, so you do not need to prove correctness exhaustively yourself — but your edit should target the actual cause, not a symptom. The moment the declared verification command passes, stop.',
         '',

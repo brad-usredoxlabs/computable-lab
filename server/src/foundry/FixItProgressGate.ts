@@ -11,6 +11,12 @@ export interface SuiteFixtureResult {
   passed: boolean;
 }
 
+export interface DiffDetail {
+  path: string;
+  expected: unknown;
+  actual: unknown;
+}
+
 /** Structural result for the target fixture. */
 export interface TargetFixtureResult {
   name: string;
@@ -19,6 +25,8 @@ export interface TargetFixtureResult {
   missing: string[];
   partial: string[];
   matched: string[];
+  /** expected-vs-actual at each missing/partial path (for the verify tool). */
+  diffDetails?: DiffDetail[];
 }
 
 /** A point-in-time verification of the worktree against the fix-it fixtures. */

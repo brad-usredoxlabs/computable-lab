@@ -22,12 +22,20 @@ import { diffFixture } from './FixtureDiff.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SPEC_FIX_PATTERN = /^spec-fix-.+\.yaml$/;
 
+interface DiffDetail {
+  path: string;
+  expected: unknown;
+  actual: unknown;
+}
+
 interface FixtureReport {
   name: string;
   passed: boolean;
   missing: string[];
   partial: string[];
   matched: string[];
+  /** expected-vs-actual at each missing/partial path (target only). */
+  diffDetails?: DiffDetail[];
   error?: string;
 }
 
@@ -36,18 +44,46 @@ function targetArg(): string | undefined {
   return idx >= 0 ? process.argv[idx + 1] : undefined;
 }
 
-async function evaluate(fileName: string): Promise<FixtureReport> {
+// Resolve a diff path like "terminalArtifacts.deckLayoutPlan.pinned[0].labwareHint"
+// against a {outcome, terminalArtifacts} root. Returns undefined if absent.
+function valueAtPath(root: unknown, path: string): unknown {
+  const tokens = path.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean);
+  let cur: unknown = root;
+  for (const tok of tokens) {
+    if (cur === null || cur === undefined) return undefined;
+    cur = (cur as Record<string, unknown>)[tok];
+  }
+  return cur;
+}
+
+function clip(value: unknown): unknown {
+  const s = typeof value === 'string' ? value : JSON.stringify(value);
+  if (typeof s === 'string' && s.length > 200) return `${s.slice(0, 200)}…`;
+  return value;
+}
+
+async function evaluate(fileName: string, withDetails: boolean): Promise<FixtureReport> {
   try {
     const fixture = parseFixture(readFileSync(join(__dirname, fileName), 'utf-8'));
     const result = await runFixture(fixture);
     const diff = diffFixture(result, fixture.expected);
-    return {
+    const report: FixtureReport = {
       name: fixture.name,
       passed: diff.missing.length === 0,
       missing: diff.missing,
       partial: diff.partial,
       matched: diff.matched,
     };
+    if (withDetails) {
+      const expectedRoot = { outcome: fixture.expected.outcome, terminalArtifacts: fixture.expected.terminalArtifacts };
+      const actualRoot = { outcome: result.outcome, terminalArtifacts: result.terminalArtifacts };
+      report.diffDetails = [...diff.missing, ...diff.partial].map((path) => ({
+        path,
+        expected: clip(valueAtPath(expectedRoot, path)),
+        actual: clip(valueAtPath(actualRoot, path)),
+      }));
+    }
+    return report;
   } catch (err) {
     // A fixture that throws is treated as failing, not a harness crash, so one
     // bad fixture can't sink the whole no-regression report.
@@ -66,7 +102,7 @@ async function main(): Promise<void> {
   const target = targetArg();
   const files = readdirSync(__dirname).filter((f) => SPEC_FIX_PATTERN.test(f)).sort();
   const reports: FixtureReport[] = [];
-  for (const file of files) reports.push(await evaluate(file));
+  for (const file of files) reports.push(await evaluate(file, target != null));
 
   const targetReport = target ? reports.find((r) => r.name === target) ?? null : null;
   process.stdout.write(
