@@ -24,16 +24,17 @@ const MAX_CONTEXT_CHARS = 6_000;
 const MAX_FILE_CHARS = 3_000;
 const MAX_ARTIFACT_CONTEXT_CHARS = 3_000;
 const MAX_SCHEMA_CONTEXT_CHARS = 3_000;
-// These reasoning models legitimately use a lot of turns on hard, multi-pass
-// bugs (trace the failing output back across passes, locate the real cause,
-// edit, verify, iterate). Observed at 80: the junior edited from turn 45,
-// iterated through 12 edits, and at turn 80 was REMOVING its debug
-// instrumentation to finalize the fix — i.e. it had basically solved it and
-// ran out mid-cleanup. Not a spiral; genuinely close. 100 gives it room to
-// land. Safe: transcript compaction bounds context growth, and the late
-// single-fire nudge (~60% of budget) catches a coder that drifts to the cap
-// without ever editing.
-export const TOOL_AGENT_MAX_TURNS = 100;
+// Per-round cap for ONE coder crack. The incremental round loop (commit
+// verified progress, re-run fresh) is what provides unbounded total progress —
+// NOT a huge single run, which only bloats the transcript until it hits the
+// model context window or the architect's request-body limit (observed: a
+// ~370KB body crashing the :8000 endpoint at turn ~70). So we keep each round
+// modest. Floor is set by observed behavior: first edits land at turn ~37-45,
+// so a round must be long enough to investigate AND then edit + verify + flip
+// at least one missing path (a round only needs to make SOME verified progress
+// to commit and continue). 60 clears that with margin while staying well under
+// the body wall.
+export const TOOL_AGENT_MAX_TURNS = 60;
 
 type CoderPatchStatus = 'applied' | 'blocked' | 'failed' | 'skipped' | 'stale' | 'needs-human';
 

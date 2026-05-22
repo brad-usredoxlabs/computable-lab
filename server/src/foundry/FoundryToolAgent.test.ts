@@ -241,6 +241,41 @@ describe('FoundryToolAgent', () => {
     }
   });
 
+  it('writes a succinct handoff summary when it runs out of turns', async () => {
+    const workdir = await mkdtemp(join(tmpdir(), 'foundry-tool-agent-handoff-'));
+    try {
+      // Model never completes. On the final no-tools handoff call we detect
+      // the handoff prompt and return a deliberate summary.
+      const complete = vi.fn(async (req: CompletionRequest) => {
+        const last = String(req.messages.at(-1)?.content ?? '');
+        if (last.includes('out of turns')) {
+          return response({ role: 'assistant', content: 'HANDOFF: root cause is the phrase used as hint; changed collectCandidate; still failing labwareHint; next map alias.' }, 'stop');
+        }
+        return response({ role: 'assistant', content: 'still investigating' }, 'stop');
+      });
+      const client = {
+        complete,
+        completeStream: vi.fn(),
+      } as unknown as InferenceClient;
+
+      const result = await runFoundryToolAgent({
+        client,
+        model: 'mock-model',
+        workdir,
+        prompt: 'fix it',
+        maxTurns: 2,
+      });
+
+      expect(result.status).toBe('max-turns');
+      // finalText is the deliberate handoff, not a mid-thought fragment.
+      expect(result.finalText).toContain('HANDOFF: root cause');
+      // 2 turns + 1 handoff call.
+      expect(complete).toHaveBeenCalledTimes(3);
+    } finally {
+      await rm(workdir, { recursive: true, force: true });
+    }
+  });
+
   it('retries once on a transient "fetch failed" inference error instead of failing', async () => {
     const workdir = await mkdtemp(join(tmpdir(), 'foundry-tool-agent-transient-'));
     try {

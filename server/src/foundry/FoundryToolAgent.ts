@@ -390,6 +390,41 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
       }
     }
 
+    // Out of turns without completing. Spend one final no-tools call asking
+    // for a SUCCINCT handoff so the next coder (senior this round, or the next
+    // round) continues from the findings instead of re-deriving them. Replaces
+    // the old behavior of forwarding whatever fragment the model last said.
+    if (requireCompletionPromise) {
+      try {
+        compactTranscript(messages, INPUT_TOKEN_BUDGET, KEEP_RECENT_TOOL_RESULTS);
+        const handoffResponse = await input.client.complete({
+          model: input.model,
+          messages: [
+            ...messages.map(cloneMessage),
+            {
+              role: 'user',
+              content:
+                'You are out of turns and the task is NOT complete. Write a concise handoff '
+                + '(<=200 words) for the next coder, who continues from your in-progress edits. '
+                + 'Cover: (1) the root cause(s) you identified, (2) what you changed and where, '
+                + '(3) what is still failing and why, (4) the single most promising next step. '
+                + 'Prose only — no tool calls.',
+            },
+          ],
+          temperature: input.temperature ?? 0.2,
+          max_tokens: 1024,
+          enableThinking: false,
+        });
+        const summary = handoffResponse.choices[0]?.message?.content?.trim();
+        if (summary) {
+          finalText = summary;
+          await progress(input, { phase: 'model_response', message: 'Coder wrote a handoff summary', details: { chars: summary.length } });
+        }
+      } catch (err) {
+        await trace(input.tracePath, { type: 'handoff_summary_failed', error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
     await progress(input, {
       phase: 'max_turns',
       message: `Tool agent reached max turns (${maxTurns})`,

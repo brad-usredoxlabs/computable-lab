@@ -10,13 +10,13 @@ import {
 } from './FoundryCoderPatch.js';
 
 describe('TOOL_AGENT_MAX_TURNS', () => {
-  it('gives the coder enough budget for hard multi-pass bugs', () => {
-    // These reasoning models legitimately use many turns: trace the cause
-    // across passes, edit, verify, iterate. At 80 the junior had basically
-    // solved it and ran out mid-cleanup (removing debug instrumentation), so
-    // 100. Growth is bounded by transcript compaction, and a late single-fire
-    // nudge stops drift-to-cap-without-editing.
-    expect(TOOL_AGENT_MAX_TURNS).toBe(100);
+  it('caps one coder round long enough to investigate, edit, and make progress', () => {
+    // Per-round cap. The round loop (commit verified progress, re-run fresh)
+    // gives unbounded TOTAL progress; a single run stays modest so it keeps
+    // under the model context window and the architect's request-body limit
+    // (a ~370KB body crashed :8000 at turn ~70). First edits land at turn
+    // ~37-45, so 60 leaves room to investigate + edit + flip a missing path.
+    expect(TOOL_AGENT_MAX_TURNS).toBe(60);
   });
 });
 
