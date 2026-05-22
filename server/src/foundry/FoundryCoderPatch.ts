@@ -684,6 +684,14 @@ export async function runFoundryCoderPatch(input: {
   coderRole?: FoundryCoderRole;
   coderEngine?: FoundryCoderEngine;
   workerInference?: Partial<InferenceConfig>;
+  /**
+   * Which endpoint the senior role uses. Defaults to 'architect'. The
+   * event-editor fix-it loop sets 'worker' so escalation runs on the bigger,
+   * big-context worker model (the architect endpoint is body-limited/flaky).
+   */
+  seniorEndpoint?: 'worker' | 'architect';
+  /** Override the tool-agent turn cap for this run (e.g. a higher senior cap). */
+  maxTurns?: number;
   revisionFeedback?: string;
   onProgress?: (event: FoundryCoderPatchProgressEvent) => void | Promise<void>;
   /**
@@ -764,9 +772,16 @@ export async function runFoundryCoderPatch(input: {
   const coderEngine: FoundryCoderEngine = input.coderEngine ?? 'symbol-patch';
 
   let baseUrl: string, model: string, timeoutMs: number;
-  if (coderRole === 'senior') {
+  if (coderRole === 'senior' && input.seniorEndpoint !== 'worker') {
     baseUrl = archBaseUrl;
     model = seniorCoderModel;
+    timeoutMs = 1200_000;
+  } else if (coderRole === 'senior') {
+    // Senior-on-worker: a fresh crack on the bigger, big-context worker model
+    // (avoids the architect's request-body wall). Generous timeout for the
+    // higher turn budget.
+    baseUrl = workerBaseUrl;
+    model = speedyCoderModel;
     timeoutMs = 1200_000;
   } else {
     baseUrl = workerBaseUrl;
@@ -905,7 +920,7 @@ export async function runFoundryCoderPatch(input: {
         ...(input.revisionFeedback ? { revisionFeedback: input.revisionFeedback } : {}),
       }),
       tracePath,
-      maxTurns: TOOL_AGENT_MAX_TURNS,
+      maxTurns: input.maxTurns ?? TOOL_AGENT_MAX_TURNS,
       maxTokens: 16_384,
       temperature: 0.1,
       ...(extraTools.length ? { extraTools } : {}),

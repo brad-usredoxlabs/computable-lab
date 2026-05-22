@@ -24,7 +24,6 @@ import {
 } from '../../compiler/pipeline/passes/ChatbotCompilePasses.js';
 import { runFoundryCoderPatch } from '../../foundry/FoundryCoderPatch.js';
 import { runFoundryPatchCritic } from '../../foundry/FoundryCritic.js';
-import type { FoundryCriticResult } from '../../foundry/FoundryCritic.js';
 import { evaluateProgress, runFixtureVerification } from '../../foundry/FixItProgressGate.js';
 import type { FixtureVerification } from '../../foundry/FixItProgressGate.js';
 import { EventEditorFixItJobManager } from '../../foundry/EventEditorFixItJobManager.js';
@@ -952,6 +951,12 @@ export interface GitOps {
    * restored to HEAD; untracked files are deleted.
    */
   reset(files: string[]): Promise<void>;
+  /**
+   * Like `reset`, but inside an isolated worktree — so a STUCK round's
+   * uncommitted edits are discarded and the next round starts clean from the
+   * worktree's last commit (committed progress is preserved).
+   */
+  resetWorktree?(worktreeRoot: string, files: string[]): Promise<void>;
 }
 
 function createGitOps(repoRoot: string): GitOps {
@@ -992,6 +997,18 @@ function createGitOps(repoRoot: string): GitOps {
           await runGit(['checkout', '--', file]).catch(() => {});
         } else {
           await unlink(resolve(repoRoot, file)).catch(() => {});
+        }
+      }
+    },
+    async resetWorktree(worktreeRoot, files) {
+      for (const file of files) {
+        const tracked = await execFileAsync('git', ['-C', worktreeRoot, 'ls-files', '--error-unmatch', '--', file])
+          .then(() => true)
+          .catch(() => false);
+        if (tracked) {
+          await execFileAsync('git', ['-C', worktreeRoot, 'checkout', '--', file]).catch(() => {});
+        } else {
+          await unlink(resolve(worktreeRoot, file)).catch(() => {});
         }
       }
     },
@@ -1088,7 +1105,7 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
     body, workspaceRoot, artifactRoot,
     activeJobRef, executionRootRef, executionArtifactRootRef, jobIdRef, touchedFileSetRef,
     fixItJobManager, gitOps,
-    coderPatchRunner, criticRunner,
+    coderPatchRunner,
     verifyFixtures, maxRounds,
     request,
     onProgress,
@@ -1162,27 +1179,30 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
 
   checkAbort();
 
-  // ── Incremental-landing round loop ──────────────────────────────────────
-  // Each round is a fresh coder crack. We commit a full PASS (done) OR verified
-  // PROGRESS (a partial fix that satisfies strictly more of the fixture with no
-  // regression) and re-run to surface the next bug. STUCK → escalate. This
-  // turns multi-bug prompts from "fix everything in one session or nothing
-  // lands" into "land one safe fix at a time".
-  let criticSummary: ApplyFixCriticSummary | undefined;
+  // ── Ralph-style incremental round loop ──────────────────────────────────
+  // Each round is ONE coder crack, gated by the deterministic fixture-diff gate
+  // (the sole authority — no critic). PASS → commit, done. PROGRESS (strictly
+  // more of the fixture satisfied, no regression) → commit the partial fix and
+  // re-run to surface the next bug. STUCK → roll back this round's edits and
+  // retry the junior; after SENIOR_AFTER consecutive stuck rounds, escalate to
+  // a senior crack (same big-context worker model, higher turn cap, all
+  // accumulated feedback). A stuck senior round ends the job (human).
+  const SENIOR_AFTER = 2;
+  const SENIOR_MAX_TURNS = 100;
   let seniorRetryRan = false;
   let commit: string | undefined;
   let landedCommits = 0;
+  let stuckStreak = 0;
   let lastVerdict: 'pass' | 'progress' | 'stuck' | undefined;
-  let criticVerdictForResult: FoundryCriticResult['verdict'] | undefined;
+  let lastMissing: string[] = [];
+  let lastMatched: string[] = [];
   let coderResult!: Awaited<ReturnType<typeof coderPatchRunner>>;
   let carryForward: string | undefined;
 
   for (let round = 1; round <= maxRounds; round += 1) {
     checkAbort();
-    if (round > 1) {
-      onEvent({ type: 'stage', stage: 'coder_running' });
-      onProgress({ source: 'server', phase: 'round_started', message: `Starting fix round ${round}/${maxRounds}`, details: { round } });
-    }
+    const role: 'junior' | 'senior' = stuckStreak >= SENIOR_AFTER ? 'senior' : 'junior';
+    if (role === 'senior') seniorRetryRan = true;
 
     // Baseline: what the fixtures already satisfy before this round's edits.
     let baseline: FixtureVerification | null = null;
@@ -1192,227 +1212,121 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
       request.log.warn({ err }, 'fix-it: baseline fixture verification unavailable');
     }
 
-    // 3) Coder crack (junior; carry-forward feedback on later rounds)
-    onEvent({ type: 'stage', stage: 'coder_running' });
-    onProgress({ source: 'server', phase: 'junior_started', message: round > 1 ? `Starting coder (round ${round})` : 'Starting junior coder' });
+    // Coder crack.
+    onEvent({ type: 'stage', stage: role === 'senior' ? 'senior_retry' : 'coder_running' });
+    onProgress({
+      source: 'server',
+      phase: role === 'senior' ? 'senior_started' : 'junior_started',
+      message: `Starting ${role} coder (round ${round}/${maxRounds})`,
+      details: { round, role },
+    });
     coderResult = await coderPatchRunner({
       artifactRoot: executionArtifactRoot,
       repoRoot: executionRoot,
       protocolId,
       variant,
       forcedSpecPath: patchSpecPath,
-      coderRole: 'junior',
+      coderRole: role,
       coderEngine: 'tool-agent',
       autoCommit: false,
+      ...(role === 'senior' ? { seniorEndpoint: 'worker' as const, maxTurns: SENIOR_MAX_TURNS } : {}),
       ...(carryForward ? { revisionFeedback: carryForward } : {}),
       ...(round > 1 ? { attempt: round } : {}),
       onProgress: (event) => onProgress(event),
     });
     onProgress({
       source: 'server',
-      phase: 'junior_finished',
-      message: `Junior coder finished with status ${coderResult.status}`,
-      details: { status: coderResult.status, touchedFiles: coderResult.touchedFiles },
+      phase: role === 'senior' ? 'senior_finished' : 'junior_finished',
+      message: `${role} coder finished with status ${coderResult.status}`,
+      details: { status: coderResult.status, touchedFiles: coderResult.touchedFiles, round, role },
     });
     const roundTouched = new Set<string>(coderResult.touchedFiles);
     for (const f of coderResult.touchedFiles) touchedFileSet.add(f);
     checkAbort();
 
-  // 4) Critic
-  let finalCriticVerdict: FoundryCriticResult['verdict'] | undefined;
-  let seniorRevisionFeedback: string | undefined;
-  if (coderResult.status === 'applied') {
-    onEvent({ type: 'stage', stage: 'critic_running' });
-    if (activeJobRef.value && fixItJobManager)
-      await fixItJobManager.markCriticRunning(activeJobRef.value.id);
-    onProgress({ source: 'server', phase: 'critic_started', message: 'Starting critic review' });
-    const critic1 = await criticRunner({
-      artifactRoot: executionArtifactRoot,
-      protocolId,
-      variant,
-      repoRoot: executionRoot,
-      onProgress: (event) => onProgress(event),
-    });
-    criticSummary = summarizeCritic(critic1, false);
-    finalCriticVerdict = critic1.verdict;
-    onProgress({
-      source: 'server',
-      phase: 'critic_finished',
-      message: `Critic verdict: ${critic1.verdict}`,
-      details: {
-        verdict: critic1.verdict,
-        criteriaMet: critic1.specVerification?.criteriaMet ?? [],
-        criteriaFailed: critic1.specVerification?.criteriaFailed ?? [],
-      },
-    });
-    checkAbort();
-    if (critic1.verdict === 'revision') {
-      seniorRevisionFeedback = critic1.revisionFeedback ?? critic1.message;
-    }
-  } else if (coderResult.status === 'needs-human') {
-    seniorRevisionFeedback = [
-      'Junior coder did not produce an accepted patch (ran out of turns before verifying).',
-      `Junior status: ${coderResult.status}`,
-      // Forward the junior's own diagnosis so the senior CONTINUES its lead
-      // rather than re-deriving the root cause from scratch. The junior often
-      // identifies the real cause but runs out of turns before landing +
-      // verifying the fix. Treat it as a strong hypothesis, not gospel —
-      // verify against the failing fixture before trusting it.
-      ...(coderResult.finalText
-        ? [
-            "Previous attempt's analysis (a strong lead — verify it against the failing fixture, do not assume it is correct):",
-            coderResult.finalText,
-          ]
-        : []),
-      'Its in-progress edits are already in the working tree. Continue from there: confirm or correct the diagnosis, land the fix, and run the verification command.',
-    ].join('\n\n');
-  }
-
-  // 5) Senior escalation
-  if (seniorRevisionFeedback) {
-    onEvent({ type: 'stage', stage: 'senior_retry' });
-    onProgress({
-      source: 'server',
-      phase: 'senior_started',
-      message: finalCriticVerdict === 'revision'
-        ? 'Critic requested a revision; starting senior coder'
-        : 'Junior coder did not complete; starting senior coder',
-      details: { revisionFeedback: seniorRevisionFeedback },
-    });
-    seniorRetryRan = true;
-    coderResult = await coderPatchRunner({
-      artifactRoot: executionArtifactRoot,
-      repoRoot: executionRoot,
-      protocolId,
-      variant,
-      forcedSpecPath: patchSpecPath,
-      coderRole: 'senior',
-      coderEngine: 'tool-agent',
-      autoCommit: false,
-      attempt: 2,
-      revisionFeedback: seniorRevisionFeedback,
-      onProgress: (event) => onProgress(event),
-    });
-    onProgress({
-      source: 'server',
-      phase: 'senior_finished',
-      message: `Senior coder finished with status ${coderResult.status}`,
-      details: { status: coderResult.status, touchedFiles: coderResult.touchedFiles },
-    });
-    for (const f of coderResult.touchedFiles) { touchedFileSet.add(f); roundTouched.add(f); }
-    checkAbort();
-    if (coderResult.status === 'applied') {
-      onEvent({ type: 'stage', stage: 'critic_running' });
-      if (activeJobRef.value && fixItJobManager)
-        await fixItJobManager.markCriticRunning(activeJobRef.value.id);
-      onProgress({
-        source: 'server',
-        phase: 'critic_started',
-        message: 'Starting critic review for senior patch',
-      });
-      const critic2 = await criticRunner({
-        artifactRoot: executionArtifactRoot,
-        protocolId,
-        variant,
-        repoRoot: executionRoot,
-        onProgress: (event) => onProgress(event),
-      });
-      criticSummary = summarizeCritic(critic2, true);
-      finalCriticVerdict = critic2.verdict;
-      onProgress({
-        source: 'server',
-        phase: 'critic_finished',
-        message: `Critic verdict: ${critic2.verdict}`,
-        details: {
-          verdict: critic2.verdict,
-          criteriaMet: critic2.specVerification?.criteriaMet ?? [],
-          criteriaFailed: critic2.specVerification?.criteriaFailed ?? [],
-        },
-      });
-      checkAbort();
-    } else {
-      if (finalCriticVerdict !== 'revision') {
-        criticSummary = undefined;
-      }
-    }
-  }
-
-    // 6) Gate. A full PASS lands and ends. Otherwise consult the verified
-    // progress gate: PROGRESS (strictly more of the fixture satisfied, no
-    // regression) lands the partial fix and re-runs; STUCK rolls back and
-    // escalates.
+    // Gate (sole authority): verify the worktree against the fixtures.
     let post: FixtureVerification | null = null;
-    let verdict: 'pass' | 'progress' | 'stuck';
-    if (finalCriticVerdict === 'pass') {
-      verdict = 'pass';
-    } else {
-      try {
-        post = await verifyFixtures(executionRoot, body.specId);
-      } catch (err) {
-        request.log.warn({ err }, 'fix-it: post-round fixture verification unavailable');
-      }
-      verdict = baseline && post ? evaluateProgress(baseline, post) : 'stuck';
-      onProgress({
-        source: 'server',
-        phase: 'progress_gate',
-        message: `Round ${round} gate verdict: ${verdict}`,
-        details: { verdict, round, ...(post?.target ? { missing: post.target.missing } : {}) },
-      });
+    try {
+      post = await verifyFixtures(executionRoot, body.specId);
+    } catch (err) {
+      request.log.warn({ err }, 'fix-it: post-round fixture verification unavailable');
     }
+    const verdict: 'pass' | 'progress' | 'stuck' = baseline && post ? evaluateProgress(baseline, post) : 'stuck';
     lastVerdict = verdict;
-    if (finalCriticVerdict !== undefined) criticVerdictForResult = finalCriticVerdict;
+    lastMissing = post?.target?.missing ?? lastMissing;
+    lastMatched = post?.target?.matched ?? lastMatched;
+    onProgress({
+      source: 'server',
+      phase: 'progress_gate',
+      message: `Round ${round} (${role}) gate verdict: ${verdict}`,
+      details: { verdict, round, role, ...(post?.target ? { missing: post.target.missing } : {}) },
+    });
 
     const roundFiles = Array.from(roundTouched);
-    if ((verdict === 'pass' || verdict === 'progress') && roundFiles.length > 0) {
-      try {
-        onProgress({
-          source: 'server',
-          phase: 'committing',
-          message: activeJobRef.value
-            ? `Landing ${roundFiles.length} file(s) from job worktree (round ${round}, ${verdict})`
-            : `Committing ${roundFiles.length} file(s) (round ${round}, ${verdict})`,
-          details: { touchedFiles: roundFiles, round, verdict, ...(activeJobRef.value ? { job: activeJobRef.value } : {}) },
-        });
-        const title = verdict === 'progress' ? `${specTitle} (round ${round})` : specTitle;
-        const roundCommit = activeJobRef.value?.worktreePath && gitOps.commitFromWorktree
-          ? await gitOps.commitFromWorktree(activeJobRef.value.worktreePath, roundFiles, title)
-          : await gitOps.commit(roundFiles, title);
-        if (roundCommit) {
-          commit = roundCommit;
-          landedCommits += 1;
+    if (verdict === 'pass' || verdict === 'progress') {
+      if (roundFiles.length > 0) {
+        try {
+          onProgress({
+            source: 'server',
+            phase: 'committing',
+            message: activeJobRef.value
+              ? `Landing ${roundFiles.length} file(s) from job worktree (round ${round}, ${verdict})`
+              : `Committing ${roundFiles.length} file(s) (round ${round}, ${verdict})`,
+            details: { touchedFiles: roundFiles, round, verdict, ...(activeJobRef.value ? { job: activeJobRef.value } : {}) },
+          });
+          const title = verdict === 'progress' ? `${specTitle} (round ${round})` : specTitle;
+          const roundCommit = activeJobRef.value?.worktreePath && gitOps.commitFromWorktree
+            ? await gitOps.commitFromWorktree(activeJobRef.value.worktreePath, roundFiles, title)
+            : await gitOps.commit(roundFiles, title);
+          if (roundCommit) {
+            commit = roundCommit;
+            landedCommits += 1;
+          }
+          onProgress({ source: 'server', phase: 'committed', message: `Committed fix ${roundCommit}`, details: { commit: roundCommit, round } });
+        } catch (gitErr) {
+          request.log.error({ err: gitErr }, 'fix-it commit failed; leaving changes uncommitted');
         }
-        onProgress({ source: 'server', phase: 'committed', message: `Committed fix ${roundCommit}`, details: { commit: roundCommit, round } });
-      } catch (gitErr) {
-        request.log.error({ err: gitErr }, 'fix-it commit failed; leaving changes uncommitted');
       }
-    } else if (verdict === 'stuck') {
-      try {
-        onProgress({
-          source: 'server',
-          phase: 'rolling_back',
-          message: activeJobRef.value
-            ? `Round ${round} made no safe progress; preserving main checkout`
-            : `Round ${round} made no safe progress; rolling back uncommitted edits`,
-          details: { touchedFiles: roundFiles, round, ...(activeJobRef.value ? { job: activeJobRef.value } : {}) },
-        });
-        if (!activeJobRef.value && roundFiles.length > 0) await gitOps.reset(roundFiles);
-      } catch (gitErr) {
-        request.log.error({ err: gitErr }, 'fix-it reset failed; working tree may be dirty');
-      }
+      if (verdict === 'pass') break;
+      // PROGRESS → reset the stuck streak and carry the verified state forward.
+      stuckStreak = 0;
+      carryForward = [
+        'A previous round landed a partial fix (already committed in the working tree); the fixture still fails on a different cause.',
+        lastMissing.length ? `Remaining unsatisfied expected paths: ${lastMissing.slice(0, 12).join(', ')}` : '',
+        coderResult.finalText
+          ? `Previous round's analysis (a lead — verify against the failing fixture, do not assume it is correct):\n${coderResult.finalText}`
+          : '',
+        'Continue from the committed state: find and fix the NEXT cause, then run the verification command.',
+      ].filter(Boolean).join('\n\n');
+      continue;
     }
 
-    if (verdict === 'pass' || verdict === 'stuck') break;
+    // STUCK → discard this round's uncommitted edits (start the next crack
+    // clean from the last commit) and retry, escalating after SENIOR_AFTER.
+    try {
+      onProgress({
+        source: 'server',
+        phase: 'rolling_back',
+        message: `Round ${round} (${role}) made no safe progress; discarding its uncommitted edits`,
+        details: { touchedFiles: roundFiles, round, role, ...(activeJobRef.value ? { job: activeJobRef.value } : {}) },
+      });
+      if (roundFiles.length > 0) {
+        if (activeJobRef.value?.worktreePath && gitOps.resetWorktree) {
+          await gitOps.resetWorktree(activeJobRef.value.worktreePath, roundFiles);
+        } else if (!activeJobRef.value) {
+          await gitOps.reset(roundFiles);
+        }
+      }
+    } catch (gitErr) {
+      request.log.error({ err: gitErr }, 'fix-it reset failed; working tree may be dirty');
+    }
 
-    // PROGRESS → carry the verified state forward so the next round continues
-    // the fix instead of re-deriving it.
-    const remaining = post?.target?.missing ?? [];
+    if (role === 'senior') break; // senior also stuck → escalate to human
+    stuckStreak += 1;
     carryForward = [
-      'A previous round landed a partial fix (already committed in the working tree); the fixture still fails on a different cause.',
-      remaining.length ? `Remaining unsatisfied expected paths: ${remaining.slice(0, 12).join(', ')}` : '',
-      coderResult.finalText
-        ? `Previous round's analysis (a lead — verify against the failing fixture, do not assume it is correct):\n${coderResult.finalText}`
-        : '',
-      'Continue from the committed state: find and fix the NEXT cause, then run the verification command.',
+      'The previous attempt made NO measurable progress on the fixture. Do not repeat the same approach — form a different hypothesis.',
+      lastMissing.length ? `Still-unsatisfied expected paths: ${lastMissing.slice(0, 12).join(', ')}` : '',
+      coderResult.finalText ? `Previous attempt's notes:\n${coderResult.finalText}` : '',
     ].filter(Boolean).join('\n\n');
   }
   // ── end round loop ──────────────────────────────────────────────────────
@@ -1422,18 +1336,31 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
     lastVerdict === 'pass'
       ? 'applied'
       : landedCommits > 0
-        ? 'needs-revision'
-        : criticVerdictForResult === 'block'
-          ? 'blocked'
-          : criticVerdictForResult === 'revision'
-            ? 'needs-revision'
-            : coderResult.status;
+        ? 'needs-revision'   // landed partial progress; more bugs remain
+        // No verified progress. A coder that "applied" edits the gate rejected
+        // still needs a human; otherwise pass through the coder's terminal
+        // status (blocked / failed / needs-human).
+        : coderResult.status === 'applied'
+          ? 'needs-human'
+          : coderResult.status;
   const effectiveMessage =
     lastVerdict === 'pass'
       ? 'Patch accepted and committed.'
       : landedCommits > 0
         ? `Landed ${landedCommits} incremental fix(es); the fixture still fails, so more work remains. Re-run to continue.`
-        : criticSummary?.message ?? coderResult.message;
+        : lastMissing.length > 0
+          ? `No fix landed; ${lastMissing.length} expected fixture path(s) still unsatisfied.`
+          : coderResult.message;
+
+  // Synthesize a critic-shaped summary from the gate so the UI/job record still
+  // shows verdict + which fixture paths are met/failing (the critic is gone).
+  const gateSummary: ApplyFixCriticSummary = {
+    verdict: lastVerdict === 'pass' ? 'pass' : 'revision',
+    message: effectiveMessage,
+    criteriaMet: lastMatched,
+    criteriaFailed: lastMissing,
+    seniorRetryRan,
+  };
 
   if (activeJobRef.value && fixItJobManager) {
     const releaseWorktree = effectiveStatus !== 'needs-revision';
@@ -1444,7 +1371,7 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
         status: effectiveStatus,
         touchedFiles,
         ...(commit ? { commit } : {}),
-        ...(criticSummary ? { critic: { ...criticSummary, seniorRetryRan } } : {}),
+        critic: gateSummary,
       },
       releaseWorktree,
     });
@@ -1458,7 +1385,7 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
       touchedFiles,
       ...(activeJobRef.value ? { job: activeJobRef.value } : {}),
       ...(commit ? { commit } : {}),
-      ...(criticSummary ? { critic: { ...criticSummary, seniorRetryRan } } : {}),
+      critic: gateSummary,
     },
   });
 
@@ -1470,9 +1397,9 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
     message: effectiveMessage,
     touchedFiles,
     seniorRetryRan,
+    criticSummary: gateSummary,
   };
   if (commit !== undefined) result.commit = commit;
-  if (criticSummary !== undefined) result.criticSummary = criticSummary;
   if (jobIdRef.value !== undefined) result.jobId = jobIdRef.value;
   return result;
 }
@@ -2226,16 +2153,3 @@ function buildApplyResultFromJob(job: EventEditorFixItJobRecord): Record<string,
   };
 }
 
-function summarizeCritic(
-  critic: FoundryCriticResult,
-  seniorRetryRan: boolean,
-): ApplyFixCriticSummary {
-  return {
-    verdict: critic.verdict,
-    message: critic.message,
-    criteriaMet: critic.specVerification?.criteriaMet ?? [],
-    criteriaFailed: critic.specVerification?.criteriaFailed ?? [],
-    ...(critic.revisionFeedback ? { revisionFeedback: critic.revisionFeedback } : {}),
-    seniorRetryRan,
-  };
-}

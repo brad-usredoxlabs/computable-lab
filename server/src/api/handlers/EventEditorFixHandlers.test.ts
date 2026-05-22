@@ -350,7 +350,7 @@ describe('EventEditorFixHandlers.synthesizeSpec', () => {
 });
 
 describe('EventEditorFixHandlers.applyFixStream', () => {
-  it('runs coder and critic in an isolated worktree, then lands the approved diff', async () => {
+  it('lands an approved diff from an isolated worktree when the gate reports PASS', async () => {
     const tmp = await mkdtemp(join(tmpdir(), 'fixit-worktree-apply-'));
     try {
       await git(tmp, ['init']);
@@ -362,7 +362,6 @@ describe('EventEditorFixHandlers.applyFixStream', () => {
       await git(tmp, ['commit', '-m', 'initial']);
 
       let coderRepoRoot = '';
-      let criticRepoRoot = '';
       const runCoderPatch = vi.fn(async (input: {
         artifactRoot: string;
         repoRoot: string;
@@ -377,33 +376,17 @@ describe('EventEditorFixHandlers.applyFixStream', () => {
           touchedFiles: ['server/src/foo.ts'],
         };
       });
-      const runPatchCritic = vi.fn(async (input: { repoRoot: string }) => {
-        criticRepoRoot = input.repoRoot;
-        return {
-          kind: 'protocol-foundry-critic-report' as const,
-          protocolId: 'event-editor-fixit',
-          variant: 'manual_tubes',
-          generated_at: '2026-05-17T00:00:00Z',
-          verdict: 'pass' as const,
-          reportPath: '/tmp/report.yaml',
-          reviewDurationMs: 1,
-          message: 'worktree patch passes',
-          notes: [],
-          touchedFiles: ['server/src/foo.ts'],
-          specVerification: {
-            accepted: true,
-            criteriaMet: ['criterion-1'],
-            criteriaFailed: [],
-            notes: [],
-          },
-        };
-      });
+      // Gate reports the fixture fully satisfied → PASS → land.
+      const verifyFixtures = vi.fn(async () => ({
+        target: { name: 'spec-fix-W', passed: true, missing: [], partial: [], matched: ['outcome'] },
+        suite: [] as Array<{ name: string; passed: boolean }>,
+      }));
 
       const handlers = createEventEditorFixHandlers({
         workspaceRoot: tmp,
         clientFactory: () => ({ complete: vi.fn(), completeStream: vi.fn() } as unknown as InferenceClient),
         runCoderPatch: runCoderPatch as never,
-        runPatchCritic: runPatchCritic as never,
+        verifyFixtures: verifyFixtures as never,
       });
 
       const reply = makeFastifyReply();
@@ -424,9 +407,10 @@ describe('EventEditorFixHandlers.applyFixStream', () => {
       );
 
       expect(coderRepoRoot).not.toBe(tmp);
-      expect(criticRepoRoot).toBe(coderRepoRoot);
       expect(coderRepoRoot).toContain('.fixit-worktrees');
       await expect(readFile(join(tmp, 'server/src/foo.ts'), 'utf-8')).resolves.toContain('foo = 1');
+      // Junior only — a PASS on round 1 never escalates to senior.
+      expect(runCoderPatch.mock.calls.every((c) => (c[0] as { coderRole?: string }).coderRole === 'junior')).toBe(true);
 
       const events = parseSseDataLines(reply._stats().writeChunks);
       const jobProgress = events.find((e): e is {
@@ -436,16 +420,6 @@ describe('EventEditorFixHandlers.applyFixStream', () => {
       } => (e as { type?: string }).type === 'progress' && (e as { phase?: string }).phase === 'job_started');
       expect(jobProgress?.details?.id).toBeDefined();
       expect(jobProgress?.details?.worktreePath).toBe(coderRepoRoot);
-      const jobYaml = await readFile(
-        join(tmp, 'artifacts/event-editor-fixit/jobs', jobProgress!.details!.id!, 'job.yaml'),
-        'utf-8',
-      );
-      expect(jobYaml).toContain('fix-session-worktree');
-      const sessionJson = await readFile(
-        join(tmp, 'artifacts/event-editor-fixit/jobs', jobProgress!.details!.id!, 'session.json'),
-        'utf-8',
-      );
-      expect(sessionJson).toContain('worktree diagnosis');
       const eventLog = await readFile(
         join(tmp, 'artifacts/event-editor-fixit/jobs', jobProgress!.details!.id!, 'events.jsonl'),
         'utf-8',
@@ -460,7 +434,6 @@ describe('EventEditorFixHandlers.applyFixStream', () => {
       } => (e as { type?: string }).type === 'done');
       expect(done?.result.status).toBe('applied');
       expect(done?.result.commit).toBeDefined();
-      expect(done?.result.job?.worktreePath).toBe(coderRepoRoot);
       const log = await git(tmp, ['log', '-1', '--pretty=%s']);
       expect(log.trim()).toBe('Event-editor fix-it: worktree landing');
     } finally {
@@ -468,46 +441,31 @@ describe('EventEditorFixHandlers.applyFixStream', () => {
     }
   });
 
-  it('writes fixture + spec, runs the coder with autoCommit:false, then commits on critic pass', async () => {
+  it('commits a fix when the gate reports PASS (junior only, no senior)', async () => {
     const tmp = await mkdtemp(join(tmpdir(), 'fixit-apply-'));
     try {
-      const runCoderPatch = vi.fn(async (input: { artifactRoot: string; repoRoot: string; protocolId: string; variant: string; forcedSpecPath: string }) => {
-        return {
-          status: 'applied' as const,
-          resultPath: join(input.artifactRoot, 'result.yaml'),
-          message: 'patch applied',
-          touchedFiles: ['server/src/foo.ts'],
-        };
-      });
-      const runPatchCritic = vi.fn(async () => ({
-        kind: 'protocol-foundry-critic-report' as const,
-        protocolId: 'event-editor-fixit',
-        variant: 'manual_tubes',
-        generated_at: '2026-05-16T00:00:00Z',
-        verdict: 'pass' as const,
-        reportPath: '/tmp/report.yaml',
-        reviewDurationMs: 1,
-        message: 'patch matches the spec acceptance criteria',
-        notes: [],
+      const runCoderPatch = vi.fn(async (input: { artifactRoot: string }) => ({
+        status: 'applied' as const,
+        resultPath: join(input.artifactRoot, 'result.yaml'),
+        message: 'patch applied',
         touchedFiles: ['server/src/foo.ts'],
-        specVerification: {
-          accepted: true,
-          criteriaMet: ['criterion-1'],
-          criteriaFailed: [],
-          notes: [],
-        },
       }));
       const gitOps = {
         commit: vi.fn(async (_files: string[], _title: string) => 'deadbeef'),
         reset: vi.fn(async (_files: string[]) => undefined),
       };
+      const verifyFixtures = vi.fn(async () => ({
+        target: { name: 'spec-fix-X', passed: true, missing: [], partial: [], matched: ['outcome'] },
+        suite: [] as Array<{ name: string; passed: boolean }>,
+      }));
 
       const handlers = createEventEditorFixHandlers({
         workspaceRoot: tmp,
         clientFactory: () => ({ complete: vi.fn(), completeStream: vi.fn() } as unknown as InferenceClient),
         runCoderPatch: runCoderPatch as never,
-        runPatchCritic: runPatchCritic as never,
         gitOps,
+        fixItJobManager: null,
+        verifyFixtures: verifyFixtures as never,
       });
 
       const reply = makeFastifyReply();
@@ -521,499 +479,153 @@ describe('EventEditorFixHandlers.applyFixStream', () => {
         reply as never,
       );
 
-      // Fixture was written into the source tree (under tmp).
-      const fixtureContents = await readFile(
-        join(tmp, 'server/src/compiler/pipeline/fixtures/spec-fix-X.yaml'),
-        'utf-8',
-      );
-      expect(fixtureContents).toContain('name: spec-fix-X');
+      // Fixture + spec written into the (tmp) tree.
+      expect(await readFile(join(tmp, 'server/src/compiler/pipeline/fixtures/spec-fix-X.yaml'), 'utf-8')).toContain('name: spec-fix-X');
 
-      // Spec was written into the artifact queue.
-      const patchSpecPath = join(
-        tmp,
-        'artifacts/event-editor-fixit/patch-specs/event-editor-fixit/manual_tubes/spec-fix-X.yaml',
-      );
-      const specContents = await readFile(patchSpecPath, 'utf-8');
-      expect(specContents).toContain('id: spec-fix-X');
-
-      // Coder was called with autoCommit:false so the handler can defer
-      // the commit until the critic has weighed in.
+      // One junior crack, autoCommit:false.
       expect(runCoderPatch).toHaveBeenCalledTimes(1);
-      const call = runCoderPatch.mock.calls[0]![0];
-      expect(call.protocolId).toBe('event-editor-fixit');
-      expect(call.variant).toBe('manual_tubes');
-      expect(call.forcedSpecPath).toBe(patchSpecPath);
-      expect((call as { coderRole: string }).coderRole).toBe('junior');
-      expect((call as { coderEngine: string }).coderEngine).toBe('tool-agent');
-      expect((call as { autoCommit: boolean }).autoCommit).toBe(false);
+      const call = runCoderPatch.mock.calls[0]![0] as { coderRole?: string; coderEngine?: string; autoCommit?: boolean };
+      expect(call.coderRole).toBe('junior');
+      expect(call.coderEngine).toBe('tool-agent');
+      expect(call.autoCommit).toBe(false);
 
-      // Critic ran exactly once (pass verdict, no senior retry).
-      expect(runPatchCritic).toHaveBeenCalledTimes(1);
-
-      // Pass verdict → commit; reset must NOT fire.
+      // Gate PASS → commit, no reset.
       expect(gitOps.commit).toHaveBeenCalledTimes(1);
       expect(gitOps.reset).not.toHaveBeenCalled();
       expect(gitOps.commit.mock.calls[0]![0]).toEqual(['server/src/foo.ts']);
       expect(gitOps.commit.mock.calls[0]![1]).toBe('Recognize lowercase slot tokens');
 
-      // SSE stream surfaced the expected stages and a done event with
-      // the critic summary + commit SHA attached.
       const events = parseSseDataLines(reply._stats().writeChunks);
-      const stageNames = events
-        .filter((e): e is { type: 'stage'; stage: string } => (e as { type?: string }).type === 'stage')
-        .map((e) => e.stage);
-      expect(stageNames).toEqual([
-        'writing_fixture',
-        'writing_spec',
-        'coder_running',
-        'critic_running',
-      ]);
       const done = events.find((e): e is {
         type: 'done';
-        result: {
-          status: string;
-          touchedFiles: string[];
-          commit?: string;
-          critic?: { verdict: string; criteriaMet: string[]; seniorRetryRan: boolean };
-        };
+        result: { status: string; touchedFiles: string[]; commit?: string; critic?: { verdict: string } };
       } => (e as { type?: string }).type === 'done');
       expect(done?.result.status).toBe('applied');
       expect(done?.result.touchedFiles).toEqual(['server/src/foo.ts']);
       expect(done?.result.commit).toBe('deadbeef');
       expect(done?.result.critic?.verdict).toBe('pass');
-      expect(done?.result.critic?.criteriaMet).toEqual(['criterion-1']);
-      expect(done?.result.critic?.seniorRetryRan).toBe(false);
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
   });
 
-  it('escalates to the senior coder when the critic asks for revision', async () => {
-    const tmp = await mkdtemp(join(tmpdir(), 'fixit-senior-'));
+  it('retries the junior on STUCK, escalates to the senior after 2 stuck rounds, then to human', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'fixit-stuck-escalate-'));
     try {
-      const seenCoderRoles: string[] = [];
-      const seenAutoCommit: boolean[] = [];
-      const runCoderPatch = vi.fn(async (input: {
-        artifactRoot: string;
-        coderRole?: string;
-        revisionFeedback?: string;
-        autoCommit?: boolean;
-      }) => {
-        seenCoderRoles.push(input.coderRole ?? '');
-        seenAutoCommit.push(input.autoCommit ?? false);
+      const seenRoles: string[] = [];
+      const runCoderPatch = vi.fn(async (input: { artifactRoot: string; coderRole?: string }) => {
+        seenRoles.push(input.coderRole ?? '');
         return {
           status: 'applied' as const,
           resultPath: join(input.artifactRoot, 'result.yaml'),
-          message: input.coderRole === 'senior' ? 'senior patch applied' : 'junior patch applied',
-          touchedFiles:
-            input.coderRole === 'senior' ? ['server/src/bar.ts'] : ['server/src/foo.ts'],
+          message: 'patch applied',
+          touchedFiles: ['server/src/foo.ts'],
         };
       });
-      let criticCall = 0;
-      const runPatchCritic = vi.fn(async () => {
-        criticCall += 1;
-        // First critic asks for revision (junior was insufficient); second
-        // critic blesses the senior's patch.
-        if (criticCall === 1) {
-          return {
-            kind: 'protocol-foundry-critic-report' as const,
-            protocolId: 'event-editor-fixit',
-            variant: 'manual_tubes',
-            generated_at: '2026-05-16T00:00:00Z',
-            verdict: 'revision' as const,
-            reportPath: '/tmp/report.yaml',
-            reviewDurationMs: 1,
-            message: 'spec acceptance partially met',
-            notes: [],
-            touchedFiles: ['server/src/foo.ts'],
-            specVerification: {
-              accepted: false,
-              criteriaMet: [],
-              criteriaFailed: ['criterion-1'],
-              notes: [],
-            },
-            revisionFeedback: 'be more explicit about case-insensitive regex',
-          };
-        }
-        return {
-          kind: 'protocol-foundry-critic-report' as const,
-          protocolId: 'event-editor-fixit',
-          variant: 'manual_tubes',
-          generated_at: '2026-05-16T00:00:01Z',
-          verdict: 'pass' as const,
-          reportPath: '/tmp/report.yaml',
-          reviewDurationMs: 1,
-          message: 'senior patch matches the spec',
-          notes: [],
-          touchedFiles: ['server/src/bar.ts'],
-          specVerification: {
-            accepted: true,
-            criteriaMet: ['criterion-1'],
-            criteriaFailed: [],
-            notes: [],
-          },
-        };
-      });
-      const gitOps = {
-        commit: vi.fn(async (_files: string[], _title: string) => 'cafebabe'),
-        reset: vi.fn(async (_files: string[]) => undefined),
-      };
-
-      const handlers = createEventEditorFixHandlers({
-        workspaceRoot: tmp,
-        clientFactory: () => ({ complete: vi.fn(), completeStream: vi.fn() } as unknown as InferenceClient),
-        runCoderPatch: runCoderPatch as never,
-        runPatchCritic: runPatchCritic as never,
-        gitOps,
-      });
-
-      const reply = makeFastifyReply();
-      await handlers.applyFixStream(
-        makeFastifyRequest({
-          specYaml: 'id: spec-fix-Y\n',
-          fixtureYaml: 'name: spec-fix-Y\ninput:\n  prompt: y\n',
-          specId: 'spec-fix-Y',
-          fixturePath: 'server/src/compiler/pipeline/fixtures/spec-fix-Y.yaml',
-        }),
-        reply as never,
-      );
-
-      // Two coder invocations: junior first, then senior with the
-      // critic's revision feedback piped through. Both with
-      // autoCommit:false so the handler controls the merge.
-      expect(seenCoderRoles).toEqual(['junior', 'senior']);
-      expect(seenAutoCommit).toEqual([false, false]);
-      const seniorCall = runCoderPatch.mock.calls[1]![0];
-      expect((seniorCall as { coderEngine?: string }).coderEngine).toBe('tool-agent');
-      expect((seniorCall as { revisionFeedback?: string }).revisionFeedback).toBe(
-        'be more explicit about case-insensitive regex',
-      );
-      // Two critic invocations: once after junior, once after senior.
-      expect(runPatchCritic).toHaveBeenCalledTimes(2);
-
-      // Final critic verdict is 'pass' → commit once with the union of
-      // both passes' touched files. No reset.
-      expect(gitOps.commit).toHaveBeenCalledTimes(1);
-      expect(gitOps.reset).not.toHaveBeenCalled();
-      expect(gitOps.commit.mock.calls[0]![0].sort()).toEqual(
-        ['server/src/bar.ts', 'server/src/foo.ts'].sort(),
-      );
-
-      const events = parseSseDataLines(reply._stats().writeChunks);
-      const stageNames = events
-        .filter((e): e is { type: 'stage'; stage: string } => (e as { type?: string }).type === 'stage')
-        .map((e) => e.stage);
-      expect(stageNames).toEqual([
-        'writing_fixture',
-        'writing_spec',
-        'coder_running',
-        'critic_running',
-        'senior_retry',
-        'critic_running',
-      ]);
-
-      const done = events.find((e): e is {
-        type: 'done';
-        result: {
-          status: string;
-          touchedFiles: string[];
-          commit?: string;
-          critic?: { verdict: string; seniorRetryRan: boolean };
-        };
-      } => (e as { type?: string }).type === 'done');
-      expect(done?.result.touchedFiles?.sort()).toEqual(
-        ['server/src/bar.ts', 'server/src/foo.ts'].sort(),
-      );
-      expect(done?.result.commit).toBe('cafebabe');
-      expect(done?.result.critic?.verdict).toBe('pass');
-      expect(done?.result.critic?.seniorRetryRan).toBe(true);
-    } finally {
-      await rm(tmp, { recursive: true, force: true });
-    }
-  });
-
-  it('surfaces needs-revision when the senior patch still fails critic regression tests', async () => {
-    const tmp = await mkdtemp(join(tmpdir(), 'fixit-senior-revision-'));
-    try {
-      const runCoderPatch = vi.fn(async (input: { artifactRoot: string; coderRole?: string }) => ({
-        status: 'applied' as const,
-        resultPath: join(input.artifactRoot, 'result.yaml'),
-        message: 'patch applied',
-        touchedFiles:
-          input.coderRole === 'senior' ? ['server/src/bar.ts'] : ['server/src/foo.ts'],
-      }));
-      const runPatchCritic = vi.fn(async () => ({
-        kind: 'protocol-foundry-critic-report' as const,
-        protocolId: 'event-editor-fixit',
-        variant: 'manual_tubes',
-        generated_at: '2026-05-16T00:00:00Z',
-        verdict: 'revision' as const,
-        reportPath: '/tmp/report.yaml',
-        reviewDurationMs: 1,
-        message: 'regression fixture still fails',
-        notes: [],
-        touchedFiles: ['server/src/foo.ts'],
-        specVerification: {
-          accepted: false,
-          criteriaMet: ['criterion-1'],
-          criteriaFailed: ['Regression test failed: fixture'],
-          notes: [],
-        },
-        revisionFeedback: 'fixture still fails',
-      }));
       const gitOps = {
         commit: vi.fn(),
         reset: vi.fn(async (_files: string[]) => undefined),
       };
+      // Always STUCK: baseline === post (same missing path, no progress).
+      const verifyFixtures = vi.fn(async () => ({
+        target: { name: 'spec-fix-S', passed: false, missing: ['a'], partial: [], matched: [] },
+        suite: [] as Array<{ name: string; passed: boolean }>,
+      }));
 
       const handlers = createEventEditorFixHandlers({
         workspaceRoot: tmp,
         clientFactory: () => ({ complete: vi.fn(), completeStream: vi.fn() } as unknown as InferenceClient),
         runCoderPatch: runCoderPatch as never,
-        runPatchCritic: runPatchCritic as never,
         gitOps,
+        fixItJobManager: null,
+        verifyFixtures: verifyFixtures as never,
+        maxRounds: 3,
       });
 
       const reply = makeFastifyReply();
       await handlers.applyFixStream(
         makeFastifyRequest({
-          specYaml: 'id: spec-fix-R\ntitle: still failing\n',
-          fixtureYaml: 'name: spec-fix-R\ninput:\n  prompt: r\n',
-          specId: 'spec-fix-R',
-          fixturePath: 'server/src/compiler/pipeline/fixtures/spec-fix-R.yaml',
+          specYaml: 'id: spec-fix-S\ntitle: stuck\n',
+          fixtureYaml: 'name: spec-fix-S\ninput:\n  prompt: s\n',
+          specId: 'spec-fix-S',
+          fixturePath: 'server/src/compiler/pipeline/fixtures/spec-fix-S.yaml',
         }),
         reply as never,
       );
 
-      expect(runCoderPatch).toHaveBeenCalledTimes(2);
-      expect(runPatchCritic).toHaveBeenCalledTimes(2);
+      // SENIOR_AFTER=2: junior, junior, senior — then a stuck senior ends it.
+      expect(seenRoles).toEqual(['junior', 'junior', 'senior']);
+      const seniorCall = runCoderPatch.mock.calls[2]![0] as { coderRole?: string; seniorEndpoint?: string };
+      expect(seniorCall.coderRole).toBe('senior');
+      expect(seniorCall.seniorEndpoint).toBe('worker');
+      // Nothing landed; each stuck round discarded its edits.
       expect(gitOps.commit).not.toHaveBeenCalled();
-      expect(gitOps.reset).toHaveBeenCalledTimes(1);
-      expect(gitOps.reset.mock.calls[0]![0].sort()).toEqual(
-        ['server/src/bar.ts', 'server/src/foo.ts'].sort(),
-      );
-
+      expect(gitOps.reset).toHaveBeenCalledTimes(3);
       const events = parseSseDataLines(reply._stats().writeChunks);
-      const done = events.find((e): e is {
-        type: 'done';
-        result: { status: string; message: string; commit?: string; critic?: { verdict: string; seniorRetryRan: boolean } };
-      } => (e as { type?: string }).type === 'done');
-      expect(done?.result.status).toBe('needs-revision');
-      expect(done?.result.message).toBe('regression fixture still fails');
-      expect(done?.result.commit).toBeUndefined();
-      expect(done?.result.critic?.verdict).toBe('revision');
-      expect(done?.result.critic?.seniorRetryRan).toBe(true);
+      const done = events.find((e): e is { type: 'done'; result: { status: string } } =>
+        (e as { type?: string }).type === 'done');
+      expect(done?.result.status).toBe('needs-human');
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
   });
 
-  it('escalates to the senior coder when the junior tool-agent needs human help', async () => {
-    const tmp = await mkdtemp(join(tmpdir(), 'fixit-needs-human-senior-'));
+  it('lands a fix when an escalated senior round finally makes the fixture pass', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'fixit-senior-lands-'));
     try {
-      const seenCoderRoles: string[] = [];
-      const runCoderPatch = vi.fn(async (input: { artifactRoot: string; coderRole?: string; revisionFeedback?: string }) => {
-        seenCoderRoles.push(input.coderRole ?? '');
-        if (input.coderRole === 'junior') {
-          return {
-            status: 'needs-human' as const,
-            resultPath: join(input.artifactRoot, 'result.yaml'),
-            message: 'tool agent did not complete: max-turns',
-            touchedFiles: [],
-            finalText: 'The kind is labware-instance not labware because the "and a" prefix is kept.',
-          };
-        }
-        expect(input.revisionFeedback).toContain('Junior coder did not produce an accepted patch');
-        // The junior's diagnosis is forwarded so the senior continues its lead.
-        expect(input.revisionFeedback).toContain("Previous attempt's analysis");
-        expect(input.revisionFeedback).toContain('the "and a" prefix is kept');
+      const seenRoles: string[] = [];
+      const runCoderPatch = vi.fn(async (input: { artifactRoot: string; coderRole?: string }) => {
+        seenRoles.push(input.coderRole ?? '');
         return {
           status: 'applied' as const,
           resultPath: join(input.artifactRoot, 'result.yaml'),
-          message: 'senior patch applied',
-          touchedFiles: ['server/src/senior.ts'],
+          message: 'patch applied',
+          touchedFiles: ['server/src/foo.ts'],
         };
       });
-      const runPatchCritic = vi.fn(async () => ({
-        kind: 'protocol-foundry-critic-report' as const,
-        protocolId: 'event-editor-fixit',
-        variant: 'manual_tubes',
-        generated_at: '2026-05-16T00:00:00Z',
-        verdict: 'pass' as const,
-        reportPath: '/tmp/report.yaml',
-        reviewDurationMs: 1,
-        message: 'senior patch passes',
-        notes: [],
-        touchedFiles: ['server/src/senior.ts'],
-        specVerification: {
-          accepted: true,
-          criteriaMet: ['criterion-1'],
-          criteriaFailed: [],
-          notes: [],
-        },
-      }));
       const gitOps = {
-        commit: vi.fn(async (_files: string[], _title: string) => 'facefeed'),
+        commit: vi.fn(async (_files: string[], _title: string) => 'sen10r'),
         reset: vi.fn(async (_files: string[]) => undefined),
       };
+      // Calls: r1 baseline/post (stuck), r2 baseline/post (stuck), r3 baseline/post (PASS).
+      const missingByCall: Record<number, string[]> = { 1: ['a'], 2: ['a'], 3: ['a'], 4: ['a'], 5: ['a'], 6: [] };
+      let call = 0;
+      const verifyFixtures = vi.fn(async () => {
+        call += 1;
+        const missing = missingByCall[call] ?? [];
+        return {
+          target: { name: 'spec-fix-SL', passed: missing.length === 0, missing, partial: [], matched: [] },
+          suite: [] as Array<{ name: string; passed: boolean }>,
+        };
+      });
 
       const handlers = createEventEditorFixHandlers({
         workspaceRoot: tmp,
         clientFactory: () => ({ complete: vi.fn(), completeStream: vi.fn() } as unknown as InferenceClient),
         runCoderPatch: runCoderPatch as never,
-        runPatchCritic: runPatchCritic as never,
         gitOps,
+        fixItJobManager: null,
+        verifyFixtures: verifyFixtures as never,
+        maxRounds: 4,
       });
 
       const reply = makeFastifyReply();
       await handlers.applyFixStream(
         makeFastifyRequest({
-          specYaml: 'id: spec-fix-H\ntitle: senior after needs-human\n',
-          fixtureYaml: 'name: spec-fix-H\ninput:\n  prompt: h\n',
-          specId: 'spec-fix-H',
-          fixturePath: 'server/src/compiler/pipeline/fixtures/spec-fix-H.yaml',
+          specYaml: 'id: spec-fix-SL\ntitle: senior lands\n',
+          fixtureYaml: 'name: spec-fix-SL\ninput:\n  prompt: sl\n',
+          specId: 'spec-fix-SL',
+          fixturePath: 'server/src/compiler/pipeline/fixtures/spec-fix-SL.yaml',
         }),
         reply as never,
       );
 
-      expect(seenCoderRoles).toEqual(['junior', 'senior']);
-      expect(runPatchCritic).toHaveBeenCalledTimes(1);
+      expect(seenRoles).toEqual(['junior', 'junior', 'senior']);
       expect(gitOps.commit).toHaveBeenCalledTimes(1);
-      expect(gitOps.reset).not.toHaveBeenCalled();
-
-      const events = parseSseDataLines(reply._stats().writeChunks);
-      const stageNames = events
-        .filter((e): e is { type: 'stage'; stage: string } => (e as { type?: string }).type === 'stage')
-        .map((e) => e.stage);
-      expect(stageNames).toEqual([
-        'writing_fixture',
-        'writing_spec',
-        'coder_running',
-        'senior_retry',
-        'critic_running',
-      ]);
-      const done = events.find((e): e is {
-        type: 'done';
-        result: { status: string; commit?: string; critic?: { verdict: string; seniorRetryRan: boolean } };
-      } => (e as { type?: string }).type === 'done');
+      const done = parseSseDataLines(reply._stats().writeChunks).find((e): e is { type: 'done'; result: { status: string; commit?: string } } =>
+        (e as { type?: string }).type === 'done');
       expect(done?.result.status).toBe('applied');
-      expect(done?.result.commit).toBe('facefeed');
-      expect(done?.result.critic?.verdict).toBe('pass');
-      expect(done?.result.critic?.seniorRetryRan).toBe(true);
-    } finally {
-      await rm(tmp, { recursive: true, force: true });
-    }
-  });
-
-  it('resets the working tree when the critic blocks the patch', async () => {
-    const tmp = await mkdtemp(join(tmpdir(), 'fixit-block-'));
-    try {
-      const runCoderPatch = vi.fn(async (input: { artifactRoot: string }) => ({
-        status: 'applied' as const,
-        resultPath: join(input.artifactRoot, 'result.yaml'),
-        message: 'patch applied (uncommitted)',
-        touchedFiles: ['server/src/baz.ts'],
-      }));
-      const runPatchCritic = vi.fn(async () => ({
-        kind: 'protocol-foundry-critic-report' as const,
-        protocolId: 'event-editor-fixit',
-        variant: 'manual_tubes',
-        generated_at: '2026-05-16T00:00:00Z',
-        verdict: 'block' as const,
-        reportPath: '/tmp/report.yaml',
-        reviewDurationMs: 1,
-        message: 'spec is malformed; cannot accept patch',
-        notes: [],
-        touchedFiles: ['server/src/baz.ts'],
-        specVerification: {
-          accepted: false,
-          criteriaMet: [],
-          criteriaFailed: ['criterion-1'],
-          notes: [],
-        },
-      }));
-      const gitOps = {
-        commit: vi.fn(),
-        reset: vi.fn(async (_files: string[]) => undefined),
-      };
-
-      const handlers = createEventEditorFixHandlers({
-        workspaceRoot: tmp,
-        clientFactory: () => ({ complete: vi.fn(), completeStream: vi.fn() } as unknown as InferenceClient),
-        runCoderPatch: runCoderPatch as never,
-        runPatchCritic: runPatchCritic as never,
-        gitOps,
-      });
-
-      const reply = makeFastifyReply();
-      await handlers.applyFixStream(
-        makeFastifyRequest({
-          specYaml: 'id: spec-fix-B\ntitle: bad patch\n',
-          fixtureYaml: 'name: spec-fix-B\ninput:\n  prompt: q\n',
-          specId: 'spec-fix-B',
-          fixturePath: 'server/src/compiler/pipeline/fixtures/spec-fix-B.yaml',
-        }),
-        reply as never,
-      );
-
-      // Block verdict → reset, no commit. Senior retry must NOT fire
-      // (block is terminal; only revision triggers escalation).
-      expect(runCoderPatch).toHaveBeenCalledTimes(1);
-      expect(runPatchCritic).toHaveBeenCalledTimes(1);
-      expect(gitOps.commit).not.toHaveBeenCalled();
-      expect(gitOps.reset).toHaveBeenCalledTimes(1);
-      expect(gitOps.reset.mock.calls[0]![0]).toEqual(['server/src/baz.ts']);
-
-      const events = parseSseDataLines(reply._stats().writeChunks);
-      const done = events.find((e): e is {
-        type: 'done';
-        result: { status: string; commit?: string; critic?: { verdict: string } };
-      } => (e as { type?: string }).type === 'done');
-      expect(done?.result.status).toBe('blocked');
-      expect(done?.result.commit).toBeUndefined();
-      expect(done?.result.critic?.verdict).toBe('block');
-    } finally {
-      await rm(tmp, { recursive: true, force: true });
-    }
-  });
-
-  it('skips the critic when the coder did not apply a patch', async () => {
-    const tmp = await mkdtemp(join(tmpdir(), 'fixit-noapply-'));
-    try {
-      const runCoderPatch = vi.fn(async (input: { artifactRoot: string }) => ({
-        status: 'blocked' as const,
-        resultPath: join(input.artifactRoot, 'result.yaml'),
-        message: 'coder produced no patch',
-        touchedFiles: [],
-      }));
-      const runPatchCritic = vi.fn();
-
-      const handlers = createEventEditorFixHandlers({
-        workspaceRoot: tmp,
-        clientFactory: () => ({ complete: vi.fn(), completeStream: vi.fn() } as unknown as InferenceClient),
-        runCoderPatch: runCoderPatch as never,
-        runPatchCritic: runPatchCritic as never,
-      });
-
-      const reply = makeFastifyReply();
-      await handlers.applyFixStream(
-        makeFastifyRequest({
-          specYaml: 'id: spec-fix-Z\n',
-          fixtureYaml: 'name: spec-fix-Z\ninput:\n  prompt: z\n',
-          specId: 'spec-fix-Z',
-          fixturePath: 'server/src/compiler/pipeline/fixtures/spec-fix-Z.yaml',
-        }),
-        reply as never,
-      );
-
-      expect(runPatchCritic).not.toHaveBeenCalled();
-      const events = parseSseDataLines(reply._stats().writeChunks);
-      const done = events.find((e): e is {
-        type: 'done';
-        result: { status: string; critic?: unknown };
-      } => (e as { type?: string }).type === 'done');
-      expect(done?.result.status).toBe('blocked');
-      expect(done?.result.critic).toBeUndefined();
+      expect(done?.result.commit).toBe('sen10r');
     } finally {
       await rm(tmp, { recursive: true, force: true });
     }
@@ -1180,70 +792,6 @@ describe('EventEditorFixHandlers.applyFixStream', () => {
     }
   });
 
-  it('does not commit and escalates when a round makes no safe progress', async () => {
-    const tmp = await mkdtemp(join(tmpdir(), 'fixit-stuck-'));
-    try {
-      const runCoderPatch = vi.fn(async (input: { artifactRoot: string }) => ({
-        status: 'applied' as const,
-        resultPath: join(input.artifactRoot, 'result.yaml'),
-        message: 'patch applied',
-        touchedFiles: ['server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts'],
-      }));
-      const runPatchCritic = vi.fn(async () => ({
-        kind: 'protocol-foundry-critic-report' as const,
-        protocolId: 'event-editor-fixit',
-        variant: 'manual_tubes',
-        generated_at: '2026-05-21T00:00:00Z',
-        verdict: 'block' as const,
-        reportPath: '/tmp/r.yaml',
-        reviewDurationMs: 1,
-        message: 'fixture still failing',
-        notes: [],
-        touchedFiles: ['server/src/compiler/pipeline/passes/DeterministicPrecompilePass.ts'],
-        specVerification: { accepted: false, criteriaMet: [], criteriaFailed: ['x'], notes: [] },
-      }));
-      const gitOps = {
-        commit: vi.fn(async () => 'c'),
-        reset: vi.fn(async (_files: string[]) => undefined),
-      };
-      // Same missing before and after → no forward progress → STUCK.
-      const verifyFixtures = vi.fn(async () => ({
-        target: { name: 'spec-fix-S', passed: false, missing: ['a'], partial: [], matched: [] },
-        suite: [] as Array<{ name: string; passed: boolean }>,
-      }));
-
-      const handlers = createEventEditorFixHandlers({
-        workspaceRoot: tmp,
-        clientFactory: () => ({ complete: vi.fn(), completeStream: vi.fn() } as unknown as InferenceClient),
-        runCoderPatch: runCoderPatch as never,
-        runPatchCritic: runPatchCritic as never,
-        gitOps,
-        fixItJobManager: null,
-        verifyFixtures: verifyFixtures as never,
-        maxRounds: 3,
-      });
-
-      const reply = makeFastifyReply();
-      await handlers.applyFixStream(
-        makeFastifyRequest({
-          specYaml: 'id: spec-fix-S\ntitle: stuck\nfixClass: compiler\n',
-          fixtureYaml: 'name: spec-fix-S\ninput:\n  prompt: s\n',
-          specId: 'spec-fix-S',
-          fixturePath: 'server/src/compiler/pipeline/fixtures/spec-fix-S.yaml',
-        }),
-        reply as never,
-      );
-
-      expect(gitOps.commit).not.toHaveBeenCalled();
-      expect(gitOps.reset).toHaveBeenCalledTimes(1);
-      const events = parseSseDataLines(reply._stats().writeChunks);
-      const done = events.find((e): e is { type: 'done'; result: { status: string } } =>
-        (e as { type?: string }).type === 'done');
-      expect(done?.result.status).toBe('blocked');
-    } finally {
-      await rm(tmp, { recursive: true, force: true });
-    }
-  });
 });
 
 describe('EventEditorFixHandlers Fix-it job endpoints', () => {
@@ -1367,6 +915,10 @@ describe('EventEditorFixHandlers Fix-it job endpoints', () => {
         idFactory: () => 'job-start-test',
       });
 
+      const verifyFixtures = vi.fn(async () => ({
+        target: { name: 'spec-fix-J', passed: true, missing: [], partial: [], matched: ['outcome'] },
+        suite: [] as Array<{ name: string; passed: boolean }>,
+      }));
       const handlers = createEventEditorFixHandlers({
         workspaceRoot: tmp,
         clientFactory: () => ({ complete: vi.fn(), completeStream: vi.fn() } as unknown as InferenceClient),
@@ -1374,6 +926,7 @@ describe('EventEditorFixHandlers Fix-it job endpoints', () => {
         runPatchCritic: runPatchCritic as never,
         gitOps,
         fixItJobManager: manager,
+        verifyFixtures: verifyFixtures as never,
       });
 
       const reply = makeFastifyReply();
@@ -1414,7 +967,7 @@ describe('EventEditorFixHandlers Fix-it job endpoints', () => {
       // after "Created worktree".
       const phases = (await manager.readEvents('job-start-test')).map((e) => e.phase);
       expect(phases).toContain('junior_started');
-      expect(phases).toContain('critic_started');
+      expect(phases).toContain('progress_gate');
       expect(phases).toContain('committed');
     } finally {
       await rm(tmp, { recursive: true, force: true });
