@@ -54,6 +54,16 @@ export function FixItPanel({ layout = 'drawer' }: { layout?: FixItPanelLayout } 
   const abortRef = useRef<AbortController | null>(null)
   const [activeApplyJobId, setActiveApplyJobId] = useState<string | null>(null)
   const [cancelingApplyJobId, setCancelingApplyJobId] = useState<string | null>(null)
+  // Stream connection status — surfaced in the ApplyingView header so users
+  // can tell at a glance whether what they see is live or a one-shot snapshot
+  // delivered on reconnect. 'idle' = no stream open; 'connecting' = SSE just
+  // opened; 'snapshot' = initial replay landing; 'live' = tailing real-time;
+  // 'reconnecting' = SSE errored, polling fallback; 'closed' = stream done.
+  const [streamStatus, setStreamStatus] = useState<'idle' | 'connecting' | 'snapshot' | 'live' | 'reconnecting' | 'closed'>('idle')
+  // Set true after we've attempted to auto-reattach once for the current
+  // panel-open session. Cleared whenever we have a live active job so the
+  // next mount can auto-reattach again.
+  const autoReattachAttemptedRef = useRef(false)
   const activeApplyEventCountRef = useRef(0)
   const logRef = useRef<HTMLDivElement>(null)
 
@@ -84,6 +94,28 @@ export function FixItPanel({ layout = 'drawer' }: { layout?: FixItPanelLayout } 
       controller.abort()
     }
   }, [fixIt.isOpen, fixIt.stage, refreshJobs])
+
+  // Auto-reattach: when the panel opens (or remounts after tab navigation)
+  // and we have no live stream, restore the newest active job so the user
+  // sees real-time updates without having to click the job row again.
+  // The previous experience was: leave tab → come back → static snapshot
+  // until manual reclick → re-snapshot delivers a "batch" of accumulated
+  // turns. Auto-reattach removes that step.
+  useEffect(() => {
+    if (!fixIt.isOpen) return
+    if (activeApplyJobId) { autoReattachAttemptedRef.current = false; return }
+    if (restoringJobId) return
+    if (jobs.length === 0) return
+    if (autoReattachAttemptedRef.current) return
+    const active = jobs.find((j) => j.status === 'running' || j.status === 'queued' || j.status === 'critic')
+    if (!active) return
+    autoReattachAttemptedRef.current = true
+    void restoreJobSession(active.id)
+    // restoreJobSession is intentionally NOT in the deps array: it changes
+    // identity on every render (useCallback closure over many vars), which
+    // would re-fire this effect each render and re-trigger autoReattach.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fixIt.isOpen, activeApplyJobId, restoringJobId, jobs])
 
   // Clicking a job row reopens the main dialog with that job's session
   // restored — the seed, chat, stage, and result all flow back into the
@@ -262,7 +294,8 @@ export function FixItPanel({ layout = 'drawer' }: { layout?: FixItPanelLayout } 
   }, [activeApplyJobId, fixIt.applyProgress.length, fixIt.stage, trackedJobId])
 
   useEffect(() => {
-    if (!activeApplyJobId) return
+    if (!activeApplyJobId) { setStreamStatus('idle'); return }
+    setStreamStatus('connecting')
     let cancelled = false
     const controller = new AbortController()
     const pollOnce = async () => {
@@ -272,6 +305,7 @@ export function FixItPanel({ layout = 'drawer' }: { layout?: FixItPanelLayout } 
       void refreshJobs()
     }
     const pollFallback = () => {
+      setStreamStatus('reconnecting')
       void pollOnce()
       return window.setInterval(() => { void pollOnce() }, 2000)
     }
@@ -283,10 +317,13 @@ export function FixItPanel({ layout = 'drawer' }: { layout?: FixItPanelLayout } 
         for await (const event of streamFixItJobEvents(activeApplyJobId, { signal: controller.signal })) {
           if (cancelled) break
           if (event.type === 'snapshot') {
+            setStreamStatus('snapshot')
             accumulatedEvents.splice(0, accumulatedEvents.length, ...event.events)
             latestJob = event.job
             syncApplyJobDetail(event)
+            setStreamStatus('live')
           } else if (event.type === 'event') {
+            setStreamStatus('live')
             accumulatedEvents.push(event.event)
             activeApplyEventCountRef.current += 1
             appendApplyJobEvent(event.event)
@@ -302,6 +339,7 @@ export function FixItPanel({ layout = 'drawer' }: { layout?: FixItPanelLayout } 
               }
               setActiveApplyJobId(null)
               setApplying(false)
+              setStreamStatus('closed')
               void refreshJobs()
             }
           } else if (event.type === 'error') {
@@ -321,6 +359,7 @@ export function FixItPanel({ layout = 'drawer' }: { layout?: FixItPanelLayout } 
             }
             setActiveApplyJobId(null)
             setApplying(false)
+            setStreamStatus('closed')
             void refreshJobs()
             break
           }
@@ -333,6 +372,7 @@ export function FixItPanel({ layout = 'drawer' }: { layout?: FixItPanelLayout } 
       cancelled = true
       controller.abort()
       if (fallbackInterval !== null) window.clearInterval(fallbackInterval)
+      setStreamStatus('idle')
     }
   }, [actions, activeApplyJobId, appendApplyJobEvent, refreshJobs, syncApplyJobDetail])
 
@@ -674,6 +714,7 @@ export function FixItPanel({ layout = 'drawer' }: { layout?: FixItPanelLayout } 
           stage={fixIt.applyStage}
           progress={fixIt.applyProgress}
           reasoning={fixIt.applyReasoning}
+          streamStatus={streamStatus}
           canCancel={Boolean(activeApplyJobId ?? trackedJobId)}
           canceling={Boolean(cancelingApplyJobId)}
           onCancel={() => { void cancelApplyJob() }}
@@ -1166,10 +1207,22 @@ const STATUS_LABELS: Record<string, string> = {
   interrupted: 'interrupted',
 }
 
+type StreamStatus = 'idle' | 'connecting' | 'snapshot' | 'live' | 'reconnecting' | 'closed'
+
+const STREAM_STATUS_LABELS: Record<StreamStatus, string> = {
+  idle: 'idle',
+  connecting: 'connecting…',
+  snapshot: 'loading snapshot…',
+  live: 'live',
+  reconnecting: 'reconnecting (polling fallback)',
+  closed: 'closed',
+}
+
 function ApplyingView({
   stage,
   progress,
   reasoning,
+  streamStatus,
   canCancel,
   canceling,
   onCancel,
@@ -1177,6 +1230,7 @@ function ApplyingView({
   stage: 'writing_fixture' | 'writing_spec' | 'coder_running' | 'critic_running' | 'senior_retry' | null
   progress: Array<{ source: 'server' | 'coder' | 'critic'; phase: string; message: string; ts: string; details?: Record<string, unknown> }>
   reasoning?: string
+  streamStatus: StreamStatus
   canCancel: boolean
   canceling: boolean
   onCancel: () => void
@@ -1189,6 +1243,14 @@ function ApplyingView({
           Coder agent running…
           {stage ? <span> ({APPLY_STAGE_LABELS[stage] ?? stage})</span> : null}
         </div>
+        <span
+          className={`fixit-panel__stream-status fixit-panel__stream-status--${streamStatus}`}
+          title={`Stream: ${STREAM_STATUS_LABELS[streamStatus]}`}
+          aria-label={`Stream status: ${STREAM_STATUS_LABELS[streamStatus]}`}
+        >
+          <span className="fixit-panel__stream-status-dot" aria-hidden />
+          <span className="fixit-panel__stream-status-label">{STREAM_STATUS_LABELS[streamStatus]}</span>
+        </span>
         <button
           type="button"
           className="fixit-panel__send fixit-panel__send--cancel"

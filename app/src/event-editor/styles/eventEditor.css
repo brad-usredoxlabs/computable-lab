@@ -1463,6 +1463,60 @@
   overflow-wrap: anywhere;
 }
 
+/* Stream status indicator in the ApplyingView header. Colored dot + label
+   so users can tell at a glance whether what they see is real-time or a
+   one-shot snapshot delivered on reconnect. */
+.event-editor .fixit-panel__stream-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--ee-muted);
+  margin-left: auto;
+  margin-right: 8px;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: var(--ee-surface-muted, rgba(255, 255, 255, 0.04));
+}
+
+.event-editor .fixit-panel__stream-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ee-muted);
+  flex-shrink: 0;
+}
+
+.event-editor .fixit-panel__stream-status--live .fixit-panel__stream-status-dot {
+  background: #4ade80;  /* green */
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.6);
+  animation: fixit-stream-pulse 1.6s ease-in-out infinite;
+}
+
+.event-editor .fixit-panel__stream-status--connecting .fixit-panel__stream-status-dot,
+.event-editor .fixit-panel__stream-status--snapshot .fixit-panel__stream-status-dot {
+  background: #facc15;  /* yellow */
+  animation: fixit-stream-pulse 0.9s ease-in-out infinite;
+}
+
+.event-editor .fixit-panel__stream-status--reconnecting .fixit-panel__stream-status-dot {
+  background: #f87171;  /* red */
+  animation: fixit-stream-pulse 0.6s ease-in-out infinite;
+}
+
+.event-editor .fixit-panel__stream-status--closed .fixit-panel__stream-status-dot {
+  background: #6b7280;  /* gray */
+}
+
+.event-editor .fixit-panel__stream-status--idle {
+  display: none;  /* hide entirely when no stream is open */
+}
+
+@keyframes fixit-stream-pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
 /* Reasoning rows: slightly louder + a subtle left border so 💭 thinking
    reads as distinct from raw tool calls. */
 .event-editor .fixit-panel__progress-log-item--reasoning {
