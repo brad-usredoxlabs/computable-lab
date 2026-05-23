@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makeProbeTool, makeResolveLabwareTool, makeVerifyTool } from './FixItCoderTools.js';
+import { makeInspectRegistryTool, makeProbeTool, makeVerifyTool } from './FixItCoderTools.js';
 
 describe('makeVerifyTool', () => {
   it('exposes a no-arg verify tool', () => {
@@ -9,23 +9,30 @@ describe('makeVerifyTool', () => {
   });
 });
 
-describe('makeResolveLabwareTool', () => {
-  it('exposes a resolve_labware tool requiring a hint', () => {
-    const tool = makeResolveLabwareTool('/repo');
-    expect(tool.definition.function.name).toBe('resolve_labware');
-    expect(tool.definition.function.parameters.required).toContain('hint');
+describe('makeInspectRegistryTool', () => {
+  it('exposes an inspect_registry tool with a registry-name enum and optional key', () => {
+    const tool = makeInspectRegistryTool('/repo');
+    expect(tool.definition.function.name).toBe('inspect_registry');
+    expect(tool.definition.function.parameters.required).toContain('name');
+    expect(tool.definition.function.parameters.required).not.toContain('key');
+    const props = tool.definition.function.parameters.properties as Record<
+      string,
+      { type: string; enum?: string[] }
+    >;
+    expect(props['name']?.enum).toContain('labware-definitions');
+    expect(props['name']?.enum).toContain('ontology-terms');
   });
 
-  it('rejects an empty hint without shelling out', async () => {
-    const tool = makeResolveLabwareTool('/repo');
-    const result = await tool.handler({ hint: '  ' });
+  it('rejects an empty registry name without shelling out', async () => {
+    const tool = makeInspectRegistryTool('/repo');
+    const result = await tool.handler({ name: '  ' });
     expect(result.ok).toBe(false);
-    expect(result.content).toContain('hint is required');
+    expect(result.content).toContain('name is required');
   });
 
   it('reports unavailable when the harness is missing from the repo', async () => {
-    const tool = makeResolveLabwareTool('/nonexistent-repo-root');
-    const result = await tool.handler({ hint: '12-well reservoir' });
+    const tool = makeInspectRegistryTool('/nonexistent-repo-root');
+    const result = await tool.handler({ name: 'labware-definitions' });
     expect(result.ok).toBe(false);
     expect(result.content).toContain('unavailable');
   });

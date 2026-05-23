@@ -164,59 +164,134 @@ export function makeProbeTool(repoRoot: string): FoundryToolAgentTool {
   };
 }
 
-const INSPECT_HARNESS_REL = 'src/compiler/pipeline/fixtures/inspectLabwareHint.ts';
+const INSPECT_REGISTRY_HARNESS_REL = 'src/compiler/pipeline/fixtures/inspectRegistry.ts';
+const INSPECT_REGISTRY_LIST_CHARS = 8000;
+const INSPECT_REGISTRY_RECORD_CHARS = 6000;
+const INSPECT_REGISTRY_NAMES = [
+  'assay-definitions',
+  'assay-specs',
+  'compound-classes',
+  'curated-vendors',
+  'execution-scale-profiles',
+  'instruments',
+  'issue-card-templates',
+  'labware-definitions',
+  'measurement-panels',
+  'ontology-terms',
+  'pipette-capabilities',
+  'prompt-templates',
+  'protocol-specs',
+  'readout-definitions',
+  'stamp-patterns',
+] as const;
 
 /**
- * `resolve_labware` — show how the fixture's labware matcher resolves a hint:
- * the record ID(s) it returns, and the alias-map record IDs available. Lets the
- * coder see WHY a hint resolves to the wrong def (e.g. "12-well reservoir" →
- * generic_1_well_reservoir) without instrumenting the (off-limits) test harness.
+ * `inspect_registry` — uniform inspector for any loadable foundry registry.
+ *
+ * Without a key: lists every record's id + label, so the coder can see what
+ * exists for a noun class (labware, ontology terms, compound classes, etc.)
+ * before grepping seed files by hand.
+ *
+ * With a key: dumps the full record so the coder can read its fields directly.
+ *
+ * Replaces the older labware-only resolve_labware; for "what does THIS hint
+ * resolve to in the lookup table" (search semantics rather than catalog
+ * contents), use `resolve_term` once it's wired.
  */
-export function makeResolveLabwareTool(repoRoot: string): FoundryToolAgentTool {
+export function makeInspectRegistryTool(repoRoot: string): FoundryToolAgentTool {
   return {
     definition: {
       type: 'function',
       function: {
-        name: 'resolve_labware',
+        name: 'inspect_registry',
         description:
-          'Inspect how the fixture labware matcher (searchLabwareByHint) resolves a hint: the '
-          + 'record ID(s) it returns and why, plus the available alias-map record IDs. Use this '
-          + 'to see why a labware hint resolves to the wrong definition.',
+          'Inspect a foundry registry. Without `key`: list every record (id + label). '
+          + 'With `key`: dump the full record. Use this to see what records EXIST for a '
+          + 'noun class — labware, ontology terms, compound classes, execution-scale profiles, '
+          + 'assays, etc. — and to read any record\'s fields directly. '
+          + `Available registries: ${INSPECT_REGISTRY_NAMES.join(', ')}.`,
         parameters: {
           type: 'object',
-          properties: { hint: { type: 'string', description: 'The labware hint to resolve, e.g. "12-well reservoir"' } },
-          required: ['hint'],
+          properties: {
+            name: {
+              type: 'string',
+              enum: [...INSPECT_REGISTRY_NAMES],
+              description: 'Registry to inspect.',
+            },
+            key: {
+              type: 'string',
+              description: 'Optional. Record id (recordId or id) to drill into. Omit to list all records.',
+            },
+          },
+          required: ['name'],
         },
       },
     },
     handler: async (args) => {
       const started = Date.now();
-      const hint = typeof args['hint'] === 'string' ? args['hint'].trim() : '';
-      if (!hint) return { ok: false, content: 'error: hint is required', durationMs: Date.now() - started };
-      if (!existsSync(join(repoRoot, 'server', INSPECT_HARNESS_REL))) {
-        return { ok: false, content: 'resolve_labware: inspection harness unavailable', durationMs: Date.now() - started };
+      const name = typeof args['name'] === 'string' ? args['name'].trim() : '';
+      const key = typeof args['key'] === 'string' ? args['key'].trim() : '';
+      if (!name) {
+        return { ok: false, content: 'error: name is required', durationMs: Date.now() - started };
       }
+      if (!existsSync(join(repoRoot, 'server', INSPECT_REGISTRY_HARNESS_REL))) {
+        return { ok: false, content: 'inspect_registry: harness unavailable', durationMs: Date.now() - started };
+      }
+      const harnessArgs = ['tsx', INSPECT_REGISTRY_HARNESS_REL, '--name', name];
+      if (key) harnessArgs.push('--key', key);
       try {
-        const { stdout } = await execFileAsync('npx', ['tsx', INSPECT_HARNESS_REL, '--hint', hint], {
+        const { stdout } = await execFileAsync('npx', harnessArgs, {
           cwd: join(repoRoot, 'server'),
           timeout: 120_000,
           maxBuffer: 8 * 1024 * 1024,
         });
         const line = stdout.trim().split('\n').filter(Boolean).at(-1) ?? '{}';
         const parsed = JSON.parse(line) as {
-          hint?: string;
-          matched?: Array<{ recordId: string; title: string }>;
-          aliasRecordIds?: string[];
+          error?: string;
+          available?: string[];
+          registry?: string;
+          totalEntries?: number;
+          entries?: Array<{ id?: string; label?: string }>;
+          found?: boolean;
+          key?: string;
+          record?: unknown;
+          sampleIds?: string[];
         };
-        const matched = parsed.matched && parsed.matched.length > 0
-          ? parsed.matched.map((m) => m.recordId).join(', ')
-          : '(no match)';
-        const available = (parsed.aliasRecordIds ?? []).join(', ') || '(none)';
-        const content = `searchLabwareByHint(${JSON.stringify(hint)}) → ${matched}\n\nAvailable alias-map record IDs:\n${available}`;
+        if (parsed.error) {
+          const avail = (parsed.available ?? []).join(', ');
+          return { ok: false, content: `${parsed.error}\navailable: ${avail}`, durationMs: Date.now() - started };
+        }
+        if (parsed.key !== undefined && parsed.found === false) {
+          const sample = (parsed.sampleIds ?? []).join(', ');
+          const content = `inspect_registry(${parsed.registry}, key=${JSON.stringify(parsed.key)}): not found (${parsed.totalEntries ?? '?'} total entries).\nSample ids: ${sample || '(none)'}`;
+          return { ok: true, content, durationMs: Date.now() - started };
+        }
+        if (parsed.found === true) {
+          const json = JSON.stringify(parsed.record, null, 2);
+          const clipped = json.length > INSPECT_REGISTRY_RECORD_CHARS
+            ? `${json.slice(0, INSPECT_REGISTRY_RECORD_CHARS)}\n… [clipped ${json.length - INSPECT_REGISTRY_RECORD_CHARS} more chars]`
+            : json;
+          const content = `inspect_registry(${parsed.registry}, key=${JSON.stringify(parsed.key)}):\n${clipped}`;
+          return { ok: true, content, durationMs: Date.now() - started };
+        }
+        // List mode
+        const entries = parsed.entries ?? [];
+        const lines = entries.map((e) => {
+          const id = fmt(e?.id);
+          const label = e?.label ? ` — ${e.label}` : '';
+          return `  - ${id}${label}`;
+        });
+        let body = lines.join('\n');
+        let suffix = '';
+        if (body.length > INSPECT_REGISTRY_LIST_CHARS) {
+          body = body.slice(0, INSPECT_REGISTRY_LIST_CHARS);
+          suffix = `\n… [clipped; ${entries.length} total entries — use \`key\` to drill into a specific id]`;
+        }
+        const content = `inspect_registry(${parsed.registry}): ${parsed.totalEntries ?? entries.length} entries\n${body}${suffix}`;
         return { ok: true, content, durationMs: Date.now() - started };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        return { ok: false, content: `resolve_labware error: ${message}`, durationMs: Date.now() - started };
+        return { ok: false, content: `inspect_registry error: ${message}`, durationMs: Date.now() - started };
       }
     },
   };

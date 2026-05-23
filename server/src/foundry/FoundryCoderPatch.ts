@@ -17,7 +17,7 @@ import {
   resolveRetrievalConfig,
   RetrievalSidecar,
 } from './RetrievalIndex.js';
-import { makeProbeTool, makeResolveLabwareTool, makeVerifyTool } from './FixItCoderTools.js';
+import { makeInspectRegistryTool, makeProbeTool, makeVerifyTool } from './FixItCoderTools.js';
 import type { FoundryVariant } from './ProtocolFoundryCompileRunner.js';
 
 const execFileAsync = promisify(execFile);
@@ -893,14 +893,15 @@ export async function runFoundryCoderPatch(input: {
     // Event-editor fix-it gets three extra tools: `verify` (run the declared
     // fixture, see expected-vs-actual per path), `probe` (run the deterministic
     // compile on an arbitrary prompt — isolate variables by varying the prompt
-    // instead of reading code blindly), and `resolve_labware` (inspect how a
-    // hint resolves). They replace the throwaway-debug-script churn.
+    // instead of reading code blindly), and `inspect_registry` (list any
+    // foundry registry's records or drill into one by id — labware, ontology,
+    // compound classes, scaling profiles, etc.). They replace throwaway debug.
     const fixItTools = input.protocolId === 'event-editor-fixit';
     const compilerFix = fixItTools && selectedSpec.fixClass === 'compiler';
     if (fixItTools) {
       extraTools.push(makeVerifyTool(input.repoRoot, selectedSpec.id));
       extraTools.push(makeProbeTool(input.repoRoot));
-      extraTools.push(makeResolveLabwareTool(input.repoRoot));
+      extraTools.push(makeInspectRegistryTool(input.repoRoot));
     }
 
     let agentResult: Awaited<ReturnType<typeof runFoundryToolAgent>>;
@@ -918,7 +919,7 @@ export async function runFoundryCoderPatch(input: {
           ? ['', 'Use the retrieve tool to find code by concept or symbol (e.g. "the pass that emits deckLayoutPlan.pinned") before reading or paging large files — it is faster than scanning.']
           : []),
         ...(fixItTools
-          ? ['', 'Use the `verify` tool to run the declared fixture and see, for each unsatisfied assertion, the EXPECTED vs ACTUAL value — call it after each edit instead of writing debug scripts or running the test suite by hand. Use `probe("<prompt>")` to run the deterministic compile on an ARBITRARY prompt and see what it emits — use this to vary the failing prompt and isolate which dimension drives the bug. Use `resolve_labware("<hint>")` to see how a labware hint resolves (and the available record IDs) when a labwareHint is wrong.']
+          ? ['', 'Use the `verify` tool to run the declared fixture and see, for each unsatisfied assertion, the EXPECTED vs ACTUAL value — call it after each edit instead of writing debug scripts or running the test suite by hand. Use `probe("<prompt>", fields?)` to run the deterministic compile on an ARBITRARY prompt and inspect any TerminalArtifacts field — use this to vary the failing prompt and isolate which dimension drives the bug. Use `inspect_registry("<name>", key?)` to list a registry\'s records (labware-definitions, ontology-terms, compound-classes, execution-scale-profiles, assay-specs, instruments, pipette-capabilities, etc.) or drill into one by id when you need to know what exists in the catalog.']
           : []),
         ...(compilerFix
           ? [
