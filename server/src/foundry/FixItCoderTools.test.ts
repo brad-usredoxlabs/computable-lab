@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makeInspectRegistryTool, makeProbeTool, makeVerifyTool } from './FixItCoderTools.js';
+import { makeInspectRegistryTool, makeProbeTool, makeResolveTermTool, makeVerifyTool } from './FixItCoderTools.js';
 
 describe('makeVerifyTool', () => {
   it('exposes a no-arg verify tool', () => {
@@ -63,6 +63,37 @@ describe('makeProbeTool', () => {
   it('reports unavailable when the harness is missing from the repo', async () => {
     const tool = makeProbeTool('/nonexistent-repo-root');
     const result = await tool.handler({ prompt: 'Place a 96-well plate on B2' });
+    expect(result.ok).toBe(false);
+    expect(result.content).toContain('unavailable');
+  });
+});
+
+describe('makeResolveTermTool', () => {
+  it('exposes a resolve_term tool requiring table + hint', () => {
+    const tool = makeResolveTermTool('/repo');
+    expect(tool.definition.function.name).toBe('resolve_term');
+    expect(tool.definition.function.parameters.required).toEqual(
+      expect.arrayContaining(['table', 'hint']),
+    );
+  });
+
+  it('rejects an empty table without shelling out', async () => {
+    const tool = makeResolveTermTool('/repo');
+    const result = await tool.handler({ table: '  ', hint: '12-well reservoir' });
+    expect(result.ok).toBe(false);
+    expect(result.content).toContain('table is required');
+  });
+
+  it('rejects an empty hint without shelling out', async () => {
+    const tool = makeResolveTermTool('/repo');
+    const result = await tool.handler({ table: 'labware', hint: '   ' });
+    expect(result.ok).toBe(false);
+    expect(result.content).toContain('hint is required');
+  });
+
+  it('reports unavailable when the harness is missing from the repo', async () => {
+    const tool = makeResolveTermTool('/nonexistent-repo-root');
+    const result = await tool.handler({ table: 'labware', hint: '12-well reservoir' });
     expect(result.ok).toBe(false);
     expect(result.content).toContain('unavailable');
   });

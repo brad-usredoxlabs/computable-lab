@@ -164,6 +164,108 @@ export function makeProbeTool(repoRoot: string): FoundryToolAgentTool {
   };
 }
 
+const RESOLVE_TERM_HARNESS_REL = 'src/compiler/pipeline/fixtures/resolveTerm.ts';
+const RESOLVE_TERM_TABLES = ['labware'] as const;
+const RESOLVE_TERM_MAX_CHARS = 4000;
+
+/**
+ * `resolve_term` — exercise the actual matcher the compiler/fixture uses to
+ * turn a hint into a recordId, for a specific table. Distinct from
+ * `inspect_registry` (catalog browse): this runs the matching function so
+ * the coder can see whether the bug is in the matcher logic vs the catalog
+ * data. Currently supports `labware`; other tables resolve inside compiler
+ * passes — use `probe` instead.
+ */
+export function makeResolveTermTool(repoRoot: string): FoundryToolAgentTool {
+  return {
+    definition: {
+      type: 'function',
+      function: {
+        name: 'resolve_term',
+        description:
+          'Run the per-table matcher for a hint and see what recordId(s) it returns. '
+          + 'Use this to diagnose bugs where the wrong recordId is chosen (matcher logic) '
+          + 'vs the right record is missing (catalog data — check via inspect_registry). '
+          + `Supported tables: ${RESOLVE_TERM_TABLES.join(', ')}. For other tables, use \`probe\` with a synthesised prompt.`,
+        parameters: {
+          type: 'object',
+          properties: {
+            table: {
+              type: 'string',
+              description: `Table to resolve against. Supported: ${RESOLVE_TERM_TABLES.join(', ')}.`,
+            },
+            hint: { type: 'string', description: 'The hint to resolve, e.g. "12-well reservoir".' },
+          },
+          required: ['table', 'hint'],
+        },
+      },
+    },
+    handler: async (args) => {
+      const started = Date.now();
+      const table = typeof args['table'] === 'string' ? args['table'].trim() : '';
+      const hint = typeof args['hint'] === 'string' ? args['hint'].trim() : '';
+      if (!table) {
+        return { ok: false, content: 'error: table is required', durationMs: Date.now() - started };
+      }
+      if (!hint) {
+        return { ok: false, content: 'error: hint is required', durationMs: Date.now() - started };
+      }
+      if (!existsSync(join(repoRoot, 'server', RESOLVE_TERM_HARNESS_REL))) {
+        return { ok: false, content: 'resolve_term: harness unavailable', durationMs: Date.now() - started };
+      }
+      try {
+        const { stdout } = await execFileAsync(
+          'npx',
+          ['tsx', RESOLVE_TERM_HARNESS_REL, '--table', table, '--hint', hint],
+          { cwd: join(repoRoot, 'server'), timeout: 120_000, maxBuffer: 8 * 1024 * 1024 },
+        );
+        const line = stdout.trim().split('\n').filter(Boolean).at(-1) ?? '{}';
+        const parsed = JSON.parse(line) as {
+          table?: string;
+          hint?: string;
+          supported?: boolean;
+          supportedTables?: string[];
+          alternatives?: string[];
+          reason?: string;
+          matches?: Array<{ recordId: string; title?: string; inRegistry?: boolean }>;
+          aliasRecordIds?: string[];
+          aliasNotInRegistry?: string[];
+        };
+        if (parsed.supported === false) {
+          const alts = (parsed.alternatives ?? []).map((a) => `  - ${a}`).join('\n');
+          const supp = (parsed.supportedTables ?? []).join(', ');
+          const reason = parsed.reason ?? '';
+          const content =
+            `resolve_term: table ${JSON.stringify(parsed.table)} not supported.\n`
+            + `Supported: ${supp}\n${reason ? `Reason: ${reason}\n` : ''}Alternatives:\n${alts}`;
+          return { ok: true, content, durationMs: Date.now() - started };
+        }
+        const matchLines = (parsed.matches ?? []).length
+          ? (parsed.matches ?? [])
+            .map((m) => {
+              const reg = m.inRegistry === undefined ? '' : `  (inRegistry: ${m.inRegistry})`;
+              return `  - ${m.recordId}${reg}`;
+            })
+            .join('\n')
+          : '  (no match)';
+        const stale = (parsed.aliasNotInRegistry ?? []).length
+          ? `\nalias entries NOT in canonical registry (test↔prod divergences):\n  ${(parsed.aliasNotInRegistry ?? []).join(', ')}`
+          : '';
+        const content =
+          `resolve_term(${parsed.table}, ${JSON.stringify(parsed.hint)}):\n`
+          + `matches:\n${matchLines}${stale}`;
+        const clipped = content.length > RESOLVE_TERM_MAX_CHARS
+          ? `${content.slice(0, RESOLVE_TERM_MAX_CHARS)}\n… [clipped ${content.length - RESOLVE_TERM_MAX_CHARS} more chars]`
+          : content;
+        return { ok: true, content: clipped, durationMs: Date.now() - started };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { ok: false, content: `resolve_term error: ${message}`, durationMs: Date.now() - started };
+      }
+    },
+  };
+}
+
 const INSPECT_REGISTRY_HARNESS_REL = 'src/compiler/pipeline/fixtures/inspectRegistry.ts';
 const INSPECT_REGISTRY_LIST_CHARS = 8000;
 const INSPECT_REGISTRY_RECORD_CHARS = 6000;

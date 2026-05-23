@@ -17,7 +17,7 @@ import {
   resolveRetrievalConfig,
   RetrievalSidecar,
 } from './RetrievalIndex.js';
-import { makeInspectRegistryTool, makeProbeTool, makeVerifyTool } from './FixItCoderTools.js';
+import { makeInspectRegistryTool, makeProbeTool, makeResolveTermTool, makeVerifyTool } from './FixItCoderTools.js';
 import type { FoundryVariant } from './ProtocolFoundryCompileRunner.js';
 
 const execFileAsync = promisify(execFile);
@@ -902,6 +902,7 @@ export async function runFoundryCoderPatch(input: {
       extraTools.push(makeVerifyTool(input.repoRoot, selectedSpec.id));
       extraTools.push(makeProbeTool(input.repoRoot));
       extraTools.push(makeInspectRegistryTool(input.repoRoot));
+      extraTools.push(makeResolveTermTool(input.repoRoot));
     }
 
     let agentResult: Awaited<ReturnType<typeof runFoundryToolAgent>>;
@@ -919,7 +920,7 @@ export async function runFoundryCoderPatch(input: {
           ? ['', 'Use the retrieve tool to find code by concept or symbol (e.g. "the pass that emits deckLayoutPlan.pinned") before reading or paging large files — it is faster than scanning.']
           : []),
         ...(fixItTools
-          ? ['', 'Use the `verify` tool to run the declared fixture and see, for each unsatisfied assertion, the EXPECTED vs ACTUAL value — call it after each edit instead of writing debug scripts or running the test suite by hand. Use `probe("<prompt>", fields?)` to run the deterministic compile on an ARBITRARY prompt and inspect any TerminalArtifacts field — use this to vary the failing prompt and isolate which dimension drives the bug. Use `inspect_registry("<name>", key?)` to list a registry\'s records (labware-definitions, ontology-terms, compound-classes, execution-scale-profiles, assay-specs, instruments, pipette-capabilities, etc.) or drill into one by id when you need to know what exists in the catalog.']
+          ? ['', 'Use the `verify` tool to run the declared fixture and see, for each unsatisfied assertion, the EXPECTED vs ACTUAL value — call it after each edit instead of writing debug scripts or running the test suite by hand. Use `probe("<prompt>", fields?)` to run the deterministic compile on an ARBITRARY prompt and inspect any TerminalArtifacts field — use this to vary the failing prompt and isolate which dimension drives the bug. Use `inspect_registry("<name>", key?)` to list a registry\'s records (labware-definitions, ontology-terms, compound-classes, execution-scale-profiles, assay-specs, instruments, pipette-capabilities, etc.) or drill into one by id when you need to know what exists in the catalog. Use `resolve_term("<table>", "<hint>")` to run the actual matcher for a hint (currently `labware`) and see which recordId it returns plus whether that id exists in the canonical registry — that distinguishes matcher-logic bugs from catalog-data bugs.']
           : []),
         ...(compilerFix
           ? [
