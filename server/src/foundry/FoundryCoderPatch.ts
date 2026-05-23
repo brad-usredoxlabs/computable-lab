@@ -18,6 +18,7 @@ import {
   RetrievalSidecar,
 } from './RetrievalIndex.js';
 import { makeInspectEventsTool, makeInspectRegistryTool, makeProbePassTool, makeProbeTool, makeResolveTermTool, makeVerifyTool } from './FixItCoderTools.js';
+import { renderSkillsForPrompt } from './skills/index.js';
 import type { FoundryVariant } from './ProtocolFoundryCompileRunner.js';
 
 const execFileAsync = promisify(execFile);
@@ -924,24 +925,7 @@ export async function runFoundryCoderPatch(input: {
         ...(fixItTools
           ? ['', 'Use the `verify` tool to run the declared fixture and see, for each unsatisfied assertion, the EXPECTED vs ACTUAL value — call it after each edit instead of writing debug scripts or running the test suite by hand. Use `probe("<prompt>", fields?)` to run the deterministic compile on an ARBITRARY prompt and inspect any TerminalArtifacts field — use this to vary the failing prompt and isolate which dimension drives the bug. Use `probe_pass("<prompt>", pass_name?)` to inspect a SPECIFIC pipeline stage\'s intermediate output (omit pass_name to list all 20+ passes that ran) — this is how you locate which stage first produces the wrong value, not just see the final terminal state. Use `inspect_events("<prompt>", position?)` for a scannable per-event summary of `terminalArtifacts.events`; position mode drills into one event with its colocated labStateDelta + resolvedRefs (events have no explicit dep edges; cross-reference manually). Use `inspect_registry("<name>", key?)` to list a registry\'s records (labware-definitions, ontology-terms, compound-classes, execution-scale-profiles, assay-specs, instruments, pipette-capabilities, etc.) or drill into one by id when you need to know what exists in the catalog. Use `resolve_term("<table>", "<hint>")` to run the actual matcher for a hint (currently `labware`) and see which recordId it returns plus whether that id exists in the canonical registry — that distinguishes matcher-logic bugs from catalog-data bugs.']
           : []),
-        ...(compilerFix
-          ? [
-            '',
-            'SKILL: compiler-pipeline-debug (applies because this spec\'s fixClass is "compiler"):',
-            'The compile pipeline has many stages. `verify` shows the END state only — it cannot tell you WHICH stage broke things. Reading source blindly is slow; experimenting with `probe` is fast. Workflow:',
-            '  1. PROBE FIRST. Call `probe(<failing-prompt>)` to capture the baseline symptom (the actual pinned/events the compiler emits).',
-            '  2. ISOLATE THE VARIABLE. Run at least 3 probes that each change ONE thing about the failing prompt:',
-            '     - drop the conjunction (probe a single clause alone),',
-            '     - reverse clause order,',
-            '     - remove a modifier (e.g. "12-well reservoir" → "reservoir"),',
-            '     - swap a verb or preposition.',
-            '     The variation that flips the symptom names the variable the bug depends on.',
-            '  3. PREDICT THE STAGE. From step 2 you should be able to name the pipeline stage that owns the failing variable (tokenizer/tagger, noun resolver, clause splitter, labware lookup, placement lowering). ONLY NOW open source files.',
-            '  4. CAP EXPLORATION. Read at most 2 source files before re-probing or re-verifying. If reading is not narrowing the bug, you are in the wrong file — probe a new variation instead.',
-            '  5. CLOSE THE LOOP. Re-call `verify` after EVERY edit. An edit you have not verified is an edit that probably did nothing.',
-            'The spec\'s rationale was written from one failing example and is a guess; your job is to test the guess with `probe`, not to implement it.',
-          ]
-          : []),
+        ...(compilerFix ? ['', renderSkillsForPrompt()] : []),
         '',
         'Debugging: prefer the `verify` tool over throwaway scripts. If you must inspect something it does not cover, write a THROWAWAY script (shell: `npx tsx /tmp/dbg.ts` or `node -e`) — do NOT add console.log/debug to the source files you are fixing (it forces a cleanup pass and risks debug cruft in the patch). Keep owned source clean: only your actual fix goes there.',
         '',
