@@ -789,8 +789,16 @@ export async function runFoundryCoderPatch(input: {
   } else {
     baseUrl = workerBaseUrl;
     model = speedyCoderModel;
-    timeoutMs = 300_000;
+    // 480s (was 300s) — enableThinking adds reasoning tokens to every call;
+    // a hard-decision turn can comfortably need 3-6 minutes of generation.
+    // 300s was tripping on rumination already; thinking-mode pushes higher.
+    timeoutMs = 480_000;
   }
+  // Thinking mode is supported on the worker (Qwen3.6 with vLLM
+  // chat_template_kwargs.enable_thinking) — smoke-verified to coexist
+  // cleanly with tool calls (reasoning_content separate from tool_calls
+  // array). Skip for the architect endpoint, untested there.
+  const enableThinking = baseUrl === workerBaseUrl;
 
   if (!baseUrl || !model || input.dryRun) {
     return { status: 'blocked', resultPath, message: 'coder not configured', touchedFiles: [] };
@@ -841,6 +849,7 @@ export async function runFoundryCoderPatch(input: {
     temperature: 0.1,
     timeoutMs,
     maxTokens: 16384,
+    ...(enableThinking ? { enableThinking: true } : {}),
   });
 
   await mkdir(resultRoot, { recursive: true });
@@ -945,11 +954,11 @@ export async function runFoundryCoderPatch(input: {
       }),
       tracePath,
       maxTurns: input.maxTurns ?? TOOL_AGENT_MAX_TURNS,
-      // 6K cap — was 16K, but the new quant tended to fill it with massive
-      // bare-text rumination turns (one 42K-char response tripped the 300s
-      // inference timeout). 6K leaves room for a planning paragraph + a
-      // tool call without permitting essay-length thinking-out-loud.
-      maxTokens: 6_144,
+      // 8K cap — bumped from 6K because reasoning_tokens count against
+      // max_tokens with enableThinking on. 8K accommodates substantial
+      // private reasoning (say 5-6K) plus a tight visible tool call (~1K)
+      // without re-opening the 40K-char visible-rumination failure mode.
+      maxTokens: 8_192,
       temperature: 0.1,
       ...(extraTools.length ? { extraTools } : {}),
       ...(fixItTools ? {

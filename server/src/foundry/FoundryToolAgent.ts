@@ -326,8 +326,19 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
       if (!assistantMessage) {
         throw new Error('tool agent received no assistant message');
       }
-      messages.push(assistantMessage);
+      // Trace the FULL response (including reasoning_content / reasoning) so
+      // the persisted trace captures the model's private thinking for debug.
       await trace(input.tracePath, { type: 'assistant', turn, message: assistantMessage });
+      // …but strip reasoning_content / reasoning before pushing into the
+      // outgoing transcript — reasoning is a one-shot output, not part of the
+      // conversation history; echoing it back bloats prompt tokens every turn
+      // and conflicts with provider conventions (OpenAI / Qwen3+).
+      const { reasoning: _r, reasoning_content: _rc, ...assistantForHistory } = assistantMessage as ChatMessage & {
+        reasoning?: unknown;
+        reasoning_content?: unknown;
+      };
+      void _r; void _rc;
+      messages.push(assistantForHistory as ChatMessage);
 
       const calls = assistantMessage.tool_calls ?? [];
       if (calls.length > 0) {
