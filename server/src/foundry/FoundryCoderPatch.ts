@@ -782,19 +782,20 @@ export async function runFoundryCoderPatch(input: {
   } else if (coderRole === 'senior') {
     // Senior-on-worker: a fresh crack on the bigger, big-context worker model
     // (avoids the architect's request-body wall). Generous timeout for the
-    // higher turn budget.
+    // higher turn budget — bumped to 1800s (30 min) so a single thinking-mode
+    // reasoning spike doesn't end the whole senior round.
     baseUrl = workerBaseUrl;
     model = speedyCoderModel;
-    timeoutMs = 1200_000;
+    timeoutMs = 1800_000;
   } else {
     baseUrl = workerBaseUrl;
     model = speedyCoderModel;
-    // 900s — observed wall-clock on thinking-mode runs: ~6 min per turn at
-    // turn 30+ (1K-1.5K reasoning tokens + growing transcript prefill).
-    // 480s was uncomfortably close; 900s gives 2x margin for the model to
-    // chew on a hard turn without tripping the timeout and tanking the
-    // whole round. Senior path already runs at 1200s.
-    timeoutMs = 900_000;
+    // 1500s — observed thinking-mode runs hit 15-min single-turn wall-clock
+    // when the model burns 20K+ chars of reasoning on a hard decision step.
+    // 900s tripped at turn 22 of a real run (job fixit-142143da); bumping
+    // to 1500s (25 min) leaves room for occasional spikes without tanking
+    // the whole round. Senior raised to match-and-then-some at 1800s.
+    timeoutMs = 1500_000;
   }
   // Thinking mode is supported on the worker (Qwen3.6 with vLLM
   // chat_template_kwargs.enable_thinking) — smoke-verified to coexist
