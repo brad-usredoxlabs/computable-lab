@@ -164,6 +164,94 @@ export function makeProbeTool(repoRoot: string): FoundryToolAgentTool {
   };
 }
 
+const PROBE_PASS_HARNESS_REL = 'src/compiler/pipeline/fixtures/probePass.ts';
+const PROBE_PASS_OUTPUT_CHARS = 8000;
+
+/**
+ * `probe_pass` — run the deterministic compile on a prompt and return either
+ * the list of pipeline pass names (list mode) or one named pass's intermediate
+ * output (detail mode). This is what shows the coder WHICH stage of the
+ * pipeline owns a diverging field — `probe` shows only the final terminal
+ * artifacts.
+ */
+export function makeProbePassTool(repoRoot: string): FoundryToolAgentTool {
+  return {
+    definition: {
+      type: 'function',
+      function: {
+        name: 'probe_pass',
+        description:
+          'Run the deterministic compile on a prompt and inspect intermediate pipeline state. '
+          + 'Without `pass_name`: list every pass that ran (in registration order, as a list of ids). '
+          + 'With `pass_name`: dump that pass\'s output as JSON — use this to locate which stage '
+          + 'first produces the wrong value (e.g. compare deterministic_precompile vs resolve_labware '
+          + 'vs plan_deck_layout) by reading their intermediate outputs.',
+        parameters: {
+          type: 'object',
+          properties: {
+            prompt: { type: 'string', description: 'The prompt to compile.' },
+            pass_name: {
+              type: 'string',
+              description: 'Optional. Pass id to drill into. Omit to list all passes that ran.',
+            },
+          },
+          required: ['prompt'],
+        },
+      },
+    },
+    handler: async (args) => {
+      const started = Date.now();
+      const prompt = typeof args['prompt'] === 'string' ? args['prompt'] : '';
+      const passName = typeof args['pass_name'] === 'string' ? args['pass_name'].trim() : '';
+      if (!prompt.trim()) {
+        return { ok: false, content: 'error: prompt is required', durationMs: Date.now() - started };
+      }
+      if (!existsSync(join(repoRoot, 'server', PROBE_PASS_HARNESS_REL))) {
+        return { ok: false, content: 'probe_pass: harness unavailable', durationMs: Date.now() - started };
+      }
+      const harnessArgs = ['tsx', PROBE_PASS_HARNESS_REL, '--prompt', prompt];
+      if (passName) harnessArgs.push('--pass', passName);
+      try {
+        const { stdout } = await execFileAsync('npx', harnessArgs, {
+          cwd: join(repoRoot, 'server'),
+          timeout: 120_000,
+          maxBuffer: 16 * 1024 * 1024,
+        });
+        const line = stdout.trim().split('\n').filter(Boolean).at(-1) ?? '{}';
+        const parsed = JSON.parse(line) as {
+          prompt?: string;
+          outcome?: string;
+          mode?: 'list' | 'detail';
+          passNames?: string[];
+          passName?: string;
+          exists?: boolean;
+          output?: unknown;
+          availablePassNames?: string[];
+        };
+        if (parsed.mode === 'list') {
+          const lines = (parsed.passNames ?? []).map((n) => `  - ${n}`).join('\n');
+          const content = `probe_pass(${JSON.stringify(prompt)}): ${parsed.passNames?.length ?? 0} passes (outcome: ${parsed.outcome ?? '?'})\n${lines}`;
+          return { ok: true, content, durationMs: Date.now() - started };
+        }
+        if (parsed.exists === false) {
+          const sample = (parsed.availablePassNames ?? []).slice(0, 30).join(', ');
+          const content = `probe_pass: pass ${JSON.stringify(parsed.passName)} did not run for this prompt.\nAvailable: ${sample}${(parsed.availablePassNames?.length ?? 0) > 30 ? ', …' : ''}`;
+          return { ok: true, content, durationMs: Date.now() - started };
+        }
+        const json = JSON.stringify(parsed.output, null, 2);
+        const clipped = json.length > PROBE_PASS_OUTPUT_CHARS
+          ? `${json.slice(0, PROBE_PASS_OUTPUT_CHARS)}\n… [clipped ${json.length - PROBE_PASS_OUTPUT_CHARS} more chars]`
+          : json;
+        const content = `probe_pass(${JSON.stringify(prompt)}, pass=${JSON.stringify(parsed.passName)}):\n${clipped}`;
+        return { ok: true, content, durationMs: Date.now() - started };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { ok: false, content: `probe_pass error: ${message}`, durationMs: Date.now() - started };
+      }
+    },
+  };
+}
+
 const RESOLVE_TERM_HARNESS_REL = 'src/compiler/pipeline/fixtures/resolveTerm.ts';
 const RESOLVE_TERM_TABLES = ['labware'] as const;
 const RESOLVE_TERM_MAX_CHARS = 4000;

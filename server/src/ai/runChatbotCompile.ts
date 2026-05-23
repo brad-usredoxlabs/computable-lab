@@ -143,6 +143,12 @@ export interface RunChatbotCompileResult {
   diagnostics: PassDiagnostic[];
   terminalArtifacts: TerminalArtifacts;
   outcome: CompileOutcome;
+  /**
+   * Per-pass outputs, keyed by pass id. Mirrors the orchestrator's internal
+   * outputs map. Surfaced so fix-it tooling (probe_pass) can see WHERE in
+   * the pipeline state diverges, not just the final terminal artifacts.
+   */
+  passOutputs: Record<string, unknown>;
 }
 
 const PIPELINE_YAML_PATH = path.resolve(
@@ -463,6 +469,15 @@ export async function runChatbotCompile(
     cache.put(convId, labStateDelta.snapshotAfter);
   }
 
+  // Surface every pass's output as a plain object so fix-it tooling can see
+  // intermediate state without re-running the pipeline. The orchestrator's
+  // Map<string, unknown> serialises cleanly; values are whatever each pass
+  // returned via its `output` field.
+  const passOutputs: Record<string, unknown> = {};
+  for (const [passId, value] of result.outputs.entries()) {
+    passOutputs[passId] = value;
+  }
+
   return {
     events,
     labwareAdditions: labware.labwareAdditions ?? [],
@@ -471,5 +486,6 @@ export async function runChatbotCompile(
     diagnostics,
     terminalArtifacts,
     outcome,
+    passOutputs,
   };
 }
