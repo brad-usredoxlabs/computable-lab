@@ -976,6 +976,15 @@ export interface GitOps {
    * worktree's last commit (committed progress is preserved).
    */
   resetWorktree?(worktreeRoot: string, files: string[]): Promise<void>;
+  /**
+   * Return the list of files in the worktree that have any pending changes
+   * (modified, added, or untracked). Used as a fallback when the coder
+   * reports `touchedFiles: []` but the gate verified PASS/PROGRESS — the
+   * worktree is the source of truth in that case. Without this fallback,
+   * the driver silently drops the model's edits and the "patch landed"
+   * status message is a lie.
+   */
+  dirtyFilesInWorktree?(worktreeRoot: string): Promise<string[]>;
 }
 
 function createGitOps(repoRoot: string): GitOps {
@@ -1018,6 +1027,26 @@ function createGitOps(repoRoot: string): GitOps {
           await unlink(resolve(repoRoot, file)).catch(() => {});
         }
       }
+    },
+    async dirtyFilesInWorktree(worktreeRoot) {
+      // --porcelain default includes untracked (as ??) which we want — a coder
+      // might have created new files. Each line is "XY <relpath>" (or
+      // "XY <oldpath> -> <newpath>" for renames). Strip the status prefix and
+      // take the post-rename name where applicable.
+      const { stdout } = await execFileAsync(
+        'git',
+        ['-C', worktreeRoot, 'status', '--porcelain', '--'],
+        { maxBuffer: 8 * 1024 * 1024 },
+      );
+      const files: string[] = [];
+      for (const line of stdout.split('\n')) {
+        if (line.length < 4) continue;
+        const rest = line.slice(3);
+        // Handle rename: "old -> new"
+        const arrow = rest.indexOf(' -> ');
+        files.push(arrow >= 0 ? rest.slice(arrow + 4) : rest);
+      }
+      return files;
     },
     async resetWorktree(worktreeRoot, files) {
       for (const file of files) {
@@ -1419,7 +1448,28 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
       details: { verdict, round, role, ...(post?.target ? { missing: post.target.missing } : {}) },
     });
 
-    const roundFiles = Array.from(roundTouched);
+    let roundFiles = Array.from(roundTouched);
+    // Fallback for the silent-drop bug: the coder may return touchedFiles:[]
+    // even after successfully editing (e.g. when status is 'blocked' but the
+    // edits landed before the block). If the worktree actually has dirty
+    // files, use those — the worktree IS the state the gate just verified.
+    if (roundFiles.length === 0 && activeJobRef.value?.worktreePath && gitOps.dirtyFilesInWorktree) {
+      try {
+        const dirty = await gitOps.dirtyFilesInWorktree(activeJobRef.value.worktreePath);
+        if (dirty.length > 0) {
+          roundFiles = dirty;
+          for (const f of dirty) touchedFileSet.add(f);
+          onProgress({
+            source: 'server',
+            phase: 'progress_gate',
+            message: `Coder reported 0 touched files but worktree has ${dirty.length}; using worktree state`,
+            details: { round, role, recoveredFromWorktree: true, files: dirty },
+          });
+        }
+      } catch (err) {
+        request.log.warn({ err }, 'fix-it: dirtyFilesInWorktree fallback failed; proceeding with empty round set');
+      }
+    }
     if (verdict === 'pass' || verdict === 'progress') {
       if (roundFiles.length > 0) {
         try {
