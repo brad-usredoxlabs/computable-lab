@@ -789,10 +789,12 @@ export async function runFoundryCoderPatch(input: {
   } else {
     baseUrl = workerBaseUrl;
     model = speedyCoderModel;
-    // 480s (was 300s) — enableThinking adds reasoning tokens to every call;
-    // a hard-decision turn can comfortably need 3-6 minutes of generation.
-    // 300s was tripping on rumination already; thinking-mode pushes higher.
-    timeoutMs = 480_000;
+    // 900s — observed wall-clock on thinking-mode runs: ~6 min per turn at
+    // turn 30+ (1K-1.5K reasoning tokens + growing transcript prefill).
+    // 480s was uncomfortably close; 900s gives 2x margin for the model to
+    // chew on a hard turn without tripping the timeout and tanking the
+    // whole round. Senior path already runs at 1200s.
+    timeoutMs = 900_000;
   }
   // Thinking mode is supported on the worker (Qwen3.6 with vLLM
   // chat_template_kwargs.enable_thinking) — smoke-verified to coexist
