@@ -15,7 +15,9 @@ const execFileAsync = promisify(execFile);
 
 const DEFAULT_MAX_TURNS = 40;
 const DEFAULT_MAX_TOOL_OUTPUT_CHARS = 30_000;
-const DEFAULT_MAX_READ_CHARS = 60_000;
+const DEFAULT_MAX_READ_CHARS = 20_000;
+const LARGE_FILE_THRESHOLD_CHARS = 50_000;
+const LARGE_FILE_PREVIEW_CHARS = 4_000;
 const DEFAULT_TOOL_TIMEOUT_MS = 120_000;
 const COMPLETE_MARKER = '<promise>COMPLETE</promise>';
 
@@ -789,6 +791,28 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
     const total = lines.length;
     const offset = Math.max(1, Math.floor(numberArg(args, 'offset') ?? 1));
     const explicitLimit = numberArg(args, 'limit');
+    const noPagingRequested = numberArg(args, 'offset') === undefined && explicitLimit === undefined;
+
+    // Big-file guard: if the caller asked for a whole-file read on something
+    // large (pass files like DeterministicPrecompilePass are 100-150KB), bail
+    // out with a tiny preview + forced strategy choice. The previous behaviour
+    // returned 60K chars per read, which blew the context budget AND cost ~30s
+    // of inference prefill on the next turn. Force the model to commit to
+    // either `retrieve` (semantic search) or paged `read_file` upfront.
+    if (noPagingRequested && content.length > LARGE_FILE_THRESHOLD_CHARS) {
+      const preview = lines.slice(0, 80).join('\n').slice(0, LARGE_FILE_PREVIEW_CHARS);
+      return [
+        `LARGE FILE (${(content.length / 1024).toFixed(0)} KB, ${total} lines) — refusing to dump whole.`,
+        `Reading a whole pass file like this blows the context budget; the previous turn paid for it.`,
+        `Choose ONE strategy:`,
+        `  - retrieve("<symbol or concept>")  — semantic search; returns just the relevant lines across the codebase`,
+        `  - grep(pattern="...", path="${rel}")  — pinpoint a line number`,
+        `  - read_file(path="${rel}", offset=<line>, limit=<count>)  — page a specific range you already know about`,
+        ``,
+        `Preview (first 80 lines, may help you frame the right query):`,
+        preview,
+      ].join('\n');
+    }
 
     // Page from `offset`, but never return more than the char cap in one call.
     // A single file can exceed the model context (e.g. 138K-char pass files);
@@ -817,7 +841,8 @@ const TOOL_HANDLERS: Record<string, ToolHandler> = {
     const shownThrough = lastLine + 1; // 1-based last line actually returned
     if (shownThrough < total) {
       body += `\n... [showed lines ${offset}-${shownThrough} of ${total}. `
-        + `Read further with read_file(path="${rel}", offset=${shownThrough + 1}).]`;
+        + `Read further with read_file(path="${rel}", offset=${shownThrough + 1}, limit=N), `
+        + `or use retrieve("<symbol or concept>") to find the relevant region without paging through the whole file.]`;
     }
     return body || `(file has ${total} line(s); offset ${offset} is past the end)`;
   },

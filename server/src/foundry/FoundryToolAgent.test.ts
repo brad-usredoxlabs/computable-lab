@@ -74,12 +74,14 @@ describe('FoundryToolAgent', () => {
     }
   });
 
-  it('pages a large file with read_file offset so code past the truncation cap is reachable', async () => {
+  it('refuses to dump a large file whole and forces a paging/retrieve strategy', async () => {
     const workdir = await mkdtemp(join(tmpdir(), 'foundry-tool-agent-bigread-'));
     try {
-      // ~120K chars; the marker sits well past the 60K read cap so the first
-      // (no-offset) read cannot reach it — exactly the situation that wedged
-      // the coder on the 138K-char ChatbotCompilePasses.ts.
+      // ~120K chars; the marker sits well past the 50KB big-file threshold.
+      // Old behaviour was to truncate at 60K chars (the marker at line 2499
+      // was unreachable). New behaviour: refuse to dump, force the model to
+      // pick a paging or retrieve strategy. Paged read then reaches the
+      // marker.
       const lines = Array.from({ length: 3000 }, (_, i) =>
         i === 2499 ? 'UNIQUE_LATE_MARKER_LINE' : `line ${i} ${'x'.repeat(30)}`,
       );
@@ -96,7 +98,7 @@ describe('FoundryToolAgent', () => {
         if (n === 2) {
           return response({
             role: 'assistant', content: null,
-            tool_calls: [{ id: 'c2', type: 'function', function: { name: 'read_file', arguments: JSON.stringify({ path: 'big.ts', offset: 2490 }) } }],
+            tool_calls: [{ id: 'c2', type: 'function', function: { name: 'read_file', arguments: JSON.stringify({ path: 'big.ts', offset: 2490, limit: 20 }) } }],
           }, 'tool_calls');
         }
         return response({ role: 'assistant', content: '<promise>COMPLETE</promise>' }, 'stop');
@@ -114,10 +116,12 @@ describe('FoundryToolAgent', () => {
       const first = toolResults[0]!.result!.content!;
       const second = toolResults[1]!.result!.content!;
 
-      // First read is truncated and tells the model how to reach the rest.
+      // First read refuses + advertises both paging and retrieve.
       expect(first).not.toContain('UNIQUE_LATE_MARKER_LINE');
-      expect(first).toContain('Read further with read_file');
-      // Paging by offset reaches the late code.
+      expect(first).toContain('LARGE FILE');
+      expect(first).toContain('retrieve(');
+      expect(first).toContain('read_file(path=');
+      // Paged read with explicit offset+limit reaches the late marker.
       expect(second).toContain('UNIQUE_LATE_MARKER_LINE');
     } finally {
       await rm(workdir, { recursive: true, force: true });
@@ -201,6 +205,46 @@ describe('FoundryToolAgent', () => {
       const finalMessages = (complete.mock.calls.at(-1)![0] as CompletionRequest).messages;
       const nudgeCount = finalMessages.filter((m) => String(m.content ?? '').includes('without editing yet')).length;
       expect(nudgeCount).toBe(1);
+    } finally {
+      await rm(workdir, { recursive: true, force: true });
+    }
+  });
+
+  it('requests a handoff report before exhausting the turn budget', async () => {
+    const workdir = await mkdtemp(join(tmpdir(), 'foundry-tool-agent-handoff-nudge-'));
+    try {
+      const complete = vi.fn(async (req: CompletionRequest) => {
+        const last = String(req.messages.at(-1)?.content ?? '');
+        if (last.includes('HANDOFF REPORT')) {
+          return response({ role: 'assistant', content: 'HANDOFF REPORT: tried verify and probe; changed parser; still failing deck pin; next inspect constructor.' }, 'stop');
+        }
+        if (last.includes('out of turns')) {
+          return response({ role: 'assistant', content: 'HANDOFF: final fallback summary.' }, 'stop');
+        }
+        return response({ role: 'assistant', content: 'still investigating' }, 'stop');
+      });
+      const client = {
+        complete,
+        completeStream: vi.fn(),
+      } as unknown as InferenceClient;
+
+      const progress: string[] = [];
+      const result = await runFoundryToolAgent({
+        client,
+        model: 'mock-model',
+        workdir,
+        prompt: 'fix it',
+        maxTurns: 20,
+        onProgress: (event) => {
+          progress.push(`${event.phase}:${event.message}`);
+        },
+      });
+
+      expect(result.status).toBe('max-turns');
+      const turn16 = complete.mock.calls[15]![0] as CompletionRequest;
+      expect(String(turn16.messages.at(-1)?.content ?? '')).toContain('HANDOFF REPORT');
+      expect(progress.some((line) => line.startsWith('handoff_requested:'))).toBe(true);
+      expect(progress.some((line) => line.startsWith('handoff_captured:'))).toBe(true);
     } finally {
       await rm(workdir, { recursive: true, force: true });
     }
