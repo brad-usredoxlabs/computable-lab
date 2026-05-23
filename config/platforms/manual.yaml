@@ -18,6 +18,14 @@ variants:
   - id: manual_collapsed
     title: Manual Technician Mode
     slots: []
+    # Same surface idiom as the side-lawn next to robot decks (400×500mm)
+    # — just sized for a technician's working area. The freeform bench
+    # variant below is bigger again. Without a surface here the deck
+    # stage renders the placeholder; with it, LawnSurface takes over.
+    surface:
+      kind: lawn
+      widthMm: 900
+      heightMm: 600
   - id: manual_freeform
     title: Manual Bench (freeform)
     slots: []

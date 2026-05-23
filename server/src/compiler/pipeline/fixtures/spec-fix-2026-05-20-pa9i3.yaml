@@ -1,0 +1,14 @@
+name: spec-fix-2026-05-20-pa9i3
+description: Regression test for 'ad' typo in verb map
+deterministicOnly: true
+input:
+  prompt: Ad a 12-well reservoir on B1
+expected:
+  outcome: complete
+  terminalArtifacts:
+    deckLayoutPlan:
+      pinned:
+        - slot: B1
+          labwareHint: lbw-def-generic-reservoir-1-v1
+    events:
+      - event_type: create_container

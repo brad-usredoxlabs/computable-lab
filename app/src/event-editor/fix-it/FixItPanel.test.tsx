@@ -86,13 +86,15 @@ const mocks = vi.hoisted(() => ({
   appendFixItApplyProgress: vi.fn(),
   requestRetryPrompt: vi.fn(),
   probeFixItHealth: vi.fn(),
-  streamApplyFix: vi.fn(),
+  startApplyFixJob: vi.fn(),
   streamFixChat: vi.fn(),
+  streamFixItJobEvents: vi.fn(),
   synthesizeFixSpec: vi.fn(),
   listFixItJobs: vi.fn(),
   getFixItJob: vi.fn(),
   getFixItJobSpec: vi.fn(),
   completeFixItJob: vi.fn(),
+  cancelFixItJob: vi.fn(),
   appendFixItApplyReasoning: vi.fn(),
 }))
 
@@ -121,13 +123,15 @@ vi.mock('../EventEditorContext', () => ({
 
 vi.mock('./fixItClient', () => ({
   probeFixItHealth: mocks.probeFixItHealth,
-  streamApplyFix: mocks.streamApplyFix,
+  startApplyFixJob: mocks.startApplyFixJob,
   streamFixChat: mocks.streamFixChat,
+  streamFixItJobEvents: mocks.streamFixItJobEvents,
   synthesizeFixSpec: mocks.synthesizeFixSpec,
   listFixItJobs: mocks.listFixItJobs,
   getFixItJob: mocks.getFixItJob,
   getFixItJobSpec: mocks.getFixItJobSpec,
   completeFixItJob: mocks.completeFixItJob,
+  cancelFixItJob: mocks.cancelFixItJob,
 }))
 
 const healthyResponse: FixItHealthResponse = {
@@ -147,15 +151,21 @@ describe('FixItPanel', () => {
     mocks.restoreFixItSession.mockReset()
     mocks.probeFixItHealth.mockReset()
     mocks.probeFixItHealth.mockResolvedValue(healthyResponse)
-    mocks.streamApplyFix.mockReset()
+    mocks.startApplyFixJob.mockReset()
+    mocks.streamFixItJobEvents.mockReset()
+    mocks.streamFixItJobEvents.mockReturnValue((async function*() {})())
     mocks.streamFixChat.mockReset()
     mocks.synthesizeFixSpec.mockReset()
     mocks.listFixItJobs.mockReset()
     mocks.listFixItJobs.mockResolvedValue({ jobs: [] })
     mocks.getFixItJob.mockReset()
     mocks.getFixItJob.mockResolvedValue(null)
+    mocks.getFixItJobSpec.mockReset()
+    mocks.getFixItJobSpec.mockResolvedValue(null)
     mocks.completeFixItJob.mockReset()
     mocks.completeFixItJob.mockResolvedValue(null)
+    mocks.cancelFixItJob.mockReset()
+    mocks.cancelFixItJob.mockResolvedValue(null)
   })
   afterEach(() => {
     cleanup()
@@ -192,7 +202,7 @@ describe('FixItPanel', () => {
     expect((synth as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('renders the spinner and a Stop button while applying', () => {
+  it('renders the spinner and a Cancel job button while applying', () => {
     mocks.fixItState = {
       ...baseFixIt(),
       stage: 'applying',
@@ -202,6 +212,7 @@ describe('FixItPanel', () => {
           source: 'coder',
           phase: 'llm_started',
           message: 'Asking coder model for symbol replacements',
+          details: { id: 'job-current' },
           ts: '2026-05-17T00:00:00.000Z',
         },
       ],
@@ -221,10 +232,9 @@ describe('FixItPanel', () => {
     // The progress message appears in both the live-status strip and the
     // detailed progress log below — accept either.
     expect(screen.getAllByText('Asking coder model for symbol replacements').length).toBeGreaterThan(0)
-    const stop = screen.getByRole('button', { name: 'Stop' })
-    fireEvent.click(stop)
-    // No assertion on abortRef state — we just verify the button is wired.
-    expect(stop).toBeTruthy()
+    const cancel = screen.getByRole('button', { name: 'Cancel job' })
+    fireEvent.click(cancel)
+    expect(mocks.cancelFixItJob).toHaveBeenCalledWith('job-current')
   })
 
   it('shows the senior-coder agent + reason when escalated', () => {
@@ -395,9 +405,47 @@ describe('FixItPanel', () => {
       fixtureYaml: 'name: spec-fix-zombie\ninput:\n  prompt: Place a 96-well plate on B2\n',
       fixturePath: 'server/src/compiler/pipeline/fixtures/spec-fix-zombie.yaml',
     })
-    // streamApplyFix yields nothing (returned as soon as the generator is
-    // entered) — we only care that it was kicked off.
-    mocks.streamApplyFix.mockReturnValue((async function*() {})())
+    mocks.getFixItJob.mockResolvedValue({
+      job: interruptedJob,
+      events: [],
+      sessionSnapshot: {
+        seed: {
+          ...baseFixIt().seed!,
+          prompt: 'Place a 96-well plate on B2',
+          fixItSessionId: 'fix-session-zombie',
+        },
+        chat: [{ role: 'assistant', content: 'Zombie diagnosis' }],
+        stage: 'failed',
+        error: null,
+        spec: null,
+        applyStage: null,
+        applyProgress: [],
+        applyReasoning: '',
+        applyResult: null,
+        fixHistory: [],
+        pendingRetryPrompt: null,
+      },
+    })
+    mocks.startApplyFixJob.mockResolvedValue({
+      job: {
+        kind: 'event-editor-fixit-job',
+        id: 'job-resumed-new',
+        status: 'running',
+        createdAt: '2026-05-17T00:02:00.000Z',
+        updatedAt: '2026-05-17T00:02:00.000Z',
+        repoRoot: '/repo',
+        artifactRoot: '/repo/artifacts',
+        jobRoot: '/repo/artifacts/event-editor-fixit/jobs/job-resumed-new',
+        worktreeRoot: '/repo/.fixit-worktrees',
+        baseRef: 'HEAD',
+        worktreePath: '/repo/.fixit-worktrees/job-resumed-new',
+        specId: 'spec-fix-zombie',
+        title: 'Resume zombie job',
+        prompt: 'Place a 96-well plate on B2',
+        eventsPath: '/repo/artifacts/event-editor-fixit/jobs/job-resumed-new/events.jsonl',
+      },
+      events: [],
+    })
 
     render(<FixItPanel />)
     await waitFor(() => {
@@ -419,7 +467,20 @@ describe('FixItPanel', () => {
       }))
     })
     await waitFor(() => {
-      expect(mocks.streamApplyFix).toHaveBeenCalledTimes(1)
+      expect(mocks.startApplyFixJob).toHaveBeenCalledTimes(1)
+    })
+    expect(mocks.startApplyFixJob.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      fixItSessionId: 'fix-session-zombie',
+      sessionSnapshot: expect.objectContaining({
+        chat: [{ role: 'assistant', content: 'Zombie diagnosis' }],
+        stage: 'applying',
+        spec: expect.objectContaining({ specId: 'spec-fix-zombie' }),
+      }),
+    }))
+    // The superseded interrupted job is retired so it stops showing as its
+    // own chip — the new running job replaces it instead of duplicating it.
+    await waitFor(() => {
+      expect(mocks.completeFixItJob).toHaveBeenCalledWith('job-zombie')
     })
   })
 
@@ -529,7 +590,7 @@ describe('FixItPanel', () => {
     expect(mocks.restoreFixItSession.mock.calls[0]?.[0]?.chat[0]?.content).toBe('Durable diagnosis')
   })
 
-  it('does not let a stale apply abort overwrite another selected Fix-it dialog', async () => {
+  it('does not let a stale durable apply start failure overwrite another selected Fix-it dialog', async () => {
     let rejectApply: (err: unknown) => void = () => {}
     mocks.fixItState = {
       ...baseFixIt(),
@@ -541,16 +602,16 @@ describe('FixItPanel', () => {
         fixturePath: 'server/src/compiler/pipeline/fixtures/spec-fix-stale.yaml',
       },
     }
-    mocks.streamApplyFix.mockImplementation(async function* () {
-      await new Promise((_resolve, reject) => {
+    mocks.startApplyFixJob.mockImplementation(() =>
+      new Promise((_resolve, reject) => {
         rejectApply = reject
-      })
-    })
+      }),
+    )
 
     const view = render(<FixItPanel />)
     fireEvent.click(screen.getByRole('button', { name: 'Apply fix' }))
     await waitFor(() => {
-      expect(mocks.streamApplyFix).toHaveBeenCalledTimes(1)
+      expect(mocks.startApplyFixJob).toHaveBeenCalledTimes(1)
     })
     mocks.setFixItStage.mockClear()
 
@@ -574,8 +635,8 @@ describe('FixItPanel', () => {
 
     await new Promise((resolve) => window.setTimeout(resolve, 0))
     expect(mocks.setFixItStage).not.toHaveBeenCalledWith(
-      'spec-ready',
-      'Aborted — edit the spec and try again.',
+      'failed',
+      expect.any(String),
     )
   })
 })

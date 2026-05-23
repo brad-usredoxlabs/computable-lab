@@ -28,7 +28,7 @@ const LABWARE_ALIAS_MAP: Record<string, string> = {
   // Reservoir hints
   generic_1_well_reservoir: 'lbw-def-generic-reservoir-1-v1',
   generic_8_well_reservoir: 'lbw-def-generic-8-reservoir',
-  generic_12_well_reservoir: 'lbw-def-generic-12-reservoir',
+  generic_12_well_reservoir: 'lbw-def-generic-12-well-reservoir',
   generic_2_well_reservoir: 'lbw-def-generic-2-well-reservoir',
   generic_24_well_reservoir: 'lbw-def-generic-24-well-reservoir',
   // Tip rack hints

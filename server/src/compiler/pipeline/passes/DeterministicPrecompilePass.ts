@@ -636,7 +636,7 @@ const DECK_SLOT_TOKEN_RE = /\b([A-Da-d][1-4])\b/g;
  * Placement prepositions that signal a deck-slot intent when followed by a
  * deck-slot token (e.g. "on B2", "onto C3").
  */
-const PLACEMENT_PREPOSITION_RE = /\b(?:on|onto|in|at)\b/gi;
+const PLACEMENT_PREPOSITION_RE = /\b(?:on|onto|in|into|at)\b/gi;
 
 /**
  * Extract well addresses from text, but filter out tokens that look like
@@ -1142,7 +1142,10 @@ function collectCandidateLabwaresFromResolved(
     // the prompt anchors it to a specific deck slot, in which case
     // resolve_labware turns the candidate into a placement.
     if (n.kind === 'labware-instance' && !deckSlot) continue;
-    const key = n.recordId ?? n.phrase;
+    // Include the deck slot in the dedup key so that the same labware
+    // definition placed on different slots is emitted as separate candidates
+    // (e.g. "a 96-well plate on B1 and a 96-well plate on b2").
+    const key = deckSlot ? `${n.recordId ?? n.phrase}:${deckSlot}` : (n.recordId ?? n.phrase);
     if (labwareHints.has(key)) continue;
     labwareHints.add(key);
     candidateLabwares.push({
@@ -1337,7 +1340,7 @@ function inferDeckSlotForMention(
  */
 function inferBareDeckSlot(text: string): string | undefined {
   const lower = text.toLowerCase();
-  const prepMatch = lower.match(/\b(?:on|onto|in|at)\b/);
+  const prepMatch = lower.match(/\b(?:on|onto|in|into|at)\b/);
   if (!prepMatch) return undefined;
   const afterPrep = lower.slice(prepMatch.index + prepMatch[0].length);
   const slotMatch = afterPrep.match(/^\s*([A-Da-d][1-4])\b/);

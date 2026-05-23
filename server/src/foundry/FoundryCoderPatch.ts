@@ -9,6 +9,17 @@ import type { CompletionRequest } from '../ai/types.js';
 import type { InferenceConfig } from '../config/types.js';
 import { asRecord, nowIso, readYamlFile, writeYamlFile } from './FoundryArtifacts.js';
 import { runFoundryToolAgent } from './FoundryToolAgent.js';
+import { runFixtureVerification } from './FixItProgressGate.js';
+import type { FoundryToolAgentTool } from './FoundryToolAgent.js';
+import {
+  buildLexicalIndex,
+  makeRetrieveTool,
+  makeRetrieveToolFromSidecar,
+  resolveRetrievalConfig,
+  RetrievalSidecar,
+} from './RetrievalIndex.js';
+import { makeInspectEventsTool, makeInspectRegistryTool, makeProbePassTool, makeProbeTool, makeResolveTermTool, makeVerifyTool } from './FixItCoderTools.js';
+import { renderSkillsForPrompt } from './skills/index.js';
 import type { FoundryVariant } from './ProtocolFoundryCompileRunner.js';
 
 const execFileAsync = promisify(execFile);
@@ -16,7 +27,17 @@ const MAX_CONTEXT_CHARS = 6_000;
 const MAX_FILE_CHARS = 3_000;
 const MAX_ARTIFACT_CONTEXT_CHARS = 3_000;
 const MAX_SCHEMA_CONTEXT_CHARS = 3_000;
-export const TOOL_AGENT_MAX_TURNS = 120;
+// Per-round cap for ONE coder crack. The incremental round loop (commit
+// verified progress, re-run fresh) is what provides unbounded total progress —
+// NOT a huge single run, which only bloats the transcript until it hits the
+// model context window or the architect's request-body limit (observed: a
+// ~370KB body crashing the :8000 endpoint at turn ~70). So we keep each round
+// modest. Floor is set by observed behavior: first edits land at turn ~37-45,
+// so a round must be long enough to investigate AND then edit + verify + flip
+// at least one missing path (a round only needs to make SOME verified progress
+// to commit and continue). 60 clears that with margin while staying well under
+// the body wall.
+export const TOOL_AGENT_MAX_TURNS = 60;
 
 type CoderPatchStatus = 'applied' | 'blocked' | 'failed' | 'skipped' | 'stale' | 'needs-human';
 
@@ -25,6 +46,12 @@ export interface FoundryCoderPatchResult {
   resultPath: string;
   message: string;
   touchedFiles: string[];
+  /**
+   * The coder agent's final natural-language output (its diagnosis/reasoning).
+   * Forwarded to the senior on escalation so it continues the junior's lead
+   * instead of re-deriving the root cause from scratch.
+   */
+  finalText?: string;
 }
 
 export type FoundryCoderRole = 'junior' | 'senior';
@@ -44,8 +71,47 @@ export interface PatchSpec {
   rationale: string;
   ownedFiles: string[];
   acceptance: string[];
+  /** Files that are off-limits for editing, beyond the general boundaries. */
+  doNotTouchFiles: string[];
   raw: Record<string, unknown>;
   path: string;
+}
+
+// Patterns for files that the coder MUST NOT edit — ever.
+// These are excluded from ownedFiles and added to the prompt's boundary list.
+const PROTECTED_PATTERNS = [
+  /\.test\.(ts|tsx)$/,          // test files
+  /FixtureRunner\.(ts|js)$/,    // test harness
+  /FixtureDiff\.(ts|js)$/,      // test helpers
+  /FixtureTypes\.(ts|js)$/,     // test type defs
+  /^spec-fix-/,                 // regression fixture files
+] as const;
+
+/** Return true if a file path matches any protected pattern. */
+function isProtectedFile(path: string): boolean {
+  return PROTECTED_PATTERNS.some(
+    (pattern) =>
+      pattern instanceof RegExp
+        ? pattern.test(path)
+        : path.includes(pattern),
+  );
+}
+
+/**
+ * Strip protected files from the owned-files list.
+ * The coder must never be given edit permission on fixtures or test infrastructure.
+ */
+function filterOwnedFiles(ownedFiles: string[]): string[] {
+  return ownedFiles.filter((f) => !isProtectedFile(f));
+}
+
+/**
+ * Extract files listed in the patch spec's doNotTouchFiles array
+ * (populated from the YAML's `doNotTouchFiles` top-level key).
+ */
+function specDoNotTouchFiles(raw: Record<string, unknown>): string[] {
+  const val = raw['doNotTouchFiles'] ?? raw['do_not_touch_files'];
+  return asStringArray(val);
 }
 
 function asStringArray(value: unknown): string[] {
@@ -218,6 +284,7 @@ async function listPatchSpecs(root: string, protocolId: string, variant: Foundry
 
 async function readPatchSpec(path: string): Promise<PatchSpec> {
   const raw = asRecord(await readYamlFile(path));
+  const rawOwned = asStringArray(raw['ownedFiles']);
   return {
     id: typeof raw['id'] === 'string' ? raw['id'] : relative(dirname(path), path),
     fixClass: typeof raw['fixClass'] === 'string'
@@ -227,8 +294,9 @@ async function readPatchSpec(path: string): Promise<PatchSpec> {
         : 'unknown',
     title: typeof raw['title'] === 'string' ? raw['title'] : 'Untitled Foundry fix',
     rationale: typeof raw['rationale'] === 'string' ? raw['rationale'] : '',
-    ownedFiles: asStringArray(raw['ownedFiles']),
+    ownedFiles: filterOwnedFiles(rawOwned),
     acceptance: asStringArray(raw['acceptance']),
+    doNotTouchFiles: specDoNotTouchFiles(raw),
     raw,
     path,
   };
@@ -528,10 +596,23 @@ function toolAgentPrompt(input: {
       : []),
     ``,
     `Instructions:`,
-    `- Use tools to inspect and edit the repository.`,
-    `- Keep edits within the owned files unless a directly necessary adjacent test/fixture change is required.`,
-    `- Run the declared verification command when one is provided.`,
-    `- Do not claim completion until the acceptance criteria are satisfied or you have made the narrowest possible fix and run verification.`,
+    `- Read enough to locate the ACTUAL root cause before editing. The bug is often in a different pass/file than it first appears — trace the failing output back to the code that produces it. read_file pages large files via offset/limit, so read the relevant code in full rather than guessing.`,
+    `- Once you understand the cause, make the smallest coherent edit that fixes it. Avoid speculative refactors and unrelated changes.`,
+    `- After editing, run the declared verification command to check your patch. If it fails, refine and re-run.`,
+    `- A critic reviews your diff and re-runs verification afterward, so you do not need to prove correctness exhaustively yourself — but do confirm your fix targets the real cause, not a symptom.`,
+    ``,
+    `Hard boundaries:`,
+    `- NEVER edit test infrastructure: FixItFixtures.test.ts, FixtureRunner.ts, FixtureDiff.ts, FixtureTypes.ts.`,
+    `- NEVER edit regression fixtures (spec-fix-*.yaml). Changing a fixture to match broken behavior is PROHIBITED.`,
+    `- NEVER edit a .test.ts file.`,
+    ...(input.selectedSpec.doNotTouchFiles.length
+      ? [input.selectedSpec.doNotTouchFiles.map((f) => `- NEVER: ${f}`).join('\n')]
+      : []),
+    `- If a verification test fails, DO NOT adjust expected values in fixtures. The fix must be in the code, not the test.`,
+    ``,
+    `Completion:`,
+    `- The moment the declared verification command passes, output ${'<promise>COMPLETE</promise>'} as the absolute last line and STOP. Nothing may follow it.`,
+    `- Do NOT run the broader test suite and do NOT re-verify a fixture that already passed.`,
   ].join('\n');
 }
 
@@ -606,6 +687,14 @@ export async function runFoundryCoderPatch(input: {
   coderRole?: FoundryCoderRole;
   coderEngine?: FoundryCoderEngine;
   workerInference?: Partial<InferenceConfig>;
+  /**
+   * Which endpoint the senior role uses. Defaults to 'architect'. The
+   * event-editor fix-it loop sets 'worker' so escalation runs on the bigger,
+   * big-context worker model (the architect endpoint is body-limited/flaky).
+   */
+  seniorEndpoint?: 'worker' | 'architect';
+  /** Override the tool-agent turn cap for this run (e.g. a higher senior cap). */
+  maxTurns?: number;
   revisionFeedback?: string;
   onProgress?: (event: FoundryCoderPatchProgressEvent) => void | Promise<void>;
   /**
@@ -686,15 +775,30 @@ export async function runFoundryCoderPatch(input: {
   const coderEngine: FoundryCoderEngine = input.coderEngine ?? 'symbol-patch';
 
   let baseUrl: string, model: string, timeoutMs: number;
-  if (coderRole === 'senior') {
+  if (coderRole === 'senior' && input.seniorEndpoint !== 'worker') {
     baseUrl = archBaseUrl;
     model = seniorCoderModel;
+    timeoutMs = 1200_000;
+  } else if (coderRole === 'senior') {
+    // Senior-on-worker: a fresh crack on the bigger, big-context worker model
+    // (avoids the architect's request-body wall). Generous timeout for the
+    // higher turn budget.
+    baseUrl = workerBaseUrl;
+    model = speedyCoderModel;
     timeoutMs = 1200_000;
   } else {
     baseUrl = workerBaseUrl;
     model = speedyCoderModel;
-    timeoutMs = 300_000;
+    // 480s (was 300s) — enableThinking adds reasoning tokens to every call;
+    // a hard-decision turn can comfortably need 3-6 minutes of generation.
+    // 300s was tripping on rumination already; thinking-mode pushes higher.
+    timeoutMs = 480_000;
   }
+  // Thinking mode is supported on the worker (Qwen3.6 with vLLM
+  // chat_template_kwargs.enable_thinking) — smoke-verified to coexist
+  // cleanly with tool calls (reasoning_content separate from tool_calls
+  // array). Skip for the architect endpoint, untested there.
+  const enableThinking = baseUrl === workerBaseUrl;
 
   if (!baseUrl || !model || input.dryRun) {
     return { status: 'blocked', resultPath, message: 'coder not configured', touchedFiles: [] };
@@ -745,6 +849,7 @@ export async function runFoundryCoderPatch(input: {
     temperature: 0.1,
     timeoutMs,
     maxTokens: 16384,
+    ...(enableThinking ? { enableThinking: true } : {}),
   });
 
   await mkdir(resultRoot, { recursive: true });
@@ -757,15 +862,90 @@ export async function runFoundryCoderPatch(input: {
       message: 'Starting tool-agent coder',
       details: { tracePath },
     });
-    const agentResult = await runFoundryToolAgent({
+
+    // Optional code-search tool. Build a lexical index of the worktree so the
+    // coder can locate code by concept ("the pass that emits
+    // deckLayoutPlan.pinned") instead of paging large files. Off unless
+    // AGENT_WORKBENCH_ROOT is set; any failure degrades to read/grep only.
+    const extraTools: FoundryToolAgentTool[] = [];
+    let retrievalAvailable = false;
+    let sidecar: RetrievalSidecar | null = null;
+    const retrievalConfig = resolveRetrievalConfig();
+    if (retrievalConfig) {
+      const indexDir = await buildLexicalIndex(
+        retrievalConfig,
+        input.repoRoot,
+        join(input.artifactRoot, 'retrieval-index'),
+      );
+      if (indexDir) {
+        if (retrievalConfig.rerankModel) {
+          // Tier-2: warm GPU reranker in a persistent sidecar. Falls back to
+          // a lexical (subprocess) retrieve tool if the sidecar can't start.
+          const candidate = new RetrievalSidecar(retrievalConfig, indexDir);
+          if (await candidate.start()) {
+            sidecar = candidate;
+            extraTools.push(makeRetrieveToolFromSidecar(candidate));
+            await progress({ phase: 'context_ready', message: `Code-search (retrieve) ready with GPU reranker ${retrievalConfig.rerankModel}` });
+          } else {
+            candidate.dispose();
+            extraTools.push(makeRetrieveTool(retrievalConfig, indexDir));
+            await progress({ phase: 'context_ready', message: 'GPU reranker unavailable; retrieve using lexical search' });
+          }
+        } else {
+          extraTools.push(makeRetrieveTool(retrievalConfig, indexDir));
+          await progress({ phase: 'context_ready', message: 'Code-search (retrieve) tool ready (lexical)' });
+        }
+        retrievalAvailable = true;
+      } else {
+        await progress({ phase: 'context_ready', message: 'Code-search index unavailable; using read/grep only' });
+      }
+    }
+
+    // Event-editor fix-it gets three extra tools: `verify` (run the declared
+    // fixture, see expected-vs-actual per path), `probe` (run the deterministic
+    // compile on an arbitrary prompt — isolate variables by varying the prompt
+    // instead of reading code blindly), and `inspect_registry` (list any
+    // foundry registry's records or drill into one by id — labware, ontology,
+    // compound classes, scaling profiles, etc.). They replace throwaway debug.
+    const fixItTools = input.protocolId === 'event-editor-fixit';
+    const compilerFix = fixItTools && selectedSpec.fixClass === 'compiler';
+    if (fixItTools) {
+      extraTools.push(makeVerifyTool(input.repoRoot, selectedSpec.id));
+      extraTools.push(makeProbeTool(input.repoRoot));
+      extraTools.push(makeProbePassTool(input.repoRoot));
+      extraTools.push(makeInspectEventsTool(input.repoRoot));
+      extraTools.push(makeInspectRegistryTool(input.repoRoot));
+      extraTools.push(makeResolveTermTool(input.repoRoot));
+    }
+
+    let agentResult: Awaited<ReturnType<typeof runFoundryToolAgent>>;
+    try {
+      agentResult = await runFoundryToolAgent({
       client,
       model,
       workdir: input.repoRoot,
       systemPrompt: [
-        'You are the Protocol Foundry coder.',
-        'Fix the compiler issue described by the patch spec.',
-        'Use tools to inspect, edit, and verify the repository.',
-        'Do not include private chain-of-thought in your final answer.',
+        'You are the Protocol Foundry coder. Your job is to land a correct, minimal code fix for the declared spec and failing fixture.',
+        '',
+'Find the real root cause, then fix it. The provided context is a starting point, but the bug is often in a different pass/file than it first appears — trace the failing output back to the code that produces it before editing. read_file pages large files via offset/limit, so read the relevant code in full rather than guessing. Then make the smallest coherent edit; avoid speculative refactors.',
+        'The spec\'s rationale was written from the compiler trace WITHOUT source access, so treat its suspected mechanism as a LEAD, not a conclusion: confirm it against the actual code before acting, and if the code says otherwise, follow the code. Trust the trace-level facts (symptom, where output is dropped, fix class); verify the how.',
+        ...(retrievalAvailable
+          ? ['', 'Use the retrieve tool to find code by concept or symbol (e.g. "the pass that emits deckLayoutPlan.pinned") before reading or paging large files — it is faster than scanning.']
+          : []),
+        ...(fixItTools
+          ? ['', 'Use the `verify` tool to run the declared fixture and see, for each unsatisfied assertion, the EXPECTED vs ACTUAL value — call it after each edit instead of writing debug scripts or running the test suite by hand. Use `probe("<prompt>", fields?)` to run the deterministic compile on an ARBITRARY prompt and inspect any TerminalArtifacts field — use this to vary the failing prompt and isolate which dimension drives the bug. Use `probe_pass("<prompt>", pass_name?)` to inspect a SPECIFIC pipeline stage\'s intermediate output (omit pass_name to list all 20+ passes that ran) — this is how you locate which stage first produces the wrong value, not just see the final terminal state. Use `inspect_events("<prompt>", position?)` for a scannable per-event summary of `terminalArtifacts.events`; position mode drills into one event with its colocated labStateDelta + resolvedRefs (events have no explicit dep edges; cross-reference manually). Use `inspect_registry("<name>", key?)` to list a registry\'s records (labware-definitions, ontology-terms, compound-classes, execution-scale-profiles, assay-specs, instruments, pipette-capabilities, etc.) or drill into one by id when you need to know what exists in the catalog. Use `resolve_term("<table>", "<hint>")` to run the actual matcher for a hint (currently `labware`) and see which recordId it returns plus whether that id exists in the canonical registry — that distinguishes matcher-logic bugs from catalog-data bugs.']
+          : []),
+        ...(compilerFix ? ['', renderSkillsForPrompt()] : []),
+        '',
+        'Debugging: prefer the `verify` tool over throwaway scripts. If you must inspect something it does not cover, write a THROWAWAY script (shell: `npx tsx /tmp/dbg.ts` or `node -e`) — do NOT add console.log/debug to the source files you are fixing (it forces a cleanup pass and risks debug cruft in the patch). Keep owned source clean: only your actual fix goes there.',
+        '',
+        'A separate critic re-runs verification and reviews your diff AFTER you finish, so you do not need to prove correctness exhaustively yourself — but your edit should target the actual cause, not a symptom. The moment the declared verification command passes, stop.',
+        '',
+        'Hard boundaries:',
+        '- Only touch files in ownedFiles. Everything else is off-limits.',
+        '- Do NOT edit any test file (.test.ts), test harness (FixtureRunner, FixtureDiff, FixtureTypes), or fixture (spec-fix-*.yaml). Changing fixture expected values to match broken behavior is PROHIBITED — the fix must be in the code, not the test.',
+        '- Use the declared verification command to check your patch. You may read/grep to understand the code, but do not run the broad test suite to explore.',
+        '- Do not include private chain-of-thought in your final answer.',
       ].join('\n'),
       prompt: toolAgentPrompt({
         selectedSpec,
@@ -773,9 +953,39 @@ export async function runFoundryCoderPatch(input: {
         ...(input.revisionFeedback ? { revisionFeedback: input.revisionFeedback } : {}),
       }),
       tracePath,
-      maxTurns: TOOL_AGENT_MAX_TURNS,
-      maxTokens: 16_384,
+      maxTurns: input.maxTurns ?? TOOL_AGENT_MAX_TURNS,
+      // 8K cap — bumped from 6K because reasoning_tokens count against
+      // max_tokens with enableThinking on. 8K accommodates substantial
+      // private reasoning (say 5-6K) plus a tight visible tool call (~1K)
+      // without re-opening the 40K-char visible-rumination failure mode.
+      maxTokens: 8_192,
       temperature: 0.1,
+      ...(extraTools.length ? { extraTools } : {}),
+      ...(fixItTools ? {
+        // Bare-text verify echo: every turn the model produces prose without
+        // a tool call, append the current verify diff to the reminder. Gives
+        // the model concrete state to react to instead of free-form
+        // rumination, which is the failure mode that caused the previous
+        // run's inference timeout (one bare-text turn at 42K chars).
+        onBareTextResponse: async (_turn: number): Promise<string | undefined> => {
+          try {
+            const v = await runFixtureVerification(input.repoRoot, selectedSpec.id);
+            const target = v.target;
+            if (!target || target.passed) return undefined;
+            const details = (target.diffDetails && target.diffDetails.length > 0)
+              ? target.diffDetails
+              : target.missing.map((path) => ({ path, expected: undefined, actual: undefined }));
+            const lines = details.slice(0, 8).map((d) => {
+              const exp = d.expected === undefined ? '(absent)' : typeof d.expected === 'string' ? d.expected : JSON.stringify(d.expected);
+              const act = d.actual === undefined ? '(absent)' : typeof d.actual === 'string' ? d.actual : JSON.stringify(d.actual);
+              return `- ${d.path}\n    expected: ${exp}\n    actual:   ${act}`;
+            }).join('\n');
+            return `Current verify state (the gate's view RIGHT NOW):\n${lines}\n\nReact to this — pick the next probe / edit that will close one of these gaps.`;
+          } catch {
+            return undefined;
+          }
+        },
+      } : {}),
       onProgress: async (event) => {
         await progress({
           phase: event.phase,
@@ -783,7 +993,11 @@ export async function runFoundryCoderPatch(input: {
           ...(event.details ? { details: event.details } : {}),
         });
       },
-    });
+      });
+    } finally {
+      // Always tear down the GPU sidecar (frees VRAM) once the agent is done.
+      sidecar?.dispose();
+    }
 
     if (agentResult.status !== 'complete') {
       await writeYamlFile(resultPath, {
@@ -803,6 +1017,7 @@ export async function runFoundryCoderPatch(input: {
         resultPath,
         message: `tool agent did not complete: ${agentResult.status}`,
         touchedFiles: [],
+        ...(agentResult.finalText.trim() ? { finalText: agentResult.finalText.slice(0, 4000) } : {}),
       };
     }
 

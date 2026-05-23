@@ -10,8 +10,13 @@ import {
 } from './FoundryCoderPatch.js';
 
 describe('TOOL_AGENT_MAX_TURNS', () => {
-  it('gives the fast local coder enough room to finish verification loops', () => {
-    expect(TOOL_AGENT_MAX_TURNS).toBe(120);
+  it('caps one coder round long enough to investigate, edit, and make progress', () => {
+    // Per-round cap. The round loop (commit verified progress, re-run fresh)
+    // gives unbounded TOTAL progress; a single run stays modest so it keeps
+    // under the model context window and the architect's request-body limit
+    // (a ~370KB body crashed :8000 at turn ~70). First edits land at turn
+    // ~37-45, so 60 leaves room to investigate + edit + flip a missing path.
+    expect(TOOL_AGENT_MAX_TURNS).toBe(60);
   });
 });
 

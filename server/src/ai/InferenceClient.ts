@@ -64,15 +64,15 @@ export function createInferenceClient(config: InferenceConfig): InferenceClient 
   // Most OpenAI-compatible providers accept both, but OpenAI rejects max_tokens
   // on newer models. Send max_completion_tokens universally for compatibility.
   //
-  // When config.enableThinking === false, merge `enable_thinking: false` into
-  // chat_template_kwargs. Request-level values win on key collision so callers
-  // can still opt back in per-call if needed.
+  // Forward enableThinking as `enable_thinking` inside chat_template_kwargs
+  // (Qwen3+ template control). Request-level values win on key collision so
+  // callers can override per-call if needed.
   function normalizeRequest(req: CompletionRequest): Record<string, unknown> {
     const { max_tokens, chat_template_kwargs, enableThinking: requestEnableThinking, ...rest } = req;
     const effectiveEnableThinking = requestEnableThinking ?? enableThinking;
     const mergedKwargs =
-      effectiveEnableThinking === false
-        ? { enable_thinking: false, ...(chat_template_kwargs ?? {}) }
+      effectiveEnableThinking !== undefined
+        ? { enable_thinking: effectiveEnableThinking, ...(chat_template_kwargs ?? {}) }
         : chat_template_kwargs;
     return {
       ...rest,

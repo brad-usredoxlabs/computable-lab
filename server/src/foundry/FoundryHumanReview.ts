@@ -1129,6 +1129,12 @@ async function writeLiveFoundryPatchSpec(input: {
       'Do not create physical inventory instances from vendor PDF evidence unless the spec explicitly calls for it.',
       'Prefer YAML/schema/registry/fixture records over code when durable data can represent the change.',
     ],
+    doNotTouchFiles: [
+      'server/src/compiler/pipeline/fixtures/FixItFixtures.test.ts',
+      'server/src/compiler/pipeline/fixtures/FixtureRunner.ts',
+      'server/src/compiler/pipeline/fixtures/FixtureDiff.ts',
+      'server/src/compiler/pipeline/fixtures/FixtureTypes.ts',
+    ],
     sourceArtifacts: {
       ...input.context.artifactRefs,
       reviewedSpecQueueItem: rel(input.workspaceRoot, input.queuePath),

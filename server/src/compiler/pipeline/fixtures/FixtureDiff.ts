@@ -153,6 +153,14 @@ function walkExpected(
       }
     }
 
+    // Expected has MORE elements than actual: the trailing ones are missing.
+    // Without this, a fixture expecting [B1, B2] would falsely "match" an
+    // actual of just [B1] — a silent false-pass for any dropped trailing item.
+    for (let i = actual.length; i < expected.length; i++) {
+      missing.push(`${path}[${i}]`);
+      allMatched = false;
+    }
+
     if (allMatched && !hasPartial) {
       matched.push(path);
     } else if (hasPartial) {

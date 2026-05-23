@@ -8,9 +8,6 @@ expected:
   terminalArtifacts:
     deckLayoutPlan:
       pinned:
-        - labwareId: generic-96-well-plate
-          slot: B2
-    events:
-      - type: place
-        labwareId: generic-96-well-plate
-        targetSlot: B2
+        - slot: B2
+          labwareHint: lbw-def-generic-96-well-plate
+    events: []

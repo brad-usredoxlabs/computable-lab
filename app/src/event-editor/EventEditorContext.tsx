@@ -115,7 +115,7 @@ export interface FixItCriticSummary {
 }
 
 export interface FixItApplyResult {
-  status: 'applied' | 'blocked' | 'failed' | 'skipped' | 'stale' | 'needs-human' | 'needs-revision'
+  status: 'applied' | 'blocked' | 'failed' | 'skipped' | 'stale' | 'needs-human' | 'needs-revision' | 'canceled'
   message: string
   touchedFiles: string[]
   job?: {

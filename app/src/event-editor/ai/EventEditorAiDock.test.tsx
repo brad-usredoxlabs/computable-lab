@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   commitPreview: vi.fn(),
   placeNewLabware: vi.fn(),
   appendEvent: vi.fn(),
+  openFixIt: vi.fn(),
   streamDraftEvents: vi.fn(),
 }))
 
@@ -66,6 +67,7 @@ vi.mock('../EventEditorContext', () => ({
       commitPreview: mocks.commitPreview,
       placeNewLabware: mocks.placeNewLabware,
       appendEvent: mocks.appendEvent,
+      openFixIt: mocks.openFixIt,
       consumeRetryPrompt: vi.fn(),
       closeFixIt: vi.fn(),
     },
@@ -88,6 +90,7 @@ describe('EventEditorAiDock', () => {
     mocks.commitPreview.mockReset()
     mocks.placeNewLabware.mockReset()
     mocks.appendEvent.mockReset()
+    mocks.openFixIt.mockReset()
     mocks.streamDraftEvents.mockReset()
   })
   afterEach(() => {
@@ -163,5 +166,16 @@ describe('EventEditorAiDock', () => {
       expect(mocks.clearPreview).toHaveBeenCalled()
     })
     expect(mocks.setPreview).not.toHaveBeenCalled()
+
+    const fixIt = screen.getByRole('button', { name: 'Fix-it' })
+    fireEvent.click(fixIt)
+    expect(mocks.openFixIt).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: 'just say hi',
+      draft: expect.objectContaining({
+        events: [],
+        placements: [],
+        skips: [],
+      }),
+    }))
   })
 })

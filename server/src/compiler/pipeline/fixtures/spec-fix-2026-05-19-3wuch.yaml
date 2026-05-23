@@ -1,0 +1,16 @@
+name: spec-fix-2026-05-19-3wuch
+description: Verify two implicit placement events are generated for compound
+  sentence with deck slots
+deterministicOnly: true
+input:
+  prompt: Put a 96-well plate on B2 and a 12-well reservoir on B1
+expected:
+  outcome: complete
+  terminalArtifacts:
+    deckLayoutPlan:
+      pinned:
+        - slot: B2
+          labwareHint: lbw-def-generic-96-well-plate
+        - slot: B1
+          labwareHint: lbw-def-generic-12-well-reservoir
+    events: []

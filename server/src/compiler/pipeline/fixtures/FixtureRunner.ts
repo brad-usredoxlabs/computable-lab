@@ -40,7 +40,7 @@ function buildTestExtractionService(): ExtractionRunnerService {
  * Deterministic alias map for labware hints — mirrors the same map used by
  * createLabwareLookup so test fixtures can resolve hints to record IDs.
  */
-const TEST_LABWARE_ALIAS_MAP: Record<string, string> = {
+export const TEST_LABWARE_ALIAS_MAP: Record<string, string> = {
   generic_24x1_5ml_tube_rack: 'lbw-def-generic-50x1p5ml-tube-rack',
   generic_6x15ml_tube_rack: 'lbw-def-generic-6x15ml-tube-rack',
   generic_4x50ml_tube_rack: 'lbw-def-generic-4x50ml-tube-rack',
@@ -50,7 +50,7 @@ const TEST_LABWARE_ALIAS_MAP: Record<string, string> = {
   generic_96_well_deep_plate: 'lbw-def-generic-96-well-deep-plate',
   generic_1_well_reservoir: 'lbw-def-generic-reservoir-1-v1',
   generic_8_well_reservoir: 'lbw-def-generic-8-reservoir',
-  generic_12_well_reservoir: 'lbw-def-generic-12-reservoir',
+  generic_12_well_reservoir: 'lbw-def-generic-12-well-reservoir',
   generic_2_well_reservoir: 'lbw-def-generic-2-well-reservoir',
   generic_24_well_reservoir: 'lbw-def-generic-24-well-reservoir',
   generic_96_tip_rack: 'lbw-def-generic-96-tip-rack',
@@ -71,7 +71,7 @@ const TEST_LABWARE_ALIAS_MAP: Record<string, string> = {
  * human-readable hints (e.g. "96-well plate") get proper record IDs in the
  * resolve_labware output.
  */
-function buildTestSearchLabwareByHint() {
+export function buildTestSearchLabwareByHint() {
   return async (hint: string): Promise<Array<{ recordId: string; title: string }>> => {
     const normalized = hint.toLowerCase().trim();
     if (!normalized) return [];

@@ -87,6 +87,7 @@ export function FoundryStatusPanel(): JSX.Element {
         </div>
         <div className="foundry-status-header__actions">
           <Link to="/protocol-ide" className="foundry-status-link">Review inbox</Link>
+          <Link to="/protocol-ide/foundry/jobs" className="foundry-status-link">Acquisition jobs</Link>
           <button type="button" onClick={() => void load()} disabled={refreshing}>
             {refreshing ? 'Refreshing...' : 'Refresh'}
           </button>
