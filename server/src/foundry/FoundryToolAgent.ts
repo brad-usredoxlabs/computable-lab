@@ -30,6 +30,8 @@ export interface FoundryToolAgentProgressEvent {
     | 'tool_finished'
     | 'model_response'
     | 'model_reasoning'
+    | 'handoff_requested'
+    | 'handoff_captured'
     | 'complete'
     | 'max_turns'
     | 'failed';
@@ -239,6 +241,26 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
     + `Prefer a concrete change over more reading; a critic reviews your diff afterward.`;
   const editNudgeDue = (turn: number): boolean =>
     requireCompletionPromise && !hasEdited && !editNudged && turn >= editNudgeDeadline;
+  let handoffNudged = false;
+  let handoffCaptured = false;
+  let handoffText = '';
+  const handoffDeadline = maxTurns >= 20 ? Math.max(1, maxTurns - 5) : Number.POSITIVE_INFINITY;
+  const handoffPrompt = (t: number): string =>
+    `You are at turn ${t}/${maxTurns}. Before doing more work, write a concise HANDOFF REPORT for the next coder. `
+    + `Start with "HANDOFF REPORT:" and include: (1) what you tried, (2) what changed and in which files, `
+    + `(3) what worked, (4) what did not work, (5) current failing verification/probe evidence, `
+    + `(6) the single best next step. Keep it under 250 words. After that, if you still have turns, continue with the next best action.`;
+  const handoffDue = (turn: number): boolean =>
+    requireCompletionPromise && !handoffNudged && turn >= handoffDeadline;
+  const requestHandoff = async (turn: number, target: ChatMessage[]): Promise<void> => {
+    target.push({ role: 'user', content: handoffPrompt(turn) });
+    handoffNudged = true;
+    await progress(input, {
+      phase: 'handoff_requested',
+      message: `Requested coder handoff report at turn ${turn}/${maxTurns}`,
+      details: { turn, maxTurns },
+    });
+  };
 
   // Context-window guard. The transcript grows every turn (full tool outputs
   // re-sent each time); without this a long run 400s with "maximum context
@@ -320,7 +342,11 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
               message: 'Inference call failed; compacting transcript and retrying once',
               details: { turn },
             });
-            compactTranscript(messages, INPUT_TOKEN_BUDGET, 0);
+            // Force mode: stub ALL tool results + clip assistant visible
+            // content. Without this the budget check in compactTranscript was
+            // returning early when the transcript was nominally in-budget,
+            // sending the SAME body that just failed.
+            compactTranscript(messages, INPUT_TOKEN_BUDGET, 0, true);
             await new Promise((r) => setTimeout(r, 750));
           }
         }
@@ -401,11 +427,22 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
         if (editNudgeDue(turn)) {
           messages.push({ role: 'user', content: editNudge(turn) });
           editNudged = true;
+        } else if (handoffDue(turn)) {
+          await requestHandoff(turn, messages);
         }
         continue;
       }
 
       finalText = assistantMessage.content ?? '';
+      if (!handoffCaptured && /^HANDOFF REPORT:/i.test(finalText.trim())) {
+        handoffCaptured = true;
+        handoffText = finalText.trim();
+        await progress(input, {
+          phase: 'handoff_captured',
+          message: 'Coder wrote a handoff report',
+          details: { turn, chars: finalText.length },
+        });
+      }
       await progress(input, {
         phase: 'model_response',
         message: finalText.includes(COMPLETE_MARKER) ? 'Model reported completion' : 'Model returned a text response',
@@ -437,6 +474,8 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
       if (editNudgeDue(turn)) {
         messages.push({ role: 'user', content: editNudge(turn) + echoSuffix });
         editNudged = true;
+      } else if (handoffDue(turn)) {
+        await requestHandoff(turn, messages);
       } else {
         messages.push({
           role: 'user',
@@ -478,12 +517,14 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
         const summary = handoffResponse.choices[0]?.message?.content?.trim();
         if (summary) {
           finalText = summary;
+          handoffText = summary;
           await progress(input, { phase: 'model_response', message: 'Coder wrote a handoff summary', details: { chars: summary.length } });
         }
       } catch (err) {
         await trace(input.tracePath, { type: 'handoff_summary_failed', error: err instanceof Error ? err.message : String(err) });
       }
     }
+    if (handoffText && !finalText) finalText = handoffText;
 
     await progress(input, {
       phase: 'max_turns',
@@ -547,8 +588,18 @@ function compactTranscript(
   messages: ChatMessage[],
   inputTokenBudget: number,
   keepRecentToolResults: number,
+  /**
+   * When true, skip the budget check at the top. Used on retry-after-failure:
+   * we KNOW the previous call failed at this size, so "are we under budget?"
+   * is the wrong question — we MUST shrink, regardless. Without this flag, the
+   * retry path was sending an identical body to the one that just failed,
+   * because the size was below INPUT_TOKEN_BUDGET (transcripts can fail at
+   * the server even when nominally in-budget — KV pressure, batched-tokens
+   * limit, etc.).
+   */
+  force: boolean = false,
 ): void {
-  if (estimateTranscriptTokens(messages) <= inputTokenBudget) return;
+  if (!force && estimateTranscriptTokens(messages) <= inputTokenBudget) return;
   const toolIndices = messages
     .map((message, index) => (message.role === 'tool' ? index : -1))
     .filter((index) => index >= 0);
@@ -556,9 +607,24 @@ function compactTranscript(
   // Oldest stubbable first; fall through to the recent ones only if still over.
   const order = [...toolIndices.slice(0, keepFrom), ...toolIndices.slice(keepFrom)];
   for (const index of order) {
-    if (estimateTranscriptTokens(messages) <= inputTokenBudget) break;
     const message = messages[index]!;
     if (message.content !== ELIDED_TOOL_OUTPUT) message.content = ELIDED_TOOL_OUTPUT;
+    // When forced, stub ALL eligible tool results — don't early-exit on
+    // budget. The whole point of the retry is to get under whatever wall
+    // the previous call hit, and that wall isn't our estimated budget.
+    if (!force && estimateTranscriptTokens(messages) <= inputTokenBudget) break;
+  }
+  // Forced retry also clips bulky assistant visible content. Reasoning is
+  // already stripped at push time; the remaining bulk is text the model
+  // wrote between tool calls. Keep a short head so structure survives.
+  if (force) {
+    for (const message of messages) {
+      if (message.role !== 'assistant') continue;
+      if (typeof message.content !== 'string') continue;
+      if (message.content.length > 400) {
+        message.content = `${message.content.slice(0, 400)}\n…[truncated for retry]`;
+      }
+    }
   }
 }
 
