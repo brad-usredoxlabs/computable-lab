@@ -1438,7 +1438,9 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 180px;
+  /* Tall enough to skim ~25 entries at a glance + scroll for history. */
+  max-height: 60vh;
+  min-height: 200px;
   overflow-y: auto;
 }
 

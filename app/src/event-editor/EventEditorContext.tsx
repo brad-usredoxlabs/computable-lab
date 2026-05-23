@@ -765,8 +765,14 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         ...state,
         fixIt: {
           ...state.fixIt,
+          // Was capped at 40 entries (slice(-39) + 1). With ~3-4 events per
+          // turn (turn_started, tool_started, tool_finished, optional
+          // model_reasoning) a 60-turn round generates ~250 entries; the cap
+          // silently dropped the early-round investigation the user might
+          // want to scroll back to. Bumped to 2000 — effectively unlimited
+          // for one job, still bounded against runaway memory.
           applyProgress: [
-            ...state.fixIt.applyProgress.slice(-39),
+            ...state.fixIt.applyProgress.slice(-1999),
             { ...action.entry, ts: new Date().toISOString() },
           ],
         },

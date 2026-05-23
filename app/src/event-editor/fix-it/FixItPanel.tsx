@@ -1207,6 +1207,49 @@ const STATUS_LABELS: Record<string, string> = {
   interrupted: 'interrupted',
 }
 
+/**
+ * The full per-turn progress log. Renders every entry (no slice). Sticky
+ * auto-scroll: if the user is already at (or within 30px of) the bottom,
+ * new entries auto-scroll into view. If the user has scrolled up to read
+ * history, their position is left alone — they won't get yanked back when
+ * the next turn lands.
+ */
+function ProgressLog({
+  progress,
+}: {
+  progress: Array<{ source: 'server' | 'coder' | 'critic'; phase: string; message: string; ts: string; details?: Record<string, unknown> }>
+}) {
+  const logRef = useRef<HTMLOListElement>(null)
+  const wasAtBottomRef = useRef(true)
+
+  useEffect(() => {
+    const el = logRef.current
+    if (!el) return
+    const onScroll = () => {
+      wasAtBottomRef.current = el.scrollTop + el.clientHeight >= el.scrollHeight - 30
+    }
+    el.addEventListener('scroll', onScroll)
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
+
+  useEffect(() => {
+    if (wasAtBottomRef.current && logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight
+    }
+  }, [progress.length])
+
+  return (
+    <ol ref={logRef} className="fixit-panel__progress-log" aria-label="Fix progress">
+      {progress.map((entry, index) => (
+        <ProgressEntry
+          key={`${entry.ts}-${entry.source}-${entry.phase}-${index}`}
+          entry={entry}
+        />
+      ))}
+    </ol>
+  )
+}
+
 type StreamStatus = 'idle' | 'connecting' | 'snapshot' | 'live' | 'reconnecting' | 'closed'
 
 const STREAM_STATUS_LABELS: Record<StreamStatus, string> = {
@@ -1268,14 +1311,7 @@ function ApplyingView({
         </details>
       ) : null}
       {progress.length > 0 ? (
-        <ol className="fixit-panel__progress-log" aria-label="Fix progress">
-          {progress.slice(-12).map((entry, index) => (
-            <ProgressEntry
-              key={`${entry.ts}-${entry.source}-${entry.phase}-${index}`}
-              entry={entry}
-            />
-          ))}
-        </ol>
+        <ProgressLog progress={progress} />
       ) : null}
     </div>
   )
