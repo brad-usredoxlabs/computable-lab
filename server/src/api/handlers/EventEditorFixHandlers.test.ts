@@ -927,6 +927,7 @@ describe('EventEditorFixHandlers Fix-it job endpoints', () => {
         gitOps,
         fixItJobManager: manager,
         verifyFixtures: verifyFixtures as never,
+        probeFailingPrompt: (async () => undefined) as never,
       });
 
       const reply = makeFastifyReply();

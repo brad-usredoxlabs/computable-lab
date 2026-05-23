@@ -285,17 +285,22 @@ function resolveWorkerConfig(): WorkerInferenceConfig {
 }
 
 function resolveArchitectConfig(): WorkerInferenceConfig {
-  // The senior coder + critic both run on the architect endpoint.
-  const baseUrl =
-    process.env['PI_ARCHITECT_BASE_URL']
-    ?? process.env['OPENAI_BASE_URL']
-    ?? 'http://thunderbeast:8000/v1';
-  const model =
-    process.env['PI_ARCHITECT_MODEL']
-    ?? process.env['OPENAI_MODEL']
-    ?? 'Qwen/Qwen3.6-27B-FP8';
-  const apiKey = process.env['PI_ARCHITECT_API_KEY'];
-  return { baseUrl, model, ...(apiKey ? { apiKey } : {}) };
+  // Architect is collapsed onto the worker: the ralph loop runs senior on the
+  // worker and the critic was dropped, so nothing in fix-it actually calls a
+  // separate architect endpoint. The `health` handler still reports an
+  // `architect` field for the FixItPanel banner; point it at the same worker
+  // so the banner reflects the single live endpoint instead of pinging a host
+  // that no longer exists. Explicit PI_ARCHITECT_BASE_URL still wins.
+  if (process.env['PI_ARCHITECT_BASE_URL']) {
+    const baseUrl = process.env['PI_ARCHITECT_BASE_URL']!;
+    const model =
+      process.env['PI_ARCHITECT_MODEL']
+      ?? process.env['OPENAI_MODEL']
+      ?? 'Qwen/Qwen3.6-27B-FP8';
+    const apiKey = process.env['PI_ARCHITECT_API_KEY'];
+    return { baseUrl, model, ...(apiKey ? { apiKey } : {}) };
+  }
+  return resolveWorkerConfig();
 }
 
 // --- System prompt ------------------------------------------------------------
@@ -707,6 +712,15 @@ fix or vice versa), and include:
     first." Bad: "Add a loop over conjunction clauses in
     DeterministicPrecompilePass" (prescribes an unverified mechanism).
   - fixClass: one of "data-only" | "registry" | "compiler" | "mixed"
+  - diagnosisLabel: free-form short kebab-case string naming the bug sub-class
+    so the coder's skill-triage rubric can route the run. Pick the most
+    specific label justified by the trace; if uncertain, leave empty. Common
+    values: "noun-resolution", "clause-structure", "verb-or-preposition",
+    "wrong-recordId", "alias-map-divergence", "missing-record",
+    "parameter-assembly", "well-address-grammar", "wrong-event-order",
+    "state-ref-wrong", "wrong-state-delta". This is a SOFT HINT — the coder
+    will still self-triage from the verify symptom; it should not be a guess
+    you can't justify from the trace.
   - rationale: short paragraph that SEPARATES what the trace proves (the
     symptom and where output is dropped — state as fact) from the suspected
     code mechanism (state as a hypothesis the coder must confirm in the source
@@ -789,6 +803,7 @@ prior diagnosis are in the messages below.`;
 interface SynthesizedSpec {
   title?: string;
   fixClass?: string;
+  diagnosisLabel?: string;
   rationale?: string;
   ownedFiles?: string[];
   acceptance?: string[];
@@ -897,12 +912,16 @@ async function synthesizeSpecAndFixture(args: {
     new Set([...(parsed.spec.tests ?? []), vitestCommand]),
   );
 
+  const diagnosisLabel = typeof parsed.spec.diagnosisLabel === 'string'
+    ? parsed.spec.diagnosisLabel.trim()
+    : '';
   const specObj: Record<string, unknown> = {
     kind: 'protocol-foundry-patch-spec',
     id: specId,
     source: 'event-editor-fixit',
     generated_at: new Date().toISOString(),
     fixClass: parsed.spec.fixClass ?? 'mixed',
+    ...(diagnosisLabel ? { diagnosisLabel } : {}),
     title: parsed.spec.title ?? 'Event-editor fix-it (untitled)',
     rationale: parsed.spec.rationale ?? '',
     ownedFiles,
@@ -1057,6 +1076,12 @@ export interface CreateEventEditorFixHandlersDeps {
    * worktree harness.
    */
   verifyFixtures?: typeof runFixtureVerification;
+  /**
+   * Override for the server-side initial probe of the failing prompt. Tests
+   * stub this to skip the npx-tsx spawn (which adds ~1s and can push deadline
+   * tests past their bound).
+   */
+  probeFailingPrompt?: typeof probeFailingPromptForCoder;
   /** Max incremental rounds per apply (fix → commit → re-run). Defaults to 3. */
   maxRounds?: number;
 }
@@ -1081,6 +1106,7 @@ interface RunFixItDriverOpts {
   coderPatchRunner: typeof runFoundryCoderPatch;
   criticRunner: typeof runFoundryPatchCritic;
   verifyFixtures: typeof runFixtureVerification;
+  probeFailingPrompt: typeof probeFailingPromptForCoder;
   maxRounds: number;
   request: FastifyRequest;
   onProgress: (event: { source: 'server' | 'coder' | 'critic'; phase: string; message: string; details?: Record<string, unknown> }) => void;
@@ -1100,13 +1126,67 @@ interface RunFixItDriverResult {
   jobId?: string;
 }
 
+// Server-side probe of the failing prompt, run once at job start. The coder
+// arrives with the baseline symptom already in hand instead of having to
+// discover it via verify-then-read. The skill prompt instructs the model to
+// PROBE VARIATIONS itself from this baseline; we only emit the starting
+// point so it doesn't have to. Returns undefined on any failure (the loop
+// proceeds without it; degraded but not broken).
+async function probeFailingPromptForCoder(
+  executionRoot: string,
+  failingPrompt: string,
+  log: { warn: (obj: Record<string, unknown>, msg: string) => void },
+): Promise<string | undefined> {
+  try {
+    const { stdout } = await execFileAsync(
+      'npx',
+      ['tsx', 'src/compiler/pipeline/fixtures/probeCompile.ts', '--prompt', failingPrompt],
+      { cwd: join(executionRoot, 'server'), timeout: 60_000, maxBuffer: 8 * 1024 * 1024 },
+    );
+    const line = stdout.trim().split('\n').filter(Boolean).at(-1) ?? '{}';
+    const parsed = JSON.parse(line) as {
+      outcome?: string;
+      fields?: string[];
+      data?: Record<string, unknown>;
+    };
+    const data = parsed.data ?? {};
+    const populated = (parsed.fields ?? [])
+      .filter((f) => {
+        const v = data[f];
+        if (v === undefined || v === null) return false;
+        if (Array.isArray(v) && v.length === 0) return false;
+        if (typeof v === 'object' && Object.keys(v as object).length === 0) return false;
+        return true;
+      })
+      .map((f) => {
+        const json = JSON.stringify(data[f], null, 2);
+        const clipped = json.length > 1500 ? `${json.slice(0, 1500)}\n… [clipped]` : json;
+        return `=== ${f} ===\n${clipped}`;
+      })
+      .join('\n\n');
+    return [
+      '## Initial probe of the failing prompt',
+      `What the compiler currently emits for ${JSON.stringify(failingPrompt)} (outcome: ${parsed.outcome ?? '?'}):`,
+      '',
+      populated || '(no fields populated)',
+      '',
+      'Now use `probe` to compare VARIATIONS of the prompt (single-clause, reversed order,',
+      'modifier removed, verb/preposition swapped). The variation that flips a field names the',
+      'pipeline stage that owns the bug. Skill triage in the system prompt routes you to a method.',
+    ].join('\n');
+  } catch (err) {
+    log.warn({ err }, 'fix-it: initial probe failed; continuing without it');
+    return undefined;
+  }
+}
+
 async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverResult> {
   const {
     body, workspaceRoot, artifactRoot,
     activeJobRef, executionRootRef, executionArtifactRootRef, jobIdRef, touchedFileSetRef,
     fixItJobManager, gitOps,
     coderPatchRunner,
-    verifyFixtures, maxRounds,
+    verifyFixtures, probeFailingPrompt, maxRounds,
     request,
     onProgress,
     onEvent,
@@ -1179,6 +1259,23 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
 
   checkAbort();
 
+  // Step 9: run probe(failingPrompt) once at job start so the coder arrives
+  // with the baseline symptom in hand. The block is prepended to every round's
+  // revisionFeedback so it remains visible after the per-round handoff is
+  // appended. Failure here is non-fatal — degraded but not broken.
+  const failingPromptForProbe = parseFixturePrompt(body.fixtureYaml);
+  const initialProbeBlock = failingPromptForProbe
+    ? await probeFailingPrompt(executionRoot, failingPromptForProbe, request.log)
+    : undefined;
+  if (initialProbeBlock) {
+    onProgress({
+      source: 'server',
+      phase: 'initial_probe',
+      message: 'Captured initial probe of the failing prompt',
+      details: { chars: initialProbeBlock.length },
+    });
+  }
+
   // ── Ralph-style incremental round loop ──────────────────────────────────
   // Each round is ONE coder crack, gated by the deterministic fixture-diff gate
   // (the sole authority — no critic). PASS → commit, done. PROGRESS (strictly
@@ -1220,6 +1317,7 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
       message: `Starting ${role} coder (round ${round}/${maxRounds})`,
       details: { round, role },
     });
+    const revisionFeedback = [initialProbeBlock, carryForward].filter(Boolean).join('\n\n') || undefined;
     coderResult = await coderPatchRunner({
       artifactRoot: executionArtifactRoot,
       repoRoot: executionRoot,
@@ -1230,7 +1328,7 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
       coderEngine: 'tool-agent',
       autoCommit: false,
       ...(role === 'senior' ? { seniorEndpoint: 'worker' as const, maxTurns: SENIOR_MAX_TURNS } : {}),
-      ...(carryForward ? { revisionFeedback: carryForward } : {}),
+      ...(revisionFeedback ? { revisionFeedback } : {}),
       ...(round > 1 ? { attempt: round } : {}),
       onProgress: (event) => onProgress(event),
     });
@@ -1423,6 +1521,7 @@ export function createEventEditorFixHandlers(
   const coderPatchRunner = deps.runCoderPatch ?? runFoundryCoderPatch;
   const criticRunner = deps.runPatchCritic ?? runFoundryPatchCritic;
   const verifyFixtures = deps.verifyFixtures ?? runFixtureVerification;
+  const probeFailingPrompt = deps.probeFailingPrompt ?? probeFailingPromptForCoder;
   const maxRounds = deps.maxRounds ?? 3;
   const workspaceRoot = deps.workspaceRoot ?? process.cwd();
   const artifactRoot = resolve(workspaceRoot, 'artifacts', 'event-editor-fixit');
@@ -1650,6 +1749,7 @@ export function createEventEditorFixHandlers(
           coderPatchRunner,
           criticRunner,
           verifyFixtures,
+          probeFailingPrompt,
           maxRounds,
           request,
           onProgress: sendProgress,
@@ -1987,6 +2087,7 @@ export function createEventEditorFixHandlers(
         coderPatchRunner,
         criticRunner,
         verifyFixtures,
+        probeFailingPrompt,
         maxRounds,
         request,
         onProgress,
