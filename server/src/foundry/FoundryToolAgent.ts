@@ -292,7 +292,10 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
           tool_choice: 'auto',
           temperature: input.temperature ?? 0.2,
           max_tokens: dynamicMaxTokens,
-          enableThinking: false,
+          // Let the InferenceClient's construction-time enableThinking decide.
+          // Hardcoding false here overrode the coder's deliberate opt-in and
+          // silently kept thinking off — that bug shipped in 616459e and
+          // burnt one run.
         };
       };
       // One retry for a context-length 400 OR a transient/oversized inference
@@ -450,6 +453,9 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
           ],
           temperature: input.temperature ?? 0.2,
           max_tokens: 1024,
+          // Handoff is short prose; force thinking OFF here (we want a fast
+          // 200-word summary, not deep reasoning). Independent of the
+          // coder's main-loop thinking setting.
           enableThinking: false,
         });
         const summary = handoffResponse.choices[0]?.message?.content?.trim();
