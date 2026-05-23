@@ -1867,6 +1867,8 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-width: 0;                   /* don't let flex children push the list wider */
+  overflow-x: hidden;             /* final safety net against horizontal scroll */
 }
 
 .event-editor .fixit-panel__job-row {
@@ -2397,6 +2399,7 @@
    card without nesting <button> inside <button>. */
 .event-editor .fixit-job-card-wrap {
   position: relative;
+  min-width: 0;                  /* shrink to parent — prevents flex blowout */
 }
 
 /* Card body. The whole card is a button so clicking anywhere on it
@@ -2405,6 +2408,7 @@
 .event-editor .fixit-job-card {
   appearance: none;
   width: 100%;
+  min-width: 0;                  /* let the flex/grid parent shrink the chip */
   text-align: left;
   border: 1px solid var(--ee-border);
   border-left-width: 3px;
@@ -2412,7 +2416,12 @@
   color: inherit;
   font: inherit;
   border-radius: 6px;
-  padding: 10px 12px;
+  /* 80px right-padding reserves room for the absolute-positioned actions
+     overlay (Resume / Cancel / Mark complete buttons at top-right). Without
+     this the chip's title/subline/hint could underlap the buttons — and on
+     a "Server restarted" interrupted chip the hint can be 50+ chars, which
+     pushed the layout enough that the Resume button scrolled off-screen. */
+  padding: 10px 80px 10px 12px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -2586,6 +2595,8 @@
   font-size: 11px;
   color: var(--ee-text-faint);
   font-style: italic;
+  overflow-wrap: anywhere;        /* long unbroken strings still wrap */
+  min-width: 0;
 }
 
 .event-editor .fixit-job-card__hint strong {
@@ -2610,7 +2621,9 @@
   font-weight: 600;
   color: var(--ee-text);
   line-height: 1.35;
-  word-break: break-word;
+  overflow-wrap: anywhere;        /* break inside long unbroken strings */
+  word-break: break-word;         /* legacy alias for older WebKit */
+  min-width: 0;
 }
 
 .event-editor .fixit-job-card__subline {
@@ -2621,6 +2634,8 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 /* ---- Add Labware Dialog ---- */
