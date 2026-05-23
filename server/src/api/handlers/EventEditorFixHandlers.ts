@@ -966,6 +966,13 @@ export interface GitOps {
    */
   commitFromWorktree?(worktreeRoot: string, files: string[], title: string): Promise<string | undefined>;
   /**
+   * Move an isolated worktree to a committed ref after landing verified
+   * progress in the main checkout. This makes the next coder round start from
+   * the committed progress, not from the original detached base plus dirty
+   * files.
+   */
+  syncWorktreeToRef?(worktreeRoot: string, ref: string): Promise<void>;
+  /**
    * Roll back the working-tree state of the given files. Tracked files are
    * restored to HEAD; untracked files are deleted.
    */
@@ -1004,7 +1011,93 @@ function createGitOps(repoRoot: string): GitOps {
     },
     async commitFromWorktree(worktreeRoot, files, title) {
       if (files.length === 0) return undefined;
-      for (const file of files) {
+
+      // Concurrent-job-safe commit. The previous implementation just copied
+      // files from worktree to repo and committed — last-write-wins, no
+      // conflict detection. With concurrent fix-it jobs, two worktrees could
+      // both edit DeterministicPrecompilePass.ts and silently stomp each
+      // other.
+      //
+      // Fix: use git's stash + rebase + pop dance INSIDE the worktree. git's
+      // 3-way merge correctly handles "this change is already in the new
+      // base" (multi-round PROGRESS commits) AND surfaces real conflicts
+      // (concurrent jobs touching overlapping lines).
+      //
+      // Worktrees are created with detached HEAD, so "rebase" reduces to
+      // "reset --hard to main" + pop the stash on top.
+      const wtGit = async (args: string[]) =>
+        execFileAsync('git', ['-C', worktreeRoot, ...args], { maxBuffer: 8 * 1024 * 1024 });
+
+      // Capture both endpoints up-front so we can roll back on conflict.
+      const mainHead = (await runGit(['rev-parse', 'HEAD'])).stdout.trim();
+      const wtOrigHead = (await wtGit(['rev-parse', 'HEAD'])).stdout.trim();
+      if (mainHead === wtOrigHead) {
+        // Fast path: worktree's base already matches main HEAD. No
+        // concurrent commit happened; just copy and commit as before.
+        for (const file of files) {
+          const src = resolve(worktreeRoot, file);
+          const dest = resolve(repoRoot, file);
+          if (existsSync(src)) {
+            await mkdir(dirname(dest), { recursive: true });
+            await copyFile(src, dest);
+          } else {
+            await unlink(dest).catch(() => {});
+          }
+        }
+        return this.commit(files, title);
+      }
+
+      // 1. Stash dirty changes (including untracked).
+      const stashLabel = `commitFromWorktree-${Date.now()}`;
+      const stashOut = await wtGit(['stash', 'push', '-u', '-m', stashLabel]);
+      const stashed = !stashOut.stdout.includes('No local changes to save');
+      if (!stashed) {
+        // Nothing to stash — the dirty list passed in was stale. No commit.
+        return undefined;
+      }
+
+      // 2. Move worktree to current main HEAD.
+      await wtGit(['reset', '--hard', mainHead]);
+
+      // 3. Pop stash. Git 3-way merge: wtOrigHead = base, mainHead = theirs,
+      // stashed = ours. Clean merge if no overlap; conflict + non-zero exit
+      // if overlap.
+      try {
+        await wtGit(['stash', 'pop']);
+      } catch (popErr) {
+        // Conflict. Roll the worktree back to its pre-rebase state so the
+        // user's work isn't lost — they can re-run the job and the loop will
+        // pick up from a clean base.
+        await wtGit(['checkout', '--', '.']).catch(() => {});
+        await wtGit(['clean', '-fd']).catch(() => {});
+        await wtGit(['stash', 'drop']).catch(() => {});
+        await wtGit(['reset', '--hard', wtOrigHead]).catch(() => {});
+        await wtGit(['stash', 'pop']).catch(() => {});
+        const errMsg = popErr instanceof Error ? popErr.message : String(popErr);
+        throw new Error(
+          `commit conflict: worktree's edits did not cleanly merge onto current main. `
+          + `A concurrent fix-it job likely touched the same files. Re-run this job; it will start from the updated main. (${errMsg})`,
+        );
+      }
+
+      // 4. Enumerate POST-MERGE dirty files. If 3-way merge folded our
+      // changes into ones already on main, the dirty set may be smaller
+      // than the input `files` list (or empty entirely).
+      const { stdout: statusOut } = await wtGit(['status', '--porcelain', '--']);
+      const mergedFiles: string[] = [];
+      for (const line of statusOut.split('\n')) {
+        if (line.length < 4) continue;
+        const rest = line.slice(3);
+        const arrow = rest.indexOf(' -> ');
+        mergedFiles.push(arrow >= 0 ? rest.slice(arrow + 4) : rest);
+      }
+      if (mergedFiles.length === 0) {
+        // Concurrent commit already included these edits. Nothing to do.
+        return undefined;
+      }
+
+      // 5. Copy post-merge files to main + commit.
+      for (const file of mergedFiles) {
         const src = resolve(worktreeRoot, file);
         const dest = resolve(repoRoot, file);
         if (existsSync(src)) {
@@ -1014,7 +1107,10 @@ function createGitOps(repoRoot: string): GitOps {
           await unlink(dest).catch(() => {});
         }
       }
-      return this.commit(files, title);
+      return this.commit(mergedFiles, title);
+    },
+    async syncWorktreeToRef(worktreeRoot, ref) {
+      await execFileAsync('git', ['-C', worktreeRoot, 'reset', '--hard', ref], { maxBuffer: 8 * 1024 * 1024 });
     },
     async reset(files) {
       for (const file of files) {
@@ -1328,8 +1424,14 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
     message: `Writing regression fixture ${body.fixturePath}`,
   });
   const absoluteFixturePath = resolve(executionRoot, body.fixturePath);
-  await mkdir(dirname(absoluteFixturePath), { recursive: true });
-  await writeFile(absoluteFixturePath, body.fixtureYaml, 'utf-8');
+  const materializeFixture = async (): Promise<void> => {
+    await mkdir(dirname(absoluteFixturePath), { recursive: true });
+    await writeFile(absoluteFixturePath, body.fixtureYaml, 'utf-8');
+  };
+  const filterRoundFiles = (files: string[]): string[] => (
+    files.filter((file) => file !== body.fixturePath)
+  );
+  await materializeFixture();
 
   onEvent({ type: 'stage', stage: 'writing_spec' });
   const protocolId = 'event-editor-fixit';
@@ -1386,6 +1488,11 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
 
   for (let round = 1; round <= maxRounds; round += 1) {
     checkAbort();
+    // The generated regression fixture is intentionally untracked in the
+    // isolated worktree. A stuck-round rollback must not be able to delete it;
+    // rewrite it before every round so retry/senior handoffs always see the
+    // declared fixture file.
+    await materializeFixture();
     const role: 'junior' | 'senior' = stuckStreak >= SENIOR_AFTER ? 'senior' : 'junior';
     if (role === 'senior') seniorRetryRan = true;
 
@@ -1448,7 +1555,7 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
       details: { verdict, round, role, ...(post?.target ? { missing: post.target.missing } : {}) },
     });
 
-    let roundFiles = Array.from(roundTouched);
+    let roundFiles = filterRoundFiles(Array.from(roundTouched));
     // Fallback for the silent-drop bug: the coder may return touchedFiles:[]
     // even after successfully editing (e.g. when status is 'blocked' but the
     // edits landed before the block). If the worktree actually has dirty
@@ -1457,14 +1564,17 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
       try {
         const dirty = await gitOps.dirtyFilesInWorktree(activeJobRef.value.worktreePath);
         if (dirty.length > 0) {
-          roundFiles = dirty;
-          for (const f of dirty) touchedFileSet.add(f);
-          onProgress({
-            source: 'server',
-            phase: 'progress_gate',
-            message: `Coder reported 0 touched files but worktree has ${dirty.length}; using worktree state`,
-            details: { round, role, recoveredFromWorktree: true, files: dirty },
-          });
+          const recoverableDirty = filterRoundFiles(dirty);
+          if (recoverableDirty.length > 0) {
+            roundFiles = recoverableDirty;
+            for (const f of roundFiles) touchedFileSet.add(f);
+            onProgress({
+              source: 'server',
+              phase: 'progress_gate',
+              message: `Coder reported 0 touched files but worktree has ${roundFiles.length}; using worktree state`,
+              details: { round, role, recoveredFromWorktree: true, files: roundFiles },
+            });
+          }
         }
       } catch (err) {
         request.log.warn({ err }, 'fix-it: dirtyFilesInWorktree fallback failed; proceeding with empty round set');
@@ -1488,6 +1598,10 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
           if (roundCommit) {
             commit = roundCommit;
             landedCommits += 1;
+            if (activeJobRef.value?.worktreePath && gitOps.syncWorktreeToRef) {
+              await gitOps.syncWorktreeToRef(activeJobRef.value.worktreePath, roundCommit);
+              await materializeFixture();
+            }
           }
           onProgress({ source: 'server', phase: 'committed', message: `Committed fix ${roundCommit}`, details: { commit: roundCommit, round } });
         } catch (gitErr) {
@@ -1524,6 +1638,7 @@ async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverR
           await gitOps.reset(roundFiles);
         }
       }
+      await materializeFixture();
     } catch (gitErr) {
       request.log.error({ err: gitErr }, 'fix-it reset failed; working tree may be dirty');
     }
@@ -2362,4 +2477,3 @@ function buildApplyResultFromJob(job: EventEditorFixItJobRecord): Record<string,
     ...(result['critic'] && typeof result['critic'] === 'object' ? { critic: result['critic'] } : {}),
   };
 }
-
