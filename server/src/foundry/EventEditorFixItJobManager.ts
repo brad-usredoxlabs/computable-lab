@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -268,15 +268,36 @@ export class EventEditorFixItJobManager {
   }
 
   /**
-   * Sweep all active jobs (running/critic) and mark them interrupted.
-   * Intended for server startup: any job left in an active state is a
-   * zombie from the previous process and has nobody driving it.
+   * Sweep active jobs (running/critic) that have been SILENT for a while
+   * and mark them interrupted. The silence threshold matters a lot in
+   * practice: under tsx --watch a server-side file save triggers a
+   * process reload, which used to murder any in-flight job's driver
+   * (this sweep ran immediately and killed everything active). Worse,
+   * the user couldn't tell why — "server restarted while job was active"
+   * with no clear cause.
+   *
+   * Heuristic: a job whose events.jsonl was written within the last
+   * staleAfterMs (default 30 min) is probably either (a) genuinely
+   * in-flight under a still-living driver, or (b) freshly orphaned by a
+   * hot reload but worth preserving so the user can manually Resume.
+   * Only truly stale jobs (no events for 30+ min) get the auto-mark.
+   *
+   * The 30-min default covers the worst-case thinking-mode silence: a
+   * single inference call can be silent for 15-25 min while the model
+   * generates 8K-15K reasoning tokens before any event fires.
    */
-  async sweepInterrupted(): Promise<EventEditorFixItJobRecord[]> {
+  async sweepInterrupted(staleAfterMs: number = 30 * 60 * 1000): Promise<EventEditorFixItJobRecord[]> {
     const active = await this.activeJobs();
+    const now = Date.now();
     const interrupted: EventEditorFixItJobRecord[] = [];
     for (const job of active) {
       try {
+        const stats = await stat(job.eventsPath).catch(() => null);
+        if (stats && now - stats.mtimeMs < staleAfterMs) {
+          // Recent events — skip. Driver may be alive, or hot-reloaded
+          // mid-run. User can manually Resume if they want a fresh driver.
+          continue;
+        }
         interrupted.push(await this.markInterrupted(job.id));
       } catch {
         // Best-effort — skip and continue with the rest.

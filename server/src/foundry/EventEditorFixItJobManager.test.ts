@@ -150,7 +150,9 @@ describe('EventEditorFixItJobManager', () => {
     await manager.markCriticRunning('job-zombie-2'); // → critic
     await manager.enqueue({ specId: 'spec-c' });     // job-zombie-3 → queued (NOT active)
 
-    const interrupted = await manager.sweepInterrupted();
+    // Pass staleAfterMs: 0 so the just-claimed jobs are considered stale and
+    // get swept. Default 30-min threshold would skip them as recent.
+    const interrupted = await manager.sweepInterrupted(0);
     expect(interrupted.map((job) => job.id).sort()).toEqual([
       'job-zombie-1',
       'job-zombie-2',
@@ -170,6 +172,31 @@ describe('EventEditorFixItJobManager', () => {
     const events = await manager.readEvents('job-zombie-1');
     const phases = events.map((event) => event.phase);
     expect(phases).toContain('interrupted');
+  });
+
+  it('sweepInterrupted skips active jobs whose events.jsonl is recent', async () => {
+    // Default 30-min staleness threshold protects in-flight jobs from
+    // being murdered when the server hot-reloads (tsx --watch). Verify
+    // that a freshly-active job survives the default sweep call.
+    const repoRoot = await createGitRepo();
+    const artifactRoot = await mkdtemp(join(tmpdir(), 'fixit-job-artifacts-'));
+    let nextId = 0;
+    const manager = new EventEditorFixItJobManager({
+      repoRoot,
+      artifactRoot,
+      worktreeRoot: join(artifactRoot, 'worktrees'),
+      idFactory: () => `job-recent-${++nextId}`,
+    });
+
+    await manager.enqueue({ specId: 'spec-a' });
+    await manager.claimNextQueuedJob(); // job-recent-1 → running, fresh events
+
+    // Default threshold = 30 min. Just-claimed job is well within that.
+    const interrupted = await manager.sweepInterrupted();
+    expect(interrupted).toEqual([]);
+
+    const survivor = await manager.getJob('job-recent-1');
+    expect(survivor?.status).toBe('running');
   });
 
   it('reads events and lets completed jobs release retained worktrees', async () => {
