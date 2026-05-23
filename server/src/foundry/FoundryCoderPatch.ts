@@ -17,7 +17,7 @@ import {
   resolveRetrievalConfig,
   RetrievalSidecar,
 } from './RetrievalIndex.js';
-import { makeResolveLabwareTool, makeVerifyTool } from './FixItCoderTools.js';
+import { makeProbeTool, makeResolveLabwareTool, makeVerifyTool } from './FixItCoderTools.js';
 import type { FoundryVariant } from './ProtocolFoundryCompileRunner.js';
 
 const execFileAsync = promisify(execFile);
@@ -890,12 +890,16 @@ export async function runFoundryCoderPatch(input: {
       }
     }
 
-    // Event-editor fix-it gets two extra tools: `verify` (run the declared
-    // fixture, see expected-vs-actual per path) and `resolve_labware` (inspect
-    // how a hint resolves). They replace the throwaway-debug-script churn.
+    // Event-editor fix-it gets three extra tools: `verify` (run the declared
+    // fixture, see expected-vs-actual per path), `probe` (run the deterministic
+    // compile on an arbitrary prompt — isolate variables by varying the prompt
+    // instead of reading code blindly), and `resolve_labware` (inspect how a
+    // hint resolves). They replace the throwaway-debug-script churn.
     const fixItTools = input.protocolId === 'event-editor-fixit';
+    const compilerFix = fixItTools && selectedSpec.fixClass === 'compiler';
     if (fixItTools) {
       extraTools.push(makeVerifyTool(input.repoRoot, selectedSpec.id));
+      extraTools.push(makeProbeTool(input.repoRoot));
       extraTools.push(makeResolveLabwareTool(input.repoRoot));
     }
 
@@ -914,7 +918,25 @@ export async function runFoundryCoderPatch(input: {
           ? ['', 'Use the retrieve tool to find code by concept or symbol (e.g. "the pass that emits deckLayoutPlan.pinned") before reading or paging large files — it is faster than scanning.']
           : []),
         ...(fixItTools
-          ? ['', 'Use the `verify` tool to run the declared fixture and see, for each unsatisfied assertion, the EXPECTED vs ACTUAL value — call it after each edit instead of writing debug scripts or running the test suite by hand. Use `resolve_labware("<hint>")` to see how a labware hint resolves (and the available record IDs) when a labwareHint is wrong.']
+          ? ['', 'Use the `verify` tool to run the declared fixture and see, for each unsatisfied assertion, the EXPECTED vs ACTUAL value — call it after each edit instead of writing debug scripts or running the test suite by hand. Use `probe("<prompt>")` to run the deterministic compile on an ARBITRARY prompt and see what it emits — use this to vary the failing prompt and isolate which dimension drives the bug. Use `resolve_labware("<hint>")` to see how a labware hint resolves (and the available record IDs) when a labwareHint is wrong.']
+          : []),
+        ...(compilerFix
+          ? [
+            '',
+            'SKILL: compiler-pipeline-debug (applies because this spec\'s fixClass is "compiler"):',
+            'The compile pipeline has many stages. `verify` shows the END state only — it cannot tell you WHICH stage broke things. Reading source blindly is slow; experimenting with `probe` is fast. Workflow:',
+            '  1. PROBE FIRST. Call `probe(<failing-prompt>)` to capture the baseline symptom (the actual pinned/events the compiler emits).',
+            '  2. ISOLATE THE VARIABLE. Run at least 3 probes that each change ONE thing about the failing prompt:',
+            '     - drop the conjunction (probe a single clause alone),',
+            '     - reverse clause order,',
+            '     - remove a modifier (e.g. "12-well reservoir" → "reservoir"),',
+            '     - swap a verb or preposition.',
+            '     The variation that flips the symptom names the variable the bug depends on.',
+            '  3. PREDICT THE STAGE. From step 2 you should be able to name the pipeline stage that owns the failing variable (tokenizer/tagger, noun resolver, clause splitter, labware lookup, placement lowering). ONLY NOW open source files.',
+            '  4. CAP EXPLORATION. Read at most 2 source files before re-probing or re-verifying. If reading is not narrowing the bug, you are in the wrong file — probe a new variation instead.',
+            '  5. CLOSE THE LOOP. Re-call `verify` after EVERY edit. An edit you have not verified is an edit that probably did nothing.',
+            'The spec\'s rationale was written from one failing example and is a guess; your job is to test the guess with `probe`, not to implement it.',
+          ]
           : []),
         '',
         'Debugging: prefer the `verify` tool over throwaway scripts. If you must inspect something it does not cover, write a THROWAWAY script (shell: `npx tsx /tmp/dbg.ts` or `node -e`) — do NOT add console.log/debug to the source files you are fixing (it forces a cleanup pass and risks debug cruft in the patch). Keep owned source clean: only your actual fix goes there.',

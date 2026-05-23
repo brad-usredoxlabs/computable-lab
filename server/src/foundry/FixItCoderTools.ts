@@ -57,6 +57,76 @@ export function makeVerifyTool(repoRoot: string, specId: string): FoundryToolAge
   };
 }
 
+const PROBE_HARNESS_REL = 'src/compiler/pipeline/fixtures/probeCompile.ts';
+
+/**
+ * `probe` — run the deterministic compile on an ARBITRARY prompt and return
+ * its key terminal artifacts. Use this to vary the failing prompt by ONE
+ * dimension at a time (single clause vs conjunction; reversed order; modifier
+ * present vs absent; verb/preposition swap) and observe which variation flips
+ * the symptom — that variation names the pipeline stage that owns the bug.
+ */
+export function makeProbeTool(repoRoot: string): FoundryToolAgentTool {
+  return {
+    definition: {
+      type: 'function',
+      function: {
+        name: 'probe',
+        description:
+          'Run the deterministic compile on an arbitrary prompt and see what it emits '
+          + '(deckLayoutPlan.pinned slots + labwareHints, event count + type histogram). '
+          + 'Use probe to isolate variables BEFORE reading code: vary the failing prompt by '
+          + 'one dimension (single clause vs conjunction, reversed order, modifier present vs '
+          + 'absent, verb/preposition swap) — the variation that flips the symptom locates the bug.',
+        parameters: {
+          type: 'object',
+          properties: { prompt: { type: 'string', description: 'The prompt to compile.' } },
+          required: ['prompt'],
+        },
+      },
+    },
+    handler: async (args) => {
+      const started = Date.now();
+      const prompt = typeof args['prompt'] === 'string' ? args['prompt'] : '';
+      if (!prompt.trim()) {
+        return { ok: false, content: 'error: prompt is required', durationMs: Date.now() - started };
+      }
+      if (!existsSync(join(repoRoot, 'server', PROBE_HARNESS_REL))) {
+        return { ok: false, content: 'probe: harness unavailable', durationMs: Date.now() - started };
+      }
+      try {
+        const { stdout } = await execFileAsync('npx', ['tsx', PROBE_HARNESS_REL, '--prompt', prompt], {
+          cwd: join(repoRoot, 'server'),
+          timeout: 120_000,
+          maxBuffer: 8 * 1024 * 1024,
+        });
+        const line = stdout.trim().split('\n').filter(Boolean).at(-1) ?? '{}';
+        const parsed = JSON.parse(line) as {
+          prompt?: string;
+          outcome?: string;
+          pinned?: Array<{ slot?: string; labwareHint?: string }>;
+          eventCount?: number;
+          eventTypes?: Record<string, number>;
+        };
+        const pinnedLines = (parsed.pinned ?? []).length
+          ? (parsed.pinned ?? [])
+            .map((p) => `  - slot: ${fmt(p?.slot)}  labwareHint: ${fmt(p?.labwareHint)}`)
+            .join('\n')
+          : '  (none)';
+        const evtTypeBits = Object.entries(parsed.eventTypes ?? {})
+          .map(([k, v]) => `${k}=${v}`)
+          .join(', ');
+        const evtSummary = parsed.eventCount ? `${parsed.eventCount} (${evtTypeBits})` : '0';
+        const content = `PROBE: ${JSON.stringify(prompt)}\n  outcome: ${parsed.outcome ?? '?'}\n  pinned:\n${pinnedLines}\n  events: ${evtSummary}`;
+        return { ok: true, content, durationMs: Date.now() - started };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { ok: false, content: `probe error: ${message}`, durationMs: Date.now() - started };
+      }
+    },
+  };
+}
+
 const INSPECT_HARNESS_REL = 'src/compiler/pipeline/fixtures/inspectLabwareHint.ts';
 
 /**
