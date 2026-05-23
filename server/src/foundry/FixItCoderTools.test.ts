@@ -38,6 +38,14 @@ describe('makeProbeTool', () => {
     expect(tool.definition.function.parameters.required).toContain('prompt');
   });
 
+  it('declares an optional `fields` array parameter', () => {
+    const tool = makeProbeTool('/repo');
+    const props = tool.definition.function.parameters.properties as Record<string, { type: string; items?: unknown }>;
+    expect(props['fields']).toBeDefined();
+    expect(props['fields']?.type).toBe('array');
+    expect(tool.definition.function.parameters.required).not.toContain('fields');
+  });
+
   it('rejects an empty prompt without shelling out', async () => {
     const tool = makeProbeTool('/repo');
     const result = await tool.handler({ prompt: '   ' });

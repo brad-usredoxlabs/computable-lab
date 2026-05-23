@@ -58,13 +58,39 @@ export function makeVerifyTool(repoRoot: string, specId: string): FoundryToolAge
 }
 
 const PROBE_HARNESS_REL = 'src/compiler/pipeline/fixtures/probeCompile.ts';
+const PROBE_FIELD_CHARS = 1500;
+const PROBE_TOTAL_CHARS = 12_000;
+
+function describeField(value: unknown): string {
+  if (value === undefined) return '(absent)';
+  if (value === null) return '(null)';
+  if (Array.isArray(value)) return value.length === 0 ? '(empty)' : `${value.length} item(s)`;
+  if (typeof value === 'object') {
+    const keys = Object.keys(value as object);
+    return keys.length === 0 ? '(empty object)' : `object, ${keys.length} key(s)`;
+  }
+  return typeof value;
+}
+
+function clip(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max)}\n… [clipped ${text.length - max} more chars]`;
+}
+
+function renderField(name: string, value: unknown): string {
+  const header = `=== ${name} — ${describeField(value)} ===`;
+  if (value === undefined || value === null) return header;
+  const json = JSON.stringify(value, null, 2);
+  return `${header}\n${clip(json, PROBE_FIELD_CHARS)}`;
+}
 
 /**
  * `probe` — run the deterministic compile on an ARBITRARY prompt and return
- * its key terminal artifacts. Use this to vary the failing prompt by ONE
- * dimension at a time (single clause vs conjunction; reversed order; modifier
- * present vs absent; verb/preposition swap) and observe which variation flips
- * the symptom — that variation names the pipeline stage that owns the bug.
+ * the top-level TerminalArtifacts fields most useful for debugging compiler
+ * bugs. Use this to vary the failing prompt by ONE dimension at a time
+ * (single clause vs conjunction; reversed order; modifier present vs absent;
+ * verb/preposition swap) — the variation that flips a field's value names the
+ * pipeline stage that owns the bug.
  */
 export function makeProbeTool(repoRoot: string): FoundryToolAgentTool {
   return {
@@ -73,14 +99,25 @@ export function makeProbeTool(repoRoot: string): FoundryToolAgentTool {
       function: {
         name: 'probe',
         description:
-          'Run the deterministic compile on an arbitrary prompt and see what it emits '
-          + '(deckLayoutPlan.pinned slots + labwareHints, event count + type histogram). '
-          + 'Use probe to isolate variables BEFORE reading code: vary the failing prompt by '
-          + 'one dimension (single clause vs conjunction, reversed order, modifier present vs '
-          + 'absent, verb/preposition swap) — the variation that flips the symptom locates the bug.',
+          'Run the deterministic compile on an arbitrary prompt and dump the resulting '
+          + 'TerminalArtifacts fields as labelled JSON blocks (events, gaps, deckLayoutPlan, '
+          + 'labStateDelta, resolvedRefs, resolvedLabwareRefs, resourceManifest, executionScalePlan, '
+          + 'deterministicProtocolPlan, protocolIntent, validationReport). Use probe to isolate '
+          + 'variables BEFORE reading code: vary the failing prompt along one dimension and watch '
+          + 'which field changes. Pass `fields` to narrow output to a specific subset; pass '
+          + '["all"] to include every supported field.',
         parameters: {
           type: 'object',
-          properties: { prompt: { type: 'string', description: 'The prompt to compile.' } },
+          properties: {
+            prompt: { type: 'string', description: 'The prompt to compile.' },
+            fields: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                'Optional. TerminalArtifacts top-level field names to include (e.g. ["events","deckLayoutPlan"]). '
+                + 'Omit for the default set of fix-it-relevant fields. Use ["all"] for every supported field.',
+            },
+          },
           required: ['prompt'],
         },
       },
@@ -94,8 +131,13 @@ export function makeProbeTool(repoRoot: string): FoundryToolAgentTool {
       if (!existsSync(join(repoRoot, 'server', PROBE_HARNESS_REL))) {
         return { ok: false, content: 'probe: harness unavailable', durationMs: Date.now() - started };
       }
+      const fieldsArg = Array.isArray(args['fields'])
+        ? (args['fields'] as unknown[]).filter((v): v is string => typeof v === 'string')
+        : [];
+      const harnessArgs = ['tsx', PROBE_HARNESS_REL, '--prompt', prompt];
+      if (fieldsArg.length > 0) harnessArgs.push('--fields', fieldsArg.join(','));
       try {
-        const { stdout } = await execFileAsync('npx', ['tsx', PROBE_HARNESS_REL, '--prompt', prompt], {
+        const { stdout } = await execFileAsync('npx', harnessArgs, {
           cwd: join(repoRoot, 'server'),
           timeout: 120_000,
           maxBuffer: 8 * 1024 * 1024,
@@ -104,20 +146,15 @@ export function makeProbeTool(repoRoot: string): FoundryToolAgentTool {
         const parsed = JSON.parse(line) as {
           prompt?: string;
           outcome?: string;
-          pinned?: Array<{ slot?: string; labwareHint?: string }>;
-          eventCount?: number;
-          eventTypes?: Record<string, number>;
+          fields?: string[];
+          data?: Record<string, unknown>;
         };
-        const pinnedLines = (parsed.pinned ?? []).length
-          ? (parsed.pinned ?? [])
-            .map((p) => `  - slot: ${fmt(p?.slot)}  labwareHint: ${fmt(p?.labwareHint)}`)
-            .join('\n')
-          : '  (none)';
-        const evtTypeBits = Object.entries(parsed.eventTypes ?? {})
-          .map(([k, v]) => `${k}=${v}`)
-          .join(', ');
-        const evtSummary = parsed.eventCount ? `${parsed.eventCount} (${evtTypeBits})` : '0';
-        const content = `PROBE: ${JSON.stringify(prompt)}\n  outcome: ${parsed.outcome ?? '?'}\n  pinned:\n${pinnedLines}\n  events: ${evtSummary}`;
+        const blocks: string[] = [];
+        blocks.push(`PROBE: ${JSON.stringify(prompt)}\n  outcome: ${parsed.outcome ?? '?'}`);
+        const fields = parsed.fields ?? [];
+        const data = parsed.data ?? {};
+        for (const f of fields) blocks.push(renderField(f, data[f]));
+        const content = clip(blocks.join('\n\n'), PROBE_TOTAL_CHARS);
         return { ok: true, content, durationMs: Date.now() - started };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

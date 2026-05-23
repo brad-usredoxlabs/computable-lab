@@ -1,53 +1,84 @@
 /**
  * probeCompile — worktree harness for the Fix-it coder's `probe` tool. Runs
- * the deterministic compile on an arbitrary prompt and prints the relevant
- * terminalArtifacts as JSON, so the coder can isolate variables by varying
- * the prompt instead of reading code blindly.
+ * the deterministic compile on an arbitrary prompt and emits a structured
+ * JSON dump of selected TerminalArtifacts fields, so the coder can isolate
+ * variables by varying the prompt instead of reading code blindly.
  *
- *   npx tsx server/src/compiler/pipeline/fixtures/probeCompile.ts --prompt "..."
+ *   npx tsx server/src/compiler/pipeline/fixtures/probeCompile.ts --prompt "..." [--fields events,gaps,...]
+ *
+ * --fields is a comma-separated list of TerminalArtifacts top-level keys.
+ * "all" returns every supported field. Omitted = DEFAULT_FIELDS (the set most
+ * load-bearing for fix-it bug classes).
  */
 import { runFixture } from './FixtureRunner.js';
 
-function promptArg(): string {
-  const idx = process.argv.indexOf('--prompt');
-  return idx >= 0 ? process.argv[idx + 1] ?? '' : '';
+const DEFAULT_FIELDS = [
+  'events',
+  'directives',
+  'gaps',
+  'deckLayoutPlan',
+  'labStateDelta',
+  'resolvedRefs',
+  'resolvedLabwareRefs',
+  'resourceManifest',
+  'executionScalePlan',
+  'deterministicProtocolPlan',
+  'protocolIntent',
+  'validationReport',
+] as const;
+
+const ALL_FIELDS = [
+  ...DEFAULT_FIELDS,
+  'protocolIntentStatePlan',
+  'protocolIntentValidation',
+  'protocolIntentLowering',
+  'instrumentRunFiles',
+  'instrumentApplianceJobs',
+  'instrumentExecutionReadiness',
+  'downstreamQueue',
+] as const;
+
+function argOf(name: string): string | undefined {
+  const idx = process.argv.indexOf(name);
+  return idx >= 0 ? process.argv[idx + 1] : undefined;
+}
+
+function resolveFields(raw: string | undefined): readonly string[] {
+  if (!raw) return DEFAULT_FIELDS;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed === 'all') return ALL_FIELDS;
+  const allowed = new Set<string>(ALL_FIELDS);
+  const requested = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+  const valid = requested.filter((f) => allowed.has(f));
+  return valid.length > 0 ? valid : DEFAULT_FIELDS;
 }
 
 async function main(): Promise<void> {
-  const prompt = promptArg();
+  const prompt = argOf('--prompt') ?? '';
   if (!prompt) {
     process.stderr.write('probeCompile: --prompt is required\n');
     process.exit(2);
   }
+  const fields = resolveFields(argOf('--fields'));
   const result = (await runFixture({
     name: 'probe',
     deterministicOnly: true,
     input: { prompt },
-  } as never)) as {
+  } as never)) as unknown as {
     outcome?: string;
-    terminalArtifacts?: {
-      deckLayoutPlan?: { pinned?: Array<{ slot?: string; labwareHint?: string }> };
-      events?: Array<{ type?: string }>;
-    };
+    terminalArtifacts?: Record<string, unknown>;
   };
   const ta = result.terminalArtifacts ?? {};
-  const pinned = (ta.deckLayoutPlan?.pinned ?? []).map((p) => ({
-    slot: p?.slot,
-    labwareHint: p?.labwareHint,
-  }));
-  const events = ta.events ?? [];
-  const eventTypes: Record<string, number> = {};
-  for (const e of events) {
-    const t = e?.type ?? '(unknown)';
-    eventTypes[t] = (eventTypes[t] ?? 0) + 1;
+  const data: Record<string, unknown> = {};
+  for (const f of fields) {
+    data[f] = (ta as Record<string, unknown>)[f];
   }
   process.stdout.write(
     JSON.stringify({
       prompt,
       outcome: result.outcome,
-      pinned,
-      eventCount: events.length,
-      eventTypes,
+      fields,
+      data,
     }) + '\n',
   );
 }
