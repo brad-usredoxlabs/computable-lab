@@ -299,6 +299,13 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
       await progress(input, { phase: 'turn_started', message: `Model turn ${turn}/${maxTurns}`, details: { turn } });
       await trace(input.tracePath, { type: 'turn_started', turn });
 
+      // PROACTIVE growth management: stub any tool result beyond the last
+      // KEEP_RECENT_TOOL_RESULTS, unconditionally, every turn. Stops the
+      // transcript from ballooning past the point where a single inference
+      // call can succeed. The reactive compactTranscript below still runs
+      // for the budget-driven case (whole-prompt overflow), but in practice
+      // this sliding-window prune is what bounds steady-state growth.
+      pruneOldToolResults(messages, KEEP_RECENT_TOOL_RESULTS);
       compactTranscript(messages, INPUT_TOKEN_BUDGET, KEEP_RECENT_TOOL_RESULTS);
       const buildRequest = (): CompletionRequest => {
         const inputTokensEst = estimateTranscriptTokens(messages);
@@ -584,6 +591,28 @@ function estimateTranscriptTokens(messages: ChatMessage[]): number {
 // tool_call_id) so the assistant/tool pairing the provider requires stays
 // intact. The system prompt, the user task prompt, and assistant turns are
 // never elided.
+/**
+ * Proactive sliding-window prune: stub any tool result beyond the last
+ * `keepRecentN` entries, unconditionally. Called at the START of every turn
+ * so transcript growth is bounded by design — vs the older pattern of
+ * letting growth explode until the server rejects the call. The recent
+ * `keepRecentN` tool results stay full-fidelity (model needs them to plan
+ * the next move); older ones get stubbed to `ELIDED_TOOL_OUTPUT`. Model
+ * can re-call a tool if it needs the old data back.
+ */
+function pruneOldToolResults(messages: ChatMessage[], keepRecentN: number): void {
+  const toolIndices = messages
+    .map((message, index) => (message.role === 'tool' ? index : -1))
+    .filter((index) => index >= 0);
+  if (toolIndices.length <= keepRecentN) return;
+  const stubCount = toolIndices.length - keepRecentN;
+  for (let i = 0; i < stubCount; i++) {
+    const idx = toolIndices[i]!;
+    const message = messages[idx]!;
+    if (message.content !== ELIDED_TOOL_OUTPUT) message.content = ELIDED_TOOL_OUTPUT;
+  }
+}
+
 function compactTranscript(
   messages: ChatMessage[],
   inputTokenBudget: number,
