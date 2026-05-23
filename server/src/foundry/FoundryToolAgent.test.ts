@@ -188,10 +188,12 @@ describe('FoundryToolAgent', () => {
       });
 
       expect(result.status).toBe('max-turns');
-      // Deadline = floor(20 * 0.6) = 12: the commit-an-edit nudge appears in
-      // the turn-13 request, not earlier.
-      const turn13 = complete.mock.calls[12]![0] as CompletionRequest;
-      expect(String(turn13.messages.at(-1)?.content ?? '')).toContain('without editing yet');
+      // Deadline = floor(20 * 0.3) = 6: the commit-an-edit nudge appears in
+      // the turn-7 request, not earlier. (Ratio moved from 0.6 → 0.3 because
+      // the new quant produces fewer-but-enormous bare-text turns; we need
+      // to nudge BEFORE the model burns half its budget on a single decision.)
+      const turn7 = complete.mock.calls[6]![0] as CompletionRequest;
+      expect(String(turn7.messages.at(-1)?.content ?? '')).toContain('without editing yet');
       // Before the deadline it's the soft "Continue working" nudge.
       const turn2 = complete.mock.calls[1]![0] as CompletionRequest;
       expect(String(turn2.messages.at(-1)?.content ?? '')).toContain('Continue working');

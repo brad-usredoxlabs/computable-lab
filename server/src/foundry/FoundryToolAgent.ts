@@ -56,6 +56,14 @@ export interface FoundryToolAgentInput {
   tracePath?: string;
   requireCompletionPromise?: boolean;
   onProgress?: (event: FoundryToolAgentProgressEvent) => void | Promise<void>;
+  /**
+   * Optional callback invoked when the model returns bare text (no tool call,
+   * no COMPLETE marker). The returned string, if any, is APPENDED to the
+   * stock "Continue working" reminder for that turn. Used by fix-it to echo
+   * the current verify diff back so rumination has concrete state to react to.
+   * Failure is non-fatal — return undefined and the stock reminder still fires.
+   */
+  onBareTextResponse?: (turn: number) => Promise<string | undefined>;
 }
 
 export interface FoundryToolAgentTool {
@@ -218,7 +226,11 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
   let hasEdited = false;
   let editNudged = false;
   const EDIT_TOOL_NAMES = new Set(['edit_file', 'write_file']);
-  const editNudgeDeadline = maxTurns >= 12 ? Math.floor(maxTurns * 0.6) : Number.POSITIVE_INFINITY;
+  // 0.3 (turn 18 of 60) — earlier than the old 0.6 because the new quant
+  // tends to produce a small number of ENORMOUS bare-text rumination turns
+  // (~30-40K chars each) rather than many short ones; we need to nudge BEFORE
+  // the model burns half its budget on a single decision.
+  const editNudgeDeadline = maxTurns >= 12 ? Math.floor(maxTurns * 0.3) : Number.POSITIVE_INFINITY;
   const editNudge = (t: number): string =>
     `You've used ${t} of ${maxTurns} turns and investigated a lot without editing yet. `
     + `You very likely have enough context now — commit your single best edit to an owned `
@@ -379,13 +391,27 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
         return result('complete', finalText, turn, toolCalls, input.tracePath);
       }
 
+      // Build the per-bare-text reminder. Append the caller's echo (e.g. the
+      // current verify diff) so the model has concrete state to react to
+      // instead of free-form rumination.
+      let echo: string | undefined;
+      if (input.onBareTextResponse) {
+        try {
+          echo = await input.onBareTextResponse(turn);
+        } catch {
+          // Non-fatal: stock reminder still fires.
+        }
+      }
+      const echoSuffix = echo ? `\n\n${echo}` : '';
       if (editNudgeDue(turn)) {
-        messages.push({ role: 'user', content: editNudge(turn) });
+        messages.push({ role: 'user', content: editNudge(turn) + echoSuffix });
         editNudged = true;
       } else {
         messages.push({
           role: 'user',
-          content: `Continue working. If the declared verification command passes, output ${COMPLETE_MARKER} as the final line and stop. Otherwise make one targeted edit and re-verify.`,
+          content:
+            `Continue working. If the declared verification command passes, output ${COMPLETE_MARKER} as the final line and stop. Otherwise make one targeted edit and re-verify.`
+            + echoSuffix,
         });
       }
     }

@@ -9,6 +9,7 @@ import type { CompletionRequest } from '../ai/types.js';
 import type { InferenceConfig } from '../config/types.js';
 import { asRecord, nowIso, readYamlFile, writeYamlFile } from './FoundryArtifacts.js';
 import { runFoundryToolAgent } from './FoundryToolAgent.js';
+import { runFixtureVerification } from './FixItProgressGate.js';
 import type { FoundryToolAgentTool } from './FoundryToolAgent.js';
 import {
   buildLexicalIndex,
@@ -944,9 +945,38 @@ export async function runFoundryCoderPatch(input: {
       }),
       tracePath,
       maxTurns: input.maxTurns ?? TOOL_AGENT_MAX_TURNS,
-      maxTokens: 16_384,
+      // 6K cap — was 16K, but the new quant tended to fill it with massive
+      // bare-text rumination turns (one 42K-char response tripped the 300s
+      // inference timeout). 6K leaves room for a planning paragraph + a
+      // tool call without permitting essay-length thinking-out-loud.
+      maxTokens: 6_144,
       temperature: 0.1,
       ...(extraTools.length ? { extraTools } : {}),
+      ...(fixItTools ? {
+        // Bare-text verify echo: every turn the model produces prose without
+        // a tool call, append the current verify diff to the reminder. Gives
+        // the model concrete state to react to instead of free-form
+        // rumination, which is the failure mode that caused the previous
+        // run's inference timeout (one bare-text turn at 42K chars).
+        onBareTextResponse: async (_turn: number): Promise<string | undefined> => {
+          try {
+            const v = await runFixtureVerification(input.repoRoot, selectedSpec.id);
+            const target = v.target;
+            if (!target || target.passed) return undefined;
+            const details = (target.diffDetails && target.diffDetails.length > 0)
+              ? target.diffDetails
+              : target.missing.map((path) => ({ path, expected: undefined, actual: undefined }));
+            const lines = details.slice(0, 8).map((d) => {
+              const exp = d.expected === undefined ? '(absent)' : typeof d.expected === 'string' ? d.expected : JSON.stringify(d.expected);
+              const act = d.actual === undefined ? '(absent)' : typeof d.actual === 'string' ? d.actual : JSON.stringify(d.actual);
+              return `- ${d.path}\n    expected: ${exp}\n    actual:   ${act}`;
+            }).join('\n');
+            return `Current verify state (the gate's view RIGHT NOW):\n${lines}\n\nReact to this — pick the next probe / edit that will close one of these gaps.`;
+          } catch {
+            return undefined;
+          }
+        },
+      } : {}),
       onProgress: async (event) => {
         await progress({
           phase: event.phase,
