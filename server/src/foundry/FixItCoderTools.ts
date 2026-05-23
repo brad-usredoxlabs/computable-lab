@@ -164,6 +164,136 @@ export function makeProbeTool(repoRoot: string): FoundryToolAgentTool {
   };
 }
 
+const INSPECT_EVENTS_HARNESS_REL = 'src/compiler/pipeline/fixtures/inspectEvents.ts';
+const INSPECT_EVENTS_MAX_CHARS = 8000;
+
+/**
+ * `inspect_events` — dump `terminalArtifacts.events` for a prompt in a
+ * scannable shape. List mode gives a per-event summary (position, eventId,
+ * event_type, labwareId, t_offset, detail keys); detail mode (position) gives
+ * the full event + colocated labStateDelta + resolvedRefs/resolvedLabwareRefs
+ * so the coder can cross-reference deps manually.
+ *
+ * Events in this codebase carry NO explicit dependency edges — ordering is
+ * array-position; deps are implicit through labStateDelta + resolved refs.
+ * The tool exposes that structure; it does not pretend to emit an adjacency
+ * list. Lookup uses position (stable across runs), not eventId (randomised).
+ */
+export function makeInspectEventsTool(repoRoot: string): FoundryToolAgentTool {
+  return {
+    definition: {
+      type: 'function',
+      function: {
+        name: 'inspect_events',
+        description:
+          'Inspect terminalArtifacts.events for a prompt. Without `position`: per-event '
+          + 'summary (position, eventId, event_type, labwareId, t_offset, detail keys). With '
+          + '`position`: full event at that index, plus colocated labStateDelta + '
+          + 'resolvedLabwareRefs + resolvedRefs so you can cross-reference dependencies '
+          + 'manually (events carry no explicit dep edges in this codebase).',
+        parameters: {
+          type: 'object',
+          properties: {
+            prompt: { type: 'string', description: 'The prompt to compile.' },
+            position: {
+              type: 'integer',
+              description:
+                'Optional. Zero-based index into the events array to drill into. Use list '
+                + 'mode first to discover positions. Position is stable across runs; eventId is not.',
+            },
+          },
+          required: ['prompt'],
+        },
+      },
+    },
+    handler: async (args) => {
+      const started = Date.now();
+      const prompt = typeof args['prompt'] === 'string' ? args['prompt'] : '';
+      const rawPosition = args['position'];
+      if (!prompt.trim()) {
+        return { ok: false, content: 'error: prompt is required', durationMs: Date.now() - started };
+      }
+      if (!existsSync(join(repoRoot, 'server', INSPECT_EVENTS_HARNESS_REL))) {
+        return { ok: false, content: 'inspect_events: harness unavailable', durationMs: Date.now() - started };
+      }
+      const harnessArgs = ['tsx', INSPECT_EVENTS_HARNESS_REL, '--prompt', prompt];
+      if (typeof rawPosition === 'number' && Number.isInteger(rawPosition)) {
+        harnessArgs.push('--position', String(rawPosition));
+      } else if (typeof rawPosition === 'string' && rawPosition.trim()) {
+        harnessArgs.push('--position', rawPosition.trim());
+      }
+      try {
+        const { stdout } = await execFileAsync('npx', harnessArgs, {
+          cwd: join(repoRoot, 'server'),
+          timeout: 120_000,
+          maxBuffer: 16 * 1024 * 1024,
+        });
+        const line = stdout.trim().split('\n').filter(Boolean).at(-1) ?? '{}';
+        const parsed = JSON.parse(line) as {
+          prompt?: string;
+          outcome?: string;
+          mode?: 'list' | 'detail';
+          totalEvents?: number;
+          events?: Array<{
+            position?: number;
+            eventId?: string | null;
+            event_type?: string | null;
+            labwareId?: string | null;
+            t_offset?: string | null;
+            detailKeys?: string[];
+          }>;
+          labStateDeltaPresent?: boolean;
+          resolvedLabwareRefsPresent?: boolean;
+          resolvedRefsPresent?: boolean;
+          position?: number;
+          found?: boolean;
+          event?: unknown;
+          labStateDelta?: unknown;
+          resolvedLabwareRefs?: unknown;
+          resolvedRefs?: unknown;
+          reason?: string;
+        };
+        if (parsed.mode === 'list') {
+          const flags = [
+            parsed.labStateDeltaPresent ? 'labStateDelta' : '',
+            parsed.resolvedLabwareRefsPresent ? 'resolvedLabwareRefs' : '',
+            parsed.resolvedRefsPresent ? 'resolvedRefs' : '',
+          ].filter(Boolean).join(', ') || '(none)';
+          const lines = (parsed.events ?? []).map((e) => {
+            const keys = (e.detailKeys ?? []).join(',');
+            return `  #${e.position}  ${e.event_type ?? '?'}${e.labwareId ? `  labware=${e.labwareId}` : ''}${e.t_offset ? `  t=${e.t_offset}` : ''}  details={${keys}}  id=${e.eventId ?? '?'}`;
+          }).join('\n') || '  (no events)';
+          const content = `inspect_events(${JSON.stringify(prompt)}): ${parsed.totalEvents ?? 0} events (outcome: ${parsed.outcome ?? '?'})\nColocated: ${flags}\n${lines}`;
+          return { ok: true, content, durationMs: Date.now() - started };
+        }
+        // detail mode
+        if (parsed.found === false) {
+          const content = `inspect_events: position not found.\n${parsed.reason ?? `total events: ${parsed.totalEvents ?? 0}`}`;
+          return { ok: true, content, durationMs: Date.now() - started };
+        }
+        const body = JSON.stringify(
+          {
+            event: parsed.event,
+            labStateDelta: parsed.labStateDelta,
+            resolvedLabwareRefs: parsed.resolvedLabwareRefs,
+            resolvedRefs: parsed.resolvedRefs,
+          },
+          null,
+          2,
+        );
+        const clipped = body.length > INSPECT_EVENTS_MAX_CHARS
+          ? `${body.slice(0, INSPECT_EVENTS_MAX_CHARS)}\n… [clipped ${body.length - INSPECT_EVENTS_MAX_CHARS} more chars]`
+          : body;
+        const content = `inspect_events(${JSON.stringify(prompt)}, position=${parsed.position}):\n${clipped}`;
+        return { ok: true, content, durationMs: Date.now() - started };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { ok: false, content: `inspect_events error: ${message}`, durationMs: Date.now() - started };
+      }
+    },
+  };
+}
+
 const PROBE_PASS_HARNESS_REL = 'src/compiler/pipeline/fixtures/probePass.ts';
 const PROBE_PASS_OUTPUT_CHARS = 8000;
 

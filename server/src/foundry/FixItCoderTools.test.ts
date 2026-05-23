@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makeInspectRegistryTool, makeProbePassTool, makeProbeTool, makeResolveTermTool, makeVerifyTool } from './FixItCoderTools.js';
+import { makeInspectEventsTool, makeInspectRegistryTool, makeProbePassTool, makeProbeTool, makeResolveTermTool, makeVerifyTool } from './FixItCoderTools.js';
 
 describe('makeVerifyTool', () => {
   it('exposes a no-arg verify tool', () => {
@@ -87,6 +87,31 @@ describe('makeProbePassTool', () => {
 
   it('reports unavailable when the harness is missing from the repo', async () => {
     const tool = makeProbePassTool('/nonexistent-repo-root');
+    const result = await tool.handler({ prompt: 'Place a 96-well plate on B2' });
+    expect(result.ok).toBe(false);
+    expect(result.content).toContain('unavailable');
+  });
+});
+
+describe('makeInspectEventsTool', () => {
+  it('exposes an inspect_events tool requiring prompt with optional integer position', () => {
+    const tool = makeInspectEventsTool('/repo');
+    expect(tool.definition.function.name).toBe('inspect_events');
+    expect(tool.definition.function.parameters.required).toContain('prompt');
+    expect(tool.definition.function.parameters.required).not.toContain('position');
+    const props = tool.definition.function.parameters.properties as Record<string, { type?: string }>;
+    expect(props['position']?.type).toBe('integer');
+  });
+
+  it('rejects an empty prompt without shelling out', async () => {
+    const tool = makeInspectEventsTool('/repo');
+    const result = await tool.handler({ prompt: '   ' });
+    expect(result.ok).toBe(false);
+    expect(result.content).toContain('prompt is required');
+  });
+
+  it('reports unavailable when the harness is missing from the repo', async () => {
+    const tool = makeInspectEventsTool('/nonexistent-repo-root');
     const result = await tool.handler({ prompt: 'Place a 96-well plate on B2' });
     expect(result.ok).toBe(false);
     expect(result.content).toContain('unavailable');
