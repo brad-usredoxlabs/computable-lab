@@ -1126,58 +1126,117 @@ interface RunFixItDriverResult {
   jobId?: string;
 }
 
-// Server-side probe of the failing prompt, run once at job start. The coder
-// arrives with the baseline symptom already in hand instead of having to
-// discover it via verify-then-read. The skill prompt instructs the model to
-// PROBE VARIATIONS itself from this baseline; we only emit the starting
-// point so it doesn't have to. Returns undefined on any failure (the loop
-// proceeds without it; degraded but not broken).
+// Server-side probe of the failing prompt, run once at job start. Returns
+// TWO things in one block so the coder arrives with both the baseline
+// symptom AND the intermediate pipeline state for the most-diagnostic
+// passes in hand — instead of spending its first 10 turns rediscovering
+// them via the same harness. The skill prompt instructs the model to
+// PROBE VARIATIONS from this baseline; we just supply the starting point.
+// Returns undefined on any failure (loop proceeds without it).
+const INITIAL_KEY_PASSES = ['deterministic_precompile', 'resolve_labware'] as const;
+
+async function fetchProbeOutput(
+  executionRoot: string,
+  failingPrompt: string,
+): Promise<{ outcome?: string; fields?: string[]; data?: Record<string, unknown> }> {
+  const { stdout } = await execFileAsync(
+    'npx',
+    ['tsx', 'src/compiler/pipeline/fixtures/probeCompile.ts', '--prompt', failingPrompt],
+    { cwd: join(executionRoot, 'server'), timeout: 60_000, maxBuffer: 8 * 1024 * 1024 },
+  );
+  const line = stdout.trim().split('\n').filter(Boolean).at(-1) ?? '{}';
+  return JSON.parse(line);
+}
+
+async function fetchProbePassOutput(
+  executionRoot: string,
+  failingPrompt: string,
+  passName: string,
+): Promise<{ exists?: boolean; output?: unknown }> {
+  const { stdout } = await execFileAsync(
+    'npx',
+    ['tsx', 'src/compiler/pipeline/fixtures/probePass.ts', '--prompt', failingPrompt, '--pass', passName],
+    { cwd: join(executionRoot, 'server'), timeout: 60_000, maxBuffer: 8 * 1024 * 1024 },
+  );
+  const line = stdout.trim().split('\n').filter(Boolean).at(-1) ?? '{}';
+  return JSON.parse(line);
+}
+
+function renderProbeFieldsBlock(parsed: { outcome?: string; fields?: string[]; data?: Record<string, unknown> }, failingPrompt: string): string {
+  const data = parsed.data ?? {};
+  const populated = (parsed.fields ?? [])
+    .filter((f) => {
+      const v = data[f];
+      if (v === undefined || v === null) return false;
+      if (Array.isArray(v) && v.length === 0) return false;
+      if (typeof v === 'object' && Object.keys(v as object).length === 0) return false;
+      return true;
+    })
+    .map((f) => {
+      const json = JSON.stringify(data[f], null, 2);
+      const clipped = json.length > 1500 ? `${json.slice(0, 1500)}\n… [clipped]` : json;
+      return `=== ${f} ===\n${clipped}`;
+    })
+    .join('\n\n');
+  return [
+    '## Initial probe of the failing prompt',
+    `What the compiler currently emits for ${JSON.stringify(failingPrompt)} (outcome: ${parsed.outcome ?? '?'}):`,
+    '',
+    populated || '(no fields populated)',
+  ].join('\n');
+}
+
+function renderProbePassBlock(passOutputs: Array<{ passName: string; output: unknown }>): string {
+  if (passOutputs.length === 0) return '';
+  const blocks = passOutputs.map(({ passName, output }) => {
+    const json = JSON.stringify(output, null, 2);
+    const clipped = json.length > 2500 ? `${json.slice(0, 2500)}\n… [clipped]` : json;
+    return `=== probe_pass "${passName}" ===\n${clipped}`;
+  });
+  return [
+    '## Intermediate pipeline state (most-diagnostic passes for the failing prompt)',
+    'If the diverging value is already wrong HERE, the bug lives in this pass or upstream of it.',
+    'If a field looks right here but wrong in the final TerminalArtifacts above, walk downstream with `probe_pass(prompt, "<pass>")`.',
+    '',
+    blocks.join('\n\n'),
+  ].join('\n');
+}
+
 async function probeFailingPromptForCoder(
   executionRoot: string,
   failingPrompt: string,
   log: { warn: (obj: Record<string, unknown>, msg: string) => void },
 ): Promise<string | undefined> {
+  let probeBlock = '';
   try {
-    const { stdout } = await execFileAsync(
-      'npx',
-      ['tsx', 'src/compiler/pipeline/fixtures/probeCompile.ts', '--prompt', failingPrompt],
-      { cwd: join(executionRoot, 'server'), timeout: 60_000, maxBuffer: 8 * 1024 * 1024 },
-    );
-    const line = stdout.trim().split('\n').filter(Boolean).at(-1) ?? '{}';
-    const parsed = JSON.parse(line) as {
-      outcome?: string;
-      fields?: string[];
-      data?: Record<string, unknown>;
-    };
-    const data = parsed.data ?? {};
-    const populated = (parsed.fields ?? [])
-      .filter((f) => {
-        const v = data[f];
-        if (v === undefined || v === null) return false;
-        if (Array.isArray(v) && v.length === 0) return false;
-        if (typeof v === 'object' && Object.keys(v as object).length === 0) return false;
-        return true;
-      })
-      .map((f) => {
-        const json = JSON.stringify(data[f], null, 2);
-        const clipped = json.length > 1500 ? `${json.slice(0, 1500)}\n… [clipped]` : json;
-        return `=== ${f} ===\n${clipped}`;
-      })
-      .join('\n\n');
-    return [
-      '## Initial probe of the failing prompt',
-      `What the compiler currently emits for ${JSON.stringify(failingPrompt)} (outcome: ${parsed.outcome ?? '?'}):`,
-      '',
-      populated || '(no fields populated)',
-      '',
-      'Now use `probe` to compare VARIATIONS of the prompt (single-clause, reversed order,',
-      'modifier removed, verb/preposition swapped). The variation that flips a field names the',
-      'pipeline stage that owns the bug. Skill triage in the system prompt routes you to a method.',
-    ].join('\n');
+    probeBlock = renderProbeFieldsBlock(await fetchProbeOutput(executionRoot, failingPrompt), failingPrompt);
   } catch (err) {
     log.warn({ err }, 'fix-it: initial probe failed; continuing without it');
     return undefined;
   }
+
+  // Pass probes are best-effort — a failure on any one is skipped, not fatal.
+  const passOutputs: Array<{ passName: string; output: unknown }> = [];
+  for (const passName of INITIAL_KEY_PASSES) {
+    try {
+      const r = await fetchProbePassOutput(executionRoot, failingPrompt, passName);
+      if (r.exists !== false && r.output !== undefined && r.output !== null) {
+        passOutputs.push({ passName, output: r.output });
+      }
+    } catch (err) {
+      log.warn({ err, passName }, 'fix-it: initial probe_pass failed; skipping pass');
+    }
+  }
+  const passBlock = renderProbePassBlock(passOutputs);
+
+  return [
+    probeBlock,
+    passBlock,
+    '',
+    'Now use `probe` to compare VARIATIONS of the prompt (single-clause, reversed order,',
+    'modifier removed, verb/preposition swapped). The variation that flips a field names the',
+    'pipeline stage that owns the bug. Skill triage in the system prompt routes you to a method.',
+  ].filter(Boolean).join('\n\n');
 }
 
 async function runFixItDriver(opts: RunFixItDriverOpts): Promise<RunFixItDriverResult> {
