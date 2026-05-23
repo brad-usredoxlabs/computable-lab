@@ -29,6 +29,7 @@ export interface FoundryToolAgentProgressEvent {
     | 'tool_started'
     | 'tool_finished'
     | 'model_response'
+    | 'model_reasoning'
     | 'complete'
     | 'max_turns'
     | 'failed';
@@ -332,6 +333,22 @@ export async function runFoundryToolAgent(input: FoundryToolAgentInput): Promise
       // Trace the FULL response (including reasoning_content / reasoning) so
       // the persisted trace captures the model's private thinking for debug.
       await trace(input.tracePath, { type: 'assistant', turn, message: assistantMessage });
+      // Surface the model's reasoning as a progress event so the UI can show
+      // "what the AI is thinking" per turn (rather than only tool names).
+      const rawReasoning =
+        (assistantMessage as { reasoning_content?: unknown; reasoning?: unknown }).reasoning_content
+        ?? (assistantMessage as { reasoning_content?: unknown; reasoning?: unknown }).reasoning;
+      if (typeof rawReasoning === 'string' && rawReasoning.length > 0) {
+        const REASONING_PREVIEW_CHARS = 800;
+        const preview = rawReasoning.length > REASONING_PREVIEW_CHARS
+          ? `${rawReasoning.slice(0, REASONING_PREVIEW_CHARS)}…`
+          : rawReasoning;
+        await progress(input, {
+          phase: 'model_reasoning',
+          message: `Model reasoning (${rawReasoning.length} chars)`,
+          details: { turn, chars: rawReasoning.length, preview },
+        });
+      }
       // …but strip reasoning_content / reasoning before pushing into the
       // outgoing transcript — reasoning is a one-shot output, not part of the
       // conversation history; echoing it back bloats prompt tokens every turn

@@ -1463,6 +1463,58 @@
   overflow-wrap: anywhere;
 }
 
+/* Reasoning rows: slightly louder + a subtle left border so 💭 thinking
+   reads as distinct from raw tool calls. */
+.event-editor .fixit-panel__progress-log-item--reasoning {
+  border-left: 2px solid var(--ee-accent, #7aa2f7);
+  padding-left: 6px;
+  margin-left: -8px;
+}
+
+/* Collapsible details: summary is the normal row; payload is the JSON /
+   reasoning text shown on expansion. */
+.event-editor .fixit-panel__progress-details {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.event-editor .fixit-panel__progress-details > summary {
+  cursor: pointer;
+  list-style: none;
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+}
+
+.event-editor .fixit-panel__progress-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.event-editor .fixit-panel__progress-details[open] > summary::after {
+  content: " ▾";
+  color: var(--ee-muted);
+}
+
+.event-editor .fixit-panel__progress-details:not([open]) > summary::after {
+  content: " ▸";
+  color: var(--ee-muted);
+}
+
+.event-editor .fixit-panel__progress-payload {
+  margin: 6px 0 0 64px;
+  padding: 6px 8px;
+  background: var(--ee-surface-muted, rgba(255, 255, 255, 0.04));
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 280px;
+  overflow-y: auto;
+  color: var(--ee-text);
+}
+
 @keyframes fixit-spin {
   to { transform: rotate(360deg); }
 }

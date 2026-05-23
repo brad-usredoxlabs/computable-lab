@@ -1175,7 +1175,7 @@ function ApplyingView({
   onCancel,
 }: {
   stage: 'writing_fixture' | 'writing_spec' | 'coder_running' | 'critic_running' | 'senior_retry' | null
-  progress: Array<{ source: 'server' | 'coder' | 'critic'; phase: string; message: string; ts: string }>
+  progress: Array<{ source: 'server' | 'coder' | 'critic'; phase: string; message: string; ts: string; details?: Record<string, unknown> }>
   reasoning?: string
   canCancel: boolean
   canceling: boolean
@@ -1208,17 +1208,74 @@ function ApplyingView({
       {progress.length > 0 ? (
         <ol className="fixit-panel__progress-log" aria-label="Fix progress">
           {progress.slice(-12).map((entry, index) => (
-            <li
+            <ProgressEntry
               key={`${entry.ts}-${entry.source}-${entry.phase}-${index}`}
-              className={`fixit-panel__progress-log-item fixit-panel__progress-log-item--${entry.source}`}
-            >
-              <span className="fixit-panel__progress-source">{entry.source}</span>
-              <span className="fixit-panel__progress-message">{entry.message}</span>
-            </li>
+              entry={entry}
+            />
           ))}
         </ol>
       ) : null}
     </div>
+  )
+}
+
+/**
+ * Per-event row in the apply progress log. Most events render as a single
+ * line (source + message). When the event carries diagnostic details
+ * (tool args, tool result preview, model reasoning) we render a
+ * collapsible <details> so the user can drill in without flooding the log.
+ */
+function ProgressEntry({ entry }: {
+  entry: { source: 'server' | 'coder' | 'critic'; phase: string; message: string; ts: string; details?: Record<string, unknown> }
+}) {
+  const details = entry.details ?? {}
+  const args = details['args']
+  const preview = typeof details['preview'] === 'string' ? details['preview'] : undefined
+  const isToolStart = entry.phase === 'tool_started'
+  const isToolFinish = entry.phase === 'tool_finished'
+  const isReasoning = entry.phase === 'model_reasoning'
+
+  const hasArgs = isToolStart && args !== undefined && args !== null && (typeof args !== 'object' || Object.keys(args as object).length > 0)
+  const hasPreview = (isToolFinish || isReasoning) && typeof preview === 'string' && preview.length > 0
+
+  const className = [
+    'fixit-panel__progress-log-item',
+    `fixit-panel__progress-log-item--${entry.source}`,
+    isReasoning ? 'fixit-panel__progress-log-item--reasoning' : '',
+  ].filter(Boolean).join(' ')
+
+  const messageDisplay = isReasoning
+    ? <span className="fixit-panel__progress-message">💭 {entry.message}</span>
+    : <span className="fixit-panel__progress-message">{entry.message}</span>
+
+  if (!hasArgs && !hasPreview) {
+    return (
+      <li className={className}>
+        <span className="fixit-panel__progress-source">{entry.source}</span>
+        {messageDisplay}
+      </li>
+    )
+  }
+
+  return (
+    <li className={className}>
+      <details className="fixit-panel__progress-details">
+        <summary className="fixit-panel__progress-summary">
+          <span className="fixit-panel__progress-source">{entry.source}</span>
+          {messageDisplay}
+        </summary>
+        {hasArgs ? (
+          <pre className="fixit-panel__progress-payload" aria-label="tool args">
+            {`args: ${typeof args === 'string' ? args : JSON.stringify(args, null, 2)}`}
+          </pre>
+        ) : null}
+        {hasPreview ? (
+          <pre className="fixit-panel__progress-payload" aria-label={isReasoning ? 'reasoning' : 'tool result'}>
+            {preview}
+          </pre>
+        ) : null}
+      </details>
+    </li>
   )
 }
 
