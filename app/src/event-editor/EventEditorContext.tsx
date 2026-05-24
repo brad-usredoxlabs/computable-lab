@@ -273,7 +273,7 @@ type Action =
   | { type: 'request_retry_prompt'; prompt: string }
   | { type: 'consume_retry_prompt' }
 
-const DEFAULT_PLATFORM_ID = 'opentrons_flex'
+const DEFAULT_PLATFORM_ID = 'manual'
 
 const initialState: EventEditorState = {
   loadState: 'idle',
@@ -381,6 +381,10 @@ function findPlacementAtSlot(
   return placements.find((p) => p.location.kind === 'slot' && p.location.slotId === slotId) ?? null
 }
 
+function isSinglePlateSlotLocation(location: PlacementLocation): boolean {
+  return location.kind === 'slot' && location.slotId === 'PLATE'
+}
+
 function reducer(state: EventEditorState, action: Action): EventEditorState {
   switch (action.type) {
     case 'load_start':
@@ -464,7 +468,10 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       }
       // If dropping onto an occupied slot, displace the existing occupant to the lawn.
       let placements = state.placements
-      if (action.location.kind === 'slot') {
+      const singlePlateSlot = isSinglePlateSlotLocation(action.location)
+      if (singlePlateSlot) {
+        placements = placements.filter((p) => !isSinglePlateSlotLocation(p.location))
+      } else if (action.location.kind === 'slot') {
         const existing = findPlacementAtSlot(placements, action.location.slotId)
         if (existing) {
           placements = placements.map((p) =>
@@ -478,6 +485,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         ...state,
         labwares: { ...state.labwares, [action.labware.labwareId]: action.labware },
         placements: [...placements, placement],
+        ...(singlePlateSlot ? { focusPlacementId: placement.placementId } : {}),
       }
     }
     case 'move_placement': {
