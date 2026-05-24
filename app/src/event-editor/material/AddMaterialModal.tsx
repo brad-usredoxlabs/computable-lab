@@ -102,8 +102,10 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
     actions.applyAddMaterial({
       labwareId: labware.labwareId,
       wells,
-      materialRef: state.picked.recordId,
+      materialRef: state.picked.ref,
       volume_uL,
+      ...(state.picked.concentration ? { concentration: state.picked.concentration } : {}),
+      ...(state.picked.compositionSnapshot ? { compositionSnapshot: state.picked.compositionSnapshot } : {}),
       ...(count !== undefined ? { count } : {}),
     })
     onClose()
@@ -571,4 +573,3 @@ function PickTypeView({
     </div>
   )
 }
-

@@ -33,6 +33,26 @@ describe('mentionToToken', () => {
     expect(mentionToToken(m)).toBe('[[aliquot:aliq-1|Stock A]]')
   })
 
+  it('material-instance', () => {
+    const m: SlashMention = {
+      type: 'material',
+      entityKind: 'material-instance',
+      id: 'MINST-1',
+      label: 'HepG2 P12',
+    }
+    expect(mentionToToken(m)).toBe('[[material-instance:MINST-1|HepG2 P12]]')
+  })
+
+  it('vendor-product', () => {
+    const m: SlashMention = {
+      type: 'material',
+      entityKind: 'vendor-product',
+      id: 'VP-1',
+      label: 'CellROX Deep Red',
+    }
+    expect(mentionToToken(m)).toBe('[[vendor-product:VP-1|CellROX Deep Red]]')
+  })
+
   it('labware', () => {
     const m: SlashMention = { type: 'labware', id: 'lbw-1', label: '96 well' }
     expect(mentionToToken(m)).toBe('[[labware:lbw-1|96 well]]')
@@ -103,6 +123,16 @@ describe('mentionBadge', () => {
     expect(
       mentionBadge({ type: 'material', entityKind: 'aliquot', id: 'x', label: 'x' }),
     ).toBe('Instance')
+  })
+  it('material-instance → Instance', () => {
+    expect(
+      mentionBadge({ type: 'material', entityKind: 'material-instance', id: 'x', label: 'x' }),
+    ).toBe('Instance')
+  })
+  it('vendor-product → Vendor', () => {
+    expect(
+      mentionBadge({ type: 'material', entityKind: 'vendor-product', id: 'x', label: 'x' }),
+    ).toBe('Vendor')
   })
   it('labware', () => {
     expect(mentionBadge({ type: 'labware', id: 'x', label: 'x' })).toBe('Labware')

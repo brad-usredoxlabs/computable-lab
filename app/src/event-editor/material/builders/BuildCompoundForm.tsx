@@ -149,6 +149,12 @@ export function BuildCompoundForm({
 
       onSaved({
         recordId: formulationResp.materialSpecId,
+        ref: {
+          kind: 'record',
+          id: formulationResp.materialSpecId,
+          type: 'material-spec',
+          label: outputName.trim(),
+        },
         label: outputName.trim(),
         hasCellComposition: false,
         ...(concentration ? { concentration } : {}),

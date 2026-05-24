@@ -125,6 +125,12 @@ export function BuildCellsForm({
 
       onSaved({
         recordId: response.materialInstanceId,
+        ref: {
+          kind: 'record',
+          id: response.materialInstanceId,
+          type: 'material-instance',
+          label: trimmedName,
+        },
         label: trimmedName,
         // Mark `hasCellComposition` so the configure step shows the
         // cell-count field. The material itself doesn't have an actual

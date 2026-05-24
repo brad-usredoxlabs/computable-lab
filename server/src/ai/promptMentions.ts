@@ -2,12 +2,13 @@
  * Server-side mention parser for prompt tokens.
  *
  * This module exports parsing semantics that mirror the app-side parser
- * for material, material-spec, aliquot, labware, and selection tokens.
+ * for material, material-spec, material-instance, aliquot, vendor-product,
+ * labware, and selection tokens.
  */
 
 export interface PromptMention {
   type: 'material' | 'labware' | 'selection' | 'protocol';
-  entityKind?: 'material' | 'material-spec' | 'aliquot' | 'protocol' | 'graph-component';
+  entityKind?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product' | 'protocol' | 'graph-component';
   selectionKind?: 'source' | 'target';
   id?: string;
   label: string;
@@ -31,7 +32,7 @@ export type PromptMentionMatch = ParsedPromptMention;
  * The regex pattern for matching mention tokens.
  * Format: [[kind:id|label]] or [[kind:id|label|extra]]
  */
-const MENTION_PATTERN = /\[\[(material|material-spec|aliquot|labware|selection|protocol|graph-component):(.*?)\]\]/g;
+const MENTION_PATTERN = /\[\[(material|material-spec|material-instance|aliquot|vendor-product|labware|selection|protocol|graph-component):(.*?)\]\]/g;
 
 /**
  * Parse all mention matches from a prompt string.
@@ -54,7 +55,7 @@ export function parsePromptMentionMatches(prompt: string): ParsedPromptMention[]
     const raw = match[0];
     const end = start + raw.length;
 
-    if (kind === 'material' || kind === 'material-spec' || kind === 'aliquot') {
+    if (kind === 'material' || kind === 'material-spec' || kind === 'material-instance' || kind === 'aliquot' || kind === 'vendor-product') {
       const [id = '', label = id] = body.split('|');
       if (!id) continue;
       mentions.push({

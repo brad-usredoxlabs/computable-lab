@@ -11,8 +11,9 @@ import type {
   WellSelection,
 } from './types'
 import type { WellId } from '../types/plate'
-import type { PlateEvent } from '../types/events'
+import type { AddMaterialDetails, PlateEvent } from '../types/events'
 import { generateEventId } from '../types/events'
+import type { Ref } from '../types/ref'
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -218,6 +219,32 @@ export interface EventEditorState {
   tipState: TipState
   preview: EventEditorPreview | null
   fixIt: FixItState
+}
+
+export function addMaterialRefDetails(ref: Ref): Pick<
+  AddMaterialDetails,
+  | 'material_ref'
+  | 'material_spec_ref'
+  | 'aliquot_ref'
+  | 'material_instance_ref'
+  | 'vendor_product_ref'
+> {
+  if (ref.kind === 'ontology') {
+    return { material_ref: ref }
+  }
+  if (ref.type === 'material-spec') {
+    return { material_spec_ref: ref }
+  }
+  if (ref.type === 'aliquot') {
+    return { aliquot_ref: ref }
+  }
+  if (ref.type === 'material-instance') {
+    return { material_instance_ref: ref }
+  }
+  if (ref.type === 'vendor-product') {
+    return { vendor_product_ref: ref }
+  }
+  return { material_ref: ref }
 }
 
 type Action =
@@ -818,8 +845,10 @@ export interface EventEditorActions {
   applyAddMaterial: (input: {
     labwareId: string
     wells: WellId[]
-    materialRef: string
+    materialRef: Ref
     volume_uL: number
+    concentration?: AddMaterialDetails['concentration']
+    compositionSnapshot?: AddMaterialDetails['composition_snapshot']
     /**
      * Cell-count payload (cells/well). Set when the picked material has
      * a `cells` composition role; rides alongside `volume_uL` so the
@@ -922,7 +951,7 @@ export function EventEditorProvider({ runId, children }: ProviderProps) {
       setSelection: (selection) => dispatch({ type: 'set_selection', selection }),
       clearSelection: () => dispatch({ type: 'set_selection', selection: null }),
       appendEvent: (event) => dispatch({ type: 'append_event', event }),
-      applyAddMaterial: ({ labwareId, wells, materialRef, volume_uL, count }) => {
+      applyAddMaterial: ({ labwareId, wells, materialRef, volume_uL, concentration, compositionSnapshot, count }) => {
         dispatch({
           type: 'append_event',
           event: {
@@ -931,8 +960,10 @@ export function EventEditorProvider({ runId, children }: ProviderProps) {
             details: {
               labwareId,
               wells,
-              material_ref: materialRef,
+              ...addMaterialRefDetails(materialRef),
               volume: { value: volume_uL, unit: 'uL' },
+              ...(concentration ? { concentration } : {}),
+              ...(compositionSnapshot ? { composition_snapshot: compositionSnapshot } : {}),
               ...(typeof count === 'number' && Number.isFinite(count) ? { count } : {}),
             },
           },

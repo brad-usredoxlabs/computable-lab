@@ -1,8 +1,8 @@
 /**
  * Default resolvers for the five built-in slash commands. Each resolver
- * queries the Phase 1 JSON-LD index for record-driven kinds (material,
- * labware, protocol) and reads from the cross-endpoint `SelectionContext`
- * for the editor-driven kinds (source, target).
+ * queries the existing record/search surfaces for record-driven kinds and
+ * reads from the cross-endpoint `SelectionContext` for the editor-driven
+ * kinds (source, target).
  *
  * The resolvers are exported individually so consumers can override one
  * (e.g. a future endpoint that wants to inject in-deck labware ahead of
@@ -10,33 +10,25 @@
  */
 
 import { searchJsonLd } from '../../api/jsonLdSearchClient'
+import { apiClient, type FormulationSummary, type MaterialSearchItem } from '../../api/client'
 import type {
   SlashResolver,
   SlashResolverContext,
+  SlashMention,
   SlashSuggestion,
 } from './types'
 
 const PAGE = 8
+const MATERIAL_PAGE = 12
 
 export const resolveMaterial: SlashResolver = async (query, ctx) => {
-  const res = await searchJsonLd({
-    q: query.trim() || undefined,
-    type: 'material',
-    limit: PAGE,
-  })
+  const q = query.trim()
+  const [materialRes, formulations] = await Promise.all([
+    apiClient.searchMaterials({ q, limit: MATERIAL_PAGE * 2 }),
+    apiClient.getFormulationsSummary({ q, limit: MATERIAL_PAGE }),
+  ])
   abortIfNeeded(ctx)
-  return res.hits.map((hit) => ({
-    key: `material:${hit.recordId}`,
-    label: hit.label,
-    badge: 'Concept',
-    subtitle: hit.recordId,
-    mention: {
-      type: 'material',
-      entityKind: 'material',
-      id: hit.recordId,
-      label: hit.label,
-    },
-  }))
+  return materialSuggestions(materialRes.items, formulations).slice(0, MATERIAL_PAGE)
 }
 
 export const resolveLabware: SlashResolver = async (query, ctx) => {
@@ -182,6 +174,78 @@ function formatSelectionLabel(
 ): string {
   const preview = wells.length > 6 ? `${wells.slice(0, 6).join(', ')}…` : wells.join(', ')
   return `${prefix}: ${labwareLabel ?? 'selection'} ${preview}`.trim()
+}
+
+type MaterialMentionKind = Extract<SlashMention, { type: 'material' }>['entityKind']
+
+const MATERIAL_CATEGORY_RANK: Record<MaterialSearchItem['category'], number> = {
+  'saved-stock': 0,
+  'vendor-reagent': 1,
+  'prepared-material': 2,
+  'biological-derived': 3,
+  'concept-only': 4,
+}
+
+function materialSuggestions(
+  items: MaterialSearchItem[],
+  formulations: FormulationSummary[],
+): SlashSuggestion[] {
+  const formulationItems: MaterialSearchItem[] = formulations.map((summary) => ({
+    recordId: summary.outputSpec.id,
+    kind: 'material-spec',
+    title: summary.outputSpec.name,
+    category: 'saved-stock',
+    subtitle: [
+      summary.outputSpec.concentration
+        ? `${summary.outputSpec.concentration.value} ${summary.outputSpec.concentration.unit}`
+        : null,
+      summary.outputSpec.solventLabel ? `in ${summary.outputSpec.solventLabel}` : null,
+    ].filter(Boolean).join(' ') || 'Saved stock or formulation',
+  }))
+
+  const seen = new Set<string>()
+  return [...formulationItems, ...items]
+    .filter((item) => {
+      if (seen.has(item.recordId)) return false
+      seen.add(item.recordId)
+      return true
+    })
+    .sort((a, b) => {
+      const ar = MATERIAL_CATEGORY_RANK[a.category] ?? 10
+      const br = MATERIAL_CATEGORY_RANK[b.category] ?? 10
+      return ar === br ? a.title.localeCompare(b.title) : ar - br
+    })
+    .map((item) => {
+      const entityKind = materialMentionKind(item.kind)
+      const mention: Extract<SlashMention, { type: 'material' }> = {
+        type: 'material',
+        entityKind,
+        id: item.recordId,
+        label: item.title,
+      }
+      return {
+        key: `${entityKind}:${item.recordId}`,
+        label: item.title,
+        badge: materialBadge(entityKind),
+        subtitle: item.subtitle || item.recordId,
+        mention,
+      }
+    })
+}
+
+function materialMentionKind(kind: string): MaterialMentionKind {
+  if (kind === 'material-spec') return 'material-spec'
+  if (kind === 'material-instance') return 'material-instance'
+  if (kind === 'aliquot') return 'aliquot'
+  if (kind === 'vendor-product') return 'vendor-product'
+  return 'material'
+}
+
+function materialBadge(kind: MaterialMentionKind): string {
+  if (kind === 'material-spec') return 'Formulation'
+  if (kind === 'material-instance' || kind === 'aliquot') return 'Instance'
+  if (kind === 'vendor-product') return 'Vendor'
+  return 'Concept'
 }
 
 function abortIfNeeded(ctx: SlashResolverContext): void {

@@ -60,6 +60,40 @@ describe('parsePromptMentionMatches', () => {
     });
   });
 
+  describe('material-instance and vendor-product tokens', () => {
+    it('should parse a single material-instance mention', () => {
+      const prompt = 'Seed [[material-instance:MINST-HEPG2|HepG2 P12]] into the plate';
+      const result = parsePromptMentionMatches(prompt);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        raw: '[[material-instance:MINST-HEPG2|HepG2 P12]]',
+        mention: {
+          type: 'material',
+          entityKind: 'material-instance',
+          id: 'MINST-HEPG2',
+          label: 'HepG2 P12',
+        },
+      });
+    });
+
+    it('should parse a single vendor-product mention', () => {
+      const prompt = 'Add [[vendor-product:VP-CELLROX|CellROX Deep Red]]';
+      const result = parsePromptMentionMatches(prompt);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        raw: '[[vendor-product:VP-CELLROX|CellROX Deep Red]]',
+        mention: {
+          type: 'material',
+          entityKind: 'vendor-product',
+          id: 'VP-CELLROX',
+          label: 'CellROX Deep Red',
+        },
+      });
+    });
+  });
+
   describe('material tokens', () => {
     it('should parse a single material mention', () => {
       const prompt = 'Add [[material:MAT-789|Ethanol]] to the mixture';

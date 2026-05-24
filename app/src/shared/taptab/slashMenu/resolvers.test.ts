@@ -56,22 +56,69 @@ function mockSearchResponse(
 }
 
 describe('resolveMaterial', () => {
-  it('maps JSON-LD hits to material suggestions', async () => {
-    mockSearchResponse([
-      { recordId: 'MAT-1', kind: 'material', label: 'Tris' },
-      { recordId: 'MAT-2', kind: 'material', label: 'NaCl' },
-    ])
+  it('maps material search hits and formulation summaries to material suggestions', async () => {
+    fetchSpy
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              recordId: 'MINST-HEPG2',
+              kind: 'material-instance',
+              title: 'HepG2 P12',
+              category: 'prepared-material',
+              subtitle: 'Existing prepared material',
+            },
+            {
+              recordId: 'MAT-TRIS',
+              kind: 'material',
+              title: 'Tris',
+              category: 'concept-only',
+            },
+          ],
+        }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              recipeId: 'REC-ROT',
+              recipeName: 'Rotenone stock',
+              recipeTags: [],
+              outputSpec: {
+                id: 'MSP-ROT-1MM',
+                name: '1 mM rotenone in DMSO',
+                concentration: { value: 1, unit: 'mM' },
+                solventLabel: 'DMSO',
+              },
+              inputRoles: [],
+              steps: [],
+              availableInstances: [],
+            },
+          ],
+        }),
+      } as Response)
+
     const out = await resolveMaterial('tris', ctx())
-    expect(out).toHaveLength(2)
+    expect(out).toHaveLength(3)
     expect(out[0]).toMatchObject({
-      key: 'material:MAT-1',
-      label: 'Tris',
-      badge: 'Concept',
+      key: 'material-spec:MSP-ROT-1MM',
+      label: '1 mM rotenone in DMSO',
+      badge: 'Formulation',
       mention: {
         type: 'material',
-        entityKind: 'material',
-        id: 'MAT-1',
-        label: 'Tris',
+        entityKind: 'material-spec',
+        id: 'MSP-ROT-1MM',
+      },
+    })
+    expect(out[1]).toMatchObject({
+      key: 'material-instance:MINST-HEPG2',
+      badge: 'Instance',
+      mention: {
+        type: 'material',
+        entityKind: 'material-instance',
+        id: 'MINST-HEPG2',
       },
     })
   })
