@@ -1,0 +1,59 @@
+# UI specification for MechanismModel records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/mechanism-model.schema.yaml"
+
+display:
+  titleField: "$.title"
+  icon: "mechanism"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.title"
+      widget: "text"
+      label: "Title"
+      required: true
+    - path: "$.description"
+      widget: "textarea"
+      label: "Description"
+  - title: "Nodes"
+    fields:
+    - path: "$.nodes"
+      widget: "array"
+      label: "Nodes"
+      required: true
+  - title: "Edges"
+    fields:
+    - path: "$.edges"
+      widget: "array"
+      label: "Edges"
+      required: true
+  - title: "Interventions"
+    fields:
+    - path: "$.interventions"
+      widget: "array"
+      label: "Interventions"
+  - title: "Tags"
+    fields:
+    - path: "$.tags"
+      widget: "tags"
+      label: "Tags"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "180px"
+  - path: "$.title"
+    label: "Title"

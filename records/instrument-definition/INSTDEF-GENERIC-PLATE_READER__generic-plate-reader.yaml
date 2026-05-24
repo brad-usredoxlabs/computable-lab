@@ -17,4 +17,8 @@ supported_readout_def_refs:
     id: RDEF-PLATE-ABS450
     type: readout-definition
     label: Absorbance 450 nm
+  - kind: record
+    id: RDEF-PLATE-NADH-AF
+    type: readout-definition
+    label: NADH Autofluorescence
 title: Generic Plate Reader

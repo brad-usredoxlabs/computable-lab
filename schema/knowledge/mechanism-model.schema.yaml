@@ -1,0 +1,188 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/mechanism-model.schema.yaml"
+title: "MechanismModel"
+description: >
+  A typed-node + claim-backed-edge graph + interventions. Assembles
+  atomic claim records into a testable causal chain so agents can
+  answer queries like "what blocks this mechanism?" or "which assays
+  test this edge?". Atomic claims remain the source of truth and stay
+  reusable; mechanism-model is a lightweight structural wrapper.
+  See docs/knowledge-layer-canonical-example.md for the canonical
+  PPARα → ROS via β-ox-driven NADH reductive stress example.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id, title, nodes, edges ]
+
+properties:
+  kind:
+    const: "mechanism-model"
+
+  id:
+    type: string
+    pattern: '^MECH-[A-Za-z0-9_-]+$'
+    description: "Stable identifier (e.g., MECH-PPARA-ROS-001)."
+
+  title:
+    type: string
+    minLength: 1
+    description: "Human-readable label for the mechanism."
+
+  description:
+    type: string
+
+  nodes:
+    type: array
+    minItems: 1
+    description: >
+      Typed nodes in the mechanism graph. Each node has a local id
+      (referenced by edges and interventions) and a kind tag. Kinds are
+      free strings; recommended values are perturbation, process, state,
+      redox_state, feature, endpoint.
+    items:
+      $ref: "#/$defs/Node"
+
+  edges:
+    type: array
+    minItems: 1
+    description: >
+      Edges between nodes, each backed by an atomic claim record. The
+      predicate of the edge lives on the referenced claim (single source
+      of truth); edge.subject and edge.object reference node ids in
+      this mechanism.
+    items:
+      $ref: "#/$defs/Edge"
+
+  interventions:
+    type: array
+    description: >
+      Materials that perturb the mechanism. An intervention either
+      blocks a specific edge (e.g. an inhibitor) or modulates a node
+      (e.g. an exogenous substrate that shifts a redox state). The
+      expected_effect declares the predicted observable change on a
+      named readout.
+    items:
+      $ref: "#/$defs/Intervention"
+
+  status:
+    type: string
+    enum: [ active, retracted ]
+    default: active
+    description: "Lifecycle state. Retracted records remain for provenance but are excluded from active queries."
+
+  retraction:
+    type: object
+    additionalProperties: false
+    description: "Details of retraction. Present only when status == retracted."
+    properties:
+      reason:
+        type: string
+      retracted_at:
+        type: string
+        format: date-time
+      retracted_by:
+        $ref: "./datatypes/ref.schema.yaml"
+      superseded_by:
+        $ref: "./datatypes/ref.schema.yaml"
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+$defs:
+  Node:
+    type: object
+    additionalProperties: false
+    required: [ id, kind ]
+    properties:
+      id:
+        type: string
+        minLength: 1
+        description: "Node id, local to this mechanism (e.g., 'ppara_agonism')."
+      kind:
+        type: string
+        minLength: 1
+        description: >
+          Node kind tag. Free string; recommended values are
+          perturbation, process, state, redox_state, feature, endpoint.
+      label:
+        type: string
+        description: "Human-readable label for display."
+      ref:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: >
+          Optional canonical entity ref (ontology term or record) that
+          this node represents. Use when the node corresponds to a
+          well-known concept; lint can warn if multiple nodes reference
+          the same ontology term within one mechanism.
+
+  Edge:
+    type: object
+    additionalProperties: false
+    required: [ id, claim_ref, subject, object ]
+    properties:
+      id:
+        type: string
+        minLength: 1
+        description: "Edge id, local to this mechanism (e.g., 'E-ppara-to-bo'). Referenced by interventions.blocks_edge."
+      claim_ref:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Reference to the atomic claim record that this edge asserts. The claim carries subject/predicate/object as ontology/record refs."
+      subject:
+        type: string
+        minLength: 1
+        description: "Local node id playing the subject role for this edge."
+      object:
+        type: string
+        minLength: 1
+        description: "Local node id playing the object role for this edge."
+      note:
+        type: string
+        description: "Optional note about how the claim instantiates in this mechanism."
+
+  Intervention:
+    type: object
+    additionalProperties: false
+    required: [ material_ref, expected_effect ]
+    properties:
+      material_ref:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Material (ontology term, vendor product, or record) that perturbs the mechanism."
+      blocks_edge:
+        type: string
+        minLength: 1
+        description: "Local edge id this intervention blocks. Mutually exclusive with modulates_node."
+      modulates_node:
+        type: string
+        minLength: 1
+        description: "Local node id this intervention modulates (e.g., shifts a redox state). Mutually exclusive with blocks_edge."
+      expected_effect:
+        type: object
+        additionalProperties: false
+        required: [ direction ]
+        description: "Predicted observable change when this intervention is applied."
+        properties:
+          readout_def_ref:
+            $ref: "./datatypes/ref.schema.yaml"
+            description: "Readout definition this prediction is about."
+          direction:
+            type: string
+            enum: [ increased, decreased, no_change, mixed, unknown ]
+          relative_to:
+            type: string
+            description: "Free-text comparator (e.g., 'clofibrate_alone', 'vehicle_control')."
+          magnitude:
+            type: object
+            additionalProperties: true
+            description: "Optional rough magnitude expectation."
+      note:
+        type: string
+    oneOf:
+      - required: [ blocks_edge ]
+        not: { required: [ modulates_node ] }
+      - required: [ modulates_node ]
+        not: { required: [ blocks_edge ] }

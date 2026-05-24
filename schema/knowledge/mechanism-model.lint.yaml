@@ -1,0 +1,10 @@
+# Lint rules for MechanismModel records
+#
+# Cross-reference checks (edge.subject/object → nodes[].id;
+# intervention.blocks_edge → edges[].id; intervention.modulates_node →
+# nodes[].id) require iterating local arrays, which is beyond the
+# current lint DSL. The structural schema enforces what it can; richer
+# referential checks will land alongside lint-DSL upgrades.
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/mechanism-model.schema.yaml"
+rules: []

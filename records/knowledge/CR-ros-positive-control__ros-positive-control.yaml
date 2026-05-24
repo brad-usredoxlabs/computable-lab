@@ -1,0 +1,28 @@
+$schema: https://computable-lab.com/schema/computable-lab/context-role.schema.yaml
+kind: context-role
+id: CR-ros-positive-control
+title: ROS positive control
+name: ROS positive control
+description: >
+  A context whose contents force ROS production, used to validate the
+  ROS readout channel.
+applicable_domains:
+  - ros-assay
+prerequisites:
+  - any:
+    - has_material:
+        ref:
+          kind: ontology
+          id: CHEBI:28201
+          namespace: CHEBI
+          label: rotenone
+    - has_material:
+        ref:
+          kind: ontology
+          id: CHEBI:16240
+          namespace: CHEBI
+          label: hydrogen peroxide
+expected_outcome:
+  direction: increased
+  measure: ros_level
+  relative_to: vehicle_control

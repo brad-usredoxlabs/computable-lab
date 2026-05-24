@@ -1,0 +1,29 @@
+$schema: https://computable-lab.com/schema/computable-lab/claim.schema.yaml
+kind: claim
+id: CLM-acac-causes-nadh-os
+title: Acetoacetate causes NADH oxidative stress
+statement: >
+  Exogenous acetoacetate drives the mitochondrial NADH pool down via
+  β-hydroxybutyrate dehydrogenase (AcAc + NADH → BHB + NAD+),
+  producing NADH oxidative stress.
+subject:
+  kind: ontology
+  id: CHEBI:15344
+  namespace: CHEBI
+  label: acetoacetate
+predicate:
+  kind: ontology
+  id: RO:0002411
+  namespace: RO
+  label: causes
+object:
+  kind: ontology
+  id: CHEBI:13389
+  namespace: CHEBI
+  label: NAD+ (elevated mitochondrial pool)
+status: active
+keywords:
+  - acac
+  - nadh
+  - bhdh
+  - redox

@@ -1,0 +1,93 @@
+$schema: https://computable-lab.com/schema/computable-lab/mechanism-model.schema.yaml
+kind: mechanism-model
+id: MECH-PPARA-ROS-001
+title: PPARα agonism → ROS via β-oxidation-driven NADH reductive stress
+description: >
+  Working mechanism: PPARα activation upregulates β-oxidation;
+  sustained β-oxidation drives the mitochondrial NADH/NAD+ ratio
+  higher (reductive stress); reductive stress triggers electron leak
+  from the ETC and produces ROS. See
+  docs/knowledge-layer-canonical-example.md for the experiment that
+  tests this mechanism.
+
+nodes:
+  - id: ppara_agonism
+    kind: perturbation
+    label: PPARα activation
+  - id: beta_oxidation
+    kind: process
+    label: Mitochondrial β-oxidation
+  - id: nadh_rs
+    kind: redox_state
+    label: Mitochondrial NADH reductive stress
+  - id: ros
+    kind: feature
+    label: Mitochondrial ROS
+
+edges:
+  - id: E-ppara-to-bo
+    claim_ref:
+      kind: record
+      id: CLM-ppar-causes-bo
+      type: claim
+    subject: ppara_agonism
+    object: beta_oxidation
+  - id: E-bo-to-nadh-rs
+    claim_ref:
+      kind: record
+      id: CLM-bo-causes-nadh-rs
+      type: claim
+    subject: beta_oxidation
+    object: nadh_rs
+  - id: E-nadh-rs-to-ros
+    claim_ref:
+      kind: record
+      id: CLM-nadh-rs-causes-ros
+      type: claim
+    subject: nadh_rs
+    object: ros
+
+interventions:
+  - material_ref:
+      kind: ontology
+      id: CHEBI:4914
+      namespace: CHEBI
+      label: etomoxir
+    blocks_edge: E-ppara-to-bo
+    expected_effect:
+      readout_def_ref:
+        kind: record
+        id: RDEF-PLATE-FAR_RED-ROS
+        type: readout-definition
+      direction: decreased
+      relative_to: clofibrate_alone
+  - material_ref:
+      kind: ontology
+      id: CHEBI:15344
+      namespace: CHEBI
+      label: acetoacetate
+    modulates_node: nadh_rs
+    expected_effect:
+      readout_def_ref:
+        kind: record
+        id: RDEF-PLATE-NADH-AF
+        type: readout-definition
+      direction: decreased
+  - material_ref:
+      kind: ontology
+      id: CHEBI:20067
+      namespace: CHEBI
+      label: beta-hydroxybutyrate
+    modulates_node: nadh_rs
+    expected_effect:
+      readout_def_ref:
+        kind: record
+        id: RDEF-PLATE-NADH-AF
+        type: readout-definition
+      direction: increased
+
+tags:
+  - ppar
+  - ros
+  - redox
+  - hypothesis
