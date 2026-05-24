@@ -529,6 +529,7 @@ export function RawRecordEditor() {
             slots={projection.slots}
             data={formData}
             disabled={saving}
+            style={projection.taptab?.style ?? 'prose'}
           />
         </div>
       )}

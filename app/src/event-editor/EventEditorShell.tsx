@@ -1,40 +1,67 @@
 import { useEventEditor } from './EventEditorContext'
-import { TopBar } from './topbar/TopBar'
+import { AppShell, NavLinks } from '../shared/shell'
 import { DeckStage } from './deck/DeckStage'
 import { EventEditorAiDock } from './ai/EventEditorAiDock'
 import { FixItLauncher } from './fix-it/FixItLauncher'
 import { FixItPanel } from './fix-it/FixItPanel'
-import { useTheme } from './lib/useTheme'
+import { DeckModeSwitcher } from './topbar/DeckModeSwitcher'
+import { VocabSwitcher } from './topbar/VocabSwitcher'
+import { ToolSwitcher } from './topbar/ToolSwitcher'
+import { TipChip } from './topbar/TipChip'
+
+const brand = 'Event Editor'
+const topbarMiddle = (
+  <>
+    <DeckModeSwitcher />
+    <VocabSwitcher />
+    <ToolSwitcher />
+    <TipChip />
+  </>
+)
+const topbarRight = <NavLinks />
+
 
 export function EventEditorShell() {
   const { state } = useEventEditor()
-  const { resolvedTheme } = useTheme()
 
   if (state.loadState === 'loading' || state.loadState === 'idle') {
     return (
-      <div className="event-editor" data-theme={resolvedTheme}>
-        <div className="splash">Loading platforms…</div>
-      </div>
+      <AppShell brand={brand} bare>
+        <div className="event-editor">
+          <div className="splash">Loading platforms…</div>
+        </div>
+      </AppShell>
     )
   }
 
   if (state.loadState === 'error') {
     return (
-      <div className="event-editor" data-theme={resolvedTheme}>
-        <div className="splash splash--error">
-          Failed to load platforms: {state.loadError ?? 'unknown error'}
+      <AppShell brand={brand} bare>
+        <div className="event-editor">
+          <div className="splash splash--error">
+            Failed to load platforms: {state.loadError ?? 'unknown error'}
+          </div>
         </div>
-      </div>
+      </AppShell>
     )
   }
 
   return (
-    <div className="event-editor" data-theme={resolvedTheme}>
-      <TopBar />
-      <DeckStage />
-      <EventEditorAiDock />
-      <FixItLauncher />
-      <FixItPanel />
-    </div>
+    <AppShell
+      brand={brand}
+      topbarMiddle={topbarMiddle}
+      topbarRight={topbarRight}
+      dock={<EventEditorAiDock />}
+      fixItLauncher={
+        <>
+          <FixItLauncher />
+          <FixItPanel />
+        </>
+      }
+    >
+      <div className="event-editor">
+        <DeckStage />
+      </div>
+    </AppShell>
   )
 }

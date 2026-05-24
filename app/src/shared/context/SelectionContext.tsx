@@ -1,197 +1,92 @@
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
+
 /**
- * SelectionContext - React Context for managing well selection state.
- * Provides selection state and actions to all plate components.
+ * SelectionContext — cross-endpoint source / target selections.
+ *
+ * Each appliance endpoint can publish what its user currently has selected as
+ * a "source" or "target", and consumers (notably the shared slash menu's
+ * `/s` and `/t` lookups) can read it without knowing which endpoint produced
+ * it. This is the registration API the appliance plan calls for: any endpoint
+ * publishes; nothing else cares where the selection came from.
+ *
+ * Selection payloads are a discriminated union so each endpoint can publish
+ * its native shape — wells on a labware in the event-editor today; record
+ * refs from /browser and candidate refs from /protocols once those land.
+ *
+ * Distinct from `WellSelectionContext`, which is the per-plate widget's
+ * internal click-and-drag state. That context is the input to the event-
+ * editor's publisher into this one, not a replacement.
  */
 
-import { createContext, useContext, useReducer, useCallback, type ReactNode } from 'react'
-import type { WellId, SelectionState, SelectionAction, PlateConfig } from '../../types/plate'
-import { expandWellRange } from '../utils/wellUtils'
+/** A set of wells on a single labware, e.g. event-editor's source/target pane. */
+export interface WellsSelection {
+  kind: 'wells'
+  labwareId: string
+  wells: string[]
+  label?: string
+}
 
-/**
- * Selection context value
- */
-interface SelectionContextValue {
-  state: SelectionState
-  // Actions
-  selectWell: (wellId: WellId, mode: 'single' | 'add' | 'range') => void
-  selectWells: (wellIds: WellId[]) => void
-  deselectWell: (wellId: WellId) => void
-  clearSelection: () => void
-  highlightWells: (wellIds: WellId[]) => void
-  clearHighlight: () => void
-  // Helpers
-  isSelected: (wellId: WellId) => boolean
-  isHighlighted: (wellId: WellId) => boolean
-  selectedCount: number
+/** A set of records — e.g. /browser row selection, /protocols candidate picks. */
+export interface RecordsSelection {
+  kind: 'records'
+  refs: Array<{ recordId: string; kind?: string; label?: string }>
+  label?: string
+}
+
+export type SelectionPayload = WellsSelection | RecordsSelection
+
+export interface SelectionContextValue {
+  source: SelectionPayload | null
+  target: SelectionPayload | null
+  setSource: (payload: SelectionPayload | null) => void
+  setTarget: (payload: SelectionPayload | null) => void
+  clear: () => void
 }
 
 const SelectionContext = createContext<SelectionContextValue | null>(null)
 
-/**
- * Initial selection state
- */
-const initialState: SelectionState = {
-  selectedWells: new Set(),
-  highlightedWells: new Set(),
-  lastClickedWell: null,
+export function SelectionProvider({ children }: { children: ReactNode }) {
+  const [source, setSource] = useState<SelectionPayload | null>(null)
+  const [target, setTarget] = useState<SelectionPayload | null>(null)
+
+  const clear = useCallback(() => {
+    setSource(null)
+    setTarget(null)
+  }, [])
+
+  const value = useMemo<SelectionContextValue>(
+    () => ({ source, target, setSource, setTarget, clear }),
+    [source, target, clear],
+  )
+
+  return <SelectionContext.Provider value={value}>{children}</SelectionContext.Provider>
 }
 
 /**
- * Selection reducer - handles all selection state changes
+ * Read the cross-endpoint selection. Returns `null` if no `SelectionProvider`
+ * is mounted — callers in legacy surfaces that pre-date the AppShell can
+ * treat that as "no selection" rather than crashing.
  */
-function selectionReducer(
-  state: SelectionState,
-  action: SelectionAction & { plateConfig?: PlateConfig }
-): SelectionState {
-  switch (action.type) {
-    case 'SELECT_WELL': {
-      const { wellId, mode } = action
-      const newSelected = new Set(state.selectedWells)
+export function useSelection(): SelectionContextValue | null {
+  return useContext(SelectionContext)
+}
 
-      if (mode === 'single') {
-        // Single click: replace selection
-        newSelected.clear()
-        newSelected.add(wellId)
-      } else if (mode === 'add') {
-        // Ctrl+click: toggle well in selection
-        if (newSelected.has(wellId)) {
-          newSelected.delete(wellId)
-        } else {
-          newSelected.add(wellId)
-        }
-      } else if (mode === 'range' && state.lastClickedWell && action.plateConfig) {
-        // Shift+click: select rectangle from last clicked to current
-        const rangeWells = expandWellRange(state.lastClickedWell, wellId, action.plateConfig)
-        rangeWells.forEach(w => newSelected.add(w))
-      }
-
-      return {
-        ...state,
-        selectedWells: newSelected,
-        lastClickedWell: wellId,
-      }
-    }
-
-    case 'SELECT_WELLS': {
-      const newSelected = new Set(action.wellIds)
-      return {
-        ...state,
-        selectedWells: newSelected,
-        lastClickedWell: action.wellIds[action.wellIds.length - 1] ?? null,
-      }
-    }
-
-    case 'DESELECT_WELL': {
-      const newSelected = new Set(state.selectedWells)
-      newSelected.delete(action.wellId)
-      return {
-        ...state,
-        selectedWells: newSelected,
-      }
-    }
-
-    case 'CLEAR_SELECTION':
-      return {
-        ...state,
-        selectedWells: new Set(),
-        lastClickedWell: null,
-      }
-
-    case 'HIGHLIGHT_WELLS':
-      return {
-        ...state,
-        highlightedWells: new Set(action.wellIds),
-      }
-
-    case 'CLEAR_HIGHLIGHT':
-      return {
-        ...state,
-        highlightedWells: new Set(),
-      }
-
-    default:
-      return state
+/**
+ * Same as `useSelection` but throws if no provider is mounted. Use this in
+ * components that genuinely depend on the publisher being there (e.g. the
+ * LabwareEditorContext publisher hook).
+ */
+export function useRequiredSelection(): SelectionContextValue {
+  const ctx = useContext(SelectionContext)
+  if (!ctx) {
+    throw new Error('useRequiredSelection must be used inside <SelectionProvider>')
   }
-}
-
-/**
- * Props for SelectionProvider
- */
-interface SelectionProviderProps {
-  children: ReactNode
-  plateConfig: PlateConfig
-}
-
-/**
- * SelectionProvider - Provides selection context to children
- */
-export function SelectionProvider({ children, plateConfig }: SelectionProviderProps) {
-  const [state, dispatch] = useReducer(selectionReducer, initialState)
-
-  const selectWell = useCallback(
-    (wellId: WellId, mode: 'single' | 'add' | 'range') => {
-      dispatch({ type: 'SELECT_WELL', wellId, mode, plateConfig })
-    },
-    [plateConfig]
-  )
-
-  const selectWells = useCallback((wellIds: WellId[]) => {
-    dispatch({ type: 'SELECT_WELLS', wellIds })
-  }, [])
-
-  const deselectWell = useCallback((wellId: WellId) => {
-    dispatch({ type: 'DESELECT_WELL', wellId })
-  }, [])
-
-  const clearSelection = useCallback(() => {
-    dispatch({ type: 'CLEAR_SELECTION' })
-  }, [])
-
-  const highlightWells = useCallback((wellIds: WellId[]) => {
-    dispatch({ type: 'HIGHLIGHT_WELLS', wellIds })
-  }, [])
-
-  const clearHighlight = useCallback(() => {
-    dispatch({ type: 'CLEAR_HIGHLIGHT' })
-  }, [])
-
-  const isSelected = useCallback(
-    (wellId: WellId) => state.selectedWells.has(wellId),
-    [state.selectedWells]
-  )
-
-  const isHighlighted = useCallback(
-    (wellId: WellId) => state.highlightedWells.has(wellId),
-    [state.highlightedWells]
-  )
-
-  const value: SelectionContextValue = {
-    state,
-    selectWell,
-    selectWells,
-    deselectWell,
-    clearSelection,
-    highlightWells,
-    clearHighlight,
-    isSelected,
-    isHighlighted,
-    selectedCount: state.selectedWells.size,
-  }
-
-  return (
-    <SelectionContext.Provider value={value}>
-      {children}
-    </SelectionContext.Provider>
-  )
-}
-
-/**
- * Hook to access selection context
- */
-export function useSelection(): SelectionContextValue {
-  const context = useContext(SelectionContext)
-  if (!context) {
-    throw new Error('useSelection must be used within a SelectionProvider')
-  }
-  return context
+  return ctx
 }

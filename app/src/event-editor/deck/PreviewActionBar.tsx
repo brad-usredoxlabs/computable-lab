@@ -1,6 +1,6 @@
 import { useEventEditor } from '../EventEditorContext'
 import { buildFixSeed } from '../fix-it/buildFixSeed'
-import { useViewport } from '../lib/useViewport'
+import { useViewport } from '../../shared/shell'
 
 function makeFixItSeedKey(): string {
   // `crypto.randomUUID()` is widely available but not in every browser

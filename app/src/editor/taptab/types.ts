@@ -139,6 +139,14 @@ export type OnSerializedChangeCallback = (
 ) => void;
 
 /**
+ * TapTab posture (Phase 4). `prose` is the default — the editor renders as
+ * a flowing writing surface with widgets inline in paragraphs. `form` keeps
+ * the pre-Phase-4 stacked label-above-widget layout for schemas that
+ * benefit from form density (e.g. dense reference data entry).
+ */
+export type TapTabStyle = 'prose' | 'form';
+
+/**
  * Props for the TapTabEditor component.
  * Supports both the legacy uiSpec+data path and the new projection-backed path.
  */
@@ -151,6 +159,8 @@ export interface TapTabEditorProps {
   schema: Record<string, unknown>;
   /** Whether the editor is disabled */
   disabled?: boolean;
+  /** TapTab posture. Defaults to the spec's `taptab.style` or `prose`. */
+  style?: TapTabStyle;
   /** Callback fired when the editor content changes (event-driven dirty tracking) */
   onUpdate?: OnSerializedChangeCallback;
 }

@@ -1,7 +1,8 @@
 import { useParams } from 'react-router-dom'
 import { EventEditorProvider } from './EventEditorContext'
 import { EventEditorShell } from './EventEditorShell'
-import { ThemeProvider } from './lib/useTheme'
+import { ThemeProvider } from '../shared/shell'
+import '../shared/styles/tokens.css'
 import './styles/eventEditor.css'
 
 export function EventEditorPage() {

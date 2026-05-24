@@ -264,6 +264,22 @@ export interface UISpec {
   detail?: DetailConfig;
   /** Custom CSS class for styling */
   className?: string;
+  /**
+   * Phase 4: TapTab posture. `prose` (default) renders the document as a
+   * writing surface with inline widgets; `form` keeps the dense stacked
+   * layout. Set explicitly only for schemas that genuinely need the form
+   * density — most records read better as prose.
+   */
+  taptab?: TapTabConfig;
+}
+
+/**
+ * TapTab posture flag. Controls whether the TipTap-backed editor renders
+ * content as flowing prose (default) or as a stacked form. Authored under
+ * the `taptab:` key in `*.ui.yaml`.
+ */
+export interface TapTabConfig {
+  style?: 'prose' | 'form';
 }
 
 /**
@@ -538,6 +554,8 @@ export interface EditorProjectionResponse {
   slots: ProjectionSlot[];
   /** Non-fatal diagnostics */
   diagnostics: EditorDiagnostic[];
+  /** TapTab posture (Phase 4) — forwarded from the schema's UI spec. */
+  taptab?: TapTabConfig;
 }
 
 /**
@@ -558,4 +576,6 @@ export interface UISpec {
   className?: string;
   /** Editor configuration for document-style surfaces (additive) */
   editor?: EditorConfig;
+  /** Phase 4: TapTab posture (`prose` default, `form` for dense schemas). */
+  taptab?: TapTabConfig;
 }

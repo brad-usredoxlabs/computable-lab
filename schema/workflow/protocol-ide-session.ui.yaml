@@ -1,6 +1,8 @@
 # UI specification for ProtocolIdeSession records
 uiVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/workflow/protocol-ide-session.schema.yaml"
+taptab:
+  style: form
 
 display:
   titleField: "$.title"

@@ -1,6 +1,8 @@
 # UI specification for Run records
 uiVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/run.schema.yaml"
+taptab:
+  style: form
 
 display:
   titleField: "$.title"

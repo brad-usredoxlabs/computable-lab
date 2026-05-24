@@ -48,7 +48,9 @@ export function RunWorkspacePage() {
       assertionCount: workspace?.assertions?.length ?? 0,
     },
   }), [runId, activeTab, summary?.runId, summary?.title, summary?.status, workspace])
-  const aiChat = useAiChat({ aiContext })
+  // Phase 2: persist to /api/ai/threads/event-editor (Phase 7 subsumes this
+  // route under /event-editor).
+  const aiChat = useAiChat({ aiContext, endpoint: 'event-editor' })
   useRegisterAiChat(aiChat)
 
   const resolvedRunId = runId || ''

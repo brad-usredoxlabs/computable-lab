@@ -49,9 +49,13 @@ async function fetchProtocolIdeSession(
 // ---------------------------------------------------------------------------
 
 export function ProtocolIdePage(): JSX.Element {
-  const { sessionId } = useParams<{ sessionId?: string }>()
+  // sessionId can come from a path param (legacy `/protocol-ide/:sessionId`) or
+  // a search param (new `/protocols?view=ide&sessionId=…`). Phase 5 wraps this
+  // page inside `/protocols`, which uses search params throughout.
+  const params = useParams<{ sessionId?: string }>()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const sessionId = params.sessionId ?? searchParams.get('sessionId') ?? undefined
   const selectedFoundryProtocolId = searchParams.get('protocolId')
   const selectedFoundryVariant = searchParams.get('variant')
 
@@ -350,7 +354,8 @@ export function ProtocolIdePage(): JSX.Element {
         }
       }
       if (finalResult && 'sessionId' in finalResult) {
-        navigate(`/protocol-ide/${finalResult.sessionId}`)
+        // Phase 5: route via the new /protocols facet URL.
+        navigate(`/protocols?view=ide&sessionId=${encodeURIComponent(finalResult.sessionId)}`)
       } else if (finalResult && 'message' in finalResult) {
         setSubmitError(finalResult.message)
       }
@@ -411,7 +416,7 @@ export function ProtocolIdePage(): JSX.Element {
     return (
       <div style={{ padding: '2rem', textAlign: 'center' }}>
         <p>Session not found.</p>
-        <button onClick={() => navigate('/protocol-ide')}>Back to Foundry Inbox</button>
+        <button onClick={() => navigate('/protocols?view=ide')}>Back to Foundry Inbox</button>
       </div>
     )
   }

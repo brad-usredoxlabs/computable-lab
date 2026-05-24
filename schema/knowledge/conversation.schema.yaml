@@ -1,0 +1,117 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/conversation.schema.yaml"
+title: "Conversation"
+description: >
+  A persisted AI conversation thread, scoped to one endpoint (browser, event-editor,
+  protocols, literature) and one user. Live threads are stored transiently on the
+  server; a thread becomes a conversation record when it is promoted — either
+  explicitly by the user or automatically because it produced an accepted artifact.
+  Promoted threads are first-class knowledge: searchable in /browser, referenceable
+  from runs, protocols, and other records.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, endpoint, userId, messages, promotedAt ]
+
+properties:
+  kind:
+    const: "conversation"
+
+  endpoint:
+    type: string
+    enum: [browser, event-editor, protocols, literature]
+    description: "Which appliance endpoint this thread belongs to."
+
+  userId:
+    type: string
+    description: "Identifier of the user the thread belonged to while live."
+
+  messages:
+    type: array
+    description: "Ordered message log. Append-only while live; frozen on promotion."
+    items:
+      type: object
+      additionalProperties: false
+      required: [role, content, createdAt]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant, system, tool]
+        content:
+          type: string
+          description: "Message text. Tool messages carry JSON-encoded payloads."
+        createdAt:
+          type: string
+          format: date-time
+        toolName:
+          type: string
+          description: "Tool that produced this message (role=tool only)."
+        toolCallId:
+          type: string
+          description: "Correlates assistant tool calls with their tool responses."
+        metadata:
+          type: object
+          additionalProperties: true
+          description: >
+            Structured payload that accompanies a message — preview events
+            (assistant), labware additions, clarifications, instrument
+            appliance jobs, execution scale plans, tool-call args and results.
+            Phase 5 widens persistence to include this so promoted
+            conversations carry the full trace, not just the user/assistant
+            text.
+
+  mentions:
+    type: array
+    description: "Slash-menu mentions referenced anywhere in the thread."
+    items:
+      type: object
+      additionalProperties: false
+      required: [kind, ref]
+      properties:
+        kind:
+          type: string
+          description: "Mention kind (material, labware, protocol, source, target, etc.)."
+        ref:
+          $ref: "./datatypes/ref.schema.yaml"
+          description: "The record the mention resolves to."
+        label:
+          type: string
+          description: "Label as shown in the editing surface at the time of mention."
+
+  linkedArtifacts:
+    type: array
+    description: >
+      Records that were produced from this thread. Populated by automatic
+      promotion when a compile pass yields an accepted artifact, and by the
+      user when promoting manually.
+    items:
+      $ref: "./datatypes/ref.schema.yaml"
+
+  promotedAt:
+    type: string
+    format: date-time
+    description: "When the thread was promoted to a record."
+
+  promotedBy:
+    type: string
+    description: "User or process that promoted the thread."
+
+  provenance:
+    type: object
+    additionalProperties: true
+    description: >
+      Provenance metadata describing why this thread was promoted. For automatic
+      promotion this carries the compile-pass identifier and the artifact ref;
+      for manual promotion it carries the user action.
+    properties:
+      mode:
+        type: string
+        enum: [manual, automatic]
+      reason:
+        type: string
+      passId:
+        type: string
+        description: "Compile-pass id, when promoted automatically."
