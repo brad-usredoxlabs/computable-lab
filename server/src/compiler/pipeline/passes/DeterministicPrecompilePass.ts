@@ -270,6 +270,36 @@ export function createDeterministicPrecompilePass(
             rememberRawLabwareRoles(labwareByRole, setupLabwareNouns, clause.text);
             continue;
           }
+          // Handle coordinated deck slots: if the clause starts with "and" or
+          // "then" and contains a deck slot, propagate the last labware context
+          // to this clause so that "Add X to B1 and C1." produces two candidates.
+          const clauseLower = clause.text.toLowerCase();
+          if (/^\s*(?:and|then)\s/.test(clauseLower)) {
+            let lastLabwareHint: string | undefined;
+            for (let i = candidateLabwares.length - 1; i >= 0; i--) {
+              if (candidateLabwares[i]?.deckSlot) {
+                lastLabwareHint = candidateLabwares[i].hint;
+                break;
+              }
+            }
+            if (lastLabwareHint) {
+              // Extract bare deck slot directly (no preposition required).
+              const slotMatch = clauseLower.match(/\b([A-Da-d][1-4])\b/);
+              if (slotMatch) {
+                const deckSlot = slotMatch[1]!.toUpperCase();
+                const key = `${lastLabwareHint}:${deckSlot}`;
+                if (!labwareHints.has(key)) {
+                  labwareHints.add(key);
+                  candidateLabwares.push({
+                    hint: lastLabwareHint,
+                    reason: 'coordinated deck slot',
+                    deckSlot: deckSlot,
+                  });
+                  continue;
+                }
+              }
+            }
+          }
           // No verb → residual clause
           residualClauses.push({
             text: clause.text,
