@@ -14,6 +14,12 @@ import type { WellId } from '../types/plate'
 import type { AddMaterialDetails, PlateEvent } from '../types/events'
 import { generateEventId } from '../types/events'
 import type { Ref } from '../types/ref'
+import {
+  applyPlateRailPatch,
+  DEFAULT_PLATE_RAIL_DRAFT,
+  type PlateRailDraft,
+  type PlateRailPatch,
+} from './rail/state'
 
 export type LoadState = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -219,6 +225,12 @@ export interface EventEditorState {
   tipState: TipState
   preview: EventEditorPreview | null
   fixIt: FixItState
+  /**
+   * Phase 3 single-plate workflow rail draft state, keyed by placementId
+   * so the rail survives well-selection changes and focus-view toggles.
+   * Phase 4 turns these drafts into real semantic records.
+   */
+  plateRail: Record<string, PlateRailDraft>
 }
 
 export function addMaterialRefDetails(ref: Ref): Pick<
@@ -299,6 +311,7 @@ type Action =
   | { type: 'append_fixit_apply_reasoning'; delta: string }
   | { type: 'request_retry_prompt'; prompt: string }
   | { type: 'consume_retry_prompt' }
+  | { type: 'update_plate_rail'; placementId: string; patch: PlateRailPatch }
 
 const DEFAULT_PLATFORM_ID = 'manual'
 
@@ -334,6 +347,7 @@ const initialState: EventEditorState = {
     fixHistory: [],
     pendingRetryPrompt: null,
   },
+  plateRail: {},
 }
 
 function pickDefaultsForPlatform(
@@ -412,6 +426,13 @@ function isSinglePlateSlotLocation(location: PlacementLocation): boolean {
   return location.kind === 'slot' && location.slotId === 'PLATE'
 }
 
+function omitKey<V>(record: Record<string, V>, key: string): Record<string, V> {
+  if (!(key in record)) return record
+  const next = { ...record }
+  delete next[key]
+  return next
+}
+
 function reducer(state: EventEditorState, action: Action): EventEditorState {
   switch (action.type) {
     case 'load_start':
@@ -469,6 +490,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
           fixHistory: [],
           pendingRetryPrompt: null,
         },
+        plateRail: {},
       }
     }
     case 'set_variant':
@@ -495,9 +517,12 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       }
       // If dropping onto an occupied slot, displace the existing occupant to the lawn.
       let placements = state.placements
+      let plateRail = state.plateRail
       const singlePlateSlot = isSinglePlateSlotLocation(action.location)
       if (singlePlateSlot) {
+        const displaced = placements.filter((p) => isSinglePlateSlotLocation(p.location))
         placements = placements.filter((p) => !isSinglePlateSlotLocation(p.location))
+        for (const p of displaced) plateRail = omitKey(plateRail, p.placementId)
       } else if (action.location.kind === 'slot') {
         const existing = findPlacementAtSlot(placements, action.location.slotId)
         if (existing) {
@@ -512,6 +537,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         ...state,
         labwares: { ...state.labwares, [action.labware.labwareId]: action.labware },
         placements: [...placements, placement],
+        plateRail,
         ...(singlePlateSlot ? { focusPlacementId: placement.placementId } : {}),
       }
     }
@@ -552,7 +578,8 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       const labwares = { ...state.labwares }
       if (!stillReferenced) delete labwares[target.labwareId]
       const focusPlacementId = state.focusPlacementId === action.placementId ? null : state.focusPlacementId
-      return { ...state, placements, labwares, focusPlacementId }
+      const plateRail = omitKey(state.plateRail, action.placementId)
+      return { ...state, placements, labwares, focusPlacementId, plateRail }
     }
     case 'set_focus': {
       // Drop selection when focus changes — selection is labware-scoped and a
@@ -818,6 +845,16 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       return { ...state, fixIt: { ...state.fixIt, pendingRetryPrompt: action.prompt } }
     case 'consume_retry_prompt':
       return { ...state, fixIt: { ...state.fixIt, pendingRetryPrompt: null } }
+    case 'update_plate_rail': {
+      const current = state.plateRail[action.placementId] ?? DEFAULT_PLATE_RAIL_DRAFT
+      return {
+        ...state,
+        plateRail: {
+          ...state.plateRail,
+          [action.placementId]: applyPlateRailPatch(current, action.patch),
+        },
+      }
+    }
     default:
       return state
   }
@@ -891,6 +928,7 @@ export interface EventEditorActions {
   appendFixItApplyReasoning: (delta: string) => void
   requestRetryPrompt: (prompt: string) => void
   consumeRetryPrompt: () => void
+  updatePlateRail: (placementId: string, patch: PlateRailPatch) => void
 }
 
 interface ContextValue {
@@ -1009,6 +1047,8 @@ export function EventEditorProvider({ runId, children }: ProviderProps) {
       appendFixItApplyReasoning: (delta) => dispatch({ type: 'append_fixit_apply_reasoning', delta }),
       requestRetryPrompt: (prompt) => dispatch({ type: 'request_retry_prompt', prompt }),
       consumeRetryPrompt: () => dispatch({ type: 'consume_retry_prompt' }),
+      updatePlateRail: (placementId, patch) =>
+        dispatch({ type: 'update_plate_rail', placementId, patch }),
     }),
     [],
   )

@@ -20,6 +20,7 @@ import {
   buildPreviewWellIndex,
   previewWellsForLabware,
 } from '../lib/previewProjection'
+import { PlateRail } from '../rail/PlateRail'
 import type { LabwareOrientation, WellSelection } from '../types'
 
 /**
@@ -268,6 +269,10 @@ export function LabwareFocus() {
     ? state.selection.wells.length
     : 0
 
+  const selectedWellIds = state.selection?.labwareId === labware.labwareId
+    ? state.selection.wells
+    : []
+
   return (
     <div className="focus" onClick={handleBackdropClick}>
       <div className="focus__canvas" ref={canvasRef} onClick={(e) => e.stopPropagation()}>
@@ -299,6 +304,8 @@ export function LabwareFocus() {
             title="Close (Esc)"
           >Close</button>
         </header>
+        <div className="focus__body">
+        <div className="focus__main">
         <div className="focus__stage" ref={stageRef}>
           <WellGrid
             labware={labware}
@@ -381,6 +388,13 @@ export function LabwareFocus() {
             </span>
           )}
         </footer>
+        </div>
+        <PlateRail
+          placementId={placement.placementId}
+          selectedWells={selectedWellIds}
+          onAddMaterial={(wells) => setAddMaterialWells(wells)}
+        />
+        </div>
       </div>
       <AddMaterialModal
         isOpen={addMaterialWells !== null && Boolean(labware)}
