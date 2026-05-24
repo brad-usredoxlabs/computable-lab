@@ -601,7 +601,14 @@ function parametersFromTags(tags: MaterializedPromptTag[], sourceText = ''): Det
     const slotName = sourceText.slice(start, end).trim();
     return { deckSlot: slotName };
   }
-  const wells = extractWellAddresses(sourceText);
+  // Check for bare deck slots (A-D + 1-4) that follow placement prepositions
+  const bareDeckSlotSpans = extractBareDeckSlotSpans(sourceText);
+  if (bareDeckSlotSpans.length > 0) {
+    const [start, end] = bareDeckSlotSpans[0];
+    const slotName = sourceText.slice(start, end).trim();
+    return { deckSlot: slotName };
+  }
+  const wells = extractNonDeckSlotWells(sourceText);
   const volumes = extractVolumes(sourceText);
   const counts = extractCounts(sourceText);
   const durations = extractDurations(sourceText);
@@ -636,7 +643,7 @@ const DECK_SLOT_TOKEN_RE = /\b([A-Da-d][1-4])\b/g;
  * Placement prepositions that signal a deck-slot intent when followed by a
  * deck-slot token (e.g. "on B2", "onto C3").
  */
-const PLACEMENT_PREPOSITION_RE = /\b(?:on|onto|in|into|at)\b/gi;
+const PLACEMENT_PREPOSITION_RE = /\b(?:on|onto|in|into|at|to)\b/gi;
 
 /**
  * Extract well addresses from text, but filter out tokens that look like
@@ -685,9 +692,9 @@ function extractBareDeckSlotSpans(text: string): Array<[number, number]> {
     if (precedingPrep !== undefined) {
       // Make sure there's no intervening well address or other entity
       const between = lower.slice(precedingPrep + m[0].length, tokenStart);
-      // If there's a well address pattern between the preposition and the token,
-      // don't treat this as a deck slot
-      if (!/\b[A-H]\d{1,2}\b/.test(between)) {
+      // If there's a well address pattern or the word "well" between the preposition
+      // and the token, don't treat this as a deck slot
+      if (!/\b[A-H]\d{1,2}\b/.test(between) && !/\bwell\b/.test(between)) {
         spans.push([tokenStart, tokenStart + m[1]!.length]);
       }
     }
@@ -1340,7 +1347,7 @@ function inferDeckSlotForMention(
  */
 function inferBareDeckSlot(text: string): string | undefined {
   const lower = text.toLowerCase();
-  const prepMatch = lower.match(/\b(?:on|onto|in|into|at)\b/);
+  const prepMatch = lower.match(/\b(?:on|onto|in|into|at|to)\b/);
   if (!prepMatch) return undefined;
   const afterPrep = lower.slice(prepMatch.index + prepMatch[0].length);
   const slotMatch = afterPrep.match(/^\s*([A-Da-d][1-4])\b/);
