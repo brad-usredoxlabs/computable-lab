@@ -26,7 +26,7 @@ import type { LabwareOrientation, WellSelection } from '../types'
  * Maximum long-edge pixel size for the well-grid SVG. The actual rendered
  * size is the smaller of this and the available container space — see
  * the ResizeObserver wiring on `stageRef` below. On mobile the
- * `--ee-focus-size` CSS token narrows the container, so the SVG shrinks
+ * `--cl-focus-size` CSS token narrows the container, so the SVG shrinks
  * with the viewport without any media-query duplication here.
  */
 const MAX_FOCUS_SIZE_PX = 720
@@ -67,7 +67,7 @@ export function LabwareFocus() {
   const canvasRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   // Rendered size of the well-grid SVG. Tracks the actual width/height of
-  // `.focus__stage` (whose max-width is driven by `--ee-focus-size`) so
+  // `.focus__stage` (whose max-width is driven by `--cl-focus-size`) so
   // the SVG shrinks smoothly with the viewport on mobile and stays at
   // 720 on desktop.
   const [focusSize, setFocusSize] = useState(MAX_FOCUS_SIZE_PX)

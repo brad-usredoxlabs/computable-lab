@@ -1,0 +1,233 @@
+/*
+ * AppShell chrome — the topbar, hamburger menu, theme toggle, and chip
+ * primitives that every appliance endpoint shares.
+ *
+ * Phase 3 lift: these rules used to live under `.event-editor .topbar*`
+ * in `app/src/event-editor/styles/eventEditor.css`, which forced every new
+ * endpoint to pass `rootClassName="event-editor"` to AppShell just to
+ * inherit the chrome. They now scope to `.cl-app`, the root class AppShell
+ * always applies, so `/browser`, `/protocols`, and `/literature` get the
+ * chrome for free. The `.event-editor` class stays — but it scopes only
+ * the deck-specific styles (stage, lawn, wells, dock) it actually owns.
+ */
+
+/* ---- Outer chrome grid ----------------------------------------------- */
+
+.cl-app {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: var(--cl-bg);
+  color: var(--cl-text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Text', 'Inter',
+    system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow: hidden;
+}
+
+/* Bare mode: standalone routes that fill the viewport (e.g.
+   /event-editor/fixit). The shell's three-row grid would clip the
+   fullscreen child, so collapse to a single block layout. */
+.cl-app--bare {
+  display: block;
+  overflow: auto;
+}
+
+.cl-app *,
+.cl-app *::before,
+.cl-app *::after {
+  box-sizing: border-box;
+}
+
+.cl-app button {
+  font: inherit;
+  color: inherit;
+}
+
+/* ---- Top bar --------------------------------------------------------- */
+
+.cl-app .topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--cl-bg-elev);
+  border-bottom: 1px solid var(--cl-border);
+  height: var(--cl-topbar-height);
+  flex-shrink: 0;
+}
+
+.cl-app .topbar__brand {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--cl-text);
+  margin-right: 4px;
+}
+
+.cl-app .topbar__group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cl-app .topbar__divider {
+  width: 1px;
+  height: 22px;
+  background: var(--cl-border);
+}
+
+.cl-app .topbar__spacer {
+  flex: 1;
+}
+
+.cl-app .topbar__nav {
+  display: flex;
+  gap: 2px;
+}
+
+.cl-app .topbar__nav a {
+  color: var(--cl-text-dim);
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 100ms ease, background 100ms ease;
+}
+
+.cl-app .topbar__nav a:hover {
+  color: var(--cl-text);
+  background: var(--cl-bg-elev-2);
+}
+
+/* ---- Theme toggle ---------------------------------------------------- */
+
+.cl-app .theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: 8px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--cl-text-dim);
+  background: transparent;
+  border: 1px solid var(--cl-border);
+  border-radius: 5px;
+  cursor: pointer;
+  transition:
+    color 100ms ease, border-color 100ms ease, background 100ms ease;
+}
+
+.cl-app .theme-toggle:hover {
+  color: var(--cl-text);
+  border-color: var(--cl-border-strong);
+  background: var(--cl-bg-elev-2);
+}
+
+/* ---- Hamburger button (mobile) -------------------------------------- */
+
+.cl-app .topbar__hamburger {
+  appearance: none;
+  background: var(--cl-bg-elev-2);
+  border: 1px solid var(--cl-border);
+  color: var(--cl-text);
+  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cl-app .topbar__hamburger:hover {
+  border-color: var(--cl-border-strong);
+}
+
+/* ---- Mobile slide-down menu ----------------------------------------- */
+
+.cl-app .topbar__menu {
+  position: fixed;
+  top: var(--cl-topbar-height);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--cl-bg-elev);
+  border-bottom: 1px solid var(--cl-border);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  max-height: calc(100vh - var(--cl-topbar-height));
+  overflow-y: auto;
+}
+
+.cl-app .topbar__menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cl-app .topbar__menu-divider {
+  height: 1px;
+  background: var(--cl-border);
+  margin: 2px 0;
+}
+
+.cl-app .topbar__menu .chip-select,
+.cl-app .topbar__menu .tip-chip,
+.cl-app .topbar__menu .theme-toggle {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.cl-app .topbar__menu .chip-select select {
+  flex: 1;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+.cl-app .topbar__menu .tip-chip {
+  flex-wrap: wrap;
+}
+
+.cl-app .topbar__menu .topbar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--cl-bg-elev-2);
+}
+
+.cl-app .topbar__menu .topbar__nav a {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--cl-border);
+  text-decoration: none;
+  color: var(--cl-text);
+}
+
+.cl-app .topbar__menu .topbar__nav a:last-child {
+  border-bottom: none;
+}
+
+@media (max-width: 768px) {
+  .cl-app .topbar {
+    padding: 4px 10px;
+    gap: 8px;
+    min-width: 0;
+  }
+  .cl-app .topbar__brand {
+    flex-shrink: 0;
+    font-size: 14px;
+  }
+}

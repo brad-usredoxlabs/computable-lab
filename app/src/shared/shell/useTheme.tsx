@@ -12,7 +12,7 @@ export type ResolvedTheme = 'light' | 'dark'
 /** Value stored in localStorage. `null` ⇒ follow system. */
 type StoredTheme = ResolvedTheme | null
 
-const STORAGE_KEY = 'ee-theme'
+const STORAGE_KEY = 'cl-theme'
 
 function readStored(): StoredTheme {
   try {

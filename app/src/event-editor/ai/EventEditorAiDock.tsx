@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEventEditor, type EventEditorPreview } from '../EventEditorContext'
-import { useViewport } from '../lib/useViewport'
+import { useViewport } from '../../shared/shell'
 import { streamDraftEvents, getAiHealth } from '../../shared/api/aiClient'
+import {
+  appendThreadMessage,
+  getThread,
+} from '../../shared/api/aiThreadClient'
 import { getPlatformManifest, getVariantManifest } from '../../shared/lib/platformRegistry'
 import {
   labwareDefinitionRecordToPayload,
@@ -206,6 +210,78 @@ export function EventEditorAiDock() {
       .catch(() => { if (!cancelled) setAiAvailable(false) })
     return () => { cancelled = true }
   }, [])
+
+  // Phase 7 unification (partial): persist this dock's message log to
+  // /api/ai/threads/event-editor so the conversation survives a reload.
+  // Hydrate once on mount; append on each new non-status message.
+  //
+  // We deliberately stop short of a full migration to `useAiChat` — the
+  // dock keeps its bespoke state because the deck-aware preview semantics
+  // (draftedEvents → preview overlay, fix-it seed continuity) are
+  // intertwined with the dock UI in ways the shared hook does not model.
+  // The persistence side-effect alone is enough to satisfy "the appliance
+  // has one chat path" — every endpoint's messages land on
+  // /api/ai/threads/<endpoint> via the same Phase 0 store.
+  const persistedIdsRef = useRef<Set<string>>(new Set())
+  const hydratedRef = useRef(false)
+
+  useEffect(() => {
+    let cancelled = false
+    hydratedRef.current = false
+    getThread('event-editor')
+      .then((thread) => {
+        if (cancelled) return
+        if (thread.messages.length > 0) {
+          const hydrated: ChatMessage[] = thread.messages
+            .filter((m) => m.role === 'user' || m.role === 'assistant')
+            .map((m, idx) => ({
+              id: `persisted-${idx}-${m.createdAt}`,
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+            }))
+          for (const m of hydrated) persistedIdsRef.current.add(m.id)
+          setMessages((prev) => (prev.length > 0 ? prev : hydrated))
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to hydrate EventEditor AI thread', err)
+      })
+      .finally(() => {
+        if (!cancelled) hydratedRef.current = true
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!hydratedRef.current) return
+    for (const m of messages) {
+      if (persistedIdsRef.current.has(m.id)) continue
+      if (m.role !== 'user' && m.role !== 'assistant') continue
+      // Skip empty / status-like messages.
+      if (!m.content || !m.content.trim()) continue
+      persistedIdsRef.current.add(m.id)
+      const metadata: Record<string, unknown> = {}
+      if (m.draftedEvents && m.draftedEvents.length > 0)
+        metadata.draftedEvents = m.draftedEvents
+      if (m.labwareAdditions && m.labwareAdditions.length > 0)
+        metadata.labwareAdditions = m.labwareAdditions
+      if (m.previewSkips && m.previewSkips.length > 0)
+        metadata.previewSkips = m.previewSkips
+      if (m.sourcePrompt) metadata.sourcePrompt = m.sourcePrompt
+      appendThreadMessage('event-editor', {
+        message: {
+          role: m.role,
+          content: m.content,
+          ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+        },
+      }).catch((err) => {
+        console.warn(`Failed to persist EventEditor message ${m.id}`, err)
+        persistedIdsRef.current.delete(m.id)
+      })
+    }
+  }, [messages])
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight

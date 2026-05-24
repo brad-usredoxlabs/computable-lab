@@ -65,6 +65,11 @@ import { createMaterialAIHandlers } from './api/handlers/MaterialAIHandlers.js';
 import { createAiIngestionHandlers } from './api/handlers/AiIngestionHandlers.js';
 import { createProtocolIdeHandlers } from './api/handlers/ProtocolIdeHandlers.js';
 import { createPlannedRunHandlers } from './api/handlers/PlannedRunHandlers.js';
+import { createAiThreadHandlers } from './api/handlers/AiThreadHandlers.js';
+import { AiThreadStore } from './ai-threads/index.js';
+import { JsonLdIndex } from './jsonld-index/index.js';
+import { JsonLdProjector } from './jsonld/JsonLdProjector.js';
+import { createJsonLdSearchHandlers } from './api/handlers/JsonLdSearchHandlers.js';
 import { IndexManager, createIndexManager } from './index/index.js';
 import { createUISpecLoader, loadAllUISpecs, type UISpecLoader } from './ui/UISpecLoader.js';
 import { createUIHandlers } from './api/handlers/UIHandlers.js';
@@ -161,6 +166,8 @@ export interface AppContext {
   platformRegistry: PlatformRegistry;
   lifecycleEngine: LifecycleEngine;
   policyBundleService: PolicyBundleService;
+  jsonLdIndex: JsonLdIndex;
+  jsonLdProjector: JsonLdProjector;
   extractionRunner?: ExtractionRunnerService;
 }
 
@@ -362,6 +369,39 @@ export async function initializeApp(
     console.warn('Failed to build initial index:', err);
   }
 
+  // JSON-LD index — Phase 1 substrate for /browser advanced search and the
+  // shared slash menu. Opened after UI specs load so the projector can read
+  // facet paths from `*.ui.yaml`. The store's writeHook then keeps the index
+  // in sync as records change.
+  const jsonLdIndexPath =
+    process.env.JSONLD_INDEX_PATH ||
+    resolve(workspaceRoot, 'var', 'jsonld-index.sqlite');
+  const jsonLdIndex = new JsonLdIndex({ dbPath: jsonLdIndexPath });
+  const jsonLdProjector = new JsonLdProjector({
+    getUiSpec: (id) => uiSpecLoader.get(id),
+  });
+  store.setWriteHook({
+    onUpsert: (env) => jsonLdIndex.upsert(jsonLdProjector.project(env)),
+    onDelete: (id) => jsonLdIndex.tombstone(id),
+  });
+
+  // Cold rebuild on startup if the index is empty (first run on a fresh
+  // workspace). Subsequent runs skip and rely on the writeHook for deltas.
+  if (jsonLdIndex.size() === 0) {
+    try {
+      const records = await store.list();
+      const tx = jsonLdIndex;
+      for (const env of records) {
+        tx.upsert(jsonLdProjector.project(env));
+      }
+      console.log(`JSON-LD index seeded with ${jsonLdIndex.size()} records`);
+    } catch (err) {
+      console.warn('Failed initial JSON-LD index rebuild:', err);
+    }
+  } else {
+    console.log(`JSON-LD index already populated (${jsonLdIndex.size()} records)`);
+  }
+
   console.log(`App initialized`);
 
   return {
@@ -382,6 +422,8 @@ export async function initializeApp(
     platformRegistry,
     lifecycleEngine,
     policyBundleService,
+    jsonLdIndex,
+    jsonLdProjector,
   };
 }
 
@@ -445,6 +487,21 @@ export async function createServer(
   const platformHandlers = createPlatformHandlers(ctx.platformRegistry);
   const labSettingsHandlers = createLabSettingsHandlers(ctx.appConfig, ctx.policyBundleService);
   const uiHandlers = createUIHandlers(ctx.uiSpecLoader, ctx.store, ctx.schemaRegistry);
+
+  // AI thread store: per-(user, endpoint) live conversations. Lives outside
+  // the records git tree so chat-rate writes do not pollute commit history;
+  // becomes a record on promote. Root path follows the workspace by default;
+  // override via AI_THREADS_ROOT for tests / shared deployments.
+  const aiThreadsRoot =
+    process.env.AI_THREADS_ROOT || resolve(ctx.workspaceRoot, 'var', 'ai-threads');
+  const aiThreadStore = new AiThreadStore({ rootDir: aiThreadsRoot });
+  const aiThreadHandlers = createAiThreadHandlers(aiThreadStore, ctx.store);
+
+  const jsonLdSearchHandlers = createJsonLdSearchHandlers(
+    ctx.jsonLdIndex,
+    ctx.jsonLdProjector,
+    ctx.store,
+  );
 
   // Build extraction infrastructure: extractor factory, populator, runner
   const extractorProfile = ctx.appConfig?.ai?.extractor;
@@ -807,6 +864,8 @@ export async function createServer(
       uiSpecCount: () => ctx.uiSpecLoader.size(),
     };
     routeOpts.aiHandlers = aiHandlers;
+    routeOpts.aiThreadHandlers = aiThreadHandlers;
+    routeOpts.jsonLdSearchHandlers = jsonLdSearchHandlers;
     // Phase-1 fix-it chat: streams worker-Qwen-backed diagnoses for AI
     // previews the user thinks are wrong. Always mounted — config (worker
     // base URL / model) is read per-request from env, so this works without

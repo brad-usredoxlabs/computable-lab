@@ -8,7 +8,7 @@
  * - Active labware focus
  */
 
-import { createContext, useContext, useReducer, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useReducer, useCallback, type ReactNode } from 'react'
 import type { WellId } from '../../types/plate'
 import type { PlateEvent } from '../../types/events'
 import type { Labware, LabwareType, LabwareRecordPayload } from '../../types/labware'
@@ -19,6 +19,7 @@ import {
   labwareRecordToEditorLabware,
   normalizeLabwareWithDefinition,
 } from '../../types/labware'
+import { useSelection } from '../../shared/context/SelectionContext'
 
 export type LabwareOrientation = 'portrait' | 'landscape'
 
@@ -711,9 +712,71 @@ export function LabwareEditorProvider({ children }: { children: ReactNode }) {
   
   return (
     <LabwareEditorContext.Provider value={value}>
+      <SelectionPublisher
+        sourceLabwareId={state.sourceLabwareId}
+        sourceWells={sourceSelection?.selectedWells}
+        sourceLabel={sourceLabware?.name}
+        targetLabwareId={state.targetLabwareId}
+        targetWells={targetSelection?.selectedWells}
+        targetLabel={targetLabware?.name}
+      />
       {children}
     </LabwareEditorContext.Provider>
   )
+}
+
+/**
+ * Mirrors the editor's source / target wells into the cross-endpoint
+ * SelectionContext so the shared slash menu's `/s` and `/t` lookups can read
+ * them without knowing they came from the labware editor. Renders nothing
+ * and is a no-op when no SelectionProvider is mounted (e.g. legacy tests).
+ */
+function SelectionPublisher({
+  sourceLabwareId,
+  sourceWells,
+  sourceLabel,
+  targetLabwareId,
+  targetWells,
+  targetLabel,
+}: {
+  sourceLabwareId: string | null
+  sourceWells: Set<WellId> | undefined
+  sourceLabel: string | undefined
+  targetLabwareId: string | null
+  targetWells: Set<WellId> | undefined
+  targetLabel: string | undefined
+}) {
+  const selection = useSelection()
+
+  useEffect(() => {
+    if (!selection) return
+    if (sourceLabwareId && sourceWells && sourceWells.size > 0) {
+      selection.setSource({
+        kind: 'wells',
+        labwareId: sourceLabwareId,
+        wells: Array.from(sourceWells),
+        ...(sourceLabel !== undefined ? { label: sourceLabel } : {}),
+      })
+    } else {
+      selection.setSource(null)
+    }
+  }, [selection, sourceLabwareId, sourceWells, sourceLabel])
+
+  useEffect(() => {
+    if (!selection) return
+    if (targetLabwareId && targetWells && targetWells.size > 0) {
+      selection.setTarget({
+        kind: 'wells',
+        labwareId: targetLabwareId,
+        wells: Array.from(targetWells),
+        ...(targetLabel !== undefined ? { label: targetLabel } : {}),
+      })
+    } else {
+      selection.setTarget(null)
+    }
+  }, [selection, targetLabwareId, targetWells, targetLabel])
+
+  return null
 }
 
 /**

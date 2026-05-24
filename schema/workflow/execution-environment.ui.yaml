@@ -1,6 +1,8 @@
 # UI specification for ExecutionEnvironment records
 uiVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/execution-environment.schema.yaml"
+taptab:
+  style: form
 
 display:
   titleField: "$.id"

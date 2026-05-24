@@ -152,6 +152,7 @@ export function SlideOverEditor({
               data={record.payload}
               disabled={saving}
               onUpdate={handleSerializedChange}
+              style={projection.taptab?.style ?? 'prose'}
             />
           ) : record ? (
             <p className="text-gray-500">

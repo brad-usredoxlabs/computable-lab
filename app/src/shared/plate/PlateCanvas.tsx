@@ -6,7 +6,7 @@
 import { useMemo } from 'react'
 import type { PlateFormat, PlateConfig, WellId } from '../../types/plate'
 import { PLATE_CONFIGS } from '../../types/plate'
-import { SelectionProvider, useSelection } from '../context/SelectionContext'
+import { WellSelectionProvider, useWellSelection } from '../context/WellSelectionContext'
 import { createWellId } from '../utils/wellUtils'
 import { Well } from './Well'
 
@@ -48,7 +48,7 @@ function PlateCanvasInner({
   width: number
   height: number
 }) {
-  const { clearSelection } = useSelection()
+  const { clearSelection } = useWellSelection()
 
   // Calculate cell size based on available space
   const cellSize = useMemo(() => {
@@ -154,7 +154,7 @@ function PlateCanvasInner({
 
 /**
  * PlateCanvas - Main plate visualization component
- * Wraps the inner component with SelectionProvider
+ * Wraps the inner component with WellSelectionProvider
  */
 export function PlateCanvas({
   format = '96',
@@ -165,7 +165,7 @@ export function PlateCanvas({
   const config = PLATE_CONFIGS[format]
 
   return (
-    <SelectionProvider plateConfig={config}>
+    <WellSelectionProvider plateConfig={config}>
       <div className="plate-canvas-container">
         <PlateCanvasInner
           config={config}
@@ -174,12 +174,12 @@ export function PlateCanvas({
           height={height}
         />
       </div>
-    </SelectionProvider>
+    </WellSelectionProvider>
   )
 }
 
 /**
- * PlateCanvasWithContext - For use when SelectionProvider is already available
+ * PlateCanvasWithContext - For use when WellSelectionProvider is already available
  */
 export function PlateCanvasWithContext({
   format = '96',

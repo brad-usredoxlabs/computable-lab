@@ -1,0 +1,92 @@
+# UI specification for Conversation records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/conversation.schema.yaml"
+
+display:
+  titleField: "$.title"
+  icon: "conversation"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.recordId"
+      widget: "text"
+      label: "Record ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "text"
+      label: "Kind"
+      readonly: true
+      hidden: true
+    - path: "$.title"
+      widget: "text"
+      label: "Title"
+  - title: "Scope"
+    fields:
+    - path: "$.endpoint"
+      widget: "select"
+      label: "Endpoint"
+      readonly: true
+    - path: "$.userId"
+      widget: "text"
+      label: "User"
+      readonly: true
+    - path: "$.promotedAt"
+      widget: "datetime"
+      label: "Promoted"
+      readonly: true
+    - path: "$.promotedBy"
+      widget: "text"
+      label: "Promoted By"
+      readonly: true
+  - title: "Conversation"
+    fields:
+    - path: "$.messages"
+      widget: "array"
+      label: "Messages"
+      readonly: true
+  - title: "Mentions"
+    fields:
+    - path: "$.mentions"
+      widget: "array"
+      label: "Mentions"
+      readonly: true
+  - title: "Linked Artifacts"
+    fields:
+    - path: "$.linkedArtifacts"
+      widget: "reflist"
+      label: "Linked Artifacts"
+      readonly: true
+  - title: "Provenance"
+    fields:
+    - path: "$.provenance.mode"
+      widget: "text"
+      label: "Mode"
+      readonly: true
+    - path: "$.provenance.reason"
+      widget: "text"
+      label: "Reason"
+      readonly: true
+    - path: "$.provenance.passId"
+      widget: "text"
+      label: "Pass ID"
+      readonly: true
+
+list:
+  columns:
+  - path: "$.recordId"
+    label: "ID"
+    width: "120px"
+  - path: "$.title"
+    label: "Title"
+  - path: "$.endpoint"
+    label: "Endpoint"
+    width: "140px"
+  - path: "$.userId"
+    label: "User"
+    width: "160px"
+  - path: "$.promotedAt"
+    label: "Promoted"
+    width: "200px"

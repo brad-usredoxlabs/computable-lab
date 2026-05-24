@@ -1,5 +1,7 @@
 uiVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/workflow/protocol-foundry-review-inner-loop-trace.schema.yaml"
+taptab:
+  style: form
 
 display:
   titleField: "$.id"

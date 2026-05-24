@@ -158,7 +158,8 @@ export function IngestionPage() {
       })) || [],
     },
   }), [selectedJobId, selection, jobs.length, detail])
-  const aiChat = useAiChat({ aiContext })
+  // Phase 2: persist to /api/ai/threads/literature (Phase 6 folds this in).
+  const aiChat = useAiChat({ aiContext, endpoint: 'literature' })
   useRegisterAiChat(aiChat)
 
   const runDisabled = loading

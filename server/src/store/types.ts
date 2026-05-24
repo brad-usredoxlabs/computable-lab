@@ -179,4 +179,20 @@ export interface RecordStoreConfig {
    *  When set, list() merges built-in seed records that don't exist in the
    *  connected lab repo. */
   seedDir?: string;
+  /**
+   * Optional write-side hook fired after a successful create / update / delete.
+   * Used by the JSON-LD index to mirror record changes. Hook failures are
+   * logged but do not fail the originating write — indexing is downstream.
+   */
+  writeHook?: RecordStoreWriteHook;
+}
+
+/**
+ * Write-side hook invoked by `RecordStore` after a successful mutation.
+ * Implementations should be idempotent and fast; long-running work should
+ * be queued onto a background job.
+ */
+export interface RecordStoreWriteHook {
+  onUpsert(envelope: RecordEnvelope): void | Promise<void>;
+  onDelete(recordId: string): void | Promise<void>;
 }

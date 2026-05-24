@@ -5,7 +5,7 @@
 
 import { useCallback, type MouseEvent } from 'react'
 import type { WellId } from '../../types/plate'
-import { useSelection } from '../context/SelectionContext'
+import { useWellSelection } from '../context/WellSelectionContext'
 
 interface WellProps {
   wellId: WellId
@@ -27,7 +27,7 @@ export function Well({
   hasContent = false,
   contentColor,
 }: WellProps) {
-  const { isSelected, isHighlighted, selectWell } = useSelection()
+  const { isSelected, isHighlighted, selectWell } = useWellSelection()
 
   const selected = isSelected(wellId)
   const highlighted = isHighlighted(wellId)
