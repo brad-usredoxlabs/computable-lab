@@ -51,6 +51,7 @@ export function EventEditorShell() {
       brand={brand}
       topbarMiddle={topbarMiddle}
       topbarRight={topbarRight}
+      rootClassName="event-editor"
       dock={<EventEditorAiDock />}
       fixItLauncher={
         <>
@@ -59,7 +60,7 @@ export function EventEditorShell() {
         </>
       }
     >
-      <div className="event-editor">
+      <div className="event-editor__stage-host">
         <DeckStage />
       </div>
     </AppShell>

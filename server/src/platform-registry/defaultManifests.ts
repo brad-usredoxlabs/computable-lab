@@ -34,7 +34,7 @@ export const DEFAULT_PLATFORM_MANIFESTS: PlatformManifest[] = [
     id: 'manual',
     label: 'Manual',
     allowedVocabIds: ['liquid-handling/v1', 'animal-handling/v1'],
-    defaultVariant: 'manual_collapsed',
+    defaultVariant: 'manual_single_plate',
     toolTypeIds: [
       'pipette_1ch',
       'pipette_4ch_fixed',
@@ -47,6 +47,21 @@ export const DEFAULT_PLATFORM_MANIFESTS: PlatformManifest[] = [
     compilerFamily: 'manual',
     modules: [],
     variants: [
+      {
+        id: 'manual_single_plate',
+        title: 'Single SBS Plate',
+        slots: [
+          {
+            id: 'PLATE',
+            kind: 'standard',
+            label: 'Click to choose labware',
+            orientationMode: 'locked_landscape',
+            row: 1,
+            col: 1,
+            reachable: true,
+          },
+        ],
+      },
       {
         id: 'manual_collapsed',
         title: 'Manual Technician Mode',

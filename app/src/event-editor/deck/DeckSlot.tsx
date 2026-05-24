@@ -27,6 +27,7 @@ export function DeckSlot({ slot }: DeckSlotProps) {
   const isStaging = slot.stagingOnly === true
   const isTrash = slot.kind === 'trash'
   const canHoldLabware = !isTrash && reachable && slot.kind !== 'special'
+  const isSinglePlateSlot = slot.id === 'PLATE'
 
   const placement = state.placements.find(
     (p): p is EventEditorPlacement & { location: { kind: 'slot'; slotId: string } } =>
@@ -150,6 +151,7 @@ export function DeckSlot({ slot }: DeckSlotProps) {
       data-occupied={placement ? 'true' : 'false'}
       data-dragover={isDragOver ? 'true' : 'false'}
       data-preview={previewPlacement && !placement ? 'true' : 'false'}
+      data-layout={isSinglePlateSlot ? 'single-plate' : undefined}
       style={{ gridRow: slot.row, gridColumn: slot.col }}
       title={title}
       onClick={handleClick}
@@ -181,7 +183,15 @@ export function DeckSlot({ slot }: DeckSlotProps) {
       ) : (
         <>
           <span className="slot__label">
-            {canHoldLabware ? <span className="slot__add">+ add</span> : slot.label ?? slot.kind}
+            {canHoldLabware ? (
+              isSinglePlateSlot ? (
+                <span className="slot__add slot__add--single-plate">
+                  {slot.label ?? 'Click to choose labware'}
+                </span>
+              ) : (
+                <span className="slot__add">+ add</span>
+              )
+            ) : slot.label ?? slot.kind}
           </span>
           {isStaging ? <span className="slot__badge">staging</span> : null}
           {orientationLock === 'portrait' ? <span className="slot__badge">portrait</span> : null}
