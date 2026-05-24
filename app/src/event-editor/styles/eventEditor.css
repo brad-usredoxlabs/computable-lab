@@ -104,8 +104,15 @@
 
 /* ---- Stage (deck area) ---- */
 
+.event-editor .event-editor__stage-host {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+}
+
 .event-editor .stage {
   position: relative;
+  flex: 1 1 auto;
   display: flex;
   align-items: stretch;
   justify-content: center;
@@ -223,6 +230,24 @@
   outline-offset: -3px;
 }
 
+.event-editor .slot[data-layout='single-plate'] {
+  width: min(68vw, 640px);
+  height: min(44vw, 420px);
+  min-width: 420px;
+  min-height: 270px;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(88, 166, 255, 0.08), transparent 58%),
+    var(--cl-bg-elev-2);
+  border: 2px solid var(--cl-border-strong);
+}
+
+.event-editor .slot[data-layout='single-plate'][data-occupied='true'] .tile {
+  width: calc(100% - 24px) !important;
+  height: calc(100% - 24px) !important;
+  border-radius: 14px;
+}
+
 .event-editor .slot__id {
   position: absolute;
   top: 4px;
@@ -238,6 +263,18 @@
   color: var(--cl-text-faint);
   text-align: center;
   padding: 0 8px;
+}
+
+.event-editor .slot[data-layout='single-plate'] .slot__id {
+  top: 12px;
+  left: 14px;
+  font-size: 11px;
+}
+
+.event-editor .slot[data-layout='single-plate'] .slot__label {
+  max-width: 70%;
+  font-size: 18px;
+  line-height: 1.35;
 }
 
 .event-editor .slot__badge {
@@ -341,6 +378,19 @@
   .event-editor .lawn:not(.lawn--primary) {
     display: none !important;
   }
+
+  .event-editor .slot[data-layout='single-plate'] {
+    width: min(92vw, 520px);
+    height: min(58vw, 330px);
+    min-width: 0;
+    min-height: 210px;
+    border-radius: 14px;
+  }
+
+  .event-editor .slot[data-layout='single-plate'] .slot__label {
+    font-size: 15px;
+  }
+
   /* Float the Fix-it launcher chip just above the dock's top edge so it
      doesn't overlap the Send button (which sits at the dock's bottom-
      right on mobile). Sitting at `bottom: var(--cl-dock-height) + 8px`
@@ -377,6 +427,15 @@
 
 .event-editor .slot:hover .slot__add {
   opacity: 0.85;
+}
+
+.event-editor .slot__add--single-plate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cl-text);
+  font-weight: 600;
+  opacity: 1;
 }
 
 /* ---- Tile (labware visual) ---- */
