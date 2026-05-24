@@ -1,0 +1,111 @@
+/*
+ * Computable Lab — app-wide design tokens.
+ *
+ * Scope: `.cl-app` is the root class applied by AppShell. All endpoint shells
+ * compose under this class, so tokens cascade everywhere in the app. Dark is
+ * the default; `data-theme="light"` on the same element switches the palette.
+ *
+ * Phase 0 lifts these out of the event-editor's scoped tokens. Endpoint-
+ * specific files (e.g., event-editor's layout CSS) consume the same tokens
+ * via the cascade rather than redefining them.
+ */
+
+.cl-app {
+  /* Dark-mode palette (default). The `[data-theme='light']` selector below
+     overrides each entry; everything else (layout dimensions, tile/well
+     shades) is theme-agnostic. */
+  --cl-bg: #0e1116;
+  --cl-bg-elev: #161b22;
+  --cl-bg-elev-2: #1c232c;
+  --cl-border: #2b3340;
+  --cl-border-strong: #3a4150;
+  --cl-text: #e6edf3;
+  --cl-text-dim: #8a93a0;
+  --cl-text-faint: #5a6270;
+  --cl-accent: #58a6ff;
+  --cl-accent-soft: rgba(88, 166, 255, 0.12);
+  --cl-danger: #f85149;
+  --cl-warn: #d29922;
+  --cl-preview: #be4bdb;
+
+  /* Text used on top of the accent fill (e.g., primary buttons). Inverts
+     with theme so it reads correctly against the accent in both modes. */
+  --cl-on-accent: #0e1116;
+
+  /* Tile / well-grid fills are explicit because they're shaded gradients
+     and SVG fills that don't compose well from rgba(text/bg, alpha). */
+  --cl-tile-bg-top: #2a3340;
+  --cl-tile-bg-bottom: #1f2731;
+  --cl-tile-hover-top: #2d3744;
+  --cl-tile-hover-bottom: #232a35;
+  --cl-well-frame: #1a2029;
+  --cl-well-fill: #2a3340;
+  --cl-well-tip-fill: #3a4150;
+
+  /* Stage / lawn faint gradients — overrideable in light mode where the
+     white-on-white tint vanishes. */
+  --cl-stage-tint: rgba(88, 166, 255, 0.04);
+  --cl-lawn-highlight: rgba(255, 255, 255, 0.02);
+  --cl-lawn-grid-line: rgba(255, 255, 255, 0.03);
+
+  /* Layout dimensions. Overridden in the mobile @media block below so the
+     same rules render correctly on phone viewports. */
+  --cl-topbar-height: 48px;
+  --cl-stage-padding: 24px;
+  --cl-deck-slot-width: 144px;
+  --cl-deck-slot-height: 96px;
+  --cl-focus-size: 720px;
+  --cl-fixit-width: 420px;
+  --cl-dock-height: 240px;
+}
+
+.cl-app[data-theme='light'] {
+  --cl-bg: #ffffff;
+  --cl-bg-elev: #f6f8fa;
+  --cl-bg-elev-2: #eaeef2;
+  --cl-border: #d0d7de;
+  --cl-border-strong: #afb8c1;
+  --cl-text: #1f2328;
+  --cl-text-dim: #656d76;
+  --cl-text-faint: #8c959f;
+  --cl-accent: #0969da;
+  --cl-accent-soft: rgba(9, 105, 218, 0.1);
+  --cl-danger: #cf222e;
+  --cl-warn: #9a6700;
+  --cl-preview: #8250df;
+  --cl-on-accent: #ffffff;
+
+  --cl-tile-bg-top: #f6f8fa;
+  --cl-tile-bg-bottom: #eaeef2;
+  --cl-tile-hover-top: #eaeef2;
+  --cl-tile-hover-bottom: #d8dee4;
+  --cl-well-frame: #f6f8fa;
+  --cl-well-fill: #d8dee4;
+  --cl-well-tip-fill: #afb8c1;
+
+  --cl-stage-tint: rgba(9, 105, 218, 0.04);
+  --cl-lawn-highlight: rgba(0, 0, 0, 0.02);
+  --cl-lawn-grid-line: rgba(0, 0, 0, 0.05);
+
+  color-scheme: light;
+}
+
+/* Mobile overrides — narrow viewports get tighter chrome, scaled deck slots,
+ * full-bleed Fix-it panel, and a flexible-height prompt dock. All layout
+ * decisions that can live in CSS go through these tokens; the React side
+ * only branches when a component tree differs (e.g., separate route for the
+ * Fix-it tab). */
+@media (max-width: 768px) {
+  .cl-app {
+    --cl-topbar-height: 40px;
+    --cl-stage-padding: 6px;
+    /* Sized so the typical Opentrons Flex 4-column deck fits in a portrait
+       iPhone (~375 css px). 21vw at 375 = 78px → 4 slots + 3 gaps + side
+       padding ≈ 360px. Wider phones get a bit more room. */
+    --cl-deck-slot-width: clamp(64px, 21vw, 100px);
+    --cl-deck-slot-height: calc(var(--cl-deck-slot-width) * 0.667);
+    --cl-focus-size: min(560px, calc(100vw - 16px));
+    --cl-fixit-width: 100vw;
+    --cl-dock-height: 30vh;
+  }
+}

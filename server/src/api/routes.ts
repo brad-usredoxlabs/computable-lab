@@ -51,6 +51,8 @@ import type { VerbActionMapHandlers } from './handlers/VerbActionMapHandlers.js'
 import type { FoundryJobHandlers } from './handlers/FoundryJobHandlers.js';
 import type { ProtocolIdeHandlers } from './handlers/ProtocolIdeHandlers.js';
 import type { PlannedRunHandlers } from './handlers/PlannedRunHandlers.js';
+import type { AiThreadHandlers } from './handlers/AiThreadHandlers.js';
+import type { JsonLdSearchHandlers } from './handlers/JsonLdSearchHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -102,6 +104,8 @@ export interface RouteOptions {
   ontologyTermHandlers?: OntologyTermHandlers;
   verbActionMapHandlers?: VerbActionMapHandlers;
   foundryJobHandlers?: FoundryJobHandlers;
+  aiThreadHandlers?: AiThreadHandlers;
+  jsonLdSearchHandlers?: JsonLdSearchHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -484,6 +488,19 @@ export function registerRoutes(
     fastify.post('/ai/draft-events', aiHandlers.draftEvents.bind(aiHandlers));
     fastify.post('/ai/draft-events/stream', aiHandlers.draftEventsStream.bind(aiHandlers));
     fastify.post('/ai/assist/stream', aiHandlers.assistStream.bind(aiHandlers));
+  }
+
+  const { aiThreadHandlers } = options;
+  if (aiThreadHandlers) {
+    fastify.get('/ai/threads/:endpoint', aiThreadHandlers.getThread.bind(aiThreadHandlers));
+    fastify.post('/ai/threads/:endpoint', aiThreadHandlers.appendMessage.bind(aiThreadHandlers));
+    fastify.post('/ai/threads/:endpoint/promote', aiThreadHandlers.promote.bind(aiThreadHandlers));
+  }
+
+  const { jsonLdSearchHandlers } = options;
+  if (jsonLdSearchHandlers) {
+    fastify.post('/search/jsonld', jsonLdSearchHandlers.search.bind(jsonLdSearchHandlers));
+    fastify.post('/search/jsonld/reindex', jsonLdSearchHandlers.reindex.bind(jsonLdSearchHandlers));
   }
 
   const { eventEditorFixHandlers } = options;

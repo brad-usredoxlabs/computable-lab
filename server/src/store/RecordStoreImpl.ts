@@ -18,6 +18,7 @@ import type { LintEngine } from '../lint/LintEngine.js';
 import type {
   RecordStore,
   RecordStoreConfig,
+  RecordStoreWriteHook,
   StoreResult,
   RecordFilter,
   CreateRecordOptions,
@@ -39,7 +40,7 @@ import { join } from 'node:path';
 /**
  * Default configuration.
  */
-const DEFAULT_CONFIG: Required<RecordStoreConfig> = {
+const DEFAULT_CONFIG: Required<Omit<RecordStoreConfig, 'writeHook'>> = {
   baseDir: 'records',
   author: 'record-store',
   email: 'store@computable-lab.com',
@@ -49,8 +50,11 @@ const DEFAULT_CONFIG: Required<RecordStoreConfig> = {
 /**
  * RecordStoreImpl — Full implementation of RecordStore.
  */
+type ResolvedConfig = Required<Omit<RecordStoreConfig, 'writeHook'>> &
+  Pick<RecordStoreConfig, 'writeHook'>;
+
 export class RecordStoreImpl implements RecordStore {
-  private readonly config: Required<RecordStoreConfig>;
+  private config: ResolvedConfig;
   private readonly repo: RepoAdapter;
   private readonly validator: AjvValidator;
   private readonly lintEngine: LintEngine;
@@ -70,7 +74,19 @@ export class RecordStoreImpl implements RecordStore {
     this.lintEngine = lintEngine;
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
-  
+
+  /**
+   * Attach (or detach with `null`) a write-side hook. Lets the server wire
+   * up dependent indexers (e.g. the JSON-LD index) after the store has been
+   * constructed — necessary because the projector depends on UI specs that
+   * are loaded after the store.
+   */
+  setWriteHook(hook: RecordStoreWriteHook | null): void {
+    if (hook) this.config.writeHook = hook;
+    else delete this.config.writeHook;
+  }
+
+
   /**
    * Find the file path for a record by ID.
    * Searches the records directory for a matching file.
@@ -459,13 +475,13 @@ export class RecordStoreImpl implements RecordStore {
       path,
       ...(result.commit?.sha !== undefined ? { commitSha: result.commit.sha } : {}),
     };
-    
+
+    const finalEnvelope = { ...envelope, meta: newMeta };
+    await this.fireUpsertHook(finalEnvelope);
+
     return {
       success: true,
-      envelope: {
-        ...envelope,
-        meta: newMeta,
-      },
+      envelope: finalEnvelope,
       ...(validation !== undefined ? { validation } : {}),
       ...(lint !== undefined ? { lint } : {}),
       ...(result.commit !== undefined ? {
@@ -477,7 +493,38 @@ export class RecordStoreImpl implements RecordStore {
       } : {}),
     };
   }
-  
+
+  /**
+   * Fire the upsert hook, swallowing errors so a misbehaving indexer cannot
+   * fail an otherwise successful write. The hook is logged on error so we
+   * can spot indexer drift; the write itself remains authoritative.
+   */
+  private async fireUpsertHook(envelope: RecordEnvelope): Promise<void> {
+    const hook = this.config.writeHook;
+    if (!hook) return;
+    try {
+      await hook.onUpsert(envelope);
+    } catch (err) {
+      console.warn(
+        `RecordStore writeHook.onUpsert failed for ${envelope.recordId}:`,
+        err,
+      );
+    }
+  }
+
+  private async fireDeleteHook(recordId: string): Promise<void> {
+    const hook = this.config.writeHook;
+    if (!hook) return;
+    try {
+      await hook.onDelete(recordId);
+    } catch (err) {
+      console.warn(
+        `RecordStore writeHook.onDelete failed for ${recordId}:`,
+        err,
+      );
+    }
+  }
+
   /**
    * Update an existing record.
    */
@@ -569,13 +616,13 @@ export class RecordStoreImpl implements RecordStore {
       path: existing.path,
       ...(result.commit?.sha !== undefined ? { commitSha: result.commit.sha } : {}),
     };
-    
+
+    const finalEnvelope = { ...envelope, meta: updatedMeta };
+    await this.fireUpsertHook(finalEnvelope);
+
     return {
       success: true,
-      envelope: {
-        ...envelope,
-        meta: updatedMeta,
-      },
+      envelope: finalEnvelope,
       ...(validation !== undefined ? { validation } : {}),
       ...(lint !== undefined ? { lint } : {}),
       ...(result.commit !== undefined ? {
@@ -587,7 +634,7 @@ export class RecordStoreImpl implements RecordStore {
       } : {}),
     };
   }
-  
+
   /**
    * Delete a record.
    */
@@ -638,7 +685,9 @@ export class RecordStoreImpl implements RecordStore {
     
     // Remove from cache
     this.pathCache.delete(recordId);
-    
+
+    await this.fireDeleteHook(recordId);
+
     return {
       success: true,
       ...(result.commit !== undefined ? {
@@ -650,7 +699,7 @@ export class RecordStoreImpl implements RecordStore {
       } : {}),
     };
   }
-  
+
   /**
    * Validate a record against its schema.
    */

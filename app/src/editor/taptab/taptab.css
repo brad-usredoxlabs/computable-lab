@@ -286,6 +286,98 @@
   color: var(--shell-text-secondary);
 }
 
+/* ── Phase 4: prose posture ───────────────────────────────────────── */
+/*
+ * `.taptab--prose` is the default — applied by TapTabEditor whenever
+ * the UI spec doesn't opt into `taptab.style: form`. Selectors below
+ * override the stacked form layout above.
+ */
+
+.taptab--prose.taptab-editor-container,
+.taptab--prose .taptab-editor-prose {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 2rem;
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.taptab--prose .taptab-section {
+  margin: 0 0 1.75rem 0;
+}
+
+.taptab--prose .taptab-section-heading {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 1.75rem 0 0.5rem;
+  padding: 0;
+  border-bottom: none;
+  color: var(--shell-text-primary);
+}
+
+.taptab--prose .taptab-section:first-child .taptab-section-heading {
+  margin-top: 0;
+}
+
+/* Field rows flow as inline-style sentences. The block atom stays
+ * block-level in the document model (so the serializer keeps working),
+ * but the visual rendering reads as "Label: value help". */
+.taptab--prose .taptab-field-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  margin: 0 0 0.45em 0;
+  padding: 0;
+  border: none;
+}
+
+.taptab--prose .taptab-field-label {
+  flex: 0 0 auto;
+  font-size: inherit;
+  font-weight: 500;
+  color: var(--shell-text-secondary);
+}
+
+.taptab--prose .taptab-field-label::after {
+  content: ': ';
+  color: var(--shell-text-muted, var(--shell-text-secondary));
+  margin-right: -0.2em;
+}
+
+.taptab--prose .taptab-field-value {
+  font-size: inherit;
+  border-bottom: 1px dotted transparent;
+  padding: 0;
+  min-width: 4ch;
+}
+
+.taptab--prose .taptab-field-value:hover,
+.taptab--prose .taptab-field-value:focus-within {
+  border-bottom-color: var(--shell-border);
+}
+
+.taptab--prose .taptab-field-help {
+  flex: 0 0 auto;
+  font-size: 0.85em;
+  color: var(--shell-text-muted, var(--shell-text-secondary));
+  margin: 0 0 0 0.5em;
+  font-style: italic;
+}
+
+/* Hide the required asterisk in prose — the field is empty when missing;
+ * the requirement is the schema's enforcement concern, not the reader's. */
+.taptab--prose .taptab-field-label[data-required="true"]::after {
+  content: ':';
+}
+
+/* DocumentShell column loses its boxy background and gridlines in prose. */
+.taptab--prose .document-shell__column,
+.document-shell__column:has(.taptab--prose) {
+  background-color: var(--shell-paper-bg, #ffffff);
+}
+
 /* ── Editor container (paper-like surface) ─────────────────────── */
 
 .taptab-editor-container {

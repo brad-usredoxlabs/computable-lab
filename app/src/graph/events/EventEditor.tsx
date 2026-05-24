@@ -7,7 +7,7 @@ import { useState, useCallback, useEffect } from 'react'
 import type { PlateEvent, EventType, EventDetails } from '../../types/events'
 import { EVENT_TYPE_LABELS, EVENT_TYPE_ICONS } from '../../types/events'
 import type { WellId } from '../../types/plate'
-import { useSelection } from '../../shared/context/SelectionContext'
+import { useWellSelection } from '../../shared/context/WellSelectionContext'
 import { formatWellList } from '../../shared/utils/wellUtils'
 
 // Form components for each event type
@@ -39,7 +39,7 @@ export function WellsSelector({
   onChange: (wells: WellId[]) => void
   label?: string
 }) {
-  const { state } = useSelection()
+  const { state } = useWellSelection()
   
   const handleUseSelection = useCallback(() => {
     if (state.selectedWells.size > 0) {

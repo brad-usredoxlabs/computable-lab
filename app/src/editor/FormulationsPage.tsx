@@ -636,7 +636,8 @@ export function FormulationsPage() {
       ingredientCount: createOpen ? createDraft.ingredients.length : null,
     },
   }), [formulations.length, createOpen, createDraft.recipeName, createDraft.ingredients.length])
-  const aiChat = useAiChat({ aiContext })
+  // Phase 2: persist to /api/ai/threads/browser (Phase 3 folds this page in).
+  const aiChat = useAiChat({ aiContext, endpoint: 'browser' })
   useRegisterAiChat(aiChat)
 
   const [prepareTarget, setPrepareTarget] = useState<FormulationSummary | null>(null)

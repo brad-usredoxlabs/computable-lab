@@ -6,7 +6,7 @@
  * business rules - those are defined in *.lint.yaml files.
  */
 
-import type { 
+import type {
   Predicate,
   ExistsPredicate,
   NonEmptyPredicate,
@@ -21,7 +21,9 @@ import type {
   ContextContainsPredicate,
   LineageIncludesPredicate,
   TimeWithinPredicate,
+  MentionKindMatchesPredicate,
 } from './types.js';
+import { parsePromptMentionMatches } from '../ai/promptMentions.js';
 
 import { 
   pathExists, 
@@ -615,12 +617,89 @@ export function evaluatePredicate(
   if (isTimeWithinPredicate(predicate)) {
     return evalTimeWithin(predicate, data);
   }
-  
+
+  if (isMentionKindMatchesPredicate(predicate)) {
+    return evalMentionKindMatches(predicate, data);
+  }
+
   // Unknown predicate type
   return {
     result: false,
     reason: `Unknown predicate op: ${(predicate as Predicate).op}`,
   };
+}
+
+/**
+ * Type guard for mention_kind_matches predicate.
+ */
+function isMentionKindMatchesPredicate(p: Predicate): p is MentionKindMatchesPredicate {
+  return p.op === 'mention_kind_matches';
+}
+
+/**
+ * Evaluate a `mention_kind_matches` predicate — Phase 6.
+ *
+ * Pulls the string at `pred.path`, walks every `[[kind:id|label]]` token,
+ * and checks that the discriminator (a material's `entityKind` when set,
+ * otherwise `type`) is in `allowedKinds`. Empty / non-string values pass:
+ * a field with no mention payload has no kind to mismatch.
+ */
+function evalMentionKindMatches(
+  pred: MentionKindMatchesPredicate,
+  data: unknown,
+): PredicateResult {
+  const value = getPath(data, pred.path);
+  if (value === undefined || value === null || value === '') {
+    return {
+      result: true,
+      path: pred.path,
+      reason: `No content at '${pred.path}' to check`,
+    };
+  }
+  if (typeof value !== 'string') {
+    return {
+      result: false,
+      path: pred.path,
+      reason: `Path '${pred.path}' is not a string`,
+    };
+  }
+  const matches = parsePromptMentionMatches(value);
+  if (matches.length === 0) {
+    return {
+      result: true,
+      path: pred.path,
+      reason: `No inline mentions at '${pred.path}'`,
+    };
+  }
+  const allowed = new Set(pred.allowedKinds);
+  for (const m of matches) {
+    const kind = inferMentionKind(m.mention);
+    if (!allowed.has(kind)) {
+      return {
+        result: false,
+        path: pred.path,
+        reason:
+          `Mention kind '${kind}' at offset ${m.start} is not allowed ` +
+          `(expected one of: ${pred.allowedKinds.join(', ')})`,
+      };
+    }
+  }
+  return {
+    result: true,
+    path: pred.path,
+    reason: `All ${matches.length} mention(s) at '${pred.path}' are of an allowed kind`,
+  };
+}
+
+interface MentionShape {
+  type: string;
+  entityKind?: string;
+}
+
+function inferMentionKind(mention: unknown): string {
+  if (!mention || typeof mention !== 'object') return 'unknown';
+  const m = mention as MentionShape;
+  return m.entityKind ?? m.type ?? 'unknown';
 }
 
 /**

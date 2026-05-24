@@ -18,20 +18,21 @@ export type LintScope = 'record' | 'collection' | 'repo';
 /**
  * Predicate operation types.
  */
-export type PredicateOp = 
-  | 'exists' 
-  | 'nonEmpty' 
-  | 'regex' 
-  | 'equals' 
-  | 'in' 
-  | 'all' 
-  | 'any' 
+export type PredicateOp =
+  | 'exists'
+  | 'nonEmpty'
+  | 'regex'
+  | 'equals'
+  | 'in'
+  | 'all'
+  | 'any'
   | 'not'
   | 'has_material_class'
   | 'state_is'
   | 'context_contains'
   | 'lineage_includes'
-  | 'time_within';
+  | 'time_within'
+  | 'mention_kind_matches';
 
 /**
  * Base predicate interface.
@@ -171,9 +172,30 @@ export interface TimeWithinPredicate extends BasePredicate {
 }
 
 /**
+ * MentionKindMatches predicate — Phase 6 carry-over from Phase 4.
+ *
+ * Walks the string value at `path` for `[[kind:id|label]]` tokens (the slash-
+ * menu wire format) and asserts that every token's `kind` is in the
+ * `allowedKinds` set. Used by lint rules attached to slots that accept
+ * inline mentions — a `[[material:…]]` token dropped into a `labware`-typed
+ * field surfaces here, alongside the usual structural validation errors.
+ */
+export interface MentionKindMatchesPredicate extends BasePredicate {
+  op: 'mention_kind_matches';
+  /** Path to the text field that may carry inline mention tokens. */
+  path: string;
+  /**
+   * Mention kinds that are allowed at this path. Compared against the
+   * parsed mention's `entityKind ?? type` — e.g. `material`, `material-spec`,
+   * `aliquot`, `labware`, `protocol`, `graph-component`, `selection`.
+   */
+  allowedKinds: string[];
+}
+
+/**
  * Union of all predicate types.
  */
-export type Predicate = 
+export type Predicate =
   | ExistsPredicate
   | NonEmptyPredicate
   | RegexPredicate
@@ -186,7 +208,8 @@ export type Predicate =
   | StateIsPredicate
   | ContextContainsPredicate
   | LineageIncludesPredicate
-  | TimeWithinPredicate;
+  | TimeWithinPredicate
+  | MentionKindMatchesPredicate;
 
 /**
  * Message configuration for a lint rule.

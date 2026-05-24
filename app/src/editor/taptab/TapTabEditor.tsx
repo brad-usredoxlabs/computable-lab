@@ -12,7 +12,16 @@ import { FieldRow } from './extensions/FieldRow';
 import { buildDocument, buildProjectionDocument } from './documentMapper';
 import { createTabNavPlugin } from './tabNavPlugin';
 import { serializeDocument, isDirty } from './recordSerializer';
-import type { TapTabEditorProps, OnSerializedChangeCallback } from './types';
+import type {
+  TapTabEditorProps,
+  OnSerializedChangeCallback,
+  TapTabStyle,
+} from './types';
+import {
+  buildSlashMenuExtension,
+  MentionNode,
+} from '../../shared/taptab/slashMenu';
+import { useSelection } from '../../shared/context/SelectionContext';
 
 /**
  * Custom Document extension with content: 'section+' to allow only section nodes.
@@ -43,7 +52,7 @@ export interface TapTabEditorHandle {
  * Supports both the legacy uiSpec+data path and the new projection-backed path.
  */
 export const TapTabEditor = forwardRef<TapTabEditorHandle, TapTabEditorProps>(function TapTabEditor(
-  { data, uiSpec, disabled, onUpdate }: TapTabEditorProps,
+  { data, uiSpec, disabled, onUpdate, style }: TapTabEditorProps,
   ref
 ) {
   // Build TipTap document from uiSpec (legacy path)
@@ -60,6 +69,17 @@ export const TapTabEditor = forwardRef<TapTabEditorHandle, TapTabEditorProps>(fu
     onUpdate(serialized, dirty);
   }, [onUpdate, data]);
 
+  // Phase 4: prose is the default. The schema can opt into form via
+  // `taptab.style: form`; an explicit prop overrides both.
+  const effectiveStyle: TapTabStyle =
+    style ?? uiSpec.taptab?.style ?? 'prose';
+
+  // Slash menu reads the latest selection at trigger time; the SelectionRef
+  // lets us hand a getter to the extension without re-instantiating it.
+  const selection = useSelection();
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+
   const editor = useEditor({
     extensions: [
       CustomDocument,
@@ -67,6 +87,10 @@ export const TapTabEditor = forwardRef<TapTabEditorHandle, TapTabEditorProps>(fu
       Section,
       SectionHeading,
       FieldRow,
+      MentionNode,
+      buildSlashMenuExtension({
+        getSelection: () => selectionRef.current,
+      }),
       TabNavExtension,
     ] as any[],
     content,
@@ -74,7 +98,7 @@ export const TapTabEditor = forwardRef<TapTabEditorHandle, TapTabEditorProps>(fu
     onUpdate: handleUpdate,
     editorProps: {
       attributes: {
-        class: 'taptab-editor-prose',
+        class: `taptab-editor-prose taptab--${effectiveStyle}`,
       },
     },
   });
@@ -92,7 +116,7 @@ export const TapTabEditor = forwardRef<TapTabEditorHandle, TapTabEditorProps>(fu
   }
 
   return (
-    <div className="taptab-editor-container">
+    <div className={`taptab-editor-container taptab--${effectiveStyle}`}>
       <EditorContent editor={editor} />
     </div>
   );
@@ -125,6 +149,8 @@ export interface ProjectionTapTabEditorProps {
   data: Record<string, unknown>;
   /** Whether the editor is disabled */
   disabled?: boolean;
+  /** TapTab posture. Defaults to the projection's `taptab.style` or `prose`. */
+  style?: TapTabStyle;
   /** Callback fired when the editor content changes (event-driven dirty tracking) */
   onUpdate?: OnSerializedChangeCallback;
 }
@@ -134,7 +160,7 @@ export interface ProjectionTapTabEditorProps {
  * Builds the TipTap document from EditorProjection blocks/slots instead of uiSpec.
  */
 export const ProjectionTapTabEditor = forwardRef<TapTabEditorHandle, ProjectionTapTabEditorProps>(function ProjectionTapTabEditor(
-  { blocks, slots, data, disabled, onUpdate }: ProjectionTapTabEditorProps,
+  { blocks, slots, data, disabled, onUpdate, style }: ProjectionTapTabEditorProps,
   ref
 ) {
   // Build TipTap document from projection (additive path)
@@ -151,6 +177,12 @@ export const ProjectionTapTabEditor = forwardRef<TapTabEditorHandle, ProjectionT
     onUpdate(serialized, dirty);
   }, [onUpdate, data]);
 
+  const effectiveStyle: TapTabStyle = style ?? 'prose';
+
+  const selection = useSelection();
+  const selectionRef = useRef(selection);
+  selectionRef.current = selection;
+
   const editor = useEditor({
     extensions: [
       CustomDocument,
@@ -158,6 +190,10 @@ export const ProjectionTapTabEditor = forwardRef<TapTabEditorHandle, ProjectionT
       Section,
       SectionHeading,
       FieldRow,
+      MentionNode,
+      buildSlashMenuExtension({
+        getSelection: () => selectionRef.current,
+      }),
       TabNavExtension,
     ] as any[],
     content,
@@ -165,7 +201,7 @@ export const ProjectionTapTabEditor = forwardRef<TapTabEditorHandle, ProjectionT
     onUpdate: handleUpdate,
     editorProps: {
       attributes: {
-        class: 'taptab-editor-prose',
+        class: `taptab-editor-prose taptab--${effectiveStyle}`,
       },
     },
   });
@@ -182,7 +218,7 @@ export const ProjectionTapTabEditor = forwardRef<TapTabEditorHandle, ProjectionT
   }
 
   return (
-    <div className="taptab-editor-container">
+    <div className={`taptab-editor-container taptab--${effectiveStyle}`}>
       <EditorContent editor={editor} />
     </div>
   );

@@ -434,6 +434,9 @@ export function projectRecord(
     blocks,
     slots,
     diagnostics,
+    // Phase 4: forward the TapTab posture flag so the frontend can render
+    // prose vs form without a separate UISpec round-trip.
+    ...(uiSpec.taptab ? { taptab: uiSpec.taptab } : {}),
   };
 }
 

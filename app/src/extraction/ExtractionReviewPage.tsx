@@ -1,6 +1,7 @@
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor';
+import { promoteThread } from '../shared/api/aiThreadClient';
 
 interface AmbiguitySpan {
   path: string;
@@ -172,8 +173,18 @@ function CandidateTapTabSurface({
 
 // ── Main page component ──────────────────────────────────────────────
 
+function generateConversationRecordId(): string {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `CONV-${stamp}-${rand}`;
+}
+
 export function ExtractionReviewPage(): JSX.Element {
-  const { recordId } = useParams<{ recordId: string }>();
+  // Phase 6: recordId may come from a path param (legacy /extraction/review/:recordId)
+  // or a search param (/literature?view=review&recordId=…).
+  const params = useParams<{ recordId: string }>();
+  const [searchParams] = useSearchParams();
+  const recordId = params.recordId ?? searchParams.get('recordId') ?? undefined;
   const [record, setRecord] = useState<ExtractionDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -216,7 +227,7 @@ export function ExtractionReviewPage(): JSX.Element {
         headers: { 'Content-Type': 'application/json' },
       });
       if (response.ok) {
-        const result = await response.json();
+        const result = await response.json() as { recordId?: string; promotionId?: string };
         // Optimistically update local state
         setRecord(prev => {
           if (!prev) return null;
@@ -224,6 +235,26 @@ export function ExtractionReviewPage(): JSX.Element {
           updatedCandidates[index] = { ...updatedCandidates[index], status: 'promoted' as const };
           return { ...prev, candidates: updatedCandidates };
         });
+        // Auto-promote the originating AI thread (Phase 0 → Phase 5 → Phase 6).
+        // Failures are non-fatal: the canonical record has already been written.
+        const promotedRecordId = result.recordId;
+        if (promotedRecordId) {
+          const linked: Array<{ recordId: string; kind?: string }> = [
+            { recordId: promotedRecordId, kind: 'extracted' },
+          ];
+          if (result.promotionId) linked.push({ recordId: result.promotionId, kind: 'extraction-promotion' });
+          try {
+            await promoteThread('literature', {
+              title: `Extraction promotion · ${promotedRecordId}`,
+              recordId: generateConversationRecordId(),
+              mode: 'automatic',
+              reason: 'extraction-promotion',
+              linkedArtifacts: linked,
+            });
+          } catch (promoteErr) {
+            console.warn('Thread auto-promotion failed:', promoteErr);
+          }
+        }
       } else {
         const errorData = await response.json().catch(() => ({}));
         alert(`Promote failed: ${errorData.message || response.statusText}`);

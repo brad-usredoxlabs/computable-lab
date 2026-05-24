@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useEventEditor } from '../EventEditorContext'
-import { useViewport } from '../lib/useViewport'
+import { useViewport } from '../../shared/shell'
 import { listFixItJobs, type FixItJobRecord } from './fixItClient'
 
 /**

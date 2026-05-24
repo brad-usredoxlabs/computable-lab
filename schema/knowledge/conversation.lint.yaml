@@ -1,0 +1,15 @@
+# Lint rules for Conversation records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/conversation.schema.yaml"
+rules:
+- id: conversation.linked-artifacts-when-automatic
+  description: >
+    Auto-promoted conversations must reference at least one linked artifact;
+    that is the entire reason the auto-promotion fired.
+  when:
+    equals:
+      path: "$.provenance.mode"
+      value: "automatic"
+  assert:
+    exists: "$.linkedArtifacts[0]"
+  severity: error

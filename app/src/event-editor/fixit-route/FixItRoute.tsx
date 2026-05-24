@@ -6,7 +6,8 @@ import {
   type FixItSeed,
 } from '../EventEditorContext'
 import { FixItPanel } from '../fix-it/FixItPanel'
-import { ThemeProvider, useTheme } from '../lib/useTheme'
+import { AppShell, ThemeProvider } from '../../shared/shell'
+import '../../shared/styles/tokens.css'
 import '../styles/eventEditor.css'
 
 /**
@@ -36,7 +37,6 @@ export function FixItRoute() {
 export default FixItRoute
 
 function FixItRouteShell() {
-  const { resolvedTheme } = useTheme()
   const { state, actions } = useEventEditor()
   const [searchParams] = useSearchParams()
   // Guard against the bootstrap effect re-firing after every state
@@ -77,14 +77,16 @@ function FixItRouteShell() {
   }, [actions, seedKey])
 
   return (
-    <div className="event-editor event-editor--fixit-route" data-theme={resolvedTheme}>
-      {state.loadState === 'error' ? (
-        <div className="splash splash--error">
-          Failed to load platforms: {state.loadError ?? 'unknown error'}
-        </div>
-      ) : (
-        <FixItPanel layout="fullscreen" />
-      )}
-    </div>
+    <AppShell brand="Fix-It" bare>
+      <div className="event-editor">
+        {state.loadState === 'error' ? (
+          <div className="splash splash--error">
+            Failed to load platforms: {state.loadError ?? 'unknown error'}
+          </div>
+        ) : (
+          <FixItPanel layout="fullscreen" />
+        )}
+      </div>
+    </AppShell>
   )
 }

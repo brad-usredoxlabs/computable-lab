@@ -10,6 +10,11 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { flushSync } from 'react-dom'
 import { streamAssist, getAiHealth } from '../api/aiClient'
 import { apiClient } from '../api/client'
+import {
+  appendThreadMessage,
+  getThread,
+  type ApplianceEndpoint,
+} from '../api/aiThreadClient'
 import { parsePromptMentions } from '../lib/aiPromptMentions'
 import type { PlateEvent } from '../../types/events'
 import type { RecordRef } from '../../types/ref'
@@ -144,13 +149,21 @@ export type AddLabwareFromRecordHandler = (record: Record<string, unknown>, addi
 interface UseAiChatOptions {
   /** Page-level AI context — determines surface and context payload. */
   aiContext: AiContext
+  /**
+   * Appliance endpoint this chat belongs to. When set, the hook hydrates
+   * messages from `/api/ai/threads/:endpoint` on mount and appends each new
+   * message back so the conversation survives a page reload. When omitted,
+   * the chat lives in memory only — used by legacy surfaces during the
+   * Phase 2 → Phase 7 migration.
+   */
+  endpoint?: ApplianceEndpoint
   /** Handler called for each accepted preview event. */
   onAcceptEvent?: AcceptEventHandler
   /** Handler called to add labware from a record (for AI-proposed additions). */
   onAddLabwareFromRecord?: AddLabwareFromRecordHandler
 }
 
-export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: UseAiChatOptions): UseAiChatReturn {
+export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFromRecord }: UseAiChatOptions): UseAiChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [isAccepting, setIsAccepting] = useState(false)
@@ -198,6 +211,89 @@ export function useAiChat({ aiContext, onAcceptEvent, onAddLabwareFromRecord }: 
   // Ref to the labware addition handler.
   const addLabwareFromRecordRef = useRef(onAddLabwareFromRecord)
   addLabwareFromRecordRef.current = onAddLabwareFromRecord
+
+  // ---- Thread persistence ------------------------------------------------
+  //
+  // When the host page provides `endpoint`, hydrate the chat from the server
+  // thread on mount and append each subsequent message back. The `persisted`
+  // set tracks which message ids have already been pushed so re-renders
+  // don't double-post.
+  const persistedIdsRef = useRef<Set<string>>(new Set())
+  const hydratedRef = useRef(false)
+
+  useEffect(() => {
+    if (!endpoint) {
+      hydratedRef.current = true
+      return
+    }
+    let cancelled = false
+    hydratedRef.current = false
+    getThread(endpoint)
+      .then((thread) => {
+        if (cancelled) return
+        if (thread.messages.length > 0) {
+          const hydrated: ChatMessage[] = thread.messages
+            .filter((m) => m.role === 'user' || m.role === 'assistant')
+            .map((m, idx) => ({
+              id: `persisted-${idx}-${m.createdAt}`,
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+              timestamp: Date.parse(m.createdAt) || Date.now(),
+            }))
+          hydrated.forEach((m) => persistedIdsRef.current.add(m.id))
+          setMessages((prev) => (prev.length > 0 ? prev : hydrated))
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to hydrate AI thread', err)
+      })
+      .finally(() => {
+        if (!cancelled) hydratedRef.current = true
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [endpoint])
+
+  useEffect(() => {
+    if (!endpoint || !hydratedRef.current) return
+    const unsynced = messages.filter(
+      (m) => !persistedIdsRef.current.has(m.id) && !m.isStreaming,
+    )
+    if (unsynced.length === 0) return
+    for (const m of unsynced) {
+      if (m.role === 'system') continue
+      persistedIdsRef.current.add(m.id)
+      // Phase 5: persist the full message shape so promoted `conversation`
+      // records carry preview events, labware additions, clarifications,
+      // tool-call traces, and execution-scale plans — not just the prose
+      // body. The schema's `messages[].metadata` accepts an open object;
+      // we forward every structured field that isn't already a primitive.
+      const metadata: Record<string, unknown> = {}
+      if (m.events && m.events.length > 0) metadata.events = m.events
+      if (m.labwareAdditions && m.labwareAdditions.length > 0)
+        metadata.labwareAdditions = m.labwareAdditions
+      if (m.clarification) metadata.clarification = m.clarification
+      if (m.executionScalePlan) metadata.executionScalePlan = m.executionScalePlan
+      if (m.instrumentApplianceJobs && m.instrumentApplianceJobs.length > 0)
+        metadata.instrumentApplianceJobs = m.instrumentApplianceJobs
+      if (m.usage) metadata.usage = m.usage
+      if (m.attachments && m.attachments.length > 0)
+        metadata.attachments = m.attachments
+      appendThreadMessage(endpoint, {
+        message: {
+          role: m.role,
+          content: m.content,
+          ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+        },
+      }).catch((err) => {
+        console.warn(`Failed to persist message ${m.id}`, err)
+        // Remove from the synced set so we retry on next change.
+        persistedIdsRef.current.delete(m.id)
+      })
+    }
+  }, [endpoint, messages])
+
 
   // ------------------------------------------------------------------
   // Per-event preview state

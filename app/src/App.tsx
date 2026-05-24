@@ -1,123 +1,84 @@
+/**
+ * App.tsx — root router.
+ *
+ * Phase 7 retired every legacy route. The appliance now has four endpoint
+ * routes plus supporting routes:
+ *   - `/browser`     (Phase 3) — schema-driven record browser.
+ *   - `/event-editor` (proven Phase 0 model) — live deck authoring.
+ *   - `/protocols`   (Phase 5) — protocol authoring + foundry + jobs.
+ *   - `/literature`  (Phase 6) — intake funnel.
+ *   - `/event-editor/fixit` — standalone full-screen Fix-It tab.
+ *   - `/settings` — off-nav settings page reached from the brand menu.
+ *
+ * `/runs/:runId/event-editor` is the same EventEditorPage at a deep-link
+ * URL; it isn't a separate endpoint. Settings, Theme, and About are exposed
+ * through the brand menu inside AppShell (top-left brand click), not the nav.
+ *
+ * The mention click handler (`MentionNavigator`) sits inside BrowserRouter
+ * so it can call useNavigate; it routes `[[kind:id|label]]` pill clicks
+ * to `/browser?id=…&type=…`.
+ */
+
 import { Suspense, lazy } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { Layout } from './shell/Layout'
 import { ErrorBoundary } from './shell/ErrorBoundary'
-import { SchemaList } from './editor/SchemaList'
-import { RecordList } from './editor/RecordList'
-import { RecordViewer } from './editor/RecordViewer'
-import { RawRecordEditor } from './editor/RawRecordEditor'
-import { SettingsPage } from './shell/SettingsPage'
-import { IngestionPage } from './ingestion/IngestionPage'
-import { ExtractionReviewPage } from './extraction/ExtractionReviewPage'
-import { ExtractionDraftsListPage } from './extraction/ExtractionDraftsListPage'
+import { SelectionProvider } from './shared/context/SelectionContext'
+import { ThemeProvider } from './shared/shell'
+import { useMentionNavigation } from './shared/taptab/slashMenu'
+import './shared/styles/tokens.css'
 
-const LabwareEventEditor = lazy(async () => import('./graph/LabwareEventEditor').then((module) => ({ default: module.LabwareEventEditor })))
-const RunWorkspacePage = lazy(async () => import('./graph/RunWorkspacePage').then((module) => ({ default: module.RunWorkspacePage })))
-const RecordBrowser = lazy(() => import('./knowledge/RecordBrowser'))
-const RecordRegistryPage = lazy(() => import('./pages/RecordRegistryPage'))
-const LiteratureExplorer = lazy(async () => import('./knowledge/LiteratureExplorer').then((module) => ({ default: module.LiteratureExplorer })))
-const ComponentLibraryPage = lazy(async () => import('./knowledge/ComponentLibraryPage').then((module) => ({ default: module.ComponentLibraryPage })))
-const FormulationsPage = lazy(async () => import('./editor/FormulationsPage').then((module) => ({ default: module.FormulationsPage })))
-const MaterialsPage = lazy(async () => import('./editor/MaterialsPage').then((module) => ({ default: module.MaterialsPage })))
-const LabwareTestPage = lazy(async () => import('./pages/LabwareTestPage').then((module) => ({ default: module.default })))
-const ProtocolIdePage = lazy(async () => import('./protocol-ide/ProtocolIdePage').then((module) => ({ default: module.ProtocolIdePage })))
-const FoundryStatusPanel = lazy(async () => import('./protocol-ide/FoundryStatusPanel').then((module) => ({ default: module.FoundryStatusPanel })))
-const FoundryAcquisitionJobsPanel = lazy(async () => import('./protocol-ide/FoundryAcquisitionJobsPanel').then((module) => ({ default: module.FoundryAcquisitionJobsPanel })))
-const RunEditorRouter = lazy(async () => import('./graph/RunEditorRouter').then((module) => ({ default: module.RunEditorRouter })))
-const EventEditorPage = lazy(async () => import('./event-editor/EventEditorPage').then((module) => ({ default: module.EventEditorPage })))
-const FixItRoute = lazy(async () => import('./event-editor/fixit-route/FixItRoute').then((module) => ({ default: module.FixItRoute })))
+const BrowserPage = lazy(async () => import('./browser/BrowserPage').then((m) => ({ default: m.BrowserPage })))
+const ProtocolsPage = lazy(async () => import('./protocols/ProtocolsPage').then((m) => ({ default: m.ProtocolsPage })))
+const LiteraturePage = lazy(async () => import('./literature/LiteraturePage').then((m) => ({ default: m.LiteraturePage })))
+const EventEditorPage = lazy(async () => import('./event-editor/EventEditorPage').then((m) => ({ default: m.EventEditorPage })))
+const FixItRoute = lazy(async () => import('./event-editor/fixit-route/FixItRoute').then((m) => ({ default: m.FixItRoute })))
+const SettingsRoute = lazy(async () => import('./settings/SettingsRoute').then((m) => ({ default: m.SettingsRoute })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
 }
 
+/** Renders nothing; wires the document-level mention-click handler. Must
+ *  live inside BrowserRouter so it can call useNavigate. */
+function MentionNavigator(): null {
+  useMentionNavigation()
+  return null
+}
+
+function NotFoundRoute() {
+  return (
+    <main style={{ padding: '2rem' }} data-testid="not-found-route">
+      <h1>404</h1>
+      <p>That route is not part of this appliance UI.</p>
+    </main>
+  )
+}
+
 export function App() {
   return (
     <ErrorBoundary>
-      <BrowserRouter>
-        <Routes>
-          {/* New minimalistic event editor — mounted outside the standard Layout
-              so it gets its own chrome and isn't constrained by the global nav. */}
-          <Route
-            path="/event-editor"
-            element={<DeferredRoute><EventEditorPage /></DeferredRoute>}
-          />
-          <Route
-            path="/runs/:runId/event-editor"
-            element={<DeferredRoute><EventEditorPage /></DeferredRoute>}
-          />
-          {/* Mobile Fix-it tab — fullscreen FixItPanel in its own React
-              tree so the user can run the loop in a separate browser
-              tab from the viewer at /event-editor. */}
-          <Route
-            path="/event-editor/fixit"
-            element={<DeferredRoute><FixItRoute /></DeferredRoute>}
-          />
-
-          <Route path="/" element={<Layout />}>
-            {/* Redirect root to browser */}
-            <Route index element={<Navigate to="/browser" replace />} />
-            
-            {/* Schema browser */}
-            <Route path="schemas" element={<SchemaList />} />
-            
-            {/* Records for a schema */}
-            <Route path="schemas/:schemaId/records" element={<RecordList />} />
-            
-            {/* Record detail view */}
-            <Route path="records/:recordId" element={<RecordViewer />} />
-            
-            {/* Edit existing record */}
-            <Route path="records/:recordId/edit" element={<RawRecordEditor />} />
-            
-            {/* Create new record (schemaId in query param) */}
-            <Route path="new" element={<RawRecordEditor />} />
-            
-            {/* Multi-Labware Event Editor */}
-            <Route path="labware-editor" element={<DeferredRoute><LabwareEventEditor /></DeferredRoute>} />
-            <Route path="runs/:runId" element={<DeferredRoute><RunWorkspacePage /></DeferredRoute>} />
-            <Route path="runs/:runId/editor" element={<DeferredRoute><RunEditorRouter /></DeferredRoute>} />
-            <Route path="runs/:runId/editor/:mode" element={<DeferredRoute><LabwareEventEditor /></DeferredRoute>} />
-            
-            {/* Settings */}
-            <Route path="settings" element={<SettingsPage />} />
-
-            {/* Ingestion */}
-            <Route path="ingestion" element={<IngestionPage />} />
-            
-            {/* Literature & Bio-Source Explorer */}
-            <Route path="literature" element={<DeferredRoute><LiteratureExplorer /></DeferredRoute>} />
-
-            {/* Component + Protocol Library */}
-            <Route path="component-library" element={<DeferredRoute><ComponentLibraryPage /></DeferredRoute>} />
-
-            {/* Formulations */}
-            <Route path="formulations" element={<DeferredRoute><FormulationsPage /></DeferredRoute>} />
-            <Route path="materials" element={<DeferredRoute><MaterialsPage /></DeferredRoute>} />
-
-            {/* Record Browser */}
-            <Route path="browser" element={<DeferredRoute><RecordBrowser /></DeferredRoute>} />
-
-            {/* Record Registry */}
-            <Route path="registry" element={<DeferredRoute><RecordRegistryPage /></DeferredRoute>} />
-
-            {/* Labware Test Page - for testing LabwarePicker */}
-            <Route path="labware-test" element={<DeferredRoute><LabwareTestPage /></DeferredRoute>} />
-
-            {/* Extraction Drafts List */}
-            <Route path="extraction" element={<ExtractionDraftsListPage />} />
-            
-            {/* Extraction Review */}
-            <Route path="extraction/review/:recordId" element={<ExtractionReviewPage />} />
-
-            {/* Protocol IDE */}
-            <Route path="protocol-ide/foundry/status" element={<DeferredRoute><FoundryStatusPanel /></DeferredRoute>} />
-            <Route path="protocol-ide/foundry/jobs" element={<DeferredRoute><FoundryAcquisitionJobsPanel /></DeferredRoute>} />
-            <Route path="protocol-ide" element={<DeferredRoute><ProtocolIdePage /></DeferredRoute>} />
-            <Route path="protocol-ide/:sessionId" element={<DeferredRoute><ProtocolIdePage /></DeferredRoute>} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+      <ThemeProvider>
+        <SelectionProvider>
+          <BrowserRouter>
+            <MentionNavigator />
+            <Routes>
+              <Route path="/" element={<Navigate to="/browser" replace />} />
+              <Route path="/browser" element={<DeferredRoute><BrowserPage /></DeferredRoute>} />
+              <Route path="/event-editor" element={<DeferredRoute><EventEditorPage /></DeferredRoute>} />
+              <Route path="/event-editor/fixit" element={<DeferredRoute><FixItRoute /></DeferredRoute>} />
+              <Route path="/runs/:runId/event-editor" element={<DeferredRoute><EventEditorPage /></DeferredRoute>} />
+              <Route path="/protocols" element={<DeferredRoute><ProtocolsPage /></DeferredRoute>} />
+              <Route path="/literature" element={<DeferredRoute><LiteraturePage /></DeferredRoute>} />
+              {/* /settings is a real page in the new UI: off-nav, reached
+                  from the brand menu, but with a URL, deep linking, and
+                  browser-back like every other shell page. */}
+              <Route path="/settings" element={<DeferredRoute><SettingsRoute /></DeferredRoute>} />
+              {/* Phase 7: retired legacy URLs do not redirect. */}
+              <Route path="*" element={<NotFoundRoute />} />
+            </Routes>
+          </BrowserRouter>
+        </SelectionProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   )
 }

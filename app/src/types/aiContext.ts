@@ -14,6 +14,7 @@ export type AiSurface =
   | 'ingestion'
   | 'literature'
   | 'protocol-ide'
+  | 'browser'
 
 export interface AiContext {
   /** Which page surface is providing context. */

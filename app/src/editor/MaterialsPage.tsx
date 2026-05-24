@@ -41,7 +41,9 @@ export function MaterialsPage() {
       materialCount: items.length,
     },
   }), [search, category, selectedMaterialId, items.length])
-  const aiChat = useAiChat({ aiContext })
+  // Phase 2: persist the chat thread to /api/ai/threads/browser so it
+  // survives a page reload. MaterialsPage folds into /browser in Phase 3.
+  const aiChat = useAiChat({ aiContext, endpoint: 'browser' })
   useRegisterAiChat(aiChat)
 
   async function load() {

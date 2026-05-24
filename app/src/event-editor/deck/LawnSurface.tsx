@@ -178,7 +178,7 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
         style={{
           width: widthPx,
           height: heightPx,
-          ['--ee-lawn-grid' as unknown as string]: `${gridPx}px`,
+          ['--cl-lawn-grid' as unknown as string]: `${gridPx}px`,
         }}
         onClick={handleSurfaceClick}
         onDragOver={handleDragOver}
