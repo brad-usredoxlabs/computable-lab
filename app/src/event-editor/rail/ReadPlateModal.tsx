@@ -89,8 +89,6 @@ function blockersForPlan(plans: ChannelExecutionPlan[]): string[] {
   const blockers: string[] = []
   if (plans.length === 0) blockers.push('Assign at least one well group before reading the plate.')
   for (const plan of plans.filter((item) => item.selected)) {
-    if (!plan.hasPositiveControl) blockers.push(channelLabel(plan.channel) + ' is missing a positive control group.')
-    if (!plan.hasNegativeControl) blockers.push(channelLabel(plan.channel) + ' is missing a negative control group.')
     if (plan.channel.excitationNm == null || plan.channel.emissionNm == null) blockers.push(channelLabel(plan.channel) + ' needs excitation and emission wavelengths.')
   }
   if (plans.length > 0 && !plans.some((item) => item.selected)) blockers.push('Select at least one channel to execute.')

@@ -62,4 +62,26 @@ describe('ReadPlateModal', () => {
     expect(apiMocks.createRecord.mock.calls.filter((call) => String(call[0]).includes('evidence.schema')).length).toBe(2)
     expect(apiMocks.updateRecord).toHaveBeenCalledTimes(2)
   })
+
+  it('allows a positive-control-only channel to execute', async () => {
+    const positive = createGroupDraft({
+      roleDefinition: SEEDED_ROLE_DEFINITIONS.find((role) => role.id === 'CR-ros-positive-control'),
+      selectedWells: ['A1'],
+    })
+    const rail = {
+      'pl-1': {
+        ...DEFAULT_PLATE_RAIL_DRAFT,
+        knowledge: { ...DEFAULT_PLATE_RAIL_DRAFT.knowledge, groups: [positive] },
+      },
+    }
+
+    render(<ReadPlateModal isOpen placementId='pl-1' labware={labware} rail={rail} events={[]} onClose={() => {}} />)
+
+    expect(screen.getByText(/missing negative control/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Execute read' }))
+
+    await waitFor(() => expect(apiMocks.executeInstrumentApplianceJob).toHaveBeenCalledTimes(1))
+    expect(apiMocks.executeInstrumentApplianceJob.mock.calls[0][0].executionReadiness).toMatchObject({ status: 'ready', blockers: [] })
+  })
+
 })
