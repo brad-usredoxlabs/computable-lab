@@ -36,7 +36,7 @@ export interface SlashSuggestion {
 export type SlashMention =
   | {
       type: 'material'
-      entityKind: 'material' | 'material-spec' | 'aliquot'
+      entityKind: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product'
       id: string
       label: string
     }

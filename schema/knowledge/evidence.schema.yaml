@@ -70,6 +70,6 @@ $defs:
     properties:
       type:
         type: string
-        enum: [ result, context, event, publication, file, event_graph ]
+        enum: [ result, context, measurement_context, event, publication, file, event_graph ]
       ref:
         $ref: "./datatypes/ref.schema.yaml"

@@ -128,6 +128,12 @@ export function BuildMixtureForm({
 
       onSaved({
         recordId: response.materialSpecId,
+        ref: {
+          kind: 'record',
+          id: response.materialSpecId,
+          type: 'material-spec',
+          label: outputName.trim(),
+        },
         label: outputName.trim(),
         hasCellComposition: hasCells,
         compositionSnapshot: composition,

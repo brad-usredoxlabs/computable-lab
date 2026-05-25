@@ -92,6 +92,7 @@ import { createReadinessHandlers } from './api/handlers/ReadinessHandlers.js';
 import { createExtractHandlers } from './api/handlers/ExtractHandlers.js';
 import { createProcurementHandlers } from './api/handlers/ProcurementHandlers.js';
 import { createPromptTemplateHandlers } from './api/handlers/PromptTemplateHandlers.js';
+import { createPredicatesHandlers } from './api/handlers/PredicatesHandlers.js';
 import { getOntologyTermRegistry } from './registry/OntologyTermRegistry.js';
 import { getVerbActionMap } from './registry/VerbActionMapRegistry.js';
 import { ExtractionRunnerService } from './extract/ExtractionRunnerService.js';
@@ -820,6 +821,10 @@ export async function createServer(
   // Verb-action-map registry (always available, synchronous load)
   const verbActionMapHandlers = createVerbActionMapHandlers(getVerbActionMap());
 
+  // Predicate registry — exposes the curated RO predicate list to the UI
+  // wizard. Tolerant of a missing registry; handler returns 503 in that case.
+  const predicatesHandlers = createPredicatesHandlers(ctx.predicateRegistry);
+
   // Register API routes with /api prefix
   await fastify.register(async (instance) => {
     const routeOpts: import('./api/routes.js').RouteOptions = {
@@ -859,6 +864,7 @@ export async function createServer(
       promptTemplateHandlers,
       ontologyTermHandlers,
       verbActionMapHandlers,
+      predicatesHandlers,
       schemaCount: () => ctx.schemaRegistry.size,
       ruleCount: () => ctx.lintEngine.ruleCount,
       uiSpecCount: () => ctx.uiSpecLoader.size(),

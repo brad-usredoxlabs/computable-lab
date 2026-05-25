@@ -71,6 +71,11 @@ export class PredicateRegistry {
     return this.entries;
   }
 
+  /** All families, in registry order, with their descriptions. */
+  getFamilies(): PredicateFamily[] {
+    return this.families;
+  }
+
   /** Lookup a single predicate by CURIE id. */
   getById(id: string): PredicateEntry | undefined {
     return this.byId.get(id);

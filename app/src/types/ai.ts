@@ -7,7 +7,7 @@ import type { OntologyRef } from './ref'
 
 export interface PromptMention {
   type: 'material' | 'labware' | 'selection' | 'protocol'
-  entityKind?: 'material' | 'material-spec' | 'aliquot' | 'protocol' | 'graph-component'
+  entityKind?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product' | 'protocol' | 'graph-component'
   selectionKind?: 'source' | 'target'
   id?: string
   label: string

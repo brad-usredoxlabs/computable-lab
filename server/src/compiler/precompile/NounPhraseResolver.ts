@@ -414,7 +414,9 @@ function resolveMentionTag(tag: MaterializedPromptTag): ResolvedNoun | undefined
   if (
     mentionKind === 'material' ||
     mentionKind === 'aliquot' ||
+    mentionKind === 'material-instance' ||
     mentionKind === 'material-spec' ||
+    mentionKind === 'vendor-product' ||
     mentionKind === 'compound'
   ) {
     return {

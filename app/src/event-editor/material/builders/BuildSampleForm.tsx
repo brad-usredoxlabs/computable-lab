@@ -148,6 +148,12 @@ export function BuildSampleForm({
 
       onSaved({
         recordId: response.materialInstanceId,
+        ref: {
+          kind: 'record',
+          id: response.materialInstanceId,
+          type: 'material-instance',
+          label: trimmedName,
+        },
         label: trimmedName,
         hasCellComposition: false,
       })

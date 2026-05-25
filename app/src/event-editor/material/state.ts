@@ -2,6 +2,7 @@ import type {
   CompositionEntryValue,
   ConcentrationValue,
 } from '../../types/material'
+import type { Ref } from '../../types/ref'
 import type { OLSResultRef } from '../../shared/api/olsClient'
 
 /**
@@ -27,6 +28,8 @@ export type MaterialKind = 'compound' | 'mixture' | 'cells' | 'sample'
 export interface PickedMaterial {
   /** Record id that the apply action sends to the event-graph. */
   recordId: string
+  /** Structured CL reference so add_material can preserve material layer. */
+  ref: Ref
   /** Display label for the configure header. */
   label: string
   /** True when the material's composition has a `role: cells` entry. */
@@ -122,10 +125,18 @@ export function reducer(state: AddMaterialState, action: AddMaterialAction): Add
  */
 export function pickedFromSearchItem(item: {
   recordId: string
+  kind?: string
   title: string
 }): PickedMaterial {
+  const type = item.kind || 'material'
   return {
     recordId: item.recordId,
+    ref: {
+      kind: 'record',
+      id: item.recordId,
+      type,
+      label: item.title,
+    },
     label: item.title,
     hasCellComposition: false,
   }
@@ -143,6 +154,12 @@ export function pickedFromFormulation(formulation: {
   const hasCellComposition = composition.some((entry) => entry?.role === 'cells')
   return {
     recordId: formulation.outputSpec.id,
+    ref: {
+      kind: 'record',
+      id: formulation.outputSpec.id,
+      type: 'material-spec',
+      label: formulation.outputSpec.name,
+    },
     label: formulation.outputSpec.name,
     hasCellComposition,
     ...(formulation.outputSpec.concentration

@@ -31,7 +31,8 @@ export function mentionToToken(mention: SlashMention): string {
 export function mentionBadge(mention: SlashMention): string {
   if (mention.type === 'material') {
     if (mention.entityKind === 'material-spec') return 'Formulation'
-    if (mention.entityKind === 'aliquot') return 'Instance'
+    if (mention.entityKind === 'aliquot' || mention.entityKind === 'material-instance') return 'Instance'
+    if (mention.entityKind === 'vendor-product') return 'Vendor'
     return 'Concept'
   }
   if (mention.type === 'labware') return 'Labware'
@@ -50,6 +51,8 @@ export function badgeStyles(
       return { background: '#dcfce7', color: '#166534', border: '#86efac' }
     case 'Instance':
       return { background: '#dbeafe', color: '#1d4ed8', border: '#93c5fd' }
+    case 'Vendor':
+      return { background: '#fef9c3', color: '#854d0e', border: '#fde68a' }
     case 'Concept':
       return { background: '#f3e8ff', color: '#7e22ce', border: '#d8b4fe' }
     case 'Labware':

@@ -1,0 +1,29 @@
+$schema: https://computable-lab.com/schema/computable-lab/context-role.schema.yaml
+kind: context-role
+id: CR-nadh-rs-negative-control
+title: NADH reductive stress negative control
+name: NADH reductive stress negative control
+description: >
+  A context whose contents force the mitochondrial NADH/NAD+ ratio
+  low (oxidative stress on the NADH pool). Bounds the NADH
+  autofluorescence readout channel's low end.
+applicable_domains:
+  - redox-assay
+prerequisites:
+  - any:
+    - has_material:
+        ref:
+          kind: ontology
+          id: CHEBI:15344
+          namespace: CHEBI
+          label: acetoacetate
+    - has_material:
+        ref:
+          kind: ontology
+          id: CHEBI:75441
+          namespace: CHEBI
+          label: FCCP
+expected_outcome:
+  direction: decreased
+  measure: nadh_autofluorescence
+  relative_to: nadh_rs_positive_control

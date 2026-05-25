@@ -1,0 +1,28 @@
+$schema: https://computable-lab.com/schema/computable-lab/claim.schema.yaml
+kind: claim
+id: CLM-rot-positive-for-ros
+title: Rotenone is a positive control for ROS
+statement: >
+  Rotenone (Complex I inhibitor) reliably induces detectable ROS in
+  cell-based assays; functions as an assay-validation positive control
+  for ROS-sensitive fluorescent probes.
+subject:
+  kind: ontology
+  id: CHEBI:28201
+  namespace: CHEBI
+  label: rotenone
+predicate:
+  kind: ontology
+  id: cl:is-positive-control-for
+  namespace: cl
+  label: is positive control for
+object:
+  kind: ontology
+  id: GO:0006979
+  namespace: GO
+  label: response to oxidative stress
+status: active
+keywords:
+  - rotenone
+  - ros
+  - assay-validation

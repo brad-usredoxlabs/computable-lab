@@ -162,9 +162,20 @@ function defaultClaimObject(roleType: string, targetRef?: RefShape, assayRef?: R
   return targetRef ?? assayRef ?? ontologyRef(`computable-lab:${roleType}`, roleLabel(roleType));
 }
 
-function generatedContextScopeField(roleFamily: RoleFamily): 'control_context' | 'treated_context' {
-  return roleFamily === 'control' ? 'control_context' : 'treated_context';
+function contextRoleRefForAssignment(roleType: string, readoutDefRef?: RefShape): RefShape {
+  const normalized = roleType.replace(/_/g, '-');
+  const readoutId = readoutDefRef?.id ?? '';
+  if (normalized === 'vehicle-control') return toRef('CR-vehicle-baseline', 'context-role', 'Vehicle baseline');
+  if (normalized === 'sample' || normalized === 'unknown-sample') return toRef('CR-test-perturbation', 'context-role', 'Test perturbation');
+  if (normalized === 'positive-control' && readoutId === 'RDEF-PLATE-FAR_RED-ROS') {
+    return toRef('CR-ros-positive-control', 'context-role', 'ROS positive control');
+  }
+  if (normalized === 'negative-control' && readoutId === 'RDEF-PLATE-FAR_RED-ROS') {
+    return toRef('CR-ros-negative-control', 'context-role', 'ROS negative control');
+  }
+  return toRef(`CR-${normalized}`, 'context-role', roleLabel(roleType));
 }
+
 
 // ---------------------------------------------------------------------------
 // Seeded definitions sourced from YAML registries
@@ -345,9 +356,14 @@ async function generateKnowledgeRecords(
     id: assertionId,
     claim_ref: claimRef,
     statement: `${sourceWellLabels} are assigned as ${roleDisplay} in ${measurementContextName}`,
-    scope: {
-      [generatedContextScopeField(args.roleFamily)]: generatedContextRef,
-    },
+    scope: 'single_context',
+    context_refs: [generatedContextRef],
+    roles: [
+      {
+        role_ref: contextRoleRefForAssignment(args.roleType, args.readoutDefRef),
+        context_ref: generatedContextRef,
+      },
+    ],
     ...(args.targetRef || args.expectedBehavior ? {
       outcome: {
         ...(args.targetRef ? { target: args.targetRef } : {}),
@@ -368,7 +384,7 @@ async function generateKnowledgeRecords(
         ref: generatedContextRef,
       },
       {
-        type: 'context',
+        type: 'measurement_context',
         ref: args.measurementContextRef,
       },
     ],

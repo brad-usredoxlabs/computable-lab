@@ -37,6 +37,12 @@ npm run test:e2e -w app           # E2E tests (playwright)
 
 The backend resolves `schema/` and `records/` relative to `APP_BASE_PATH` (defaults to `process.cwd()`). `start-app.sh` sets this to the monorepo root. Symlinks in `server/` also point to the root for when running from the server directory directly.
 
+## Knowledge Layer (canonical model)
+
+The substance of computable-lab is the **knowledge layer**: a plate sets the *biological context* for a scientist's *assertions* about *globally reusable claims*; a plate read produces *evidence* that supports or refutes those assertions in that context.
+
+Before authoring or editing anything that touches `claim`, `context`, `context-role`, `assertion`, `evidence`, `mechanism-model`, or `experiment-narrative` records — or any UI/orchestration that drives them — read `docs/knowledge-layer-canonical-example.md`. It works the PPARα → ROS hypothesis through the full record graph and pins down the model that conflates easily otherwise (claim ≠ context ≠ assertion; mechanism chains live in `mechanism-model`, not as nested claims; context-roles are reusable records with optional machine-checkable prerequisites).
+
 ## Backend Architecture (server/)
 
 **computable-lab** is a schema-driven laboratory information system. The core principle: **if something can be expressed as data, it must be expressed as data.** Business logic lives in declarative YAML specs, not in TypeScript.

@@ -1,0 +1,29 @@
+$schema: https://computable-lab.com/schema/computable-lab/context-role.schema.yaml
+kind: context-role
+id: CR-nadh-rs-positive-control
+title: NADH reductive stress positive control
+name: NADH reductive stress positive control
+description: >
+  A context whose contents force the mitochondrial NADH/NAD+ ratio
+  high (reductive stress), used to validate the NADH autofluorescence
+  readout channel.
+applicable_domains:
+  - redox-assay
+prerequisites:
+  - any:
+    - has_material:
+        ref:
+          kind: ontology
+          id: CHEBI:20067
+          namespace: CHEBI
+          label: beta-hydroxybutyrate
+    - has_material:
+        ref:
+          kind: ontology
+          id: CHEBI:28201
+          namespace: CHEBI
+          label: rotenone
+expected_outcome:
+  direction: increased
+  measure: nadh_autofluorescence
+  relative_to: vehicle_control

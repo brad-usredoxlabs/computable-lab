@@ -1,0 +1,22 @@
+$schema: https://computable-lab.com/schema/computable-lab/readout-definition.schema.yaml
+recordId: RDEF-PLATE-NADH-AF
+kind: readout-definition
+id: RDEF-PLATE-NADH-AF
+name: NADH Autofluorescence
+instrument_type: plate_reader
+mode: fluorescence
+channel_label: NADH
+excitation_nm: 340
+emission_nm: 460
+units: RFU
+proxy_ref:
+  kind: ontology
+  id: CHEBI:16908
+  label: NADH
+  namespace: CHEBI
+tags:
+  - nadh
+  - redox
+  - autofluorescence
+  - plate-reader
+title: NADH Autofluorescence
