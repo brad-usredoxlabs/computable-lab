@@ -21,6 +21,7 @@ import {
   previewWellsForLabware,
 } from '../lib/previewProjection'
 import { PlateRail } from '../rail/PlateRail'
+import { ReadPlateModal } from '../rail/ReadPlateModal'
 import type { LabwareOrientation, WellSelection } from '../types'
 
 /**
@@ -77,6 +78,7 @@ export function LabwareFocus() {
   // this; the modal owns its own internal state machine and clears
   // back to null on apply / cancel / escape.
   const [addMaterialWells, setAddMaterialWells] = useState<WellId[] | null>(null)
+  const [readPlateOpen, setReadPlateOpen] = useState(false)
 
   // Auto-dismiss a pinned tooltip after a few seconds — touch users
   // don't have a "move pointer away" gesture to clear it themselves.
@@ -299,6 +301,11 @@ export function LabwareFocus() {
           ) : null}
           <button
             type="button"
+            className="focus__btn"
+            onClick={() => setReadPlateOpen(true)}
+          >Read plate</button>
+          <button
+            type="button"
             className="focus__btn focus__btn--ghost"
             onClick={() => actions.setFocus(null)}
             title="Close (Esc)"
@@ -396,6 +403,14 @@ export function LabwareFocus() {
         />
         </div>
       </div>
+      <ReadPlateModal
+        isOpen={readPlateOpen && Boolean(labware) && Boolean(placement)}
+        placementId={placement.placementId}
+        labware={labware!}
+        rail={state.plateRail}
+        events={state.events}
+        onClose={() => setReadPlateOpen(false)}
+      />
       <AddMaterialModal
         isOpen={addMaterialWells !== null && Boolean(labware)}
         labware={labware!}

@@ -117,14 +117,23 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
     wells.length === 1 ? `Well ${wells[0]}` : `${wells.length} wells`
 
   const node = (
-    <div className="add-material-scrim" onMouseDown={onClose} role="presentation">
+    <div
+      className="add-material-scrim"
+      role="presentation"
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        if (e.target === e.currentTarget) onClose()
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
       <div
         ref={dialogRef}
         className="add-material-dialog"
         role="dialog"
         aria-modal="true"
         aria-label={`Add material to ${wellsLabel}`}
-        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <header className="add-material-header">
           <div className="add-material-title">
@@ -275,7 +284,7 @@ function SearchView({
           ref={inputRef}
           type="text"
           className="add-material-input"
-          placeholder="Search materials… (e.g., clofibrate, DMSO, HepG2)"
+          placeholder="Search materials… (e.g., test compound, DMSO, HepG2)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           autoComplete="off"
@@ -508,7 +517,7 @@ const PICK_TYPE_OPTIONS: PickTypeOption[] = [
   {
     kind: 'compound',
     title: 'Compound + solvent',
-    detail: '1 mM clofibrate in DMSO — single primary compound dissolved in a solvent',
+    detail: '10 uM test compound in DMSO — single primary compound dissolved in a solvent',
     enabled: true,
   },
   {

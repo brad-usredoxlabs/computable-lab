@@ -228,7 +228,7 @@ export interface EventEditorState {
   /**
    * Phase 3 single-plate workflow rail draft state, keyed by placementId
    * so the rail survives well-selection changes and focus-view toggles.
-   * Phase 4 turns these drafts into real semantic records.
+   * The sidecar tracks well groups, notes, and readout intent.
    */
   plateRail: Record<string, PlateRailDraft>
 }

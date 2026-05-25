@@ -1,98 +1,77 @@
+import { useMemo } from 'react'
 import { useEventEditor } from '../EventEditorContext'
 import {
-  CELLROX_DEEP_RED_EMISSION_NM,
-  CELLROX_DEEP_RED_EXCITATION_NM,
+  channelKey,
+  channelLabel,
   getPlateRailDraft,
-  type ReadoutChannelPreset,
+  type ChannelDraft,
+  type GroupDraft,
   type ReadoutDraft,
 } from './state'
-
-/**
- * Readout section of the rail. Phase 3 captures the channel + instrument
- * intent against the knowledge anchor; Phase 5 builds the actual
- * Gemini `instrument-appliance-job` from this draft.
- *
- * Default preset is CellROX Deep Red (Ex/Em 644/665) since that's the
- * target of the vertical slice.
- */
 
 interface Props {
   placementId: string
 }
 
+interface ChannelSummary {
+  channel: ChannelDraft
+  groups: GroupDraft[]
+  hasPositiveControl: boolean
+  hasNegativeControl: boolean
+}
+
 export function ReadoutRailSection({ placementId }: Props) {
   const { state, actions } = useEventEditor()
-  const draft = getPlateRailDraft(state.plateRail, placementId).readout
+  const draft = getPlateRailDraft(state.plateRail, placementId)
 
   const patch = (next: Partial<ReadoutDraft>) =>
     actions.updatePlateRail(placementId, { readout: next })
 
-  const onPresetChange = (preset: ReadoutChannelPreset) => {
-    if (preset === 'cellrox-deep-red') {
-      patch({
-        channelPreset: 'cellrox-deep-red',
-        excitationNm: CELLROX_DEEP_RED_EXCITATION_NM,
-        emissionNm: CELLROX_DEEP_RED_EMISSION_NM,
-      })
-    } else {
-      patch({ channelPreset: 'custom' })
+  const channels = useMemo(() => {
+    const byKey = new Map<string, ChannelSummary>()
+    for (const group of draft.knowledge.groups) {
+      const key = channelKey(group.channel)
+      const existing = byKey.get(key)
+      if (existing) {
+        existing.groups.push(group)
+        existing.hasPositiveControl = existing.hasPositiveControl || group.roleType === 'positive_control'
+        existing.hasNegativeControl = existing.hasNegativeControl || group.roleType === 'negative_control'
+      } else {
+        byKey.set(key, {
+          channel: group.channel,
+          groups: [group],
+          hasPositiveControl: group.roleType === 'positive_control',
+          hasNegativeControl: group.roleType === 'negative_control',
+        })
+      }
     }
-  }
-
-  const onNumberChange = (
-    key: 'excitationNm' | 'emissionNm',
-    raw: string,
-  ) => {
-    const trimmed = raw.trim()
-    if (trimmed === '') {
-      patch({ [key]: null, channelPreset: 'custom' })
-      return
-    }
-    const parsed = Number(trimmed)
-    if (!Number.isFinite(parsed)) return
-    patch({ [key]: parsed, channelPreset: 'custom' })
-  }
+    return Array.from(byKey.values())
+  }, [draft.knowledge.groups])
 
   return (
     <section className="plate-rail__section" data-section="readout">
-      <h3 className="plate-rail__section-title">Readout</h3>
-      <p className="plate-rail__section-help">
-        Bind the knowledge claim to a plate-reader channel. Defaults to
-        CellROX Deep Red.
-      </p>
+      <h3 className="plate-rail__section-title">Read</h3>
 
-      <label className="plate-rail__field">
-        <span className="plate-rail__field-label">Channel preset</span>
-        <select
-          className="plate-rail__input"
-          value={draft.channelPreset}
-          onChange={(e) => onPresetChange(e.target.value as ReadoutChannelPreset)}
-        >
-          <option value="cellrox-deep-red">CellROX Deep Red (Ex/Em 644/665)</option>
-          <option value="custom">Custom</option>
-        </select>
-      </label>
-
-      <div className="plate-rail__field-row">
-        <label className="plate-rail__field">
-          <span className="plate-rail__field-label">Excitation (nm)</span>
-          <input
-            type="number"
-            className="plate-rail__input"
-            value={draft.excitationNm ?? ''}
-            onChange={(e) => onNumberChange('excitationNm', e.target.value)}
-          />
-        </label>
-        <label className="plate-rail__field">
-          <span className="plate-rail__field-label">Emission (nm)</span>
-          <input
-            type="number"
-            className="plate-rail__input"
-            value={draft.emissionNm ?? ''}
-            onChange={(e) => onNumberChange('emissionNm', e.target.value)}
-          />
-        </label>
-      </div>
+      {channels.length === 0 ? (
+        <p className="plate-rail__section-help">
+          Assign group roles to define the plate-reader channels needed for this plate.
+        </p>
+      ) : (
+        <div className="plate-rail__channel-summary-list">
+          {channels.map((summary) => (
+            <div key={channelKey(summary.channel)} className="plate-rail__channel-summary">
+              <strong>{channelLabel(summary.channel)}</strong>
+              <span>{summary.groups.length} group{summary.groups.length === 1 ? '' : 's'}</span>
+              <span data-state={summary.hasPositiveControl ? 'present' : 'missing'}>
+                {summary.hasPositiveControl ? 'positive control set' : 'missing positive control'}
+              </span>
+              <span data-state={summary.hasNegativeControl ? 'present' : 'missing'}>
+                {summary.hasNegativeControl ? 'negative control set' : 'missing negative control'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <label className="plate-rail__field">
         <span className="plate-rail__field-label">Instrument</span>
@@ -100,7 +79,7 @@ export function ReadoutRailSection({ placementId }: Props) {
           type="text"
           className="plate-rail__input"
           placeholder="e.g. Gemini EM"
-          value={draft.instrumentLabel}
+          value={draft.readout.instrumentLabel}
           onChange={(e) => patch({ instrumentLabel: e.target.value })}
         />
       </label>

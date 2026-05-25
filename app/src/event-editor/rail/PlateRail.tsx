@@ -1,17 +1,14 @@
 import type { WellId } from '../../types/plate'
 import { MaterialsRailSection } from './MaterialsRailSection'
 import { KnowledgeRailSection } from './KnowledgeRailSection'
+import { ProtocolRailSection } from './ProtocolRailSection'
 import { ReadoutRailSection } from './ReadoutRailSection'
 
 /**
- * Right rail for the focused single-plate view. Composes the Phase 3
- * Materials / Knowledge / Readout sections. The Protocol section is
- * deferred to Phase 4, where it lands alongside the narrative record
- * the TapTab editor will be bound to.
- *
- * Draft state for Knowledge and Readout lives in `EventEditorContext`
- * keyed by `placementId`, so closing/reopening the focus view or
- * changing the well selection does not reset it.
+ * Right rail for the focused single-plate view. It keeps the common
+ * plate setup workflow close to the wells: add materials, assign well
+ * groups, capture notes, and choose the reader signal. Draft state lives
+ * in `EventEditorContext` keyed by `placementId`.
  */
 
 interface Props {
@@ -31,6 +28,7 @@ export function PlateRail({ placementId, selectedWells, onAddMaterial }: Props) 
         placementId={placementId}
         selectedWells={selectedWells}
       />
+      <ProtocolRailSection placementId={placementId} />
       <ReadoutRailSection placementId={placementId} />
     </aside>
   )

@@ -12,7 +12,7 @@ import { useOntologyConfig } from '../useOntologyConfig'
 import type { PickedMaterial } from '../state'
 
 /**
- * Compound formulation builder ("1 mM clofibrate in DMSO"-style).
+ * Compound formulation builder for a primary compound dissolved in a solvent.
  *
  * Two-step save:
  *   1. `createRecord(MATERIAL_SCHEMA_ID, …)` — registers the compound as
@@ -193,7 +193,7 @@ export function BuildCompoundForm({
           className="add-material-input"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="e.g., clofibrate"
+          placeholder="e.g., test compound"
           autoFocus={!seedOntologyRef}
           required
         />

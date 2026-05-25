@@ -53,6 +53,7 @@ import type { ProtocolIdeHandlers } from './handlers/ProtocolIdeHandlers.js';
 import type { PlannedRunHandlers } from './handlers/PlannedRunHandlers.js';
 import type { AiThreadHandlers } from './handlers/AiThreadHandlers.js';
 import type { JsonLdSearchHandlers } from './handlers/JsonLdSearchHandlers.js';
+import type { PredicatesHandlers } from './handlers/PredicatesHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -106,6 +107,7 @@ export interface RouteOptions {
   foundryJobHandlers?: FoundryJobHandlers;
   aiThreadHandlers?: AiThreadHandlers;
   jsonLdSearchHandlers?: JsonLdSearchHandlers;
+  predicatesHandlers?: PredicatesHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
   uiSpecCount?: () => number;
@@ -878,5 +880,14 @@ export function registerRoutes(
 
   if (verbActionMapHandlers) {
     fastify.get('/verb-action-map/lookup', verbActionMapHandlers.getVerbActionMapping.bind(verbActionMapHandlers));
+  }
+
+  // ============================================================================
+  // Predicate Registry
+  // ============================================================================
+
+  const { predicatesHandlers } = options;
+  if (predicatesHandlers) {
+    fastify.get('/predicates', predicatesHandlers.listPredicates.bind(predicatesHandlers));
   }
 }
