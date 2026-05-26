@@ -1,5 +1,6 @@
 import type { AppContext } from '../server.js';
 import { ParserRegistry } from './parsers/ParserRegistry.js';
+import { basename } from 'node:path';
 
 const MEASUREMENT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/measurement.schema.yaml';
 
@@ -29,9 +30,9 @@ type MeasurementPayload = {
   artifacts?: Array<{
     role: string;
     fileRef: {
-      uri: string;
-      mimeType: string;
-      label: string;
+      file_name: string;
+      media_type: string;
+      stored_path?: string;
     };
   }>;
   parserInfo: {
@@ -157,9 +158,9 @@ export class MeasurementService {
         {
           role: 'raw_data',
           fileRef: {
-            uri: rawPath,
-            mimeType: parsed.mimeType,
-            label: 'Raw measurement CSV',
+            file_name: basename(rawPath),
+            media_type: parsed.mimeType,
+            stored_path: rawPath,
           },
         },
       ],
