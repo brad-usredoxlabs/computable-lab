@@ -36,6 +36,11 @@ import {
   createAIHandlers,
   createDeterministicOnlyAIHandlers,
   createGatewayAIHandlers,
+  createGatewayKnowledgeAIHandlers,
+  createGatewayIngestionAIHandlers,
+  createGatewayMaterialAIHandlers,
+  createGatewayAiRecordDraftHandlers,
+  createGatewayEventEditorFixHandlers,
   createEventEditorFixHandlers,
   createMetaHandlers,
   ConfigHandlers,
@@ -583,6 +588,21 @@ export async function createServer(
   const gatewayAiHandlers = aiGatewayUrl
     ? createGatewayAIHandlers(aiGatewayUrl)
     : undefined;
+  const gatewayKnowledgeAIHandlers = aiGatewayUrl
+    ? createGatewayKnowledgeAIHandlers(aiGatewayUrl)
+    : undefined;
+  const gatewayIngestionAIHandlers = aiGatewayUrl
+    ? createGatewayIngestionAIHandlers(aiGatewayUrl)
+    : undefined;
+  const gatewayMaterialAIHandlers = aiGatewayUrl
+    ? createGatewayMaterialAIHandlers(aiGatewayUrl)
+    : undefined;
+  const gatewayAiRecordDraftHandlers = aiGatewayUrl
+    ? createGatewayAiRecordDraftHandlers(aiGatewayUrl)
+    : undefined;
+  const gatewayEventEditorFixHandlers = aiGatewayUrl
+    ? createGatewayEventEditorFixHandlers(aiGatewayUrl)
+    : undefined;
   if (aiGatewayUrl) {
     console.log(`AI gateway proxy enabled → ${aiGatewayUrl}`);
   }
@@ -770,6 +790,7 @@ export async function createServer(
 
   const knowledgeAIHandlers: KnowledgeAIHandlers = {
     async extractKnowledge(request, reply) {
+      if (gatewayKnowledgeAIHandlers) return gatewayKnowledgeAIHandlers.extractKnowledge(request, reply);
       if (!knowledgeAIHandlersImpl) {
         reply.status(503);
         return { error: 'AI_UNAVAILABLE', message: aiUnavailableMessage() };
@@ -777,6 +798,7 @@ export async function createServer(
       return knowledgeAIHandlersImpl.extractKnowledge(request, reply);
     },
     async extractKnowledgeStream(request, reply) {
+      if (gatewayKnowledgeAIHandlers) return gatewayKnowledgeAIHandlers.extractKnowledgeStream(request, reply);
       if (!knowledgeAIHandlersImpl) {
         reply.status(503);
         await reply.send({ error: 'AI_UNAVAILABLE', message: aiUnavailableMessage() });
@@ -788,6 +810,7 @@ export async function createServer(
 
   const aiRecordDraftHandlers: AiRecordDraftHandlers = {
     async draftRecord(request, reply) {
+      if (gatewayAiRecordDraftHandlers) return gatewayAiRecordDraftHandlers.draftRecord(request, reply);
       if (!aiRecordDraftHandlersImpl) {
         reply.status(503);
         return { success: false, error: 'AI_UNAVAILABLE', message: aiUnavailableMessage() };
@@ -890,14 +913,15 @@ export async function createServer(
     // Phase-1 fix-it chat: streams worker-Qwen-backed diagnoses for AI
     // previews the user thinks are wrong. Always mounted — config (worker
     // base URL / model) is read per-request from env, so this works without
-    // an AI runtime configured for the main draft loop.
-    routeOpts.eventEditorFixHandlers = createEventEditorFixHandlers({
+    // an AI runtime configured for the main draft loop. When the AI
+    // gateway is configured, every fix-it route reverse-proxies there.
+    routeOpts.eventEditorFixHandlers = gatewayEventEditorFixHandlers ?? createEventEditorFixHandlers({
       workspaceRoot: ctx.workspaceRoot,
     });
     routeOpts.knowledgeAIHandlers = knowledgeAIHandlers;
-    routeOpts.ingestionAIHandlers = ingestionAIHandlersImpl;
+    routeOpts.ingestionAIHandlers = gatewayIngestionAIHandlers ?? ingestionAIHandlersImpl;
     routeOpts.aiIngestionHandlers = aiIngestionHandlersImpl;
-    routeOpts.materialAIHandlers = materialAIHandlersImpl;
+    routeOpts.materialAIHandlers = gatewayMaterialAIHandlers ?? materialAIHandlersImpl;
     routeOpts.aiRecordDraftHandlers = aiRecordDraftHandlers;
     routeOpts.extractHandlers = extractHandlers;
     if (aiInfo) routeOpts.aiInfo = aiInfo;

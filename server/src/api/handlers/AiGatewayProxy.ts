@@ -2,14 +2,14 @@
  * Reverse-proxy implementations of the AI handler interfaces.
  *
  * When `CLA_AI_GATEWAY_URL` is set, the host delegates every AI request to
- * an external gateway process (the appliance's `cla-lab-ai-gateway` service,
- * or any other implementation of the AiClient contract). Each proxy mirrors
- * the route paths exposed by the host so the gateway can be a near-drop-in
- * replacement for the in-host AI runtime.
+ * an external gateway process (the appliance's `cla-lab-ai-gateway`
+ * service, or any other implementation of the AiClient contract). Each
+ * proxy forwards request.url and request.method 1:1 — the gateway is
+ * expected to mirror the host's route paths exactly.
  *
- * Phase 1 of the AI-extension split introduces the gate; later phases move
- * the in-host AI handlers out of the AGPL3 codebase entirely, leaving only
- * these proxies + the deterministic fallback in the host.
+ * Phase 1 of the AI-extension split introduces the gate; later phases
+ * move the in-host AI handlers out of the AGPL3 codebase entirely,
+ * leaving only these proxies + the deterministic fallback in the host.
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -18,6 +18,7 @@ import type { KnowledgeAIHandlers } from './KnowledgeAIHandlers.js';
 import type { IngestionAIHandlers } from './IngestionAIHandlers.js';
 import type { MaterialAIHandlers } from './MaterialAIHandlers.js';
 import type { AiRecordDraftHandlers } from './AiRecordDraftHandlers.js';
+import type { EventEditorFixHandlers } from './EventEditorFixHandlers.js';
 
 const FORWARDED_REQUEST_HEADERS = ['x-user-id', 'authorization', 'cookie'] as const;
 const STRIP_RESPONSE_HEADERS = new Set([
@@ -40,14 +41,13 @@ function buildForwardHeaders(request: FastifyRequest, hasBody: boolean): Record<
 
 async function proxyToGateway(
   gatewayUrl: string,
-  method: string,
-  path: string,
   request: FastifyRequest,
   reply: FastifyReply,
 ): Promise<void> {
+  const method = request.method.toUpperCase();
   const hasBody = method !== 'GET' && method !== 'HEAD' && request.body !== undefined && request.body !== null;
   const body = hasBody ? JSON.stringify(request.body) : undefined;
-  const url = `${gatewayUrl.replace(/\/$/, '')}${path}`;
+  const url = `${gatewayUrl.replace(/\/$/, '')}${request.url}`;
   const upstream = await fetch(url, {
     method,
     headers: buildForwardHeaders(request, hasBody),
@@ -65,45 +65,57 @@ async function proxyToGateway(
   }
 }
 
-function withGatewayPath(gatewayUrl: string, method: string, path: string) {
+function proxy(gatewayUrl: string) {
   return (request: FastifyRequest, reply: FastifyReply) =>
-    proxyToGateway(gatewayUrl, method, path, request, reply);
+    proxyToGateway(gatewayUrl, request, reply);
 }
 
 export function createGatewayAIHandlers(gatewayUrl: string): AIHandlers {
-  return {
-    draftEvents: withGatewayPath(gatewayUrl, 'POST', '/api/ai/draft-events'),
-    draftEventsStream: withGatewayPath(gatewayUrl, 'POST', '/api/ai/draft-events/stream'),
-    assistStream: withGatewayPath(gatewayUrl, 'POST', '/api/ai/assist/stream'),
-  } as AIHandlers;
+  const p = proxy(gatewayUrl);
+  return { draftEvents: p, draftEventsStream: p, assistStream: p } as AIHandlers;
 }
 
 export function createGatewayKnowledgeAIHandlers(gatewayUrl: string): KnowledgeAIHandlers {
-  return {
-    extractKnowledge: withGatewayPath(gatewayUrl, 'POST', '/api/ai/knowledge/extract'),
-    extractKnowledgeStream: withGatewayPath(gatewayUrl, 'POST', '/api/ai/knowledge/extract/stream'),
-  } as KnowledgeAIHandlers;
+  const p = proxy(gatewayUrl);
+  return { extractKnowledge: p, extractKnowledgeStream: p } as KnowledgeAIHandlers;
 }
 
 export function createGatewayIngestionAIHandlers(gatewayUrl: string): IngestionAIHandlers {
-  // Cast through unknown because IngestionAIHandlers is class-shaped with private state;
-  // the proxy stands in via duck typing on the public method signatures used by routes.ts.
+  const p = proxy(gatewayUrl);
   return {
-    suggestSourceKind: withGatewayPath(gatewayUrl, 'POST', '/api/ai/ingestion/suggest-source-kind'),
-    analyze: withGatewayPath(gatewayUrl, 'POST', '/api/ai/ingestion/analyze'),
-    analyzeStream: withGatewayPath(gatewayUrl, 'POST', '/api/ai/ingestion/analyze/stream'),
-  } as unknown as IngestionAIHandlers;
+    inferSourceKind: p,
+    suggestIngestionMapping: p,
+    explainIngestionIssue: p,
+  } as IngestionAIHandlers;
 }
 
 export function createGatewayMaterialAIHandlers(gatewayUrl: string): MaterialAIHandlers {
+  const p = proxy(gatewayUrl);
   return {
-    suggestMaterial: withGatewayPath(gatewayUrl, 'POST', '/api/ai/material/suggest'),
-    suggestMaterialStream: withGatewayPath(gatewayUrl, 'POST', '/api/ai/material/suggest/stream'),
-  } as unknown as MaterialAIHandlers;
+    draftMaterial: p,
+    searchMaterials: p,
+    reviewComposition: p,
+    checkDuplicate: p,
+  } as MaterialAIHandlers;
 }
 
 export function createGatewayAiRecordDraftHandlers(gatewayUrl: string): AiRecordDraftHandlers {
+  const p = proxy(gatewayUrl);
+  return { draftRecord: p } as unknown as AiRecordDraftHandlers;
+}
+
+export function createGatewayEventEditorFixHandlers(gatewayUrl: string): EventEditorFixHandlers {
+  const p = proxy(gatewayUrl);
   return {
-    draftRecord: withGatewayPath(gatewayUrl, 'POST', '/api/ai/record/draft'),
-  } as unknown as AiRecordDraftHandlers;
+    chatStream: p,
+    synthesizeSpec: p,
+    applyFixStream: p,
+    startApplyFixJob: p,
+    health: p,
+    listJobs: p,
+    getJob: p,
+    streamJobEvents: p,
+    completeJob: p,
+    getJobSpec: p,
+  } as unknown as EventEditorFixHandlers;
 }
