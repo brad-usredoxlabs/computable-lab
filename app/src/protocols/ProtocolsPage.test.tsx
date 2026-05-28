@@ -24,13 +24,6 @@ vi.mock('./ProtocolCandidatesView', () => ({
   ProtocolCandidatesView: () => <div data-testid="candidates-panel">candidates-panel</div>,
 }))
 
-// The page mounts AiChatPanel which reaches into a portal and the chat
-// client; we stub it to a passthrough so the routing assertion isn't
-// blocked on AI infrastructure.
-vi.mock('../shared/ai/AiChatPanel', () => ({
-  AiChatPanel: () => null,
-}))
-
 // Stub useAiChat to avoid network calls.
 vi.mock('../shared/hooks/useAiChat', () => ({
   useAiChat: () => ({
