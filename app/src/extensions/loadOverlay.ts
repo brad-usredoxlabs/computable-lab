@@ -2,21 +2,30 @@ import type { ExtensionManifest } from '@cla-lab/ai-extension-api'
 import { NULL_MANIFEST } from '@cla-lab/ai-extension-api'
 import { defaultManifest } from './defaultRegistry'
 
-const OVERLAY_URL = import.meta.env.VITE_AI_OVERLAY_URL as string | undefined
+/**
+ * Resolve the AI extension manifest at boot.
+ *
+ * When the build sets VITE_AI_OVERLAY (the appliance sets it to
+ * `@cla-lab/ai-overlay-appliance`), the `virtual:cla-ai-overlay` module —
+ * supplied by the aiOverlayPlugin in vite.config — re-exports the overlay
+ * package's manifest. The dynamic import emits the overlay as a separate
+ * async chunk that shares this build's React/TipTap singletons. Bare CL
+ * leaves VITE_AI_OVERLAY unset, so the virtual module yields an empty
+ * manifest and we fall back to the in-host defaultManifest (also empty
+ * after Phase 3 — every <Slot> renders <NullSlot>).
+ */
+const OVERLAY_ENABLED = Boolean(import.meta.env.VITE_AI_OVERLAY)
 
 export async function loadManifest(): Promise<ExtensionManifest> {
-  if (OVERLAY_URL && OVERLAY_URL.length > 0) {
-    try {
-      const mod = (await import(/* @vite-ignore */ OVERLAY_URL)) as {
-        manifest?: ExtensionManifest
-      }
-      if (mod.manifest) return mod.manifest
-      console.warn(
-        `AI overlay at ${OVERLAY_URL} did not export a 'manifest' — falling back to in-host default`,
-      )
-    } catch (err) {
-      console.warn(`Failed to load AI overlay from ${OVERLAY_URL}`, err)
+  if (!OVERLAY_ENABLED) return defaultManifest
+  try {
+    const mod = (await import('virtual:cla-ai-overlay')) as {
+      manifest?: ExtensionManifest
     }
+    if (mod.manifest) return mod.manifest
+    console.warn("AI overlay did not export a 'manifest' — using in-host default")
+  } catch (err) {
+    console.warn('Failed to load AI overlay', err)
   }
   return defaultManifest
 }
