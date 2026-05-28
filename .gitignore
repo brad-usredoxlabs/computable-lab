@@ -44,3 +44,8 @@ scripts/.ontology-cache/*
 
 # Playwright MCP runtime artifacts
 .playwright-mcp/
+
+# AI overlay bundles served by vite preview at runtime — populated by
+# ansible (cla-lab-ai-overlay role) or symlinked from cl-appliance for
+# local dev. Never committed; the source of truth lives in cl-appliance.
+app/public/overlays/
