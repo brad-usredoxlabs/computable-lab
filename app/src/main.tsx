@@ -2,7 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import './index.css'
-import { ExtensionProvider, loadManifest } from './extensions'
+import { ExtensionProvider, Slot, loadManifest } from './extensions'
 
 async function bootstrap(): Promise<void> {
   const root = createRoot(document.getElementById('root')!)
@@ -13,7 +13,6 @@ async function bootstrap(): Promise<void> {
   if (isLabwareFixture) {
     const { LabwareEventEditor } = await import('./graph/LabwareEventEditor')
     const { AiPanelProvider } = await import('./shared/context/AiPanelContext')
-    const { AiChatPanel } = await import('./shared/ai/AiChatPanel')
     root.render(
       <StrictMode>
         <ExtensionProvider manifest={manifest}>
@@ -23,7 +22,7 @@ async function bootstrap(): Promise<void> {
                 <Route path="*" element={<LabwareEventEditor />} />
               </Routes>
             </BrowserRouter>
-            <AiChatPanel />
+            <Slot name="chat.panel.global" />
           </AiPanelProvider>
         </ExtensionProvider>
       </StrictMode>

@@ -1,9 +1,8 @@
 import { useEventEditor } from './EventEditorContext'
 import { AppShell, NavLinks } from '../shared/shell'
 import { DeckStage } from './deck/DeckStage'
-import { EventEditorAiDock } from './ai/EventEditorAiDock'
 import { FixItLauncher } from './fix-it/FixItLauncher'
-import { FixItPanel } from './fix-it/FixItPanel'
+import { Slot } from '../extensions'
 import { DeckModeSwitcher } from './topbar/DeckModeSwitcher'
 import { VocabSwitcher } from './topbar/VocabSwitcher'
 import { ToolSwitcher } from './topbar/ToolSwitcher'
@@ -52,11 +51,11 @@ export function EventEditorShell() {
       topbarMiddle={topbarMiddle}
       topbarRight={topbarRight}
       rootClassName="event-editor"
-      dock={<EventEditorAiDock />}
+      dock={<Slot name="event-editor.dock" />}
       fixItLauncher={
         <>
           <FixItLauncher />
-          <FixItPanel />
+          <Slot name="event-editor.fix-it-panel" />
         </>
       }
     >

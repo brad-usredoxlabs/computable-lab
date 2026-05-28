@@ -25,13 +25,13 @@ import { ErrorBoundary } from './shell/ErrorBoundary'
 import { SelectionProvider } from './shared/context/SelectionContext'
 import { ThemeProvider } from './shared/shell'
 import { useMentionNavigation } from './shared/taptab/slashMenu'
+import { Slot } from './extensions'
 import './shared/styles/tokens.css'
 
 const BrowserPage = lazy(async () => import('./browser/BrowserPage').then((m) => ({ default: m.BrowserPage })))
 const ProtocolsPage = lazy(async () => import('./protocols/ProtocolsPage').then((m) => ({ default: m.ProtocolsPage })))
 const LiteraturePage = lazy(async () => import('./literature/LiteraturePage').then((m) => ({ default: m.LiteraturePage })))
 const EventEditorPage = lazy(async () => import('./event-editor/EventEditorPage').then((m) => ({ default: m.EventEditorPage })))
-const FixItRoute = lazy(async () => import('./event-editor/fixit-route/FixItRoute').then((m) => ({ default: m.FixItRoute })))
 const SettingsRoute = lazy(async () => import('./settings/SettingsRoute').then((m) => ({ default: m.SettingsRoute })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
@@ -65,7 +65,7 @@ export function App() {
               <Route path="/" element={<Navigate to="/browser" replace />} />
               <Route path="/browser" element={<DeferredRoute><BrowserPage /></DeferredRoute>} />
               <Route path="/event-editor" element={<DeferredRoute><EventEditorPage /></DeferredRoute>} />
-              <Route path="/event-editor/fixit" element={<DeferredRoute><FixItRoute /></DeferredRoute>} />
+              <Route path="/event-editor/fixit" element={<DeferredRoute><Slot name="event-editor.fix-it-route" /></DeferredRoute>} />
               <Route path="/runs/:runId/event-editor" element={<DeferredRoute><EventEditorPage /></DeferredRoute>} />
               <Route path="/protocols" element={<DeferredRoute><ProtocolsPage /></DeferredRoute>} />
               <Route path="/literature" element={<DeferredRoute><LiteraturePage /></DeferredRoute>} />

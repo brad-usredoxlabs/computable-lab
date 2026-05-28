@@ -5,7 +5,7 @@ import type { UseResultInterpretationReturn } from '../hooks/useResultInterpreta
 import type { UseEvidenceAssemblyReturn } from '../hooks/useEvidenceAssembly'
 import type { RunWorkspaceResponse } from '../../shared/api/client'
 import { RunAiSuggestions } from './RunAiSuggestions'
-import { RunClaimDraftPanel } from './RunClaimDraftPanel'
+import { Slot } from '../../extensions'
 import { ResultInterpretationPanel } from './ResultInterpretationPanel'
 import { EvidenceAssemblyPanel } from './EvidenceAssemblyPanel'
 
@@ -28,7 +28,7 @@ export function RunResultsTab({ summary, runId, chat, interpretation, assembly, 
       </Link>
       <ResultInterpretationPanel interpretation={interpretation} workspace={workspace} />
       <EvidenceAssemblyPanel assembly={assembly} workspace={workspace} />
-      <RunClaimDraftPanel runId={runId} chat={chat} onRefresh={async () => {}} />
+      <Slot name="run-workspace.claim-draft" runId={runId} chat={chat} onRefresh={async () => {}} />
       <RunAiSuggestions runId={runId} tab="results" chat={chat} />
     </section>
   )
