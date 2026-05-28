@@ -2,9 +2,11 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import './index.css'
+import { ExtensionProvider, loadManifest } from './extensions'
 
 async function bootstrap(): Promise<void> {
   const root = createRoot(document.getElementById('root')!)
+  const manifest = await loadManifest()
   const url = new URL(window.location.href)
   const isLabwareFixture = url.searchParams.get('screen') === 'labware-editor' && url.searchParams.has('fixture')
 
@@ -14,14 +16,16 @@ async function bootstrap(): Promise<void> {
     const { AiChatPanel } = await import('./shared/ai/AiChatPanel')
     root.render(
       <StrictMode>
-        <AiPanelProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="*" element={<LabwareEventEditor />} />
-            </Routes>
-          </BrowserRouter>
-          <AiChatPanel />
-        </AiPanelProvider>
+        <ExtensionProvider manifest={manifest}>
+          <AiPanelProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="*" element={<LabwareEventEditor />} />
+              </Routes>
+            </BrowserRouter>
+            <AiChatPanel />
+          </AiPanelProvider>
+        </ExtensionProvider>
       </StrictMode>
     )
     return
@@ -30,7 +34,9 @@ async function bootstrap(): Promise<void> {
   const { App } = await import('./App')
   root.render(
     <StrictMode>
-      <App />
+      <ExtensionProvider manifest={manifest}>
+        <App />
+      </ExtensionProvider>
     </StrictMode>
   )
 }

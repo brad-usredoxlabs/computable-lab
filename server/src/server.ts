@@ -35,6 +35,7 @@ import {
   createOntologyHandlers,
   createAIHandlers,
   createDeterministicOnlyAIHandlers,
+  createGatewayAIHandlers,
   createEventEditorFixHandlers,
   createMetaHandlers,
   ConfigHandlers,
@@ -562,7 +563,7 @@ export async function createServer(
   const toolRegistry = new ToolRegistry();
 
   // Register MCP server on /mcp (also populates toolRegistry)
-  const mcpServer = createMcpServer(ctx, toolRegistry);
+  const mcpServer = await createMcpServer(ctx, toolRegistry);
   await fastify.register(mcpPlugin, { prefix: '/mcp', mcpServer });
 
   // Create bio-source proxy handlers (uses populated toolRegistry)
@@ -571,6 +572,20 @@ export async function createServer(
     workspaceRoot: ctx.workspaceRoot,
     toolRegistry,
   });
+
+  // AI gateway proxy gate. If CLA_AI_GATEWAY_URL is set, every AI route is
+  // reverse-proxied to that gateway instead of running in-process. Used by
+  // the appliance to host LLM features in a separate proprietary service
+  // (`cla-lab-ai-gateway`) while keeping AI feature parity for the kiosk.
+  // When unset, behavior is identical to before — falls through to the
+  // in-process aiHandlersImpl (when available) or deterministicAiHandlers.
+  const aiGatewayUrl = process.env.CLA_AI_GATEWAY_URL?.trim() || undefined;
+  const gatewayAiHandlers = aiGatewayUrl
+    ? createGatewayAIHandlers(aiGatewayUrl)
+    : undefined;
+  if (aiGatewayUrl) {
+    console.log(`AI gateway proxy enabled → ${aiGatewayUrl}`);
+  }
 
   // Initialize AI runtime state and hot-reload on config changes.
   let aiHandlersImpl: ReturnType<typeof createAIHandlers> | undefined;
@@ -740,15 +755,15 @@ export async function createServer(
 
   const aiHandlers: AIHandlers = {
     async draftEvents(request, reply) {
-      const impl = aiHandlersImpl ?? deterministicAiHandlers;
+      const impl = gatewayAiHandlers ?? aiHandlersImpl ?? deterministicAiHandlers;
       return impl.draftEvents(request, reply);
     },
     async draftEventsStream(request, reply) {
-      const impl = aiHandlersImpl ?? deterministicAiHandlers;
+      const impl = gatewayAiHandlers ?? aiHandlersImpl ?? deterministicAiHandlers;
       return impl.draftEventsStream(request, reply);
     },
     async assistStream(request, reply) {
-      const impl = aiHandlersImpl ?? deterministicAiHandlers;
+      const impl = gatewayAiHandlers ?? aiHandlersImpl ?? deterministicAiHandlers;
       return impl.assistStream(request, reply);
     },
   };
