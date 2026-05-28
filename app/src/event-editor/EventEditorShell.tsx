@@ -1,7 +1,6 @@
 import { useEventEditor } from './EventEditorContext'
 import { AppShell, NavLinks } from '../shared/shell'
 import { DeckStage } from './deck/DeckStage'
-import { FixItLauncher } from './fix-it/FixItLauncher'
 import { Slot } from '../extensions'
 import { DeckModeSwitcher } from './topbar/DeckModeSwitcher'
 import { VocabSwitcher } from './topbar/VocabSwitcher'
@@ -54,7 +53,7 @@ export function EventEditorShell() {
       dock={<Slot name="event-editor.dock" />}
       fixItLauncher={
         <>
-          <FixItLauncher />
+          <Slot name="event-editor.fix-it-launcher" />
           <Slot name="event-editor.fix-it-panel" />
         </>
       }
