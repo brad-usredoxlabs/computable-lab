@@ -33,6 +33,7 @@ import {
   createTreeHandlers,
   createLibraryHandlers,
   createOntologyHandlers,
+  createResolveHandlers,
   createAIHandlers,
   createDeterministicOnlyAIHandlers,
   createGatewayAIHandlers,
@@ -66,6 +67,8 @@ import {
   createVerbActionMapHandlers,
   createFoundryJobHandlers,
 } from './api/handlers/index.js';
+import { createResolveSpine, createResolveSpineFromContext, resolveOakServiceUrl } from './resolve/index.js';
+import { buildResidentContext } from './ai/residentContext.js';
 import { createIngestionAIHandlers } from './api/handlers/IngestionAIHandlers.js';
 import { createMaterialAIHandlers } from './api/handlers/MaterialAIHandlers.js';
 import { createAiIngestionHandlers } from './api/handlers/AiIngestionHandlers.js';
@@ -482,6 +485,24 @@ export async function createServer(
   const treeHandlers = createTreeHandlers(ctx.indexManager, ctx.store, ctx.platformRegistry);
   const libraryHandlers = createLibraryHandlers(ctx.store);
   const ontologyHandlers = createOntologyHandlers();
+  const resolveSpine = createResolveSpineFromContext(ctx);
+  const resolveHandlers = createResolveHandlers(resolveSpine);
+
+  // Compile hot path uses an OAK-only spine (no records, no remote): fast,
+  // offline-safe, and consistent with the appliance's on-box ontologies. Only
+  // wired when an OAK service is configured; otherwise the compiler keeps its
+  // frozen ontology-term YAML registry (bare CL — unchanged behavior).
+  const compileOntologyResolver = resolveOakServiceUrl(ctx.appConfig?.ontology)
+    ? (() => {
+        const compileSpine = createResolveSpine(
+          ctx.appConfig?.ontology ? { ontology: ctx.appConfig.ontology } : {},
+        );
+        return async (q: string) =>
+          (await compileSpine.resolve(q, { localOnly: true }))
+            .filter((c) => c.curie && c.source === 'oak')
+            .map((c) => ({ id: c.curie, label: c.label, source: c.namespace.toLowerCase() }));
+      })()
+    : undefined;
   const vendorSearchHandlers = createVendorSearchHandlers();
   const vendorDocumentHandlers = createVendorDocumentHandlers(ctx.store);
   const chemistryHandlers = createChemistryHandlers();
@@ -675,6 +696,8 @@ export async function createServer(
         searchLabwareByHint: createLabwareLookup(ctx.store),
         extractionService: runner,
         llmClient: inferenceClient,
+        ...(compileOntologyResolver ? { ontologyResolver: compileOntologyResolver } : {}),
+        residentContext: buildResidentContext(ctx.schemaRegistry),
       };
       
       const orchestrator = createAgentOrchestrator(
@@ -762,6 +785,7 @@ export async function createServer(
           extractionService: runner,
           llmClient: null,
           searchLabwareByHint: createLabwareLookup(ctx.store),
+          ...(compileOntologyResolver ? { ontologyResolver: compileOntologyResolver } : {}),
         },
         onPassEvent: (event) => {
           if (event.type !== 'pass_started') return;
@@ -876,6 +900,7 @@ export async function createServer(
       treeHandlers,
       libraryHandlers,
       ontologyHandlers,
+      resolveHandlers,
       vendorSearchHandlers,
       vendorDocumentHandlers,
       chemistryHandlers,

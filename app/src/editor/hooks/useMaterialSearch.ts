@@ -6,8 +6,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { apiClient, type MaterialSearchItem } from '../../shared/api/client'
-import { useOLSSearch } from '../../shared/hooks/useOLSSearch'
-import { MATERIAL_OLS_ONTOLOGIES } from '../../types/material'
+import { useResolveOntology } from './useResolveOntology'
 import { formatConcentration } from '../../types/material'
 import type { OLSSearchResult } from '../../shared/api/olsClient'
 
@@ -50,14 +49,15 @@ export function useMaterialSearch(opts: UseMaterialSearchOptions): UseMaterialSe
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // OLS search via existing hook
+  // Ontology search via the resolve() spine (local OAK → remote OLS4, ranked).
+  // Replaces the OLS4-only path so the picker agrees with the slash menu,
+  // the agent, and the compiler — one resolution path.
   const {
     results: olsResults,
     loading: olsLoading,
     fromCache: olsFromCache,
-  } = useOLSSearch({
+  } = useResolveOntology({
     query,
-    ontologies: MATERIAL_OLS_ONTOLOGIES,
     enabled: enabled && query.length >= minQueryLength,
     debounceMs,
     minQueryLength,

@@ -121,6 +121,14 @@ export interface RunChatbotCompileArgs {
     llmClient: LlmClient | null;
     searchLabwareByHint: (hint: string) => Promise<Array<{ recordId: string; title: string }>>;
     labStateCache?: LabStateCache;
+    /**
+     * Ontology resolver backing the precompile noun-resolution ontology tier.
+     * When provided (server wires the resolve() spine, local-only), terms
+     * resolve against the on-box OAK ontologies + local records — consistent
+     * with the UI and the agent. When absent, falls back to the frozen
+     * ontology-term YAML registry (tests / bare callers).
+     */
+    ontologyResolver?: (q: string) => Promise<Array<{ id: string; label: string; source: string }>>;
   };
   /** Optional conversation identifier used to key the lab-state cache. */
   conversationId?: string;
@@ -236,11 +244,20 @@ export async function runChatbotCompile(
       },
     },
     ontologyTermRegistry: {
-      searchLabel: (q) => {
-        const needle = q.toLowerCase();
-        return getOntologyTermRegistry().list()
-          .filter((t) => t.label.toLowerCase().includes(needle))
-          .map((t) => ({ id: t.id, label: t.label, source: t.source }));
+      // Spine-backed (on-box OAK) when wired, with the frozen ontology-term
+      // YAML registry as the fallback (bare CL, or terms the OAK packs miss).
+      searchLabel: async (q) => {
+        const fromYaml = () => {
+          const needle = q.toLowerCase();
+          return getOntologyTermRegistry().list()
+            .filter((t) => t.label.toLowerCase().includes(needle))
+            .map((t) => ({ id: t.id, label: t.label, source: t.source }));
+        };
+        if (args.deps.ontologyResolver) {
+          const hits = await args.deps.ontologyResolver(q);
+          return hits.length > 0 ? hits : fromYaml();
+        }
+        return fromYaml();
       },
     },
     labwareInstanceLookup: args.deps.searchLabwareByHint,

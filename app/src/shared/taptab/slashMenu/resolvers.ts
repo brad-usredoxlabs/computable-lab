@@ -10,7 +10,12 @@
  */
 
 import { searchJsonLd } from '../../api/jsonLdSearchClient'
-import { apiClient, type FormulationSummary, type MaterialSearchItem } from '../../api/client'
+import {
+  apiClient,
+  type FormulationSummary,
+  type MaterialSearchItem,
+  type ResolveCandidate,
+} from '../../api/client'
 import type {
   SlashResolver,
   SlashResolverContext,
@@ -23,12 +28,45 @@ const MATERIAL_PAGE = 12
 
 export const resolveMaterial: SlashResolver = async (query, ctx) => {
   const q = query.trim()
-  const [materialRes, formulations] = await Promise.all([
+  const [materialRes, formulations, resolved] = await Promise.all([
     apiClient.searchMaterials({ q, limit: MATERIAL_PAGE * 2 }),
     apiClient.getFormulationsSummary({ q, limit: MATERIAL_PAGE }),
+    // Ontology grounding via the resolve() spine. Degrades to workspace-only
+    // if the endpoint is unavailable (older backend) — never blocks the menu.
+    q
+      ? apiClient.resolve({ term: q, kinds: ['material'], limit: PAGE }).catch(() => ({ candidates: [] }))
+      : Promise.resolve({ candidates: [] as ResolveCandidate[] }),
   ])
   abortIfNeeded(ctx)
-  return materialSuggestions(materialRes.items, formulations).slice(0, MATERIAL_PAGE)
+
+  // Workspace (local) matches first, ontology-grounded terms appended.
+  const workspace = materialSuggestions(materialRes.items, formulations)
+  const seen = new Set(workspace.map((s) => s.key))
+  const merged = [...workspace]
+  for (const s of ontologySuggestions(resolved.candidates)) {
+    if (seen.has(s.key)) continue
+    seen.add(s.key)
+    merged.push(s)
+  }
+  return merged.slice(0, MATERIAL_PAGE)
+}
+
+/**
+ * Map external-ontology resolve() candidates (CHEBI/GO/…) to material
+ * mentions carrying the CURIE as the id. Local-record candidates are skipped
+ * (the workspace search already covers them) and the tier-5 mint affordance is
+ * left to the material picker.
+ */
+function ontologySuggestions(candidates: ResolveCandidate[]): SlashSuggestion[] {
+  return candidates
+    .filter((c) => (c.source === 'oak' || c.source === 'ols4') && c.curie)
+    .map((c) => ({
+      key: `ontology:${c.curie}`,
+      label: c.label,
+      badge: c.namespace ? c.namespace.toUpperCase() : 'Ontology',
+      subtitle: c.curie,
+      mention: { type: 'material', entityKind: 'material', id: c.curie, label: c.label },
+    }))
 }
 
 export const resolveLabware: SlashResolver = async (query, ctx) => {

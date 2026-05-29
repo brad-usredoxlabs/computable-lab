@@ -23,6 +23,12 @@ import type {
 import { buildSystemPrompt, buildSurfaceAwarePrompt } from './systemPrompt.js';
 import { resolveMentionsForPrompt, buildResolvedContextMessage } from './resolveMentions.js';
 import { runChatbotCompile } from './runChatbotCompile.js';
+import {
+  SUBMIT_SUGGESTION_TOOL_DEF,
+  SUBMIT_SUGGESTION_TOOL_NAME,
+  SUBMIT_SUGGESTION_INSTRUCTION,
+  parseSubmitSuggestionArgs,
+} from './submitSuggestionTool.js';
 import type { PassProgressEvent } from '../compiler/pipeline/PipelineRunner.js';
 import { getDefaultLabStateCache } from '../compiler/state/LabStateCache.js';
 import { decodeAttachmentText } from '../extract/decodeAttachment.js';
@@ -178,6 +184,18 @@ function summarizeConversationHistory(history: ChatMessage[]): string | null {
 export interface AgentOrchestratorDeps extends ResolveMentionDeps {
   extractionService?: import('../extract/ExtractionRunnerService.js').ExtractionRunnerService;
   llmClient?: import('../compiler/pipeline/passes/ChatbotCompilePasses.js').LlmClient;
+  /**
+   * Spine-backed (on-box OAK) ontology resolver forwarded to the precompile
+   * noun-resolution tier, so the agent grounds terms the same way the UI and
+   * compiler do. Optional — omitted ⇒ frozen ontology-term YAML registry.
+   */
+  ontologyResolver?: (q: string) => Promise<Array<{ id: string; label: string; source: string }>>;
+  /**
+   * Resident context (#1/#2) — a small, stable world-map + pinned-vocab block
+   * (buildResidentContext) injected into the agent's system message on
+   * tool-bearing turns. Computed once at construction.
+   */
+  residentContext?: string;
 }
 
 export function createAgentOrchestrator(
@@ -241,6 +259,7 @@ export function createAgentOrchestrator(
           llmClient: deps.llmClient ?? null,
           searchLabwareByHint: deps.searchLabwareByHint!,
           labStateCache: getDefaultLabStateCache(),
+          ...(deps.ontologyResolver ? { ontologyResolver: deps.ontologyResolver } : {}),
         },
         ...(deterministicOnly ? { deterministicOnly: true } : {}),
         ...(inferenceConfig.model ? { model: inferenceConfig.model } : {}),
@@ -417,8 +436,10 @@ export function createAgentOrchestrator(
       for (const m of attachmentMessages) {
         if (typeof m.content === 'string' && m.content.length > 0) systemSections.push(m.content);
       }
+      if (!isDocDiscussionTurn && deps.residentContext) systemSections.push(deps.residentContext);
       if (resolvedContextMessage) systemSections.push(resolvedContextMessage);
       if (historySummary) systemSections.push(historySummary);
+      if (!isDocDiscussionTurn) systemSections.push(SUBMIT_SUGGESTION_INSTRUCTION);
 
       const messages: ChatMessage[] = [
         { role: 'system', content: systemSections.join('\n\n---\n\n') },
@@ -427,11 +448,15 @@ export function createAgentOrchestrator(
       ];
 
       const allToolDefs = toolBridge.getToolDefinitions();
-      const toolDefs = isDocDiscussionTurn
+      const baseToolDefs = isDocDiscussionTurn
         ? []
         : toolFilter
           ? allToolDefs.filter((d) => toolFilter.includes(d.function.name))
           : allToolDefs;
+      // Append the structured output tool (#8): the agent finalizes by calling
+      // submit_suggestion rather than emitting free-text JSON. Always available
+      // (except doc-discussion turns, which are plain prose).
+      const toolDefs = isDocDiscussionTurn ? [] : [...baseToolDefs, SUBMIT_SUGGESTION_TOOL_DEF];
       const effectiveMaxTurns = isDocDiscussionTurn ? 1 : maxTurns;
       const totalUsage = { promptTokens: 0, completionTokens: 0 };
       console.log(`[agent ${tid}] tools=${toolDefs.length}${toolFilter ? ` (filtered from ${allToolDefs.length})` : ''} docDiscussion=${isDocDiscussionTurn} maxTurns=${effectiveMaxTurns}`);
@@ -683,6 +708,55 @@ export function createAgentOrchestrator(
           } else {
             console.log(`[agent ${tid}] done success=true elapsedMs=${elapsed} turns=${turn + 1} toolCalls=${totalToolCalls} events=${result.events?.length ?? 0}`);
           }
+          return result;
+        }
+
+        // 3b. Terminal via submit_suggestion (#8): the agent finalized through
+        // the structured output tool. Capture its args as the result directly —
+        // no regex parse, grounded by the tool schema.
+        const submitCall = assistantMsg.tool_calls.find(
+          (tc) => tc.function.name === SUBMIT_SUGGESTION_TOOL_NAME,
+        );
+        if (submitCall) {
+          let submitArgs: Record<string, unknown>;
+          try {
+            submitArgs = JSON.parse(submitCall.function.arguments) as Record<string, unknown>;
+          } catch {
+            submitArgs = {};
+          }
+          onEvent?.({ type: 'tool_call', toolName: SUBMIT_SUGGESTION_TOOL_NAME, args: submitArgs });
+          const result = parseSubmitSuggestionArgs(submitArgs, totalUsage, turn + 1, totalToolCalls);
+          const elapsed = Date.now() - t0;
+          turnStats.push({
+            turn: turn + 1,
+            durationMs: Date.now() - turnStart,
+            finishReason: choice.finish_reason,
+            promptTokens: response.usage?.prompt_tokens ?? 0,
+            completionTokens: response.usage?.completion_tokens ?? 0,
+            tools: turnToolStats,
+          });
+          const summary: AgentSummary = {
+            traceId: tid,
+            surface: surfaceName,
+            model,
+            success: result.success,
+            elapsedMs: elapsed,
+            turns: turnStats,
+            totals: {
+              turns: turn + 1,
+              toolCalls: totalToolCalls,
+              promptTokens: totalUsage.promptTokens,
+              completionTokens: totalUsage.completionTokens,
+              totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+            },
+            resolvedMentions: resolvedMentionsCount,
+            bypass: null,
+          };
+          if (result.error) summary.error = result.error;
+          logAgentSummary(tid, summary);
+          console.log(
+            `[agent ${tid}] done success=${result.success} via submit_suggestion turns=${turn + 1} events=${result.events?.length ?? 0} elapsedMs=${elapsed}`,
+          );
           return result;
         }
 

@@ -16,6 +16,30 @@ export interface AppConfig {
   execution?: ExecutionConfig;
   lab?: LabConfig;
   integrations?: IntegrationsConfig;
+  ontology?: OntologyConfig;
+}
+
+/**
+ * Ontology resolution configuration.
+ *
+ * Controls the on-box OAK ontology service tier of the resolve() spine.
+ * When `serviceUrl` is unset (bare computable-lab, no appliance), the local
+ * OAK tier is skipped and resolution falls back to records + remote OLS4.
+ */
+export interface OntologyConfig {
+  /**
+   * URL of the on-box OAK ontology HTTP service (e.g. "http://127.0.0.1:8766").
+   * Appliance-only. Unset ⇒ local OAK tier disabled. Falls back to the
+   * CLA_ONTOLOGY_SERVICE_URL env var when not set here.
+   */
+  serviceUrl?: string;
+  /**
+   * Which local OAK ontologies to query, by key
+   * (default: chebi, go, ncit, uberon, ncbitaxon — the bundled snapshots).
+   */
+  localOntologies?: string[];
+  /** Per-request timeout against the local ontology service (ms, default 1500). */
+  timeoutMs?: number;
 }
 
 export type ExecutionMode = 'local' | 'remote' | 'hybrid';

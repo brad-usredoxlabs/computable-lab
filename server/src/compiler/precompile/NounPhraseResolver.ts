@@ -44,7 +44,11 @@ export interface NounResolverDeps {
     findByName: (name: string) => ({ recordId: string } & Partial<{ registryMatch: FuzzyRegistryMatch }>) | undefined;
   };
   ontologyTermRegistry: {
-    searchLabel: (q: string) => Array<{ id: string; label: string; source: string }>;
+    searchLabel: (
+      q: string,
+    ) =>
+      | Array<{ id: string; label: string; source: string }>
+      | Promise<Array<{ id: string; label: string; source: string }>>;
   };
   labwareInstanceLookup: (hint: string) => Promise<Array<{ recordId: string; title: string }>>;
   /**
@@ -244,7 +248,7 @@ async function resolveOne(
   }
 
   // Tier 3: ontology-term case-insensitive substring
-  const ontHits = deps.ontologyTermRegistry.searchLabel(phrase);
+  const ontHits = await deps.ontologyTermRegistry.searchLabel(phrase);
   if (ontHits.length > 0) {
     const first = ontHits[0]!;
     return {

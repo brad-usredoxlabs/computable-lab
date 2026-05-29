@@ -79,7 +79,11 @@ export interface DeterministicPrecompileDeps {
     }) | undefined;
   };
   ontologyTermRegistry: {
-    searchLabel: (q: string) => Array<{ id: string; label: string; source: string }>;
+    searchLabel: (
+      q: string,
+    ) =>
+      | Array<{ id: string; label: string; source: string }>
+      | Promise<Array<{ id: string; label: string; source: string }>>;
   };
   labwareInstanceLookup: (hint: string) => Promise<Array<{ recordId: string; title: string }>>;
 }
