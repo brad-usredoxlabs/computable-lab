@@ -3116,15 +3116,19 @@
 }
 
 .event-editor .ai-dock__input-row {
-  display: flex;
+  /* Grid (not flex) for the row because grid's `minmax(0, 1fr)` reliably
+     shrinks the middle column past its intrinsic min-content width,
+     which `flex:1 1 0 + min-width:0` doesn't always do once TipTap
+     inserts inline-block mention chips or a wide contenteditable. The
+     three columns are: mode-toggle (auto) | input wrapper (shrinkable) |
+     Send button (auto). On a narrow / square viewport this guarantees
+     Send stays in view even when the editor would otherwise want max-content. */
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 8px;
   padding: 10px 14px;
   border-top: 1px solid var(--cl-border);
-  align-items: flex-end;
-  /* Required so the flex children's `flex:1 1 0; min-width:0` actually
-     shrinks the editor wrapper below its content width — without this on
-     the row itself, the row can size to max-content and bleed past the
-     dock, hiding the Send button on narrow viewports. */
+  align-items: end;
   min-width: 0;
 }
 
