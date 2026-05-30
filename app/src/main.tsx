@@ -31,10 +31,13 @@ async function bootstrap(): Promise<void> {
   }
 
   const { App } = await import('./App')
+  const { AiPanelProvider } = await import('./shared/context/AiPanelContext')
   root.render(
     <StrictMode>
       <ExtensionProvider manifest={manifest}>
-        <App />
+        <AiPanelProvider>
+          <App />
+        </AiPanelProvider>
       </ExtensionProvider>
     </StrictMode>
   )

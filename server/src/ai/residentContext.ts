@@ -16,6 +16,7 @@
  */
 
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js';
+import type { RecordStore } from '../store/types.js';
 import { getOntologyTermRegistry } from '../registry/OntologyTermRegistry.js';
 
 const WORLD_NARRATIVE = [
@@ -71,10 +72,43 @@ export function buildPinnedVocab(limit = 40): string {
 }
 
 /**
- * Combine the world map and pinned vocab into one resident block. Computed once
- * (both sources are effectively static) and injected into the agent's system
- * message on tool-bearing turns.
+ * Ontology CURIEs actually in use in this workspace — scanned from material
+ * records' class[] groundings. This is the true #2 ("what does exist here"),
+ * naturally small and lab-specific. Returns '' when no material is grounded
+ * yet (caller falls back to the pinned vocab).
  */
-export function buildResidentContext(registry: SchemaRegistry): string {
-  return [buildWorldMap(registry), buildPinnedVocab()].filter((s) => s.length > 0).join('\n\n---\n\n');
+export async function buildInUseVocab(store: RecordStore, limit = 40): Promise<string> {
+  let records: Awaited<ReturnType<RecordStore['list']>>;
+  try {
+    records = await store.list({ kind: 'material' });
+  } catch {
+    return '';
+  }
+  const seen = new Map<string, string>(); // curie -> label
+  for (const rec of records) {
+    const cls = (rec.payload as Record<string, unknown>).class;
+    if (!Array.isArray(cls)) continue;
+    for (const ref of cls) {
+      const r = ref as Record<string, unknown> | null;
+      if (r && r.kind === 'ontology' && typeof r.id === 'string' && r.id.length > 0 && !seen.has(r.id)) {
+        seen.set(r.id, typeof r.label === 'string' && r.label ? r.label : r.id);
+      }
+    }
+    if (seen.size >= limit) break;
+  }
+  if (seen.size === 0) return '';
+  const lines = [...seen.entries()].slice(0, limit).map(([id, label]) => `- ${id} ${label}`);
+  return ['ONTOLOGY TERMS IN USE IN THIS WORKSPACE:', ...lines].join('\n');
+}
+
+/**
+ * Combine the world map and noun vocab into one resident block, injected into
+ * the agent's system message on tool-bearing turns. Prefers the workspace's
+ * in-use CURIEs (when a store is given and any material is grounded); otherwise
+ * falls back to the pinned vocabulary.
+ */
+export async function buildResidentContext(registry: SchemaRegistry, store?: RecordStore): Promise<string> {
+  const inUse = store ? await buildInUseVocab(store) : '';
+  const vocab = inUse || buildPinnedVocab();
+  return [buildWorldMap(registry), vocab].filter((s) => s.length > 0).join('\n\n---\n\n');
 }

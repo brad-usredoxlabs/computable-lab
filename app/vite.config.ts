@@ -52,6 +52,64 @@ export default defineConfig({
       '@tiptap/core',
       '@tiptap/react',
       '@tiptap/pm',
+      // @tiptap/pm is a meta-package that re-exports prosemirror-*;
+      // deduping it does NOT dedupe the underlying packages. With pnpm's
+      // nested layout, two physical copies of prosemirror-view / -state
+      // are common — and ProseMirror decorations from one copy iterated
+      // by another throw "Cannot read properties of undefined (reading
+      // 'localsInner')". Pin each explicitly.
+      'prosemirror-view',
+      'prosemirror-state',
+      'prosemirror-model',
+      'prosemirror-transform',
+      '@tiptap/suggestion',
+    ],
+  },
+  // The AI overlay imports `@cla-lab-host/*` (CL source) through the alias
+  // above. If vite pre-bundles the overlay into node_modules/.vite/deps/, it
+  // inlines those imports as separate copies — so the overlay's React
+  // contexts (EventEditorContext, AiPanelContext, …) end up as DIFFERENT
+  // instances from CL's, and `useEventEditor() / useAiPanel()` throw "must
+  // be used inside Provider" even though the provider IS in the tree.
+  // Excluding from pre-bundling makes vite serve the overlay through the
+  // normal resolver, sharing context instances with CL.
+  // Vite ignores node_modules from its file watcher by default. The AI
+  // overlay lives there (installed from a tarball), so dist updates aren't
+  // detected until vite is restarted with the .vite cache wiped. Opt the
+  // overlay back into the watcher so rebuild+pack+install reloads cleanly.
+  server: {
+    watch: {
+      ignored: ['!**/node_modules/@cla-lab/ai-overlay-appliance/**'],
+    },
+  },
+  optimizeDeps: {
+    // The AI overlay imports `@cla-lab-host/*` (CL source) through the alias
+    // above. If vite pre-bundles the overlay into node_modules/.vite/deps/, it
+    // inlines those imports as separate copies — so the overlay's React
+    // contexts (EventEditorContext, AiPanelContext, …) end up as DIFFERENT
+    // instances from CL's, and `useEventEditor() / useAiPanel()` throw "must
+    // be used inside Provider" even though the provider IS in the tree.
+    //
+    // The @tiptap/pm subpaths (state/view/model/transform) and @tiptap/
+    // suggestion all inline parts of prosemirror-* into self-contained
+    // pre-bundled chunks. Even with dedupe set for prosemirror packages, two
+    // chunks → two physical copies of PluginKey/Decoration classes → the
+    // "Cannot read properties of undefined (reading 'localsInner')" crash when
+    // a decoration from one PM-view instance is iterated by another. Excluding
+    // from pre-bundling makes vite resolve them via the standard alias+dedupe
+    // resolver, giving a single instance shared by the host and the overlay.
+    exclude: [
+      '@cla-lab/ai-overlay-appliance',
+      '@tiptap/pm',
+      '@tiptap/pm/state',
+      '@tiptap/pm/view',
+      '@tiptap/pm/model',
+      '@tiptap/pm/transform',
+      '@tiptap/suggestion',
+      'prosemirror-view',
+      'prosemirror-state',
+      'prosemirror-model',
+      'prosemirror-transform',
     ],
   },
   plugins: [

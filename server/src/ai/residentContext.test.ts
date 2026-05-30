@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js';
-import { buildWorldMap, buildPinnedVocab, buildResidentContext } from './residentContext.js';
+import type { RecordStore } from '../store/types.js';
+import { buildWorldMap, buildPinnedVocab, buildInUseVocab, buildResidentContext } from './residentContext.js';
+
+/** Minimal store stub — buildInUseVocab only calls store.list({kind:'material'}). */
+function stubStore(materialPayloads: Array<Record<string, unknown>>): RecordStore {
+  return {
+    list: async () => materialPayloads.map((payload, i) => ({ recordId: `MAT-${i}`, schemaId: 'material', payload })),
+  } as unknown as RecordStore;
+}
 
 /** Minimal stub — buildWorldMap only calls registry.getAll(). */
 function stubRegistry(entries: Array<{ id: string; schema: Record<string, unknown> }>): SchemaRegistry {
@@ -55,9 +63,38 @@ describe('buildPinnedVocab', () => {
   });
 });
 
+describe('buildInUseVocab', () => {
+  it('collects distinct ontology CURIEs from material class[]', async () => {
+    const store = stubStore([
+      { class: [{ kind: 'ontology', id: 'CHEBI:5001', label: 'fenofibrate' }] },
+      { class: [{ kind: 'ontology', id: 'CHEBI:5001', label: 'fenofibrate' }, { kind: 'record', id: 'MAT-x' }] },
+      { class: [{ kind: 'ontology', id: 'CL:0000182', label: 'hepatocyte' }] },
+    ]);
+    const v = await buildInUseVocab(store);
+    expect(v).toContain('ONTOLOGY TERMS IN USE');
+    expect(v).toContain('- CHEBI:5001 fenofibrate');
+    expect(v).toContain('- CL:0000182 hepatocyte');
+    // deduped: CHEBI:5001 appears once
+    expect(v.match(/CHEBI:5001/g)).toHaveLength(1);
+    // record refs ignored
+    expect(v).not.toContain('MAT-x');
+  });
+
+  it('returns empty when no material is grounded', async () => {
+    expect(await buildInUseVocab(stubStore([{ name: 'ungrounded' }, { class: [] }]))).toBe('');
+  });
+});
+
 describe('buildResidentContext', () => {
-  it('combines the world map (and vocab) into one block', () => {
-    const ctx = buildResidentContext(REGISTRY);
+  it('combines the world map (and pinned vocab) when no store is given', async () => {
+    const ctx = await buildResidentContext(REGISTRY);
     expect(ctx).toContain('LAB WORLD MAP');
+  });
+
+  it('prefers in-use vocab over pinned when the store has grounded materials', async () => {
+    const store = stubStore([{ class: [{ kind: 'ontology', id: 'CHEBI:5001', label: 'fenofibrate' }] }]);
+    const ctx = await buildResidentContext(REGISTRY, store);
+    expect(ctx).toContain('LAB WORLD MAP');
+    expect(ctx).toContain('ONTOLOGY TERMS IN USE');
   });
 });

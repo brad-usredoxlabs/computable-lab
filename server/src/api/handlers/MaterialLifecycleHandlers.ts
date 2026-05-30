@@ -6,7 +6,7 @@ import type { IndexManager } from '../../index/IndexManager.js';
 import { toStoredConcentration, type Concentration } from '../../materials/concentration.js';
 import { extractPrimaryDeclaredConcentration } from '../../materials/vendorComposition.js';
 
-const SCHEMA_IDS = {
+export const SCHEMA_IDS = {
   material: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
   vendorProduct: 'https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml',
   materialSpec: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml',
@@ -110,7 +110,12 @@ type PromoteMaterialFromContextBody = {
   derivedState?: Record<string, unknown>;
 };
 
-function token(prefix: string): string {
+/**
+ * Generate a stable lifecycle id like "MAT-…", "MINST-…", "ALQ-…".
+ * Exported so other server modules (e.g. AI mention auto-bind) mint with the
+ * same shape as the regular UI handlers.
+ */
+export function token(prefix: string): string {
   return `${prefix}-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
 }
 
@@ -175,7 +180,12 @@ function dedupeStrings(value: unknown): string[] | undefined {
   return filtered.length > 0 ? Array.from(new Set(filtered)) : undefined;
 }
 
-async function createRecord(store: RecordStore, recordId: string, schemaId: string, payload: Record<string, unknown>, message: string): Promise<RecordEnvelope | null> {
+/**
+ * Thin wrapper over store.create. Returns the persisted envelope on success or
+ * null on failure. Exported so other server modules (AI mention auto-bind, etc.)
+ * use the same write path as the lifecycle handlers.
+ */
+export async function createRecord(store: RecordStore, recordId: string, schemaId: string, payload: Record<string, unknown>, message: string): Promise<RecordEnvelope | null> {
   const result = await store.create({
     envelope: { recordId, schemaId, payload },
     message,

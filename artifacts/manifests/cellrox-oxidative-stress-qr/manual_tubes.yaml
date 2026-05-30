@@ -1,7 +1,7 @@
 kind: protocol-foundry-variant-manifest
 protocolId: cellrox-oxidative-stress-qr
 variant: manual_tubes
-generated_at: 2026-05-16T01:29:12.026Z
+generated_at: 2026-05-29T23:42:27.205Z
 status: gap
 metrics:
   eventCount: 10

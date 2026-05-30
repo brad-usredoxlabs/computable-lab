@@ -89,6 +89,7 @@ import { getCompoundClassRegistry } from '../registry/CompoundClassRegistry.js';
 import { getOntologyTermRegistry } from '../registry/OntologyTermRegistry.js';
 import { getVerbActionMap } from '../registry/VerbActionMapRegistry.js';
 import { getLabwareDefinitionRegistry } from '../registry/LabwareDefinitionRegistry.js';
+import { bindOntologyMentions, type OntologyMentionBinding } from './mentions/bindOntologyMentions.js';
 import { fuzzyFindByName } from '../registry/fuzzyMatch.js';
 import * as path from 'node:path';
 import '../compiler/patterns/index.js'; // registers all pattern expanders
@@ -129,6 +130,15 @@ export interface RunChatbotCompileArgs {
      * ontology-term YAML registry (tests / bare callers).
      */
     ontologyResolver?: (q: string) => Promise<Array<{ id: string; label: string; source: string }>>;
+    /**
+     * Record store. When provided, ontology-CURIE material mentions
+     * (e.g. `[[material:CHEBI:5001|fenofibrate]]`) are auto-bound to local
+     * material records (find-or-mint) before the precompile runs, so the
+     * compiler / ghost / persist flow always see real `MAT-…` recordIds.
+     * Optional — when omitted (tests / bare callers), mentions pass through
+     * unchanged.
+     */
+    store?: import('../store/types.js').RecordStore;
   };
   /** Optional conversation identifier used to key the lab-state cache. */
   conversationId?: string;
@@ -151,6 +161,13 @@ export interface RunChatbotCompileResult {
   diagnostics: PassDiagnostic[];
   terminalArtifacts: TerminalArtifacts;
   outcome: CompileOutcome;
+  /**
+   * Ontology-CURIE material mentions that were auto-bound to local material
+   * records before the precompile ran. Newly-minted bindings carry
+   * `minted: true`; reused bindings are silent in the user-facing notes but
+   * still surface here for observability.
+   */
+  ontologyBindings?: OntologyMentionBinding[];
   /**
    * Per-pass outputs, keyed by pass id. Mirrors the orchestrator's internal
    * outputs map. Surfaced so fix-it tooling (probe_pass) can see WHERE in
@@ -317,13 +334,27 @@ export async function runChatbotCompile(
 
   // Resolve mentions: prefer client-shipped, fall back to a server-side parse
   // so the precompile pass and labware resolver always see structured tokens.
-  const effectiveMentions: PromptMention[] = args.mentions && args.mentions.length > 0
+  const rawMentions: PromptMention[] = args.mentions && args.mentions.length > 0
     ? args.mentions
     : parsePromptMentions(compilePrompt);
 
+  // Auto-bind ontology-CURIE material mentions to local material records
+  // (find-or-mint with the CURIE in class[]). Runs once per compile, ahead of
+  // every downstream consumer, so the rest of the pipeline only ever sees
+  // real `MAT-…` recordIds. Skipped when no store is wired (older callers).
+  const bindResult = args.deps.store
+    ? await bindOntologyMentions(rawMentions, { store: args.deps.store, prompt: compilePrompt })
+    : { mentions: rawMentions, bindings: [], prompt: compilePrompt };
+  const effectiveMentions = bindResult.mentions;
+  const ontologyBindings = bindResult.bindings;
+  // DeterministicPrecompilePass re-parses the prompt text to build its mention
+  // placeholders, so we must hand it the rewritten prompt — not just the
+  // rewritten mentions array — for CURIE→MAT- substitutions to flow downstream.
+  const effectivePrompt = bindResult.prompt ?? compilePrompt;
+
   const spec = loadPipeline(PIPELINE_YAML_PATH);
   const result = await runPipeline(spec, registry, {
-    prompt: compilePrompt,
+    prompt: effectivePrompt,
     attachments: args.attachments ?? [],
     mentions: effectiveMentions,
     editorLabwares: args.editorLabwares ?? [],
@@ -504,5 +535,6 @@ export async function runChatbotCompile(
     terminalArtifacts,
     outcome,
     passOutputs,
+    ...(ontologyBindings.length > 0 ? { ontologyBindings } : {}),
   };
 }

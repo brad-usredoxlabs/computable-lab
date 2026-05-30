@@ -19,7 +19,13 @@
  */
 
 import { Extension } from '@tiptap/core'
+import { PluginKey } from '@tiptap/pm/state'
 import Suggestion, { type SuggestionOptions, type SuggestionProps } from '@tiptap/suggestion'
+
+// Distinct plugin key so this Suggestion plugin can coexist with the slash
+// menu's Suggestion (both use @tiptap/suggestion, which defaults to the same
+// key — adding two would throw "different instances of a keyed plugin").
+const ONTOLOGY_COPILOT_PLUGIN_KEY = new PluginKey('ontologyCopilotSuggestion')
 import { createRoot, type Root } from 'react-dom/client'
 import { createElement } from 'react'
 import { SlashSuggestionList, type SlashSuggestionListHandle } from '../slashMenu/SlashSuggestionList'
@@ -55,6 +61,7 @@ export function buildOntologyCopilotExtension(): Extension {
     addProseMirrorPlugins() {
       return [
         Suggestion({
+          pluginKey: ONTOLOGY_COPILOT_PLUGIN_KEY,
           editor: this.editor,
           char: '@',
           startOfLine: false,
@@ -117,13 +124,25 @@ function createRenderer() {
     container.style.display = 'block'
     container.style.position = 'fixed'
     container.style.zIndex = '1000'
-    const popoverHeight = container.firstElementChild?.clientHeight ?? 220
-    if (rect.top > popoverHeight + 12) {
-      container.style.top = `${rect.top - popoverHeight - 8}px`
-    } else {
-      container.style.top = `${rect.bottom + 8}px`
-    }
     container.style.left = `${rect.left}px`
+
+    // Same viewport-aware anchoring as the slash menu — pin to a viewport
+    // edge and cap maxHeight so a longer query (more items, taller popover)
+    // never overflows off-screen.
+    const MARGIN = 8
+    const popoverEl = container.firstElementChild as HTMLElement | null
+    const spaceAbove = rect.top - MARGIN
+    const spaceBelow = window.innerHeight - rect.bottom - MARGIN
+    const placeAbove = spaceAbove >= 140 || spaceAbove >= spaceBelow
+    if (placeAbove) {
+      container.style.top = ''
+      container.style.bottom = `${window.innerHeight - rect.top + MARGIN}px`
+      if (popoverEl) popoverEl.style.maxHeight = `${Math.max(120, spaceAbove)}px`
+    } else {
+      container.style.bottom = ''
+      container.style.top = `${rect.bottom + MARGIN}px`
+      if (popoverEl) popoverEl.style.maxHeight = `${Math.max(120, spaceBelow)}px`
+    }
   }
 
   return {

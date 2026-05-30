@@ -880,6 +880,7 @@ export function createProtocolIdeHandlers(
                 extractionService: deps.extractionService,
                 llmClient: deps.llmClient,
                 searchLabwareByHint: createLabwareLookup(ctx.store),
+                store: ctx.store,
               },
               ...(deps.model ? { model: deps.model } : {}),
               onPassEvent: (event) => {

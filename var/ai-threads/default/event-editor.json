@@ -1,0 +1,320 @@
+{
+  "endpoint": "event-editor",
+  "userId": "default",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Add 1mM fenofibrate to well B2",
+      "createdAt": "2026-05-29T23:28:17.208Z"
+    },
+    {
+      "role": "assistant",
+      "content": "No events generated.",
+      "metadata": {
+        "sourcePrompt": "Add 1mM fenofibrate to well B2"
+      },
+      "createdAt": "2026-05-29T23:28:17.326Z"
+    },
+    {
+      "role": "user",
+      "content": "add [[material:NCIT:C29047|Fenofibrate]] to a [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]] and add it to the deck",
+      "createdAt": "2026-05-30T14:14:59.927Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Drafted 1 event and 1 labware placement.",
+      "metadata": {
+        "draftedEvents": [
+          {
+            "eventId": "evt-add_material-rz9csgw5",
+            "event_type": "add_material",
+            "details": {
+              "recordId": "NCIT:C29047",
+              "kind": "material"
+            },
+            "labwareId": "lbw-seed-plate-96-flat"
+          }
+        ],
+        "labwareAdditions": [
+          {
+            "recordId": "lbw-seed-plate-96-flat",
+            "reason": "resolved labware mention"
+          }
+        ],
+        "sourcePrompt": "add [[material:NCIT:C29047|Fenofibrate]] to a [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]] and add it to the deck"
+      },
+      "createdAt": "2026-05-30T14:15:00.044Z"
+    },
+    {
+      "role": "user",
+      "content": "add a [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]] to the deck.  add 100uL of [[material:mesh:D011345|Fenofibrate]] to well A1",
+      "createdAt": "2026-05-30T14:16:04.301Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Drafted 1 event and 1 labware placement.",
+      "metadata": {
+        "draftedEvents": [
+          {
+            "eventId": "evt-add_material-70c963q2",
+            "event_type": "add_material",
+            "details": {
+              "well": "A1",
+              "recordId": "mesh:D011345",
+              "kind": "material",
+              "volume_uL": 100,
+              "volumeUl": 100,
+              "volume": {
+                "value": 100,
+                "unit": "uL"
+              }
+            }
+          }
+        ],
+        "labwareAdditions": [
+          {
+            "recordId": "lbw-seed-plate-96-flat",
+            "reason": "resolved labware mention"
+          }
+        ],
+        "sourcePrompt": "add a [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]] to the deck.  add 100uL of [[material:mesh:D011345|Fenofibrate]] to well A1"
+      },
+      "createdAt": "2026-05-30T14:16:04.419Z"
+    },
+    {
+      "role": "user",
+      "content": "Add 1mM [[material:OMIT:0012301|Fenofibrate]] to well A1",
+      "createdAt": "2026-05-30T16:59:20.326Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Drafted 1 event.",
+      "metadata": {
+        "draftedEvents": [
+          {
+            "eventId": "evt-add_material-h90hmrvm",
+            "event_type": "add_material",
+            "details": {
+              "well": "A1",
+              "recordId": "OMIT:0012301",
+              "kind": "material",
+              "concentration_uM": 1000,
+              "concentration": {
+                "raw": "1mM",
+                "value": 1000,
+                "unit": "uM"
+              }
+            }
+          }
+        ],
+        "sourcePrompt": "Add 1mM [[material:OMIT:0012301|Fenofibrate]] to well A1"
+      },
+      "createdAt": "2026-05-30T16:59:20.464Z"
+    },
+    {
+      "role": "user",
+      "content": "add 100 uL of 1mM [[material:CHEBI:5001|fenofibrate]] to well A1 of the [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]]",
+      "createdAt": "2026-05-30T17:00:30.728Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Drafted 1 event and 1 labware placement.",
+      "metadata": {
+        "draftedEvents": [
+          {
+            "eventId": "evt-add_material-z6g8w9p5",
+            "event_type": "add_material",
+            "details": {
+              "well": "A1",
+              "recordId": "CHEBI:5001",
+              "kind": "material",
+              "volume_uL": 100,
+              "concentration_uM": 1000,
+              "concentration": {
+                "raw": "1mM",
+                "value": 1000,
+                "unit": "uM"
+              },
+              "volumeUl": 100,
+              "volume": {
+                "value": 100,
+                "unit": "uL"
+              }
+            },
+            "labwareId": "lbw-seed-plate-96-flat"
+          }
+        ],
+        "labwareAdditions": [
+          {
+            "recordId": "lbw-seed-plate-96-flat",
+            "reason": "resolved labware mention"
+          }
+        ],
+        "sourcePrompt": "add 100 uL of 1mM [[material:CHEBI:5001|fenofibrate]] to well A1 of the [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]]"
+      },
+      "createdAt": "2026-05-30T17:00:30.829Z"
+    },
+    {
+      "role": "user",
+      "content": "add 100uL of [[material:CHEBI:5001|fenofibrate]] to well A1 of the [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]]",
+      "createdAt": "2026-05-30T17:33:28.591Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Drafted 1 event and 1 labware placement.",
+      "metadata": {
+        "draftedEvents": [
+          {
+            "eventId": "evt-add_material-877rzb0x",
+            "event_type": "add_material",
+            "details": {
+              "well": "A1",
+              "recordId": "CHEBI:5001",
+              "kind": "material",
+              "volume_uL": 100,
+              "volumeUl": 100,
+              "volume": {
+                "value": 100,
+                "unit": "uL"
+              }
+            },
+            "labwareId": "lbw-seed-plate-96-flat"
+          }
+        ],
+        "labwareAdditions": [
+          {
+            "recordId": "lbw-seed-plate-96-flat",
+            "reason": "resolved labware mention"
+          }
+        ],
+        "sourcePrompt": "add 100uL of [[material:CHEBI:5001|fenofibrate]] to well A1 of the [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]]"
+      },
+      "createdAt": "2026-05-30T17:33:28.752Z"
+    },
+    {
+      "role": "user",
+      "content": "add 100uM of 1mM [[material:CHEBI:5001|fenofibrate]] to well A1 of the [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]]",
+      "createdAt": "2026-05-30T18:51:30.573Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Drafted 1 event and 1 labware placement.",
+      "metadata": {
+        "draftedEvents": [
+          {
+            "eventId": "evt-add_material-m8g3pgee",
+            "event_type": "add_material",
+            "details": {
+              "well": "A1",
+              "recordId": "CHEBI:5001",
+              "kind": "material",
+              "concentration_uM": 100,
+              "concentration": {
+                "raw": "100uM",
+                "value": 100,
+                "unit": "uM"
+              }
+            },
+            "labwareId": "lbw-seed-plate-96-flat"
+          }
+        ],
+        "labwareAdditions": [
+          {
+            "recordId": "lbw-seed-plate-96-flat",
+            "reason": "resolved labware mention"
+          }
+        ],
+        "sourcePrompt": "add 100uM of 1mM [[material:CHEBI:5001|fenofibrate]] to well A1 of the [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]]"
+      },
+      "createdAt": "2026-05-30T18:51:30.709Z"
+    },
+    {
+      "role": "user",
+      "content": "add 100uL of 1mM [[material:mesh:D011345|Fenofibrate]] fibrate to well A1 of the [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]]",
+      "createdAt": "2026-05-30T19:05:50.217Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Drafted 1 event and 1 labware placement.",
+      "metadata": {
+        "draftedEvents": [
+          {
+            "eventId": "evt-add_material-zeqx1ak0",
+            "event_type": "add_material",
+            "details": {
+              "well": "A1",
+              "recordId": "mesh:D011345",
+              "kind": "material",
+              "volume_uL": 100,
+              "concentration_uM": 1000,
+              "concentration": {
+                "raw": "1mM",
+                "value": 1000,
+                "unit": "uM"
+              },
+              "volumeUl": 100,
+              "volume": {
+                "value": 100,
+                "unit": "uL"
+              }
+            },
+            "labwareId": "lbw-seed-plate-96-flat"
+          }
+        ],
+        "labwareAdditions": [
+          {
+            "recordId": "lbw-seed-plate-96-flat",
+            "reason": "resolved labware mention"
+          }
+        ],
+        "sourcePrompt": "add 100uL of 1mM [[material:mesh:D011345|Fenofibrate]] fibrate to well A1 of the [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]]"
+      },
+      "createdAt": "2026-05-30T19:05:50.360Z"
+    },
+    {
+      "role": "user",
+      "content": "add 100uL of 1mM [[material:mesh:D011345|Fenofibrate]] fibrate to well A1 of the [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]]",
+      "createdAt": "2026-05-30T19:06:32.702Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Drafted 1 event and 1 labware placement.",
+      "metadata": {
+        "draftedEvents": [
+          {
+            "eventId": "evt-add_material-bzvg12wm",
+            "event_type": "add_material",
+            "details": {
+              "well": "A1",
+              "recordId": "mesh:D011345",
+              "kind": "material",
+              "volume_uL": 100,
+              "concentration_uM": 1000,
+              "concentration": {
+                "raw": "1mM",
+                "value": 1000,
+                "unit": "uM"
+              },
+              "volumeUl": 100,
+              "volume": {
+                "value": 100,
+                "unit": "uL"
+              }
+            },
+            "labwareId": "lbw-seed-plate-96-flat"
+          }
+        ],
+        "labwareAdditions": [
+          {
+            "recordId": "lbw-seed-plate-96-flat",
+            "reason": "resolved labware mention"
+          }
+        ],
+        "sourcePrompt": "add 100uL of 1mM [[material:mesh:D011345|Fenofibrate]] fibrate to well A1 of the [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]]"
+      },
+      "createdAt": "2026-05-30T19:06:32.837Z"
+    }
+  ],
+  "mentions": [],
+  "updatedAt": "2026-05-30T19:06:32.837Z"
+}

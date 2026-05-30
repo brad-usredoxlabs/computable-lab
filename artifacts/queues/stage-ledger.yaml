@@ -1,6 +1,6 @@
 kind: protocol-foundry-stage-ledger
 generated_at: 2026-05-08T22:13:08.559Z
-updated_at: 2026-05-16T01:29:11.908Z
+updated_at: 2026-05-29T23:42:27.079Z
 artifact_root: ../artifacts
 protocols:
   - an-fame-oil-gc-pal3-5994-8543en-agilent

@@ -191,6 +191,12 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
    */
   ontologyResolver?: (q: string) => Promise<Array<{ id: string; label: string; source: string }>>;
   /**
+   * Record store. Forwarded to runChatbotCompile so ontology-CURIE material
+   * mentions are auto-bound to local material records (find-or-mint) before
+   * the precompile runs. Optional — omitted ⇒ mentions pass through unchanged.
+   */
+  store?: import('../store/types.js').RecordStore;
+  /**
    * Resident context (#1/#2) — a small, stable world-map + pinned-vocab block
    * (buildResidentContext) injected into the agent's system message on
    * tool-bearing turns. Computed once at construction.
@@ -260,6 +266,7 @@ export function createAgentOrchestrator(
           searchLabwareByHint: deps.searchLabwareByHint!,
           labStateCache: getDefaultLabStateCache(),
           ...(deps.ontologyResolver ? { ontologyResolver: deps.ontologyResolver } : {}),
+          ...(deps.store ? { store: deps.store } : {}),
         },
         ...(deterministicOnly ? { deterministicOnly: true } : {}),
         ...(inferenceConfig.model ? { model: inferenceConfig.model } : {}),

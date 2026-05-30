@@ -697,7 +697,8 @@ export async function createServer(
         extractionService: runner,
         llmClient: inferenceClient,
         ...(compileOntologyResolver ? { ontologyResolver: compileOntologyResolver } : {}),
-        residentContext: buildResidentContext(ctx.schemaRegistry),
+        residentContext: await buildResidentContext(ctx.schemaRegistry, ctx.store),
+        store: ctx.store,
       };
       
       const orchestrator = createAgentOrchestrator(
@@ -786,6 +787,7 @@ export async function createServer(
           llmClient: null,
           searchLabwareByHint: createLabwareLookup(ctx.store),
           ...(compileOntologyResolver ? { ontologyResolver: compileOntologyResolver } : {}),
+          store: ctx.store,
         },
         onPassEvent: (event) => {
           if (event.type !== 'pass_started') return;

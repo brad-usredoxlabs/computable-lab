@@ -178,16 +178,34 @@ function createRenderer(commands: SlashCommandSpec[]) {
     container.style.display = 'block'
     container.style.position = 'fixed'
     container.style.zIndex = '1000'
-    // Anchor above the trigger so the popover doesn't cover what the user
-    // is typing. Fallback to below when there's not enough room above.
-    const popoverHeight = container.firstElementChild?.clientHeight ?? 220
-    const room = rect.top
-    if (room > popoverHeight + 12) {
-      container.style.top = `${rect.top - popoverHeight - 8}px`
-    } else {
-      container.style.top = `${rect.bottom + 8}px`
-    }
     container.style.left = `${rect.left}px`
+
+    // Anchor so the popover always fits in the viewport regardless of how
+    // many items it has. Measuring container.firstElementChild?.clientHeight
+    // is unreliable because the React render is async — a longer query that
+    // fetches more items renders a taller popover *after* position() has
+    // already chosen a placement, and the bottom runs off-screen. Anchor by
+    // viewport edges (top / bottom on the container, max-height on the inner
+    // popover) so it grows inside the available space, not past it.
+    const MARGIN = 8
+    const popoverEl = container.firstElementChild as HTMLElement | null
+    const spaceAbove = rect.top - MARGIN
+    const spaceBelow = window.innerHeight - rect.bottom - MARGIN
+    // Prefer above (so the popover doesn't cover what the user is typing),
+    // but fall through to below when above is genuinely tighter.
+    const placeAbove = spaceAbove >= 140 || spaceAbove >= spaceBelow
+
+    if (placeAbove) {
+      // Pin the bottom near rect.top; clear `top` so the popover can grow
+      // upward within spaceAbove without ever overshooting the viewport.
+      container.style.top = ''
+      container.style.bottom = `${window.innerHeight - rect.top + MARGIN}px`
+      if (popoverEl) popoverEl.style.maxHeight = `${Math.max(120, spaceAbove)}px`
+    } else {
+      container.style.bottom = ''
+      container.style.top = `${rect.bottom + MARGIN}px`
+      if (popoverEl) popoverEl.style.maxHeight = `${Math.max(120, spaceBelow)}px`
+    }
   }
 
   return {
