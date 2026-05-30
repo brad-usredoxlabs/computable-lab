@@ -52,7 +52,7 @@ describe('MCP Server', () => {
 
     // Initialize app context
     ctx = await initializeApp(testDir);
-    server = createMcpServer(ctx);
+    server = await createMcpServer(ctx);
   });
 
   afterAll(async () => {

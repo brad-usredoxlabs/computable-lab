@@ -48,6 +48,7 @@ export function registerVendorProtocolEventGraphDraftTools(
                 extractionService: ctx.extractionRunner!,
                 llmClient: null,
                 searchLabwareByHint: createLabwareLookup(ctx.store),
+                store: ctx.store,
               },
             }),
           } : {}),

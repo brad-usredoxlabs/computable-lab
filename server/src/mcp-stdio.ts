@@ -26,7 +26,7 @@ async function main() {
   console.log(`Initializing computable-lab MCP server (base: ${basePath})`);
 
   const ctx = await initializeApp(basePath);
-  const mcpServer = createMcpServer(ctx);
+  const mcpServer = await createMcpServer(ctx);
 
   const transport = new StdioServerTransport();
   await mcpServer.connect(transport);

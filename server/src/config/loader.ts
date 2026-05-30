@@ -22,6 +22,7 @@ import type {
   ExecutionConfig,
   LabConfig,
   IntegrationsConfig,
+  OntologyConfig,
   ExtractorProfileConfig,
 } from './types.js';
 import { DEFAULT_CONFIG, DEFAULT_REPO_CONFIG } from './types.js';
@@ -445,6 +446,27 @@ function validateIntegrationsConfig(config: unknown, path = 'integrations'): ass
   }
 }
 
+function validateOntologyConfig(config: unknown, path = 'ontology'): asserts config is OntologyConfig {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    throw new ConfigValidationError('must be an object', path, config);
+  }
+  const c = config as Record<string, unknown>;
+  if (c.serviceUrl !== undefined && typeof c.serviceUrl !== 'string') {
+    throw new ConfigValidationError('serviceUrl must be a string', `${path}.serviceUrl`, c.serviceUrl);
+  }
+  if (c.localOntologies !== undefined) {
+    if (!Array.isArray(c.localOntologies) || c.localOntologies.some((o) => typeof o !== 'string')) {
+      throw new ConfigValidationError('localOntologies must be an array of strings', `${path}.localOntologies`, c.localOntologies);
+    }
+  }
+  if (
+    c.timeoutMs !== undefined &&
+    (typeof c.timeoutMs !== 'number' || !Number.isFinite(c.timeoutMs) || c.timeoutMs < 1)
+  ) {
+    throw new ConfigValidationError('timeoutMs must be a positive number', `${path}.timeoutMs`, c.timeoutMs);
+  }
+}
+
 /**
  * Validate the entire configuration.
  */
@@ -496,6 +518,10 @@ export function validateConfig(config: unknown): asserts config is Partial<AppCo
 
   if (c.integrations !== undefined) {
     validateIntegrationsConfig(c.integrations, 'integrations');
+  }
+
+  if (c.ontology !== undefined) {
+    validateOntologyConfig(c.ontology, 'ontology');
   }
 }
 
@@ -582,6 +608,10 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<AppCo
 
   if (partialConfig.integrations !== undefined) {
     config.integrations = partialConfig.integrations;
+  }
+
+  if (partialConfig.ontology !== undefined) {
+    config.ontology = partialConfig.ontology;
   }
 
   return config;

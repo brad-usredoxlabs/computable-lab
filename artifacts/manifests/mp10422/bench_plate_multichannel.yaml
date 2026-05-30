@@ -1,7 +1,7 @@
 kind: protocol-foundry-variant-manifest
 protocolId: mp10422
 variant: bench_plate_multichannel
-generated_at: 2026-05-16T01:29:12.133Z
+generated_at: 2026-05-29T23:42:27.314Z
 status: gap
 metrics:
   eventCount: 0

@@ -333,12 +333,30 @@ export interface AgentResult {
   instrumentApplianceJobs?: InstrumentApplianceJob[];
 }
 
+/**
+ * A grounded material reference on an agent suggestion. Either an existing
+ * CURIE (ontology term or `local:` record, from the resolve() spine) or a
+ * request to mint a new local term. There is no free-text option — the agent
+ * cannot name a material without grounding it.
+ */
+export interface GroundedMaterial {
+  /** Which slot this fills on the event (e.g. "source", "target", "reagent"). */
+  slot?: string;
+  ref: { curie: string } | { mint: { label: string; domain?: string } };
+}
+
 export interface PlateEventProposal {
   eventId: string;
   event_type: string;
   verb: string;
   vocabPackId: string;
   details: Record<string, unknown>;
+  /**
+   * CURIE-typed material references for this event (Phase 2 / #8). Populated
+   * when the agent finalizes via the `submit_suggestion` tool. Additive: the
+   * compiler still reads `details`; these are a validated grounding signal.
+   */
+  materials?: GroundedMaterial[];
   t_offset?: string;
   notes?: string;
   provenance: {

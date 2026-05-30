@@ -21,6 +21,7 @@ import {
   buildSlashMenuExtension,
   MentionNode,
 } from '../../shared/taptab/slashMenu';
+import { buildOntologyCopilotExtension } from '../../shared/taptab/ontologyCopilot/OntologyCopilotExtension';
 import { useSelection } from '../../shared/context/SelectionContext';
 
 /**
@@ -52,7 +53,7 @@ export interface TapTabEditorHandle {
  * Supports both the legacy uiSpec+data path and the new projection-backed path.
  */
 export const TapTabEditor = forwardRef<TapTabEditorHandle, TapTabEditorProps>(function TapTabEditor(
-  { data, uiSpec, disabled, onUpdate, style }: TapTabEditorProps,
+  { data, uiSpec, disabled, onUpdate, style, enableOntologyCopilot }: TapTabEditorProps,
   ref
 ) {
   // Build TipTap document from uiSpec (legacy path)
@@ -91,6 +92,7 @@ export const TapTabEditor = forwardRef<TapTabEditorHandle, TapTabEditorProps>(fu
       buildSlashMenuExtension({
         getSelection: () => selectionRef.current,
       }),
+      ...(enableOntologyCopilot ? [buildOntologyCopilotExtension()] : []),
       TabNavExtension,
     ] as any[],
     content,
@@ -153,6 +155,8 @@ export interface ProjectionTapTabEditorProps {
   style?: TapTabStyle;
   /** Callback fired when the editor content changes (event-driven dirty tracking) */
   onUpdate?: OnSerializedChangeCallback;
+  /** Opt into the inline ontology copilot (`@<noun>` → grounded candidates). */
+  enableOntologyCopilot?: boolean;
 }
 
 /**
@@ -160,7 +164,7 @@ export interface ProjectionTapTabEditorProps {
  * Builds the TipTap document from EditorProjection blocks/slots instead of uiSpec.
  */
 export const ProjectionTapTabEditor = forwardRef<TapTabEditorHandle, ProjectionTapTabEditorProps>(function ProjectionTapTabEditor(
-  { blocks, slots, data, disabled, onUpdate, style }: ProjectionTapTabEditorProps,
+  { blocks, slots, data, disabled, onUpdate, style, enableOntologyCopilot }: ProjectionTapTabEditorProps,
   ref
 ) {
   // Build TipTap document from projection (additive path)
@@ -194,6 +198,7 @@ export const ProjectionTapTabEditor = forwardRef<TapTabEditorHandle, ProjectionT
       buildSlashMenuExtension({
         getSelection: () => selectionRef.current,
       }),
+      ...(enableOntologyCopilot ? [buildOntologyCopilotExtension()] : []),
       TabNavExtension,
     ] as any[],
     content,

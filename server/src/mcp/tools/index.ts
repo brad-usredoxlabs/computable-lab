@@ -11,6 +11,7 @@ import { registerValidationTools } from './validationTools.js';
 import { registerTreeTools } from './treeTools.js';
 import { registerLibraryTools } from './libraryTools.js';
 import { registerOntologyTools } from './ontologyTools.js';
+import { registerResolveTool } from './resolveTool.js';
 import { registerGitTools } from './gitTools.js';
 import { registerNcbiTools } from './ncbiTools.js';
 import { registerUniprotTools } from './uniprotTools.js';
@@ -43,6 +44,7 @@ export function registerAllTools(server: McpServer, ctx: AppContext, registry?: 
   registerTreeTools(server, ctx, registry);
   registerLibraryTools(server, ctx, registry);
   registerOntologyTools(server, registry);
+  registerResolveTool(server, ctx, registry);
   registerGitTools(server, ctx, registry);
 
   // External knowledge base tools

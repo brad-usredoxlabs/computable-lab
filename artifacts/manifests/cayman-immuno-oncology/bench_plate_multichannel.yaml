@@ -1,7 +1,7 @@
 kind: protocol-foundry-variant-manifest
 protocolId: cayman-immuno-oncology
 variant: bench_plate_multichannel
-generated_at: 2026-05-16T01:29:11.974Z
+generated_at: 2026-05-29T23:42:27.152Z
 status: gap
 metrics:
   eventCount: 11

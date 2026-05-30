@@ -19,7 +19,7 @@ import { lazy, Suspense, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AppShell, NavLinks } from '../shared/shell'
 import { AiPanelProvider, useRegisterAiChat } from '../shared/context/AiPanelContext'
-import { AiChatPanel } from '../shared/ai/AiChatPanel'
+import { Slot } from '../extensions'
 import { useAiChat } from '../shared/hooks/useAiChat'
 import type { AiContext } from '../types/aiContext'
 
@@ -122,7 +122,7 @@ function ProtocolsPageInner() {
           {view === 'candidates' && <ProtocolCandidatesView />}
         </Suspense>
       </div>
-      <AiChatPanel />
+      <Slot name="chat.panel.global" />
       <style>{styles}</style>
     </AppShell>
   )

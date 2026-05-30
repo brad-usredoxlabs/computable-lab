@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react'
 import { apiClient } from '../shared/api/client'
 import type { PlatformManifest } from '../types/platformRegistry'
-import { defaultVariantForPlatform, getPlatformManifest } from '../shared/lib/platformRegistry'
+import { defaultVariantForPlatform, getPlatformManifest, getVariantManifest } from '../shared/lib/platformRegistry'
 import type { Labware } from '../types/labware'
 import type {
   EventEditorPlacement,
@@ -433,6 +433,42 @@ function omitKey<V>(record: Record<string, V>, key: string): Record<string, V> {
   return next
 }
 
+function normalizePreviewPlacementLocations(
+  state: EventEditorState,
+  preview: EventEditorPreview,
+): EventEditorPreview {
+  const variant = getVariantManifest(state.platforms, state.platformId, state.variantId)
+  if (!variant || variant.surface || variant.sideLawn) return preview
+
+  const occupiedSlots = new Set(
+    state.placements
+      .filter((p) => p.location.kind === 'slot')
+      .map((p) => p.location.slotId),
+  )
+  const nextSlot = (): string | null => {
+    const slot = variant.slots.find((entry) => (
+      entry.kind !== 'trash'
+      && entry.kind !== 'special'
+      && entry.reachable !== false
+      && !occupiedSlots.has(entry.id)
+    ))
+    if (!slot) return null
+    occupiedSlots.add(slot.id)
+    return slot.id
+  }
+
+  let changed = false
+  const previewPlacements = preview.previewPlacements.map((placement) => {
+    if (placement.location.kind !== 'lawn') return placement
+    const slotId = nextSlot()
+    if (!slotId) return placement
+    changed = true
+    return { ...placement, location: { kind: 'slot' as const, slotId } }
+  })
+
+  return changed ? { ...preview, previewPlacements } : preview
+}
+
 function reducer(state: EventEditorState, action: Action): EventEditorState {
   switch (action.type) {
     case 'load_start':
@@ -625,6 +661,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       }
     }
     case 'set_preview': {
+      const preview = normalizePreviewPlacementLocations(state, action.preview)
       // Replace any existing preview — a fresh draft supersedes the old one.
       // If the user was drilled into a labware that belonged to the *previous*
       // preview, drop the focus so the stale ghost doesn't render orphaned.
@@ -632,10 +669,10 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         state.preview != null
         && state.focusPlacementId != null
         && state.preview.previewPlacements.some((p) => p.placementId === state.focusPlacementId)
-          && !action.preview.previewPlacements.some((p) => p.placementId === state.focusPlacementId)
+          && !preview.previewPlacements.some((p) => p.placementId === state.focusPlacementId)
       return {
         ...state,
-        preview: action.preview,
+        preview,
         ...(droppedFocus ? { focusPlacementId: null, selection: null } : {}),
       }
     }

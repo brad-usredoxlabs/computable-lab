@@ -1,7 +1,7 @@
 kind: protocol-foundry-variant-manifest
 protocolId: man0011863-memper-plus-memb-protein-extract-ug
 variant: bench_plate_multichannel
-generated_at: 2026-05-16T01:29:12.111Z
+generated_at: 2026-05-29T23:42:27.292Z
 status: gap
 metrics:
   eventCount: 0

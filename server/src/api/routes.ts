@@ -15,6 +15,7 @@ import type { GitHandlers } from './handlers/GitHandlers.js';
 import type { TreeHandlers } from './handlers/TreeHandlers.js';
 import type { LibraryHandlers } from './handlers/LibraryHandlers.js';
 import type { OntologyHandlers } from './handlers/OntologyHandlers.js';
+import type { ResolveHandlers } from './handlers/ResolveHandlers.js';
 import type { AIHandlers } from './handlers/AIHandlers.js';
 import type { EventEditorFixHandlers } from './handlers/EventEditorFixHandlers.js';
 import type { ConfigHandlers } from './handlers/configHandlers.js';
@@ -70,6 +71,7 @@ export interface RouteOptions {
   treeHandlers?: TreeHandlers;
   libraryHandlers?: LibraryHandlers;
   ontologyHandlers?: OntologyHandlers;
+  resolveHandlers?: ResolveHandlers;
   aiHandlers?: AIHandlers;
   eventEditorFixHandlers?: EventEditorFixHandlers;
   configHandlers?: ConfigHandlers;
@@ -375,6 +377,16 @@ export function registerRoutes(
 
   if (ontologyHandlers) {
     fastify.get('/ontology/search', ontologyHandlers.searchOntology.bind(ontologyHandlers));
+  }
+
+  // ============================================================================
+  // Resolve spine (optional - requires resolveHandlers)
+  // ============================================================================
+
+  const { resolveHandlers } = options;
+
+  if (resolveHandlers) {
+    fastify.post('/resolve', resolveHandlers.resolveTerm.bind(resolveHandlers));
   }
 
   const { vendorSearchHandlers } = options;

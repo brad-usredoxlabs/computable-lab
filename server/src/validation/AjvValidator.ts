@@ -19,6 +19,7 @@ import { type ErrorObject, type ValidateFunction, type AnySchema } from 'ajv';
 import addFormats from 'ajv-formats';
 import type { ValidationResult, ValidationError } from '../types/common.js';
 import type { Validator, ValidatorOptions } from './types.js';
+import { closestMatch } from './closestMatch.js';
 
 /**
  * Default validator options.
@@ -39,12 +40,16 @@ function convertAjvError(error: ErrorObject): ValidationError {
   
   // Get a readable message
   let message = error.message ?? 'Validation failed';
-  
+  // Teaching hint: a constructive nudge toward the fix (closest enum value,
+  // what a missing field is, etc.). Populated where it helps convergence.
+  let suggestion: string | undefined;
+
   // Enhance message based on keyword
   switch (error.keyword) {
     case 'required':
       if (error.params && 'missingProperty' in error.params) {
         message = `Missing required property: ${error.params.missingProperty}`;
+        suggestion = `Add the "${error.params.missingProperty}" field.`;
       }
       break;
     case 'type':
@@ -54,18 +59,26 @@ function convertAjvError(error: ErrorObject): ValidationError {
       break;
     case 'enum':
       if (error.params && 'allowedValues' in error.params) {
-        const allowed = (error.params.allowedValues as unknown[]).join(', ');
-        message = `Must be one of: ${allowed}`;
+        const allowedValues = (error.params.allowedValues as unknown[]).map((v) => String(v));
+        message = `Must be one of: ${allowedValues.join(', ')}`;
+        if (typeof error.data === 'string') {
+          const match = closestMatch(error.data, allowedValues);
+          suggestion = match
+            ? `You wrote "${error.data}" — did you mean "${match}"?`
+            : `"${error.data}" is not allowed here; choose one of: ${allowedValues.join(', ')}.`;
+        }
       }
       break;
     case 'const':
       if (error.params && 'allowedValue' in error.params) {
         message = `Must equal: ${error.params.allowedValue}`;
+        suggestion = `Expected "${String(error.params.allowedValue)}".`;
       }
       break;
     case 'additionalProperties':
       if (error.params && 'additionalProperty' in error.params) {
         message = `Unknown property: ${error.params.additionalProperty}`;
+        suggestion = `"${error.params.additionalProperty}" is not a recognized field — check for a typo or remove it.`;
       }
       break;
     case 'pattern':
@@ -120,6 +133,7 @@ function convertAjvError(error: ErrorObject): ValidationError {
     message,
     keyword: error.keyword,
     ...(error.params !== undefined ? { params: error.params as Record<string, unknown> } : {}),
+    ...(suggestion ? { suggestion } : {}),
   };
 }
 

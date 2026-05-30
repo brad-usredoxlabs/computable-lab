@@ -33,8 +33,15 @@ import {
   createTreeHandlers,
   createLibraryHandlers,
   createOntologyHandlers,
+  createResolveHandlers,
   createAIHandlers,
   createDeterministicOnlyAIHandlers,
+  createGatewayAIHandlers,
+  createGatewayKnowledgeAIHandlers,
+  createGatewayIngestionAIHandlers,
+  createGatewayMaterialAIHandlers,
+  createGatewayAiRecordDraftHandlers,
+  createGatewayEventEditorFixHandlers,
   createEventEditorFixHandlers,
   createMetaHandlers,
   ConfigHandlers,
@@ -60,6 +67,8 @@ import {
   createVerbActionMapHandlers,
   createFoundryJobHandlers,
 } from './api/handlers/index.js';
+import { createResolveSpine, createResolveSpineFromContext, resolveOakServiceUrl } from './resolve/index.js';
+import { buildResidentContext } from './ai/residentContext.js';
 import { createIngestionAIHandlers } from './api/handlers/IngestionAIHandlers.js';
 import { createMaterialAIHandlers } from './api/handlers/MaterialAIHandlers.js';
 import { createAiIngestionHandlers } from './api/handlers/AiIngestionHandlers.js';
@@ -476,6 +485,24 @@ export async function createServer(
   const treeHandlers = createTreeHandlers(ctx.indexManager, ctx.store, ctx.platformRegistry);
   const libraryHandlers = createLibraryHandlers(ctx.store);
   const ontologyHandlers = createOntologyHandlers();
+  const resolveSpine = createResolveSpineFromContext(ctx);
+  const resolveHandlers = createResolveHandlers(resolveSpine);
+
+  // Compile hot path uses an OAK-only spine (no records, no remote): fast,
+  // offline-safe, and consistent with the appliance's on-box ontologies. Only
+  // wired when an OAK service is configured; otherwise the compiler keeps its
+  // frozen ontology-term YAML registry (bare CL — unchanged behavior).
+  const compileOntologyResolver = resolveOakServiceUrl(ctx.appConfig?.ontology)
+    ? (() => {
+        const compileSpine = createResolveSpine(
+          ctx.appConfig?.ontology ? { ontology: ctx.appConfig.ontology } : {},
+        );
+        return async (q: string) =>
+          (await compileSpine.resolve(q, { localOnly: true }))
+            .filter((c) => c.curie && c.source === 'oak')
+            .map((c) => ({ id: c.curie, label: c.label, source: c.namespace.toLowerCase() }));
+      })()
+    : undefined;
   const vendorSearchHandlers = createVendorSearchHandlers();
   const vendorDocumentHandlers = createVendorDocumentHandlers(ctx.store);
   const chemistryHandlers = createChemistryHandlers();
@@ -562,7 +589,7 @@ export async function createServer(
   const toolRegistry = new ToolRegistry();
 
   // Register MCP server on /mcp (also populates toolRegistry)
-  const mcpServer = createMcpServer(ctx, toolRegistry);
+  const mcpServer = await createMcpServer(ctx, toolRegistry);
   await fastify.register(mcpPlugin, { prefix: '/mcp', mcpServer });
 
   // Create bio-source proxy handlers (uses populated toolRegistry)
@@ -571,6 +598,35 @@ export async function createServer(
     workspaceRoot: ctx.workspaceRoot,
     toolRegistry,
   });
+
+  // AI gateway proxy gate. If CLA_AI_GATEWAY_URL is set, every AI route is
+  // reverse-proxied to that gateway instead of running in-process. Used by
+  // the appliance to host LLM features in a separate proprietary service
+  // (`cla-lab-ai-gateway`) while keeping AI feature parity for the kiosk.
+  // When unset, behavior is identical to before — falls through to the
+  // in-process aiHandlersImpl (when available) or deterministicAiHandlers.
+  const aiGatewayUrl = process.env.CLA_AI_GATEWAY_URL?.trim() || undefined;
+  const gatewayAiHandlers = aiGatewayUrl
+    ? createGatewayAIHandlers(aiGatewayUrl)
+    : undefined;
+  const gatewayKnowledgeAIHandlers = aiGatewayUrl
+    ? createGatewayKnowledgeAIHandlers(aiGatewayUrl)
+    : undefined;
+  const gatewayIngestionAIHandlers = aiGatewayUrl
+    ? createGatewayIngestionAIHandlers(aiGatewayUrl)
+    : undefined;
+  const gatewayMaterialAIHandlers = aiGatewayUrl
+    ? createGatewayMaterialAIHandlers(aiGatewayUrl)
+    : undefined;
+  const gatewayAiRecordDraftHandlers = aiGatewayUrl
+    ? createGatewayAiRecordDraftHandlers(aiGatewayUrl)
+    : undefined;
+  const gatewayEventEditorFixHandlers = aiGatewayUrl
+    ? createGatewayEventEditorFixHandlers(aiGatewayUrl)
+    : undefined;
+  if (aiGatewayUrl) {
+    console.log(`AI gateway proxy enabled → ${aiGatewayUrl}`);
+  }
 
   // Initialize AI runtime state and hot-reload on config changes.
   let aiHandlersImpl: ReturnType<typeof createAIHandlers> | undefined;
@@ -640,6 +696,9 @@ export async function createServer(
         searchLabwareByHint: createLabwareLookup(ctx.store),
         extractionService: runner,
         llmClient: inferenceClient,
+        ...(compileOntologyResolver ? { ontologyResolver: compileOntologyResolver } : {}),
+        residentContext: await buildResidentContext(ctx.schemaRegistry, ctx.store),
+        store: ctx.store,
       };
       
       const orchestrator = createAgentOrchestrator(
@@ -727,6 +786,8 @@ export async function createServer(
           extractionService: runner,
           llmClient: null,
           searchLabwareByHint: createLabwareLookup(ctx.store),
+          ...(compileOntologyResolver ? { ontologyResolver: compileOntologyResolver } : {}),
+          store: ctx.store,
         },
         onPassEvent: (event) => {
           if (event.type !== 'pass_started') return;
@@ -740,21 +801,22 @@ export async function createServer(
 
   const aiHandlers: AIHandlers = {
     async draftEvents(request, reply) {
-      const impl = aiHandlersImpl ?? deterministicAiHandlers;
+      const impl = gatewayAiHandlers ?? aiHandlersImpl ?? deterministicAiHandlers;
       return impl.draftEvents(request, reply);
     },
     async draftEventsStream(request, reply) {
-      const impl = aiHandlersImpl ?? deterministicAiHandlers;
+      const impl = gatewayAiHandlers ?? aiHandlersImpl ?? deterministicAiHandlers;
       return impl.draftEventsStream(request, reply);
     },
     async assistStream(request, reply) {
-      const impl = aiHandlersImpl ?? deterministicAiHandlers;
+      const impl = gatewayAiHandlers ?? aiHandlersImpl ?? deterministicAiHandlers;
       return impl.assistStream(request, reply);
     },
   };
 
   const knowledgeAIHandlers: KnowledgeAIHandlers = {
     async extractKnowledge(request, reply) {
+      if (gatewayKnowledgeAIHandlers) return gatewayKnowledgeAIHandlers.extractKnowledge(request, reply);
       if (!knowledgeAIHandlersImpl) {
         reply.status(503);
         return { error: 'AI_UNAVAILABLE', message: aiUnavailableMessage() };
@@ -762,6 +824,7 @@ export async function createServer(
       return knowledgeAIHandlersImpl.extractKnowledge(request, reply);
     },
     async extractKnowledgeStream(request, reply) {
+      if (gatewayKnowledgeAIHandlers) return gatewayKnowledgeAIHandlers.extractKnowledgeStream(request, reply);
       if (!knowledgeAIHandlersImpl) {
         reply.status(503);
         await reply.send({ error: 'AI_UNAVAILABLE', message: aiUnavailableMessage() });
@@ -773,6 +836,7 @@ export async function createServer(
 
   const aiRecordDraftHandlers: AiRecordDraftHandlers = {
     async draftRecord(request, reply) {
+      if (gatewayAiRecordDraftHandlers) return gatewayAiRecordDraftHandlers.draftRecord(request, reply);
       if (!aiRecordDraftHandlersImpl) {
         reply.status(503);
         return { success: false, error: 'AI_UNAVAILABLE', message: aiUnavailableMessage() };
@@ -838,6 +902,7 @@ export async function createServer(
       treeHandlers,
       libraryHandlers,
       ontologyHandlers,
+      resolveHandlers,
       vendorSearchHandlers,
       vendorDocumentHandlers,
       chemistryHandlers,
@@ -875,14 +940,15 @@ export async function createServer(
     // Phase-1 fix-it chat: streams worker-Qwen-backed diagnoses for AI
     // previews the user thinks are wrong. Always mounted — config (worker
     // base URL / model) is read per-request from env, so this works without
-    // an AI runtime configured for the main draft loop.
-    routeOpts.eventEditorFixHandlers = createEventEditorFixHandlers({
+    // an AI runtime configured for the main draft loop. When the AI
+    // gateway is configured, every fix-it route reverse-proxies there.
+    routeOpts.eventEditorFixHandlers = gatewayEventEditorFixHandlers ?? createEventEditorFixHandlers({
       workspaceRoot: ctx.workspaceRoot,
     });
     routeOpts.knowledgeAIHandlers = knowledgeAIHandlers;
-    routeOpts.ingestionAIHandlers = ingestionAIHandlersImpl;
+    routeOpts.ingestionAIHandlers = gatewayIngestionAIHandlers ?? ingestionAIHandlersImpl;
     routeOpts.aiIngestionHandlers = aiIngestionHandlersImpl;
-    routeOpts.materialAIHandlers = materialAIHandlersImpl;
+    routeOpts.materialAIHandlers = gatewayMaterialAIHandlers ?? materialAIHandlersImpl;
     routeOpts.aiRecordDraftHandlers = aiRecordDraftHandlers;
     routeOpts.extractHandlers = extractHandlers;
     if (aiInfo) routeOpts.aiInfo = aiInfo;

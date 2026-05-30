@@ -163,6 +163,13 @@ export interface TapTabEditorProps {
   style?: TapTabStyle;
   /** Callback fired when the editor content changes (event-driven dirty tracking) */
   onUpdate?: OnSerializedChangeCallback;
+  /**
+   * Opt into the inline ontology copilot: typing `@<noun>` opens
+   * ontology-grounded candidates from the resolve() spine and inserts a
+   * CURIE-bearing mention. Off by default — enable on protocol-authoring
+   * surfaces. (See OntologyCopilotExtension.)
+   */
+  enableOntologyCopilot?: boolean;
 }
 
 /**

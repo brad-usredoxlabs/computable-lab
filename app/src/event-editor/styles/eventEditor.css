@@ -3116,7 +3116,14 @@
 }
 
 .event-editor .ai-dock__input {
-  flex: 1;
+  /* `flex: 1 1 0` + `min-width: 0` so the wrapper actually expands to fill the
+     remaining row width even when its (empty) contenteditable child has zero
+     intrinsic width. Without min-width:0, a flex item won't grow past content
+     and an empty editor collapses to a single-character box. */
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
   background: var(--cl-bg-elev-2);
   border: 1px solid var(--cl-border);
   color: var(--cl-text);
@@ -3125,17 +3132,46 @@
   font-size: 13px;
   outline: none;
   font: inherit;
-  /* Textarea-specific: control its own sizing via JS auto-grow (see
-     EventEditorAiDock auto-grow effect), and disable user resize so
-     the layout stays predictable. */
   resize: none;
-  min-height: 36px;
-  max-height: 140px;
+  /* ~3 visible lines by default; grows up to max-height then scrolls. */
+  min-height: 84px;
+  max-height: 200px;
   line-height: 1.4;
   overflow-y: auto;
 }
 
 .event-editor .ai-dock__input:focus {
+  border-color: var(--cl-accent);
+}
+
+/* TipTap contenteditable inside the .ai-dock__input wrapper — the wrapper
+   carries border/padding/min-height; the inner editor stays neutral so the
+   layout is identical to the old textarea. */
+.event-editor .ai-dock__input-editor {
+  outline: none;
+  font: inherit;
+  color: inherit;
+  /* Fill the wrapper's vertical space (wrapper is flex-column) so the
+     contenteditable area is the full 3-line height, not collapsed to one. */
+  flex: 1 1 auto;
+  min-height: 1.4em;
+  word-break: break-word;
+  /* TipTap doesn't set a default width — without this an empty editor inside
+     a flex parent can render at 0 width. */
+  width: 100%;
+}
+.event-editor .ai-dock__input-editor p {
+  margin: 0;
+}
+/* Placeholder pattern from @tiptap/extension-placeholder. */
+.event-editor .ai-dock__input-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--cl-text-muted);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+.event-editor .ai-dock__input:focus-within {
   border-color: var(--cl-accent);
 }
 

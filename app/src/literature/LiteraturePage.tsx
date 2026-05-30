@@ -19,7 +19,7 @@ import { lazy, Suspense, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AppShell, NavLinks } from '../shared/shell'
 import { AiPanelProvider, useRegisterAiChat } from '../shared/context/AiPanelContext'
-import { AiChatPanel } from '../shared/ai/AiChatPanel'
+import { Slot } from '../extensions'
 import { useAiChat } from '../shared/hooks/useAiChat'
 import type { AiContext } from '../types/aiContext'
 
@@ -125,7 +125,7 @@ function LiteraturePageInner() {
           {view === 'review' && <ExtractionReviewPage />}
         </Suspense>
       </div>
-      <AiChatPanel />
+      <Slot name="chat.panel.literature" />
       <style>{styles}</style>
     </AppShell>
   )

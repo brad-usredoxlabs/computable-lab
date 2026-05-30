@@ -1,7 +1,7 @@
 kind: protocol-foundry-variant-manifest
 protocolId: an-fame-oil-gc-pal3-5994-8543en-agilent
 variant: bench_plate_multichannel
-generated_at: 2026-05-16T01:29:11.929Z
+generated_at: 2026-05-29T23:42:27.102Z
 status: stalled
 metrics:
   eventCount: 0

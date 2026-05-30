@@ -22,9 +22,6 @@ vi.mock('../extraction/ExtractionDraftsListPage', () => ({
 vi.mock('../extraction/ExtractionReviewPage', () => ({
   ExtractionReviewPage: () => <div data-testid="review-panel">review-panel</div>,
 }))
-vi.mock('../shared/ai/AiChatPanel', () => ({
-  AiChatPanel: () => null,
-}))
 vi.mock('../shared/hooks/useAiChat', () => ({
   useAiChat: () => ({
     messages: [],

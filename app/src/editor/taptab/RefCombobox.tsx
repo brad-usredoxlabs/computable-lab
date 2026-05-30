@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, KeyboardEvent, MouseEvent } from 'react';
+import { useState, useRef, useEffect, useMemo, KeyboardEvent, MouseEvent } from 'react';
 import { useTagSuggestions } from '../../shared/hooks/useTagSuggestions';
 import { useOLSSearch } from '../../shared/hooks/useOLSSearch';
 import type { StructuredValue } from '../../shared/forms/suggestionPlan';
@@ -62,9 +62,15 @@ export function RefCombobox({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
-  // Extract suggestion plan values (fall back to defaults)
+  // Extract suggestion plan values (fall back to defaults).
+  // ontologies is memoized on a stable string key so a fresh array reference
+  // on every parent render doesn't trigger useOLSSearch's effect (which has
+  // `ontologies` in its dep array) into an infinite re-render loop.
+  const ontologies = useMemo(
+    () => suggestionPlan?.ontologies ?? (refKind ? [refKind] : []),
+    [refKind, (suggestionPlan?.ontologies ?? []).join(',')],
+  );
   const sources = suggestionPlan?.sources ?? ['local'];
-  const ontologies = suggestionPlan?.ontologies ?? (refKind ? [refKind] : []);
   const searchField = suggestionPlan?.searchField ?? 'tags';
   const useOls = sources.includes('ols');
 

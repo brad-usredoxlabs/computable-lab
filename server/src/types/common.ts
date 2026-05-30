@@ -17,6 +17,12 @@ export interface ValidationError {
   keyword: string;
   /** Additional parameters from the validation */
   params?: Record<string, unknown>;
+  /**
+   * A teaching hint that helps the author (or AI) converge — e.g. the closest
+   * allowed value for an enum typo, or what a missing required field is for.
+   * Populated by the validator where a constructive suggestion is available.
+   */
+  suggestion?: string;
 }
 
 /**

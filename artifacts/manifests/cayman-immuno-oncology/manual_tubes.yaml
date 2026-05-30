@@ -1,7 +1,7 @@
 kind: protocol-foundry-variant-manifest
 protocolId: cayman-immuno-oncology
 variant: manual_tubes
-generated_at: 2026-05-16T01:29:11.960Z
+generated_at: 2026-05-29T23:42:27.139Z
 status: gap
 metrics:
   eventCount: 2

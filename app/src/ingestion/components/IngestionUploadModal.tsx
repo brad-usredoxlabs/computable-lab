@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
-import { AiAnalysisPanel } from './AiAnalysisPanel'
-import { SourceKindSuggestionBadge } from './IngestionAiSuggestion'
+import { Slot } from '../../extensions'
 import type {
   AnalyzeIngestionDraftSpec,
   AnalyzeIngestionResponse,
@@ -289,10 +288,11 @@ export function IngestionUploadModal({ open, onClose, onCreated }: Props) {
                   <option key={option.value} value={option.value}>{option.label}</option>
                 ))}
               </select>
-              <SourceKindSuggestionBadge
+              <Slot
+                name="ingestion.ai-suggestion"
                 suggestion={kindSuggestion}
                 loading={kindLoading}
-                onAccept={(kind) => { setSourceKind(kind); setKindSuggestion(null) }}
+                onAccept={(kind: IngestionSourceKind) => { setSourceKind(kind); setKindSuggestion(null) }}
               />
             </label>
           )}
@@ -349,7 +349,8 @@ export function IngestionUploadModal({ open, onClose, onCreated }: Props) {
           )}
 
           {aiAssist && aiAnalysis && (
-            <AiAnalysisPanel
+            <Slot
+              name="ingestion.ai-analysis"
               analysis={aiAnalysis}
               onReAnalyze={handleReAnalyze}
               onConfirmAndRun={submitAiAssisted}

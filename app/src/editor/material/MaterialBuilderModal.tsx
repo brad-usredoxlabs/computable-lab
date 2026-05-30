@@ -260,6 +260,23 @@ export function MaterialBuilderModal({
         tags: [],
       }
 
+      // Dedup before minting: if the lab already has a material with this
+      // exact name, reuse it rather than creating a duplicate local term.
+      const trimmedName = name.trim()
+      const existing = await apiClient.searchMaterials({ q: trimmedName, limit: 20 })
+      const duplicate = existing.items.find(
+        (it) => it.title.trim().toLowerCase() === trimmedName.toLowerCase(),
+      )
+      if (duplicate) {
+        onSave({
+          kind: 'record',
+          id: duplicate.recordId,
+          type: duplicate.kind || 'material',
+          label: duplicate.title,
+        })
+        return
+      }
+
       await apiClient.createRecord(MATERIAL_SCHEMA_ID, payload)
 
       onSave({

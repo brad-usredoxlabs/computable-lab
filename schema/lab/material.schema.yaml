@@ -34,6 +34,39 @@ properties:
       $ref: "./datatypes/ref.schema.yaml"
     uniqueItems: true
 
+  activities:
+    type: array
+    description: >
+      Biological roles / mechanisms this material participates in — what it
+      DOES (e.g. "agonist-of PPARα"), as opposed to class[], which says what it
+      IS. Each entry relates the material to a target ontology/record term, so
+      the lab and the AI can reason about why a reagent is used.
+    items:
+      type: object
+      required: [ relation, term ]
+      additionalProperties: false
+      properties:
+        relation:
+          type: string
+          description: "How this material acts on the target term."
+          enum:
+            - agonist-of
+            - antagonist-of
+            - inhibits
+            - activates
+            - targets
+            - modulates
+            - substrate-of
+            - cofactor-of
+            - binds
+        term:
+          description: "The target (e.g. a receptor/gene/process) as an ontology or record ref."
+          $ref: "./datatypes/ref.schema.yaml"
+        note:
+          type: string
+          description: "Optional free-text or citation note for this activity."
+    uniqueItems: true
+
   pipetteHints:
     type: object
     description: "Default liquid handling parameters for this material class."

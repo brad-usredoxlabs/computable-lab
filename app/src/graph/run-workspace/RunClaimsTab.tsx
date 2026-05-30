@@ -5,7 +5,7 @@ import type { UseAiChatReturn } from '../../shared/hooks/useAiChat'
 import type { UseEvidenceAssemblyReturn } from '../hooks/useEvidenceAssembly'
 import type { RecordEnvelope } from '../../types/kernel'
 import { RunAiSuggestions } from './RunAiSuggestions'
-import { RunClaimDraftPanel } from './RunClaimDraftPanel'
+import { Slot } from '../../extensions'
 import { AssertionDraftPanel } from './AssertionDraftPanel'
 import { ProvenanceChain } from './ProvenanceChain'
 
@@ -260,7 +260,7 @@ export function RunClaimsTab({ workspace, onRefresh, onExportAnalysis, exporting
       )}
       <AssertionDraftPanel runId={runId} assembly={assembly} workspace={workspace} />
       <ProvenanceChain workspace={workspace} />
-      <RunClaimDraftPanel runId={runId} chat={chat} onRefresh={onRefresh} />
+      <Slot name="run-workspace.claim-draft" runId={runId} chat={chat} onRefresh={onRefresh} />
       <RunAiSuggestions runId={runId} tab="claims" chat={chat} />
 
       <style>{`

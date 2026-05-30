@@ -145,9 +145,14 @@ const containerStyle: React.CSSProperties = {
   border: '1px solid #d0d5dd',
   borderRadius: '8px',
   boxShadow: '0 12px 28px rgba(0,0,0,0.12)',
-  maxHeight: '280px',
+  // Cap at ~40% of viewport so the popover always fits even when the
+  // trigger is near the screen edge; scroll internally beyond that.
+  maxHeight: 'min(280px, 40vh)',
   overflowY: 'auto',
   minWidth: '260px',
+  // Without a max-width, long CHEBI/CL/etc. labels can stretch the popover
+  // across the whole viewport. Cap it so it stays a panel, not a banner.
+  maxWidth: 'min(420px, 90vw)',
 }
 
 const emptyStyle: React.CSSProperties = {

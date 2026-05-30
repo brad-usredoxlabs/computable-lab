@@ -79,7 +79,11 @@ export interface DeterministicPrecompileDeps {
     }) | undefined;
   };
   ontologyTermRegistry: {
-    searchLabel: (q: string) => Array<{ id: string; label: string; source: string }>;
+    searchLabel: (
+      q: string,
+    ) =>
+      | Array<{ id: string; label: string; source: string }>
+      | Promise<Array<{ id: string; label: string; source: string }>>;
   };
   labwareInstanceLookup: (hint: string) => Promise<Array<{ recordId: string; title: string }>>;
 }
@@ -319,6 +323,7 @@ export function createDeterministicPrecompilePass(
         });
         const nouns = resolveContextualLabwareReferences(resolvedNouns, labwareByRole);
         diagnostics.push(...diagnosticsForRegistryMatches(nouns));
+        diagnostics.push(...diagnosticsForUngroundedNouns(nouns));
 
         // 3. Check for unresolved nouns
         const unresolvedNouns = nouns.filter((n) => n.kind === 'unresolved');
@@ -541,6 +546,7 @@ async function runFromTags(
       resolveBackReferenceLabware(group.tags, labwareByRole),
     ), labwareByRole);
     diagnostics.push(...diagnosticsForRegistryMatches(nouns));
+    diagnostics.push(...diagnosticsForUngroundedNouns(nouns));
 
     const parameters = parametersFromTags(group.tags, sourceText);
     const labwareNouns = nouns.filter((noun) => noun.kind === 'labware' || noun.kind === 'labware-instance');
@@ -1603,6 +1609,32 @@ function finalizeResult(
     ...(allDiagnostics.length > 0 ? { diagnostics: allDiagnostics } : {}),
     secondaryOutputs: { ai_precompile: aiPrecompilePassthrough },
   };
+}
+
+/**
+ * Mint-gate (#11): surface ungrounded references so the compiler never
+ * silently turns a free-text noun into a bare material. Medium-hard — a
+ * warning, not a hard fail: the term still flows as a local free-text material
+ * (materialForEvent), but the author/agent is taught to ground it to a CURIE
+ * (via the resolve tool) or confirm it is lab-specific. Role-generic so it is
+ * correct for any unresolved noun (material or labware).
+ */
+export function diagnosticsForUngroundedNouns(nouns: ResolvedNoun[]): PassDiagnostic[] {
+  return nouns.flatMap((noun) => {
+    if (noun.kind !== 'unresolved') return [];
+    const phrase = (noun.phrase ?? '').trim();
+    if (phrase.length < 2) return [];
+    return [{
+      severity: 'warning' as const,
+      code: 'ungrounded_reference',
+      message:
+        `Ungrounded reference "${phrase}" — not resolved to a known record or ontology term. ` +
+        `It will be used as a local free-text term; ground it to a CURIE (try the resolve tool) ` +
+        `if it belongs to an ontology, or confirm it is lab-specific.`,
+      pass_id: 'deterministic_precompile',
+      details: { phrase, kind: noun.kind },
+    }];
+  });
 }
 
 function diagnosticsForRegistryMatches(nouns: ResolvedNoun[]): PassDiagnostic[] {

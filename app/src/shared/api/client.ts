@@ -153,6 +153,23 @@ export interface MaterialSearchItem {
   subtitle?: string
 }
 
+/**
+ * A ranked, CURIE-typed candidate from the resolve() spine (POST /resolve).
+ * Mirrors server `RankedCandidate`. A `source: 'mint'` candidate is the
+ * tier-5 "create a local term" affordance and carries `mint`, not a real CURIE.
+ */
+export interface ResolveCandidate {
+  curie: string
+  label: string
+  namespace: string
+  tier: 1 | 2 | 3 | 4 | 5
+  level: 'concept' | 'spec' | 'instance' | 'aliquot' | 'unknown'
+  score: number
+  source: 'local-record' | 'oak' | 'ols4' | 'vendor' | 'mint'
+  uri?: string
+  mint?: { label: string; domain?: string }
+}
+
 export interface MaterialDraftResponse {
   proposed: {
     name: string
@@ -1668,6 +1685,24 @@ export const apiClient = {
   async getMaterial(recordId: string): Promise<RecordEnvelope> {
     const response = await request<{ record: RecordEnvelope }>(`/materials/${encodeURIComponent(recordId)}`)
     return response.record
+  },
+
+  /**
+   * Resolve a noun to ranked, ontology-grounded CURIE candidates via the
+   * resolve() spine. Used by the slash menu, the TapTab copilot, and the
+   * material picker so all three ground terms the same way.
+   */
+  async resolve(body: {
+    term: string
+    surface?: string
+    kinds?: string[]
+    level?: ResolveCandidate['level']
+    limit?: number
+  }): Promise<{ candidates: ResolveCandidate[] }> {
+    return request('/resolve', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
   },
 
   async updateMaterialStatus(recordId: string, body: { status: string; note?: string; changedAt?: string }): Promise<{ success: true; status: string }> {

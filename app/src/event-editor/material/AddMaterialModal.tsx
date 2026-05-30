@@ -52,12 +52,18 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
 
   // Reset everything when the modal closes; opens fresh next time so a
   // stale "configure" state from a prior session doesn't surface.
+  // `search.setQuery` is captured through a ref because the search object
+  // returned by useMaterialSearch is a fresh reference every render —
+  // depending on it directly here would re-run the effect on every render
+  // and infinite-loop through dispatch+setQuery.
+  const setQueryRef = useRef(search.setQuery)
+  setQueryRef.current = search.setQuery
   useEffect(() => {
     if (!isOpen) {
       dispatch({ type: 'reset' })
-      search.setQuery('')
+      setQueryRef.current('')
     }
-  }, [isOpen, search])
+  }, [isOpen])
 
   // Autofocus search on open. The input ref settles after the portal
   // mounts, so we wait one frame.

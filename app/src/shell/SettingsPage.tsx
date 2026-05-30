@@ -19,11 +19,11 @@ import {
   NamespaceSection,
   SyncSection,
   JsonLdSection,
-  AiSettingsSection,
   ExtractorSettingsSection,
   LabMaterialTrackingSection,
   WebSearchSettingsSection,
 } from './settings'
+import { Slot } from '../extensions'
 import type { SectionId } from './settings/EditableSection'
 import type { ConfigPatchResponse } from '../types/config'
 
@@ -216,7 +216,8 @@ export function SettingsPage() {
         </Section>
 
         {/* ---- Editable: AI Assistant ---- */}
-        <AiSettingsSection
+        <Slot
+          name="settings.ai-section"
           ai={config?.ai ?? null}
           aiStatus={config?.aiStatus ?? null}
           editingSection={editingSection}
