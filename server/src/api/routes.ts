@@ -525,17 +525,22 @@ export function registerRoutes(
   // already loaded and cached in-process).
   fastify.post('/labware-definitions/search', async (request, reply) => {
     const body = (request.body ?? {}) as { q?: string; limit?: number };
-    const q = (body.q ?? '').trim().toLowerCase();
+    const rawQ = (body.q ?? '').trim().toLowerCase();
     const limit = Math.min(Math.max(body.limit ?? 12, 1), 50);
     const all = getLabwareDefinitionRegistry().list();
-    const matches = q
-      ? all.filter(
-          (d) =>
-            d.display_name.toLowerCase().includes(q) ||
-            d.id.toLowerCase().includes(q) ||
-            d.recordId.toLowerCase().includes(q),
-        )
-      : all;
+    // Tokenize so "96 well" matches "Generic 96-Well Plate" (hyphen in
+    // haystack, space in needle) and "well 96" matches the same record.
+    // Each token must appear in the joined searchable text — fold hyphens
+    // and underscores to spaces on both sides so neither word boundary
+    // breaks the search.
+    const fold = (s: string) => s.toLowerCase().replace(/[-_]+/g, ' ');
+    const tokens = rawQ ? fold(rawQ).split(/\s+/).filter(Boolean) : [];
+    const matches = tokens.length === 0
+      ? all
+      : all.filter((d) => {
+          const hay = fold(`${d.display_name} ${d.id} ${d.recordId}`);
+          return tokens.every((t) => hay.includes(t));
+        });
     return reply.send({
       hits: matches.slice(0, limit).map((d) => ({
         recordId: d.recordId,

@@ -28,56 +28,69 @@ const MATERIAL_PAGE = 12
 
 export const resolveMaterial: SlashResolver = async (query, ctx) => {
   const q = query.trim()
-  // First paint: workspace records + formulations + LOCAL-ONLY resolve()
-  // (tier-1 records + tier-2 on-box OAK). All three are fast (<100ms on
-  // the appliance), so the menu pops with useful results immediately.
-  const [materialRes, formulations, localResolved] = await Promise.all([
+  // First paint: workspace records + formulations only. Both come from
+  // the local SQLite-backed indices and return in <50ms, so the menu
+  // pops the instant the user finishes typing the query — no waiting on
+  // OAK SQLite scans or remote OLS4 calls. The ontology tiers stream
+  // in via onUpdate below.
+  const [materialRes, formulations] = await Promise.all([
     apiClient.searchMaterials({ q, limit: MATERIAL_PAGE * 2 }),
     apiClient.getFormulationsSummary({ q, limit: MATERIAL_PAGE }),
-    q
-      ? apiClient
-          .resolve({ term: q, kinds: ['material'], limit: PAGE, localOnly: true })
-          .catch(() => ({ candidates: [] as ResolveCandidate[] }))
-      : Promise.resolve({ candidates: [] as ResolveCandidate[] }),
   ])
   abortIfNeeded(ctx)
 
   const workspace = materialSuggestions(materialRes.items, formulations)
-  const seen = new Set(workspace.map((s) => s.key))
-  const initial: SlashSuggestion[] = [...workspace]
-  for (const s of ontologySuggestions(localResolved.candidates)) {
-    if (seen.has(s.key)) continue
-    seen.add(s.key)
-    initial.push(s)
-  }
-  const trimmed = initial.slice(0, MATERIAL_PAGE)
+  const initial = workspace.slice(0, MATERIAL_PAGE)
+  const seen = new Set(initial.map((s) => s.key))
 
-  // Second paint: run the full resolve() — including the remote OLS4 tier
-  // — in the background and append any new candidates via onUpdate. The
-  // menu re-renders when this lands, typically 1-2s later, so the user
-  // sees local hits immediately and broader-ontology hits when they
-  // arrive. Aborts when the user keeps typing (signal closure).
+  // Below-first-paint: chain the two resolve() calls so the on-box OAK
+  // tier (still 1-2s on a cold snapshot scan) lands as the second paint,
+  // and the remote OLS4 tier lands as the third. Each call only emits
+  // additions that aren't already on screen — the menu rebuilds in
+  // strictly additive order. Aborts when the user keeps typing.
   if (q && ctx.onUpdate) {
     void (async () => {
       try {
-        const full = await apiClient.resolve({ term: q, kinds: ['material'], limit: PAGE })
+        const localRes = await apiClient.resolve({
+          term: q,
+          kinds: ['material'],
+          limit: PAGE,
+          localOnly: true,
+        })
         if (ctx.signal.aborted) return
-        const seenLate = new Set(trimmed.map((s) => s.key))
-        const additions: SlashSuggestion[] = []
-        for (const s of ontologySuggestions(full.candidates)) {
-          if (seenLate.has(s.key)) continue
-          seenLate.add(s.key)
-          additions.push(s)
-        }
-        if (additions.length > 0) ctx.onUpdate?.(additions)
+        appendOntologyHits(localRes.candidates, seen, ctx.onUpdate!)
       } catch {
-        // Network/abort failures during the late tail are silently dropped —
-        // the user already has the first-paint results.
+        /* local-only path failure — fall through to the full call below */
+      }
+      try {
+        const fullRes = await apiClient.resolve({
+          term: q,
+          kinds: ['material'],
+          limit: PAGE,
+        })
+        if (ctx.signal.aborted) return
+        appendOntologyHits(fullRes.candidates, seen, ctx.onUpdate!)
+      } catch {
+        /* remote-tail failure — silently drop, user has earlier paints */
       }
     })()
   }
 
-  return trimmed
+  return initial
+}
+
+function appendOntologyHits(
+  candidates: ResolveCandidate[],
+  seen: Set<string>,
+  onUpdate: (more: SlashSuggestion[]) => void,
+): void {
+  const additions: SlashSuggestion[] = []
+  for (const s of ontologySuggestions(candidates)) {
+    if (seen.has(s.key)) continue
+    seen.add(s.key)
+    additions.push(s)
+  }
+  if (additions.length > 0) onUpdate(additions)
 }
 
 /**
