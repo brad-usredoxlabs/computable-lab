@@ -89,11 +89,23 @@ describe('bindOntologyMentions', () => {
     expect(bindings[0]!.via).toBe('class-ref');
     expect(bindings[0]!.curie).toBe('CHEBI:5001');
 
-    // The minted record carries the grounding ref in class[]
+    // The minted record carries the grounding ref in class[] and enters
+    // vocabulary review instead of becoming active lab vocabulary.
     const written = await store.list({ kind: 'material' });
     expect(written).toHaveLength(1);
-    const cls = (written[0]!.payload as { class?: Array<{ id: string }> }).class;
-    expect(cls?.[0]?.id).toBe('CHEBI:5001');
+    const payload = written[0]!.payload as {
+      class?: Array<{ id: string }>;
+      status?: string;
+      lifecycleId?: string;
+      provenance?: { sourceCurie?: string; source?: string };
+    };
+    expect(payload.class?.[0]?.id).toBe('CHEBI:5001');
+    expect(payload.status).toBe('proposed');
+    expect(payload.lifecycleId).toBe('lab-vocabulary-control');
+    expect(payload.provenance?.source).toBe('ai_mention');
+    expect(payload.provenance?.sourceCurie).toBe('CHEBI:5001');
+    expect(bindings[0]!.state).toBe('proposed');
+    expect(bindings[0]!.requiresReview).toBe(true);
   });
 
   it('reuses an existing material whose class[] already carries the CURIE', async () => {

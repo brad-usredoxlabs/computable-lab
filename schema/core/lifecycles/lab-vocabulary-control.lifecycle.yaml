@@ -1,0 +1,55 @@
+lifecycleVersion: 1
+id: lab-vocabulary-control
+description: "Lifecycle for local vocabulary records grounded by ontology CURIEs."
+
+roles:
+- id: author
+  label: "Author"
+  description: "The person or agent that proposed the vocabulary record."
+- id: reviewer
+  label: "Reviewer"
+  description: "A qualified person who reviews the vocabulary grounding."
+- id: steward
+  label: "Vocabulary steward"
+  description: "A person authorized to retire active vocabulary records."
+
+states:
+- id: proposed
+  label: "Proposed"
+  initial: true
+  description: "Created from AI, compiler, or user drafting. Not active lab vocabulary."
+- id: in_review
+  label: "In Review"
+  description: "Awaiting reviewer decision."
+- id: active
+  label: "Active"
+  description: "Approved for use as local lab vocabulary."
+- id: rejected
+  label: "Rejected"
+  terminal: true
+  description: "Rejected and unavailable for active use."
+- id: deprecated
+  label: "Deprecated"
+  terminal: true
+  description: "Retired from active use."
+
+transitions:
+- from: proposed
+  to: in_review
+  role: author
+  label: "Submit for review"
+- from: [proposed, in_review]
+  to: active
+  role: reviewer
+  label: "Activate"
+  guards:
+  - type: requires_different_person
+    than: author
+- from: [proposed, in_review]
+  to: rejected
+  role: reviewer
+  label: "Reject"
+- from: active
+  to: deprecated
+  role: steward
+  label: "Deprecate"

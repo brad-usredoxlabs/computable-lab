@@ -3,6 +3,8 @@ import type { ApiError } from '../types.js';
 import type { RecordEnvelope } from '../../store/types.js';
 import type { RecordStore } from '../../store/types.js';
 import type { IndexManager } from '../../index/IndexManager.js';
+import type { LifecycleEngine } from '../../lifecycle/LifecycleEngine.js';
+import { checkLifecycleTransition } from '../../lifecycle/lifecycleMiddleware.js';
 import { toStoredConcentration, type Concentration } from '../../materials/concentration.js';
 import { extractPrimaryDeclaredConcentration } from '../../materials/vendorComposition.js';
 
@@ -379,7 +381,7 @@ const MATERIAL_SEARCH_SCHEMA_IDS = [
   SCHEMA_IDS.material,
 ] as const;
 
-export function createMaterialLifecycleHandlers(store: RecordStore, indexManager?: IndexManager) {
+export function createMaterialLifecycleHandlers(store: RecordStore, indexManager?: IndexManager, lifecycleEngine?: LifecycleEngine) {
   async function createDerivationFromBody(
     body: CreateMaterialDerivationBody,
     reply: FastifyReply,
@@ -516,6 +518,20 @@ export function createMaterialLifecycleHandlers(store: RecordStore, indexManager
         ...payload,
         status,
       };
+      if (lifecycleEngine) {
+        const lifecycleResult = checkLifecycleTransition(lifecycleEngine, {
+          previousPayload: payload,
+          nextPayload: updatedPayload,
+          actorId: (request.headers['x-actor-id'] as string) || 'anonymous',
+        });
+        if (!lifecycleResult.allowed) {
+          reply.status(422);
+          return {
+            error: 'LIFECYCLE_TRANSITION_DENIED',
+            message: lifecycleResult.error || 'Lifecycle transition not allowed',
+          };
+        }
+      }
       const updated = await store.update({
         envelope: {
           recordId: envelope!.recordId,

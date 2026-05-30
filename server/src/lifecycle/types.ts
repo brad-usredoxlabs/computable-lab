@@ -16,9 +16,16 @@ export interface LifecycleSpec {
     role: string
     label?: string
     guards?: Array<{
-      type: 'requires_different_person' | 'requires_field_set' | 'requires_active_policy'
+      type:
+        | 'requires_different_person'
+        | 'requires_field_set'
+        | 'requires_active_policy'
+        | 'requires_policy_disposition'
+        | 'requires_authority'
       field?: string
       than?: string
+      disposition?: 'allowed' | 'needs-confirmation' | 'blocked'
+      authority?: string
     }>
     description?: string
   }>

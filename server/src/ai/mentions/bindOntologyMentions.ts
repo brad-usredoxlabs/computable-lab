@@ -33,6 +33,12 @@ export interface OntologyMentionBinding {
   via: 'class-ref' | 'name';
   /** Human-readable label for log/note rendering. */
   label: string;
+  /** Lifecycle governing a newly-proposed local vocabulary/material record. */
+  lifecycleId?: 'lab-vocabulary-control';
+  /** Current local vocabulary/material lifecycle state. */
+  state?: 'proposed' | 'in_review' | 'active' | 'rejected' | 'deprecated';
+  /** True when this binding needs human or policy review before active use. */
+  requiresReview?: boolean;
 }
 
 export interface BindOntologyMentionsResult {
@@ -191,6 +197,16 @@ export async function bindOntologyMentions(
       id: recordId,
       name: label,
       domain: inferDomainFromNamespace(namespace),
+      status: 'proposed',
+      lifecycleId: 'lab-vocabulary-control',
+      provenance: {
+        source: 'ai_mention',
+        sourceCurie: curie,
+        sourceLabel: label,
+        createdBy: 'compiler',
+        createdAt: new Date().toISOString(),
+        note: 'Created as a proposed local vocabulary record from an ontology-grounded prompt mention.',
+      },
       class: [{ kind: 'ontology', id: curie, namespace, label }],
     };
     const created = await createRecord(
@@ -208,7 +224,16 @@ export async function bindOntologyMentions(
     materials = [...materials, created];
     resolvedThisCall.set(curie, recordId);
     promptRewrites.set(curie, recordId);
-    bindings.push({ curie, recordId, minted: true, via: 'class-ref', label });
+    bindings.push({
+      curie,
+      recordId,
+      minted: true,
+      via: 'class-ref',
+      label,
+      lifecycleId: 'lab-vocabulary-control',
+      state: 'proposed',
+      requiresReview: true,
+    });
     out[i] = { ...m, id: recordId };
   }
 

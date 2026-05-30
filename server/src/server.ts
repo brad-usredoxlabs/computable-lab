@@ -508,7 +508,7 @@ export async function createServer(
   const chemistryHandlers = createChemistryHandlers();
   const tagHandlers = createTagHandlers(ctx.store);
   const materialPrepHandlers = createMaterialPrepHandlers(ctx.store, ctx.indexManager);
-  const materialLifecycleHandlers = createMaterialLifecycleHandlers(ctx.store, ctx.indexManager);
+  const materialLifecycleHandlers = createMaterialLifecycleHandlers(ctx.store, ctx.indexManager, ctx.lifecycleEngine);
   const semanticsHandlers = createSemanticsHandlers(ctx);
   const runWorkspaceHandlers = createRunWorkspaceHandlers(ctx);
   const runContextAssembler = new RunContextAssembler(ctx.store);

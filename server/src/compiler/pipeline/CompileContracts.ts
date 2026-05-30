@@ -132,6 +132,15 @@ export interface ResourceManifest {
   consumables: string[];
 }
 
+export interface LifecycleDecision {
+  recordId: string;
+  lifecycleId: string;
+  state: string;
+  disposition: 'allowed' | 'needs-confirmation' | 'blocked';
+  message: string;
+  details?: Record<string, unknown>;
+}
+
 // ---------------------------------------------------------------------------
 // ExecutionScalePlan
 // ---------------------------------------------------------------------------
@@ -305,6 +314,8 @@ export interface TerminalArtifacts {
   downstreamQueue?: DownstreamCompileJob[];
   /** Aggregated validation findings. Spec-034. */
   validationReport?: ValidationReport;
+  /** Lifecycle/admissibility decisions attached to records proposed during compile. */
+  lifecycleDecisions?: LifecycleDecision[];
 }
 
 // ---------------------------------------------------------------------------

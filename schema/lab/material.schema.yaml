@@ -27,6 +27,36 @@ properties:
     description: "High-level material domain."
     enum: [ cell_line, chemical, media, reagent, organism, sample, other ]
 
+  status:
+    type: string
+    description: "Vocabulary curation state for this material concept."
+    enum: [ proposed, in_review, active, rejected, deprecated ]
+
+  lifecycleId:
+    type: string
+    const: "lab-vocabulary-control"
+    description: "Lifecycle governing local vocabulary curation for this material concept."
+
+  provenance:
+    type: object
+    description: "Minimal provenance for compiler- or AI-proposed concept records."
+    additionalProperties: false
+    properties:
+      source:
+        type: string
+        enum: [ ai_mention, compiler, human, import ]
+      sourceCurie:
+        type: string
+      sourceLabel:
+        type: string
+      createdBy:
+        type: string
+      createdAt:
+        type: string
+        format: date-time
+      note:
+        type: string
+
   class:
     type: array
     description: "Ontology-backed classifications (CURIEs)."

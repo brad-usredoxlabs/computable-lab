@@ -63,10 +63,20 @@ properties:
             properties:
               type:
                 type: string
-                enum: [requires_different_person, requires_field_set, requires_active_policy]
+                enum:
+                - requires_different_person
+                - requires_field_set
+                - requires_active_policy
+                - requires_policy_disposition
+                - requires_authority
               field:
                 type: string
               than:
+                type: string
+              disposition:
+                type: string
+                enum: [allowed, needs-confirmation, blocked]
+              authority:
                 type: string
         description:
           type: string

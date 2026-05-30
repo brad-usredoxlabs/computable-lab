@@ -452,6 +452,24 @@ export async function runChatbotCompile(
       : {}),
   };
 
+  const lifecycleDecisions = ontologyBindings
+    .filter((binding) => binding.minted && binding.lifecycleId && binding.state)
+    .map((binding) => ({
+      recordId: binding.recordId,
+      lifecycleId: binding.lifecycleId!,
+      state: binding.state!,
+      disposition: 'needs-confirmation' as const,
+      message: `Ontology term ${binding.curie} was materialized as proposed local vocabulary.`,
+      details: {
+        curie: binding.curie,
+        label: binding.label,
+        requiresReview: binding.requiresReview === true,
+      },
+    }));
+  if (lifecycleDecisions.length > 0) {
+    terminalArtifacts.lifecycleDecisions = lifecycleDecisions;
+  }
+
   // Build deckLayoutPlan from plan_deck_layout pass output (spec-033)
   const planDeckLayoutOutput = (result.outputs.get('plan_deck_layout') ?? { pinned: [], autoFilled: [], conflicts: [] }) as PlanDeckLayoutOutput;
   const deckLayoutPlan: DeckLayoutPlan = {

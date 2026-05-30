@@ -58,20 +58,31 @@ export function compileLifecycle(spec: LifecycleSpec): {
 }
 
 function createGuardFunction(guards: Array<{
-  type: 'requires_different_person' | 'requires_field_set' | 'requires_active_policy'
+  type: 'requires_different_person' | 'requires_field_set' | 'requires_active_policy' | 'requires_policy_disposition' | 'requires_authority'
   field?: string
   than?: string
+  disposition?: 'allowed' | 'needs-confirmation' | 'blocked'
+  authority?: string
 }>): (ctx: { context: LifecycleContext }) => boolean {
   const guardFns = guards.map(g => {
     switch (g.type) {
       case 'requires_different_person':
-        return (ctx: { context: LifecycleContext }) =>
-          ctx.context.roleAssignments[g.than!] !== ctx.context.currentActorId
+        return (ctx: { context: LifecycleContext }) => {
+          const otherActorId = g.than ? ctx.context.roleAssignments[g.than] : undefined
+          return Boolean(otherActorId) && otherActorId !== ctx.context.currentActorId
+        }
       case 'requires_field_set':
-        return (ctx: { context: LifecycleContext }) =>
-          ctx.context.fields[g.field!] != null
+        return (ctx: { context: LifecycleContext }) => getField(ctx.context.fields, g.field) != null
       case 'requires_active_policy':
-        return () => true
+        return (ctx: { context: LifecycleContext }) =>
+          getField(ctx.context.fields, 'activePolicy') !== false
+            && getField(ctx.context.fields, 'policyActive') !== false
+      case 'requires_policy_disposition':
+        return (ctx: { context: LifecycleContext }) =>
+          !g.disposition || getField(ctx.context.fields, 'policyDisposition') === g.disposition
+      case 'requires_authority':
+        return (ctx: { context: LifecycleContext }) =>
+          !g.authority || getField(ctx.context.fields, 'approvalAuthority') === g.authority
       default:
         return () => true
     }
@@ -79,4 +90,12 @@ function createGuardFunction(guards: Array<{
 
   return (ctx: { context: LifecycleContext }) =>
     guardFns.every(fn => fn(ctx))
+}
+
+function getField(fields: Record<string, unknown>, path?: string): unknown {
+  if (!path) return undefined
+  return path.split('.').reduce<unknown>((current, part) => {
+    if (!current || typeof current !== 'object' || Array.isArray(current)) return undefined
+    return (current as Record<string, unknown>)[part]
+  }, fields)
 }

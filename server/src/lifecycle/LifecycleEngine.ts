@@ -22,7 +22,7 @@ export class LifecycleEngine {
 
   loadLifecycle(spec: LifecycleSpec): void {
     const { config, guards } = compileLifecycle(spec)
-    const machine = createMachine(config, guards)
+    const machine = createMachine(config, { guards })
     this.machines.set(spec.id, machine)
     this.specs.set(spec.id, spec)
   }
@@ -31,32 +31,58 @@ export class LifecycleEngine {
     return this.machines.has(lifecycleId)
   }
 
-  canTransition(lifecycleId: string, currentState: string, event: string, _context: LifecycleContext): boolean {
+  canTransition(lifecycleId: string, currentState: string, event: string, context: LifecycleContext): boolean {
     const machine = this.machines.get(lifecycleId)
     if (!machine) throw new Error(`Lifecycle not loaded: ${lifecycleId}`)
 
-    // Check if the event is valid in the spec for this state
-    return this.checkEventInSpec(lifecycleId, currentState, event)
+    return this.checkEventInSpec(lifecycleId, currentState, event, context)
   }
 
-  private checkEventInSpec(lifecycleId: string, currentState: string, event: string): boolean {
-    const spec = this.specs.get(lifecycleId)
-    if (!spec) return false
+  private checkEventInSpec(lifecycleId: string, currentState: string, event: string, context: LifecycleContext): boolean {
+    const transition = this.findTransition(lifecycleId, currentState, event)
+    if (!transition) return false
+    return this.guardsPass(transition.guards ?? [], context)
+  }
 
-    for (const transition of spec.transitions) {
+  private findTransition(lifecycleId: string, currentState: string, event: string): LifecycleSpec['transitions'][number] | undefined {
+    const spec = this.specs.get(lifecycleId)
+    if (!spec) return undefined
+
+    return spec.transitions.find(transition => {
       const fromStates = Array.isArray(transition.from) ? transition.from : [transition.from]
       const eventName = (transition.label || transition.to).toUpperCase().replace(/\s+/g, '_')
-      if (fromStates.includes(currentState) && eventName === event) {
-        // Verify guard passes
-        if (transition.guards && transition.guards.length > 0) {
-          // For guard evaluation, we'd need to run the machine
-          // For now, assume guards pass if event matches
-          return true
+      return fromStates.includes(currentState) && eventName === event
+    })
+  }
+
+  private guardsPass(guards: NonNullable<LifecycleSpec['transitions'][number]['guards']>, context: LifecycleContext): boolean {
+    return guards.every(guard => {
+      switch (guard.type) {
+        case 'requires_different_person': {
+          const otherActorId = guard.than ? context.roleAssignments[guard.than] : undefined
+          return Boolean(otherActorId) && otherActorId !== context.currentActorId
         }
-        return true
+        case 'requires_field_set':
+          return this.fieldValue(context.fields, guard.field) != null
+        case 'requires_active_policy':
+          return this.fieldValue(context.fields, 'activePolicy') !== false
+            && this.fieldValue(context.fields, 'policyActive') !== false
+        case 'requires_policy_disposition':
+          return !guard.disposition || this.fieldValue(context.fields, 'policyDisposition') === guard.disposition
+        case 'requires_authority':
+          return !guard.authority || this.fieldValue(context.fields, 'approvalAuthority') === guard.authority
+        default:
+          return false
       }
-    }
-    return false
+    })
+  }
+
+  private fieldValue(fields: Record<string, unknown>, path?: string): unknown {
+    if (!path) return undefined
+    return path.split('.').reduce<unknown>((current, part) => {
+      if (!current || typeof current !== 'object' || Array.isArray(current)) return undefined
+      return (current as Record<string, unknown>)[part]
+    }, fields)
   }
 
   getValidTransitions(lifecycleId: string, currentState: string, context: LifecycleContext): TransitionInfo[] {
@@ -90,11 +116,7 @@ export class LifecycleEngine {
     const spec = this.specs.get(lifecycleId)
     if (!spec) throw new Error(`Lifecycle not loaded: ${lifecycleId}`)
 
-    const transition = spec.transitions.find(t => {
-      const fromStates = Array.isArray(t.from) ? t.from : [t.from]
-      const eventName = (t.label || t.to).toUpperCase().replace(/\s+/g, '_')
-      return fromStates.includes(currentState) && eventName === event
-    })
+    const transition = this.findTransition(lifecycleId, currentState, event)
 
     if (!transition) {
       throw new Error(`Transition ${event} not found in lifecycle ${lifecycleId}`)
