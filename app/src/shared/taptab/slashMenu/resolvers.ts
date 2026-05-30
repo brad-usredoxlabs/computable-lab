@@ -28,27 +28,56 @@ const MATERIAL_PAGE = 12
 
 export const resolveMaterial: SlashResolver = async (query, ctx) => {
   const q = query.trim()
-  const [materialRes, formulations, resolved] = await Promise.all([
+  // First paint: workspace records + formulations + LOCAL-ONLY resolve()
+  // (tier-1 records + tier-2 on-box OAK). All three are fast (<100ms on
+  // the appliance), so the menu pops with useful results immediately.
+  const [materialRes, formulations, localResolved] = await Promise.all([
     apiClient.searchMaterials({ q, limit: MATERIAL_PAGE * 2 }),
     apiClient.getFormulationsSummary({ q, limit: MATERIAL_PAGE }),
-    // Ontology grounding via the resolve() spine. Degrades to workspace-only
-    // if the endpoint is unavailable (older backend) — never blocks the menu.
     q
-      ? apiClient.resolve({ term: q, kinds: ['material'], limit: PAGE }).catch(() => ({ candidates: [] }))
+      ? apiClient
+          .resolve({ term: q, kinds: ['material'], limit: PAGE, localOnly: true })
+          .catch(() => ({ candidates: [] as ResolveCandidate[] }))
       : Promise.resolve({ candidates: [] as ResolveCandidate[] }),
   ])
   abortIfNeeded(ctx)
 
-  // Workspace (local) matches first, ontology-grounded terms appended.
   const workspace = materialSuggestions(materialRes.items, formulations)
   const seen = new Set(workspace.map((s) => s.key))
-  const merged = [...workspace]
-  for (const s of ontologySuggestions(resolved.candidates)) {
+  const initial: SlashSuggestion[] = [...workspace]
+  for (const s of ontologySuggestions(localResolved.candidates)) {
     if (seen.has(s.key)) continue
     seen.add(s.key)
-    merged.push(s)
+    initial.push(s)
   }
-  return merged.slice(0, MATERIAL_PAGE)
+  const trimmed = initial.slice(0, MATERIAL_PAGE)
+
+  // Second paint: run the full resolve() — including the remote OLS4 tier
+  // — in the background and append any new candidates via onUpdate. The
+  // menu re-renders when this lands, typically 1-2s later, so the user
+  // sees local hits immediately and broader-ontology hits when they
+  // arrive. Aborts when the user keeps typing (signal closure).
+  if (q && ctx.onUpdate) {
+    void (async () => {
+      try {
+        const full = await apiClient.resolve({ term: q, kinds: ['material'], limit: PAGE })
+        if (ctx.signal.aborted) return
+        const seenLate = new Set(trimmed.map((s) => s.key))
+        const additions: SlashSuggestion[] = []
+        for (const s of ontologySuggestions(full.candidates)) {
+          if (seenLate.has(s.key)) continue
+          seenLate.add(s.key)
+          additions.push(s)
+        }
+        if (additions.length > 0) ctx.onUpdate?.(additions)
+      } catch {
+        // Network/abort failures during the late tail are silently dropped —
+        // the user already has the first-paint results.
+      }
+    })()
+  }
+
+  return trimmed
 }
 
 /**
@@ -70,19 +99,41 @@ function ontologySuggestions(candidates: ResolveCandidate[]): SlashSuggestion[] 
 }
 
 export const resolveLabware: SlashResolver = async (query, ctx) => {
-  const res = await searchJsonLd({
-    q: query.trim() || undefined,
-    type: 'labware',
-    limit: PAGE,
-  })
+  const q = query.trim()
+  // Records (indexed labware instances) AND definitions (the lbw-def-…
+  // registry) in parallel. Records first so user-curated workspace plates
+  // win the order; definitions fill in when the workspace is bare (fresh
+  // appliance) or no record matches the query.
+  const [recordRes, defRes] = await Promise.all([
+    searchJsonLd({ q: q || undefined, type: 'labware', limit: PAGE }),
+    apiClient
+      .searchLabwareDefinitions({ q, limit: PAGE })
+      .catch(() => ({ hits: [] as Array<{ recordId: string; label: string }>, total: 0 })),
+  ])
   abortIfNeeded(ctx)
-  return res.hits.map((hit) => ({
+
+  const records: SlashSuggestion[] = recordRes.hits.map((hit) => ({
     key: `labware:${hit.recordId}`,
     label: hit.label,
     badge: 'Labware',
     subtitle: hit.recordId,
     mention: { type: 'labware', id: hit.recordId, label: hit.label },
   }))
+  const seen = new Set(records.map((s) => s.key))
+  const defs: SlashSuggestion[] = []
+  for (const hit of defRes.hits) {
+    const key = `labware:${hit.recordId}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    defs.push({
+      key,
+      label: hit.label,
+      badge: 'Definition',
+      subtitle: hit.recordId,
+      mention: { type: 'labware', id: hit.recordId, label: hit.label },
+    })
+  }
+  return [...records, ...defs].slice(0, PAGE)
 }
 
 export const resolveProtocol: SlashResolver = async (query, ctx) => {

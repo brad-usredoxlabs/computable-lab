@@ -1698,8 +1698,25 @@ export const apiClient = {
     kinds?: string[]
     level?: ResolveCandidate['level']
     limit?: number
+    /**
+     * Skip remote tiers (OLS4, vendor). Used by the slash menu's first
+     * paint so the user sees local results in <100ms; the second call
+     * (without this flag) streams the slower remote tiers in via the
+     * resolver's onUpdate callback.
+     */
+    localOnly?: boolean
   }): Promise<{ candidates: ResolveCandidate[] }> {
     return request('/resolve', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  async searchLabwareDefinitions(body: {
+    q?: string
+    limit?: number
+  }): Promise<{ hits: Array<{ recordId: string; label: string; kind: 'labware-definition' }>; total: number }> {
+    return request('/labware-definitions/search', {
       method: 'POST',
       body: JSON.stringify(body),
     })

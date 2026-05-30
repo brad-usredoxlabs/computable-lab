@@ -2964,6 +2964,14 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* Belt-and-suspenders so a wide TipTap editor / long mention chip can
+     never push siblings (the Send button) off-screen on narrow / square
+     viewports. The input row already uses flex with `min-width:0` on the
+     editor wrapper, but the dock itself needs to refuse to grow past its
+     parent. */
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .event-editor .ai-dock__log {
@@ -3113,6 +3121,11 @@
   padding: 10px 14px;
   border-top: 1px solid var(--cl-border);
   align-items: flex-end;
+  /* Required so the flex children's `flex:1 1 0; min-width:0` actually
+     shrinks the editor wrapper below its content width — without this on
+     the row itself, the row can size to max-content and bleed past the
+     dock, hiding the Send button on narrow viewports. */
+  min-width: 0;
 }
 
 .event-editor .ai-dock__input {
@@ -3138,6 +3151,11 @@
   max-height: 200px;
   line-height: 1.4;
   overflow-y: auto;
+  /* Clip horizontal overflow inside the wrapper too — a wide mention chip
+     or long word would otherwise bleed past the flex item and push Send
+     out of the row. The inner editor sets overflow-wrap to break long
+     tokens; this clip is the last-resort guard. */
+  overflow-x: hidden;
 }
 
 .event-editor .ai-dock__input:focus {
@@ -3155,10 +3173,16 @@
      contenteditable area is the full 3-line height, not collapsed to one. */
   flex: 1 1 auto;
   min-height: 1.4em;
+  /* `overflow-wrap: anywhere` breaks long unbroken tokens (URLs, CURIEs in
+     mention labels) at any character; `word-break: break-word` alone leaves
+     some unbreakable runs that can push horizontal scroll. */
   word-break: break-word;
+  overflow-wrap: anywhere;
   /* TipTap doesn't set a default width — without this an empty editor inside
      a flex parent can render at 0 width. */
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 .event-editor .ai-dock__input-editor p {
   margin: 0;

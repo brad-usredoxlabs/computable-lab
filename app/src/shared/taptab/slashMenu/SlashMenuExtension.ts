@@ -87,6 +87,19 @@ export function buildSlashMenuExtension(options: SlashMenuOptions = {}): Extensi
     name: 'slashMenu',
 
     addProseMirrorPlugins() {
+      // Shared state for the *currently-open* slash menu. items() fills it
+      // when the resolver returns; the renderer reads from it for late
+      // updates (so a resolver's ctx.onUpdate callback can append more
+      // suggestions after the initial Promise resolves — used by /m to
+      // overlay OLS4 hits on top of the fast local results). One Suggestion
+      // plugin instance per editor → one session is enough.
+      const session: ProgressiveSession = {
+        query: null,
+        controller: null,
+        items: [],
+        repaint: null,
+      }
+
       return [
         Suggestion({
           editor: this.editor,
@@ -119,22 +132,42 @@ export function buildSlashMenuExtension(options: SlashMenuOptions = {}): Extensi
               .run()
           },
           items: async ({ query }) => {
+            // New query: cancel any in-flight late updates from the previous
+            // one (so a slow OLS4 tail can't bleed into a fresh search).
+            session.controller?.abort()
+            const controller = new AbortController()
+            session.query = query
+            session.controller = controller
+            session.items = []
+
             const match = matchCommand(commands, query)
             if (!match) return []
-            const controller = new AbortController()
             const ctx: SlashResolverContext = {
               selection: getSelection(),
               signal: controller.signal,
+              onUpdate: (more) => {
+                // Drop late updates after the query moved on or the menu
+                // closed (both null out session.query).
+                if (session.query !== query) return
+                if (!more || more.length === 0) return
+                const seen = new Set(session.items.map((s) => s.key))
+                const additions = more.filter((s) => !seen.has(s.key))
+                if (additions.length === 0) return
+                session.items = [...session.items, ...additions]
+                session.repaint?.(session.items)
+              },
             }
             try {
-              return await match.command.resolve(match.innerQuery, ctx)
+              const initial = await match.command.resolve(match.innerQuery, ctx)
+              session.items = initial
+              return initial
             } catch (err) {
               if ((err as Error).name === 'AbortError') return []
               console.warn(`Slash resolver for /${match.command.kind} failed:`, err)
               return []
             }
           },
-          render: () => createRenderer(commands),
+          render: () => createRenderer(commands, session),
         } as SuggestionOptions<SlashSuggestion>),
       ]
     },
@@ -142,20 +175,41 @@ export function buildSlashMenuExtension(options: SlashMenuOptions = {}): Extensi
 }
 
 /**
+ * State the items() handler shares with the renderer so a resolver's
+ * `ctx.onUpdate(more)` can repaint the open menu with appended results
+ * after its initial Promise resolves. See the /m progressive flow.
+ */
+interface ProgressiveSession {
+  /** The exact query string the open menu was built for; null when closed. */
+  query: string | null
+  /** Aborter for the in-flight resolver (and late tasks it spawned). */
+  controller: AbortController | null
+  /** Current materialized items shown in the menu (initial + late additions). */
+  items: SlashSuggestion[]
+  /** Renderer-provided callback to redraw the open menu with new items. */
+  repaint: ((items: SlashSuggestion[]) => void) | null
+}
+
+/**
  * Manages the React root that hosts `SlashSuggestionList`. The plugin's
  * `render()` returns lifecycle hooks; this factory keeps the heavy mounting
- * logic in one place.
+ * logic in one place. The shared `session` lets the items() handler push
+ * late updates back into the menu via `session.repaint`.
  */
-function createRenderer(commands: SlashCommandSpec[]) {
+function createRenderer(commands: SlashCommandSpec[], session: ProgressiveSession) {
   let container: HTMLDivElement | null = null
   let root: Root | null = null
   let listHandle: SlashSuggestionListHandle | null = null
+  /** Last props the suggestion plugin handed us — needed so late repaints
+   *  can preserve the click handler and query/empty-state context. */
+  let lastProps: SuggestionProps<SlashSuggestion> | null = null
   const setListRef = (handle: SlashSuggestionListHandle | null) => {
     listHandle = handle
   }
 
   function paint(props: SuggestionProps<SlashSuggestion>) {
     if (!container || !root) return
+    lastProps = props
     const match = matchCommand(commands, props.query)
     root.render(
       createElement(SlashSuggestionList, {
@@ -166,6 +220,15 @@ function createRenderer(commands: SlashCommandSpec[]) {
         command: (item) => props.command(item),
       }),
     )
+  }
+
+  /**
+   * Re-paint with a new items array but the same query/command/click
+   * handler. Used by `session.repaint` for progressive resolver updates.
+   */
+  function repaintItems(items: SlashSuggestion[]) {
+    if (!lastProps) return
+    paint({ ...lastProps, items })
   }
 
   function position(props: SuggestionProps<SlashSuggestion>) {
@@ -214,6 +277,7 @@ function createRenderer(commands: SlashCommandSpec[]) {
       container.dataset.slashMenuRoot = 'true'
       document.body.appendChild(container)
       root = createRoot(container)
+      session.repaint = repaintItems
       paint(props)
       position(props)
     },
@@ -226,6 +290,10 @@ function createRenderer(commands: SlashCommandSpec[]) {
       return listHandle?.onKeyDown(props.event) ?? false
     },
     onExit() {
+      session.query = null
+      session.repaint = null
+      session.controller?.abort()
+      session.controller = null
       if (root) {
         root.unmount()
         root = null

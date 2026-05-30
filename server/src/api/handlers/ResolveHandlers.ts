@@ -19,6 +19,14 @@ export interface ResolveRequestBody {
   kinds?: string[];
   level?: MaterialLevel;
   limit?: number;
+  /**
+   * When true, skip remote tiers (OLS4, vendor) and return only
+   * tier-1 (records) + tier-2 (on-box OAK). Used by the slash menu's
+   * progressive first paint so the user sees local results in
+   * <100ms; a follow-up call without this flag streams the slower
+   * remote tiers in.
+   */
+  localOnly?: boolean;
 }
 
 export function createResolveHandlers(spine: ResolveSpine) {
@@ -41,6 +49,7 @@ export function createResolveHandlers(spine: ResolveSpine) {
         ...(body.kinds ? { kinds: body.kinds } : {}),
         ...(body.level ? { level: body.level } : {}),
         ...(body.limit ? { limit: body.limit } : {}),
+        ...(body.localOnly ? { localOnly: true } : {}),
       });
 
       return { candidates };

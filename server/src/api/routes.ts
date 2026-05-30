@@ -54,6 +54,7 @@ import type { ProtocolIdeHandlers } from './handlers/ProtocolIdeHandlers.js';
 import type { PlannedRunHandlers } from './handlers/PlannedRunHandlers.js';
 import type { AiThreadHandlers } from './handlers/AiThreadHandlers.js';
 import type { JsonLdSearchHandlers } from './handlers/JsonLdSearchHandlers.js';
+import { getLabwareDefinitionRegistry } from '../registry/LabwareDefinitionRegistry.js';
 import type { PredicatesHandlers } from './handlers/PredicatesHandlers.js';
 import type { HealthResponse } from './types.js';
 
@@ -516,6 +517,34 @@ export function registerRoutes(
     fastify.post('/search/jsonld', jsonLdSearchHandlers.search.bind(jsonLdSearchHandlers));
     fastify.post('/search/jsonld/reindex', jsonLdSearchHandlers.reindex.bind(jsonLdSearchHandlers));
   }
+
+  // Labware-definition search — backs the slash menu /l so a fresh
+  // appliance with no labware *records* still finds the generic/Corning/etc
+  // definitions shipped with the registry. Lightweight: just a substring
+  // match against display_name + id, no index needed (the registry is
+  // already loaded and cached in-process).
+  fastify.post('/labware-definitions/search', async (request, reply) => {
+    const body = (request.body ?? {}) as { q?: string; limit?: number };
+    const q = (body.q ?? '').trim().toLowerCase();
+    const limit = Math.min(Math.max(body.limit ?? 12, 1), 50);
+    const all = getLabwareDefinitionRegistry().list();
+    const matches = q
+      ? all.filter(
+          (d) =>
+            d.display_name.toLowerCase().includes(q) ||
+            d.id.toLowerCase().includes(q) ||
+            d.recordId.toLowerCase().includes(q),
+        )
+      : all;
+    return reply.send({
+      hits: matches.slice(0, limit).map((d) => ({
+        recordId: d.recordId,
+        label: d.display_name,
+        kind: 'labware-definition',
+      })),
+      total: matches.length,
+    });
+  });
 
   const { eventEditorFixHandlers } = options;
   if (eventEditorFixHandlers) {

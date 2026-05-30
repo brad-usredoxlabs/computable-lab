@@ -63,18 +63,32 @@ export type SlashMention =
  * Context handed to resolvers so they can fulfil their query without
  * reaching into React directly. Selection is the cross-endpoint
  * `SelectionContext`; signal is an AbortSignal that fires when the user
- * keeps typing (so resolvers can cancel in-flight searches).
+ * keeps typing (so resolvers can cancel in-flight searches); onUpdate
+ * lets a resolver progressively append more candidates after its initial
+ * Promise resolves (used by /m to show local hits immediately and merge
+ * remote-ontology hits in as they arrive).
  */
 export interface SlashResolverContext {
   selection: SelectionContextValue | null
   signal: AbortSignal
+  /**
+   * Push additional suggestions into the open menu after the initial
+   * resolver Promise has resolved. The extension dedups by `key` and
+   * preserves the relative order of items already shown, then appends new
+   * items. Calls after the menu closes (or the user types another
+   * character) are silently dropped — the AbortSignal also fires in that
+   * case, so well-behaved resolvers can bail early.
+   */
+  onUpdate?: (more: SlashSuggestion[]) => void
 }
 
 /**
  * A resolver returns a (possibly empty) list of suggestions for a given
  * command + query string. Resolvers are async because most query against
  * the JSON-LD index over the wire. The result list is shown in command
- * order, deduped by `key`.
+ * order, deduped by `key`. Resolvers MAY also call `ctx.onUpdate` after
+ * their initial Promise resolves to stream in late results without
+ * blocking the first paint (see /m's tier-3 OLS4 pass).
  */
 export type SlashResolver = (
   query: string,
