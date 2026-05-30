@@ -18,6 +18,14 @@
   inset: 0;
   display: grid;
   grid-template-rows: auto 1fr auto;
+  /* Explicit `minmax(0, 1fr)` column so the grid track can shrink past
+     the intrinsic min-content width of its children. Without this, the
+     topbar's nowrap chips + nav links + brand fix the column at their
+     combined min-content (~800px on desktop), and the dock (row 3 child)
+     inherits that width — so on any viewport narrower than ~800px the
+     dock extends past the right edge and overflow:hidden clips the
+     Send button. The fix lets every row honor the viewport width. */
+  grid-template-columns: minmax(0, 1fr);
   background: var(--cl-bg);
   color: var(--cl-text);
   font-family:
