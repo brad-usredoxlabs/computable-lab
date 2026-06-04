@@ -204,19 +204,29 @@ function AppShellTopBar({ brand, middle, right, tabs }: TopBarProps) {
 }
 
 function DesktopTopBar({ brand, middle, right, tabs }: TopBarProps) {
+  // The single-row case (no project tabs) keeps the original `.topbar` flex
+  // layout untouched — brand + middle + spacer + right line up horizontally
+  // exactly like every existing endpoint expects. The two-row case wraps
+  // the chrome in `.topbar__chrome` AND flips the outer header to
+  // `flex-direction: column`, then drops the tabs row below. Wrapping
+  // unconditionally would inject an unstyled div in the middle of the
+  // single-row flex line, breaking ProtocolsPage / LiteraturePage / etc.
+  const chromeRow = (
+    <>
+      <BrandMenu brand={brand} />
+      {middle ? (
+        <>
+          <span className="topbar__divider" />
+          <div className="topbar__group">{middle}</div>
+        </>
+      ) : null}
+      <span className="topbar__spacer" />
+      {right}
+    </>
+  )
   return (
     <header className={tabs ? 'topbar topbar--with-tabs' : 'topbar'}>
-      <div className="topbar__chrome">
-        <BrandMenu brand={brand} />
-        {middle ? (
-          <>
-            <span className="topbar__divider" />
-            <div className="topbar__group">{middle}</div>
-          </>
-        ) : null}
-        <span className="topbar__spacer" />
-        {right}
-      </div>
+      {tabs ? <div className="topbar__chrome">{chromeRow}</div> : chromeRow}
       {tabs ? <div className="topbar__tabs">{tabs}</div> : null}
     </header>
   )

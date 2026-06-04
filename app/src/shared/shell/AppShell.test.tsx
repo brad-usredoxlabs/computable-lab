@@ -55,6 +55,32 @@ describe('AppShell — stacked (default) layout', () => {
     expect(document.querySelector('.cl-workspace')).toBeNull()
     expect(document.querySelector('.cl-workspace__handle')).toBeNull()
   })
+
+  it('does NOT inject the .topbar__chrome wrapper when no project tabs', () => {
+    // Regression: unconditionally wrapping brand/middle/right in
+    // `.topbar__chrome` broke stacked-mode pages (Protocols / Literature /
+    // Browser) because the wrapper has no flex CSS outside the
+    // `.topbar--with-tabs` modifier. Items stacked vertically and pushed
+    // the page content past the viewport.
+    renderShell({
+      brand: <span>CL</span>,
+      topbarMiddle: <div>chips</div>,
+      topbarRight: <nav>right</nav>,
+      children: <div>BODY</div>,
+    })
+    expect(document.querySelector('.topbar__chrome')).toBeNull()
+    expect(document.querySelector('.topbar--with-tabs')).toBeNull()
+  })
+
+  it('injects the .topbar__chrome wrapper only when tabs are present', () => {
+    renderShell({
+      brand: <span>CL</span>,
+      topbarTabs: <div data-testid="tabs">[StudyA]</div>,
+      children: <div>BODY</div>,
+    })
+    expect(document.querySelector('.topbar__chrome')).toBeTruthy()
+    expect(document.querySelector('.topbar--with-tabs')).toBeTruthy()
+  })
 })
 
 describe('AppShell — workspace layout', () => {
