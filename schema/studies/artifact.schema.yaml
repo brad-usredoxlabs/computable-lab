@@ -1,0 +1,137 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/artifact.schema.yaml"
+title: "Artifact"
+description: >
+  An Artifact is a Study-scoped supporting record: a vendor PDF, a protocol
+  draft, an experimental write-up, a saved prompt, a personnel training
+  record, or a study conclusion. Artifacts are the durable home for content
+  that has historically lived only in transient AI chat attachments or in
+  ad-hoc files. They reference a parent Study and carry one polymorphic body
+  matched to their `artifactKind`.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- title
+- studyId
+- artifactKind
+
+properties:
+  kind:
+    const: "artifact"
+    description: "Record discriminator."
+
+  recordId:
+    type: string
+    description: "Stable local identifier (e.g., ART-000123)."
+
+  title:
+    type: string
+    description: "Human-readable artifact title."
+
+  shortSlug:
+    type: string
+    description: "URL-safe short identifier for the artifact."
+
+  studyId:
+    type: string
+    description: "Parent Study recordId."
+
+  experimentId:
+    type: string
+    description: >
+      Optional Experiment recordId when the artifact is scoped to a single
+      experiment rather than the whole study (e.g., a protocol used for one
+      experiment).
+
+  artifactKind:
+    type: string
+    enum:
+    - pdf
+    - protocol
+    - writeup
+    - training
+    - saved-prompt
+    - conclusion
+    description: >
+      Subtype. Determines which polymorphic body field is meaningful for
+      this record.
+
+  state:
+    type: string
+    description: "Workflow state (draft, in_progress, accepted, superseded, archived)."
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true
+
+  # ---- Polymorphic body (one of these is populated per artifactKind) ----
+
+  file:
+    description: >
+      Reference to the stored binary (used by `artifactKind: pdf` and any
+      future binary-backed kinds). Content-addressed via sha256 + stored_path.
+    $ref: "./datatypes/file-ref.schema.yaml"
+
+  extractedText:
+    type: array
+    description: >
+      Per-page extracted plain text for PDF artifacts. Index 0 is page 1.
+      Populated by the PDF acquisition / extraction pipeline so that text
+      search and AI context assembly do not need to re-extract on every read.
+    items:
+      type: object
+      additionalProperties: false
+      required: [ pageNumber, text ]
+      properties:
+        pageNumber:
+          type: integer
+          minimum: 1
+        text:
+          type: string
+
+  body:
+    type: object
+    description: >
+      Rich document body as TipTap JSON (ProseMirror doc shape). Used by
+      `artifactKind` values: protocol, writeup, training, conclusion. Stored
+      structured so slash-menu nodes and ontology copilot bindings survive a
+      round-trip through persistence.
+
+  promptText:
+    type: string
+    description: >
+      Saved prompt content. Used by `artifactKind: saved-prompt`. Stored as
+      plain text rather than TipTap JSON because saved prompts are intended
+      to be re-injected into a chat or "Run in event-editor" dispatch.
+
+  # ---- Loose metadata ----
+
+  source:
+    type: object
+    description: >
+      Where this artifact came from. For vendor PDFs: search engine result
+      metadata. For protocols: a parent protocol record or external URL.
+    additionalProperties: true
+    properties:
+      vendor:
+        type: string
+      url:
+        type: string
+        format: uri
+      query:
+        type: string
+      ingestedAt:
+        type: string
+        format: date-time
+
+  metadata:
+    type: object
+    description: "Free-form key/value metadata for filters/search."
+    additionalProperties: true

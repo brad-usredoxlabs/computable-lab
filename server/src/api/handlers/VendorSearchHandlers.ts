@@ -1,5 +1,6 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiError } from '../types.js';
+import type { AppConfig } from '../../config/types.js';
 import { parseConcentration, type Concentration } from '../../materials/concentration.js';
 import type { ProtocolIdeDocumentResult } from '../../vendor-documents/protocolIdeVendors.js';
 import { isCuratedVendor } from '../../vendor-documents/protocolIdeVendors.js';
@@ -8,6 +9,22 @@ import {
   shapeDocumentResult,
 } from '../../vendor-documents/service.js';
 import type { FoundryPdfCollectionCandidate } from '../../foundry/FoundryPdfCollector.js';
+import type { ProtocolCandidateSummary, SourcePdfSummary } from '../../ai/types.js';
+import { exaSearch, resolveExaConfig } from '../../integrations/exa.js';
+import { getCuratedVendorRegistry } from '../../registry/CuratedVendorRegistry.js';
+import {
+  downloadVendorPdf,
+  extractVendorPdfText,
+} from '../../vendor-documents/pdfAcquisition.js';
+import { extractVendorProtocolCandidateFromInput } from '../../ingestion/vendor-protocol/VendorProtocolCandidateService.js';
+import type { RecordStore } from '../../store/types.js';
+import { createEnvelope } from '../../types/RecordEnvelope.js';
+import type {
+  ExtractedCandidateItem,
+  ProtocolCandidate,
+  ProtocolStepCandidate,
+  VendorProtocolProvenance,
+} from '../../ingestion/vendor-protocol/types.js';
 
 export type VendorName = 'thermo' | 'sigma' | 'fisher' | 'vwr' | 'cayman' | 'thomas';
 
@@ -40,6 +57,78 @@ export interface ProtocolIdeDocumentSearchResponse {
     success: boolean;
     error?: string;
   }>;
+}
+
+
+export interface GraphLemurPdfSearchItem {
+  id: string;
+  title: string;
+  url: string;
+  vendor?: string;
+  snippet?: string;
+  score?: number;
+  publishedDate?: string;
+  source: 'exa';
+  documentType: 'protocol' | 'application_note' | 'white_paper' | 'manual' | 'other';
+  sourcePdf: SourcePdfSummary;
+  sourceProtocolCandidate: ProtocolCandidateSummary;
+}
+
+export interface GraphLemurPdfSearchResponse {
+  items: GraphLemurPdfSearchItem[];
+  configured: boolean;
+  query: string;
+  vendors: Array<{
+    vendor: VendorName;
+    success: boolean;
+    error?: string;
+  }>;
+}
+
+export interface GraphLemurPdfIngestResponse {
+  sourcePdf: SourcePdfSummary;
+  sourceProtocolCandidate: ProtocolCandidateSummary;
+  extraction: {
+    requestedUrl: string;
+    resolvedPdfUrl: string;
+    resolution: 'direct' | 'landing_page';
+    artifactPath: string;
+    candidatePath?: string;
+    pageCount: number;
+    sectionCount: number;
+    tableCount: number;
+    diagnostics: Array<{
+      code: string;
+      severity: 'info' | 'warning' | 'error';
+      message: string;
+    }>;
+  };
+  /**
+   * Recorded artifact id when the request supplied a `studyId` AND a
+   * RecordStore is configured. Absent for legacy callers (the chat dock
+   * before the workspace migration) — they treat `sourcePdf` as transient
+   * draft state. The `extractedTextPageCount` mirrors the persisted
+   * `extractedText[].length` for UI display before re-fetching the record.
+   */
+  recordedArtifact?: {
+    recordId: string;
+    studyId: string;
+    extractedTextPageCount: number;
+  };
+}
+
+export interface VendorSearchHandlerOptions {
+  appConfig?: AppConfig;
+  workspaceRoot?: string;
+  /**
+   * Optional RecordStore. When supplied, GraphLemur PDF ingests with a
+   * `studyId` in the request body will additionally persist a kind=artifact
+   * record under records/studies/<studyId>/artifacts/, picking up the
+   * downloaded PDF as a content-addressed file ref and the layout-extracted
+   * per-page text. Without a store, ingest preserves its legacy behavior:
+   * download + return metadata, no durable artifact.
+   */
+  store?: RecordStore;
 }
 
 type VendorStatus = VendorSearchResponse['vendors'][number];
@@ -370,7 +459,392 @@ const VENDOR_SEARCH_MAP: Record<VendorName, (query: string, limit: number) => Pr
   thomas: searchThomas,
 };
 
-export function createVendorSearchHandlers() {
+
+const GRAPH_LEMUR_VENDOR_DOMAINS: Record<VendorName, string[]> = {
+  thermo: ['thermofisher.com'],
+  sigma: ['sigmaaldrich.com'],
+  fisher: ['fishersci.com', 'fisherscientific.com'],
+  vwr: ['vwr.com'],
+  cayman: ['caymanchem.com'],
+  thomas: ['thomassci.com', 'thomasscientific.com'],
+};
+
+type ExaResultLike = {
+  id?: unknown;
+  title?: unknown;
+  url?: unknown;
+  score?: unknown;
+  publishedDate?: unknown;
+  text?: unknown;
+  summary?: unknown;
+  highlights?: unknown;
+};
+
+function exaResults(response: unknown): ExaResultLike[] {
+  if (!response || typeof response !== 'object') return [];
+  const results = (response as { results?: unknown }).results;
+  return Array.isArray(results) ? results.filter((item): item is ExaResultLike => Boolean(item && typeof item === 'object')) : [];
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function highlightText(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value
+    .map((entry) => {
+      if (typeof entry === 'string') return entry;
+      if (entry && typeof entry === 'object') {
+        return stringValue((entry as { text?: unknown }).text)
+          ?? stringValue((entry as { highlight?: unknown }).highlight);
+      }
+      return undefined;
+    })
+    .filter((entry): entry is string => Boolean(entry))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim() || undefined;
+}
+
+function looksLikePdfUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return /\.pdf$/i.test(parsed.pathname);
+  } catch {
+    return /\.pdf(?:$|[?#])/i.test(value);
+  }
+}
+
+function inferVendorFromUrl(url: string): VendorName | undefined {
+  let host = '';
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    host = url.toLowerCase();
+  }
+  for (const [vendor, domains] of Object.entries(GRAPH_LEMUR_VENDOR_DOMAINS) as Array<[VendorName, string[]]>) {
+    if (domains.some((domain) => host.includes(domain))) return vendor;
+  }
+  return undefined;
+}
+
+function inferGraphLemurDocumentType(title: string, text?: string): GraphLemurPdfSearchItem['documentType'] {
+  const combined = `${title} ${text ?? ''}`.toLowerCase();
+  if (/application note|app note|application_note/.test(combined)) return 'application_note';
+  if (/white paper|whitepaper|white_paper/.test(combined)) return 'white_paper';
+  if (/manual|guide|instructions?/.test(combined)) return 'manual';
+  if (/protocol|assay|workflow|procedure|extraction/.test(combined)) return 'protocol';
+  return 'other';
+}
+
+function excerpt(value: string | undefined, max = 900): string | undefined {
+  const normalized = value?.replace(/\s+/g, ' ').trim();
+  if (!normalized) return undefined;
+  return normalized.slice(0, max);
+}
+
+function candidateStepsFromText(text: string | undefined): NonNullable<ProtocolCandidateSummary['steps']> {
+  const normalized = text?.replace(/\r/g, '').trim();
+  if (!normalized) return [];
+  const lines = normalized
+    .split('\n')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter((line) => line.length >= 24 && line.length <= 800);
+  const numbered = lines.filter((line) => /^(?:step\s*)?\d+[.)\s:-]/i.test(line)).slice(0, 12);
+  const selected = numbered.length > 0 ? numbered : lines.slice(0, 6);
+  if (selected.length === 0) return [{ text: excerpt(normalized, 900) ?? normalized.slice(0, 900), confidence: 0.35 }];
+  return selected.map((line, index) => ({
+    stepNumber: index + 1,
+    text: line,
+    evidence: [{ snippet: line }],
+    confidence: numbered.length > 0 ? 0.55 : 0.35,
+    uncertainty: numbered.length > 0 ? 'inferred' : 'ambiguous',
+  }));
+}
+
+function graphLemurQuery(q: string): string {
+  return `${q} vendor protocol PDF application note assay workflow procedure`;
+}
+
+const GRAPH_LEMUR_LANDING_PAGE_MAX_BYTES = 2 * 1024 * 1024;
+
+type GraphLemurPdfResolution = {
+  requestedUrl: string;
+  pdfUrl: string;
+  resolution: 'direct' | 'landing_page';
+};
+
+type GraphLemurPdfLinkCandidate = {
+  url: string;
+  label: string;
+  score: number;
+};
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&#(\d+);/g, (_match, code) => String.fromCharCode(Number(code)));
+}
+
+function htmlText(value: string): string {
+  return decodeHtmlEntities(value)
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function hostName(value: string): string | undefined {
+  try {
+    return new URL(value).hostname.replace(/^www\./, '').toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
+async function responseTextLimited(response: Response, maxBytes: number): Promise<string> {
+  if (!response.body) return (await response.text()).slice(0, maxBytes);
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) throw new Error(`landing page exceeded max bytes (${maxBytes})`);
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
+}
+
+function scorePdfLink(url: string, label: string, baseUrl: string): number {
+  const combined = `${url} ${label}`.toLowerCase();
+  let score = 0;
+  if (looksLikePdfUrl(url)) score += 100;
+  if (/\.pdf(?:$|[?#])|pdf\b/.test(combined)) score += 35;
+  if (/protocol|procedure|workflow|assay|extraction|isolation|purification/.test(combined)) score += 30;
+  if (/application\s*note|app\s*note|manual|guide|instructions?|ifu|product\s*insert|user\s*guide/.test(combined)) score += 20;
+  if (/sds|safety\s*data|certificate|certificat|coa|cofa|terms|privacy|warranty/.test(combined)) score -= 35;
+  if (hostName(url) === hostName(baseUrl)) score += 10;
+  return score;
+}
+
+function extractPdfLinkCandidates(html: string, baseUrl: string): GraphLemurPdfLinkCandidate[] {
+  const candidates = new Map<string, GraphLemurPdfLinkCandidate>();
+  const addCandidate = (rawHref: string, rawLabel = '') => {
+    const href = decodeHtmlEntities(rawHref).trim();
+    if (!href || href.startsWith('#') || /^javascript:/i.test(href) || /^mailto:/i.test(href)) return;
+    let url: string;
+    try {
+      const parsed = new URL(href, baseUrl);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
+      url = parsed.href;
+    } catch {
+      return;
+    }
+    const label = htmlText(rawLabel);
+    const score = scorePdfLink(url, label, baseUrl);
+    if (score < 70) return;
+    const key = url.toLowerCase();
+    const existing = candidates.get(key);
+    if (!existing || score > existing.score) candidates.set(key, { url, label, score });
+  };
+
+  for (const match of html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const attrs = match[1] ?? '';
+    const label = match[2] ?? '';
+    const href = attrs.match(/\bhref\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i);
+    if (href) addCandidate(href[1] ?? href[2] ?? href[3] ?? '', label);
+  }
+  for (const match of html.matchAll(/\bhref\s*=\s*(?:"([^"]+\.pdf(?:[^"]*)?)"|'([^']+\.pdf(?:[^']*)?)'|([^\s>]+\.pdf[^\s>]*))/gi)) {
+    addCandidate(match[1] ?? match[2] ?? match[3] ?? '');
+  }
+
+  return Array.from(candidates.values()).sort((a, b) => b.score - a.score);
+}
+
+async function resolveGraphLemurPdfUrl(url: string): Promise<GraphLemurPdfResolution> {
+  if (looksLikePdfUrl(url)) return { requestedUrl: url, pdfUrl: url, resolution: 'direct' };
+  const response = await fetchWithTimeout(url, {
+    headers: {
+      Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.5',
+    },
+  });
+  if (!response.ok) throw new Error(`landing page fetch failed: HTTP ${response.status}`);
+  const html = await responseTextLimited(response, GRAPH_LEMUR_LANDING_PAGE_MAX_BYTES);
+  const candidates = extractPdfLinkCandidates(html, response.url || url);
+  const selected = candidates[0];
+  if (!selected) throw new Error('No protocol-like PDF link found on landing page');
+  return {
+    requestedUrl: url,
+    pdfUrl: selected.url,
+    resolution: 'landing_page',
+  };
+}
+
+function includeDomainsForVendors(vendors: VendorName[]): string[] | undefined {
+  if (vendors.length === 0) return undefined;
+  const registry = getCuratedVendorRegistry();
+  const domains = vendors.flatMap((vendor) => {
+    const configured = registry.get(vendor);
+    if (configured?.landing_url) {
+      try {
+        return [new URL(configured.landing_url).hostname.replace(/^www\./, '')];
+      } catch {
+        return GRAPH_LEMUR_VENDOR_DOMAINS[vendor];
+      }
+    }
+    return GRAPH_LEMUR_VENDOR_DOMAINS[vendor];
+  });
+  return Array.from(new Set(domains));
+}
+
+function shapeGraphLemurPdfResult(result: ExaResultLike, index: number): GraphLemurPdfSearchItem | null {
+  const url = stringValue(result.url);
+  if (!url) return null;
+  const title = stringValue(result.title) ?? url;
+  const text = stringValue(result.text);
+  const summary = stringValue(result.summary);
+  const highlights = highlightText(result.highlights);
+  const snippet = excerpt(highlights ?? summary ?? text, 700);
+  const pdfLike = looksLikePdfUrl(url) || /\bpdf\b/i.test(`${title} ${snippet ?? ''}`);
+  const protocolLike = /protocol|application note|app note|assay|workflow|procedure|manual|extraction/i.test(`${title} ${snippet ?? ''}`);
+  if (!pdfLike && !protocolLike) return null;
+  const vendor = inferVendorFromUrl(url);
+  const documentType = inferGraphLemurDocumentType(title, snippet ?? text);
+  const sourcePdf: SourcePdfSummary = {
+    url,
+    title,
+    ...(vendor ? { vendor } : {}),
+  };
+  const sourceProtocolCandidate: ProtocolCandidateSummary = {
+    kind: 'vendor-protocol-candidate',
+    title,
+    ...(snippet ? { scope: snippet } : {}),
+    source: {
+      documentId: `exa-${index + 1}`,
+      ...(vendor ? { vendor } : {}),
+      title,
+      url,
+    },
+    materials: [],
+    labware: [],
+    equipment: [],
+    steps: candidateStepsFromText(text ?? snippet),
+    diagnostics: [{
+      code: text ? 'EXA_TEXT_SNIPPET' : 'EXA_SEARCH_SNIPPET_ONLY',
+      severity: 'info',
+      message: text
+        ? 'Protocol candidate was seeded from Exa text content. Full PDF extraction is still required before promotion.'
+        : 'Protocol candidate was seeded from Exa search metadata. Full PDF extraction is still required before promotion.',
+      ...(snippet ? { evidence: [{ snippet }] } : {}),
+    }],
+  };
+  return {
+    id: stringValue(result.id) ?? `exa-${index + 1}`,
+    title,
+    url,
+    ...(vendor ? { vendor } : {}),
+    ...(snippet ? { snippet } : {}),
+    ...(numberValue(result.score) !== undefined ? { score: numberValue(result.score)! } : {}),
+    ...(stringValue(result.publishedDate) ? { publishedDate: stringValue(result.publishedDate)! } : {}),
+    source: 'exa',
+    documentType,
+    sourcePdf,
+    sourceProtocolCandidate,
+  };
+}
+
+
+type ProtocolCandidateEvidenceSummary = NonNullable<NonNullable<ProtocolCandidateSummary['steps']>[number]['evidence']>;
+
+function evidenceFromProvenance(provenance?: VendorProtocolProvenance, snippet?: string): ProtocolCandidateEvidenceSummary {
+  const evidence: ProtocolCandidateEvidenceSummary = [];
+  if (!provenance && !snippet) return evidence;
+  evidence.push({
+    ...(provenance ? {
+      pageNumber: provenance.pageStart,
+      ...(provenance.sectionId ? { sectionId: provenance.sectionId } : {}),
+    } : {}),
+    ...(snippet ? { snippet: excerpt(snippet, 500) ?? snippet.slice(0, 500) } : {}),
+  });
+  return evidence;
+}
+
+function summarizeCandidateItem(item: ExtractedCandidateItem): NonNullable<ProtocolCandidateSummary['materials']>[number] {
+  const evidence = evidenceFromProvenance(item.provenance, item.sourceText);
+  return {
+    label: item.label,
+    ...(item.role ? { role: item.role } : {}),
+    ...(item.quantity ? { notes: [item.quantity] } : {}),
+    ...(evidence && evidence.length > 0 ? { evidence } : {}),
+    confidence: item.confidence,
+  };
+}
+
+function summarizeCandidateStep(step: ProtocolStepCandidate): NonNullable<ProtocolCandidateSummary['steps']>[number] {
+  const evidence = evidenceFromProvenance(step.provenance, step.sourceText);
+  return {
+    stepNumber: step.stepNumber,
+    text: step.sourceText,
+    ...(step.materials.length > 0 ? { materials: step.materials } : {}),
+    ...(step.labware.length > 0 ? { labware: step.labware } : {}),
+    ...(step.equipment.length > 0 ? { equipment: step.equipment } : {}),
+    ...(step.notes.length > 0 ? { notes: step.notes } : {}),
+    ...(evidence && evidence.length > 0 ? { evidence } : {}),
+    confidence: step.confidence,
+    ...(step.uncertainty ? { uncertainty: step.uncertainty } : {}),
+  };
+}
+
+function summarizeProtocolCandidate(candidate: ProtocolCandidate, options: {
+  url?: string;
+  sha256?: string;
+  vendor?: string;
+  title?: string;
+} = {}): ProtocolCandidateSummary {
+  return {
+    kind: 'vendor-protocol-candidate',
+    title: candidate.title,
+    ...(candidate.scope ? { scope: candidate.scope } : {}),
+    source: {
+      documentId: candidate.source.documentId,
+      ...(options.vendor ?? candidate.source.vendor ? { vendor: options.vendor ?? candidate.source.vendor } : {}),
+      ...(options.title ?? candidate.source.title ? { title: options.title ?? candidate.source.title } : {}),
+      ...(options.url ? { url: options.url } : {}),
+      ...(options.sha256 ? { sha256: options.sha256 } : {}),
+    },
+    materials: candidate.materials.slice(0, 40).map(summarizeCandidateItem),
+    labware: candidate.labware.slice(0, 40).map(summarizeCandidateItem),
+    equipment: candidate.equipment.slice(0, 40).map(summarizeCandidateItem),
+    steps: candidate.steps.slice(0, 80).map(summarizeCandidateStep),
+    diagnostics: candidate.diagnostics.map((diagnostic) => ({
+      code: diagnostic.code,
+      severity: diagnostic.severity,
+      message: diagnostic.message,
+    })),
+  };
+}
+
+export function createVendorSearchHandlers(options: VendorSearchHandlerOptions = {}) {
+  const appConfig = options.appConfig;
+  const workspaceRoot = options.workspaceRoot;
+  const store = options.store;
   return {
     async searchVendors(
       request: FastifyRequest<{
@@ -424,6 +898,295 @@ export function createVendorSearchHandlers() {
         items,
         vendors: vendorStatuses,
       };
+    },
+
+    async searchGraphLemurPdfs(
+      request: FastifyRequest<{
+        Querystring: {
+          q?: string;
+          vendors?: string;
+          limit?: string;
+        };
+      }>,
+      reply: FastifyReply,
+    ): Promise<GraphLemurPdfSearchResponse | ApiError> {
+      const q = (request.query.q || '').trim();
+      if (q.length < 2) {
+        reply.status(400);
+        return {
+          error: 'BAD_REQUEST',
+          message: 'Query parameter "q" must be at least 2 characters.',
+        };
+      }
+
+      const resolvedConfig = resolveExaConfig(appConfig);
+      if (!resolvedConfig) {
+        reply.status(503);
+        return {
+          error: 'EXA_NOT_CONFIGURED',
+          message: 'Exa is not configured. Configure integrations.exa.apiKey before searching vendor PDFs.',
+        };
+      }
+
+      const requestedVendors = parseVendorIds(request.query.vendors || '');
+      const vendors: VendorName[] = requestedVendors.length > 0 ? Array.from(new Set(requestedVendors)) : [];
+      const limit = Math.min(Math.max(Number(request.query.limit) || 8, 1), 20);
+      const includeDomains = includeDomainsForVendors(vendors);
+
+      try {
+        const response = await exaSearch(resolvedConfig, {
+          query: graphLemurQuery(q),
+          searchType: 'auto',
+          numResults: Math.min(limit * 2, 25),
+          ...(includeDomains?.length ? { includeDomains } : {}),
+          contentMode: 'text',
+          maxCharacters: 6000,
+          highlightQuery: q,
+        });
+        const seen = new Set<string>();
+        const items = exaResults(response)
+          .map((entry, index) => shapeGraphLemurPdfResult(entry, index))
+          .filter((entry): entry is GraphLemurPdfSearchItem => Boolean(entry))
+          .filter((entry) => {
+            const key = entry.url.toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          })
+          .slice(0, limit);
+        return {
+          configured: true,
+          query: q,
+          items,
+          vendors: vendors.map((vendor) => ({ vendor, success: true })),
+        };
+      } catch (err) {
+        reply.status(502);
+        return {
+          error: 'EXA_SEARCH_FAILED',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+
+    async ingestGraphLemurPdf(
+      request: FastifyRequest<{
+        Body: {
+          url?: string;
+          title?: string;
+          vendor?: string;
+          /**
+           * When present, persist the ingest as an `artifact` record under
+           * records/studies/<studyId>/artifacts/. Validated to match the
+           * STU-... pattern so we don't write to an arbitrary path. When
+           * absent, legacy behavior: transient sourcePdf metadata only.
+           */
+          studyId?: string;
+          query?: string;
+        };
+      }>,
+      reply: FastifyReply,
+    ): Promise<GraphLemurPdfIngestResponse | ApiError> {
+      const body = request.body ?? {};
+      const url = stringValue(body.url);
+      if (!url) {
+        reply.status(400);
+        return {
+          error: 'BAD_REQUEST',
+          message: 'Body field "url" is required.',
+        };
+      }
+      if (!workspaceRoot) {
+        reply.status(503);
+        return {
+          error: 'WORKSPACE_NOT_CONFIGURED',
+          message: 'GraphLemur PDF ingest requires a configured workspace root.',
+        };
+      }
+
+      const title = stringValue(body.title);
+      const vendor = stringValue(body.vendor) ?? inferVendorFromUrl(url);
+      const requestedStudyId = stringValue(body.studyId);
+      const ingestQuery = stringValue(body.query);
+      if (requestedStudyId && !/^STU-[A-Za-z0-9_-]+$/.test(requestedStudyId)) {
+        reply.status(400);
+        return {
+          error: 'BAD_REQUEST',
+          message: `Body field "studyId" must match /^STU-[A-Za-z0-9_-]+$/ (got "${requestedStudyId}").`,
+        };
+      }
+
+      try {
+        let resolution: GraphLemurPdfResolution = { requestedUrl: url, pdfUrl: url, resolution: 'direct' };
+        const downloadInput = (pdfUrl: string) => {
+          const sourceDomain = (() => {
+            try {
+              return new URL(pdfUrl).hostname.replace(/^www\./, '');
+            } catch {
+              return undefined;
+            }
+          })();
+          return {
+            url: pdfUrl,
+            workspaceRoot,
+            ...(title ? { title, outputName: title } : {}),
+            ...(sourceDomain ? { sourceDomain } : {}),
+          };
+        };
+        let download = await downloadVendorPdf(downloadInput(url)).catch(async (directError) => {
+          if (looksLikePdfUrl(url)) throw directError;
+          resolution = await resolveGraphLemurPdfUrl(url);
+          return downloadVendorPdf(downloadInput(resolution.pdfUrl));
+        });
+        const extraction = await extractVendorProtocolCandidateFromInput({
+          workspaceRoot,
+          artifactPath: download.relativePath,
+          documentId: `graph-lemur-${download.sha256.slice(0, 12)}`,
+          ...(vendor ? { vendor } : {}),
+          persist: true,
+        });
+        const sourcePdf: SourcePdfSummary = {
+          url: download.effectiveUrl || download.url,
+          ...(title ? { title } : extraction.candidate.title ? { title: extraction.candidate.title } : {}),
+          ...(vendor ? { vendor } : {}),
+          artifactPath: download.relativePath,
+          sha256: download.sha256,
+        };
+        const sourceProtocolCandidate = summarizeProtocolCandidate(extraction.candidate, {
+          url: download.effectiveUrl || download.url,
+          sha256: download.sha256,
+          ...(vendor ? { vendor } : {}),
+          ...(sourcePdf.title ? { title: sourcePdf.title } : {}),
+        });
+
+        // Phase 9: persist the ingest as a study-scoped artifact record so it
+        // shows up in the workspace Browse tab and the PDF viewer can open it
+        // later by id. Best-effort — a failure here doesn't break the legacy
+        // chat flow that just wants the sourcePdf metadata.
+        let recordedArtifact: GraphLemurPdfIngestResponse['recordedArtifact'];
+        if (requestedStudyId && store) {
+          const artifactTitle =
+            title ||
+            extraction.candidate.title ||
+            sourcePdf.url ||
+            'Vendor PDF';
+          // Content-addressed id: the sha256 prefix gives idempotency across
+          // re-ingests of the same PDF. If the record already exists, treat
+          // that as a successful no-op rather than surfacing an error.
+          const recordId = `ART-${download.sha256.slice(0, 12).toUpperCase()}`;
+          let extractedTextPages: Array<{ pageNumber: number; text: string }> = [];
+          try {
+            const layout = await extractVendorPdfText({
+              workspaceRoot,
+              artifactPath: download.relativePath,
+              fileName: download.relativePath.split('/').pop() ?? 'document.pdf',
+              mode: 'layout',
+            });
+            extractedTextPages = layout.layoutText?.pages ?? [];
+          } catch (extractionErr) {
+            // Layout extraction is best-effort; the artifact is still useful
+            // even with empty extractedText (the PDF viewer falls back to
+            // pdfjs's on-the-fly text layer for selection).
+            request.log?.warn?.(
+              { err: extractionErr },
+              'GraphLemur ingest: layout extraction failed; artifact will have no extractedText',
+            );
+          }
+
+          const nowIso = new Date().toISOString();
+          const payload = {
+            kind: 'artifact' as const,
+            $schema:
+              'https://computable-lab.com/schema/computable-lab/artifact.schema.yaml',
+            recordId,
+            title: artifactTitle,
+            studyId: requestedStudyId,
+            artifactKind: 'pdf' as const,
+            file: {
+              file_name: download.relativePath.split('/').pop() ?? 'document.pdf',
+              media_type: 'application/pdf',
+              source_url: sourcePdf.url,
+              size_bytes: download.bytesDownloaded,
+              sha256: download.sha256,
+              stored_path: download.relativePath,
+              page_count: extraction.document.pageCount,
+            },
+            extractedText: extractedTextPages.map((p) => ({
+              pageNumber: p.pageNumber,
+              text: p.text,
+            })),
+            source: {
+              ...(vendor ? { vendor } : {}),
+              url: sourcePdf.url,
+              ...(ingestQuery ? { query: ingestQuery } : {}),
+              ingestedAt: nowIso,
+            },
+          };
+
+          const envelope = createEnvelope(
+            payload,
+            'https://computable-lab.com/schema/computable-lab/artifact.schema.yaml',
+            { kind: 'artifact' },
+          );
+          if (envelope) {
+            const exists = await store.exists(recordId).catch(() => false);
+            if (!exists) {
+              const result = await store.create({
+                envelope,
+                message: `GraphLemur ingest: ${artifactTitle}`,
+              });
+              if (result.success) {
+                recordedArtifact = {
+                  recordId,
+                  studyId: requestedStudyId,
+                  extractedTextPageCount: extractedTextPages.length,
+                };
+              } else {
+                request.log?.warn?.(
+                  { error: result.error },
+                  'GraphLemur ingest: artifact record create failed',
+                );
+              }
+            } else {
+              // Already on disk from a previous ingest — return its id so the
+              // caller can still reference the record.
+              recordedArtifact = {
+                recordId,
+                studyId: requestedStudyId,
+                extractedTextPageCount: extractedTextPages.length,
+              };
+            }
+          }
+        }
+
+        return {
+          sourcePdf,
+          sourceProtocolCandidate,
+          extraction: {
+            requestedUrl: resolution.requestedUrl,
+            resolvedPdfUrl: resolution.pdfUrl,
+            resolution: resolution.resolution,
+            artifactPath: download.relativePath,
+            ...(extraction.candidatePath ? { candidatePath: extraction.candidatePath } : {}),
+            pageCount: extraction.document.pageCount,
+            sectionCount: extraction.document.sectionCount,
+            tableCount: extraction.document.tableCount,
+            diagnostics: extraction.document.diagnostics.map((diagnostic) => ({
+              code: diagnostic.code,
+              severity: diagnostic.severity,
+              message: diagnostic.message,
+            })),
+          },
+          ...(recordedArtifact ? { recordedArtifact } : {}),
+        };
+      } catch (err) {
+        reply.status(502);
+        return {
+          error: 'GRAPH_LEMUR_PDF_INGEST_FAILED',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
     },
 
     /**

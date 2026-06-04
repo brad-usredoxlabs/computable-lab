@@ -68,6 +68,7 @@ const RECORD_ID_PATTERNS = [
   /^NAR-\d+$/,      // Narrative
   /^TML-\d+$/,      // Timeline
   /^WCX-\d+$/,      // Well Context
+  /^ART-\d+$/,      // Artifact (study-scoped supporting record)
   /^[\w]+-[\w-]+$/, // Generic pattern (prefix-identifier)
 ];
 
@@ -131,6 +132,13 @@ export function generatePath(options: PathGenerationOptions): string {
       // Fallback: just use runId if we don't have full hierarchy
       dirPath = `${baseDir}/runs/${links.runId}/event-graphs`;
     }
+  }
+
+  // Artifacts are study-scoped supporting records (PDFs, protocols, writeups,
+  // saved prompts, training, conclusions). They nest under the parent study
+  // so a study folder carries everything FAIR-relevant about it.
+  if (kind === 'artifact' && links?.studyId) {
+    dirPath = `${baseDir}/studies/${links.studyId}/artifacts`;
   }
   
   // Build full path
@@ -236,13 +244,30 @@ export function isValidRecordId(recordId: string): boolean {
 
 /**
  * Get the directory for a record kind.
- * 
+ *
  * @param kind - Record kind
  * @param baseDir - Base directory (default: 'records')
  * @returns Directory path (e.g., "records/study")
  */
 export function getKindDirectory(kind: string, baseDir: string = 'records'): string {
   return `${baseDir}/${kind}`;
+}
+
+/**
+ * Kinds that live nested inside a parent record's directory tree rather than
+ * in their own top-level kind folder. Listings for these kinds must recurse
+ * from the base directory and filter by envelope.kind, because there is no
+ * single `records/{kind}/` folder to scan.
+ */
+const NESTED_KINDS = new Set(['artifact', 'event-graph']);
+
+/**
+ * Whether records of this kind are stored nested under a parent (e.g.,
+ * artifacts under their study, event-graphs under their run) rather than
+ * flat under `records/{kind}/`.
+ */
+export function isNestedKind(kind: string): boolean {
+  return NESTED_KINDS.has(kind);
 }
 
 /**

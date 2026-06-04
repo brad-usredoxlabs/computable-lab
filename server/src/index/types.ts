@@ -61,6 +61,10 @@ export interface RecordIndex {
 
 /**
  * Tree node for study hierarchy.
+ *
+ * `artifacts` carries the study-scoped supporting records (PDFs, protocols,
+ * writeups, training, saved prompts, conclusions). Optional because tree
+ * responses emitted before the artifact concept landed don't include it.
  */
 export interface StudyTreeNode {
   recordId: string;
@@ -68,6 +72,22 @@ export interface StudyTreeNode {
   shortSlug?: string;
   path: string;
   experiments: ExperimentTreeNode[];
+  artifacts?: ArtifactSummaryEntry[];
+}
+
+/**
+ * Lightweight artifact header for tree responses. Avoids loading TipTap
+ * bodies / extracted text when only listing under a study.
+ */
+export interface ArtifactSummaryEntry {
+  recordId: string;
+  title: string;
+  artifactKind: string;
+  studyId: string;
+  experimentId?: string;
+  path: string;
+  updatedAt?: string;
+  size?: number;
 }
 
 /**

@@ -54,6 +54,8 @@ import type { ProtocolIdeHandlers } from './handlers/ProtocolIdeHandlers.js';
 import type { PlannedRunHandlers } from './handlers/PlannedRunHandlers.js';
 import type { AiThreadHandlers } from './handlers/AiThreadHandlers.js';
 import type { JsonLdSearchHandlers } from './handlers/JsonLdSearchHandlers.js';
+import type { WorkspaceHandlers } from './handlers/WorkspaceHandlers.js';
+import type { ArtifactBlobHandlers } from './handlers/ArtifactBlobHandlers.js';
 import { getLabwareDefinitionRegistry } from '../registry/LabwareDefinitionRegistry.js';
 import type { PredicatesHandlers } from './handlers/PredicatesHandlers.js';
 import type { HealthResponse } from './types.js';
@@ -110,6 +112,8 @@ export interface RouteOptions {
   foundryJobHandlers?: FoundryJobHandlers;
   aiThreadHandlers?: AiThreadHandlers;
   jsonLdSearchHandlers?: JsonLdSearchHandlers;
+  workspaceHandlers?: WorkspaceHandlers;
+  artifactBlobHandlers?: ArtifactBlobHandlers;
   predicatesHandlers?: PredicatesHandlers;
   schemaCount: () => number;
   ruleCount: () => number;
@@ -395,6 +399,8 @@ export function registerRoutes(
   if (vendorSearchHandlers) {
     fastify.get('/vendors/search', vendorSearchHandlers.searchVendors.bind(vendorSearchHandlers));
     fastify.get('/vendors/protocol-ide/documents', vendorSearchHandlers.searchProtocolIdeDocuments.bind(vendorSearchHandlers));
+    fastify.get('/vendors/graph-lemur/pdfs', vendorSearchHandlers.searchGraphLemurPdfs.bind(vendorSearchHandlers));
+    fastify.post('/vendors/graph-lemur/pdfs/ingest', vendorSearchHandlers.ingestGraphLemurPdf.bind(vendorSearchHandlers));
   }
 
   const { vendorDocumentHandlers } = options;
@@ -935,5 +941,27 @@ export function registerRoutes(
   const { predicatesHandlers } = options;
   if (predicatesHandlers) {
     fastify.get('/predicates', predicatesHandlers.listPredicates.bind(predicatesHandlers));
+  }
+
+  // ============================================================================
+  // Per-study Workspace State (sidecar YAML for the event-editor workspace)
+  // ============================================================================
+
+  const { workspaceHandlers } = options;
+  if (workspaceHandlers) {
+    fastify.get('/studies/:studyId/workspace', workspaceHandlers.getWorkspace);
+    fastify.put('/studies/:studyId/workspace', workspaceHandlers.putWorkspace);
+  }
+
+  // ============================================================================
+  // Artifact Blob (binary file referenced by an artifact record)
+  // ============================================================================
+
+  const { artifactBlobHandlers } = options;
+  if (artifactBlobHandlers) {
+    fastify.get(
+      '/studies/:studyId/artifacts/:artifactId/blob',
+      artifactBlobHandlers.getArtifactBlob,
+    );
   }
 }

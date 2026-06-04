@@ -32,6 +32,7 @@ import {
 } from './RecordParser.js';
 import {
   generatePath,
+  isNestedKind,
   parseRecordPath,
 } from '../repo/PathConvention.js';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -317,15 +318,19 @@ export class RecordStoreImpl implements RecordStore {
    * List records.
    */
   async list(filter?: RecordFilter): Promise<RecordEnvelope[]> {
-    // Determine search directory
-    const searchDir = filter?.kind
+    // Determine search directory. Most kinds live flat under `records/{kind}/`
+    // and can be scanned non-recursively. Nested kinds (artifacts, event-graphs)
+    // are stored inside parent record directories, so they need a recursive
+    // sweep from the base dir and a post-filter on envelope.kind.
+    const nested = filter?.kind ? isNestedKind(filter.kind) : false;
+    const searchDir = filter?.kind && !nested
       ? `${this.config.baseDir}/${filter.kind}`
       : this.config.baseDir;
 
     const files = await this.repo.listFiles({
       directory: searchDir,
       pattern: '*.yaml',
-      recursive: !filter?.kind, // Recursive only if no kind filter
+      recursive: !filter?.kind || nested,
     });
 
     const envelopes: RecordEnvelope[] = [];
@@ -344,6 +349,15 @@ export class RecordStoreImpl implements RecordStore {
 
       const result = parseRecord(file.content, filePath);
       if (!result.success || !result.envelope) continue;
+
+      // For nested kinds the directory walk yields everything under baseDir,
+      // so we have to filter by the payload's own kind (carried on
+      // envelope.meta.kind by RecordParser). parseRecordPath can't tell us
+      // this — the parent directory name (e.g. "artifacts") isn't the
+      // record kind ("artifact").
+      if (nested && result.envelope.meta?.kind !== filter?.kind) {
+        continue;
+      }
 
       // Apply schema filter if specified
       if (filter?.schemaId && result.envelope.schemaId !== filter.schemaId) {
@@ -432,8 +446,32 @@ export class RecordStoreImpl implements RecordStore {
     const kind = payload.kind as string || envelope.meta?.kind || 'unknown';
     const title = payload.title as string || payload.name as string || '';
     
-    // Extract links from payload if present
-    const links = payload.links as { studyId?: string; experimentId?: string; runId?: string } | undefined;
+    // Extract links from payload. Records carry hierarchical refs either
+    // nested under `payload.links` or at the top level (e.g. experiment
+    // schemas put `studyId` at the top; artifact does the same). Merge both
+    // shapes so PathConvention sees a single `links` object regardless of
+    // schema style.
+    const nestedLinks = (payload.links ?? {}) as {
+      studyId?: string;
+      experimentId?: string;
+      runId?: string;
+    };
+    const mergedLinks: {
+      studyId?: string;
+      experimentId?: string;
+      runId?: string;
+    } = {
+      ...nestedLinks,
+      ...(typeof payload.studyId === 'string'
+        ? { studyId: payload.studyId }
+        : {}),
+      ...(typeof payload.experimentId === 'string'
+        ? { experimentId: payload.experimentId }
+        : {}),
+      ...(typeof payload.runId === 'string' ? { runId: payload.runId } : {}),
+    };
+    const links =
+      Object.keys(mergedLinks).length > 0 ? mergedLinks : undefined;
     
     // Generate path
     const path = generatePath({

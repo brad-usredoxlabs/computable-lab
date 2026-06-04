@@ -102,6 +102,8 @@ import { createExtractHandlers } from './api/handlers/ExtractHandlers.js';
 import { createProcurementHandlers } from './api/handlers/ProcurementHandlers.js';
 import { createPromptTemplateHandlers } from './api/handlers/PromptTemplateHandlers.js';
 import { createPredicatesHandlers } from './api/handlers/PredicatesHandlers.js';
+import { createWorkspaceHandlers } from './api/handlers/WorkspaceHandlers.js';
+import { createArtifactBlobHandlers } from './api/handlers/ArtifactBlobHandlers.js';
 import { getOntologyTermRegistry } from './registry/OntologyTermRegistry.js';
 import { getVerbActionMap } from './registry/VerbActionMapRegistry.js';
 import { ExtractionRunnerService } from './extract/ExtractionRunnerService.js';
@@ -503,7 +505,14 @@ export async function createServer(
             .map((c) => ({ id: c.curie, label: c.label, source: c.namespace.toLowerCase() }));
       })()
     : undefined;
-  const vendorSearchHandlers = createVendorSearchHandlers();
+  const vendorSearchHandlers = createVendorSearchHandlers({
+    ...(ctx.appConfig ? { appConfig: ctx.appConfig } : {}),
+    workspaceRoot: ctx.workspaceRoot,
+    // Phase 9: GraphLemur ingest persists each PDF as a study-scoped
+    // artifact record when the request supplies a studyId, so the
+    // workspace Browse tab can surface it durably.
+    store: ctx.store,
+  });
   const vendorDocumentHandlers = createVendorDocumentHandlers(ctx.store);
   const chemistryHandlers = createChemistryHandlers();
   const tagHandlers = createTagHandlers(ctx.store);
@@ -674,8 +683,7 @@ export async function createServer(
     };
 
     if (!probe.available) {
-      console.warn(`AI agent disabled — inference endpoint not reachable: ${probe.error}`);
-      return;
+      console.warn(`AI inference endpoint probe failed; initializing AI runtime anyway so request-time calls can retry: ${probe.error}`);
     }
 
     try {
@@ -889,6 +897,22 @@ export async function createServer(
   // wizard. Tolerant of a missing registry; handler returns 503 in that case.
   const predicatesHandlers = createPredicatesHandlers(ctx.predicateRegistry);
 
+  // Per-study workspace state — sidecar YAML at
+  // records/studies/<id>/workspace.yaml. Carries UI shape (open tabs,
+  // pane widths, right-pane mode), not scientific data.
+  const workspaceHandlers = createWorkspaceHandlers(
+    ctx.workspaceRoot,
+    ctx.recordsDir,
+  );
+
+  // Streams binary artifact files (e.g. PDF bytes) to the workspace
+  // viewer. Phase 5 (PDF viewer) is the first consumer; future artifact
+  // kinds with binary bodies can use the same endpoint.
+  const artifactBlobHandlers = createArtifactBlobHandlers(
+    ctx.store,
+    ctx.workspaceRoot,
+  );
+
   // Register API routes with /api prefix
   await fastify.register(async (instance) => {
     const routeOpts: import('./api/routes.js').RouteOptions = {
@@ -930,6 +954,8 @@ export async function createServer(
       ontologyTermHandlers,
       verbActionMapHandlers,
       predicatesHandlers,
+      workspaceHandlers,
+      artifactBlobHandlers,
       schemaCount: () => ctx.schemaRegistry.size,
       ruleCount: () => ctx.lintEngine.ruleCount,
       uiSpecCount: () => ctx.uiSpecLoader.size(),
