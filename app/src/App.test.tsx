@@ -8,12 +8,20 @@
  *  - `/settings` renders as an off-nav brand-menu route,
  *  - every deleted legacy URL falls through to the `*` catch-all and
  *    renders a 404, not a redirect,
- *  - `/event-editor/fixit` and `/runs/:runId/event-editor` reach their
+ *  - `/event-editor/fixit`, `/event-editor/:eventGraphId`, and `/runs/:runId/event-editor` reach their
  *    expected components.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
+
+vi.mock('./extensions', () => ({
+  Slot: ({ name }: { name: string }) => (
+    name === 'event-editor.fix-it-route'
+      ? <div data-testid="fixit-route">fixit</div>
+      : <div data-testid={`slot-${name}`} />
+  ),
+}))
 
 vi.mock('./browser/BrowserPage', () => ({
   BrowserPage: () => <div data-testid="browser-page">browser</div>,
@@ -79,6 +87,11 @@ describe('App router (Phase 7)', () => {
 
   it('renders EventEditorPage at /event-editor', async () => {
     visit('/event-editor')
+    await waitFor(() => expect(screen.getByTestId('event-editor-page')).toBeTruthy())
+  })
+
+  it('renders EventEditorPage at /event-editor/:eventGraphId', async () => {
+    visit('/event-editor/EVG-123')
     await waitFor(() => expect(screen.getByTestId('event-editor-page')).toBeTruthy())
   })
 

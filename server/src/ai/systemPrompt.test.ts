@@ -39,4 +39,56 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('25000 cells/mL');
     expect(prompt).toContain('count=1000.000');
   });
+
+  it('formats GraphLemur revision context with source-preserving instructions', () => {
+    const prompt = buildSystemPrompt({
+      labwares: [],
+      eventSummary: 'No events yet.',
+      vocabPackId: 'liquid-handling/v1',
+      availableVerbs: ['transfer', 'mix'],
+      graphLemur: {
+        revisionMode: true,
+        sourcePdf: {
+          title: 'Vendor DNA Extraction Protocol',
+          vendor: 'thermo',
+          url: 'https://vendor.example/protocol.pdf',
+          artifactPath: 'artifacts/foundry/pdfs/protocol.pdf',
+          sha256: 'abc123',
+        },
+        sourceProtocolCandidate: {
+          kind: 'vendor-protocol-candidate',
+          title: 'Vendor DNA Extraction Protocol',
+          source: { documentId: 'doc-1', vendor: 'thermo', url: 'https://vendor.example/protocol.pdf' },
+          steps: [{
+            stepNumber: 1,
+            text: 'Add lysis buffer to each well.',
+            evidence: [{ pageNumber: 2, snippet: 'Add lysis buffer' }],
+            confidence: 0.9,
+          }],
+          diagnostics: [{
+            code: 'TABLE_AMBIGUOUS',
+            severity: 'warning',
+            message: 'Volume table was ambiguous.',
+          }],
+        },
+        currentPreviewDraft: {
+          events: [{ event_type: 'add_material', details: { volume: { value: 100, unit: 'uL' } } }],
+          labwareRequirements: [],
+          labwareAdditions: [],
+          sourcePrompt: 'Draft this protocol in 96-well plates.',
+        },
+        revisionHistory: [{ prompt: 'Use deepwell plates.', createdAt: '2026-06-03T00:00:00.000Z' }],
+      },
+    });
+
+    expect(prompt).toContain('## GraphLemur Context');
+    expect(prompt).toContain('GraphLemur operating contract:');
+    expect(prompt).toContain('Preserve source evidence anchors');
+    expect(prompt).toContain('Mode: revise the current preview draft.');
+    expect(prompt).toContain('Use the current preview draft as the baseline');
+    expect(prompt).toContain('Return a full replacement draft, not a partial patch.');
+    expect(prompt).toContain('Current preview draft to revise:');
+    expect(prompt).toContain('Prior user corrections:');
+  });
+
 });

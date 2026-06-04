@@ -109,4 +109,9 @@ export interface WriteResponse {
   record: RecordEnvelope
   validation: ValidationResult
   lint: LintResult
+  commit?: {
+    sha: string
+    message: string
+    timestamp: string
+  }
 }

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parseSubmitSuggestionArgs, SUBMIT_SUGGESTION_TOOL_DEF } from './submitSuggestionTool.js';
+import {
+  COMPILE_EVENT_GRAPH_DRAFT_TOOL_DEF,
+  COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME,
+  parseSubmitSuggestionArgs,
+  SUBMIT_SUGGESTION_TOOL_DEF,
+} from './submitSuggestionTool.js';
 
 const USAGE = { promptTokens: 10, completionTokens: 20 };
 
@@ -75,6 +80,89 @@ describe('parseSubmitSuggestionArgs', () => {
     expect(r.labwareAdditions).toEqual([{ recordId: 'LW-1', reason: 'needed' }]);
   });
 
+  it('parses generic labwareRequirements', () => {
+    const r = parseSubmitSuggestionArgs(
+      {
+        labwareRequirements: [
+          {
+            classCurie: 'CL:96_well_plate',
+            handle: 'plate1',
+            deckSlot: 'B2',
+            specificity: 'generic',
+            constraints: ['CL:black'],
+          },
+          { deckSlot: 'C2' },
+        ],
+      },
+      USAGE,
+      1,
+      0,
+    );
+    expect(r.labwareRequirements).toEqual([
+      {
+        classCurie: 'CL:96_well_plate',
+        handle: 'plate1',
+        deckSlot: 'B2',
+        specificity: 'generic',
+        constraints: ['CL:black'],
+      },
+    ]);
+  });
+
+  it('coerces invented labware additions into generic requirements', () => {
+    const r = parseSubmitSuggestionArgs(
+      {
+        labwareAdditions: [
+          { recordId: 'LBW-96-black-low-binding-plate', reason: 'all black low-binding 96 well plate in slot B2' },
+          { recordId: 'LW-1', reason: 'existing concrete labware' },
+        ],
+      },
+      USAGE,
+      1,
+      0,
+    );
+
+    expect(r.labwareRequirements).toEqual([
+      {
+        classCurie: 'CL:96_well_plate',
+        deckSlot: 'B2',
+        reason: 'all black low-binding 96 well plate in slot B2',
+        specificity: 'constrained',
+        constraints: ['CL:black', 'CL:low_binding'],
+      },
+    ]);
+    expect(r.labwareAdditions).toEqual([{ recordId: 'LW-1', reason: 'existing concrete labware' }]);
+  });
+
+  it('coerces over-specific labware clarifications into generic requirements when the class is inferable', () => {
+    const r = parseSubmitSuggestionArgs(
+      {
+        notes: ['Proposing to add a 96-well plate to deck slot B2 as requested.'],
+        clarification: {
+          prompt: 'Which 96-well plate type should be placed in slot B2?',
+          entityType: 'labware',
+          options: [
+            { id: 'a', label: 'Black clear-bottom 96-well plate', snippet: 'CL:96_well_plate, CL:black' },
+            { id: 'b', label: 'Clear flat-bottom 96-well plate', snippet: 'CL:96_well_plate, CL:clear' },
+          ],
+        },
+      },
+      USAGE,
+      1,
+      0,
+    );
+
+    expect(r.clarification).toBeUndefined();
+    expect(r.labwareRequirements).toEqual([
+      {
+        classCurie: 'CL:96_well_plate',
+        deckSlot: 'B2',
+        reason: 'Proposing to add a 96-well plate to deck slot B2 as requested.',
+        specificity: 'generic',
+      },
+    ]);
+  });
+
   it('degrades gracefully on malformed input', () => {
     const r = parseSubmitSuggestionArgs(
       { events: 'not-an-array', materials: 42, clarification: { prompt: 'x' } },
@@ -103,9 +191,13 @@ describe('parseSubmitSuggestionArgs', () => {
     expect(r.events![0]!.materials).toEqual([{ ref: { curie: 'CHEBI:1' } }]);
   });
 
-  it('exposes a well-formed tool definition', () => {
+  it('exposes well-formed terminal tool definitions', () => {
     expect(SUBMIT_SUGGESTION_TOOL_DEF.type).toBe('function');
     expect(SUBMIT_SUGGESTION_TOOL_DEF.function.name).toBe('submit_suggestion');
     expect(SUBMIT_SUGGESTION_TOOL_DEF.function.parameters).toHaveProperty('properties.events');
+    expect(SUBMIT_SUGGESTION_TOOL_DEF.function.parameters).toHaveProperty('properties.labwareRequirements');
+    expect(COMPILE_EVENT_GRAPH_DRAFT_TOOL_DEF.type).toBe('function');
+    expect(COMPILE_EVENT_GRAPH_DRAFT_TOOL_DEF.function.name).toBe(COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME);
+    expect(COMPILE_EVENT_GRAPH_DRAFT_TOOL_DEF.function.parameters).toBe(SUBMIT_SUGGESTION_TOOL_DEF.function.parameters);
   });
 });

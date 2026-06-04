@@ -17,6 +17,7 @@ import type {
   AgentClarification,
   AgentClarificationOption,
   AgentLabwareAddition,
+  AgentLabwareRequirement,
   GroundedMaterial,
   OntologyRefProposal,
   PlateEventProposal,
@@ -24,6 +25,7 @@ import type {
 } from './types.js';
 
 export const SUBMIT_SUGGESTION_TOOL_NAME = 'submit_suggestion';
+export const COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME = 'compile_event_graph_draft';
 
 /**
  * System-prompt guidance directing the agent to resolve nouns first and
@@ -33,9 +35,13 @@ export const SUBMIT_SUGGESTION_TOOL_NAME = 'submit_suggestion';
 export const SUBMIT_SUGGESTION_INSTRUCTION = [
   'FINALIZING YOUR ANSWER:',
   '- Resolve every material/reagent/noun with the `resolve` tool first, and use the top-ranked CURIE it returns.',
-  '- Finish by calling the `submit_suggestion` tool exactly once. Do NOT print JSON in your text reply.',
+  '- Finish by calling the `compile_event_graph_draft` tool exactly once. Do NOT print JSON in your text reply.',
   "- In each event's `materials[]`, reference a material only as {curie} (from `resolve`) or {mint:{label,domain}} when no ontology term fits — never a bare free-text name.",
-  '- If you need more information, call `submit_suggestion` with a `clarification` (and no events) instead.',
+  '- For requested labware, prefer `labwareRequirements[]` with a computable classCurie such as CL:96_well_plate, CL:384_well_plate, CL:96_deepwell_plate, CL:8_well_reservoir_horizontal, CL:12_well_reservoir_vertical, CL:single_well_reservoir_sbs, CL:16_well_reservoir_horizontal_384_pitch, CL:24_well_reservoir_vertical_384_pitch, or CL:tube_rack_15ml.',
+  '- Do not ask which vendor/catalog/plate subtype for a generic request like "a 96-well plate". Emit a generic labwareRequirement and let the user refine it later.',
+  '- Ask a labware clarification only when no baseline classCurie can be inferred at all.',
+  '- Use `labwareAdditions[]` only when you have a concrete known labware record or definition id. Never invent LBW-* record ids.',
+  '- If you need more information, call `compile_event_graph_draft` with a `clarification` (and no events) instead.',
 ].join('\n');
 
 const GROUNDED_REF_SCHEMA = {
@@ -137,6 +143,28 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
             },
           },
         },
+        labwareRequirements: {
+          type: 'array',
+          description: 'Generic or constrained labware requirements. Use this for natural-language labware such as "a 96-well plate" rather than inventing a recordId.',
+          items: {
+            type: 'object',
+            required: ['classCurie'],
+            properties: {
+              classCurie: {
+                type: 'string',
+                description: 'Computable labware class CURIE, e.g. CL:96_well_plate, CL:384_well_plate, CL:1536_well_plate, CL:8_well_reservoir_horizontal, CL:12_well_reservoir_vertical, CL:tube_rack_15ml.',
+              },
+              handle: { type: 'string', description: 'Optional user-visible instance handle, e.g. plate1 or res1.' },
+              reason: { type: 'string' },
+              deckSlot: { type: 'string', description: 'Optional deck slot, e.g. B2.' },
+              constraints: { type: 'array', items: { type: 'string' }, description: 'Optional trait constraints such as CL:black, CL:low_binding, CL:flat_bottom.' },
+              specificity: { type: 'string', enum: ['generic', 'constrained', 'concrete'] },
+              tubeVolumeClass: { type: 'string', enum: ['1.5ml', '2ml', '5ml', '15ml', '50ml'] },
+              rows: { type: 'number' },
+              columns: { type: 'number' },
+            },
+          },
+        },
         labwareAdditions: {
           type: 'array',
           items: {
@@ -145,6 +173,7 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
             properties: {
               recordId: { type: 'string' },
               reason: { type: 'string' },
+              deckSlot: { type: 'string', description: 'Optional deck slot for the new labware, e.g. B2.' },
             },
           },
         },
@@ -152,6 +181,16 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
     },
   },
 };
+export const COMPILE_EVENT_GRAPH_DRAFT_TOOL_DEF: ToolDefinition = {
+  ...SUBMIT_SUGGESTION_TOOL_DEF,
+  function: {
+    ...SUBMIT_SUGGESTION_TOOL_DEF.function,
+    name: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME,
+    description:
+      'Compile an AI-proposed draft event graph through the server compiler and return ghostable events or clarification gaps. Every material reference MUST be grounded as {curie} or {mint:{label,domain}}.',
+  },
+};
+
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -240,6 +279,134 @@ function parseLabwareAdditions(raw: unknown): AgentLabwareAddition[] {
     if (!r || typeof r.recordId !== 'string' || r.recordId.length === 0) continue;
     const entry: AgentLabwareAddition = { recordId: r.recordId };
     if (typeof r.reason === 'string') entry.reason = r.reason;
+    if (typeof r.deckSlot === 'string') entry.deckSlot = r.deckSlot;
+    out.push(entry);
+  }
+  return out;
+}
+
+function inferLabwareClassCurie(text: string): string | undefined {
+  const lower = text.toLowerCase();
+  if (/1536\s*[-_ ]?\s*well/.test(lower)) return 'CL:1536_well_plate';
+  if (/384\s*[-_ ]?\s*well/.test(lower)) return 'CL:384_well_plate';
+  if (/96\s*[-_ ]?\s*(deep\s*well|deepwell)/.test(lower)) return 'CL:96_deepwell_plate';
+  if (/96\s*[-_ ]?\s*well/.test(lower)) return 'CL:96_well_plate';
+  if (/48\s*[-_ ]?\s*well/.test(lower)) return 'CL:48_well_plate';
+  if (/24\s*[-_ ]?\s*well/.test(lower) && /reservoir|reagent/.test(lower)) return 'CL:24_well_reservoir_vertical_384_pitch';
+  if (/24\s*[-_ ]?\s*well/.test(lower)) return 'CL:24_well_plate';
+  if (/16\s*[-_ ]?\s*well/.test(lower) && /reservoir|reagent/.test(lower)) return 'CL:16_well_reservoir_horizontal_384_pitch';
+  if (/12\s*[-_ ]?\s*well/.test(lower) && /reservoir|reagent/.test(lower)) return 'CL:12_well_reservoir_vertical';
+  if (/12\s*[-_ ]?\s*well/.test(lower)) return 'CL:12_well_plate';
+  if (/8\s*[-_ ]?\s*well/.test(lower) && /reservoir|reagent/.test(lower)) return 'CL:8_well_reservoir_horizontal';
+  if (/6\s*[-_ ]?\s*well/.test(lower)) return 'CL:6_well_plate';
+  if (/(single|one)\s*[-_ ]?\s*well/.test(lower) && /reservoir|reagent/.test(lower)) return 'CL:single_well_reservoir_sbs';
+  if (/50\s*ml/.test(lower) && /tube/.test(lower)) return 'CL:tube_rack_50ml';
+  if (/15\s*ml/.test(lower) && /tube/.test(lower)) return 'CL:tube_rack_15ml';
+  if (/5\s*ml/.test(lower) && /tube/.test(lower)) return 'CL:tube_rack_5ml';
+  if (/2\s*ml/.test(lower) && /tube/.test(lower)) return 'CL:tube_rack_2ml';
+  if (/(1\.5|1p5)\s*ml/.test(lower) && /tube/.test(lower)) return 'CL:tube_rack_1p5ml';
+  if (/tube/.test(lower) && /rack|set/.test(lower)) return 'CL:tube_rack';
+  return undefined;
+}
+
+function inferLabwareConstraints(text: string): string[] {
+  const lower = text.toLowerCase();
+  const constraints: string[] = [];
+  const add = (curie: string) => {
+    if (!constraints.includes(curie)) constraints.push(curie);
+  };
+  if (/\bblack\b|all[-_ ]black/.test(lower)) add('CL:black');
+  if (/\bclear\b/.test(lower)) add('CL:clear');
+  if (/white/.test(lower)) add('CL:white');
+  if (/low[-_ ]?binding|non[-_ ]?binding/.test(lower)) add('CL:low_binding');
+  if (/high[-_ ]?binding/.test(lower)) add('CL:high_binding');
+  if (/flat[-_ ]?bottom/.test(lower)) add('CL:flat_bottom');
+  if (/u[-_ ]?bottom/.test(lower)) add('CL:u_bottom');
+  if (/v[-_ ]?bottom/.test(lower)) add('CL:v_bottom');
+  if (/glass[-_ ]?bottom|glass/.test(lower)) add('CL:glass_bottom');
+  if (/film[-_ ]?bottom|imaging/.test(lower)) add('CL:imaging_bottom');
+  if (/polystyrene|\bps\b/.test(lower)) add('CL:polystyrene');
+  if (/polypropylene|\bpp\b/.test(lower)) add('CL:polypropylene');
+  return constraints;
+}
+
+function inferTubeVolumeClass(text: string): AgentLabwareRequirement['tubeVolumeClass'] | undefined {
+  const lower = text.toLowerCase();
+  if (/50\s*ml/.test(lower)) return '50ml';
+  if (/15\s*ml/.test(lower)) return '15ml';
+  if (/5\s*ml/.test(lower)) return '5ml';
+  if (/2\s*ml/.test(lower)) return '2ml';
+  if (/(1\.5|1p5)\s*ml/.test(lower)) return '1.5ml';
+  return undefined;
+}
+
+function inferDeckSlot(text: string): string | undefined {
+  const explicit = text.match(/\b(?:deck\s*)?slot\s+([A-Z][0-9]{1,2})\b/i);
+  if (explicit?.[1]) return explicit[1].toUpperCase();
+  const compact = text.match(/\b([A-Z][0-9]{1,2})\b/i);
+  if (compact?.[1]) return compact[1].toUpperCase();
+  return undefined;
+}
+
+function labwareRequirementFromAddition(addition: AgentLabwareAddition): AgentLabwareRequirement | null {
+  const text = `${addition.recordId} ${addition.reason ?? ''}`;
+  const classCurie = inferLabwareClassCurie(text);
+  if (!classCurie) return null;
+
+  const recordIdLooksInvented = /^LBW[-_:]/i.test(addition.recordId);
+  const recordIdLooksConcreteDefinition = /[/@]/.test(addition.recordId);
+  const recordIdLooksLikeDescription = !recordIdLooksConcreteDefinition && /plate|well|reservoir|tube|rack|deepwell/i.test(addition.recordId);
+  if (!recordIdLooksInvented && !recordIdLooksLikeDescription) return null;
+
+  const constraints = inferLabwareConstraints(text);
+  const entry: AgentLabwareRequirement = {
+    classCurie,
+    specificity: constraints.length > 0 ? 'constrained' : 'generic',
+  };
+  if (typeof addition.reason === 'string') entry.reason = addition.reason;
+  const deckSlot = typeof addition.deckSlot === 'string' ? addition.deckSlot : inferDeckSlot(text);
+  if (deckSlot) entry.deckSlot = deckSlot;
+  if (constraints.length > 0) entry.constraints = constraints;
+  const tubeVolumeClass = inferTubeVolumeClass(text);
+  if (tubeVolumeClass) entry.tubeVolumeClass = tubeVolumeClass;
+  return entry;
+}
+
+function labwareRequirementFromClarification(clarification: AgentClarification | undefined, notes: string[]): AgentLabwareRequirement | null {
+  if (!clarification || !/labware|plate|reservoir|tube/i.test(clarification.entityType)) return null;
+  const optionText = clarification.options
+    .map((option) => `${option.label} ${option.snippet ?? ''}`)
+    .join(' ');
+  const text = `${clarification.prompt} ${notes.join(' ')} ${optionText}`;
+  const classCurie = inferLabwareClassCurie(text);
+  if (!classCurie) return null;
+  const entry: AgentLabwareRequirement = {
+    classCurie,
+    specificity: 'generic',
+    reason: notes[0] ?? clarification.prompt,
+  };
+  const deckSlot = inferDeckSlot(text);
+  if (deckSlot) entry.deckSlot = deckSlot;
+  const tubeVolumeClass = inferTubeVolumeClass(text);
+  if (tubeVolumeClass) entry.tubeVolumeClass = tubeVolumeClass;
+  return entry;
+}
+
+function parseLabwareRequirements(raw: unknown): AgentLabwareRequirement[] {
+  if (!Array.isArray(raw)) return [];
+  const out: AgentLabwareRequirement[] = [];
+  for (const item of raw) {
+    const r = asRecord(item);
+    if (!r || typeof r.classCurie !== 'string' || r.classCurie.length === 0) continue;
+    const entry: AgentLabwareRequirement = { classCurie: r.classCurie };
+    if (typeof r.handle === 'string') entry.handle = r.handle;
+    if (typeof r.reason === 'string') entry.reason = r.reason;
+    if (typeof r.deckSlot === 'string') entry.deckSlot = r.deckSlot;
+    if (Array.isArray(r.constraints)) entry.constraints = r.constraints.filter((c): c is string => typeof c === 'string' && c.length > 0);
+    if (r.specificity === 'generic' || r.specificity === 'constrained' || r.specificity === 'concrete') entry.specificity = r.specificity;
+    if (r.tubeVolumeClass === '1.5ml' || r.tubeVolumeClass === '2ml' || r.tubeVolumeClass === '5ml' || r.tubeVolumeClass === '15ml' || r.tubeVolumeClass === '50ml') entry.tubeVolumeClass = r.tubeVolumeClass;
+    if (typeof r.rows === 'number') entry.rows = r.rows;
+    if (typeof r.columns === 'number') entry.columns = r.columns;
     out.push(entry);
   }
   return out;
@@ -257,13 +424,24 @@ export function parseSubmitSuggestionArgs(
   toolCalls: number,
 ): AgentResult {
   const events = parseEvents(args.events);
+  const notes = Array.isArray(args.notes) ? args.notes.filter((n): n is string => typeof n === 'string') : [];
   const clarification = parseClarification(args.clarification);
-  const labwareAdditions = parseLabwareAdditions(args.labwareAdditions);
+  const rawLabwareAdditions = parseLabwareAdditions(args.labwareAdditions);
+  const inferredLabwareRequirements = rawLabwareAdditions
+    .map(labwareRequirementFromAddition)
+    .filter((entry): entry is AgentLabwareRequirement => entry !== null);
+  const labwareClarificationRequirement = labwareRequirementFromClarification(clarification, notes);
+  const labwareAdditions = rawLabwareAdditions.filter((addition) => labwareRequirementFromAddition(addition) === null);
+  const labwareRequirements = [
+    ...parseLabwareRequirements(args.labwareRequirements),
+    ...inferredLabwareRequirements,
+    ...(labwareClarificationRequirement ? [labwareClarificationRequirement] : []),
+  ];
 
   const result: AgentResult = {
     success: true,
     events,
-    notes: Array.isArray(args.notes) ? args.notes.filter((n): n is string => typeof n === 'string') : [],
+    notes,
     unresolvedRefs: Array.isArray(args.unresolvedRefs) ? (args.unresolvedRefs as OntologyRefProposal[]) : [],
     usage: {
       ...usage,
@@ -272,7 +450,8 @@ export function parseSubmitSuggestionArgs(
       toolCalls,
     },
   };
-  if (clarification) result.clarification = clarification;
+  if (clarification && !labwareClarificationRequirement) result.clarification = clarification;
   if (labwareAdditions.length > 0) result.labwareAdditions = labwareAdditions;
+  if (labwareRequirements.length > 0) result.labwareRequirements = labwareRequirements;
   return result;
 }

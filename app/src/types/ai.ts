@@ -109,6 +109,19 @@ export interface AiClarification {
   options: AiClarificationOption[]
 }
 
+
+export interface AiLabwareRequirement {
+  classCurie: string
+  handle?: string
+  reason?: string
+  deckSlot?: string
+  constraints?: string[]
+  specificity?: 'generic' | 'constrained' | 'concrete'
+  tubeVolumeClass?: '1.5ml' | '2ml' | '5ml' | '15ml' | '50ml'
+  rows?: number
+  columns?: number
+}
+
 export interface AiLabwareAddition {
   recordId: string
   reason?: string
@@ -228,6 +241,18 @@ export interface InstrumentApplianceJobExecutionResult {
   applianceExecutionRecordPath?: string
 }
 
+export interface DraftOntologyBinding {
+  curie: string
+  recordId: string
+  minted: boolean
+  via: 'class-ref' | 'name'
+  label: string
+  lifecycleId?: 'lab-vocabulary-control'
+  state?: 'proposed' | 'in_review' | 'active' | 'rejected' | 'deprecated'
+  requiresReview?: boolean
+  draftOnly?: boolean
+}
+
 export interface AiAgentResult {
   success: boolean
   events: PlateEvent[]
@@ -237,12 +262,16 @@ export interface AiAgentResult {
   clarification?: AiClarification
   error?: string
   labwareAdditions?: AiLabwareAddition[]
+  labwareRequirements?: AiLabwareRequirement[]
   executionScalePlan?: ExecutionScalePlan
   instrumentApplianceJobs?: InstrumentApplianceJob[]
+  ontologyBindings?: DraftOntologyBinding[]
   usage?: {
     inputTokens?: number
     outputTokens?: number
     totalTokens?: number
+    turns?: number
+    toolCalls?: number
   }
 }
 
@@ -274,8 +303,10 @@ export interface ChatMessage {
   attachments?: ChatMessageAttachment[]
   /** Structured clarification (numbered options) from the AI */
   clarification?: AiClarification
-  /** Proposed labware additions from the AI */
+  /** Proposed concrete labware additions from the AI */
   labwareAdditions?: AiLabwareAddition[]
+  /** Proposed generic/constrained labware requirements from the AI */
+  labwareRequirements?: AiLabwareRequirement[]
   /** Deterministic execution scaling handoff from the compiler */
   executionScalePlan?: ExecutionScalePlan
   /** Appliance active-control jobs emitted by the compiler */
@@ -334,6 +365,89 @@ export interface AiWellStateSummary {
   harvested: boolean
 }
 
+export interface AiProtocolCandidateEvidenceAnchor {
+  pageNumber?: number
+  snippet?: string
+  context?: string
+  sectionId?: string
+  stepNumber?: number
+}
+
+export interface AiProtocolCandidateItemSummary {
+  label: string
+  role?: string
+  normalizedId?: string
+  notes?: string[]
+  evidence?: AiProtocolCandidateEvidenceAnchor[]
+  confidence?: number
+}
+
+export interface AiProtocolCandidateStepSummary {
+  stepNumber?: number
+  title?: string
+  text: string
+  materials?: string[]
+  labware?: string[]
+  equipment?: string[]
+  notes?: string[]
+  evidence?: AiProtocolCandidateEvidenceAnchor[]
+  confidence?: number
+  uncertainty?: 'ambiguous' | 'inferred' | 'unresolved' | 'table-derived'
+}
+
+export interface AiProtocolCandidateSummary {
+  kind: 'vendor-protocol-candidate'
+  title: string
+  scope?: string
+  source?: {
+    documentId?: string
+    vendor?: string
+    title?: string
+    url?: string
+    sha256?: string
+  }
+  materials?: AiProtocolCandidateItemSummary[]
+  labware?: AiProtocolCandidateItemSummary[]
+  equipment?: AiProtocolCandidateItemSummary[]
+  steps?: AiProtocolCandidateStepSummary[]
+  diagnostics?: Array<{
+    code: string
+    severity: 'info' | 'warning' | 'error'
+    message: string
+    evidence?: AiProtocolCandidateEvidenceAnchor[]
+  }>
+}
+
+export interface AiSourcePdfSummary {
+  artifactPath?: string
+  url?: string
+  title?: string
+  vendor?: string
+  sha256?: string
+}
+
+export interface AiCurrentPreviewDraft {
+  events: PlateEvent[]
+  labwareRequirements: AiLabwareRequirement[]
+  labwareAdditions: AiLabwareAddition[]
+  ontologyBindings?: DraftOntologyBinding[]
+  sourcePrompt?: string
+  sourceSkips?: string[]
+}
+
+export interface AiGraphLemurRevisionEntry {
+  prompt: string
+  createdAt: string
+}
+
+export interface AiGraphLemurContext {
+  sourceProtocolCandidate?: AiProtocolCandidateSummary
+  sourcePdf?: AiSourcePdfSummary
+  currentPreviewDraft?: AiCurrentPreviewDraft
+  revisionHistory?: AiGraphLemurRevisionEntry[]
+  revisionMode?: boolean
+}
+
 export interface AiRequestContext {
   labwares: AiLabwareSummary[]
   eventSummary: string
@@ -356,6 +470,8 @@ export interface AiRequestContext {
     mode: 'relaxed' | 'tracked'
     allowAdHocEventInstances: boolean
   }
+  /** GraphLemur protocol-source and iterative-preview revision context. */
+  graphLemur?: AiGraphLemurContext
 }
 
 // =============================================================================

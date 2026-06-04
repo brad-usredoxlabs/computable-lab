@@ -1,6 +1,14 @@
+import { useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useEventEditor } from '../EventEditorContext'
 import { buildFixSeed } from '../fix-it/buildFixSeed'
 import { useViewport } from '../../shared/shell'
+import { persistAcceptedEventGraph } from '../eventGraphPersistence'
+import { eventEditorGraphPath } from '../eventGraphRouting'
+import {
+  materializeAcceptedOntologyBindings,
+  rewriteAcceptedOntologyRefs,
+} from './acceptedOntologyBindings'
 
 function makeFixItSeedKey(): string {
   // `crypto.randomUUID()` is widely available but not in every browser
@@ -24,12 +32,17 @@ function makeFixItSeedKey(): string {
  */
 export function PreviewActionBar() {
   const { state, actions } = useEventEditor()
+  const navigate = useNavigate()
   const { isMobile } = useViewport()
+  const [accepting, setAccepting] = useState(false)
+  const [acceptError, setAcceptError] = useState<string | null>(null)
+  const acceptingRef = useRef(false)
   const preview = state.preview
   if (!preview) return null
+  const activePreview = preview
 
-  const labwareCount = preview.previewPlacements.length
-  const eventCount = preview.previewEvents.length
+  const labwareCount = activePreview.previewPlacements.length
+  const eventCount = activePreview.previewEvents.length
 
   const summary = [
     labwareCount > 0
@@ -44,8 +57,29 @@ export function PreviewActionBar() {
     actions.clearPreview()
   }
 
-  function handleAccept() {
-    actions.commitPreview()
+  async function handleAccept() {
+    if (acceptingRef.current) return
+    acceptingRef.current = true
+    setAcceptError(null)
+    setAccepting(true)
+    try {
+      const materialized = await materializeAcceptedOntologyBindings(activePreview.ontologyBindings)
+      const acceptedEvents = rewriteAcceptedOntologyRefs(activePreview.previewEvents, materialized)
+      const persisted = await persistAcceptedEventGraph({
+        eventGraphId: state.eventGraphId,
+        runId: state.runId,
+        events: [...state.events, ...acceptedEvents],
+        labwares: { ...state.labwares, ...activePreview.previewLabwares },
+        placements: [...state.placements, ...activePreview.previewPlacements],
+      })
+      actions.commitPreview(acceptedEvents, persisted.eventGraphId, persisted.commit)
+      navigate(eventEditorGraphPath(persisted.eventGraphId, state.runId), { replace: true })
+    } catch (error) {
+      setAcceptError(error instanceof Error ? error.message : String(error))
+    } finally {
+      acceptingRef.current = false
+      setAccepting(false)
+    }
   }
 
   function handleFixIt() {
@@ -54,8 +88,8 @@ export function PreviewActionBar() {
     // future code path that doesn't yet set them) the seed still works but
     // with an empty prompt — the user can fill in via chat.
     const seed = buildFixSeed({
-      prompt: preview?.sourcePrompt ?? '',
-      previewSkips: preview?.sourceSkips ?? [],
+      prompt: activePreview.sourcePrompt ?? '',
+      previewSkips: activePreview.sourceSkips ?? [],
       state,
     })
     if (isMobile) {
@@ -94,12 +128,19 @@ export function PreviewActionBar() {
         onClick={handleFixIt}
         title="Open the fix-it side chat to diagnose what's wrong"
       >Fix-it</button>
+      {acceptError ? (
+        <div className="preview-bar__error" role="alert" title={acceptError}>
+          <span className="preview-bar__error-label">Accept failed</span>
+          <span className="preview-bar__error-message">{acceptError}</span>
+        </div>
+      ) : null}
       <button
         type="button"
         className="preview-bar__btn preview-bar__btn--primary"
-        onClick={handleAccept}
+        onClick={() => { void handleAccept() }}
+        disabled={accepting}
         title="Commit the preview to the deck and event graph"
-      >Accept</button>
+      >{accepting ? 'Accepting...' : 'Accept'}</button>
     </div>
   )
 }

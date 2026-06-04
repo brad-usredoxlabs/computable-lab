@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react'
 import { apiClient } from '../shared/api/client'
+import { loadAcceptedEventGraph, type SavedEventGraphCommit } from './eventGraphPersistence'
+import { assignVisibleLabwareHandle, assignVisibleLabwareHandles } from './labwareHandles'
 import type { PlatformManifest } from '../types/platformRegistry'
 import { defaultVariantForPlatform, getPlatformManifest, getVariantManifest } from '../shared/lib/platformRegistry'
 import type { Labware } from '../types/labware'
@@ -11,6 +13,7 @@ import type {
   WellSelection,
 } from './types'
 import type { WellId } from '../types/plate'
+import type { AiGraphLemurRevisionEntry, AiLabwareAddition, AiLabwareRequirement, AiProtocolCandidateSummary, AiSourcePdfSummary, DraftOntologyBinding } from '../types/ai'
 import type { AddMaterialDetails, PlateEvent } from '../types/events'
 import { generateEventId } from '../types/events'
 import type { Ref } from '../types/ref'
@@ -32,6 +35,24 @@ export type LoadState = 'idle' | 'loading' | 'ready' | 'error'
  * `previewLabwares` carries Labware definitions for previewPlacements that
  * aren't yet in `labwares` — committed labwares stay in the main map.
  */
+export interface EventEditorGraphLemurIngestSummary {
+  requestedUrl: string
+  resolvedPdfUrl: string
+  resolution: 'direct' | 'landing_page'
+  artifactPath: string
+  candidatePath?: string
+  pageCount: number
+  sectionCount: number
+  tableCount: number
+  stepCount: number
+}
+
+export interface EventEditorGraphLemurSource {
+  sourceProtocolCandidate?: AiProtocolCandidateSummary
+  sourcePdf?: AiSourcePdfSummary
+  ingest?: EventEditorGraphLemurIngestSummary
+}
+
 export interface EventEditorPreview {
   previewLabwares: Record<string, Labware>
   previewPlacements: EventEditorPlacement[]
@@ -48,6 +69,20 @@ export interface EventEditorPreview {
    * the dock shows under the chat bubble.
    */
   sourceSkips?: string[]
+  /** Proposed generic/constrained labware requirements that produced preview labware. */
+  labwareRequirements?: AiLabwareRequirement[]
+  /** Proposed concrete labware additions that produced preview labware. */
+  labwareAdditions?: AiLabwareAddition[]
+  /** Ontology terms proposed during draft compile; draftOnly entries materialize on Accept. */
+  ontologyBindings?: DraftOntologyBinding[]
+  /** Vendor protocol candidate GraphLemur used as source material for this preview. */
+  sourceProtocolCandidate?: AiProtocolCandidateSummary
+  /** Source PDF metadata for a vendor-protocol-backed preview. */
+  sourcePdf?: AiSourcePdfSummary
+  /** PDF ingest and extraction provenance for a vendor-protocol-backed preview. */
+  ingest?: EventEditorGraphLemurIngestSummary
+  /** User correction prompts that led to the current replacement preview. */
+  revisionHistory?: AiGraphLemurRevisionEntry[]
 }
 
 /**
@@ -217,6 +252,8 @@ export interface EventEditorState {
   toolTypeId: string | null
   assistPipetteId: string | null
   runId: string | null
+  eventGraphId: string | null
+  eventGraphSave: SavedEventGraphCommit | null
   labwares: Record<string, Labware>
   placements: EventEditorPlacement[]
   focusPlacementId: string | null
@@ -224,6 +261,7 @@ export interface EventEditorState {
   events: PlateEvent[]
   tipState: TipState
   preview: EventEditorPreview | null
+  graphLemurSource: EventEditorGraphLemurSource | null
   fixIt: FixItState
   /**
    * Phase 3 single-plate workflow rail draft state, keyed by placementId
@@ -263,6 +301,14 @@ type Action =
   | { type: 'load_start' }
   | { type: 'load_error'; error: string }
   | { type: 'load_success'; platforms: PlatformManifest[]; initialPlatformId?: string }
+  | {
+      type: 'load_event_graph_success'
+      eventGraphId: string
+      runId: string | null
+      events: PlateEvent[]
+      labwares: Record<string, Labware>
+      placements: EventEditorPlacement[]
+    }
   | { type: 'set_platform'; platformId: string }
   | { type: 'set_variant'; variantId: string }
   | { type: 'set_vocab'; vocabPackId: string }
@@ -290,7 +336,8 @@ type Action =
   | { type: 'dispense_commit'; destLabwareId: string; destWells: WellId[] }
   | { type: 'set_preview'; preview: EventEditorPreview }
   | { type: 'clear_preview' }
-  | { type: 'commit_preview' }
+  | { type: 'set_graph_lemur_source'; source: EventEditorGraphLemurSource | null }
+  | { type: 'commit_preview'; previewEvents?: PlateEvent[]; eventGraphId?: string; eventGraphCommit?: SavedEventGraphCommit }
   | { type: 'open_fixit'; seed: FixItSeed }
   | { type: 'open_fixit_without_seed' }
   | { type: 'close_fixit' }
@@ -325,6 +372,8 @@ const initialState: EventEditorState = {
   toolTypeId: null,
   assistPipetteId: null,
   runId: null,
+  eventGraphId: null,
+  eventGraphSave: null,
   labwares: {},
   placements: [],
   focusPlacementId: null,
@@ -332,6 +381,7 @@ const initialState: EventEditorState = {
   events: [],
   tipState: { kind: 'empty' },
   preview: null,
+  graphLemurSource: null,
   fixIt: {
     isOpen: false,
     seed: null,
@@ -441,9 +491,7 @@ function normalizePreviewPlacementLocations(
   if (!variant || variant.surface || variant.sideLawn) return preview
 
   const occupiedSlots = new Set(
-    state.placements
-      .filter((p) => p.location.kind === 'slot')
-      .map((p) => p.location.slotId),
+    state.placements.flatMap((p) => (p.location.kind === 'slot' ? [p.location.slotId] : [])),
   )
   const nextSlot = (): string | null => {
     const slot = variant.slots.find((entry) => (
@@ -493,6 +541,22 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         assistPipetteId: null,
       }
     }
+    case 'load_event_graph_success':
+      return {
+        ...state,
+        loadError: null,
+        eventGraphId: action.eventGraphId,
+        eventGraphSave: null,
+        runId: action.runId,
+        events: action.events,
+        labwares: action.labwares,
+        placements: action.placements,
+        focusPlacementId: null,
+        selection: null,
+        preview: null,
+        graphLemurSource: null,
+        tipState: { kind: 'empty' },
+      }
     case 'set_platform': {
       if (action.platformId === state.platformId) return state
       const defaults = pickDefaultsForPlatform(state.platforms, action.platformId)
@@ -511,6 +575,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         events: [],
         tipState: { kind: 'empty' },
         preview: null,
+        graphLemurSource: null,
         fixIt: {
           isOpen: false,
           seed: null,
@@ -545,9 +610,10 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
     case 'set_run':
       return { ...state, runId: action.runId }
     case 'place_new_labware': {
+      const labware = assignVisibleLabwareHandle(action.labware, Object.values(state.labwares))
       const placement: EventEditorPlacement = {
         placementId: nextPlacementId(),
-        labwareId: action.labware.labwareId,
+        labwareId: labware.labwareId,
         location: action.location,
         orientation: action.orientation,
       }
@@ -571,7 +637,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       }
       return {
         ...state,
-        labwares: { ...state.labwares, [action.labware.labwareId]: action.labware },
+        labwares: { ...state.labwares, [labware.labwareId]: labware },
         placements: [...placements, placement],
         plateRail,
         ...(singlePlateSlot ? { focusPlacementId: placement.placementId } : {}),
@@ -661,7 +727,11 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       }
     }
     case 'set_preview': {
-      const preview = normalizePreviewPlacementLocations(state, action.preview)
+      const normalizedPreview = normalizePreviewPlacementLocations(state, action.preview)
+      const preview = {
+        ...normalizedPreview,
+        previewLabwares: assignVisibleLabwareHandles(normalizedPreview.previewLabwares, Object.values(state.labwares)),
+      }
       // Replace any existing preview — a fresh draft supersedes the old one.
       // If the user was drilled into a labware that belonged to the *previous*
       // preview, drop the focus so the stale ghost doesn't render orphaned.
@@ -676,6 +746,8 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         ...(droppedFocus ? { focusPlacementId: null, selection: null } : {}),
       }
     }
+    case 'set_graph_lemur_source':
+      return { ...state, graphLemurSource: action.source }
     case 'clear_preview': {
       // If the user was drilled into a ghost labware, leave focus mode —
       // otherwise LabwareFocus would render an empty pane.
@@ -698,7 +770,9 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         ...state,
         labwares: { ...state.labwares, ...preview.previewLabwares },
         placements: [...state.placements, ...preview.previewPlacements],
-        events: [...state.events, ...preview.previewEvents],
+        events: [...state.events, ...(action.previewEvents ?? preview.previewEvents)],
+        eventGraphId: action.eventGraphId ?? state.eventGraphId,
+        eventGraphSave: action.eventGraphCommit ?? state.eventGraphSave,
         preview: null,
       }
     }
@@ -945,7 +1019,8 @@ export interface EventEditorActions {
   appendEvent: (event: PlateEvent) => void
   setPreview: (preview: EventEditorPreview) => void
   clearPreview: () => void
-  commitPreview: () => void
+  commitPreview: (previewEvents?: PlateEvent[], eventGraphId?: string, eventGraphCommit?: SavedEventGraphCommit) => void
+  setGraphLemurSource: (source: EventEditorGraphLemurSource | null) => void
   openFixIt: (seed: FixItSeed) => void
   openFixItWithoutSeed: () => void
   closeFixIt: () => void
@@ -977,10 +1052,11 @@ const EventEditorContext = createContext<ContextValue | null>(null)
 
 interface ProviderProps {
   runId?: string
+  eventGraphId?: string
   children: ReactNode
 }
 
-export function EventEditorProvider({ runId, children }: ProviderProps) {
+export function EventEditorProvider({ runId, eventGraphId, children }: ProviderProps) {
   const [state, dispatch] = useReducer(reducer, initialState)
 
   useEffect(() => {
@@ -1005,6 +1081,30 @@ export function EventEditorProvider({ runId, children }: ProviderProps) {
   useEffect(() => {
     dispatch({ type: 'set_run', runId: runId ?? null })
   }, [runId])
+
+  useEffect(() => {
+    if (!eventGraphId) return
+    let cancelled = false
+    loadAcceptedEventGraph(eventGraphId)
+      .then((graph) => {
+        if (cancelled) return
+        dispatch({
+          type: 'load_event_graph_success',
+          eventGraphId: graph.eventGraphId,
+          runId: runId ?? graph.runId,
+          events: graph.events,
+          labwares: graph.labwares,
+          placements: graph.placements,
+        })
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return
+        dispatch({ type: 'load_error', error: error instanceof Error ? error.message : String(error) })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [eventGraphId, runId])
 
   const actions = useMemo<EventEditorActions>(
     () => ({
@@ -1061,7 +1161,13 @@ export function EventEditorProvider({ runId, children }: ProviderProps) {
       clearTip: () => dispatch({ type: 'set_tip', tipState: { kind: 'empty' } }),
       setPreview: (preview) => dispatch({ type: 'set_preview', preview }),
       clearPreview: () => dispatch({ type: 'clear_preview' }),
-      commitPreview: () => dispatch({ type: 'commit_preview' }),
+      commitPreview: (previewEvents, eventGraphId, eventGraphCommit) => dispatch({
+        type: 'commit_preview',
+        ...(previewEvents ? { previewEvents } : {}),
+        ...(eventGraphId ? { eventGraphId } : {}),
+        ...(eventGraphCommit ? { eventGraphCommit } : {}),
+      }),
+      setGraphLemurSource: (source) => dispatch({ type: 'set_graph_lemur_source', source }),
       openFixIt: (seed) => dispatch({ type: 'open_fixit', seed }),
       openFixItWithoutSeed: () => dispatch({ type: 'open_fixit_without_seed' }),
       closeFixIt: () => dispatch({ type: 'close_fixit' }),

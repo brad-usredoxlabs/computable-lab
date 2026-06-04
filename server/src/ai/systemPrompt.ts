@@ -161,6 +161,74 @@ function formatMentions(context: EditorContext): string {
   }).join('\n');
 }
 
+function formatGraphLemurContext(context: EditorContext): string {
+  const graphLemur = context.graphLemur;
+  if (!graphLemur) return '';
+
+  const lines: string[] = ['## GraphLemur Context'];
+  lines.push(
+    '',
+    'GraphLemur operating contract:',
+    '- Treat the vendor protocol candidate and source PDF metadata as the authoritative source material for protocol-derived drafts.',
+    '- Preserve source evidence anchors, uncertainty, and diagnostic caveats in event notes or metadata whenever the graph cannot represent a biological or procedural detail exactly.',
+    '- Do not invent missing vendor-protocol details. Ask for clarification or mark the assumption as unresolved when the source candidate is ambiguous.',
+    '- When adapting the protocol to a requested labware format, keep the original protocol intent visible and only change the parts required by the user request.',
+  );
+  if (graphLemur.revisionMode) {
+    lines.push(
+      '',
+      'Mode: revise the current preview draft.',
+      '- Use the current preview draft as the baseline; do not restart from scratch unless the user explicitly asks for a fresh draft.',
+      '- Apply the newest user correction as a targeted revision while preserving unaffected events, labware, ontology bindings, and source anchors.',
+      '- Return a full replacement draft, not a partial patch.',
+    );
+  } else {
+    lines.push(
+      '',
+      'Mode: create an initial source-backed draft from the vendor protocol candidate.',
+    );
+  }
+
+  if (graphLemur.sourcePdf) {
+    const pdf = graphLemur.sourcePdf;
+    lines.push('', 'Source PDF:');
+    if (pdf.title) lines.push(`- title: ${pdf.title}`);
+    if (pdf.vendor) lines.push(`- vendor: ${pdf.vendor}`);
+    if (pdf.url) lines.push(`- url: ${pdf.url}`);
+    if (pdf.artifactPath) lines.push(`- artifactPath: ${pdf.artifactPath}`);
+    if (pdf.sha256) lines.push(`- sha256: ${pdf.sha256}`);
+  }
+
+  if (graphLemur.sourceProtocolCandidate) {
+    const candidate = graphLemur.sourceProtocolCandidate;
+    lines.push('', 'Source protocol candidate:');
+    lines.push(JSON.stringify({
+      title: candidate.title,
+      scope: candidate.scope,
+      source: candidate.source,
+      materials: candidate.materials ?? [],
+      labware: candidate.labware ?? [],
+      equipment: candidate.equipment ?? [],
+      steps: candidate.steps ?? [],
+      diagnostics: candidate.diagnostics ?? [],
+    }, null, 2));
+  }
+
+  if (graphLemur.currentPreviewDraft) {
+    lines.push('', 'Current preview draft to revise:');
+    lines.push(JSON.stringify(graphLemur.currentPreviewDraft, null, 2));
+  }
+
+  if (graphLemur.revisionHistory && graphLemur.revisionHistory.length > 0) {
+    lines.push('', 'Prior user corrections:');
+    for (const entry of graphLemur.revisionHistory.slice(-6)) {
+      lines.push(`- ${entry.createdAt}: ${entry.prompt}`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
 // ============================================================================
 // Surface-aware prompt sections
 // ============================================================================
@@ -312,7 +380,7 @@ export function buildSystemPrompt(
   const groupId = `ag-${Date.now().toString(36)}`;
   const isoNow = new Date().toISOString();
 
-  return `${materialRules.trim()}\n\n---\n\n${template}`
+  const prompt = `${materialRules.trim()}\n\n---\n\n${template}`
     .replace('{{LABWARES}}', formatLabwares(context.labwares))
     .replace('{{EVENT_SUMMARY}}', formatEventSummary(context.eventSummary))
     .replace('{{SELECTED_WELLS}}', formatSelectedWells(context.selectedWells))
@@ -326,4 +394,7 @@ export function buildSystemPrompt(
     .replace('{{RUN_ID}}', context.runId ?? 'none')
     .replace('{{ISO_NOW}}', isoNow)
     .replace('{{GROUP_ID}}', groupId);
+
+  const graphLemurContext = formatGraphLemurContext(context);
+  return graphLemurContext ? `${prompt}\n\n---\n\n${graphLemurContext}` : prompt;
 }

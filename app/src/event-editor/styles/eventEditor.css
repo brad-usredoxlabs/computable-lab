@@ -61,6 +61,47 @@
   font-size: 10px;
 }
 
+.event-editor .graph-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  max-width: 160px;
+  padding: 0 10px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font-size: 12px;
+  font-weight: 600;
+  gap: 6px;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event-editor .graph-chip[data-state='saved'] {
+  border-color: rgba(63, 185, 80, 0.5);
+  color: #d7f7df;
+}
+
+.event-editor .graph-chip[data-state='unsaved'] {
+  color: var(--cl-text-dim);
+}
+
+.event-editor .graph-chip__status {
+  flex: 0 0 auto;
+  padding-left: 6px;
+  border-left: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--cl-text-dim);
+  font-weight: 500;
+}
+
+.event-editor .graph-chip:hover {
+  border-color: var(--cl-border-strong);
+}
+
 /* native <select> styling — phase 1 keeps switchers as plain selects */
 
 .event-editor .chip-select {
@@ -631,6 +672,37 @@
 .event-editor .preview-bar__btn--ghost:hover {
   color: var(--cl-text);
   border-color: var(--cl-border-strong);
+}
+
+.event-editor .preview-bar__btn:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.event-editor .preview-bar__error {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(420px, 45vw);
+  padding: 4px 8px;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  border-radius: 6px;
+  background: rgba(127, 29, 29, 0.3);
+  font-size: 12px;
+  line-height: 1.25;
+  color: #fecaca;
+}
+
+.event-editor .preview-bar__error-label {
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+
+.event-editor .preview-bar__error-message {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .event-editor .preview-bar__btn--primary {
@@ -2861,6 +2933,18 @@
   stroke-width: 0.35;
 }
 
+.event-editor .well-grid__well[data-occupied='true'] {
+  fill: rgba(51, 154, 240, 0.24);
+  stroke: #1c7ed6;
+  stroke-width: 0.28;
+}
+
+.event-editor .well-grid__tip[data-occupied='true'] {
+  fill: rgba(51, 154, 240, 0.24);
+  stroke: #1c7ed6;
+  stroke-width: 0.28;
+}
+
 .event-editor .well-grid__well[data-selected='true'] {
   fill: rgba(88, 166, 255, 0.28);
   stroke: var(--cl-accent);
@@ -2972,6 +3056,226 @@
   min-width: 0;
   max-width: 100%;
   overflow-x: hidden;
+}
+
+
+.event-editor .ai-dock__graphlemur {
+  border-bottom: 1px solid var(--cl-border);
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: color-mix(in srgb, var(--cl-bg-elev) 88%, var(--cl-accent) 12%);
+  min-width: 0;
+}
+
+.event-editor .ai-dock__graphlemur-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.event-editor .ai-dock__graphlemur-title {
+  color: var(--cl-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.event-editor .ai-dock__graphlemur-source {
+  color: var(--cl-accent);
+  border: 1px solid color-mix(in srgb, var(--cl-accent) 48%, transparent);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.event-editor .ai-dock__graphlemur-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  min-width: 0;
+}
+
+.event-editor .ai-dock__graphlemur-input {
+  min-width: 0;
+  border: 1px solid var(--cl-border);
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  border-radius: 6px;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.event-editor .ai-dock__graphlemur-input:focus {
+  border-color: var(--cl-accent);
+}
+
+.event-editor .ai-dock__graphlemur-button,
+.event-editor .ai-dock__graphlemur-clear,
+.event-editor .ai-dock__graphlemur-revise {
+  border: 1px solid var(--cl-border);
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.event-editor .ai-dock__graphlemur-button:disabled,
+.event-editor .ai-dock__graphlemur-clear:disabled,
+.event-editor .ai-dock__graphlemur-revise:disabled,
+.event-editor .ai-dock__graphlemur-result:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.event-editor .ai-dock__graphlemur-error {
+  color: var(--cl-warn);
+  font-size: 11px;
+}
+
+.event-editor .ai-dock__graphlemur-revision {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--cl-accent) 38%, var(--cl-border));
+  background: color-mix(in srgb, var(--cl-bg-elev-2) 86%, var(--cl-accent) 14%);
+  border-radius: 6px;
+  padding: 6px 8px;
+  min-width: 0;
+}
+
+.event-editor .ai-dock__graphlemur-revision span {
+  color: var(--cl-text);
+  font-size: 11px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-editor .ai-dock__graphlemur-revise {
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
+.event-editor .ai-dock__graphlemur-active {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  color: var(--cl-text-dim);
+  font-size: 11px;
+  min-width: 0;
+}
+
+.event-editor .ai-dock__graphlemur-active-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.event-editor .ai-dock__graphlemur-active-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cl-text);
+  font-weight: 700;
+}
+
+.event-editor .ai-dock__graphlemur-details {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 10px;
+  min-width: 0;
+}
+
+.event-editor .ai-dock__graphlemur-details div {
+  min-width: 0;
+}
+
+.event-editor .ai-dock__graphlemur-details dt {
+  color: var(--cl-text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.event-editor .ai-dock__graphlemur-details dd {
+  margin: 0;
+  color: var(--cl-text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-editor .ai-dock__graphlemur-results {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.event-editor .ai-dock__graphlemur-result {
+  flex: 0 0 min(320px, 78vw);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: left;
+  border: 1px solid var(--cl-border);
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  border-radius: 6px;
+  padding: 8px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.event-editor .ai-dock__graphlemur-result[data-selected='true'] {
+  border-color: var(--cl-accent);
+  box-shadow: inset 0 0 0 1px var(--cl-accent);
+}
+
+.event-editor .ai-dock__graphlemur-result-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.event-editor .ai-dock__graphlemur-result-title {
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-editor .ai-dock__graphlemur-result-meta {
+  color: var(--cl-text-faint);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.event-editor .ai-dock__graphlemur-result-snippet {
+  color: var(--cl-text-dim);
+  font-size: 11px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .event-editor .ai-dock__log {

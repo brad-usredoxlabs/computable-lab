@@ -206,6 +206,49 @@ properties:
           type: string
           enum: [ portrait, landscape ]
 
+  editorLayout:
+    type: object
+    description: "Event-editor canvas layout, including lawn coordinates that do not fit the slot-only deckLayout model."
+    additionalProperties: false
+    properties:
+      surface:
+        type: string
+        enum: [ event-editor/v1 ]
+      placements:
+        type: array
+        items:
+          type: object
+          additionalProperties: false
+          required: [ placementId, labwareId, location, orientation ]
+          properties:
+            placementId:
+              type: string
+            labwareId:
+              type: string
+            orientation:
+              type: string
+              enum: [ portrait, landscape ]
+            location:
+              oneOf:
+              - type: object
+                additionalProperties: false
+                required: [ kind, slotId ]
+                properties:
+                  kind:
+                    const: slot
+                  slotId:
+                    type: string
+              - type: object
+                additionalProperties: false
+                required: [ kind, xMm, yMm ]
+                properties:
+                  kind:
+                    const: lawn
+                  xMm:
+                    type: number
+                  yMm:
+                    type: number
+
   tags:
     type: array
     items:

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createAgentOrchestrator } from './AgentOrchestrator.js';
 import type { CompletionRequest, InferenceClient, ToolBridge, AgentEvent } from './types.js';
 import * as runChatbotCompileModule from './runChatbotCompile.js';
+import { COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME } from './submitSuggestionTool.js';
 
 describe('createAgentOrchestrator', () => {
   it('includes prior user and assistant turns before the current prompt', async () => {
@@ -60,6 +61,169 @@ describe('createAgentOrchestrator', () => {
       { role: 'assistant', content: 'Which source well contains clofibrate?' },
       { role: 'user', content: 'Yes, reservoir A1.' },
     ]);
+  });
+
+
+  it('forces the event-editor fallback LLM call to use compile_event_graph_draft', async () => {
+    const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [],
+      labwareAdditions: [],
+      unresolvedRefs: [],
+      diagnostics: [{
+        severity: 'error',
+        code: 'CONFIG_MISSING',
+        message: 'extractor profile missing or disabled',
+        pass_id: 'extract_entities',
+      }],
+      terminalArtifacts: {
+        events: [],
+        directives: [],
+        gaps: [],
+      },
+      outcome: 'error',
+    });
+
+    let capturedRequest: CompletionRequest | null = null;
+    const completeStream = vi.fn(async function* (request: CompletionRequest) {
+      capturedRequest = request;
+      yield {
+        id: 'resp-compile-tool',
+        choices: [{
+          index: 0,
+          delta: {
+            role: 'assistant',
+            tool_calls: [{
+              index: 0,
+              id: 'call-1',
+              type: 'function',
+              function: {
+                name: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME,
+                arguments: JSON.stringify({
+                  clarification: {
+                    prompt: 'Which wells should I use?',
+                    entityType: 'well_selection',
+                    options: [{ id: 'all', label: 'All wells' }],
+                  },
+                }),
+              },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+      };
+    });
+
+    const events: AgentEvent[] = [];
+    const orchestrator = createAgentOrchestrator(
+      { complete: vi.fn(), completeStream },
+      { getToolDefinitions: () => [{ type: 'function', function: { name: 'search_records', description: 'search', parameters: {} } }], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+    );
+
+    await orchestrator.run({
+      prompt: 'Draft a plate setup.',
+      forceDraftTool: true,
+      onEvent: (event) => events.push(event),
+      context: {
+        labwares: [],
+        eventSummary: 'No events yet.',
+        vocabPackId: 'liquid-handling/v1',
+        availableVerbs: ['transfer'],
+      },
+    });
+
+    expect(capturedRequest?.tool_choice).toEqual({
+      type: 'function',
+      function: { name: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME },
+    });
+    expect(capturedRequest?.tools?.map((tool) => tool.function.name)).toEqual([COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME]);
+    expect(compileSpy).not.toHaveBeenCalled();
+    expect(events).toContainEqual({
+      type: 'status',
+      message: `Skipping compiler preflight; asking AI to call ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} directly…`,
+    });
+    expect(events.some((event) => event.type === 'tool_call' && event.toolName === COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME)).toBe(true);
+  });
+
+
+  it('coerces compiler draft JSON when the model ignores forced tool_choice', async () => {
+    const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [],
+      labwareAdditions: [],
+      unresolvedRefs: [],
+      diagnostics: [{
+        severity: 'error',
+        code: 'CONFIG_MISSING',
+        message: 'extractor profile missing or disabled',
+        pass_id: 'extract_entities',
+      }],
+      terminalArtifacts: {
+        events: [],
+        directives: [],
+        gaps: [],
+      },
+      outcome: 'error',
+    });
+
+    const completeStream = vi.fn(async function* () {
+      yield {
+        id: 'resp-no-tool',
+        choices: [{
+          index: 0,
+          delta: { role: 'assistant', content: '' },
+          finish_reason: 'stop',
+        }],
+      };
+    });
+    const complete = vi.fn(async () => ({
+      id: 'resp-json-args',
+      choices: [{
+        index: 0,
+        message: {
+          role: 'assistant' as const,
+          content: JSON.stringify({
+            labwareAdditions: [{
+              recordId: 'opentrons/nest_96_wellplate_200ul_flat@v1',
+              deckSlot: 'B2',
+              reason: '96-well plate requested',
+            }],
+          }),
+        },
+        finish_reason: 'stop' as const,
+      }],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    }));
+
+    const events: AgentEvent[] = [];
+    const orchestrator = createAgentOrchestrator(
+      { complete, completeStream },
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2 },
+    );
+
+    const result = await orchestrator.run({
+      prompt: 'place a 96 well plate in slot B2',
+      forceDraftTool: true,
+      onEvent: (event) => events.push(event),
+      context: {
+        labwares: [],
+        eventSummary: 'No events yet.',
+        vocabPackId: 'liquid-handling/v1',
+        availableVerbs: ['transfer'],
+      },
+    });
+
+    expect(compileSpy).not.toHaveBeenCalled();
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(events).toContainEqual({
+      type: 'status',
+      message: `${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} was not emitted natively; asking AI for compiler arguments…`,
+    });
+    expect(events.some((event) => event.type === 'tool_call' && event.toolName === COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME)).toBe(true);
+    expect(result.success).toBe(true);
+    expect(result.labwareAdditions?.[0]?.deckSlot).toBe('B2');
   });
 
   // -----------------------------------------------------------------------

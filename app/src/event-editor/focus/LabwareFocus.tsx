@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEventEditor } from '../EventEditorContext'
 import { getPlatformManifest, getVariantManifest } from '../../shared/lib/platformRegistry'
 import { computeLabwareStates, getWellState } from '../../graph/lib/eventGraph'
+import { eventsWithPreviewState, labwareMapWithPreviewState, occupiedWellsForLabware } from './wellStateProjection'
 import type { Labware } from '../../types/labware'
 import { LABWARE_TYPE_ICONS, LABWARE_TYPE_LABELS } from '../../types/labware'
 import type { WellId } from '../../types/plate'
@@ -114,10 +115,11 @@ export function LabwareFocus() {
 
   const labwareStates = useMemo(() => {
     if (!labware) return null
-    const labwareMap = new Map<string, Labware>()
-    for (const lw of Object.values(state.labwares)) labwareMap.set(lw.labwareId, lw)
-    return computeLabwareStates(state.events, labwareMap)
-  }, [labware, state.labwares, state.events])
+    return computeLabwareStates(
+      eventsWithPreviewState(state.events, state.preview),
+      labwareMapWithPreviewState(state.labwares, state.preview),
+    )
+  }, [labware, state.labwares, state.events, state.preview])
 
   const previewIndex = useMemo(() => buildPreviewWellIndex(state.preview), [state.preview])
   const previewWells = useMemo(
@@ -128,6 +130,10 @@ export function LabwareFocus() {
   const previewEventsForLabware = useMemo(
     () => (labware ? previewIndex.eventsByLabware.get(labware.labwareId) ?? [] : []),
     [previewIndex, labware],
+  )
+  const occupiedWellIds = useMemo(
+    () => occupiedWellsForLabware(labwareStates, labware?.labwareId),
+    [labwareStates, labware],
   )
 
   // ESC: clear a pinned tooltip first (touch-only state); then selection;
@@ -321,6 +327,7 @@ export function LabwareFocus() {
             hoveredWellId={hover?.wellId ?? null}
             selectedWellIds={selectedSet}
             previewWellIds={previewWells}
+            occupiedWellIds={occupiedWellIds}
             onHover={(wellId, event) => {
               if (!wellId || !event) {
                 // Mouseleave shouldn't dismiss a tooltip that the user

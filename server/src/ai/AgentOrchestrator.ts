@@ -24,8 +24,9 @@ import { buildSystemPrompt, buildSurfaceAwarePrompt } from './systemPrompt.js';
 import { resolveMentionsForPrompt, buildResolvedContextMessage } from './resolveMentions.js';
 import { runChatbotCompile } from './runChatbotCompile.js';
 import {
-  SUBMIT_SUGGESTION_TOOL_DEF,
   SUBMIT_SUGGESTION_TOOL_NAME,
+  COMPILE_EVENT_GRAPH_DRAFT_TOOL_DEF,
+  COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME,
   SUBMIT_SUGGESTION_INSTRUCTION,
   parseSubmitSuggestionArgs,
 } from './submitSuggestionTool.js';
@@ -38,22 +39,29 @@ import { decodeAttachmentText } from '../extract/decodeAttachment.js';
  * per-pass progress in the chat UI during the silent compile window.
  */
 const PASS_LABELS: Record<string, string> = {
-  extract_entities: 'Extracting entities from prompt and attachments…',
-  tag_prompt: 'Tagging prompt clauses…',
-  ai_precompile: 'Checking deterministic plan; using LLM only if needed…',
-  expand_biology_verbs: 'Expanding biology verbs…',
-  resolve_labware: 'Resolving labware references…',
-  apply_directives: 'Applying directives…',
-  expand_patterns: 'Expanding stamp patterns…',
-  expand_protocol: 'Expanding protocol…',
-  resolve_roles: 'Resolving role-to-well coordinates…',
-  mint_materials: 'Minting new materials…',
-  compute_volumes: 'Computing volumes…',
-  compute_resources: 'Computing tip and reservoir requirements…',
-  derive_execution_scale_plan: 'Deriving execution scale plan…',
-  plan_deck_layout: 'Planning deck layout…',
-  validate: 'Validating…',
+  extract_entities: 'extracting entities from prompt and attachments…',
+  tag_prompt: 'tagging prompt clauses…',
+  ai_precompile: 'checking deterministic plan…',
+  expand_biology_verbs: 'expanding biology verbs…',
+  resolve_labware: 'resolving labware references…',
+  apply_directives: 'applying directives…',
+  expand_patterns: 'expanding stamp patterns…',
+  expand_protocol: 'expanding protocol…',
+  resolve_roles: 'resolving role-to-well coordinates…',
+  mint_materials: 'minting new materials…',
+  compute_volumes: 'computing volumes…',
+  compute_resources: 'computing tip and reservoir requirements…',
+  derive_execution_scale_plan: 'deriving execution scale plan…',
+  plan_deck_layout: 'planning deck layout…',
+  validate: 'validating…',
 };
+
+function compilerPassStatus(passId: string, phase: 'preflight' | 'tool'): string {
+  const label = PASS_LABELS[passId] ?? `running ${passId}…`;
+  return phase === 'preflight'
+    ? `Compiler preflight: ${label}`
+    : `Compiler tool: ${label}`;
+}
 
 /**
  * Parse the agent's final text response into an AgentResult.
@@ -178,6 +186,216 @@ function summarizeConversationHistory(history: ChatMessage[]): string | null {
   ].join('\n');
 }
 
+
+
+const FORCED_DRAFT_TOOL_INSTRUCTION = [
+  'EVENT-EDITOR DRAFT MODE:',
+  `- You MUST finish this turn by calling the ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} tool.`,
+  '- Do not answer in prose. Do not leave the assistant message empty.',
+  '- If the prompt is underspecified, call the tool with a clarification object instead of stopping.',
+  '- If the requested operation is simple labware/deck setup, include labwareRequirements with classCurie and deckSlot. Use labwareAdditions only for concrete known definitions.',
+  '- Do not ask which vendor/catalog/plate subtype for generic labware such as a 96-well plate; emit a generic labwareRequirement and let the user refine it later.',
+].join('\n');
+
+type ChatbotCompileResult = Awaited<ReturnType<typeof runChatbotCompile>>;
+
+function compileResultToAgentResult(
+  compileResult: ChatbotCompileResult,
+  usage: { promptTokens: number; completionTokens: number },
+  turns: number,
+  toolCalls: number,
+): AgentResult {
+  const events = compileResult.events.map((prim) => ({
+    eventId: prim.eventId,
+    event_type: prim.event_type,
+    verb: prim.event_type,
+    vocabPackId: 'general',
+    details: prim.details,
+    ...(prim.labwareId ? { labwareId: prim.labwareId } : {}),
+    ...(prim.t_offset ? { t_offset: prim.t_offset } : {}),
+    provenance: {
+      actor: 'ai-agent',
+      timestamp: new Date().toISOString(),
+      method: 'compiler',
+      actionGroupId: 'compiler-draft',
+    },
+  })) as unknown as PlateEventProposal[];
+
+  const unresolvedRefs = [...(compileResult.unresolvedRefs ?? [])];
+  let clarification: string | undefined = compileResult.clarification;
+  for (const gap of compileResult.terminalArtifacts.gaps) {
+    if (gap.kind === 'unresolved_ref') {
+      const rawReason = (gap.details as Record<string, unknown> | undefined)?.reason;
+      unresolvedRefs.push({
+        kind: 'other',
+        label: gap.message,
+        reason: typeof rawReason === 'string' ? rawReason : 'unresolved',
+      });
+    } else if (gap.kind === 'clarification') {
+      clarification = gap.message;
+    } else {
+      unresolvedRefs.push({ kind: 'other', label: gap.message, reason: `other: ${gap.message}` });
+    }
+  }
+
+  return {
+    success: true,
+    events,
+    ...(compileResult.labwareAdditions.length > 0 ? { labwareAdditions: compileResult.labwareAdditions } : {}),
+    ...(unresolvedRefs.length > 0 ? { unresolvedRefs: unresolvedRefs as unknown as NonNullable<AgentResult['unresolvedRefs']> } : {}),
+    ...(clarification ? { clarification: { prompt: clarification, entityType: 'general', options: [] } } : {}),
+    ...(compileResult.terminalArtifacts.downstreamQueue?.length ? { downstreamQueue: compileResult.terminalArtifacts.downstreamQueue } : {}),
+    ...(compileResult.terminalArtifacts.executionScalePlan ? { executionScalePlan: compileResult.terminalArtifacts.executionScalePlan } : {}),
+    ...(compileResult.terminalArtifacts.instrumentApplianceJobs?.length ? { instrumentApplianceJobs: compileResult.terminalArtifacts.instrumentApplianceJobs } : {}),
+    ...(compileResult.ontologyBindings?.length ? { ontologyBindings: compileResult.ontologyBindings } : {}),
+    usage: {
+      ...usage,
+      totalTokens: usage.promptTokens + usage.completionTokens,
+      turns,
+      toolCalls,
+    },
+  };
+}
+
+function buildCompilerPromptFromDraftArgs(args: Record<string, unknown>): string {
+  const events = Array.isArray(args.events) ? args.events : [];
+  const lines: string[] = [];
+
+  for (const item of events) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const event = item as Record<string, unknown>;
+    const verb = typeof event.verb === 'string'
+      ? event.verb
+      : typeof event.event_type === 'string'
+        ? event.event_type
+        : 'do';
+    const details = event.details && typeof event.details === 'object' && !Array.isArray(event.details)
+      ? event.details as Record<string, unknown>
+      : {};
+    const parts = [verb.replace(/_/g, ' ')];
+
+    const volume = details.volume_uL ?? details.volumeUl ?? details.volume;
+    if (volume !== undefined) {
+      parts.push(String(volume));
+      if (typeof volume === 'number') parts.push('uL');
+    }
+
+    const materials = Array.isArray(event.materials) ? event.materials : [];
+    for (const material of materials) {
+      if (!material || typeof material !== 'object' || Array.isArray(material)) continue;
+      const ref = (material as Record<string, unknown>).ref;
+      if (!ref || typeof ref !== 'object' || Array.isArray(ref)) continue;
+      const r = ref as Record<string, unknown>;
+      if (typeof r.curie === 'string' && r.curie) parts.push(`[[material:${r.curie}|${r.curie}]]`);
+      const mint = r.mint;
+      if (mint && typeof mint === 'object' && !Array.isArray(mint)) {
+        const label = (mint as Record<string, unknown>).label;
+        if (typeof label === 'string' && label) parts.push(label);
+      }
+    }
+
+    const well = details.well ?? details.wells ?? details.target_wells;
+    if (Array.isArray(well)) parts.push('to wells', well.join(', '));
+    else if (typeof well === 'string') parts.push('to well', well);
+
+    const labware = details.labware_id ?? details.labwareId ?? event.labwareId;
+    if (typeof labware === 'string' && labware) parts.push('in', labware);
+
+    lines.push(parts.filter(Boolean).join(' '));
+  }
+
+  if (lines.length > 0) return lines.join('; ');
+  return JSON.stringify(args);
+}
+
+
+function extractJsonObject(text: string): Record<string, unknown> | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced?.[1]?.trim() ?? trimmed;
+  const attempts = [candidate];
+  const firstBrace = candidate.indexOf('{');
+  const lastBrace = candidate.lastIndexOf('}');
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    attempts.push(candidate.slice(firstBrace, lastBrace + 1));
+  }
+  for (const attempt of attempts) {
+    try {
+      const parsed = JSON.parse(attempt) as unknown;
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? parsed as Record<string, unknown>
+        : null;
+    } catch {
+      // Try the next extraction strategy.
+    }
+  }
+  return null;
+}
+
+function buildForcedDraftJsonPrompt(originalPrompt: string): string {
+  return [
+    `You did not emit the required ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} tool call.`,
+    'Return ONLY the JSON arguments for that tool. No markdown, no explanation.',
+    'Allowed top-level keys: events, labwareRequirements, labwareAdditions, clarification, unresolvedRefs, notes.',
+    'For labware/deck setup, prefer labwareRequirements like {"classCurie":"CL:96_well_plate","deckSlot":"B2","reason":"96-well plate requested","specificity":"generic"}. Do not invent LBW-* recordIds.',
+    'Do not ask which vendor/catalog/plate subtype for a generic request like a 96-well plate. Emit the generic requirement.',
+    'For material nouns, use materials[].ref as {"curie":"..."} or {"mint":{"label":"...","domain":"..."}}.',
+    `Original user prompt: ${originalPrompt}`,
+  ].join('\n');
+}
+
+
+function waitMs(ms: number): Promise<'heartbeat'> {
+  return new Promise((resolve) => setTimeout(() => resolve('heartbeat'), ms));
+}
+
+async function nextWithHeartbeat<T>(
+  iterator: AsyncIterator<T>,
+  intervalMs: number,
+  onHeartbeat: () => void,
+): Promise<IteratorResult<T>> {
+  const next = iterator.next().then(
+    (result) => ({ kind: 'result' as const, result }),
+    (error) => ({ kind: 'error' as const, error }),
+  );
+  while (true) {
+    const winner = await Promise.race([
+      next,
+      waitMs(intervalMs).then(() => ({ kind: 'heartbeat' as const })),
+    ]);
+    if (winner.kind === 'heartbeat') {
+      onHeartbeat();
+      continue;
+    }
+    if (winner.kind === 'error') throw winner.error;
+    return winner.result;
+  }
+}
+
+async function awaitWithHeartbeat<T>(
+  promise: Promise<T>,
+  intervalMs: number,
+  onHeartbeat: () => void,
+): Promise<T> {
+  const settled = promise.then(
+    (value) => ({ kind: 'result' as const, value }),
+    (error) => ({ kind: 'error' as const, error }),
+  );
+  while (true) {
+    const winner = await Promise.race([
+      settled,
+      waitMs(intervalMs).then(() => ({ kind: 'heartbeat' as const })),
+    ]);
+    if (winner.kind === 'heartbeat') {
+      onHeartbeat();
+      continue;
+    }
+    if (winner.kind === 'error') throw winner.error;
+    return winner.value;
+  }
+}
+
 /**
  * Create an agent orchestrator.
  */
@@ -226,7 +444,7 @@ export function createAgentOrchestrator(
 
   return {
     async run(request: AgentRequest): Promise<AgentResult> {
-      const { prompt, context, history, surface, toolFilter, onEvent, attachments, enableThinking, deterministicOnly } = request;
+      const { prompt, context, history, surface, toolFilter, onEvent, attachments, enableThinking, deterministicOnly, forceDraftTool } = request;
       const tid = traceId();
       const t0 = Date.now();
       const surfaceName = surface ?? 'default';
@@ -255,31 +473,50 @@ export function createAgentOrchestrator(
       // New: route through chatbot-compile pipeline
       const ctxMentions = Array.isArray(context?.mentions) ? context.mentions : undefined;
       const ctxLabwares = Array.isArray(context?.labwares) ? context.labwares : undefined;
-      const compileResult = await runChatbotCompile({
-        prompt,
-        ...(attachments ? { attachments } : {}),
-        ...(ctxMentions ? { mentions: ctxMentions } : {}),
-        ...(ctxLabwares ? { editorLabwares: ctxLabwares } : {}),
-        deps: {
-          extractionService: deps.extractionService!,
-          llmClient: deps.llmClient ?? null,
-          searchLabwareByHint: deps.searchLabwareByHint!,
-          labStateCache: getDefaultLabStateCache(),
-          ...(deps.ontologyResolver ? { ontologyResolver: deps.ontologyResolver } : {}),
-          ...(deps.store ? { store: deps.store } : {}),
+      const skipCompilerPreflight = Boolean(forceDraftTool && !deterministicOnly);
+      if (skipCompilerPreflight) {
+        onEvent?.({ type: 'status', message: `Skipping compiler preflight; asking AI to call ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} directly…` });
+        console.log(`[agent ${tid}] skipping compiler preflight for forced draft tool mode`);
+      }
+      if (!skipCompilerPreflight) {
+      const preflightStart = Date.now();
+      let preflightLastStatus = 'starting compiler preflight';
+      const compileResult = await awaitWithHeartbeat(
+        runChatbotCompile({
+          prompt,
+          ...(attachments ? { attachments } : {}),
+          ...(ctxMentions ? { mentions: ctxMentions } : {}),
+          ...(ctxLabwares ? { editorLabwares: ctxLabwares } : {}),
+          deps: {
+            extractionService: deps.extractionService!,
+            llmClient: deps.llmClient ?? null,
+            searchLabwareByHint: deps.searchLabwareByHint!,
+            labStateCache: getDefaultLabStateCache(),
+            ...(deps.ontologyResolver ? { ontologyResolver: deps.ontologyResolver } : {}),
+            ...(deps.store ? { store: deps.store } : {}),
+          },
+          ...(deterministicOnly ? { deterministicOnly: true } : {}),
+          ...(inferenceConfig.model ? { model: inferenceConfig.model } : {}),
+          onPassEvent: (event: PassProgressEvent) => {
+            if (event.type !== 'pass_started') return;
+            const message = compilerPassStatus(event.pass_id, 'preflight');
+            preflightLastStatus = message.replace(/^Compiler preflight: /, '');
+            try {
+              onEvent?.({ type: 'status', message });
+            } catch {
+              /* swallow — streaming must not abort the pipeline */
+            }
+          },
+        }),
+        3000,
+        () => {
+          const elapsedSec = Math.round((Date.now() - preflightStart) / 1000);
+          onEvent?.({
+            type: 'status',
+            message: `Compiler preflight still running… ${elapsedSec}s elapsed (${preflightLastStatus}).`,
+          });
         },
-        ...(deterministicOnly ? { deterministicOnly: true } : {}),
-        ...(inferenceConfig.model ? { model: inferenceConfig.model } : {}),
-        onPassEvent: (event: PassProgressEvent) => {
-          if (event.type !== 'pass_started') return;
-          const message = PASS_LABELS[event.pass_id] ?? `Running ${event.pass_id}…`;
-          try {
-            onEvent?.({ type: 'status', message });
-          } catch {
-            /* swallow — streaming must not abort the pipeline */
-          }
-        },
-      });
+      );
       // Outcome-based forwarding: decide whether to short-circuit the LLM
       // fallback based on compileResult.outcome and terminalArtifacts, not
       // on compileResult.events.length alone.
@@ -368,6 +605,7 @@ export function createAgentOrchestrator(
           ...(compileResult.terminalArtifacts.downstreamQueue?.length ? { downstreamQueue: compileResult.terminalArtifacts.downstreamQueue } : {}),
           ...(compileResult.terminalArtifacts.executionScalePlan ? { executionScalePlan: compileResult.terminalArtifacts.executionScalePlan } : {}),
           ...(compileResult.terminalArtifacts.instrumentApplianceJobs?.length ? { instrumentApplianceJobs: compileResult.terminalArtifacts.instrumentApplianceJobs } : {}),
+          ...(compileResult.ontologyBindings?.length ? { ontologyBindings: compileResult.ontologyBindings } : {}),
           usage: {
             promptTokens: 0,
             completionTokens: 0,
@@ -389,7 +627,12 @@ export function createAgentOrchestrator(
           .map(d => ({ pass_id: d.pass_id, code: d.code, severity: d.severity, message: d.message }));
         onEvent?.({ type: 'pipeline_diagnostics', outcome: compileResult.outcome, diagnostics: filtered });
 
-        console.log(`[agent ${tid}] outcome=${compileResult.outcome}, hasArtifacts=${hasArtifacts}; falling through to LLM loop`);
+        const toolPolicy = forceDraftTool
+          ? `Compiler preflight ${compileResult.outcome}; asking AI to call ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME}…`
+          : `Compiler preflight ${compileResult.outcome}; asking AI to continue…`;
+        onEvent?.({ type: 'status', message: toolPolicy });
+        console.log(`[agent ${tid}] outcome=${compileResult.outcome}, hasArtifacts=${hasArtifacts}; falling through to LLM loop forceDraftTool=${Boolean(forceDraftTool)}`);
+      }
       }
 
       // Decode attachments into plain text so the fallthrough LLM loop can
@@ -447,6 +690,7 @@ export function createAgentOrchestrator(
       if (resolvedContextMessage) systemSections.push(resolvedContextMessage);
       if (historySummary) systemSections.push(historySummary);
       if (!isDocDiscussionTurn) systemSections.push(SUBMIT_SUGGESTION_INSTRUCTION);
+      if (!isDocDiscussionTurn && forceDraftTool) systemSections.push(FORCED_DRAFT_TOOL_INSTRUCTION);
 
       const messages: ChatMessage[] = [
         { role: 'system', content: systemSections.join('\n\n---\n\n') },
@@ -455,15 +699,16 @@ export function createAgentOrchestrator(
       ];
 
       const allToolDefs = toolBridge.getToolDefinitions();
-      const baseToolDefs = isDocDiscussionTurn
+      const baseToolDefs = isDocDiscussionTurn || forceDraftTool
         ? []
         : toolFilter
           ? allToolDefs.filter((d) => toolFilter.includes(d.function.name))
           : allToolDefs;
       // Append the structured output tool (#8): the agent finalizes by calling
-      // submit_suggestion rather than emitting free-text JSON. Always available
-      // (except doc-discussion turns, which are plain prose).
-      const toolDefs = isDocDiscussionTurn ? [] : [...baseToolDefs, SUBMIT_SUGGESTION_TOOL_DEF];
+      // compile_event_graph_draft rather than emitting free-text JSON. The
+      // event-editor prompt endpoint sets forceDraftTool, which gives the LLM
+      // only this terminal tool and sets tool_choice to require it.
+      const toolDefs = isDocDiscussionTurn ? [] : [...baseToolDefs, COMPILE_EVENT_GRAPH_DRAFT_TOOL_DEF];
       const effectiveMaxTurns = isDocDiscussionTurn ? 1 : maxTurns;
       const totalUsage = { promptTokens: 0, completionTokens: 0 };
       console.log(`[agent ${tid}] tools=${toolDefs.length}${toolFilter ? ` (filtered from ${allToolDefs.length})` : ''} docDiscussion=${isDocDiscussionTurn} maxTurns=${effectiveMaxTurns}`);
@@ -487,7 +732,9 @@ export function createAgentOrchestrator(
           };
           if (toolDefs.length > 0) {
             completionReq.tools = toolDefs;
-            completionReq.tool_choice = 'auto';
+            completionReq.tool_choice = forceDraftTool
+              ? { type: 'function', function: { name: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME } }
+              : 'auto';
           }
 
           // Accumulators for the streaming response
@@ -501,7 +748,31 @@ export function createAgentOrchestrator(
           let finishReason: 'stop' | 'tool_calls' | 'length' | null = null;
           let lastId = '';
 
-          for await (const chunk of inferenceClient.completeStream(completionReq)) {
+          const modelStart = Date.now();
+          let modelHeartbeatCount = 0;
+          let sawModelChunk = false;
+          onEvent?.({
+            type: 'status',
+            message: `AI request sent to thunderbeast; waiting for ${forceDraftTool ? COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME : 'model output'}…`,
+          });
+          const streamIterator = inferenceClient.completeStream(completionReq)[Symbol.asyncIterator]();
+          while (true) {
+            const next = await nextWithHeartbeat(streamIterator, 3000, () => {
+              modelHeartbeatCount += 1;
+              const elapsedSec = Math.round((Date.now() - modelStart) / 1000);
+              const waitingFor = sawModelChunk ? 'next model chunk' : 'first model chunk';
+              onEvent?.({
+                type: 'status',
+                message: `AI drafting on thunderbeast… ${elapsedSec}s elapsed, waiting for ${waitingFor}.`,
+              });
+            });
+            if (next.done) break;
+            const chunk = next.value;
+            sawModelChunk = true;
+            if (modelHeartbeatCount > 0) {
+              onEvent?.({ type: 'status', message: 'AI stream resumed from thunderbeast.' });
+              modelHeartbeatCount = 0;
+            }
             if (chunk.id) lastId = chunk.id;
             const choice = chunk.choices?.[0];
             if (!choice) continue;
@@ -647,8 +918,119 @@ export function createAgentOrchestrator(
         const tcNames = assistantMsg.tool_calls?.map(t => t.function.name).join(',') ?? '';
         console.log(`[agent ${tid}] turn ${turn + 1} finish=${choice.finish_reason} contentLen=${contentLen} toolCalls=${tcCount}${tcNames ? ` [${tcNames}]` : ''}`);
 
-        // 3. If no tool calls, the agent is done
-        if (choice.finish_reason === 'stop' || !assistantMsg.tool_calls?.length) {
+        // 3. If no tool calls, the agent is done. In event-editor draft
+        // mode, local OpenAI-compatible servers may ignore tool_choice; when
+        // that happens, coerce a JSON argument object and invoke the compiler
+        // draft tool locally so the UI still gets a visible tool-call trace.
+        if (!assistantMsg.tool_calls?.length && forceDraftTool && !isDocDiscussionTurn) {
+          const contentPreview = typeof assistantMsg.content === 'string'
+            ? assistantMsg.content.replace(/\s+/g, ' ').slice(0, 400)
+            : '<empty>';
+          onEvent?.({
+            type: 'status',
+            message: `${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} was not emitted natively; asking AI for compiler arguments…`,
+          });
+          try {
+            const coerceStart = Date.now();
+            const coerceResponse = await awaitWithHeartbeat(
+              inferenceClient.complete({
+                model: inferenceConfig.model,
+                messages: [
+                  ...messages.slice(0, -1),
+                  { role: 'user', content: buildForcedDraftJsonPrompt(prompt) },
+                ],
+                temperature: 0,
+                max_tokens: Math.min(inferenceConfig.maxTokens ?? 4096, 2048),
+                ...(enableThinking !== undefined ? { enableThinking } : {}),
+              }),
+              3000,
+              () => {
+                const elapsedSec = Math.round((Date.now() - coerceStart) / 1000);
+                onEvent?.({
+                  type: 'status',
+                  message: `AI compiler-argument fallback is still running… ${elapsedSec}s elapsed.`,
+                });
+              },
+            );
+            if (coerceResponse.usage) {
+              totalUsage.promptTokens += coerceResponse.usage.prompt_tokens;
+              totalUsage.completionTokens += coerceResponse.usage.completion_tokens;
+            }
+            const coerceText = typeof coerceResponse.choices[0]?.message?.content === 'string'
+              ? coerceResponse.choices[0]!.message.content
+              : '';
+            const coercedArgs = extractJsonObject(coerceText);
+            if (coercedArgs) {
+              assistantMsg.content = null;
+              assistantMsg.tool_calls = [{
+                id: `call-coerced-${Date.now().toString(36)}`,
+                type: 'function',
+                function: {
+                  name: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME,
+                  arguments: JSON.stringify(coercedArgs),
+                },
+              }];
+              choice.finish_reason = 'tool_calls';
+              onEvent?.({
+                type: 'status',
+                message: `AI returned compiler arguments; invoking ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME}…`,
+              });
+              console.warn(`[agent ${tid}] model ignored forced tool call; coerced JSON args after stop contentPreview="${contentPreview}"`);
+            } else {
+              console.warn(`[agent ${tid}] failed to coerce compiler args from response: ${coerceText.replace(/\s+/g, ' ').slice(0, 400)}`);
+            }
+          } catch (err) {
+            console.warn(`[agent ${tid}] compiler-arg coercion failed: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+
+        if (!assistantMsg.tool_calls?.length && forceDraftTool && !isDocDiscussionTurn) {
+          const contentPreview = typeof assistantMsg.content === 'string'
+            ? assistantMsg.content.replace(/\s+/g, ' ').slice(0, 400)
+            : '<empty>';
+          const error = `AI stopped without calling ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME}, and compiler-argument fallback did not produce valid JSON. Last text: ${contentPreview}`;
+          onEvent?.({ type: 'error', message: error });
+          const elapsed = Date.now() - t0;
+          turnStats.push({
+            turn: turn + 1,
+            durationMs: Date.now() - turnStart,
+            finishReason: choice.finish_reason,
+            promptTokens: response.usage?.prompt_tokens ?? 0,
+            completionTokens: response.usage?.completion_tokens ?? 0,
+            tools: turnToolStats,
+          });
+          const summary: AgentSummary = {
+            traceId: tid,
+            surface: surfaceName,
+            model,
+            success: false,
+            elapsedMs: elapsed,
+            turns: turnStats,
+            totals: {
+              turns: turn + 1,
+              toolCalls: totalToolCalls,
+              promptTokens: totalUsage.promptTokens,
+              completionTokens: totalUsage.completionTokens,
+              totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+            },
+            resolvedMentions: resolvedMentionsCount,
+            bypass: null,
+            error,
+          };
+          logAgentSummary(tid, summary);
+          return {
+            success: false,
+            error,
+            usage: {
+              ...totalUsage,
+              totalTokens: totalUsage.promptTokens + totalUsage.completionTokens,
+              turns: turn + 1,
+              toolCalls: totalToolCalls,
+            },
+          };
+        }
+
+        if (!assistantMsg.tool_calls?.length) {
           // On a document-discussion turn the answer is plain text by
           // design. Don't route it through parseAgentFinalResponse, which
           // would demote prose to clarificationNeeded=false-success.
@@ -722,7 +1104,7 @@ export function createAgentOrchestrator(
         // the structured output tool. Capture its args as the result directly —
         // no regex parse, grounded by the tool schema.
         const submitCall = assistantMsg.tool_calls.find(
-          (tc) => tc.function.name === SUBMIT_SUGGESTION_TOOL_NAME,
+          (tc) => tc.function.name === COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME || tc.function.name === SUBMIT_SUGGESTION_TOOL_NAME,
         );
         if (submitCall) {
           let submitArgs: Record<string, unknown>;
@@ -731,8 +1113,66 @@ export function createAgentOrchestrator(
           } catch {
             submitArgs = {};
           }
-          onEvent?.({ type: 'tool_call', toolName: SUBMIT_SUGGESTION_TOOL_NAME, args: submitArgs });
-          const result = parseSubmitSuggestionArgs(submitArgs, totalUsage, turn + 1, totalToolCalls);
+          onEvent?.({ type: 'tool_call', toolName: submitCall.function.name, args: submitArgs });
+
+          const parsed = parseSubmitSuggestionArgs(submitArgs, totalUsage, turn + 1, totalToolCalls);
+          let result = parsed;
+          if ((parsed.events?.length ?? 0) > 0) {
+            const compilerPrompt = buildCompilerPromptFromDraftArgs(submitArgs);
+            onEvent?.({ type: 'tool_call', toolName: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME, args: { prompt: compilerPrompt } });
+            const compilerToolStart = Date.now();
+            let compilerToolLastStatus = 'starting compiler tool';
+            const compiledDraft = await awaitWithHeartbeat(
+              runChatbotCompile({
+                prompt: compilerPrompt,
+                ...(ctxMentions ? { mentions: ctxMentions } : {}),
+                ...(ctxLabwares ? { editorLabwares: ctxLabwares } : {}),
+                deps: {
+                  extractionService: deps.extractionService!,
+                  llmClient: null,
+                  searchLabwareByHint: deps.searchLabwareByHint!,
+                  labStateCache: getDefaultLabStateCache(),
+                  ...(deps.ontologyResolver ? { ontologyResolver: deps.ontologyResolver } : {}),
+                  ...(deps.store ? { store: deps.store } : {}),
+                },
+                deterministicOnly: true,
+                onPassEvent: (event: PassProgressEvent) => {
+                  if (event.type !== 'pass_started') return;
+                  const message = compilerPassStatus(event.pass_id, 'tool');
+                  compilerToolLastStatus = message.replace(/^Compiler tool: /, '');
+                  try {
+                    onEvent?.({ type: 'status', message });
+                  } catch {
+                    /* streaming must not abort the compiler tool call */
+                  }
+                },
+              }),
+              3000,
+              () => {
+                const elapsedSec = Math.round((Date.now() - compilerToolStart) / 1000);
+                onEvent?.({
+                  type: 'status',
+                  message: `Compiler tool still running… ${elapsedSec}s elapsed (${compilerToolLastStatus}).`,
+                });
+              },
+            );
+            const compiledHasArtifacts =
+              compiledDraft.terminalArtifacts.events.length > 0 ||
+              compiledDraft.terminalArtifacts.gaps.length > 0;
+            if (compiledHasArtifacts && compiledDraft.outcome !== 'error') {
+              result = compileResultToAgentResult(compiledDraft, totalUsage, turn + 1, totalToolCalls);
+              result.notes = [
+                ...(result.notes ?? []),
+                'Draft was compiled before preview.',
+              ];
+            } else {
+              result.notes = [
+                ...(result.notes ?? []),
+                'Compiler returned no ghostable artifacts for the structured draft; showing the validated structured proposal.',
+              ];
+            }
+          }
+
           const elapsed = Date.now() - t0;
           turnStats.push({
             turn: turn + 1,
@@ -762,7 +1202,7 @@ export function createAgentOrchestrator(
           if (result.error) summary.error = result.error;
           logAgentSummary(tid, summary);
           console.log(
-            `[agent ${tid}] done success=${result.success} via submit_suggestion turns=${turn + 1} events=${result.events?.length ?? 0} elapsedMs=${elapsed}`,
+            `[agent ${tid}] done success=${result.success} via ${submitCall.function.name} turns=${turn + 1} events=${result.events?.length ?? 0} elapsedMs=${elapsed}`,
           );
           return result;
         }

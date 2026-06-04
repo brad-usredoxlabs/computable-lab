@@ -33,6 +33,8 @@ interface WellGridProps {
    * cells the floating Accept button will commit.
    */
   previewWellIds?: ReadonlySet<WellId>
+  /** Wells with committed or preview-computed material/volume state. */
+  occupiedWellIds?: ReadonlySet<WellId>
   onHover: (wellId: WellId | null, event: React.MouseEvent | null) => void
   onWellClick?: (wellId: WellId, event: React.MouseEvent) => void
   onWellContextMenu?: (wellId: WellId, event: React.MouseEvent) => void
@@ -53,6 +55,7 @@ export function WellGrid({
   hoveredWellId,
   selectedWellIds,
   previewWellIds = EMPTY_WELLS,
+  occupiedWellIds = EMPTY_WELLS,
   onHover,
   onWellClick,
   onWellContextMenu,
@@ -100,12 +103,14 @@ export function WellGrid({
         const hovered = well.wellId === hoveredWellId
         const selected = selectedWellIds.has(well.wellId)
         const previewed = previewWellIds.has(well.wellId)
+        const occupied = occupiedWellIds.has(well.wellId)
         const interactive: CSSProperties = onWellClick ? { cursor: 'pointer' } : {}
         const common = {
           'data-well-id': well.wellId,
           'data-hovered': hovered ? 'true' : 'false',
           'data-selected': selected ? 'true' : 'false',
           'data-preview': previewed ? 'true' : 'false',
+          'data-occupied': occupied ? 'true' : 'false',
           'data-tip': isTipRack ? 'true' : 'false',
           onMouseEnter: (event: React.MouseEvent) => onHover(well.wellId, event),
           onMouseMove: (event: React.MouseEvent) => onHover(well.wellId, event),

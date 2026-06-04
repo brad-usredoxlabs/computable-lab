@@ -6,6 +6,7 @@ import { DeckModeSwitcher } from './topbar/DeckModeSwitcher'
 import { VocabSwitcher } from './topbar/VocabSwitcher'
 import { ToolSwitcher } from './topbar/ToolSwitcher'
 import { TipChip } from './topbar/TipChip'
+import { EventGraphChip } from './topbar/EventGraphChip'
 
 const brand = 'Event Editor'
 const topbarMiddle = (
@@ -14,6 +15,7 @@ const topbarMiddle = (
     <VocabSwitcher />
     <ToolSwitcher />
     <TipChip />
+    <EventGraphChip />
   </>
 )
 const topbarRight = <NavLinks />

@@ -146,6 +146,11 @@ export interface AgentRequest {
   /** Per-request override to enable thinking mode on the inference client. */
   enableThinking?: boolean;
   /**
+   * When true, force the LLM fallback to finish by calling
+   * compile_event_graph_draft instead of allowing a plain-text stop.
+   */
+  forceDraftTool?: boolean;
+  /**
    * When true, run only the deterministic portion of the chatbot-compile
    * pipeline: skip the LLM-backed `ai_precompile` pass and never fall through
    * to the LLM agent loop. Required when no LLM is configured.
@@ -165,6 +170,89 @@ export interface FileAttachment {
 export interface ConversationHistoryMessage {
   role: 'user' | 'assistant';
   content: string;
+}
+
+export interface ProtocolCandidateEvidenceAnchor {
+  pageNumber?: number;
+  snippet?: string;
+  context?: string;
+  sectionId?: string;
+  stepNumber?: number;
+}
+
+export interface ProtocolCandidateItemSummary {
+  label: string;
+  role?: string;
+  normalizedId?: string;
+  notes?: string[];
+  evidence?: ProtocolCandidateEvidenceAnchor[];
+  confidence?: number;
+}
+
+export interface ProtocolCandidateStepSummary {
+  stepNumber?: number;
+  title?: string;
+  text: string;
+  materials?: string[];
+  labware?: string[];
+  equipment?: string[];
+  notes?: string[];
+  evidence?: ProtocolCandidateEvidenceAnchor[];
+  confidence?: number;
+  uncertainty?: 'ambiguous' | 'inferred' | 'unresolved' | 'table-derived';
+}
+
+export interface ProtocolCandidateSummary {
+  kind: 'vendor-protocol-candidate';
+  title: string;
+  scope?: string;
+  source?: {
+    documentId?: string;
+    vendor?: string;
+    title?: string;
+    url?: string;
+    sha256?: string;
+  };
+  materials?: ProtocolCandidateItemSummary[];
+  labware?: ProtocolCandidateItemSummary[];
+  equipment?: ProtocolCandidateItemSummary[];
+  steps?: ProtocolCandidateStepSummary[];
+  diagnostics?: Array<{
+    code: string;
+    severity: 'info' | 'warning' | 'error';
+    message: string;
+    evidence?: ProtocolCandidateEvidenceAnchor[];
+  }>;
+}
+
+export interface SourcePdfSummary {
+  artifactPath?: string;
+  url?: string;
+  title?: string;
+  vendor?: string;
+  sha256?: string;
+}
+
+export interface CurrentPreviewDraft {
+  events: Array<Record<string, unknown>>;
+  labwareRequirements: AgentLabwareRequirement[];
+  labwareAdditions: AgentLabwareAddition[];
+  ontologyBindings?: DraftOntologyBinding[];
+  sourcePrompt?: string;
+  sourceSkips?: string[];
+}
+
+export interface GraphLemurRevisionEntry {
+  prompt: string;
+  createdAt: string;
+}
+
+export interface GraphLemurContext {
+  sourceProtocolCandidate?: ProtocolCandidateSummary;
+  sourcePdf?: SourcePdfSummary;
+  currentPreviewDraft?: CurrentPreviewDraft;
+  revisionHistory?: GraphLemurRevisionEntry[];
+  revisionMode?: boolean;
 }
 
 export interface EditorContext {
@@ -237,6 +325,8 @@ export interface EditorContext {
   runId?: string;
   /** The event graph record ID (if saved). */
   eventGraphId?: string;
+  /** GraphLemur protocol-source and iterative-preview revision context. */
+  graphLemur?: GraphLemurContext;
 }
 
 export interface LabwareSummary {
@@ -295,9 +385,23 @@ export interface AgentClarification {
   options: AgentClarificationOption[];
 }
 
+
+export interface AgentLabwareRequirement {
+  classCurie: string;
+  handle?: string;
+  reason?: string;
+  deckSlot?: string;
+  constraints?: string[];
+  specificity?: 'generic' | 'constrained' | 'concrete';
+  tubeVolumeClass?: '1.5ml' | '2ml' | '5ml' | '15ml' | '50ml';
+  rows?: number;
+  columns?: number;
+}
+
 export interface AgentLabwareAddition {
   recordId: string;
   reason?: string;
+  deckSlot?: string;
 }
 
 export interface AgentResult {
@@ -315,8 +419,10 @@ export interface AgentResult {
   clarificationNeeded?: string;
   /** Structured clarification request with options. */
   clarification?: AgentClarification;
-  /** Proposed labware additions to apply before events. */
+  /** Proposed concrete labware additions to apply before events. */
   labwareAdditions?: AgentLabwareAddition[];
+  /** Proposed generic/constrained labware requirements to ghost before concrete binding. */
+  labwareRequirements?: AgentLabwareRequirement[];
   /** Token usage for observability. */
   usage?: {
     promptTokens: number;
@@ -331,6 +437,8 @@ export interface AgentResult {
   executionScalePlan?: ExecutionScalePlan;
   /** Appliance active-control jobs derived from instrument run files. */
   instrumentApplianceJobs?: InstrumentApplianceJob[];
+  /** Ontology terms bound during draft compile; draftOnly entries materialize on human accept. */
+  ontologyBindings?: DraftOntologyBinding[];
 }
 
 /**
@@ -377,6 +485,18 @@ export interface OntologyRefProposal {
   };
   suggestedType?: string;
   usedInEvents: string[];
+}
+
+export interface DraftOntologyBinding {
+  curie: string;
+  recordId: string;
+  minted: boolean;
+  via: 'class-ref' | 'name';
+  label: string;
+  lifecycleId?: 'lab-vocabulary-control';
+  state?: 'proposed' | 'in_review' | 'active' | 'rejected' | 'deprecated';
+  requiresReview?: boolean;
+  draftOnly?: boolean;
 }
 
 // ============================================================================

@@ -8,14 +8,15 @@
  * material's `recordId` is a real workspace record (e.g. `MAT-…`), so a raw
  * CURIE id silently fails to ghost.
  *
- * This module intercepts those mentions ONCE inside `runChatbotCompile` and
- * find-or-mints a real local material record whose `class[]` carries the
- * CURIE as the grounding ref ("classify, don't replace"). The mention's `id`
- * is rewritten to the local recordId. Everything downstream is unchanged.
+ * This module intercepts those mentions ONCE inside `runChatbotCompile`. It
+ * rewrites a CURIE to an existing local material when one already carries that
+ * class ref or matching name. New terms can either be minted immediately
+ * (legacy/default behavior) or left draft-only so acceptance of the final graph
+ * is the point where local vocabulary is created.
  *
  * Dedup order: existing material whose class[] already carries the CURIE →
- * existing material with the same name (Phase 1f modal parity) → mint a new
- * concept material.
+ * existing material with the same name (Phase 1f modal parity) → draft-only or
+ * mint a new concept material, depending on caller policy.
  */
 
 import type { PromptMention } from '../promptMentions.js';
@@ -39,6 +40,8 @@ export interface OntologyMentionBinding {
   state?: 'proposed' | 'in_review' | 'active' | 'rejected' | 'deprecated';
   /** True when this binding needs human or policy review before active use. */
   requiresReview?: boolean;
+  /** True when the CURIE remains draft-only and was not written to local records. */
+  draftOnly?: boolean;
 }
 
 export interface BindOntologyMentionsResult {
@@ -126,13 +129,13 @@ function payloadName(payload: Record<string, unknown> | null): string {
 }
 
 /**
- * Rewrite every CURIE-bearing material mention to a local recordId,
- * minting concept materials on demand. Pure with respect to non-material
- * mentions and already-local material mentions.
+ * Rewrite CURIE-bearing material mentions to existing local recordIds when
+ * possible. When `persistNew` is false, unknown CURIEs remain draft-only;
+ * otherwise they are minted as proposed concept materials.
  */
 export async function bindOntologyMentions(
   mentions: PromptMention[],
-  deps: { store: RecordStore; prompt?: string },
+  deps: { store: RecordStore; prompt?: string; persistNew?: boolean },
 ): Promise<BindOntologyMentionsResult> {
   const out: PromptMention[] = new Array(mentions.length);
   const bindings: OntologyMentionBinding[] = [];
@@ -186,6 +189,12 @@ export async function bindOntologyMentions(
       promptRewrites.set(curie, nameMatch.recordId);
       bindings.push({ curie, recordId: nameMatch.recordId, minted: false, via: 'name', label });
       out[i] = { ...m, id: nameMatch.recordId };
+      continue;
+    }
+
+    if (deps.persistNew === false) {
+      bindings.push({ curie, recordId: curie, minted: false, via: 'class-ref', label, draftOnly: true });
+      out[i] = m;
       continue;
     }
 

@@ -23,6 +23,8 @@ export interface DraftEventsBody {
    * not configured.
    */
   deterministicOnly?: boolean;
+  /** Per-request thinking-mode override for OpenAI-compatible reasoning models. */
+  enableThinking?: boolean;
 }
 
 export type AiSurface =
@@ -66,7 +68,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
       request: FastifyRequest<{ Body: DraftEventsBody }>,
       reply: FastifyReply,
     ) {
-      const { prompt, context, history, attachments, deterministicOnly } = request.body;
+      const { prompt, context, history, attachments, deterministicOnly, enableThinking } = request.body;
 
       if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
         reply.status(400);
@@ -79,7 +81,9 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
           context,
           ...(history ? { history } : {}),
           ...(attachments ? { attachments } : {}),
-          ...(deterministicOnly ? { deterministicOnly: true } : {}),
+          ...(deterministicOnly !== undefined ? { deterministicOnly } : {}),
+          ...(!deterministicOnly ? { forceDraftTool: true } : {}),
+          ...(enableThinking !== undefined ? { enableThinking } : {}),
         });
         return result;
       } catch (err) {
@@ -104,6 +108,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
       let history: ConversationHistoryMessage[] | undefined;
       let attachments: FileAttachment[] | undefined;
       let deterministicOnly: boolean | undefined;
+      let enableThinking: boolean | undefined;
 
       if (contentType.includes('multipart/form-data')) {
         // Parse multipart form-data so the event-editor surface can send
@@ -132,6 +137,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
           ? files.map((f) => ({ name: f.originalName, mime_type: f.mimeType, content: f.buffer }))
           : undefined;
         deterministicOnly = fields['deterministicOnly'] === 'true' ? true : undefined;
+        enableThinking = fields['enableThinking'] === 'true' ? true : fields['enableThinking'] === 'false' ? false : undefined;
       } else {
         const body = request.body;
         prompt = body.prompt;
@@ -139,6 +145,7 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
         history = body.history;
         attachments = body.attachments;
         deterministicOnly = body.deterministicOnly;
+        enableThinking = body.enableThinking;
       }
 
       reply.raw.writeHead(200, {
@@ -161,7 +168,9 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
           context,
           ...(history ? { history } : {}),
           ...(attachments ? { attachments } : {}),
-          ...(deterministicOnly ? { deterministicOnly: true } : {}),
+          ...(deterministicOnly !== undefined ? { deterministicOnly } : {}),
+          ...(!deterministicOnly ? { forceDraftTool: true } : {}),
+          ...(enableThinking !== undefined ? { enableThinking } : {}),
           onEvent: sendEvent,
         });
 

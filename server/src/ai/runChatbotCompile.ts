@@ -338,12 +338,11 @@ export async function runChatbotCompile(
     ? args.mentions
     : parsePromptMentions(compilePrompt);
 
-  // Auto-bind ontology-CURIE material mentions to local material records
-  // (find-or-mint with the CURIE in class[]). Runs once per compile, ahead of
-  // every downstream consumer, so the rest of the pipeline only ever sees
-  // real `MAT-…` recordIds. Skipped when no store is wired (older callers).
+  // Bind ontology-CURIE material mentions to existing local records when
+  // possible, but keep brand-new terms draft-only. Accepting the final graph
+  // is the point where new lab-specific vocabulary may enter the local lexicon.
   const bindResult = args.deps.store
-    ? await bindOntologyMentions(rawMentions, { store: args.deps.store, prompt: compilePrompt })
+    ? await bindOntologyMentions(rawMentions, { store: args.deps.store, prompt: compilePrompt, persistNew: false })
     : { mentions: rawMentions, bindings: [], prompt: compilePrompt };
   const effectiveMentions = bindResult.mentions;
   const ontologyBindings = bindResult.bindings;

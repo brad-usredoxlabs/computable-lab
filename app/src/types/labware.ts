@@ -14,14 +14,33 @@ import {
   type LabwareDefinition,
 } from './labwareDefinition'
 
+function alphaRowLabels(count: number): string[] {
+  return Array.from({ length: count }, (_, index) => {
+    let n = index
+    let label = ''
+    do {
+      label = String.fromCharCode(65 + (n % 26)) + label
+      n = Math.floor(n / 26) - 1
+    } while (n >= 0)
+    return label
+  })
+}
+
 /**
  * Labware type discriminator
  */
 export type LabwareType =
   | 'plate_96'
   | 'plate_384'
+  | 'plate_1536'
+  | 'plate_6'
+  | 'plate_12'
+  | 'plate_24'
+  | 'plate_48'
   | 'reservoir_12'
   | 'reservoir_8'
+  | 'reservoir_16'
+  | 'reservoir_24'
   | 'reservoir_1'
   | 'tube'
   | 'tubeset_24'
@@ -50,8 +69,15 @@ export type LabwareType =
 export const LABWARE_TYPE_LABELS: Record<LabwareType, string> = {
   plate_96: '96-Well Plate (200 µL)',
   plate_384: '384-Well Plate (112 µL)',
-  reservoir_12: '12-Channel Reservoir',
-  reservoir_8: '8-Channel Reservoir',
+  plate_1536: '1536-Well Plate',
+  plate_6: '6-Well Plate',
+  plate_12: '12-Well Plate',
+  plate_24: '24-Well Plate',
+  plate_48: '48-Well Plate',
+  reservoir_12: '12-Well Reservoir',
+  reservoir_8: '8-Well Reservoir',
+  reservoir_16: '16-Well Reservoir (384 Pitch)',
+  reservoir_24: '24-Well Reservoir (384 Pitch)',
   reservoir_1: 'Single Reservoir',
   tube: 'Single Tube',
   tubeset_24: '24-Tube Rack',
@@ -80,8 +106,15 @@ export const LABWARE_TYPE_LABELS: Record<LabwareType, string> = {
 export const LABWARE_TYPE_ICONS: Record<LabwareType, string> = {
   plate_96: '🔬',
   plate_384: '🔬',
+  plate_1536: '🔬',
+  plate_6: '🔬',
+  plate_12: '🔬',
+  plate_24: '🔬',
+  plate_48: '🔬',
   reservoir_12: '📦',
   reservoir_8: '📦',
+  reservoir_16: '📦',
+  reservoir_24: '📦',
   reservoir_1: '🧴',
   tube: '🧪',
   tubeset_24: '🧪',
@@ -112,8 +145,15 @@ export type LabwareCategory = 'plate' | 'reservoir' | 'tube' | 'tiprack'
 export const LABWARE_CATEGORIES: Record<LabwareType, LabwareCategory> = {
   plate_96: 'plate',
   plate_384: 'plate',
+  plate_1536: 'plate',
+  plate_6: 'plate',
+  plate_12: 'plate',
+  plate_24: 'plate',
+  plate_48: 'plate',
   reservoir_12: 'reservoir',
   reservoir_8: 'reservoir',
+  reservoir_16: 'reservoir',
+  reservoir_24: 'reservoir',
   reservoir_1: 'reservoir',
   tube: 'tube',
   tubeset_24: 'tube',
@@ -208,6 +248,12 @@ export interface Labware {
   notes?: string
   /** Source record ID if this labware was created from a persisted record */
   sourceRecordId?: string
+  /** Generic labware class requirement backing this instance, e.g. CL:96_well_plate. */
+  requirementClassCurie?: string
+  /** Optional trait constraints from a labware requirement, e.g. CL:black. */
+  requirementConstraints?: string[]
+  /** Requirement specificity before binding to a concrete vendor/platform definition. */
+  requirementSpecificity?: 'generic' | 'constrained' | 'concrete'
   /** Optional per-well geometry overrides for heterogeneous labware (e.g., mixed tube racks) */
   wellOverrides?: Record<string, { maxVolume_uL?: number; wellShape?: 'round' | 'square' | 'v-bottom' | 'conical' }>
 }
@@ -254,6 +300,85 @@ export const LABWARE_CONFIGS: Record<LabwareType, Omit<Labware, 'labwareId' | 'n
     orientationPolicy: 'rotatable',
     color: '#7950f2',
   },
+  plate_1536: {
+    labwareType: 'plate_1536',
+    addressing: {
+      type: 'grid',
+      rows: 32,
+      columns: 48,
+      rowLabels: alphaRowLabels(32),
+      columnLabels: Array.from({ length: 48 }, (_, i) => String(i + 1)),
+    },
+    geometry: {
+      maxVolume_uL: 10,
+      minVolume_uL: 1,
+      wellShape: 'square',
+    },
+    layoutFamily: 'sbs_plate',
+    wellPitch_mm: 2.25,
+    orientationPolicy: 'rotatable',
+    color: '#6741d9',
+  },
+  plate_6: {
+    labwareType: 'plate_6',
+    addressing: {
+      type: 'grid',
+      rows: 2,
+      columns: 3,
+      rowLabels: ['A', 'B'],
+      columnLabels: ['1', '2', '3'],
+    },
+    geometry: { maxVolume_uL: 16000, minVolume_uL: 500, wellShape: 'round' },
+    layoutFamily: 'sbs_plate',
+    wellPitch_mm: 39,
+    orientationPolicy: 'rotatable',
+    color: '#1c7ed6',
+  },
+  plate_12: {
+    labwareType: 'plate_12',
+    addressing: {
+      type: 'grid',
+      rows: 3,
+      columns: 4,
+      rowLabels: ['A', 'B', 'C'],
+      columnLabels: ['1', '2', '3', '4'],
+    },
+    geometry: { maxVolume_uL: 6800, minVolume_uL: 200, wellShape: 'round' },
+    layoutFamily: 'sbs_plate',
+    wellPitch_mm: 26,
+    orientationPolicy: 'rotatable',
+    color: '#228be6',
+  },
+  plate_24: {
+    labwareType: 'plate_24',
+    addressing: {
+      type: 'grid',
+      rows: 4,
+      columns: 6,
+      rowLabels: ['A', 'B', 'C', 'D'],
+      columnLabels: ['1', '2', '3', '4', '5', '6'],
+    },
+    geometry: { maxVolume_uL: 3400, minVolume_uL: 100, wellShape: 'round' },
+    layoutFamily: 'sbs_plate',
+    wellPitch_mm: 19.3,
+    orientationPolicy: 'rotatable',
+    color: '#339af0',
+  },
+  plate_48: {
+    labwareType: 'plate_48',
+    addressing: {
+      type: 'grid',
+      rows: 6,
+      columns: 8,
+      rowLabels: ['A', 'B', 'C', 'D', 'E', 'F'],
+      columnLabels: ['1', '2', '3', '4', '5', '6', '7', '8'],
+    },
+    geometry: { maxVolume_uL: 1600, minVolume_uL: 50, wellShape: 'round' },
+    layoutFamily: 'sbs_plate',
+    wellPitch_mm: 13,
+    orientationPolicy: 'rotatable',
+    color: '#4dabf7',
+  },
   reservoir_12: {
     labwareType: 'reservoir_12',
     addressing: {
@@ -283,6 +408,30 @@ export const LABWARE_CONFIGS: Record<LabwareType, Omit<Labware, 'labwareId' | 'n
     layoutFamily: 'reservoir',
     orientationPolicy: 'fixed_columns',
     color: '#12b886',
+  },
+  reservoir_16: {
+    labwareType: 'reservoir_16',
+    addressing: {
+      type: 'linear',
+      linearLabels: Array.from({ length: 16 }, (_, i) => String(i + 1)),
+    },
+    geometry: { maxVolume_uL: 6000, minVolume_uL: 200, wellShape: 'v-bottom' },
+    layoutFamily: 'reservoir',
+    wellPitch_mm: 4.5,
+    orientationPolicy: 'fixed_columns',
+    color: '#0ca678',
+  },
+  reservoir_24: {
+    labwareType: 'reservoir_24',
+    addressing: {
+      type: 'linear',
+      linearLabels: Array.from({ length: 24 }, (_, i) => String(i + 1)),
+    },
+    geometry: { maxVolume_uL: 4000, minVolume_uL: 200, wellShape: 'v-bottom' },
+    layoutFamily: 'reservoir',
+    wellPitch_mm: 4.5,
+    orientationPolicy: 'fixed_columns',
+    color: '#087f5b',
   },
   reservoir_1: {
     labwareType: 'reservoir_1',

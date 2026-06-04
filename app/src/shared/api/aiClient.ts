@@ -30,7 +30,7 @@ export async function* streamDraftEvents(
   context: AiRequestContext,
   history: AiConversationMessage[] = [],
   signal?: AbortSignal,
-  options?: { deterministicOnly?: boolean },
+  options?: { deterministicOnly?: boolean; enableThinking?: boolean },
 ): AsyncGenerator<AiStreamEvent> {
   const response = await fetch(`${API_BASE}/ai/draft-events/stream`, {
     method: 'POST',
@@ -39,7 +39,8 @@ export async function* streamDraftEvents(
       prompt,
       context,
       history,
-      ...(options?.deterministicOnly ? { deterministicOnly: true } : {}),
+      ...(options?.deterministicOnly !== undefined ? { deterministicOnly: options.deterministicOnly } : {}),
+      ...(options?.enableThinking !== undefined ? { enableThinking: options.enableThinking } : {}),
     }),
     signal,
   })

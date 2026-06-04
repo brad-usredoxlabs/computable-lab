@@ -26,9 +26,13 @@ const CATEGORY_LABELS: Record<LabwareCategory, string> = {
 
 export function AddLabwareDialog({ open, contextLabel, onClose, onPick }: AddLabwareDialogProps) {
   const [query, setQuery] = useState('')
+  const [customName, setCustomName] = useState('')
 
   useEffect(() => {
-    if (!open) setQuery('')
+    if (!open) {
+      setQuery('')
+      setCustomName('')
+    }
   }, [open])
 
   useEffect(() => {
@@ -61,7 +65,7 @@ export function AddLabwareDialog({ open, contextLabel, onClose, onPick }: AddLab
 
   function handlePick(type: LabwareType) {
     try {
-      const labware = createLabware(type)
+      const labware = createLabware(type, customName.trim() || undefined)
       onPick(labware)
       onClose()
     } catch (error) {
@@ -86,6 +90,13 @@ export function AddLabwareDialog({ open, contextLabel, onClose, onPick }: AddLab
           placeholder="Search labware…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+        />
+        <input
+          type="text"
+          className="ee-dialog__search"
+          placeholder="Name on deck (optional)"
+          value={customName}
+          onChange={(e) => setCustomName(e.target.value)}
         />
         <div className="ee-dialog__body">
           {CATEGORY_ORDER.map((category) => {

@@ -192,6 +192,23 @@ describe('bindOntologyMentions', () => {
     expect(result.prompt).toBeUndefined();
   });
 
+  it('keeps new CURIE mentions draft-only when persistence is disabled', async () => {
+    const store = stubStore([]);
+    const prompt = 'add [[material:CHEBI:5001|fenofibrate]]';
+    const { mentions, bindings, prompt: rewritten } = await bindOntologyMentions(
+      [materialMention('CHEBI:5001', 'fenofibrate')],
+      { store, prompt, persistNew: false },
+    );
+    expect(mentions[0]!.id).toBe('CHEBI:5001');
+    expect(rewritten).toBe(prompt);
+    expect(bindings).toEqual([expect.objectContaining({
+      curie: 'CHEBI:5001',
+      recordId: 'CHEBI:5001',
+      draftOnly: true,
+    })]);
+    expect(await store.list({ kind: 'material' })).toHaveLength(0);
+  });
+
   it('falls back to leaving the CURIE in place when the write fails (no worse than today)', async () => {
     const store: RecordStore = {
       list: async () => [],

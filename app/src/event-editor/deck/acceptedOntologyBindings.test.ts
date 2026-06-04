@@ -1,0 +1,80 @@
+import { describe, expect, it, vi } from 'vitest'
+import type { DraftOntologyBinding } from '../../types/ai'
+import type { PlateEvent } from '../../types/events'
+import {
+  inferDomainFromCurie,
+  localMaterialIdForCurie,
+  materializeAcceptedOntologyBindings,
+  rewriteAcceptedOntologyRefs,
+} from './acceptedOntologyBindings'
+
+const binding = (curie: string, label: string): DraftOntologyBinding => ({
+  curie,
+  recordId: curie,
+  label,
+  minted: false,
+  via: 'class-ref',
+  draftOnly: true,
+})
+
+describe('accepted ontology bindings', () => {
+  it('derives stable local material IDs and domains from CURIEs', () => {
+    expect(localMaterialIdForCurie('CHEBI:5001')).toBe('MAT-CHEBI-5001')
+    expect(inferDomainFromCurie('CHEBI:5001')).toBe('chemical')
+    expect(inferDomainFromCurie('CL:0000182')).toBe('cell_line')
+    expect(inferDomainFromCurie('NCBITAXON:9606')).toBe('organism')
+  })
+
+  it('creates proposed material records for unique draft-only bindings', async () => {
+    const createRecord = vi.fn().mockResolvedValue({ success: true })
+    const out = await materializeAcceptedOntologyBindings([
+      binding('CHEBI:5001', 'fenofibrate'),
+      binding('CHEBI:5001', 'fenofibrate'),
+      { ...binding('MAT-EXISTING', 'existing'), draftOnly: false },
+    ], createRecord)
+
+    expect(out).toEqual([{ curie: 'CHEBI:5001', recordId: 'MAT-CHEBI-5001', label: 'fenofibrate' }])
+    expect(createRecord).toHaveBeenCalledTimes(1)
+    expect(createRecord.mock.calls[0]![1]).toMatchObject({
+      kind: 'material',
+      id: 'MAT-CHEBI-5001',
+      name: 'fenofibrate',
+      domain: 'chemical',
+      status: 'proposed',
+      lifecycleId: 'lab-vocabulary-control',
+      class: [{ kind: 'ontology', id: 'CHEBI:5001', namespace: 'CHEBI', label: 'fenofibrate' }],
+      provenance: expect.objectContaining({
+        source: 'ai_mention',
+        sourceCurie: 'CHEBI:5001',
+        createdBy: 'human_accept',
+      }),
+    })
+  })
+
+  it('rewrites accepted ontology refs in preview event details to local material refs', () => {
+    const events: PlateEvent[] = [{
+      eventId: 'evt-1',
+      event_type: 'add_material',
+      details: {
+        material_ref: { kind: 'ontology', id: 'CHEBI:5001', namespace: 'CHEBI', label: 'fenofibrate' },
+        recordId: 'CHEBI:5001',
+        nested: { source_material_ref: 'CHEBI:5001' },
+      } as PlateEvent['details'],
+    }]
+
+    const rewritten = rewriteAcceptedOntologyRefs(events, [{
+      curie: 'CHEBI:5001',
+      recordId: 'MAT-CHEBI-5001',
+      label: 'fenofibrate',
+    }])
+
+    expect(rewritten).not.toBe(events)
+    expect(rewritten[0]!.details).toMatchObject({
+      material_ref: { kind: 'record', id: 'MAT-CHEBI-5001', type: 'material', label: 'fenofibrate' },
+      recordId: 'MAT-CHEBI-5001',
+      nested: {
+        source_material_ref: { kind: 'record', id: 'MAT-CHEBI-5001', type: 'material', label: 'fenofibrate' },
+      },
+    })
+  })
+})
