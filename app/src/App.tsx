@@ -5,6 +5,7 @@
  * routes plus supporting routes:
  *   - `/browser`     (Phase 3) — schema-driven record browser.
  *   - `/event-editor` (proven Phase 0 model) — live deck authoring.
+ *   - `/event-editor/:eventGraphId` — resume a saved event graph.
  *   - `/protocols`   (Phase 5) — protocol authoring + foundry + jobs.
  *   - `/literature`  (Phase 6) — intake funnel.
  *   - `/event-editor/fixit` — standalone full-screen Fix-It tab.
@@ -32,6 +33,7 @@ const BrowserPage = lazy(async () => import('./browser/BrowserPage').then((m) =>
 const ProtocolsPage = lazy(async () => import('./protocols/ProtocolsPage').then((m) => ({ default: m.ProtocolsPage })))
 const LiteraturePage = lazy(async () => import('./literature/LiteraturePage').then((m) => ({ default: m.LiteraturePage })))
 const EventEditorPage = lazy(async () => import('./event-editor/EventEditorPage').then((m) => ({ default: m.EventEditorPage })))
+const ProjectWorkspacePage = lazy(async () => import('./event-editor/projects/ProjectWorkspacePage').then((m) => ({ default: m.ProjectWorkspacePage })))
 const SettingsRoute = lazy(async () => import('./settings/SettingsRoute').then((m) => ({ default: m.SettingsRoute })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
@@ -66,7 +68,18 @@ export function App() {
               <Route path="/browser" element={<DeferredRoute><BrowserPage /></DeferredRoute>} />
               <Route path="/event-editor" element={<DeferredRoute><EventEditorPage /></DeferredRoute>} />
               <Route path="/event-editor/fixit" element={<DeferredRoute><Slot name="event-editor.fix-it-route" /></DeferredRoute>} />
+              <Route path="/event-editor/:eventGraphId" element={<DeferredRoute><EventEditorPage /></DeferredRoute>} />
               <Route path="/runs/:runId/event-editor" element={<DeferredRoute><EventEditorPage /></DeferredRoute>} />
+              {/* Phase 3 of the workspace redesign — additive route. Existing
+                  /event-editor routes stay live and unmodified; this is the
+                  new home for the project (study-as-project) workspace shell
+                  with topbar tabs, viewer pane, and right-pane modes. The
+                  legacy routes will redirect here in Phase 10's cutover. */}
+              <Route path="/project/:studyId" element={<DeferredRoute><ProjectWorkspacePage /></DeferredRoute>} />
+              {/* Phase 10: the legacy `/event-editor/:eventGraphId` route
+                  redirects here. ProjectWorkspacePage reads the param and
+                  auto-opens a deck tab on top of the workspace. */}
+              <Route path="/project/:studyId/event-graph/:eventGraphId" element={<DeferredRoute><ProjectWorkspacePage /></DeferredRoute>} />
               <Route path="/protocols" element={<DeferredRoute><ProtocolsPage /></DeferredRoute>} />
               <Route path="/literature" element={<DeferredRoute><LiteraturePage /></DeferredRoute>} />
               {/* /settings is a real page in the new UI: off-nav, reached

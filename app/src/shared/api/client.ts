@@ -46,6 +46,8 @@ import type { CompositionEntryValue, ConcentrationValue } from '../../types/mate
 import type {
   InstrumentApplianceJob,
   InstrumentApplianceJobExecutionResult,
+  AiProtocolCandidateSummary,
+  AiSourcePdfSummary,
 } from '../../types/ai'
 import type { DeckSummary, ToolsSummary, ReagentsSummary, BudgetSummary } from '../../protocol-ide/overlaySummaries.types'
 import { ApiError, NetworkError } from './errors'
@@ -901,6 +903,62 @@ export interface VendorSearchResponse {
   }>
 }
 
+
+export interface GraphLemurPdfSearchResult {
+  id: string
+  title: string
+  url: string
+  vendor?: string
+  snippet?: string
+  score?: number
+  publishedDate?: string
+  source: 'exa'
+  documentType: 'protocol' | 'application_note' | 'white_paper' | 'manual' | 'other'
+  sourcePdf: AiSourcePdfSummary
+  sourceProtocolCandidate: AiProtocolCandidateSummary
+}
+
+export interface GraphLemurPdfSearchResponse {
+  items: GraphLemurPdfSearchResult[]
+  configured: boolean
+  query: string
+  vendors: Array<{
+    vendor: VendorName
+    success: boolean
+    error?: string
+  }>
+}
+
+export interface GraphLemurPdfIngestResponse {
+  sourcePdf: AiSourcePdfSummary
+  sourceProtocolCandidate: AiProtocolCandidateSummary
+  extraction: {
+    requestedUrl: string
+    resolvedPdfUrl: string
+    resolution: 'direct' | 'landing_page'
+    artifactPath: string
+    candidatePath?: string
+    pageCount: number
+    sectionCount: number
+    tableCount: number
+    diagnostics: Array<{
+      code: string
+      severity: 'info' | 'warning' | 'error'
+      message: string
+    }>
+  }
+  /**
+   * Phase 9: when the ingest request supplied a `studyId`, the server
+   * additionally persisted the PDF as a study-scoped artifact record.
+   * Absent for legacy callers (the cl-appliance chat dock pre-workspace).
+   */
+  recordedArtifact?: {
+    recordId: string
+    studyId: string
+    extractedTextPageCount: number
+  }
+}
+
 export interface VendorDocumentExtractionRequest {
   fileName: string
   mediaType: string
@@ -1459,6 +1517,10 @@ export const apiClient = {
       labwares: unknown[]
       runId?: string
       name?: string
+      links?: { studyId?: string; experimentId?: string; runId?: string }
+      status?: 'inbox' | 'filed' | 'draft'
+      deckLayout?: unknown
+      editorLayout?: unknown
     }
   ): Promise<WriteResponse> {
     const recordId = eventGraphId || generateEventGraphId()
@@ -1494,6 +1556,8 @@ export const apiClient = {
     labwares: unknown[]
     runId?: string
     name?: string
+    deckLayout?: unknown
+    editorLayout?: unknown
   }> {
     const response = await request<RecordResponse>(`/records/${encodeURIComponent(eventGraphId)}`)
     return response.record.payload as {
@@ -1502,6 +1566,8 @@ export const apiClient = {
       labwares: unknown[]
       runId?: string
       name?: string
+      deckLayout?: unknown
+      editorLayout?: unknown
     }
   },
 
@@ -1637,6 +1703,33 @@ export const apiClient = {
     if (params.vendors?.length) qs.set('vendors', params.vendors.join(','))
     if (typeof params.limit === 'number') qs.set('limit', String(params.limit))
     return request<VendorSearchResponse>(`/vendors/search?${qs.toString()}`)
+  },
+
+
+  async searchGraphLemurVendorPdfs(params: {
+    q: string
+    vendors?: VendorName[]
+    limit?: number
+  }): Promise<GraphLemurPdfSearchResponse> {
+    const qs = new URLSearchParams({ q: params.q })
+    if (params.vendors?.length) qs.set('vendors', params.vendors.join(','))
+    if (typeof params.limit === 'number') qs.set('limit', String(params.limit))
+    return request<GraphLemurPdfSearchResponse>(`/vendors/graph-lemur/pdfs?${qs.toString()}`)
+  },
+
+  async ingestGraphLemurVendorPdf(params: {
+    url: string
+    title?: string
+    vendor?: string
+    /** When supplied, server persists the PDF as a study-scoped artifact. */
+    studyId?: string
+    /** Origin query string — kept with the artifact's `source.query` for provenance. */
+    query?: string
+  }): Promise<GraphLemurPdfIngestResponse> {
+    return request<GraphLemurPdfIngestResponse>('/vendors/graph-lemur/pdfs/ingest', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    })
   },
 
   async extractVendorProductDocument(
@@ -3416,6 +3509,63 @@ export const apiClient = {
       method: 'POST',
     })
   },
+
+  // === Artifact Blobs ===
+
+  /**
+   * Construct the URL for an artifact's binary content. Returned as a plain
+   * string so it can be handed directly to pdfjs's `getDocument()`,
+   * `<img src>`, etc. — the server streams the file at this URL.
+   */
+  artifactBlobUrl(studyId: string, artifactId: string): string {
+    return `${API_BASE}/studies/${encodeURIComponent(studyId)}/artifacts/${encodeURIComponent(artifactId)}/blob`
+  },
+
+  // === Per-study Workspace State ===
+
+  /**
+   * Load the per-study workspace UI state (open viewer tabs, pane widths,
+   * right-pane mode). Server returns a default state when the file is
+   * missing — callers do not need to handle 404.
+   */
+  async loadWorkspace(studyId: string): Promise<{ state: WorkspaceStateApi }> {
+    return request<{ state: WorkspaceStateApi }>(
+      `/studies/${encodeURIComponent(studyId)}/workspace`,
+    )
+  },
+
+  /**
+   * Save the per-study workspace state. Last-writer-wins on the server;
+   * the client throttles concurrent writes to 500ms debounced.
+   */
+  async saveWorkspace(
+    studyId: string,
+    state: WorkspaceStateApi,
+  ): Promise<{ state: WorkspaceStateApi }> {
+    return request<{ state: WorkspaceStateApi }>(
+      `/studies/${encodeURIComponent(studyId)}/workspace`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(state),
+      },
+    )
+  },
+}
+
+/**
+ * Wire-format workspace state — mirrors the server's `WorkspaceState`.
+ * Kept loose here (no discriminated narrowing on tab kinds) because the
+ * apiClient layer should be schema-agnostic; the strict shape lives in
+ * `app/src/event-editor/workspace/types.ts`.
+ */
+export interface WorkspaceStateApi {
+  version: 1
+  studyId: string
+  tabs: Array<Record<string, unknown> & { id: string; kind: string; title: string }>
+  activeTabId: string | null
+  rightPaneMode: 'ai' | 'search' | 'browse'
+  rightPaneCollapsed: boolean
+  paneWidths: { left: number; right: number }
 }
 
 /**

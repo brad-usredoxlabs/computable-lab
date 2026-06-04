@@ -1,0 +1,140 @@
+/* SearchTabPanel — input + filtered list. */
+
+.search-tab {
+  padding-top: 8px;
+}
+
+.search-tab__input {
+  appearance: none;
+  background: var(--cl-bg);
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  color: var(--cl-text);
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  outline: none;
+}
+
+.search-tab__input::placeholder {
+  color: var(--cl-text-faint);
+}
+
+.search-tab__input:focus {
+  border-color: var(--cl-accent);
+}
+
+/* ---- VendorPdfSearchSection ----------------------------------------- */
+
+.vendor-pdf-search {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--cl-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vendor-pdf-search__form {
+  display: flex;
+  gap: 6px;
+}
+
+.vendor-pdf-search__input {
+  flex: 1;
+  appearance: none;
+  background: var(--cl-bg);
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  color: var(--cl-text);
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  outline: none;
+  min-width: 0;
+}
+
+.vendor-pdf-search__input:focus {
+  border-color: var(--cl-accent);
+}
+
+.vendor-pdf-search__submit {
+  appearance: none;
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+  border: 0;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.vendor-pdf-search__submit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.vendor-pdf-search__results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.vendor-pdf-search__result {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  color: var(--cl-text);
+  text-align: left;
+  padding: 8px 10px;
+  cursor: pointer;
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.vendor-pdf-search__result:hover:not(:disabled) {
+  background: var(--cl-bg-elev-2);
+}
+
+.vendor-pdf-search__result:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.vendor-pdf-search__result-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.vendor-pdf-search__result-meta {
+  font-size: 11px;
+  color: var(--cl-text-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+}
+
+.vendor-pdf-search__result-snippet {
+  font-size: 11px;
+  color: var(--cl-text-dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.vendor-pdf-search__result-cta {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cl-accent);
+  margin-top: 2px;
+}
+
+.vendor-pdf-search__success {
+  color: var(--cl-accent);
+  font-size: 11px;
+  margin: 0;
+}

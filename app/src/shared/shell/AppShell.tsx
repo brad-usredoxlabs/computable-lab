@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { useTheme } from './useTheme'
 import { useViewport } from './useViewport'
 import { BrandMenu } from './BrandMenu'
@@ -7,7 +8,7 @@ import './AppShell.css'
 /**
  * AppShell — the one shared chrome for every appliance endpoint.
  *
- * Phase 0 lifts this out of `EventEditorShell` so the four endpoints
+ * Phase 0 lifted this out of `EventEditorShell` so the four endpoints
  * (/browser, /event-editor, /protocols, /literature) all compose under
  * one shell with the same top-bar layout, dock slot, and theme handling.
  *
@@ -16,8 +17,24 @@ import './AppShell.css'
  *                     future brand menu where Settings will live).
  * - `topbarMiddle`  — endpoint-specific chips (vocab, tool, mode, etc.).
  * - `topbarRight`   — right-hand chrome (theme toggle, endpoint nav links).
+ * - `topbarTabs`    — second row beneath the chrome row, for project tabs
+ *                     (browser-tab style). Rendered only when provided.
+ * - `viewerToolbar` — context-sensitive toolbar above the workspace viewer
+ *                     (deck chips, rich-text toolbar, PDF nav). Only used
+ *                     in workspace layout.
  * - `dock`          — the foot dock, scoped to the endpoint's AI layer.
+ *                     Replaced by `rightPane` in workspace layout.
  * - `fixItLauncher` — optional Fix-It overlay (compilable-artifact endpoints).
+ *
+ * `layout` switches between two structural shapes:
+ * - `'stacked'` (default) — the original 3-row grid (topbar / children / dock).
+ *                            Every existing endpoint stays on this and is
+ *                            unaffected by the new props.
+ * - `'workspace'`         — the project-workspace shape: project tabs in the
+ *                            topbar, a polymorphic viewer in the left pane,
+ *                            and an AI/Search/Browse panel on the right.
+ *                            The middle row hosts a `PanelGroup` so both
+ *                            panes resize / collapse via drag.
  *
  * On mobile, the middle and right slots collapse into a slide-down menu
  * triggered by a hamburger so the bar fits a phone-width without scroll.
@@ -33,25 +50,48 @@ export interface AppShellProps {
   brand: ReactNode
   topbarMiddle?: ReactNode
   topbarRight?: ReactNode
+  topbarTabs?: ReactNode
+  viewerToolbar?: ReactNode
+  leftPane?: ReactNode
+  rightPane?: ReactNode
   dock?: ReactNode
   fixItLauncher?: ReactNode
   rootClassName?: string
   bare?: boolean
-  children: ReactNode
+  layout?: 'stacked' | 'workspace'
+  /**
+   * When set, react-resizable-panels persists the pane sizes to localStorage
+   * under this key. Workspace pages should pass a per-study id so different
+   * studies remember their own pane widths.
+   */
+  panelAutoSaveId?: string
+  children?: ReactNode
 }
 
 export function AppShell({
   brand,
   topbarMiddle,
   topbarRight,
+  topbarTabs,
+  viewerToolbar,
+  leftPane,
+  rightPane,
   dock,
   fixItLauncher,
   rootClassName,
   bare,
+  layout = 'stacked',
+  panelAutoSaveId,
   children,
 }: AppShellProps) {
   const { resolvedTheme } = useTheme()
-  const cls = ['cl-app', bare ? 'cl-app--bare' : '', rootClassName]
+  const isWorkspace = layout === 'workspace' && !bare
+  const cls = [
+    'cl-app',
+    bare ? 'cl-app--bare' : '',
+    isWorkspace ? 'cl-app--workspace' : '',
+    rootClassName,
+  ]
     .filter(Boolean)
     .join(' ')
 
@@ -65,10 +105,86 @@ export function AppShell({
 
   return (
     <div className={cls} data-theme={resolvedTheme}>
-      <AppShellTopBar brand={brand} middle={topbarMiddle} right={topbarRight} />
-      {children}
+      <AppShellTopBar
+        brand={brand}
+        middle={topbarMiddle}
+        right={topbarRight}
+        tabs={topbarTabs}
+      />
+      {isWorkspace ? (
+        <WorkspaceMain
+          viewerToolbar={viewerToolbar}
+          leftPane={leftPane}
+          rightPane={rightPane}
+          panelAutoSaveId={panelAutoSaveId}
+        />
+      ) : (
+        children
+      )}
       {dock}
       {fixItLauncher}
+    </div>
+  )
+}
+
+interface WorkspaceMainProps {
+  viewerToolbar?: ReactNode
+  leftPane?: ReactNode
+  rightPane?: ReactNode
+  panelAutoSaveId?: string
+}
+
+/**
+ * Workspace middle row — two stacked sub-rows:
+ *   1. viewer toolbar (auto, only if provided)
+ *   2. PanelGroup with viewer on the left and tools on the right
+ *
+ * Both panels are `collapsible` so the user can drag either side to zero
+ * and snap it shut. Default split favors the viewer (60/40); per-study
+ * sizes persist via `panelAutoSaveId` once the workspace context wires it
+ * up in Phase 2.
+ */
+function WorkspaceMain({
+  viewerToolbar,
+  leftPane,
+  rightPane,
+  panelAutoSaveId,
+}: WorkspaceMainProps) {
+  const hasRight = rightPane !== undefined && rightPane !== null
+  return (
+    <div className="cl-workspace">
+      {viewerToolbar ? (
+        <div className="cl-workspace__toolbar">{viewerToolbar}</div>
+      ) : null}
+      <PanelGroup
+        direction="horizontal"
+        className="cl-workspace__panels"
+        {...(panelAutoSaveId ? { autoSaveId: panelAutoSaveId } : {})}
+      >
+        <Panel
+          defaultSize={hasRight ? 60 : 100}
+          minSize={20}
+          collapsible
+          collapsedSize={0}
+          className="cl-workspace__pane cl-workspace__pane--left"
+        >
+          {leftPane}
+        </Panel>
+        {hasRight ? (
+          <>
+            <PanelResizeHandle className="cl-workspace__handle" />
+            <Panel
+              defaultSize={40}
+              minSize={20}
+              collapsible
+              collapsedSize={0}
+              className="cl-workspace__pane cl-workspace__pane--right"
+            >
+              {rightPane}
+            </Panel>
+          </>
+        ) : null}
+      </PanelGroup>
     </div>
   )
 }
@@ -77,26 +193,31 @@ interface TopBarProps {
   brand: ReactNode
   middle?: ReactNode
   right?: ReactNode
+  tabs?: ReactNode
 }
 
-function AppShellTopBar({ brand, middle, right }: TopBarProps) {
+function AppShellTopBar({ brand, middle, right, tabs }: TopBarProps) {
   const { isMobile } = useViewport()
-  if (isMobile) return <MobileTopBar brand={brand} middle={middle} right={right} />
-  return <DesktopTopBar brand={brand} middle={middle} right={right} />
+  if (isMobile)
+    return <MobileTopBar brand={brand} middle={middle} right={right} tabs={tabs} />
+  return <DesktopTopBar brand={brand} middle={middle} right={right} tabs={tabs} />
 }
 
-function DesktopTopBar({ brand, middle, right }: TopBarProps) {
+function DesktopTopBar({ brand, middle, right, tabs }: TopBarProps) {
   return (
-    <header className="topbar">
-      <BrandMenu brand={brand} />
-      {middle ? (
-        <>
-          <span className="topbar__divider" />
-          <div className="topbar__group">{middle}</div>
-        </>
-      ) : null}
-      <span className="topbar__spacer" />
-      {right}
+    <header className={tabs ? 'topbar topbar--with-tabs' : 'topbar'}>
+      <div className="topbar__chrome">
+        <BrandMenu brand={brand} />
+        {middle ? (
+          <>
+            <span className="topbar__divider" />
+            <div className="topbar__group">{middle}</div>
+          </>
+        ) : null}
+        <span className="topbar__spacer" />
+        {right}
+      </div>
+      {tabs ? <div className="topbar__tabs">{tabs}</div> : null}
     </header>
   )
 }
@@ -106,7 +227,7 @@ function DesktopTopBar({ brand, middle, right }: TopBarProps) {
  * collapse into a slide-down menu below the bar so it fits a phone width
  * without horizontal scrolling.
  */
-function MobileTopBar({ brand, middle, right }: TopBarProps) {
+function MobileTopBar({ brand, middle, right, tabs }: TopBarProps) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -152,6 +273,7 @@ function MobileTopBar({ brand, middle, right }: TopBarProps) {
           {open ? '✕' : '☰'}
         </button>
       </header>
+      {tabs ? <div className="topbar__tabs topbar__tabs--mobile">{tabs}</div> : null}
       {open ? (
         <div
           className="topbar__menu"

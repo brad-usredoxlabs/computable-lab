@@ -68,6 +68,43 @@
   flex-shrink: 0;
 }
 
+/* When project tabs are present the topbar grows to two stacked rows: the
+   chrome row (brand + chips + nav) above the tabs row (browser-style tab
+   strip). The fixed height switches off so each row uses its natural size. */
+.cl-app .topbar--with-tabs {
+  flex-direction: column;
+  align-items: stretch;
+  height: auto;
+  padding: 0;
+  gap: 0;
+}
+
+.cl-app .topbar--with-tabs .topbar__chrome {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  height: var(--cl-topbar-height);
+  min-width: 0;
+}
+
+.cl-app .topbar__tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 0 8px;
+  background: var(--cl-bg);
+  border-top: 1px solid var(--cl-border);
+  min-height: 36px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.cl-app .topbar__tabs--mobile {
+  border-top: 1px solid var(--cl-border);
+}
+
 .cl-app .topbar__brand {
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -238,4 +275,87 @@
     flex-shrink: 0;
     font-size: 14px;
   }
+}
+
+/* ---- Workspace layout ----------------------------------------------- */
+
+/* In workspace mode the middle row (children area in stacked mode) becomes
+   a 2-row internal grid: an optional viewer toolbar above a horizontally
+   resizable pair of panes. The outer `.cl-app` grid still owns the topbar
+   and dock rows, so collapsing the workspace back to stacked mode is a
+   single prop flip — no DOM reshuffling around the topbar. */
+.cl-app--workspace .cl-workspace {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  background: var(--cl-bg);
+  overflow: hidden;
+}
+
+.cl-app--workspace .cl-workspace__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: var(--cl-bg-elev);
+  border-bottom: 1px solid var(--cl-border);
+  min-height: 36px;
+  flex-shrink: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.cl-app--workspace .cl-workspace__panels {
+  min-height: 0;
+  min-width: 0;
+}
+
+.cl-app--workspace .cl-workspace__pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--cl-bg);
+}
+
+.cl-app--workspace .cl-workspace__pane--right {
+  background: var(--cl-bg-elev);
+  border-left: 1px solid var(--cl-border);
+}
+
+/* react-resizable-panels assigns `data-panel-resize-handle-enabled` to the
+   handle element; we layer our visual on top of its hit area. Keep the
+   handle slim so the panels feel adjacent, then grow on hover so the user
+   can grab it easily. */
+.cl-app--workspace .cl-workspace__handle {
+  position: relative;
+  width: 4px;
+  background: transparent;
+  cursor: col-resize;
+  transition: background 120ms ease;
+  flex-shrink: 0;
+}
+
+.cl-app--workspace .cl-workspace__handle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: var(--cl-border);
+  transform: translateX(-50%);
+}
+
+.cl-app--workspace .cl-workspace__handle:hover,
+.cl-app--workspace .cl-workspace__handle[data-resize-handle-active] {
+  background: color-mix(in srgb, var(--cl-accent) 30%, transparent);
+}
+
+.cl-app--workspace .cl-workspace__handle:hover::before,
+.cl-app--workspace .cl-workspace__handle[data-resize-handle-active]::before {
+  background: var(--cl-accent);
+  width: 2px;
 }

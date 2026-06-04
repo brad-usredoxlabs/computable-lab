@@ -2,8 +2,15 @@
  * Types for the record browser tree navigation.
  */
 
+import type { ArtifactSummary } from './artifact'
+
 /**
  * Tree node for study hierarchy.
+ *
+ * `artifacts` carries the study-scoped supporting records (PDFs, protocols,
+ * writeups, training, saved prompts, conclusions). It is populated by the
+ * tree handler when artifacts exist for the study; older trees emitted
+ * before the artifact concept landed will see an empty array.
  */
 export interface StudyTreeNode {
   recordId: string
@@ -11,6 +18,7 @@ export interface StudyTreeNode {
   shortSlug?: string
   path: string
   experiments: ExperimentTreeNode[]
+  artifacts?: ArtifactSummary[]
 }
 
 /**

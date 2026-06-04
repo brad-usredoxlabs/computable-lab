@@ -1,0 +1,27 @@
+/**
+ * DeckToolbar — the chips that used to live in `EventEditorShell.tsx`'s
+ * topbar middle slot, lifted into the workspace's `viewerToolbar` slot.
+ *
+ * Renders only when the active workspace tab is `kind: 'deck'`. Each chip
+ * reads from `useEventEditor()`, so this component MUST be mounted inside
+ * the same `EventEditorProvider` subtree that wraps `DeckViewer`. The
+ * provider is set up in `ProjectWorkspacePage` so it covers both slots.
+ */
+
+import { DeckModeSwitcher } from '../../topbar/DeckModeSwitcher'
+import { VocabSwitcher } from '../../topbar/VocabSwitcher'
+import { ToolSwitcher } from '../../topbar/ToolSwitcher'
+import { TipChip } from '../../topbar/TipChip'
+import { EventGraphChip } from '../../topbar/EventGraphChip'
+
+export function DeckToolbar() {
+  return (
+    <div className="viewer-toolbar viewer-toolbar--deck">
+      <DeckModeSwitcher />
+      <VocabSwitcher />
+      <ToolSwitcher />
+      <TipChip />
+      <EventGraphChip />
+    </div>
+  )
+}

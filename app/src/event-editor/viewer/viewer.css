@@ -1,0 +1,136 @@
+/* Shared visuals for the workspace viewer dispatcher. Per-kind viewers
+   (DeckStage, PdfViewer, DocumentEditor) own their own internal CSS;
+   these rules style the placeholder fills + the empty state + the small
+   per-kind toolbar wrappers. */
+
+.viewer-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 32px;
+  text-align: center;
+  color: var(--cl-text-dim);
+  gap: 6px;
+}
+
+.viewer-placeholder h2 {
+  margin: 0;
+  color: var(--cl-text);
+  font-size: 16px;
+}
+
+.viewer-placeholder__id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  color: var(--cl-text-faint);
+  font-size: 12px;
+  margin: 0;
+}
+
+.viewer-placeholder__hint {
+  color: var(--cl-text-faint);
+  font-size: 12px;
+  margin: 0;
+  max-width: 480px;
+}
+
+.viewer-placeholder--deck {
+  /* Loading/error fills should look like the deck stage's own placeholder
+     to avoid layout shift when the deck actually loads. */
+  background: var(--cl-bg);
+}
+
+.viewer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+
+.viewer-toolbar--deck {
+  /* Inherits the chip styles from event-editor's existing CSS; nothing
+     extra needed here. */
+}
+
+.viewer-toolbar__hint {
+  color: var(--cl-text-faint);
+  font-size: 12px;
+}
+
+.viewer-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 32px;
+}
+
+.viewer-empty__inner {
+  max-width: 480px;
+  text-align: center;
+  color: var(--cl-text-dim);
+}
+
+.viewer-empty__inner h2 {
+  margin: 0 0 12px;
+  color: var(--cl-text);
+  font-size: 18px;
+}
+
+.viewer-empty__inner p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.viewer-empty__inner code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+  font-size: 12px;
+  background: var(--cl-bg-elev-2);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.viewer-empty__cta {
+  appearance: none;
+  margin-top: 16px;
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 100ms ease;
+}
+
+.viewer-empty__cta:hover {
+  opacity: 0.9;
+}
+
+.viewer-empty__ctas {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.viewer-empty__ctas .viewer-empty__cta {
+  margin-top: 0;
+}
+
+.viewer-empty__cta--secondary {
+  background: transparent;
+  color: var(--cl-text);
+  border: 1px solid var(--cl-border);
+}
+
+.viewer-empty__cta--secondary:hover {
+  opacity: 1;
+  background: var(--cl-bg-elev-2);
+}

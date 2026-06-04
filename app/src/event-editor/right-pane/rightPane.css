@@ -1,0 +1,124 @@
+/* RightPane chrome + per-panel shared bits. Each panel layers more
+   detailed styles via its own classes (.browse-tab, .search-tab, etc.). */
+
+.right-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+}
+
+.right-pane__tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--cl-border);
+  background: var(--cl-bg-elev-2);
+  flex-shrink: 0;
+}
+
+.right-pane__tab {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--cl-text-dim);
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 100ms ease, border-color 100ms ease;
+}
+
+.right-pane__tab:hover {
+  color: var(--cl-text);
+}
+
+.right-pane__tab--active {
+  color: var(--cl-text);
+  border-bottom-color: var(--cl-accent);
+}
+
+.right-pane__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.right-pane__error {
+  border-top: 1px solid var(--cl-border);
+  background: color-mix(in srgb, var(--cl-danger) 12%, transparent);
+  color: var(--cl-danger);
+  padding: 6px 12px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* ---- Per-panel shared bits ----------------------------------------- */
+
+.right-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px;
+  gap: 8px;
+  color: var(--cl-text);
+}
+
+.right-panel__heading {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cl-text-faint);
+  margin: 8px 0 4px;
+}
+
+.right-panel__hint {
+  font-size: 12px;
+  color: var(--cl-text-faint);
+  margin: 0;
+}
+
+.right-panel__error {
+  color: var(--cl-danger);
+  font-size: 12px;
+}
+
+.right-panel__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.right-panel__row {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  width: 100%;
+  padding: 6px 8px;
+  cursor: pointer;
+  color: var(--cl-text);
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font: inherit;
+}
+
+.right-panel__row:hover {
+  background: var(--cl-bg-elev-2);
+}
+
+.right-panel__row-title {
+  font-size: 13px;
+}
+
+.right-panel__row-sub {
+  font-size: 11px;
+  color: var(--cl-text-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+}

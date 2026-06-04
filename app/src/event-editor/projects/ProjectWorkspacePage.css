@@ -1,0 +1,90 @@
+/* ProjectWorkspacePage — placeholder visuals for the workspace shell.
+   Replaced piece-by-piece by Phases 4, 5, 6, 7 (viewer, PDF, document
+   editor, right-pane tabs). Keep this file lightweight; styles that
+   outlive the placeholder belong in their phase-owned components. */
+
+.project-workspace__viewer-toolbar-placeholder {
+  color: var(--cl-text-faint);
+  font-size: 12px;
+  padding: 0 4px;
+}
+
+.project-workspace__viewer-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 32px;
+  text-align: center;
+  color: var(--cl-text-dim);
+}
+
+.project-workspace__viewer-placeholder h2 {
+  margin: 0 0 8px;
+  color: var(--cl-text);
+  font-size: 18px;
+}
+
+.project-workspace__hint {
+  font-size: 12px;
+  color: var(--cl-text-faint);
+  margin: 4px 0;
+}
+
+.project-workspace__right-pane {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+}
+
+.project-workspace__right-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--cl-border);
+  background: var(--cl-bg-elev-2);
+}
+
+.project-workspace__right-tab {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--cl-text-dim);
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 100ms ease, border-color 100ms ease;
+}
+
+.project-workspace__right-tab:hover {
+  color: var(--cl-text);
+}
+
+.project-workspace__right-tab--active {
+  color: var(--cl-text);
+  border-bottom-color: var(--cl-accent);
+}
+
+.project-workspace__right-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  color: var(--cl-text-dim);
+  font-size: 13px;
+}
+
+.project-workspace__right-body p {
+  margin: 0 0 8px;
+}
+
+.project-workspace__error {
+  padding: 32px;
+  color: var(--cl-text);
+}
+
+.project-workspace__error-line {
+  color: var(--cl-danger);
+}

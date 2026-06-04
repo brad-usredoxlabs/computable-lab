@@ -1,0 +1,86 @@
+/* StudyPickerPopover — small floating list of studies, anchored to the
+   "+" button in the project tab strip. Absolutely-positioned within the
+   tab strip's `position: relative` container. */
+
+.study-picker-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 30;
+  background: var(--cl-bg-elev);
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  width: 320px;
+  max-height: 360px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.study-picker-popover__input {
+  appearance: none;
+  background: var(--cl-bg);
+  border: 0;
+  border-bottom: 1px solid var(--cl-border);
+  color: var(--cl-text);
+  padding: 8px 12px;
+  font: inherit;
+  outline: none;
+}
+
+.study-picker-popover__input::placeholder {
+  color: var(--cl-text-faint);
+}
+
+.study-picker-popover__error {
+  background: color-mix(in srgb, var(--cl-danger) 12%, transparent);
+  color: var(--cl-danger);
+  padding: 6px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--cl-border);
+}
+
+.study-picker-popover__list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.study-picker-popover__empty {
+  padding: 16px 12px;
+  color: var(--cl-text-faint);
+  font-size: 12px;
+  text-align: center;
+}
+
+.study-picker-popover__row {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: var(--cl-text);
+  transition: background 80ms ease;
+}
+
+.study-picker-popover__row:hover,
+.study-picker-popover__row--highlighted {
+  background: color-mix(in srgb, var(--cl-accent) 14%, transparent);
+}
+
+.study-picker-popover__row-title {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.study-picker-popover__row-id {
+  font-size: 11px;
+  color: var(--cl-text-faint);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+}

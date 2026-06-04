@@ -1,0 +1,99 @@
+/* ProjectTabStrip — browser-tab style tabs in the AppShell topbar.
+   Lives inside `.topbar__tabs` (Phase 1) so it inherits the row height
+   and horizontal scroll, but owns its own per-tab visuals.
+
+   Tabs are anchors (<a>) so middle-click opens in a new browser tab; the
+   visual is button-like. The trailing "+" sits flush after the last tab. */
+
+.project-tab-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-width: 0;
+  position: relative;
+}
+
+.project-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 10px;
+  text-decoration: none;
+  color: var(--cl-text-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: 1px solid transparent;
+  border-top-left-radius: 6px;
+  border-top-right-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 100ms ease, color 100ms ease, border-color 100ms ease;
+  max-width: 220px;
+  min-width: 0;
+}
+
+.project-tab:hover {
+  color: var(--cl-text);
+  background: var(--cl-bg-elev-2);
+}
+
+.project-tab--active {
+  color: var(--cl-text);
+  background: var(--cl-bg-elev);
+  border-color: var(--cl-border);
+  /* Hide the bottom border so the tab visually flows into the body. */
+  border-bottom-color: var(--cl-bg-elev);
+  margin-bottom: -1px;
+}
+
+.project-tab__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  max-width: 180px;
+}
+
+.project-tab__close {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--cl-text-faint);
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease;
+}
+
+.project-tab__close:hover {
+  background: var(--cl-bg);
+  color: var(--cl-text);
+}
+
+.project-tab__add {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--cl-text-dim);
+  width: 28px;
+  align-self: center;
+  margin-left: 4px;
+  height: 26px;
+  border-radius: 4px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease;
+}
+
+.project-tab__add:hover {
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+}
