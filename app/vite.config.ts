@@ -177,4 +177,31 @@ export default defineConfig({
       },
     },
   },
+  // `vite preview` is what the appliance's cla-lab-frontend systemd unit
+  // runs. Vite 5 blocks unknown Host headers unless explicitly allowed —
+  // listing the appliance hostname here lets browsers reach the kiosk over
+  // the LAN AND over tailnet (where the Host header may be the bare
+  // hostname, `appliance-01.<tailnet>.ts.net`, or an IP).
+  preview: {
+    host: true,
+    port: 5174,
+    allowedHosts: [
+      'computable',
+      'appliance-01',
+      'appliance-01.local',
+      'thunderbeast',
+      'bobbert',
+      // Tailnet MagicDNS resolves bare hostnames AND fully-qualified
+      // ones; leading-dot suffix matches anything in the tailnet.
+      '.ts.net',
+    ],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        timeout: 15 * 60 * 1000,
+        proxyTimeout: 15 * 60 * 1000,
+      },
+    },
+  },
 })
