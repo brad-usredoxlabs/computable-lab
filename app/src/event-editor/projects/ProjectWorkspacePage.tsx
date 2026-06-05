@@ -1,17 +1,18 @@
 /**
- * ProjectWorkspacePage — route component for `/project/:studyId`.
+ * ProjectWorkspacePage — route component for `/project/:studyId/:mode?`.
  *
- * Phase 3 stood up the chrome (topbar tabs, workspace layout, persistence).
- * Phase 4 wired the polymorphic Viewer + ViewerToolbar dispatchers into the
- * left pane and toolbar slots, with `EventEditorProvider` (deck tabs) /
- * `PdfStateProvider` (pdf tabs) / `DocumentStateProvider` (document tabs)
- * wrapping the shell conditionally — required so the per-kind toolbar and
- * viewer share state across AppShell's separate slots.
+ * Project tab strip in row 1 of the topbar switches studies. The mode
+ * selector inline in the chrome row switches *within* a project (event-
+ * editor vs protocols vs browser vs literature). When mode is the
+ * default (`event-editor`), the page renders the full workspace shell:
+ * viewer toolbar + viewer pane on the left + AI/Search/Browse on the
+ * right. For other modes, the body of each legacy page (extracted into
+ * `XxxBody.tsx`) is embedded inline as the leftPane, and the right
+ * pane / viewer toolbar collapse so the mode can use the full width.
  *
- * Phase 7 replaces the right-pane mode placeholder with `RightPane` — three
- * sibling panels (AI / Search / Browse) switched by the workspace-state
- * mode. Browse is now the canonical way to open viewer tabs, so the
- * prompt-based CTAs from earlier phases are gone.
+ * Global `<NavLinks />` is gone from this shell — mode switching IS the
+ * navigation. The legacy `/protocols`, `/browser`, `/literature` URLs
+ * redirect into this dispatcher (see legacyRouteResolution).
  */
 
 import { useEffect, useRef } from 'react'
@@ -28,17 +29,24 @@ import { DocumentStateProvider } from '../viewer/document/DocumentEditorContext'
 import { Viewer } from '../viewer/Viewer'
 import { ViewerToolbar } from '../viewer/ViewerToolbar'
 import { ProjectTabStrip } from './ProjectTabStrip'
+import { ProjectModeSelector } from './ProjectModeSelector'
+import { projectModeFromParam, type ProjectMode } from './projectMode'
 import { RightPane } from '../right-pane/RightPane'
+import { ProtocolsBody } from '../../protocols/ProtocolsBody'
+import { BrowserBody } from '../../browser/BrowserBody'
+import { LiteratureBody } from '../../literature/LiteratureBody'
 import type { WorkspaceTab } from '../workspace/types'
 import '../viewer/viewer.css'
 import '../styles/eventEditor.css'
 import './ProjectWorkspacePage.css'
 
 export function ProjectWorkspacePage() {
-  const { studyId, eventGraphId } = useParams<{
+  const { studyId, eventGraphId, mode: rawMode } = useParams<{
     studyId: string
     eventGraphId?: string
+    mode?: string
   }>()
+  const mode = projectModeFromParam(rawMode)
 
   if (!studyId || !/^STU-[A-Za-z0-9_-]+$/.test(studyId)) {
     return (
@@ -57,6 +65,7 @@ export function ProjectWorkspacePage() {
     <WorkspaceProvider studyId={studyId}>
       <WorkspaceShellHost
         studyId={studyId}
+        mode={mode}
         autoOpenEventGraphId={eventGraphId ?? null}
       />
     </WorkspaceProvider>
@@ -65,6 +74,7 @@ export function ProjectWorkspacePage() {
 
 interface WorkspaceShellHostProps {
   studyId: string
+  mode: ProjectMode
   /** When the route is /project/:studyId/event-graph/:eventGraphId, the
    *  workspace opens a deck tab for that graph on mount. Used by the
    *  Phase 10 legacy redirect (`/event-editor/:eventGraphId`). */
@@ -73,6 +83,7 @@ interface WorkspaceShellHostProps {
 
 function WorkspaceShellHost({
   studyId,
+  mode,
   autoOpenEventGraphId,
 }: WorkspaceShellHostProps) {
   const ws = useWorkspace()
@@ -85,13 +96,12 @@ function WorkspaceShellHost({
   }, [studyId, openStudy])
 
   // Phase 10 deep-link: open a deck tab for the named event graph once
-  // the workspace state has loaded. We only do this once per
-  // (studyId, eventGraphId) pair — `openTab` is a fresh function each
-  // render and would otherwise refire the effect on every state change.
+  // the workspace state has loaded.
   const openedRef = useRef<string | null>(null)
   useEffect(() => {
     if (!autoOpenEventGraphId) return
     if (!ws.ready) return
+    if (mode !== 'event-editor') return
     const key = `${studyId}::${autoOpenEventGraphId}`
     if (openedRef.current === key) return
     openedRef.current = key
@@ -103,13 +113,34 @@ function WorkspaceShellHost({
     })
   })
 
+  // Mode selector + brand-menu live in the chrome row of the topbar.
+  // NavLinks is gone — modes are the navigation now.
+  const topbarMiddle = <ProjectModeSelector studyId={studyId} />
+
+  if (mode !== 'event-editor') {
+    // Non-deck modes (protocols / browser / literature) take over the full
+    // workspace body: the leftPane carries their body, the rightPane and
+    // viewer toolbar are unused. The mode bodies own their own internal
+    // sub-tabs, AI provider, and chrome row.
+    return (
+      <AppShell
+        brand="Project"
+        topbarTabs={<ProjectTabStrip />}
+        topbarMiddle={topbarMiddle}
+        layout="workspace"
+        panelAutoSaveId={`project:${studyId}:${mode}`}
+        leftPane={<ModeBody mode={mode} />}
+      />
+    )
+  }
+
   const activeTab = findActiveTab(ws.state.tabs, ws.state.activeTabId)
 
   const shellContent = (
     <AppShell
       brand="Project"
       topbarTabs={<ProjectTabStrip />}
-      topbarRight={<NavLinks />}
+      topbarMiddle={topbarMiddle}
       layout="workspace"
       panelAutoSaveId={`project:${studyId}`}
       viewerToolbar={<ViewerToolbar tab={activeTab} />}
@@ -118,10 +149,6 @@ function WorkspaceShellHost({
     />
   )
 
-  // Deck viewers need `EventEditorProvider` in scope for both the toolbar
-  // chips AND the DeckStage. AppShell renders those into separate slots, so
-  // the provider has to wrap the whole shell. `key` forces a clean remount
-  // when the user switches between deck tabs (different eventGraphIds).
   if (activeTab?.kind === 'deck') {
     return (
       <EventEditorProvider
@@ -132,9 +159,6 @@ function WorkspaceShellHost({
       </EventEditorProvider>
     )
   }
-  // PDF tabs likewise: the toolbar (page nav / zoom / search) and the
-  // viewer (canvas pages + extracted text) share PdfStateProvider so both
-  // AppShell slots see the same artifact / state.
   if (activeTab?.kind === 'pdf') {
     return (
       <PdfStateProvider
@@ -146,9 +170,6 @@ function WorkspaceShellHost({
       </PdfStateProvider>
     )
   }
-  // Document tabs: the toolbar (mark / heading / list buttons) and the
-  // EditorContent share the same TipTap Editor through
-  // DocumentStateProvider. Same shape as the deck + pdf providers above.
   if (activeTab?.kind === 'document') {
     return (
       <DocumentStateProvider
@@ -169,6 +190,25 @@ function findActiveTab(
 ): WorkspaceTab | null {
   if (!activeTabId) return null
   return tabs.find((t) => t.id === activeTabId) ?? null
+}
+
+interface ModeBodyProps {
+  mode: Exclude<ProjectMode, 'event-editor'>
+}
+
+function ModeBody({ mode }: ModeBodyProps) {
+  switch (mode) {
+    case 'protocols':
+      return <ProtocolsBody />
+    case 'browser':
+      return <BrowserBody />
+    case 'literature':
+      return <LiteratureBody />
+    default: {
+      const _exhaustive: never = mode
+      return _exhaustive ?? null
+    }
+  }
 }
 
 interface LeftPaneProps {

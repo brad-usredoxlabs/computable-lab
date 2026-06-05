@@ -5,6 +5,43 @@
    Tabs are anchors (<a>) so middle-click opens in a new browser tab; the
    visual is button-like. The trailing "+" sits flush after the last tab. */
 
+/* ---- ProjectModeSelector --------------------------------------------- */
+/* Sits in the chrome row (topbar__chrome) of the workspace topbar — same
+   row as brand + theme toggle. Mode switching happens WITHIN a project;
+   project switching happens in the tabs row below. */
+
+.project-mode-selector {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+  margin-left: 8px;
+}
+
+.project-mode-selector__tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--cl-text-dim);
+  text-decoration: none;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  transition: color 100ms ease, background 100ms ease, border-color 100ms ease;
+}
+
+.project-mode-selector__tab:hover {
+  color: var(--cl-text);
+  background: var(--cl-bg-elev-2);
+}
+
+.project-mode-selector__tab--active {
+  color: var(--cl-text);
+  background: color-mix(in srgb, var(--cl-accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--cl-accent) 60%, transparent);
+}
+
+
 .project-tab-strip {
   display: flex;
   align-items: stretch;

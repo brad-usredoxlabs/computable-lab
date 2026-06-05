@@ -111,6 +111,23 @@ export function resolveLegacyNoParamsRoute(): ResolvedLegacyRoute {
   }
 }
 
+/**
+ * Phase 11: the legacy global endpoints (`/protocols`, `/browser`,
+ * `/literature`) now redirect into the workspace's mode dispatcher.
+ * Workspace mounts the same body content inline so the project tabs
+ * stay visible; this redirect just gets the URL into the right shape.
+ *
+ * The scratch study is the default landing — picking the "right" study
+ * for a bare `/protocols` URL would require state the URL doesn't carry.
+ * Once the user is in a real project tab, mode-switching keeps them
+ * within that project (see ProjectModeSelector).
+ */
+export function resolveLegacyModeRoute(
+  mode: 'protocols' | 'browser' | 'literature',
+): { studyId: string; mode: 'protocols' | 'browser' | 'literature' } {
+  return { studyId: SCRATCH_STUDY_ID, mode }
+}
+
 async function resolveStudyForRun(runId: string): Promise<string | null> {
   try {
     const env = await apiClient.getRecord(runId)

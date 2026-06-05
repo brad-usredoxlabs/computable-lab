@@ -29,12 +29,10 @@ import { useMentionNavigation } from './shared/taptab/slashMenu'
 import { Slot } from './extensions'
 import './shared/styles/tokens.css'
 
-const BrowserPage = lazy(async () => import('./browser/BrowserPage').then((m) => ({ default: m.BrowserPage })))
-const ProtocolsPage = lazy(async () => import('./protocols/ProtocolsPage').then((m) => ({ default: m.ProtocolsPage })))
-const LiteraturePage = lazy(async () => import('./literature/LiteraturePage').then((m) => ({ default: m.LiteraturePage })))
 const EventEditorPage = lazy(async () => import('./event-editor/EventEditorPage').then((m) => ({ default: m.EventEditorPage })))
 const ProjectWorkspacePage = lazy(async () => import('./event-editor/projects/ProjectWorkspacePage').then((m) => ({ default: m.ProjectWorkspacePage })))
 const SettingsRoute = lazy(async () => import('./settings/SettingsRoute').then((m) => ({ default: m.SettingsRoute })))
+const LegacyModeRedirect = lazy(async () => import('./event-editor/projects/LegacyModeRedirect').then((m) => ({ default: m.LegacyModeRedirect })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -64,24 +62,28 @@ export function App() {
           <BrowserRouter>
             <MentionNavigator />
             <Routes>
-              <Route path="/" element={<Navigate to="/browser" replace />} />
-              <Route path="/browser" element={<DeferredRoute><BrowserPage /></DeferredRoute>} />
+              {/* Project workspace is the canonical home. Modes live INSIDE
+                  a project (event-editor / protocols / browser / literature)
+                  and switch via the in-workspace ProjectModeSelector. Project
+                  switch is the topbar tab strip. */}
+              <Route path="/" element={<Navigate to="/project/STU-scratch" replace />} />
+              <Route path="/project/:studyId" element={<DeferredRoute><ProjectWorkspacePage /></DeferredRoute>} />
+              <Route path="/project/:studyId/:mode" element={<DeferredRoute><ProjectWorkspacePage /></DeferredRoute>} />
+              <Route path="/project/:studyId/event-graph/:eventGraphId" element={<DeferredRoute><ProjectWorkspacePage /></DeferredRoute>} />
+
+              {/* Phase 10: legacy /event-editor routes resolve their parent
+                  study and redirect into /project/:studyId/event-graph/:id. */}
               <Route path="/event-editor" element={<DeferredRoute><EventEditorPage /></DeferredRoute>} />
               <Route path="/event-editor/fixit" element={<DeferredRoute><Slot name="event-editor.fix-it-route" /></DeferredRoute>} />
               <Route path="/event-editor/:eventGraphId" element={<DeferredRoute><EventEditorPage /></DeferredRoute>} />
               <Route path="/runs/:runId/event-editor" element={<DeferredRoute><EventEditorPage /></DeferredRoute>} />
-              {/* Phase 3 of the workspace redesign — additive route. Existing
-                  /event-editor routes stay live and unmodified; this is the
-                  new home for the project (study-as-project) workspace shell
-                  with topbar tabs, viewer pane, and right-pane modes. The
-                  legacy routes will redirect here in Phase 10's cutover. */}
-              <Route path="/project/:studyId" element={<DeferredRoute><ProjectWorkspacePage /></DeferredRoute>} />
-              {/* Phase 10: the legacy `/event-editor/:eventGraphId` route
-                  redirects here. ProjectWorkspacePage reads the param and
-                  auto-opens a deck tab on top of the workspace. */}
-              <Route path="/project/:studyId/event-graph/:eventGraphId" element={<DeferredRoute><ProjectWorkspacePage /></DeferredRoute>} />
-              <Route path="/protocols" element={<DeferredRoute><ProtocolsPage /></DeferredRoute>} />
-              <Route path="/literature" element={<DeferredRoute><LiteraturePage /></DeferredRoute>} />
+
+              {/* Phase 11: legacy global endpoints redirect into the workspace's
+                  mode dispatcher. Each preserves its query string so deep-links
+                  to ?view=foundry / ?type=material / etc. survive. */}
+              <Route path="/browser" element={<DeferredRoute><LegacyModeRedirect mode="browser" /></DeferredRoute>} />
+              <Route path="/protocols" element={<DeferredRoute><LegacyModeRedirect mode="protocols" /></DeferredRoute>} />
+              <Route path="/literature" element={<DeferredRoute><LegacyModeRedirect mode="literature" /></DeferredRoute>} />
               {/* /settings is a real page in the new UI: off-nav, reached
                   from the brand menu, but with a URL, deep linking, and
                   browser-back like every other shell page. */}
