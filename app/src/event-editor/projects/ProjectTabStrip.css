@@ -5,43 +5,6 @@
    Tabs are anchors (<a>) so middle-click opens in a new browser tab; the
    visual is button-like. The trailing "+" sits flush after the last tab. */
 
-/* ---- ProjectModeSelector --------------------------------------------- */
-/* Sits in the chrome row (topbar__chrome) of the workspace topbar — same
-   row as brand + theme toggle. Mode switching happens WITHIN a project;
-   project switching happens in the tabs row below. */
-
-.project-mode-selector {
-  display: inline-flex;
-  align-items: stretch;
-  gap: 2px;
-  margin-left: 8px;
-}
-
-.project-mode-selector__tab {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 12px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--cl-text-dim);
-  text-decoration: none;
-  border-radius: 4px;
-  border: 1px solid transparent;
-  transition: color 100ms ease, background 100ms ease, border-color 100ms ease;
-}
-
-.project-mode-selector__tab:hover {
-  color: var(--cl-text);
-  background: var(--cl-bg-elev-2);
-}
-
-.project-mode-selector__tab--active {
-  color: var(--cl-text);
-  background: color-mix(in srgb, var(--cl-accent) 16%, transparent);
-  border-color: color-mix(in srgb, var(--cl-accent) 60%, transparent);
-}
-
-
 .project-tab-strip {
   display: flex;
   align-items: stretch;
@@ -61,6 +24,53 @@
   position: relative;
   display: inline-flex;
   align-items: stretch;
+}
+
+/* Flex spacer between the + add-wrap and the trailing settings gear,
+   so the gear pins to the right edge of the topbar regardless of how
+   many project tabs are open. */
+.project-tab-strip__spacer {
+  flex: 1;
+  min-width: 16px;
+}
+
+/* The settings gear at the trailing edge of the topbar. Anchors the
+   BrandMenuDropdown popover (which uses align="right"). */
+.settings-menu-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding-right: 8px;
+}
+
+.settings-menu-button__trigger {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--cl-text-dim);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  width: 28px;
+  height: 26px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 100ms ease, background 100ms ease, border-color 100ms ease;
+}
+
+.settings-menu-button__trigger:hover {
+  color: var(--cl-text);
+  background: var(--cl-bg-elev-2);
+  border-color: var(--cl-border);
+}
+
+.settings-menu-button__trigger[aria-expanded='true'] {
+  color: var(--cl-text);
+  background: var(--cl-bg-elev-2);
+  border-color: var(--cl-border);
 }
 
 .project-tab {

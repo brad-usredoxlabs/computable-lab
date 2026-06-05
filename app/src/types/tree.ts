@@ -23,6 +23,11 @@ export interface StudyTreeNode {
 
 /**
  * Tree node for experiment.
+ *
+ * `artifacts` is the subset of artifacts whose `links.experimentId`
+ * matches this experiment AND has no `links.runId` (run-scoped
+ * artifacts are pushed to `RunTreeNode.artifacts` instead). Optional
+ * for back-compat with v1 tree responses.
  */
 export interface ExperimentTreeNode {
   recordId: string
@@ -31,6 +36,7 @@ export interface ExperimentTreeNode {
   path: string
   studyId: string
   runs: RunTreeNode[]
+  artifacts?: ArtifactSummary[]
 }
 
 /**
@@ -52,6 +58,12 @@ export interface RunTreeNode {
     attachments: number
     other: number
   }
+  /**
+   * Artifacts whose `links.runId` matches this run. Populated by Phase
+   * 12's tree-handler upgrade; older tree responses leave this absent
+   * and the Find tab falls back to client-side scoping.
+   */
+  artifacts?: ArtifactSummary[]
 }
 
 /**

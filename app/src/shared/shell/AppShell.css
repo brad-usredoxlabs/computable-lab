@@ -105,6 +105,34 @@
   border-top: 1px solid var(--cl-border);
 }
 
+/* Phase 12: workspace topbar is JUST the tab strip — no chrome row
+   above it. The strip is the entire header, so it needs the topbar's
+   normal height + a border-BOTTOM (it used to have a border-TOP back
+   when it sat below a chrome row). The `.topbar` element here is a
+   direct child of `.cl-app`, so it inherits its grid-row 1 slot. */
+.cl-app .topbar--workspace {
+  flex-direction: column;
+  align-items: stretch;
+  height: auto;
+  padding: 0;
+  background: var(--cl-bg-elev);
+  border-bottom: 1px solid var(--cl-border);
+  min-height: var(--cl-topbar-height);
+}
+
+.cl-app .topbar--workspace > .topbar__tabs,
+.cl-app .topbar--workspace > .project-tab-strip {
+  /* The strip might render directly as the header's only child, or be
+     wrapped in `.topbar__tabs` for the mobile-tabs path; either way,
+     drop the now-stale border-top and let the workspace topbar's
+     border-bottom carry the divider. */
+  border-top: 0;
+  background: transparent;
+  flex: 1;
+  min-height: var(--cl-topbar-height);
+  align-items: stretch;
+}
+
 .cl-app .topbar__brand {
   font-weight: 600;
   letter-spacing: 0.02em;

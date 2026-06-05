@@ -100,6 +100,28 @@ describe('AppShell — workspace layout', () => {
     expect(document.querySelector('.cl-workspace__handle')).toBeTruthy()
   })
 
+  it('Phase 12: workspace topbar has NO chrome row — only the tab strip', () => {
+    renderShell({
+      brand: <span data-testid="brand">CL</span>,
+      topbarMiddle: <div data-testid="middle">should not render</div>,
+      topbarRight: <nav data-testid="right">should not render</nav>,
+      topbarTabs: <div data-testid="tabs">[StudyA]</div>,
+      layout: 'workspace',
+      leftPane: <div>LEFT</div>,
+    })
+    // The workspace topbar uses the new `.topbar--workspace` marker
+    // and the tab strip becomes the entire header content. Brand,
+    // topbarMiddle, topbarRight are dropped entirely — Phase 12.3
+    // brings them back through a gear icon in the tab strip itself.
+    expect(document.querySelector('.topbar--workspace')).toBeTruthy()
+    expect(document.querySelector('.topbar__chrome')).toBeNull()
+    expect(document.querySelector('.topbar--with-tabs')).toBeNull()
+    expect(screen.queryByTestId('brand')).toBeNull()
+    expect(screen.queryByTestId('middle')).toBeNull()
+    expect(screen.queryByTestId('right')).toBeNull()
+    expect(screen.getByTestId('tabs')).toBeTruthy()
+  })
+
   it('omits the resize handle when there is no right pane', () => {
     renderShell({
       brand: <span>CL</span>,

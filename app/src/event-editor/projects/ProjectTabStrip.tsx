@@ -18,6 +18,7 @@
 import { useCallback, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { StudyPickerPopover } from './StudyPickerPopover'
+import { SettingsMenuButton } from './SettingsMenuButton'
 import { useOpenStudies } from '../workspace/useOpenStudies'
 import './ProjectTabStrip.css'
 
@@ -41,7 +42,7 @@ export function ProjectTabStrip() {
         const idx = studies.findIndex((e) => e.studyId === studyId)
         const next = remaining[idx] ?? remaining[idx - 1]
         if (next) navigate(`/project/${next.studyId}`)
-        else navigate('/browser')
+        else navigate('/')
       }
     },
     [activeStudyId, closeStudy, navigate, studies],
@@ -114,6 +115,11 @@ export function ProjectTabStrip() {
           />
         ) : null}
       </div>
+      {/* Push the gear to the trailing edge of the topbar. Phase 12.3
+          relocated the brand menu's items (Settings / Theme / About)
+          here after the chrome row was retired. */}
+      <span className="project-tab-strip__spacer" aria-hidden />
+      <SettingsMenuButton />
     </div>
   )
 }

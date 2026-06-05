@@ -32,11 +32,19 @@ export function SourcesStrip({ studyId, activeTab }: SourcesStripProps) {
         label: 'Deck',
         sub: activeTab.eventGraphId || '(unsaved draft)',
       })
-    } else {
+    } else if (activeTab.kind === 'pdf' || activeTab.kind === 'document') {
       chips.push({
         id: activeTab.kind,
         label: activeTab.kind === 'pdf' ? 'PDF' : 'Document',
         sub: activeTab.artifactId,
+      })
+    } else if (activeTab.kind === 'project-details') {
+      // Phase 12: the project-overview tab has no artifact, just the
+      // study context that's already in the Study chip above.
+      chips.push({
+        id: 'project-details',
+        label: 'Overview',
+        sub: 'project tree + artifacts',
       })
     }
   }

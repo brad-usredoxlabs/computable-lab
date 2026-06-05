@@ -1,23 +1,29 @@
 /**
- * ProjectWorkspacePage — route component for `/project/:studyId/:mode?`.
+ * ProjectWorkspacePage — route component for `/project/:studyId` and
+ * `/project/:studyId/event-graph/:eventGraphId`.
  *
- * Project tab strip in row 1 of the topbar switches studies. The mode
- * selector inline in the chrome row switches *within* a project (event-
- * editor vs protocols vs browser vs literature). When mode is the
- * default (`event-editor`), the page renders the full workspace shell:
- * viewer toolbar + viewer pane on the left + AI/Search/Browse on the
- * right. For other modes, the body of each legacy page (extracted into
- * `XxxBody.tsx`) is embedded inline as the leftPane, and the right
- * pane / viewer toolbar collapse so the mode can use the full width.
+ * Phase 12 reshaped the navigation hierarchy:
+ *   - Project tabs in the topbar switch studies (handled by ProjectTabStrip).
+ *   - WITHIN a study, the user navigates via the right-pane Find tab
+ *     (a tree of experiments → runs + artifact sections). Clicking a
+ *     node opens it as a left-pane viewer tab.
+ *   - The project-details tab is the always-present landing surface;
+ *     defaults open one for any study with no other tabs.
  *
- * Global `<NavLinks />` is gone from this shell — mode switching IS the
- * navigation. The legacy `/protocols`, `/browser`, `/literature` URLs
- * redirect into this dispatcher (see legacyRouteResolution).
+ * Phase 11's mode dispatcher (event-editor / protocols / browser /
+ * literature) is gone. ProtocolsBody / BrowserBody / LiteratureBody no
+ * longer mount inline here — those routes redirect to `/` (Phase 12.6).
+ *
+ * Left-pane dispatch on `activeTab.kind`:
+ *   - 'project-details' → <ProjectDetailsView /> (Phase 12.5)
+ *   - 'deck'            → DeckStage via <Viewer /> + EventEditorProvider
+ *   - 'pdf'             → <PdfViewer /> + PdfStateProvider
+ *   - 'document'        → <DocumentEditor /> + DocumentStateProvider
  */
 
 import { useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
-import { AppShell, NavLinks } from '../../shared/shell'
+import { AppShell } from '../../shared/shell'
 import {
   WorkspaceProvider,
   useWorkspace,
@@ -29,28 +35,23 @@ import { DocumentStateProvider } from '../viewer/document/DocumentEditorContext'
 import { Viewer } from '../viewer/Viewer'
 import { ViewerToolbar } from '../viewer/ViewerToolbar'
 import { ProjectTabStrip } from './ProjectTabStrip'
-import { ProjectModeSelector } from './ProjectModeSelector'
-import { projectModeFromParam, type ProjectMode } from './projectMode'
+import { ProjectDetailsView } from './ProjectDetailsView'
 import { RightPane } from '../right-pane/RightPane'
-import { ProtocolsBody } from '../../protocols/ProtocolsBody'
-import { BrowserBody } from '../../browser/BrowserBody'
-import { LiteratureBody } from '../../literature/LiteratureBody'
 import type { WorkspaceTab } from '../workspace/types'
+import { projectDetailsTabId } from '../workspace/types'
 import '../viewer/viewer.css'
 import '../styles/eventEditor.css'
 import './ProjectWorkspacePage.css'
 
 export function ProjectWorkspacePage() {
-  const { studyId, eventGraphId, mode: rawMode } = useParams<{
+  const { studyId, eventGraphId } = useParams<{
     studyId: string
     eventGraphId?: string
-    mode?: string
   }>()
-  const mode = projectModeFromParam(rawMode)
 
   if (!studyId || !/^STU-[A-Za-z0-9_-]+$/.test(studyId)) {
     return (
-      <AppShell brand="Project workspace" topbarRight={<NavLinks />}>
+      <AppShell brand="Project workspace">
         <div className="project-workspace__error">
           <h1>Unknown study</h1>
           <p>
@@ -65,7 +66,6 @@ export function ProjectWorkspacePage() {
     <WorkspaceProvider studyId={studyId}>
       <WorkspaceShellHost
         studyId={studyId}
-        mode={mode}
         autoOpenEventGraphId={eventGraphId ?? null}
       />
     </WorkspaceProvider>
@@ -74,7 +74,6 @@ export function ProjectWorkspacePage() {
 
 interface WorkspaceShellHostProps {
   studyId: string
-  mode: ProjectMode
   /** When the route is /project/:studyId/event-graph/:eventGraphId, the
    *  workspace opens a deck tab for that graph on mount. Used by the
    *  Phase 10 legacy redirect (`/event-editor/:eventGraphId`). */
@@ -83,25 +82,21 @@ interface WorkspaceShellHostProps {
 
 function WorkspaceShellHost({
   studyId,
-  mode,
   autoOpenEventGraphId,
 }: WorkspaceShellHostProps) {
   const ws = useWorkspace()
   const { openStudy } = useOpenStudies()
 
-  // Deep-linked study → make sure the topbar tab strip shows it. Paste /
-  // back / fresh-bookmark all skip the picker that would normally do this.
+  // Deep-linked study → make sure the topbar tab strip shows it.
   useEffect(() => {
     openStudy(studyId)
   }, [studyId, openStudy])
 
-  // Phase 10 deep-link: open a deck tab for the named event graph once
-  // the workspace state has loaded.
+  // Phase 10 deep-link: open a deck tab for the named event graph.
   const openedRef = useRef<string | null>(null)
   useEffect(() => {
     if (!autoOpenEventGraphId) return
     if (!ws.ready) return
-    if (mode !== 'event-editor') return
     const key = `${studyId}::${autoOpenEventGraphId}`
     if (openedRef.current === key) return
     openedRef.current = key
@@ -113,26 +108,18 @@ function WorkspaceShellHost({
     })
   })
 
-  // Mode selector + brand-menu live in the chrome row of the topbar.
-  // NavLinks is gone — modes are the navigation now.
-  const topbarMiddle = <ProjectModeSelector studyId={studyId} />
-
-  if (mode !== 'event-editor') {
-    // Non-deck modes (protocols / browser / literature) take over the full
-    // workspace body: the leftPane carries their body, the rightPane and
-    // viewer toolbar are unused. The mode bodies own their own internal
-    // sub-tabs, AI provider, and chrome row.
-    return (
-      <AppShell
-        brand="Project"
-        topbarTabs={<ProjectTabStrip />}
-        topbarMiddle={topbarMiddle}
-        layout="workspace"
-        panelAutoSaveId={`project:${studyId}:${mode}`}
-        leftPane={<ModeBody mode={mode} />}
-      />
-    )
-  }
+  // Phase 12: when the workspace loads with no tabs (e.g. fresh study,
+  // no workspace.yaml yet), make sure there's at least the canonical
+  // project-details tab so the user lands somewhere. parseWorkspaceState
+  // also inserts this on the server, but client-side defaultWorkspaceState
+  // already does it too — this is the "loaded from server returned
+  // partial state" safety net.
+  useEffect(() => {
+    if (!ws.ready) return
+    if (ws.state.tabs.length > 0) return
+    const id = projectDetailsTabId(studyId)
+    ws.openTab({ id, kind: 'project-details', title: 'Project' })
+  }, [studyId, ws.ready, ws.state.tabs.length, ws.openTab])
 
   const activeTab = findActiveTab(ws.state.tabs, ws.state.activeTabId)
 
@@ -140,11 +127,10 @@ function WorkspaceShellHost({
     <AppShell
       brand="Project"
       topbarTabs={<ProjectTabStrip />}
-      topbarMiddle={topbarMiddle}
       layout="workspace"
       panelAutoSaveId={`project:${studyId}`}
       viewerToolbar={<ViewerToolbar tab={activeTab} />}
-      leftPane={<LeftPane activeTab={activeTab} />}
+      leftPane={<LeftPane activeTab={activeTab} studyId={studyId} />}
       rightPane={<RightPane />}
     />
   )
@@ -181,6 +167,7 @@ function WorkspaceShellHost({
       </DocumentStateProvider>
     )
   }
+  // project-details has no per-kind provider; renders as a pure view.
   return shellContent
 }
 
@@ -192,43 +179,25 @@ function findActiveTab(
   return tabs.find((t) => t.id === activeTabId) ?? null
 }
 
-interface ModeBodyProps {
-  mode: Exclude<ProjectMode, 'event-editor'>
-}
-
-function ModeBody({ mode }: ModeBodyProps) {
-  switch (mode) {
-    case 'protocols':
-      return <ProtocolsBody />
-    case 'browser':
-      return <BrowserBody />
-    case 'literature':
-      return <LiteratureBody />
-    default: {
-      const _exhaustive: never = mode
-      return _exhaustive ?? null
-    }
-  }
-}
-
 interface LeftPaneProps {
   activeTab: WorkspaceTab | null
+  studyId: string
 }
 
-function LeftPane({ activeTab }: LeftPaneProps) {
+function LeftPane({ activeTab, studyId }: LeftPaneProps) {
   if (!activeTab) {
+    // Falls through to a brief loading state — the workspace effect
+    // above will open project-details on the next tick.
     return (
       <div className="viewer-empty">
         <div className="viewer-empty__inner">
-          <h2>No viewer open</h2>
-          <p>
-            Switch the right pane to <strong>Browse</strong> to pick an
-            artifact (PDFs, protocols, write-ups, training records,
-            conclusions). Clicking a row opens it here.
-          </p>
+          <h2>Loading project…</h2>
         </div>
       </div>
     )
+  }
+  if (activeTab.kind === 'project-details') {
+    return <ProjectDetailsView studyId={studyId} />
   }
   return <Viewer tab={activeTab} />
 }

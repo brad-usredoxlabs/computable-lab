@@ -1,63 +1,55 @@
 /**
- * Phase 7 tests for the retired router.
+ * App router tests — Phase 12.
  *
  * Asserts:
- *  - root `/` redirects to `/browser`,
- *  - each of the four endpoint URLs renders (we mock the page components
- *    to keep the assertion on routing behaviour, not page internals),
+ *  - root `/` renders the WelcomePage (no more redirect to /browser),
+ *  - legacy `/browser`, `/protocols`, `/literature` redirect to `/`,
+ *  - `/event-editor`, `/event-editor/:eventGraphId`, `/runs/:runId/event-editor`
+ *    reach EventEditorPage,
+ *  - `/event-editor/fixit` reaches the fix-it slot route,
  *  - `/settings` renders as an off-nav brand-menu route,
  *  - every deleted legacy URL falls through to the `*` catch-all and
- *    renders a 404, not a redirect,
- *  - `/event-editor/fixit`, `/event-editor/:eventGraphId`, and `/runs/:runId/event-editor` reach their
- *    expected components.
+ *    renders a 404, not a redirect.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 
 vi.mock('./extensions', () => ({
-  Slot: ({ name }: { name: string }) => (
-    name === 'event-editor.fix-it-route'
-      ? <div data-testid="fixit-route">fixit</div>
-      : <div data-testid={`slot-${name}`} />
-  ),
+  Slot: ({ name }: { name: string }) =>
+    name === 'event-editor.fix-it-route' ? (
+      <div data-testid="fixit-route">fixit</div>
+    ) : (
+      <div data-testid={`slot-${name}`} />
+    ),
 }))
 
-vi.mock('./browser/BrowserPage', () => ({
-  BrowserPage: () => <div data-testid="browser-page">browser</div>,
-}))
-vi.mock('./protocols/ProtocolsPage', () => ({
-  ProtocolsPage: () => <div data-testid="protocols-page">protocols</div>,
-}))
-vi.mock('./literature/LiteraturePage', () => ({
-  LiteraturePage: () => <div data-testid="literature-page">literature</div>,
+vi.mock('./welcome/WelcomePage', () => ({
+  WelcomePage: () => <div data-testid="welcome-page">welcome</div>,
 }))
 vi.mock('./event-editor/EventEditorPage', () => ({
   EventEditorPage: () => <div data-testid="event-editor-page">event-editor</div>,
 }))
-vi.mock('./event-editor/fixit-route/FixItRoute', () => ({
-  FixItRoute: () => <div data-testid="fixit-route">fixit</div>,
+vi.mock('./event-editor/projects/ProjectWorkspacePage', () => ({
+  ProjectWorkspacePage: () => (
+    <div data-testid="project-workspace-page">workspace</div>
+  ),
 }))
 vi.mock('./settings/SettingsRoute', () => ({
   SettingsRoute: () => <div data-testid="settings-route">settings</div>,
 }))
 
-// Stub the ErrorBoundary because its production fallback would swallow
-// test failures; we want them visible.
 vi.mock('./shell/ErrorBoundary', () => ({
   ErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
-// We need to control which URL the in-process BrowserRouter starts from,
-// but the App's BrowserRouter is hard-coded. The trick: vi.mock the
-// react-router-dom BrowserRouter to be MemoryRouter with initialEntries
-// fed by a global `__START_URL__` we set before each test.
 vi.mock('react-router-dom', async (original) => {
   const real = (await original()) as typeof import('react-router-dom')
   return {
     ...real,
     BrowserRouter: ({ children }: { children: React.ReactNode }) => {
-      const url = (globalThis as unknown as { __START_URL__?: string }).__START_URL__ ?? '/'
+      const url =
+        (globalThis as unknown as { __START_URL__?: string }).__START_URL__ ?? '/'
       return <real.MemoryRouter initialEntries={[url]}>{children}</real.MemoryRouter>
     },
   }
@@ -74,30 +66,38 @@ afterEach(() => {
   cleanup()
 })
 
-describe('App router (Phase 7)', () => {
-  it('redirects / to /browser', async () => {
+describe('App router (Phase 12)', () => {
+  it('renders WelcomePage at /', async () => {
     visit('/')
-    await waitFor(() => expect(screen.getByTestId('browser-page')).toBeTruthy())
+    await waitFor(() => expect(screen.getByTestId('welcome-page')).toBeTruthy())
   })
 
-  it('renders BrowserPage at /browser', async () => {
-    visit('/browser')
-    await waitFor(() => expect(screen.getByTestId('browser-page')).toBeTruthy())
+  it('renders ProjectWorkspacePage at /project/:studyId', async () => {
+    visit('/project/STU-000001')
+    await waitFor(() =>
+      expect(screen.getByTestId('project-workspace-page')).toBeTruthy(),
+    )
   })
 
   it('renders EventEditorPage at /event-editor', async () => {
     visit('/event-editor')
-    await waitFor(() => expect(screen.getByTestId('event-editor-page')).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByTestId('event-editor-page')).toBeTruthy(),
+    )
   })
 
   it('renders EventEditorPage at /event-editor/:eventGraphId', async () => {
     visit('/event-editor/EVG-123')
-    await waitFor(() => expect(screen.getByTestId('event-editor-page')).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByTestId('event-editor-page')).toBeTruthy(),
+    )
   })
 
   it('renders EventEditorPage at /runs/:runId/event-editor', async () => {
     visit('/runs/RUN-123/event-editor')
-    await waitFor(() => expect(screen.getByTestId('event-editor-page')).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByTestId('event-editor-page')).toBeTruthy(),
+    )
   })
 
   it('renders FixItRoute at /event-editor/fixit', async () => {
@@ -105,19 +105,26 @@ describe('App router (Phase 7)', () => {
     await waitFor(() => expect(screen.getByTestId('fixit-route')).toBeTruthy())
   })
 
-  it('renders ProtocolsPage at /protocols', async () => {
-    visit('/protocols')
-    await waitFor(() => expect(screen.getByTestId('protocols-page')).toBeTruthy())
+  it('redirects /browser to / (Welcome)', async () => {
+    visit('/browser')
+    await waitFor(() => expect(screen.getByTestId('welcome-page')).toBeTruthy())
   })
 
-  it('renders LiteraturePage at /literature', async () => {
+  it('redirects /protocols to / (Welcome)', async () => {
+    visit('/protocols')
+    await waitFor(() => expect(screen.getByTestId('welcome-page')).toBeTruthy())
+  })
+
+  it('redirects /literature to / (Welcome)', async () => {
     visit('/literature')
-    await waitFor(() => expect(screen.getByTestId('literature-page')).toBeTruthy())
+    await waitFor(() => expect(screen.getByTestId('welcome-page')).toBeTruthy())
   })
 
   it('renders SettingsRoute at /settings', async () => {
     visit('/settings')
-    await waitFor(() => expect(screen.getByTestId('settings-route')).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByTestId('settings-route')).toBeTruthy(),
+    )
   })
 
   // ---- Retired legacy routes render 404 ---------------------------------
@@ -148,7 +155,9 @@ describe('App router (Phase 7)', () => {
   ]) {
     it(`renders 404 for retired legacy URL ${url}`, async () => {
       visit(url)
-      await waitFor(() => expect(screen.getByTestId('not-found-route')).toBeTruthy())
+      await waitFor(() =>
+        expect(screen.getByTestId('not-found-route')).toBeTruthy(),
+      )
     })
   }
 })

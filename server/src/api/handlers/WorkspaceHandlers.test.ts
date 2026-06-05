@@ -123,10 +123,16 @@ describe('WorkspaceHandlers', () => {
   });
 
   describe('PUT', () => {
+    // Phase 12: PUT inputs are normalized through parseWorkspaceState
+    // before persistence. v2 is the canonical version on the wire; a
+    // project-details tab is always present after parsing (auto-inserted
+    // when absent). Tests use a v2 input shape with project-details
+    // already included so PUT/GET round-trips are loss-less.
     const validState: WorkspaceState = {
-      version: 1,
+      version: 2,
       studyId: 'STU-000001',
       tabs: [
+        { id: 'details:STU-000001', kind: 'project-details', title: 'Project' },
         {
           id: 'tab-1',
           kind: 'deck',
@@ -163,9 +169,10 @@ describe('WorkspaceHandlers', () => {
       const yamlText = await readFile(filePath, 'utf-8');
       const parsed = parseYaml(yamlText);
       expect(parsed.studyId).toBe('STU-000001');
-      expect(parsed.tabs).toHaveLength(2);
-      expect(parsed.tabs[0].kind).toBe('deck');
-      expect(parsed.tabs[1].kind).toBe('pdf');
+      expect(parsed.tabs).toHaveLength(3);
+      expect(parsed.tabs[0].kind).toBe('project-details');
+      expect(parsed.tabs[1].kind).toBe('deck');
+      expect(parsed.tabs[2].kind).toBe('pdf');
     });
 
     it('GET after PUT returns the persisted state', async () => {
@@ -182,6 +189,40 @@ describe('WorkspaceHandlers', () => {
       );
       expect(getState.status).toBe(200);
       expect(result?.state).toEqual(validState);
+    });
+
+    it('v1 legacy payload migrates to v2 on parse (browse → find, project-details inserted)', async () => {
+      // Older client builds POST v1 shapes. The parser accepts them but
+      // emits v2 so the workspace UI always sees the new union.
+      const v1Payload = {
+        version: 1,
+        studyId: 'STU-000001',
+        tabs: [
+          {
+            id: 'tab-1',
+            kind: 'deck' as const,
+            eventGraphId: 'EVG-V1',
+            title: 'Legacy deck',
+          },
+        ],
+        activeTabId: 'tab-1',
+        rightPaneMode: 'browse',
+        rightPaneCollapsed: false,
+        paneWidths: { left: 0.6, right: 0.4 },
+      };
+      const { reply } = makeReply();
+      const result = await handlers.putWorkspace(
+        makeRequest({ studyId: 'STU-000001' }, v1Payload),
+        reply,
+      );
+      expect(result?.state.version).toBe(2);
+      expect(result?.state.rightPaneMode).toBe('find');
+      // project-details auto-inserted at index 0.
+      expect(result?.state.tabs[0].kind).toBe('project-details');
+      // Original deck tab preserved.
+      expect(result?.state.tabs).toContainEqual(
+        expect.objectContaining({ id: 'tab-1', kind: 'deck' }),
+      );
     });
 
     it('rejects body that does not parse as WorkspaceState', async () => {

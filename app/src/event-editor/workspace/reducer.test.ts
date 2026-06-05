@@ -11,11 +11,20 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { defaultWorkspaceState } from './types'
+import { defaultWorkspaceState, type WorkspaceState } from './types'
 import { workspaceReducer } from './reducer'
 
 describe('workspaceReducer', () => {
-  const base = defaultWorkspaceState('STU-000001')
+  // Phase 12 made `defaultWorkspaceState` seed a project-details tab so
+  // the workspace always has a landing surface. The reducer tests pre-date
+  // that and are about reducer mechanics, not default seeding — start
+  // from an empty tabs/activeTabId so length assertions stay focused.
+  const emptyBase = (): WorkspaceState => ({
+    ...defaultWorkspaceState('STU-000001'),
+    tabs: [],
+    activeTabId: null,
+  })
+  const base = emptyBase()
 
   describe('open-tab', () => {
     it('appends a new tab and activates it by default', () => {
@@ -177,9 +186,9 @@ describe('workspaceReducer', () => {
     it('changes mode', () => {
       const next = workspaceReducer(base, {
         type: 'set-right-pane-mode',
-        mode: 'browse',
+        mode: 'find',
       })
-      expect(next.rightPaneMode).toBe('browse')
+      expect(next.rightPaneMode).toBe('find')
     })
 
     it('toggles collapsed', () => {
@@ -207,7 +216,7 @@ describe('workspaceReducer', () => {
       const swapped = workspaceReducer(base, {
         type: 'replace',
         state: {
-          version: 1,
+          version: 2,
           studyId: 'STU-OTHER',
           tabs: [
             {

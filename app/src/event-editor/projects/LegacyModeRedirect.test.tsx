@@ -1,10 +1,11 @@
 /**
- * LegacyModeRedirect tests — Phase 11 cutover.
+ * LegacyModeRedirect tests — Phase 12.
  *
- *  - /protocols → /project/STU-scratch/protocols
- *  - /browser → /project/STU-scratch/browser
- *  - /literature → /project/STU-scratch/literature
- *  - query string is preserved (deep-link tokens like ?view=, ?type=)
+ *  - /protocols → /
+ *  - /browser → /
+ *  - /literature → /
+ *  - query strings are dropped (mode-specific params have no meaning in
+ *    the Phase-12 workspace)
  */
 
 import { afterEach, describe, expect, it } from 'vitest'
@@ -14,7 +15,6 @@ import {
   Route,
   Routes,
   useLocation,
-  useParams,
 } from 'react-router-dom'
 import { LegacyModeRedirect } from './LegacyModeRedirect'
 
@@ -22,52 +22,47 @@ afterEach(() => cleanup())
 
 function Probe() {
   const location = useLocation()
-  const params = useParams()
   return (
     <div>
       <div data-testid="pathname">{location.pathname}</div>
       <div data-testid="search">{location.search}</div>
-      <div data-testid="study">{params.studyId ?? ''}</div>
-      <div data-testid="mode">{params.mode ?? ''}</div>
     </div>
   )
 }
 
-function renderAt(initial: string, mode: 'protocols' | 'browser' | 'literature') {
+function renderAt(
+  initial: string,
+  mode: 'protocols' | 'browser' | 'literature',
+) {
   return render(
     <MemoryRouter initialEntries={[initial]}>
       <Routes>
         <Route path={`/${mode}`} element={<LegacyModeRedirect mode={mode} />} />
-        <Route path="/project/:studyId/:mode" element={<Probe />} />
+        <Route path="/" element={<Probe />} />
       </Routes>
     </MemoryRouter>,
   )
 }
 
 describe('LegacyModeRedirect', () => {
-  it('/protocols → /project/STU-scratch/protocols', () => {
+  it('/protocols → /', () => {
     renderAt('/protocols', 'protocols')
-    expect(screen.getByTestId('study').textContent).toBe('STU-scratch')
-    expect(screen.getByTestId('mode').textContent).toBe('protocols')
+    expect(screen.getByTestId('pathname').textContent).toBe('/')
   })
 
-  it('/browser → /project/STU-scratch/browser', () => {
+  it('/browser → /', () => {
     renderAt('/browser', 'browser')
-    expect(screen.getByTestId('study').textContent).toBe('STU-scratch')
-    expect(screen.getByTestId('mode').textContent).toBe('browser')
+    expect(screen.getByTestId('pathname').textContent).toBe('/')
   })
 
-  it('/literature → /project/STU-scratch/literature', () => {
+  it('/literature → /', () => {
     renderAt('/literature', 'literature')
-    expect(screen.getByTestId('study').textContent).toBe('STU-scratch')
-    expect(screen.getByTestId('mode').textContent).toBe('literature')
+    expect(screen.getByTestId('pathname').textContent).toBe('/')
   })
 
-  it('preserves the query string', () => {
+  it('drops the query string (mode-specific params no longer apply)', () => {
     renderAt('/protocols?view=foundry&sessionId=PIS-X', 'protocols')
-    expect(screen.getByTestId('mode').textContent).toBe('protocols')
-    expect(screen.getByTestId('search').textContent).toBe(
-      '?view=foundry&sessionId=PIS-X',
-    )
+    expect(screen.getByTestId('pathname').textContent).toBe('/')
+    expect(screen.getByTestId('search').textContent).toBe('')
   })
 })

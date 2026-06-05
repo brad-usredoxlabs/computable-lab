@@ -1,0 +1,120 @@
+/* FindTabPanel — per-study tree + artifact rows. Phase 12.7 renamed
+   from BrowseTabPanel; the experiments tree at the top is the new
+   addition. */
+
+.find-tab__tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 10px;
+}
+
+.find-tab__tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.find-tab__tree-list--nested {
+  margin-left: 16px;
+}
+
+.find-tab__tree-row {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  color: inherit;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  width: 100%;
+}
+
+.find-tab__tree-row:hover {
+  background: var(--cl-bg-elev);
+}
+
+.find-tab__tree-row:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.find-tab__chev {
+  display: inline-block;
+  width: 12px;
+  text-align: center;
+  color: var(--cl-text-dim);
+}
+
+.find-tab__row-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.find-tab__row-meta {
+  font-size: 11px;
+  color: var(--cl-text-dim);
+}
+
+.find-tab {
+  padding-top: 0;
+}
+
+.find-tab__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 8px 4px;
+  border-bottom: 1px solid var(--cl-border);
+  background: var(--cl-bg-elev);
+  margin: -12px -12px 8px;
+}
+
+.find-tab__head h3 {
+  margin: 0;
+}
+
+.find-tab__refresh {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--cl-border);
+  color: var(--cl-text-dim);
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.find-tab__refresh:hover {
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+}
+
+.find-tab__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.find-tab__group-heading {
+  margin: 6px 0 2px;
+}
+
+.right-panel__row:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

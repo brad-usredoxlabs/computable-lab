@@ -1,0 +1,117 @@
+/* WelcomePage — root route landing surface. */
+
+.welcome-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 32px 40px;
+  max-width: 900px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  width: 100%;
+  color: var(--cl-text);
+}
+
+.welcome-page__head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.welcome-page__title {
+  margin: 0;
+  font-size: 28px;
+}
+
+.welcome-page__sub {
+  margin: 0;
+  color: var(--cl-text-dim);
+  font-size: 14px;
+}
+
+.welcome-page__section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.welcome-page__section-title {
+  margin: 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cl-text-dim);
+}
+
+.welcome-page__hint {
+  margin: 0;
+  color: var(--cl-text-dim);
+  font-size: 14px;
+}
+
+.welcome-page__grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.welcome-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg-elev);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.1s ease, background 0.1s ease;
+}
+
+.welcome-card:hover {
+  border-color: var(--cl-accent, #4a90e2);
+  background: var(--cl-bg-elev-2, var(--cl-bg-elev));
+}
+
+.welcome-card__title {
+  font-size: 15px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.welcome-card__sub {
+  font-family: var(--cl-font-mono, monospace);
+  font-size: 11px;
+  color: var(--cl-text-dim);
+}
+
+.welcome-card__meta {
+  font-size: 11px;
+  color: var(--cl-text-dim);
+  margin-top: 4px;
+}
+
+.welcome-page__open-all-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.welcome-page__open-all {
+  appearance: none;
+  background: var(--cl-bg-elev);
+  border: 1px solid var(--cl-border);
+  color: inherit;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.welcome-page__open-all:hover {
+  border-color: var(--cl-accent, #4a90e2);
+}

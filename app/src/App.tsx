@@ -21,7 +21,7 @@
  */
 
 import { Suspense, lazy } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { ErrorBoundary } from './shell/ErrorBoundary'
 import { SelectionProvider } from './shared/context/SelectionContext'
 import { ThemeProvider } from './shared/shell'
@@ -33,6 +33,7 @@ const EventEditorPage = lazy(async () => import('./event-editor/EventEditorPage'
 const ProjectWorkspacePage = lazy(async () => import('./event-editor/projects/ProjectWorkspacePage').then((m) => ({ default: m.ProjectWorkspacePage })))
 const SettingsRoute = lazy(async () => import('./settings/SettingsRoute').then((m) => ({ default: m.SettingsRoute })))
 const LegacyModeRedirect = lazy(async () => import('./event-editor/projects/LegacyModeRedirect').then((m) => ({ default: m.LegacyModeRedirect })))
+const WelcomePage = lazy(async () => import('./welcome/WelcomePage').then((m) => ({ default: m.WelcomePage })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -62,13 +63,13 @@ export function App() {
           <BrowserRouter>
             <MentionNavigator />
             <Routes>
-              {/* Project workspace is the canonical home. Modes live INSIDE
-                  a project (event-editor / protocols / browser / literature)
-                  and switch via the in-workspace ProjectModeSelector. Project
-                  switch is the topbar tab strip. */}
-              <Route path="/" element={<Navigate to="/project/STU-scratch" replace />} />
+              {/* Phase 12: `/` is the Welcome screen — a deck of recently-
+                  opened projects + an "Open all projects" picker. The
+                  project workspace lives at `/project/:studyId` and there
+                  are no in-workspace modes; navigation within a project is
+                  the right-pane Find tab. */}
+              <Route path="/" element={<DeferredRoute><WelcomePage /></DeferredRoute>} />
               <Route path="/project/:studyId" element={<DeferredRoute><ProjectWorkspacePage /></DeferredRoute>} />
-              <Route path="/project/:studyId/:mode" element={<DeferredRoute><ProjectWorkspacePage /></DeferredRoute>} />
               <Route path="/project/:studyId/event-graph/:eventGraphId" element={<DeferredRoute><ProjectWorkspacePage /></DeferredRoute>} />
 
               {/* Phase 10: legacy /event-editor routes resolve their parent

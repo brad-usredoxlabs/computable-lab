@@ -81,9 +81,19 @@ function renderWithTab(
 }
 
 describe('AiTabPanel', () => {
-  it('surfaces the no-viewer system prompt by default', async () => {
-    renderWithTab()
+  it('surfaces the no-viewer system prompt when no tab is active', async () => {
+    // Phase 12 made defaultWorkspaceState seed a project-details tab as
+    // active. To exercise the null-viewer branch we explicitly clear
+    // tabs and activeTabId.
+    renderWithTab({ tabs: [], activeTabId: null })
     const expected = systemPromptForViewer(null)
+    expect(await screen.findByText(expected.label)).toBeTruthy()
+  })
+
+  it('surfaces the project-details system prompt for the default landing tab', async () => {
+    // Default seed = project-details active.
+    renderWithTab()
+    const expected = systemPromptForViewer('project-details')
     expect(await screen.findByText(expected.label)).toBeTruthy()
   })
 

@@ -24,8 +24,8 @@ vi.mock('./ai/AiTabPanel', () => ({
 vi.mock('./search/SearchTabPanel', () => ({
   SearchTabPanel: () => <div data-testid="panel-search">SEARCH</div>,
 }))
-vi.mock('./browse/BrowseTabPanel', () => ({
-  BrowseTabPanel: () => <div data-testid="panel-browse">BROWSE</div>,
+vi.mock('./find/FindTabPanel', () => ({
+  FindTabPanel: () => <div data-testid="panel-find">FIND</div>,
 }))
 
 import { RightPane } from './RightPane'
@@ -61,33 +61,35 @@ function renderRightPane(initialMode?: WorkspaceContextValue['state']['rightPane
 }
 
 describe('RightPane', () => {
-  it('renders the AI panel by default', async () => {
+  it('renders the Find panel by default', async () => {
+    // Phase 12: defaultWorkspaceState lands on 'find' so a freshly-
+    // opened study shows the in-project tree first instead of an empty
+    // chat. AI is one click away.
     renderRightPane()
-    // After the loadFn resolves, the AI panel is active.
-    await screen.findByTestId('panel-ai')
-    expect(screen.queryByTestId('panel-browse')).toBeNull()
+    await screen.findByTestId('panel-find')
+    expect(screen.queryByTestId('panel-ai')).toBeNull()
   })
 
-  it('clicking Browse switches the active panel', async () => {
+  it('clicking AI switches the active panel', async () => {
     renderRightPane()
-    await screen.findByTestId('panel-ai')
-    fireEvent.click(screen.getByTestId('right-pane-tab-browse'))
-    expect(screen.getByTestId('panel-browse')).toBeTruthy()
-    expect(screen.queryByTestId('panel-ai')).toBeNull()
+    await screen.findByTestId('panel-find')
+    fireEvent.click(screen.getByTestId('right-pane-tab-ai'))
+    expect(screen.getByTestId('panel-ai')).toBeTruthy()
+    expect(screen.queryByTestId('panel-find')).toBeNull()
   })
 
   it('clicking Search switches the active panel', async () => {
     renderRightPane()
-    await screen.findByTestId('panel-ai')
+    await screen.findByTestId('panel-find')
     fireEvent.click(screen.getByTestId('right-pane-tab-search'))
     expect(screen.getByTestId('panel-search')).toBeTruthy()
   })
 
   it('aria-selected reflects the active mode', async () => {
-    renderRightPane('browse')
-    await screen.findByTestId('panel-browse')
+    renderRightPane('find')
+    await screen.findByTestId('panel-find')
     expect(
-      screen.getByTestId('right-pane-tab-browse').getAttribute('aria-selected'),
+      screen.getByTestId('right-pane-tab-find').getAttribute('aria-selected'),
     ).toBe('true')
     expect(
       screen.getByTestId('right-pane-tab-ai').getAttribute('aria-selected'),

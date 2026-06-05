@@ -5,7 +5,7 @@
  *  - renders one tab per open study and a trailing "+" button
  *  - active tab gets the --active class based on URL param
  *  - clicking a tab navigates to /project/<studyId>
- *  - closing the active tab navigates to a sibling, then to /browser
+ *  - closing the active tab navigates to a sibling, then to / (Welcome)
  *    when none remain
  *  - "+" toggles the StudyPickerPopover; the popover render path uses
  *    apiClient.listRecordsByKind which is mocked here
@@ -18,6 +18,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom'
+import { ThemeProvider } from '../../shared/shell'
 import { ProjectTabStrip } from './ProjectTabStrip'
 import {
   clearOpenStudies,
@@ -48,24 +49,25 @@ function LocationRecorder() {
 }
 
 function renderStrip(initial = '/project/STU-000001') {
+  // ThemeProvider is required because the SettingsMenuButton mounts
+  // BrandMenuDropdown which reads from `useTheme()`.
   return render(
-    <MemoryRouter initialEntries={[initial]}>
-      <Routes>
-        <Route
-          path="/project/:studyId"
-          element={
-            <>
-              <ProjectTabStrip />
-              <LocationRecorder />
-            </>
-          }
-        />
-        <Route
-          path="/browser"
-          element={<LocationRecorder />}
-        />
-      </Routes>
-    </MemoryRouter>,
+    <ThemeProvider>
+      <MemoryRouter initialEntries={[initial]}>
+        <Routes>
+          <Route
+            path="/project/:studyId"
+            element={
+              <>
+                <ProjectTabStrip />
+                <LocationRecorder />
+              </>
+            }
+          />
+          <Route path="/" element={<LocationRecorder />} />
+        </Routes>
+      </MemoryRouter>
+    </ThemeProvider>,
   )
 }
 
@@ -119,11 +121,11 @@ describe('ProjectTabStrip', () => {
     )
   })
 
-  it('closing the last remaining tab navigates to /browser', () => {
+  it('closing the last remaining tab navigates to / (Welcome)', () => {
     openStudy('STU-000001', 'A')
     renderStrip('/project/STU-000001')
     fireEvent.click(screen.getByTestId('project-tab-close-STU-000001'))
-    expect(screen.getByTestId('current-location').textContent).toBe('/browser')
+    expect(screen.getByTestId('current-location').textContent).toBe('/')
   })
 
   it('closing an inactive tab leaves the URL unchanged', () => {
@@ -143,5 +145,30 @@ describe('ProjectTabStrip', () => {
     expect(screen.getByTestId('study-picker-popover')).toBeTruthy()
     fireEvent.click(screen.getByTestId('project-tab-add'))
     expect(screen.queryByTestId('study-picker-popover')).toBeNull()
+  })
+
+  it('renders the settings gear at the trailing edge of the strip', () => {
+    renderStrip('/project/STU-000001')
+    expect(screen.getByTestId('settings-menu-button')).toBeTruthy()
+    expect(screen.getByTestId('settings-menu-trigger')).toBeTruthy()
+  })
+
+  it('clicking the gear opens the brand menu dropdown (Settings / Theme / About)', () => {
+    renderStrip('/project/STU-000001')
+    expect(screen.queryByTestId('brand-menu-dropdown')).toBeNull()
+    fireEvent.click(screen.getByTestId('settings-menu-trigger'))
+    expect(screen.getByTestId('brand-menu-dropdown')).toBeTruthy()
+    // The three reuseable items from BrandMenuDropdown should be visible.
+    expect(screen.getByText('Settings')).toBeTruthy()
+    expect(screen.getByText(/Theme:/)).toBeTruthy()
+    expect(screen.getByText('About')).toBeTruthy()
+  })
+
+  it('gear toggles closed when clicked again', () => {
+    renderStrip('/project/STU-000001')
+    fireEvent.click(screen.getByTestId('settings-menu-trigger'))
+    expect(screen.getByTestId('brand-menu-dropdown')).toBeTruthy()
+    fireEvent.click(screen.getByTestId('settings-menu-trigger'))
+    expect(screen.queryByTestId('brand-menu-dropdown')).toBeNull()
   })
 })

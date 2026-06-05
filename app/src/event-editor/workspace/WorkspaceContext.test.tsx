@@ -54,9 +54,9 @@ function Consumer() {
       <button
         type="button"
         data-testid="switch-mode"
-        onClick={() => ws.setRightPaneMode('browse')}
+        onClick={() => ws.setRightPaneMode('find')}
       >
-        browse
+        find
       </button>
     </div>
   )
@@ -66,7 +66,7 @@ describe('WorkspaceProvider', () => {
   it('loads initial state from the server on mount', async () => {
     const state: WorkspaceState = {
       ...defaultWorkspaceState('STU-000001'),
-      rightPaneMode: 'browse',
+      rightPaneMode: 'find',
       tabs: [
         {
           id: 'existing',
@@ -95,7 +95,11 @@ describe('WorkspaceProvider', () => {
     await waitFor(() =>
       expect(screen.getByTestId('ready').textContent).toBe('ready'),
     )
-    expect(screen.getByTestId('mode').textContent).toBe('browse')
+    expect(screen.getByTestId('mode').textContent).toBe('find')
+    // loadFn returns state with its tabs field explicitly set to one pdf,
+    // overriding defaultWorkspaceState's project-details seed. The
+    // workspace provider trusts what the server hands it; the
+    // project-details auto-insert lives in ProjectWorkspacePage, not here.
     expect(screen.getByTestId('tab-count').textContent).toBe('1')
     expect(loadFn).toHaveBeenCalledWith('STU-000001')
     // No save should have fired yet — initial load is not echoed back.
@@ -134,8 +138,10 @@ describe('WorkspaceProvider', () => {
       { timeout: 200 },
     )
     const saved = saveFn.mock.calls[0][1] as WorkspaceState
-    expect(saved.rightPaneMode).toBe('browse')
-    expect(saved.tabs).toHaveLength(1)
+    expect(saved.rightPaneMode).toBe('find')
+    // Phase 12: defaultWorkspaceState seeds a project-details tab, and
+    // `open-deck` adds the deck on top — so we expect 2 tabs (details + deck).
+    expect(saved.tabs).toHaveLength(2)
     expect(saved.activeTabId).toBe('deck-1')
   })
 
@@ -161,12 +167,14 @@ describe('WorkspaceProvider', () => {
     expect(screen.getByTestId('error').textContent).toContain('network down')
     // Default state should still be available, not a spinner-forever.
     expect(screen.getByTestId('study').textContent).toBe('STU-000001')
-    expect(screen.getByTestId('mode').textContent).toBe('ai')
+    // Phase 12: defaultWorkspaceState lands on 'find' so the freshly-
+    // opened study shows the in-project tree first.
+    expect(screen.getByTestId('mode').textContent).toBe('find')
   })
 
   it('reloads when studyId prop changes', async () => {
     const loadFn = vi.fn(async (studyId: string) => ({
-      state: { ...defaultWorkspaceState(studyId), rightPaneMode: 'browse' as const },
+      state: { ...defaultWorkspaceState(studyId), rightPaneMode: 'find' as const },
     }))
     const saveFn = vi.fn(async (_studyId: string, s: WorkspaceState) => ({ state: s }))
 

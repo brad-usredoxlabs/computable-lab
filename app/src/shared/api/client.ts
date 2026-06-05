@@ -3559,11 +3559,15 @@ export const apiClient = {
  * `app/src/event-editor/workspace/types.ts`.
  */
 export interface WorkspaceStateApi {
-  version: 1
+  // Phase 12 bumped the canonical version to 2. Accept either; the
+  // server's parser migrates v1 → v2 on read.
+  version: 1 | 2
   studyId: string
   tabs: Array<Record<string, unknown> & { id: string; kind: string; title: string }>
   activeTabId: string | null
-  rightPaneMode: 'ai' | 'search' | 'browse'
+  // 'browse' is the v1 spelling kept for back-compat with older clients
+  // still posting v1. The server rewrites it to 'find' on parse.
+  rightPaneMode: 'ai' | 'search' | 'browse' | 'find'
   rightPaneCollapsed: boolean
   paneWidths: { left: number; right: number }
 }

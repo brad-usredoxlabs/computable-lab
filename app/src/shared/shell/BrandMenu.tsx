@@ -1,14 +1,17 @@
 /**
- * BrandMenu — the brand-click menu in the top-bar's left slot.
+ * BrandMenu + BrandMenuDropdown — the Settings / Theme / About menu.
  *
- * Phase 7 retires the global Settings link from the nav: settings,
- * theme, and About all move into a single brand-anchored menu. Every
- * endpoint shares the same menu shape; AppShell wraps the `brand` prop
- * in this component so individual endpoint shells don't have to know.
+ * Phase 12 split the original component into two pieces so the menu can
+ * be mounted from two different triggers:
+ *  - `BrandMenu` — the legacy stacked-shell trigger (brand text + caret),
+ *    used by /protocols, /browser, /literature, /settings.
+ *  - `BrandMenuDropdown` — the reusable dropdown body, used directly by
+ *    the new `SettingsMenuButton` (gear icon at the end of the
+ *    workspace project tab strip). Both surfaces show the same items.
  *
- * Settings opens the off-nav `/settings` shell route so the page gets normal
- * browser history and deep-link behavior. Theme toggles inline. About shows
- * a small dialog.
+ * Settings opens the off-nav `/settings` shell route so the page gets
+ * normal browser history + deep-link behavior. Theme toggles inline.
+ * About shows a small dialog.
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
@@ -21,12 +24,10 @@ interface BrandMenuProps {
 
 export function BrandMenu({ brand }: BrandMenuProps) {
   const [open, setOpen] = useState(false)
-  const [aboutOpen, setAboutOpen] = useState(false)
-  const { resolvedTheme, toggleTheme } = useTheme()
-  const navigate = useNavigate()
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Tap-outside / Escape closes the dropdown.
+  // Tap-outside closes the dropdown. Escape handling lives in
+  // BrandMenuDropdown itself so the gear-button trigger gets it too.
   useEffect(() => {
     if (!open) return
     function onDocClick(event: MouseEvent) {
@@ -34,67 +35,101 @@ export function BrandMenu({ brand }: BrandMenuProps) {
       if (target && containerRef.current?.contains(target)) return
       setOpen(false)
     }
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false)
-    }
     document.addEventListener('mousedown', onDocClick)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDocClick)
-      document.removeEventListener('keydown', onKey)
-    }
+    return () => document.removeEventListener('mousedown', onDocClick)
   }, [open])
 
+  return (
+    <div ref={containerRef} className="brand-menu" style={{ position: 'relative' }}>
+      <button
+        type="button"
+        className="topbar__brand brand-menu__trigger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        {brand}
+        <span className="brand-menu__caret" aria-hidden>
+          ▾
+        </span>
+      </button>
+      {open ? <BrandMenuDropdown onClose={() => setOpen(false)} /> : null}
+    </div>
+  )
+}
+
+/**
+ * The Settings / Theme / About menu body + About modal. Renders only
+ * when its parent decides to mount it (the parent owns the open/close
+ * state — both legacy BrandMenu and the new SettingsMenuButton drive
+ * it). The dropdown is absolutely-positioned, so the parent must be
+ * `position: relative`.
+ */
+export interface BrandMenuDropdownProps {
+  /** Called when the user picks an item or presses Escape. */
+  onClose: () => void
+  /** Right-anchor the dropdown when used by the gear button (the
+   *  trigger is on the right side of the topbar; anchoring left would
+   *  push the popover off-screen). */
+  align?: 'left' | 'right'
+}
+
+export function BrandMenuDropdown({ onClose, align = 'left' }: BrandMenuDropdownProps) {
+  const [aboutOpen, setAboutOpen] = useState(false)
+  const { resolvedTheme, toggleTheme } = useTheme()
+  const navigate = useNavigate()
+
+  // Escape closes the popover; the About modal owns its own Escape.
+  useEffect(() => {
+    if (aboutOpen) return
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [aboutOpen, onClose])
+
   const openSettings = useCallback(() => {
-    setOpen(false)
+    onClose()
     navigate('/settings')
-  }, [navigate])
+  }, [navigate, onClose])
 
   const openAbout = useCallback(() => {
     setAboutOpen(true)
-    setOpen(false)
   }, [])
 
   const handleThemeToggle = useCallback(() => {
     toggleTheme()
-    setOpen(false)
-  }, [toggleTheme])
+    onClose()
+  }, [toggleTheme, onClose])
 
   return (
     <>
-      <div ref={containerRef} className="brand-menu" style={{ position: 'relative' }}>
-        <button
-          type="button"
-          className="topbar__brand brand-menu__trigger"
-          aria-haspopup="menu"
-          aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
-        >
-          {brand}
-          <span className="brand-menu__caret" aria-hidden>
-            ▾
-          </span>
-        </button>
-        {open && (
-          <ul className="brand-menu__dropdown" role="menu">
-            <li>
-              <button type="button" role="menuitem" onClick={openSettings}>
-                Settings
-              </button>
-            </li>
-            <li>
-              <button type="button" role="menuitem" onClick={handleThemeToggle}>
-                Theme: {resolvedTheme === 'dark' ? 'Dark' : 'Light'}
-              </button>
-            </li>
-            <li>
-              <button type="button" role="menuitem" onClick={openAbout}>
-                About
-              </button>
-            </li>
-          </ul>
-        )}
-      </div>
+      <ul
+        className={
+          align === 'right'
+            ? 'brand-menu__dropdown brand-menu__dropdown--align-right'
+            : 'brand-menu__dropdown'
+        }
+        role="menu"
+        data-testid="brand-menu-dropdown"
+      >
+        <li>
+          <button type="button" role="menuitem" onClick={openSettings}>
+            Settings
+          </button>
+        </li>
+        <li>
+          <button type="button" role="menuitem" onClick={handleThemeToggle}>
+            Theme: {resolvedTheme === 'dark' ? 'Dark' : 'Light'}
+          </button>
+        </li>
+        <li>
+          <button type="button" role="menuitem" onClick={openAbout}>
+            About
+          </button>
+        </li>
+      </ul>
       {aboutOpen && (
         <ModalOverlay onClose={() => setAboutOpen(false)} title="About">
           <AboutPanel />
@@ -200,6 +235,10 @@ const brandMenuStyles = `
   border-radius: 6px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
   min-width: 180px;
+}
+.brand-menu__dropdown--align-right {
+  left: auto;
+  right: 0;
 }
 .brand-menu__dropdown li button {
   font: inherit;

@@ -12,7 +12,20 @@
  * could end up in telemetry as the selected `systemPromptId`.
  */
 
-import type { WorkspaceViewerKind } from '../../workspace/types'
+import type { WorkspaceTab, WorkspaceViewerKind } from '../../workspace/types'
+
+/** The tab kinds the AI panel can derive a system prompt from. Phase 12
+ *  added `project-details`, which uses the same NO_VIEWER preamble as
+ *  the null case (no viewer is open, ask the agent to help navigate). */
+type SystemPromptKind = WorkspaceViewerKind | 'project-details' | null
+
+/** Convenience: get the SystemPromptKind from a WorkspaceTab (or null). */
+export function systemPromptKindForTab(
+  tab: WorkspaceTab | null,
+): SystemPromptKind {
+  if (!tab) return null
+  return tab.kind
+}
 
 export interface ViewerSystemPrompt {
   /** Stable identifier for telemetry / future server-side selection. */
@@ -47,8 +60,14 @@ const NO_VIEWER: ViewerSystemPrompt = {
   body: 'You are assisting with a computable-lab study. The user has no viewer tab open yet — encourage them to open a deck, PDF, or document so subsequent answers can ground in concrete artifacts.',
 }
 
+const PROJECT_DETAILS: ViewerSystemPrompt = {
+  id: 'workspace.project-details',
+  label: 'Project overview',
+  body: 'You are assisting with a computable-lab study at the project-overview level — the user is looking at the experiments / runs tree and artifact sections. Help them navigate the project, summarize what they have, or pick a record to open. Do not draft event graphs unless the user explicitly opens a deck.',
+}
+
 export function systemPromptForViewer(
-  kind: WorkspaceViewerKind | null,
+  kind: SystemPromptKind,
 ): ViewerSystemPrompt {
   switch (kind) {
     case 'deck':
@@ -57,6 +76,8 @@ export function systemPromptForViewer(
       return PDF
     case 'document':
       return DOCUMENT
+    case 'project-details':
+      return PROJECT_DETAILS
     case null:
       return NO_VIEWER
     default: {

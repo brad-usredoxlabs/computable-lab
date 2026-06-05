@@ -14,6 +14,7 @@ import type {
   StudyTreeNode,
   ExperimentTreeNode,
   RunTreeNode,
+  ArtifactSummaryEntry,
   IndexQuery,
 } from './types.js';
 import { resolveSeedRecordsDir } from './seedRecordsDir.js';
@@ -73,6 +74,13 @@ function buildIndexEntry(
   const title = (payload.title || payload.name || payload.label) as string | undefined;
   const createdAt = payload.createdAt as string | undefined;
   const updatedAt = payload.updatedAt as string | undefined;
+  // Phase 12: capture artifactKind for artifact records so the tree
+  // handler can attach typed artifact summaries without re-reading
+  // each YAML payload.
+  const artifactKind =
+    kind === 'artifact' && typeof payload.artifactKind === 'string'
+      ? (payload.artifactKind as string)
+      : undefined;
   
   // Build links object conditionally
   const links: IndexEntry['links'] = hasLinks ? {
@@ -88,10 +96,34 @@ function buildIndexEntry(
     path: filePath,
     hash,
     ...(kind !== undefined ? { kind } : {}),
+    ...(artifactKind !== undefined ? { artifactKind } : {}),
     ...(title !== undefined ? { title } : {}),
     ...(links !== undefined ? { links } : {}),
     ...(createdAt !== undefined ? { createdAt } : {}),
     ...(updatedAt !== undefined ? { updatedAt } : {}),
+  };
+}
+
+/**
+ * Convert an artifact `IndexEntry` into the lightweight tree summary
+ * the Phase 12 Find tab consumes. studyId is always known (from the
+ * containing node); experimentId is only set when the artifact is
+ * scoped to a specific experiment (the parent run's experimentId for
+ * run-scoped artifacts).
+ */
+function indexEntryToArtifactSummary(
+  entry: IndexEntry,
+  studyId: string,
+  experimentId?: string,
+): ArtifactSummaryEntry {
+  return {
+    recordId: entry.recordId,
+    title: entry.title || entry.recordId,
+    artifactKind: entry.artifactKind || 'unknown',
+    studyId,
+    path: entry.path,
+    ...(experimentId !== undefined ? { experimentId } : {}),
+    ...(entry.updatedAt !== undefined ? { updatedAt: entry.updatedAt } : {}),
   };
 }
 
@@ -503,44 +535,70 @@ export class IndexManager {
     if (!this.loaded) {
       await this.load();
     }
-    
+
     // Get all studies
     const studies = await this.query({ kind: 'study' });
-    
+
     // Get all experiments
     const experiments = await this.query({ kind: 'experiment' });
-    
+
     // Get all runs
     const runs = await this.query({ kind: 'run' });
-    
+
+    // Phase 12: pre-bucket artifacts by their most-specific parent so we
+    // emit each one exactly once on the correct tree node. A `links.runId`
+    // wins over `links.experimentId` wins over `links.studyId`.
+    const allArtifacts = await this.query({ kind: 'artifact' });
+    const artifactsByRun = new Map<string, IndexEntry[]>();
+    const artifactsByExperiment = new Map<string, IndexEntry[]>();
+    const artifactsByStudy = new Map<string, IndexEntry[]>();
+    for (const a of allArtifacts) {
+      if (a.links?.runId) {
+        const arr = artifactsByRun.get(a.links.runId) ?? [];
+        arr.push(a);
+        artifactsByRun.set(a.links.runId, arr);
+      } else if (a.links?.experimentId) {
+        const arr = artifactsByExperiment.get(a.links.experimentId) ?? [];
+        arr.push(a);
+        artifactsByExperiment.set(a.links.experimentId, arr);
+      } else if (a.links?.studyId) {
+        const arr = artifactsByStudy.get(a.links.studyId) ?? [];
+        arr.push(a);
+        artifactsByStudy.set(a.links.studyId, arr);
+      }
+      // Artifacts with no parent link at all are orphaned — Phase 12 tree
+      // ignores them so the Find tab doesn't surface stray records. The
+      // generic /records API can still list them for an admin workflow.
+    }
+
     // Get all other records for counting
     const allEntries = Array.from(this.entries.values());
-    
+
     // Build tree
     const tree: StudyTreeNode[] = [];
-    
+
     for (const study of studies) {
       // Get experiments for this study
       const studyExperiments = experiments.filter(
         e => e.links?.studyId === study.recordId
       );
-      
+
       const experimentNodes: ExperimentTreeNode[] = [];
-      
+
       for (const exp of studyExperiments) {
         // Get runs for this experiment
         const expRuns = runs.filter(
           r => r.links?.experimentId === exp.recordId
         );
-        
+
         const runNodes: RunTreeNode[] = [];
-        
+
         for (const run of expRuns) {
           // Count records linked to this run
           const runRecords = allEntries.filter(
             e => e.links?.runId === run.recordId && e.kind !== 'run'
           );
-          
+
           const counts = {
             eventGraphs: runRecords.filter(r => r.kind === 'event-graph' || r.schemaId.includes('event-graph')).length,
             plates: runRecords.filter(r => r.kind === 'plate' || r.schemaId.includes('plate')).length,
@@ -551,7 +609,10 @@ export class IndexManager {
             other: 0,
           };
           counts.other = runRecords.length - Object.values(counts).reduce((a, b) => a + b, 0);
-          
+
+          const runArtifactSummaries = (artifactsByRun.get(run.recordId) ?? [])
+            .map((a) => indexEntryToArtifactSummary(a, study.recordId, exp.recordId));
+
           runNodes.push({
             recordId: run.recordId,
             title: run.title || run.recordId,
@@ -559,26 +620,41 @@ export class IndexManager {
             studyId: study.recordId,
             experimentId: exp.recordId,
             recordCounts: counts,
+            ...(runArtifactSummaries.length > 0
+              ? { artifacts: runArtifactSummaries }
+              : {}),
           });
         }
-        
+
+        const expArtifactSummaries = (artifactsByExperiment.get(exp.recordId) ?? [])
+          .map((a) => indexEntryToArtifactSummary(a, study.recordId, exp.recordId));
+
         experimentNodes.push({
           recordId: exp.recordId,
           title: exp.title || exp.recordId,
           path: exp.path,
           studyId: study.recordId,
           runs: runNodes,
+          ...(expArtifactSummaries.length > 0
+            ? { artifacts: expArtifactSummaries }
+            : {}),
         });
       }
-      
+
+      const studyArtifactSummaries = (artifactsByStudy.get(study.recordId) ?? [])
+        .map((a) => indexEntryToArtifactSummary(a, study.recordId));
+
       tree.push({
         recordId: study.recordId,
         title: study.title || study.recordId,
         path: study.path,
         experiments: experimentNodes,
+        ...(studyArtifactSummaries.length > 0
+          ? { artifacts: studyArtifactSummaries }
+          : {}),
       });
     }
-    
+
     return tree;
   }
   

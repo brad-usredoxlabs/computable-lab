@@ -35,19 +35,22 @@ export function AiTabPanel() {
   // ride in `attachments` when Phase 9 adds upload support; today the
   // agent can ask the user to dispatch via Run-in-event-editor when it
   // needs the viewer's body to draft a graph.
-  const context = useMemo(
-    () => ({
+  const context = useMemo(() => {
+    const activeArtifactId =
+      activeTab && (activeTab.kind === 'pdf' || activeTab.kind === 'document')
+        ? activeTab.artifactId
+        : null
+    const activeEventGraphId =
+      activeTab?.kind === 'deck' ? activeTab.eventGraphId : null
+    return {
       studyId: ws.state.studyId,
       activeTabKind: activeTab?.kind ?? null,
-      activeArtifactId:
-        activeTab && activeTab.kind !== 'deck' ? activeTab.artifactId : null,
-      activeEventGraphId:
-        activeTab?.kind === 'deck' ? activeTab.eventGraphId : null,
+      activeArtifactId,
+      activeEventGraphId,
       systemPromptId: systemPrompt.id,
       systemPromptBody: systemPrompt.body,
-    }),
-    [ws.state.studyId, activeTab, systemPrompt],
-  )
+    }
+  }, [ws.state.studyId, activeTab, systemPrompt])
 
   const chat = useChatThread({
     surface: systemPrompt.id,

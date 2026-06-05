@@ -105,12 +105,22 @@ export function AppShell({
 
   return (
     <div className={cls} data-theme={resolvedTheme}>
-      <AppShellTopBar
-        brand={brand}
-        middle={topbarMiddle}
-        right={topbarRight}
-        tabs={topbarTabs}
-      />
+      {isWorkspace ? (
+        // Phase 12: the workspace topbar is ONLY the project tab strip.
+        // Brand / middle / right slots are dropped entirely in this mode —
+        // Settings / Theme / About live in a gear icon hosted by the tab
+        // strip itself (Phase 12.3). The legacy stacked layout below keeps
+        // its multi-slot topbar untouched for /protocols, /browser,
+        // /literature, /event-editor, /settings.
+        <header className="topbar topbar--workspace">{topbarTabs}</header>
+      ) : (
+        <AppShellTopBar
+          brand={brand}
+          middle={topbarMiddle}
+          right={topbarRight}
+          tabs={topbarTabs}
+        />
+      )}
       {isWorkspace ? (
         <WorkspaceMain
           viewerToolbar={viewerToolbar}

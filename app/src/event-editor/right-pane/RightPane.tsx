@@ -1,24 +1,28 @@
 /**
- * RightPane — workspace right-pane shell. Three modes (AI / Search /
- * Browse), one at a time. The active mode is held in WorkspaceContext so
- * it persists per-study to workspace.yaml.
+ * RightPane — workspace right-pane shell. Three modes (AI / Find /
+ * Search), one at a time. The active mode is held in WorkspaceContext
+ * so it persists per-study to workspace.yaml.
  *
- * Replaces the inline placeholder that ProjectWorkspacePage used through
- * Phases 3–6. Each panel owns its own data fetching and rendering — this
- * file is just the chrome.
+ * Phase 12 renames the 'browse' mode to 'find' (server's parser migrates
+ * v1 inputs on read). Tab order: AI · Find · Search — Find sits next to
+ * AI because it's the primary in-project navigator (tree + local
+ * search); Search is external/vendor work.
+ *
+ * Each panel owns its own data fetching and rendering — this file is
+ * just the chrome.
  */
 
 import { useWorkspace } from '../workspace/WorkspaceContext'
 import type { WorkspaceRightPaneMode } from '../workspace/types'
 import { AiTabPanel } from './ai/AiTabPanel'
 import { SearchTabPanel } from './search/SearchTabPanel'
-import { BrowseTabPanel } from './browse/BrowseTabPanel'
+import { FindTabPanel } from './find/FindTabPanel'
 import './rightPane.css'
 
 const TABS: { mode: WorkspaceRightPaneMode; label: string }[] = [
   { mode: 'ai', label: 'AI' },
+  { mode: 'find', label: 'Find' },
   { mode: 'search', label: 'Search' },
-  { mode: 'browse', label: 'Browse' },
 ]
 
 export function RightPane() {
@@ -49,7 +53,7 @@ export function RightPane() {
       <div className="right-pane__body">
         {active === 'ai' ? <AiTabPanel /> : null}
         {active === 'search' ? <SearchTabPanel /> : null}
-        {active === 'browse' ? <BrowseTabPanel /> : null}
+        {active === 'find' ? <FindTabPanel /> : null}
       </div>
       {ws.error ? (
         <div className="right-pane__error" data-testid="right-pane-error">

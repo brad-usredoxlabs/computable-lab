@@ -1,25 +1,30 @@
 /**
  * Per-study workspace UI state — read/written by the event-editor's
- * project-workspace shell (Phase 2 of the workspace redesign).
+ * project-workspace shell (Phase 2 → Phase 12).
  *
  * This is NOT a record. It is a sidecar YAML stored alongside the study at
  * `records/studies/<studyId>/workspace.yaml`. It carries only UI state:
  * which viewer tabs are open, which one is active, the right-pane mode
- * (AI/Search/Browse), pane widths, and collapse states. Persisting it next
- * to the study (rather than per-user in localStorage) lets teammates open
- * the same study and see the same arrangement, which is a FAIR/repro win.
+ * (AI / Find / Search), pane widths, and collapse states. Persisting it
+ * next to the study (rather than per-user in localStorage) lets teammates
+ * open the same study and see the same arrangement.
  *
  * Conflict policy: last-writer-wins. Pane widths and active modes are
  * low-stakes and the throttled 500ms debounced save on the client side
  * keeps churn small. No optimistic locking.
  *
- * The shape lives in this small server-side module (and is mirrored on the
- * frontend in `app/src/event-editor/workspace/types.ts`). They are
- * structurally identical — keep them in sync when the schema evolves and
- * bump `version`.
+ * Schema versions:
+ *  - v1 — Phase 2 shape: deck / pdf / document tabs only; right-pane
+ *    modes 'ai' | 'search' | 'browse'.
+ *  - v2 — Phase 12. Adds `project-details` tab kind. Renames the
+ *    right-pane 'browse' mode to 'find'. parseWorkspaceState below
+ *    accepts BOTH versions; v1 inputs are migrated to v2 in memory and
+ *    re-saved on the next PUT.
+ *
+ * The shape mirrors `app/src/event-editor/workspace/types.ts`. Keep
+ * the two in sync when the schema evolves.
  */
 
-/** Discriminator for the open viewer kind. */
 export type WorkspaceViewerKind = 'deck' | 'pdf' | 'document';
 
 /** One open viewer tab within a study. */
@@ -41,18 +46,23 @@ export type WorkspaceTab =
       kind: 'document';
       artifactId: string;
       title: string;
+    }
+  | {
+      id: string;
+      kind: 'project-details';
+      title: string;
     };
 
-/** Which mode the right pane is in. */
-export type WorkspaceRightPaneMode = 'ai' | 'search' | 'browse';
+/** Which mode the right pane is in. Phase 12 renames `browse` to `find`. */
+export type WorkspaceRightPaneMode = 'ai' | 'search' | 'find';
 
 /**
- * Full workspace state for a single study. `studyId` is redundant with the
- * file path but kept on disk for self-describing reads in the YAML.
+ * Full workspace state for a single study. `studyId` is redundant with
+ * the file path but kept on disk for self-describing reads in the YAML.
  */
 export interface WorkspaceState {
-  /** Schema version. Bump if the shape changes incompatibly. */
-  version: 1;
+  /** Schema version. v2 as of Phase 12; v1 inputs are migrated on read. */
+  version: 2;
   studyId: string;
   tabs: WorkspaceTab[];
   activeTabId: string | null;
@@ -62,18 +72,24 @@ export interface WorkspaceState {
   paneWidths: { left: number; right: number };
 }
 
+/** Stable id for the project-details tab — one per study. */
+export function projectDetailsTabId(studyId: string): string {
+  return `details:${studyId}`;
+}
+
 /**
  * Default workspace state for a study that has no `workspace.yaml` yet.
- * Loaders should fall back to this so the UI never has to handle a missing
- * file specially.
+ * Phase 12 lands on a project-details tab so the user sees the project
+ * overview, not an empty viewer.
  */
 export function defaultWorkspaceState(studyId: string): WorkspaceState {
+  const detailsId = projectDetailsTabId(studyId);
   return {
-    version: 1,
+    version: 2,
     studyId,
-    tabs: [],
-    activeTabId: null,
-    rightPaneMode: 'ai',
+    tabs: [{ id: detailsId, kind: 'project-details', title: 'Project' }],
+    activeTabId: detailsId,
+    rightPaneMode: 'find',
     rightPaneCollapsed: false,
     paneWidths: { left: 0.6, right: 0.4 },
   };
@@ -81,11 +97,14 @@ export function defaultWorkspaceState(studyId: string): WorkspaceState {
 
 /**
  * Shallow validation of an unknown value claiming to be a WorkspaceState.
- * Used on the read path (a hand-edited YAML might be malformed) and on the
- * write path (a misbehaving client might post garbage). Returns the value
- * narrowed to WorkspaceState when valid, null otherwise.
+ * Used on the read path (a hand-edited YAML might be malformed) and on
+ * the write path (a misbehaving client might post garbage). Returns the
+ * value narrowed to WorkspaceState when valid, null otherwise.
  *
- * Intentionally lenient on unknown extra fields — forward-compat first.
+ * Accepts both v1 and v2 inputs. v1 'browse' mode migrates to v2 'find';
+ * v1 files lacking project-details get a fresh one inserted on read so
+ * the workspace always has somewhere to land. The returned object is
+ * always v2 — older builds re-saving will write v2 in place.
  */
 export function parseWorkspaceState(value: unknown): WorkspaceState | null {
   if (!value || typeof value !== 'object') return null;
@@ -109,23 +128,59 @@ export function parseWorkspaceState(value: unknown): WorkspaceState | null {
       tabs.push({ id: t.id, kind: 'pdf', artifactId: t.artifactId, title: t.title });
     } else if (t.kind === 'document' && typeof t.artifactId === 'string') {
       tabs.push({ id: t.id, kind: 'document', artifactId: t.artifactId, title: t.title });
+    } else if (t.kind === 'project-details') {
+      tabs.push({ id: t.id, kind: 'project-details', title: t.title });
     } else {
-      return null;
+      // Unknown kind — drop silently rather than refuse the whole file.
+      // Older builds opening a future-versioned file degrade by losing
+      // unknown tabs but keep working.
+      continue;
     }
   }
-  const mode = v.rightPaneMode;
-  if (mode !== 'ai' && mode !== 'search' && mode !== 'browse') return null;
+
+  // Migrate v1 'browse' to v2 'find'. Reject any other unknown value.
+  let mode: WorkspaceRightPaneMode;
+  if (v.rightPaneMode === 'browse') {
+    mode = 'find';
+  } else if (
+    v.rightPaneMode === 'ai' ||
+    v.rightPaneMode === 'search' ||
+    v.rightPaneMode === 'find'
+  ) {
+    mode = v.rightPaneMode;
+  } else {
+    return null;
+  }
+
   const collapsed = v.rightPaneCollapsed;
   if (typeof collapsed !== 'boolean') return null;
   const widths = v.paneWidths;
   if (!widths || typeof widths !== 'object') return null;
   const w = widths as Record<string, unknown>;
   if (typeof w.left !== 'number' || typeof w.right !== 'number') return null;
+
+  // Ensure every study has a project-details tab so the workspace
+  // always has a landing place. Inserted at the head so it reads as
+  // the canonical "back to overview" tab.
+  const detailsId = projectDetailsTabId(v.studyId);
+  if (!tabs.some((t) => t.kind === 'project-details')) {
+    tabs.unshift({ id: detailsId, kind: 'project-details', title: 'Project' });
+  }
+
+  // If the persisted activeTabId no longer matches any tab (e.g. a
+  // record was deleted), fall back to the project-details tab so the
+  // UI doesn't render with no active selection.
+  const persistedActive =
+    (v.activeTabId as string | null | undefined) ?? null;
+  const activeTabId = tabs.some((t) => t.id === persistedActive)
+    ? persistedActive
+    : detailsId;
+
   return {
-    version: 1,
+    version: 2,
     studyId: v.studyId,
     tabs,
-    activeTabId: (v.activeTabId as string | null | undefined) ?? null,
+    activeTabId,
     rightPaneMode: mode,
     rightPaneCollapsed: collapsed,
     paneWidths: { left: w.left, right: w.right },
