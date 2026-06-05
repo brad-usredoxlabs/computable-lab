@@ -30,6 +30,10 @@ export function ViewerToolbar({ tab }: ViewerToolbarProps) {
       return <PdfToolbar artifactId={tab.artifactId} />
     case 'document':
       return <DocumentToolbar artifactId={tab.artifactId} />
+    case 'project-details':
+      // The project-overview landing surface has its own header inside
+      // the viewer body — no per-surface toolbar.
+      return null
     default: {
       const _exhaustive: never = tab
       return _exhaustive ?? null

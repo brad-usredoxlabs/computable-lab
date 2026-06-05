@@ -36,6 +36,11 @@ export function Viewer({ tab }: ViewerProps) {
       return <PdfViewer artifactId={tab.artifactId} title={tab.title} />
     case 'document':
       return <DocumentEditor artifactId={tab.artifactId} title={tab.title} />
+    case 'project-details':
+      // ProjectWorkspacePage's LeftPane renders ProjectDetailsView directly
+      // for this kind and doesn't call Viewer; this arm exists so a future
+      // caller can't crash by handing us a project-details tab.
+      return <EmptyViewerState />
     default: {
       const _exhaustive: never = tab
       return _exhaustive ?? <EmptyViewerState />
@@ -49,10 +54,9 @@ function EmptyViewerState() {
       <div className="viewer-empty__inner">
         <h2>No viewer open</h2>
         <p>
-          Use the right pane's <strong>Browse</strong> mode to open a deck,
-          a PDF, or a document. The right-pane modes are placeholders until
-          Phase 7 — you can still flip between AI / Search / Browse and the
-          state will save to <code>workspace.yaml</code>.
+          Use the right pane's <strong>Find</strong> tab to open a deck, a
+          PDF, or a document. State persists per-study via
+          <code>workspace.yaml</code>.
         </p>
       </div>
     </div>
