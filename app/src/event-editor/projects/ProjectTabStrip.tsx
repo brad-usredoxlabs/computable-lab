@@ -97,21 +97,23 @@ export function ProjectTabStrip() {
           </a>
         )
       })}
-      <button
-        type="button"
-        className="project-tab__add"
-        aria-label="Open another study"
-        data-testid="project-tab-add"
-        onClick={() => setPickerOpen((v) => !v)}
-      >
-        +
-      </button>
-      {pickerOpen ? (
-        <StudyPickerPopover
-          onPick={handlePicked}
-          onDismiss={() => setPickerOpen(false)}
-        />
-      ) : null}
+      <div className="project-tab-strip__add-wrap">
+        <button
+          type="button"
+          className="project-tab__add"
+          aria-label="Open another study"
+          data-testid="project-tab-add"
+          onClick={() => setPickerOpen((v) => !v)}
+        >
+          +
+        </button>
+        {pickerOpen ? (
+          <StudyPickerPopover
+            onPick={handlePicked}
+            onDismiss={() => setPickerOpen(false)}
+          />
+        ) : null}
+      </div>
     </div>
   )
 }

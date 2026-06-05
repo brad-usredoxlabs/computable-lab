@@ -47,7 +47,20 @@
   align-items: stretch;
   gap: 0;
   min-width: 0;
+  /* `position: relative` USED to live here so StudyPickerPopover could
+     anchor against the whole strip. That broke with zero open studies:
+     the strip was ~28 px wide (just the +) and the popover, positioned
+     `right: 0; width: 320px`, extended 290 px off the left edge of the
+     viewport. Anchoring is now on `__add-wrap` (a relative container
+     around just the + button) so the popover lands under the + at any
+     tab count. */
+}
+
+/* The wrapper around just the + button — popover anchors here. */
+.project-tab-strip__add-wrap {
   position: relative;
+  display: inline-flex;
+  align-items: stretch;
 }
 
 .project-tab {

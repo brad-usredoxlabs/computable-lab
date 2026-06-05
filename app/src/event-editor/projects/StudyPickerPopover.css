@@ -1,11 +1,15 @@
 /* StudyPickerPopover — small floating list of studies, anchored to the
    "+" button in the project tab strip. Absolutely-positioned within the
-   tab strip's `position: relative` container. */
+   `.project-tab-strip__add-wrap` (a narrow relative container around
+   just the + button) so the popover hangs DOWN-and-RIGHTWARD from the
+   button regardless of how many tabs precede it. The earlier `right: 0`
+   anchored to the whole strip and slid the popover off-screen left
+   whenever the strip had zero open-study tabs. */
 
 .study-picker-popover {
   position: absolute;
   top: calc(100% + 4px);
-  right: 0;
+  left: 0;
   z-index: 30;
   background: var(--cl-bg-elev);
   border: 1px solid var(--cl-border);
