@@ -1095,10 +1095,13 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
           }
 
           const nowIso = new Date().toISOString();
+          // The schema URI belongs in the envelope's `schemaId` (passed to
+          // createEnvelope below), not the payload. The artifact schema
+          // declares `unevaluatedProperties: false`, so a stray `$schema`
+          // here makes validation fail and store.create returns success:false,
+          // which the frontend surfaces as "legacy chat-draft mode."
           const payload = {
             kind: 'artifact' as const,
-            $schema:
-              'https://computable-lab.com/schema/computable-lab/artifact.schema.yaml',
             recordId,
             title: artifactTitle,
             studyId: requestedStudyId,
