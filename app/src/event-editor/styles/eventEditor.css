@@ -145,7 +145,15 @@
 
 /* ---- Stage (deck area) ---- */
 
-.event-editor .event-editor__stage-host {
+/* Drop the `.event-editor` ancestor scope: DeckViewer places both classes
+   on the same element, so a descendant combinator never matches and the
+   wrapper falls back to block flow — which collapses the focus view to
+   zero height because .focus is position: absolute. Also add flex: 1 so
+   the wrapper fills its parent in the Phase 12 workspace pane (flex
+   column); harmless in the legacy stacked AppShell where it lives in a
+   grid 1fr row and align-self: stretch already does the same job. */
+.event-editor__stage-host {
+  flex: 1;
   min-height: 0;
   min-width: 0;
   display: flex;
