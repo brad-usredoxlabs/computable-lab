@@ -1,22 +1,43 @@
 /**
- * ChatInput — textarea + Send/Stop buttons for the workspace AI panel.
+ * ChatInput — TipTap-backed prompt editor + Send/Stop buttons for the
+ * workspace AI panel.
  *
- * Phase 7b ships a plain textarea (no TipTap) to keep the dependency
- * surface tight. The slash-menu and ontology-copilot integration the
- * legacy dock has are valuable but a follow-up — wiring them into a
- * fresh editor instance is its own state machine. The textarea handles
- * the 80% case (typing + Enter to send + Shift-Enter for newline).
+ * Phase 7b shipped a plain textarea; Phase 13 lifts the right-pane AI
+ * tab to feature parity with the legacy EventEditorAiDock by swapping
+ * the textarea for the same TipTap stack:
+ *   - slash menu (/l labware, /m material, /p protocol, /s source,
+ *     /t target) via buildSlashMenuExtension
+ *   - @-trigger ontology copilot via buildOntologyCopilotExtension
+ *   - MentionNode chips that serialize back to the wire format the
+ *     server's mention parser already understands ([[kind:id|label]])
+ *
+ * `editorToText` is the bridge between the rich editor and the plain
+ * string the chat thread + downstream tools expect — the same serializer
+ * the legacy dock uses, so messages typed here are indistinguishable
+ * on the wire from messages typed in the dock.
  */
 
-import { useCallback, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEditor, EditorContent, type Editor } from '@tiptap/react'
+import Document from '@tiptap/extension-document'
+import Paragraph from '@tiptap/extension-paragraph'
+import Text from '@tiptap/extension-text'
+import HardBreak from '@tiptap/extension-hard-break'
+import Placeholder from '@tiptap/extension-placeholder'
+import {
+  buildSlashMenuExtension,
+  MentionNode,
+  editorToText,
+} from '../../../shared/taptab/slashMenu'
+import { buildOntologyCopilotExtension } from '../../../shared/taptab/ontologyCopilot/OntologyCopilotExtension'
+import { useSelection } from '../../../shared/context/SelectionContext'
 
 export interface ChatInputProps {
   isStreaming: boolean
   onSend: (text: string) => void | Promise<void>
   onStop: () => void
-  /** Whether the underlying provider is in a state where sending makes
-   *  sense (e.g. an active viewer is present). When false, the send button
-   *  is disabled but the textarea is still editable for staging. */
+  /** When false, the send button is disabled but the editor is still
+   *  editable so the user can stage a prompt. */
   disabled?: boolean
   /** Optional placeholder override; defaults to a generic prompt hint. */
   placeholder?: string
@@ -33,50 +54,108 @@ export function ChatInput({
   placeholder,
   prefill,
 }: ChatInputProps) {
-  const [text, setText] = useState(prefill ?? '')
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const [text, setText] = useState('')
+  // The slash menu extension wants live access to the cross-endpoint
+  // selection (the /m material kind uses selected wells); we expose it
+  // through a ref so the extension reads the latest value without
+  // forcing the editor to be re-created on selection change.
+  const selection = useSelection()
+  const selectionRef = useRef(selection)
+  useEffect(() => {
+    selectionRef.current = selection
+  }, [selection])
 
-  // If the parent pushes a new prefill (e.g. the user clicked
-  // "Run in event-editor" from a PDF viewer), replace whatever was in the
-  // textarea — the prefill is short-lived and overrides whatever the user
-  // had staged. The dependency on `prefill` here is intentional: parents
-  // should only set it when they truly want to overwrite.
-  useResetOnPrefill(prefill, setText, textareaRef)
+  // Hold the editor on a ref so `send` (declared before useEditor) can
+  // call clearContent without re-running its callback on every editor
+  // re-render.
+  const editorRef = useRef<Editor | null>(null)
 
   const send = useCallback(async () => {
     const trimmed = text.trim()
     if (!trimmed) return
     setText('')
+    editorRef.current?.commands.clearContent()
     await onSend(trimmed)
   }, [text, onSend])
 
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLTextAreaElement>) => {
-      // Enter sends; Shift-Enter / Ctrl-Enter inserts a newline. Matches
-      // the legacy dock and most chat UIs.
-      if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey) {
-        event.preventDefault()
-        void send()
-      }
+  // Track the latest send fn in a ref so the editor's keydown handler
+  // (registered once at mount) always calls the current closure.
+  const sendRef = useRef(send)
+  useEffect(() => {
+    sendRef.current = send
+  }, [send])
+
+  const isStreamingRef = useRef(isStreaming)
+  useEffect(() => {
+    isStreamingRef.current = isStreaming
+  }, [isStreaming])
+
+  const editor = useEditor({
+    extensions: [
+      Document,
+      Paragraph,
+      Text,
+      HardBreak,
+      Placeholder.configure({
+        placeholder:
+          placeholder ??
+          'Ask anything. /l labware · /m material · @ for ontology · Enter to send.',
+      }),
+      MentionNode,
+      buildSlashMenuExtension({
+        getSelection: () => selectionRef.current,
+      }),
+      buildOntologyCopilotExtension(),
+    ],
+    editorProps: {
+      attributes: { class: 'chat-input__editor' },
+      handleKeyDown(_view, event) {
+        // Enter sends; Shift-Enter inserts a hard break — matches the
+        // legacy dock and the prior textarea behavior. Don't send while
+        // a stream is in flight (the Send button is replaced by Stop in
+        // that state).
+        if (
+          event.key === 'Enter' &&
+          !event.shiftKey &&
+          !event.ctrlKey &&
+          !event.metaKey
+        ) {
+          event.preventDefault()
+          if (!isStreamingRef.current) void sendRef.current()
+          return true
+        }
+        return false
+      },
     },
-    [send],
-  )
+    onUpdate({ editor }) {
+      setText(editorToText(editor))
+    },
+  })
+
+  useEffect(() => {
+    editorRef.current = editor
+  }, [editor])
+
+  // Run-in-event-editor prefill: parent pushes a string in; we replace
+  // the editor content (escaping HTML so it lands as plain text in the
+  // paragraph). The ref guards against re-applying the same prefill on
+  // unrelated re-renders.
+  const lastPrefillRef = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (prefill === undefined) return
+    if (prefill === lastPrefillRef.current) return
+    lastPrefillRef.current = prefill
+    if (!editor) return
+    editor.commands.setContent(`<p>${escapeHtml(prefill)}</p>`)
+    setText(prefill)
+    editor.commands.focus('end')
+  }, [prefill, editor])
 
   return (
     <div className="chat-input" data-testid="chat-input">
-      <textarea
-        ref={textareaRef}
-        className="chat-input__textarea"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={
-          placeholder ??
-          'Ask anything about this viewer. Enter to send, Shift-Enter for newline.'
-        }
-        rows={3}
-        data-testid="chat-input-textarea"
-      />
+      <div className="chat-input__editor-wrap">
+        <EditorContent editor={editor} />
+      </div>
       <div className="chat-input__actions">
         {isStreaming ? (
           <button
@@ -103,20 +182,11 @@ export function ChatInput({
   )
 }
 
-// Tiny helper so the prefill effect doesn't clutter the main component.
-function useResetOnPrefill(
-  prefill: string | undefined,
-  setText: (v: string) => void,
-  textareaRef: React.MutableRefObject<HTMLTextAreaElement | null>,
-): void {
-  const lastPrefillRef = useRef<string | undefined>(undefined)
-  if (prefill !== undefined && prefill !== lastPrefillRef.current) {
-    lastPrefillRef.current = prefill
-    // Defer to allow whatever triggered the prefill (likely a button click)
-    // to finish its synchronous work first.
-    queueMicrotask(() => {
-      setText(prefill)
-      textareaRef.current?.focus()
-    })
-  }
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
 }

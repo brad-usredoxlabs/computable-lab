@@ -186,22 +186,51 @@
   gap: 6px;
 }
 
-.chat-input__textarea {
-  appearance: none;
+/* Wrapper around the TipTap EditorContent. The wrapper carries the
+   chrome (border, padding, background); the inner contenteditable
+   (.chat-input__editor, set via editorProps.attributes) handles the
+   text styling and caret. Focus styling lights up when the inner
+   contenteditable is focused. */
+.chat-input__editor-wrap {
   background: var(--cl-bg);
   border: 1px solid var(--cl-border);
   border-radius: 6px;
+  padding: 8px;
+  min-height: 60px;
+  max-height: 240px;
+  overflow-y: auto;
+  transition: border-color 120ms ease;
+}
+
+.chat-input__editor-wrap:focus-within {
+  border-color: var(--cl-accent);
+}
+
+.chat-input__editor {
+  outline: none;
   color: var(--cl-text);
   font: inherit;
   font-size: 13px;
-  padding: 8px;
-  resize: vertical;
-  min-height: 60px;
-  outline: none;
+  min-height: 44px;
 }
 
-.chat-input__textarea:focus {
-  border-color: var(--cl-accent);
+.chat-input__editor p {
+  margin: 0;
+}
+
+.chat-input__editor p + p {
+  margin-top: 6px;
+}
+
+/* TipTap placeholder is rendered as a :before on the first empty p
+   when Placeholder.configure is used. Same pattern the legacy
+   .ai-dock__input-editor uses. */
+.chat-input__editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--cl-text-faint);
+  pointer-events: none;
+  float: left;
+  height: 0;
 }
 
 .chat-input__actions {
