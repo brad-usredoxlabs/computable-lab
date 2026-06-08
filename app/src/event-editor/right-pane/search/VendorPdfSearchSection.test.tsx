@@ -105,7 +105,13 @@ describe('VendorPdfSearchSection', () => {
     expect(ingestArgs.query).toBe('ultra')
     expect(ingestArgs.url).toBe('https://neb.example/ultra.pdf')
     await waitFor(() =>
-      expect(onIngested).toHaveBeenCalledWith('ART-ABCDEF123456'),
+      expect(onIngested).toHaveBeenCalledWith(
+        'ART-ABCDEF123456',
+        expect.objectContaining({
+          sourceUrl: 'https://neb.example/ultra.pdf',
+          title: 'NEBNext Ultra II',
+        }),
+      ),
     )
     expect(
       screen.getByTestId('vendor-pdf-ingest-success').textContent,

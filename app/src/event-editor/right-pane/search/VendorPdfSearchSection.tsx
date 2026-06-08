@@ -20,8 +20,16 @@ type VendorPdfResult = GraphLemurPdfSearchResult
 
 export interface VendorPdfSearchSectionProps {
   studyId: string
-  /** Called after the server confirms the artifact was written. */
-  onIngested: (artifactId: string) => void
+  /**
+   * Called after the server confirms the artifact was written. The
+   * second arg carries enough metadata that callers can show a chip /
+   * tab title without a follow-up record fetch — the AI tab's "+ Add
+   * source" flow uses it that way; the Search tab ignores it.
+   */
+  onIngested: (
+    artifactId: string,
+    info: { title?: string; sourceUrl: string; vendor?: string },
+  ) => void
 }
 
 export function VendorPdfSearchSection({
@@ -69,7 +77,11 @@ export function VendorPdfSearchSection({
         })
         if (response.recordedArtifact) {
           setLastIngested(response.recordedArtifact.recordId)
-          onIngested(response.recordedArtifact.recordId)
+          onIngested(response.recordedArtifact.recordId, {
+            ...(result.title ? { title: result.title } : {}),
+            sourceUrl: result.url,
+            ...(result.vendor ? { vendor: result.vendor } : {}),
+          })
         } else {
           // Server didn't write a record — most likely the studyId wasn't
           // accepted (e.g. workspace root not configured). Surface so the

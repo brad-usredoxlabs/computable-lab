@@ -101,6 +101,108 @@
   color: var(--cl-text-faint);
 }
 
+.sources-strip__hint strong {
+  color: var(--cl-text-dim);
+  font-weight: 600;
+}
+
+/* Added-source chips are buttons (click → open in viewer). Borrow the
+   chip pill chrome but make the affordance obvious on hover. */
+.sources-strip__chip--added {
+  appearance: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 100ms ease, background 100ms ease;
+}
+
+.sources-strip__chip--added:hover {
+  border-color: var(--cl-accent);
+  background: var(--cl-bg-elev);
+}
+
+.sources-strip__add-btn {
+  appearance: none;
+  border: 1px dashed var(--cl-border);
+  background: transparent;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--cl-text-faint);
+  cursor: pointer;
+  transition: border-color 100ms ease, color 100ms ease;
+}
+
+.sources-strip__add-btn:hover {
+  border-color: var(--cl-accent);
+  color: var(--cl-accent);
+}
+
+/* ---- AddSourceModal ------------------------------------------------- */
+
+.add-source-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(14, 17, 22, 0.65);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 80;
+  padding: 24px;
+}
+
+.add-source-dialog {
+  background: var(--cl-bg-elev);
+  border: 1px solid var(--cl-border-strong);
+  border-radius: 10px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
+  width: min(640px, 100%);
+  max-height: min(640px, 90vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.add-source-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--cl-border);
+}
+
+.add-source-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cl-text-dim);
+}
+
+.add-source-close {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: var(--cl-text-faint);
+  font-size: 20px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.add-source-close:hover {
+  background: var(--cl-bg);
+  color: var(--cl-text);
+}
+
+.add-source-body {
+  padding: 16px;
+  overflow-y: auto;
+}
+
 /* ---- MessageLog ----------------------------------------------------- */
 
 .message-log {
