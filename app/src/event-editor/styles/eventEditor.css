@@ -2773,24 +2773,24 @@
   overflow: hidden;
 }
 
-.event-editor .plate-rail {
+.plate-rail {
   display: flex;
   flex-direction: column;
   gap: 18px;
 }
 
-.event-editor .plate-rail__section {
+.plate-rail__section {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.event-editor .plate-rail__section + .plate-rail__section {
+.plate-rail__section + .plate-rail__section {
   border-top: 1px solid var(--cl-border);
   padding-top: 16px;
 }
 
-.event-editor .plate-rail__section-title {
+.plate-rail__section-title {
   margin: 0;
   font-size: 12px;
   font-weight: 600;
@@ -2799,37 +2799,37 @@
   color: var(--cl-text-faint);
 }
 
-.event-editor .plate-rail__section-help {
+.plate-rail__section-help {
   margin: 0;
   font-size: 11px;
   color: var(--cl-text-faint);
   line-height: 1.4;
 }
 
-.event-editor .plate-rail__field {
+.plate-rail__field {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.event-editor .plate-rail__field-row {
+.plate-rail__field-row {
   display: flex;
   flex-direction: row;
   gap: 8px;
 }
 
-.event-editor .plate-rail__field-row .plate-rail__field {
+.plate-rail__field-row .plate-rail__field {
   flex: 1;
 }
 
-.event-editor .plate-rail__field-label {
+.plate-rail__field-label {
   font-size: 11px;
   color: var(--cl-text-faint);
   letter-spacing: 0.02em;
 }
 
-.event-editor .plate-rail__input,
-.event-editor .plate-rail__textarea {
+.plate-rail__input,
+.plate-rail__textarea {
   background: var(--cl-bg-elev);
   border: 1px solid var(--cl-border);
   color: var(--cl-text);
@@ -2839,19 +2839,19 @@
   font-family: inherit;
 }
 
-.event-editor .plate-rail__input:focus,
-.event-editor .plate-rail__textarea:focus {
+.plate-rail__input:focus,
+.plate-rail__textarea:focus {
   outline: none;
   border-color: var(--cl-accent);
 }
 
-.event-editor .plate-rail__textarea {
+.plate-rail__textarea {
   resize: vertical;
   min-height: 60px;
 }
 
-.event-editor .plate-rail__primary-btn,
-.event-editor .plate-rail__secondary-btn {
+.plate-rail__primary-btn,
+.plate-rail__secondary-btn {
   border-radius: 6px;
   padding: 8px 10px;
   font-size: 12px;
@@ -2859,42 +2859,42 @@
   border: 1px solid var(--cl-border);
 }
 
-.event-editor .plate-rail__primary-btn {
+.plate-rail__primary-btn {
   background: var(--cl-accent);
   color: #fff;
   border-color: var(--cl-accent);
   font-weight: 600;
 }
 
-.event-editor .plate-rail__primary-btn:disabled,
-.event-editor .plate-rail__secondary-btn:disabled {
+.plate-rail__primary-btn:disabled,
+.plate-rail__secondary-btn:disabled {
   opacity: 0.45;
   cursor: default;
 }
 
-.event-editor .plate-rail__secondary-btn {
+.plate-rail__secondary-btn {
   background: var(--cl-bg-elev);
   color: var(--cl-text);
 }
 
-.event-editor .plate-rail__secondary-btn:hover:not(:disabled) {
+.plate-rail__secondary-btn:hover:not(:disabled) {
   border-color: var(--cl-border-strong);
 }
 
-.event-editor .plate-rail__quick-actions {
+.plate-rail__quick-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.event-editor .plate-rail__anchor-row {
+.plate-rail__anchor-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
-.event-editor .plate-rail__anchor-status {
+.plate-rail__anchor-status {
   font-size: 11px;
   color: var(--cl-text-faint);
 }
@@ -4295,15 +4295,15 @@
   align-items: flex-end;
 }
 
-.event-editor .plate-rail__section-header-row,
-.event-editor .plate-rail__group-card-header {
+.plate-rail__section-header-row,
+.plate-rail__group-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
-.event-editor .plate-rail__group-card {
+.plate-rail__group-card {
   border: 1px solid var(--cl-border);
   background: var(--cl-bg-elev);
   border-radius: 6px;
@@ -4313,7 +4313,7 @@
   gap: 8px;
 }
 
-.event-editor .plate-rail__icon-btn {
+.plate-rail__icon-btn {
   width: 24px;
   height: 24px;
   border-radius: 6px;
@@ -4407,16 +4407,16 @@
 }
 
 .context-role-validation[data-state='present'],
-.event-editor .plate-rail__requirements-summary span[data-state='present'],
-.event-editor .plate-rail__channel-summary span[data-state='present'] {
+.plate-rail__requirements-summary span[data-state='present'],
+.plate-rail__channel-summary span[data-state='present'] {
   color: #7ee787;
   border-color: rgba(126, 231, 135, 0.35);
   background: rgba(126, 231, 135, 0.08);
 }
 
 .context-role-validation[data-state='missing'],
-.event-editor .plate-rail__requirements-summary span[data-state='missing'],
-.event-editor .plate-rail__channel-summary span[data-state='missing'] {
+.plate-rail__requirements-summary span[data-state='missing'],
+.plate-rail__channel-summary span[data-state='missing'] {
   color: #ffb4a8;
   border-color: rgba(255, 180, 168, 0.35);
   background: rgba(255, 180, 168, 0.08);
@@ -4432,18 +4432,18 @@
   line-height: 1.4;
 }
 
-.event-editor .plate-rail__group-meta,
-.event-editor .plate-rail__requirements-summary,
-.event-editor .plate-rail__channel-summary-list,
-.event-editor .plate-rail__channel-summary {
+.plate-rail__group-meta,
+.plate-rail__requirements-summary,
+.plate-rail__channel-summary-list,
+.plate-rail__channel-summary {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.event-editor .plate-rail__group-meta span,
-.event-editor .plate-rail__requirements-summary span,
-.event-editor .plate-rail__channel-summary span {
+.plate-rail__group-meta span,
+.plate-rail__requirements-summary span,
+.plate-rail__channel-summary span {
   border: 1px solid var(--cl-border);
   border-radius: 999px;
   padding: 4px 7px;
@@ -4453,14 +4453,14 @@
   font-size: 11px;
 }
 
-.event-editor .plate-rail__channel-summary {
+.plate-rail__channel-summary {
   border: 1px solid var(--cl-border);
   background: var(--cl-bg-elev);
   border-radius: 6px;
   padding: 8px;
 }
 
-.event-editor .plate-rail__channel-summary strong {
+.plate-rail__channel-summary strong {
   font-size: 12px;
   color: var(--cl-text);
 }
@@ -4471,7 +4471,7 @@
   }
 }
 
-.event-editor .plate-rail__role-picker {
+.plate-rail__role-picker {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
@@ -4479,7 +4479,7 @@
 }
 
 @media (max-width: 720px) {
-  .event-editor .plate-rail__role-picker {
+  .plate-rail__role-picker {
     grid-template-columns: 1fr;
   }
 }
