@@ -1,0 +1,47 @@
+/* DetailsTabPanel — Phase 13. Container styling for the right-pane
+   Details tab. The PlateRail and its .plate-rail__* children carry
+   their own styling (defined in eventEditor.css and shared with the
+   legacy single-plate focus layout pre-Phase-13). */
+
+.details-tab {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.details-tab .plate-rail {
+  /* Override the legacy fixed-width sidebar shape: the rail now fills
+     the right pane's content area instead of being a 320px column on
+     the right edge of the deck. */
+  flex: 1 1 auto;
+  border-left: none;
+  border-top: none;
+  background: transparent;
+  padding: 12px;
+}
+
+.details-tab__placeholder {
+  padding: 16px;
+  color: var(--cl-text-faint);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.details-tab__placeholder h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cl-text-dim);
+}
+
+.details-tab__placeholder p {
+  margin: 0;
+}
+
+.details-tab__placeholder strong {
+  color: var(--cl-text-dim);
+}

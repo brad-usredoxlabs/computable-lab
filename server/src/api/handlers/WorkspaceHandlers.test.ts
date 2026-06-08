@@ -225,6 +225,38 @@ describe('WorkspaceHandlers', () => {
       );
     });
 
+    it('accepts the Phase 13 details rightPaneMode and round-trips it', async () => {
+      // Phase 13 added 'details' to the union for the per-plate workflow
+      // tab. A round-trip through PUT → GET should preserve it.
+      const detailsState = {
+        version: 2 as const,
+        studyId: 'STU-000001',
+        tabs: [
+          {
+            id: 'details:STU-000001',
+            kind: 'project-details' as const,
+            title: 'Project',
+          },
+        ],
+        activeTabId: 'details:STU-000001',
+        rightPaneMode: 'details' as const,
+        rightPaneCollapsed: false,
+        paneWidths: { left: 0.6, right: 0.4 },
+      };
+      const { reply: putReply } = makeReply();
+      const putResult = await handlers.putWorkspace(
+        makeRequest({ studyId: 'STU-000001' }, detailsState),
+        putReply,
+      );
+      expect(putResult?.state.rightPaneMode).toBe('details');
+      const { reply: getReply } = makeReply();
+      const getResult = await handlers.getWorkspace(
+        makeRequest({ studyId: 'STU-000001' }),
+        getReply,
+      );
+      expect(getResult?.state.rightPaneMode).toBe('details');
+    });
+
     it('rejects body that does not parse as WorkspaceState', async () => {
       const { reply, state } = makeReply();
       const result = await handlers.putWorkspace(

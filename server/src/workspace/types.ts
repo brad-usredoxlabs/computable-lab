@@ -53,8 +53,12 @@ export type WorkspaceTab =
       title: string;
     };
 
-/** Which mode the right pane is in. Phase 12 renames `browse` to `find`. */
-export type WorkspaceRightPaneMode = 'ai' | 'search' | 'find';
+/**
+ * Which mode the right pane is in. Phase 12 renamed `browse` to `find`;
+ * Phase 13 adds `details` for the single-plate workflow that used to
+ * ride as a sidebar column inside the focused-plate left pane.
+ */
+export type WorkspaceRightPaneMode = 'ai' | 'search' | 'find' | 'details';
 
 /**
  * Full workspace state for a single study. `studyId` is redundant with
@@ -145,7 +149,8 @@ export function parseWorkspaceState(value: unknown): WorkspaceState | null {
   } else if (
     v.rightPaneMode === 'ai' ||
     v.rightPaneMode === 'search' ||
-    v.rightPaneMode === 'find'
+    v.rightPaneMode === 'find' ||
+    v.rightPaneMode === 'details'
   ) {
     mode = v.rightPaneMode;
   } else {

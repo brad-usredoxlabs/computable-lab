@@ -30,6 +30,7 @@ import {
 } from '../workspace/WorkspaceContext'
 import { useOpenStudies } from '../workspace/useOpenStudies'
 import { EventEditorProvider } from '../EventEditorContext'
+import { FocusModalsProvider } from '../focus/FocusModalsProvider'
 import { PdfStateProvider } from '../viewer/pdf/PdfViewerContext'
 import { DocumentStateProvider } from '../viewer/document/DocumentEditorContext'
 import { Viewer } from '../viewer/Viewer'
@@ -141,7 +142,7 @@ function WorkspaceShellHost({
         key={activeTab.eventGraphId}
         eventGraphId={activeTab.eventGraphId}
       >
-        {shellContent}
+        <FocusModalsProvider>{shellContent}</FocusModalsProvider>
       </EventEditorProvider>
     )
   }

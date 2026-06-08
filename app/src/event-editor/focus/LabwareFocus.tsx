@@ -16,12 +16,11 @@ import {
 } from '../lib/pipetteSelection'
 import { ContextMenu, type ContextMenuItem } from '../menus/ContextMenu'
 import { buildWellMenuItems } from '../menus/wellMenuItems'
-import { AddMaterialModal } from '../material/AddMaterialModal'
+import { useFocusModals } from './FocusModalsProvider'
 import {
   buildPreviewWellIndex,
   previewWellsForLabware,
 } from '../lib/previewProjection'
-import { PlateRail } from '../rail/PlateRail'
 import { ReadPlateModal } from '../rail/ReadPlateModal'
 import type { LabwareOrientation, WellSelection } from '../types'
 
@@ -37,6 +36,7 @@ const MIN_FOCUS_SIZE_PX = 200
 
 export function LabwareFocus() {
   const { state, actions } = useEventEditor()
+  const { openAddMaterial } = useFocusModals()
   const placementId = state.focusPlacementId
   // Look for the focused placement in committed state first, then in the
   // current preview so a click on a ghost tile drills into the proposed
@@ -75,10 +75,11 @@ export function LabwareFocus() {
   // 720 on desktop.
   const [focusSize, setFocusSize] = useState(MAX_FOCUS_SIZE_PX)
 
-  // Open state for the AddMaterialModal. The well-context-menu sets
-  // this; the modal owns its own internal state machine and clears
-  // back to null on apply / cancel / escape.
-  const [addMaterialWells, setAddMaterialWells] = useState<WellId[] | null>(null)
+  // Phase 13: AddMaterialModal is hosted by FocusModalsProvider so the
+  // right-pane Details tab can trigger the same modal instance. The
+  // well-context-menu here calls openAddMaterial(wells) instead of
+  // setting a local open-state. ReadPlateModal still lives here because
+  // it's only triggered from the header's "Read plate" button.
   const [readPlateOpen, setReadPlateOpen] = useState(false)
 
   // Auto-dismiss a pinned tooltip after a few seconds — touch users
@@ -277,10 +278,6 @@ export function LabwareFocus() {
     ? state.selection.wells.length
     : 0
 
-  const selectedWellIds = state.selection?.labwareId === labware.labwareId
-    ? state.selection.wells
-    : []
-
   return (
     <div className="focus" onClick={handleBackdropClick}>
       <div className="focus__canvas" ref={canvasRef} onClick={(e) => e.stopPropagation()}>
@@ -318,7 +315,6 @@ export function LabwareFocus() {
           >Close</button>
         </header>
         <div className="focus__body">
-        <div className="focus__main">
         <div className="focus__stage" ref={stageRef}>
           <WellGrid
             labware={labware}
@@ -361,7 +357,7 @@ export function LabwareFocus() {
               onClearSelection: () => actions.clearSelection(),
               onAddMaterial: (wells) => {
                 setMenu((m) => ({ ...m, open: false }))
-                setAddMaterialWells(wells)
+                openAddMaterial(wells)
               },
             })
             const items: ContextMenuItem[] = built.items
@@ -403,12 +399,6 @@ export function LabwareFocus() {
           )}
         </footer>
         </div>
-        <PlateRail
-          placementId={placement.placementId}
-          selectedWells={selectedWellIds}
-          onAddMaterial={(wells) => setAddMaterialWells(wells)}
-        />
-        </div>
       </div>
       <ReadPlateModal
         isOpen={readPlateOpen && Boolean(labware) && Boolean(placement)}
@@ -417,12 +407,6 @@ export function LabwareFocus() {
         rail={state.plateRail}
         events={state.events}
         onClose={() => setReadPlateOpen(false)}
-      />
-      <AddMaterialModal
-        isOpen={addMaterialWells !== null && Boolean(labware)}
-        labware={labware!}
-        wells={addMaterialWells ?? []}
-        onClose={() => setAddMaterialWells(null)}
       />
     </div>
   )

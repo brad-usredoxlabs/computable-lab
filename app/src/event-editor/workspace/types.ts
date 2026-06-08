@@ -33,8 +33,13 @@ export type WorkspaceTab =
   | { id: string; kind: 'document'; artifactId: string; title: string }
   | { id: string; kind: 'project-details'; title: string }
 
-/** Phase 12 renames `browse` to `find`. The parser migrates v1 → v2 on read. */
-export type WorkspaceRightPaneMode = 'ai' | 'search' | 'find'
+/**
+ * Phase 12 renamed `browse` to `find`. Phase 13 adds `details` — the
+ * single-plate workflow (Materials / Groups / Notes / Read) that used
+ * to ride as a column inside the focused-plate left pane.
+ * The server parser migrates v1 `browse` → v2 `find` on read.
+ */
+export type WorkspaceRightPaneMode = 'ai' | 'search' | 'find' | 'details'
 
 export interface WorkspaceState {
   version: 2

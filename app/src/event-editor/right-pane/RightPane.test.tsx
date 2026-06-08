@@ -27,6 +27,9 @@ vi.mock('./search/SearchTabPanel', () => ({
 vi.mock('./find/FindTabPanel', () => ({
   FindTabPanel: () => <div data-testid="panel-find">FIND</div>,
 }))
+vi.mock('./details/DetailsTabPanel', () => ({
+  DetailsTabPanel: () => <div data-testid="panel-details">DETAILS</div>,
+}))
 
 import { RightPane } from './RightPane'
 
@@ -83,6 +86,24 @@ describe('RightPane', () => {
     await screen.findByTestId('panel-find')
     fireEvent.click(screen.getByTestId('right-pane-tab-search'))
     expect(screen.getByTestId('panel-search')).toBeTruthy()
+  })
+
+  it('clicking Details switches the active panel', async () => {
+    // Phase 13: Details surfaces the per-plate workflow rail (Materials
+    // / Groups / Notes / Read) that used to ride inside the focused
+    // plate's left pane.
+    renderRightPane()
+    await screen.findByTestId('panel-find')
+    fireEvent.click(screen.getByTestId('right-pane-tab-details'))
+    expect(screen.getByTestId('panel-details')).toBeTruthy()
+    expect(screen.queryByTestId('panel-find')).toBeNull()
+  })
+
+  it('renders all four tab buttons in order: AI · Find · Search · Details', async () => {
+    renderRightPane()
+    await screen.findByTestId('panel-find')
+    const tabs = screen.getAllByRole('tab').map((el) => el.textContent)
+    expect(tabs).toEqual(['AI', 'Find', 'Search', 'Details'])
   })
 
   it('aria-selected reflects the active mode', async () => {

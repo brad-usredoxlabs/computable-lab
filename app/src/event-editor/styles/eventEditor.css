@@ -2754,46 +2754,29 @@
   vertical-align: middle;
 }
 
-/* ---- Plate workflow rail (single-plate focus view) ---- */
+/* ---- Plate workflow rail ---- */
+
+/* Phase 13: PlateRail moved out of the focus body into the right-pane
+   Details tab, so .focus__body is now a single-column flow around the
+   well grid (stage + footer). The two-column row layout, the 320px
+   .plate-rail sidebar, and the mobile media query that flipped the
+   .focus__body to column are gone — DetailsTabPanel handles the rail
+   surface and its own scroll. The .plate-rail__* section/heading/field
+   rules below are still used (just inside a different parent). */
 
 .event-editor .focus__body {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
-.event-editor .focus__main {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-
 .event-editor .plate-rail {
-  flex: 0 0 320px;
-  border-left: 1px solid var(--cl-border);
-  background: var(--cl-bg-elev-2);
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 18px;
-  overflow-y: auto;
-}
-
-@media (max-width: 900px) {
-  .event-editor .focus__body {
-    flex-direction: column;
-  }
-
-  .event-editor .plate-rail {
-    flex: 0 0 auto;
-    border-left: none;
-    border-top: 1px solid var(--cl-border);
-    max-height: 50%;
-  }
 }
 
 .event-editor .plate-rail__section {
