@@ -13,6 +13,7 @@
  */
 
 import { useEffect } from 'react'
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { ExtractedTextPanel } from './ExtractedTextPanel'
 import { PdfPage } from './PdfPage'
 import { usePdfViewer } from './PdfViewerContext'
@@ -49,12 +50,35 @@ export function PdfViewer({ artifactId, title }: PdfViewerProps) {
       {v.artifactError ? (
         <div className="pdf-viewer__error">{v.artifactError}</div>
       ) : null}
-      <PagesScroller />
-      <ExtractedTextPanel
-        pages={v.extractedText}
-        scrollToPage={v.scrollToPageInTextPanel}
-        highlight={v.search.trim() ? v.search : undefined}
-      />
+      <PanelGroup
+        direction="vertical"
+        className="pdf-viewer__panels"
+        autoSaveId="pdf-viewer:split"
+      >
+        <Panel
+          defaultSize={65}
+          minSize={20}
+          collapsible
+          collapsedSize={0}
+          className="pdf-viewer__panel pdf-viewer__panel--pages"
+        >
+          <PagesScroller />
+        </Panel>
+        <PanelResizeHandle className="pdf-viewer__handle" />
+        <Panel
+          defaultSize={35}
+          minSize={10}
+          collapsible
+          collapsedSize={0}
+          className="pdf-viewer__panel pdf-viewer__panel--text"
+        >
+          <ExtractedTextPanel
+            pages={v.extractedText}
+            scrollToPage={v.scrollToPageInTextPanel}
+            highlight={v.search.trim() ? v.search : undefined}
+          />
+        </Panel>
+      </PanelGroup>
     </div>
   )
 }

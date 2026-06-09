@@ -106,15 +106,79 @@
   transform-origin: 0% 0%;
 }
 
-/* ---- Extracted text panel below ------------------------------------ */
+/* ---- Vertical split between rendered pages and extracted-text panel --
+
+   Phase 13c: the extracted-text panel used to sit as a fixed 35% strip
+   under the canvas. It's now a real resizable pane via
+   react-resizable-panels — autoSaveId persists the user's choice across
+   PDFs and reloads. */
+
+.pdf-viewer__panels {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.pdf-viewer__panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pdf-viewer__panel--pages > .pdf-viewer__pages {
+  flex: 1;
+  min-height: 0;
+  /* Keep the existing canvas-area chrome; just inherit height from the
+     panel instead of a fixed flex:1 of the parent column. */
+}
+
+.pdf-viewer__panel--text {
+  background: var(--cl-bg-elev);
+  border-top: 1px solid var(--cl-border);
+}
+
+.pdf-viewer__handle {
+  position: relative;
+  height: 4px;
+  background: transparent;
+  cursor: row-resize;
+  transition: background 120ms ease;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.pdf-viewer__handle::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--cl-border);
+  transform: translateY(-50%);
+}
+
+.pdf-viewer__handle:hover,
+.pdf-viewer__handle[data-resize-handle-active] {
+  background: color-mix(in srgb, var(--cl-accent) 30%, transparent);
+}
+
+.pdf-viewer__handle:hover::before,
+.pdf-viewer__handle[data-resize-handle-active]::before {
+  background: var(--cl-accent);
+  height: 2px;
+}
+
+/* ---- Extracted text panel ------------------------------------------ */
 
 .pdf-extracted-text {
-  border-top: 1px solid var(--cl-border);
-  background: var(--cl-bg-elev);
-  padding: 12px 16px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  max-height: 35%;
-  flex-shrink: 0;
+  padding: 16px 20px;
+  /* Reading column on wide viewers — long lines hurt readability. */
+  --pdf-text-reading-width: 720px;
 }
 
 .pdf-extracted-text--empty {
@@ -125,22 +189,42 @@
   gap: 4px;
 }
 
+/* Each page reads as a card: subtle border, generous padding, room
+   between consecutive pages so the user can tell where one ends. */
 .pdf-extracted-text__page {
-  margin-bottom: 16px;
+  background: var(--cl-bg);
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  padding: 14px 18px;
+  margin: 0 auto 14px;
+  max-width: var(--pdf-text-reading-width);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+
+.pdf-extracted-text__page:last-child {
+  margin-bottom: 0;
 }
 
 .pdf-extracted-text__header {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
   color: var(--cl-text-faint);
-  margin-bottom: 4px;
+  margin: 0 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--cl-border);
 }
 
+/* Body reads as a document, not a code dump. Sans-serif, comfortable
+   line-height, but pre-wrap to preserve whatever paragraph spacing the
+   extractor managed to keep. word-break stays on so long URLs / chem
+   strings don't blow the column. */
 .pdf-extracted-text__body {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
-  font-size: 12px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
   margin: 0;
@@ -148,7 +232,7 @@
 }
 
 .pdf-extracted-text__hit {
-  background: color-mix(in srgb, var(--cl-accent) 30%, transparent);
+  background: color-mix(in srgb, var(--cl-accent) 35%, transparent);
   color: var(--cl-text);
   border-radius: 2px;
   padding: 0 2px;
