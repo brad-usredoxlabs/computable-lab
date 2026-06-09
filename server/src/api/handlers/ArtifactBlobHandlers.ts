@@ -169,8 +169,13 @@ export function createArtifactBlobHandlers(
         );
 
       const stream = createReadStream(requestedPath);
-      // Fastify accepts a Readable directly via reply.send().
-      reply.send(stream);
+      // `return reply.send(...)` is load-bearing for streams in async
+      // handlers: without an explicit return, Fastify resolves the
+      // handler's promise to `undefined` and auto-sends that as the
+      // response body — overwriting our stream with a zero-byte reply.
+      // HEAD requests survive (no body is written either way), so the
+      // breakage only shows up as "PDF file is empty" on GET.
+      return reply.send(stream);
     },
   };
 }
