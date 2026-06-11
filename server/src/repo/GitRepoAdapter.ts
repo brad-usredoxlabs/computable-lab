@@ -150,7 +150,30 @@ export class GitRepoAdapter implements RepoAdapter {
 
       this.git = simpleGit(this.workspacePath);
     }
-    
+
+    // Self-heal branch-name drift from the empty-repo bootstrap bug:
+    // before the checkout -B fix in initializeEmptyRepo, commits landed on
+    // git init's default branch (often `master`) while every push targets
+    // config.git.branch — so pushes failed forever with "src refspec ...
+    // does not match any". Rename in place when the configured branch
+    // doesn't exist locally; existing commits come along.
+    try {
+      const branches = await this.git.branchLocal();
+      const want = this.config.git.branch;
+      if (
+        branches.current &&
+        branches.current !== want &&
+        !branches.all.includes(want)
+      ) {
+        console.log(
+          `Renaming local branch ${branches.current} -> ${want} to match configured branch`,
+        );
+        await this.git.raw(['branch', '-m', branches.current, want]);
+      }
+    } catch (err) {
+      console.warn('Branch-name reconciliation skipped:', err);
+    }
+
     // Configure git user
     await this.git.addConfig('user.name', this.authorName);
     await this.git.addConfig('user.email', this.authorEmail);
@@ -689,6 +712,11 @@ export class GitRepoAdapter implements RepoAdapter {
     // Initialize new git repo
     this.git = simpleGit(this.workspacePath);
     await this.git.init();
+    // git init's default branch is whatever init.defaultBranch says (often
+    // `master`), but every later push targets config.git.branch — without
+    // this, an empty-remote bootstrap commits to master and `push origin
+    // main` fails forever with "src refspec main does not match any".
+    await this.git.raw(['checkout', '-B', this.config.git.branch]);
     await this.git.addRemote('origin', authUrl);
     
     // Create an initial commit (required before we can push)
