@@ -24,6 +24,9 @@ export function systemPromptKindForTab(
   tab: WorkspaceTab | null,
 ): SystemPromptKind {
   if (!tab) return null
+  // The record-create surface has no viewer document to ground on; the
+  // NO_VIEWER preamble (navigate / advise) is the right scope for it.
+  if (tab.kind === 'record-create') return null
   return tab.kind
 }
 

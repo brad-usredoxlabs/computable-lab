@@ -51,6 +51,14 @@ export type WorkspaceTab =
       id: string;
       kind: 'project-details';
       title: string;
+    }
+  | {
+      id: string;
+      kind: 'record-create';
+      nodeType: 'study' | 'experiment' | 'run';
+      title: string;
+      studyId?: string;
+      experimentId?: string;
     };
 
 /**
@@ -134,6 +142,22 @@ export function parseWorkspaceState(value: unknown): WorkspaceState | null {
       tabs.push({ id: t.id, kind: 'document', artifactId: t.artifactId, title: t.title });
     } else if (t.kind === 'project-details') {
       tabs.push({ id: t.id, kind: 'project-details', title: t.title });
+    } else if (
+      t.kind === 'record-create' &&
+      (t.nodeType === 'study' ||
+        t.nodeType === 'experiment' ||
+        t.nodeType === 'run')
+    ) {
+      tabs.push({
+        id: t.id,
+        kind: 'record-create',
+        nodeType: t.nodeType,
+        title: t.title,
+        ...(typeof t.studyId === 'string' ? { studyId: t.studyId } : {}),
+        ...(typeof t.experimentId === 'string'
+          ? { experimentId: t.experimentId }
+          : {}),
+      });
     } else {
       // Unknown kind — drop silently rather than refuse the whole file.
       // Older builds opening a future-versioned file degrade by losing

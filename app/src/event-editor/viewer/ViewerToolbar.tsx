@@ -31,8 +31,9 @@ export function ViewerToolbar({ tab }: ViewerToolbarProps) {
     case 'document':
       return <DocumentToolbar artifactId={tab.artifactId} />
     case 'project-details':
-      // The project-overview landing surface has its own header inside
-      // the viewer body — no per-surface toolbar.
+    case 'record-create':
+      // These surfaces carry their own headers inside the viewer body —
+      // no per-surface toolbar.
       return null
     default: {
       const _exhaustive: never = tab

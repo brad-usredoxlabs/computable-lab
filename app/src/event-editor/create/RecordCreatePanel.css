@@ -1,0 +1,123 @@
+/* RecordCreatePanel — TapTab-first creation surface (workspace tokens). */
+
+.record-create-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 24px;
+  overflow: auto;
+  height: 100%;
+  box-sizing: border-box;
+  color: var(--cl-text);
+}
+
+.record-create-panel__head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 1px solid var(--cl-border);
+  padding-bottom: 10px;
+}
+
+.record-create-panel__title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.record-create-panel__sub {
+  color: var(--cl-text-dim);
+  font-size: 12px;
+  font-family: var(--cl-font-mono, monospace);
+}
+
+.record-create-panel__form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 12px;
+}
+
+.record-create-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.record-create-panel__error {
+  border: 1px solid var(--cl-danger, #b14545);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--cl-danger, #e07777);
+}
+
+.record-create-panel__hint {
+  color: var(--cl-text-dim);
+  font-size: 13px;
+}
+
+.record-create-panel__fallback {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 520px;
+}
+
+.record-create-panel__label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cl-text-dim);
+  margin-top: 8px;
+}
+
+.record-create-panel__input {
+  background: var(--cl-bg-inset, transparent);
+  color: var(--cl-text);
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.record-create-panel__input:focus {
+  outline: none;
+  border-color: var(--cl-accent, #6b9fff);
+}
+
+.record-create-panel__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid var(--cl-border);
+  padding-top: 12px;
+}
+
+.record-create-panel__btn {
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cl-text);
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.record-create-panel__btn:hover:not(:disabled) {
+  border-color: var(--cl-accent, #6b9fff);
+}
+
+.record-create-panel__btn--primary {
+  background: var(--cl-accent, #2f6fed);
+  border-color: var(--cl-accent, #2f6fed);
+  color: var(--cl-on-accent, #fff);
+}
+
+.record-create-panel__btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

@@ -32,6 +32,25 @@ export type WorkspaceTab =
   | { id: string; kind: 'pdf'; artifactId: string; title: string }
   | { id: string; kind: 'document'; artifactId: string; title: string }
   | { id: string; kind: 'project-details'; title: string }
+  | {
+      id: string
+      kind: 'record-create'
+      nodeType: 'study' | 'experiment' | 'run'
+      title: string
+      studyId?: string
+      experimentId?: string
+    }
+
+/**
+ * Stable id for a creation tab so re-clicking "New …" focuses the open
+ * draft instead of stacking duplicates. One in-flight draft per parent.
+ */
+export function recordCreateTabId(
+  nodeType: 'study' | 'experiment' | 'run',
+  parentId?: string,
+): string {
+  return `create:${nodeType}${parentId ? `:${parentId}` : ''}`
+}
 
 /**
  * Phase 12 renamed `browse` to `find`. Phase 13 adds `details` — the

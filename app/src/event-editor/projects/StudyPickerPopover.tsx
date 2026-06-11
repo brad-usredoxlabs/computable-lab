@@ -22,12 +22,21 @@ interface StudyOption {
   title: string
 }
 
+/** listRecordsByKind fetch cap; when hit, the footer says so (§4.4). */
+const FETCH_LIMIT = 200
+
 export interface StudyPickerPopoverProps {
   onPick: (studyId: string, title: string) => void
   onDismiss: () => void
+  /**
+   * When provided, the picker offers creation: a persistent footer action
+   * and, when the filter matches nothing, "Create '<query>'" so a search
+   * for a project that doesn't exist flows straight into making it.
+   */
+  onCreateNew?: (query: string) => void
 }
 
-export function StudyPickerPopover({ onPick, onDismiss }: StudyPickerPopoverProps) {
+export function StudyPickerPopover({ onPick, onDismiss, onCreateNew }: StudyPickerPopoverProps) {
   const [studies, setStudies] = useState<StudyOption[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -117,10 +126,15 @@ export function StudyPickerPopover({ onPick, onDismiss }: StudyPickerPopoverProp
       if (event.key === 'Enter') {
         event.preventDefault()
         const choice = filtered[clampedHighlight]
-        if (choice) onPick(choice.studyId, choice.title)
+        if (choice) {
+          onPick(choice.studyId, choice.title)
+        } else if (onCreateNew && query.trim()) {
+          // No match — Enter flows into creating what was searched for.
+          onCreateNew(query.trim())
+        }
       }
     },
-    [clampedHighlight, filtered, onDismiss, onPick],
+    [clampedHighlight, filtered, onDismiss, onPick, onCreateNew, query],
   )
 
   return (
@@ -153,7 +167,20 @@ export function StudyPickerPopover({ onPick, onDismiss }: StudyPickerPopoverProp
         {studies === null ? (
           <div className="study-picker-popover__empty">Loading…</div>
         ) : filtered.length === 0 ? (
-          <div className="study-picker-popover__empty">No studies match.</div>
+          onCreateNew ? (
+            <button
+              type="button"
+              className="study-picker-popover__row study-picker-popover__row--create"
+              onClick={() => onCreateNew(query.trim())}
+              data-testid="study-picker-create-from-query"
+            >
+              {query.trim()
+                ? `No studies match — create "${query.trim()}"`
+                : 'No studies yet — create the first project'}
+            </button>
+          ) : (
+            <div className="study-picker-popover__empty">No studies match.</div>
+          )
         ) : (
           filtered.map((s, i) => {
             const isHighlighted = i === clampedHighlight
@@ -179,6 +206,21 @@ export function StudyPickerPopover({ onPick, onDismiss }: StudyPickerPopoverProp
           })
         )}
       </div>
+      {studies !== null && studies.length >= FETCH_LIMIT ? (
+        <div className="study-picker-popover__footer-note">
+          First {FETCH_LIMIT} studies shown — refine your search.
+        </div>
+      ) : null}
+      {onCreateNew ? (
+        <button
+          type="button"
+          className="study-picker-popover__footer-create"
+          onClick={() => onCreateNew(query.trim())}
+          data-testid="study-picker-new-project"
+        >
+          + New project
+        </button>
+      ) : null}
     </div>
   )
 }

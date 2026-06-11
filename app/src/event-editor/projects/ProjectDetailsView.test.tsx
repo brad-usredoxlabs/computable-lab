@@ -231,14 +231,17 @@ describe('ProjectDetailsView', () => {
     expect(await screen.findByText('artifacts boom')).toBeTruthy()
   })
 
-  it('falls back to the studyId in the header when no study match', async () => {
+  it('offers experiment creation when the study has no tree data yet', async () => {
     getStudyTree.mockResolvedValueOnce({ studies: [] })
     listRecordsByKind.mockResolvedValueOnce({ records: [] })
 
     renderView('STU-UNKNOWN')
 
     expect(
-      await screen.findByText(/No tree data for/),
+      await screen.findByText(/No experiments yet/),
+    ).toBeTruthy()
+    expect(
+      screen.getByTestId('project-details-new-experiment'),
     ).toBeTruthy()
   })
 })

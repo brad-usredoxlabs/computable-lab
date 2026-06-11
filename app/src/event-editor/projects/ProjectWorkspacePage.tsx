@@ -37,6 +37,7 @@ import { Viewer } from '../viewer/Viewer'
 import { ViewerToolbar } from '../viewer/ViewerToolbar'
 import { ProjectTabStrip } from './ProjectTabStrip'
 import { ProjectDetailsView } from './ProjectDetailsView'
+import { RecordCreatePanel } from '../create/RecordCreatePanel'
 import { RightPane } from '../right-pane/RightPane'
 import type { WorkspaceTab } from '../workspace/types'
 import { projectDetailsTabId } from '../workspace/types'
@@ -186,6 +187,7 @@ interface LeftPaneProps {
 }
 
 function LeftPane({ activeTab, studyId }: LeftPaneProps) {
+  const ws = useWorkspace()
   if (!activeTab) {
     // Falls through to a brief loading state — the workspace effect
     // above will open project-details on the next tick.
@@ -199,6 +201,18 @@ function LeftPane({ activeTab, studyId }: LeftPaneProps) {
   }
   if (activeTab.kind === 'project-details') {
     return <ProjectDetailsView studyId={studyId} />
+  }
+  if (activeTab.kind === 'record-create') {
+    return (
+      <RecordCreatePanel
+        key={activeTab.id}
+        nodeType={activeTab.nodeType}
+        studyId={activeTab.studyId ?? studyId}
+        experimentId={activeTab.experimentId}
+        onCreated={() => ws.closeTab(activeTab.id)}
+        onCancel={() => ws.closeTab(activeTab.id)}
+      />
+    )
   }
   return <Viewer tab={activeTab} />
 }

@@ -112,6 +112,14 @@ export function ProjectTabStrip() {
           <StudyPickerPopover
             onPick={handlePicked}
             onDismiss={() => setPickerOpen(false)}
+            onCreateNew={(query) => {
+              setPickerOpen(false)
+              navigate(
+                query
+                  ? `/create/study?title=${encodeURIComponent(query)}`
+                  : '/create/study',
+              )
+            }}
           />
         ) : null}
       </div>

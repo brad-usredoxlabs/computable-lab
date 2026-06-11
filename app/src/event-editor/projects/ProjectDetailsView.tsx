@@ -13,13 +13,15 @@
  *     fetch via `getRunMethod`; runs without a method are non-clickable)
  *   - Artifact → open via `tabForArtifact`
  *
- * Read-only navigation only. Creating studies/experiments/runs lives
- * elsewhere (the legacy `/browser` page or the dedicated CLI). This view
- * just helps the user find and open something.
+ * Navigation plus the creation spine's in-project entry points
+ * (specifications/creation-entry-points.md §4.2/§4.3): "New experiment"
+ * on the Experiments section, "New run" on each experiment row. Both open
+ * a `record-create` workspace tab hosting the TapTab creation surface.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useWorkspace } from '../workspace/WorkspaceContext'
+import { recordCreateTabId } from '../workspace/types'
 import { getStudyTree, getRunMethod } from '../../shared/api/treeClient'
 import { useStudyArtifacts } from '../right-pane/useStudyArtifacts'
 import {
@@ -48,9 +50,19 @@ interface ProjectDetailsViewProps {
 }
 
 export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
+  const ws = useWorkspace()
   const [study, setStudy] = useState<StudyTreeNode | null>(null)
   const [treeError, setTreeError] = useState<string | null>(null)
   const [treeLoading, setTreeLoading] = useState(true)
+  // Bumped by the cl:records-changed event so a created experiment/run
+  // shows up without a manual refresh.
+  const [treeEpoch, setTreeEpoch] = useState(0)
+
+  useEffect(() => {
+    const onChanged = () => setTreeEpoch((e) => e + 1)
+    window.addEventListener('cl:records-changed', onChanged)
+    return () => window.removeEventListener('cl:records-changed', onChanged)
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -72,7 +84,17 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
     return () => {
       cancelled = true
     }
-  }, [studyId])
+  }, [studyId, treeEpoch])
+
+  const openNewExperiment = useCallback(() => {
+    ws.openTab({
+      id: recordCreateTabId('experiment', studyId),
+      kind: 'record-create',
+      nodeType: 'experiment',
+      studyId,
+      title: 'New experiment',
+    })
+  }, [studyId, ws])
 
   const {
     artifacts,
@@ -98,25 +120,34 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
         className="project-details-view__section"
         data-testid="project-details-tree"
       >
-        <h3 className="project-details-view__section-title">Experiments</h3>
+        <div className="project-details-view__section-head">
+          <h3 className="project-details-view__section-title">Experiments</h3>
+          <button
+            type="button"
+            className="project-details-view__create-btn"
+            onClick={openNewExperiment}
+            data-testid="project-details-new-experiment"
+          >
+            + New experiment
+          </button>
+        </div>
         {treeError ? (
           <p className="project-details-view__error">{treeError}</p>
         ) : treeLoading ? (
           <p className="project-details-view__hint">Loading project tree…</p>
-        ) : !study ? (
+        ) : !study || study.experiments.length === 0 ? (
           <p className="project-details-view__hint">
-            No tree data for <code>{studyId}</code> yet — once the study is
-            indexed, experiments and runs will show here.
-          </p>
-        ) : study.experiments.length === 0 ? (
-          <p className="project-details-view__hint">
-            No experiments yet. Use the record browser to create the first
-            experiment under this study.
+            No experiments yet — "New experiment" above creates the first
+            one under this study.
           </p>
         ) : (
           <ul className="project-details-view__tree">
             {study.experiments.map((exp) => (
-              <ExperimentRow key={exp.recordId} experiment={exp} />
+              <ExperimentRow
+                key={exp.recordId}
+                experiment={exp}
+                studyId={studyId}
+              />
             ))}
           </ul>
         )}
@@ -162,28 +193,58 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
   )
 }
 
-function ExperimentRow({ experiment }: { experiment: ExperimentTreeNode }) {
+function ExperimentRow({
+  experiment,
+  studyId,
+}: {
+  experiment: ExperimentTreeNode
+  studyId: string
+}) {
+  const ws = useWorkspace()
   const [open, setOpen] = useState(true)
   const hasRuns = experiment.runs.length > 0
+
+  const openNewRun = useCallback(() => {
+    ws.openTab({
+      id: recordCreateTabId('run', experiment.recordId),
+      kind: 'record-create',
+      nodeType: 'run',
+      studyId,
+      experimentId: experiment.recordId,
+      title: 'New run',
+    })
+  }, [experiment.recordId, studyId, ws])
+
   return (
     <li className="project-details-view__tree-item">
-      <button
-        type="button"
-        className="project-details-view__tree-toggle"
-        data-testid={`project-details-experiment-${experiment.recordId}`}
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-      >
-        <span className="project-details-view__chev" aria-hidden>
-          {hasRuns ? (open ? '▾' : '▸') : '·'}
-        </span>
-        <span className="project-details-view__tree-title">
-          {experiment.title}
-        </span>
-        <span className="project-details-view__tree-meta">
-          {experiment.runs.length} run{experiment.runs.length === 1 ? '' : 's'}
-        </span>
-      </button>
+      <div className="project-details-view__tree-row">
+        <button
+          type="button"
+          className="project-details-view__tree-toggle"
+          data-testid={`project-details-experiment-${experiment.recordId}`}
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+        >
+          <span className="project-details-view__chev" aria-hidden>
+            {hasRuns ? (open ? '▾' : '▸') : '·'}
+          </span>
+          <span className="project-details-view__tree-title">
+            {experiment.title}
+          </span>
+          <span className="project-details-view__tree-meta">
+            {experiment.runs.length} run{experiment.runs.length === 1 ? '' : 's'}
+          </span>
+        </button>
+        <button
+          type="button"
+          className="project-details-view__create-btn project-details-view__create-btn--row"
+          onClick={openNewRun}
+          data-testid={`project-details-new-run-${experiment.recordId}`}
+          title={`Create a run under ${experiment.title}`}
+        >
+          + Run
+        </button>
+      </div>
       {open && hasRuns ? (
         <ul className="project-details-view__tree project-details-view__tree--nested">
           {experiment.runs.map((run) => (

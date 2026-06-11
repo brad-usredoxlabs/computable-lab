@@ -118,3 +118,40 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Creation affordances (creation-entry-points spec §4.2/§4.3). */
+.find-tab__group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.find-tab__tree-row-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.find-tab__tree-row-wrap .find-tab__tree-row {
+  flex: 1;
+  min-width: 0;
+}
+
+.find-tab__create-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--cl-border);
+  border-radius: 5px;
+  color: var(--cl-accent, #6b9fff);
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  font-size: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.find-tab__create-btn:hover {
+  border-color: var(--cl-accent, #6b9fff);
+}

@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
+import { recordCreateTabId } from '../../workspace/types'
 import { useStudyArtifacts } from '../useStudyArtifacts'
 import { artifactKindLabel, tabForArtifact } from '../openArtifactInViewer'
 import { getRunMethod, getStudyTree } from '../../../shared/api/treeClient'
@@ -70,6 +71,27 @@ export function FindTabPanel() {
     return dispose
   }, [refreshTree])
 
+  // Stay live when the creation spine adds an experiment/run (the
+  // record-create surface dispatches cl:records-changed on save).
+  useEffect(() => {
+    const onChanged = () => {
+      refreshTree()
+      void refresh()
+    }
+    window.addEventListener('cl:records-changed', onChanged)
+    return () => window.removeEventListener('cl:records-changed', onChanged)
+  }, [refreshTree, refresh])
+
+  const openNewExperiment = useCallback(() => {
+    ws.openTab({
+      id: recordCreateTabId('experiment', studyId),
+      kind: 'record-create',
+      nodeType: 'experiment',
+      studyId,
+      title: 'New experiment',
+    })
+  }, [studyId, ws])
+
   return (
     <div className="right-panel find-tab" data-testid="find-tab">
       <header className="find-tab__head">
@@ -90,21 +112,37 @@ export function FindTabPanel() {
       </header>
 
       <section className="find-tab__tree" data-testid="find-tab-tree">
-        <h4 className="right-panel__heading find-tab__group-heading">
-          Experiments
-        </h4>
+        <div className="find-tab__group-head">
+          <h4 className="right-panel__heading find-tab__group-heading">
+            Experiments
+          </h4>
+          <button
+            type="button"
+            className="find-tab__create-btn"
+            onClick={openNewExperiment}
+            data-testid="find-tab-new-experiment"
+            title="Create an experiment in this project"
+          >
+            +
+          </button>
+        </div>
         {treeError ? (
           <p className="right-panel__error">{treeError}</p>
         ) : treeLoading ? (
           <p className="right-panel__hint">Loading tree…</p>
         ) : !study || study.experiments.length === 0 ? (
           <p className="right-panel__hint">
-            No experiments yet for <code>{studyId}</code>.
+            No experiments yet for <code>{studyId}</code> — use + above to
+            create the first one.
           </p>
         ) : (
           <ul className="find-tab__tree-list">
             {study.experiments.map((exp) => (
-              <ExperimentRow key={exp.recordId} experiment={exp} />
+              <ExperimentRow
+                key={exp.recordId}
+                experiment={exp}
+                studyId={studyId}
+              />
             ))}
           </ul>
         )}
@@ -144,24 +182,54 @@ export function FindTabPanel() {
   )
 }
 
-function ExperimentRow({ experiment }: { experiment: ExperimentTreeNode }) {
+function ExperimentRow({
+  experiment,
+  studyId,
+}: {
+  experiment: ExperimentTreeNode
+  studyId: string
+}) {
+  const ws = useWorkspace()
   const [open, setOpen] = useState(true)
   const hasRuns = experiment.runs.length > 0
+
+  const openNewRun = useCallback(() => {
+    ws.openTab({
+      id: recordCreateTabId('run', experiment.recordId),
+      kind: 'record-create',
+      nodeType: 'run',
+      studyId,
+      experimentId: experiment.recordId,
+      title: 'New run',
+    })
+  }, [experiment.recordId, studyId, ws])
+
   return (
     <li>
-      <button
-        type="button"
-        className="find-tab__tree-row"
-        data-testid={`find-tab-experiment-${experiment.recordId}`}
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-      >
-        <span className="find-tab__chev" aria-hidden>
-          {hasRuns ? (open ? '▾' : '▸') : '·'}
-        </span>
-        <span className="find-tab__row-title">{experiment.title}</span>
-        <span className="find-tab__row-meta">{experiment.runs.length}</span>
-      </button>
+      <div className="find-tab__tree-row-wrap">
+        <button
+          type="button"
+          className="find-tab__tree-row"
+          data-testid={`find-tab-experiment-${experiment.recordId}`}
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+        >
+          <span className="find-tab__chev" aria-hidden>
+            {hasRuns ? (open ? '▾' : '▸') : '·'}
+          </span>
+          <span className="find-tab__row-title">{experiment.title}</span>
+          <span className="find-tab__row-meta">{experiment.runs.length}</span>
+        </button>
+        <button
+          type="button"
+          className="find-tab__create-btn"
+          onClick={openNewRun}
+          data-testid={`find-tab-new-run-${experiment.recordId}`}
+          title={`Create a run under ${experiment.title}`}
+        >
+          +
+        </button>
+      </div>
       {open && hasRuns ? (
         <ul className="find-tab__tree-list find-tab__tree-list--nested">
           {experiment.runs.map((run) => (

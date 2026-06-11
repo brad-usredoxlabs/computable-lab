@@ -34,6 +34,7 @@ const ProjectWorkspacePage = lazy(async () => import('./event-editor/projects/Pr
 const SettingsRoute = lazy(async () => import('./settings/SettingsRoute').then((m) => ({ default: m.SettingsRoute })))
 const LegacyModeRedirect = lazy(async () => import('./event-editor/projects/LegacyModeRedirect').then((m) => ({ default: m.LegacyModeRedirect })))
 const WelcomePage = lazy(async () => import('./welcome/WelcomePage').then((m) => ({ default: m.WelcomePage })))
+const CreateStudyPage = lazy(async () => import('./welcome/CreateStudyPage').then((m) => ({ default: m.CreateStudyPage })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -69,6 +70,10 @@ export function App() {
                   are no in-workspace modes; navigation within a project is
                   the right-pane Find tab. */}
               <Route path="/" element={<DeferredRoute><WelcomePage /></DeferredRoute>} />
+              {/* Creation-entry-points spec §4.1: project creation needs a
+                  home before any workspace exists. TapTab-first surface;
+                  ?title= carries the picker's unmatched search query. */}
+              <Route path="/create/study" element={<DeferredRoute><CreateStudyPage /></DeferredRoute>} />
               <Route path="/project/:studyId" element={<DeferredRoute><ProjectWorkspacePage /></DeferredRoute>} />
               <Route path="/project/:studyId/event-graph/:eventGraphId" element={<DeferredRoute><ProjectWorkspacePage /></DeferredRoute>} />
 

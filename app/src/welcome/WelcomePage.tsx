@@ -58,8 +58,9 @@ export function WelcomePage() {
                 className="welcome-page__hint"
                 data-testid="welcome-page-empty"
               >
-                You haven't opened any projects yet. Choose one from
-                "Open all projects" below.
+                You haven't opened any projects yet. Create one with
+                "New project" below, or choose an existing one from
+                "Open all projects".
               </p>
             ) : (
               <ul className="welcome-page__grid">
@@ -100,21 +101,38 @@ export function WelcomePage() {
           </section>
 
           <section className="welcome-page__section">
-            <div className="welcome-page__open-all-wrap">
+            <div className="welcome-page__actions">
               <button
                 type="button"
-                className="welcome-page__open-all"
-                data-testid="welcome-page-open-all"
-                onClick={() => setPickerOpen((o) => !o)}
+                className="welcome-page__open-all welcome-page__new-project"
+                data-testid="welcome-page-new-project"
+                onClick={() => navigate('/create/study')}
               >
-                Open all projects
+                New project
               </button>
-              {pickerOpen ? (
-                <StudyPickerPopover
-                  onPick={handlePicked}
-                  onDismiss={() => setPickerOpen(false)}
-                />
-              ) : null}
+              <div className="welcome-page__open-all-wrap">
+                <button
+                  type="button"
+                  className="welcome-page__open-all"
+                  data-testid="welcome-page-open-all"
+                  onClick={() => setPickerOpen((o) => !o)}
+                >
+                  Open all projects
+                </button>
+                {pickerOpen ? (
+                  <StudyPickerPopover
+                    onPick={handlePicked}
+                    onDismiss={() => setPickerOpen(false)}
+                    onCreateNew={(query) =>
+                      navigate(
+                        query
+                          ? `/create/study?title=${encodeURIComponent(query)}`
+                          : '/create/study',
+                      )
+                    }
+                  />
+                ) : null}
+              </div>
             </div>
           </section>
         </div>

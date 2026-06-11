@@ -88,3 +88,33 @@
   color: var(--cl-text-faint);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
 }
+
+/* Creation affordances (creation-entry-points spec §4.1/§4.4). */
+.study-picker-popover__row--create {
+  color: var(--cl-accent, #6b9fff);
+  font-style: italic;
+}
+
+.study-picker-popover__footer-note {
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--cl-text-dim);
+  border-top: 1px solid var(--cl-border);
+}
+
+.study-picker-popover__footer-create {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--cl-border);
+  color: var(--cl-accent, #6b9fff);
+  padding: 8px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.study-picker-popover__footer-create:hover {
+  background: var(--cl-bg-elev);
+}

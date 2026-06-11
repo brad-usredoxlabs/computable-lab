@@ -115,3 +115,16 @@
 .welcome-page__open-all:hover {
   border-color: var(--cl-accent, #4a90e2);
 }
+
+.welcome-page__actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* The creation entry point is the primary action on this page. */
+.welcome-page__new-project {
+  background: var(--cl-accent, #2f6fed);
+  border-color: var(--cl-accent, #2f6fed);
+  color: var(--cl-on-accent, #fff);
+}
