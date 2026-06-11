@@ -76,6 +76,14 @@ export interface CompletionRequest {
    * providers.
    */
   id_slot?: number;
+  /**
+   * llama.cpp (TurboQuant fork) extension: logical context identity. The
+   * server binds the key to the slot that processed it and routes later
+   * requests with the same key back to that slot, so a background-warmed
+   * prefix is found deterministically instead of relying on LRU/similarity
+   * slot selection. Ignored by other providers.
+   */
+  cache_key?: string;
 }
 
 /**

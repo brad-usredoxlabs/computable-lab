@@ -11,6 +11,7 @@ import type {
   FileAttachment,
 } from '../../ai/types.js';
 import { type UploadedFile } from '../../ai/FileContentExtractor.js';
+import { deriveContextCacheKey } from '../../ai/systemPrompt.js';
 import type { PromptWarmupManager } from '../../ai/warm/PromptWarmupManager.js';
 
 export interface DraftEventsBody {
@@ -343,9 +344,11 @@ export function createAIHandlers(
       }
 
       // Mirror the real draft path exactly: /ai/draft-events sets
-      // forceDraftTool and no surface, so the warmed prefix must too.
+      // forceDraftTool and no surface, so the warmed prefix must too — and
+      // the key must equal the cache_key the orchestrator derives, so the
+      // server routes the real request to the warmed slot.
       warmup.requestWarm({
-        key: `event-editor:${context.runId ?? context.eventGraphId ?? 'default'}`,
+        key: deriveContextCacheKey(undefined, context),
         buildMessages: () =>
           buildPrefixMessages({
             context,

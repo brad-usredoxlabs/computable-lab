@@ -394,6 +394,23 @@ export function buildSystemPrompt(
 }
 
 /**
+ * Logical cache identity for a (surface, context) pair. Sent as the llama.cpp
+ * `cache_key` on both background warm requests and real draft requests so the
+ * server routes them to the same slot (and thus the same warmed KV prefix).
+ * Must stay in sync between the warm triggers and the orchestrator — that is
+ * why it lives here as the single derivation.
+ */
+export function deriveContextCacheKey(
+  surface: AiSurface | undefined,
+  context: EditorContext,
+): string {
+  if (surface?.startsWith('run-workspace') && context.runId) {
+    return `run:${context.runId}`;
+  }
+  return `event-editor:${context.runId ?? context.eventGraphId ?? 'default'}`;
+}
+
+/**
  * Render the per-turn volatile editor state (selection, pane selections,
  * prompt mentions) as an `[Editor state]` block. This rides at the top of the
  * user message — NOT the system prompt — so the system prefix stays

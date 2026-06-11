@@ -22,7 +22,7 @@ import type {
   PlateEventProposal,
 } from './types.js';
 import type { AiSurface } from './systemPrompt.js';
-import { buildSystemPrompt, buildSurfaceAwarePrompt, buildVolatileContextMessage } from './systemPrompt.js';
+import { buildSystemPrompt, buildSurfaceAwarePrompt, buildVolatileContextMessage, deriveContextCacheKey } from './systemPrompt.js';
 import { resolveMentionsForPrompt, buildResolvedContextMessage } from './resolveMentions.js';
 import { runChatbotCompile } from './runChatbotCompile.js';
 import {
@@ -787,6 +787,9 @@ export function createAgentOrchestrator(
             messages,
             temperature: inferenceConfig.temperature ?? 0.1,
             max_tokens: inferenceConfig.maxTokens ?? 4096,
+            // Routes this request to the slot holding the background-warmed
+            // prefix for this editor context (llama.cpp fork; no-op elsewhere).
+            cache_key: deriveContextCacheKey(surface, context),
             ...(enableThinking !== undefined ? { enableThinking } : {}),
           };
           if (toolDefs.length > 0) {

@@ -163,6 +163,10 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
         max_tokens: 1,
         temperature: 0,
         cache_prompt: true,
+        // Bind this context's identity to the slot that processes the warm;
+        // the real request carries the same cache_key and gets routed back to
+        // it (in-slot KV reuse, no dependence on LRU/similarity selection).
+        cache_key: key,
         ...(settings.slotPersistence ? { id_slot: settings.warmSlotId } : {}),
       });
       const ms = Date.now() - t0;
