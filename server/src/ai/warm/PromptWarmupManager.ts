@@ -17,6 +17,7 @@
 
 import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
+import { dirname } from 'node:path';
 
 import type { ChatMessage, InferenceClient } from '../types.js';
 import type { LlamaCacheClient } from './LlamaCacheClient.js';
@@ -110,6 +111,7 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
   }
 
   async function writeManifest(entries: ManifestEntry[]): Promise<void> {
+    await fs.mkdir(dirname(settings.manifestPath), { recursive: true });
     await fs.writeFile(settings.manifestPath, JSON.stringify(entries, null, 2), 'utf8');
   }
 

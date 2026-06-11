@@ -810,6 +810,7 @@ export function createAgentOrchestrator(
           const modelStart = Date.now();
           let modelHeartbeatCount = 0;
           let sawModelChunk = false;
+          let lastTimings: import('./types.js').LlamaTimings | undefined;
           onEvent?.({
             type: 'status',
             message: `AI request sent to thunderbeast; waiting for ${forceDraftTool ? COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME : 'model output'}…`,
@@ -833,6 +834,7 @@ export function createAgentOrchestrator(
               modelHeartbeatCount = 0;
             }
             if (chunk.id) lastId = chunk.id;
+            if (chunk.timings) lastTimings = chunk.timings;
             const choice = chunk.choices?.[0];
             if (!choice) continue;
 
@@ -873,6 +875,18 @@ export function createAgentOrchestrator(
             if (choice.finish_reason) {
               finishReason = choice.finish_reason;
             }
+          }
+
+          // KV-cache observability (llama.cpp only): how much of this turn's
+          // prompt was served from cache. The compiled-context warmer's whole
+          // job is making `cached` ≈ the full prefix on the first turn.
+          if (lastTimings?.prompt_n != null) {
+            const cached = lastTimings.cache_n ?? 0;
+            const total = lastTimings.prompt_n + cached;
+            console.log(
+              `[agent ${tid}] prefill: ${lastTimings.prompt_n} new + ${cached} cached tokens` +
+              `${total > 0 ? ` (${Math.round((100 * cached) / total)}% reused)` : ''}`,
+            );
           }
 
           // Reassemble the final assistant message
