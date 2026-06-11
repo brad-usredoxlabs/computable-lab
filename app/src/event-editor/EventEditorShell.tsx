@@ -39,7 +39,7 @@ export function EventEditorShell() {
       <AppShell brand={brand} bare>
         <div className="event-editor">
           <div className="splash splash--error">
-            Failed to load platforms: {state.loadError ?? 'unknown error'}
+            Failed to load: {state.loadError ?? 'unknown error'}
           </div>
         </div>
       </AppShell>

@@ -30,7 +30,7 @@ export function DeckViewer() {
     return (
       <div className="viewer-placeholder viewer-placeholder--deck viewer-placeholder--error">
         <div className="splash splash--error">
-          Failed to load platforms: {state.loadError ?? 'unknown error'}
+          Failed to load: {state.loadError ?? 'unknown error'}
         </div>
       </div>
     )

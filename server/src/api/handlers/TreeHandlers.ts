@@ -781,7 +781,15 @@ export function createTreeHandlers(
         };
       }
       const payload = (runRecord.payload ?? {}) as Record<string, unknown>;
-      const methodEventGraphId = typeof payload['methodEventGraphId'] === 'string' ? payload['methodEventGraphId'] : undefined;
+      let methodEventGraphId = typeof payload['methodEventGraphId'] === 'string' && payload['methodEventGraphId'].length > 0 ? payload['methodEventGraphId'] : undefined;
+      // Trust but verify: a run can carry a dangling/garbage reference
+      // (e.g. a stray suggestion committed into the ref field). Reporting
+      // hasMethod for a graph that doesn't exist sends the client into a
+      // deck tab that can never load — treat it as no method instead.
+      if (methodEventGraphId) {
+        const graph = await recordStore.get(methodEventGraphId);
+        if (!graph) methodEventGraphId = undefined;
+      }
       const methodPlatformRaw = payload['methodPlatform'];
       const methodPlatform = typeof methodPlatformRaw === 'string' && platformRegistry.hasPlatform(methodPlatformRaw)
         ? methodPlatformRaw

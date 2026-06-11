@@ -1071,7 +1071,7 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
       .catch((error: unknown) => {
         if (cancelled) return
         const message = error instanceof Error ? error.message : String(error)
-        dispatch({ type: 'load_error', error: message })
+        dispatch({ type: 'load_error', error: `platforms: ${message}` })
       })
     return () => {
       cancelled = true
@@ -1099,7 +1099,8 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
       })
       .catch((error: unknown) => {
         if (cancelled) return
-        dispatch({ type: 'load_error', error: error instanceof Error ? error.message : String(error) })
+        const message = error instanceof Error ? error.message : String(error)
+        dispatch({ type: 'load_error', error: `event graph ${eventGraphId}: ${message}` })
       })
     return () => {
       cancelled = true

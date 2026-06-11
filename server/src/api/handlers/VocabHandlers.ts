@@ -125,7 +125,11 @@ export function createVocabHandlers(
         reply.status(422);
         return {
           error: 'VALIDATION_FAILED',
-          message: `Minting "${label}" failed validation: ${JSON.stringify(result.validation ?? result.lint ?? 'unknown')}`,
+          message: `Minting "${label}" failed: ${
+            result.error ?? 'unknown'
+          }${result.validation ? ` validation=${JSON.stringify(result.validation)}` : ''}${
+            result.lint ? ` lint=${JSON.stringify(result.lint)}` : ''
+          }`,
         };
       }
 
