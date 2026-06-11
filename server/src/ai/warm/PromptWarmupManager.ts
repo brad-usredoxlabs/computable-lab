@@ -244,44 +244,33 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
           log('warn', '[warm] slot persistence configured but llama-server has no --slot-save-path; skipping restore');
           return;
         }
-        // Each restore overwrites the target slot, so loading every entry
-        // into the warm slot would leave only the last one. Restore the
-        // newest compiled context (the most likely next-used) and leave the
-        // rest on disk.
+        // Re-prefill the newest compiled context from its stored prefix
+        // rather than /slots-restoring the KV file: measured on the
+        // TurboQuant fork, file-restored state serves exact continuations
+        // but cannot be truncated at a divergence point — the first real
+        // (diverging) request silently re-prefills everything anyway. A
+        // fresh prefill on the idle GPU at boot (~45s for 37k tokens) yields
+        // normal, truncatable KV plus the in-memory cache_key binding. The
+        // .bin files remain on disk for exact-match restore flows.
         const entries = await readManifest();
         const newest = entries[0];
-        if (!newest) return;
-        try {
-          const result = await cacheClient.restoreSlot(settings.warmSlotId, newest.filename);
-          log('info', `[warm ${newest.key}] restored ${newest.filename} (${result.n_restored ?? '?'} tokens)`);
-        } catch (err) {
-          log('warn', `[warm ${newest.key}] restore failed (will re-prefill): ${err instanceof Error ? err.message : String(err)}`);
-        }
-        // The server's cache_key→slot binding is in-memory and did not
-        // survive the restart; without it, keyed requests skip similarity
-        // routing and would miss the restored KV. Re-send the stored prefix
-        // pinned to the warm slot: near-free against the restored state,
-        // re-binds the key, and degrades to a full background re-prefill if
-        // the restore failed.
-        if (newest.prefix) {
-          const t0 = Date.now();
-          const response = await inferenceClient.complete({
-            model,
-            ...newest.prefix,
-            max_tokens: 1,
-            temperature: 0,
-            cache_prompt: true,
-            cache_key: newest.key,
-            id_slot: settings.warmSlotId,
-          });
-          const timings = response.timings ?? {};
-          lastWarmedHash.set(newest.key, newest.promptHash);
-          log(
-            'info',
-            `[warm ${newest.key}] re-bound after boot: ${timings.prompt_n ?? '?'} new, ` +
-              `${timings.cache_n ?? '?'} cached, ${Date.now() - t0}ms`,
-          );
-        }
+        if (!newest?.prefix) return;
+        const t0 = Date.now();
+        const response = await inferenceClient.complete({
+          model,
+          ...newest.prefix,
+          max_tokens: 1,
+          temperature: 0,
+          cache_prompt: true,
+          cache_key: newest.key,
+        });
+        const timings = response.timings ?? {};
+        lastWarmedHash.set(newest.key, newest.promptHash);
+        log(
+          'info',
+          `[warm ${newest.key}] re-prefilled after boot: ${timings.prompt_n ?? '?'} tokens ` +
+            `(${timings.cache_n ?? '?'} cached) in ${Date.now() - t0}ms`,
+        );
       } catch (err) {
         log('warn', `[warm] boot restore failed: ${err instanceof Error ? err.message : String(err)}`);
       }
