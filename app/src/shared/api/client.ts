@@ -2526,16 +2526,36 @@ export const apiClient = {
   },
 
   /**
-   * Add a term to the local vocabulary.
-   * This is a stub method that logs a warning and returns a resolved promise.
-   * TODO: Implement actual API endpoint for local vocabulary management.
+   * Mint a new term into the lab's local namespace — the floor of the
+   * ontology funnel (creation-entry-points spec §6). The server persists a
+   * minimal draft record (e.g. a `material` with status: proposed) that the
+   * resolve spine's tier-1 picks up on the next search.
+   * Calls POST /vocab/mint.
+   */
+  async mintLocalTerm(
+    refKind: string,
+    label: string,
+    sourceQuery?: string
+  ): Promise<{ success: true; recordId: string; label: string; iri: string }> {
+    return request<{ success: true; recordId: string; label: string; iri: string }>(
+      '/vocab/mint',
+      {
+        method: 'POST',
+        body: JSON.stringify({ refKind, label, ...(sourceQuery ? { sourceQuery } : {}) }),
+      }
+    )
+  },
+
+  /**
+   * Add a term to the local vocabulary. Thin wrapper over mintLocalTerm kept
+   * for the OntologySidebar "Add to vocabulary" flow's existing call shape.
    */
   async addLocalVocabTerm(
     refKind: string,
     term: { value: string; iri: string }
   ): Promise<{ success: boolean; termId?: string }> {
-    console.warn('addLocalVocabTerm is a stub - no backend endpoint implemented yet', { refKind, term });
-    return { success: true };
+    const res = await apiClient.mintLocalTerm(refKind || 'material', term.value);
+    return { success: true, termId: res.recordId };
   },
 
   /**

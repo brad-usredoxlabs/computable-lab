@@ -29,16 +29,39 @@ const ONTOLOGY_COPILOT_PLUGIN_KEY = new PluginKey('ontologyCopilotSuggestion')
 import { createRoot, type Root } from 'react-dom/client'
 import { createElement } from 'react'
 import { SlashSuggestionList, type SlashSuggestionListHandle } from '../slashMenu/SlashSuggestionList'
-import type { SlashSuggestion } from '../slashMenu/types'
+import type { SlashMention, SlashSuggestion } from '../slashMenu/types'
 import { apiClient } from '../../api/client'
 
 const LIMIT = 8
 
-async function resolveOntologyItems(query: string): Promise<SlashSuggestion[]> {
+/** Resolve-spine kinds the copilot can ground against, and the mention
+ *  type each inserts. Per creation-entry-points spec §7 — hosts pick the
+ *  kinds that fit their surface (a labware-heavy editor passes 'labware'). */
+export type CopilotKind = 'material' | 'labware' | 'protocol'
+
+function mentionFor(kind: CopilotKind, curie: string, label: string): SlashMention {
+  switch (kind) {
+    case 'labware':
+      return { type: 'labware', id: curie, label }
+    case 'protocol':
+      return { type: 'protocol', entityKind: 'protocol', id: curie, label }
+    case 'material':
+      return { type: 'material', entityKind: 'material', id: curie, label }
+  }
+}
+
+async function resolveOntologyItems(
+  query: string,
+  kinds: CopilotKind[],
+): Promise<SlashSuggestion[]> {
   const q = query.trim()
   if (!q) return []
   try {
-    const { candidates } = await apiClient.resolve({ term: q, kinds: ['material'], limit: LIMIT })
+    const { candidates } = await apiClient.resolve({ term: q, kinds, limit: LIMIT })
+    // Mention type follows the requested kind set; with several kinds the
+    // first one wins as the pill type (ontology CURIEs are material-shaped
+    // in practice — OAK/OLS4 don't index labware or protocols).
+    const primaryKind = kinds[0] ?? 'material'
     return candidates
       .filter((c) => (c.source === 'oak' || c.source === 'ols4') && c.curie)
       .map((c) => ({
@@ -46,7 +69,7 @@ async function resolveOntologyItems(query: string): Promise<SlashSuggestion[]> {
         label: c.label,
         badge: c.namespace ? c.namespace.toUpperCase() : 'Ontology',
         subtitle: c.curie,
-        mention: { type: 'material', entityKind: 'material', id: c.curie, label: c.label },
+        mention: mentionFor(primaryKind, c.curie, c.label),
       }))
   } catch {
     // Spine unavailable (older backend / offline) — degrade silently.
@@ -54,7 +77,16 @@ async function resolveOntologyItems(query: string): Promise<SlashSuggestion[]> {
   }
 }
 
-export function buildOntologyCopilotExtension(): Extension {
+export interface OntologyCopilotOptions {
+  /** Resolve-spine kinds to ground against. Defaults to ['material']. */
+  kinds?: CopilotKind[]
+}
+
+export function buildOntologyCopilotExtension(
+  options?: OntologyCopilotOptions,
+): Extension {
+  const kinds: CopilotKind[] =
+    options?.kinds && options.kinds.length > 0 ? options.kinds : ['material']
   return Extension.create({
     name: 'ontologyCopilot',
 
@@ -83,7 +115,7 @@ export function buildOntologyCopilotExtension(): Extension {
             if (item.disabled) return
             editor.chain().focus().deleteRange(range).insertMention(item.mention).run()
           },
-          items: ({ query }) => resolveOntologyItems(query),
+          items: ({ query }) => resolveOntologyItems(query, kinds),
           render: () => createRenderer(),
         } as SuggestionOptions<SlashSuggestion>),
       ]

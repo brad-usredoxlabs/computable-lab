@@ -101,7 +101,15 @@ describe('resolveMaterial', () => {
       } as Response)
 
     const out = await resolveMaterial('tris', ctx())
-    expect(out).toHaveLength(3)
+    // 3 search/formulation hits + the pinned tier-5 mint affordance
+    // (creation-entry-points spec §6) which is always offered last.
+    expect(out).toHaveLength(4)
+    expect(out[3]).toMatchObject({
+      key: 'mint:tris',
+      badge: 'New',
+      pinBottom: true,
+    })
+    expect(out[3]?.resolveMention).toBeTypeOf('function')
     expect(out[0]).toMatchObject({
       key: 'material-spec:MSP-ROT-1MM',
       label: '1 mM rotenone in DMSO',

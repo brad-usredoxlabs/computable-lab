@@ -16,6 +16,7 @@ import type { TreeHandlers } from './handlers/TreeHandlers.js';
 import type { LibraryHandlers } from './handlers/LibraryHandlers.js';
 import type { OntologyHandlers } from './handlers/OntologyHandlers.js';
 import type { ResolveHandlers } from './handlers/ResolveHandlers.js';
+import type { VocabHandlers } from './handlers/VocabHandlers.js';
 import type { AIHandlers } from './handlers/AIHandlers.js';
 import type { EventEditorFixHandlers } from './handlers/EventEditorFixHandlers.js';
 import type { ConfigHandlers } from './handlers/configHandlers.js';
@@ -75,6 +76,7 @@ export interface RouteOptions {
   libraryHandlers?: LibraryHandlers;
   ontologyHandlers?: OntologyHandlers;
   resolveHandlers?: ResolveHandlers;
+  vocabHandlers?: VocabHandlers;
   aiHandlers?: AIHandlers;
   eventEditorFixHandlers?: EventEditorFixHandlers;
   configHandlers?: ConfigHandlers;
@@ -392,6 +394,15 @@ export function registerRoutes(
 
   if (resolveHandlers) {
     fastify.post('/resolve', resolveHandlers.resolveTerm.bind(resolveHandlers));
+  }
+
+  // Local-namespace term minting — the ontology funnel's floor
+  // (creation-entry-points spec §6). Optional like the resolve spine
+  // it complements.
+  const { vocabHandlers } = options;
+
+  if (vocabHandlers) {
+    fastify.post('/vocab/mint', vocabHandlers.mintTerm.bind(vocabHandlers));
   }
 
   const { vendorSearchHandlers } = options;

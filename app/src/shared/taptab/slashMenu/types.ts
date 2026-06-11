@@ -25,6 +25,19 @@ export interface SlashSuggestion {
   mention: SlashMention
   /** When true, the row renders disabled (e.g. "no wells selected"). */
   disabled?: boolean
+  /**
+   * When set, the mention is produced asynchronously on select instead of
+   * inserting `mention` directly — the tier-5 mint affordance must create
+   * the record server-side before the pill has an id to point at. Resolving
+   * to null aborts the insert.
+   */
+  resolveMention?: () => Promise<SlashMention | null>
+  /**
+   * Keep this row at the bottom of the list across progressive repaints
+   * (the mint affordance stays last — it's the funnel's deliberate last
+   * resort, never the default).
+   */
+  pinBottom?: boolean
 }
 
 /**

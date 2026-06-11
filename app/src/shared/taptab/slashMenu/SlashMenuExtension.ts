@@ -124,6 +124,23 @@ export function buildSlashMenuExtension(options: SlashMenuOptions = {}): Extensi
           command: ({ editor, range, props }) => {
             const item = props as SlashSuggestion
             if (item.disabled) return
+            if (item.resolveMention) {
+              // Async path (tier-5 mint): clear the trigger text now, insert
+              // the pill once the server has created the record. A failed or
+              // null resolution aborts the insert — the user keeps typing.
+              editor.chain().focus().deleteRange(range).run()
+              void item
+                .resolveMention()
+                .then((mention) => {
+                  if (mention) {
+                    editor.chain().focus().insertMention(mention).run()
+                  }
+                })
+                .catch((err) => {
+                  console.warn('Mention resolution (mint) failed:', err)
+                })
+              return
+            }
             editor
               .chain()
               .focus()
@@ -153,7 +170,11 @@ export function buildSlashMenuExtension(options: SlashMenuOptions = {}): Extensi
                 const seen = new Set(session.items.map((s) => s.key))
                 const additions = more.filter((s) => !seen.has(s.key))
                 if (additions.length === 0) return
-                session.items = [...session.items, ...additions]
+                // pinBottom rows (the mint affordance) stay last across
+                // progressive repaints — additions slot in above them.
+                const pinned = session.items.filter((s) => s.pinBottom)
+                const unpinned = session.items.filter((s) => !s.pinBottom)
+                session.items = [...unpinned, ...additions, ...pinned]
                 session.repaint?.(session.items)
               },
             }

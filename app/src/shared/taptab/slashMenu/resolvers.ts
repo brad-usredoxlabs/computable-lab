@@ -43,6 +43,30 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
   const initial = workspace.slice(0, MATERIAL_PAGE)
   const seen = new Set(initial.map((s) => s.key))
 
+  // The funnel's floor (creation-entry-points spec §6): minting a new
+  // local-namespace term is always offered, always last, never the
+  // keyboard default. Selecting it creates a draft material record
+  // server-side, then inserts the pill — tier-1 finds it next search.
+  if (q) {
+    initial.push({
+      key: `mint:${q}`,
+      label: `Create local term "${q}"`,
+      badge: 'New',
+      subtitle: 'mint a draft term into the lab namespace',
+      pinBottom: true,
+      mention: { type: 'material', entityKind: 'material', id: '', label: q },
+      resolveMention: async () => {
+        const res = await apiClient.mintLocalTerm('material', q, q)
+        return {
+          type: 'material',
+          entityKind: 'material',
+          id: res.recordId,
+          label: res.label,
+        }
+      },
+    })
+  }
+
   // Below-first-paint: chain the two resolve() calls so the on-box OAK
   // tier (still 1-2s on a cold snapshot scan) lands as the second paint,
   // and the remote OLS4 tier lands as the third. Each call only emits

@@ -34,6 +34,7 @@ import {
   createLibraryHandlers,
   createOntologyHandlers,
   createResolveHandlers,
+  createVocabHandlers,
   createAIHandlers,
   createDeterministicOnlyAIHandlers,
   createGatewayAIHandlers,
@@ -571,6 +572,9 @@ export async function createServer(
 
   // Create meta handlers
   const repoConfig = ctx.appConfig ? getDefaultRepository(ctx.appConfig) ?? undefined : undefined;
+  // Term minting writes into the same store the resolve spine's tier-1
+  // reads from; the namespace gives minted IRIs a per-lab home.
+  const vocabHandlers = createVocabHandlers(ctx.store, repoConfig?.namespace);
   const metaHandlers = createMetaHandlers({
     schemaRegistry: ctx.schemaRegistry,
     getRuleCount: () => ctx.lintEngine.ruleCount,
@@ -927,6 +931,7 @@ export async function createServer(
       libraryHandlers,
       ontologyHandlers,
       resolveHandlers,
+      vocabHandlers,
       vendorSearchHandlers,
       vendorDocumentHandlers,
       chemistryHandlers,
