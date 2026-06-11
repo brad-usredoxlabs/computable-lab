@@ -230,15 +230,21 @@ export function createRunWarmRequester(opts: {
   return (runId: string) => {
     const warmup = opts.getWarmup();
     const orchestrator = opts.getOrchestrator();
-    const buildPrefixMessages = orchestrator?.buildPrefixMessages?.bind(orchestrator);
-    if (!warmup || !buildPrefixMessages) return;
+    const buildPrefixRequest = orchestrator?.buildPrefixRequest?.bind(orchestrator);
+    if (!warmup || !buildPrefixRequest) return;
     warmup.requestWarm({
       key: `run:${runId}`,
-      buildMessages: async () => {
+      buildPrefix: async () => {
         const fresh = await opts.contextAssembler.assembleEventGraphContext(runId);
         if (!fresh) throw new Error(`run ${runId} has no event-graph context`);
         const editorContext = buildMinimalEditorContext(runId, fresh as unknown as Record<string, unknown>);
-        return buildPrefixMessages({ context: editorContext, surface: 'run-workspace:plan' });
+        // Mirror runDraftAgent's event-graph draft path: same surface, same
+        // domain tool subset — the tool block is part of the token prefix.
+        return buildPrefixRequest({
+          context: editorContext,
+          surface: 'run-workspace:plan',
+          toolFilter: DOMAIN_TOOL_SUBSETS['event-graph'],
+        });
       },
     });
   };

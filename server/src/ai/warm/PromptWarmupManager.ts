@@ -19,7 +19,7 @@ import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import { dirname } from 'node:path';
 
-import type { ChatMessage, InferenceClient } from '../types.js';
+import type { CompletionRequest, InferenceClient } from '../types.js';
 import type { LlamaCacheClient } from './LlamaCacheClient.js';
 import type { InferenceActivityTracker } from './InferenceActivityTracker.js';
 
@@ -37,14 +37,19 @@ export interface WarmupSettings {
   manifestPath: string;
 }
 
+/** The template-relevant prefix of a request: messages plus tool surface. */
+export type WarmPrefix = Pick<CompletionRequest, 'messages' | 'tools' | 'tool_choice'>;
+
 export interface WarmTarget {
   /** Stable identity for debouncing/dedup, e.g. `run:RUN-123`. */
   key: string;
   /**
-   * Build the message prefix to warm — [system, ...history]. Called lazily at
-   * fire time so the freshest graph state is rendered.
+   * Build the request prefix to warm — [system, ...history] AND the tool
+   * definitions (the chat template renders tools into the prompt, so they are
+   * prefix-relevant). Called lazily at fire time so the freshest graph state
+   * is rendered.
    */
-  buildMessages(): Promise<ChatMessage[]> | ChatMessage[];
+  buildPrefix(): Promise<WarmPrefix> | WarmPrefix;
 }
 
 export interface WarmupStats {
@@ -96,8 +101,8 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
   const supersededKeys = new Map<string, WarmTarget>();
   const stats: WarmupStats = { warms: 0, skippedUnchanged: 0, deferrals: 0, failures: 0 };
 
-  function hashMessages(messages: ChatMessage[]): string {
-    return createHash('sha256').update(model).update(JSON.stringify(messages)).digest('hex');
+  function hashPrefix(prefix: WarmPrefix): string {
+    return createHash('sha256').update(model).update(JSON.stringify(prefix)).digest('hex');
   }
 
   async function readManifest(): Promise<ManifestEntry[]> {
@@ -149,8 +154,8 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
 
     inFlightKeys.add(key);
     try {
-      const messages = await target.buildMessages();
-      const promptHash = hashMessages(messages);
+      const prefix = await target.buildPrefix();
+      const promptHash = hashPrefix(prefix);
       if (lastWarmedHash.get(key) === promptHash) {
         stats.skippedUnchanged += 1;
         return;
@@ -159,7 +164,7 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
       const t0 = Date.now();
       const response = await inferenceClient.complete({
         model,
-        messages,
+        ...prefix,
         max_tokens: 1,
         temperature: 0,
         cache_prompt: true,

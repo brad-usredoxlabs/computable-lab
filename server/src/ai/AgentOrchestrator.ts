@@ -11,6 +11,7 @@ import type {
   AgentOrchestrator,
   AgentRequest,
   AgentResult,
+  CompletionRequest,
   AgentClarificationOption,
   AgentLabwareAddition,
   ChatMessage,
@@ -443,18 +444,37 @@ export function createAgentOrchestrator(
   const traceId = () => Math.random().toString(36).slice(2, 8);
 
   /**
-   * Render the stable, cacheable prompt prefix for a (surface, context) pair:
-   * the single system message plus the last-n raw history turns. This is the
+   * Tool definitions offered to the LLM for a non-doc turn. Shared by run()
+   * and buildPrefixRequest: the chat template renders tool schemas into the
+   * prompt, so warm and real requests must carry IDENTICAL tools or their
+   * token prefixes diverge at the very start of the system region (measured:
+   * 3 common tokens when the warm omitted tools).
+   */
+  function buildToolDefs(forceDraftTool?: boolean, toolFilter?: readonly string[]) {
+    const allToolDefs = toolBridge.getToolDefinitions();
+    const baseToolDefs = forceDraftTool
+      ? []
+      : toolFilter
+        ? allToolDefs.filter((d) => toolFilter.includes(d.function.name))
+        : allToolDefs;
+    return [...baseToolDefs, COMPILE_EVENT_GRAPH_DRAFT_TOOL_DEF];
+  }
+
+  /**
+   * Render the stable, cacheable request prefix for a (surface, context)
+   * pair: the single system message, the last-n raw history turns, and the
+   * tool definitions (template-rendered, hence prefix-relevant). This is the
    * ONE render path shared by run() and the background prompt warmer — if the
    * two ever drifted, warmed prefixes would never match real requests and the
    * KV cache would miss silently.
    */
-  function buildPrefixMessages(args: {
+  function buildPrefixRequest(args: {
     context: EditorContext;
     surface?: AiSurface;
     history?: ConversationHistoryMessage[];
     forceDraftTool?: boolean;
-  }): ChatMessage[] {
+    toolFilter?: readonly string[];
+  }): Pick<CompletionRequest, 'messages' | 'tools' | 'tool_choice'> {
     const systemPrompt = args.surface
       ? buildSurfaceAwarePrompt(args.surface, args.context)
       : buildSystemPrompt(args.context, systemPromptPath);
@@ -467,10 +487,17 @@ export function createAgentOrchestrator(
       ? args.history.map(normalizeHistoryMessage).filter((m): m is ChatMessage => m !== null)
       : [];
 
-    return [
-      { role: 'system', content: systemSections.join('\n\n---\n\n') },
-      ...historyMessages.slice(-historyTurns),
-    ];
+    const tools = buildToolDefs(args.forceDraftTool, args.toolFilter);
+    return {
+      messages: [
+        { role: 'system', content: systemSections.join('\n\n---\n\n') },
+        ...historyMessages.slice(-historyTurns),
+      ],
+      tools,
+      tool_choice: args.forceDraftTool
+        ? { type: 'function', function: { name: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME } }
+        : 'auto',
+    };
   }
 
   // Helper to emit the structured summary log line
@@ -479,7 +506,7 @@ export function createAgentOrchestrator(
   }
 
   return {
-    buildPrefixMessages,
+    buildPrefixRequest,
 
     async run(request: AgentRequest): Promise<AgentResult> {
       const { prompt, context, history, surface, toolFilter, onEvent, attachments, enableThinking, deterministicOnly, forceDraftTool } = request;
@@ -747,30 +774,27 @@ export function createAgentOrchestrator(
           ? `${volatileParts.join('\n\n')}\n\n[User request]\n${prompt}`
           : prompt;
         messages = [
-          ...buildPrefixMessages({
+          ...buildPrefixRequest({
             context,
             ...(surface ? { surface } : {}),
             ...(history ? { history } : {}),
             ...(forceDraftTool ? { forceDraftTool } : {}),
-          }),
+            ...(toolFilter ? { toolFilter } : {}),
+          }).messages,
           { role: 'user', content: userContent },
         ];
       }
 
-      const allToolDefs = toolBridge.getToolDefinitions();
-      const baseToolDefs = isDocDiscussionTurn || forceDraftTool
-        ? []
-        : toolFilter
-          ? allToolDefs.filter((d) => toolFilter.includes(d.function.name))
-          : allToolDefs;
       // Append the structured output tool (#8): the agent finalizes by calling
       // compile_event_graph_draft rather than emitting free-text JSON. The
       // event-editor prompt endpoint sets forceDraftTool, which gives the LLM
       // only this terminal tool and sets tool_choice to require it.
-      const toolDefs = isDocDiscussionTurn ? [] : [...baseToolDefs, COMPILE_EVENT_GRAPH_DRAFT_TOOL_DEF];
+      // buildToolDefs is shared with the prompt-warm prefix so warm and real
+      // requests render identical tool blocks (prefix-relevant).
+      const toolDefs = isDocDiscussionTurn ? [] : buildToolDefs(forceDraftTool, toolFilter);
       const effectiveMaxTurns = isDocDiscussionTurn ? 1 : maxTurns;
       const totalUsage = { promptTokens: 0, completionTokens: 0 };
-      console.log(`[agent ${tid}] tools=${toolDefs.length}${toolFilter ? ` (filtered from ${allToolDefs.length})` : ''} docDiscussion=${isDocDiscussionTurn} maxTurns=${effectiveMaxTurns}`);
+      console.log(`[agent ${tid}] tools=${toolDefs.length}${toolFilter ? ' (filtered)' : ''} docDiscussion=${isDocDiscussionTurn} maxTurns=${effectiveMaxTurns}`);
 
       // 2. Agent loop
       for (let turn = 0; turn < effectiveMaxTurns; turn++) {

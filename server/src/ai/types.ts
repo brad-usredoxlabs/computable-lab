@@ -568,16 +568,18 @@ export interface InferenceClient {
 export interface AgentOrchestrator {
   run(request: AgentRequest): Promise<AgentResult>;
   /**
-   * Render the stable, cacheable prompt prefix ([system, ...history]) for a
-   * (surface, context) pair — the same render path run() uses. Consumed by
-   * the background prompt warmer; optional so test doubles stay minimal.
+   * Render the stable, cacheable request prefix ([system, ...history] plus
+   * the template-rendered tool definitions) for a (surface, context) pair —
+   * the same render path run() uses. Consumed by the background prompt
+   * warmer; optional so test doubles stay minimal.
    */
-  buildPrefixMessages?(args: {
+  buildPrefixRequest?(args: {
     context: EditorContext;
     surface?: import('./systemPrompt.js').AiSurface;
     history?: ConversationHistoryMessage[];
     forceDraftTool?: boolean;
-  }): ChatMessage[];
+    toolFilter?: readonly string[];
+  }): Pick<CompletionRequest, 'messages' | 'tools' | 'tool_choice'>;
 }
 
 // ============================================================================

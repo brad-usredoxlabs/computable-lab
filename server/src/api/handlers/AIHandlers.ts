@@ -337,20 +337,20 @@ export function createAIHandlers(
       }
 
       const warmup = getWarmup?.();
-      const buildPrefixMessages = orchestrator.buildPrefixMessages?.bind(orchestrator);
-      if (!warmup || !buildPrefixMessages) {
+      const buildPrefixRequest = orchestrator.buildPrefixRequest?.bind(orchestrator);
+      if (!warmup || !buildPrefixRequest) {
         reply.status(202);
         return { accepted: false, reason: 'warming disabled' };
       }
 
       // Mirror the real draft path exactly: /ai/draft-events sets
-      // forceDraftTool and no surface, so the warmed prefix must too — and
-      // the key must equal the cache_key the orchestrator derives, so the
-      // server routes the real request to the warmed slot.
+      // forceDraftTool and no surface (which also fixes the rendered tool
+      // block), and the key must equal the cache_key the orchestrator
+      // derives, so the server routes the real request to the warmed slot.
       warmup.requestWarm({
         key: deriveContextCacheKey(undefined, context),
-        buildMessages: () =>
-          buildPrefixMessages({
+        buildPrefix: () =>
+          buildPrefixRequest({
             context,
             ...(history ? { history } : {}),
             forceDraftTool: true,
