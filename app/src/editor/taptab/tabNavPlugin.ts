@@ -40,11 +40,37 @@ export function focusAdjacentTapTabField(from: HTMLElement, backwards: boolean):
   const root = from.closest('.taptab-editor-prose') ?? from.ownerDocument;
   const fields = Array.from(root.querySelectorAll(FIELD_SELECTOR)) as HTMLElement[];
   if (fields.length === 0) return;
-  const current = fields.findIndex((el) => el === from || el.contains(from));
-  const next =
-    current === -1
-      ? fields[backwards ? fields.length - 1 : 0]
-      : fields[(current + (backwards ? -1 : 1) + fields.length) % fields.length];
+  // `from` is either an element inside a field (inline input) or the field
+  // row itself (the FieldRow wrapper passes its currentTarget because
+  // portal-rendered widgets like comboboxes put the real event target
+  // outside the editor DOM entirely). Match both containments.
+  const current = fields.findIndex(
+    (el) => el === from || el.contains(from) || from.contains(el),
+  );
+  if (current !== -1) {
+    const next =
+      fields[(current + (backwards ? -1 : 1) + fields.length) % fields.length];
+    if (next) activateField(next);
+    return;
+  }
+  // No containment match — a combobox/ref widget in edit mode replaces its
+  // .taptab-widget-value wrapper entirely, so its row holds no field
+  // element. Fall back to document order relative to the row.
+  const row = from.closest('.taptab-field-row') ?? from;
+  const firstAfter = fields.findIndex(
+    (el) =>
+      (row.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) !==
+      0,
+  );
+  let next: HTMLElement | undefined;
+  if (backwards) {
+    next =
+      firstAfter === -1
+        ? fields[fields.length - 1]
+        : fields[(firstAfter - 1 + fields.length) % fields.length];
+  } else {
+    next = firstAfter === -1 ? fields[0] : fields[firstAfter];
+  }
   if (next) activateField(next);
 }
 

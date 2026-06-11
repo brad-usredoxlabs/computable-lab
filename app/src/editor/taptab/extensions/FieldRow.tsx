@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { OntologySidebar, type OntologyTerm } from '../OntologySidebar';
 import { apiClient } from '../../../shared/api/client';
 import { WidgetRenderer } from './WidgetRenderer';
+import { focusAdjacentTapTabField } from '../tabNavPlugin';
 
 function FieldRowView({ node, updateAttributes }: NodeViewProps) {
   const attrs = node.attrs as FieldRowAttrs;
@@ -32,8 +33,24 @@ function FieldRowView({ node, updateAttributes }: NodeViewProps) {
 
   if (attrs.widget === 'hidden') return null;
 
+  // Row-level Tab fallback: the plain inline input handles its own Tab
+  // (and stops propagation), but composite widgets — rich-text Description,
+  // arrays, comboboxes — swallow or never surface Tab, which made
+  // navigation die exactly at the fields where those widgets sit (the last
+  // field of most sections, so it read as "can't tab across sections").
+  // Any Tab that bubbles up to the row advances to the adjacent field.
+  const handleRowKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key !== 'Tab') return;
+    e.preventDefault();
+    e.stopPropagation();
+    // currentTarget (the row), NOT target: portal-rendered widget inputs
+    // (comboboxes) dispatch through the React tree but live outside the
+    // editor DOM, so the target can't anchor a position lookup.
+    focusAdjacentTapTabField(e.currentTarget as HTMLElement, e.shiftKey);
+  };
+
   return (
-    <NodeViewWrapper className={`taptab-field-row ${attrs.readOnly ? 'readonly' : ''}`} data-read-only={attrs.readOnly}>
+    <NodeViewWrapper className={`taptab-field-row ${attrs.readOnly ? 'readonly' : ''}`} data-read-only={attrs.readOnly} onKeyDown={handleRowKeyDown}>
       <span className="taptab-field-label" data-required={attrs.required}>{attrs.label}</span>
       <WidgetRenderer
         widget={attrs.widget}
