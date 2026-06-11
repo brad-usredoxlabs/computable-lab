@@ -15,12 +15,14 @@ import type {
   AgentLabwareAddition,
   ChatMessage,
   ConversationHistoryMessage,
+  EditorContext,
   ResolveMentionDeps,
   AgentSummary,
   TurnStats,
   PlateEventProposal,
 } from './types.js';
-import { buildSystemPrompt, buildSurfaceAwarePrompt } from './systemPrompt.js';
+import type { AiSurface } from './systemPrompt.js';
+import { buildSystemPrompt, buildSurfaceAwarePrompt, buildVolatileContextMessage } from './systemPrompt.js';
 import { resolveMentionsForPrompt, buildResolvedContextMessage } from './resolveMentions.js';
 import { runChatbotCompile } from './runChatbotCompile.js';
 import {
@@ -106,7 +108,7 @@ function parseAgentFinalResponse(
     const result: AgentResult = {
       success: true,
       usage: usageResult,
-      events: Array.isArray(parsed.events) ? parsed.events : [],
+      events: Array.isArray(parsed.events) ? stampDraftProvenance(parsed.events) : [],
       notes: Array.isArray(parsed.notes) ? parsed.notes : [],
       unresolvedRefs: Array.isArray(parsed.unresolvedRefs) ? parsed.unresolvedRefs : [],
     };
@@ -168,25 +170,27 @@ function normalizeHistoryMessage(message: ConversationHistoryMessage): ChatMessa
   };
 }
 
-function summarizeConversationHistory(history: ChatMessage[]): string | null {
-  if (history.length === 0) return null;
-  const lines = history
-    .slice(-6)
-    .map((message, index) => {
-      const speaker = message.role === 'user' ? 'User' : 'Assistant';
-      const content = (message.content ?? '').replace(/\s+/g, ' ').trim().slice(0, 240);
-      return `${index + 1}. ${speaker}: ${content}`;
-    })
-    .filter((line) => !line.endsWith(':'));
-  if (lines.length === 0) return null;
-  return [
-    'Recent conversation context:',
-    ...lines,
-    'Treat the latest user message as a continuation of this exchange when resolving references like "yes", "that one", or omitted wells/materials.',
-  ].join('\n');
+/**
+ * Overwrite provenance stamps on model-drafted events. The system prompt is
+ * deterministic (no timestamps/ids — see buildSystemPrompt) so models copy
+ * placeholder values; the server is the authority for when a draft was made.
+ */
+function stampDraftProvenance<T>(events: T[]): T[] {
+  const timestamp = new Date().toISOString();
+  const actionGroupId = `ag-${Date.now().toString(36)}`;
+  return events.map((ev) => {
+    if (!ev || typeof ev !== 'object') return ev;
+    const e = ev as Record<string, unknown>;
+    const prov =
+      e.provenance && typeof e.provenance === 'object'
+        ? (e.provenance as Record<string, unknown>)
+        : {};
+    return {
+      ...e,
+      provenance: { actor: 'ai-agent', method: 'automated', ...prov, timestamp, actionGroupId },
+    } as T;
+  });
 }
-
-
 
 const FORCED_DRAFT_TOOL_INSTRUCTION = [
   'EVENT-EDITOR DRAFT MODE:',
@@ -432,10 +436,42 @@ export function createAgentOrchestrator(
   const {
     maxTurns = 15,
     maxToolCallsPerTurn = 5,
+    historyTurns = 4,
     systemPromptPath,
   } = agentConfig;
 
   const traceId = () => Math.random().toString(36).slice(2, 8);
+
+  /**
+   * Render the stable, cacheable prompt prefix for a (surface, context) pair:
+   * the single system message plus the last-n raw history turns. This is the
+   * ONE render path shared by run() and the background prompt warmer — if the
+   * two ever drifted, warmed prefixes would never match real requests and the
+   * KV cache would miss silently.
+   */
+  function buildPrefixMessages(args: {
+    context: EditorContext;
+    surface?: AiSurface;
+    history?: ConversationHistoryMessage[];
+    forceDraftTool?: boolean;
+  }): ChatMessage[] {
+    const systemPrompt = args.surface
+      ? buildSurfaceAwarePrompt(args.surface, args.context)
+      : buildSystemPrompt(args.context, systemPromptPath);
+    const systemSections: string[] = [systemPrompt];
+    if (deps.residentContext) systemSections.push(deps.residentContext);
+    systemSections.push(SUBMIT_SUGGESTION_INSTRUCTION);
+    if (args.forceDraftTool) systemSections.push(FORCED_DRAFT_TOOL_INSTRUCTION);
+
+    const historyMessages = Array.isArray(args.history)
+      ? args.history.map(normalizeHistoryMessage).filter((m): m is ChatMessage => m !== null)
+      : [];
+
+    return [
+      { role: 'system', content: systemSections.join('\n\n---\n\n') },
+      ...historyMessages.slice(-historyTurns),
+    ];
+  }
 
   // Helper to emit the structured summary log line
   function logAgentSummary(_tid: string, summary: AgentSummary): void {
@@ -443,6 +479,8 @@ export function createAgentOrchestrator(
   }
 
   return {
+    buildPrefixMessages,
+
     async run(request: AgentRequest): Promise<AgentResult> {
       const { prompt, context, history, surface, toolFilter, onEvent, attachments, enableThinking, deterministicOnly, forceDraftTool } = request;
       const tid = traceId();
@@ -463,8 +501,7 @@ export function createAgentOrchestrator(
       const historyMessages = Array.isArray(history)
         ? history.map(normalizeHistoryMessage).filter((message): message is ChatMessage => message !== null)
         : [];
-      const historySummary = summarizeConversationHistory(historyMessages);
-      
+
       // Resolve mentions and build resolved context message
       const resolvedMentions = await resolveMentionsForPrompt(prompt, deps);
       resolvedMentionsCount = resolvedMentions.length;
@@ -682,21 +719,43 @@ export function createAgentOrchestrator(
       // Qwen3 chat template rejects multiple consecutive system messages
       // with "System message must be at the beginning." Fold all system
       // content into a single message before user/assistant turns.
-      const systemSections: string[] = [effectiveSystemPrompt];
-      for (const m of attachmentMessages) {
-        if (typeof m.content === 'string' && m.content.length > 0) systemSections.push(m.content);
+      //
+      // The system message must stay a pure function of (mode, editor graph
+      // state) — per-turn volatile context (selection, mentions, resolved
+      // entities) rides in the user message instead, so llama-server's
+      // prompt cache can reuse the prefix between graph mutations. The prefix
+      // itself comes from buildPrefixMessages, the same render path the
+      // background prompt warmer uses.
+      let messages: ChatMessage[];
+      if (isDocDiscussionTurn) {
+        const systemSections: string[] = [effectiveSystemPrompt];
+        for (const m of attachmentMessages) {
+          if (typeof m.content === 'string' && m.content.length > 0) systemSections.push(m.content);
+        }
+        if (resolvedContextMessage) systemSections.push(resolvedContextMessage);
+        messages = [
+          { role: 'system', content: systemSections.join('\n\n---\n\n') },
+          ...historyMessages.slice(-historyTurns),
+          { role: 'user', content: prompt },
+        ];
+      } else {
+        const volatileParts: string[] = [];
+        const volatileContext = buildVolatileContextMessage(context);
+        if (volatileContext) volatileParts.push(volatileContext);
+        if (resolvedContextMessage) volatileParts.push(resolvedContextMessage);
+        const userContent = volatileParts.length > 0
+          ? `${volatileParts.join('\n\n')}\n\n[User request]\n${prompt}`
+          : prompt;
+        messages = [
+          ...buildPrefixMessages({
+            context,
+            ...(surface ? { surface } : {}),
+            ...(history ? { history } : {}),
+            ...(forceDraftTool ? { forceDraftTool } : {}),
+          }),
+          { role: 'user', content: userContent },
+        ];
       }
-      if (!isDocDiscussionTurn && deps.residentContext) systemSections.push(deps.residentContext);
-      if (resolvedContextMessage) systemSections.push(resolvedContextMessage);
-      if (historySummary) systemSections.push(historySummary);
-      if (!isDocDiscussionTurn) systemSections.push(SUBMIT_SUGGESTION_INSTRUCTION);
-      if (!isDocDiscussionTurn && forceDraftTool) systemSections.push(FORCED_DRAFT_TOOL_INSTRUCTION);
-
-      const messages: ChatMessage[] = [
-        { role: 'system', content: systemSections.join('\n\n---\n\n') },
-        ...historyMessages,
-        { role: 'user', content: prompt },
-      ];
 
       const allToolDefs = toolBridge.getToolDefinitions();
       const baseToolDefs = isDocDiscussionTurn || forceDraftTool

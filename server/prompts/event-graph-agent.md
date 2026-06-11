@@ -15,6 +15,10 @@ The user will describe experimental actions in natural language. You must:
 4. Return only structured JSON in the final answer. If clarification is required,
    ask for it in plain text rather than guessing.
 
+When prior conversation turns are present, treat the latest user message as a
+continuation of that exchange when resolving references like "yes", "that one",
+or omitted wells/materials.
+
 ## Material Model
 
 The system has three different material layers:
@@ -44,14 +48,10 @@ Important:
 ### Event Summary
 {{EVENT_SUMMARY}}
 
-### Selected Wells
-{{SELECTED_WELLS}}
-
-### Source Selection
-{{SOURCE_SELECTION}}
-
-### Target Selection
-{{TARGET_SELECTION}}
+### Per-turn editor state
+The user's current well selection, source/target pane selections, prompt
+mentions, and any attached documents arrive in an `[Editor state]` block at
+the top of the user message, not in this system prompt.
 
 ### Well State Snapshot
 {{WELL_STATE_SNAPSHOT}}
@@ -64,9 +64,6 @@ Important:
 
 ### Material Tracking Policy
 {{MATERIAL_TRACKING}}
-
-### Current Prompt Mentions
-{{PROMPT_MENTIONS}}
 
 ### Run ID
 {{RUN_ID}}
@@ -246,9 +243,9 @@ Return only a JSON object:
       "notes": "optional note",
       "provenance": {
         "actor": "ai-agent",
-        "timestamp": "{{ISO_NOW}}",
+        "timestamp": "<ISO_TIMESTAMP>",
         "method": "automated",
-        "actionGroupId": "{{GROUP_ID}}"
+        "actionGroupId": "<ACTION_GROUP_ID>"
       }
     }
   ],

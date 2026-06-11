@@ -122,6 +122,27 @@ export interface AIConfig {
   agent: AgentConfig;
   /** Optional extractor profile for AI-powered extraction. */
   extractor?: ExtractorProfileConfig;
+  /** Background KV-context warming against a local llama.cpp server. */
+  warmup?: WarmupConfig;
+}
+
+/**
+ * Background prompt-warming ("compiled context") configuration. Only
+ * meaningful when the inference provider is a llama.cpp server.
+ */
+export interface WarmupConfig {
+  /** Master switch (default false). */
+  enabled?: boolean;
+  /** Quiet period after a graph mutation before warming fires (default 2000). */
+  debounceMs?: number;
+  /** Persist warmed contexts via llama.cpp --slot-save-path (default false). */
+  slotPersistence?: boolean;
+  /** Server slot pinned for persisted warms (default 0). */
+  warmSlotId?: number;
+  /** Max persisted compiled contexts (default 4). */
+  maxLibraryEntries?: number;
+  /** Manifest path for persisted contexts (default "var/compiled-contexts.json"). */
+  manifestPath?: string;
 }
 
 /**
@@ -168,6 +189,8 @@ export interface AgentConfig {
   maxTurns?: number;
   /** Max tool calls per single turn (default 5) */
   maxToolCallsPerTurn?: number;
+  /** Raw conversation turns replayed after the system prompt (default 4) */
+  historyTurns?: number;
   /** Path to system prompt template (default "prompts/event-graph-agent.md") */
   systemPromptPath?: string;
 }

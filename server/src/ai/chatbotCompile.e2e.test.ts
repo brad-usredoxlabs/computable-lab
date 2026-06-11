@@ -4,6 +4,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('./systemPrompt.js', () => ({
   buildSystemPrompt: () => 'Test system prompt',
   buildSurfaceAwarePrompt: () => 'Test surface prompt',
+  buildVolatileContextMessage: () => null,
 }));
 
 // Mock the resolveMentions module

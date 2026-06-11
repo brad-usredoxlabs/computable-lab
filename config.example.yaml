@@ -135,6 +135,29 @@ repositories:
 # CL_EXECUTION_ADAPTER_MODE_OPENTRONS_FLEX=local
 
 # -----------------------------------------------------------------------------
+# AI inference + background prompt warming
+# -----------------------------------------------------------------------------
+# ai:
+#   inference:
+#     provider: openai-compatible
+#     baseUrl: http://127.0.0.1:11434/v1
+#     model: qwen3.6-35b-a3b
+#   agent:
+#     maxTurns: 15
+#     historyTurns: 4          # raw conversation turns replayed after the system prompt
+#   # Background KV-context warming ("compiled contexts") — llama.cpp servers
+#   # only. After an event-graph Accept or edit, the server re-prefills the
+#   # (system prompt + graph) prefix on the idle GPU so the next draft prompt
+#   # only pays prefill for its suffix.
+#   warmup:
+#     enabled: true
+#     debounceMs: 2000         # quiet period after a graph mutation
+#     slotPersistence: true    # save/restore compiled contexts via --slot-save-path
+#     warmSlotId: 0
+#     maxLibraryEntries: 4
+#     manifestPath: var/compiled-contexts.json
+
+# -----------------------------------------------------------------------------
 # Optional external integrations
 # -----------------------------------------------------------------------------
 # EXA_API_KEY=...

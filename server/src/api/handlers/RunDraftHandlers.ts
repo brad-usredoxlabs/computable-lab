@@ -15,6 +15,7 @@ import type { RecordStore, RecordEnvelope } from '../../store/types.js';
 import type { AgentOrchestrator, AgentEvent, EditorContext } from '../../ai/types.js';
 import type { AiSurface } from '../../ai/systemPrompt.js';
 import type { RunContextAssembler } from '../../ai/RunContextAssembler.js';
+import type { PromptWarmupManager } from '../../ai/warm/PromptWarmupManager.js';
 import { DOMAIN_TOOL_SUBSETS, type DraftDomain } from '../../ai/ToolBridge.js';
 import type { LintEngine } from '../../lint/LintEngine.js';
 import type { AjvValidator } from '../../validation/AjvValidator.js';
@@ -175,6 +176,8 @@ export interface RunDraftHandlersOptions {
   validator: AjvValidator;
   lintEngine: LintEngine;
   getOrchestrator: () => AgentOrchestrator | undefined;
+  /** Background prompt warmer; absent when warming is disabled. */
+  getWarmup?: () => PromptWarmupManager | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -212,8 +215,43 @@ function buildMinimalEditorContext(runId: string, contextData: Record<string, un
 // Factory
 // ---------------------------------------------------------------------------
 
+/**
+ * Build a debounced warm requester for a run's draft-prompt prefix. The warm
+ * target re-assembles the run context lazily at fire time and renders through
+ * the orchestrator's own prefix builder, so the warmed bytes match the next
+ * real draft request exactly. Shared by the Accept handler here and the
+ * generic record-mutation hook in server wiring.
+ */
+export function createRunWarmRequester(opts: {
+  contextAssembler: RunContextAssembler;
+  getOrchestrator: () => AgentOrchestrator | undefined;
+  getWarmup: () => PromptWarmupManager | undefined;
+}): (runId: string) => void {
+  return (runId: string) => {
+    const warmup = opts.getWarmup();
+    const orchestrator = opts.getOrchestrator();
+    const buildPrefixMessages = orchestrator?.buildPrefixMessages?.bind(orchestrator);
+    if (!warmup || !buildPrefixMessages) return;
+    warmup.requestWarm({
+      key: `run:${runId}`,
+      buildMessages: async () => {
+        const fresh = await opts.contextAssembler.assembleEventGraphContext(runId);
+        if (!fresh) throw new Error(`run ${runId} has no event-graph context`);
+        const editorContext = buildMinimalEditorContext(runId, fresh as unknown as Record<string, unknown>);
+        return buildPrefixMessages({ context: editorContext, surface: 'run-workspace:plan' });
+      },
+    });
+  };
+}
+
 export function createRunDraftHandlers(options: RunDraftHandlersOptions): RunDraftHandlers {
-  const { store, contextAssembler, getOrchestrator } = options;
+  const { store, contextAssembler, getOrchestrator, getWarmup } = options;
+
+  const requestRunContextWarm = createRunWarmRequester({
+    contextAssembler,
+    getOrchestrator,
+    getWarmup: () => getWarmup?.(),
+  });
 
   /** Run the AI orchestrator with run-scoped context and domain-specific surface + tool subset. */
   async function runDraftAgent(
@@ -342,6 +380,11 @@ export function createRunDraftHandlers(options: RunDraftHandlersOptions): RunDra
             lint: result.lint,
           };
         }
+
+        // The graph just changed: pre-warm the (system prompt + graph) prefix
+        // on the idle GPU so the user's next draft prompt only pays prefill
+        // for its suffix. Fire-and-forget; never affects this response.
+        requestRunContextWarm(runId);
 
         return {
           recordId: eventGraphEnvelope.recordId,

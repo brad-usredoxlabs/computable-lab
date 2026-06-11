@@ -65,6 +65,32 @@ export interface CompletionRequest {
    * When undefined, construction config is used.
    */
   enableThinking?: boolean;
+  /**
+   * llama.cpp extension: ask the server to keep this request's prompt in its
+   * KV/prompt cache for prefix reuse. Ignored by other providers.
+   */
+  cache_prompt?: boolean;
+  /**
+   * llama.cpp extension: pin the request to a specific server slot. Used by
+   * the prompt warmer so a warmed prefix can be slot-saved. Ignored by other
+   * providers.
+   */
+  id_slot?: number;
+}
+
+/**
+ * llama.cpp per-request timing block, returned on OpenAI-compatible
+ * responses. `cache_n` is the number of prompt tokens served from the KV /
+ * prompt cache — the observable signal that prefix warming worked.
+ */
+export interface LlamaTimings {
+  prompt_n?: number;
+  cache_n?: number;
+  prompt_ms?: number;
+  prompt_per_second?: number;
+  predicted_n?: number;
+  predicted_ms?: number;
+  predicted_per_second?: number;
 }
 
 export interface CompletionResponse {
@@ -79,6 +105,8 @@ export interface CompletionResponse {
     completion_tokens: number;
     total_tokens: number;
   };
+  /** Present on llama.cpp servers; absent elsewhere. */
+  timings?: LlamaTimings;
 }
 
 export interface StreamChunk {
@@ -88,6 +116,8 @@ export interface StreamChunk {
     delta: Partial<ChatMessage>;
     finish_reason: 'stop' | 'tool_calls' | 'length' | null;
   }>;
+  /** llama.cpp attaches timings to the final stream chunk. */
+  timings?: LlamaTimings;
 }
 
 // ============================================================================
@@ -529,6 +559,17 @@ export interface InferenceClient {
 
 export interface AgentOrchestrator {
   run(request: AgentRequest): Promise<AgentResult>;
+  /**
+   * Render the stable, cacheable prompt prefix ([system, ...history]) for a
+   * (surface, context) pair — the same render path run() uses. Consumed by
+   * the background prompt warmer; optional so test doubles stay minimal.
+   */
+  buildPrefixMessages?(args: {
+    context: EditorContext;
+    surface?: import('./systemPrompt.js').AiSurface;
+    history?: ConversationHistoryMessage[];
+    forceDraftTool?: boolean;
+  }): ChatMessage[];
 }
 
 // ============================================================================

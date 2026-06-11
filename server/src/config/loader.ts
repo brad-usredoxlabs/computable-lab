@@ -316,6 +316,28 @@ function validateAIConfig(config: unknown, path = 'ai'): asserts config is AICon
     }
   }
 
+  // Validate warmup block if present
+  const warmup = c.warmup as Record<string, unknown> | undefined;
+  if (warmup !== undefined) {
+    if (!warmup || typeof warmup !== 'object') {
+      throw new ConfigValidationError('warmup must be an object', `${path}.warmup`, warmup);
+    }
+    const w = warmup as Record<string, unknown>;
+    for (const key of ['enabled', 'slotPersistence'] as const) {
+      if (w[key] !== undefined && typeof w[key] !== 'boolean') {
+        throw new ConfigValidationError(`warmup.${key} must be a boolean`, `${path}.warmup.${key}`, w[key]);
+      }
+    }
+    for (const key of ['debounceMs', 'warmSlotId', 'maxLibraryEntries'] as const) {
+      if (w[key] !== undefined && typeof w[key] !== 'number') {
+        throw new ConfigValidationError(`warmup.${key} must be a number`, `${path}.warmup.${key}`, w[key]);
+      }
+    }
+    if (w.manifestPath !== undefined && typeof w.manifestPath !== 'string') {
+      throw new ConfigValidationError('warmup.manifestPath must be a string', `${path}.warmup.manifestPath`, w.manifestPath);
+    }
+  }
+
   // Normalize: agent block is optional in config.yaml but the type contract
   // (AIConfig.agent, AIProfile.agent) requires it to exist. Default to {}
   // here so every downstream consumer can read ai.agent.* without guarding.

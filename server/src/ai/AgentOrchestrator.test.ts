@@ -55,7 +55,9 @@ describe('createAgentOrchestrator', () => {
     expect(capturedMessages.map((message) => ({ role: message.role, content: message.content }))).toEqual([
       {
         role: 'system',
-        content: expect.stringContaining('Recent conversation context:\n1. User: Transfer 10 uL of clofibrate to B2.'),
+        // History is replayed as raw turns below, never summarized into the
+        // system prompt — the prefix must stay byte-stable for KV-cache reuse.
+        content: expect.not.stringContaining('Recent conversation context:'),
       },
       { role: 'user', content: 'Transfer 10 uL of clofibrate to B2.' },
       { role: 'assistant', content: 'Which source well contains clofibrate?' },

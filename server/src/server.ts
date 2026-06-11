@@ -95,7 +95,10 @@ import {
   testInferenceEndpoint,
   RunContextAssembler,
 } from './ai/index.js';
-import { createRunDraftHandlers } from './api/handlers/RunDraftHandlers.js';
+import { createRunDraftHandlers, createRunWarmRequester } from './api/handlers/RunDraftHandlers.js';
+import { createPromptWarmupManager } from './ai/warm/PromptWarmupManager.js';
+import { createLlamaCacheClient } from './ai/warm/LlamaCacheClient.js';
+import { createActivityTracker, withActivityTracking } from './ai/warm/InferenceActivityTracker.js';
 import { createRelatedRecordsHandlers } from './api/handlers/RelatedRecordsHandlers.js';
 import { createAiRecordDraftHandlers } from './api/handlers/AiRecordDraftHandlers.js';
 import { createReadinessHandlers } from './api/handlers/ReadinessHandlers.js';
@@ -475,12 +478,18 @@ export async function createServer(
   });
 
   // Create handlers
+  // Lazily-bound warm requester: the prompt warmer, orchestrator, and run
+  // context assembler are all created later (AI runtime init), but record
+  // handlers need a stable callback reference now.
+  let requestRunWarm: ((runId: string) => void) | undefined;
+
   const recordHandlers = createRecordHandlers(
     ctx.store,
     ctx.indexManager,
     ctx.identity,
     () => ctx.appConfig?.lab?.materialTracking,
     ctx.lifecycleEngine,
+    (runId) => requestRunWarm?.(runId),
   );
   const schemaHandlers = createSchemaHandlers(ctx.schemaRegistry);
   const validationHandlers = createValidationHandlers(ctx.validator, ctx.lintEngine);
@@ -649,6 +658,7 @@ export async function createServer(
   let aiIngestionHandlersImpl = createAiIngestionHandlers(undefined, undefined, ctx.store);
   let aiRecordDraftHandlersImpl: ReturnType<typeof createAiRecordDraftHandlers> | undefined;
   let currentOrchestrator: import('./ai/types.js').AgentOrchestrator | undefined;
+  let currentWarmup: import('./ai/warm/PromptWarmupManager.js').PromptWarmupManager | undefined;
   let aiInfo: {
     available: boolean;
     inferenceUrl: string;
@@ -665,6 +675,7 @@ export async function createServer(
     aiIngestionHandlersImpl = createAiIngestionHandlers(undefined, undefined, ctx.store);
     aiRecordDraftHandlersImpl = undefined;
     currentOrchestrator = undefined;
+    currentWarmup = undefined;
     protocolIdeAiDeps.current = undefined;
     aiInfo = undefined;
 
@@ -691,8 +702,25 @@ export async function createServer(
     }
 
     try {
-      const inferenceClient = createInferenceClient(inferenceConfig);
+      // The raw client serves background prompt warming; the activity-tracked
+      // wrapper serves all interactive paths so the warmer can defer while
+      // real requests are in flight.
+      const rawInferenceClient = createInferenceClient(inferenceConfig);
+      const activityTracker = createActivityTracker();
+      const inferenceClient = withActivityTracking(rawInferenceClient, activityTracker);
       const toolBridge = createToolBridge(toolRegistry);
+
+      const warmupConfig = aiConfig.warmup ?? {};
+      const warmupSettings = {
+        // Warming targets llama.cpp-specific behavior (cache_prompt, /slots);
+        // never enable it against plain OpenAI.
+        enabled: (warmupConfig.enabled ?? false) && inferenceConfig.provider === 'openai-compatible',
+        debounceMs: warmupConfig.debounceMs ?? 2000,
+        slotPersistence: warmupConfig.slotPersistence ?? false,
+        warmSlotId: warmupConfig.warmSlotId ?? 0,
+        maxLibraryEntries: warmupConfig.maxLibraryEntries ?? 4,
+        manifestPath: warmupConfig.manifestPath ?? 'var/compiled-contexts.json',
+      };
 
       // Reuse the fully-wired extraction runner built above (populator + real
       // extractorFactory + library matcher). The earlier stub here crashed
@@ -721,7 +749,23 @@ export async function createServer(
         placeholderDeps,
       );
       currentOrchestrator = orchestrator;
-      aiHandlersImpl = createAIHandlers(orchestrator);
+      currentWarmup = createPromptWarmupManager({
+        inferenceClient: rawInferenceClient,
+        cacheClient: warmupSettings.slotPersistence
+          ? createLlamaCacheClient(inferenceConfig.baseUrl, inferenceConfig.apiKey)
+          : undefined,
+        tracker: activityTracker,
+        model: inferenceConfig.model,
+        settings: warmupSettings,
+      });
+      if (warmupSettings.enabled) {
+        console.log(
+          `AI prompt warming enabled (debounce ${warmupSettings.debounceMs}ms, ` +
+          `slot persistence ${warmupSettings.slotPersistence ? 'on' : 'off'})`,
+        );
+        void currentWarmup.restoreLibraryAtBoot();
+      }
+      aiHandlersImpl = createAIHandlers(orchestrator, () => currentWarmup);
       ingestionAIHandlersImpl = createIngestionAIHandlers(orchestrator, ctx.store);
       materialAIHandlersImpl = createMaterialAIHandlers(orchestrator, ctx.store);
       aiIngestionHandlersImpl = createAiIngestionHandlers(inferenceClient, inferenceConfig.model, ctx.store);
@@ -824,6 +868,12 @@ export async function createServer(
       const impl = gatewayAiHandlers ?? aiHandlersImpl ?? deterministicAiHandlers;
       return impl.assistStream(request, reply);
     },
+    async warmContext(request, reply) {
+      // Warming targets the local llama.cpp server's KV cache — never the
+      // cloud gateway, whose caching is out of our hands.
+      const impl = aiHandlersImpl ?? deterministicAiHandlers;
+      return impl.warmContext(request, reply);
+    },
   };
 
   const knowledgeAIHandlers: KnowledgeAIHandlers = {
@@ -876,6 +926,14 @@ export async function createServer(
     validator: ctx.validator,
     lintEngine: ctx.lintEngine,
     getOrchestrator: () => currentOrchestrator,
+    getWarmup: () => currentWarmup,
+  });
+
+  // Bind the record-mutation warm hook now that the context assembler exists.
+  requestRunWarm = createRunWarmRequester({
+    contextAssembler: runContextAssembler,
+    getOrchestrator: () => currentOrchestrator,
+    getWarmup: () => currentWarmup,
   });
 
   const relatedRecordsHandlers = createRelatedRecordsHandlers(ctx.store);

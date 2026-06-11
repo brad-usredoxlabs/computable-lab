@@ -11,6 +11,7 @@ import type {
   FileAttachment,
 } from '../../ai/types.js';
 import { type UploadedFile } from '../../ai/FileContentExtractor.js';
+import type { PromptWarmupManager } from '../../ai/warm/PromptWarmupManager.js';
 
 export interface DraftEventsBody {
   prompt: string;
@@ -44,6 +45,17 @@ export interface AssistBody {
   enableThinking?: boolean;
 }
 
+/**
+ * Body for POST /ai/context/warm — the event editor's client-assembled
+ * context, sent on Accept and after debounced graph edits so the server can
+ * pre-warm the (system prompt + graph) prefix on the idle GPU while the user
+ * types their next prompt.
+ */
+export interface WarmContextBody {
+  context: EditorContext;
+  history?: ConversationHistoryMessage[];
+}
+
 export interface AIHandlers {
   draftEvents(
     request: FastifyRequest<{ Body: DraftEventsBody }>,
@@ -57,12 +69,19 @@ export interface AIHandlers {
     request: FastifyRequest<{ Body: AssistBody }>,
     reply: FastifyReply,
   ): Promise<void>;
+  warmContext(
+    request: FastifyRequest<{ Body: WarmContextBody }>,
+    reply: FastifyReply,
+  ): Promise<unknown>;
 }
 
 /**
  * Create AI handlers backed by the given orchestrator.
  */
-export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
+export function createAIHandlers(
+  orchestrator: AgentOrchestrator,
+  getWarmup?: () => PromptWarmupManager | undefined,
+): AIHandlers {
   return {
     async draftEvents(
       request: FastifyRequest<{ Body: DraftEventsBody }>,
@@ -305,6 +324,38 @@ export function createAIHandlers(orchestrator: AgentOrchestrator): AIHandlers {
         reply.raw.end();
       }
     },
+
+    async warmContext(
+      request: FastifyRequest<{ Body: WarmContextBody }>,
+      reply: FastifyReply,
+    ) {
+      const { context, history } = request.body ?? {};
+      if (!context || typeof context !== 'object') {
+        reply.status(400);
+        return { error: 'INVALID_REQUEST', message: 'context is required' };
+      }
+
+      const warmup = getWarmup?.();
+      const buildPrefixMessages = orchestrator.buildPrefixMessages?.bind(orchestrator);
+      if (!warmup || !buildPrefixMessages) {
+        reply.status(202);
+        return { accepted: false, reason: 'warming disabled' };
+      }
+
+      // Mirror the real draft path exactly: /ai/draft-events sets
+      // forceDraftTool and no surface, so the warmed prefix must too.
+      warmup.requestWarm({
+        key: `event-editor:${context.runId ?? context.eventGraphId ?? 'default'}`,
+        buildMessages: () =>
+          buildPrefixMessages({
+            context,
+            ...(history ? { history } : {}),
+            forceDraftTool: true,
+          }),
+      });
+      reply.status(202);
+      return { accepted: true };
+    },
   };
 }
 
@@ -441,6 +492,12 @@ export function createDeterministicOnlyAIHandlers(deps: {
     async assistStream(_request, reply) {
       reply.status(503);
       await reply.send({ error: 'AI_UNAVAILABLE', message: deps.unavailableMessage() });
+    },
+
+    async warmContext(_request, reply) {
+      // No LLM configured — nothing to warm.
+      reply.status(202);
+      return { accepted: false, reason: 'AI not configured' };
     },
   };
 }

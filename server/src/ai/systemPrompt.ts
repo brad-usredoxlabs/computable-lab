@@ -376,25 +376,45 @@ export function buildSystemPrompt(
   const template = loadPromptTemplate(templatePath);
   const materialRules = loadPromptTemplate('prompts/material-system-rules.md');
 
-  // Generate a group ID for this prompt
-  const groupId = `ag-${Date.now().toString(36)}`;
-  const isoNow = new Date().toISOString();
-
+  // No timestamps or generated ids here: the rendered prompt must be a pure
+  // function of (template, context) so identical editor state produces a
+  // byte-identical prefix that llama-server's prompt cache can reuse.
+  // Event provenance is stamped server-side when drafts are parsed.
   const prompt = `${materialRules.trim()}\n\n---\n\n${template}`
     .replace('{{LABWARES}}', formatLabwares(context.labwares))
     .replace('{{EVENT_SUMMARY}}', formatEventSummary(context.eventSummary))
-    .replace('{{SELECTED_WELLS}}', formatSelectedWells(context.selectedWells))
-    .replace('{{SOURCE_SELECTION}}', formatPaneSelection('Source Selection', context.sourceSelection))
-    .replace('{{TARGET_SELECTION}}', formatPaneSelection('Target Selection', context.targetSelection))
     .replace('{{WELL_STATE_SNAPSHOT}}', formatWellStateSnapshot(context))
     .replace('{{VOCAB_PACK}}', formatVocabPack(context.vocabPackId, context.availableVerbs))
     .replace('{{DECK_CONTEXT}}', formatDeckContext(context))
     .replace('{{MATERIAL_TRACKING}}', formatMaterialTracking(context))
-    .replace('{{PROMPT_MENTIONS}}', formatMentions(context))
-    .replace('{{RUN_ID}}', context.runId ?? 'none')
-    .replace('{{ISO_NOW}}', isoNow)
-    .replace('{{GROUP_ID}}', groupId);
+    .replace('{{RUN_ID}}', context.runId ?? 'none');
 
   const graphLemurContext = formatGraphLemurContext(context);
   return graphLemurContext ? `${prompt}\n\n---\n\n${graphLemurContext}` : prompt;
+}
+
+/**
+ * Render the per-turn volatile editor state (selection, pane selections,
+ * prompt mentions) as an `[Editor state]` block. This rides at the top of the
+ * user message — NOT the system prompt — so the system prefix stays
+ * byte-stable between graph mutations and llama-server can reuse its KV cache.
+ * Returns null when there is no volatile state worth sending.
+ */
+export function buildVolatileContextMessage(context: EditorContext): string | null {
+  const sections: string[] = [];
+
+  const selectedWells = formatSelectedWells(context.selectedWells);
+  if (selectedWells !== '(none selected)') sections.push(`Selected wells: ${selectedWells}`);
+
+  const source = formatPaneSelection('Source Selection', context.sourceSelection);
+  if (!source.endsWith('(none)')) sections.push(source);
+
+  const target = formatPaneSelection('Target Selection', context.targetSelection);
+  if (!target.endsWith('(none)')) sections.push(target);
+
+  const mentions = formatMentions(context);
+  if (mentions !== '(none)') sections.push(`Prompt mentions:\n${mentions}`);
+
+  if (sections.length === 0) return null;
+  return `[Editor state]\n${sections.join('\n')}`;
 }

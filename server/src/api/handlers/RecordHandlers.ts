@@ -34,6 +34,12 @@ export function createRecordHandlers(
   identity?: ResolvedIdentity,
   getMaterialTracking?: () => MaterialTrackingConfig | undefined,
   lifecycleEngine?: LifecycleEngine,
+  /**
+   * Called after a successful event-graph record update with the linked run
+   * id (manual edits, drag/drop, etc.) so the AI prompt warmer can refresh
+   * its compiled context. Best-effort; debouncing happens in the warmer.
+   */
+  onEventGraphMutated?: (runId: string) => void,
 ) {
   return {
     /**
@@ -465,6 +471,20 @@ export function createRecordHandlers(
             await indexManager.rebuild(); // For now, rebuild to ensure consistency
           } catch (indexErr) {
             console.error('Failed to update index after update:', indexErr);
+          }
+        }
+
+        // Graph mutated outside the Accept path (manual edits, drag/drop):
+        // let the AI prompt warmer refresh its compiled context.
+        if (onEventGraphMutated && existing.schemaId.includes('event-graph')) {
+          const links = ((payloadWithProvenance as Record<string, unknown>).links ?? {}) as Record<string, unknown>;
+          const linkedRunId = typeof links.runId === 'string' ? links.runId : undefined;
+          if (linkedRunId) {
+            try {
+              onEventGraphMutated(linkedRunId);
+            } catch {
+              // Warming is best-effort; never fail the update for it.
+            }
           }
         }
         
