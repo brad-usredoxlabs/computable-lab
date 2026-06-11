@@ -231,15 +231,19 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
           log('warn', '[warm] slot persistence configured but llama-server has no --slot-save-path; skipping restore');
           return;
         }
+        // Each restore overwrites the target slot, so loading every entry
+        // into the warm slot would leave only the last one. Restore the
+        // newest compiled context (the most likely next-used) and leave the
+        // rest on disk for future on-demand restore.
         const entries = await readManifest();
-        for (const entry of entries) {
-          try {
-            const result = await cacheClient.restoreSlot(settings.warmSlotId, entry.filename);
-            lastWarmedHash.set(entry.key, entry.promptHash);
-            log('info', `[warm ${entry.key}] restored ${entry.filename} (${result.n_restored ?? '?'} tokens)`);
-          } catch (err) {
-            log('warn', `[warm ${entry.key}] restore failed: ${err instanceof Error ? err.message : String(err)}`);
-          }
+        const newest = entries[0];
+        if (!newest) return;
+        try {
+          const result = await cacheClient.restoreSlot(settings.warmSlotId, newest.filename);
+          lastWarmedHash.set(newest.key, newest.promptHash);
+          log('info', `[warm ${newest.key}] restored ${newest.filename} (${result.n_restored ?? '?'} tokens)`);
+        } catch (err) {
+          log('warn', `[warm ${newest.key}] restore failed: ${err instanceof Error ? err.message : String(err)}`);
         }
       } catch (err) {
         log('warn', `[warm] boot restore failed: ${err instanceof Error ? err.message : String(err)}`);
