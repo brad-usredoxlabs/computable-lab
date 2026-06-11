@@ -33,6 +33,7 @@ export type WorkspaceTab =
       id: string;
       kind: 'deck';
       eventGraphId: string;
+      runId?: string;
       title: string;
     }
   | {
@@ -135,7 +136,13 @@ export function parseWorkspaceState(value: unknown): WorkspaceState | null {
     const t = raw as Record<string, unknown>;
     if (typeof t.id !== 'string' || typeof t.title !== 'string') return null;
     if (t.kind === 'deck' && typeof t.eventGraphId === 'string') {
-      tabs.push({ id: t.id, kind: 'deck', eventGraphId: t.eventGraphId, title: t.title });
+      tabs.push({
+        id: t.id,
+        kind: 'deck',
+        eventGraphId: t.eventGraphId,
+        ...(typeof t.runId === 'string' ? { runId: t.runId } : {}),
+        title: t.title,
+      });
     } else if (t.kind === 'pdf' && typeof t.artifactId === 'string') {
       tabs.push({ id: t.id, kind: 'pdf', artifactId: t.artifactId, title: t.title });
     } else if (t.kind === 'document' && typeof t.artifactId === 'string') {

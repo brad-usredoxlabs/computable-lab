@@ -140,8 +140,13 @@ function WorkspaceShellHost({
   if (activeTab?.kind === 'deck') {
     return (
       <EventEditorProvider
-        key={activeTab.eventGraphId}
-        eventGraphId={activeTab.eventGraphId}
+        // Fresh canvases have an empty eventGraphId — key on the tab id so
+        // two new canvases don't share provider state.
+        key={activeTab.eventGraphId || activeTab.id}
+        {...(activeTab.eventGraphId
+          ? { eventGraphId: activeTab.eventGraphId }
+          : {})}
+        {...(activeTab.runId ? { runId: activeTab.runId } : {})}
       >
         <FocusModalsProvider>{shellContent}</FocusModalsProvider>
       </EventEditorProvider>

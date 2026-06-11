@@ -28,7 +28,15 @@ export type WorkspaceViewerKind = 'deck' | 'pdf' | 'document'
  * auto-opened by the WorkspaceProvider when no tabs exist.
  */
 export type WorkspaceTab =
-  | { id: string; kind: 'deck'; eventGraphId: string; title: string }
+  | {
+      id: string
+      kind: 'deck'
+      /** Empty string = fresh unsaved canvas. */
+      eventGraphId: string
+      /** When set, graphs saved from this canvas attach to the run. */
+      runId?: string
+      title: string
+    }
   | { id: string; kind: 'pdf'; artifactId: string; title: string }
   | { id: string; kind: 'document'; artifactId: string; title: string }
   | { id: string; kind: 'project-details'; title: string }

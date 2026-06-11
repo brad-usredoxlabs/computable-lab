@@ -267,7 +267,17 @@ function RunRow({ run }: { run: RunTreeNode }) {
     try {
       const summary = await getRunMethod(run.recordId)
       if (!summary.hasMethod || !summary.methodEventGraphId) {
+        // No method yet — open a fresh canvas bound to the run. Saving
+        // from it creates the event graph with links.runId and the server
+        // back-fills the run's methodEventGraphId.
         setMissing(true)
+        ws.openTab({
+          id: `tab-deck-new-${run.recordId}`,
+          kind: 'deck',
+          eventGraphId: '',
+          runId: run.recordId,
+          title: run.title,
+        })
         return
       }
       ws.openTab({

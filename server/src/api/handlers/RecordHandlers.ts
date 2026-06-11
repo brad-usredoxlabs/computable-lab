@@ -280,6 +280,34 @@ export function createRecordHandlers(
         
         reply.status(201);
         
+        // Back-fill the run's method pointer: an event graph saved from a
+        // run-bound canvas carries links.runId, and the run becomes
+        // openable from the project tree only once methodEventGraphId is
+        // set. Best-effort — a failure here never fails the graph create.
+        const createdPayload = (result.envelope?.payload ?? {}) as Record<string, unknown>;
+        const createdLinks = (createdPayload.links ?? {}) as Record<string, unknown>;
+        const linkedRunId = typeof createdLinks.runId === 'string' ? createdLinks.runId : undefined;
+        if (linkedRunId && schemaId.includes('event-graph')) {
+          try {
+            const runEnvelope = await store.get(linkedRunId);
+            const runPayload = (runEnvelope?.payload ?? {}) as Record<string, unknown>;
+            if (runEnvelope && !runPayload.methodEventGraphId) {
+              await store.update({
+                envelope: {
+                  ...runEnvelope,
+                  payload: {
+                    ...runPayload,
+                    methodEventGraphId: extractRecordId(createdPayload),
+                  },
+                },
+                message: `Attach method ${extractRecordId(createdPayload)} to ${linkedRunId}`,
+              });
+            }
+          } catch (attachErr) {
+            console.warn(`Failed to attach event graph to run ${linkedRunId}:`, attachErr);
+          }
+        }
+
         // Update index after successful create
         if (indexManager && result.envelope) {
           try {
