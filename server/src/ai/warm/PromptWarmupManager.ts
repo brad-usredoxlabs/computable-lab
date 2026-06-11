@@ -66,6 +66,14 @@ interface ManifestEntry {
   filename: string;
   tokenCount?: number;
   savedAt: string;
+  /**
+   * The full warmed prefix. Needed at boot: the server's cache_key→slot
+   * binding is in-memory, so after restoring the slot file we re-send this
+   * prefix (pinned to the warm slot) to re-bind the key. The restored KV
+   * makes that re-bind near-free; if the restore failed it degrades to a
+   * full re-prefill on the idle GPU.
+   */
+  prefix?: WarmPrefix;
 }
 
 export interface PromptWarmupManager {
@@ -120,12 +128,17 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
     await fs.writeFile(settings.manifestPath, JSON.stringify(entries, null, 2), 'utf8');
   }
 
-  async function persistWarmedSlot(key: string, promptHash: string, tokenCount?: number): Promise<void> {
+  async function persistWarmedSlot(
+    key: string,
+    promptHash: string,
+    prefix: WarmPrefix,
+    tokenCount?: number,
+  ): Promise<void> {
     if (!settings.slotPersistence || !cacheClient) return;
     const filename = `ctx-${promptHash.slice(0, 24)}.bin`;
     await cacheClient.saveSlot(settings.warmSlotId, filename);
     const entries = (await readManifest()).filter((e) => e.key !== key);
-    const entry: ManifestEntry = { key, promptHash, filename, savedAt: new Date().toISOString() };
+    const entry: ManifestEntry = { key, promptHash, filename, savedAt: new Date().toISOString(), prefix };
     if (tokenCount != null) entry.tokenCount = tokenCount;
     entries.unshift(entry);
     await writeManifest(entries.slice(0, settings.maxLibraryEntries));
@@ -189,7 +202,7 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
       );
 
       try {
-        await persistWarmedSlot(key, promptHash, timings.prompt_n);
+        await persistWarmedSlot(key, promptHash, prefix, timings.prompt_n);
       } catch (err) {
         log('warn', `[warm ${key}] slot save failed: ${err instanceof Error ? err.message : String(err)}`);
       }
@@ -234,16 +247,40 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
         // Each restore overwrites the target slot, so loading every entry
         // into the warm slot would leave only the last one. Restore the
         // newest compiled context (the most likely next-used) and leave the
-        // rest on disk for future on-demand restore.
+        // rest on disk.
         const entries = await readManifest();
         const newest = entries[0];
         if (!newest) return;
         try {
           const result = await cacheClient.restoreSlot(settings.warmSlotId, newest.filename);
-          lastWarmedHash.set(newest.key, newest.promptHash);
           log('info', `[warm ${newest.key}] restored ${newest.filename} (${result.n_restored ?? '?'} tokens)`);
         } catch (err) {
-          log('warn', `[warm ${newest.key}] restore failed: ${err instanceof Error ? err.message : String(err)}`);
+          log('warn', `[warm ${newest.key}] restore failed (will re-prefill): ${err instanceof Error ? err.message : String(err)}`);
+        }
+        // The server's cache_key→slot binding is in-memory and did not
+        // survive the restart; without it, keyed requests skip similarity
+        // routing and would miss the restored KV. Re-send the stored prefix
+        // pinned to the warm slot: near-free against the restored state,
+        // re-binds the key, and degrades to a full background re-prefill if
+        // the restore failed.
+        if (newest.prefix) {
+          const t0 = Date.now();
+          const response = await inferenceClient.complete({
+            model,
+            ...newest.prefix,
+            max_tokens: 1,
+            temperature: 0,
+            cache_prompt: true,
+            cache_key: newest.key,
+            id_slot: settings.warmSlotId,
+          });
+          const timings = response.timings ?? {};
+          lastWarmedHash.set(newest.key, newest.promptHash);
+          log(
+            'info',
+            `[warm ${newest.key}] re-bound after boot: ${timings.prompt_n ?? '?'} new, ` +
+              `${timings.cache_n ?? '?'} cached, ${Date.now() - t0}ms`,
+          );
         }
       } catch (err) {
         log('warn', `[warm] boot restore failed: ${err instanceof Error ? err.message : String(err)}`);
