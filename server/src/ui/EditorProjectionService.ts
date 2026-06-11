@@ -222,7 +222,10 @@ function assignSlotsToBlocksFromSections(
   sections: FormSection[]
 ): void {
   for (const section of sections) {
-    const blockId = section.id ?? `section-${blocks.length - sections.indexOf(section)}`;
+    // Must mirror projectBlocksFromFormSections' id generation
+    // (`section-${index}`) — anything else assigns every section's fields
+    // to the wrong block.
+    const blockId = section.id ?? `section-${sections.indexOf(section)}`;
     const block = blocks.find((b) => b.id === blockId);
     if (!block) continue;
 

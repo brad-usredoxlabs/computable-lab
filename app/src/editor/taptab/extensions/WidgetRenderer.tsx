@@ -5,6 +5,7 @@
  */
 
 import { useState } from 'react';
+import { focusAdjacentTapTabField } from '../tabNavPlugin';
 import type { WidgetType } from '../types';
 import { EnumCombobox } from '../EnumCombobox';
 import { RefCombobox } from '../RefCombobox';
@@ -73,6 +74,16 @@ export function WidgetRenderer({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') { e.preventDefault(); onCommit(localValue); setEditing(false); }
     else if (e.key === 'Escape') { e.preventDefault(); setLocalValue(String(value ?? '')); setEditing(false); onCancel(); }
+    else if (e.key === 'Tab') {
+      // Keydowns inside the React NodeView never reach ProseMirror's
+      // tab-nav plugin, so Word-style commit-and-advance is handled here.
+      e.preventDefault();
+      e.stopPropagation();
+      const from = e.currentTarget as HTMLElement;
+      onCommit(localValue);
+      setEditing(false);
+      focusAdjacentTapTabField(from, e.shiftKey);
+    }
   };
 
   const handleComboboxSelect = (v: string) => { onCommit(v); setEditing(false); };
@@ -194,9 +205,18 @@ export function WidgetRenderer({
   }
 
   const display = editing ? (
-    <input type={getInputType()} value={localValue} onChange={(e) => setLocalValue(e.target.value)} onBlur={handleInputBlur} onKeyDown={handleKeyDown} className="taptab-inline-input" onClick={(e) => e.stopPropagation()} />
+    // autoFocus: edit mode is entered by clicking the display span (or via
+    // Tab-nav's synthetic click) — the input that replaces it must take
+    // focus itself or keystrokes silently go nowhere.
+    <input type={getInputType()} value={localValue} onChange={(e) => setLocalValue(e.target.value)} onBlur={handleInputBlur} onKeyDown={handleKeyDown} className="taptab-inline-input" onClick={(e) => e.stopPropagation()} autoFocus />
+  ) : String(value ?? '') !== '' ? (
+    <span>{String(value)}</span>
   ) : (
-    <span>{String(value ?? '')}</span>
+    // Visible affordance for empty editable fields — without it a new
+    // record renders as invisible zero-width click targets.
+    <span className="taptab-widget-empty" aria-hidden>
+      {readOnly ? '' : '—'}
+    </span>
   );
 
   const wrapperProps = readOnly ? { className: 'taptab-widget-value' } : { className: 'taptab-widget-value', onClick: () => setEditing(true) };

@@ -224,7 +224,8 @@
   color: var(--shell-text-secondary);
 }
 
-.taptab-field-value {
+.taptab-field-value,
+.taptab-widget-value {
   font-size: 0.875rem;
   color: var(--shell-text-primary);
   border-bottom: 1px solid transparent;
@@ -234,11 +235,13 @@
   transition: border-color 0.15s ease;
 }
 
-.taptab-field-value:hover {
+.taptab-field-value:hover,
+.taptab-widget-value:hover {
   border-bottom-color: var(--shell-border);
 }
 
-.taptab-field-value:empty::before {
+.taptab-field-value:empty::before,
+.taptab-widget-value:empty::before {
   content: '—';
   color: var(--shell-text-muted);
 }
@@ -248,7 +251,8 @@
   background-color: transparent;
 }
 
-.taptab-field-row[data-read-only="true"] .taptab-field-value {
+.taptab-field-row[data-read-only="true"] .taptab-field-value,
+.taptab-field-row[data-read-only="true"] .taptab-widget-value {
   opacity: 0.6;
   cursor: default;
 }
@@ -338,6 +342,10 @@
   font-size: inherit;
   font-weight: 500;
   color: var(--shell-text-secondary);
+  /* Keep the ::after colon glued to the label text — without this the
+   * pseudo-element wraps to a second line inside the label box and renders
+   * as an orphaned ":" under the label. */
+  white-space: nowrap;
 }
 
 .taptab--prose .taptab-field-label::after {
@@ -346,15 +354,34 @@
   margin-right: -0.2em;
 }
 
-.taptab--prose .taptab-field-value {
+.taptab--prose .taptab-field-value,
+.taptab--prose .taptab-widget-value {
   font-size: inherit;
   border-bottom: 1px dotted transparent;
   padding: 0;
   min-width: 4ch;
+  /* The rest of the line belongs to the value: one big click target, so
+   * clicking anywhere after the label enters edit mode instead of landing
+   * on the ProseMirror atom (which node-selects the whole row/section). */
+  flex: 1 1 auto;
+  cursor: text;
+}
+
+.taptab--prose .taptab-inline-input {
+  width: 100%;
+}
+
+/* Empty editable values render a visible dash affordance (set by
+ * WidgetRenderer — the wrapper always has an inner span, so the
+ * :empty::before trick can never fire). */
+.taptab-widget-empty {
+  color: var(--shell-text-muted);
 }
 
 .taptab--prose .taptab-field-value:hover,
-.taptab--prose .taptab-field-value:focus-within {
+.taptab--prose .taptab-widget-value:hover,
+.taptab--prose .taptab-field-value:focus-within,
+.taptab--prose .taptab-widget-value:focus-within {
   border-bottom-color: var(--shell-border);
 }
 
