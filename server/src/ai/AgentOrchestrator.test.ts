@@ -228,6 +228,160 @@ describe('createAgentOrchestrator', () => {
     expect(result.labwareAdditions?.[0]?.deckSlot).toBe('B2');
   });
 
+  it('keeps structured material refs when compiler preflight strips grounded materials', async () => {
+    const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+      events: [
+        {
+          eventId: 'compiled-cells',
+          event_type: 'add_material',
+          details: {
+            labwareId: 'lbw-seed-plate-96-flat',
+            wells: ['A6', 'B6', 'C6', 'D6', 'E6', 'F6', 'G6', 'H6'],
+            count: 10000,
+            note: '10,000 cells per well',
+          },
+        },
+        {
+          eventId: 'compiled-media',
+          event_type: 'add_material',
+          details: {
+            labwareId: 'lbw-seed-plate-96-flat',
+            wells: ['A6', 'B6', 'C6', 'D6', 'E6', 'F6', 'G6', 'H6'],
+            volume: { value: 200, unit: 'uL' },
+            note: '200 uL of DMEM + 10% FBS per well',
+          },
+        },
+      ],
+      labwareAdditions: [],
+      unresolvedRefs: [],
+      diagnostics: [],
+      terminalArtifacts: {
+        events: [
+          {
+            eventId: 'compiled-cells',
+            event_type: 'add_material',
+            details: {
+              labwareId: 'lbw-seed-plate-96-flat',
+              wells: ['A6', 'B6', 'C6', 'D6', 'E6', 'F6', 'G6', 'H6'],
+              count: 10000,
+              note: '10,000 cells per well',
+            },
+          },
+          {
+            eventId: 'compiled-media',
+            event_type: 'add_material',
+            details: {
+              labwareId: 'lbw-seed-plate-96-flat',
+              wells: ['A6', 'B6', 'C6', 'D6', 'E6', 'F6', 'G6', 'H6'],
+              volume: { value: 200, unit: 'uL' },
+              note: '200 uL of DMEM + 10% FBS per well',
+            },
+          },
+        ],
+        directives: [],
+        gaps: [],
+      },
+      outcome: 'complete',
+    });
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const label = url.includes('mesh%3AD056945') || url.includes('mesh:D056945')
+        ? 'Hep G2 Cells'
+        : url.includes('XCO%3A0000988') || url.includes('XCO:0000988')
+          ? "Dulbecco's Modified Eagle's Medium"
+          : url.includes('MSIO%3A0000017') || url.includes('MSIO:0000017')
+            ? 'fetal bovine serum'
+            : 'unknown material';
+      return {
+        ok: true,
+        json: async () => ({ _embedded: { terms: [{ label }] } }),
+      } as unknown as Response;
+    });
+
+    const completeStream = vi.fn(async function* () {
+      yield {
+        id: 'resp-materials',
+        choices: [{
+          index: 0,
+          delta: {
+            role: 'assistant',
+            tool_calls: [{
+              index: 0,
+              id: 'call-materials',
+              type: 'function',
+              function: {
+                name: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME,
+                arguments: JSON.stringify({
+                  events: [{
+                    eventId: 'ai-evt-001',
+                    event_type: 'add_material',
+                    verb: 'add',
+                    vocabPackId: 'general',
+                    details: {
+                      labwareId: 'lbw-seed-plate-96-flat',
+                      wells: ['A6', 'B6', 'C6', 'D6', 'E6', 'F6', 'G6', 'H6'],
+                      count: 10000,
+                      volume: { value: 200, unit: 'uL' },
+                      note: 'Adding Hep G2 cells and media (DMEM + 10% FBS) to wells A6-H6.',
+                    },
+                    materials: [
+                      { ref: { curie: 'mesh:D056945' }, role: 'cells', count: 10000 },
+                      { ref: { curie: 'XCO:0000988' }, role: 'solvent', concentration: { value: 90, unit: 'percent' } },
+                      { ref: { curie: 'MSIO:0000017' }, role: 'additive', concentration: { value: 10, unit: 'percent' } },
+                    ],
+                  }],
+                  notes: ["Resolved 'seed plate 96 flat' to lbw-seed-plate-96-flat."],
+                  unresolvedRefs: [],
+                  clarification: null,
+                  labwareAdditions: [],
+                }),
+              },
+            }],
+          },
+          finish_reason: 'tool_calls',
+        }],
+      };
+    });
+
+    const orchestrator = createAgentOrchestrator(
+      { complete: vi.fn(), completeStream },
+      { getToolDefinitions: () => [], executeTool: vi.fn() },
+      { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+      { maxTurns: 2, draftFlowMode: 'preflight-llm' },
+    );
+
+    const result = await orchestrator.run({
+      prompt: 'add cells and media',
+      forceDraftTool: true,
+      context: {
+        labwares: [],
+        eventSummary: 'No events yet.',
+        vocabPackId: 'liquid-handling/v1',
+        availableVerbs: ['add_material'],
+      },
+    });
+
+    expect(compileSpy).toHaveBeenCalled();
+    expect(result.events).toHaveLength(2);
+    const cellDetails = result.events![0]!.details as Record<string, unknown>;
+    const mediaDetails = result.events![1]!.details as Record<string, unknown>;
+    expect(cellDetails.material_ref).toMatchObject({ id: 'mesh:D056945', label: 'Hep G2 Cells' });
+    expect(cellDetails.count).toBe(10000);
+    expect(cellDetails.volume).toBeUndefined();
+    expect(mediaDetails.material_ref).toMatchObject({ id: 'XCO:0000988', label: "Dulbecco's Modified Eagle's Medium" });
+    expect(mediaDetails.composition_snapshot).toEqual([
+      expect.objectContaining({ role: 'buffer_component', component_ref: expect.objectContaining({ id: 'XCO:0000988' }) }),
+      expect.objectContaining({
+        role: 'additive',
+        component_ref: expect.objectContaining({ id: 'MSIO:0000017' }),
+        concentration: { value: 10, unit: '% v/v', basis: 'volume_fraction' },
+      }),
+    ]);
+    expect(result.notes).toContain('Compiler preflight dropped material refs/composition; showing the validated structured proposal.');
+
+    fetchSpy.mockRestore();
+  });
+
   // -----------------------------------------------------------------------
   // spec-020: pipeline_diagnostics emit on fall-through
   // -----------------------------------------------------------------------

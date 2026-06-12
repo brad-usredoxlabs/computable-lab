@@ -13,6 +13,7 @@ import type {
   MaterialCompilerRecordRef,
   MaterialCompilerRequest,
   MaterialCompilerResult,
+  MaterialFormulationKind,
   MaterialPolicySettingOrigin,
   MaterialResolvedPolicy,
   NormalizedMaterialIntentPayload,
@@ -188,6 +189,24 @@ function sameConcentration(left?: Concentration, right?: Concentration): boolean
   if (!left && !right) return true;
   if (!left || !right) return false;
   return left.value === right.value && normalizeConcentrationUnit(left.unit) === normalizeConcentrationUnit(right.unit);
+}
+
+function sameOptionalId(left?: string, right?: string): boolean {
+  return (left ?? '') === (right ?? '');
+}
+
+function lifecycleProvenance(sourceLabel: string): Record<string, unknown> {
+  return {
+    status: 'proposed',
+    lifecycleId: 'lab-vocabulary-control',
+    provenance: {
+      source: 'compiler',
+      sourceLabel,
+      createdBy: 'material-compiler',
+      createdAt: new Date().toISOString(),
+      note: 'Created as a proposed local material/formulation record from a compiler material intent.',
+    },
+  };
 }
 
 function extractMaterialDomain(intent: NormalizedMaterialIntentPayload, role: 'analyte' | 'solvent'): string {
@@ -434,11 +453,10 @@ export class MaterialCompilerService {
     const requiresFormulation = Boolean(
       analyteRef
       && payload.concentration
-      && payload.solventName
       && materialPolicy.settings.concentrationSemantics !== 'event',
     );
 
-    if (requiresFormulation && analyteRef && solventRef) {
+    if (requiresFormulation && analyteRef) {
       const formulationMatches = await listBySchema(this.store, SCHEMA_IDS.materialSpec);
       const formulationResolution = await this.resolveFormulation({
         matches: formulationMatches.map((envelope) => {
@@ -450,7 +468,7 @@ export class MaterialCompilerService {
           };
         }),
         analyteRef,
-        solventRef,
+        ...(solventRef ? { solventRef } : {}),
         ...(payload.concentration ? { concentration: payload.concentration } : {}),
         persist,
         canAutoCreate,
@@ -623,6 +641,7 @@ export class MaterialCompilerService {
       id: recordId,
       name: args.name,
       domain: args.domain,
+      ...lifecycleProvenance(args.name),
       tags: ['compiler-created', args.slot],
     };
     await this.store.create({
@@ -663,7 +682,7 @@ export class MaterialCompilerService {
   private async resolveFormulation(args: {
     matches: FormulationMatch[];
     analyteRef: MaterialCompilerRecordRef;
-    solventRef: MaterialCompilerRecordRef;
+    solventRef?: MaterialCompilerRecordRef;
     concentration?: Concentration;
     persist: boolean;
     canAutoCreate: boolean;
@@ -679,7 +698,7 @@ export class MaterialCompilerService {
   }): Promise<MaterialCompilerRecordRef | undefined> {
     const exact = args.matches.find((match) =>
       match.analyteId === args.analyteRef.id
-      && match.solventId === args.solventRef.id
+      && sameOptionalId(match.solventId, args.solventRef?.id)
       && sameConcentration(match.concentration, args.concentration));
 
     if (exact) {
@@ -711,7 +730,7 @@ export class MaterialCompilerService {
 
     const nearMatches = args.matches.filter((match) =>
       match.analyteId === args.analyteRef.id
-      && match.solventId === args.solventRef.id
+      && sameOptionalId(match.solventId, args.solventRef?.id)
       && !sameConcentration(match.concentration, args.concentration));
 
     if (nearMatches.length > 0) {
@@ -747,7 +766,9 @@ export class MaterialCompilerService {
     args.requestedActions.push({
       action: 'auto-create',
       target: 'formulation',
-      detail: `${formatConcentration(args.concentration)} ${args.analyteRef.label ?? args.analyteRef.id} in ${args.solventRef.label ?? args.solventRef.id}`,
+      detail: args.solventRef
+        ? `${formatConcentration(args.concentration)} ${args.analyteRef.label ?? args.analyteRef.id} in ${args.solventRef.label ?? args.solventRef.id}`
+        : `${formatConcentration(args.concentration)} ${args.analyteRef.label ?? args.analyteRef.id} with unresolved vehicle`,
     });
 
     if (!args.persist || !args.canAutoCreate) {
@@ -768,9 +789,13 @@ export class MaterialCompilerService {
 
     const recordId = await ensureUniqueId(
       this.store,
-      `MSP-${slugify(`${formatConcentration(args.concentration) ?? 'FORMULATION'}-${args.analyteRef.label ?? args.analyteRef.id}-IN-${args.solventRef.label ?? args.solventRef.id}`)}`,
+      `MSP-${slugify(args.solventRef
+        ? `${formatConcentration(args.concentration) ?? 'FORMULATION'}-${args.analyteRef.label ?? args.analyteRef.id}-IN-${args.solventRef.label ?? args.solventRef.id}`
+        : `${formatConcentration(args.concentration) ?? 'FORMULATION'}-${args.analyteRef.label ?? args.analyteRef.id}-VEHICLE-UNRESOLVED`)}`,
     );
-    const name = `${formatConcentration(args.concentration) ?? 'Formulation'} ${args.analyteRef.label ?? args.analyteRef.id} in ${args.solventRef.label ?? args.solventRef.id}`;
+    const name = args.solventRef
+      ? `${formatConcentration(args.concentration) ?? 'Formulation'} ${args.analyteRef.label ?? args.analyteRef.id} in ${args.solventRef.label ?? args.solventRef.id}`
+      : `${formatConcentration(args.concentration) ?? 'Formulation'} ${args.analyteRef.label ?? args.analyteRef.id} (vehicle unresolved)`;
     await this.store.create({
       envelope: {
         recordId,
@@ -780,10 +805,13 @@ export class MaterialCompilerService {
           id: recordId,
           name,
           material_ref: storedRef(args.analyteRef.id, 'material', args.analyteRef.label),
+          formulation_kind: 'single_active' satisfies MaterialFormulationKind,
+          ...lifecycleProvenance(name),
           formulation: {
             ...(args.concentration ? { concentration: toStoredConcentration(args.concentration) } : {}),
-            solvent_ref: storedRef(args.solventRef.id, 'material', args.solventRef.label),
+            ...(args.solventRef ? { solvent_ref: storedRef(args.solventRef.id, 'material', args.solventRef.label) } : {}),
             composition: deriveFormulationComposition(args.analyteRef, args.solventRef, args.concentration),
+            ...(!args.solventRef ? { notes: 'Vehicle unresolved from drafting prompt.' } : {}),
           },
           tags: ['compiler-created'],
         },
@@ -995,6 +1023,12 @@ export class MaterialCompilerService {
       details.material_instance_ref = storedRef(args.materialSourceRef.id, 'material-instance', args.materialSourceRef.label);
     } else if (args.formulationRef) {
       details.material_spec_ref = storedRef(args.formulationRef.id, 'material-spec', args.formulationRef.label);
+      details.formulation_kind = 'single_active';
+      details.material_source_requirement = {
+        status: 'unresolved',
+        material_spec_ref: storedRef(args.formulationRef.id, 'material-spec', args.formulationRef.label),
+        reason: 'No explicit material instance or aliquot selected during drafting.',
+      };
     } else if (args.analyteRef) {
       details.material_ref = storedRef(args.analyteRef.id, 'material', args.analyteRef.label);
     }

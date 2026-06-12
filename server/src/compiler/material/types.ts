@@ -14,6 +14,8 @@ export type MaterialClarificationBehavior = 'confirm-near-match' | 'diagnostic-o
 
 export type MaterialConcentrationSemantics = 'formulation' | 'event';
 
+export type MaterialFormulationKind = 'single_active' | 'defined_composition' | 'complex_composition' | 'biological_preparation';
+
 export type MaterialRemediationBehavior = 'suggest' | 'suppress';
 
 export interface NormalizedMaterialIntentPayload {
@@ -72,6 +74,7 @@ export type MaterialCompilerPlanStep = {
 export interface MaterialCompilerBindingPayload {
   recordId: string;
   recordType: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'placeholder';
+  formulationKind?: MaterialFormulationKind | undefined;
   label: string;
   created?: boolean | undefined;
 }

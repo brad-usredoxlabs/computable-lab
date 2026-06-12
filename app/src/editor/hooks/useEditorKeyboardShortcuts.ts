@@ -44,11 +44,15 @@ export function useEditorKeyboardShortcuts({
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (disabled) return
 
-    // Don't intercept when typing in inputs/textareas
+    // Don't intercept when typing in inputs/textareas/rich-text editors.
+    // isContentEditable covers descendants of a contenteditable host (e.g.
+    // TipTap's ProseMirror surface) in real browsers; the attribute check
+    // is the fallback for environments that don't implement it (jsdom).
     const target = event.target as HTMLElement
     if (
       target.tagName === 'INPUT' ||
       target.tagName === 'TEXTAREA' ||
+      target.isContentEditable ||
       target.contentEditable === 'true'
     ) {
       // Allow Escape to work even in inputs
@@ -59,50 +63,49 @@ export function useEditorKeyboardShortcuts({
 
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0
     const ctrlOrCmd = isMac ? event.metaKey : event.ctrlKey
+    // Shift+Z reports key 'Z' — normalize so Ctrl+Shift+Z matches.
+    const key = event.key.toLowerCase()
+
+    // Each branch only preventDefaults when its handler is actually wired —
+    // a consumer passing just {onUndo} must not eat Ctrl+S/Ctrl+A/Delete.
 
     // Ctrl+Z: Undo
-    if (ctrlOrCmd && !event.shiftKey && event.key === 'z') {
+    if (ctrlOrCmd && !event.shiftKey && key === 'z' && onUndo) {
       event.preventDefault()
-      onUndo?.()
+      onUndo()
       return
     }
 
     // Ctrl+Shift+Z or Ctrl+Y: Redo
     if (
-      (ctrlOrCmd && event.shiftKey && event.key === 'z') ||
-      (ctrlOrCmd && !event.shiftKey && event.key === 'y')
+      ((ctrlOrCmd && event.shiftKey && key === 'z') ||
+        (ctrlOrCmd && !event.shiftKey && key === 'y')) &&
+      onRedo
     ) {
       event.preventDefault()
-      onRedo?.()
+      onRedo()
       return
     }
 
     // Ctrl+S: Save
-    if (ctrlOrCmd && event.key === 's') {
+    if (ctrlOrCmd && key === 's' && onSave) {
       event.preventDefault()
-      onSave?.()
+      onSave()
       return
     }
 
     // Ctrl+A: Select all
-    if (ctrlOrCmd && event.key === 'a') {
+    if (ctrlOrCmd && key === 'a' && onSelectAll) {
       event.preventDefault()
-      onSelectAll?.()
+      onSelectAll()
       return
     }
 
     // Delete or Backspace: Delete
-    if (event.key === 'Delete' || event.key === 'Backspace') {
-      // Only if not in an input
-      if (
-        target.tagName !== 'INPUT' &&
-        target.tagName !== 'TEXTAREA' &&
-        target.contentEditable !== 'true'
-      ) {
-        event.preventDefault()
-        onDelete?.()
-        return
-      }
+    if ((event.key === 'Delete' || event.key === 'Backspace') && onDelete) {
+      event.preventDefault()
+      onDelete()
+      return
     }
 
     // Escape: Cancel/clear

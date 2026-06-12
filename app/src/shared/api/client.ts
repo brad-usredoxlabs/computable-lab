@@ -57,7 +57,7 @@ export interface QuantityValue {
   value: number
   unit: string
 }
-export type { ConcentrationValue } from '../../types/material'
+export type { ConcentrationValue, FormulationKind } from '../../types/material'
 
 export interface FlexibleQuantityValue {
   value: number | string
@@ -105,6 +105,7 @@ export interface FormulationCopilotIngredientDraft {
 
 export interface FormulationCopilotDraft {
   recipeName?: string
+  formulationKind?: import('../../types/material').FormulationKind
   representsMaterial?: MaterialRefInput
   totalProduced?: QuantityValue
   outputSolventRef?: MaterialRefInput
@@ -614,6 +615,7 @@ export interface FormulationSummary {
     materialName?: string
     vendorProductId?: string
     vendorProductLabel?: string
+    formulationKind?: import('../../types/material').FormulationKind
     concentration?: ConcentrationValue
     composition?: CompositionEntryValue[]
     solventRefId?: string
@@ -727,6 +729,7 @@ export interface CreateFormulationRequest {
     name: string
     materialRefId?: string
     vendorProductRefId?: string
+    formulationKind?: import('../../types/material').FormulationKind
     concentration?: ConcentrationValue
     composition?: CompositionEntryValue[]
     solventRef?: MaterialRefInput

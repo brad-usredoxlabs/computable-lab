@@ -35,6 +35,12 @@ interface WellGridProps {
   previewWellIds?: ReadonlySet<WellId>
   /** Wells with committed or preview-computed material/volume state. */
   occupiedWellIds?: ReadonlySet<WellId>
+  /**
+   * Per-well fill/stroke keyed on composition signature: replicates share a
+   * hue, distinct conditions differ. Applied as inline style so the hue tracks
+   * data; preview/hover states and the selection ring still take precedence.
+   */
+  compositionStyles?: ReadonlyMap<WellId, { fill: string; stroke: string }>
   onHover: (wellId: WellId | null, event: React.MouseEvent | null) => void
   onWellClick?: (wellId: WellId, event: React.MouseEvent) => void
   onWellContextMenu?: (wellId: WellId, event: React.MouseEvent) => void
@@ -56,6 +62,7 @@ export function WellGrid({
   selectedWellIds,
   previewWellIds = EMPTY_WELLS,
   occupiedWellIds = EMPTY_WELLS,
+  compositionStyles,
   onHover,
   onWellClick,
   onWellContextMenu,
@@ -105,6 +112,18 @@ export function WellGrid({
         const previewed = previewWellIds.has(well.wellId)
         const occupied = occupiedWellIds.has(well.wellId)
         const interactive: CSSProperties = onWellClick ? { cursor: 'pointer' } : {}
+        // Composition hue (inline) shows what's in the well. It yields to the
+        // preview overlay and hover feedback (both transient/CSS-driven), and
+        // its stroke yields to the amber selection ring so a selected well
+        // still reads as selected while keeping its composition fill.
+        const composition =
+          well.shape !== 'tip' && !previewed && !hovered
+            ? compositionStyles?.get(well.wellId)
+            : undefined
+        if (composition) {
+          interactive.fill = composition.fill
+          if (!selected) interactive.stroke = composition.stroke
+        }
         const common = {
           'data-well-id': well.wellId,
           'data-hovered': hovered ? 'true' : 'false',

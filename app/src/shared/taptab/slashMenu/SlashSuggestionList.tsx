@@ -195,7 +195,7 @@ SlashSuggestionList.displayName = 'SlashSuggestionList'
  * with the hovered row. Pointer-events stay off so it never steals the
  * hover/click from the list underneath it.
  */
-function DetailTooltip({
+export function DetailTooltip({
   detail,
   anchor,
   listRect,

@@ -50,6 +50,27 @@ export function assignVisibleLabwareHandle(labware: Labware, existing: Iterable<
   return { ...labware, name: nextLabwareHandle(labware, existing) }
 }
 
+/**
+ * Find an existing labware whose name collides with `name` (case-insensitive,
+ * trimmed). `excludeLabwareId` skips the labware being renamed so changing
+ * only the casing of its own name ("plate1" → "Plate1") is not a conflict.
+ * Duplicate display names are rejected because the AI's loose labware-ref
+ * repair requires a unique name match.
+ */
+export function findLabwareNameConflict(
+  name: string,
+  existing: Iterable<Labware>,
+  excludeLabwareId?: string,
+): Labware | null {
+  const needle = normalizedName(name)
+  if (!needle) return null
+  for (const labware of existing) {
+    if (excludeLabwareId !== undefined && labware.labwareId === excludeLabwareId) continue
+    if (normalizedName(labware.name) === needle) return labware
+  }
+  return null
+}
+
 export function assignVisibleLabwareHandles(
   labwares: Record<string, Labware>,
   existing: Iterable<Labware>,

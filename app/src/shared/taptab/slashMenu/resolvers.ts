@@ -138,7 +138,7 @@ const RESOLVE_SOURCE_LABEL: Record<ResolveCandidate['source'], string> = {
   mint: 'New local term',
 }
 
-function candidateDetail(c: ResolveCandidate): SlashSuggestion['detail'] {
+export function candidateDetail(c: ResolveCandidate): SlashSuggestion['detail'] {
   return {
     source: RESOLVE_SOURCE_LABEL[c.source] ?? c.source,
     ontology: c.namespace || undefined,

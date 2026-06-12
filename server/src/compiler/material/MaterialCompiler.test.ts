@@ -248,6 +248,43 @@ describe('MaterialCompilerService', () => {
     expect(createdId ? await store.get(createdId) : null).not.toBeNull();
   });
 
+
+  it('creates a proposed single-active formulation with unresolved vehicle when concentration is provided without solvent', async () => {
+    const store = new MemoryRecordStore([
+      material('MAT-FEN', 'Fenofibrate'),
+    ]);
+    const compiler = new MaterialCompilerService(store);
+
+    const result = await compiler.compile({
+      normalizedIntent: normalizedIntent({
+        concentration: { value: 1, unit: 'mM', basis: 'molar' },
+      }),
+      activeScope: { organizationId: 'org-1' },
+      policyProfiles: profiles({
+        allowAutoCreate: 'allow',
+        allowPlaceholders: 'allow',
+        mode: 'semantic-planning',
+      }),
+    });
+
+    const createdId = result.resolved.formulation?.recordId;
+    expect(createdId).toBeTruthy();
+    const created = createdId ? await store.get(createdId) : null;
+    expect(created?.payload).toMatchObject({
+      kind: 'material-spec',
+      material_ref: { id: 'MAT-FEN' },
+      formulation_kind: 'single_active',
+      status: 'proposed',
+      lifecycleId: 'lab-vocabulary-control',
+    });
+    expect((created?.payload as { formulation?: { solvent_ref?: unknown } }).formulation?.solvent_ref).toBeUndefined();
+    expect((result.eventDraft?.details.material_spec_ref as { id: string }).id).toBe(createdId);
+    expect(result.eventDraft?.details.material_source_requirement).toMatchObject({
+      status: 'unresolved',
+      material_spec_ref: { id: createdId },
+    });
+  });
+
   it('does not silently substitute a near concentration match', async () => {
     const store = new MemoryRecordStore([
       material('MAT-FEN', 'Fenofibrate'),

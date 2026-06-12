@@ -308,6 +308,48 @@ function compileResultToAgentResult(
   };
 }
 
+
+function eventDetails(event: unknown): Record<string, unknown> {
+  if (!event || typeof event !== 'object' || Array.isArray(event)) return {};
+  const details = (event as Record<string, unknown>).details;
+  return details && typeof details === 'object' && !Array.isArray(details)
+    ? details as Record<string, unknown>
+    : {};
+}
+
+function hasGroundedMaterials(event: unknown): boolean {
+  if (!event || typeof event !== 'object' || Array.isArray(event)) return false;
+  const materials = (event as Record<string, unknown>).materials;
+  return Array.isArray(materials) && materials.some((material) => {
+    if (!material || typeof material !== 'object' || Array.isArray(material)) return false;
+    const ref = (material as Record<string, unknown>).ref;
+    if (!ref || typeof ref !== 'object' || Array.isArray(ref)) return false;
+    const record = ref as Record<string, unknown>;
+    return typeof record.curie === 'string' && record.curie.trim().length > 0
+      || (record.mint !== undefined && typeof record.mint === 'object' && !Array.isArray(record.mint));
+  });
+}
+
+function hasMaterialSemantics(events: unknown[] | undefined): boolean {
+  return (events ?? []).some((event) => {
+    const details = eventDetails(event);
+    return hasGroundedMaterials(event)
+      || details.material_ref !== undefined
+      || details.composition_snapshot !== undefined
+      || details.material_source_requirement !== undefined
+      || details.material_spec_ref !== undefined
+      || details.aliquot_ref !== undefined
+      || details.material_instance_ref !== undefined
+      || details.vendor_product_ref !== undefined;
+  });
+}
+
+function compilerDroppedMaterialSemantics(parsed: AgentResult, compiled: AgentResult): boolean {
+  const parsedEvents = parsed.events as unknown[] | undefined;
+  const compiledEvents = compiled.events as unknown[] | undefined;
+  return hasMaterialSemantics(parsedEvents) && !hasMaterialSemantics(compiledEvents);
+}
+
 function buildCompilerPromptFromDraftArgs(args: Record<string, unknown>): string {
   const events = Array.isArray(args.events) ? args.events : [];
   const lines: string[] = [];
@@ -445,6 +487,31 @@ async function awaitWithHeartbeat<T>(
     if (winner.kind === 'error') throw winner.error;
     return winner.value;
   }
+}
+
+/**
+ * Human-readable label for the configured inference endpoint, used in the
+ * status feed so the user sees where their request actually went. Derived
+ * from the live `baseUrl` (not a hardcoded host) so it tracks settings;
+ * loopback endpoints read as "the on-box model".
+ */
+function inferenceEndpointLabel(config: InferenceConfig): string {
+  let host = '';
+  try {
+    host = new URL(config.baseUrl).hostname;
+  } catch {
+    // baseUrl isn't a parseable URL — fall back to the model name below.
+  }
+  if (!host || host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+    return 'the on-box model';
+  }
+  return host;
+}
+
+/** Count drafted events in a (possibly partial) tool-call argument string. */
+function countDraftedEvents(partialArgs: string): number {
+  const matches = partialArgs.match(/"event_type"\s*:/g);
+  return matches ? matches.length : 0;
 }
 
 /**
@@ -874,6 +941,8 @@ export function createAgentOrchestrator(
       const totalUsage = { promptTokens: 0, completionTokens: 0 };
       console.log(`[agent ${tid}] tools=${toolDefs.length}${toolFilter ? ' (filtered)' : ''} docDiscussion=${isDocDiscussionTurn} maxTurns=${effectiveMaxTurns}`);
 
+      const endpointLabel = inferenceEndpointLabel(inferenceConfig);
+
       // 2. Agent loop
       for (let turn = 0; turn < effectiveMaxTurns; turn++) {
         const turnStart = Date.now();
@@ -916,9 +985,10 @@ export function createAgentOrchestrator(
           let modelHeartbeatCount = 0;
           let sawModelChunk = false;
           let lastTimings: import('./types.js').LlamaTimings | undefined;
+          let lastToolProgressAt = 0;
           onEvent?.({
             type: 'status',
-            message: `AI request sent to thunderbeast; waiting for ${forceDraftTool ? COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME : 'model output'}…`,
+            message: `AI request sent to ${endpointLabel}; waiting for ${forceDraftTool ? COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME : 'model output'}…`,
           });
           const streamIterator = inferenceClient.completeStream(completionReq)[Symbol.asyncIterator]();
           while (true) {
@@ -928,14 +998,14 @@ export function createAgentOrchestrator(
               const waitingFor = sawModelChunk ? 'next model chunk' : 'first model chunk';
               onEvent?.({
                 type: 'status',
-                message: `AI drafting on thunderbeast… ${elapsedSec}s elapsed, waiting for ${waitingFor}.`,
+                message: `AI drafting on ${endpointLabel}… ${elapsedSec}s elapsed, waiting for ${waitingFor}.`,
               });
             });
             if (next.done) break;
             const chunk = next.value;
             sawModelChunk = true;
             if (modelHeartbeatCount > 0) {
-              onEvent?.({ type: 'status', message: 'AI stream resumed from thunderbeast.' });
+              onEvent?.({ type: 'status', message: `AI stream resumed from ${endpointLabel}.` });
               modelHeartbeatCount = 0;
             }
             if (chunk.id) lastId = chunk.id;
@@ -974,6 +1044,24 @@ export function createAgentOrchestrator(
                   entry.args = (entry.args ?? '') + tcDelta.function.arguments;
                 }
                 toolCallAcc.set(idx, entry);
+              }
+
+              // Forced-tool drafts stream as tool-call argument deltas, which
+              // carry no assistant text and arrive fast enough that the
+              // between-chunk heartbeat never fires — so without this the user
+              // sees a long silence while the draft JSON streams. Surface a
+              // throttled, growing progress line as events accumulate.
+              const now = Date.now();
+              if (now - lastToolProgressAt >= 1200) {
+                lastToolProgressAt = now;
+                const draftArgs = toolCallAcc.get(0)?.args ?? '';
+                const n = countDraftedEvents(draftArgs);
+                onEvent?.({
+                  type: 'status',
+                  message: n > 0
+                    ? `Drafting on ${endpointLabel}… ${n} event${n === 1 ? '' : 's'} so far.`
+                    : `Drafting on ${endpointLabel}…`,
+                });
               }
             }
 
@@ -1298,6 +1386,7 @@ export function createAgentOrchestrator(
             parsed.events = await enrichAddMaterialRefs(
               normalizeDraftLabwareRefs(parsed.events, context),
               createMaterialLabeler({ store: deps.store, ontology: deps.ontology }),
+              { store: deps.store, mentions: ctxMentions },
             );
           }
           let result = parsed;
@@ -1351,11 +1440,27 @@ export function createAgentOrchestrator(
               compiledDraft.terminalArtifacts.events.length > 0 ||
               compiledDraft.terminalArtifacts.gaps.length > 0;
             if (compiledHasArtifacts && compiledDraft.outcome !== 'error') {
-              result = compileResultToAgentResult(compiledDraft, totalUsage, turn + 1, totalToolCalls);
-              result.notes = [
-                ...(result.notes ?? []),
-                'Draft was compiled before preview.',
-              ];
+              const compiledResult = compileResultToAgentResult(compiledDraft, totalUsage, turn + 1, totalToolCalls);
+              if (compilerDroppedMaterialSemantics(parsed, compiledResult)) {
+                result = { ...parsed };
+                if (compiledResult.labwareAdditions !== undefined) result.labwareAdditions = compiledResult.labwareAdditions;
+                if (compiledResult.labwareRequirements !== undefined) result.labwareRequirements = compiledResult.labwareRequirements;
+                if (compiledResult.unresolvedRefs !== undefined) result.unresolvedRefs = compiledResult.unresolvedRefs;
+                if (compiledResult.downstreamQueue !== undefined) result.downstreamQueue = compiledResult.downstreamQueue;
+                if (compiledResult.executionScalePlan !== undefined) result.executionScalePlan = compiledResult.executionScalePlan;
+                if (compiledResult.instrumentApplianceJobs !== undefined) result.instrumentApplianceJobs = compiledResult.instrumentApplianceJobs;
+                if (compiledResult.ontologyBindings !== undefined) result.ontologyBindings = compiledResult.ontologyBindings;
+                result.notes = [
+                  ...(result.notes ?? []),
+                  'Compiler preflight dropped material refs/composition; showing the validated structured proposal.',
+                ];
+              } else {
+                result = compiledResult;
+                result.notes = [
+                  ...(result.notes ?? []),
+                  'Draft was compiled before preview.',
+                ];
+              }
             } else {
               result.notes = [
                 ...(result.notes ?? []),

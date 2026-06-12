@@ -334,6 +334,13 @@ export function createRecordHandlers(
         };
         return response;
       } catch (err) {
+        if (err instanceof MaterialUsagePolicyError) {
+          reply.status(422);
+          return {
+            error: 'INVALID_MATERIAL_USAGE',
+            message: err.message,
+          };
+        }
         const message = err instanceof Error ? err.message : String(err);
         const stack = err instanceof Error ? err.stack : undefined;
         console.error('CREATE RECORD ERROR:', message);

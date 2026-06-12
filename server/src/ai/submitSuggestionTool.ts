@@ -36,7 +36,7 @@ export const SUBMIT_SUGGESTION_INSTRUCTION = [
   'FINALIZING YOUR ANSWER:',
   '- Resolve every material/reagent/noun with the `resolve` tool first, and use the top-ranked CURIE it returns.',
   '- Finish by calling the `compile_event_graph_draft` tool exactly once. Do NOT print JSON in your text reply.',
-  "- In each event's `materials[]`, reference a material only as {curie} (from `resolve`) or {mint:{label,domain}} when no ontology term fits — never a bare free-text name.",
+  "- In each event's `materials[]`, reference a material only as {curie} (from `resolve`) or {mint:{label,domain}} when no ontology term fits — never a bare free-text name. Use `role` for mixture semantics such as cells, buffer_component, or additive, `concentration` for component contributions such as 10% FBS, and `count` for absolute cell counts.",
   '- For requested labware, prefer `labwareRequirements[]` with a computable classCurie such as CL:96_well_plate, CL:384_well_plate, CL:96_deepwell_plate, CL:8_well_reservoir_horizontal, CL:12_well_reservoir_vertical, CL:single_well_reservoir_sbs, CL:16_well_reservoir_horizontal_384_pitch, CL:24_well_reservoir_vertical_384_pitch, or CL:tube_rack_15ml.',
   '- Do not ask which vendor/catalog/plate subtype for a generic request like "a 96-well plate". Emit a generic labwareRequirement and let the user refine it later.',
   '- Ask a labware clarification only when no baseline classCurie can be inferred at all.',
@@ -128,6 +128,18 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
                   additionalProperties: false,
                   properties: {
                     slot: { type: 'string', description: 'e.g. "source", "target", "reagent".' },
+                    role: { type: 'string', description: 'Composition role, e.g. cells, buffer_component, additive, solute, solvent, other.' },
+                    count: { type: 'number', description: 'Absolute material count when the user specifies one, e.g. 10000 cells.' },
+                    concentration: {
+                      type: 'object',
+                      additionalProperties: false,
+                      required: ['value', 'unit'],
+                      properties: {
+                        value: { type: 'number' },
+                        unit: { type: 'string' },
+                        basis: { type: 'string' },
+                      },
+                    },
                     ref: GROUNDED_REF_SCHEMA,
                   },
                 },
@@ -215,6 +227,17 @@ function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 }
 
+function parseConcentrationValue(raw: unknown): { value: number; unit: string; basis?: string } | undefined {
+  const record = asRecord(raw);
+  if (!record || typeof record.value !== 'number' || !Number.isFinite(record.value)) return undefined;
+  if (typeof record.unit !== 'string' || record.unit.trim().length === 0) return undefined;
+  return {
+    value: record.value,
+    unit: record.unit.trim(),
+    ...(typeof record.basis === 'string' && record.basis.trim() ? { basis: record.basis.trim() } : {}),
+  };
+}
+
 function parseMaterials(raw: unknown): GroundedMaterial[] {
   if (!Array.isArray(raw)) return [];
   const out: GroundedMaterial[] = [];
@@ -226,6 +249,10 @@ function parseMaterials(raw: unknown): GroundedMaterial[] {
     if (typeof ref.curie === 'string' && ref.curie.length > 0) {
       const m: GroundedMaterial = { ref: { curie: ref.curie } };
       if (typeof r.slot === 'string') m.slot = r.slot;
+      if (typeof r.role === 'string') m.role = r.role;
+      if (typeof r.count === 'number' && Number.isFinite(r.count)) m.count = r.count;
+      const concentration = parseConcentrationValue(r.concentration);
+      if (concentration) m.concentration = concentration;
       out.push(m);
     } else {
       const mint = asRecord(ref.mint);
@@ -234,6 +261,10 @@ function parseMaterials(raw: unknown): GroundedMaterial[] {
         if (typeof mint.domain === 'string') ref2.mint.domain = mint.domain;
         const m: GroundedMaterial = { ref: ref2 };
         if (typeof r.slot === 'string') m.slot = r.slot;
+        if (typeof r.role === 'string') m.role = r.role;
+        if (typeof r.count === 'number' && Number.isFinite(r.count)) m.count = r.count;
+        const concentration = parseConcentrationValue(r.concentration);
+        if (concentration) m.concentration = concentration;
         out.push(m);
       }
     }

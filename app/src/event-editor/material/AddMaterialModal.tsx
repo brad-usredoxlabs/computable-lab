@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useEventEditor } from '../EventEditorContext'
 import { useMaterialSearch } from './useMaterialSearch'
@@ -12,8 +12,11 @@ import {
 } from './state'
 import type { Labware } from '../../types/labware'
 import type { WellId } from '../../types/plate'
-import type { FormulationSummary, MaterialSearchItem } from '../../shared/api/client'
-import { olsResultToRef, type OLSSearchResult } from '../../shared/api/olsClient'
+import type { FormulationSummary, MaterialSearchItem, ResolveCandidate } from '../../shared/api/client'
+import type { OLSResultRef } from '../../shared/api/olsClient'
+import { DetailTooltip } from '../../shared/taptab/slashMenu/SlashSuggestionList'
+import { candidateDetail } from '../../shared/taptab/slashMenu/resolvers'
+import type { SlashSuggestionDetail } from '../../shared/taptab/slashMenu/types'
 import { BuildCompoundForm } from './builders/BuildCompoundForm'
 import { BuildCellsForm } from './builders/BuildCellsForm'
 import { BuildMixtureForm } from './builders/BuildMixtureForm'
@@ -41,6 +44,17 @@ export interface AddMaterialModalProps {
   labware: Labware
   wells: WellId[]
   onClose: () => void
+}
+
+export function inferMaterialKindForOntologyCandidate(candidate: Pick<ResolveCandidate, 'namespace' | 'label' | 'curie'>): MaterialKind {
+  const ns = candidate.namespace.toUpperCase()
+  const text = `${candidate.label} ${candidate.curie}`.toLowerCase()
+
+  if (ns === 'CL' || ns === 'NCBITAXON' || ns === 'UBERON') return 'cells'
+  if (/\b(?:hep\s*g2|hepg2|cell|cells|cell\s*line|culture|hepatocyte|fibroblast|neuron|organoid)\b/.test(text)) return 'cells'
+  if (/\b(?:medium|media|dmem|dulbecco|serum|fbs|buffer|pbs|hbss|rpmi|emem|mem)\b/.test(text)) return 'mixture'
+
+  return 'compound'
 }
 
 export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMaterialModalProps) {
@@ -161,21 +175,24 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
             onPickLocal={(item) => dispatch({ type: 'pick', material: pickedFromSearchItem(item) })}
             onPickFormulation={(formulation) =>
               dispatch({ type: 'pick', material: pickedFromFormulation(formulation) })}
-            onPickOntology={(result) => {
+            onPickOntology={(candidate) => {
               // Clicking an ontology hit routes into the appropriate
               // builder pre-filled with the term. Namespace decides:
               // CL / NCBITaxon / Uberon → cells (anything biological);
               // everything else → compound (the canonical "create
               // formulation from this ChEBI term" path).
-              const ref = olsResultToRef(result)
-              const kind: MaterialKind =
-                ref.namespace === 'CL'
-                || ref.namespace === 'NCBITAXON'
-                || ref.namespace === 'NCBITaxon'
-                || ref.namespace === 'UBERON'
-                  ? 'cells'
-                  : 'compound'
-              dispatch({ type: 'seed-build', kind, ontologyRef: ref })
+              const ref: OLSResultRef = {
+                kind: 'ontology',
+                id: candidate.curie,
+                namespace: candidate.namespace,
+                label: candidate.label,
+                uri: candidate.uri ?? '',
+              }
+              dispatch({
+                type: 'seed-build',
+                kind: inferMaterialKindForOntologyCandidate(candidate),
+                ontologyRef: ref,
+              })
             }}
             onRequestCreate={() => dispatch({ type: 'request-create' })}
           />
@@ -247,7 +264,14 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
     </div>
   )
 
-  return createPortal(node, document.body)
+  // Portal into the themed app root, NOT document.body. The `--cl-*` design
+  // tokens (and the live `data-theme`) are scoped to `.cl-app`; mounting on
+  // body left every token unresolved, so the CSS fell back to its hardcoded
+  // *dark* literals — the modal rendered dark and jarring in light mode. The
+  // root has no transform, so the fixed-position scrim still covers the
+  // viewport and isn't clipped by the root's overflow.
+  const themeRoot = document.querySelector('.cl-app') ?? document.body
+  return createPortal(node, themeRoot)
 }
 
 interface SearchViewProps {
@@ -255,7 +279,7 @@ interface SearchViewProps {
   search: ReturnType<typeof useMaterialSearch>
   onPickLocal: (item: MaterialSearchItem) => void
   onPickFormulation: (formulation: FormulationSummary) => void
-  onPickOntology: (result: OLSSearchResult) => void
+  onPickOntology: (candidate: ResolveCandidate) => void
   onRequestCreate: () => void
 }
 
@@ -276,12 +300,26 @@ function SearchView({
     loadingLocal,
     loadingOntology,
     error,
-    searchOntology,
   } = search
 
   const trimmed = query.trim()
-  const hasLocalHits = localResults.length > 0 || formulations.length > 0
   const hasOntologyHits = ontologyResults.length > 0
+
+  // Definition hover card — reuses the AI route's DetailTooltip so a moused-over
+  // ontology hit shows its definition + provenance, docked beside the list.
+  const ontologyListRef = useRef<HTMLUListElement>(null)
+  const [hoveredOntology, setHoveredOntology] = useState<{
+    detail: SlashSuggestionDetail
+    anchor: DOMRect
+    listRect: DOMRect
+  } | null>(null)
+
+  function showOntologyDetail(candidate: ResolveCandidate, row: HTMLElement) {
+    const listRect = ontologyListRef.current?.getBoundingClientRect()
+    const detail = candidateDetail(candidate)
+    if (!listRect || !detail) return
+    setHoveredOntology({ detail, anchor: row.getBoundingClientRect(), listRect })
+  }
 
   return (
     <div className="add-material-body">
@@ -360,44 +398,51 @@ function SearchView({
           <section className="add-material-section">
             <div className="add-material-section-title">
               <span>Ontologies</span>
-              <button
-                type="button"
-                className="add-material-link"
-                onClick={() => { void searchOntology() }}
-                disabled={loadingOntology || trimmed.length < 2}
-              >{loadingOntology ? 'Searching…' : hasOntologyHits ? 'Re-search' : 'Search ChEBI/Taxon/CL/…'}</button>
+              {loadingOntology ? <span className="add-material-spinner" aria-hidden /> : null}
             </div>
             {hasOntologyHits ? (
-              <ul className="add-material-list">
-                {ontologyResults.map((result) => (
-                  <li key={result.iri}>
+              <ul className="add-material-list" ref={ontologyListRef}>
+                {ontologyResults.map((candidate) => (
+                  <li key={candidate.curie}>
                     <button
                       type="button"
                       className="add-material-row"
                       data-category="ontology"
-                      onClick={() => onPickOntology(result)}
+                      onClick={() => onPickOntology(candidate)}
+                      onMouseEnter={(e) => showOntologyDetail(candidate, e.currentTarget)}
+                      onMouseLeave={() => setHoveredOntology(null)}
+                      onFocus={(e) => showOntologyDetail(candidate, e.currentTarget)}
+                      onBlur={() => setHoveredOntology(null)}
                     >
                       <span className="add-material-row-title">
-                        {result.label}
-                        <span className="add-material-row-ontology">{result.ontology_prefix ?? result.ontology_name}</span>
+                        {candidate.label}
+                        <span className="add-material-row-ontology">
+                          {candidate.namespace.toUpperCase()}
+                        </span>
                       </span>
                       <span className="add-material-row-meta">
-                        {result.obo_id}
-                        {result.description?.[0] ? ` · ${result.description[0]}` : ''}
+                        {candidate.curie}
+                        {candidate.definition ? ` · ${candidate.definition}` : ''}
                       </span>
                     </button>
                   </li>
                 ))}
               </ul>
+            ) : loadingOntology ? (
+              <div className="add-material-hint">Searching ontologies…</div>
             ) : (
-              !loadingOntology && (
-                <div className="add-material-hint">
-                  {hasLocalHits
-                    ? `Nothing in the local DB matches what you want? Search ontologies for "${trimmed}".`
-                    : `No local matches for "${trimmed}". Try the ontology search.`}
-                </div>
-              )
+              <div className="add-material-hint">No ontology matches for "{trimmed}".</div>
             )}
+            {hoveredOntology
+              ? createPortal(
+                  <DetailTooltip
+                    detail={hoveredOntology.detail}
+                    anchor={hoveredOntology.anchor}
+                    listRect={hoveredOntology.listRect}
+                  />,
+                  document.body,
+                )
+              : null}
           </section>
 
           <section className="add-material-section">

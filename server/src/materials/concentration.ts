@@ -35,6 +35,14 @@ const LEGACY_UNIT_ALIASES: Record<string, string> = {
   'µM': 'uM',
 };
 
+function normalizeConcentrationUnitForBasis(unit: string, basis?: ConcentrationBasis): string {
+  const trimmed = unit.trim();
+  if (/^(?:%|percent|percentage)$/i.test(trimmed)) {
+    return basis === 'mass_fraction' ? '% w/v' : '% v/v';
+  }
+  return normalizeConcentrationUnit(trimmed);
+}
+
 function asObject(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -55,8 +63,9 @@ export function parseConcentration(value: unknown): Concentration | undefined {
   if (!obj) return undefined;
   if (typeof obj.value !== 'number' || !Number.isFinite(obj.value) || obj.value <= 0) return undefined;
   if (typeof obj.unit !== 'string' || obj.unit.trim().length === 0) return undefined;
-  const unit = normalizeConcentrationUnit(obj.unit);
-  const basis = typeof obj.basis === 'string' ? obj.basis.trim() as ConcentrationBasis : inferConcentrationBasis(unit);
+  const rawBasis = typeof obj.basis === 'string' ? obj.basis.trim() as ConcentrationBasis : undefined;
+  const unit = normalizeConcentrationUnitForBasis(obj.unit, rawBasis);
+  const basis = rawBasis ?? inferConcentrationBasis(unit);
   if (basis && inferConcentrationBasis(unit) && inferConcentrationBasis(unit) !== basis) return undefined;
   return {
     value: obj.value,

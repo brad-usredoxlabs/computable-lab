@@ -22,5 +22,19 @@ properties:
     - other
   concentration:
     $ref: "./concentration.schema.yaml"
+  concentration_range:
+    type: object
+    additionalProperties: false
+    required: [ unit ]
+    properties:
+      min:
+        type: number
+      max:
+        type: number
+      unit:
+        type: string
+      basis:
+        type: string
+        enum: [ molar, mass_per_volume, activity_per_volume, count_per_volume, volume_fraction, mass_fraction ]
   source:
     type: string

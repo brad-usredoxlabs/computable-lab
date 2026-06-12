@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEventEditor } from '../EventEditorContext'
 import { getPlatformManifest, getVariantManifest } from '../../shared/lib/platformRegistry'
-import { computeLabwareStates, getWellState } from '../../graph/lib/eventGraph'
+import { computeLabwareStates, getWellState, getMaterialsSummary } from '../../graph/lib/eventGraph'
+import { buildCompositionStyles, buildCompositionLegend, wellCompositionSignature, type WellHueStyle } from '../../graph/lib/wellSignature'
 import { eventsWithPreviewState, labwareMapWithPreviewState, occupiedWellsForLabware } from './wellStateProjection'
 import type { Labware } from '../../types/labware'
 import { LABWARE_TYPE_ICONS, LABWARE_TYPE_LABELS } from '../../types/labware'
@@ -9,6 +10,7 @@ import type { WellId } from '../../types/plate'
 import { WellGrid } from './WellGrid'
 import { WellTooltip } from './WellTooltip'
 import { resolveOrientation, validatePlacement } from '../lib/placementRules'
+import { findLabwareNameConflict } from '../labwareHandles'
 import {
   expandMultichannelSelection,
   expandRangeSelection,
@@ -81,6 +83,26 @@ export function LabwareFocus() {
   // setting a local open-state. ReadPlateModal still lives here because
   // it's only triggered from the header's "Read plate" button.
   const [readPlateOpen, setReadPlateOpen] = useState(false)
+  // Inline rename of the focused labware. `null` = not editing; otherwise the
+  // working draft of the name shown in the header input.
+  const [nameDraft, setNameDraft] = useState<string | null>(null)
+  const [nameError, setNameError] = useState<string | null>(null)
+  const nameInputRef = useRef<HTMLInputElement>(null)
+
+  // Duplicate display names break the AI's labware-ref repair (it requires
+  // a unique name match), so renames are validated against committed AND
+  // preview-ghost labwares before dispatch.
+  const renameConflict = useCallback((): Labware | null => {
+    if (!labware || nameDraft === null) return null
+    return findLabwareNameConflict(
+      nameDraft,
+      [
+        ...Object.values(state.labwares),
+        ...Object.values(state.preview?.previewLabwares ?? {}),
+      ],
+      labware.labwareId,
+    )
+  }, [labware, nameDraft, state.labwares, state.preview])
 
   // Auto-dismiss a pinned tooltip after a few seconds — touch users
   // don't have a "move pointer away" gesture to clear it themselves.
@@ -136,6 +158,45 @@ export function LabwareFocus() {
     () => occupiedWellsForLabware(labwareStates, labware?.labwareId),
     [labwareStates, labware],
   )
+
+  // Per-well fill/stroke keyed on a composition signature: replicates share a
+  // hue, distinct conditions get distinct hues. Hue is further modulated by
+  // knowledge-layer group membership (vivid when grouped). Selection is layered
+  // on top by the grid as an amber ring.
+  const compositionStyles = useMemo(() => {
+    if (!labware || !labwareStates) return EMPTY_STYLE_MAP
+    const groupWells = new Set<WellId>()
+    const rail = placementId ? state.plateRail[placementId] : undefined
+    for (const group of rail?.knowledge.groups ?? []) {
+      for (const well of group.wells) groupWells.add(well)
+    }
+    const wellOrder = [...occupiedWellIds].sort()
+    return buildCompositionStyles(
+      wellOrder,
+      (wellId) =>
+        wellCompositionSignature(getWellState(labwareStates, labware.labwareId, wellId)),
+      groupWells,
+    )
+  }, [labware, labwareStates, occupiedWellIds, placementId, state.plateRail])
+
+  // Legend mapping each distinct composition hue back to a readable condition,
+  // built from the same well order so swatches match the on-plate fills.
+  const compositionLegend = useMemo(() => {
+    if (!labware || !labwareStates) return []
+    const groupWells = new Set<WellId>()
+    const rail = placementId ? state.plateRail[placementId] : undefined
+    for (const group of rail?.knowledge.groups ?? []) {
+      for (const well of group.wells) groupWells.add(well)
+    }
+    const wellOrder = [...occupiedWellIds].sort()
+    return buildCompositionLegend(
+      wellOrder,
+      (wellId) =>
+        wellCompositionSignature(getWellState(labwareStates, labware.labwareId, wellId)),
+      (wellId) => getMaterialsSummary(getWellState(labwareStates, labware.labwareId, wellId)),
+      groupWells,
+    )
+  }, [labware, labwareStates, occupiedWellIds, placementId, state.plateRail])
 
   // ESC: clear a pinned tooltip first (touch-only state); then selection;
   // then exit focus. Each press peels one layer of context.
@@ -262,13 +323,6 @@ export function LabwareFocus() {
 
   const wellState = hover && labwareStates ? getWellState(labwareStates, labware.labwareId, hover.wellId) : null
 
-  const tooltipPos = hover && canvasRef.current
-    ? (() => {
-        const rect = canvasRef.current.getBoundingClientRect()
-        return { x: hover.clientX - rect.left + 12, y: hover.clientY - rect.top + 12 }
-      })()
-    : null
-
   const locationLabel =
     placement.location.kind === 'slot'
       ? `slot ${placement.location.slotId}`
@@ -285,9 +339,59 @@ export function LabwareFocus() {
           <span className="focus__icon" aria-hidden>{LABWARE_TYPE_ICONS[labware.labwareType]}</span>
           <div className="focus__title-block">
             <div className="focus__name">
-              {labware.name}
+              {nameDraft !== null ? (
+                <input
+                  ref={nameInputRef}
+                  className="focus__name-input"
+                  value={nameDraft}
+                  autoFocus
+                  onChange={(e) => {
+                    setNameDraft(e.target.value)
+                    setNameError(null)
+                  }}
+                  onFocus={(e) => e.target.select()}
+                  onClick={(e) => e.stopPropagation()}
+                  onBlur={() => {
+                    // Click-away with a conflicting draft reverts silently —
+                    // don't trap focus on a transient error.
+                    if (!renameConflict()) {
+                      actions.renameLabware(labware.labwareId, nameDraft)
+                    }
+                    setNameDraft(null)
+                    setNameError(null)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      const conflict = renameConflict()
+                      if (conflict) {
+                        setNameError(`Name already used by “${conflict.name}”`)
+                        return
+                      }
+                      nameInputRef.current?.blur()
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault()
+                      setNameDraft(null)
+                      setNameError(null)
+                    }
+                  }}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="focus__name-btn"
+                  disabled={isPreviewPlacement}
+                  onClick={() => setNameDraft(labware.name)}
+                  title={isPreviewPlacement ? undefined : 'Click to rename'}
+                >
+                  {labware.name}
+                </button>
+              )}
               {isPreviewPlacement ? <span className="focus__preview-tag">Proposed</span> : null}
             </div>
+            {nameError ? (
+              <div className="focus__name-error" role="alert">{nameError}</div>
+            ) : null}
             <div className="focus__meta">
               {LABWARE_TYPE_LABELS[labware.labwareType]} · {locationLabel} · {placement.orientation}
               {activePipette ? ` · tool: ${activePipette.label}` : ''}
@@ -324,6 +428,7 @@ export function LabwareFocus() {
             selectedWellIds={selectedSet}
             previewWellIds={previewWells}
             occupiedWellIds={occupiedWellIds}
+            compositionStyles={compositionStyles}
             onHover={(wellId, event) => {
               if (!wellId || !event) {
                 // Mouseleave shouldn't dismiss a tooltip that the user
@@ -342,8 +447,8 @@ export function LabwareFocus() {
               setMenu({ open: true, x: event.clientX, y: event.clientY, targetWells })
             }}
           />
-          {hover && wellState && tooltipPos ? (
-            <WellTooltip wellId={hover.wellId} state={wellState} x={tooltipPos.x} y={tooltipPos.y} />
+          {hover && wellState ? (
+            <WellTooltip wellId={hover.wellId} state={wellState} clientX={hover.clientX} clientY={hover.clientY} />
           ) : null}
         </div>
         {menu.open && labware && labwareStates ? (
@@ -398,6 +503,39 @@ export function LabwareFocus() {
             </span>
           )}
         </footer>
+        {compositionLegend.length > 0 ? (
+          <div className="focus__legend" role="list" aria-label="Well compositions">
+            {compositionLegend.map((entry) => (
+              <button
+                key={entry.signature}
+                type="button"
+                role="listitem"
+                className="focus__legend-chip"
+                title={`Select the ${entry.wells.length} well${entry.wells.length === 1 ? '' : 's'} of ${entry.label}`}
+                onClick={() => {
+                  if (!labware) return
+                  const wells = entry.wells as WellId[]
+                  actions.setSelection({
+                    labwareId: labware.labwareId,
+                    wells,
+                    anchor: wells[0] ?? null,
+                  })
+                }}
+              >
+                <span
+                  className="focus__legend-swatch"
+                  style={{ background: entry.fill, borderColor: entry.stroke }}
+                  aria-hidden
+                />
+                <span className="focus__legend-label">{entry.label}</span>
+                <span className="focus__legend-count">
+                  ×{entry.wells.length}
+                  {entry.groupedCount > 0 ? ' ⬢' : ''}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         </div>
       </div>
       <ReadPlateModal
@@ -413,3 +551,4 @@ export function LabwareFocus() {
 }
 
 const EMPTY_SET: ReadonlySet<WellId> = new Set()
+const EMPTY_STYLE_MAP: ReadonlyMap<WellId, WellHueStyle> = new Map()

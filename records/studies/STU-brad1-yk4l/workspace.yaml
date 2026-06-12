@@ -1,0 +1,17 @@
+version: 2
+studyId: STU-brad1-yk4l
+tabs:
+  - id: details:STU-brad1-yk4l
+    kind: project-details
+    title: Project
+  - id: tab-deck-new-RUN-ru1-ptk2
+    kind: deck
+    eventGraphId: ""
+    runId: RUN-ru1-ptk2
+    title: Ru1
+activeTabId: tab-deck-new-RUN-ru1-ptk2
+rightPaneMode: ai
+rightPaneCollapsed: false
+paneWidths:
+  left: 0.6
+  right: 0.4

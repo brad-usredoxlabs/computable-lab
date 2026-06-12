@@ -1,0 +1,12 @@
+$schema: https://computable-lab.com/schema/computable-lab/experiment.schema.yaml
+recordId: EXP-basic-experiment-5b7m
+kind: experiment
+state: draft
+studyId: STU-scratch
+title: Basic Experiment
+shortSlug: basic-experiment
+createdAt: 2026-06-11T21:41:45.648Z
+updatedAt: 2026-06-11T21:41:45.648Z
+tags:
+  - scratch
+  - workspace-default

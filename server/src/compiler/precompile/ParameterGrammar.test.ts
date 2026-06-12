@@ -129,6 +129,20 @@ describe('extractWellAddresses', () => {
     expect(extractWellAddresses('')).toEqual([]);
   });
 
+
+
+  it('extracts natural language through ranges', () => {
+    const input = 'to wells A4 through H4 of seed plate';
+    const result = extractWellAddresses(input);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toEqual({
+      wells: ['A4', 'B4', 'C4', 'D4', 'E4', 'F4', 'G4', 'H4'],
+      kind: 'range',
+      span: [9, 22],
+      raw: 'A4 through H4',
+    });
+  });
+
   it('extracts a row label', () => {
     const input = 'row B';
     const result = extractWellAddresses(input);

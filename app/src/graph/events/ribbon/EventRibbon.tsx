@@ -325,6 +325,7 @@ function AddMaterialFields({ details, onChange, sourceSelectionCount, getSourceW
             ...(sourceLabwareId ? { labwareId: sourceLabwareId } : {}),
             ...(defaults.concentration ? { concentration: withInferredConcentrationBasis(defaults.concentration) } : {}),
             composition_snapshot: defaults.compositionSnapshot,
+            ...(defaults.formulationKind ? { formulation_kind: defaults.formulationKind } : {}),
           })
         })
         .catch(() => {
@@ -345,6 +346,7 @@ function AddMaterialFields({ details, onChange, sourceSelectionCount, getSourceW
             ...(sourceLabwareId ? { labwareId: sourceLabwareId } : {}),
             ...(defaults.concentration ? { concentration: defaults.concentration } : {}),
             ...(defaults.compositionSnapshot ? { composition_snapshot: defaults.compositionSnapshot } : {}),
+            ...(defaults.formulationKind ? { formulation_kind: defaults.formulationKind } : {}),
           })
         })
         .catch(() => {
@@ -372,6 +374,7 @@ function AddMaterialFields({ details, onChange, sourceSelectionCount, getSourceW
           ...next,
           ...(defaults.concentration ? { concentration: defaults.concentration } : {}),
           ...(defaults.compositionSnapshot ? { composition_snapshot: defaults.compositionSnapshot } : {}),
+            ...(defaults.formulationKind ? { formulation_kind: defaults.formulationKind } : {}),
           ...(sourceLabwareId ? { labwareId: sourceLabwareId } : {}),
           ...(lot && Object.keys(lot).length > 0 ? { instance_lot: lot } : { instance_lot: undefined }),
         } as DetailsRecord)

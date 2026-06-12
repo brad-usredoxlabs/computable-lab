@@ -161,10 +161,20 @@ function parseCopilotRef(value: unknown): CopilotRef | undefined {
   };
 }
 
+function formulationKindValue(value: unknown): FormulationCopilotDraft['formulationKind'] | undefined {
+  return value === 'single_active'
+    || value === 'defined_composition'
+    || value === 'complex_composition'
+    || value === 'biological_preparation'
+    ? value
+    : undefined;
+}
+
 function parseCopilotDraft(value: unknown): FormulationCopilotDraft | undefined {
   if (!isObject(value) || !Array.isArray(value.ingredients)) return undefined;
   return {
     ...(stringValue(value.recipeName) ? { recipeName: stringValue(value.recipeName)! } : {}),
+    ...(formulationKindValue(value.formulationKind) ? { formulationKind: formulationKindValue(value.formulationKind)! } : {}),
     ...(parseCopilotRef(value.representsMaterial) ? { representsMaterial: parseCopilotRef(value.representsMaterial)! } : {}),
     ...(quantityValue(value.totalProduced) ? { totalProduced: quantityValue(value.totalProduced)! } : {}),
     ...(parseCopilotRef(value.outputSolventRef) ? { outputSolventRef: parseCopilotRef(value.outputSolventRef)! } : {}),

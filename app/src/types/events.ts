@@ -6,7 +6,7 @@
 import type { WellId } from './plate'
 import type { Ref } from './ref'
 import type { MacroProgram } from './macroProgram'
-import type { CompositionEntryValue, ConcentrationValue } from './material'
+import type { CompositionEntryValue, ConcentrationValue, FormulationKind, MaterialRefValue } from './material'
 
 /**
  * Event type discriminator - matches kernel schema enum
@@ -72,6 +72,7 @@ export const EVENT_TYPE_COLORS: Record<EventType, string> = {
   wash: '#74c0fc',
   incubate: '#f59f00',
   read: '#ff6b6b',
+  centrifuge: '#15aabf',
   harvest: '#40c057',
   macro_program: '#5f3dc4',
   serial_dilution: '#845ef7',
@@ -97,6 +98,26 @@ export interface AddMaterialDetails extends BaseEventDetails {
   aliquot_ref?: string | Ref
   material_instance_ref?: string | Ref
   vendor_product_ref?: string | Ref
+  formulation_kind?: FormulationKind
+  material_source_requirement?: {
+    status: 'unresolved' | 'provided' | 'linked'
+    material_ref?: MaterialRefValue
+    material_spec_ref?: MaterialRefValue
+    vendor_product_ref?: MaterialRefValue
+    source_ref?: MaterialRefValue
+    reason?: string
+    source_details?: {
+      manufacturer?: string
+      vendor?: string
+      catalog_number?: string
+      lot_number?: string
+      expiration_date?: string
+      solvent_ref?: MaterialRefValue
+      concentration?: ConcentrationValue
+      ncbi_taxon_ref?: MaterialRefValue
+      uberon_tissue_ref?: MaterialRefValue
+    }
+  }
   volume?: { value: number; unit: string }
   concentration?: ConcentrationValue
   composition_snapshot?: CompositionEntryValue[]
@@ -445,7 +466,7 @@ export function parseMaterialLikeRef(ref: string | Ref | undefined): Ref | null 
   if (typeof ref === 'string') {
     if (ref.includes(':')) {
       const [namespace] = ref.split(':')
-      const knownNamespaces = ['CHEBI', 'CL', 'UBERON', 'GO', 'OBI', 'UO', 'NCBITAXON']
+      const knownNamespaces = ['CHEBI', 'CL', 'CLO', 'UBERON', 'GO', 'OBI', 'UO', 'NCBITAXON', 'MESH', 'XCO', 'MSIO']
       if (knownNamespaces.includes(namespace.toUpperCase())) {
         return {
           kind: 'ontology',
@@ -481,6 +502,8 @@ export function applyAddMaterialSelection(details: AddMaterialDetails, ref: Ref 
       composition_snapshot: undefined,
       count: undefined,
       instance_lot: undefined,
+      material_source_requirement: undefined,
+      formulation_kind: undefined,
     }
   }
   const next: AddMaterialDetails = {
@@ -490,7 +513,7 @@ export function applyAddMaterialSelection(details: AddMaterialDetails, ref: Ref 
     aliquot_ref: undefined,
     material_instance_ref: undefined,
     vendor_product_ref: undefined,
-    ...(isSameRef ? {} : { concentration: undefined, composition_snapshot: undefined, count: undefined }),
+    ...(isSameRef ? {} : { concentration: undefined, composition_snapshot: undefined, count: undefined, material_source_requirement: undefined, formulation_kind: undefined }),
     ...(ref.kind === 'record' && ref.type === 'material-spec' ? {} : { instance_lot: undefined }),
   }
   if (ref.kind === 'record' && ref.type === 'material-spec') {

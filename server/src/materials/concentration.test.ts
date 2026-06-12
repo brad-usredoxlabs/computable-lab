@@ -16,6 +16,19 @@ describe('concentration helpers', () => {
     });
   });
 
+  it('normalizes bare percent units to schema-valid fraction units', () => {
+    expect(toStoredConcentration({ value: 10, unit: '%', basis: 'volume_fraction' })).toEqual({
+      value: 10,
+      unit: '% v/v',
+      basis: 'volume_fraction',
+    });
+    expect(toStoredConcentration({ value: 5, unit: 'percent', basis: 'mass_fraction' })).toEqual({
+      value: 5,
+      unit: '% w/v',
+      basis: 'mass_fraction',
+    });
+  });
+
   it('stores typed concentration when basis is known', () => {
     expect(toStoredConcentration({ value: 1, unit: 'mM' })).toEqual({
       value: 1,

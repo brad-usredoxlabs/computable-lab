@@ -1,7 +1,7 @@
 import type { DragEvent } from 'react'
 import type { Labware } from '../../types/labware'
-import { LABWARE_TYPE_ICONS } from '../../types/labware'
 import type { EventEditorPlacement, LabwareOrientation } from '../types'
+import { LabwareGlyph } from './LabwareGlyph'
 
 interface LabwareTileProps {
   labware: Labware
@@ -85,7 +85,7 @@ export function LabwareTile({
       style={{ width: sized.w, height: sized.h }}
       title={tileTitle}
     >
-      <span className="tile__icon" aria-hidden>{LABWARE_TYPE_ICONS[labware.labwareType]}</span>
+      <LabwareGlyph labware={labware} orientation={orientation} />
       <span className="tile__name">{labware.name}</span>
       {ghost ? <span className="tile__ghost-tag">Proposed</span> : null}
       {!ghost && affected ? <span className="tile__affected-tag">Preview</span> : null}

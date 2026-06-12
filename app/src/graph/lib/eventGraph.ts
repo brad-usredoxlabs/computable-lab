@@ -448,10 +448,11 @@ function applyAddMaterial(state: WellComputedState, event: PlateEvent, details: 
   const snapshot = Array.isArray(details.composition_snapshot) ? details.composition_snapshot : []
   if (snapshot.length > 0) {
     snapshot.forEach((entry, index) => {
-      const componentLabel = entry.componentRef?.label || entry.componentRef?.id || materialLabel || `component_${index + 1}`
+      const componentRef = entry.componentRef || (entry as unknown as { component_ref?: typeof entry.componentRef }).component_ref
+      const componentLabel = componentRef?.label || componentRef?.id || materialLabel || `component_${index + 1}`
       const count = typeof details.count === 'number' && (entry.role === 'cells' || snapshot.length === 1) ? details.count : undefined
       newState.components = mergeLedgerEntry(newState.components, createLedgerEntry(event, details, componentLabel, {
-        componentId: entry.componentRef?.id || `${index + 1}`,
+        componentId: componentRef?.id || `${index + 1}`,
         concentration: entry.concentration,
         role: entry.role,
         count,

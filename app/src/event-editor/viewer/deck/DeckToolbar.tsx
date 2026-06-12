@@ -8,6 +8,7 @@
  * provider is set up in `ProjectWorkspacePage` so it covers both slots.
  */
 
+import { UndoRedoControls } from '../../topbar/UndoRedoControls'
 import { DeckModeSwitcher } from '../../topbar/DeckModeSwitcher'
 import { VocabSwitcher } from '../../topbar/VocabSwitcher'
 import { ToolSwitcher } from '../../topbar/ToolSwitcher'
@@ -17,6 +18,7 @@ import { EventGraphChip } from '../../topbar/EventGraphChip'
 export function DeckToolbar() {
   return (
     <div className="viewer-toolbar viewer-toolbar--deck">
+      <UndoRedoControls />
       <DeckModeSwitcher />
       <VocabSwitcher />
       <ToolSwitcher />

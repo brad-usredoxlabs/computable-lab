@@ -1,0 +1,16 @@
+$schema: https://computable-lab.com/schema/computable-lab/material-instance.schema.yaml
+recordId: MINST-MQBGD5B5-ZFYI6H
+kind: material-instance
+id: MINST-MQBGD5B5-ZFYI6H
+name: HepaRG
+material_ref:
+  kind: record
+  id: MAT-heparg-5z9o
+  type: material
+  label: HepaRG
+prepared_on: 2026-06-12T00:00:00.000Z
+status: available
+tags:
+  - cells
+biological_state:
+  passage_number: 5

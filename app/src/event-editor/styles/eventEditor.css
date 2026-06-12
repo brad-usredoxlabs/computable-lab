@@ -521,9 +521,13 @@
   background: linear-gradient(180deg, var(--cl-tile-hover-top), var(--cl-tile-hover-bottom));
 }
 
-.event-editor .tile__icon {
-  font-size: 16px;
-  line-height: 1;
+.event-editor .tile__glyph {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  /* Leave room for the name + a little breathing space. */
+  max-height: calc(100% - 16px);
+  display: block;
 }
 
 .event-editor .tile__name {
@@ -2538,6 +2542,93 @@
   padding: 8px 16px 16px;
 }
 
+/* ---- Proposed-changes inspector (View changes) ---- */
+
+.event-editor .proposed-graph {
+  width: min(720px, 92vw);
+  max-height: 86vh;
+}
+
+.event-editor .proposed-graph__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.event-editor .proposed-graph__heading {
+  margin: 0 0 6px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cl-text-faint);
+}
+
+.event-editor .proposed-graph__lw-list,
+.event-editor .proposed-graph__events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.event-editor .proposed-graph__lw {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.event-editor .proposed-graph__lw-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.event-editor .proposed-graph__muted {
+  color: var(--cl-text-faint);
+  font-size: 11px;
+}
+
+.event-editor .proposed-graph__event {
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.event-editor .proposed-graph__event-type {
+  display: block;
+  padding: 5px 8px;
+  background: var(--cl-bg-elev-2);
+  font-weight: 600;
+  font-size: 12px;
+  font-family: var(--cl-font-mono, ui-monospace, monospace);
+  color: var(--cl-accent);
+}
+
+.event-editor .proposed-graph__json {
+  margin: 0;
+  padding: 8px;
+  font-family: var(--cl-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--cl-text);
+  background: var(--cl-bg-elev-1);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+
+.event-editor .proposed-graph__raw > summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--cl-text-faint);
+  user-select: none;
+}
+
+.event-editor .proposed-graph__raw[open] > summary {
+  margin-bottom: 6px;
+}
+
 .event-editor .ee-dialog__group {
   margin-top: 12px;
 }
@@ -2643,12 +2734,51 @@
 }
 
 .event-editor .focus__name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 15px;
   font-weight: 600;
   color: var(--cl-text);
   overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Click-to-rename: the name reads as plain text but reveals it is editable on
+   hover. Inherits the header font so toggling to the input doesn't shift size. */
+.event-editor .focus__name-btn {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border-radius: 4px;
+  font: inherit;
+  color: inherit;
+  cursor: text;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.event-editor .focus__name-btn:hover:not(:disabled) {
+  background: var(--cl-bg-elev-2);
+}
+
+.event-editor .focus__name-btn:disabled {
+  cursor: default;
+}
+
+.event-editor .focus__name-input {
+  font: inherit;
+  color: var(--cl-text);
+  background: var(--cl-bg-elev-1);
+  border: 1px solid var(--cl-accent, var(--cl-border));
+  border-radius: 4px;
+  padding: 2px 4px;
+  margin: -3px 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .event-editor .focus__meta {
@@ -2709,6 +2839,57 @@
   font-size: 11px;
   color: var(--cl-text-faint);
   letter-spacing: 0.02em;
+}
+
+/* Composition legend: one chip per distinct well composition (hue), mapping the
+   on-plate colors back to a readable condition. Clicking a chip selects that
+   condition's replicate wells. */
+.event-editor .focus__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 18px 12px;
+  border-top: 1px solid var(--cl-border);
+}
+
+.event-editor .focus__legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  padding: 3px 8px 3px 4px;
+  background: var(--cl-bg-elev-1);
+  border: 1px solid var(--cl-border);
+  border-radius: 999px;
+  color: var(--cl-text);
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color 100ms ease, background 100ms ease;
+}
+
+.event-editor .focus__legend-chip:hover {
+  border-color: var(--cl-accent);
+  background: var(--cl-bg-elev-2);
+}
+
+.event-editor .focus__legend-swatch {
+  width: 13px;
+  height: 13px;
+  border-radius: 4px;
+  border: 1.5px solid;
+  flex: 0 0 auto;
+}
+
+.event-editor .focus__legend-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-editor .focus__legend-count {
+  color: var(--cl-text-faint);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
 }
 
 .event-editor .focus__selection-count {
@@ -2936,10 +3117,19 @@
   stroke-width: 0.28;
 }
 
+/* Selection uses a distinct amber hue + bold ring so it never blends into the
+   blue "has material" fill (the two used to be near-identical light blues). */
 .event-editor .well-grid__well[data-selected='true'] {
-  fill: rgba(88, 166, 255, 0.28);
-  stroke: var(--cl-accent);
-  stroke-width: 0.35;
+  fill: rgba(255, 201, 60, 0.30);
+  stroke: #ffc93c;
+  stroke-width: 0.55;
+}
+
+/* A selected well that also holds material keeps its blue material fill so the
+   contents stay visible; the bold amber ring (from the rule above) carries the
+   selection. Two-attribute selector outranks the single-attribute fills. */
+.event-editor .well-grid__well[data-occupied='true'][data-selected='true'] {
+  fill: rgba(51, 154, 240, 0.24);
 }
 
 .event-editor .well-grid__well[data-preview='true'] {
@@ -2951,7 +3141,7 @@
 /* When a well is both selected and previewed, the selection ring still wins
    for stroke (the user explicitly selected it), but the fill remains preview. */
 .event-editor .well-grid__well[data-preview='true'][data-selected='true'] {
-  stroke: var(--cl-accent);
+  stroke: #ffc93c;
 }
 
 .event-editor .well-grid__tip[data-preview='true'] {
@@ -2966,6 +3156,18 @@
   stroke-width: 0.18;
 }
 
+/* Tip-rack selection mirrors the well selection palette (amber ring, material
+   fill preserved when occupied) so the two states are just as distinct here. */
+.event-editor .well-grid__tip[data-selected='true'] {
+  fill: rgba(255, 201, 60, 0.30);
+  stroke: #ffc93c;
+  stroke-width: 0.55;
+}
+
+.event-editor .well-grid__tip[data-occupied='true'][data-selected='true'] {
+  fill: rgba(51, 154, 240, 0.24);
+}
+
 .event-editor .well-grid__tip[data-hovered='true'] {
   fill: var(--cl-accent-soft);
   stroke: var(--cl-accent);
@@ -2974,8 +3176,12 @@
 /* ---- Well tooltip ---- */
 
 .event-editor .well-tooltip {
-  position: absolute;
-  background: rgba(14, 17, 22, 0.96);
+  /* Fixed (viewport-relative) + flipped in JS so the scrollable focus stage's
+     overflow can't clip it at the right/bottom edges (column 12 / row H). */
+  position: fixed;
+  /* Theme-aware elevated surface — was hardcoded dark, which rendered
+     dark-on-dark text in light mode. Pairs with var(--cl-text). */
+  background: var(--cl-bg-elev-2);
   border: 1px solid var(--cl-border-strong);
   border-radius: 6px;
   padding: 8px 10px;
@@ -3013,6 +3219,59 @@
 .event-editor .well-tooltip__empty {
   color: var(--cl-text-faint);
   font-style: italic;
+}
+
+/* Per-material composition table: material | current concentration | volume. */
+.event-editor .well-tooltip__materials {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.event-editor .well-tooltip__material > td {
+  padding: 2px 0;
+  vertical-align: baseline;
+  border-top: 1px solid var(--cl-border);
+}
+
+.event-editor .well-tooltip__material:first-child > td {
+  border-top: 0;
+}
+
+.event-editor .well-tooltip__material-name {
+  font-weight: 600;
+  color: var(--cl-text);
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-editor .well-tooltip__material-role {
+  font-weight: 400;
+  color: var(--cl-text-faint);
+}
+
+.event-editor .well-tooltip__material-conc {
+  padding-left: 10px;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--cl-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.event-editor .well-tooltip__material-vol {
+  padding-left: 10px;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--cl-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.event-editor .well-tooltip__more > td {
+  color: var(--cl-text-faint);
+  font-style: italic;
+  padding-top: 3px;
 }
 
 .event-editor .well-tooltip__flag {
@@ -5021,4 +5280,51 @@
   .read-plate-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ---- Undo/redo toolbar controls ---- */
+
+.event-editor .undo-redo {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.event-editor .undo-redo__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 6px;
+  background: var(--cl-bg-elev-2);
+  border: 1px solid var(--cl-border);
+  color: var(--cl-text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.event-editor .undo-redo__btn:hover:not(:disabled) {
+  border-color: var(--cl-accent);
+  background: var(--cl-accent-soft);
+}
+
+.event-editor .undo-redo__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---- Labware rename validation (LabwareFocus) ---- */
+
+.event-editor .focus__name-error {
+  background: rgba(248, 81, 73, 0.18);
+  color: #ffb4ae;
+  border: 1px solid rgba(248, 81, 73, 0.4);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-top: 4px;
+  font-size: 11px;
 }

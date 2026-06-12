@@ -1,0 +1,16 @@
+version: 2
+studyId: STU-scratch
+tabs:
+  - id: details:STU-scratch
+    kind: project-details
+    title: Project
+  - id: tab-deck-EVG-mqaawtrj-6w0o
+    kind: deck
+    eventGraphId: EVG-mqaawtrj-6w0o
+    title: EVG-mqaawtrj-6w0o
+activeTabId: tab-deck-EVG-mqaawtrj-6w0o
+rightPaneMode: ai
+rightPaneCollapsed: false
+paneWidths:
+  left: 0.6
+  right: 0.4

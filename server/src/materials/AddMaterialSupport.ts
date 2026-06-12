@@ -6,6 +6,7 @@ import { extractPrimaryDeclaredConcentration } from './vendorComposition.js';
 
 const ALIQUOT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml';
 const MATERIAL_INSTANCE_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/material-instance.schema.yaml';
+const MATERIAL_SPEC_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml';
 
 type RefShape = {
   kind: 'record' | 'ontology';
@@ -36,6 +37,23 @@ export class MaterialUsagePolicyError extends Error {
     super(message);
     this.name = 'MaterialUsagePolicyError';
   }
+}
+
+function storeFailureMessage(
+  result: { error?: string; validation?: { errors?: Array<{ path?: string; message?: string }> }; lint?: { violations?: Array<{ path?: string; message?: string }> } },
+  fallback: string,
+): string {
+  const validationDetails = result.validation?.errors
+    ?.map((error) => [error.path, error.message].filter(Boolean).join(': '))
+    .filter(Boolean)
+    .join('; ');
+  if (validationDetails) return `${fallback}: ${validationDetails}`;
+  const lintDetails = result.lint?.violations
+    ?.map((violation) => [violation.path, violation.message].filter(Boolean).join(': '))
+    .filter(Boolean)
+    .join('; ');
+  if (lintDetails) return `${fallback}: ${lintDetails}`;
+  return result.error ? `${fallback}: ${result.error}` : fallback;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -120,12 +138,114 @@ function implicitMaterialInstanceId(eventGraphId: string, eventId: string): stri
   return `MINST-IMPLICIT-${seed || 'UNKNOWN'}`;
 }
 
+function implicitMaterialSpecId(eventGraphId: string, eventId: string): string {
+  const seed = `${eventGraphId}_${eventId}`.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return `MSP-DRAFT-${seed || 'UNKNOWN'}`;
+}
+
+function refLabel(ref: RefShape | null): string | undefined {
+  return ref?.label || ref?.id;
+}
+
+function canonicalCompositionSnapshot(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const obj = asRecord(entry);
+    if (!obj) return [];
+    const componentRef = normalizeRef(obj['component_ref'] ?? obj['componentRef']);
+    const role = typeof obj['role'] === 'string' && obj['role'].trim().length > 0 ? obj['role'].trim() : null;
+    if (!componentRef || !role) return [];
+    return [{
+      component_ref: componentRef,
+      role,
+      ...(toStoredConcentration(obj['concentration']) ? { concentration: toStoredConcentration(obj['concentration']) } : {}),
+      ...(asRecord(obj['concentration_range']) ? { concentration_range: obj['concentration_range'] } : {}),
+      ...(typeof obj['source'] === 'string' && obj['source'].trim() ? { source: obj['source'].trim() } : {}),
+    }];
+  });
+}
+
+function lifecycleProvenance(sourceLabel: string, eventGraphId: string, eventId: string): Record<string, unknown> {
+  return {
+    status: 'proposed',
+    lifecycleId: 'lab-vocabulary-control',
+    provenance: {
+      source: 'compiler',
+      sourceLabel,
+      createdBy: 'add-material-normalizer',
+      createdAt: new Date().toISOString(),
+      note: `Created as a proposed local formulation record from accepted add-material composition snapshot ${eventGraphId}:${eventId}.`,
+    },
+  };
+}
+
+async function upsertProposedMaterialSpecFromComposition(
+  store: RecordStore,
+  eventGraphId: string,
+  eventId: string,
+  details: Record<string, unknown>,
+): Promise<RefShape | null> {
+  if (normalizeRef(details['material_spec_ref'], 'material-spec')) return null;
+  if (normalizeRef(details['aliquot_ref'], 'aliquot')) return null;
+  if (normalizeRef(details['material_instance_ref'], 'material-instance')) return null;
+  if (normalizeRef(details['vendor_product_ref'], 'vendor-product')) return null;
+  const materialRef = normalizeRef(details['material_ref'], 'material');
+  if (!materialRef) return null;
+  const composition = canonicalCompositionSnapshot(details['composition_snapshot']);
+  if (composition.length < 2) return null;
+
+  const specId = implicitMaterialSpecId(eventGraphId, eventId);
+  const existing = await store.get(specId);
+  const componentLabels = composition
+    .map((entry) => refLabel(normalizeRef(entry['component_ref'])))
+    .filter((entry): entry is string => Boolean(entry));
+  const name = componentLabels.length > 0
+    ? componentLabels.join(' + ')
+    : `Draft formulation for ${refLabel(materialRef) ?? materialRef.id}`;
+  const payload: Record<string, unknown> = {
+    kind: 'material-spec',
+    id: specId,
+    name,
+    material_ref: materialRef,
+    formulation_kind: typeof details['formulation_kind'] === 'string' ? details['formulation_kind'] : 'complex_composition',
+    ...lifecycleProvenance(name, eventGraphId, eventId),
+    formulation: {
+      composition,
+      notes: 'Draft formulation inferred from an add-material event composition snapshot.',
+    },
+    tags: ['ai-draft', 'composition_snapshot'],
+  };
+  if (!existing) {
+    const created = await store.create({
+      envelope: {
+        recordId: specId,
+        schemaId: MATERIAL_SPEC_SCHEMA_ID,
+        payload,
+        meta: { kind: 'material-spec' },
+      },
+      message: `Create proposed material spec ${specId} from ${eventGraphId}:${eventId}`,
+    });
+    if (!created.success) {
+      throw new MaterialUsagePolicyError(storeFailureMessage(created, `Failed to create proposed material spec ${specId}`));
+    }
+  }
+  return toRecordRef(specId, 'material-spec', name);
+}
+
 function toRecordRef(id: string, type: string, label?: string): RefShape {
   return {
     kind: 'record',
     id,
     type,
     ...(label ? { label } : {}),
+  };
+}
+
+function unresolvedSourceRequirement(refField: 'material_spec_ref' | 'vendor_product_ref', ref: RefShape): Record<string, unknown> {
+  return {
+    status: 'unresolved',
+    [refField]: toRecordRef(ref.id, ref.type || (refField === 'material_spec_ref' ? 'material-spec' : 'vendor-product'), ref.label || ref.id),
+    reason: 'No explicit material instance, aliquot, or source lot selected during drafting.',
   };
 }
 
@@ -170,7 +290,7 @@ async function upsertImplicitAliquot(
       message: `Create implicit aliquot ${aliquotId} for ${eventGraphId}:${eventId}`,
     });
     if (!created.success) {
-      throw new Error(created.error || `Failed to create implicit aliquot ${aliquotId}`);
+      throw new MaterialUsagePolicyError(storeFailureMessage(created, `Failed to create implicit aliquot ${aliquotId}`));
     }
   } else {
     const updated = await store.update({
@@ -193,7 +313,7 @@ async function upsertImplicitAliquot(
       message: `Refresh implicit aliquot ${aliquotId} for ${eventGraphId}:${eventId}`,
     });
     if (!updated.success) {
-      throw new Error(updated.error || `Failed to update implicit aliquot ${aliquotId}`);
+      throw new MaterialUsagePolicyError(storeFailureMessage(updated, `Failed to update implicit aliquot ${aliquotId}`));
     }
   }
 
@@ -247,7 +367,7 @@ async function upsertImplicitMaterialInstance(
       message: `Create implicit material instance ${instanceId} for ${eventGraphId}:${eventId}`,
     });
     if (!created.success) {
-      throw new Error(created.error || `Failed to create implicit material instance ${instanceId}`);
+      throw new MaterialUsagePolicyError(storeFailureMessage(created, `Failed to create implicit material instance ${instanceId}`));
     }
   } else {
     const updated = await store.update({
@@ -270,7 +390,7 @@ async function upsertImplicitMaterialInstance(
       message: `Refresh implicit material instance ${instanceId} for ${eventGraphId}:${eventId}`,
     });
     if (!updated.success) {
-      throw new Error(updated.error || `Failed to update implicit material instance ${instanceId}`);
+      throw new MaterialUsagePolicyError(storeFailureMessage(updated, `Failed to update implicit material instance ${instanceId}`));
     }
   }
 
@@ -290,47 +410,55 @@ export async function normalizeEventGraphMaterialUsage(
   const events = Array.isArray(graph['events']) ? graph['events'] as AddMaterialEvent[] : null;
   if (!eventGraphId || !events) return payload;
 
-  const materialTracking: MaterialTrackingConfig = {
-    mode: options.materialTracking?.mode ?? 'relaxed',
-    allowAdHocEventInstances: options.materialTracking?.allowAdHocEventInstances ?? true,
-  };
+  void options;
   let changed = false;
   const nextEvents = await Promise.all(events.map(async (event, index) => {
     if (event.event_type !== 'add_material') return event;
     const eventId = typeof event.eventId === 'string' && event.eventId.trim().length > 0 ? event.eventId.trim() : `event_${index + 1}`;
     const details = asRecord(event.details);
     if (!details) return event;
-    if (normalizeRef(details['aliquot_ref'], 'aliquot')) return event;
-    if (normalizeRef(details['material_instance_ref'], 'material-instance')) return event;
+    const proposedSpecRef = await upsertProposedMaterialSpecFromComposition(store, eventGraphId, eventId, details);
+    const detailsWithProposedSpec = proposedSpecRef
+      ? {
+          ...details,
+          material_spec_ref: proposedSpecRef,
+          material_source_requirement: details['material_source_requirement'] ?? unresolvedSourceRequirement('material_spec_ref', proposedSpecRef),
+        }
+      : details;
+    if (proposedSpecRef) changed = true;
+    if (normalizeRef(detailsWithProposedSpec['aliquot_ref'], 'aliquot')) return { ...event, details: detailsWithProposedSpec };
+    if (normalizeRef(detailsWithProposedSpec['material_instance_ref'], 'material-instance')) return { ...event, details: detailsWithProposedSpec };
 
-    const explicitSpec = normalizeRef(details['material_spec_ref'], 'material-spec');
+    const explicitSpec = normalizeRef(detailsWithProposedSpec['material_spec_ref'], 'material-spec');
     const inferredSpec = explicitSpec
       ?? (() => {
-        const materialRef = normalizeRef(details['material_ref'], 'material');
+        const materialRef = normalizeRef(detailsWithProposedSpec['material_ref'], 'material');
         if (materialRef?.kind === 'record' && materialRef.type === 'material-spec') {
           return { ...materialRef, type: 'material-spec' as const };
         }
         return null;
       })();
     if (!inferredSpec || inferredSpec.kind !== 'record') return event;
-    const lot = extractInstanceLot(details);
-    if (
-      materialTracking.mode === 'tracked'
-      && materialTracking.allowAdHocEventInstances === false
-      && !lot
-    ) {
-      throw new MaterialUsagePolicyError(
-        `Tracked material policy requires provenance when using formulation ${inferredSpec.label || inferredSpec.id} without an explicit instance`
-      );
+    const lot = extractInstanceLot(detailsWithProposedSpec);
+    if (!lot) {
+      changed = true;
+      return {
+        ...event,
+        details: {
+          ...detailsWithProposedSpec,
+          material_spec_ref: detailsWithProposedSpec['material_spec_ref'] ?? toRecordRef(inferredSpec.id, 'material-spec', inferredSpec.label || inferredSpec.id),
+          material_source_requirement: detailsWithProposedSpec['material_source_requirement'] ?? unresolvedSourceRequirement('material_spec_ref', inferredSpec),
+        },
+      };
     }
 
-    const aliquotRef = await upsertImplicitAliquot(store, eventGraphId, eventId, inferredSpec, details);
+    const aliquotRef = await upsertImplicitAliquot(store, eventGraphId, eventId, inferredSpec, detailsWithProposedSpec);
     changed = true;
     return {
       ...event,
       details: {
-        ...details,
-        material_spec_ref: details['material_spec_ref'] ?? toRecordRef(inferredSpec.id, 'material-spec', inferredSpec.label || inferredSpec.id),
+        ...detailsWithProposedSpec,
+        material_spec_ref: detailsWithProposedSpec['material_spec_ref'] ?? toRecordRef(inferredSpec.id, 'material-spec', inferredSpec.label || inferredSpec.id),
         aliquot_ref: aliquotRef,
       },
     };
@@ -347,14 +475,16 @@ export async function normalizeEventGraphMaterialUsage(
     const vendorProductRef = normalizeRef(details['vendor_product_ref'], 'vendor-product');
     if (!vendorProductRef || vendorProductRef.kind !== 'record') return event;
     const lot = extractInstanceLot(details);
-    if (
-      materialTracking.mode === 'tracked'
-      && materialTracking.allowAdHocEventInstances === false
-      && !lot
-    ) {
-      throw new MaterialUsagePolicyError(
-        `Tracked material policy requires provenance when using vendor product ${vendorProductRef.label || vendorProductRef.id} without an explicit material instance`
-      );
+    if (!lot) {
+      changed = true;
+      return {
+        ...event,
+        details: {
+          ...details,
+          vendor_product_ref: details['vendor_product_ref'] ?? toRecordRef(vendorProductRef.id, 'vendor-product', vendorProductRef.label || vendorProductRef.id),
+          material_source_requirement: details['material_source_requirement'] ?? unresolvedSourceRequirement('vendor_product_ref', vendorProductRef),
+        },
+      };
     }
     const materialInstanceRef = await upsertImplicitMaterialInstance(store, eventGraphId, eventId, vendorProductRef, details);
     changed = true;

@@ -44,6 +44,50 @@ properties:
     $ref: "../../datatypes/ref.schema.yaml"
     description: "Deprecated legacy material ref field."
 
+  formulation_kind:
+    type: string
+    description: "Biological intent of the formulation/specification used by this event."
+    enum: [ single_active, defined_composition, complex_composition, biological_preparation ]
+
+  material_source_requirement:
+    type: object
+    additionalProperties: false
+    description: "Draft-time source requirement or enrichment facts. This records unresolved source/provenance needs without minting a concrete tube, aliquot, or material instance."
+    required: [ status ]
+    properties:
+      status:
+        type: string
+        enum: [ unresolved, provided, linked ]
+      material_ref:
+        $ref: "../../datatypes/ref.schema.yaml"
+      material_spec_ref:
+        $ref: "../../datatypes/ref.schema.yaml"
+      vendor_product_ref:
+        $ref: "../../datatypes/ref.schema.yaml"
+      source_ref:
+        $ref: "../../datatypes/ref.schema.yaml"
+      reason:
+        type: string
+      source_details:
+        type: object
+        additionalProperties: false
+        properties:
+          manufacturer: { type: string }
+          vendor: { type: string }
+          catalog_number: { type: string }
+          lot_number: { type: string }
+          expiration_date: { type: string, format: date }
+          solvent_ref:
+            $ref: "../../datatypes/ref.schema.yaml"
+          concentration:
+            oneOf:
+            - $ref: "../../datatypes/concentration.schema.yaml"
+            - $ref: "../../datatypes/amount.schema.yaml"
+          ncbi_taxon_ref:
+            $ref: "../../datatypes/ref.schema.yaml"
+          uberon_tissue_ref:
+            $ref: "../../datatypes/ref.schema.yaml"
+
   volume:
     type: object
     additionalProperties: false

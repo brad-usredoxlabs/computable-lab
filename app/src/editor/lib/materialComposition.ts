@@ -6,11 +6,13 @@ import {
   withInferredConcentrationBasis,
   type CompositionEntryValue,
   type ConcentrationValue,
+  type FormulationKind,
 } from '../../types/material'
 
 type SourceDefaults = {
   concentration?: ConcentrationValue
   compositionSnapshot?: CompositionEntryValue[]
+  formulationKind?: FormulationKind
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -21,6 +23,13 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function materialSpecCompositionFromPayload(payload: Record<string, unknown> | null): CompositionEntryValue[] {
   return parseCompositionEntries(asRecord(payload?.formulation)?.composition)
+}
+
+function materialSpecFormulationKindFromPayload(payload: Record<string, unknown> | null): FormulationKind | undefined {
+  const value = payload?.formulation_kind
+  return value === 'single_active' || value === 'defined_composition' || value === 'complex_composition' || value === 'biological_preparation'
+    ? value
+    : undefined
 }
 
 function materialSpecConcentrationFromPayload(payload: Record<string, unknown> | null): ConcentrationValue | undefined {
@@ -35,9 +44,11 @@ async function loadMaterialSpecDefaults(materialSpecId: string): Promise<SourceD
   const payload = asRecord(record.payload)
   const compositionSnapshot = materialSpecCompositionFromPayload(payload)
   const concentration = materialSpecConcentrationFromPayload(payload)
+  const formulationKind = materialSpecFormulationKindFromPayload(payload)
   return {
     ...(concentration ? { concentration } : {}),
     ...(compositionSnapshot.length > 0 ? { compositionSnapshot } : {}),
+    ...(formulationKind ? { formulationKind } : {}),
   }
 }
 
@@ -54,6 +65,7 @@ export async function resolveAddMaterialSourceDefaults(
       return {
         ...(concentration ? { concentration } : {}),
         ...(compositionSnapshot.length > 0 ? { compositionSnapshot } : {}),
+        ...(formulationSummary.outputSpec.formulationKind ? { formulationKind: formulationSummary.outputSpec.formulationKind } : {}),
       }
     }
     return loadMaterialSpecDefaults(ref.id)

@@ -28,6 +28,7 @@ vi.mock('../EventEditorContext', () => ({
       eventGraphCommit: null,
       runId: null,
       dirty: false,
+      history: { past: [], future: [] },
       // Anything else a chip reads — return a sane default so render doesn't crash.
     },
     actions: {
@@ -36,6 +37,8 @@ vi.mock('../EventEditorContext', () => ({
       setVocabPack: () => undefined,
       setToolType: () => undefined,
       dropTip: () => undefined,
+      undo: () => undefined,
+      redo: () => undefined,
     },
   }),
 }))

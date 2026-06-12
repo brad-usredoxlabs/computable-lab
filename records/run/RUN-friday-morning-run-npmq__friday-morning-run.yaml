@@ -1,0 +1,10 @@
+$schema: https://computable-lab.com/schema/computable-lab/run.schema.yaml
+recordId: RUN-friday-morning-run-npmq
+kind: run
+experimentId: EXP-determine-baseline-695f
+studyId: STU-brad-s-project-drxd
+status: planned
+title: Friday Morning Run
+shortSlug: friday-morning-run
+createdAt: 2026-06-11T02:45:21.261Z
+updatedAt: 2026-06-11T02:54:50.266Z

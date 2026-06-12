@@ -20,6 +20,15 @@ export interface ConcentrationValue {
   basis?: ConcentrationBasis
 }
 
+export interface ConcentrationRangeValue {
+  min?: number
+  max?: number
+  unit: string
+  basis?: ConcentrationBasis
+}
+
+export type FormulationKind = 'single_active' | 'defined_composition' | 'complex_composition' | 'biological_preparation'
+
 export interface MaterialRefValue {
   kind: 'record' | 'ontology'
   id: string
@@ -42,6 +51,7 @@ export interface CompositionEntryValue {
   componentRef: MaterialRefValue
   role: CompositionRole
   concentration?: ConcentrationValue
+  concentrationRange?: ConcentrationRangeValue
   source?: string
 }
 
@@ -212,6 +222,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
+function parseConcentrationRange(value: unknown): ConcentrationRangeValue | undefined {
+  if (!isRecord(value)) return undefined
+  if (typeof value.unit !== 'string' || !value.unit.trim()) return undefined
+  const min = typeof value.min === 'number' && Number.isFinite(value.min) ? value.min : undefined
+  const max = typeof value.max === 'number' && Number.isFinite(value.max) ? value.max : undefined
+  if (min === undefined && max === undefined) return undefined
+  return {
+    ...(min !== undefined ? { min } : {}),
+    ...(max !== undefined ? { max } : {}),
+    unit: normalizeConcentrationUnit(value.unit),
+    ...(typeof value.basis === 'string' ? { basis: value.basis as ConcentrationBasis } : {}),
+  }
+}
+
 function parseRef(value: unknown): MaterialRefValue | undefined {
   if (!isRecord(value)) return undefined
   const kind = value.kind === 'ontology' ? 'ontology' : value.kind === 'record' ? 'record' : undefined
@@ -230,7 +254,7 @@ export function parseCompositionEntries(value: unknown): CompositionEntryValue[]
   if (!Array.isArray(value)) return []
   return value.flatMap((entry) => {
     if (!isRecord(entry)) return []
-    const componentRef = parseRef(entry.component_ref)
+    const componentRef = parseRef(entry.component_ref) ?? parseRef(entry.componentRef)
     if (!componentRef) return []
     const role = typeof entry.role === 'string' ? entry.role.trim() as CompositionRole : undefined
     if (!role) return []
@@ -246,10 +270,12 @@ export function parseCompositionEntries(value: unknown): CompositionEntryValue[]
         }
       : undefined
     const concentration = withInferredConcentrationBasis(rawConcentration)
+    const concentrationRange = parseConcentrationRange(entry.concentration_range)
     return [{
       componentRef,
       role,
       ...(concentration ? { concentration } : {}),
+      ...(concentrationRange ? { concentrationRange } : {}),
       ...(typeof entry.source === 'string' && entry.source.trim() ? { source: entry.source.trim() } : {}),
     }]
   })

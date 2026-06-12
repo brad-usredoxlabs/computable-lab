@@ -23,6 +23,8 @@ import {
 } from '../../materials/formulationCopilot.js';
 import { extractPrimaryDeclaredConcentration } from '../../materials/vendorComposition.js';
 
+type FormulationKind = 'single_active' | 'defined_composition' | 'complex_composition' | 'biological_preparation';
+
 const SCHEMA_IDS = {
   material: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
   vendorProduct: 'https://computable-lab.com/schema/computable-lab/vendor-product.schema.yaml',
@@ -77,6 +79,7 @@ type CreateFormulationBody = {
     name?: string;
     materialRefId?: string;
     vendorProductRefId?: string;
+    formulationKind?: FormulationKind;
     concentration?: Concentration;
     solventRef?: RefShape;
     solventRefId?: string;
@@ -170,6 +173,46 @@ function token(prefix: string): string {
 
 function toRef(id: string, type: string, label?: string): RefShape {
   return { kind: 'record', id, type, ...(label ? { label } : {}) };
+}
+
+function lifecycleProvenance(sourceLabel: string): Record<string, unknown> {
+  return {
+    status: 'proposed',
+    lifecycleId: 'lab-vocabulary-control',
+    provenance: {
+      source: 'compiler',
+      sourceLabel,
+      createdBy: 'formulation-api',
+      createdAt: new Date().toISOString(),
+      note: 'Created as a proposed local material/formulation record from a formulation draft.',
+    },
+  };
+}
+
+function formulationKindValue(value: unknown): FormulationKind | undefined {
+  return value === 'single_active'
+    || value === 'defined_composition'
+    || value === 'complex_composition'
+    || value === 'biological_preparation'
+    ? value
+    : undefined;
+}
+
+function inferFormulationKind(args: {
+  explicit?: unknown;
+  materialDomain?: string;
+  vendorProductRefId?: string;
+  inputRoles: Array<{ roleType: string; ref: RefShape | null }>;
+  composition?: Record<string, unknown>[] | undefined;
+}): FormulationKind {
+  const explicit = formulationKindValue(args.explicit);
+  if (explicit) return explicit;
+  if (args.materialDomain === 'cell_line' || args.inputRoles.some((role) => role.roleType === 'cells')) return 'biological_preparation';
+  if (args.vendorProductRefId && args.composition && args.composition.length > 2) return 'complex_composition';
+  const nonSolventRoles = args.inputRoles.filter((role) => role.roleType !== 'solvent' && role.roleType !== 'diluent');
+  if (nonSolventRoles.length === 1 && args.inputRoles.length <= 2) return 'single_active';
+  if ((args.composition?.length ?? 0) > 2 || nonSolventRoles.length > 1) return 'defined_composition';
+  return 'single_active';
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -687,6 +730,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
                 name: stringValue(specPayload?.name) ?? outputSpecRef.label ?? outputSpecRef.id,
                 ...(materialRef?.id ? { materialId: materialRef.id } : {}),
                 ...(materialName ? { materialName } : {}),
+                ...(formulationKindValue(specPayload?.formulation_kind) ? { formulationKind: formulationKindValue(specPayload?.formulation_kind)! } : {}),
                 ...(concentration ? { concentration } : {}),
                 ...(composition.length > 0 ? { composition } : {}),
                 ...(solventRef?.id ? { solventRefId: solventRef.id } : {}),
@@ -1146,13 +1190,15 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
               reply.status(422);
               return { error: 'INVALID_FORMULATION', message: 'material.name is required when creating a new output material' };
             }
+            const materialNameForCreate = stringValue(materialInput.name)!;
             const createdMaterial = await createStoredRecord(
               store,
               {
                 kind: 'material',
                 id: materialId,
-                name: stringValue(materialInput.name),
+                name: materialNameForCreate,
                 domain: stringValue(materialInput.domain) ?? 'other',
+                ...lifecycleProvenance(materialNameForCreate),
                 ...(Array.isArray(materialInput.classRefs)
                   ? {
                       class: materialInput.classRefs
@@ -1186,6 +1232,7 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
               id: materialId,
               name: inferredMaterialName,
               domain: 'other',
+              ...lifecycleProvenance(inferredMaterialName),
             },
             SCHEMA_IDS.material,
             `Infer material ${materialId} from formulation output ${inferredMaterialName}`
@@ -1295,11 +1342,15 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
             : {}),
         }));
 
+        const outputMaterialEnvelope = await store.get(materialId);
+        const outputMaterialPayload = asPayload(outputMaterialEnvelope);
+        const outputMaterialDomain = stringValue(outputMaterialPayload?.domain);
         const specPayload: Record<string, unknown> = {
           kind: 'material-spec',
           id: materialSpecId,
           name: stringValue(outputSpec.name),
           material_ref: toRef(materialId, 'material', materialId),
+          ...lifecycleProvenance(stringValue(outputSpec.name) ?? materialSpecId),
         };
         if (stringValue(outputSpec.vendorProductRefId)) {
           specPayload.vendor_product_ref = toRef(stringValue(outputSpec.vendorProductRefId)!, 'vendor-product', stringValue(outputSpec.vendorProductRefId)!);
@@ -1333,6 +1384,13 @@ export function createMaterialPrepHandlers(store: RecordStore, indexManager?: In
             ...(solventRef?.label ? { solventLabel: solventRef.label } : {}),
           });
         if (composition) formulation.composition = composition;
+        specPayload.formulation_kind = inferFormulationKind({
+          ...(outputSpec.formulationKind ? { explicit: outputSpec.formulationKind } : {}),
+          ...(outputMaterialDomain ? { materialDomain: outputMaterialDomain } : {}),
+          ...(stringValue(outputSpec.vendorProductRefId) ? { vendorProductRefId: stringValue(outputSpec.vendorProductRefId)! } : {}),
+          inputRoles: normalizedInputRoles.map((role) => ({ roleType: role.roleType, ref: role.ref })),
+          ...(composition ? { composition } : {}),
+        });
         if (stringValue(outputSpec.grade)) formulation.grade = stringValue(outputSpec.grade);
         if (typeof outputSpec.ph === 'number' && Number.isFinite(outputSpec.ph)) formulation.ph = outputSpec.ph;
         if (stringValue(outputSpec.notes)) formulation.notes = stringValue(outputSpec.notes);

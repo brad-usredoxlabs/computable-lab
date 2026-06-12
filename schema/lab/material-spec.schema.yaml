@@ -26,7 +26,42 @@ properties:
 
   material_ref:
     $ref: "./datatypes/ref.schema.yaml"
-    description: "Reference to canonical material concept."
+    description: "Reference to the material concept this spec represents. For a single-active formulation this is the active/focal material; for a defined composition this is the composition concept itself."
+
+  formulation_kind:
+    type: string
+    description: "Biological intent of the formulation/specification."
+    enum: [ single_active, defined_composition, complex_composition, biological_preparation ]
+
+  status:
+    type: string
+    description: "Curation state for this formulation/specification."
+    enum: [ proposed, in_review, active, rejected, deprecated ]
+
+  lifecycleId:
+    type: string
+    const: "lab-vocabulary-control"
+    description: "Lifecycle governing local formulation/spec curation."
+
+  provenance:
+    type: object
+    description: "Minimal provenance for compiler- or AI-proposed formulation records."
+    additionalProperties: false
+    properties:
+      source:
+        type: string
+        enum: [ ai_mention, compiler, human, import ]
+      sourceCurie:
+        type: string
+      sourceLabel:
+        type: string
+      createdBy:
+        type: string
+      createdAt:
+        type: string
+        format: date-time
+      note:
+        type: string
 
   vendor_product_ref:
     $ref: "./datatypes/ref.schema.yaml"

@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react'
 import { apiClient } from '../shared/api/client'
 import { loadAcceptedEventGraph, type SavedEventGraphCommit } from './eventGraphPersistence'
-import { assignVisibleLabwareHandle, assignVisibleLabwareHandles } from './labwareHandles'
+import { assignVisibleLabwareHandle, assignVisibleLabwareHandles, findLabwareNameConflict } from './labwareHandles'
+import { EMPTY_HISTORY, withEditorHistory, type EditorHistory } from './editorHistory'
 import type { PlatformManifest } from '../types/platformRegistry'
 import { defaultVariantForPlatform, getPlatformManifest, getVariantManifest } from '../shared/lib/platformRegistry'
 import type { Labware } from '../types/labware'
@@ -269,6 +270,8 @@ export interface EventEditorState {
    * The sidecar tracks well groups, notes, and readout intent.
    */
   plateRail: Record<string, PlateRailDraft>
+  /** Undo/redo stacks, maintained by the withEditorHistory reducer wrapper. */
+  history: EditorHistory
 }
 
 export function addMaterialRefDetails(ref: Ref): Pick<
@@ -297,7 +300,9 @@ export function addMaterialRefDetails(ref: Ref): Pick<
   return { material_ref: ref }
 }
 
-type Action =
+export type EventEditorAction =
+  | { type: 'undo' }
+  | { type: 'redo' }
   | { type: 'load_start' }
   | { type: 'load_error'; error: string }
   | { type: 'load_success'; platforms: PlatformManifest[]; initialPlatformId?: string }
@@ -329,6 +334,7 @@ type Action =
       displaceTo?: { xMm: number; yMm: number }
     }
   | { type: 'remove_placement'; placementId: string }
+  | { type: 'rename_labware'; labwareId: string; name: string }
   | { type: 'set_focus'; placementId: string | null }
   | { type: 'set_selection'; selection: WellSelection | null }
   | { type: 'append_event'; event: PlateEvent }
@@ -359,6 +365,8 @@ type Action =
   | { type: 'request_retry_prompt'; prompt: string }
   | { type: 'consume_retry_prompt' }
   | { type: 'update_plate_rail'; placementId: string; patch: PlateRailPatch }
+
+type Action = EventEditorAction
 
 const DEFAULT_PLATFORM_ID = 'manual'
 
@@ -398,6 +406,7 @@ const initialState: EventEditorState = {
     pendingRetryPrompt: null,
   },
   plateRail: {},
+  history: EMPTY_HISTORY,
 }
 
 function pickDefaultsForPlatform(
@@ -682,6 +691,21 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       const focusPlacementId = state.focusPlacementId === action.placementId ? null : state.focusPlacementId
       const plateRail = omitKey(state.plateRail, action.placementId)
       return { ...state, placements, labwares, focusPlacementId, plateRail }
+    }
+    case 'rename_labware': {
+      const target = state.labwares[action.labwareId]
+      const name = action.name.trim()
+      // Ignore no-op / empty renames; the label is just a display handle, so an
+      // unknown id or a blank string leaves the existing name untouched.
+      if (!target || !name || name === target.name) return state
+      // Duplicate names break the AI's labware-ref repair (it requires a
+      // unique name match), so reject them here too — the rename UI shows
+      // the error; this guard is defense in depth.
+      if (findLabwareNameConflict(name, Object.values(state.labwares), action.labwareId)) return state
+      return {
+        ...state,
+        labwares: { ...state.labwares, [action.labwareId]: { ...target, name } },
+      }
     }
     case 'set_focus': {
       // Drop selection when focus changes — selection is labware-scoped and a
@@ -971,7 +995,13 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
   }
 }
 
+/** The real reducer the provider runs — base reducer + undo/redo history. */
+export const eventEditorReducer = withEditorHistory<EventEditorState, Action>(reducer)
+export { initialState as eventEditorInitialState }
+
 export interface EventEditorActions {
+  undo: () => void
+  redo: () => void
   setPlatform: (platformId: string) => void
   setVariant: (variantId: string) => void
   setVocab: (vocabPackId: string) => void
@@ -987,6 +1017,7 @@ export interface EventEditorActions {
     orientation: LabwareOrientation,
   ) => void
   removePlacement: (placementId: string) => void
+  renameLabware: (labwareId: string, name: string) => void
   setFocus: (placementId: string | null) => void
   setSelection: (selection: WellSelection | null) => void
   clearSelection: () => void
@@ -1057,7 +1088,7 @@ interface ProviderProps {
 }
 
 export function EventEditorProvider({ runId, eventGraphId, children }: ProviderProps) {
-  const [state, dispatch] = useReducer(reducer, initialState)
+  const [state, dispatch] = useReducer(eventEditorReducer, initialState)
 
   useEffect(() => {
     let cancelled = false
@@ -1109,6 +1140,8 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
 
   const actions = useMemo<EventEditorActions>(
     () => ({
+      undo: () => dispatch({ type: 'undo' }),
+      redo: () => dispatch({ type: 'redo' }),
       setPlatform: (platformId) => dispatch({ type: 'set_platform', platformId }),
       setVariant: (variantId) => dispatch({ type: 'set_variant', variantId }),
       setVocab: (vocabPackId) => dispatch({ type: 'set_vocab', vocabPackId }),
@@ -1123,6 +1156,7 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
       movePlacement: (placementId, location, orientation) =>
         dispatch({ type: 'move_placement', placementId, location, orientation }),
       removePlacement: (placementId) => dispatch({ type: 'remove_placement', placementId }),
+      renameLabware: (labwareId, name) => dispatch({ type: 'rename_labware', labwareId, name }),
       setFocus: (placementId) => dispatch({ type: 'set_focus', placementId }),
       setSelection: (selection) => dispatch({ type: 'set_selection', selection }),
       clearSelection: () => dispatch({ type: 'set_selection', selection: null }),

@@ -207,7 +207,7 @@ export function extractWellAddresses(text: string): WellMatch[] {
   }
 
   // --- Range pattern (em-dash and hyphen) ---
-  const rangeRe = /\b([A-H])(\d{1,2})\s*[-–]\s*([A-H])(\d{1,2})\b/g;
+  const rangeRe = /\b([A-H])(\d{1,2})\s*(?:[-–]|through|thru|to)\s*([A-H])(\d{1,2})\b/gi;
   while ((m = rangeRe.exec(text)) !== null) {
     const row1 = m[1]!.toUpperCase();
     const col1 = parseInt(m[2]!, 10);

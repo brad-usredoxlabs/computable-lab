@@ -18,10 +18,18 @@ export type CompositionRole =
   | 'cells'
   | 'other';
 
+export type ConcentrationRange = {
+  min?: number;
+  max?: number;
+  unit: string;
+  basis?: Concentration['basis'];
+};
+
 export type ParsedCompositionEntry = {
   componentRef: RefShape;
   role: CompositionRole;
   concentration?: Concentration;
+  concentrationRange?: ConcentrationRange;
   source?: string;
 };
 
@@ -33,6 +41,33 @@ function asObject(value: unknown): Record<string, unknown> | null {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function concentrationRangeValue(value: unknown): ConcentrationRange | undefined {
+  const obj = asObject(value);
+  if (!obj) return undefined;
+  const unit = stringValue(obj.unit);
+  if (!unit) return undefined;
+  const min = typeof obj.min === 'number' && Number.isFinite(obj.min) ? obj.min : undefined;
+  const max = typeof obj.max === 'number' && Number.isFinite(obj.max) ? obj.max : undefined;
+  if (min === undefined && max === undefined) return undefined;
+  return {
+    ...(min !== undefined ? { min } : {}),
+    ...(max !== undefined ? { max } : {}),
+    unit,
+    ...(stringValue(obj.basis) ? { basis: stringValue(obj.basis)! as Concentration['basis'] } : {}),
+  };
+}
+
+function toStoredConcentrationRange(value: unknown): Record<string, unknown> | undefined {
+  const range = concentrationRangeValue(value);
+  if (!range) return undefined;
+  return {
+    ...(range.min !== undefined ? { min: range.min } : {}),
+    ...(range.max !== undefined ? { max: range.max } : {}),
+    unit: range.unit,
+    ...(range.basis ? { basis: range.basis } : {}),
+  };
 }
 
 function refValue(value: unknown): RefShape | null {
@@ -60,10 +95,12 @@ export function parseStoredCompositionEntries(value: unknown): ParsedComposition
     const role = stringValue(obj.role) as CompositionRole | undefined;
     if (!componentRef || !role) return [];
     const concentration = parseConcentration(obj.concentration);
+    const concentrationRange = concentrationRangeValue(obj.concentration_range);
     return [{
       componentRef,
       role,
       ...(concentration ? { concentration } : {}),
+      ...(concentrationRange ? { concentrationRange } : {}),
       ...(stringValue(obj.source) ? { source: stringValue(obj.source)! } : {}),
     }];
   });
@@ -78,10 +115,12 @@ export function toStoredCompositionEntries(value: unknown): Record<string, unkno
     const role = stringValue(obj.role) as CompositionRole | undefined;
     if (!componentRef || !role) return [];
     const concentration = toStoredConcentration(obj.concentration);
+    const concentrationRange = toStoredConcentrationRange(obj.concentrationRange ?? obj.concentration_range);
     return [{
       component_ref: componentRef,
       role,
       ...(concentration ? { concentration } : {}),
+      ...(concentrationRange ? { concentration_range: concentrationRange } : {}),
       ...(stringValue(obj.source) ? { source: stringValue(obj.source)! } : {}),
     }];
   });

@@ -19,6 +19,7 @@
 
 import type { OntologyConfig } from '../config/types.js';
 import type { RecordStore } from '../store/types.js';
+import type { PromptMention } from './promptMentions.js';
 import { resolveOakServiceUrl } from '../resolve/providers/oak.js';
 
 const OLS4_TERMS_BASE = 'https://www.ebi.ac.uk/ols4/api/terms';
@@ -30,6 +31,14 @@ const CURIE_RE = /^[A-Za-z][\w.-]*:\S+$/;
 
 export function isCurieShaped(value: string): boolean {
   return CURIE_RE.test(value.trim());
+}
+
+
+function canonicalMaterialCurie(value: string): string {
+  const curie = value.trim();
+  if (!curie.startsWith('local:')) return curie;
+  const suffix = curie.slice('local:'.length);
+  return isCurieShaped(suffix) ? suffix : curie;
 }
 
 /**
@@ -121,45 +130,251 @@ export function createMaterialLabeler(deps: MaterialLabelerDeps = {}): MaterialL
 
 type Dict = Record<string, unknown>;
 
+type CompositionRole = 'solute' | 'solvent' | 'buffer_component' | 'additive' | 'activity_source' | 'cells' | 'other';
+
+const COMPOSITION_ROLES = new Set<string>([
+  'solute',
+  'solvent',
+  'buffer_component',
+  'additive',
+  'activity_source',
+  'cells',
+  'other',
+]);
+
+const RECORD_REF_FIELDS: Record<string, string> = {
+  aliquot_ref: 'aliquot',
+  material_spec_ref: 'material-spec',
+  material_instance_ref: 'material-instance',
+  vendor_product_ref: 'vendor-product',
+};
+
 /** One grounded component: an existing CURIE or a mint-by-label. */
 interface RefPart {
   curie?: string;
   label?: string;
+  role?: CompositionRole;
+  concentration?: Dict;
+  count?: number;
+}
+
+export interface EnrichAddMaterialRefsOptions {
+  store?: RecordStore | undefined;
+  mentions?: PromptMention[] | undefined;
 }
 
 function asDict(v: unknown): Dict | null {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Dict) : null;
 }
 
+function normalizeRole(value: unknown): CompositionRole | undefined {
+  if (typeof value !== 'string') return undefined;
+  const role = value.trim().toLowerCase();
+  const aliases: Record<string, CompositionRole> = {
+    vehicle: 'buffer_component',
+    medium: 'buffer_component',
+    media: 'buffer_component',
+    buffer: 'buffer_component',
+  };
+  return aliases[role] ?? (COMPOSITION_ROLES.has(role) ? role as CompositionRole : undefined);
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeConcentrationBasis(value: unknown): string | undefined {
+  const basis = stringValue(value);
+  if (!basis) return undefined;
+  if (/^(?:volume|vol|v\/v|volume_fraction)$/i.test(basis)) return 'volume_fraction';
+  if (/^(?:mass|weight|w\/w|mass_fraction)$/i.test(basis)) return 'mass_fraction';
+  return basis;
+}
+
+function volumeToUL(value: number, unit: string): number | undefined {
+  const normalized = unit.trim().toLowerCase();
+  if (/^(?:ul|µl|microliter|microliters)$/.test(normalized)) return value;
+  if (/^(?:ml|milliliter|milliliters)$/.test(normalized)) return value * 1000;
+  if (/^(?:l|liter|liters)$/.test(normalized)) return value * 1_000_000;
+  return undefined;
+}
+
+function totalVolumeUL(details: Dict): number | undefined {
+  const volume = asDict(details.volume);
+  if (volume && typeof volume.value === 'number' && Number.isFinite(volume.value)) {
+    const unit = stringValue(volume.unit);
+    if (unit) return volumeToUL(volume.value, unit);
+  }
+  return typeof details.volume_uL === 'number' && Number.isFinite(details.volume_uL) ? details.volume_uL : undefined;
+}
+
+function concentrationValue(value: unknown, totalVolume?: number): Dict | undefined {
+  const record = asDict(value);
+  if (!record || typeof record.value !== 'number' || !Number.isFinite(record.value)) return undefined;
+  const unit = stringValue(record.unit);
+  if (!unit) return undefined;
+  const componentVolume = volumeToUL(record.value, unit);
+  if (componentVolume !== undefined && totalVolume !== undefined && totalVolume > 0) {
+    return { value: (componentVolume / totalVolume) * 100, unit: '% v/v', basis: 'volume_fraction' };
+  }
+  const basis = normalizeConcentrationBasis(record.basis);
+  if (/^(?:percent|percentage|%)$/i.test(unit) || /^%\s*v\/v$/i.test(unit)) {
+    return { value: record.value, unit: '% v/v', basis: basis ?? 'volume_fraction' };
+  }
+  if (/^%\s*w\/v$/i.test(unit)) {
+    return { value: record.value, unit: '% w/v', basis: basis ?? 'mass_fraction' };
+  }
+  return {
+    value: record.value,
+    unit,
+    ...(basis ? { basis } : {}),
+  };
+}
+
+function countValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function tokenize(value: string): string[] {
+  return value.toLowerCase().match(/[a-z0-9]+/g)?.filter((token) => token.length > 1) ?? [];
+}
+
+function acronymFor(label: string): string | undefined {
+  const ignored = new Set(['of', 'the', 'and', 'with']);
+  const letters = tokenize(label)
+    .filter((token) => !ignored.has(token))
+    .map((token) => token[0])
+    .join('');
+  return letters.length >= 2 ? letters : undefined;
+}
+
+function inferRole(label: string | undefined, explicit?: unknown): CompositionRole {
+  const explicitRole = normalizeRole(explicit);
+  if (explicitRole) return explicitRole;
+  const lower = (label ?? '').toLowerCase();
+  if (/\b(?:cell|cells|hepg2|hep\s*g2)\b/.test(lower)) return 'cells';
+  if (/\b(?:serum|fbs|fetal\s+bovine)\b/.test(lower)) return 'additive';
+  if (/\b(?:medium|media|dmem|dulbecco)\b/.test(lower)) return 'buffer_component';
+  return 'other';
+}
+
+function eventSearchText(e: Dict, details: Dict): string {
+  return JSON.stringify({
+    details,
+    notes: e.notes,
+    note: details.note,
+  }).toLowerCase();
+}
+
+function mentionMatchesText(mention: PromptMention, text: string): boolean {
+  const id = mention.id?.toLowerCase() ?? '';
+  const label = mention.label.toLowerCase();
+  if (id && text.includes(id)) return true;
+  if (label && text.includes(label)) return true;
+  const acronym = acronymFor(mention.label);
+  if (acronym && new RegExp(`\\b${acronym.toLowerCase()}\\b`).test(text)) return true;
+  const mentionTokens = tokenize(mention.label);
+  if (mentionTokens.length === 0) return false;
+  const textTokens = new Set(tokenize(text));
+  const overlap = mentionTokens.filter((token) => textTokens.has(token)).length;
+  return overlap / Math.max(mentionTokens.length, 1) >= 0.5;
+}
+
+function curieForMention(mention: PromptMention): string | undefined {
+  const id = mention.id?.trim();
+  if (!id) return undefined;
+  return isCurieShaped(id) ? canonicalMaterialCurie(id) : `local:${id}`;
+}
+
+function inferPercentContribution(text: string, label: string | undefined): Dict | undefined {
+  if (!label) return undefined;
+  const labels = [label, acronymFor(label)].filter((entry): entry is string => Boolean(entry));
+  for (const entry of labels) {
+    const escaped = entry.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const before = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*%\\s*(?:v\\/v\\s*)?(?:[^.;,]{0,40})\\b${escaped}\\b`, 'i');
+    const after = new RegExp(`\\b${escaped}\\b(?:[^.;,]{0,40})(\\d+(?:\\.\\d+)?)\\s*%`, 'i');
+    const match = text.match(before) ?? text.match(after);
+    if (match?.[1]) {
+      const value = Number(match[1]);
+      if (Number.isFinite(value)) return { value, unit: '% v/v', basis: 'volume_fraction' };
+    }
+  }
+  return undefined;
+}
+
+function partFromMention(mention: PromptMention, text: string): RefPart | undefined {
+  const curie = curieForMention(mention);
+  if (!curie) return undefined;
+  const role = inferRole(mention.label);
+  const inferredConcentration = role === 'additive' ? inferPercentContribution(text, mention.label) : undefined;
+  return {
+    curie,
+    role,
+    ...(inferredConcentration ? { concentration: inferredConcentration } : {}),
+  };
+}
+
+function dedupeParts(parts: RefPart[]): RefPart[] {
+  const seen = new Set<string>();
+  const out: RefPart[] = [];
+  for (const part of parts) {
+    const key = part.curie ?? `mint:${part.label ?? ''}`;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(part);
+  }
+  return out;
+}
+
 /**
- * Pull the component list for an add_material event: grounded materials[]
- * first (the tool-schema contract), else a degraded details.material_ref the
- * model wrote directly. Comma-joined CURIE lists are split either way.
+ * Pull the component list for an add_material event: grounded materials[] first
+ * (the tool-schema contract), then prompt mentions, then degraded details.material_ref.
  */
-function collectParts(e: Dict, details: Dict): RefPart[] {
-  const materials = Array.isArray(e.materials) ? (e.materials as unknown[]) : [];
+function collectParts(e: Dict, details: Dict, mentions: PromptMention[] = []): RefPart[] {
+  const topLevelMaterials = Array.isArray(e.materials) ? (e.materials as unknown[]) : [];
+  const detailMaterials = Array.isArray(details.materials) ? (details.materials as unknown[]) : [];
+  const materials = topLevelMaterials.length > 0 ? topLevelMaterials : detailMaterials;
+  const eventTotalVolume = totalVolumeUL(details);
   const parts: RefPart[] = [];
   for (const item of materials) {
-    const ref = asDict(asDict(item)?.ref);
+    const itemRecord = asDict(item);
+    const ref = asDict(itemRecord?.ref);
     if (!ref) continue;
+    const role = inferRole(undefined, itemRecord?.role ?? itemRecord?.slot);
+    const concentration = concentrationValue(itemRecord?.concentration, eventTotalVolume);
+    const count = countValue(itemRecord?.count);
     if (typeof ref.curie === 'string' && ref.curie) {
-      const split = splitCurieList(ref.curie);
-      if (split) for (const c of split) parts.push({ curie: c });
-      else parts.push({ curie: ref.curie });
+      const curie = canonicalMaterialCurie(ref.curie);
+      const split = splitCurieList(curie);
+      if (split) {
+        for (const c of split) parts.push({ curie: canonicalMaterialCurie(c), role, ...(concentration ? { concentration } : {}), ...(count !== undefined ? { count } : {}) });
+      } else {
+        parts.push({ curie, role, ...(concentration ? { concentration } : {}), ...(count !== undefined ? { count } : {}) });
+      }
     } else {
       const mint = asDict(ref.mint);
       if (mint && typeof mint.label === 'string' && mint.label) {
-        parts.push({ label: mint.label });
+        parts.push({ label: mint.label, role: inferRole(mint.label, itemRecord?.role ?? itemRecord?.slot), ...(concentration ? { concentration } : {}), ...(count !== undefined ? { count } : {}) });
       }
     }
   }
-  if (parts.length > 0) return parts;
+  if (parts.length > 0) return dedupeParts(parts);
+
+  const text = eventSearchText(e, details);
+  const mentionParts = mentions
+    .filter((mention) => mention.type === 'material' && mention.entityKind === 'material')
+    .filter((mention) => mentionMatchesText(mention, text))
+    .flatMap((mention) => {
+      const part = partFromMention(mention, text);
+      return part ? [part] : [];
+    });
+  if (mentionParts.length > 0) return dedupeParts(mentionParts);
 
   const mr = details.material_ref;
   if (typeof mr === 'string' && mr) {
     const split = splitCurieList(mr);
-    if (split) return split.map((c) => ({ curie: c }));
-    if (isCurieShaped(mr)) return [{ curie: mr }];
+    if (split) return split.map((c) => ({ curie: c, role: 'other' }));
+    if (isCurieShaped(mr)) return [{ curie: canonicalMaterialCurie(mr), role: 'other' }];
     return [];
   }
   const obj = asDict(mr);
@@ -167,8 +382,8 @@ function collectParts(e: Dict, details: Dict): RefPart[] {
     const id = typeof obj.id === 'string' ? obj.id : '';
     const label = typeof obj.label === 'string' ? obj.label : '';
     const split = (id ? splitCurieList(id) : null) ?? (label ? splitCurieList(label) : null);
-    if (split) return split.map((c) => ({ curie: c }));
-    if (id && isCurieShaped(id)) return [{ curie: id }];
+    if (split) return split.map((c) => ({ curie: c, role: 'other' }));
+    if (id && isCurieShaped(id)) return [{ curie: canonicalMaterialCurie(id), role: inferRole(label) }];
   }
   return [];
 }
@@ -189,60 +404,242 @@ function hasHealthyMaterialRef(details: Dict): boolean {
 
 async function toMaterialRef(part: RefPart, labeler: MaterialLabeler): Promise<Dict> {
   if (part.curie) {
-    const label = (await labeler.lookup(part.curie)) ?? part.curie;
-    if (part.curie.startsWith('local:')) {
-      return { kind: 'record', id: part.curie.slice('local:'.length), type: 'material', label };
+    const curie = canonicalMaterialCurie(part.curie);
+    const label = (await labeler.lookup(curie)) ?? curie;
+    if (curie.startsWith('local:')) {
+      return { kind: 'record', id: curie.slice('local:'.length), type: 'material', label };
     }
     return {
       kind: 'ontology',
-      id: part.curie,
-      namespace: part.curie.split(':')[0] ?? '',
+      id: curie,
+      namespace: curie.split(':')[0] ?? '',
       label,
     };
   }
   return { kind: 'draft', id: `mint:${part.label}`, label: part.label ?? '' };
 }
 
+async function hasExistingRecordRef(ref: unknown, expectedType: string, store: RecordStore | undefined): Promise<boolean> {
+  if (!store) return true;
+  const record = asDict(ref);
+  const id = stringValue(record?.id) ?? (typeof ref === 'string' ? ref : undefined);
+  if (!id) return false;
+  const envelope = await store.get(id).catch(() => null);
+  if (!envelope) return false;
+  const payload = asDict(envelope.payload);
+  const kind = stringValue(payload?.kind);
+  return !kind || kind === expectedType;
+}
+
+async function stripMissingRecordRefs(details: Dict, store: RecordStore | undefined): Promise<{ details: Dict; stripped: boolean }> {
+  if (!store) return { details, stripped: false };
+  let stripped = false;
+  const next: Dict = { ...details };
+  for (const [field, expectedType] of Object.entries(RECORD_REF_FIELDS)) {
+    if (next[field] === undefined) continue;
+    if (await hasExistingRecordRef(next[field], expectedType, store)) continue;
+    delete next[field];
+    stripped = true;
+  }
+  return { details: next, stripped };
+}
+
+function unresolvedSourceRequirement(materialRef: Dict): Dict {
+  return {
+    status: 'unresolved',
+    material_ref: materialRef,
+    reason: 'AI draft referenced a material concept but did not select a verified aliquot, instance, vendor product, or formulation record.',
+  };
+}
+
+function hasVolume(details: Dict): boolean {
+  return details.volume !== undefined || typeof details.volume_uL === 'number';
+}
+
+function detailCount(details: Dict, cellsPart: RefPart): number | undefined {
+  const detailCountValue = countValue(details.count);
+  return detailCountValue ?? cellsPart.count;
+}
+
+function materialRefSearchText(ref: Dict | undefined): string {
+  if (!ref) return '';
+  return JSON.stringify({ id: ref.id, label: ref.label, namespace: ref.namespace }).toLowerCase();
+}
+
+function isMediaLike(part: RefPart, ref: Dict | undefined): boolean {
+  const text = `${part.curie ?? ''} ${part.label ?? ''} ${materialRefSearchText(ref)}`.toLowerCase();
+  return /\b(?:medium|media|dmem|dulbecco)\b/.test(text) || /\bxco:/.test(text);
+}
+
+function roleForPart(part: RefPart, ref: Dict | undefined): CompositionRole {
+  return part.role ?? inferRole(part.label ?? stringValue(ref?.label));
+}
+
+function roleForSnapshot(part: RefPart, ref: Dict | undefined, eventHasCells: boolean): CompositionRole {
+  const role = roleForPart(part, ref);
+  if (role === 'solvent' && eventHasCells && isMediaLike(part, ref)) return 'buffer_component';
+  return role;
+}
+
+function eventIdWithSuffix(e: Dict, suffix: string): string | undefined {
+  const id = stringValue(e.eventId);
+  return id ? `${id}-${suffix}` : undefined;
+}
+
+function stripDraftOnlyMaterialFields(details: Dict): Dict {
+  const next = { ...details };
+  delete next.composition_snapshot;
+  delete next.formulation_kind;
+  delete next.material_spec_ref;
+  delete next.material_source_requirement;
+  delete next.materials;
+  return next;
+}
+
+function withoutGroundedMaterials(e: Dict): Dict {
+  const { materials: _materials, ...rest } = e;
+  return rest;
+}
+
+function makeCompositionEntry(part: RefPart, componentRef: Dict, role: CompositionRole, options: { includeConcentration?: boolean } = {}): Dict {
+  return {
+    component_ref: componentRef,
+    role,
+    ...(options.includeConcentration !== false && part.concentration ? { concentration: part.concentration } : {}),
+  };
+}
+
+function stableKeyValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableKeyValue);
+  const record = asDict(value);
+  if (!record) return value;
+  return Object.fromEntries(
+    Object.keys(record)
+      .sort()
+      .map((key) => [key, stableKeyValue(record[key])]),
+  );
+}
+
+function dedupeExactAddMaterialEvents<T>(events: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const event of events) {
+    const record = asDict(event);
+    if (!record || (record.event_type ?? record.verb) !== 'add_material') {
+      out.push(event);
+      continue;
+    }
+    const key = JSON.stringify({
+      verb: record.event_type ?? record.verb,
+      details: stableKeyValue(record.details),
+    });
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(event);
+  }
+  return out;
+}
+
+function trySplitMixedBiologicalAdd<T>(e: Dict, details: Dict, parts: RefPart[], refs: Dict[], sanitizedStripped: boolean): T[] | null {
+  const cellsIndex = parts.findIndex((part, index) => roleForPart(part, refs[index]) === 'cells');
+  if (cellsIndex < 0) return null;
+  const cellsPart = parts[cellsIndex]!;
+  const count = detailCount(details, cellsPart);
+  if (count === undefined || !hasVolume(details)) return null;
+  const mediumParts = parts
+    .map((part, index) => ({ part, ref: refs[index] }))
+    .filter((entry): entry is { part: RefPart; ref: Dict } => entry.ref !== undefined && roleForPart(entry.part, entry.ref) !== 'cells');
+  if (mediumParts.length === 0) return null;
+
+  const baseIndex = mediumParts.findIndex((entry) => roleForPart(entry.part, entry.ref) !== 'additive');
+  const baseEntry = mediumParts[baseIndex >= 0 ? baseIndex : 0]!;
+  const orderedMediumParts = [
+    baseEntry,
+    ...mediumParts.filter((entry) => entry !== baseEntry),
+  ];
+  const eventBase = withoutGroundedMaterials(e);
+  const cellsRef = refs[cellsIndex]!;
+  const cellDetails = stripDraftOnlyMaterialFields(details);
+  cellDetails.material_ref = cellsRef;
+  cellDetails.count = count;
+  delete cellDetails.volume;
+  delete cellDetails.volume_uL;
+  delete cellDetails.material_ref_display;
+  if (sanitizedStripped && !cellDetails.material_source_requirement) {
+    cellDetails.material_source_requirement = unresolvedSourceRequirement(cellsRef);
+  }
+
+  const mediumDetails = stripDraftOnlyMaterialFields(details);
+  mediumDetails.material_ref = baseEntry.ref;
+  mediumDetails.composition_snapshot = orderedMediumParts.map((entry) => {
+    const role = entry === baseEntry ? 'buffer_component' : roleForSnapshot(entry.part, entry.ref, true);
+    return makeCompositionEntry(entry.part, entry.ref, role, { includeConcentration: entry !== baseEntry });
+  });
+  mediumDetails.formulation_kind = 'complex_composition';
+  delete mediumDetails.count;
+  delete mediumDetails.material_ref_display;
+  if (sanitizedStripped && !mediumDetails.material_source_requirement) {
+    mediumDetails.material_source_requirement = unresolvedSourceRequirement(baseEntry.ref);
+  }
+
+  return [
+    { ...eventBase, ...(eventIdWithSuffix(e, 'cells') ? { eventId: eventIdWithSuffix(e, 'cells') } : {}), details: cellDetails } as T,
+    { ...eventBase, ...(eventIdWithSuffix(e, 'medium') ? { eventId: eventIdWithSuffix(e, 'medium') } : {}), details: mediumDetails } as T,
+  ];
+}
+
 /**
- * Normalize material references on drafted add_material events. See module
- * doc. Events with sibling refs (aliquot/spec/instance/vendor) or an already
- * healthy material_ref pass through untouched.
+ * Normalize material references on drafted add_material events. See module doc.
+ * Store-backed sibling refs are preserved only when the referenced record exists.
+ * Missing/fabricated ALQ/MSP/MINST/VP refs are stripped and rebuilt from
+ * grounded CURIE material parts.
  */
 export async function enrichAddMaterialRefs<T>(
   events: T[],
   labeler: MaterialLabeler,
+  options: EnrichAddMaterialRefsOptions = {},
 ): Promise<T[]> {
-  return Promise.all(
-    events.map(async (ev) => {
-      if (!ev || typeof ev !== 'object') return ev;
+  const chunks = await Promise.all(
+    events.map(async (ev): Promise<T[]> => {
+      if (!ev || typeof ev !== 'object') return [ev];
       const e = ev as Dict;
-      if ((e.event_type ?? e.verb) !== 'add_material') return ev;
-      const details = asDict(e.details) ?? {};
-      if (
-        details.material_spec_ref || details.aliquot_ref ||
-        details.material_instance_ref || details.vendor_product_ref
-      ) {
-        return ev;
-      }
-      if (hasHealthyMaterialRef(details)) return ev;
+      if ((e.event_type ?? e.verb) !== 'add_material') return [ev];
+      const rawDetails = asDict(e.details) ?? {};
+      const sanitized = await stripMissingRecordRefs(rawDetails, options.store);
+      const details = sanitized.details;
+      const hasSiblingRef = Object.keys(RECORD_REF_FIELDS).some((field) => details[field] !== undefined);
+      if (hasSiblingRef && !sanitized.stripped) return [ev];
 
-      const parts = collectParts(e, details);
-      if (parts.length === 0) return ev;
+      const parts = collectParts(e, details, options.mentions ?? []);
+      if (parts.length === 0) {
+        if (!sanitized.stripped && hasHealthyMaterialRef(details)) return [ev];
+        return sanitized.stripped ? [{ ...e, details } as T] : [ev];
+      }
 
       const refs = await Promise.all(parts.map((p) => toMaterialRef(p, labeler)));
+      const splitEvents = trySplitMixedBiologicalAdd<T>(e, details, parts, refs, sanitized.stripped);
+      if (splitEvents) return splitEvents;
+      if (!sanitized.stripped && hasHealthyMaterialRef(details)) return [ev];
+
       const next: Dict = { ...details, material_ref: refs[0] };
+      delete next.materials;
       const existingSnapshot = Array.isArray(details.composition_snapshot)
         ? (details.composition_snapshot as unknown[])
         : [];
       if (refs.length > 1 && existingSnapshot.length === 0) {
         // One ledger line per component: the well engine renders snapshot
         // entries individually, so a mixture stops collapsing onto one line.
-        next.composition_snapshot = refs.map((componentRef) => ({
-          componentRef,
-          role: 'other',
-        }));
+        next.composition_snapshot = refs.map((componentRef, index) => {
+          const part = parts[index] ?? {};
+          return makeCompositionEntry(part, componentRef, roleForSnapshot(part, componentRef, false));
+        });
+        if (!next.formulation_kind) next.formulation_kind = 'complex_composition';
       }
-      return { ...e, details: next } as T;
+      if (sanitized.stripped && !next.material_source_requirement) {
+        next.material_source_requirement = unresolvedSourceRequirement(refs[0]!);
+      }
+      return [{ ...e, details: next } as T];
     }),
   );
+  return dedupeExactAddMaterialEvents(chunks.flat());
 }

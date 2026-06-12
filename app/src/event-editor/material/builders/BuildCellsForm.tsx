@@ -79,7 +79,6 @@ export function BuildCellsForm({
 
   const canSubmit = !submitting
     && name.trim().length > 0
-    && (organism !== null || cellType !== null)
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit) return
@@ -187,7 +186,7 @@ export function BuildCellsForm({
         label="Cell type"
         ontologies={['cl']}
         placeholder="Search Cell Ontology (e.g., hepatocyte, HepG2 cell)"
-        hint="From the Cell Ontology (CL). Either this OR organism is required."
+        hint="From the Cell Ontology (CL). Optional."
         picked={cellType}
         onChange={setCellType}
       />

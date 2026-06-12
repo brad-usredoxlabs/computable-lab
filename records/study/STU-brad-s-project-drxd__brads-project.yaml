@@ -1,0 +1,8 @@
+$schema: https://computable-lab.com/schema/computable-lab/study.schema.yaml
+recordId: STU-brad-s-project-drxd
+kind: study
+state: draft
+title: Brad's Project
+shortSlug: BP
+createdAt: 2026-06-11T02:43:07.096Z
+updatedAt: 2026-06-11T02:43:07.096Z

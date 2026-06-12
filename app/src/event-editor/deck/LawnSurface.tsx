@@ -20,10 +20,19 @@ interface LawnSurfaceProps {
 
 const MM_PER_PIXEL_PRIMARY = 1.6
 const MM_PER_PIXEL_SIDE = 1.4
+// Physical footprint (mm) used for placement math — clamping into the lawn and
+// collision/validation. Kept in mm because positions are real-world.
 const TILE_MM_WIDTH = 127 // SBS footprint approx
 const TILE_MM_HEIGHT = 85
 const TILE_MM_HEIGHT_PORTRAIT = TILE_MM_WIDTH
 const TILE_MM_WIDTH_PORTRAIT = TILE_MM_HEIGHT
+// Lawn/bench tiles *render* at the same fixed pixel footprint as robot-deck
+// slot tiles (LabwareTile SLOT_* sizes) so the labware schematics stay equally
+// legible on freeform surfaces. Only the tile position is scaled to physical
+// mm (left/top below); the tile size is not, otherwise a fit-the-bench scale
+// shrinks them to ~half the deck tiles and 96- vs 384-well becomes unreadable.
+const LAWN_TILE_LANDSCAPE = { w: 126, h: 80 }
+const LAWN_TILE_PORTRAIT = { w: 80, h: 126 }
 
 export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnSurfaceProps) {
   const { state, actions } = useEventEditor()
@@ -194,12 +203,9 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
           const labware = state.labwares[placement.labwareId]
           if (!labware) return null
           const isPortrait = placement.orientation === 'portrait'
-          const tileWmm = isPortrait ? TILE_MM_WIDTH_PORTRAIT : TILE_MM_WIDTH
-          const tileHmm = isPortrait ? TILE_MM_HEIGHT_PORTRAIT : TILE_MM_HEIGHT
+          const tileSize = isPortrait ? LAWN_TILE_PORTRAIT : LAWN_TILE_LANDSCAPE
           const leftPx = Math.round(placement.location.xMm / scale)
           const topPx = Math.round(placement.location.yMm / scale)
-          const widthTilePx = Math.round(tileWmm / scale)
-          const heightTilePx = Math.round(tileHmm / scale)
           const affected = previewIndex.byLabware.has(placement.labwareId)
           return (
             <div
@@ -212,8 +218,8 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
                 placement={placement}
                 orientation={placement.orientation}
                 variant="lawn"
-                width={widthTilePx}
-                height={heightTilePx}
+                width={tileSize.w}
+                height={tileSize.h}
                 affected={affected}
                 onRemove={() => actions.removePlacement(placement.placementId)}
                 onFocus={() => actions.setFocus(placement.placementId)}
@@ -247,12 +253,9 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
             ?? null
           if (!labware) return null
           const isPortrait = placement.orientation === 'portrait'
-          const tileWmm = isPortrait ? TILE_MM_WIDTH_PORTRAIT : TILE_MM_WIDTH
-          const tileHmm = isPortrait ? TILE_MM_HEIGHT_PORTRAIT : TILE_MM_HEIGHT
+          const tileSize = isPortrait ? LAWN_TILE_PORTRAIT : LAWN_TILE_LANDSCAPE
           const leftPx = Math.round(placement.location.xMm / scale)
           const topPx = Math.round(placement.location.yMm / scale)
-          const widthTilePx = Math.round(tileWmm / scale)
-          const heightTilePx = Math.round(tileHmm / scale)
           return (
             <div
               key={`ghost-${placement.placementId}`}
@@ -264,8 +267,8 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
                 placement={placement}
                 orientation={placement.orientation}
                 variant="lawn"
-                width={widthTilePx}
-                height={heightTilePx}
+                width={tileSize.w}
+                height={tileSize.h}
                 ghost
                 onFocus={() => actions.setFocus(placement.placementId)}
               />

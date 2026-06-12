@@ -23,8 +23,11 @@ export type CopilotIngredientDraft = {
   compositionSnapshot?: ParsedCompositionEntry[];
 };
 
+export type FormulationKind = 'single_active' | 'defined_composition' | 'complex_composition' | 'biological_preparation';
+
 export type FormulationCopilotDraft = {
   recipeName?: string;
+  formulationKind?: FormulationKind;
   representsMaterial?: CopilotRef;
   totalProduced?: { value: number; unit: string };
   outputSolventRef?: CopilotRef;
@@ -140,6 +143,7 @@ export function summarizeFormulationDraft(draft: FormulationCopilotDraft): Formu
     })),
     ...(draft.totalProduced ? { totalProduced: draft.totalProduced } : {}),
     ...(draft.recipeName ? { recipeName: draft.recipeName } : {}),
+    ...(draft.formulationKind ? { formulationKind: draft.formulationKind } : {}),
     ...(draft.representsMaterial ? { representsMaterial: draft.representsMaterial } : {}),
     ...(draft.outputSolventRef ? { outputSolventRef: draft.outputSolventRef } : {}),
     ...(draft.storage ? { storage: draft.storage } : {}),
@@ -269,6 +273,7 @@ export async function draftFormulationFromPrompt(
 
   const draft: FormulationCopilotDraft = {
     recipeName: text,
+    formulationKind: 'single_active',
     ...(soluteRef ? { representsMaterial: soluteRef } : {}),
     ...(totalProduced ? { totalProduced } : {}),
     ...(solventRef ? { outputSolventRef: solventRef } : {}),

@@ -51,6 +51,32 @@ describe('parseSubmitSuggestionArgs', () => {
     expect(r.events![0]!.materials).toEqual([{ ref: { mint: { label: 'HepG2', domain: 'cell_line' } } }]);
   });
 
+  it('preserves material roles, counts, and component concentrations', () => {
+    const r = parseSubmitSuggestionArgs(
+      {
+        events: [
+          {
+            verb: 'add_material',
+            materials: [
+              { role: 'cells', count: 10000, ref: { curie: 'mesh:D056945' } },
+              { role: 'buffer_component', ref: { curie: 'XCO:0000988' } },
+              { role: 'additive', concentration: { value: 10, unit: '%', basis: 'volume_fraction' }, ref: { curie: 'MSIO:0000017' } },
+            ],
+          },
+        ],
+      },
+      USAGE,
+      1,
+      1,
+    );
+
+    expect(r.events![0]!.materials).toEqual([
+      { role: 'cells', count: 10000, ref: { curie: 'mesh:D056945' } },
+      { role: 'buffer_component', ref: { curie: 'XCO:0000988' } },
+      { role: 'additive', concentration: { value: 10, unit: '%', basis: 'volume_fraction' }, ref: { curie: 'MSIO:0000017' } },
+    ]);
+  });
+
   it('captures a clarification with no events', () => {
     const r = parseSubmitSuggestionArgs(
       {

@@ -1,0 +1,42 @@
+$schema: https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml
+recordId: MSP-DRAFT-EVG_MQAAWTRJ_6W0O_ADD_CELLS_MEDIA_MEDIUM
+kind: material-spec
+id: MSP-DRAFT-EVG_MQAAWTRJ_6W0O_ADD_CELLS_MEDIA_MEDIUM
+name: Dulbecco's Modified Eagle's Medium + fetal bovine serum
+material_ref:
+  kind: ontology
+  id: XCO:0000988
+  label: Dulbecco's Modified Eagle's Medium
+  namespace: XCO
+formulation_kind: complex_composition
+status: proposed
+lifecycleId: lab-vocabulary-control
+provenance:
+  source: compiler
+  sourceLabel: Dulbecco's Modified Eagle's Medium + fetal bovine serum
+  createdBy: add-material-normalizer
+  createdAt: 2026-06-12T23:29:07.913Z
+  note: Created as a proposed local formulation record from accepted add-material
+    composition snapshot EVG-mqaawtrj-6w0o:add-cells-media-medium.
+formulation:
+  composition:
+    - component_ref:
+        kind: ontology
+        id: XCO:0000988
+        label: Dulbecco's Modified Eagle's Medium
+        namespace: XCO
+      role: buffer_component
+    - component_ref:
+        kind: ontology
+        id: MSIO:0000017
+        label: fetal bovine serum
+        namespace: MSIO
+      role: additive
+      concentration:
+        value: 10
+        unit: "% v/v"
+        basis: volume_fraction
+  notes: Draft formulation inferred from an add-material event composition snapshot.
+tags:
+  - ai-draft
+  - composition_snapshot

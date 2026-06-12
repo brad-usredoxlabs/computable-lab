@@ -488,6 +488,12 @@ export interface AgentResult {
 export interface GroundedMaterial {
   /** Which slot this fills on the event (e.g. "source", "target", "reagent"). */
   slot?: string;
+  /** Composition role for add-material mixtures, e.g. cells, buffer_component, additive. */
+  role?: string;
+  /** Optional component concentration/contribution, e.g. fetal bovine serum at 10%. */
+  concentration?: { value: number; unit: string; basis?: string };
+  /** Optional absolute count for cell/material additions, e.g. 10,000 cells. */
+  count?: number;
   ref: { curie: string } | { mint: { label: string; domain?: string } };
 }
 

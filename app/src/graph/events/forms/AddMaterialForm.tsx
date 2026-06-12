@@ -58,6 +58,7 @@ export function AddMaterialForm({ details, onChange }: FormProps) {
             ...applyAddMaterialSelection(d, ref),
             ...(defaults.concentration ? { concentration: withInferredConcentrationBasis(defaults.concentration) } : {}),
             ...(defaults.compositionSnapshot ? { composition_snapshot: defaults.compositionSnapshot } : {}),
+            ...(defaults.formulationKind ? { formulation_kind: defaults.formulationKind } : {}),
           })
         })
         .catch(() => {
@@ -74,6 +75,7 @@ export function AddMaterialForm({ details, onChange }: FormProps) {
             ...applyAddMaterialSelection(d, ref),
             ...(defaults.concentration ? { concentration: defaults.concentration } : {}),
             ...(defaults.compositionSnapshot ? { composition_snapshot: defaults.compositionSnapshot } : {}),
+            ...(defaults.formulationKind ? { formulation_kind: defaults.formulationKind } : {}),
           })
         })
         .catch(() => onChange(applyAddMaterialSelection(d, ref)))
@@ -93,6 +95,7 @@ export function AddMaterialForm({ details, onChange }: FormProps) {
           ...next,
           ...(defaults.concentration ? { concentration: defaults.concentration } : {}),
           ...(defaults.compositionSnapshot ? { composition_snapshot: defaults.compositionSnapshot } : {}),
+            ...(defaults.formulationKind ? { formulation_kind: defaults.formulationKind } : {}),
           ...(lot && Object.keys(lot).length > 0 ? { instance_lot: lot } : { instance_lot: undefined }),
         })
       })
