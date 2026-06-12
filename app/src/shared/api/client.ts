@@ -1528,6 +1528,9 @@ export const apiClient = {
       schemaId: 'https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml',
       payload: {
         id: recordId,
+        // Without an explicit kind the store files the record under
+        // records/unknown/ and kind-filtered queries miss it.
+        kind: 'event-graph',
         ...payload,
       },
     }
