@@ -18,7 +18,7 @@ import {
   initialChatState,
   type ChatMessage,
 } from './chatReducer'
-import { runAssistStream, type AssistStreamRequest } from './assistStream'
+import { runAssistStream, summarizeDraftResult, type AssistStreamRequest } from './assistStream'
 
 interface SendOptions {
   /** Override the surface id for this single send. Used by RunInEventEditor. */
@@ -118,9 +118,14 @@ export function useChatThread({
               case 'text_delta':
                 dispatch({ type: 'stream-delta', delta: event.delta })
                 return
-              case 'done':
-                dispatch({ type: 'stream-done' })
+              case 'done': {
+                // Forced-draft-tool responses carry their whole answer in the
+                // result payload (no text deltas); summarize it so the turn
+                // doesn't commit as "(no response)".
+                const fallbackText = summarizeDraftResult(event.result)
+                dispatch({ type: 'stream-done', ...(fallbackText ? { fallbackText } : {}) })
                 return
+              }
               case 'error':
                 dispatch({ type: 'stream-error', message: event.message })
                 return

@@ -29,11 +29,47 @@ export interface AssistStreamRequest {
   history?: Array<{ role: 'user' | 'assistant'; content: string }>
 }
 
+/**
+ * The slice of the backend's AgentResult the chat panel can render. In
+ * forced-draft-tool mode the model emits no prose at all — the entire answer
+ * lives in this payload, so dropping it renders as "(no response)".
+ */
+export interface AssistDraftResult {
+  success?: boolean
+  events?: unknown[]
+  notes?: string[]
+  labwareRequirements?: Array<{ classCurie?: string; deckSlot?: string; reason?: string }>
+  labwareAdditions?: Array<{ recordId?: string; deckSlot?: string; reason?: string }>
+  clarificationNeeded?: string
+  clarification?: { prompt?: string }
+  error?: string
+}
+
 export type AssistStreamEvent =
   | { type: 'status'; message: string }
   | { type: 'text_delta'; delta: string }
-  | { type: 'done' }
+  | { type: 'done'; result?: AssistDraftResult }
   | { type: 'error'; message: string }
+
+/** Render a draft-tool result as chat text for panels with no preview canvas. */
+export function summarizeDraftResult(result: AssistDraftResult | undefined): string | undefined {
+  if (!result) return undefined
+  if (result.error) return `Draft failed: ${result.error}`
+  const clarification = result.clarification?.prompt ?? result.clarificationNeeded
+  if (clarification) return clarification
+  const lines: string[] = []
+  const events = Array.isArray(result.events) ? result.events.length : 0
+  if (events > 0) lines.push(`Drafted ${events} event${events === 1 ? '' : 's'}.`)
+  for (const req of result.labwareRequirements ?? []) {
+    const what = req.classCurie ?? 'labware'
+    lines.push(`Proposed labware: ${what}${req.deckSlot ? ` in slot ${req.deckSlot}` : ''}.`)
+  }
+  for (const add of result.labwareAdditions ?? []) {
+    lines.push(`Proposed labware addition: ${add.recordId ?? 'unknown record'}${add.deckSlot ? ` in slot ${add.deckSlot}` : ''}.`)
+  }
+  for (const note of result.notes ?? []) lines.push(note)
+  return lines.length > 0 ? lines.join('\n') : undefined
+}
 
 export interface AssistStreamHandlers {
   onEvent: (event: AssistStreamEvent) => void
@@ -125,7 +161,7 @@ function dispatchFrame(
   }
   if (dataLines.length === 0) return
   const payload = dataLines.join('\n')
-  let parsed: { type?: string; message?: string; delta?: string }
+  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult }
   try {
     parsed = JSON.parse(payload)
   } catch {
@@ -142,7 +178,7 @@ function dispatchFrame(
       onEvent({ type: 'text_delta', delta: parsed.delta ?? '' })
       return
     case 'done':
-      onEvent({ type: 'done' })
+      onEvent({ type: 'done', ...(parsed.result ? { result: parsed.result } : {}) })
       return
     case 'error':
       onEvent({ type: 'error', message: parsed.message ?? 'Unknown error' })

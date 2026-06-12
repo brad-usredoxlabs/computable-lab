@@ -34,7 +34,7 @@ export type ChatAction =
   | { type: 'send'; userMessage: ChatMessage; pendingAssistantId: string }
   | { type: 'stream-status'; message: string }
   | { type: 'stream-delta'; delta: string }
-  | { type: 'stream-done' }
+  | { type: 'stream-done'; fallbackText?: string }
   | { type: 'stream-error'; message: string }
   | { type: 'stream-cancelled' }
   | { type: 'reset' }
@@ -87,9 +87,9 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         return { ...state, status: null }
       }
       // Promote the in-flight pending message into the committed history.
-      // If the assistant produced no text at all, surface a placeholder so
-      // the UI doesn't render an empty bubble.
-      const text = state.pending.text || '(no response)'
+      // Tool-call-only turns stream no text — use the caller's summary of
+      // the draft result before falling back to a placeholder.
+      const text = state.pending.text || action.fallbackText || '(no response)'
       const committed: ChatMessage = {
         id: state.pending.id,
         role: 'assistant',
