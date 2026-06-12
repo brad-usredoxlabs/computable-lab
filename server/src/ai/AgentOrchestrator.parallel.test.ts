@@ -116,7 +116,7 @@ describe('AgentOrchestrator parallel tool execution', () => {
       inferenceClient,
       toolBridge,
       { model: 'test-model', temperature: 0.1, maxTokens: 512 },
-      { maxTurns: 3, maxToolCallsPerTurn: 5 },
+      { maxTurns: 3, maxToolCallsPerTurn: 5, draftFlowMode: 'preflight-llm' },
     );
 
     const result = await orchestrator.run({
@@ -253,7 +253,7 @@ describe('AgentOrchestrator parallel tool execution', () => {
       inferenceClient,
       toolBridge,
       { model: 'test-model', temperature: 0.1, maxTokens: 512 },
-      { maxTurns: 3, maxToolCallsPerTurn: 5 },
+      { maxTurns: 3, maxToolCallsPerTurn: 5, draftFlowMode: 'preflight-llm' },
     );
 
     const result = await orchestrator.run({

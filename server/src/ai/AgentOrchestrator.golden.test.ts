@@ -45,7 +45,7 @@ describe('AgentOrchestrator - golden test for auto-create labware', () => {
       inferenceClient,
       toolBridge,
       { baseUrl: 'http://fake', model: 'fake-model' },
-      {},
+      { draftFlowMode: 'preflight-llm' },
       deps,
     );
 

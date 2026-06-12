@@ -129,7 +129,7 @@ describe('AgentOrchestrator - golden test with real seed records', () => {
       inferenceClient,
       toolBridge,
       { baseUrl: 'http://fake', model: 'fake-model' },
-      {},
+      { draftFlowMode: 'preflight-llm' },
       deps,
     );
 

@@ -184,6 +184,21 @@ export interface InferenceConfig {
 /**
  * Agent behavior configuration.
  */
+/**
+ * How an AI draft request flows before/through the LLM.
+ *
+ * - 'forced-tool' (default): no compiler preflight; a single LLM call with
+ *   tool_choice forced to compile_event_graph_draft. Predictable latency,
+ *   always ends in a draft payload.
+ * - 'preflight-deterministic': run the chatbot-compile pipeline WITHOUT its
+ *   LLM-backed passes first (ms-fast when it works); short-circuit on
+ *   success, otherwise fall through to the forced-tool LLM call.
+ * - 'preflight-llm': legacy flow — full preflight including the LLM-backed
+ *   ai_precompile/tag_prompt passes, then an open-ended (tool_choice auto)
+ *   agent loop on fallthrough.
+ */
+export type DraftFlowMode = 'forced-tool' | 'preflight-deterministic' | 'preflight-llm';
+
 export interface AgentConfig {
   /** Max tool-calling round trips (default 15) */
   maxTurns?: number;
@@ -191,6 +206,8 @@ export interface AgentConfig {
   maxToolCallsPerTurn?: number;
   /** Raw conversation turns replayed after the system prompt (default 4) */
   historyTurns?: number;
+  /** Draft request flow (default 'forced-tool'); see DraftFlowMode. */
+  draftFlowMode?: DraftFlowMode;
   /** Path to system prompt template (default "prompts/event-graph-agent.md") */
   systemPromptPath?: string;
 }

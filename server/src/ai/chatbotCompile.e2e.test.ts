@@ -99,6 +99,7 @@ describe('chatbot-compile E2E', () => {
     };
 
     const agentConfig: AgentConfig = {
+      draftFlowMode: 'preflight-llm',
       maxTurns: 15,
       maxToolCallsPerTurn: 5,
       systemPromptPath: '/home/brad/git/computable-lab/server/prompts/event-graph-agent.md',

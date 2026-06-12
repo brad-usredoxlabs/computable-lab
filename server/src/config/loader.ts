@@ -344,6 +344,19 @@ function validateAIConfig(config: unknown, path = 'ai'): asserts config is AICon
   if (c.agent === undefined || c.agent === null) {
     c.agent = {};
   }
+  const agent = c.agent as Record<string, unknown>;
+  if (
+    agent.draftFlowMode !== undefined &&
+    agent.draftFlowMode !== 'forced-tool' &&
+    agent.draftFlowMode !== 'preflight-deterministic' &&
+    agent.draftFlowMode !== 'preflight-llm'
+  ) {
+    throw new ConfigValidationError(
+      'agent.draftFlowMode must be one of: forced-tool, preflight-deterministic, preflight-llm',
+      `${path}.agent.draftFlowMode`,
+      agent.draftFlowMode,
+    );
+  }
   if (c.profiles && typeof c.profiles === 'object' && !Array.isArray(c.profiles)) {
     for (const profile of Object.values(c.profiles as Record<string, unknown>)) {
       if (profile && typeof profile === 'object') {

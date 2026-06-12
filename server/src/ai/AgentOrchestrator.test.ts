@@ -34,7 +34,7 @@ describe('createAgentOrchestrator', () => {
       inferenceClient,
       toolBridge,
       { model: 'test-model', temperature: 0.1, maxTokens: 512 },
-      { maxTurns: 2 },
+      { maxTurns: 2, draftFlowMode: 'preflight-llm' },
     );
 
     await orchestrator.run({
@@ -120,7 +120,7 @@ describe('createAgentOrchestrator', () => {
       { complete: vi.fn(), completeStream },
       { getToolDefinitions: () => [{ type: 'function', function: { name: 'search_records', description: 'search', parameters: {} } }], executeTool: vi.fn() },
       { model: 'test-model', temperature: 0.1, maxTokens: 512 },
-      { maxTurns: 2 },
+      { maxTurns: 2, draftFlowMode: 'preflight-llm' },
     );
 
     await orchestrator.run({
@@ -202,7 +202,7 @@ describe('createAgentOrchestrator', () => {
       { complete, completeStream },
       { getToolDefinitions: () => [], executeTool: vi.fn() },
       { model: 'test-model', temperature: 0.1, maxTokens: 512 },
-      { maxTurns: 2 },
+      { maxTurns: 2, draftFlowMode: 'preflight-llm' },
     );
 
     const result = await orchestrator.run({
@@ -287,7 +287,7 @@ describe('createAgentOrchestrator', () => {
         inferenceClient,
         toolBridge,
         { model: 'test-model', temperature: 0.1, maxTokens: 512 },
-        { maxTurns: 2 },
+        { maxTurns: 2, draftFlowMode: 'preflight-llm' },
       );
 
       await orchestrator.run({
@@ -353,7 +353,7 @@ describe('createAgentOrchestrator', () => {
         inferenceClient,
         toolBridge,
         { model: 'test-model', temperature: 0.1, maxTokens: 512 },
-        { maxTurns: 2 },
+        { maxTurns: 2, draftFlowMode: 'preflight-llm' },
       );
 
       await orchestrator.run({
@@ -413,7 +413,7 @@ describe('createAgentOrchestrator', () => {
         inferenceClient,
         toolBridge,
         { model: 'test-model', temperature: 0.1, maxTokens: 512 },
-        { maxTurns: 2 },
+        { maxTurns: 2, draftFlowMode: 'preflight-llm' },
       );
 
       await orchestrator.run({
@@ -469,7 +469,7 @@ describe('createAgentOrchestrator', () => {
         inferenceClient,
         toolBridge,
         { model: 'test-model', temperature: 0.1, maxTokens: 512 },
-        { maxTurns: 2 },
+        { maxTurns: 2, draftFlowMode: 'preflight-llm' },
       );
 
       const result = await orchestrator.run({
@@ -520,7 +520,7 @@ describe('createAgentOrchestrator', () => {
         inferenceClient,
         toolBridge,
         { model: 'test-model', temperature: 0.1, maxTokens: 512 },
-        { maxTurns: 2 },
+        { maxTurns: 2, draftFlowMode: 'preflight-llm' },
       );
 
       await orchestrator.run({

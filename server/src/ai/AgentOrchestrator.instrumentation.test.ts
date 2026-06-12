@@ -66,6 +66,7 @@ describe('AgentOrchestrator instrumentation', () => {
     };
 
     const agentConfig: AgentConfig = {
+      draftFlowMode: 'preflight-llm',
       maxTurns: 15,
       maxToolCallsPerTurn: 5,
     };
@@ -163,6 +164,7 @@ describe('AgentOrchestrator instrumentation', () => {
     };
 
     const agentConfig: AgentConfig = {
+      draftFlowMode: 'preflight-llm',
       maxTurns: 15,
       maxToolCallsPerTurn: 5,
     };

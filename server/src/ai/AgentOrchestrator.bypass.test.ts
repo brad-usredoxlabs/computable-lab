@@ -48,6 +48,7 @@ describe('AgentOrchestrator compiler bypass', () => {
     };
 
     const agentConfig: AgentConfig = {
+      draftFlowMode: 'preflight-llm',
       maxTurns: 15,
       maxToolCallsPerTurn: 5,
       systemPromptPath: 'default',
@@ -144,6 +145,7 @@ describe('AgentOrchestrator compiler bypass', () => {
     };
 
     const agentConfig: AgentConfig = {
+      draftFlowMode: 'preflight-llm',
       maxTurns: 15,
       maxToolCallsPerTurn: 5,
       systemPromptPath: 'default',

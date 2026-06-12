@@ -726,13 +726,19 @@ export async function createServer(
       // extractorFactory + library matcher). The earlier stub here crashed
       // AI runtime init because ExtractionRunnerService's guard requires
       // either candidatesByKind or a populator.
+      // Mention resolvers are store-backed: a [[labware:LBW-...]] mention in
+      // the prompt resolves to the actual record payload and rides into the
+      // LLM's resolved-context block. These were `() => null` placeholders,
+      // which made every prompt mention silently unresolvable.
+      const fetchRecordPayload = async (id: string) =>
+        (await ctx.store.get(id))?.payload as Record<string, unknown> | null ?? null;
       const placeholderDeps = {
-        fetchMaterialSpec: async (_id: string) => null,
-        fetchAliquot: async (_id: string) => null,
-        fetchMaterial: async (_id: string) => null,
-        fetchLabware: async (_id: string) => null,
-        fetchProtocol: async (_id: string) => null,
-        fetchGraphComponent: async (_id: string) => null,
+        fetchMaterialSpec: fetchRecordPayload,
+        fetchAliquot: fetchRecordPayload,
+        fetchMaterial: fetchRecordPayload,
+        fetchLabware: fetchRecordPayload,
+        fetchProtocol: fetchRecordPayload,
+        fetchGraphComponent: fetchRecordPayload,
         searchLabwareByHint: createLabwareLookup(ctx.store),
         extractionService: runner,
         llmClient: inferenceClient,

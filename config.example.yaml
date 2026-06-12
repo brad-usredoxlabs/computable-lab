@@ -145,6 +145,12 @@ repositories:
 #   agent:
 #     maxTurns: 15
 #     historyTurns: 4          # raw conversation turns replayed after the system prompt
+#     # Draft request flow:
+#     #   forced-tool             — (default) single LLM call, terminal tool forced
+#     #   preflight-deterministic — ms-fast deterministic compile first (no LLM
+#     #                             passes), forced-tool LLM call on fallthrough
+#     #   preflight-llm           — legacy: LLM-assisted preflight + open agent loop
+#     draftFlowMode: forced-tool
 #   # Background KV-context warming ("compiled contexts") — llama.cpp servers
 #   # only. After an event-graph Accept or edit, the server re-prefills the
 #   # (system prompt + graph) prefix on the idle GPU so the next draft prompt

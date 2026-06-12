@@ -438,8 +438,17 @@ export function createAgentOrchestrator(
     maxTurns = 15,
     maxToolCallsPerTurn = 5,
     historyTurns = 4,
+    draftFlowMode = 'forced-tool',
     systemPromptPath,
   } = agentConfig;
+
+  /**
+   * Whether the agent phase forces the terminal draft tool when the request
+   * doesn't say. Both 'forced-tool' and 'preflight-deterministic' force it;
+   * only the legacy 'preflight-llm' mode runs the open-ended agent loop.
+   * Shared by run() and buildPrefixRequest so warm and real renders agree.
+   */
+  const defaultForceDraftTool = draftFlowMode !== 'preflight-llm';
 
   const traceId = () => Math.random().toString(36).slice(2, 8);
 
@@ -475,26 +484,27 @@ export function createAgentOrchestrator(
     forceDraftTool?: boolean;
     toolFilter?: readonly string[];
   }): Pick<CompletionRequest, 'messages' | 'tools' | 'tool_choice'> {
+    const forceDraftTool = args.forceDraftTool ?? defaultForceDraftTool;
     const systemPrompt = args.surface
       ? buildSurfaceAwarePrompt(args.surface, args.context)
       : buildSystemPrompt(args.context, systemPromptPath);
     const systemSections: string[] = [systemPrompt];
     if (deps.residentContext) systemSections.push(deps.residentContext);
     systemSections.push(SUBMIT_SUGGESTION_INSTRUCTION);
-    if (args.forceDraftTool) systemSections.push(FORCED_DRAFT_TOOL_INSTRUCTION);
+    if (forceDraftTool) systemSections.push(FORCED_DRAFT_TOOL_INSTRUCTION);
 
     const historyMessages = Array.isArray(args.history)
       ? args.history.map(normalizeHistoryMessage).filter((m): m is ChatMessage => m !== null)
       : [];
 
-    const tools = buildToolDefs(args.forceDraftTool, args.toolFilter);
+    const tools = buildToolDefs(forceDraftTool, args.toolFilter);
     return {
       messages: [
         { role: 'system', content: systemSections.join('\n\n---\n\n') },
         ...historyMessages.slice(-historyTurns),
       ],
       tools,
-      tool_choice: args.forceDraftTool
+      tool_choice: forceDraftTool
         ? { type: 'function', function: { name: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME } }
         : 'auto',
     };
@@ -509,7 +519,22 @@ export function createAgentOrchestrator(
     buildPrefixRequest,
 
     async run(request: AgentRequest): Promise<AgentResult> {
-      const { prompt, context, history, surface, toolFilter, onEvent, attachments, enableThinking, deterministicOnly, forceDraftTool } = request;
+      const { prompt, context, history, surface, toolFilter, onEvent, attachments, enableThinking, deterministicOnly } = request;
+      // Draft-flow gating: an explicit request value always wins (the
+      // event-editor dock sends forceDraftTool: true; Precompile mode sends
+      // deterministicOnly). Otherwise agentConfig.draftFlowMode decides.
+      const forceDraftTool = request.forceDraftTool ?? (!deterministicOnly && defaultForceDraftTool);
+      const runPreflight = deterministicOnly
+        ? true
+        : request.forceDraftTool === true
+          ? false
+          : draftFlowMode !== 'forced-tool';
+      // 'preflight-deterministic' keeps the millisecond-fast compiler path
+      // but skips its LLM-backed passes (ai_precompile, tag_prompt) — those
+      // were the hidden seconds-long LLM calls inside "deterministic"
+      // preflight.
+      const preflightDeterministicOnly =
+        Boolean(deterministicOnly) || draftFlowMode === 'preflight-deterministic';
       const tid = traceId();
       const t0 = Date.now();
       const surfaceName = surface ?? 'default';
@@ -537,7 +562,7 @@ export function createAgentOrchestrator(
       // New: route through chatbot-compile pipeline
       const ctxMentions = Array.isArray(context?.mentions) ? context.mentions : undefined;
       const ctxLabwares = Array.isArray(context?.labwares) ? context.labwares : undefined;
-      const skipCompilerPreflight = Boolean(forceDraftTool && !deterministicOnly);
+      const skipCompilerPreflight = !runPreflight;
       if (skipCompilerPreflight) {
         onEvent?.({ type: 'status', message: `Skipping compiler preflight; asking AI to call ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} directly…` });
         console.log(`[agent ${tid}] skipping compiler preflight for forced draft tool mode`);
@@ -559,7 +584,7 @@ export function createAgentOrchestrator(
             ...(deps.ontologyResolver ? { ontologyResolver: deps.ontologyResolver } : {}),
             ...(deps.store ? { store: deps.store } : {}),
           },
-          ...(deterministicOnly ? { deterministicOnly: true } : {}),
+          ...(preflightDeterministicOnly ? { deterministicOnly: true } : {}),
           ...(inferenceConfig.model ? { model: inferenceConfig.model } : {}),
           onPassEvent: (event: PassProgressEvent) => {
             if (event.type !== 'pass_started') return;

@@ -122,7 +122,25 @@ export class RecordStoreImpl implements RecordStore {
         }
       }
     }
-    
+
+    // Filename-convention miss: records whose filenames lack the
+    // `{recordId}__{slug}` shape (hand-authored or imported files) are
+    // invisible to the path scan above but perfectly parseable — list() and
+    // the library index read content and DO see them, which made get-by-id
+    // disagree with search about which records exist. Fall back to content
+    // identity so every path agrees; the path cache makes repeats cheap.
+    for (const filePath of files) {
+      if (parseRecordPath(filePath)) continue; // covered by the scan above
+      const file = await this.repo.getFile(filePath);
+      if (!file) continue;
+      const result = parseRecord(file.content, filePath);
+      if (result.success && result.envelope?.recordId === recordId) {
+        const entry = { path: filePath, sha: file.sha };
+        this.pathCache.set(recordId, entry);
+        return entry;
+      }
+    }
+
     return null;
   }
 

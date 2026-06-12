@@ -44,6 +44,7 @@ function makeConfig(): { inferenceConfig: InferenceConfig; agentConfig: AgentCon
     agentConfig: {
       maxTurns: 15,
       maxToolCallsPerTurn: 5,
+      draftFlowMode: 'preflight-llm',
       systemPromptPath: 'default',
     },
   };
