@@ -49,6 +49,8 @@ export interface WorkspaceContextValue {
   closeTab: (tabId: string) => void
   activateTab: (tabId: string) => void
   renameTab: (tabId: string, title: string) => void
+  /** Bind a fresh deck canvas tab to its first persisted event graph. */
+  bindDeckTab: (tabId: string, eventGraphId: string) => void
   /** Right pane controls. */
   setRightPaneMode: (mode: WorkspaceRightPaneMode) => void
   setRightPaneCollapsed: (collapsed: boolean) => void
@@ -188,6 +190,8 @@ export function WorkspaceProvider({
       activateTab: (tabId) => dispatch({ type: 'activate-tab', tabId }),
       renameTab: (tabId, title) =>
         dispatch({ type: 'rename-tab', tabId, title }),
+      bindDeckTab: (tabId, eventGraphId) =>
+        dispatch({ type: 'bind-deck-tab', tabId, eventGraphId }),
       setRightPaneMode: (mode) =>
         dispatch({ type: 'set-right-pane-mode', mode }),
       setRightPaneCollapsed: (collapsed) =>
@@ -216,6 +220,15 @@ export function useWorkspace(): WorkspaceContextValue {
   return ctx
 }
 
+/**
+ * Like useWorkspace, but returns null outside a Provider. For components
+ * shared between the workspace shell and the legacy standalone event-editor
+ * routes (e.g. PreviewActionBar), which must behave differently in each.
+ */
+export function useOptionalWorkspace(): WorkspaceContextValue | null {
+  return useContext(WorkspaceContext)
+}
+
 /** Convenience: dispatch raw actions (for advanced consumers and tests). */
 export function workspaceActionFor(
   ctx: WorkspaceContextValue,
@@ -239,6 +252,9 @@ export function workspaceActionFor(
       return
     case 'set-right-pane-collapsed':
       ctx.setRightPaneCollapsed(action.collapsed)
+      return
+    case 'bind-deck-tab':
+      ctx.bindDeckTab(action.tabId, action.eventGraphId)
       return
     case 'set-pane-widths':
       ctx.setPaneWidths(action.left, action.right)

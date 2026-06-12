@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useEventEditor } from '../EventEditorContext'
+import { useOptionalWorkspace } from '../workspace/WorkspaceContext'
 import { buildFixSeed } from '../fix-it/buildFixSeed'
 import { useViewport } from '../../shared/shell'
 import { persistAcceptedEventGraph } from '../eventGraphPersistence'
@@ -32,6 +33,7 @@ function makeFixItSeedKey(): string {
  */
 export function PreviewActionBar() {
   const { state, actions } = useEventEditor()
+  const workspace = useOptionalWorkspace()
   const navigate = useNavigate()
   const { isMobile } = useViewport()
   const [accepting, setAccepting] = useState(false)
@@ -73,7 +75,18 @@ export function PreviewActionBar() {
         placements: [...state.placements, ...activePreview.previewPlacements],
       })
       actions.commitPreview(acceptedEvents, persisted.eventGraphId, persisted.commit)
-      navigate(eventEditorGraphPath(persisted.eventGraphId, state.runId), { replace: true })
+      if (workspace) {
+        // Workspace shell: stay put. commitPreview already adopted the
+        // persisted graph into editor state; binding the tab makes reloads
+        // and tab switches rehydrate it. Navigating to the legacy
+        // /event-editor route here bounced through the workspace redirect
+        // and remounted everything — losing the conversation and the
+        // freshly accepted deck.
+        const activeTabId = workspace.state.activeTabId
+        if (activeTabId) workspace.bindDeckTab(activeTabId, persisted.eventGraphId)
+      } else {
+        navigate(eventEditorGraphPath(persisted.eventGraphId, state.runId), { replace: true })
+      }
     } catch (error) {
       setAcceptError(error instanceof Error ? error.message : String(error))
     } finally {

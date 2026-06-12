@@ -140,9 +140,12 @@ function WorkspaceShellHost({
   if (activeTab?.kind === 'deck') {
     return (
       <EventEditorProvider
-        // Fresh canvases have an empty eventGraphId — key on the tab id so
-        // two new canvases don't share provider state.
-        key={activeTab.eventGraphId || activeTab.id}
+        // Key on the tab id (unique per tab, including fresh canvases) and
+        // NOT on eventGraphId: a fresh canvas gains its eventGraphId when
+        // the first Accept persists the graph (bind-deck-tab), and a
+        // key change at that moment would remount the provider and wipe
+        // the just-accepted deck plus the right-pane conversation.
+        key={activeTab.id}
         {...(activeTab.eventGraphId
           ? { eventGraphId: activeTab.eventGraphId }
           : {})}

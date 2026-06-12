@@ -19,6 +19,7 @@ export type WorkspaceAction =
   | { type: 'close-tab'; tabId: string }
   | { type: 'activate-tab'; tabId: string }
   | { type: 'rename-tab'; tabId: string; title: string }
+  | { type: 'bind-deck-tab'; tabId: string; eventGraphId: string }
   | { type: 'set-right-pane-mode'; mode: WorkspaceRightPaneMode }
   | { type: 'set-right-pane-collapsed'; collapsed: boolean }
   | { type: 'set-pane-widths'; left: number; right: number }
@@ -70,6 +71,17 @@ export function workspaceReducer(
     case 'rename-tab': {
       const nextTabs = state.tabs.map((t) =>
         t.id === action.tabId ? { ...t, title: action.title } : t,
+      )
+      return { ...state, tabs: nextTabs }
+    }
+
+    case 'bind-deck-tab': {
+      // A fresh canvas persisted its graph for the first time: bind the tab
+      // to the saved record so tab switches and reloads rehydrate it.
+      const nextTabs = state.tabs.map((t) =>
+        t.id === action.tabId && t.kind === 'deck'
+          ? { ...t, eventGraphId: action.eventGraphId }
+          : t,
       )
       return { ...state, tabs: nextTabs }
     }
