@@ -1242,7 +1242,14 @@ export function createAgentOrchestrator(
 
           const parsed = parseSubmitSuggestionArgs(submitArgs, totalUsage, turn + 1, totalToolCalls);
           let result = parsed;
-          if ((parsed.events?.length ?? 0) > 0) {
+          // Post-tool re-compile is a legacy-preflight behavior: it rebuilds
+          // a text prompt from the structured draft and REPLACES the model's
+          // events with the pipeline's output when it produces anything —
+          // which can swap a fully-specified draft for a degraded primitive
+          // (observed: add_material stripped of wells/labware/volume). In
+          // 'forced-tool' mode the schema-validated tool payload IS the
+          // draft; the compiler validates later, at Accept/persist time.
+          if (draftFlowMode !== 'forced-tool' && (parsed.events?.length ?? 0) > 0) {
             const compilerPrompt = buildCompilerPromptFromDraftArgs(submitArgs);
             onEvent?.({ type: 'tool_call', toolName: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME, args: { prompt: compilerPrompt } });
             const compilerToolStart = Date.now();
