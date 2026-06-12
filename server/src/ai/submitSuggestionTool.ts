@@ -109,6 +109,14 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
                 properties: {
                   labwareId: { type: 'string', description: 'Target labware id from the editor context.' },
                   wells: { type: 'array', items: { type: 'string' }, description: 'Target wells, e.g. ["A1"].' },
+                  material_ref: {
+                    type: 'object',
+                    additionalProperties: true,
+                    description:
+                      'Display reference for the added material, e.g. {"kind":"ontology","id":"CHEBI:5001",' +
+                      '"namespace":"CHEBI","label":"fenofibrate"}. ALWAYS include the human-readable label. ' +
+                      'This complements (does not replace) the grounded materials[] entry.',
+                  },
                 },
               },
               materials: {

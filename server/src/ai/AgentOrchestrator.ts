@@ -220,6 +220,54 @@ function normalizeDraftLabwareRefs<T>(events: T[], context: EditorContext): T[] 
   });
 }
 
+/**
+ * The well-state engine derives well contents from details.material_ref (and
+ * its spec/aliquot/instance siblings); the grounded-materials contract (#8)
+ * carries the material in the top-level materials[] instead. When a drafted
+ * add_material has materials[] but no details ref, synthesize one so wells
+ * don't render as "Empty" with a phantom volume.
+ */
+function enrichAddMaterialRefs<T>(events: T[]): T[] {
+  return events.map((ev) => {
+    if (!ev || typeof ev !== 'object') return ev;
+    const e = ev as Record<string, unknown>;
+    if ((e.event_type ?? e.verb) !== 'add_material') return ev;
+    const details =
+      e.details && typeof e.details === 'object'
+        ? (e.details as Record<string, unknown>)
+        : {};
+    if (
+      details.material_ref || details.material_spec_ref || details.aliquot_ref ||
+      details.material_instance_ref || details.vendor_product_ref
+    ) {
+      return ev;
+    }
+    const materials = Array.isArray(e.materials)
+      ? (e.materials as Array<Record<string, unknown>>)
+      : [];
+    const ref = materials[0]?.ref as Record<string, unknown> | undefined;
+    if (!ref) return ev;
+    let materialRef: Record<string, unknown> | null = null;
+    if (typeof ref.curie === 'string' && ref.curie) {
+      materialRef = {
+        kind: 'ontology',
+        id: ref.curie,
+        namespace: ref.curie.split(':')[0] ?? '',
+        // Best label we have without an async lookup; the tool schema asks
+        // the model for a labeled material_ref, so this is the fallback.
+        label: ref.curie,
+      };
+    } else if (ref.mint && typeof ref.mint === 'object') {
+      const label = (ref.mint as Record<string, unknown>).label;
+      if (typeof label === 'string' && label) {
+        materialRef = { kind: 'draft', id: `mint:${label}`, label };
+      }
+    }
+    if (!materialRef) return ev;
+    return { ...e, details: { ...details, material_ref: materialRef } } as T;
+  });
+}
+
 function stampDraftProvenance<T>(events: T[]): T[] {
   const timestamp = new Date().toISOString();
   const actionGroupId = `ag-${Date.now().toString(36)}`;
@@ -1287,7 +1335,7 @@ export function createAgentOrchestrator(
 
           const parsed = parseSubmitSuggestionArgs(submitArgs, totalUsage, turn + 1, totalToolCalls);
           if (parsed.events?.length) {
-            parsed.events = normalizeDraftLabwareRefs(parsed.events, context);
+            parsed.events = enrichAddMaterialRefs(normalizeDraftLabwareRefs(parsed.events, context));
           }
           let result = parsed;
           // Post-tool re-compile is a legacy-preflight behavior: it rebuilds
