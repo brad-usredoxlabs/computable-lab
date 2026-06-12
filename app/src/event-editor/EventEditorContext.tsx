@@ -1209,3 +1209,13 @@ export function useEventEditor(): ContextValue {
   }
   return ctx
 }
+
+/**
+ * Like useEventEditor, but returns null outside an <EventEditorProvider>.
+ * For components that live in surfaces only sometimes wrapped by the editor
+ * (e.g. the workspace right-pane AI tab, whose provider exists only when the
+ * active tab is a deck).
+ */
+export function useOptionalEventEditor(): ContextValue | null {
+  return useContext(EventEditorContext)
+}

@@ -40,6 +40,8 @@ export interface AssistDraftResult {
   notes?: string[]
   labwareRequirements?: Array<{ classCurie?: string; deckSlot?: string; reason?: string }>
   labwareAdditions?: Array<{ recordId?: string; deckSlot?: string; reason?: string }>
+  /** Draft-only ontology bindings; materialized into records on Accept. */
+  ontologyBindings?: unknown[]
   clarificationNeeded?: string
   clarification?: { prompt?: string }
   error?: string

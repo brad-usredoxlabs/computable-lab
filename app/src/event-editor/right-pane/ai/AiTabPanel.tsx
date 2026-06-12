@@ -14,12 +14,18 @@
 
 import { useCallback, useMemo, useState } from 'react'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
+import { useOptionalEventEditor } from '../../EventEditorContext'
+import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/platformRegistry'
+import type { AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
+import type { PlateEvent } from '../../../types/events'
 import { systemPromptForViewer } from './systemPromptForViewer'
 import { SourcesStrip, type AddedSource } from './SourcesStrip'
 import { MessageLog } from './MessageLog'
 import { ChatInput } from './ChatInput'
 import { RunInEventEditorButton } from './RunInEventEditorButton'
 import { useChatThread } from './useChatThread'
+import { buildPreviewFromDraft } from './draftPreview'
+import type { AssistDraftResult } from './assistStream'
 import { AddSourceModal } from './AddSourceModal'
 import './ai.css'
 
@@ -31,6 +37,11 @@ export function AiTabPanel() {
   }, [ws.state.activeTabId, ws.state.tabs])
 
   const systemPrompt = systemPromptForViewer(activeTab?.kind ?? null)
+
+  // Present only when the active tab is a deck (EventEditorProvider wraps
+  // the pane then); null on pdf/document/project tabs.
+  const editor = useOptionalEventEditor()
+  const editorState = editor?.state ?? null
 
   // Context the agent should know about. Keep this small — full bodies
   // ride in `attachments` when Phase 9 adds upload support; today the
@@ -50,12 +61,82 @@ export function AiTabPanel() {
       activeEventGraphId,
       systemPromptId: systemPrompt.id,
       systemPromptBody: systemPrompt.body,
+      // Deck tabs: send the live editor state the way the standalone dock
+      // does, so the model drafts against real labware/placements instead
+      // of a blank deck.
+      ...(editorState
+        ? {
+            labwares: Object.values(editorState.labwares).map((lw) => ({
+              labwareId: lw.labwareId,
+              labwareType: lw.labwareType,
+              name: lw.name,
+            })),
+            eventSummary:
+              editorState.events.length === 0
+                ? 'No events yet.'
+                : `${editorState.events.length} event${editorState.events.length === 1 ? '' : 's'} in graph.`,
+            deckPlatform: editorState.platformId,
+            deckVariant: editorState.variantId,
+            deckPlacements: editorState.placements.map((p) => ({
+              slotId: p.location.kind === 'slot' ? p.location.slotId : 'lawn',
+              labwareId: p.labwareId,
+            })),
+          }
+        : {}),
     }
-  }, [ws.state.studyId, activeTab, systemPrompt])
+  }, [ws.state.studyId, activeTab, systemPrompt, editorState])
+
+  // Promote draft results into the editor's ghost preview so the user gets
+  // the draft → ghost → Accept/Discard loop the standalone dock has.
+  const onDraftResult = useCallback(
+    (result: AssistDraftResult, prompt: string) => {
+      if (!editor) return
+      const { state, actions } = editor
+      const events = (result.events ?? []) as PlateEvent[]
+      const labwareAdditions = (result.labwareAdditions ?? []) as AiLabwareAddition[]
+      const labwareRequirements = (result.labwareRequirements ?? []) as AiLabwareRequirement[]
+      const platform = getPlatformManifest(state.platforms, state.platformId)
+      const variant = getVariantManifest(state.platforms, state.platformId, state.variantId)
+      const { preview, skips } = buildPreviewFromDraft({
+        platform,
+        variant,
+        events,
+        labwareAdditions,
+        labwareRequirements,
+        existingLabwares: state.labwares,
+      })
+      const hasPreview =
+        preview.previewPlacements.length > 0 || preview.previewEvents.length > 0
+      if (!hasPreview) return
+      // A follow-up draft while a preview is mounted is a revision: replace
+      // the ghosts and append to the revision trail that rides back to the
+      // backend as graphLemur revision context.
+      const previousPreview = state.preview
+      const revisionHistory = previousPreview
+        ? [
+            ...(previousPreview.revisionHistory ?? []),
+            { prompt, createdAt: new Date().toISOString() },
+          ]
+        : undefined
+      actions.setPreview({
+        ...preview,
+        sourcePrompt: prompt,
+        labwareRequirements: [...labwareRequirements],
+        labwareAdditions: [...labwareAdditions],
+        ...(skips.length > 0 ? { sourceSkips: skips } : {}),
+        ...(result.ontologyBindings?.length
+          ? { ontologyBindings: result.ontologyBindings as never }
+          : {}),
+        ...(revisionHistory ? { revisionHistory } : {}),
+      })
+    },
+    [editor],
+  )
 
   const chat = useChatThread({
     surface: systemPrompt.id,
     context,
+    onDraftResult,
   })
 
   // Run-in-event-editor pushes a composed prompt into ChatInput; the user

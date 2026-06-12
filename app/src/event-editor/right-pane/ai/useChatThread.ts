@@ -18,7 +18,7 @@ import {
   initialChatState,
   type ChatMessage,
 } from './chatReducer'
-import { runAssistStream, summarizeDraftResult, type AssistStreamRequest } from './assistStream'
+import { runAssistStream, summarizeDraftResult, type AssistDraftResult, type AssistStreamRequest } from './assistStream'
 
 interface SendOptions {
   /** Override the surface id for this single send. Used by RunInEventEditor. */
@@ -47,6 +47,12 @@ export interface UseChatThreadOptions {
   /** Whatever the agent should know about the active viewer/study. */
   context: Record<string, unknown>
   /**
+   * Called when a stream finishes with a draft-tool result, before the turn
+   * commits to chat history. Deck surfaces use this to promote the draft
+   * into the event editor's ghost preview.
+   */
+  onDraftResult?: (result: AssistDraftResult, prompt: string) => void
+  /**
    * Test seam — override the SSE runner. Real callers leave this unset
    * to use the default fetch-based client.
    */
@@ -56,6 +62,7 @@ export interface UseChatThreadOptions {
 export function useChatThread({
   surface,
   context,
+  onDraftResult,
   runStream,
 }: UseChatThreadOptions): UseChatThreadResult {
   const [state, dispatch] = useReducer(chatReducer, initialChatState)
@@ -119,6 +126,13 @@ export function useChatThread({
                 dispatch({ type: 'stream-delta', delta: event.delta })
                 return
               case 'done': {
+                if (event.result) {
+                  try {
+                    onDraftResult?.(event.result, trimmed)
+                  } catch {
+                    // Preview promotion must never break the chat turn.
+                  }
+                }
                 // Forced-draft-tool responses carry their whole answer in the
                 // result payload (no text deltas); summarize it so the turn
                 // doesn't commit as "(no response)".
@@ -144,7 +158,7 @@ export function useChatThread({
     },
     // We capture state.messages so the history snapshot is fresh. The
     // alternative — reading via a ref — risks stale conversation context.
-    [state.messages, surface, context, runStream],
+    [state.messages, surface, context, onDraftResult, runStream],
   )
 
   const stop = useCallback(() => {
