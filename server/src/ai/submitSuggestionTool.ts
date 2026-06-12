@@ -99,7 +99,18 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
               event_type: { type: 'string' },
               verb: { type: 'string' },
               vocabPackId: { type: 'string' },
-              details: { type: 'object', additionalProperties: true, description: 'Verb-specific parameters.' },
+              details: {
+                type: 'object',
+                additionalProperties: true,
+                description:
+                  'Verb-specific parameters. Well-targeted verbs (add_material, transfer, mix, …) MUST include ' +
+                  'labwareId (an existing editor labware id) and wells (e.g. ["A1","B2"]). Use structured ' +
+                  'quantities: volume {value,unit}, concentration {value,unit}.',
+                properties: {
+                  labwareId: { type: 'string', description: 'Target labware id from the editor context.' },
+                  wells: { type: 'array', items: { type: 'string' }, description: 'Target wells, e.g. ["A1"].' },
+                },
+              },
               materials: {
                 type: 'array',
                 description: 'CURIE-typed material references for this event.',

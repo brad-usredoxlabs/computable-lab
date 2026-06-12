@@ -235,6 +235,7 @@ function formatGraphLemurContext(context: EditorContext): string {
 
 export type AiSurface =
   | 'event-editor'
+  | 'workspace.deck'
   | 'run-workspace'
   | `run-workspace:${'overview' | 'plan' | 'biology' | 'readouts' | 'results' | 'claims'}`
   | 'materials'
@@ -327,7 +328,12 @@ export function buildSurfaceAwarePrompt(
   surface: AiSurface,
   context: EditorContext,
 ): string {
-  if (surface === 'event-editor') {
+  // The workspace deck tab IS an event editor — it drafts event graphs onto
+  // a canvas. Without the full event-graph prompt (detail schemas, labware
+  // model, output format) the model improvises malformed event details
+  // (observed: add_material with only a material recordId — renders as
+  // nothing). It previously fell through to the generic chat preamble.
+  if (surface === 'event-editor' || surface === 'workspace.deck') {
     return buildSystemPrompt(context);
   }
 

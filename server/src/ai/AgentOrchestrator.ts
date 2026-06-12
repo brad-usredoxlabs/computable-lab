@@ -176,6 +176,50 @@ function normalizeHistoryMessage(message: ConversationHistoryMessage): ChatMessa
  * deterministic (no timestamps/ids — see buildSystemPrompt) so models copy
  * placeholder values; the server is the authority for when a draft was made.
  */
+/**
+ * Rewrite loose labware references in drafted event details against the
+ * editor's actual labware list. Models routinely echo a labware's type
+ * ("plate_96") or display name instead of its id; when the reference
+ * uniquely matches a real labware, repair it rather than shipping an event
+ * the canvas can't bind.
+ */
+function normalizeDraftLabwareRefs<T>(events: T[], context: EditorContext): T[] {
+  const labwares = Array.isArray(context?.labwares) ? context.labwares : [];
+  if (labwares.length === 0) return events;
+  const knownIds = new Set(labwares.map((lw) => lw.labwareId));
+  const resolve = (ref: string): string | null => {
+    if (knownIds.has(ref)) return ref;
+    const needle = ref.toLowerCase();
+    const matches = labwares.filter(
+      (lw) =>
+        lw.labwareType?.toLowerCase() === needle ||
+        lw.name?.toLowerCase() === needle ||
+        lw.labwareId.toLowerCase() === needle,
+    );
+    return matches.length === 1 ? matches[0]!.labwareId : null;
+  };
+  return events.map((ev) => {
+    if (!ev || typeof ev !== 'object') return ev;
+    const e = ev as Record<string, unknown>;
+    const details = e.details;
+    if (!details || typeof details !== 'object') return ev;
+    const d = details as Record<string, unknown>;
+    let changed = false;
+    const next: Record<string, unknown> = { ...d };
+    for (const key of ['labwareId', 'sourceLabwareId', 'targetLabwareId'] as const) {
+      const value = d[key];
+      if (typeof value === 'string' && value && !knownIds.has(value)) {
+        const repaired = resolve(value);
+        if (repaired) {
+          next[key] = repaired;
+          changed = true;
+        }
+      }
+    }
+    return changed ? ({ ...e, details: next } as T) : ev;
+  });
+}
+
 function stampDraftProvenance<T>(events: T[]): T[] {
   const timestamp = new Date().toISOString();
   const actionGroupId = `ag-${Date.now().toString(36)}`;
@@ -198,6 +242,7 @@ const FORCED_DRAFT_TOOL_INSTRUCTION = [
   `- You MUST finish this turn by calling the ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} tool.`,
   '- Do not answer in prose. Do not leave the assistant message empty.',
   '- If the prompt is underspecified, call the tool with a clarification object instead of stopping.',
+  '- Every well-targeted event\'s details MUST include labwareId (an existing labware id from the editor context) and wells (e.g. ["A1"]). An event without them cannot be rendered or executed.',
   '- If the requested operation is simple labware/deck setup, include labwareRequirements with classCurie and deckSlot. Use labwareAdditions only for concrete known definitions.',
   '- Do not ask which vendor/catalog/plate subtype for generic labware such as a 96-well plate; emit a generic labwareRequirement and let the user refine it later.',
 ].join('\n');
@@ -1241,6 +1286,9 @@ export function createAgentOrchestrator(
           onEvent?.({ type: 'tool_call', toolName: submitCall.function.name, args: submitArgs });
 
           const parsed = parseSubmitSuggestionArgs(submitArgs, totalUsage, turn + 1, totalToolCalls);
+          if (parsed.events?.length) {
+            parsed.events = normalizeDraftLabwareRefs(parsed.events, context);
+          }
           let result = parsed;
           // Post-tool re-compile is a legacy-preflight behavior: it rebuilds
           // a text prompt from the structured draft and REPLACES the model's
