@@ -35,6 +35,8 @@ export interface ProviderHit {
   uri?: string;
   /** Material layer, when the provider knows it (records do; ontologies = concept). */
   level?: MaterialLevel;
+  /** Term definition / description text, when the provider has one. */
+  definition?: string;
 }
 
 /**
@@ -50,6 +52,8 @@ export interface RankedCandidate {
   score: number;
   source: ResolveSource;
   uri?: string;
+  /** Term definition / description text, when the source ontology or record has one. */
+  definition?: string;
   /** Present only on the tier-5 affordance: the free text to mint locally. */
   mint?: { label: string; domain?: string };
 }

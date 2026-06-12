@@ -169,6 +169,8 @@ export interface ResolveCandidate {
   score: number
   source: 'local-record' | 'oak' | 'ols4' | 'vendor' | 'mint'
   uri?: string
+  /** Term definition / description text, when the source ontology or record has one. */
+  definition?: string
   mint?: { label: string; domain?: string }
 }
 

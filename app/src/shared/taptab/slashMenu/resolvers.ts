@@ -53,6 +53,13 @@ export const resolveMaterial: SlashResolver = async (query, ctx) => {
       label: `Create local term "${q}"`,
       badge: 'New',
       subtitle: 'mint a draft term into the lab namespace',
+      detail: {
+        source: 'New local term (tier 5 — last resort)',
+        ontology: 'local',
+        definition:
+          `Creates a draft material record named "${q}" in the lab's local namespace. ` +
+          'Prefer an existing workspace record or ontology term above when one matches.',
+      },
       pinBottom: true,
       mention: { type: 'material', entityKind: 'material', id: '', label: q },
       resolveMention: async () => {
@@ -123,6 +130,28 @@ function appendOntologyHits(
  * (the workspace search already covers them) and the tier-5 mint affordance is
  * left to the material picker.
  */
+const RESOLVE_SOURCE_LABEL: Record<ResolveCandidate['source'], string> = {
+  'local-record': 'Workspace record (this lab)',
+  oak: 'On-box ontology snapshot (OAK)',
+  ols4: 'EBI Ontology Lookup Service (remote)',
+  vendor: 'Vendor catalog',
+  mint: 'New local term',
+}
+
+function candidateDetail(c: ResolveCandidate): SlashSuggestion['detail'] {
+  return {
+    source: RESOLVE_SOURCE_LABEL[c.source] ?? c.source,
+    ontology: c.namespace || undefined,
+    id: c.curie || undefined,
+    ...(c.uri ? { iri: c.uri } : {}),
+    ...(c.definition ? { definition: c.definition } : {}),
+    extra: [
+      { label: 'Tier', value: `${c.tier} · ${c.source}` },
+      ...(c.level && c.level !== 'unknown' ? [{ label: 'Level', value: c.level }] : []),
+    ],
+  }
+}
+
 function ontologySuggestions(candidates: ResolveCandidate[]): SlashSuggestion[] {
   return candidates
     .filter((c) => (c.source === 'oak' || c.source === 'ols4') && c.curie)
@@ -131,6 +160,7 @@ function ontologySuggestions(candidates: ResolveCandidate[]): SlashSuggestion[] 
       label: c.label,
       badge: c.namespace ? c.namespace.toUpperCase() : 'Ontology',
       subtitle: c.curie,
+      detail: candidateDetail(c),
       mention: { type: 'material', entityKind: 'material', id: c.curie, label: c.label },
     }))
 }
@@ -154,6 +184,12 @@ export const resolveLabware: SlashResolver = async (query, ctx) => {
     label: hit.label,
     badge: 'Labware',
     subtitle: hit.recordId,
+    detail: {
+      source: 'Workspace record (this lab)',
+      ontology: 'local',
+      id: hit.recordId,
+      extra: [{ label: 'Kind', value: 'labware instance' }],
+    },
     mention: { type: 'labware', id: hit.recordId, label: hit.label },
   }))
   const seen = new Set(records.map((s) => s.key))
@@ -167,6 +203,11 @@ export const resolveLabware: SlashResolver = async (query, ctx) => {
       label: hit.label,
       badge: 'Definition',
       subtitle: hit.recordId,
+      detail: {
+        source: 'Labware definition registry (on-box)',
+        id: hit.recordId,
+        extra: [{ label: 'Kind', value: 'labware definition' }],
+      },
       mention: { type: 'labware', id: hit.recordId, label: hit.label },
     })
   }
@@ -354,6 +395,16 @@ function materialSuggestions(
         label: item.title,
         badge: materialBadge(entityKind),
         subtitle: item.subtitle || item.recordId,
+        detail: {
+          source: 'Workspace record (this lab)',
+          ontology: 'local',
+          id: item.recordId,
+          ...(item.subtitle ? { definition: item.subtitle } : {}),
+          extra: [
+            { label: 'Kind', value: item.kind },
+            { label: 'Category', value: item.category },
+          ],
+        },
         mention,
       }
     })

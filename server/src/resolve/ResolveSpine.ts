@@ -172,6 +172,7 @@ function toCandidate(
     score: TIER_BASE[spec.tier] + matchBonus(term, hit.label) + levelBonus,
     source: spec.source,
     ...(hit.uri ? { uri: hit.uri } : {}),
+    ...(hit.definition ? { definition: hit.definition } : {}),
   };
 }
 

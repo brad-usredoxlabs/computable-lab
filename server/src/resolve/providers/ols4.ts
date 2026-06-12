@@ -43,14 +43,26 @@ export async function searchOls4(
     const iri = String(doc.iri ?? '');
     const ontKey = String(doc.ontology_name ?? doc.ontology_prefix ?? '').toLowerCase();
     const curie = oboId || iri;
+    const definition = firstText(doc.description) ?? firstText(doc.definition);
     return {
       curie,
       label: String(doc.label ?? ''),
       namespace: curie.includes(':') ? (curie.split(':')[0] ?? ontKey) : ontKey,
       level: 'concept',
       ...(iri ? { uri: iri } : {}),
+      ...(definition ? { definition } : {}),
     };
   });
+}
+
+/** OLS4 serves description/definition as either a string or a string array. */
+function firstText(value: unknown): string | undefined {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (Array.isArray(value)) {
+    const first = value.find((v) => typeof v === 'string' && v.trim());
+    if (typeof first === 'string') return first.trim();
+  }
+  return undefined;
 }
 
 /** Build the tier-3 OLS4 provider. */

@@ -15,7 +15,7 @@ const DEFAULT_LOCAL_ONTOLOGIES = ['chebi', 'go', 'ncit', 'uberon', 'ncbitaxon'];
 
 interface OakSearchResponse {
   q?: string;
-  results?: Array<{ id?: string; label?: string }>;
+  results?: Array<{ id?: string; label?: string; definition?: string | null }>;
 }
 
 /**
@@ -65,6 +65,9 @@ export function createOakProvider(ontology?: OntologyConfig): ResolveProvider | 
               label: r.label ?? id,
               namespace: id.split(':')[0] ?? name,
               level: 'concept',
+              // Older ontology-service builds don't return definitions on
+              // search hits; treat the field as best-effort.
+              ...(r.definition ? { definition: r.definition } : {}),
             });
           }
           return hits;

@@ -12,6 +12,27 @@ import type { SelectionContextValue } from '../../context/SelectionContext'
 
 export type SlashCommandKind = 'material' | 'labware' | 'protocol' | 'source' | 'target'
 
+/**
+ * Rich hover detail for a suggestion row. Shown as a side tooltip on
+ * mouseover so the user can judge a hit (which ontology, what it means)
+ * before inserting it. All fields optional — rows without a detail block
+ * simply don't get a tooltip.
+ */
+export interface SlashSuggestionDetail {
+  /** Human-readable provenance, e.g. "On-box ontology (OAK)", "EBI OLS4 (remote)", "Workspace record". */
+  source?: string
+  /** Ontology / namespace prefix, e.g. "CHEBI", "local". */
+  ontology?: string
+  /** CURIE or record id, e.g. "CHEBI:17790", "MAT-tris-7f2a". */
+  id?: string
+  /** Full IRI, when known. */
+  iri?: string
+  /** Term definition / description text. */
+  definition?: string
+  /** Extra labelled rows (record kind, category, match score, …). */
+  extra?: Array<{ label: string; value: string }>
+}
+
 /** A suggestion shown in the menu and inserted as a mention on select. */
 export interface SlashSuggestion {
   /** Stable key for React lists + dedupe across resolvers. */
@@ -21,6 +42,8 @@ export interface SlashSuggestion {
   badge: string
   /** Secondary line shown under the label. */
   subtitle?: string
+  /** Hover tooltip content (ontology provenance, definition, IRI, …). */
+  detail?: SlashSuggestionDetail
   /** Mention payload — emitted into the editor on select. */
   mention: SlashMention
   /** When true, the row renders disabled (e.g. "no wells selected"). */

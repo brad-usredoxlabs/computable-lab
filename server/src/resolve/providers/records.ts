@@ -43,6 +43,13 @@ function matchableStrings(payload: Record<string, unknown>): string[] {
   return out;
 }
 
+function firstString(...values: unknown[]): string | undefined {
+  for (const v of values) {
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+  return undefined;
+}
+
 /**
  * Build a tier-1 record provider over the given store. `kinds` overrides the
  * default kind set (e.g. when a surface restricts to labware).
@@ -64,11 +71,15 @@ export function createRecordProvider(store: RecordStore, kinds: string[] = DEFAU
         const fields = matchableStrings(payload);
         if (!fields.some((f) => f.includes(needle))) continue;
         const label = String(payload.name ?? payload.title ?? payload.label ?? record.recordId);
+        const definition = firstString(payload.definition, payload.description);
+        const iri = firstString(payload.iri, payload.uri);
         hits.push({
           curie: `local:${record.recordId}`,
           label,
           namespace: 'local',
           level: KIND_LEVEL[kind] ?? 'unknown',
+          ...(definition ? { definition } : {}),
+          ...(iri ? { uri: iri } : {}),
         });
         if (hits.length >= limit) return hits;
       }
