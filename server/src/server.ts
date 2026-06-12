@@ -743,6 +743,7 @@ export async function createServer(
         extractionService: runner,
         llmClient: inferenceClient,
         ...(compileOntologyResolver ? { ontologyResolver: compileOntologyResolver } : {}),
+        ...(ctx.appConfig?.ontology ? { ontology: ctx.appConfig.ontology } : {}),
         residentContext: await buildResidentContext(ctx.schemaRegistry, ctx.store),
         store: ctx.store,
       };

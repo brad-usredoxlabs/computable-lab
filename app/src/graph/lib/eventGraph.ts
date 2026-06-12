@@ -458,12 +458,33 @@ function applyAddMaterial(state: WellComputedState, event: PlateEvent, details: 
       }))
     })
   } else if (materialLabel) {
-    newState.components = mergeLedgerEntry(newState.components, createLedgerEntry(event, details, materialLabel, {
-      count: typeof details.count === 'number' ? details.count : undefined,
-    }))
+    // Older drafts can carry a comma-joined CURIE list ("CHEBI:1,XCO:2") in
+    // one ref; render each component on its own ledger line. Only splits
+    // when every part is CURIE-shaped, so "1,2-dichloroethane" stays whole.
+    const curieParts = splitCurieList(materialLabel)
+    if (curieParts) {
+      curieParts.forEach((part) => {
+        newState.components = mergeLedgerEntry(newState.components, createLedgerEntry(event, details, part, {
+          componentId: part,
+        }))
+      })
+    } else {
+      newState.components = mergeLedgerEntry(newState.components, createLedgerEntry(event, details, materialLabel, {
+        count: typeof details.count === 'number' ? details.count : undefined,
+      }))
+    }
   }
 
   return syncDerivedMaterials(newState)
+}
+
+const CURIE_PART_RE = /^[A-Za-z][\w.-]*:\S+$/
+
+function splitCurieList(value: string): string[] | null {
+  if (!value.includes(',')) return null
+  const parts = value.split(',').map((p) => p.trim()).filter(Boolean)
+  if (parts.length < 2) return null
+  return parts.every((p) => CURIE_PART_RE.test(p)) ? parts : null
 }
 
 function applyTransferSource(state: WellComputedState, event: PlateEvent, details: TransferDetails): WellComputedState {
