@@ -166,7 +166,9 @@ export default defineConfig({
   server: {
     host: true,
     port: 5174,
-    allowedHosts: ['computable'],
+    // Same allowlist as `preview` below so dev mode is reachable over the
+    // LAN / tailnet (bare hostnames and *.ts.net MagicDNS FQDNs).
+    allowedHosts: ['computable', 'appliance-01', 'appliance-2', '.ts.net'],
     proxy: {
       // Proxy all API routes to the backend server
       '/api': {
@@ -189,6 +191,8 @@ export default defineConfig({
       'computable',
       'appliance-01',
       'appliance-01.local',
+      'appliance-2',
+      'appliance-2.local',
       'thunderbeast',
       'bobbert',
       // Tailnet MagicDNS resolves bare hostnames AND fully-qualified
