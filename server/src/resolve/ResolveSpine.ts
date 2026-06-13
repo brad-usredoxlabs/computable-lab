@@ -70,6 +70,42 @@ function matchBonus(term: string, label: string): number {
   return 0;
 }
 
+function tokens(value: string): string[] {
+  return value.toLowerCase().match(/[a-z0-9]+/g)?.filter((token) => token.length > 1) ?? [];
+}
+
+function acronym(value: string): string | undefined {
+  const ignored = new Set(['of', 'the', 'and', 'with']);
+  const letters = tokens(value)
+    .filter((token) => !ignored.has(token))
+    .map((token) => token[0])
+    .join('');
+  return letters.length >= 2 ? letters : undefined;
+}
+
+function hasLexicalSupport(term: string, label: string, definition?: string): boolean {
+  const t = term.trim().toLowerCase();
+  const l = label.trim().toLowerCase();
+  if (!t || !l) return false;
+  if (l === t || l.startsWith(t) || l.includes(t) || t.includes(l)) return true;
+
+  const labelAcronym = acronym(label);
+  if (labelAcronym && labelAcronym === t.replace(/[^a-z0-9]/g, '')) return true;
+
+  const termTokens = tokens(term);
+  if (termTokens.length === 0) return false;
+  const labelTokens = new Set(tokens(label));
+  const overlap = termTokens.filter((token) => labelTokens.has(token)).length;
+  if (overlap / Math.max(termTokens.length, 1) >= 0.5) return true;
+
+  if (definition) {
+    const definitionTokens = new Set(tokens(definition));
+    const definitionOverlap = termTokens.filter((token) => definitionTokens.has(token)).length;
+    return definitionOverlap / Math.max(termTokens.length, 1) >= 0.75;
+  }
+  return false;
+}
+
 function namespaceOf(hit: ProviderHit): string {
   if (hit.namespace) return hit.namespace;
   const curie = hit.curie ?? '';
@@ -133,7 +169,9 @@ export function createResolveSpine(deps: ResolveSpineDeps = {}): ResolveSpine {
           perTier,
           spec.remote ? remoteTimeout : localTimeout,
         );
-        return hits.map((hit) => toCandidate(hit, spec, trimmed, opts.level));
+        return hits
+          .filter((hit) => hasLexicalSupport(trimmed, hit.label, hit.definition))
+          .map((hit) => toCandidate(hit, spec, trimmed, opts.level));
       }),
     );
 

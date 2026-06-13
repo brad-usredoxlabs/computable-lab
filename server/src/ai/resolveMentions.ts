@@ -63,7 +63,12 @@ export async function resolveMentionsForPrompt(
     const { mention, raw } = entry;
     // Derive kind from mention.type, with entityKind as override for material mentions
     let kind: 'material-spec' | 'aliquot' | 'material' | 'labware' | 'selection' | 'protocol' | 'graph-component';
-    if (mention.type === 'labware') {
+    if (mention.type === 'tube') {
+      // Tube mentions are size literals, not records — don't resolve them as a
+      // material (which would trigger a bogus fetch). The token stays in the
+      // prompt as free-text context for the model.
+      continue;
+    } else if (mention.type === 'labware') {
       kind = 'labware';
     } else if (mention.type === 'selection') {
       kind = 'selection';

@@ -22,6 +22,7 @@ import type {
   SlashMention,
   SlashSuggestion,
 } from './types'
+import { filterTubePresets } from '../../../types/tubeSizes'
 
 const PAGE = 8
 const MATERIAL_PAGE = 12
@@ -241,6 +242,25 @@ export const resolveProtocol: SlashResolver = async (query, ctx) => {
  * — `/browser` (row selections), `/protocols` (candidate picks) — drop into
  * the same context and will appear here automatically.
  */
+/**
+ * Tube command (`/t`) — fully local. Offers the shared tube-size presets,
+ * filtered by query (e.g. `/t 15` → 15 mL). A tube mention is a size literal,
+ * not a record, so there is no network round-trip or progressive streaming.
+ */
+export const resolveTube: SlashResolver = async (query) =>
+  filterTubePresets(query).map((preset) => ({
+    key: `tube:${preset.sizeLabel}`,
+    label: `${preset.sizeLabel} tube`,
+    badge: 'Tube',
+    subtitle: `${preset.maxVolume_uL} µL capacity`,
+    mention: {
+      type: 'tube',
+      sizeLabel: preset.sizeLabel,
+      maxVolume_uL: preset.maxVolume_uL,
+      label: `${preset.sizeLabel} tube`,
+    },
+  }))
+
 export const resolveSource: SlashResolver = async (_query, ctx) =>
   resolveSelection('source', ctx)
 

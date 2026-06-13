@@ -305,6 +305,9 @@ $defs:
         - aliquot
         - seal
         - unseal
+        - place_tube
+        - move_tube
+        - remove_tube
         description: "Type of the event."
       at:
         type: string

@@ -8,6 +8,8 @@ export interface ContextMenuItem {
   detail?: string
   disabled?: boolean
   destructive?: boolean
+  /** Render a divider rule instead of a button (other fields ignored). */
+  separator?: boolean
   onSelect?: () => void
 }
 
@@ -73,6 +75,9 @@ export function ContextMenu({ open, x, y, items, onClose, title }: ContextMenuPr
     >
       {title ? <div className="ctx-menu__title">{title}</div> : null}
       {items.map((item) => (
+        item.separator ? (
+          <hr key={item.id} className="ctx-menu__sep" />
+        ) : (
         <button
           key={item.id}
           type="button"
@@ -91,6 +96,7 @@ export function ContextMenu({ open, x, y, items, onClose, title }: ContextMenuPr
           <span className="ctx-menu__label">{item.label}</span>
           {item.detail ? <span className="ctx-menu__detail">{item.detail}</span> : null}
         </button>
+        )
       ))}
     </div>,
     document.body,

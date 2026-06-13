@@ -36,6 +36,11 @@ interface WellGridProps {
   /** Wells with committed or preview-computed material/volume state. */
   occupiedWellIds?: ReadonlySet<WellId>
   /**
+   * Rack positions that hold a tube (empty or filled). Distinguishes an empty
+   * slot (no tube) from an empty tube and a filled tube in the focus view.
+   */
+  tubeWellIds?: ReadonlyMap<WellId, { sizeLabel: string; maxVolume_uL: number }>
+  /**
    * Per-well fill/stroke keyed on composition signature: replicates share a
    * hue, distinct conditions differ. Applied as inline style so the hue tracks
    * data; preview/hover states and the selection ring still take precedence.
@@ -53,6 +58,7 @@ const FRAME_SHORT_MM = 85
 const FRAME_PADDING_MM = 8
 
 const EMPTY_WELLS: ReadonlySet<WellId> = new Set()
+const EMPTY_TUBES: ReadonlyMap<WellId, { sizeLabel: string; maxVolume_uL: number }> = new Map()
 
 export function WellGrid({
   labware,
@@ -62,6 +68,7 @@ export function WellGrid({
   selectedWellIds,
   previewWellIds = EMPTY_WELLS,
   occupiedWellIds = EMPTY_WELLS,
+  tubeWellIds = EMPTY_TUBES,
   compositionStyles,
   onHover,
   onWellClick,
@@ -111,6 +118,7 @@ export function WellGrid({
         const selected = selectedWellIds.has(well.wellId)
         const previewed = previewWellIds.has(well.wellId)
         const occupied = occupiedWellIds.has(well.wellId)
+        const hasTube = tubeWellIds.has(well.wellId)
         const interactive: CSSProperties = onWellClick ? { cursor: 'pointer' } : {}
         // Composition hue (inline) shows what's in the well. It yields to the
         // preview overlay and hover feedback (both transient/CSS-driven), and
@@ -130,6 +138,7 @@ export function WellGrid({
           'data-selected': selected ? 'true' : 'false',
           'data-preview': previewed ? 'true' : 'false',
           'data-occupied': occupied ? 'true' : 'false',
+          'data-tube': hasTube ? 'true' : 'false',
           'data-tip': isTipRack ? 'true' : 'false',
           onMouseEnter: (event: React.MouseEvent) => onHover(well.wellId, event),
           onMouseMove: (event: React.MouseEvent) => onHover(well.wellId, event),

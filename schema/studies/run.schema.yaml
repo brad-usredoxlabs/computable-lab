@@ -107,6 +107,25 @@ properties:
     type: string
     description: "Execution platform lock for the active run method."
 
+  methodDeckLock:
+    type: object
+    description: "Authoritative deck layout lock for event-editor AI/compiler drafting in this run."
+    additionalProperties: false
+    required: [ locked, platformId, variantId, source, lockedAt ]
+    properties:
+      locked:
+        const: true
+      platformId:
+        type: string
+      variantId:
+        type: string
+      source:
+        type: string
+        enum: [ first-edit, method-attach, template, manual-replace ]
+      lockedAt:
+        type: string
+        format: date-time
+
   methodVocabId:
     type: string
     enum: [ liquid-handling/v1, animal-handling/v1 ]

@@ -81,6 +81,33 @@ describe('resolve() spine', () => {
     expect(out.some((c) => c.source === 'oak')).toBe(false);
   });
 
+  it('drops ontology hits that have no lexical support for the searched term', async () => {
+    stubFetch({ oak: [{ curie: 'NCBITaxon:10275', label: 'Suipoxvirus', namespace: 'NCBITaxon' }] });
+    const spine = createResolveSpine({
+      ontology: { serviceUrl: 'http://127.0.0.1:8766', localOntologies: ['ncbitaxon'] },
+    });
+
+    const out = await spine.resolve('HepG2 cells');
+    expect(out.some((candidate) => candidate.curie === 'NCBITaxon:10275')).toBe(false);
+    expect(out[0]?.source).toBe('mint');
+    expect(out[0]?.mint?.label).toBe('HepG2 cells');
+  });
+
+  it('keeps acronym-supported ontology hits for media components', async () => {
+    stubFetch({
+      oak: [
+        { curie: 'XCO:0000988', label: "Dulbecco's Modified Eagle's Medium", namespace: 'XCO' },
+        { curie: 'MSIO:0000017', label: 'fetal bovine serum', namespace: 'MSIO' },
+      ],
+    });
+    const spine = createResolveSpine({
+      ontology: { serviceUrl: 'http://127.0.0.1:8766', localOntologies: ['xco', 'msio'] },
+    });
+
+    expect((await spine.resolve('DMEM'))[0]?.curie).toBe('XCO:0000988');
+    expect((await spine.resolve('FBS'))[0]?.curie).toBe('MSIO:0000017');
+  });
+
   it('isolates a remote/OAK failure — local hits and the mint affordance survive', async () => {
     stubFetch({ oakThrows: true });
     const spine = createResolveSpine({

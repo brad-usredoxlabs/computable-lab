@@ -487,13 +487,33 @@ function eventIdWithSuffix(e: Dict, suffix: string): string | undefined {
 }
 
 function stripDraftOnlyMaterialFields(details: Dict): Dict {
-  const next = { ...details };
+  const stripped = stripLegacyMaterialScalarFields(details);
+  const next = stripped === details ? { ...details } : stripped;
   delete next.composition_snapshot;
   delete next.formulation_kind;
   delete next.material_spec_ref;
   delete next.material_source_requirement;
   delete next.materials;
   return next;
+}
+
+function stripLegacyMaterialScalarFields(details: Dict): Dict {
+  if (
+    details.material_ref_kind === undefined &&
+    details.material_ref_id === undefined &&
+    details.material_ref_label === undefined
+  ) {
+    return details;
+  }
+  const next = { ...details };
+  delete next.material_ref_kind;
+  delete next.material_ref_id;
+  delete next.material_ref_label;
+  return next;
+}
+
+function withDetailsIfChanged<T>(event: T, originalDetails: Dict, details: Dict): T {
+  return details === originalDetails ? event : { ...(event as Dict), details } as T;
 }
 
 function withoutGroundedMaterials(e: Dict): Dict {
@@ -606,22 +626,22 @@ export async function enrichAddMaterialRefs<T>(
       if ((e.event_type ?? e.verb) !== 'add_material') return [ev];
       const rawDetails = asDict(e.details) ?? {};
       const sanitized = await stripMissingRecordRefs(rawDetails, options.store);
-      const details = sanitized.details;
+      const details = stripLegacyMaterialScalarFields(sanitized.details);
       const hasSiblingRef = Object.keys(RECORD_REF_FIELDS).some((field) => details[field] !== undefined);
-      if (hasSiblingRef && !sanitized.stripped) return [ev];
+      if (hasSiblingRef && !sanitized.stripped) return [withDetailsIfChanged(ev, rawDetails, details)];
 
       const parts = collectParts(e, details, options.mentions ?? []);
       if (parts.length === 0) {
-        if (!sanitized.stripped && hasHealthyMaterialRef(details)) return [ev];
-        return sanitized.stripped ? [{ ...e, details } as T] : [ev];
+        if (!sanitized.stripped && hasHealthyMaterialRef(details)) return [withDetailsIfChanged(ev, rawDetails, details)];
+        return sanitized.stripped || details !== rawDetails ? [{ ...e, details } as T] : [ev];
       }
 
       const refs = await Promise.all(parts.map((p) => toMaterialRef(p, labeler)));
       const splitEvents = trySplitMixedBiologicalAdd<T>(e, details, parts, refs, sanitized.stripped);
       if (splitEvents) return splitEvents;
-      if (!sanitized.stripped && hasHealthyMaterialRef(details)) return [ev];
+      if (!sanitized.stripped && hasHealthyMaterialRef(details)) return [withDetailsIfChanged(ev, rawDetails, details)];
 
-      const next: Dict = { ...details, material_ref: refs[0] };
+      const next: Dict = stripLegacyMaterialScalarFields({ ...details, material_ref: refs[0] });
       delete next.materials;
       const existingSnapshot = Array.isArray(details.composition_snapshot)
         ? (details.composition_snapshot as unknown[])

@@ -15,6 +15,17 @@ export interface PromptMention {
   wells?: string[]
 }
 
+export interface AiActiveDeckScope {
+  locked: boolean
+  runId?: string
+  platformId: string
+  variantId: string
+  allowedSurfaces: Array<'slot' | 'lawn'>
+  allowedSlots: string[]
+  allowedLabwareIds: string[]
+  focusedLabwareId?: string
+}
+
 // =============================================================================
 // SSE Stream Events (from POST /api/ai/draft-events/stream)
 // =============================================================================
@@ -522,6 +533,7 @@ export interface AiRequestContext {
     labwareId?: string
     moduleId?: string
   }>
+  activeDeckScope?: AiActiveDeckScope
   manualPipettingMode?: boolean
   materialTracking?: {
     mode: 'relaxed' | 'tracked'

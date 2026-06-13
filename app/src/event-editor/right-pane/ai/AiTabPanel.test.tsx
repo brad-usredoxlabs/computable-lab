@@ -53,7 +53,8 @@ vi.mock('./useChatThread', () => ({
   }),
 }))
 
-import { AiTabPanel, WarmIndicator } from './AiTabPanel'
+import { AiTabPanel, WarmIndicator, clarificationAnswerPrompt } from './AiTabPanel'
+import { mentionTokenForOption } from './MessageLog'
 import { systemPromptForViewer } from './systemPromptForViewer'
 
 afterEach(() => cleanup())
@@ -103,6 +104,26 @@ function renderWithTab(
     </MemoryRouter>,
   )
 }
+
+describe('clarification answer routing', () => {
+  it('builds material mention tokens from CURIE-backed options', () => {
+    expect(mentionTokenForOption(
+      { id: 'cells', kind: 'material', prompt: 'Which cells?', menuProvider: '/m', options: [] },
+      { id: 'fallback-id', label: 'Hep G2 Cells', ref: { id: 'mesh:D056945', kind: 'ontology' } },
+    )).toBe('[[material:mesh:D056945|Hep G2 Cells]]')
+  })
+
+  it('sends clarification answers with the mention token in the prompt text', () => {
+    expect(clarificationAnswerPrompt(
+      {
+        requestId: 'cells',
+        label: 'Hep G2 Cells',
+        mentionToken: '[[material:mesh:D056945|Hep G2 Cells]]',
+      },
+      { id: 'cells', kind: 'material', prompt: 'Which cells?', entityType: 'material', menuProvider: '/m', options: [] },
+    )).toBe('Use [[material:mesh:D056945|Hep G2 Cells]] for material.')
+  })
+})
 
 describe('AiTabPanel', () => {
   it('surfaces the no-viewer system prompt when no tab is active', async () => {

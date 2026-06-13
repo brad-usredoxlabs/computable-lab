@@ -7,7 +7,7 @@
  */
 
 export interface PromptMention {
-  type: 'material' | 'labware' | 'selection' | 'protocol';
+  type: 'material' | 'labware' | 'selection' | 'protocol' | 'tube';
   entityKind?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product' | 'protocol' | 'graph-component';
   selectionKind?: 'source' | 'target';
   id?: string;
@@ -32,7 +32,7 @@ export type PromptMentionMatch = ParsedPromptMention;
  * The regex pattern for matching mention tokens.
  * Format: [[kind:id|label]] or [[kind:id|label|extra]]
  */
-const MENTION_PATTERN = /\[\[(material|material-spec|material-instance|aliquot|vendor-product|labware|selection|protocol|graph-component):(.*?)\]\]/g;
+const MENTION_PATTERN = /\[\[(material|material-spec|material-instance|aliquot|vendor-product|labware|selection|protocol|graph-component|tube):(.*?)\]\]/g;
 
 /**
  * Parse all mention matches from a prompt string.
@@ -118,6 +118,23 @@ export function parsePromptMentionMatches(prompt: string): ParsedPromptMention[]
         mention: {
           type: 'protocol',
           entityKind: kind,
+          id,
+          label,
+        },
+        raw,
+        start,
+        end,
+      });
+      continue;
+    }
+    if (kind === 'tube') {
+      // Tube mentions are size literals (id = sizeLabel), not records — they
+      // ride through as free-text context for the model, not a record binding.
+      const [id = '', label = id] = body.split('|');
+      if (!id) continue;
+      mentions.push({
+        mention: {
+          type: 'tube',
           id,
           label,
         },

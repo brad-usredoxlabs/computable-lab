@@ -23,6 +23,9 @@ export type EventType =
   | 'harvest'
   | 'macro_program'
   | 'serial_dilution'
+  | 'place_tube'
+  | 'move_tube'
+  | 'remove_tube'
   | 'other'
 
 /**
@@ -40,6 +43,9 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   harvest: 'Harvest',
   macro_program: '⚙ Macro Program',
   serial_dilution: '⚙ Serial Dilution',
+  place_tube: 'Place Tube',
+  move_tube: 'Move Tube',
+  remove_tube: 'Remove Tube',
   other: 'Other',
 }
 
@@ -58,6 +64,9 @@ export const EVENT_TYPE_ICONS: Record<EventType, string> = {
   harvest: '🧪',
   macro_program: '🧩',
   serial_dilution: '⚙️',
+  place_tube: '🧪',
+  move_tube: '↪️',
+  remove_tube: '🗑️',
   other: '📝',
 }
 
@@ -76,6 +85,9 @@ export const EVENT_TYPE_COLORS: Record<EventType, string> = {
   harvest: '#40c057',
   macro_program: '#5f3dc4',
   serial_dilution: '#845ef7',
+  place_tube: '#fd7e14',
+  move_tube: '#fd7e14',
+  remove_tube: '#fd7e14',
   other: '#868e96',
 }
 
@@ -252,6 +264,37 @@ export interface MacroProgramDetails extends BaseEventDetails {
 }
 
 /**
+ * Tube vessel descriptor placed in a rack position. Size only — no barcodes or
+ * separate records (lightweight occupancy). Capacity follows the placed tube.
+ */
+export interface TubeDescriptor {
+  sizeLabel: string
+  maxVolume_uL: number
+  wellShape?: 'round' | 'square' | 'v-bottom' | 'conical'
+}
+
+/**
+ * Place a tube into one or more rack positions (occupancy authoring).
+ */
+export interface PlaceTubeDetails extends BaseEventDetails {
+  tube: TubeDescriptor
+}
+
+/**
+ * Remove a tube (and its contents) from one or more rack positions.
+ */
+export type RemoveTubeDetails = BaseEventDetails
+
+/**
+ * Move a tube — with its contents — from one position to another, within a rack
+ * or between racks. Contents are derived at replay, not serialized here.
+ */
+export interface MoveTubeDetails {
+  source: { labwareId?: string; well: WellId }
+  target: { labwareId?: string; well: WellId }
+}
+
+/**
  * Union type for all event details
  */
 export type EventDetails =
@@ -263,6 +306,9 @@ export type EventDetails =
   | ReadDetails
   | HarvestDetails
   | MacroProgramDetails
+  | PlaceTubeDetails
+  | RemoveTubeDetails
+  | MoveTubeDetails
   | OtherDetails
 
 /**
@@ -313,17 +359,24 @@ export function getAffectedWells(event: PlateEvent): WellId[] {
   if ('dest_wells' in details && details.dest_wells) {
     wells.push(...details.dest_wells)
   }
-  if ('source' in details && details.source?.wells) {
-    wells.push(...details.source.wells)
+  if ('source' in details) {
+    const srcWells = (details.source as { wells?: WellId[] } | undefined)?.wells
+    if (srcWells) wells.push(...srcWells)
   }
-  if ('target' in details && details.target?.wells) {
-    wells.push(...details.target.wells)
+  if ('target' in details) {
+    const tgtWells = (details.target as { wells?: WellId[] } | undefined)?.wells
+    if (tgtWells) wells.push(...tgtWells)
   }
   if ('mapping' in details && Array.isArray(details.mapping)) {
     for (const edge of details.mapping) {
       if (edge?.source_well) wells.push(edge.source_well)
       if (edge?.target_well) wells.push(edge.target_well)
     }
+  }
+  if (event.event_type === 'move_tube') {
+    const d = details as MoveTubeDetails
+    if (d.source?.well) wells.push(d.source.well)
+    if (d.target?.well) wells.push(d.target.well)
   }
   if (event.event_type === 'macro_program') {
     const program = (details as MacroProgramDetails).program
@@ -597,6 +650,17 @@ export function getEventSummary(event: PlateEvent): string {
       const programKind = d.program?.kind || 'macro'
       return `Macro ${programKind.replace(/_/g, ' ')} ${wellStr}`.trim()
     }
+    case 'place_tube': {
+      const d = event.details as PlaceTubeDetails
+      return `Place ${d.tube?.sizeLabel || ''} tube ${wellStr}`.trim()
+    }
+    case 'move_tube': {
+      const d = event.details as MoveTubeDetails
+      return `Move tube ${d.source?.well ?? ''}→${d.target?.well ?? ''}`.trim()
+    }
+    case 'remove_tube': {
+      return `Remove tube ${wellStr}`.trim()
+    }
     case 'other': {
       const d = event.details as OtherDetails
       return d.description || 'Other event'
@@ -635,6 +699,8 @@ export function createEmptyEvent(eventType: EventType): PlateEvent {
     t_offset: 'PT0M',
     details: (eventType === 'transfer' || eventType === 'multi_dispense')
       ? { source_wells: [], dest_wells: [] }
-      : { wells: [] },
+      : eventType === 'move_tube'
+        ? { source: { well: '' }, target: { well: '' } }
+        : { wells: [] },
   }
 }

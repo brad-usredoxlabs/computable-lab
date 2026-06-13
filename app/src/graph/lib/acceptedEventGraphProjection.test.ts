@@ -25,8 +25,12 @@ describe('buildAcceptedEventGraphProjection', () => {
       availableVerbs: ['add_material'],
       sourceSelection: { labware: plate, selectedWells: ['A1'] },
       deckPlatform: 'manual',
-      deckVariant: 'default',
-      deckPlacements: [{ slotId: 'A1', labwareId: plate.labwareId }],
+      deckVariant: 'manual_single_plate',
+      deckPlacements: [{ slotId: 'PLATE', labwareId: plate.labwareId }],
+      deckAllowedSurfaces: ['slot'],
+      deckAllowedSlots: ['PLATE'],
+      focusedLabwareId: plate.labwareId,
+      runId: 'RUN-1',
       eventGraphId: 'EVG-1',
     })
 
@@ -60,6 +64,17 @@ describe('buildAcceptedEventGraphProjection', () => {
         },
       ],
     })
+    expect(projection.runId).toBe('RUN-1')
     expect(projection.eventGraphId).toBe('EVG-1')
+    expect(projection.activeDeckScope).toEqual({
+      locked: true,
+      runId: 'RUN-1',
+      platformId: 'manual',
+      variantId: 'manual_single_plate',
+      allowedSurfaces: ['slot'],
+      allowedSlots: ['PLATE'],
+      allowedLabwareIds: [plate.labwareId],
+      focusedLabwareId: plate.labwareId,
+    })
   })
 })

@@ -740,6 +740,7 @@ export function createAgentOrchestrator(
           ...(attachments ? { attachments } : {}),
           ...(ctxMentions ? { mentions: ctxMentions } : {}),
           ...(ctxLabwares ? { editorLabwares: ctxLabwares } : {}),
+          ...(context.activeDeckScope ? { activeDeckScope: context.activeDeckScope } : {}),
           deps: {
             extractionService: deps.extractionService!,
             llmClient: deps.llmClient ?? null,
@@ -1459,6 +1460,7 @@ export function createAgentOrchestrator(
                 prompt: compilerPrompt,
                 ...(ctxMentions ? { mentions: ctxMentions } : {}),
                 ...(ctxLabwares ? { editorLabwares: ctxLabwares } : {}),
+                ...(context.activeDeckScope ? { activeDeckScope: context.activeDeckScope } : {}),
                 deps: {
                   extractionService: deps.extractionService!,
                   llmClient: null,

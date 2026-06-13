@@ -32,6 +32,7 @@ export function ViewerToolbar({ tab }: ViewerToolbarProps) {
       return <DocumentToolbar artifactId={tab.artifactId} />
     case 'project-details':
     case 'record-create':
+    case 'record-edit':
       // These surfaces carry their own headers inside the viewer body —
       // no per-surface toolbar.
       return null

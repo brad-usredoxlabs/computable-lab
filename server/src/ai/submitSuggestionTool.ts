@@ -47,7 +47,11 @@ export const SUBMIT_SUGGESTION_INSTRUCTION = [
   '- Do not ask which vendor/catalog/plate subtype for a generic request like "a 96-well plate". Emit a generic labwareRequirement and let the user refine it later.',
   '- Ask a labware clarification only when no baseline classCurie can be inferred at all.',
   '- Use `labwareAdditions[]` only when you have a concrete known labware record or definition id. Never invent LBW-* record ids.',
-  '- If you need more information, call `compile_event_graph_draft` with a `clarification` (and no events) instead.',
+  '- If the context includes an active deck scope, do not propose labwareRequirements, labwareAdditions, deckSlot values, or lawn placements outside that scope. Ask for a layout-switch clarification instead.',
+  '- If you need more information, call `compile_event_graph_draft` with atomic `clarificationRequests[]` (and no events) instead.',
+  "- Clarify only ambiguous literals in the user's prompt, such as which named material, which concentration meaning, or which wells. One request per ambiguity.",
+  '- Do not ask the user to choose aliquots, vials, inventory sources, lots, or physical instances unless the user explicitly asked for a specific physical source. Draft concept/formulation additions first; inventory binding is a later refinement.',
+  '- Never combine unrelated questions into one multiple-choice clarification. For example, concentration ambiguity and well-range ambiguity must be separate clarificationRequests.',
 ].join('\n');
 
 const GROUNDED_REF_SCHEMA = {
@@ -185,7 +189,7 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
         },
         clarificationRequests: {
           type: 'array',
-          description: 'Typed follow-up questions for ambiguous materials, labware, parameters, wells, or sequence choices. Use menuProvider /m for material-like choices and /l for labware choices.',
+          description: 'Atomic follow-up questions for ambiguous literals in the user prompt. Use one request per ambiguity. Use menuProvider /m for named material/ontology choices and /l for labware choices. Do not ask for aliquots, vials, inventory sources, lots, or physical instances unless the user explicitly requested a physical source.',
           items: {
             type: 'object',
             required: ['id', 'kind', 'prompt'],

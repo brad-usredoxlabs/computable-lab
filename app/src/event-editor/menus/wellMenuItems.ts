@@ -1,8 +1,10 @@
 import type { ContextMenuItem } from './ContextMenu'
 import type { Labware } from '../../types/labware'
+import { isTubeRack, defaultTubeForLabware } from '../../types/labware'
 import type { WellId } from '../../types/plate'
 import type { TipState } from '../types'
 import type { EventEditorActions } from '../EventEditorContext'
+import { generateEventId } from '../../types/events'
 import { formatVolume, getWellState, type LabwareStates } from '../../graph/lib/eventGraph'
 
 interface BuildArgs {
@@ -20,6 +22,11 @@ interface BuildArgs {
    * window.prompt() calls.
    */
   onAddMaterial?: (wells: WellId[]) => void
+  /**
+   * Begin a "move tube" gesture from the given well: the caller arms a
+   * pending state and commits a move_tube on the next destination click.
+   */
+  onBeginMoveTube?: (fromWell: WellId) => void
 }
 
 export function buildWellMenuItems({
@@ -31,6 +38,7 @@ export function buildWellMenuItems({
   onClearSelection,
   onInspect,
   onAddMaterial,
+  onBeginMoveTube,
 }: BuildArgs): { title: string; items: ContextMenuItem[] } {
   const labwareId = labware.labwareId
   const single = targetWells.length === 1
@@ -42,6 +50,8 @@ export function buildWellMenuItems({
   let anyHasVolume = false
   let firstNonEmptyLabel: string | null = null
   let firstNonEmptyVolume = 0
+  let anyHasTube = false
+  let singleWellHasTube = false
   for (const wellId of targetWells) {
     const wellState = getWellState(labwareStates, labwareId, wellId)
     if (wellState.volume_uL > 0) {
@@ -51,7 +61,13 @@ export function buildWellMenuItems({
         firstNonEmptyVolume = wellState.volume_uL
       }
     }
+    if (wellState.tube) {
+      anyHasTube = true
+      if (single) singleWellHasTube = true
+    }
   }
+
+  const tubeRack = isTubeRack(labware)
 
   const items: ContextMenuItem[] = []
 
@@ -122,6 +138,71 @@ export function buildWellMenuItems({
       })
     },
   })
+
+  // ---- Tube actions (tube racks only) ----
+  if (tubeRack) {
+    items.push({ id: 'sep-tube', label: '', separator: true })
+
+    // One "Place {size} tube" item per size the rack offers (its tubeOptions,
+    // or a single derived default). Placement is permissive — these are
+    // convenience sizes, not a constraint.
+    const sizes = labware.tubeOptions && labware.tubeOptions.length > 0
+      ? labware.tubeOptions
+      : [defaultTubeForLabware(labware)]
+    for (const size of sizes) {
+      items.push({
+        id: `place-tube-${size.sizeLabel}`,
+        label: single ? `Place ${size.sizeLabel} tube` : `Place ${size.sizeLabel} tubes`,
+        icon: '🧪',
+        ...(anyHasTube ? { detail: 'replaces tube' } : {}),
+        onSelect: () => {
+          actions.appendEvent({
+            eventId: generateEventId(),
+            event_type: 'place_tube',
+            details: {
+              labwareId,
+              wells: targetWells,
+              tube: {
+                sizeLabel: size.sizeLabel,
+                maxVolume_uL: size.maxVolume_uL,
+                ...(size.wellShape ? { wellShape: size.wellShape } : {}),
+              },
+            },
+          })
+        },
+      })
+    }
+
+    // ---- Move tube (single well that holds a tube) ----
+    if (single && singleWellHasTube && onBeginMoveTube) {
+      items.push({
+        id: 'move-tube',
+        label: 'Move tube to…',
+        icon: '↪️',
+        onSelect: () => onBeginMoveTube(targetWells[0] as WellId),
+      })
+    }
+
+    // ---- Remove tube ----
+    items.push({
+      id: 'remove-tube',
+      label: single ? 'Remove tube' : 'Remove tubes',
+      icon: '🗑️',
+      destructive: true,
+      disabled: !anyHasTube,
+      ...(anyHasTube ? {} : { detail: 'no tube' }),
+      onSelect: () => {
+        if (anyHasVolume && !window.confirm('Remove tube(s) and discard their contents?')) return
+        actions.appendEvent({
+          eventId: generateEventId(),
+          event_type: 'remove_tube',
+          details: { labwareId, wells: targetWells },
+        })
+      },
+    })
+
+    items.push({ id: 'sep-tube-end', label: '', separator: true })
+  }
 
   // ---- Inspect (single only) ----
   if (single && onInspect) {

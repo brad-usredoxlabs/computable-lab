@@ -38,6 +38,7 @@ import { ViewerToolbar } from '../viewer/ViewerToolbar'
 import { ProjectTabStrip } from './ProjectTabStrip'
 import { ProjectDetailsView } from './ProjectDetailsView'
 import { RecordCreatePanel } from '../create/RecordCreatePanel'
+import { RecordEditPanel } from '../create/RecordEditPanel'
 import { RightPane } from '../right-pane/RightPane'
 import type { WorkspaceTab } from '../workspace/types'
 import { projectDetailsTabId } from '../workspace/types'
@@ -219,6 +220,16 @@ function LeftPane({ activeTab, studyId }: LeftPaneProps) {
         experimentId={activeTab.experimentId}
         onCreated={() => ws.closeTab(activeTab.id)}
         onCancel={() => ws.closeTab(activeTab.id)}
+      />
+    )
+  }
+  if (activeTab.kind === 'record-edit') {
+    return (
+      <RecordEditPanel
+        key={activeTab.id}
+        recordId={activeTab.recordId}
+        title={activeTab.title}
+        onClose={() => ws.closeTab(activeTab.id)}
       />
     )
   }

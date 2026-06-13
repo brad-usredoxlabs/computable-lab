@@ -61,6 +61,8 @@ export function PreviewActionBar() {
         events: [...state.events, ...acceptedEvents],
         labwares: { ...state.labwares, ...activePreview.previewLabwares },
         placements: [...state.placements, ...activePreview.previewPlacements],
+        platformId: state.platformId,
+        variantId: state.variantId,
       })
       actions.commitPreview(acceptedEvents, persisted.eventGraphId, persisted.commit)
       if (workspace) {

@@ -81,7 +81,7 @@ import type { LabStateSnapshot } from '../compiler/state/LabState.js';
 import { emptyLabState } from '../compiler/state/LabState.js';
 import type { LabStateCache } from '../compiler/state/LabStateCache.js';
 import { parsePromptMentions, type PromptMention } from './promptMentions.js';
-import type { LabwareSummary } from './types.js';
+import type { ActiveDeckScope, LabwareSummary } from './types.js';
 import { getProtocolSpecRegistry } from '../registry/ProtocolSpecRegistry.js';
 import { getAssaySpecRegistry } from '../registry/AssaySpecRegistry.js';
 import { getStampPatternRegistry } from '../registry/StampPatternRegistry.js';
@@ -111,6 +111,7 @@ export interface RunChatbotCompileArgs {
    * mention-resolved labware can be honored without a record-store lookup.
    */
   editorLabwares?: LabwareSummary[];
+  activeDeckScope?: ActiveDeckScope;
   priorLabState?: LabStateSnapshot;
   deps: {
     extractionService: ExtractionRunnerService;
@@ -188,6 +189,19 @@ function normalizePromptForCompile(prompt: string): string {
     .trim();
 }
 
+function scopeAllowsLabwareAddition(addition: { deckSlot?: string }, scope?: ActiveDeckScope): boolean {
+  if (!scope?.locked) return true
+  if (addition.deckSlot) return scope.allowedSlots.includes(addition.deckSlot)
+  if (!scope.allowedSurfaces.includes('lawn') && scope.allowedSlots.length === 1) return true
+  return scope.allowedSurfaces.includes('lawn')
+}
+
+function deckScopeGapMessage(scope: ActiveDeckScope): string {
+  const slots = scope.allowedSlots.length > 0 ? scope.allowedSlots.join(', ') : 'no deck slots'
+  const surfaces = scope.allowedSurfaces.length > 0 ? scope.allowedSurfaces.join(', ') : 'no surfaces'
+  return 'This run is locked to ' + scope.platformId + '/' + scope.variantId
+    + ' (' + surfaces + '; slots: ' + slots + '). Explicit layout replacement is required before adding labware outside that scope.'
+}
 export async function runChatbotCompile(
   args: RunChatbotCompileArgs,
 ): Promise<RunChatbotCompileResult> {
@@ -357,6 +371,7 @@ export async function runChatbotCompile(
     attachments: args.attachments ?? [],
     mentions: effectiveMentions,
     editorLabwares: args.editorLabwares ?? [],
+    activeDeckScope: args.activeDeckScope,
     labState: effectivePrior,
   }, undefined, args.onPassEvent);
 
@@ -365,6 +380,9 @@ export async function runChatbotCompile(
   const applyDirOutput = (result.outputs.get('apply_directives') ?? { directives: [] }) as ApplyDirectivesPassOutput;
   const resolvedRoles = (result.outputs.get('resolve_roles') ?? { events: [] }) as ResolveRolesOutput;
   const labware = (result.outputs.get('resolve_labware') ?? { labwareAdditions: [], resolvedLabwares: [] }) as LabwareResolveOutput;
+  const activeDeckScope = args.activeDeckScope;
+  const scopedLabwareAdditions = (labware.labwareAdditions ?? []).filter((addition) => scopeAllowsLabwareAddition(addition, activeDeckScope));
+  const blockedLabwareAdditions = (labware.labwareAdditions ?? []).filter((addition) => !scopeAllowsLabwareAddition(addition, activeDeckScope));
   const resolveRefs = (result.outputs.get('resolve_references') ?? { resolvedRefs: [], unresolvableRefs: [] }) as ResolveReferencesOutput;
   const priorLabware = (result.outputs.get('resolve_prior_labware_references') ?? { resolvedLabwareRefs: [], unresolved: [] }) as ResolvePriorLabwareReferencesOutput;
   const labStateOutput = (result.outputs.get('lab_state') ?? { events: [], snapshotAfter: emptyLabState() }) as LabStatePassOutput;
@@ -414,6 +432,18 @@ export async function runChatbotCompile(
       kind: 'clarification' as const,
       message: blocker.message,
       details: { ...blocker, source: 'executionScalePlan' },
+    });
+  }
+
+  if (activeDeckScope && blockedLabwareAdditions.length > 0) {
+    gaps.push({
+      kind: 'clarification' as const,
+      message: deckScopeGapMessage(activeDeckScope),
+      details: {
+        source: 'activeDeckScope',
+        activeDeckScope,
+        blockedLabwareAdditions,
+      },
     });
   }
 
@@ -545,7 +575,7 @@ export async function runChatbotCompile(
 
   return {
     events,
-    labwareAdditions: labware.labwareAdditions ?? [],
+    labwareAdditions: scopedLabwareAdditions,
     unresolvedRefs,
     ...(clarification ? { clarification } : {}),
     diagnostics,

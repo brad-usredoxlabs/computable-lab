@@ -32,6 +32,7 @@ import {
   resolveProtocol,
   resolveSource,
   resolveTarget,
+  resolveTube,
 } from './resolvers'
 import type {
   SlashCommandKind,
@@ -46,7 +47,9 @@ const DEFAULT_COMMANDS: SlashCommandSpec[] = [
   { kind: 'labware', aliases: ['l', 'labware'], resolve: resolveLabware },
   { kind: 'protocol', aliases: ['p', 'protocol'], resolve: resolveProtocol },
   { kind: 'source', aliases: ['s', 'source', 'src'], resolve: resolveSource },
-  { kind: 'target', aliases: ['t', 'target', 'tar'], resolve: resolveTarget },
+  // `/t` now means tube; target keeps its `tar`/`target` aliases.
+  { kind: 'target', aliases: ['target', 'tar'], resolve: resolveTarget },
+  { kind: 'tube', aliases: ['t', 'tube'], resolve: resolveTube },
 ]
 
 export interface SlashMenuOptions {

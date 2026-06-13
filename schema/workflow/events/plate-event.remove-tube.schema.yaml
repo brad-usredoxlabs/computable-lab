@@ -1,0 +1,25 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/events/plate-event.remove-tube.schema.yaml"
+title: "PlateEventRemoveTubeDetails"
+type: object
+additionalProperties: false
+required: [wells]
+
+properties:
+  labwareId:
+    type: string
+    description: "Editor-native id of the tube rack."
+  labwareInstanceId:
+    $ref: "../../datatypes/ref.schema.yaml"
+  wells:
+    type: array
+    items:
+      type: string
+    minItems: 1
+    description: "Rack positions the tube (and its contents) is removed from."
+  family:
+    type: string
+    enum: [material-movement, state-transformation, lifecycle, measurement, composition]
+    default: lifecycle
+  notes:
+    type: string

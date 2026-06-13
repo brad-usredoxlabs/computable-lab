@@ -30,6 +30,9 @@ properties:
     - harvest
     - multi_dispense
     - macro_program
+    - place_tube
+    - move_tube
+    - remove_tube
     - other
 
   at:

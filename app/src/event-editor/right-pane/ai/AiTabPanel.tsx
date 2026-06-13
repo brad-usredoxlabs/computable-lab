@@ -32,6 +32,15 @@ import type { AssistDraftResult } from './assistStream'
 import { AddSourceModal } from './AddSourceModal'
 import './ai.css'
 
+export function clarificationAnswerPrompt(
+  answer: AiClarificationAnswer,
+  request: AiClarificationRequest,
+): string {
+  const target = request.entityType ?? request.kind
+  const value = answer.mentionToken ?? answer.label ?? answer.value ?? answer.optionId ?? 'answer'
+  return `Use ${value} for ${target}.`
+}
+
 /**
  * Tiny prefill-progress chip for the panel header. llama.cpp exposes no
  * mid-prefill percentage, so this is a three-phase indicator: pulsing while
@@ -103,6 +112,21 @@ export function AiTabPanel() {
         : null
     const activeEventGraphId =
       activeTab?.kind === 'deck' ? activeTab.eventGraphId : null
+    const activeVariant = editorState
+      ? getVariantManifest(editorState.platforms, editorState.platformId, editorState.variantId)
+      : null
+    const activePlacement = editorState?.focusPlacementId
+      ? editorState.placements.find((p) => p.placementId === editorState.focusPlacementId) ?? null
+      : null
+    const deckAllowedSurfaces = activeVariant
+      ? [
+          ...(activeVariant.slots.length > 0 ? ['slot' as const] : []),
+          ...(activeVariant.surface || activeVariant.sideLawn ? ['lawn' as const] : []),
+        ]
+      : undefined
+    const deckAllowedSlots = activeVariant?.slots
+      .filter((slot) => slot.kind !== 'trash' && slot.kind !== 'special' && slot.reachable !== false)
+      .map((slot) => slot.id)
     const acceptedGraphProjection = editorState
       ? buildAcceptedEventGraphProjection({
           labwares: new Map(Object.entries(editorState.labwares)),
@@ -121,6 +145,9 @@ export function AiTabPanel() {
             slotId: p.location.kind === 'slot' ? p.location.slotId : 'lawn',
             labwareId: p.labwareId,
           })),
+          ...(deckAllowedSurfaces ? { deckAllowedSurfaces } : {}),
+          ...(deckAllowedSlots ? { deckAllowedSlots } : {}),
+          ...(activePlacement?.labwareId ? { focusedLabwareId: activePlacement.labwareId } : {}),
           ...(editorState.runId ? { runId: editorState.runId } : {}),
           ...(editorState.eventGraphId ? { eventGraphId: editorState.eventGraphId } : {}),
         })
@@ -186,6 +213,7 @@ export function AiTabPanel() {
         labwareAdditions,
         labwareRequirements,
         existingLabwares: state.labwares,
+        activeDeckScope: context.activeDeckScope,
       })
       const hasPreview =
         preview.previewPlacements.length > 0 || preview.previewEvents.length > 0
@@ -219,7 +247,7 @@ export function AiTabPanel() {
         ...(revisionHistory ? { revisionHistory } : {}),
       })
     },
-    [editor],
+    [context.activeDeckScope, editor],
   )
 
   const chat = useChatThread({
@@ -296,9 +324,7 @@ export function AiTabPanel() {
 
   const handleClarificationAnswer = useCallback(
     async (answer: AiClarificationAnswer, request: AiClarificationRequest) => {
-      const label = answer.label ?? answer.value ?? answer.optionId ?? 'answer'
-      const prompt = `Use ${label} for ${request.entityType ?? request.kind}.`
-      await chat.send(prompt, { clarificationAnswers: [answer] })
+      await chat.send(clarificationAnswerPrompt(answer, request), { clarificationAnswers: [answer] })
     },
     [chat],
   )

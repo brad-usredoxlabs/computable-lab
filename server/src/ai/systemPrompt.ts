@@ -127,6 +127,7 @@ function formatDeckContext(context: EditorContext): string {
   const platform = context.deckPlatform ?? 'unknown';
   const variant = context.deckVariant ?? 'unknown';
   const mode = context.manualPipettingMode ? 'manual' : 'robot-aware';
+  const scope = context.activeDeckScope;
   const placements = (context.deckPlacements ?? []).length > 0
     ? context.deckPlacements!
         .map((placement) => {
@@ -139,7 +140,19 @@ function formatDeckContext(context: EditorContext): string {
         })
         .join('\n')
     : '(no deck placements)';
-  return `Platform: ${platform}\nVariant: ${variant}\nMode: ${mode}\nPlacements:\n${placements}`;
+  const scopeLines = scope
+    ? [
+        'Active deck scope: LOCKED',
+        '- runId: ' + (scope.runId ?? 'none'),
+        '- platform/variant: ' + scope.platformId + '/' + scope.variantId,
+        '- allowed surfaces: ' + (scope.allowedSurfaces.join(', ') || '(none)'),
+        '- allowed slots: ' + (scope.allowedSlots.join(', ') || '(none)'),
+        '- allowed labware ids: ' + (scope.allowedLabwareIds.join(', ') || '(none)'),
+        ...(scope.focusedLabwareId ? ['- focused labware id: ' + scope.focusedLabwareId] : []),
+        '- Do not draft labware additions or placements outside this scope. If the user asks for another surface or deck layout, ask for clarification to replace/switch the run layout.',
+      ].join('\n')
+    : 'Active deck scope: unlocked';
+  return `Platform: ${platform}\nVariant: ${variant}\nMode: ${mode}\nPlacements:\n${placements}\n\n${scopeLines}`;
 }
 
 function formatMaterialTracking(context: EditorContext): string {
@@ -439,10 +452,12 @@ export function deriveContextCacheKey(
   surface: AiSurface | undefined,
   context: EditorContext,
 ): string {
+  const scope = context.activeDeckScope;
+  const scopeSuffix = scope ? `:${scope.platformId}:${scope.variantId}` : '';
   if (surface?.startsWith('run-workspace') && context.runId) {
-    return `run:${context.runId}`;
+    return `run:${context.runId}${scopeSuffix}`;
   }
-  return `event-editor:${context.runId ?? context.eventGraphId ?? 'default'}`;
+  return `event-editor:${context.runId ?? context.eventGraphId ?? 'default'}${scopeSuffix}`;
 }
 
 /**

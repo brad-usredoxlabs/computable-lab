@@ -38,9 +38,11 @@ export function Viewer({ tab }: ViewerProps) {
       return <DocumentEditor artifactId={tab.artifactId} title={tab.title} />
     case 'project-details':
     case 'record-create':
+    case 'record-edit':
       // ProjectWorkspacePage's LeftPane renders these kinds directly
-      // (ProjectDetailsView / RecordCreatePanel) and doesn't call Viewer;
-      // these arms exist so a future caller can't crash by handing one in.
+      // (ProjectDetailsView / RecordCreatePanel / RecordEditPanel) and doesn't
+      // call Viewer; these arms exist so a future caller can't crash by
+      // handing one in.
       return <EmptyViewerState />
     default: {
       const _exhaustive: never = tab

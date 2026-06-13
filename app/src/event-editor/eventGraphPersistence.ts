@@ -9,6 +9,14 @@ export interface EventEditorLayoutSnapshot {
   placements: EventEditorPlacement[]
 }
 
+export interface RunDeckLock {
+  locked: true
+  platformId: string
+  variantId: string
+  source: 'first-edit' | 'method-attach' | 'template' | 'manual-replace'
+  lockedAt: string
+}
+
 export interface AcceptedEventGraphPayload {
   events: PlateEvent[]
   labwares: Labware[]
@@ -36,6 +44,8 @@ export interface PersistAcceptedEventGraphInput {
   events: PlateEvent[]
   labwares: Record<string, Labware>
   placements: EventEditorPlacement[]
+  platformId?: string
+  variantId?: string
 }
 
 interface LoadEventGraphResult {
@@ -63,6 +73,8 @@ type SaveEventGraphFn = (
 ) => Promise<SaveEventGraphResult>
 
 type LoadEventGraphFn = (eventGraphId: string) => Promise<LoadEventGraphResult>
+type GetRecordFn = typeof apiClient.getRecord
+type UpdateRecordFn = typeof apiClient.updateRecord
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -153,6 +165,49 @@ export function hydrateEventEditorGraph(graph: LoadEventGraphResult): {
   }
 }
 
+function isRunDeckLock(value: unknown): value is RunDeckLock {
+  return Boolean(value)
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && (value as { locked?: unknown }).locked === true
+    && typeof (value as { platformId?: unknown }).platformId === 'string'
+    && typeof (value as { variantId?: unknown }).variantId === 'string'
+}
+
+export async function ensureRunDeckLock(
+  input: Pick<PersistAcceptedEventGraphInput, 'runId' | 'platformId' | 'variantId'>,
+  getRecord: GetRecordFn = apiClient.getRecord,
+  updateRecord: UpdateRecordFn = apiClient.updateRecord,
+  now: () => string = () => new Date().toISOString(),
+): Promise<RunDeckLock | null> {
+  if (!input.runId || !input.platformId || !input.variantId) return null
+  const run = await getRecord(input.runId)
+  const payload = (run.payload ?? {}) as Record<string, unknown>
+  const existing = payload.methodDeckLock
+  if (isRunDeckLock(existing)) {
+    if (existing.platformId !== input.platformId || existing.variantId !== input.variantId) {
+      throw new Error(
+        'Run ' + input.runId + ' is locked to ' + existing.platformId + '/' + existing.variantId
+          + '; explicit layout replacement is required before saving ' + input.platformId + '/' + input.variantId + '.',
+      )
+    }
+    return existing
+  }
+  const lock: RunDeckLock = {
+    locked: true,
+    platformId: input.platformId,
+    variantId: input.variantId,
+    source: 'first-edit',
+    lockedAt: now(),
+  }
+  await updateRecord(input.runId, {
+    ...payload,
+    methodDeckLock: lock,
+    methodPlatform: input.platformId,
+    updatedAt: lock.lockedAt,
+  })
+  return lock
+}
 export function buildAcceptedEventGraphPayload(input: Omit<PersistAcceptedEventGraphInput, 'eventGraphId'>): AcceptedEventGraphPayload {
   const runId = input.runId || undefined
   return {
@@ -188,6 +243,7 @@ export async function persistAcceptedEventGraph(
   input: PersistAcceptedEventGraphInput,
   saveEventGraph: SaveEventGraphFn = apiClient.saveEventGraph,
 ): Promise<PersistAcceptedEventGraphResult> {
+  await ensureRunDeckLock(input)
   const payload = buildAcceptedEventGraphPayload(input)
   const result = await saveEventGraph(input.eventGraphId, payload)
   assertSavedEventGraphValid(result)

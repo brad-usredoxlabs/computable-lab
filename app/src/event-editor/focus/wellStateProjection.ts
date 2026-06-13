@@ -39,3 +39,27 @@ export function occupiedWellsForLabware(
   }
   return occupied
 }
+
+export interface WellTube {
+  sizeLabel: string
+  maxVolume_uL: number
+}
+
+/**
+ * Positions that hold a tube (regardless of whether they also hold material).
+ * Orthogonal to `occupiedWellsForLabware` (which tracks contents) so the focus
+ * view can distinguish empty slot / empty tube / filled tube.
+ */
+export function tubeWellsForLabware(
+  labwareStates: LabwareStates | null,
+  labwareId: string | undefined,
+): Map<WellId, WellTube> {
+  const tubes = new Map<WellId, WellTube>()
+  if (!labwareStates || !labwareId) return tubes
+  const wellStates = labwareStates.get(labwareId)
+  if (!wellStates) return tubes
+  for (const [wellId, state] of wellStates.entries()) {
+    if (state.tube) tubes.set(wellId, { sizeLabel: state.tube.sizeLabel, maxVolume_uL: state.tube.maxVolume_uL })
+  }
+  return tubes
+}

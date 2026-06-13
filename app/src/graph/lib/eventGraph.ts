@@ -7,6 +7,7 @@
 
 import type { WellId } from '../../types/plate'
 import type { Labware } from '../../types/labware'
+import { isTubeRack, defaultTubeForLabware } from '../../types/labware'
 import type {
   PlateEvent,
   AddMaterialDetails,
@@ -15,6 +16,8 @@ import type {
   WashDetails,
   IncubateDetails,
   HarvestDetails,
+  PlaceTubeDetails,
+  MoveTubeDetails,
 } from '../../types/events'
 import { getAddMaterialRef, getRefLabel, normalizeTransferDetails } from '../../types/events'
 import {
@@ -71,6 +74,18 @@ export interface WellComputedState {
     temperature?: { value: number; unit: string }
     eventId: string
   }>
+  /**
+   * Tube occupying this rack position, if any (lightweight occupancy — size
+   * only). Undefined = empty slot. Set by place_tube/move_tube and auto-implied
+   * when material lands in a tubeless rack well; capacity follows this tube.
+   */
+  tube?: {
+    sizeLabel: string
+    maxVolume_uL: number
+    wellShape?: 'round' | 'square' | 'v-bottom' | 'conical'
+    /** True when this tube was auto-implied (material added without an explicit place_tube). */
+    implied?: boolean
+  }
 }
 
 type ConcentrationDescriptor = {
@@ -235,6 +250,7 @@ function cloneWellState(state: WellComputedState): WellComputedState {
       ...incubation,
       temperature: incubation.temperature ? { ...incubation.temperature } : undefined,
     })),
+    ...(state.tube ? { tube: { ...state.tube } } : {}),
   }
 }
 
@@ -609,6 +625,26 @@ function applyGenericEvent(state: WellComputedState, event: PlateEvent): WellCom
   return syncDerivedMaterials(newState)
 }
 
+function applyPlaceTube(state: WellComputedState, event: PlateEvent, details: PlaceTubeDetails): WellComputedState {
+  const newState = cloneWellState(state)
+  newState.tube = { ...details.tube }
+  newState.eventHistory.push(event.eventId)
+  newState.lastEventId = event.eventId
+  return newState
+}
+
+function applyRemoveTube(state: WellComputedState, event: PlateEvent): WellComputedState {
+  // The tube leaves with its contents — the position becomes a fully empty slot.
+  const newState = cloneWellState(state)
+  newState.tube = undefined
+  newState.volume_uL = 0
+  newState.components = []
+  newState.materials = []
+  newState.eventHistory.push(event.eventId)
+  newState.lastEventId = event.eventId
+  return newState
+}
+
 export type LabwareStates = Map<string, Map<WellId, WellComputedState>>
 
 type TransferEdge = {
@@ -766,14 +802,20 @@ export function computeLabwareStates(events: PlateEvent[], labwares: Map<string,
         }))
       }
 
+      const destLabware = destLabwareId ? labwares.get(destLabwareId) : undefined
       for (const edge of transferEdges) {
         if (!edge.destWellId) continue
         const sourceState = sourceStatesBeforeTransfer.get(edge.sourceWellId) || createEmptyWellState()
         const destState = destLabwareState.get(edge.destWellId) || createEmptyWellState()
-        destLabwareState.set(edge.destWellId, applyTransferDest(destState, sourceState, event, {
+        let nextDest = applyTransferDest(destState, sourceState, event, {
           ...transferDetails,
           volume: { value: edge.transferVolume_uL, unit: 'uL' },
-        }))
+        })
+        // Material into a tubeless rack well implies a default tube.
+        if (destLabware && isTubeRack(destLabware) && !nextDest.tube) {
+          nextDest = { ...nextDest, tube: { ...defaultTubeForLabware(destLabware), implied: true } }
+        }
+        destLabwareState.set(edge.destWellId, nextDest)
       }
 
       if (sourceLabwareId) states.set(sourceLabwareId, sourceLabwareState)
@@ -781,10 +823,37 @@ export function computeLabwareStates(events: PlateEvent[], labwares: Map<string,
       continue
     }
 
+    if (eventType === 'move_tube') {
+      // Whole-state move: the tube and its contents relocate; the source
+      // position becomes empty. Works within a rack or between racks.
+      const moveDetails = details as unknown as MoveTubeDetails
+      const srcLabwareId = moveDetails.source?.labwareId || labwareId
+      const tgtLabwareId = moveDetails.target?.labwareId || labwareId
+      const srcWell = moveDetails.source?.well
+      const tgtWell = moveDetails.target?.well
+      const sameWell = srcLabwareId === tgtLabwareId && srcWell === tgtWell
+      if (srcLabwareId && tgtLabwareId && srcWell && tgtWell && !sameWell) {
+        const srcLabwareState = states.get(srcLabwareId) || new Map()
+        const tgtLabwareState = states.get(tgtLabwareId) || new Map()
+        const moving = srcLabwareState.get(srcWell)
+        if (moving && moving.tube) {
+          const moved = cloneWellState(moving)
+          moved.eventHistory.push(event.eventId)
+          moved.lastEventId = event.eventId
+          tgtLabwareState.set(tgtWell, moved)
+          srcLabwareState.set(srcWell, createEmptyWellState())
+          states.set(srcLabwareId, srcLabwareState)
+          states.set(tgtLabwareId, tgtLabwareState)
+        }
+      }
+      continue
+    }
+
     if (!labwareId) continue
 
     const labwareState = states.get(labwareId) || new Map()
     const wells = (details.wells as WellId[]) || []
+    const labware = labwares.get(labwareId)
 
     for (const wellId of wells) {
       const currentState = labwareState.get(wellId) || createEmptyWellState()
@@ -806,11 +875,22 @@ export function computeLabwareStates(events: PlateEvent[], labwares: Map<string,
         case 'mix':
           newState = applyMix(currentState, event, details as MixDetails)
           break
+        case 'place_tube':
+          newState = applyPlaceTube(currentState, event, details as unknown as PlaceTubeDetails)
+          break
+        case 'remove_tube':
+          newState = applyRemoveTube(currentState, event)
+          break
         case 'read':
         case 'other':
         default:
           newState = applyGenericEvent(currentState, event)
           break
+      }
+
+      // Material into a tubeless rack well implies a default tube.
+      if (eventType === 'add_material' && labware && isTubeRack(labware) && !newState.tube) {
+        newState.tube = { ...defaultTubeForLabware(labware), implied: true }
       }
 
       labwareState.set(wellId, newState)
@@ -840,6 +920,15 @@ export function getWellEvents(events: PlateEvent[], labwareId: string, wellId: W
 
       if (sourceLabwareId === labwareId && normalized.sourceWells.includes(wellId)) return true
       if (destLabwareId === labwareId && normalized.destWells.includes(wellId)) return true
+      return false
+    }
+
+    if (event.event_type === 'move_tube') {
+      const moveDetails = details as unknown as MoveTubeDetails
+      const srcLabwareId = moveDetails.source?.labwareId || details.labwareId
+      const tgtLabwareId = moveDetails.target?.labwareId || details.labwareId
+      if (srcLabwareId === labwareId && moveDetails.source?.well === wellId) return true
+      if (tgtLabwareId === labwareId && moveDetails.target?.well === wellId) return true
       return false
     }
 

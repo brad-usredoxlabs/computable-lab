@@ -81,6 +81,7 @@ export type ValidationCode =
   | 'EMPTY_EVENT_GRAPH'
   // Warnings
   | 'LOW_VOLUME_WARNING'
+  | 'TUBELESS_WELL_AUTOFILLED'
   | 'HIGH_EVAPORATION_RISK'
   | 'MISSING_MATERIAL_REF'
   | 'UNKNOWN_SOURCE_CONCENTRATION'
@@ -913,10 +914,33 @@ function validateVolumeConstraints(
     const labware = labwares.get(labwareId)
     if (!labware) continue
     
-    const maxVolume = options.customMaxVolumes?.get(labwareId) || labware.geometry.maxVolume_uL
     const minVolume = options.minVolumeWarningThreshold || labware.geometry.minVolume_uL
-    
+
     for (const [wellId, wellState] of labwareState) {
+      // Effective capacity follows the placed tube (a 0.5 mL tube in a 1.5 mL
+      // slot caps at ~500 µL), then per-labware override, then the inert
+      // per-well wellOverrides hint, then the rack default.
+      const maxVolume =
+        wellState.tube?.maxVolume_uL
+        ?? options.customMaxVolumes?.get(labwareId)
+        ?? labware.wellOverrides?.[wellId]?.maxVolume_uL
+        ?? labware.geometry.maxVolume_uL
+
+      // Material landed in a tube-rack well with no explicitly placed tube —
+      // a default tube was assumed. Non-blocking nudge.
+      if (!options.errorsOnly && wellState.tube?.implied && (wellState.volume_uL > 0 || wellState.materials.length > 0)) {
+        errors.push({
+          id: generateErrorId(),
+          labwareId,
+          wellId,
+          eventId: wellState.lastEventId || undefined,
+          severity: 'warning',
+          code: 'TUBELESS_WELL_AUTOFILLED',
+          message: `Well ${wellId} had no tube placed; assumed a ${wellState.tube.sizeLabel} tube`,
+          details: { assumedTube: wellState.tube.sizeLabel },
+        })
+      }
+
       // Check for negative volume (should not happen with correct computation)
       if (wellState.volume_uL < 0) {
         errors.push({

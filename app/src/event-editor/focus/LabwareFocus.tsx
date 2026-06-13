@@ -3,9 +3,10 @@ import { useEventEditor } from '../EventEditorContext'
 import { getPlatformManifest, getVariantManifest } from '../../shared/lib/platformRegistry'
 import { computeLabwareStates, getWellState, getMaterialsSummary } from '../../graph/lib/eventGraph'
 import { buildCompositionStyles, buildCompositionLegend, wellCompositionSignature, type WellHueStyle } from '../../graph/lib/wellSignature'
-import { eventsWithPreviewState, labwareMapWithPreviewState, occupiedWellsForLabware } from './wellStateProjection'
+import { eventsWithPreviewState, labwareMapWithPreviewState, occupiedWellsForLabware, tubeWellsForLabware } from './wellStateProjection'
 import type { Labware } from '../../types/labware'
-import { LABWARE_TYPE_ICONS, LABWARE_TYPE_LABELS } from '../../types/labware'
+import { LABWARE_TYPE_ICONS, LABWARE_TYPE_LABELS, isTubeRack } from '../../types/labware'
+import { generateEventId } from '../../types/events'
 import type { WellId } from '../../types/plate'
 import { WellGrid } from './WellGrid'
 import { WellTooltip } from './WellTooltip'
@@ -69,6 +70,9 @@ export function LabwareFocus() {
     y: number
     targetWells: WellId[]
   }>({ open: false, x: 0, y: 0, targetWells: [] })
+  // When set, the next well click commits a move_tube from this position into
+  // the clicked destination (within the focused rack).
+  const [moveTubeFrom, setMoveTubeFrom] = useState<WellId | null>(null)
   const canvasRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLDivElement>(null)
   // Rendered size of the well-grid SVG. Tracks the actual width/height of
@@ -158,6 +162,10 @@ export function LabwareFocus() {
     () => occupiedWellsForLabware(labwareStates, labware?.labwareId),
     [labwareStates, labware],
   )
+  const tubeWellIds = useMemo(
+    () => tubeWellsForLabware(labwareStates, labware?.labwareId),
+    [labwareStates, labware],
+  )
 
   // Per-well fill/stroke keyed on a composition signature: replicates share a
   // hue, distinct conditions get distinct hues. Hue is further modulated by
@@ -203,6 +211,10 @@ export function LabwareFocus() {
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key !== 'Escape') return
+      if (moveTubeFrom) {
+        setMoveTubeFrom(null)
+        return
+      }
       if (hover?.pinned) {
         setHover(null)
         return
@@ -215,7 +227,7 @@ export function LabwareFocus() {
     }
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
-  }, [actions, hover, state.selection])
+  }, [actions, hover, state.selection, moveTubeFrom])
 
   const selectedSet = useMemo(() => {
     if (!state.selection || !labware || state.selection.labwareId !== labware.labwareId) {
@@ -229,6 +241,22 @@ export function LabwareFocus() {
   const handleWellClick = useCallback(
     (wellId: WellId, event: React.MouseEvent) => {
       if (!labware) return
+      // Complete a pending "move tube" gesture: the click is the destination.
+      if (moveTubeFrom) {
+        const labwareId = labware.labwareId
+        if (wellId !== moveTubeFrom) {
+          actions.appendEvent({
+            eventId: generateEventId(),
+            event_type: 'move_tube',
+            details: {
+              source: { labwareId, well: moveTubeFrom },
+              target: { labwareId, well: wellId },
+            },
+          })
+        }
+        setMoveTubeFrom(null)
+        return
+      }
       // Pin the tooltip on tap. Desktop already shows it on hover but
       // pinning is harmless there; on touch this is the only way to see
       // a well's metadata.
@@ -280,7 +308,7 @@ export function LabwareFocus() {
       actions.setSelection({ labwareId, wells: [wellId], anchor: wellId })
       setSelectionWarning(null)
     },
-    [actions, activePipette, labware, placement, state.selection],
+    [actions, activePipette, labware, placement, state.selection, moveTubeFrom],
   )
 
   if (!placement || !labware) return null
@@ -428,6 +456,7 @@ export function LabwareFocus() {
             selectedWellIds={selectedSet}
             previewWellIds={previewWells}
             occupiedWellIds={occupiedWellIds}
+            tubeWellIds={tubeWellIds}
             compositionStyles={compositionStyles}
             onHover={(wellId, event) => {
               if (!wellId || !event) {
@@ -448,7 +477,7 @@ export function LabwareFocus() {
             }}
           />
           {hover && wellState ? (
-            <WellTooltip wellId={hover.wellId} state={wellState} clientX={hover.clientX} clientY={hover.clientY} />
+            <WellTooltip wellId={hover.wellId} state={wellState} isTubeRack={labware ? isTubeRack(labware) : false} clientX={hover.clientX} clientY={hover.clientY} />
           ) : null}
         </div>
         {menu.open && labware && labwareStates ? (
@@ -463,6 +492,10 @@ export function LabwareFocus() {
               onAddMaterial: (wells) => {
                 setMenu((m) => ({ ...m, open: false }))
                 openAddMaterial(wells)
+              },
+              onBeginMoveTube: (fromWell) => {
+                setMenu((m) => ({ ...m, open: false }))
+                setMoveTubeFrom(fromWell)
               },
             })
             const items: ContextMenuItem[] = built.items
@@ -479,6 +512,11 @@ export function LabwareFocus() {
           })()
         ) : null}
         <footer className="focus__footer">
+          {moveTubeFrom ? (
+            <span className="focus__hint">
+              Moving tube from {moveTubeFrom} — click a destination well · esc to cancel
+            </span>
+          ) : null}
           {previewEventsForLabware.length > 0 ? (
             <span className="focus__preview-summary" title="Use the floating Accept button on the deck to commit.">
               {previewEventsForLabware.length} proposed event

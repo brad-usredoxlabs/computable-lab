@@ -4,6 +4,8 @@
  */
 
 import type { WellId } from './plate'
+import type { TubeDescriptor } from './events'
+import { nearestTubePreset } from './tubeSizes'
 import {
   buildAddressingFromDefinition,
   getDefinitionAllowedOrientations,
@@ -289,6 +291,15 @@ export interface Labware {
    * isLawnOnlyLabwareType() rather than this (possibly unset) instance flag.
    */
   lawnOnly?: boolean
+  /**
+   * Tube sizes a position on this rack accepts, offered in the "Place tube"
+   * picker. Absent ⇒ a single default size is derived from
+   * geometry.maxVolume_uL. Placement is permissive — this is a convenience
+   * menu, not a constraint (any size may be placed in any slot).
+   */
+  tubeOptions?: TubeDescriptor[]
+  /** Which `tubeOptions` entry (by sizeLabel) is the default when placing a tube. */
+  defaultTubeSizeLabel?: string
 }
 
 /**
@@ -673,6 +684,11 @@ export const LABWARE_CONFIGS: Record<LabwareType, Omit<Labware, 'labwareId' | 'n
     orientationPolicy: 'rotatable',
     color: '#fd7e14',
     lawnOnly: true,
+    tubeOptions: [
+      { sizeLabel: '15 mL', maxVolume_uL: 15000, wellShape: 'conical' },
+      { sizeLabel: '5 mL', maxVolume_uL: 5000, wellShape: 'round' },
+    ],
+    defaultTubeSizeLabel: '15 mL',
   },
   // Side 3: a 4×8 grid; each well holds a 1.5 mL Eppendorf or a 2 mL cryo tube.
   tubeset_4way_32x2ml: {
@@ -694,6 +710,11 @@ export const LABWARE_CONFIGS: Record<LabwareType, Omit<Labware, 'labwareId' | 'n
     orientationPolicy: 'rotatable',
     color: '#fd7e14',
     lawnOnly: true,
+    tubeOptions: [
+      { sizeLabel: '2 mL', maxVolume_uL: 2000, wellShape: 'round' },
+      { sizeLabel: '1.5 mL', maxVolume_uL: 1500, wellShape: 'round' },
+    ],
+    defaultTubeSizeLabel: '2 mL',
   },
   // Side 4: the flip side of side 3 — same footprint, smaller holes for 0.5 mL tubes.
   tubeset_4way_32x0p5ml: {
@@ -738,6 +759,11 @@ export const LABWARE_CONFIGS: Record<LabwareType, Omit<Labware, 'labwareId' | 'n
     orientationPolicy: 'rotatable',
     color: '#fd7e14',
     lawnOnly: true,
+    tubeOptions: [
+      { sizeLabel: '2 mL', maxVolume_uL: 2000, wellShape: 'round' },
+      { sizeLabel: '1.5 mL', maxVolume_uL: 1500, wellShape: 'round' },
+    ],
+    defaultTubeSizeLabel: '2 mL',
   },
   deepwell_96: {
     labwareType: 'deepwell_96',
@@ -1131,6 +1157,36 @@ export function isTipRackType(labwareType: LabwareType): boolean {
  */
 export function isLawnOnlyLabwareType(labwareType: LabwareType): boolean {
   return LABWARE_CONFIGS[labwareType]?.lawnOnly === true
+}
+
+/**
+ * True when a labware is a tube RACK — a multi-position holder of tubes — as
+ * opposed to a single tube, a plate, a reservoir, or a tip rack. Tube actions
+ * (place/move/remove tube) and per-placement capacity apply only to these.
+ */
+export function isTubeRack(labware: Labware): boolean {
+  return labware.layoutFamily === 'tube' && labware.addressing.type !== 'single'
+}
+
+/**
+ * The default tube to imply/place for a rack: its configured default option, or
+ * the first option, or a descriptor derived from the rack's nominal geometry
+ * (capacity = the rack's max well volume; label = nearest preset size).
+ */
+export function defaultTubeForLabware(labware: Labware): TubeDescriptor {
+  if (labware.tubeOptions && labware.tubeOptions.length > 0) {
+    const byLabel = labware.defaultTubeSizeLabel
+      ? labware.tubeOptions.find((tube) => tube.sizeLabel === labware.defaultTubeSizeLabel)
+      : undefined
+    return byLabel ?? labware.tubeOptions[0]
+  }
+  const maxVolume_uL = labware.geometry.maxVolume_uL
+  const preset = nearestTubePreset(maxVolume_uL)
+  return {
+    sizeLabel: preset.sizeLabel,
+    maxVolume_uL,
+    ...(labware.geometry.wellShape ? { wellShape: labware.geometry.wellShape } : { wellShape: preset.wellShape }),
+  }
 }
 
 /**

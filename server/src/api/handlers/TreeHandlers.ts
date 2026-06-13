@@ -519,6 +519,13 @@ export function createTreeHandlers(
       ...runPayload,
       methodEventGraphId,
       methodPlatform: input.platform,
+      methodDeckLock: {
+        locked: true,
+        platformId: input.platform,
+        variantId: input.deckVariant,
+        source: input.templateId ? 'template' : 'method-attach',
+        lockedAt: now,
+      },
       methodVocabId: input.vocabId,
       methodAttachedAt: now,
       updatedAt: now,

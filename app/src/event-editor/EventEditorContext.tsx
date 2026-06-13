@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react'
 import { apiClient } from '../shared/api/client'
-import { loadAcceptedEventGraph, type SavedEventGraphCommit } from './eventGraphPersistence'
+import { loadAcceptedEventGraph, type RunDeckLock, type SavedEventGraphCommit } from './eventGraphPersistence'
 import { assignVisibleLabwareHandle, assignVisibleLabwareHandles, findLabwareNameConflict } from './labwareHandles'
 import { EMPTY_HISTORY, withEditorHistory, type EditorHistory } from './editorHistory'
 import type { PlatformManifest } from '../types/platformRegistry'
@@ -254,6 +254,7 @@ export interface EventEditorState {
   toolTypeId: string | null
   assistPipetteId: string | null
   runId: string | null
+  runDeckLock: RunDeckLock | null
   eventGraphId: string | null
   eventGraphSave: SavedEventGraphCommit | null
   labwares: Record<string, Labware>
@@ -320,6 +321,7 @@ export type EventEditorAction =
   | { type: 'set_vocab'; vocabPackId: string }
   | { type: 'set_tool'; toolTypeId: string | null; assistPipetteId: string | null }
   | { type: 'set_run'; runId: string | null }
+  | { type: 'set_run_deck_lock'; lock: RunDeckLock | null }
   | {
       type: 'place_new_labware'
       labware: Labware
@@ -381,6 +383,7 @@ const initialState: EventEditorState = {
   toolTypeId: null,
   assistPipetteId: null,
   runId: null,
+  runDeckLock: null,
   eventGraphId: null,
   eventGraphSave: null,
   labwares: {},
@@ -540,7 +543,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       const platforms = action.platforms
       const fallbackPlatformId =
         platforms.find((p) => p.id === DEFAULT_PLATFORM_ID)?.id ?? platforms[0]?.id ?? DEFAULT_PLATFORM_ID
-      const platformId = action.initialPlatformId ?? fallbackPlatformId
+      const platformId = state.runDeckLock?.platformId ?? action.initialPlatformId ?? fallbackPlatformId
       const defaults = pickDefaultsForPlatform(platforms, platformId)
       return {
         ...state,
@@ -548,7 +551,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         loadError: null,
         platforms,
         platformId,
-        variantId: defaults.variantId,
+        variantId: state.runDeckLock?.variantId ?? defaults.variantId,
         vocabPackId: defaults.vocabPackId,
         toolTypeId: defaults.toolTypeId,
         assistPipetteId: null,
@@ -571,6 +574,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
         tipState: { kind: 'empty' },
       }
     case 'set_platform': {
+      if (state.runDeckLock?.locked && action.platformId !== state.runDeckLock.platformId) return state
       if (action.platformId === state.platformId) return state
       const defaults = pickDefaultsForPlatform(state.platforms, action.platformId)
       // Switching platforms wipes placements — slot IDs aren't comparable across decks.
@@ -608,6 +612,7 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       }
     }
     case 'set_variant':
+      if (state.runDeckLock?.locked && action.variantId !== state.runDeckLock.variantId) return state
       // Variant change keeps labwares but drops slot placements that no longer exist.
       // We don't know the new variant's slots here, so the DeckStage will reconcile —
       // for now, keep placements; orphaned ones simply won't render.
@@ -622,6 +627,20 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       }
     case 'set_run':
       return { ...state, runId: action.runId }
+    case 'set_run_deck_lock': {
+      const defaults = action.lock ? pickDefaultsForPlatform(state.platforms, action.lock.platformId) : null
+      return {
+        ...state,
+        runDeckLock: action.lock,
+        ...(action.lock
+          ? {
+              platformId: action.lock.platformId,
+              variantId: action.lock.variantId,
+              ...(defaults ? { vocabPackId: defaults.vocabPackId, toolTypeId: defaults.toolTypeId } : {}),
+            }
+          : {}),
+      }
+    }
     case 'place_new_labware': {
       const labware = assignVisibleLabwareHandle(action.labware, Object.values(state.labwares))
       const placement: EventEditorPlacement = {
@@ -1091,6 +1110,17 @@ interface ProviderProps {
   children: ReactNode
 }
 
+function isRunDeckLock(value: unknown): value is RunDeckLock {
+  return Boolean(value)
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && (value as { locked?: unknown }).locked === true
+    && typeof (value as { platformId?: unknown }).platformId === 'string'
+    && typeof (value as { variantId?: unknown }).variantId === 'string'
+    && typeof (value as { source?: unknown }).source === 'string'
+    && typeof (value as { lockedAt?: unknown }).lockedAt === 'string'
+}
+
 export function EventEditorProvider({ runId, eventGraphId, children }: ProviderProps) {
   const [state, dispatch] = useReducer(eventEditorReducer, initialState)
 
@@ -1115,6 +1145,26 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
 
   useEffect(() => {
     dispatch({ type: 'set_run', runId: runId ?? null })
+  }, [runId])
+
+  useEffect(() => {
+    if (!runId) {
+      dispatch({ type: 'set_run_deck_lock', lock: null })
+      return
+    }
+    let cancelled = false
+    apiClient.getRecord(runId)
+      .then((record) => {
+        if (cancelled) return
+        const payload = (record.payload ?? {}) as Record<string, unknown>
+        dispatch({ type: 'set_run_deck_lock', lock: isRunDeckLock(payload.methodDeckLock) ? payload.methodDeckLock : null })
+      })
+      .catch(() => {
+        if (!cancelled) dispatch({ type: 'set_run_deck_lock', lock: null })
+      })
+    return () => {
+      cancelled = true
+    }
   }, [runId])
 
   useEffect(() => {

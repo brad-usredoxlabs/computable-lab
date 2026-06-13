@@ -16,7 +16,7 @@ import {
   type LabwareRecordPayload,
 } from '../../../types/labware'
 import { createLabwareFromRequirement } from '../../../types/labwareRequirement'
-import type { AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
+import type { AiActiveDeckScope, AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
 import type { PlatformManifest, PlatformVariantManifest } from '../../../types/platformRegistry'
 import { assignVisibleLabwareHandle } from '../../labwareHandles'
 import { resolveOrientation, validatePlacement } from '../../lib/placementRules'
@@ -79,11 +79,25 @@ export interface BuildPreviewArgs {
   labwareAdditions: AiLabwareAddition[]
   labwareRequirements: AiLabwareRequirement[]
   existingLabwares: Record<string, Labware>
+  activeDeckScope?: AiActiveDeckScope
 }
 
 export interface BuildPreviewResult {
   preview: EventEditorPreview
   skips: string[]
+}
+
+function scopeAllowsPreviewPlacement(location: PlacementLocation, scope?: AiActiveDeckScope): boolean {
+  if (!scope?.locked) return true
+  if (location.kind === 'lawn') return scope.allowedSurfaces.includes('lawn')
+  return scope.allowedSurfaces.includes('slot') && scope.allowedSlots.includes(location.slotId)
+}
+
+function scopeSkipReason(label: string, location: PlacementLocation, scope: AiActiveDeckScope): string {
+  const requested = location.kind === 'lawn' ? 'lawn' : 'slot ' + location.slotId
+  const slots = scope.allowedSlots.length > 0 ? scope.allowedSlots.join(', ') : 'none'
+  return label + ': requested ' + requested + ', but run ' + (scope.runId ?? '')
+    + ' is locked to ' + scope.platformId + '/' + scope.variantId + ' (allowed slots: ' + slots + ')'
 }
 
 export function buildPreviewFromDraft({
@@ -93,6 +107,7 @@ export function buildPreviewFromDraft({
   labwareAdditions,
   labwareRequirements,
   existingLabwares,
+  activeDeckScope,
 }: BuildPreviewArgs): BuildPreviewResult {
   const previewLabwares: Record<string, Labware> = {}
   const allocatedLabwares: Labware[] = Object.values(existingLabwares)
@@ -117,12 +132,25 @@ export function buildPreviewFromDraft({
     const labware = assignVisibleLabwareHandle(proposal.labware, allocatedLabwares)
     allocatedLabwares.push(labware)
     const slotId = normalizeDeckSlot(proposal.deckSlot)
+    const implicitSingleSlot = !slotId
+      && activeDeckScope?.locked
+      && !activeDeckScope.allowedSurfaces.includes('lawn')
+      && activeDeckScope.allowedSlots.length === 1
+        ? activeDeckScope.allowedSlots[0]
+        : null
     const location: PlacementLocation = slotId
       ? { kind: 'slot', slotId }
-      : { kind: 'lawn', xMm: 20 + index * 24, yMm: 20 + index * 18 }
+      : implicitSingleSlot
+        ? { kind: 'slot', slotId: implicitSingleSlot }
+        : { kind: 'lawn', xMm: 20 + index * 24, yMm: 20 + index * 18 }
 
     if (!platform || !variant) {
       skips.push(`${proposal.label}: deck not loaded`)
+      continue
+    }
+
+    if (activeDeckScope && !scopeAllowsPreviewPlacement(location, activeDeckScope)) {
+      skips.push(scopeSkipReason(proposal.label, location, activeDeckScope))
       continue
     }
 

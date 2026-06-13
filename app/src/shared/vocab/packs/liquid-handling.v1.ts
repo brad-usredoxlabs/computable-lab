@@ -314,6 +314,57 @@ const harvest: PrimitiveVerbDefinition = {
   },
 }
 
+// Tube occupancy on bench tube racks (lawn-only labware). Tubes are a
+// lightweight per-well vessel: place sets occupancy, move relocates a tube with
+// its contents, remove takes the tube and its contents away.
+const placeTube: PrimitiveVerbDefinition = {
+  verb: 'place_tube',
+  displayName: 'Place Tube',
+  icon: '🧪',
+  color: '#fd7e14',
+  eventKind: 'primitive',
+
+  requiresMaterial: false,
+  requiresSourceTarget: false,
+  affectsVolume: 'none',
+
+  requiredParams: [],
+  optionalParams: [
+    { name: 'sizeLabel', type: 'string', label: 'Tube size', showInCompact: true },
+    { name: 'maxVolume_uL', type: 'number', label: 'Capacity', unit: 'µL' },
+  ],
+}
+
+const moveTube: PrimitiveVerbDefinition = {
+  verb: 'move_tube',
+  displayName: 'Move Tube',
+  icon: '↪️',
+  color: '#fd7e14',
+  eventKind: 'primitive',
+
+  requiresMaterial: false,
+  requiresSourceTarget: true,
+  affectsVolume: 'none',
+
+  requiredParams: [],
+  optionalParams: [],
+}
+
+const removeTube: PrimitiveVerbDefinition = {
+  verb: 'remove_tube',
+  displayName: 'Remove Tube',
+  icon: '🗑️',
+  color: '#fd7e14',
+  eventKind: 'primitive',
+
+  requiresMaterial: false,
+  requiresSourceTarget: false,
+  affectsVolume: 'none',
+
+  requiredParams: [],
+  optionalParams: [],
+}
+
 // =============================================================================
 // Macro Verbs
 // =============================================================================
@@ -540,6 +591,9 @@ export const liquidHandlingV1: VocabPack = {
     incubate,
     read,
     harvest,
+    placeTube,
+    moveTube,
+    removeTube,
     // Macros
     serialDilution,
     plateCopy,

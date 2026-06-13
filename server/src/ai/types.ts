@@ -305,6 +305,17 @@ export interface GraphLemurContext {
   revisionMode?: boolean;
 }
 
+export interface ActiveDeckScope {
+  locked: boolean;
+  runId?: string;
+  platformId: string;
+  variantId: string;
+  allowedSurfaces: Array<'slot' | 'lawn'>;
+  allowedSlots: string[];
+  allowedLabwareIds: string[];
+  focusedLabwareId?: string;
+}
+
 export interface EditorContext {
   /** Current labware definitions. */
   labwares: LabwareSummary[];
@@ -364,6 +375,8 @@ export interface EditorContext {
   deckVariant?: string;
   /** Current deck placements. */
   deckPlacements?: DeckPlacementSummary[];
+  /** Hard scope for AI/compiler drafting on a run-locked deck layout. */
+  activeDeckScope?: ActiveDeckScope;
   /** Whether the editor is in manual pipetting mode. */
   manualPipettingMode?: boolean;
   /** Lab-level material tracking behavior. */

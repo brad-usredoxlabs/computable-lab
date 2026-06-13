@@ -7,6 +7,7 @@ import {
   hydrateEventEditorGraph,
   assertSavedEventGraphValid,
   extractSavedEventGraphId,
+  ensureRunDeckLock,
   persistAcceptedEventGraph,
 } from './eventGraphPersistence'
 
@@ -120,6 +121,55 @@ describe('event-editor accepted event graph persistence', () => {
     })
   })
 
+  it('locks an unlocked run on first accepted deck save', async () => {
+    const getRecord = vi.fn().mockResolvedValue({
+      recordId: 'RUN-001',
+      payload: { kind: 'run', recordId: 'RUN-001', status: 'planned', experimentId: 'EXP-1' },
+    })
+    const updateRecord = vi.fn().mockResolvedValue({ success: true })
+
+    const lock = await ensureRunDeckLock(
+      { runId: 'RUN-001', platformId: 'manual', variantId: 'manual_single_plate' },
+      getRecord,
+      updateRecord,
+      () => '2026-06-13T12:00:00.000Z',
+    )
+
+    expect(lock).toEqual({
+      locked: true,
+      platformId: 'manual',
+      variantId: 'manual_single_plate',
+      source: 'first-edit',
+      lockedAt: '2026-06-13T12:00:00.000Z',
+    })
+    expect(updateRecord).toHaveBeenCalledWith('RUN-001', expect.objectContaining({
+      methodPlatform: 'manual',
+      methodDeckLock: lock,
+    }))
+  })
+
+  it('rejects saves that drift from an existing run deck lock', async () => {
+    const getRecord = vi.fn().mockResolvedValue({
+      recordId: 'RUN-001',
+      payload: {
+        methodDeckLock: {
+          locked: true,
+          platformId: 'manual',
+          variantId: 'manual_single_plate',
+          source: 'first-edit',
+          lockedAt: '2026-06-13T12:00:00.000Z',
+        },
+      },
+    })
+    const updateRecord = vi.fn()
+
+    await expect(ensureRunDeckLock(
+      { runId: 'RUN-001', platformId: 'manual', variantId: 'manual_freeform' },
+      getRecord,
+      updateRecord,
+    )).rejects.toThrow(/explicit layout replacement/i)
+    expect(updateRecord).not.toHaveBeenCalled()
+  })
   it('hydrates older deckLayout slot placements when editorLayout is absent', () => {
     const hydrated = hydrateEventEditorGraph({
       id: 'EVG-OLD',

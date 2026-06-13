@@ -48,6 +48,15 @@ export type WorkspaceTab =
       studyId?: string
       experimentId?: string
     }
+  | {
+      id: string
+      kind: 'record-edit'
+      /** Existing record opened for viewing/editing in a TapTab left pane. */
+      recordId: string
+      /** Record kind, for the tab label / icon. */
+      recordKind?: string
+      title: string
+    }
 
 /**
  * Stable id for a creation tab so re-clicking "New …" focuses the open
@@ -58,6 +67,14 @@ export function recordCreateTabId(
   parentId?: string,
 ): string {
   return `create:${nodeType}${parentId ? `:${parentId}` : ''}`
+}
+
+/**
+ * Stable id for an edit tab so re-clicking the same record focuses the open
+ * editor instead of stacking duplicates.
+ */
+export function recordEditTabId(recordId: string): string {
+  return `record:${recordId}`
 }
 
 /**

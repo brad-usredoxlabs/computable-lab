@@ -6,6 +6,8 @@ import { formatComputedConcentration, formatComputedCount } from '../../shared/l
 interface WellTooltipProps {
   wellId: WellId
   state: WellComputedState
+  /** True when the focused labware is a tube rack (changes the empty label). */
+  isTubeRack?: boolean
   /** Cursor position in viewport coordinates (clientX/clientY). */
   clientX: number
   clientY: number
@@ -17,8 +19,9 @@ const MAX_ROWS = 6
 const CURSOR_GAP = 14
 const EDGE_GAP = 8
 
-export function WellTooltip({ wellId, state, clientX, clientY }: WellTooltipProps) {
+export function WellTooltip({ wellId, state, isTubeRack = false, clientX, clientY }: WellTooltipProps) {
   const empty = state.volume_uL === 0 && state.materials.length === 0 && !state.harvested
+  const emptyLabel = state.tube ? 'Empty tube' : isTubeRack ? 'No tube' : 'Empty'
   const rows = state.materials.slice(0, MAX_ROWS)
   const overflow = state.materials.length - rows.length
 
@@ -27,7 +30,7 @@ export function WellTooltip({ wellId, state, clientX, clientY }: WellTooltipProp
   // the viewport edge — otherwise column-12 and row-H wells push it off-screen.
   const ref = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
-  const measureKey = `${wellId}:${rows.length}:${overflow}:${state.harvested}:${empty}`
+  const measureKey = `${wellId}:${rows.length}:${overflow}:${state.harvested}:${empty}:${state.tube?.sizeLabel ?? ''}`
   useLayoutEffect(() => {
     const el = ref.current
     if (el) setSize({ w: el.offsetWidth, h: el.offsetHeight })
@@ -57,9 +60,15 @@ export function WellTooltip({ wellId, state, clientX, clientY }: WellTooltipProp
         <span className="well-tooltip__well-id">{wellId}</span>
         <span className="well-tooltip__volume">{formatVolume(state.volume_uL)}</span>
       </div>
+      {state.tube ? (
+        <div className="well-tooltip__tube">
+          {state.tube.sizeLabel} tube · {formatVolume(state.tube.maxVolume_uL)} cap
+          {state.tube.implied ? ' (assumed)' : ''}
+        </div>
+      ) : null}
       {empty ? (
         <div className="well-tooltip__contents">
-          <span className="well-tooltip__empty">Empty</span>
+          <span className="well-tooltip__empty">{emptyLabel}</span>
         </div>
       ) : state.materials.length > 0 ? (
         // Per-material table: each component with its event-graph-computed

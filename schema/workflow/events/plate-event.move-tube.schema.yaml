@@ -1,0 +1,39 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/events/plate-event.move-tube.schema.yaml"
+title: "PlateEventMoveTubeDetails"
+type: object
+additionalProperties: false
+required: [source, target]
+description: >
+  Move a tube — with its contents — from one position to another, within a rack
+  or between racks. Contents are derived by replay, not serialized here.
+
+properties:
+  source:
+    type: object
+    additionalProperties: false
+    required: [well]
+    properties:
+      labwareId:
+        type: string
+      labwareInstanceId:
+        $ref: "../../datatypes/ref.schema.yaml"
+      well:
+        type: string
+  target:
+    type: object
+    additionalProperties: false
+    required: [well]
+    properties:
+      labwareId:
+        type: string
+      labwareInstanceId:
+        $ref: "../../datatypes/ref.schema.yaml"
+      well:
+        type: string
+  family:
+    type: string
+    enum: [material-movement, state-transformation, lifecycle, measurement, composition]
+    default: material-movement
+  notes:
+    type: string

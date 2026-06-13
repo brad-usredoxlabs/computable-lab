@@ -1,4 +1,5 @@
 import type {
+  AiActiveDeckScope,
   AiLabwareSummary,
   AiRequestContext,
   AiWellSelection,
@@ -26,6 +27,9 @@ export interface AcceptedEventGraphProjectionInput {
   deckPlatform?: string
   deckVariant?: string
   deckPlacements?: AiRequestContext['deckPlacements']
+  deckAllowedSurfaces?: AiActiveDeckScope['allowedSurfaces']
+  deckAllowedSlots?: string[]
+  focusedLabwareId?: string
   manualPipettingMode?: boolean
   materialTracking?: AiRequestContext['materialTracking']
   runId?: string
@@ -45,6 +49,7 @@ export type AcceptedEventGraphProjection = Pick<
   | 'deckPlatform'
   | 'deckVariant'
   | 'deckPlacements'
+  | 'activeDeckScope'
   | 'manualPipettingMode'
   | 'materialTracking'
 > & {
@@ -105,6 +110,31 @@ function summarizeLabwares(labwares: Map<string, Labware>): AiLabwareSummary[] {
     name: lw.name,
     ...(lw.addressing.type === 'grid' ? { rows: lw.addressing.rows ?? 0, columns: lw.addressing.columns ?? 0 } : {}),
   }))
+}
+
+function buildActiveDeckScope(input: AcceptedEventGraphProjectionInput): AiActiveDeckScope | undefined {
+  if (!input.runId || !input.deckPlatform || !input.deckVariant) return undefined
+  const allowedSurfaces = input.deckAllowedSurfaces?.length
+    ? Array.from(new Set(input.deckAllowedSurfaces))
+    : ['slot' as const]
+  const allowedSlots = input.deckAllowedSlots
+    ? Array.from(new Set(input.deckAllowedSlots))
+    : []
+  const allowedLabwareIds = Array.from(new Set(
+    (input.deckPlacements ?? [])
+      .map((placement) => placement.labwareId)
+      .filter((id): id is string => Boolean(id)),
+  ))
+  return {
+    locked: true,
+    runId: input.runId,
+    platformId: input.deckPlatform,
+    variantId: input.deckVariant,
+    allowedSurfaces,
+    allowedSlots,
+    allowedLabwareIds,
+    ...(input.focusedLabwareId ? { focusedLabwareId: input.focusedLabwareId } : {}),
+  }
 }
 
 function buildWellStateSnapshot(args: {
@@ -174,6 +204,7 @@ export function buildAcceptedEventGraphProjection(
     sourceSelectionSummary,
     targetSelectionSummary,
   })
+  const activeDeckScope = buildActiveDeckScope(input)
 
   return {
     labwares,
@@ -187,6 +218,7 @@ export function buildAcceptedEventGraphProjection(
     ...(input.deckPlatform ? { deckPlatform: input.deckPlatform } : {}),
     ...(input.deckVariant ? { deckVariant: input.deckVariant } : {}),
     ...(input.deckPlacements ? { deckPlacements: input.deckPlacements } : {}),
+    ...(activeDeckScope ? { activeDeckScope } : {}),
     ...(typeof input.manualPipettingMode === 'boolean' ? { manualPipettingMode: input.manualPipettingMode } : {}),
     ...(input.materialTracking ? { materialTracking: input.materialTracking } : {}),
     ...(input.runId ? { runId: input.runId } : {}),

@@ -13,8 +13,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
-import { recordCreateTabId } from '../../workspace/types'
+import { recordCreateTabId, recordEditTabId } from '../../workspace/types'
 import { useStudyArtifacts } from '../useStudyArtifacts'
+import {
+  useProjectInventory,
+  deckLabwareItems,
+  deckMaterialItems,
+  mergeInventoryItems,
+  type InventoryRecord,
+} from '../useProjectInventory'
+import { useOptionalEventEditor } from '../../EventEditorContext'
 import { artifactKindLabel, tabForArtifact } from '../openArtifactInViewer'
 import { getRunMethod, getStudyTree } from '../../../shared/api/treeClient'
 import type {
@@ -38,7 +46,36 @@ export function FindTabPanel() {
   const ws = useWorkspace()
   const studyId = ws.state.studyId
   const { artifacts, loading, error, refresh } = useStudyArtifacts(studyId)
+  const inventory = useProjectInventory(studyId)
   const grouped = useMemo(() => groupByKind(artifacts), [artifacts])
+
+  // The currently-open deck (null on non-deck tabs). Labware placed on the deck
+  // and materials referenced by its events live in the event graph, not as
+  // studyId-filtered records — surface them directly so things you just added
+  // show up immediately.
+  const editor = useOptionalEventEditor()
+  const deckState = editor?.state ?? null
+  const deckLabwares = useMemo(
+    () => (deckState ? deckLabwareItems(deckState.labwares) : []),
+    [deckState],
+  )
+  const deckMaterials = useMemo(
+    () => (deckState ? deckMaterialItems(deckState.events) : []),
+    [deckState],
+  )
+  const inventorySections = useMemo(
+    () =>
+      inventory.sections.map((section) => {
+        if (section.label === 'Labwares') {
+          return { ...section, records: mergeInventoryItems(section.records, deckLabwares) }
+        }
+        if (section.label === 'Materials') {
+          return { ...section, records: mergeInventoryItems(section.records, deckMaterials) }
+        }
+        return section
+      }),
+    [inventory.sections, deckLabwares, deckMaterials],
+  )
 
   const [study, setStudy] = useState<StudyTreeNode | null>(null)
   const [treeError, setTreeError] = useState<string | null>(null)
@@ -77,10 +114,11 @@ export function FindTabPanel() {
     const onChanged = () => {
       refreshTree()
       void refresh()
+      inventory.refresh()
     }
     window.addEventListener('cl:records-changed', onChanged)
     return () => window.removeEventListener('cl:records-changed', onChanged)
-  }, [refreshTree, refresh])
+  }, [refreshTree, refresh, inventory])
 
   const openNewExperiment = useCallback(() => {
     ws.openTab({
@@ -102,6 +140,7 @@ export function FindTabPanel() {
           onClick={() => {
             refreshTree()
             void refresh()
+            inventory.refresh()
           }}
           data-testid="find-tab-refresh"
           aria-label="Refresh project tree and artifacts"
@@ -145,6 +184,33 @@ export function FindTabPanel() {
               />
             ))}
           </ul>
+        )}
+      </section>
+
+      <section data-testid="find-tab-inventory">
+        {inventory.error ? (
+          <p className="right-panel__error">{inventory.error}</p>
+        ) : inventory.loading && inventorySections.every((s) => s.records.length === 0) ? (
+          <p className="right-panel__hint">Loading inventory…</p>
+        ) : inventorySections.every((s) => s.records.length === 0) ? (
+          <p className="right-panel__hint">
+            No labware, aliquots, materials, or protocols to show yet.
+          </p>
+        ) : (
+          inventorySections.map((section) =>
+            section.records.length === 0 ? null : (
+              <section key={section.key} className="find-tab__group">
+                <h4 className="right-panel__heading find-tab__group-heading">
+                  {section.label} ({section.records.length})
+                </h4>
+                <div className="right-panel__group">
+                  {section.records.map((record) => (
+                    <InventoryRow key={record.recordId} record={record} />
+                  ))}
+                </div>
+              </section>
+            ),
+          )
         )}
       </section>
 
@@ -324,6 +390,39 @@ function ArtifactRow({ artifact }: { artifact: ArtifactSummary }) {
         {artifact.recordId}
         {artifact.size !== undefined ? ` · ${artifact.size}` : ''}
       </span>
+    </button>
+  )
+}
+
+function InventoryRow({ record }: { record: InventoryRecord }) {
+  const ws = useWorkspace()
+  const editable = record.editable !== false
+  return (
+    <button
+      type="button"
+      className="right-panel__row"
+      data-testid={`find-tab-inv-${record.recordId}`}
+      disabled={!editable}
+      onClick={() => {
+        if (!editable) return
+        // Open the record in a TapTab left-pane tab — stays in the project,
+        // keeps the right panel, no navigation.
+        ws.openTab({
+          id: recordEditTabId(record.recordId),
+          kind: 'record-edit',
+          recordId: record.recordId,
+          recordKind: record.kind,
+          title: record.title,
+        })
+      }}
+      title={
+        editable
+          ? `Open ${record.title} for editing`
+          : `${record.title} — on the deck (no saved record to edit yet)`
+      }
+    >
+      <span className="right-panel__row-title">{record.title}</span>
+      <span className="right-panel__row-sub">{record.recordId}</span>
     </button>
   )
 }

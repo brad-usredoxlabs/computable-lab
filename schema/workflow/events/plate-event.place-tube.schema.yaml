@@ -1,0 +1,41 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/workflow/events/plate-event.place-tube.schema.yaml"
+title: "PlateEventPlaceTubeDetails"
+type: object
+additionalProperties: false
+required: [wells, tube]
+
+properties:
+  labwareId:
+    type: string
+    description: "Editor-native id of the tube rack."
+  labwareInstanceId:
+    $ref: "../../datatypes/ref.schema.yaml"
+  wells:
+    type: array
+    items:
+      type: string
+    minItems: 1
+    description: "Rack positions a tube is placed into."
+  tube:
+    type: object
+    additionalProperties: false
+    required: [sizeLabel, maxVolume_uL]
+    description: "The tube placed (lightweight occupancy — size only)."
+    properties:
+      sizeLabel:
+        type: string
+        description: "Human label, e.g. '1.5 mL', '15 mL'."
+      maxVolume_uL:
+        type: number
+        exclusiveMinimum: 0
+        description: "Capacity of this tube; the well's effective capacity follows it."
+      wellShape:
+        type: string
+        enum: [round, square, v-bottom, conical]
+  family:
+    type: string
+    enum: [material-movement, state-transformation, lifecycle, measurement, composition]
+    default: lifecycle
+  notes:
+    type: string

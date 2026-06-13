@@ -25,7 +25,7 @@ export function normalizeClarificationKind(raw: unknown): AgentClarificationKind
   if (value.includes('ontology')) return 'ontology';
   if (value.includes('well')) return 'well-selection';
   if (value.includes('sequence') || value.includes('step')) return 'sequence';
-  if (value.includes('parameter') || value.includes('volume') || value.includes('count')) return 'parameter';
+  if (value.includes('parameter') || value.includes('volume') || value.includes('count') || value.includes('concentration') || value.includes('percent') || value.includes('%')) return 'parameter';
   return 'general';
 }
 
@@ -50,6 +50,51 @@ function parseOption(raw: unknown): AgentClarificationOption | null {
   const ref = asRecord(r.ref);
   if (ref) out.ref = ref;
   return out;
+}
+
+function splitNumberedPrompt(prompt: string): string[] {
+  const normalized = prompt.replace(/\s+/g, ' ').trim();
+  const markers = [...normalized.matchAll(/(?:^|\s)(\d+)\.\s+/g)];
+  if (markers.length < 2) return [];
+  return markers
+    .map((marker, index) => {
+      const start = (marker.index ?? 0) + marker[0].length;
+      const end = index + 1 < markers.length ? markers[index + 1]!.index ?? normalized.length : normalized.length;
+      return normalized.slice(start, end).trim();
+    })
+    .filter((part) => part.length > 0);
+}
+
+function optionKind(option: AgentClarificationOption): AgentClarificationKind {
+  return normalizeClarificationKind((option.label + ' ' + (option.snippet ?? '') + ' ' + (option.source ?? '')).trim());
+}
+
+function isInventoryDepthRequest(request: AgentClarificationRequest): boolean {
+  const text = [request.kind, request.entityType, request.prompt, request.query, request.snippet]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+  if (!/(aliquot|inventory|vial|source)/.test(text)) return false;
+  return /(which|should|search|available|look for|use)/.test(text);
+}
+
+function expandCompoundChoiceRequest(request: AgentClarificationRequest): AgentClarificationRequest[] {
+  if (request.menuProvider !== 'choice') return [request];
+  const parts = splitNumberedPrompt(request.prompt);
+  if (parts.length < 2) return [request];
+  return parts.map((prompt, index) => {
+    const kind = normalizeClarificationKind(prompt);
+    const options = request.options.filter((option) => optionKind(option) === kind);
+    return {
+      ...request,
+      id: request.id + '-' + String(index + 1),
+      kind,
+      prompt,
+      entityType: kind,
+      menuProvider: menuProviderForKind(kind),
+      options,
+    };
+  });
 }
 
 export function parseClarificationRequests(raw: unknown): AgentClarificationRequest[] {
@@ -89,7 +134,9 @@ export function parseClarificationRequests(raw: unknown): AgentClarificationRequ
       const end = typeof sourceSpan.end === 'number' ? sourceSpan.end : undefined;
       if (start !== undefined || end !== undefined) request.sourceSpan = { ...(start !== undefined ? { start } : {}), ...(end !== undefined ? { end } : {}) };
     }
-    out.push(request);
+    for (const expanded of expandCompoundChoiceRequest(request)) {
+      if (!isInventoryDepthRequest(expanded)) out.push(expanded);
+    }
   }
   return out;
 }

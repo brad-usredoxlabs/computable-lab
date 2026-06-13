@@ -99,6 +99,54 @@ describe('runChatbotCompile', () => {
     expect(result.unresolvedRefs.length).toBe(0);
   });
 
+  it('blocks labware additions outside the active deck scope', async () => {
+    const mockExtractionService: ExtractionRunnerService = {
+      run: vi.fn(async (req: RunExtractionServiceArgs) => ({
+        target_kind: req.target_kind,
+        source: req.source,
+        candidates: [],
+        diagnostics: [],
+      })),
+    } as unknown as ExtractionRunnerService;
+
+    const mockLlmClient: LlmClient = {
+      complete: vi
+        .fn()
+        .mockResolvedValueOnce(completionResponse(JSON.stringify({ tags: [] })))
+        .mockResolvedValueOnce(completionResponse(JSON.stringify({
+          candidateEvents: [],
+          candidateLabwares: [
+            { hint: '96-well plate', reason: 'requested extra plate', deckSlot: 'B2' },
+          ],
+          unresolvedRefs: [],
+        }))),
+    } as unknown as LlmClient;
+
+    const result = await runChatbotCompile({
+      prompt: 'place another 96-well plate on deck slot B2',
+      activeDeckScope: {
+        locked: true,
+        runId: 'RUN-001',
+        platformId: 'manual',
+        variantId: 'manual_single_plate',
+        allowedSurfaces: ['slot'],
+        allowedSlots: ['PLATE'],
+        allowedLabwareIds: ['plate-1'],
+      },
+      deps: {
+        extractionService: mockExtractionService,
+        llmClient: mockLlmClient,
+        searchLabwareByHint: async () => [],
+      },
+    });
+
+    expect(result.labwareAdditions).toEqual([]);
+    expect(result.outcome).toBe('gap');
+    expect(result.terminalArtifacts.gaps.some((gap) =>
+      gap.message.includes('manual/manual_single_plate')
+        && gap.message.includes('Explicit layout replacement'),
+    )).toBe(true);
+  });
   it('preserves mention tokens and short-circuits without the precompile LLM', async () => {
     // Extraction is irrelevant for the mention-resolved path — return nothing.
     const mockExtractionService: ExtractionRunnerService = {

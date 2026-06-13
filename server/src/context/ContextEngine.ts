@@ -42,6 +42,11 @@ export class ContextEngine {
     this.handlers['mix'] = this.handleMix.bind(this);
     this.handlers['read'] = this.handleRead.bind(this);
     this.handlers['centrifuge'] = this.handleCentrifuge.bind(this);
+    // Tube occupancy is a per-well editor concern with no representation in the
+    // single-context model; these verbs only need to not throw during replay.
+    this.handlers['place_tube'] = this.handleTubeOccupancyNoop.bind(this);
+    this.handlers['move_tube'] = this.handleTubeOccupancyNoop.bind(this);
+    this.handlers['remove_tube'] = this.handleTubeOccupancyNoop.bind(this);
   }
 
   /**
@@ -83,6 +88,11 @@ export class ContextEngine {
    */
   registerHandler(eventType: string, handler: EventHandler): void {
     this.handlers[eventType] = handler;
+  }
+
+  private handleTubeOccupancyNoop(_draft: ContextDraft, _event: EventGraphEvent): void {
+    // No-op: tube occupancy is tracked per-well in the editor projection,
+    // which the single-context engine does not model.
   }
 
   private handleCreateContainer(draft: ContextDraft, _event: EventGraphEvent): void {

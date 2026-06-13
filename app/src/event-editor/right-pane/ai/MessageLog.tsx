@@ -16,12 +16,23 @@ export interface MessageLogProps {
   onClarificationAnswer?: (answer: AiClarificationAnswer, request: AiClarificationRequest) => void
 }
 
-function mentionTokenForOption(
+function safeMentionPart(value: string): string {
+  return value.replace(/[\]\n\r]/g, '').trim()
+}
+
+function optionRefId(option: AiClarificationOption): string {
+  const ref = option.ref
+  if (typeof ref?.curie === 'string' && ref.curie.trim()) return ref.curie
+  if (typeof ref?.id === 'string' && ref.id.trim()) return ref.id
+  return option.id
+}
+
+export function mentionTokenForOption(
   request: AiClarificationRequest,
   option: AiClarificationOption,
 ): string | undefined {
-  const label = option.label.replace(/]/g, '')
-  const id = option.id.replace(/]/g, '')
+  const label = safeMentionPart(option.label)
+  const id = safeMentionPart(optionRefId(option))
   if (!id) return undefined
   if (request.menuProvider === '/l' || request.kind === 'labware') {
     return `[[labware:${id}|${label}]]`

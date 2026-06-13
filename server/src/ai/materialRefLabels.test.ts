@@ -170,6 +170,24 @@ describe('enrichAddMaterialRefs', () => {
     expect(out).toBe(event);
   });
 
+  it('strips legacy scalar material_ref fields even when material_ref is otherwise healthy', async () => {
+    const event = addMaterial({
+      details: {
+        material_ref_kind: 'ontology',
+        material_ref_id: 'NCBITaxon:10275',
+        material_ref_label: 'HepG2 cells',
+        material_ref: { kind: 'ontology', id: 'XCO:0000988', namespace: 'XCO', label: "Dulbecco's Modified Eagle's Medium" },
+      },
+    });
+
+    const [out] = await enrichAddMaterialRefs([event], stubLabeler);
+    const details = (out as Record<string, unknown>).details as Record<string, unknown>;
+    expect(details.material_ref_kind).toBeUndefined();
+    expect(details.material_ref_id).toBeUndefined();
+    expect(details.material_ref_label).toBeUndefined();
+    expect(details.material_ref).toMatchObject({ id: 'XCO:0000988' });
+  });
+
   it('strips an invented aliquot ref and rebuilds the cell event from a grounded CURIE', async () => {
     const store = { get: async () => null };
     const [out] = await enrichAddMaterialRefs(

@@ -23,6 +23,8 @@ export function mentionToToken(mention: SlashMention): string {
       return `[[selection:${mention.selectionKind}|${mention.labwareId}|${mention.wells.join(
         ',',
       )}|${mention.label}]]`
+    case 'tube':
+      return `[[tube:${mention.sizeLabel}|${mention.label}]]`
   }
 }
 
@@ -39,6 +41,7 @@ export function mentionBadge(mention: SlashMention): string {
   if (mention.type === 'protocol') {
     return mention.entityKind === 'graph-component' ? 'Component' : 'Protocol'
   }
+  if (mention.type === 'tube') return 'Tube'
   return mention.selectionKind === 'source' ? 'Source' : 'Target'
 }
 
@@ -65,6 +68,8 @@ export function badgeStyles(
       return { background: '#e0e7ff', color: '#3730a3', border: '#c7d2fe' }
     case 'Component':
       return { background: '#ede9fe', color: '#5b21b6', border: '#ddd6fe' }
+    case 'Tube':
+      return { background: '#ffedd5', color: '#9a3412', border: '#fdba74' }
     default:
       return { background: '#e5e7eb', color: '#374151', border: '#d1d5db' }
   }

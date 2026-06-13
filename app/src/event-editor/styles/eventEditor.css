@@ -3099,6 +3099,15 @@
   transition: fill 80ms ease, stroke 80ms ease;
 }
 
+/* A rack position holding a tube reads as a solid ring; an empty slot keeps the
+   faint base stroke. Lowest priority (single attribute, placed before the
+   hover/occupied/selected/preview rules) so material, selection, preview, and
+   hover styles all still win on top of it. */
+.event-editor .well-grid__well[data-tube='true'] {
+  stroke: var(--cl-border-strong);
+  stroke-width: 0.34;
+}
+
 .event-editor .well-grid__well[data-hovered='true'] {
   fill: var(--cl-accent-soft);
   stroke: var(--cl-accent);
@@ -3219,6 +3228,12 @@
 .event-editor .well-tooltip__empty {
   color: var(--cl-text-faint);
   font-style: italic;
+}
+
+.event-editor .well-tooltip__tube {
+  color: var(--cl-text-dim);
+  font-size: 0.78em;
+  margin-top: 2px;
 }
 
 /* Per-material composition table: material | current concentration | volume. */
