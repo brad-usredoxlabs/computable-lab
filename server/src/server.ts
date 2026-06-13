@@ -46,6 +46,7 @@ import {
   createEventEditorFixHandlers,
   createMetaHandlers,
   ConfigHandlers,
+  createIdentityHandlers,
   createProtocolHandlers,
   createComponentHandlers,
   createExecutionHandlers,
@@ -126,7 +127,7 @@ import { PolicyBundleService } from './policy/PolicyBundleService.js';
 import { createLabwareLookup } from './ai/compiler/labwareLookup.js';
 import { runChatbotCompile } from './ai/runChatbotCompile.js';
 import type { ExtractorAdapter } from './extract/ExtractorAdapter.js';
-import { LocalIdentityService } from './security/LocalIdentityService.js';
+import { LocalIdentityService, LOCAL_ADMIN_USER_ID } from './security/LocalIdentityService.js';
 import { AuthorizationService } from './security/AuthorizationService.js';
 
 /**
@@ -393,6 +394,17 @@ export async function initializeApp(
   const localIdentityService = new LocalIdentityService(store);
   await localIdentityService.ensureLocalAdminUser();
   const authorizationService = new AuthorizationService(store);
+  // Backfill owner policies for pre-existing policy-root records that have no
+  // ACL (otherwise "no policy = open to everyone" leaks them to other users).
+  // Idempotent; a no-op once everything is stamped.
+  try {
+    const backfilled = await authorizationService.backfillOwnerPolicies(LOCAL_ADMIN_USER_ID);
+    if (backfilled > 0) {
+      console.log(`Backfilled ${backfilled} owner access ${backfilled === 1 ? 'policy' : 'policies'} for pre-existing records`);
+    }
+  } catch (err) {
+    console.warn('Owner-policy backfill failed (records may remain open):', err);
+  }
   
   // Initialize index manager
   const indexManager = createIndexManager(repoAdapter, {
@@ -980,6 +992,14 @@ export async function createServer(
     () => aiInfo,
   );
 
+  // Identity / groups / sharing convenience endpoints — reuse the live
+  // LocalIdentityService + AuthorizationService that already enforce access.
+  const identityHandlers = createIdentityHandlers({
+    store: ctx.store,
+    identityService: ctx.localIdentityService,
+    authorizationService: ctx.authorizationService,
+  });
+
   // Create run-centered draft/accept handlers
   const runDraftHandlers = createRunDraftHandlers({
     store: ctx.store,
@@ -1104,6 +1124,7 @@ export async function createServer(
     if (aiInfo) routeOpts.aiInfo = aiInfo;
     routeOpts.getAiInfo = () => aiInfo;
     routeOpts.configHandlers = configHandlers;
+    routeOpts.identityHandlers = identityHandlers;
     registerRoutes(instance, routeOpts);
   }, { prefix: '/api' });
 

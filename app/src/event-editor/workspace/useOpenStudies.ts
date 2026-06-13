@@ -18,7 +18,7 @@ import {
   openStudy as storageOpenStudy,
   reorderOpenStudies as storageReorderOpenStudies,
   setOpenStudyTitle as storageSetOpenStudyTitle,
-  OPEN_STUDIES_STORAGE_KEY,
+  currentOpenStudiesStorageKey,
   type OpenStudyEntry,
 } from './openStudiesStorage'
 
@@ -48,7 +48,7 @@ export function useOpenStudies(): UseOpenStudiesValue {
     // Re-render when another browser tab edits localStorage. The storage
     // event only fires on OTHER tabs; same-tab updates use the notifier.
     const onStorage = (event: StorageEvent) => {
-      if (event.key === OPEN_STUDIES_STORAGE_KEY) setTick((t) => t + 1)
+      if (event.key === currentOpenStudiesStorageKey()) setTick((t) => t + 1)
     }
     window.addEventListener('storage', onStorage)
     return () => {

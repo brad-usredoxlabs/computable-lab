@@ -157,3 +157,46 @@
   background: var(--cl-bg-elev-2);
   color: var(--cl-text);
 }
+
+/* Trailing workspace controls (share, user switcher) sit left of the gear.
+   Mirror the gear button's sizing and vertically center within the strip
+   (whose items otherwise stretch full-height). */
+.workspace-share-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.workspace-share-button__trigger {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--cl-text-dim);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  width: 28px;
+  height: 26px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 100ms ease, background 100ms ease, border-color 100ms ease;
+}
+
+.workspace-share-button__trigger:hover:not(:disabled) {
+  color: var(--cl-text);
+  background: var(--cl-bg-elev-2);
+}
+
+.workspace-share-button__trigger:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.project-tab-strip .user-switcher {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 2px;
+}

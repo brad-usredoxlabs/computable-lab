@@ -7,6 +7,8 @@ import { DiagnosticsPanel } from './DiagnosticsPanel'
 import { ProjectionTapTabEditor } from './taptab/TapTabEditor'
 import type { RecordEnvelope, ValidationResult, LintResult } from '../types/kernel'
 import type { UISpec } from '../types/uiSpec'
+import { ShareRecordDialog } from '../shared/sharing/ShareRecordDialog'
+import { isPolicyRootKind } from '../shared/sharing/policyRoots'
 
 interface RecordWithDiagnostics {
   record: RecordEnvelope
@@ -17,6 +19,7 @@ interface RecordWithDiagnostics {
 export function RecordViewer() {
   const { recordId } = useParams<{ recordId: string }>()
   const [data, setData] = useState<RecordWithDiagnostics | null>(null)
+  const [shareOpen, setShareOpen] = useState(false)
   const [uiSpec, setUiSpec] = useState<UISpec | null>(null)
   const [schema, setSchema] = useState<Record<string, unknown> | null>(null)
   const [blocks, setBlocks] = useState<
@@ -149,7 +152,15 @@ export function RecordViewer() {
         >
           Edit
         </Link>
+        {isPolicyRootKind((record.payload as { kind?: string })?.kind ?? record.meta?.kind) ? (
+          <button type="button" className="btn" onClick={() => setShareOpen(true)}>
+            Share
+          </button>
+        ) : null}
       </div>
+      {shareOpen ? (
+        <ShareRecordDialog recordId={record.recordId} onClose={() => setShareOpen(false)} />
+      ) : null}
 
       <section className="record-metadata">
         <h2>Metadata</h2>

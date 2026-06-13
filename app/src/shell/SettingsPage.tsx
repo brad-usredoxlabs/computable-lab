@@ -22,6 +22,7 @@ import {
   ExtractorSettingsSection,
   LabMaterialTrackingSection,
   WebSearchSettingsSection,
+  GroupMembershipSection,
 } from './settings'
 import { Slot } from '../extensions'
 import type { SectionId } from './settings/EditableSection'
@@ -252,6 +253,9 @@ export function SettingsPage() {
           onSave={handleSave}
           saving={saving}
         />
+
+        {/* ---- Groups / collaboration ---- */}
+        <GroupMembershipSection />
 
         {/* ---- Policy Bundle Selector ---- */}
         <Section title="Policy Bundle">

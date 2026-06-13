@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useWorkspace } from '../workspace/WorkspaceContext'
 import { recordCreateTabId } from '../workspace/types'
 import { getStudyTree, getRunMethod } from '../../shared/api/treeClient'
+import { apiClient } from '../../shared/api/client'
 import { useStudyArtifacts } from '../right-pane/useStudyArtifacts'
 import {
   artifactKindLabel,
@@ -54,6 +55,10 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
   const [study, setStudy] = useState<StudyTreeNode | null>(null)
   const [treeError, setTreeError] = useState<string | null>(null)
   const [treeLoading, setTreeLoading] = useState(true)
+  // Whether the current user can add experiments/runs here. Default true so the
+  // owner (the common case) sees no flicker; flips to false once we learn this
+  // study is owned by someone else / not shared with edit access.
+  const [canEdit, setCanEdit] = useState(true)
   // Bumped by the cl:records-changed event so a created experiment/run
   // shows up without a manual refresh.
   const [treeEpoch, setTreeEpoch] = useState(0)
@@ -84,6 +89,16 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
     return () => {
       cancelled = true
     }
+  }, [studyId, treeEpoch])
+
+  // Resolve edit permission so we can hide add affordances the user can't use.
+  useEffect(() => {
+    let cancelled = false
+    apiClient
+      .getAccessPolicy(studyId)
+      .then((p) => { if (!cancelled) setCanEdit(p.canWrite) })
+      .catch(() => { if (!cancelled) setCanEdit(false) })
+    return () => { cancelled = true }
   }, [studyId, treeEpoch])
 
   const openNewExperiment = useCallback(() => {
@@ -122,14 +137,23 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
       >
         <div className="project-details-view__section-head">
           <h3 className="project-details-view__section-title">Experiments</h3>
-          <button
-            type="button"
-            className="project-details-view__create-btn"
-            onClick={openNewExperiment}
-            data-testid="project-details-new-experiment"
-          >
-            + New experiment
-          </button>
+          {canEdit ? (
+            <button
+              type="button"
+              className="project-details-view__create-btn"
+              onClick={openNewExperiment}
+              data-testid="project-details-new-experiment"
+            >
+              + New experiment
+            </button>
+          ) : (
+            <span
+              className="project-details-view__readonly-hint"
+              title="This study belongs to another user. Switch user or ask the owner to share it with edit access."
+            >
+              read-only
+            </span>
+          )}
         </div>
         {treeError ? (
           <p className="project-details-view__error">{treeError}</p>
@@ -147,6 +171,7 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
                 key={exp.recordId}
                 experiment={exp}
                 studyId={studyId}
+                canEdit={canEdit}
               />
             ))}
           </ul>
@@ -196,9 +221,11 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
 function ExperimentRow({
   experiment,
   studyId,
+  canEdit,
 }: {
   experiment: ExperimentTreeNode
   studyId: string
+  canEdit: boolean
 }) {
   const ws = useWorkspace()
   const [open, setOpen] = useState(true)
@@ -235,15 +262,17 @@ function ExperimentRow({
             {experiment.runs.length} run{experiment.runs.length === 1 ? '' : 's'}
           </span>
         </button>
-        <button
-          type="button"
-          className="project-details-view__create-btn project-details-view__create-btn--row"
-          onClick={openNewRun}
-          data-testid={`project-details-new-run-${experiment.recordId}`}
-          title={`Create a run under ${experiment.title}`}
-        >
-          + Run
-        </button>
+        {canEdit ? (
+          <button
+            type="button"
+            className="project-details-view__create-btn project-details-view__create-btn--row"
+            onClick={openNewRun}
+            data-testid={`project-details-new-run-${experiment.recordId}`}
+            title={`Create a run under ${experiment.title}`}
+          >
+            + Run
+          </button>
+        ) : null}
       </div>
       {open && hasRuns ? (
         <ul className="project-details-view__tree project-details-view__tree--nested">

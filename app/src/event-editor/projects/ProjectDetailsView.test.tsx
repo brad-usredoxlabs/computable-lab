@@ -10,7 +10,7 @@
  *   - tree fetch error + artifact fetch error each render an error line
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   cleanup,
   fireEvent,
@@ -23,9 +23,11 @@ import { WorkspaceProvider } from '../workspace/WorkspaceContext'
 import { defaultWorkspaceState } from '../workspace/types'
 
 const listRecordsByKind = vi.fn()
+const getAccessPolicy = vi.fn()
 vi.mock('../../shared/api/client', () => ({
   apiClient: {
     listRecordsByKind: (...args: unknown[]) => listRecordsByKind(...args),
+    getAccessPolicy: (...args: unknown[]) => getAccessPolicy(...args),
   },
 }))
 
@@ -139,6 +141,11 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+beforeEach(() => {
+  // Default: current user can edit (owner) so the add affordances render.
+  getAccessPolicy.mockResolvedValue({ canWrite: true, canAdmin: true })
+})
+
 describe('ProjectDetailsView', () => {
   it('renders the study title and experiments → runs tree', async () => {
     getStudyTree.mockResolvedValueOnce(studyTreeResponse)
@@ -149,6 +156,21 @@ describe('ProjectDetailsView', () => {
     expect(await screen.findByText('Hepatocyte toxicity')).toBeTruthy()
     expect(await screen.findByText('Exp 1 dose response')).toBeTruthy()
     expect(await screen.findByText('Run 1')).toBeTruthy()
+  })
+
+  it('hides add affordances and shows read-only when the user cannot edit', async () => {
+    getStudyTree.mockResolvedValueOnce(studyTreeResponse)
+    listRecordsByKind.mockResolvedValueOnce({ records: sampleArtifacts })
+    getAccessPolicy.mockResolvedValue({ canWrite: false, canAdmin: false })
+
+    renderView()
+
+    // Tree still renders…
+    expect(await screen.findByText('Exp 1 dose response')).toBeTruthy()
+    // …but the create affordances are gone, replaced by a read-only hint.
+    expect(await screen.findByText('read-only')).toBeTruthy()
+    expect(screen.queryByTestId('project-details-new-experiment')).toBeNull()
+    expect(screen.queryByTestId('project-details-new-run-EXP-001')).toBeNull()
   })
 
   it('renders artifact sections filtered to the active study', async () => {

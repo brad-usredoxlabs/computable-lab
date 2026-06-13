@@ -14,7 +14,21 @@
  * Reads tolerate missing/corrupt JSON and fall back to an empty list.
  */
 
+import { getCurrentUserId } from '../../shared/api/base'
+
 const STORAGE_KEY = 'cl-open-studies'
+
+/**
+ * Open studies are a per-user browser session, so the storage key is scoped by
+ * the active user id. Switching users therefore shows that user's own tabs (or
+ * none, for a user with no prior session) instead of another user's tabs
+ * pointing at projects they can't access. No selected user (the default local
+ * admin) uses the bare key, preserving existing sessions.
+ */
+function storageKey(): string {
+  const userId = getCurrentUserId()
+  return userId ? `${STORAGE_KEY}:${userId}` : STORAGE_KEY
+}
 
 export interface OpenStudyEntry {
   studyId: string
@@ -26,7 +40,7 @@ export interface OpenStudyEntry {
 
 function readStorage(): OpenStudyEntry[] {
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
+    const raw = window.localStorage.getItem(storageKey())
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
@@ -50,7 +64,7 @@ function readStorage(): OpenStudyEntry[] {
 
 function writeStorage(entries: OpenStudyEntry[]): void {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(entries))
+    window.localStorage.setItem(storageKey(), JSON.stringify(entries))
   } catch {
     // localStorage may be unavailable (private browsing, quota). Tab-strip
     // state is a nice-to-have, not load-bearing — silently degrade.
@@ -133,10 +147,10 @@ export function setOpenStudyTitle(
   return next
 }
 
-/** Test/QA helper — clear the entire open-studies list. */
+/** Test/QA helper — clear the current user's open-studies list. */
 export function clearOpenStudies(): void {
   try {
-    window.localStorage.removeItem(STORAGE_KEY)
+    window.localStorage.removeItem(storageKey())
   } catch {
     /* ignore */
   }
@@ -144,3 +158,8 @@ export function clearOpenStudies(): void {
 
 /** Exposed for tests. Production code should not depend on the key name. */
 export const OPEN_STUDIES_STORAGE_KEY = STORAGE_KEY
+
+/** The active (user-scoped) storage key — used by the cross-tab `storage` listener. */
+export function currentOpenStudiesStorageKey(): string {
+  return storageKey()
+}

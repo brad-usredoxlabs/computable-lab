@@ -7,14 +7,18 @@
  */
 
 import { Link } from 'react-router-dom'
+import { UserSwitcher } from './UserSwitcher'
 
 export function NavLinks() {
   return (
-    <nav className="topbar__nav" aria-label="Primary navigation">
-      <Link to="/browser">Browser</Link>
-      <Link to="/event-editor">Event Editor</Link>
-      <Link to="/protocols">Protocols</Link>
-      <Link to="/literature">Literature</Link>
-    </nav>
+    <div className="topbar__right-group" style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
+      <nav className="topbar__nav" aria-label="Primary navigation">
+        <Link to="/browser">Browser</Link>
+        <Link to="/event-editor">Event Editor</Link>
+        <Link to="/protocols">Protocols</Link>
+        <Link to="/literature">Literature</Link>
+      </nav>
+      <UserSwitcher />
+    </div>
   )
 }

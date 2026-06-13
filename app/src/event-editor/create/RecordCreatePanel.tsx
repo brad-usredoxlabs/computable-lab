@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiClient } from '../../shared/api/client'
+import { describeApiError } from '../../shared/api/errors'
 // Import via the barrel — index.ts is what pulls in taptab.css. A direct
 // `./TapTabEditor` import renders the editor with no styling at all.
 import {
@@ -234,7 +235,7 @@ export function RecordCreatePanel({
         window.dispatchEvent(new CustomEvent('cl:records-changed'))
         onCreated(payload.recordId as string, payload.title as string)
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to create record')
+        setError(describeApiError(err))
       } finally {
         setIsSubmitting(false)
       }

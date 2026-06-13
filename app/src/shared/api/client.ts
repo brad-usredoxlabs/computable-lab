@@ -51,7 +51,7 @@ import type {
 } from '../../types/ai'
 import type { DeckSummary, ToolsSummary, ReagentsSummary, BudgetSummary } from '../../protocol-ide/overlaySummaries.types'
 import { ApiError, NetworkError } from './errors'
-import { API_BASE } from './base'
+import { API_BASE, getCurrentUserId } from './base'
 
 export interface QuantityValue {
   value: number
@@ -1063,6 +1063,11 @@ async function request<T>(
     ? { 'Content-Type': 'application/json' }
     : {}
 
+  // Local-first identity: forward the selected user so the backend resolves
+  // them (and applies their access policies) instead of the fallback admin.
+  const currentUserId = getCurrentUserId()
+  if (currentUserId) baseHeaders['x-user-id'] = currentUserId
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -1350,7 +1355,114 @@ export interface FoundryManifestIndex {
 /**
  * API client methods for kernel endpoints.
  */
+// ---- Identity / groups / sharing ----
+export interface UserSummary {
+  recordId: string
+  username?: string
+  displayName?: string
+  status?: string
+  email?: string
+}
+
+export interface GroupSummary {
+  recordId: string
+  name?: string
+  displayName?: string
+  status?: string
+  memberUserIds: string[]
+  memberGroupIds: string[]
+}
+
+export interface MeResponse {
+  userId: string | null
+  isSystem: boolean
+  user: UserSummary | null
+  groups: Array<{ recordId: string; name?: string; displayName?: string }>
+  reason?: string
+}
+
+export type AccessRole = 'owner' | 'admin' | 'editor' | 'operator' | 'qa' | 'viewer'
+export type Visibility = 'private' | 'shared' | 'public'
+
+export interface AccessGrant {
+  principalType: 'user' | 'group'
+  principalId: string
+  role: AccessRole
+}
+
+export interface AccessPolicyShape {
+  recordId: string
+  visibility: Visibility
+  ownerUserId: string
+  grants: AccessGrant[]
+}
+
+export interface AccessPolicyResponse {
+  recordId: string
+  kind: string | null
+  isPolicyRoot: boolean
+  canAdmin: boolean
+  canWrite: boolean
+  direct: AccessPolicyShape | null
+  effective: AccessPolicyShape | null
+  inherited: boolean
+}
+
 export const apiClient = {
+  // ---- Identity / groups / sharing ----
+  async getMe(): Promise<MeResponse> {
+    return request<MeResponse>('/me')
+  },
+
+  async listUsers(): Promise<UserSummary[]> {
+    const response = await request<{ users: UserSummary[] }>('/users')
+    return response.users
+  },
+
+  async createUser(body: { displayName: string; username?: string }): Promise<UserSummary> {
+    return request<UserSummary>('/users', { method: 'POST', body: JSON.stringify(body) })
+  },
+
+  async getAccessPolicy(recordId: string): Promise<AccessPolicyResponse> {
+    return request<AccessPolicyResponse>(`/records/${encodeURIComponent(recordId)}/access-policy`)
+  },
+
+  async putAccessPolicy(
+    recordId: string,
+    body: { visibility: Visibility; grants: AccessGrant[] },
+  ): Promise<AccessPolicyShape> {
+    return request<AccessPolicyShape>(`/records/${encodeURIComponent(recordId)}/access-policy`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    })
+  },
+
+  async listGroups(): Promise<GroupSummary[]> {
+    const response = await request<{ groups: GroupSummary[] }>('/groups')
+    return response.groups
+  },
+
+  async createGroup(body: { name: string; displayName: string }): Promise<GroupSummary> {
+    return request<GroupSummary>('/groups', { method: 'POST', body: JSON.stringify(body) })
+  },
+
+  async addGroupMember(
+    groupId: string,
+    member: { principalType: 'user' | 'group'; principalId: string },
+  ): Promise<GroupSummary> {
+    return request<GroupSummary>(`/groups/${encodeURIComponent(groupId)}/members`, {
+      method: 'POST',
+      body: JSON.stringify(member),
+    })
+  },
+
+  async removeGroupMember(groupId: string, principalId: string): Promise<GroupSummary> {
+    return request<GroupSummary>(
+      `/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(principalId)}`,
+      { method: 'DELETE' },
+    )
+  },
+
   /**
    * Get all available schemas.
    */

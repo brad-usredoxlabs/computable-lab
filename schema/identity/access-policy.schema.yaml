@@ -9,7 +9,7 @@ description: >
 type: object
 unevaluatedProperties: false
 allOf:
-- $ref: "../core/common.schema.yaml#/$defs/FAIRCommon"
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 
 required:
 - kind
@@ -29,7 +29,7 @@ properties:
 
   resourceRef:
     allOf:
-    - $ref: "../core/datatypes/ref.schema.yaml"
+    - $ref: "./datatypes/ref.schema.yaml"
     - type: object
       properties:
         kind: { const: record }

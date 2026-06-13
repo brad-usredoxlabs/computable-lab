@@ -11,10 +11,13 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiClient } from '../shared/api/client'
+import { describeApiError } from '../shared/api/errors'
 import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor'
 import type { TapTabEditorHandle } from '../editor/taptab/types'
 import type { EditorProjectionResponse } from '../types/uiSpec'
 import type { RecordEnvelope } from '../types/kernel'
+import { ShareRecordDialog } from '../shared/sharing/ShareRecordDialog'
+import { isPolicyRootKind } from '../shared/sharing/policyRoots'
 
 export interface DetailPaneProps {
   recordId: string | null
@@ -42,6 +45,7 @@ export function DetailPane({ recordId, onSaved, onClose }: DetailPaneProps) {
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [shareOpen, setShareOpen] = useState(false)
 
   useEffect(() => {
     if (!recordId) {
@@ -98,7 +102,7 @@ export function DetailPane({ recordId, onSaved, onClose }: DetailPaneProps) {
       setDirty(false)
       onSaved()
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Save failed')
+      setSaveError(describeApiError(err))
     } finally {
       setSaving(false)
     }
@@ -147,6 +151,16 @@ export function DetailPane({ recordId, onSaved, onClose }: DetailPaneProps) {
           {dirty && <span className="cl-browser__detail-dirty">Unsaved</span>}
         </div>
         <div className="cl-browser__detail-actions">
+          {isPolicyRootKind((state.record.payload as { kind?: string })?.kind ?? state.record.meta?.kind) ? (
+            <button
+              type="button"
+              className="cl-browser__detail-save"
+              onClick={() => setShareOpen(true)}
+              title="Manage who can see and edit this record"
+            >
+              Share
+            </button>
+          ) : null}
           <button
             type="button"
             className="cl-browser__detail-save"
@@ -160,6 +174,9 @@ export function DetailPane({ recordId, onSaved, onClose }: DetailPaneProps) {
           </button>
         </div>
       </header>
+      {shareOpen ? (
+        <ShareRecordDialog recordId={state.record.recordId} onClose={() => setShareOpen(false)} />
+      ) : null}
       {saveError && <div className="cl-browser__detail-error">{saveError}</div>}
       {state.projection ? (
         <ProjectionTapTabEditor

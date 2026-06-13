@@ -79,6 +79,26 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Turn an API error into a user-facing message. Access-control failures (403,
+ * and the 401 "unknown user" case) get a friendly, actionable hint instead of
+ * the raw server text like "FORBIDDEN: User USR-… cannot add child records
+ * under STU-…", which reads as a crash. Everything else is surfaced verbatim.
+ */
+export function describeApiError(err: unknown): string {
+  if (ApiError.isApiError(err)) {
+    if (err.status === 403) {
+      return "You don't have edit access here — this project belongs to another user. Switch user (top-right) or ask the owner to share it with you."
+    }
+    if (err.status === 401) {
+      return 'Your user could not be identified. Pick a user from the switcher (top-right) and try again.'
+    }
+    return err.message
+  }
+  if (NetworkError.isNetworkError(err)) return err.message
+  return err instanceof Error ? err.message : 'Something went wrong'
+}
+
 export class NetworkError extends Error {
   constructor(message: string = 'Network error') {
     super(message)

@@ -231,3 +231,12 @@
 .project-details-view__create-btn--row:focus-visible {
   opacity: 1;
 }
+
+/* Shown in place of the create button when the user can't edit this study
+   (it's owned by another user and not shared with edit access). */
+.project-details-view__readonly-hint {
+  font-size: 11px;
+  color: var(--cl-text-faint);
+  font-style: italic;
+  padding: 4px 6px;
+}

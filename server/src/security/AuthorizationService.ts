@@ -171,6 +171,33 @@ export class AuthorizationService {
     return policies.find((policy) => getResourceRefId(policy) === recordId) ?? null;
   }
 
+  /**
+   * One-time backfill: stamp an owner policy on every policy-root record that
+   * doesn't already resolve one (directly or via a parent). Without this,
+   * records created before access policies existed have no ACL and are treated
+   * as open to everyone — so a non-owner user could read/write them. Owner is
+   * the record's `meta.createdBy` when it's a USR-* id, else `defaultOwnerId`.
+   * Idempotent: re-running creates nothing once everything is covered. Studies
+   * are processed before their children so the children inherit (no redundant
+   * child ACLs). Returns the number of policies created.
+   */
+  async backfillOwnerPolicies(defaultOwnerId: string): Promise<number> {
+    let created = 0;
+    // Parents before children so a stamped study covers its experiments/runs.
+    for (const kind of ['study', 'experiment', 'planned-run', 'run']) {
+      const records = await this.store.list({ kind, limit: 100000 });
+      for (const record of records) {
+        if (await this.resolveEffectivePolicy(record)) continue;
+        const createdBy = record.meta?.createdBy;
+        const owner = typeof createdBy === 'string' && createdBy.startsWith('USR-')
+          ? createdBy
+          : defaultOwnerId;
+        if (await this.ensureOwnerPolicy(record, owner)) created += 1;
+      }
+    }
+    return created;
+  }
+
   private async loadGroups(): Promise<GroupRecord[]> {
     const groups = await this.store.list({ kind: 'group', limit: 10000 });
     return groups.map(coerceGroup).filter((group): group is GroupRecord => group !== null);

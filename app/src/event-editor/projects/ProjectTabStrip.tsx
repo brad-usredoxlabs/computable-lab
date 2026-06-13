@@ -19,6 +19,8 @@ import { useCallback, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { StudyPickerPopover } from './StudyPickerPopover'
 import { SettingsMenuButton } from './SettingsMenuButton'
+import { WorkspaceShareButton } from './WorkspaceShareButton'
+import { UserSwitcher } from '../../shared/shell/UserSwitcher'
 import { useOpenStudies } from '../workspace/useOpenStudies'
 import './ProjectTabStrip.css'
 
@@ -127,6 +129,8 @@ export function ProjectTabStrip() {
           relocated the brand menu's items (Settings / Theme / About)
           here after the chrome row was retired. */}
       <span className="project-tab-strip__spacer" aria-hidden />
+      <WorkspaceShareButton {...(activeStudyId ? { studyId: activeStudyId } : {})} />
+      <UserSwitcher />
       <SettingsMenuButton />
     </div>
   )

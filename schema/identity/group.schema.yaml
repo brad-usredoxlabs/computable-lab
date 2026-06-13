@@ -8,7 +8,7 @@ description: >
 type: object
 unevaluatedProperties: false
 allOf:
-- $ref: "../core/common.schema.yaml#/$defs/FAIRCommon"
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 
 required:
 - kind

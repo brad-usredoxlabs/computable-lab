@@ -20,6 +20,7 @@ import type { VocabHandlers } from './handlers/VocabHandlers.js';
 import type { AIHandlers } from './handlers/AIHandlers.js';
 import type { EventEditorFixHandlers } from './handlers/EventEditorFixHandlers.js';
 import type { ConfigHandlers } from './handlers/configHandlers.js';
+import type { IdentityHandlers } from './handlers/IdentityHandlers.js';
 import type { MetaHandlers } from './handlers/metaHandlers.js';
 import type { ProtocolHandlers } from './handlers/ProtocolHandlers.js';
 import type { ComponentHandlers } from './handlers/ComponentHandlers.js';
@@ -80,6 +81,7 @@ export interface RouteOptions {
   aiHandlers?: AIHandlers;
   eventEditorFixHandlers?: EventEditorFixHandlers;
   configHandlers?: ConfigHandlers;
+  identityHandlers?: IdentityHandlers;
   metaHandlers?: MetaHandlers;
   protocolHandlers?: ProtocolHandlers;
   protocolIdeHandlers?: ProtocolIdeHandlers;
@@ -196,6 +198,20 @@ export function registerRoutes(
   const { relatedRecordsHandlers } = options;
   if (relatedRecordsHandlers) {
     fastify.get('/records/:id/related', relatedRecordsHandlers.getRelatedRecords.bind(relatedRecordsHandlers));
+  }
+
+  // Identity / groups / sharing (optional - requires identityHandlers)
+  const { identityHandlers } = options;
+  if (identityHandlers) {
+    fastify.get('/me', identityHandlers.getMe.bind(identityHandlers));
+    fastify.get('/users', identityHandlers.listUsers.bind(identityHandlers));
+    fastify.post('/users', identityHandlers.createUser.bind(identityHandlers));
+    fastify.get('/records/:id/access-policy', identityHandlers.getAccessPolicy.bind(identityHandlers));
+    fastify.put('/records/:id/access-policy', identityHandlers.putAccessPolicy.bind(identityHandlers));
+    fastify.get('/groups', identityHandlers.listGroups.bind(identityHandlers));
+    fastify.post('/groups', identityHandlers.createGroup.bind(identityHandlers));
+    fastify.post('/groups/:id/members', identityHandlers.addGroupMember.bind(identityHandlers));
+    fastify.delete('/groups/:id/members/:principalId', identityHandlers.removeGroupMember.bind(identityHandlers));
   }
 
   // ============================================================================
