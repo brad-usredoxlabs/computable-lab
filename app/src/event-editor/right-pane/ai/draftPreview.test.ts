@@ -64,4 +64,25 @@ describe('buildPreviewFromDraft activeDeckScope', () => {
     expect(result.preview.previewPlacements).toEqual([])
     expect(result.skips.join(' ')).toContain('allowed slots: PLATE')
   })
+
+  it('expands AI-emitted well ranges in preview events', () => {
+    const result = buildPreviewFromDraft({
+      platform,
+      variant: singlePlateVariant,
+      events: [
+        {
+          eventId: 'e1',
+          event_type: 'add_material',
+          details: { labwareId: 'plate-1', wells: ['A1:A12'], volume: { value: 100, unit: 'uL' } },
+        },
+      ] as never,
+      labwareAdditions: [],
+      labwareRequirements: [],
+      existingLabwares: {},
+    })
+    const wells = (result.preview.previewEvents[0]?.details as { wells: string[] }).wells
+    expect(wells).toHaveLength(12)
+    expect(wells[0]).toBe('A1')
+    expect(wells[11]).toBe('A12')
+  })
 })

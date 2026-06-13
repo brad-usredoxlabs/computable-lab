@@ -101,6 +101,10 @@ properties:
     minimum: 0
     description: "Deprecated legacy volume field."
 
+  role:
+    type: string
+    description: "Optional semantic role for this material in the target context, e.g. cells, treatment, vehicle, additive, or control."
+
   concentration:
     oneOf:
     - $ref: "../../datatypes/concentration.schema.yaml"

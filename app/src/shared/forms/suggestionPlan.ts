@@ -51,6 +51,14 @@ export interface SuggestionPlan {
   isRef: boolean;
   /** Whether this plan represents a combobox (multi-value). */
   isCombobox: boolean;
+  /** Field-level ontology persistence policy. */
+  ontologyBinding?: 'allow-ontology' | 'local-material-required' | 'local-record-required';
+  /** Whether the application, not the user, owns this field's value. */
+  ownedByApp?: boolean;
+  /** Expected stored value shape. */
+  valueShape?: 'text' | 'ref' | 'record-ref' | 'ontology-ref' | 'material-ref';
+  /** Default lifecycle state for newly minted controlled values. */
+  lifecycleDefault?: string;
 }
 
 // ============================================================================
@@ -81,6 +89,7 @@ export function buildSuggestionPlanFromFieldHint(
     options,
     isRef,
     isCombobox,
+    ...extractControlProps(props),
   };
 }
 
@@ -141,6 +150,21 @@ function extractOntologies(props?: Record<string, unknown>): string[] {
  *
  * Falls back to 'tags' (the legacy default).
  */
+function extractControlProps(props?: Record<string, unknown>): Pick<SuggestionPlan, 'ontologyBinding' | 'ownedByApp' | 'valueShape' | 'lifecycleDefault'> {
+  const ontologyBinding = props?.ontologyBinding === 'allow-ontology' || props?.ontologyBinding === 'local-material-required' || props?.ontologyBinding === 'local-record-required'
+    ? props.ontologyBinding
+    : undefined;
+  const valueShape = props?.valueShape === 'text' || props?.valueShape === 'ref' || props?.valueShape === 'record-ref' || props?.valueShape === 'ontology-ref' || props?.valueShape === 'material-ref'
+    ? props.valueShape
+    : undefined;
+  return {
+    ...(ontologyBinding ? { ontologyBinding } : {}),
+    ...(typeof props?.ownedByApp === 'boolean' ? { ownedByApp: props.ownedByApp } : {}),
+    ...(valueShape ? { valueShape } : {}),
+    ...(typeof props?.lifecycleDefault === 'string' ? { lifecycleDefault: props.lifecycleDefault } : {}),
+  };
+}
+
 function extractSearchField(props?: Record<string, unknown>): SearchField {
   const raw = props?.field;
   if (raw === 'keywords' || raw === 'tags') {

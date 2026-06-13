@@ -119,6 +119,43 @@ describe('normalizeEventGraphMaterialUsage', () => {
   });
 
 
+  it('grounds concept-only ontology material refs to proposed local materials on accept', async () => {
+    const store = new MemoryRecordStore();
+    const graph = {
+      kind: 'event-graph',
+      id: 'EVG-CELLS',
+      events: [
+        {
+          eventId: 'evt-cells',
+          event_type: 'add_material',
+          details: {
+            wells: ['A1'],
+            material_ref: { kind: 'ontology', id: 'EFO:0001187', namespace: 'EFO', label: 'HepG2' },
+            count: 10000,
+          },
+        },
+      ],
+    };
+
+    const normalized = await normalizeEventGraphMaterialUsage(store, EVENT_GRAPH_SCHEMA_ID, graph);
+    const event = (normalized as { events: Array<{ details: Record<string, unknown> }> }).events[0]!;
+
+    expect(event.details.material_ref).toMatchObject({
+      kind: 'record',
+      id: 'MAT-EFO-0001187',
+      type: 'material',
+      label: 'HepG2',
+    });
+    expect(store.created.find((record) => record.recordId === 'MAT-EFO-0001187')?.payload).toMatchObject({
+      kind: 'material',
+      id: 'MAT-EFO-0001187',
+      name: 'HepG2',
+      status: 'proposed',
+      lifecycleId: 'lab-vocabulary-control',
+      class: [{ kind: 'ontology', id: 'EFO:0001187', namespace: 'EFO', label: 'HepG2' }],
+    });
+  });
+
   it('creates a proposed material spec from a grounded composition snapshot on accept', async () => {
     const store = new MemoryRecordStore();
     const graph = {
@@ -171,13 +208,23 @@ describe('normalizeEventGraphMaterialUsage', () => {
         createdBy: 'add-material-normalizer',
       },
       formulation_kind: 'complex_composition',
-      material_ref: { id: 'XCO:0000988' },
+      material_ref: { kind: 'record', id: 'MAT-XCO-0000988', type: 'material' },
       formulation: {
         composition: [
-          { component_ref: { id: 'XCO:0000988' }, role: 'buffer_component' },
-          { component_ref: { id: 'MSIO:0000017' }, role: 'additive', concentration: { value: 10, unit: '% v/v', basis: 'volume_fraction' } },
+          { component_ref: { kind: 'record', id: 'MAT-XCO-0000988', type: 'material' }, role: 'buffer_component' },
+          { component_ref: { kind: 'record', id: 'MAT-MSIO-0000017', type: 'material' }, role: 'additive', concentration: { value: 10, unit: '% v/v', basis: 'volume_fraction' } },
         ],
       },
+    });
+    expect(store.created.find((record) => record.recordId === 'MAT-XCO-0000988')?.payload).toMatchObject({
+      kind: 'material',
+      status: 'proposed',
+      class: [{ kind: 'ontology', id: 'XCO:0000988' }],
+    });
+    expect(store.created.find((record) => record.recordId === 'MAT-MSIO-0000017')?.payload).toMatchObject({
+      kind: 'material',
+      status: 'proposed',
+      class: [{ kind: 'ontology', id: 'MSIO:0000017' }],
     });
     expect((createdSpec.payload as Record<string, unknown>).provenance).not.toHaveProperty('eventGraphId');
     expect((createdSpec.payload as Record<string, unknown>).provenance).not.toHaveProperty('eventId');

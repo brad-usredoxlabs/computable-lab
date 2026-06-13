@@ -34,6 +34,7 @@ import {
   parseSubmitSuggestionArgs,
 } from './submitSuggestionTool.js';
 import { createMaterialLabeler, enrichAddMaterialRefs } from './materialRefLabels.js';
+import { expandEventWells } from './wellRange.js';
 import {
   clarificationRequestFromLegacy,
   clarificationRequestsFromGaps,
@@ -277,7 +278,8 @@ const FORCED_DRAFT_TOOL_INSTRUCTION = [
   'EVENT-EDITOR DRAFT MODE:',
   `- You MUST finish this turn by calling the ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} tool.`,
   '- Do not answer in prose. Do not leave the assistant message empty.',
-  '- If the prompt is underspecified, call the tool with a clarification object instead of stopping.',
+  '- The `resolve` tool is NOT available this turn. Do not output any ontology CURIE you were not given in <resolved_context> — recalling an id from memory is a hallucination. Ground a named material as {mint:{label,domain}}, or, when you are unsure which specific record the user means, emit a material clarification (menuProvider /m) and let them pick.',
+  '- If the prompt is underspecified or a named material/labware is ambiguous, call the tool with clarificationRequests[] (and no events) instead of guessing.',
   '- Every well-targeted event\'s details MUST include labwareId (an existing labware id from the editor context) and wells (e.g. ["A1"]). An event without them cannot be rendered or executed.',
   '- If the requested operation is simple labware/deck setup, include labwareRequirements with classCurie and deckSlot. Use labwareAdditions only for concrete known definitions.',
   '- Do not ask which vendor/catalog/plate subtype for generic labware such as a 96-well plate; emit a generic labwareRequirement and let the user refine it later.',
@@ -1436,6 +1438,9 @@ export function createAgentOrchestrator(
 
           const parsed = parseSubmitSuggestionArgs(submitArgs, totalUsage, turn + 1, totalToolCalls);
           if (parsed.events?.length) {
+            // Expand compact well ranges ("A1:H12") the model emits into literal
+            // wells, so every dock gets the existing per-well format.
+            parsed.events = parsed.events.map(expandEventWells);
             parsed.events = await enrichAddMaterialRefs(
               normalizeDraftLabwareRefs(parsed.events, context),
               createMaterialLabeler({ store: deps.store, ontology: deps.ontology }),

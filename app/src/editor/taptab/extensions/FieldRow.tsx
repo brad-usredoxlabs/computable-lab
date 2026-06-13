@@ -8,22 +8,86 @@ import { apiClient } from '../../../shared/api/client';
 import { WidgetRenderer } from './WidgetRenderer';
 import { focusAdjacentTapTabField } from '../tabNavPlugin';
 
+interface SelectedOntologyTerm {
+  label: string;
+  iri?: string;
+  definition?: string;
+  synonyms?: string[];
+  ontology?: string;
+  oboId?: string;
+}
+
+function curieFromOntologyTerm(term: SelectedOntologyTerm): { curie: string; namespace: string } | null {
+  if (term.oboId && /^[A-Za-z][A-Za-z0-9_]*:[A-Za-z0-9_]+$/.test(term.oboId)) {
+    const namespace = term.oboId.split(':')[0]!.toUpperCase();
+    return { curie: `${namespace}:${term.oboId.split(':').slice(1).join(':')}`, namespace };
+  }
+  const iriTail = term.iri?.split(/[\/#]/).filter(Boolean).pop();
+  if (iriTail && /^[A-Za-z][A-Za-z0-9]+_[A-Za-z0-9_]+$/.test(iriTail)) {
+    const [prefix, ...rest] = iriTail.split('_');
+    return { curie: `${prefix.toUpperCase()}:${rest.join('_')}`, namespace: prefix.toUpperCase() };
+  }
+  const namespace = term.ontology?.trim().toUpperCase();
+  if (!namespace) return null;
+  const id = term.label.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return { curie: `${namespace}:${id}`, namespace };
+}
+
 function FieldRowView({ node, updateAttributes }: NodeViewProps) {
   const attrs = node.attrs as FieldRowAttrs;
   const [sidebarTerm, setSidebarTerm] = useState<OntologyTerm | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const handleRefSelect = (v: string, s: 'local' | 'ontology', t?: { label: string; iri: string; definition?: string; synonyms?: string[]; ontology?: string }) => {
+  const groundOntologyTerm = async (term: SelectedOntologyTerm) => {
+    const curie = curieFromOntologyTerm(term);
+    if (!curie) throw new Error('Could not derive ontology CURIE for selected term');
+    const response = await apiClient.groundOntologyMaterial({
+      ontologyRef: {
+        kind: 'ontology',
+        id: curie.curie,
+        namespace: curie.namespace,
+        label: term.label,
+        ...(term.iri ? { uri: term.iri } : {}),
+      },
+      sourceLabel: term.label,
+    });
+    updateAttributes({ value: response.materialRef });
+  };
+
+  const handleRefSelect = async (v: string, s: 'local' | 'ontology', t?: SelectedOntologyTerm) => {
     if (s === 'ontology' && t) {
-      setSidebarTerm({ label: t.label, iri: t.iri, definition: t.definition, synonyms: t.synonyms, ontology: t.ontology });
+      if (attrs.suggestionPlan?.ontologyBinding === 'local-material-required') {
+        try {
+          await groundOntologyTerm(t);
+          return;
+        } catch (error) {
+          console.error('Failed to ground ontology material:', error);
+        }
+      }
+      if (attrs.suggestionPlan?.valueShape === 'ontology-ref') {
+        const curie = curieFromOntologyTerm(t);
+        updateAttributes({
+          value: curie
+            ? { kind: 'ontology', id: curie.curie, namespace: curie.namespace, label: t.label, ...(t.iri ? { uri: t.iri } : {}) }
+            : v,
+        });
+        return;
+      }
+      setSidebarTerm({ label: t.label, iri: t.iri ?? '', definition: t.definition, synonyms: t.synonyms, ontology: t.ontology });
       setSidebarOpen(true);
-    } else { updateAttributes({ value: v }); }
+    } else {
+      updateAttributes({ value: v });
+    }
   };
 
   const handleAddToVocab = async (term: { label: string; iri: string }) => {
     try {
-      await apiClient.addLocalVocabTerm(attrs.refKind || 'default', { value: term.label, iri: term.iri });
-      updateAttributes({ value: term.label });
+      if (attrs.suggestionPlan?.ontologyBinding === 'local-material-required') {
+        await groundOntologyTerm({ ...term, ontology: sidebarTerm?.ontology });
+      } else {
+        await apiClient.addLocalVocabTerm(attrs.refKind || 'default', { value: term.label, iri: term.iri });
+        updateAttributes({ value: term.label });
+      }
       setSidebarOpen(false);
       setSidebarTerm(null);
     } catch (error) { console.error('Failed to add term to local vocabulary:', error); }
@@ -34,30 +98,26 @@ function FieldRowView({ node, updateAttributes }: NodeViewProps) {
   if (attrs.widget === 'hidden') return null;
 
   // Row-level Tab fallback: the plain inline input handles its own Tab
-  // (and stops propagation), but composite widgets — rich-text Description,
-  // arrays, comboboxes — swallow or never surface Tab, which made
-  // navigation die exactly at the fields where those widgets sit (the last
-  // field of most sections, so it read as "can't tab across sections").
-  // Any Tab that bubbles up to the row advances to the adjacent field.
+  // (and stops propagation), but composite widgets swallow or never surface Tab.
   const handleRowKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== 'Tab') return;
     e.preventDefault();
     e.stopPropagation();
-    // currentTarget (the row), NOT target: portal-rendered widget inputs
-    // (comboboxes) dispatch through the React tree but live outside the
-    // editor DOM, so the target can't anchor a position lookup.
     focusAdjacentTapTabField(e.currentTarget as HTMLElement, e.shiftKey);
   };
 
+  const readOnly = attrs.readOnly || attrs.suggestionPlan?.ownedByApp || false;
+
   return (
-    <NodeViewWrapper className={`taptab-field-row ${attrs.readOnly ? 'readonly' : ''}`} data-read-only={attrs.readOnly} onKeyDown={handleRowKeyDown}>
+    <NodeViewWrapper className={`taptab-field-row ${readOnly ? 'readonly' : ''}`} data-read-only={readOnly} onKeyDown={handleRowKeyDown}>
       <span className="taptab-field-label" data-required={attrs.required}>{attrs.label}</span>
       <WidgetRenderer
         widget={attrs.widget}
         value={attrs.value}
-        readOnly={attrs.readOnly || false}
+        readOnly={readOnly}
         options={attrs.options}
         refKind={attrs.refKind}
+        suggestionPlan={attrs.suggestionPlan}
         onCommit={(v) => updateAttributes({ value: v })}
         onRefSelect={handleRefSelect}
         onCancel={() => {}}
@@ -81,6 +141,7 @@ export const FieldRow = Node.create({
       readOnly: { default: false },
       required: { default: false },
       options: { default: null },
+      suggestionPlan: { default: null },
       refKind: { default: null },
       help: { default: null },
       arraySchema: { default: null },

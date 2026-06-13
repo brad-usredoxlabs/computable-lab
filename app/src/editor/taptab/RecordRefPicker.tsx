@@ -12,6 +12,10 @@ export interface RecordRefPickerProps {
     searchField: 'keywords' | 'tags';
     isRef: boolean;
     isCombobox: boolean;
+    ontologyBinding?: 'allow-ontology' | 'local-material-required' | 'local-record-required';
+    ownedByApp?: boolean;
+    valueShape?: 'text' | 'ref' | 'record-ref' | 'ontology-ref' | 'material-ref';
+    lifecycleDefault?: string;
   };
   onSelect: (
     value: string,
@@ -30,7 +34,7 @@ interface SearchResult {
 export function RecordRefPicker({
   value,
   refKind,
-  suggestionPlan,
+  suggestionPlan: _suggestionPlan,
   onSelect,
   onCancel,
 }: RecordRefPickerProps) {

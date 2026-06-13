@@ -46,3 +46,4 @@ export * from './PromptTemplateHandlers.js';
 export * from './OntologyTermHandlers.js';
 export * from './VerbActionMapHandlers.js';
 export * from './FoundryJobHandlers.js';
+export * from './MaterialProfileHandlers.js';

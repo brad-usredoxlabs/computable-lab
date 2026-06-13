@@ -10,8 +10,9 @@ import type { OLSResultRef } from '../../shared/api/olsClient'
  * through:
  *
  *   search → configure → apply               (pick existing)
- *   search → pick-type → build-<type> →
- *            creating → configure → apply    (create new)
+ *   search → intent (MaterialIntentSurface:
+ *            type select → builder) →
+ *            configure → apply               (create new)
  *
  * Each state carries the minimum data needed to render its UI. The
  * reducer rejects transitions that don't make sense from the current
@@ -44,16 +45,13 @@ export type AddMaterialState =
   /** Initial state. Search results + on-demand OLS. */
   | { phase: 'search' }
   /** A material is chosen; user enters volume / count then confirms. */
-  | { phase: 'configure'; picked: PickedMaterial; volume_uL: string; count: string }
-  /** User clicked "Create new"; choose which kind. */
-  | { phase: 'pick-type' }
+  | { phase: 'configure'; picked: PickedMaterial; volume_uL: string; count: string; role: string }
   /**
-   * Building a new material of a specific kind. The builder form owns
-   * its own internal field state — this slice only carries the kind +
-   * an optional ontology seed when the user came in by clicking an
-   * ontology hit in search (the "create from this term" path).
+   * Creating a new material via the shared MaterialIntentSurface (type
+   * selection + per-type builder). An optional ontology seed jumps straight to
+   * the right builder pre-filled (the "create from this term" path).
    */
-  | { phase: 'build'; kind: MaterialKind; seedOntologyRef?: OLSResultRef }
+  | { phase: 'intent'; seed?: { kind: MaterialKind; ontologyRef: OLSResultRef } }
   /** Submitting createRecord / createFormulation / createMaterialInstance. */
   | { phase: 'creating' }
   /** Terminal error before close. */
@@ -61,12 +59,11 @@ export type AddMaterialState =
 
 export type AddMaterialAction =
   | { type: 'pick'; material: PickedMaterial }
-  | { type: 'request-create' }
-  | { type: 'pick-kind'; kind: MaterialKind }
-  | { type: 'seed-build'; kind: MaterialKind; ontologyRef: OLSResultRef }
-  | { type: 'cancel-build' }
+  | { type: 'open-intent' }
+  | { type: 'seed-intent'; kind: MaterialKind; ontologyRef: OLSResultRef }
   | { type: 'set-volume'; value: string }
   | { type: 'set-count'; value: string }
+  | { type: 'set-role'; value: string }
   | { type: 'submitting' }
   | { type: 'fail'; message: string }
   | { type: 'reset' }
@@ -84,27 +81,25 @@ export function reducer(state: AddMaterialState, action: AddMaterialAction): Add
         picked: material,
         volume_uL: '100',
         count: material.hasCellComposition ? '100000' : '',
+        role: '',
       }
     }
-    case 'request-create':
+    case 'open-intent':
       if (state.phase !== 'search') return state
-      return { phase: 'pick-type' }
-    case 'pick-kind':
-      if (state.phase !== 'pick-type') return state
-      return { phase: 'build', kind: action.kind }
-    case 'seed-build':
-      // Reachable from `search` (clicked an ontology hit, going
-      // straight into the builder with the term pre-filled) or from
-      // `pick-type` (user changed their mind about which kind to build).
-      return { phase: 'build', kind: action.kind, seedOntologyRef: action.ontologyRef }
-    case 'cancel-build':
-      return { phase: 'search' }
+      return { phase: 'intent' }
+    case 'seed-intent':
+      // Reachable from `search` by clicking an ontology hit — jump straight
+      // into the right builder with the term pre-filled.
+      return { phase: 'intent', seed: { kind: action.kind, ontologyRef: action.ontologyRef } }
     case 'set-volume':
       if (state.phase !== 'configure') return state
       return { ...state, volume_uL: action.value }
     case 'set-count':
       if (state.phase !== 'configure') return state
       return { ...state, count: action.value }
+    case 'set-role':
+      if (state.phase !== 'configure') return state
+      return { ...state, role: action.value }
     case 'submitting':
       return { phase: 'creating' }
     case 'fail':

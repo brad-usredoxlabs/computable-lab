@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AddMaterialModal, inferMaterialKindForOntologyCandidate } from './AddMaterialModal'
+import { AddMaterialModal, inferMaterialKindForOntologyCandidate, inferMaterialProfileIdForOntologyCandidate } from './AddMaterialModal'
 import type { Labware } from '../../types/labware'
 
 const applyAddMaterial = vi.fn()
@@ -39,6 +39,13 @@ describe('inferMaterialKindForOntologyCandidate', () => {
       namespace: 'mesh',
       label: 'Hep G2 Cells',
     })).toBe('cells')
+  })
+
+
+  it('routes EFO/CL-like terms to the cell_line profile', () => {
+    const candidate = { curie: 'EFO:0001187', namespace: 'EFO', label: 'HepG2' }
+    expect(inferMaterialProfileIdForOntologyCandidate(candidate)).toBe('cell_line')
+    expect(inferMaterialKindForOntologyCandidate(candidate)).toBe('cells')
   })
 
   it('routes media-like ontology terms to the mixture builder', () => {

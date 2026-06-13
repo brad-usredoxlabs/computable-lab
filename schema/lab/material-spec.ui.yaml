@@ -28,6 +28,13 @@ form:
     - path: "$.material_ref"
       widget: "ref"
       label: "Material"
+      refKind: "material"
+      props:
+        sources: ["local", "ols"]
+        ontologies: ["chebi", "cl", "efo", "xco", "msio"]
+        valueShape: "material-ref"
+        ontologyBinding: "local-material-required"
+        lifecycleDefault: "proposed"
     - path: "$.formulation.concentration.value"
       widget: "number"
       label: "Concentration Value"
@@ -40,6 +47,13 @@ form:
     - path: "$.formulation.solvent_ref"
       widget: "ref"
       label: "Solvent"
+      refKind: "material"
+      props:
+        sources: ["local", "ols"]
+        ontologies: ["chebi", "xco", "msio"]
+        valueShape: "material-ref"
+        ontologyBinding: "local-material-required"
+        lifecycleDefault: "proposed"
     - path: "$.formulation.grade"
       widget: "text"
       label: "Grade"

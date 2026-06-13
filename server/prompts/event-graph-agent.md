@@ -263,6 +263,22 @@ Return only a JSON object:
 `"clarification"` is optional. Include it (and leave `"events"` empty) when 2+ search results need user disambiguation. Omit the field entirely when drafting events normally.
 `"labwareAdditions"` is optional. Include it when proposing to add labware to the editor before the generated events.
 
+## Well Ranges
+
+To save space, do NOT enumerate every well when they form a contiguous block.
+Any `wells` array (and transfer `source_wells` / `dest_wells`) accepts compact
+rectangular ranges using `START:END`:
+
+- `"A1:H12"` — the full 96-well block (rows A–H × columns 1–12)
+- `"A1:A12"` — row A, columns 1–12
+- `"A1:H1"` — column 1, rows A–H
+- `"A1:D6"` — a 4×6 quadrant
+
+Mix ranges and singletons freely, e.g. `["A1:H10", "A11", "C12"]`. Always prefer
+a range over listing each well — emit `["A1:H12"]`, never `["A1","A2", … ,"H12"]`.
+The editor expands ranges to individual wells on apply, so volumes and
+per-well state are unaffected.
+
 ## Event Detail Schemas
 
 ### add_material

@@ -29,9 +29,27 @@ form:
     - path: "$.domain"
       widget: "select"
       label: "Domain"
+    - path: "$.status"
+      widget: "select"
+      label: "Curation Status"
+      readonly: true
+      props:
+        ownedByApp: true
+        lifecycleDefault: "proposed"
+    - path: "$.lifecycleId"
+      widget: "text"
+      label: "Lifecycle"
+      readonly: true
+      props:
+        ownedByApp: true
     - path: "$.class"
       widget: "array"
       label: "Classifications"
+      props:
+        sources: ["ols"]
+        ontologies: ["chebi", "cl", "efo", "uberon", "ncbitaxon", "xco", "msio"]
+        valueShape: "ontology-ref"
+        ontologyBinding: "allow-ontology"
     - path: "$.description"
       widget: "markdown"
       label: "Description"

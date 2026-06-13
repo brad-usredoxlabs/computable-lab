@@ -17,7 +17,8 @@ import { useMaterialSearch } from '../hooks/useMaterialSearch'
 import type { MaterialSearchItem, MaterialSmartSearchResult, VendorSearchResult, VendorName } from '../../shared/api/client'
 import { formatConcentration } from '../../types/material'
 import { MaterialBuilderModal } from './MaterialBuilderModal'
-import { MaterialIntentModal } from './MaterialIntentModal'
+import { MaterialIntentSurface } from '../../shared/material-intent/MaterialIntentSurface'
+import type { MaterialIntentOption } from '../../shared/material-intent/types'
 import { VendorProductBuilderModal } from './VendorProductBuilderModal'
 import { MaterialInstanceBuilderModal } from './MaterialInstanceBuilderModal'
 import { BiologicalMaterialBuilderModal } from './BiologicalMaterialBuilderModal'
@@ -32,7 +33,6 @@ const VENDOR_DISPLAY_NAMES: Record<VendorName, string> = {
   thomas: 'Thomas Scientific',
 }
 
-const VENDOR_SEARCH_VENDORS: VendorName[] = ['thermo', 'sigma', 'fisher', 'vwr', 'cayman', 'thomas']
 
 export interface MaterialPickerProps {
   value?: Ref | null
@@ -213,6 +213,74 @@ function ResultRow({
       </div>
     </div>
   )
+}
+
+/**
+ * The "make this ontology concept addable" router — the record-editor's material
+ * kinds, each a host-handled route that opens its own builder modal (which carry
+ * distinct seeds: vendor search result, derivation inputs, prepared source). The
+ * options drive the shared `MaterialIntentSurface`; this replaces the old bespoke
+ * `MaterialIntentModal`. Disjoint from the event editor's placeable-material
+ * kinds — both plug into the same surface.
+ */
+export interface IntentRouteDeps {
+  onCreateFormulationFromOntology?: (ref: OntologyRef) => void
+  setVendorProductSeed: (v: { ontologyRef: OntologyRef | null; result: VendorSearchResult | null } | null) => void
+  setPreparedMaterialRef: (v: OntologyRef | null) => void
+  setBiologicalMaterialRef: (v: OntologyRef | null) => void
+  setDerivedMaterialRef: (v: OntologyRef | null) => void
+  setModalRef: (v: OntologyRef | null) => void
+  setIntentRef: (v: OntologyRef | null) => void
+}
+
+export function intentRouteOptions(ref: OntologyRef, deps: IntentRouteDeps): MaterialIntentOption[] {
+  const route = (open: () => void) => () => {
+    open()
+    deps.setIntentRef(null)
+  }
+  const options: MaterialIntentOption[] = []
+  if (deps.onCreateFormulationFromOntology) {
+    const onCreate = deps.onCreateFormulationFromOntology
+    options.push({
+      kind: 'formulation',
+      title: 'Create Saved Formulation',
+      detail: 'Recommended. Open a reusable recipe card for a stock or prepared formulation.',
+      onSelect: route(() => onCreate(ref)),
+    })
+  }
+  options.push(
+    {
+      kind: 'vendor-product',
+      title: 'Add Vendor Product',
+      detail: 'Create a searchable vendor reagent linked to this material concept.',
+      onSelect: route(() => deps.setVendorProductSeed({ ontologyRef: ref, result: null })),
+    },
+    {
+      kind: 'prepared-instance',
+      title: 'Create Prepared Material',
+      detail: 'Create a concrete stock, bottle, or prepared source that your lab can use directly.',
+      onSelect: route(() => deps.setPreparedMaterialRef(ref)),
+    },
+    {
+      kind: 'biological',
+      title: 'Create Biological Material',
+      detail: 'Use this for cells or other biological materials with state like passage number.',
+      onSelect: route(() => deps.setBiologicalMaterialRef(ref)),
+    },
+    {
+      kind: 'derived',
+      title: 'Create Derived Material',
+      detail: 'Use this for conditioned media, harvested outputs, or collected supernatants.',
+      onSelect: route(() => deps.setDerivedMaterialRef(ref)),
+    },
+    {
+      kind: 'concept',
+      title: 'Create Local Concept',
+      detail: 'Use this when your lab needs its own material concept record first.',
+      onSelect: route(() => deps.setModalRef(ref)),
+    },
+  )
+  return options
 }
 
 export function MaterialPicker({
@@ -1099,41 +1167,24 @@ export function MaterialPicker({
         document.body,
       )}
 
-      {intentRef && createPortal(
-        <MaterialIntentModal
-          isOpen={true}
-          ontologyRef={intentRef}
-          onClose={() => setIntentRef(null)}
-          onCreateFormulation={() => {
-            if (onCreateFormulationFromOntology) onCreateFormulationFromOntology(intentRef)
-            setIntentRef(null)
-          }}
-          onAddVendorProduct={() => {
-            setVendorProductSeed({ ontologyRef: intentRef, result: null })
-            setIntentRef(null)
-          }}
-          onCreatePreparedMaterial={() => {
-            setPreparedMaterialRef(intentRef)
-            setIntentRef(null)
-          }}
-          onCreateBiologicalMaterial={() => {
-            setBiologicalMaterialRef(intentRef)
-            setIntentRef(null)
-          }}
-          onCreateDerivedMaterial={() => {
-            setDerivedMaterialRef(intentRef)
-            setIntentRef(null)
-          }}
-          onCreateLocalConcept={() => {
-            setModalRef(intentRef)
-            setIntentRef(null)
-          }}
-          onUseBareConcept={() => {
-            onChange(intentRef)
-            setIntentRef(null)
-          }}
-        />,
-        document.body,
+      {intentRef && (
+        <MaterialIntentSurface
+          layout="modal"
+          hint={`${intentRef.label} is an ontology concept. Choose how you want to use it in the lab.`}
+          cancelLabel="Cancel"
+          options={intentRouteOptions(intentRef, {
+            onCreateFormulationFromOntology,
+            setVendorProductSeed,
+            setPreparedMaterialRef,
+            setBiologicalMaterialRef,
+            setDerivedMaterialRef,
+            setModalRef,
+            setIntentRef,
+          })}
+          onCancel={() => setIntentRef(null)}
+          onResolved={() => {}}
+          onError={() => {}}
+        />
       )}
 
       {preparedMaterialRef && createPortal(

@@ -174,6 +174,34 @@ definitions:
         description: "Field width in form layout"
 
       # Widget-specific options
+      props:
+        type: "object"
+        description: "Semantic field behavior used by TapTab and suggestion widgets."
+        additionalProperties: true
+        properties:
+          sources:
+            type: "array"
+            items:
+              type: "string"
+              enum: ["local", "ols", "vendor-search", "local-records"]
+          ontologies:
+            type: "array"
+            items:
+              type: "string"
+          field:
+            type: "string"
+            enum: ["keywords", "tags"]
+          ownedByApp:
+            type: "boolean"
+          valueShape:
+            type: "string"
+            enum: ["text", "ref", "record-ref", "ontology-ref", "material-ref"]
+          ontologyBinding:
+            type: "string"
+            enum: ["allow-ontology", "local-material-required", "local-record-required"]
+          lifecycleDefault:
+            type: "string"
+
       options:
         type: "object"
         description: "Widget-specific options"

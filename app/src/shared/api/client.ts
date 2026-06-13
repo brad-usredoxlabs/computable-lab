@@ -148,6 +148,30 @@ export interface MaterialRefInput {
   uri?: string
 }
 
+
+export type MaterialProfileControl = 'app-owned' | 'free-text' | 'ontology-ref' | 'local-material-required' | 'record-ref'
+export type MaterialProfileLayer = 'concept' | 'formulation' | 'instance'
+
+export interface MaterialProfileField {
+  path: string
+  label: string
+  widget: string
+  layer: MaterialProfileLayer
+  required: boolean
+  control: MaterialProfileControl
+  default?: unknown
+  ontologies: string[]
+}
+
+export interface MaterialProfile {
+  id: string
+  label: string
+  applies_when: { domain?: string[]; formulation_kind?: string[] }
+  layers: MaterialProfileLayer[]
+  fields: MaterialProfileField[]
+  quick_add: string[]
+}
+
 export interface MaterialSearchItem {
   recordId: string
   kind: string
@@ -1915,6 +1939,27 @@ export const apiClient = {
   async getMaterial(recordId: string): Promise<RecordEnvelope> {
     const response = await request<{ record: RecordEnvelope }>(`/materials/${encodeURIComponent(recordId)}`)
     return response.record
+  },
+
+
+  async listMaterialProfiles(): Promise<{ version: number; profiles: MaterialProfile[] }> {
+    return request('/materials/profiles')
+  },
+
+  async getMaterialProfile(profileId: string): Promise<{ profile: MaterialProfile }> {
+    return request(`/materials/profiles/${encodeURIComponent(profileId)}`)
+  },
+
+  async groundOntologyMaterial(body: {
+    ontologyRef: MaterialRefInput
+    domainHint?: string
+    profileId?: string
+    sourceLabel?: string
+  }): Promise<{ materialRef: MaterialRefInput; profileId: string }> {
+    return request('/materials/ground-ontology', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
   },
 
   /**

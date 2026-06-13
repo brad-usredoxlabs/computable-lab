@@ -189,6 +189,30 @@ describe('editorHistory (via eventEditorReducer)', () => {
     expect(switched.history.past).toHaveLength(0)
   })
 
+  it('hydrate_history adopts a restored stack so undo works after a reload', () => {
+    // Build a stack, then simulate reload: a fresh load wipes history…
+    const edited = run([
+      { type: 'append_event', event: event('e1') },
+      { type: 'append_event', event: event('e2') },
+    ])
+    const savedHistory = edited.history
+    const reloaded = reduce(edited, {
+      type: 'load_event_graph_success',
+      eventGraphId: 'EVG-1',
+      runId: null,
+      events: [event('e1'), event('e2')],
+      labwares: {},
+      placements: [],
+    })
+    expect(reloaded.history.past).toHaveLength(0)
+
+    // …then the persisted stack is rehydrated and undo steps back again.
+    const hydrated = reduce(reloaded, { type: 'hydrate_history', history: savedHistory })
+    expect(hydrated.history.past).toHaveLength(2)
+    const undone = reduce(hydrated, { type: 'undo' })
+    expect(undone.events.map((e) => e.eventId)).toEqual(['e1'])
+  })
+
   it('undo of commit_preview removes committed ghosts without resurrecting the preview', () => {
     const labware = createLabware('plate_96')
     const preview = {

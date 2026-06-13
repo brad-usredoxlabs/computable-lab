@@ -17,7 +17,10 @@ import { EventGraphChip } from '../../topbar/EventGraphChip'
 
 export function DeckToolbar() {
   return (
-    <div className="viewer-toolbar viewer-toolbar--deck">
+    // `event-editor` scopes the chip/undo/tip/graph styles, which are written
+    // as `.event-editor .x`. The workspace AppShell doesn't add that scope to
+    // the toolbar slot, so (mirroring DeckViewer) we self-scope here.
+    <div className="event-editor viewer-toolbar viewer-toolbar--deck">
       <UndoRedoControls />
       <DeckModeSwitcher />
       <VocabSwitcher />

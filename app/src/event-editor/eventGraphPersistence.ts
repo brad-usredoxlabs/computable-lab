@@ -38,6 +38,13 @@ export interface PersistAcceptedEventGraphResult {
   commit?: SavedEventGraphCommit
 }
 
+export class RunDeckLockConflictError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'RunDeckLockConflictError'
+  }
+}
+
 export interface PersistAcceptedEventGraphInput {
   eventGraphId: string | null
   runId: string | null
@@ -71,6 +78,10 @@ type SaveEventGraphFn = (
   eventGraphId: string | null,
   payload: AcceptedEventGraphPayload,
 ) => Promise<SaveEventGraphResult>
+
+type EnsureRunDeckLockFn = (
+  input: Pick<PersistAcceptedEventGraphInput, 'runId' | 'platformId' | 'variantId'>,
+) => Promise<RunDeckLock | null>
 
 type LoadEventGraphFn = (eventGraphId: string) => Promise<LoadEventGraphResult>
 type GetRecordFn = typeof apiClient.getRecord
@@ -186,7 +197,7 @@ export async function ensureRunDeckLock(
   const existing = payload.methodDeckLock
   if (isRunDeckLock(existing)) {
     if (existing.platformId !== input.platformId || existing.variantId !== input.variantId) {
-      throw new Error(
+      throw new RunDeckLockConflictError(
         'Run ' + input.runId + ' is locked to ' + existing.platformId + '/' + existing.variantId
           + '; explicit layout replacement is required before saving ' + input.platformId + '/' + input.variantId + '.',
       )
@@ -242,8 +253,14 @@ export function extractSavedEventGraphId(
 export async function persistAcceptedEventGraph(
   input: PersistAcceptedEventGraphInput,
   saveEventGraph: SaveEventGraphFn = apiClient.saveEventGraph,
+  ensureDeckLock: EnsureRunDeckLockFn = ensureRunDeckLock,
 ): Promise<PersistAcceptedEventGraphResult> {
-  await ensureRunDeckLock(input)
+  try {
+    await ensureDeckLock(input)
+  } catch (error) {
+    if (error instanceof RunDeckLockConflictError) throw error
+    console.warn('Run deck lock could not be persisted; continuing with event graph save.', error)
+  }
   const payload = buildAcceptedEventGraphPayload(input)
   const result = await saveEventGraph(input.eventGraphId, payload)
   assertSavedEventGraphValid(result)

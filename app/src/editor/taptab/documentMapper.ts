@@ -4,6 +4,7 @@
 
 import type { UISpec, FieldHint, FormSection, FieldOption } from '../../types/uiSpec';
 import { getValueAtPath, stripJsonPath, isFieldHidden } from '../../shared/lib/formHelpers';
+import { buildSuggestionPlanFromFieldHint } from '../../shared/forms/suggestionPlan';
 
 /**
  * TipTap JSON content node type - matches @tiptap/core JSONContent.
@@ -85,15 +86,18 @@ function buildFieldRowNode(field: FieldHint, data: Record<string, unknown>): JSO
     label: opt.label,
   })) ?? null;
 
+  const suggestionPlan = buildSuggestionPlanFromFieldHint(field.widget, field.props, field.refKind, fieldOptions ?? undefined);
+
   const attrs: Record<string, unknown> = {
     path: field.path,
     widget: field.widget,
     label: field.label ?? stripJsonPath(field.path),
     value,
-    readOnly: field.readOnly ?? field.readonly ?? false,
+    readOnly: Boolean(field.readOnly ?? field.readonly ?? suggestionPlan.ownedByApp ?? false),
     required: field.required ?? false,
     options: fieldOptions,
     refKind: field.refKind ?? undefined,
+    suggestionPlan,
     help: field.help ?? undefined,
   };
 
@@ -151,7 +155,9 @@ export function buildProjectionDocument(
     required?: boolean;
     readOnly?: boolean;
     suggestionProviders?: string[];
-    options?: Array<{ value: string; label: string }>;
+    options?: Array<{ value: string | number | boolean; label: string }>;
+    refKind?: string;
+    props?: Record<string, unknown>;
     properties?: Array<{ name: string; widget: string; label: string; help?: string; required?: boolean }>;
   }>,
   data: Record<string, unknown>,
@@ -171,16 +177,21 @@ export function buildProjectionDocument(
       const rawValue = getValueAtPath(data, slot.path);
       const value = stripJsonPathValue(rawValue);
 
+      const slotOptions = slot.options?.map((opt) => ({ value: String(opt.value), label: opt.label }));
+
+      const suggestionPlan = buildSuggestionPlanFromFieldHint(slot.widget, slot.props, slot.refKind, slotOptions);
+
       // Build composite widget config based on widget type
       const attrs: Record<string, unknown> = {
         path: slot.path,
         widget: slot.widget,
         label: slot.label,
         value,
-        readOnly: slot.readOnly ?? false,
+        readOnly: Boolean(slot.readOnly ?? suggestionPlan.ownedByApp ?? false),
         required: slot.required ?? false,
         options: null,
-        refKind: undefined,
+        refKind: slot.refKind ?? undefined,
+        suggestionPlan,
         help: slot.help ?? undefined,
       };
 

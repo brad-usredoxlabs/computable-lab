@@ -3,6 +3,10 @@ import type { RecordStore } from '../store/types.js';
 import type { MaterialTrackingConfig } from '../config/types.js';
 import { toStoredConcentration } from './concentration.js';
 import { extractPrimaryDeclaredConcentration } from './vendorComposition.js';
+import {
+  ensureLocalMaterialForOntology,
+  type RefShape as GroundingRefShape,
+} from './MaterialGrounding.js';
 
 const ALIQUOT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/aliquot.schema.yaml';
 const MATERIAL_INSTANCE_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/material-instance.schema.yaml';
@@ -241,6 +245,85 @@ function toRecordRef(id: string, type: string, label?: string): RefShape {
   };
 }
 
+async function ensureLocalMaterialRef(
+  store: RecordStore,
+  ref: RefShape | null,
+  sourceLabel: string,
+): Promise<RefShape | null> {
+  if (!ref || ref.kind !== 'ontology') return ref;
+  return ensureLocalMaterialForOntology(store, ref as GroundingRefShape, {
+    source: 'compiler',
+    sourceLabel,
+    createdBy: 'add-material-normalizer',
+    note: 'Created as a proposed local material record from an accepted add-material event graph.',
+  }) as Promise<RefShape>;
+}
+
+async function normalizeCompositionMaterialRefs(
+  store: RecordStore,
+  value: unknown,
+): Promise<unknown> {
+  if (!Array.isArray(value)) return value;
+  return Promise.all(value.map(async (entry) => {
+    const obj = asRecord(entry);
+    if (!obj) return entry;
+    const componentRef = normalizeRef(obj['component_ref'] ?? obj['componentRef']);
+    if (!componentRef) return entry;
+    const grounded = await ensureLocalMaterialRef(store, componentRef, refLabel(componentRef) ?? componentRef.id);
+    return {
+      ...obj,
+      component_ref: grounded,
+    };
+  }));
+}
+
+async function normalizeMaterialSourceRequirementRefs(
+  store: RecordStore,
+  value: unknown,
+): Promise<unknown> {
+  const req = asRecord(value);
+  if (!req) return value;
+  const out: Record<string, unknown> = { ...req };
+  const materialRef = normalizeRef(out.material_ref, 'material');
+  if (materialRef?.kind === 'ontology') {
+    out.material_ref = await ensureLocalMaterialRef(store, materialRef, refLabel(materialRef) ?? materialRef.id);
+  }
+  const sourceDetails = asRecord(out.source_details);
+  if (sourceDetails) {
+    const nextSourceDetails: Record<string, unknown> = { ...sourceDetails };
+    const solventRef = normalizeRef(sourceDetails.solvent_ref, 'material');
+    if (solventRef?.kind === 'ontology') {
+      nextSourceDetails.solvent_ref = await ensureLocalMaterialRef(store, solventRef, refLabel(solventRef) ?? solventRef.id);
+    }
+    out.source_details = nextSourceDetails;
+  }
+  return out;
+}
+
+async function normalizeAddMaterialDetailsMaterialRefs(
+  store: RecordStore,
+  details: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = { ...details };
+  const materialRef = normalizeRef(out.material_ref, 'material');
+  if (materialRef?.kind === 'ontology') {
+    out.material_ref = await ensureLocalMaterialRef(store, materialRef, refLabel(materialRef) ?? materialRef.id);
+  }
+  if (out.materialId !== undefined) {
+    const materialIdRef = normalizeRef(out.materialId, 'material');
+    if (materialIdRef?.kind === 'ontology') {
+      out.materialId = await ensureLocalMaterialRef(store, materialIdRef, refLabel(materialIdRef) ?? materialIdRef.id);
+    }
+  }
+  if (out.composition_snapshot !== undefined) {
+    out.composition_snapshot = await normalizeCompositionMaterialRefs(store, out.composition_snapshot);
+  }
+  if (out.material_source_requirement !== undefined) {
+    out.material_source_requirement = await normalizeMaterialSourceRequirementRefs(store, out.material_source_requirement);
+  }
+  return out;
+}
+
 function unresolvedSourceRequirement(refField: 'material_spec_ref' | 'vendor_product_ref', ref: RefShape): Record<string, unknown> {
   return {
     status: 'unresolved',
@@ -417,14 +500,16 @@ export async function normalizeEventGraphMaterialUsage(
     const eventId = typeof event.eventId === 'string' && event.eventId.trim().length > 0 ? event.eventId.trim() : `event_${index + 1}`;
     const details = asRecord(event.details);
     if (!details) return event;
-    const proposedSpecRef = await upsertProposedMaterialSpecFromComposition(store, eventGraphId, eventId, details);
+    const groundedDetails = await normalizeAddMaterialDetailsMaterialRefs(store, details);
+    changed = true;
+    const proposedSpecRef = await upsertProposedMaterialSpecFromComposition(store, eventGraphId, eventId, groundedDetails);
     const detailsWithProposedSpec = proposedSpecRef
       ? {
-          ...details,
+          ...groundedDetails,
           material_spec_ref: proposedSpecRef,
-          material_source_requirement: details['material_source_requirement'] ?? unresolvedSourceRequirement('material_spec_ref', proposedSpecRef),
+          material_source_requirement: groundedDetails['material_source_requirement'] ?? unresolvedSourceRequirement('material_spec_ref', proposedSpecRef),
         }
-      : details;
+      : groundedDetails;
     if (proposedSpecRef) changed = true;
     if (normalizeRef(detailsWithProposedSpec['aliquot_ref'], 'aliquot')) return { ...event, details: detailsWithProposedSpec };
     if (normalizeRef(detailsWithProposedSpec['material_instance_ref'], 'material-instance')) return { ...event, details: detailsWithProposedSpec };
@@ -438,7 +523,7 @@ export async function normalizeEventGraphMaterialUsage(
         }
         return null;
       })();
-    if (!inferredSpec || inferredSpec.kind !== 'record') return event;
+    if (!inferredSpec || inferredSpec.kind !== 'record') return { ...event, details: detailsWithProposedSpec };
     const lot = extractInstanceLot(detailsWithProposedSpec);
     if (!lot) {
       changed = true;

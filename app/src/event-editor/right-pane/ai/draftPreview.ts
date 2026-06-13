@@ -9,6 +9,7 @@
 import type { EventEditorPreview } from '../../EventEditorContext'
 import type { EventEditorPlacement, PlacementLocation } from '../../types'
 import type { PlateEvent } from '../../../types/events'
+import { expandEventWells } from '../../lib/wellRange'
 import {
   labwareDefinitionRecordToPayload,
   labwareRecordToEditorLabware,
@@ -173,7 +174,9 @@ export function buildPreviewFromDraft({
     preview: {
       previewLabwares,
       previewPlacements,
-      previewEvents: [...events],
+      // Expand any compact well ranges the AI emitted ("A1:H12") into literal
+      // wells, so committed events keep the existing per-well format.
+      previewEvents: events.map(expandEventWells),
     },
     skips,
   }

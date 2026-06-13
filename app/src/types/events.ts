@@ -131,6 +131,7 @@ export interface AddMaterialDetails extends BaseEventDetails {
     }
   }
   volume?: { value: number; unit: string }
+  role?: string
   concentration?: ConcentrationValue
   composition_snapshot?: CompositionEntryValue[]
   count?: number

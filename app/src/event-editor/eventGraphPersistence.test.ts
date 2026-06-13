@@ -9,6 +9,7 @@ import {
   extractSavedEventGraphId,
   ensureRunDeckLock,
   persistAcceptedEventGraph,
+  RunDeckLockConflictError,
 } from './eventGraphPersistence'
 
 const event: PlateEvent = {
@@ -86,6 +87,54 @@ describe('event-editor accepted event graph persistence', () => {
       status: 'inbox',
       editorLayout: { surface: 'event-editor/v1', placements: [placement] },
     }))
+  })
+
+  it('continues saving accepted graphs when first run deck lock persistence fails', async () => {
+    const saveEventGraph = vi.fn().mockResolvedValue({ record: { recordId: 'EVG-001' } })
+    const ensureDeckLock = vi.fn().mockRejectedValue(
+      new Error('Validation failed: /methodDeckLock: must not have unevaluated properties'),
+    )
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    const saved = await persistAcceptedEventGraph({
+      eventGraphId: 'EVG-001',
+      runId: 'RUN-001',
+      events: [event],
+      labwares: { 'plate-1': labware },
+      placements: [placement],
+      platformId: 'manual',
+      variantId: 'manual_single_plate',
+    }, saveEventGraph, ensureDeckLock)
+
+    expect(saved.eventGraphId).toBe('EVG-001')
+    expect(saveEventGraph).toHaveBeenCalledWith('EVG-001', expect.objectContaining({
+      runId: 'RUN-001',
+      status: 'filed',
+    }))
+    expect(warn).toHaveBeenCalledWith(
+      'Run deck lock could not be persisted; continuing with event graph save.',
+      expect.any(Error),
+    )
+    warn.mockRestore()
+  })
+
+  it('does not save accepted graphs when an existing run deck lock conflicts', async () => {
+    const saveEventGraph = vi.fn()
+    const ensureDeckLock = vi.fn().mockRejectedValue(
+      new RunDeckLockConflictError('Run RUN-001 is locked to manual/manual_single_plate'),
+    )
+
+    await expect(persistAcceptedEventGraph({
+      eventGraphId: 'EVG-001',
+      runId: 'RUN-001',
+      events: [event],
+      labwares: { 'plate-1': labware },
+      placements: [placement],
+      platformId: 'manual',
+      variantId: 'manual_freeform',
+    }, saveEventGraph, ensureDeckLock)).rejects.toThrow(/locked to/)
+
+    expect(saveEventGraph).not.toHaveBeenCalled()
   })
 
   it('uses the fallback id for update responses that omit record ids', () => {

@@ -52,6 +52,18 @@ export interface FieldRowAttrs {
   required?: boolean;
   /** Options for select/combobox widgets */
   options: Array<{ value: string; label: string }> | null;
+  /** Suggestion/control metadata forwarded from the UI spec. */
+  suggestionPlan?: {
+    sources: string[];
+    ontologies: string[];
+    searchField: 'keywords' | 'tags';
+    isRef: boolean;
+    isCombobox: boolean;
+    ontologyBinding?: 'allow-ontology' | 'local-material-required' | 'local-record-required';
+    ownedByApp?: boolean;
+    valueShape?: 'text' | 'ref' | 'record-ref' | 'ontology-ref' | 'material-ref';
+    lifecycleDefault?: string;
+  };
   /** Reference kind for ref widgets */
   refKind?: string;
   /** Help text for the field */
@@ -195,6 +207,9 @@ export interface ProjectionEditorProps {
     required?: boolean;
     readOnly?: boolean;
     suggestionProviders?: string[];
+    options?: Array<{ value: string | number | boolean; label: string }>;
+    refKind?: string;
+    props?: Record<string, unknown>;
   }>;
   /** Base payload to edit */
   data: Record<string, unknown>;

@@ -1,8 +1,9 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react'
 import { apiClient } from '../shared/api/client'
-import { loadAcceptedEventGraph, type RunDeckLock, type SavedEventGraphCommit } from './eventGraphPersistence'
+import { ensureRunDeckLock, loadAcceptedEventGraph, type RunDeckLock, type SavedEventGraphCommit } from './eventGraphPersistence'
 import { assignVisibleLabwareHandle, assignVisibleLabwareHandles, findLabwareNameConflict } from './labwareHandles'
-import { EMPTY_HISTORY, withEditorHistory, type EditorHistory } from './editorHistory'
+import { EMPTY_HISTORY, withEditorHistory, type EditorHistory, type UndoableSnapshot } from './editorHistory'
+import { persistEditorHistory, loadEditorHistory, snapshotFingerprint } from './editorHistoryStorage'
 import type { PlatformManifest } from '../types/platformRegistry'
 import { defaultVariantForPlatform, getPlatformManifest, getVariantManifest } from '../shared/lib/platformRegistry'
 import type { Labware } from '../types/labware'
@@ -19,6 +20,7 @@ import type { AiGraphLemurRevisionEntry, AiLabwareAddition, AiLabwareRequirement
 import type { AddMaterialDetails, PlateEvent } from '../types/events'
 import { generateEventId } from '../types/events'
 import type { Ref } from '../types/ref'
+import { groundMaterialRef } from './lib/groundMaterialRef'
 import {
   applyPlateRailPatch,
   DEFAULT_PLATE_RAIL_DRAFT,
@@ -322,6 +324,7 @@ export type EventEditorAction =
   | { type: 'set_tool'; toolTypeId: string | null; assistPipetteId: string | null }
   | { type: 'set_run'; runId: string | null }
   | { type: 'set_run_deck_lock'; lock: RunDeckLock | null }
+  | { type: 'hydrate_history'; history: EditorHistory }
   | {
       type: 'place_new_labware'
       labware: Labware
@@ -627,6 +630,10 @@ function reducer(state: EventEditorState, action: Action): EventEditorState {
       }
     case 'set_run':
       return { ...state, runId: action.runId }
+    case 'hydrate_history':
+      // Restore a persisted undo/redo stack after a reload. The wrapper leaves
+      // this through (not undoable, not a reset), so the field is adopted as-is.
+      return { ...state, history: action.history }
     case 'set_run_deck_lock': {
       const defaults = action.lock ? pickDefaultsForPlatform(state.platforms, action.lock.platformId) : null
       return {
@@ -1049,6 +1056,7 @@ export interface EventEditorActions {
     wells: WellId[]
     materialRef: Ref
     volume_uL: number
+    role?: string
     concentration?: AddMaterialDetails['concentration']
     compositionSnapshot?: AddMaterialDetails['composition_snapshot']
     /**
@@ -1123,6 +1131,37 @@ function isRunDeckLock(value: unknown): value is RunDeckLock {
 
 export function EventEditorProvider({ runId, eventGraphId, children }: ProviderProps) {
   const [state, dispatch] = useReducer(eventEditorReducer, initialState)
+  const stateRef = useRef(state)
+  stateRef.current = state
+  // Tracks the graph key we've already attempted to rehydrate undo history for,
+  // so the load-time history reset doesn't get re-persisted (clobbering the
+  // saved stack) before we restore it.
+  const hydratedForRef = useRef<string | null>(null)
+
+  function lockRunDeckForFirstEdit() {
+    const current = stateRef.current
+    if (!current.runId || current.runDeckLock) return
+    const lockedAt = new Date().toISOString()
+    const optimisticLock: RunDeckLock = {
+      locked: true,
+      platformId: current.platformId,
+      variantId: current.variantId,
+      source: 'first-edit',
+      lockedAt,
+    }
+    dispatch({ type: 'set_run_deck_lock', lock: optimisticLock })
+    void ensureRunDeckLock({
+      runId: current.runId,
+      platformId: current.platformId,
+      variantId: current.variantId,
+    }, undefined, undefined, () => lockedAt)
+      .then((lock) => {
+        if (lock) dispatch({ type: 'set_run_deck_lock', lock })
+      })
+      .catch((error: unknown) => {
+        console.warn('Failed to persist run deck lock', error)
+      })
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -1192,6 +1231,46 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
     }
   }, [eventGraphId, runId])
 
+  // Rehydrate the undo/redo stack from localStorage after a load, so undo
+  // survives a page reload. Guarded by a fingerprint of the live snapshot — if
+  // the loaded graph diverged from what the persisted stack was built against,
+  // the stale stack is dropped rather than restored.
+  useEffect(() => {
+    if (state.loadState !== 'ready') return
+    const key = state.eventGraphId || runId || null
+    if (!key || hydratedForRef.current === key) return
+    hydratedForRef.current = key
+    const persisted = loadEditorHistory(key)
+    if (!persisted) return
+    const s = stateRef.current
+    const live: UndoableSnapshot = {
+      events: s.events,
+      labwares: s.labwares,
+      placements: s.placements,
+      plateRail: s.plateRail,
+      tipState: s.tipState,
+    }
+    if (persisted.headSig === snapshotFingerprint(live)) {
+      dispatch({ type: 'hydrate_history', history: persisted.history })
+    }
+  }, [state.loadState, state.eventGraphId, runId])
+
+  // Persist the stack on every history change — but only once we've passed the
+  // rehydration gate for this graph, so the empty history from the load reset
+  // never overwrites the saved stack before we read it.
+  useEffect(() => {
+    const key = state.eventGraphId || runId || null
+    if (!key || hydratedForRef.current !== key) return
+    const s = stateRef.current
+    persistEditorHistory(key, s.history, {
+      events: s.events,
+      labwares: s.labwares,
+      placements: s.placements,
+      plateRail: s.plateRail,
+      tipState: s.tipState,
+    })
+  }, [state.history, state.eventGraphId, runId])
+
   const actions = useMemo<EventEditorActions>(
     () => ({
       undo: () => dispatch({ type: 'undo' }),
@@ -1205,18 +1284,25 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
           toolTypeId,
           assistPipetteId: assistPipetteId ?? null,
         }),
-      placeNewLabware: (labware, location, orientation) =>
-        dispatch({ type: 'place_new_labware', labware, location, orientation }),
-      movePlacement: (placementId, location, orientation) =>
-        dispatch({ type: 'move_placement', placementId, location, orientation }),
-      removePlacement: (placementId) => dispatch({ type: 'remove_placement', placementId }),
+      placeNewLabware: (labware, location, orientation) => {
+        lockRunDeckForFirstEdit()
+        dispatch({ type: 'place_new_labware', labware, location, orientation })
+      },
+      movePlacement: (placementId, location, orientation) => {
+        lockRunDeckForFirstEdit()
+        dispatch({ type: 'move_placement', placementId, location, orientation })
+      },
+      removePlacement: (placementId) => {
+        lockRunDeckForFirstEdit()
+        dispatch({ type: 'remove_placement', placementId })
+      },
       renameLabware: (labwareId, name) => dispatch({ type: 'rename_labware', labwareId, name }),
       setFocus: (placementId) => dispatch({ type: 'set_focus', placementId }),
       setSelection: (selection) => dispatch({ type: 'set_selection', selection }),
       clearSelection: () => dispatch({ type: 'set_selection', selection: null }),
       appendEvent: (event) => dispatch({ type: 'append_event', event }),
-      applyAddMaterial: ({ labwareId, wells, materialRef, volume_uL, concentration, compositionSnapshot, count }) => {
-        dispatch({
+      applyAddMaterial: ({ labwareId, wells, materialRef, volume_uL, role, concentration, compositionSnapshot, count }) => {
+        const emit = (ref: Ref) => dispatch({
           type: 'append_event',
           event: {
             eventId: generateEventId(),
@@ -1224,14 +1310,22 @@ export function EventEditorProvider({ runId, eventGraphId, children }: ProviderP
             details: {
               labwareId,
               wells,
-              ...addMaterialRefDetails(materialRef),
+              ...addMaterialRefDetails(ref),
               volume: { value: volume_uL, unit: 'uL' },
+              ...(role?.trim() ? { role: role.trim() } : {}),
               ...(concentration ? { concentration } : {}),
               ...(compositionSnapshot ? { composition_snapshot: compositionSnapshot } : {}),
               ...(typeof count === 'number' && Number.isFinite(count) ? { count } : {}),
             },
           },
         })
+        // An ontology ref is grounded to a local material record before it lands
+        // in the event (record refs dispatch synchronously, unchanged).
+        if (materialRef.kind === 'ontology') {
+          void groundMaterialRef(materialRef).then(emit)
+        } else {
+          emit(materialRef)
+        }
       },
       applyAspirate: ({ labwareId, wells, volume_uL, sourceLabel }) => {
         dispatch({

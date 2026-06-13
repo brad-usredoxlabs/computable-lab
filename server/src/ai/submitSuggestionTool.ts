@@ -40,7 +40,8 @@ export const COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME = 'compile_event_graph_draft';
  */
 export const SUBMIT_SUGGESTION_INSTRUCTION = [
   'FINALIZING YOUR ANSWER:',
-  '- Resolve every material/reagent/noun with the `resolve` tool first, and use the top-ranked CURIE it returns.',
+  '- Ground every material/reagent/noun before referencing it. A {curie} is legitimate ONLY when it came from the `resolve` tool or appears in <resolved_context>. When `resolve` is available, call it first and use the top-ranked CURIE; when it is not (draft mode), NEVER recall, guess, or reconstruct a CURIE from memory.',
+  '- For a named material you cannot ground to a resolved/known CURIE, prefer {mint:{label,domain}} — it becomes a local proposed record. But when the user named something specific that should already exist and you are unsure which record they mean (e.g. "CHO cells" could be several cell lines), do NOT guess or mint silently: ask a material clarification so the user picks.',
   '- Finish by calling the `compile_event_graph_draft` tool exactly once. Do NOT print JSON in your text reply.',
   "- In each event's `materials[]`, reference a material only as {curie} (from `resolve`) or {mint:{label,domain}} when no ontology term fits — never a bare free-text name. Use `role` for mixture semantics such as cells, buffer_component, or additive, `concentration` for component contributions such as 10% FBS, and `count` for absolute cell counts.",
   '- For requested labware, prefer `labwareRequirements[]` with a computable classCurie such as CL:96_well_plate, CL:384_well_plate, CL:96_deepwell_plate, CL:8_well_reservoir_horizontal, CL:12_well_reservoir_vertical, CL:single_well_reservoir_sbs, CL:16_well_reservoir_horizontal_384_pitch, CL:24_well_reservoir_vertical_384_pitch, or CL:tube_rack_15ml.',
@@ -49,7 +50,7 @@ export const SUBMIT_SUGGESTION_INSTRUCTION = [
   '- Use `labwareAdditions[]` only when you have a concrete known labware record or definition id. Never invent LBW-* record ids.',
   '- If the context includes an active deck scope, do not propose labwareRequirements, labwareAdditions, deckSlot values, or lawn placements outside that scope. Ask for a layout-switch clarification instead.',
   '- If you need more information, call `compile_event_graph_draft` with atomic `clarificationRequests[]` (and no events) instead.',
-  "- Clarify only ambiguous literals in the user's prompt, such as which named material, which concentration meaning, or which wells. One request per ambiguity.",
+  "- DISAMBIGUATION INTERVIEW: clarify ambiguous materials, labware, concentrations, or wells — this includes a named material/cell line/reagent you cannot confidently ground, not only vague wording. Emit a material clarification with menuProvider /m (labware /l) and let the user pick inline. One request per ambiguity; never decide a specific record on the user's behalf when you are unsure.",
   '- Do not ask the user to choose aliquots, vials, inventory sources, lots, or physical instances unless the user explicitly asked for a specific physical source. Draft concept/formulation additions first; inventory binding is a later refinement.',
   '- Never combine unrelated questions into one multiple-choice clarification. For example, concentration ambiguity and well-range ambiguity must be separate clarificationRequests.',
 ].join('\n');
@@ -58,19 +59,12 @@ const GROUNDED_REF_SCHEMA = {
   oneOf: [
     {
       type: 'object',
-      required: ['curie'],
-      additionalProperties: false,
-      properties: {
-        curie: { type: 'string', description: 'An existing CURIE from the resolve tool (e.g. "CHEBI:5001", "local:MAT-…").' },
-      },
-    },
-    {
-      type: 'object',
       required: ['mint'],
       additionalProperties: false,
       properties: {
         mint: {
           type: 'object',
+          description: 'DEFAULT in draft mode: mint a local material from the user\'s own words. label is the user\'s phrasing verbatim (e.g. "CHO cells").',
           required: ['label'],
           additionalProperties: false,
           properties: {
@@ -78,6 +72,14 @@ const GROUNDED_REF_SCHEMA = {
             domain: { type: 'string', description: 'cell_line | chemical | media | reagent | organism | sample | other' },
           },
         },
+      },
+    },
+    {
+      type: 'object',
+      required: ['curie'],
+      additionalProperties: false,
+      properties: {
+        curie: { type: 'string', description: 'ONLY a CURIE that appeared in <resolved_context> or was returned by resolve this session (e.g. "CHEBI:5001", "local:MAT-..."). NEVER a CURIE recalled from memory — mint instead.' },
       },
     },
   ],
@@ -92,8 +94,12 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
     name: SUBMIT_SUGGESTION_TOOL_NAME,
     description:
       'Finalize your answer. Call this exactly once when you are ready to propose events (or ask for clarification). ' +
-      'Every material you reference MUST be grounded: put it in the event\'s materials[] as an existing {curie} from the ' +
-      'resolve tool, or as {mint:{label,domain}} only when no ontology term fits. Never invent a free-text material name.',
+      'Every material you reference MUST be grounded in the event\'s materials[]. In this draft mode the resolve tool is ' +
+      'NOT available, so the default grounding is {mint:{label,domain}} using the user\'s OWN WORDS as the label — minting a ' +
+      'named material (e.g. {mint:{label:"CHO cells",domain:"cell_line"}}) is the correct, expected action, not "inventing" it. ' +
+      'Use {curie} ONLY for a CURIE that appears verbatim in <resolved_context> or that resolve returned this session. ' +
+      'NEVER write an ontology id (CHEBI:/EFO:/NCBITaxon:/…) recalled from memory — that is a hallucination. When unsure which ' +
+      'specific record the user means, ask a material clarification instead of guessing.',
     parameters: {
       type: 'object',
       additionalProperties: false,
@@ -123,15 +129,16 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
                     type: 'object',
                     additionalProperties: true,
                     description:
-                      'Display reference for the added material, e.g. {"kind":"ontology","id":"CHEBI:5001",' +
-                      '"namespace":"CHEBI","label":"fenofibrate"}. ALWAYS include the human-readable label. ' +
-                      'This complements (does not replace) the grounded materials[] entry.',
+                      'Display reference mirroring the grounded materials[] entry. For a minted material use the user\'s ' +
+                      'wording, e.g. {"kind":"local","label":"CHO cells"}; only use {"kind":"ontology","id":"CHEBI:5001",…} ' +
+                      'when that exact CURIE came from <resolved_context>. ALWAYS include the human-readable label, and never ' +
+                      'put an ontology id recalled from memory here.',
                   },
                 },
               },
               materials: {
                 type: 'array',
-                description: 'CURIE-typed material references for this event.',
+                description: 'Grounded material references for this event. Prefer {mint:{label,domain}} with the user\'s wording; use {curie} only for a CURIE present in <resolved_context>.',
                 items: {
                   type: 'object',
                   required: ['ref'],
@@ -189,7 +196,7 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
         },
         clarificationRequests: {
           type: 'array',
-          description: 'Atomic follow-up questions for ambiguous literals in the user prompt. Use one request per ambiguity. Use menuProvider /m for named material/ontology choices and /l for labware choices. Do not ask for aliquots, vials, inventory sources, lots, or physical instances unless the user explicitly requested a physical source.',
+          description: 'Atomic follow-up questions for ambiguous materials, labware, concentrations, or wells — including a named material/cell line/reagent you cannot confidently ground. Use one request per ambiguity. Use menuProvider /m for named material/ontology choices and /l for labware choices. Do not ask for aliquots, vials, inventory sources, lots, or physical instances unless the user explicitly requested a physical source.',
           items: {
             type: 'object',
             required: ['id', 'kind', 'prompt'],

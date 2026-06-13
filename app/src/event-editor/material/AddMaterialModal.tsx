@@ -17,10 +17,56 @@ import type { OLSResultRef } from '../../shared/api/olsClient'
 import { DetailTooltip } from '../../shared/taptab/slashMenu/SlashSuggestionList'
 import { candidateDetail } from '../../shared/taptab/slashMenu/resolvers'
 import type { SlashSuggestionDetail } from '../../shared/taptab/slashMenu/types'
+import { MaterialIntentSurface } from '../../shared/material-intent/MaterialIntentSurface'
+import type { MaterialIntentOption } from '../../shared/material-intent/types'
 import { BuildCompoundForm } from './builders/BuildCompoundForm'
 import { BuildCellsForm } from './builders/BuildCellsForm'
 import { BuildMixtureForm } from './builders/BuildMixtureForm'
 import { BuildSampleForm } from './builders/BuildSampleForm'
+
+/**
+ * The event editor's material kinds — placeable materials counted into wells.
+ * Each renders its inline builder, pre-filled with the ontology seed when the
+ * user arrived via "create from this term". Disjoint from `MaterialPicker`'s
+ * record-ref kinds; both plug into the same shared `MaterialIntentSurface`.
+ */
+function eventEditorMaterialOptions(seedOntologyRef?: OLSResultRef): MaterialIntentOption[] {
+  const seed = seedOntologyRef ? { seedOntologyRef } : {}
+  return [
+    {
+      kind: 'compound',
+      title: 'Compound + solvent',
+      detail: '10 uM test compound in DMSO — single primary compound dissolved in a solvent',
+      render: ({ onResolved, onCancel, onError }) => (
+        <BuildCompoundForm {...seed} onSaved={onResolved} onCancel={onCancel} onError={onError} />
+      ),
+    },
+    {
+      kind: 'mixture',
+      title: 'Mixture',
+      detail: 'Cell media, buffers — multiple components, no dominant ontology ref',
+      render: ({ onResolved, onCancel, onError }) => (
+        <BuildMixtureForm {...seed} onSaved={onResolved} onCancel={onCancel} onError={onError} />
+      ),
+    },
+    {
+      kind: 'cells',
+      title: 'Cells',
+      detail: 'HepG2, primary cultures — counted in cells/well, not concentration',
+      render: ({ onResolved, onCancel, onError }) => (
+        <BuildCellsForm {...seed} onSaved={onResolved} onCancel={onCancel} onError={onError} />
+      ),
+    },
+    {
+      kind: 'sample',
+      title: 'Sample',
+      detail: 'DNA / cDNA / RNA preps with origin and parent-experiment metadata',
+      render: ({ onResolved, onCancel, onError }) => (
+        <BuildSampleForm {...seed} onSaved={onResolved} onCancel={onCancel} onError={onError} />
+      ),
+    },
+  ]
+}
 
 /**
  * Replaces the two `window.prompt()` calls that the well-context-menu
@@ -46,14 +92,22 @@ export interface AddMaterialModalProps {
   onClose: () => void
 }
 
-export function inferMaterialKindForOntologyCandidate(candidate: Pick<ResolveCandidate, 'namespace' | 'label' | 'curie'>): MaterialKind {
+export function inferMaterialProfileIdForOntologyCandidate(candidate: Pick<ResolveCandidate, 'namespace' | 'label' | 'curie'>): 'chemical' | 'cell_line' | 'media_composition' | 'sample' | 'other' {
   const ns = candidate.namespace.toUpperCase()
   const text = `${candidate.label} ${candidate.curie}`.toLowerCase()
 
-  if (ns === 'CL' || ns === 'NCBITAXON' || ns === 'UBERON') return 'cells'
-  if (/\b(?:hep\s*g2|hepg2|cell|cells|cell\s*line|culture|hepatocyte|fibroblast|neuron|organoid)\b/.test(text)) return 'cells'
-  if (/\b(?:medium|media|dmem|dulbecco|serum|fbs|buffer|pbs|hbss|rpmi|emem|mem)\b/.test(text)) return 'mixture'
+  if (ns === 'CL' || ns === 'CLO' || ns === 'EFO' || /\b(?:hep\s*g2|hepg2|cell|cells|cell\s*line|culture|hepatocyte|fibroblast|neuron|organoid)\b/.test(text)) return 'cell_line'
+  if (ns === 'XCO' || ns === 'MSIO' || /\b(?:medium|media|dmem|dulbecco|serum|fbs|buffer|pbs|hbss|rpmi|emem|mem)\b/.test(text)) return 'media_composition'
+  if (ns === 'UBERON' || /\b(?:sample|specimen|tissue|plasma|serum sample)\b/.test(text)) return 'sample'
+  if (ns === 'CHEBI') return 'chemical'
+  return 'other'
+}
 
+export function inferMaterialKindForOntologyCandidate(candidate: Pick<ResolveCandidate, 'namespace' | 'label' | 'curie'>): MaterialKind {
+  const profileId = inferMaterialProfileIdForOntologyCandidate(candidate)
+  if (profileId === 'cell_line') return 'cells'
+  if (profileId === 'media_composition') return 'mixture'
+  if (profileId === 'sample') return 'sample'
   return 'compound'
 }
 
@@ -124,6 +178,7 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
       wells,
       materialRef: state.picked.ref,
       volume_uL,
+      role: state.role.trim() || undefined,
       ...(state.picked.concentration ? { concentration: state.picked.concentration } : {}),
       ...(state.picked.compositionSnapshot ? { compositionSnapshot: state.picked.compositionSnapshot } : {}),
       ...(count !== undefined ? { count } : {}),
@@ -189,12 +244,12 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
                 uri: candidate.uri ?? '',
               }
               dispatch({
-                type: 'seed-build',
+                type: 'seed-intent',
                 kind: inferMaterialKindForOntologyCandidate(candidate),
                 ontologyRef: ref,
               })
             }}
-            onRequestCreate={() => dispatch({ type: 'request-create' })}
+            onRequestCreate={() => dispatch({ type: 'open-intent' })}
           />
         ) : null}
 
@@ -203,52 +258,22 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
             picked={state.picked}
             volumeValue={state.volume_uL}
             countValue={state.count}
+            roleValue={state.role}
             onVolumeChange={(value) => dispatch({ type: 'set-volume', value })}
             onCountChange={(value) => dispatch({ type: 'set-count', value })}
+            onRoleChange={(value) => dispatch({ type: 'set-role', value })}
             onBack={() => dispatch({ type: 'reset' })}
             onConfirm={handleApply}
           />
         ) : null}
 
-        {state.phase === 'pick-type' ? (
-          <PickTypeView
-            onPick={(kind) => dispatch({ type: 'pick-kind', kind })}
-            onBack={() => dispatch({ type: 'reset' })}
-          />
-        ) : null}
-
-        {state.phase === 'build' && state.kind === 'compound' ? (
-          <BuildCompoundForm
-            {...(state.seedOntologyRef ? { seedOntologyRef: state.seedOntologyRef } : {})}
-            onSaved={(picked) => dispatch({ type: 'pick', material: picked })}
-            onCancel={() => dispatch({ type: 'cancel-build' })}
-            onError={(message) => dispatch({ type: 'fail', message })}
-          />
-        ) : null}
-
-        {state.phase === 'build' && state.kind === 'cells' ? (
-          <BuildCellsForm
-            {...(state.seedOntologyRef ? { seedOntologyRef: state.seedOntologyRef } : {})}
-            onSaved={(picked) => dispatch({ type: 'pick', material: picked })}
-            onCancel={() => dispatch({ type: 'cancel-build' })}
-            onError={(message) => dispatch({ type: 'fail', message })}
-          />
-        ) : null}
-
-        {state.phase === 'build' && state.kind === 'mixture' ? (
-          <BuildMixtureForm
-            {...(state.seedOntologyRef ? { seedOntologyRef: state.seedOntologyRef } : {})}
-            onSaved={(picked) => dispatch({ type: 'pick', material: picked })}
-            onCancel={() => dispatch({ type: 'cancel-build' })}
-            onError={(message) => dispatch({ type: 'fail', message })}
-          />
-        ) : null}
-
-        {state.phase === 'build' && state.kind === 'sample' ? (
-          <BuildSampleForm
-            {...(state.seedOntologyRef ? { seedOntologyRef: state.seedOntologyRef } : {})}
-            onSaved={(picked) => dispatch({ type: 'pick', material: picked })}
-            onCancel={() => dispatch({ type: 'cancel-build' })}
+        {state.phase === 'intent' ? (
+          <MaterialIntentSurface
+            options={eventEditorMaterialOptions(state.seed?.ontologyRef)}
+            seedKind={state.seed?.kind ?? null}
+            cancelLabel="Back to search"
+            onResolved={(picked) => dispatch({ type: 'pick', material: picked })}
+            onCancel={() => dispatch({ type: 'reset' })}
             onError={(message) => dispatch({ type: 'fail', message })}
           />
         ) : null}
@@ -465,8 +490,10 @@ interface ConfigureViewProps {
   picked: PickedMaterial
   volumeValue: string
   countValue: string
+  roleValue: string
   onVolumeChange: (value: string) => void
   onCountChange: (value: string) => void
+  onRoleChange: (value: string) => void
   onBack: () => void
   onConfirm: () => void
 }
@@ -475,8 +502,10 @@ function ConfigureView({
   picked,
   volumeValue,
   countValue,
+  roleValue,
   onVolumeChange,
   onCountChange,
+  onRoleChange,
   onBack,
   onConfirm,
 }: ConfigureViewProps) {
@@ -545,6 +574,31 @@ function ConfigureView({
         </label>
       ) : null}
 
+      <label className="add-material-field">
+        <span className="add-material-field-label">Role</span>
+        <input
+          type="text"
+          className="add-material-input"
+          value={roleValue}
+          list="add-material-role-options"
+          placeholder={showCount ? 'cells' : 'treatment'}
+          onChange={(e) => onRoleChange(e.target.value)}
+        />
+        <datalist id="add-material-role-options">
+          <option value="cells" />
+          <option value="treatment" />
+          <option value="vehicle" />
+          <option value="control" />
+          <option value="solvent" />
+          <option value="additive" />
+          <option value="buffer_component" />
+        </datalist>
+        <span className="add-material-field-hint">
+          Optional semantic role for this addition, such as cells, treatment,
+          vehicle, or additive.
+        </span>
+      </label>
+
       <footer className="add-material-footer">
         <button type="button" className="add-material-btn" onClick={onBack}>Back</button>
         <button
@@ -557,79 +611,3 @@ function ConfigureView({
   )
 }
 
-interface PickTypeOption {
-  kind: MaterialKind
-  title: string
-  detail: string
-  enabled: boolean
-}
-
-const PICK_TYPE_OPTIONS: PickTypeOption[] = [
-  {
-    kind: 'compound',
-    title: 'Compound + solvent',
-    detail: '10 uM test compound in DMSO — single primary compound dissolved in a solvent',
-    enabled: true,
-  },
-  {
-    kind: 'mixture',
-    title: 'Mixture',
-    detail: 'Cell media, buffers — multiple components, no dominant ontology ref',
-    enabled: true,
-  },
-  {
-    kind: 'cells',
-    title: 'Cells',
-    detail: 'HepG2, primary cultures — counted in cells/well, not concentration',
-    enabled: true,
-  },
-  {
-    kind: 'sample',
-    title: 'Sample',
-    detail: 'DNA / cDNA / RNA preps with origin and parent-experiment metadata',
-    enabled: true,
-  },
-]
-
-function PickTypeView({
-  onPick,
-  onBack,
-}: {
-  onPick: (kind: MaterialKind) => void
-  onBack: () => void
-}) {
-  return (
-    <div className="add-material-body">
-      <div className="add-material-hint">
-        What kind of material are you creating? Each kind has different
-        fields and quantity semantics.
-      </div>
-      <ul className="add-material-list">
-        {PICK_TYPE_OPTIONS.map((option) => (
-          <li key={option.kind}>
-            <button
-              type="button"
-              className="add-material-row"
-              onClick={() => option.enabled && onPick(option.kind)}
-              disabled={!option.enabled}
-              data-category={option.enabled ? 'saved-stock' : undefined}
-            >
-              <span className="add-material-row-title">
-                {option.title}
-                {!option.enabled ? (
-                  <span className="add-material-row-ontology">soon</span>
-                ) : null}
-              </span>
-              <span className="add-material-row-meta">{option.detail}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      <footer className="add-material-footer">
-        <button type="button" className="add-material-btn" onClick={onBack}>
-          Back to search
-        </button>
-      </footer>
-    </div>
-  )
-}

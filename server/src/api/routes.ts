@@ -31,6 +31,7 @@ import type { KnowledgeAIHandlers } from './handlers/KnowledgeAIHandlers.js';
 import type { TagHandlers } from './handlers/TagHandlers.js';
 import type { MaterialPrepHandlers } from './handlers/MaterialPrepHandlers.js';
 import type { MaterialLifecycleHandlers } from './handlers/MaterialLifecycleHandlers.js';
+import type { MaterialProfileHandlers } from './handlers/MaterialProfileHandlers.js';
 import type { PlatformHandlers } from './handlers/PlatformHandlers.js';
 import type { LabSettingsHandlers } from './handlers/LabSettingsHandlers.js';
 import type { VendorSearchHandlers } from './handlers/VendorSearchHandlers.js';
@@ -94,6 +95,7 @@ export interface RouteOptions {
   tagHandlers?: TagHandlers;
   materialPrepHandlers?: MaterialPrepHandlers;
   materialLifecycleHandlers?: MaterialLifecycleHandlers;
+  materialProfileHandlers?: MaterialProfileHandlers;
   platformHandlers?: PlatformHandlers;
   labSettingsHandlers?: LabSettingsHandlers;
   vendorSearchHandlers?: VendorSearchHandlers;
@@ -476,6 +478,13 @@ export function registerRoutes(
     fastify.post('/materials/formulations/copilot/flatten', materialPrepHandlers.flattenFormulationComposition.bind(materialPrepHandlers));
     fastify.post('/materials/formulations', materialPrepHandlers.createFormulation.bind(materialPrepHandlers));
     fastify.post('/materials/recipes/:id/execute', materialPrepHandlers.executeRecipe.bind(materialPrepHandlers));
+  }
+
+  const { materialProfileHandlers } = options;
+  if (materialProfileHandlers) {
+    fastify.get('/materials/profiles', materialProfileHandlers.listProfiles.bind(materialProfileHandlers));
+    fastify.get('/materials/profiles/:profileId', materialProfileHandlers.getProfile.bind(materialProfileHandlers));
+    fastify.post('/materials/ground-ontology', materialProfileHandlers.groundOntology.bind(materialProfileHandlers));
   }
 
   const { materialLifecycleHandlers } = options;

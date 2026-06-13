@@ -1,71 +1,454 @@
 version: 1
 title: "Material Profile Registry"
 description: >
-  Additive profile metadata for material authoring and ingestion. Profiles do not
-  change the canonical `material` schema; they describe which optional field
-  groups should be emphasized for each material domain.
+  Declarative authoring policy for material concepts, material-spec
+  formulations, and material-instance records. Profiles do not replace JSON
+  schemas; they describe which schema fields UI and AI authoring surfaces show,
+  which values are app-owned, and which reference controls must be grounded.
 
 profiles:
   chemical:
     label: "Chemical"
     applies_when:
-      domain: [chemical]
-    field_groups:
-    - id: identity
-      label: "Identity"
-      fields: [name, domain, class, definition, synonyms]
-    - id: chemistry
-      label: "Chemistry"
-      fields:
-      - molecular_weight
-      - chemical_properties.molecular_formula
-      - chemical_properties.cas_number
-      - chemical_properties.solubility
+      domain: [chemical, reagent]
+    layers: [concept]
+    fields:
+    - path: kind
+      layer: concept
+      label: "Kind"
+      widget: hidden
+      required: true
+      default: material
+      control: app-owned
+    - path: id
+      layer: concept
+      label: "Material ID"
+      widget: text
+      required: true
+      control: app-owned
+    - path: name
+      layer: concept
+      label: "Name"
+      widget: text
+      required: true
+      control: free-text
+    - path: domain
+      layer: concept
+      label: "Domain"
+      widget: select
+      required: true
+      default: chemical
+      control: app-owned
+    - path: class
+      layer: concept
+      label: "Ontology classes"
+      widget: reflist
+      control: ontology-ref
+      ontologies: [chebi]
+    - path: definition
+      layer: concept
+      label: "Definition"
+      widget: textarea
+      control: free-text
+    - path: synonyms
+      layer: concept
+      label: "Synonyms"
+      widget: array
+      control: free-text
+    - path: molecular_weight
+      layer: concept
+      label: "Molecular weight"
+      widget: object
+      control: free-text
+    - path: chemical_properties.molecular_formula
+      layer: concept
+      label: "Molecular formula"
+      widget: text
+      control: free-text
+    - path: chemical_properties.cas_number
+      layer: concept
+      label: "CAS number"
+      widget: text
+      control: free-text
+    - path: status
+      layer: concept
+      label: "Status"
+      widget: select
+      default: proposed
+      control: app-owned
+    - path: lifecycleId
+      layer: concept
+      label: "Lifecycle"
+      widget: hidden
+      default: lab-vocabulary-control
+      control: app-owned
+    - path: provenance
+      layer: concept
+      label: "Provenance"
+      widget: object
+      control: app-owned
+    quick_add: [name, class, molecular_weight, chemical_properties.molecular_formula, chemical_properties.cas_number]
+
   cell_line:
-    label: "Cell Line"
+    label: "Cell line"
     applies_when:
       domain: [cell_line]
-    field_groups:
-    - id: identity
-      label: "Identity"
-      fields: [name, domain, class, definition, synonyms]
-  media:
-    label: "Media"
+    layers: [concept, formulation, instance]
+    fields:
+    - path: kind
+      layer: concept
+      label: "Kind"
+      widget: hidden
+      required: true
+      default: material
+      control: app-owned
+    - path: id
+      layer: concept
+      label: "Material ID"
+      widget: text
+      required: true
+      control: app-owned
+    - path: name
+      layer: concept
+      label: "Name"
+      widget: text
+      required: true
+      control: free-text
+    - path: domain
+      layer: concept
+      label: "Domain"
+      widget: select
+      required: true
+      default: cell_line
+      control: app-owned
+    - path: class
+      layer: concept
+      label: "Cell ontology class"
+      widget: reflist
+      control: ontology-ref
+      ontologies: [cl, clo, efo]
+    - path: definition
+      layer: concept
+      label: "Definition"
+      widget: textarea
+      control: free-text
+    - path: formulation_kind
+      layer: formulation
+      label: "Formulation kind"
+      widget: select
+      default: biological_preparation
+      control: app-owned
+    - path: material_ref
+      layer: formulation
+      label: "Cell material"
+      widget: ref
+      required: true
+      control: local-material-required
+      ontologies: [cl, clo, efo]
+    - path: biological_state.passage_number
+      layer: instance
+      label: "Passage"
+      widget: number
+      control: free-text
+    - path: biological_state.parent_culture_ref
+      layer: instance
+      label: "Parent culture"
+      widget: ref
+      control: record-ref
+    - path: biological_state.medium_note
+      layer: instance
+      label: "Medium"
+      widget: text
+      control: free-text
+    - path: status
+      layer: concept
+      label: "Status"
+      widget: select
+      default: proposed
+      control: app-owned
+    - path: lifecycleId
+      layer: concept
+      label: "Lifecycle"
+      widget: hidden
+      default: lab-vocabulary-control
+      control: app-owned
+    - path: provenance
+      layer: concept
+      label: "Provenance"
+      widget: object
+      control: app-owned
+    quick_add: [name, class, biological_state.passage_number, biological_state.medium_note]
+
+  media_composition:
+    label: "Media composition"
     applies_when:
       domain: [media]
-    field_groups:
-    - id: identity
-      label: "Identity"
-      fields: [name, domain, class, definition, synonyms]
-  reagent:
-    label: "Reagent"
+      formulation_kind: [defined_composition, complex_composition]
+    layers: [concept, formulation]
+    fields:
+    - path: kind
+      layer: concept
+      label: "Kind"
+      widget: hidden
+      required: true
+      default: material
+      control: app-owned
+    - path: name
+      layer: concept
+      label: "Name"
+      widget: text
+      required: true
+      control: free-text
+    - path: domain
+      layer: concept
+      label: "Domain"
+      widget: select
+      required: true
+      default: media
+      control: app-owned
+    - path: class
+      layer: concept
+      label: "Media ontology class"
+      widget: reflist
+      control: ontology-ref
+      ontologies: [xco, msio, obi, chebi]
+    - path: formulation_kind
+      layer: formulation
+      label: "Formulation kind"
+      widget: select
+      default: complex_composition
+      control: app-owned
+    - path: material_ref
+      layer: formulation
+      label: "Media concept"
+      widget: ref
+      required: true
+      control: local-material-required
+      ontologies: [xco, msio, obi]
+    - path: formulation.composition
+      layer: formulation
+      label: "Components"
+      widget: array
+      control: local-material-required
+      ontologies: [chebi, xco, msio, obi]
+    - path: formulation.ph
+      layer: formulation
+      label: "pH"
+      widget: number
+      control: free-text
+    - path: formulation.notes
+      layer: formulation
+      label: "Notes"
+      widget: textarea
+      control: free-text
+    - path: status
+      layer: formulation
+      label: "Status"
+      widget: select
+      default: proposed
+      control: app-owned
+    - path: lifecycleId
+      layer: formulation
+      label: "Lifecycle"
+      widget: hidden
+      default: lab-vocabulary-control
+      control: app-owned
+    - path: provenance
+      layer: formulation
+      label: "Provenance"
+      widget: object
+      control: app-owned
+    quick_add: [name, class, formulation.composition, formulation.ph]
+
+  single_active_formulation:
+    label: "Single-active formulation"
     applies_when:
-      domain: [reagent]
-    field_groups:
-    - id: identity
-      label: "Identity"
-      fields: [name, domain, class, definition, synonyms]
-  organism:
-    label: "Organism"
-    applies_when:
-      domain: [organism]
-    field_groups:
-    - id: identity
-      label: "Identity"
-      fields: [name, domain, class, definition, synonyms]
+      formulation_kind: [single_active]
+    layers: [concept, formulation, instance]
+    fields:
+    - path: name
+      layer: formulation
+      label: "Formulation name"
+      widget: text
+      required: true
+      control: free-text
+    - path: material_ref
+      layer: formulation
+      label: "Active material"
+      widget: ref
+      required: true
+      control: local-material-required
+      ontologies: [chebi]
+    - path: formulation.concentration
+      layer: formulation
+      label: "Concentration"
+      widget: object
+      control: free-text
+    - path: formulation.solvent_ref
+      layer: formulation
+      label: "Solvent"
+      widget: ref
+      control: local-material-required
+      ontologies: [chebi, obi]
+    - path: formulation.grade
+      layer: formulation
+      label: "Grade"
+      widget: text
+      control: free-text
+    - path: vendor_product_ref
+      layer: formulation
+      label: "Vendor product"
+      widget: ref
+      control: record-ref
+    - path: lot
+      layer: instance
+      label: "Lot"
+      widget: object
+      control: free-text
+    - path: status
+      layer: formulation
+      label: "Status"
+      widget: select
+      default: proposed
+      control: app-owned
+    - path: lifecycleId
+      layer: formulation
+      label: "Lifecycle"
+      widget: hidden
+      default: lab-vocabulary-control
+      control: app-owned
+    - path: provenance
+      layer: formulation
+      label: "Provenance"
+      widget: object
+      control: app-owned
+    quick_add: [material_ref, formulation.concentration, formulation.solvent_ref, vendor_product_ref]
+
   sample:
     label: "Sample"
     applies_when:
       domain: [sample]
-    field_groups:
-    - id: identity
-      label: "Identity"
-      fields: [name, domain, class, definition, synonyms]
+    layers: [concept, instance]
+    fields:
+    - path: kind
+      layer: concept
+      label: "Kind"
+      widget: hidden
+      required: true
+      default: material
+      control: app-owned
+    - path: name
+      layer: concept
+      label: "Name"
+      widget: text
+      required: true
+      control: free-text
+    - path: domain
+      layer: concept
+      label: "Domain"
+      widget: select
+      required: true
+      default: sample
+      control: app-owned
+    - path: class
+      layer: concept
+      label: "Sample ontology class"
+      widget: reflist
+      control: ontology-ref
+      ontologies: [uberon, obi, efo]
+    - path: derived_state.source_material_refs
+      layer: instance
+      label: "Source materials"
+      widget: reflist
+      control: local-material-required
+      ontologies: [cl, uberon, ncbitaxon, efo]
+    - path: derived_state.derivation_type
+      layer: instance
+      label: "Derivation type"
+      widget: text
+      control: free-text
+    - path: derived_state.collection_date
+      layer: instance
+      label: "Collection date"
+      widget: datetime
+      control: free-text
+    - path: status
+      layer: concept
+      label: "Status"
+      widget: select
+      default: proposed
+      control: app-owned
+    - path: lifecycleId
+      layer: concept
+      label: "Lifecycle"
+      widget: hidden
+      default: lab-vocabulary-control
+      control: app-owned
+    - path: provenance
+      layer: concept
+      label: "Provenance"
+      widget: object
+      control: app-owned
+    quick_add: [name, class, derived_state.source_material_refs, derived_state.derivation_type]
+
   other:
-    label: "Other"
+    label: "Other material"
     applies_when:
-      domain: [other]
-    field_groups:
-    - id: identity
-      label: "Identity"
-      fields: [name, domain, class, definition, synonyms]
+      domain: [other, organism]
+    layers: [concept, formulation, instance]
+    fields:
+    - path: kind
+      layer: concept
+      label: "Kind"
+      widget: hidden
+      required: true
+      default: material
+      control: app-owned
+    - path: name
+      layer: concept
+      label: "Name"
+      widget: text
+      required: true
+      control: free-text
+    - path: domain
+      layer: concept
+      label: "Domain"
+      widget: select
+      required: true
+      default: other
+      control: free-text
+    - path: class
+      layer: concept
+      label: "Ontology classes"
+      widget: reflist
+      control: ontology-ref
+      ontologies: [obi, efo, ncbitaxon, uberon, chebi]
+    - path: definition
+      layer: concept
+      label: "Definition"
+      widget: textarea
+      control: free-text
+    - path: material_ref
+      layer: formulation
+      label: "Material"
+      widget: ref
+      control: local-material-required
+      ontologies: [obi, efo, ncbitaxon, uberon, chebi]
+    - path: status
+      layer: concept
+      label: "Status"
+      widget: select
+      default: proposed
+      control: app-owned
+    - path: lifecycleId
+      layer: concept
+      label: "Lifecycle"
+      widget: hidden
+      default: lab-vocabulary-control
+      control: app-owned
+    - path: provenance
+      layer: concept
+      label: "Provenance"
+      widget: object
+      control: app-owned
+    quick_add: [name, domain, class, definition]

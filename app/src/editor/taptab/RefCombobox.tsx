@@ -13,16 +13,21 @@ export interface RefComboboxProps {
     searchField: 'keywords' | 'tags';
     isRef: boolean;
     isCombobox: boolean;
+    ontologyBinding?: 'allow-ontology' | 'local-material-required' | 'local-record-required';
+    ownedByApp?: boolean;
+    valueShape?: 'text' | 'ref' | 'record-ref' | 'ontology-ref' | 'material-ref';
+    lifecycleDefault?: string;
   };
   onSelect: (
     value: string,
     source: 'local' | 'ontology',
     termData?: {
       label: string;
-      iri: string;
+      iri?: string;
       definition?: string;
       synonyms?: string[];
       ontology?: string;
+      oboId?: string;
     } & { __structured__?: StructuredValue }
   ) => void;
   onCancel: () => void;
@@ -39,6 +44,7 @@ interface CombinedResult {
   definition?: string;
   synonyms?: string[];
   ontology?: string;
+  oboId?: string;
 }
 
 /**
@@ -106,6 +112,7 @@ export function RefCombobox({
       definition: r.description?.[0],
       synonyms: r.synonyms,
       ontology: r.ontology_name,
+      oboId: r.obo_id,
     })),
   ];
 
@@ -204,12 +211,14 @@ export function RefCombobox({
             definition: result.definition,
             synonyms: result.synonyms,
             ontology: result.ontology,
+            oboId: result.oboId,
             __structured__: {
               value: result.value,
               source: 'ols',
               metadata: {
                 iri: result.iri,
                 ontology: result.ontology,
+                oboId: result.oboId,
                 definition: result.definition,
               },
             },
@@ -243,10 +252,11 @@ export function RefCombobox({
     resultType: 'local' | 'ontology',
     termData?: {
       label: string;
-      iri: string;
+      iri?: string;
       definition?: string;
       synonyms?: string[];
       ontology?: string;
+      oboId?: string;
     }
   ) => {
     const structuredValue: StructuredValue | undefined =
@@ -257,6 +267,7 @@ export function RefCombobox({
             metadata: {
               iri: termData?.iri,
               ontology: termData?.ontology,
+              oboId: termData?.oboId,
               definition: termData?.definition,
             },
           }
@@ -268,6 +279,7 @@ export function RefCombobox({
 
     onSelect(resultValue, resultType, {
       ...termData,
+      label: termData?.label ?? resultValue,
       __structured__: structuredValue,
     });
   };
@@ -341,6 +353,7 @@ export function RefCombobox({
             definition: result.description?.[0],
             synonyms: result.synonyms,
             ontology: result.ontology_name,
+            oboId: result.obo_id,
           })}
           onMouseDown={handleMouseDown}
         >

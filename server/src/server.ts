@@ -68,6 +68,7 @@ import {
   createOntologyTermHandlers,
   createVerbActionMapHandlers,
   createFoundryJobHandlers,
+  createMaterialProfileHandlers,
 } from './api/handlers/index.js';
 import { createResolveSpine, createResolveSpineFromContext, resolveOakServiceUrl } from './resolve/index.js';
 import { buildResidentContext } from './ai/residentContext.js';
@@ -128,6 +129,7 @@ import { createLabwareLookup } from './ai/compiler/labwareLookup.js';
 import { runChatbotCompile } from './ai/runChatbotCompile.js';
 import type { ExtractorAdapter } from './extract/ExtractorAdapter.js';
 import { LocalIdentityService, LOCAL_ADMIN_USER_ID } from './security/LocalIdentityService.js';
+import { loadDefaultMaterialProfileRegistry, type MaterialProfileRegistry } from './materials/MaterialProfileRegistry.js';
 import { AuthorizationService } from './security/AuthorizationService.js';
 
 /**
@@ -208,6 +210,7 @@ export interface AppContext {
   platformRegistry: PlatformRegistry;
   lifecycleEngine: LifecycleEngine;
   policyBundleService: PolicyBundleService;
+  materialProfileRegistry: MaterialProfileRegistry;
   jsonLdIndex: JsonLdIndex;
   jsonLdProjector: JsonLdProjector;
   extractionRunner?: ExtractionRunnerService;
@@ -341,6 +344,9 @@ export async function initializeApp(
   const bundleDir = resolve(schemaDir, 'core/policy-bundles')
   const bundleCount = policyBundleService.loadFromDir(bundleDir)
   console.log(`Loaded ${bundleCount} policy bundles`)
+
+  const materialProfileRegistry = loadDefaultMaterialProfileRegistry(schemaDir)
+  console.log(`Loaded ${materialProfileRegistry.list().length} material authoring profiles`)
 
   if (!repoConfig) {
     repoConfig = createEmbeddedDefaultRepositoryConfig(opts.recordsDir);
@@ -490,6 +496,7 @@ export async function initializeApp(
     platformRegistry,
     lifecycleEngine,
     policyBundleService,
+    materialProfileRegistry,
     jsonLdIndex,
     jsonLdProjector,
   };
@@ -587,6 +594,7 @@ export async function createServer(
   const tagHandlers = createTagHandlers(ctx.store);
   const materialPrepHandlers = createMaterialPrepHandlers(ctx.store, ctx.indexManager);
   const materialLifecycleHandlers = createMaterialLifecycleHandlers(ctx.store, ctx.indexManager, ctx.lifecycleEngine);
+  const materialProfileHandlers = createMaterialProfileHandlers(ctx.materialProfileRegistry, ctx.store);
   const semanticsHandlers = createSemanticsHandlers(ctx);
   const runWorkspaceHandlers = createRunWorkspaceHandlers(ctx);
   const runContextAssembler = new RunContextAssembler(ctx.store);
@@ -1078,6 +1086,7 @@ export async function createServer(
       tagHandlers,
       materialPrepHandlers,
       materialLifecycleHandlers,
+      materialProfileHandlers,
       semanticsHandlers,
       runWorkspaceHandlers,
       runDraftHandlers,

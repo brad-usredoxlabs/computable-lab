@@ -16,7 +16,7 @@ import { MultiselectWidget } from '../widgets/MultiselectWidget';
 import { ReflistWidget, type ReflistEntry } from '../widgets/ReflistWidget';
 import { ArrayWidget } from '../widgets/ArrayWidget';
 import { ObjectWidget } from '../widgets/ObjectWidget';
-import type { StructuredValue } from '../../shared/forms/suggestionPlan';
+import type { StructuredValue } from '../../../shared/forms/suggestionPlan';
 
 export interface WidgetRendererProps {
   widget: WidgetType;
@@ -31,6 +31,10 @@ export interface WidgetRendererProps {
     searchField: 'keywords' | 'tags';
     isRef: boolean;
     isCombobox: boolean;
+    ontologyBinding?: 'allow-ontology' | 'local-material-required' | 'local-record-required';
+    ownedByApp?: boolean;
+    valueShape?: 'text' | 'ref' | 'record-ref' | 'ontology-ref' | 'material-ref';
+    lifecycleDefault?: string;
   };
   onCommit: (newValue: unknown) => void;
   onCancel: () => void;
@@ -39,10 +43,11 @@ export interface WidgetRendererProps {
     source: 'local' | 'ontology',
     termData?: {
       label: string;
-      iri: string;
+      iri?: string;
       definition?: string;
       synonyms?: string[];
       ontology?: string;
+      oboId?: string;
     } & { __structured__?: StructuredValue }
   ) => void;
   /** Object widget properties (for 'object' widget type) */
@@ -95,10 +100,11 @@ export function WidgetRenderer({
     s: 'local' | 'ontology',
     t?: {
       label: string;
-      iri: string;
+      iri?: string;
       definition?: string;
       synonyms?: string[];
       ontology?: string;
+      oboId?: string;
     } & { __structured__?: StructuredValue }
   ) => {
     onRefSelect(v, s, t);
