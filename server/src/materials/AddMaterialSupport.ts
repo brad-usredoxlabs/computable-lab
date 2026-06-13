@@ -5,6 +5,7 @@ import { toStoredConcentration } from './concentration.js';
 import { extractPrimaryDeclaredConcentration } from './vendorComposition.js';
 import {
   ensureLocalMaterialForOntology,
+  ensureLocalMaterialForDraft,
   type RefShape as GroundingRefShape,
 } from './MaterialGrounding.js';
 
@@ -13,7 +14,7 @@ const MATERIAL_INSTANCE_SCHEMA_ID = 'https://computable-lab.com/schema/computabl
 const MATERIAL_SPEC_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml';
 
 type RefShape = {
-  kind: 'record' | 'ontology';
+  kind: 'record' | 'ontology' | 'draft';
   id: string;
   type?: string;
   label?: string;
@@ -86,6 +87,24 @@ export function normalizeRef(value: unknown, fallbackType?: string): RefShape | 
   if (typeof obj['namespace'] === 'string' && obj['namespace'].trim().length > 0) ref.namespace = obj['namespace'].trim();
   if (typeof obj['uri'] === 'string' && obj['uri'].trim().length > 0) ref.uri = obj['uri'].trim();
   if (!ref.type && fallbackType && ref.kind === 'record') ref.type = fallbackType;
+  return ref;
+}
+
+/**
+ * Like {@link normalizeRef} but also recognises a `draft`/mint ref
+ * (`{ kind: 'draft', id: 'mint:<label>' }`) so the grounding pass can mint it
+ * into a real local material. `normalizeRef` deliberately drops draft refs (the
+ * rest of the compiler only deals with resolved record/ontology refs), so this
+ * narrower reader is used solely at the grounding spots.
+ */
+function normalizeGroundableRef(value: unknown, fallbackType?: string): RefShape | null {
+  const base = normalizeRef(value, fallbackType);
+  if (base) return base;
+  const obj = asRecord(value);
+  if (!obj || obj['kind'] !== 'draft') return null;
+  if (typeof obj['id'] !== 'string' || obj['id'].trim().length === 0) return null;
+  const ref: RefShape = { kind: 'draft', id: obj['id'].trim() };
+  if (typeof obj['label'] === 'string' && obj['label'].trim().length > 0) ref.label = obj['label'].trim();
   return ref;
 }
 
@@ -249,14 +268,26 @@ async function ensureLocalMaterialRef(
   store: RecordStore,
   ref: RefShape | null,
   sourceLabel: string,
+  domainHint?: string,
 ): Promise<RefShape | null> {
-  if (!ref || ref.kind !== 'ontology') return ref;
-  return ensureLocalMaterialForOntology(store, ref as GroundingRefShape, {
-    source: 'compiler',
+  if (!ref) return ref;
+  const options = {
+    source: 'compiler' as const,
     sourceLabel,
     createdBy: 'add-material-normalizer',
     note: 'Created as a proposed local material record from an accepted add-material event graph.',
-  }) as Promise<RefShape>;
+    ...(domainHint ? { domainHint } : {}),
+  };
+  if (ref.kind === 'ontology') {
+    return ensureLocalMaterialForOntology(store, ref as GroundingRefShape, options) as Promise<RefShape>;
+  }
+  // A draft/mint ref is a free-text material name with no ontology CURIE — mint
+  // it into a real local material record so the accepted graph never persists a
+  // bare free-text label. (See ensureLocalMaterialForDraft.)
+  if (ref.kind === 'draft') {
+    return ensureLocalMaterialForDraft(store, ref as GroundingRefShape, options) as Promise<RefShape>;
+  }
+  return ref;
 }
 
 async function normalizeCompositionMaterialRefs(
@@ -267,9 +298,10 @@ async function normalizeCompositionMaterialRefs(
   return Promise.all(value.map(async (entry) => {
     const obj = asRecord(entry);
     if (!obj) return entry;
-    const componentRef = normalizeRef(obj['component_ref'] ?? obj['componentRef']);
+    const componentRef = normalizeGroundableRef(obj['component_ref'] ?? obj['componentRef']);
     if (!componentRef) return entry;
-    const grounded = await ensureLocalMaterialRef(store, componentRef, refLabel(componentRef) ?? componentRef.id);
+    const domainHint = typeof obj['component_ref_domain'] === 'string' ? obj['component_ref_domain'] : undefined;
+    const grounded = await ensureLocalMaterialRef(store, componentRef, refLabel(componentRef) ?? componentRef.id, domainHint);
     return {
       ...obj,
       component_ref: grounded,
@@ -284,15 +316,15 @@ async function normalizeMaterialSourceRequirementRefs(
   const req = asRecord(value);
   if (!req) return value;
   const out: Record<string, unknown> = { ...req };
-  const materialRef = normalizeRef(out.material_ref, 'material');
-  if (materialRef?.kind === 'ontology') {
+  const materialRef = normalizeGroundableRef(out.material_ref, 'material');
+  if (materialRef && materialRef.kind !== 'record') {
     out.material_ref = await ensureLocalMaterialRef(store, materialRef, refLabel(materialRef) ?? materialRef.id);
   }
   const sourceDetails = asRecord(out.source_details);
   if (sourceDetails) {
     const nextSourceDetails: Record<string, unknown> = { ...sourceDetails };
-    const solventRef = normalizeRef(sourceDetails.solvent_ref, 'material');
-    if (solventRef?.kind === 'ontology') {
+    const solventRef = normalizeGroundableRef(sourceDetails.solvent_ref, 'material');
+    if (solventRef && solventRef.kind !== 'record') {
       nextSourceDetails.solvent_ref = await ensureLocalMaterialRef(store, solventRef, refLabel(solventRef) ?? solventRef.id);
     }
     out.source_details = nextSourceDetails;
@@ -305,14 +337,15 @@ async function normalizeAddMaterialDetailsMaterialRefs(
   details: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = { ...details };
-  const materialRef = normalizeRef(out.material_ref, 'material');
-  if (materialRef?.kind === 'ontology') {
-    out.material_ref = await ensureLocalMaterialRef(store, materialRef, refLabel(materialRef) ?? materialRef.id);
+  const domainHint = typeof out.material_ref_domain === 'string' ? out.material_ref_domain : undefined;
+  const materialRef = normalizeGroundableRef(out.material_ref, 'material');
+  if (materialRef && materialRef.kind !== 'record') {
+    out.material_ref = await ensureLocalMaterialRef(store, materialRef, refLabel(materialRef) ?? materialRef.id, domainHint);
   }
   if (out.materialId !== undefined) {
-    const materialIdRef = normalizeRef(out.materialId, 'material');
-    if (materialIdRef?.kind === 'ontology') {
-      out.materialId = await ensureLocalMaterialRef(store, materialIdRef, refLabel(materialIdRef) ?? materialIdRef.id);
+    const materialIdRef = normalizeGroundableRef(out.materialId, 'material');
+    if (materialIdRef && materialIdRef.kind !== 'record') {
+      out.materialId = await ensureLocalMaterialRef(store, materialIdRef, refLabel(materialIdRef) ?? materialIdRef.id, domainHint);
     }
   }
   if (out.composition_snapshot !== undefined) {

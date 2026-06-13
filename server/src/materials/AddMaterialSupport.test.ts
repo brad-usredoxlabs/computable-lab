@@ -156,6 +156,115 @@ describe('normalizeEventGraphMaterialUsage', () => {
     });
   });
 
+  it('grounds a free-text draft/mint material ref to a proposed local material on accept', async () => {
+    const store = new MemoryRecordStore();
+    // The exact shape the deterministic/AI parser emits for "add 10uL of 1uM
+    // fenofibrate to A3": a draft ref with a mint: id and no ontology CURIE.
+    const graph = {
+      kind: 'event-graph',
+      id: 'EVG-DRAFT',
+      events: [
+        {
+          eventId: 'evt-feno',
+          event_type: 'add_material',
+          details: {
+            labwareId: 'lw-1781391596458-azjp4a',
+            wells: ['A3'],
+            volume: { value: 10, unit: 'uL' },
+            concentration: { value: 1, unit: 'uM' },
+            material_ref_domain: 'chemical',
+            material_ref: { kind: 'draft', id: 'mint:fenofibrate', label: 'fenofibrate' },
+          },
+        },
+      ],
+    };
+
+    const normalized = await normalizeEventGraphMaterialUsage(store, EVENT_GRAPH_SCHEMA_ID, graph);
+    const event = (normalized as { events: Array<{ details: Record<string, unknown> }> }).events[0]!;
+
+    // The draft ref is replaced with a real local record ref (lab namespace).
+    const groundedRef = event.details.material_ref as Record<string, unknown>;
+    expect(groundedRef.kind).toBe('record');
+    expect(groundedRef.type).toBe('material');
+    expect(groundedRef.label).toBe('fenofibrate');
+    expect(String(groundedRef.id)).toMatch(/^MAT-fenofibrate-[a-z0-9]{4}$/);
+    // No bare draft/mint ref survives into the accepted graph.
+    expect(groundedRef.id).not.toContain('mint:');
+
+    const minted = store.created.find((record) => record.recordId === groundedRef.id);
+    expect(minted?.payload).toMatchObject({
+      kind: 'material',
+      name: 'fenofibrate',
+      domain: 'chemical',
+      status: 'proposed',
+    });
+    // A free-text mint carries no ontology class.
+    expect((minted?.payload as Record<string, unknown>).class).toBeUndefined();
+  });
+
+  it('reuses an existing local material when a draft ref names one that already exists', async () => {
+    const existing: RecordEnvelope = {
+      recordId: 'MAT-FENO-EXISTING',
+      schemaId: 'https://computable-lab.com/schema/computable-lab/material.schema.yaml',
+      payload: { kind: 'material', id: 'MAT-FENO-EXISTING', name: 'Fenofibrate', domain: 'chemical', status: 'active' },
+    };
+    const store = new MemoryRecordStore([existing]);
+    const graph = {
+      kind: 'event-graph',
+      id: 'EVG-DRAFT-DEDUP',
+      events: [
+        {
+          eventId: 'evt-feno',
+          event_type: 'add_material',
+          details: {
+            wells: ['A3'],
+            // Different case than the stored name — dedup is case-insensitive.
+            material_ref: { kind: 'draft', id: 'mint:fenofibrate', label: 'fenofibrate' },
+          },
+        },
+      ],
+    };
+
+    const normalized = await normalizeEventGraphMaterialUsage(store, EVENT_GRAPH_SCHEMA_ID, graph);
+    const event = (normalized as { events: Array<{ details: Record<string, unknown> }> }).events[0]!;
+
+    expect(event.details.material_ref).toMatchObject({ kind: 'record', id: 'MAT-FENO-EXISTING' });
+    // Reused, not re-minted.
+    expect(store.created.some((record) => record.recordId.startsWith('MAT-fenofibrate-'))).toBe(false);
+  });
+
+  it('is idempotent for a draft ref — re-normalizing reuses the minted record', async () => {
+    const store = new MemoryRecordStore();
+    const makeGraph = () => ({
+      kind: 'event-graph',
+      id: 'EVG-DRAFT-IDEM',
+      events: [
+        {
+          eventId: 'evt-feno',
+          event_type: 'add_material',
+          details: {
+            wells: ['A3'],
+            material_ref_domain: 'chemical',
+            material_ref: { kind: 'draft', id: 'mint:fenofibrate', label: 'fenofibrate' },
+          },
+        },
+      ],
+    });
+
+    const first = await normalizeEventGraphMaterialUsage(store, EVENT_GRAPH_SCHEMA_ID, makeGraph());
+    const firstId = ((first as { events: Array<{ details: Record<string, unknown> }> }).events[0]!
+      .details.material_ref as Record<string, unknown>).id;
+    const mintedAfterFirst = store.created.length;
+
+    const second = await normalizeEventGraphMaterialUsage(store, EVENT_GRAPH_SCHEMA_ID, makeGraph());
+    const secondId = ((second as { events: Array<{ details: Record<string, unknown> }> }).events[0]!
+      .details.material_ref as Record<string, unknown>).id;
+
+    expect(secondId).toBe(firstId);
+    // No second mint: the deterministic id resolves to the same existing record.
+    expect(store.created.length).toBe(mintedAfterFirst);
+  });
+
   it('creates a proposed material spec from a grounded composition snapshot on accept', async () => {
     const store = new MemoryRecordStore();
     const graph = {
