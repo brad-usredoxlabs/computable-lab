@@ -2534,6 +2534,28 @@ export const apiClient = {
   },
 
   /**
+   * Fire-and-forget KV-cache pre-warm (POST /ai/context/warm). Sends the
+   * same editor context (and conversation history) the next draft request
+   * will carry, so the server can prefill the (system prompt + tools +
+   * event graph) prefix on the idle GPU while the user is still typing.
+   * Best-effort and never throws — warming is an optimization, not a
+   * dependency; offline/disabled backends just skip it.
+   */
+  async warmAiContext(
+    context: Record<string, unknown>,
+    history?: Array<{ role: 'user' | 'assistant'; content: string }>
+  ): Promise<void> {
+    try {
+      await request<{ accepted: boolean }>('/ai/context/warm', {
+        method: 'POST',
+        body: JSON.stringify({ context, ...(history?.length ? { history } : {}) }),
+      })
+    } catch {
+      /* best-effort */
+    }
+  },
+
+  /**
    * Mint a new term into the lab's local namespace — the floor of the
    * ontology funnel (creation-entry-points spec §6). The server persists a
    * minimal draft record (e.g. a `material` with status: proposed) that the

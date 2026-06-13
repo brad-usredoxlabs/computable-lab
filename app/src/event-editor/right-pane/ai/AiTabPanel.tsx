@@ -12,13 +12,14 @@
  * fork on it without bumping the API.
  */
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
 import { useOptionalEventEditor } from '../../EventEditorContext'
+import { apiClient } from '../../../shared/api/client'
 import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/platformRegistry'
 import type { AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
 import type { PlateEvent } from '../../../types/events'
-import { systemPromptForViewer } from './systemPromptForViewer'
+import { systemPromptForViewer, systemPromptKindForTab } from './systemPromptForViewer'
 import { SourcesStrip, type AddedSource } from './SourcesStrip'
 import { MessageLog } from './MessageLog'
 import { ChatInput } from './ChatInput'
@@ -36,7 +37,7 @@ export function AiTabPanel() {
     return ws.state.tabs.find((t) => t.id === ws.state.activeTabId) ?? null
   }, [ws.state.activeTabId, ws.state.tabs])
 
-  const systemPrompt = systemPromptForViewer(activeTab?.kind ?? null)
+  const systemPrompt = systemPromptForViewer(systemPromptKindForTab(activeTab))
 
   // Present only when the active tab is a deck (EventEditorProvider wraps
   // the pane then); null on pdf/document/project tabs.
@@ -66,6 +67,12 @@ export function AiTabPanel() {
       // of a blank deck.
       ...(editorState
         ? {
+            // Cache-key identity: deriveContextCacheKey reads runId/
+            // eventGraphId, so carrying them keys the warmed KV slot (and
+            // the real draft request) per graph instead of a shared
+            // 'event-editor:default'.
+            ...(editorState.runId ? { runId: editorState.runId } : {}),
+            ...(editorState.eventGraphId ? { eventGraphId: editorState.eventGraphId } : {}),
             labwares: Object.values(editorState.labwares).map((lw) => ({
               labwareId: lw.labwareId,
               labwareType: lw.labwareType,
@@ -138,6 +145,27 @@ export function AiTabPanel() {
     context,
     onDraftResult,
   })
+
+  // Pre-warm the KV cache while the user reads/types: whenever the deck
+  // context changes (tab opened, graph loaded, draft accepted, labware
+  // edited) or a turn completes, ship the exact context + history the next
+  // draft request will carry to POST /ai/context/warm. The server debounces
+  // (2s), dedups by prompt hash, and defers to interactive traffic, so this
+  // can fire eagerly; the client timeout just coalesces rapid edits. Skipped
+  // while streaming (messages mutate per-chunk) and on non-deck tabs.
+  const messagesRef = useRef(chat.state.messages)
+  messagesRef.current = chat.state.messages
+  const hasDeckEditor = editorState !== null
+  useEffect(() => {
+    if (!hasDeckEditor || chat.isStreaming) return
+    const timer = setTimeout(() => {
+      const history = messagesRef.current
+        .filter((m) => m.text)
+        .map((m) => ({ role: m.role, content: m.text }))
+      void apiClient.warmAiContext(context, history)
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [hasDeckEditor, chat.isStreaming, chat.state.messages.length, context])
 
   // Run-in-event-editor pushes a composed prompt into ChatInput; the user
   // reviews then sends. We hold the prefill here so a re-render doesn't
