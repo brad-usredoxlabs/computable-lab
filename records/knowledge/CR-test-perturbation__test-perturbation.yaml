@@ -1,9 +1,0 @@
-$schema: https://computable-lab.com/schema/computable-lab/context-role.schema.yaml
-kind: context-role
-id: CR-test-perturbation
-title: Test perturbation
-name: Test perturbation
-description: >
-  Generic experimental arm. The context carries the perturbation under
-  test; predicted direction depends on the claim being asserted.
-prerequisites: []

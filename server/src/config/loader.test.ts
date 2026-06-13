@@ -53,6 +53,54 @@ describe('config loader', () => {
     });
   });
 
+  it('defaults an empty-url repository to embedded local Git', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'cl-config-'));
+    const configPath = join(tempDir, 'config.yaml');
+    await writeFile(
+      configPath,
+      [
+        'server:',
+        '  port: 3001',
+        '  host: 0.0.0.0',
+        '  logLevel: info',
+        '  dataDir: ~/.computable-lab',
+        '  workspaceDir: ~/.computable-lab/workspaces',
+        '  cors:',
+        '    enabled: true',
+        '    origins: ["*"]',
+        'schemas:',
+        '  source: bundled',
+        '  bundledDir: ./schema',
+        'repositories:',
+        '- id: main',
+        '  default: true',
+        '  git:',
+        '    url: ""',
+        '    branch: main',
+        '    auth:',
+        '      type: none',
+        '  namespace:',
+        '    baseUri: http://localhost:3001/records/',
+        '    prefix: local',
+        '  jsonld:',
+        '    context: default',
+        '  sync:',
+        '    mode: manual',
+        '    autoCommit: true',
+        '    autoPush: false',
+        '  records:',
+        '    directory: records',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const config = await loadConfig({ configPath });
+    expect(config.server.dataDir).toBe('~/.computable-lab');
+    expect(config.repositories[0]?.mode).toBe('embedded-git');
+    expect(config.repositories[0]?.git.url).toBe('');
+    expect(config.repositories[0]?.sync.autoPush).toBe(false);
+  });
+
   describe('extractor profile defaults', () => {
     it('applies defaults when extractor is absent', async () => {
       tempDir = await mkdtemp(join(tmpdir(), 'cl-config-'));

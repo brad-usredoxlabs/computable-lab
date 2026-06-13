@@ -80,7 +80,16 @@ function normalizeConfig(config?: ExaConfig | null): ResolvedExaConfig | null {
 }
 
 export function resolveExaConfig(appConfig?: AppConfig): ResolvedExaConfig | null {
-  return normalizeConfig(appConfig?.integrations?.exa);
+  const fromConfig = normalizeConfig(appConfig?.integrations?.exa);
+  if (fromConfig) return fromConfig;
+  // Fall back to the EXA_API_KEY environment variable so a key supplied via the
+  // environment (local dev, CI, or an appliance secret) works without a
+  // persisted config file — and survives restarts. Explicit config takes
+  // precedence; an explicit `enabled: false` still disables (the spread keeps
+  // it, so normalizeConfig returns null).
+  const envKey = trimString(process.env.EXA_API_KEY);
+  if (!envKey) return null;
+  return normalizeConfig({ ...appConfig?.integrations?.exa, apiKey: envKey });
 }
 
 function createContentRequest(

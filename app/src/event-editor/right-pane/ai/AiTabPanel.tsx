@@ -17,6 +17,8 @@ import { useWorkspace } from '../../workspace/WorkspaceContext'
 import { useOptionalEventEditor } from '../../EventEditorContext'
 import { apiClient, type AiWarmStatus } from '../../../shared/api/client'
 import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/platformRegistry'
+import { getVerbsForDisplay } from '../../../shared/vocab/registry'
+import { buildAcceptedEventGraphProjection } from '../../../graph/lib/acceptedEventGraphProjection'
 import type { AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
 import type { PlateEvent } from '../../../types/events'
 import { systemPromptForViewer, systemPromptKindForTab } from './systemPromptForViewer'
@@ -101,6 +103,28 @@ export function AiTabPanel() {
         : null
     const activeEventGraphId =
       activeTab?.kind === 'deck' ? activeTab.eventGraphId : null
+    const acceptedGraphProjection = editorState
+      ? buildAcceptedEventGraphProjection({
+          labwares: new Map(Object.entries(editorState.labwares)),
+          events: editorState.events,
+          vocabPackId: editorState.vocabPackId,
+          availableVerbs: getVerbsForDisplay(editorState.vocabPackId).map((v) => v.verb),
+          sourceSelection: editorState.selection
+            ? {
+                labware: editorState.labwares[editorState.selection.labwareId],
+                selectedWells: editorState.selection.wells,
+              }
+            : undefined,
+          deckPlatform: editorState.platformId,
+          deckVariant: editorState.variantId,
+          deckPlacements: editorState.placements.map((p) => ({
+            slotId: p.location.kind === 'slot' ? p.location.slotId : 'lawn',
+            labwareId: p.labwareId,
+          })),
+          ...(editorState.runId ? { runId: editorState.runId } : {}),
+          ...(editorState.eventGraphId ? { eventGraphId: editorState.eventGraphId } : {}),
+        })
+      : {}
     return {
       studyId: ws.state.studyId,
       activeTabKind: activeTab?.kind ?? null,
@@ -108,34 +132,9 @@ export function AiTabPanel() {
       activeEventGraphId,
       systemPromptId: systemPrompt.id,
       systemPromptBody: systemPrompt.body,
-      // Deck tabs: send the live editor state the way the standalone dock
-      // does, so the model drafts against real labware/placements instead
-      // of a blank deck.
-      ...(editorState
-        ? {
-            // Cache-key identity: deriveContextCacheKey reads runId/
-            // eventGraphId, so carrying them keys the warmed KV slot (and
-            // the real draft request) per graph instead of a shared
-            // 'event-editor:default'.
-            ...(editorState.runId ? { runId: editorState.runId } : {}),
-            ...(editorState.eventGraphId ? { eventGraphId: editorState.eventGraphId } : {}),
-            labwares: Object.values(editorState.labwares).map((lw) => ({
-              labwareId: lw.labwareId,
-              labwareType: lw.labwareType,
-              name: lw.name,
-            })),
-            eventSummary:
-              editorState.events.length === 0
-                ? 'No events yet.'
-                : `${editorState.events.length} event${editorState.events.length === 1 ? '' : 's'} in graph.`,
-            deckPlatform: editorState.platformId,
-            deckVariant: editorState.variantId,
-            deckPlacements: editorState.placements.map((p) => ({
-              slotId: p.location.kind === 'slot' ? p.location.slotId : 'lawn',
-              labwareId: p.labwareId,
-            })),
-          }
-        : {}),
+      // Deck tabs send the same accepted event graph projection used by the
+      // standalone editor; this context object is shared by warm and draft.
+      ...acceptedGraphProjection,
     }
   }, [ws.state.studyId, activeTab, systemPrompt, editorState])
 

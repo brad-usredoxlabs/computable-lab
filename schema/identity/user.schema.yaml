@@ -1,0 +1,71 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/user.schema.yaml"
+title: "User"
+description: >
+  Local-first login principal. A user may be linked to a person record for lab
+  operations, training, and competency checks, but authentication identity and
+  personnel identity are intentionally separate.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "../core/common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- username
+- displayName
+- status
+
+properties:
+  kind:
+    const: "user"
+
+  recordId:
+    type: string
+    pattern: "^USR-[A-Z0-9][A-Z0-9_-]*$"
+
+  username:
+    type: string
+    minLength: 1
+
+  displayName:
+    type: string
+    minLength: 1
+
+  status:
+    type: string
+    enum: [ active, inactive, suspended ]
+
+  email:
+    type: string
+    format: email
+
+  personRef:
+    allOf:
+    - $ref: "../core/datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+        type: { const: person }
+
+  externalIdentities:
+    type: array
+    description: "Optional cloud or institutional identity links. No secrets are stored here."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ provider, subject ]
+      properties:
+        provider:
+          type: string
+          examples: [ github, gitlab, google, institution-sso ]
+        subject:
+          type: string
+        username:
+          type: string
+    uniqueItems: true
+
+  notes:
+    type: string

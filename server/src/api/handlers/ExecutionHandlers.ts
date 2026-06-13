@@ -30,6 +30,7 @@ import { SidecarContractConformanceService } from '../../execution/SidecarContra
 import { createExecutionProvider, resolveExecutionMode } from '../../execution/providers/createExecutionProvider.js';
 import { ExecutionTaskService } from '../../execution/ExecutionTaskService.js';
 import type { AssistEmitterMode } from '../../execution/emitters/assist/AssistPlusEmitter.js';
+import type { AccessAction } from '../../security/AccessControlService.js';
 
 export function createExecutionHandlers(ctx: AppContext) {
   const orchestrator = new ExecutionOrchestrator(ctx);
@@ -113,6 +114,32 @@ export function createExecutionHandlers(ctx: AppContext) {
     return platform.compilerFamily;
   }
 
+  async function requireRecordAccess(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    recordId: string,
+    action: AccessAction,
+  ): Promise<ApiError | null> {
+    const record = await ctx.store.get(recordId);
+    if (!record) {
+      reply.status(404);
+      return { error: 'NOT_FOUND', message: `Record not found: ${recordId}` };
+    }
+    const user = await ctx.localIdentityService.resolveRequestUser(request);
+    if (!user.userId) {
+      reply.status(401);
+      return { error: 'UNAUTHENTICATED', message: 'A valid local user is required' };
+    }
+    const allowed = await ctx.authorizationService.canAccess(user.userId, action, record);
+    if (!allowed) {
+      reply.status(action === 'read' ? 404 : 403);
+      return action === 'read'
+        ? { error: 'NOT_FOUND', message: `Record not found: ${recordId}` }
+        : { error: 'FORBIDDEN', message: `User ${user.userId} cannot ${action} ${recordId}` };
+    }
+    return null;
+  }
+
   return {
     /**
      * GET /execution-runs
@@ -168,6 +195,8 @@ export function createExecutionHandlers(ctx: AppContext) {
           reply.status(404);
           return { error: 'NOT_FOUND', message: `Execution run not found: ${request.params.id}` };
         }
+        const denied = await requireRecordAccess(request, reply, request.params.id, 'read');
+        if (denied) return denied;
         return { run: env };
       } catch (err) {
         reply.status(500);
@@ -189,6 +218,8 @@ export function createExecutionHandlers(ctx: AppContext) {
       reply: FastifyReply,
     ): Promise<{ status: Record<string, unknown> } | ApiError> {
       try {
+        const denied = await requireRecordAccess(request, reply, request.params.id, 'read');
+        if (denied) return denied;
         const status = await executionRunService.getExecutionRunStatus(request.params.id);
         return { status };
       } catch (err) {
@@ -216,6 +247,8 @@ export function createExecutionHandlers(ctx: AppContext) {
       reply: FastifyReply,
     ): Promise<{ success: boolean; executionRunId: string; logId?: string; taskId?: string; status: 'queued' | 'completed' | 'error' } | ApiError> {
       try {
+        const denied = await requireRecordAccess(request, reply, request.params.id, 'operate');
+        if (denied) return denied;
         const result = await executionRunService.retryExecutionRunWithOptions(request.params.id, {
           force: request.body?.force === true,
         });
@@ -252,6 +285,8 @@ export function createExecutionHandlers(ctx: AppContext) {
       reply: FastifyReply,
     ): Promise<{ success: boolean; executionRunId?: string; status?: string } | ApiError> {
       try {
+        const denied = await requireRecordAccess(request, reply, request.params.id, 'quality-review');
+        if (denied) return denied;
         const result = await executionRunService.resolveExecutionRun(request.params.id, request.body);
         return { success: true, ...result };
       } catch (err) {
@@ -899,6 +934,8 @@ export function createExecutionHandlers(ctx: AppContext) {
       reply: FastifyReply,
     ): Promise<{ success: boolean; executionRunId: string; logId?: string; taskId?: string; status: 'queued' | 'completed' | 'error' } | ApiError> {
       try {
+        const denied = await requireRecordAccess(request, reply, request.params.id, 'operate');
+        if (denied) return denied;
         const result = await provider.executeRobotPlan(request.params.id, {
           ...(request.body?.parameters ? { parameters: request.body.parameters } : {}),
         });
@@ -958,6 +995,15 @@ export function createExecutionHandlers(ctx: AppContext) {
         }
         let robotPlanId = request.body.robotPlanId;
         let targetPlatform = request.body.targetPlatform;
+
+        if (hasPlanned && request.body.plannedRunId) {
+          const denied = await requireRecordAccess(request, reply, request.body.plannedRunId, 'operate');
+          if (denied) return denied;
+        }
+        if (!hasPlanned && robotPlanId) {
+          const denied = await requireRecordAccess(request, reply, robotPlanId, 'operate');
+          if (denied) return denied;
+        }
 
         if (hasPlanned) {
           if (!targetPlatform) {

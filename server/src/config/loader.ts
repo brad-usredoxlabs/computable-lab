@@ -157,6 +157,14 @@ function validateServerConfig(config: unknown, path = 'server'): asserts config 
   if (c.host !== undefined && typeof c.host !== 'string') {
     throw new ConfigValidationError('host must be a string', `${path}.host`, c.host);
   }
+
+  if (c.dataDir !== undefined && typeof c.dataDir !== 'string') {
+    throw new ConfigValidationError('dataDir must be a string', `${path}.dataDir`, c.dataDir);
+  }
+
+  if (c.workspaceDir !== undefined && typeof c.workspaceDir !== 'string') {
+    throw new ConfigValidationError('workspaceDir must be a string', `${path}.workspaceDir`, c.workspaceDir);
+  }
   
   if (c.logLevel !== undefined && !['debug', 'info', 'warn', 'error'].includes(c.logLevel as string)) {
     throw new ConfigValidationError('logLevel must be one of: debug, info, warn, error', `${path}.logLevel`, c.logLevel);
@@ -192,8 +200,8 @@ function validateGitConfig(config: unknown, path: string): asserts config is Git
   
   const c = config as Record<string, unknown>;
   
-  if (!c.url || typeof c.url !== 'string') {
-    throw new ConfigValidationError('url is required', `${path}.url`, c.url);
+  if (c.url !== undefined && typeof c.url !== 'string') {
+    throw new ConfigValidationError('url must be a string', `${path}.url`, c.url);
   }
   
   if (c.auth) {
@@ -234,10 +242,13 @@ function validateRepositoryConfig(config: unknown, path: string): asserts config
     throw new ConfigValidationError('id is required', `${path}.id`, c.id);
   }
   
-  if (!c.git) {
-    throw new ConfigValidationError('git configuration is required', `${path}.git`, c.git);
+  if (c.mode !== undefined && !['embedded-git', 'remote-git', 'local-filesystem'].includes(c.mode as string)) {
+    throw new ConfigValidationError('mode must be one of: embedded-git, remote-git, local-filesystem', `${path}.mode`, c.mode);
   }
-  validateGitConfig(c.git, `${path}.git`);
+
+  if (c.git) {
+    validateGitConfig(c.git, `${path}.git`);
+  }
   
   if (c.namespace) {
     validateNamespaceConfig(c.namespace, `${path}.namespace`);
@@ -565,6 +576,14 @@ export function validateConfig(config: unknown): asserts config is Partial<AppCo
  */
 function applyRepoDefaults(repo: Partial<RepositoryConfig>): RepositoryConfig {
   const result = deepMerge(DEFAULT_REPO_CONFIG as RepositoryConfig, repo as RepositoryConfig);
+
+  if (!result.git) {
+    result.git = { url: '', branch: 'main', auth: { type: 'none' } };
+  }
+
+  if (result.git.url === undefined) {
+    result.git.url = '';
+  }
   
   // Ensure git.branch has default
   if (!result.git.branch) {
@@ -574,6 +593,10 @@ function applyRepoDefaults(repo: Partial<RepositoryConfig>): RepositoryConfig {
   // Ensure git.auth has default
   if (!result.git.auth) {
     result.git.auth = { type: 'none' };
+  }
+
+  if (!repo.mode) {
+    result.mode = result.git.url.trim() ? 'remote-git' : 'embedded-git';
   }
   
   return result;
@@ -701,6 +724,7 @@ export function createLocalDevConfig(basePath: string): AppConfig {
     repositories: [{
       id: 'local',
       default: true,
+      mode: 'local-filesystem',
       git: {
         url: '', // Empty URL signals local mode
         branch: 'main',
@@ -719,4 +743,30 @@ export function createLocalDevConfig(basePath: string): AppConfig {
       records: { directory: 'records' },
     }],
   };
+}
+
+/**
+ * Create the default durable local repository config.
+ */
+export function createEmbeddedDefaultRepositoryConfig(recordsDir = 'records'): RepositoryConfig {
+  return applyRepoDefaults({
+    id: 'main',
+    default: true,
+    mode: 'embedded-git',
+    git: {
+      url: '',
+      branch: 'main',
+      auth: { type: 'none' },
+    },
+    namespace: {
+      baseUri: 'http://localhost:3001/records/',
+      prefix: 'local',
+    },
+    sync: {
+      mode: 'manual',
+      autoCommit: true,
+      autoPush: false,
+    },
+    records: { directory: recordsDir },
+  });
 }

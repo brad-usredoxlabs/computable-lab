@@ -4,7 +4,10 @@ import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { extractPdfText } from '../extract/PdfTextAdapter.js';
 import { extractPdfLayoutText, type PdfExtractionResult as LayoutPdfExtractionResult } from '../ingestion/pdf/TableExtractionService.js';
 
-const DEFAULT_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) ProtocolFoundry/1.0';
+// A realistic browser UA — vendor CDNs (e.g. tools.thermofisher.com) 403 a
+// custom "ProtocolFoundry/1.0" token as a bot. Matches the UA the vendor
+// search path already uses successfully.
+const DEFAULT_USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36';
 const DEFAULT_MAX_BYTES = 50 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 20_000;
 
@@ -81,8 +84,14 @@ export async function downloadVendorPdf(input: VendorPdfDownloadInput): Promise<
     const response = await fetchImpl(url.href, {
       headers: {
         'User-Agent': DEFAULT_USER_AGENT,
-        'Accept': 'application/pdf,application/octet-stream;q=0.9,*/*;q=0.5',
+        // Browser-like Accept + language + same-origin Referer so hotlink
+        // protection and bot filters treat this like a normal click-through.
+        'Accept': 'application/pdf,application/xhtml+xml,text/html;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': url.origin + '/',
       },
+      // Follow the vendor's redirects (landing → CDN) like a browser would.
+      redirect: 'follow',
       signal: controller.signal,
     });
     if (!response.ok) {

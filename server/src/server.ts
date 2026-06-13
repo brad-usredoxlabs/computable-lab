@@ -10,7 +10,8 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
-import { resolve, join } from 'node:path';
+import { isAbsolute, resolve, join } from 'node:path';
+import { homedir } from 'node:os';
 
 import { SchemaRegistry, createSchemaRegistry } from './schema/SchemaRegistry.js';
 import { loadAllSchemas } from './schema/SchemaLoader.js';
@@ -19,11 +20,10 @@ import { LintEngine, createLintEngine } from './lint/LintEngine.js';
 import { loadAllLintSpecs } from './lint/LintSpecLoader.js';
 import { PredicateRegistry, loadPredicateRegistry } from './registry/PredicateRegistry.js';
 import { createRepoAdapter, isGitRepoAdapter } from './repo/createRepoAdapter.js';
-import { createLocalRepoAdapter } from './repo/LocalRepoAdapter.js';
 import type { RepoAdapter } from './repo/types.js';
 import { RecordStoreImpl, createRecordStore } from './store/RecordStoreImpl.js';
 import { resolveSeedRecordsDir } from './index/seedRecordsDir.js';
-import { loadConfig, getDefaultRepository } from './config/loader.js';
+import { createEmbeddedDefaultRepositoryConfig, loadConfig, getDefaultRepository } from './config/loader.js';
 import { DEFAULT_CONFIG as DEFAULT_APP_CONFIG, type AppConfig, type RepositoryConfig, resolveAiProfile } from './config/types.js';
 import {
   createRecordHandlers,
@@ -126,6 +126,8 @@ import { PolicyBundleService } from './policy/PolicyBundleService.js';
 import { createLabwareLookup } from './ai/compiler/labwareLookup.js';
 import { runChatbotCompile } from './ai/runChatbotCompile.js';
 import type { ExtractorAdapter } from './extract/ExtractorAdapter.js';
+import { LocalIdentityService } from './security/LocalIdentityService.js';
+import { AuthorizationService } from './security/AuthorizationService.js';
 
 /**
  * Null extractor that returns empty results with a diagnostic.
@@ -161,6 +163,25 @@ const DEFAULT_CONFIG: Required<ServerConfig> = {
   logLevel: 'info',
 };
 
+function expandHomePath(path: string): string {
+  if (path === '~') return homedir();
+  if (path.startsWith('~/')) return join(homedir(), path.slice(2));
+  return path;
+}
+
+function resolveConfiguredPath(basePath: string, path: string): string {
+  const expanded = expandHomePath(path);
+  return isAbsolute(expanded) ? expanded : resolve(basePath, expanded);
+}
+
+function isTmpPath(path: string): boolean {
+  return path === '/tmp' || path.startsWith('/tmp/');
+}
+
+function resolveRepositoryMode(repoConfig: RepositoryConfig): RepositoryConfig['mode'] {
+  return repoConfig.mode ?? (repoConfig.git?.url?.trim() ? 'remote-git' : 'embedded-git');
+}
+
 /**
  * Application context holding all initialized components.
  */
@@ -173,12 +194,16 @@ export interface AppContext {
   indexManager: IndexManager;
   uiSpecLoader: UISpecLoader;
   workspaceRoot: string;
+  dataDir: string;
+  repositoryMode: RepositoryConfig['mode'];
   recordsDir: string;
   schemaDir: string;
   appConfig?: AppConfig | undefined;
   configPath?: string | undefined;
   predicateRegistry?: PredicateRegistry | undefined;
   identity?: ResolvedIdentity | undefined;
+  localIdentityService: LocalIdentityService;
+  authorizationService: AuthorizationService;
   platformRegistry: PlatformRegistry;
   lifecycleEngine: LifecycleEngine;
   policyBundleService: PolicyBundleService;
@@ -316,28 +341,35 @@ export async function initializeApp(
   const bundleCount = policyBundleService.loadFromDir(bundleDir)
   console.log(`Loaded ${bundleCount} policy bundles`)
 
-  // Initialize repo adapter based on configuration
-  let repoAdapter: RepoAdapter;
-  let workspaceRoot = basePath;
-  
-  if (repoConfig && repoConfig.git?.url) {
-    // Use GitRepoAdapter when git URL is configured
-    const workspaceDir = appConfig?.server?.workspaceDir || '/tmp/cl-workspaces';
-    const workspacePath = join(workspaceDir, repoConfig.id);
-    workspaceRoot = workspacePath;
-    
-    repoAdapter = await createRepoAdapter({
-      repoConfig,
-      workspacePath,
-    });
-  } else {
-    // Fallback to local adapter
-    console.log('Using LocalRepoAdapter (no git URL configured)');
-    repoAdapter = createLocalRepoAdapter({
-      basePath,
-    });
-    workspaceRoot = basePath;
+  if (!repoConfig) {
+    repoConfig = createEmbeddedDefaultRepositoryConfig(opts.recordsDir);
+    appConfig = {
+      ...(appConfig ?? DEFAULT_APP_CONFIG),
+      repositories: [repoConfig],
+    };
+    console.log(`No repository configured; using durable embedded Git repository: ${repoConfig.id}`);
   }
+
+  const dataDir = resolveConfiguredPath(basePath, appConfig?.server?.dataDir ?? '~/.computable-lab');
+  const workspaceDir = resolveConfiguredPath(basePath, appConfig?.server?.workspaceDir ?? join(dataDir, 'workspaces'));
+  const repoMode = resolveRepositoryMode(repoConfig);
+  const workspacePath = repoMode === 'remote-git' ? join(workspaceDir, repoConfig.id) : basePath;
+
+  console.log(`Repository storage mode: ${repoMode}`);
+  console.log(`  Data dir: ${dataDir}`);
+  if (repoMode === 'remote-git') console.log(`  Workspace dir: ${workspacePath}`);
+  if (isTmpPath(dataDir) || (repoMode === 'remote-git' && isTmpPath(workspacePath))) {
+    console.warn('Storage is configured under /tmp; records may disappear after restart. Set server.dataDir to a durable path.');
+  }
+
+  const repoAdapter = await createRepoAdapter({
+    repoConfig,
+    workspacePath,
+    dataDir,
+  });
+  const workspaceRoot =
+    (repoAdapter as { worktreePath?: string }).worktreePath ??
+    (repoMode === 'remote-git' ? workspacePath : basePath);
   
   // Resolve GitHub identity from PAT (if configured)
   let identity: ResolvedIdentity | undefined;
@@ -357,6 +389,10 @@ export async function initializeApp(
     email: identity?.email ?? 'store@computable-lab.com',
     ...(seedDir ? { seedDir } : {}),
   });
+
+  const localIdentityService = new LocalIdentityService(store);
+  await localIdentityService.ensureLocalAdminUser();
+  const authorizationService = new AuthorizationService(store);
   
   // Initialize index manager
   const indexManager = createIndexManager(repoAdapter, {
@@ -429,12 +465,16 @@ export async function initializeApp(
     indexManager,
     uiSpecLoader,
     workspaceRoot,
+    dataDir,
+    repositoryMode: repoMode,
     recordsDir,
     schemaDir,
     appConfig,
     configPath,
     predicateRegistry,
     identity,
+    localIdentityService,
+    authorizationService,
     platformRegistry,
     lifecycleEngine,
     policyBundleService,
@@ -490,6 +530,10 @@ export async function createServer(
     () => ctx.appConfig?.lab?.materialTracking,
     ctx.lifecycleEngine,
     (runId) => requestRunWarm?.(runId),
+    {
+      identityService: ctx.localIdentityService,
+      authorizationService: ctx.authorizationService,
+    },
   );
   const schemaHandlers = createSchemaHandlers(ctx.schemaRegistry);
   const validationHandlers = createValidationHandlers(ctx.validator, ctx.lintEngine);
@@ -516,7 +560,10 @@ export async function createServer(
       })()
     : undefined;
   const vendorSearchHandlers = createVendorSearchHandlers({
-    ...(ctx.appConfig ? { appConfig: ctx.appConfig } : {}),
+    // Live accessor, not a snapshot: PATCH /api/config (onConfigUpdate above)
+    // reassigns ctx.appConfig, so reading it per-request lets a freshly-pasted
+    // Exa key take effect without a server restart.
+    getAppConfig: () => ctx.appConfig,
     workspaceRoot: ctx.workspaceRoot,
     // Phase 9: GraphLemur ingest persists each PDF as a study-scoped
     // artifact record when the request supplies a studyId, so the
@@ -589,6 +636,9 @@ export async function createServer(
     getRuleCount: () => ctx.lintEngine.ruleCount,
     ...(isGitRepoAdapter(ctx.repoAdapter) ? { gitRepoAdapter: ctx.repoAdapter } : {}),
     ...(repoConfig ? { repoConfig, namespace: repoConfig.namespace } : {}),
+    storageMode: ctx.repositoryMode,
+    dataDir: ctx.dataDir,
+    workspaceRoot: ctx.workspaceRoot,
   });
 
   // Create protocol, execution, and measurement handlers

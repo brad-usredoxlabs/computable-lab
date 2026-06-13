@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { ApiError } from '../types.js';
 import type { AppConfig } from '../../config/types.js';
@@ -10,7 +11,7 @@ import {
 } from '../../vendor-documents/service.js';
 import type { FoundryPdfCollectionCandidate } from '../../foundry/FoundryPdfCollector.js';
 import type { ProtocolCandidateSummary, SourcePdfSummary } from '../../ai/types.js';
-import { exaSearch, resolveExaConfig } from '../../integrations/exa.js';
+import { exaSearch, exaGetContents, resolveExaConfig } from '../../integrations/exa.js';
 import { getCuratedVendorRegistry } from '../../registry/CuratedVendorRegistry.js';
 import {
   downloadVendorPdf,
@@ -118,7 +119,14 @@ export interface GraphLemurPdfIngestResponse {
 }
 
 export interface VendorSearchHandlerOptions {
+  /**
+   * Static config snapshot. Prefer `getAppConfig` so the handlers see live
+   * config (e.g. an Exa key pasted into Settings after boot) — a captured
+   * snapshot goes stale because PATCH /api/config reassigns the config object.
+   */
   appConfig?: AppConfig;
+  /** Live config accessor; called per-request so settings changes take effect immediately. */
+  getAppConfig?: () => AppConfig | undefined;
   workspaceRoot?: string;
   /**
    * Optional RecordStore. When supplied, GraphLemur PDF ingests with a
@@ -842,7 +850,9 @@ function summarizeProtocolCandidate(candidate: ProtocolCandidate, options: {
 }
 
 export function createVendorSearchHandlers(options: VendorSearchHandlerOptions = {}) {
-  const appConfig = options.appConfig;
+  // Resolve config live on each call so a key added in Settings after boot is
+  // picked up without a server restart. Falls back to the static snapshot.
+  const getAppConfig = options.getAppConfig ?? (() => options.appConfig);
   const workspaceRoot = options.workspaceRoot;
   const store = options.store;
   return {
@@ -919,7 +929,7 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
         };
       }
 
-      const resolvedConfig = resolveExaConfig(appConfig);
+      const resolvedConfig = resolveExaConfig(getAppConfig());
       if (!resolvedConfig) {
         reply.status(503);
         return {
@@ -1034,11 +1044,126 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
             ...(sourceDomain ? { sourceDomain } : {}),
           };
         };
-        let download = await downloadVendorPdf(downloadInput(url)).catch(async (directError) => {
-          if (looksLikePdfUrl(url)) throw directError;
-          resolution = await resolveGraphLemurPdfUrl(url);
-          return downloadVendorPdf(downloadInput(resolution.pdfUrl));
-        });
+        let download: Awaited<ReturnType<typeof downloadVendorPdf>>;
+        try {
+          download = await downloadVendorPdf(downloadInput(url)).catch(async (directError) => {
+            if (looksLikePdfUrl(url)) throw directError;
+            resolution = await resolveGraphLemurPdfUrl(url);
+            return downloadVendorPdf(downloadInput(resolution.pdfUrl));
+          });
+        } catch (downloadError) {
+          // Some vendor CDNs (e.g. Thermo/Akamai) block server-side PDF
+          // downloads at the TLS-fingerprint level — no header tweak gets
+          // through (HTTP 403). Exa's own crawler/cache can usually still
+          // return the document text, so fall back to seeding a TEXT-ONLY
+          // protocol candidate instead of failing the ingest outright. No PDF
+          // artifact is persisted in this path (there are no bytes to store).
+          const exaConfig = resolveExaConfig(getAppConfig());
+          if (!exaConfig) throw downloadError;
+          let exaText: string | undefined;
+          let exaTitle: string | undefined;
+          try {
+            const contents = await exaGetContents(exaConfig, {
+              urls: [url],
+              contentMode: 'text',
+              maxCharacters: 12000,
+            });
+            const first = exaResults(contents)[0];
+            exaText = first ? stringValue(first.text) : undefined;
+            exaTitle = first ? stringValue(first.title) : undefined;
+          } catch (exaError) {
+            request.log?.warn?.({ err: exaError }, 'GraphLemur ingest: Exa text fallback failed');
+          }
+          if (!exaText) throw downloadError;
+
+          const candidateTitle = title ?? exaTitle ?? url;
+          const blockedMessage =
+            'Vendor blocked the direct PDF download (HTTP 403); this candidate was seeded from Exa text. ' +
+            'No PDF artifact was stored — tables/layout are unavailable.';
+          const sourcePdf: SourcePdfSummary = {
+            url,
+            title: candidateTitle,
+            ...(vendor ? { vendor } : {}),
+          };
+          const sourceProtocolCandidate: ProtocolCandidateSummary = {
+            kind: 'vendor-protocol-candidate',
+            title: candidateTitle,
+            source: {
+              documentId: 'graph-lemur-exa-text',
+              ...(vendor ? { vendor } : {}),
+              title: candidateTitle,
+              url,
+            },
+            materials: [],
+            labware: [],
+            equipment: [],
+            steps: candidateStepsFromText(exaText),
+            diagnostics: [{ code: 'EXA_TEXT_FALLBACK', severity: 'warning', message: blockedMessage }],
+          };
+          // Persist a durable, text-only artifact so the chip isn't stuck in
+          // "legacy chat-draft mode". No `file` (the binary was blocked); the
+          // Exa-retrieved text lands in `extractedText` so it's searchable and
+          // openable. Content-addressed by the text hash for idempotency.
+          let recordedArtifact: GraphLemurPdfIngestResponse['recordedArtifact'];
+          if (requestedStudyId && store) {
+            const sha256 = createHash('sha256').update(exaText).digest('hex');
+            const recordId = `ART-${sha256.slice(0, 12).toUpperCase()}`;
+            const payload = {
+              kind: 'artifact' as const,
+              recordId,
+              title: candidateTitle,
+              studyId: requestedStudyId,
+              artifactKind: 'pdf' as const,
+              extractedText: [{ pageNumber: 1, text: exaText }],
+              source: {
+                ...(vendor ? { vendor } : {}),
+                url,
+                ...(ingestQuery ? { query: ingestQuery } : {}),
+                ingestedAt: new Date().toISOString(),
+                acquisition: 'exa-text',
+              },
+            };
+            const envelope = createEnvelope(
+              payload,
+              'https://computable-lab.com/schema/computable-lab/artifact.schema.yaml',
+              { kind: 'artifact' },
+            );
+            if (envelope) {
+              const exists = await store.exists(recordId).catch(() => false);
+              if (!exists) {
+                const result = await store.create({
+                  envelope,
+                  message: `GraphLemur ingest (Exa text): ${candidateTitle}`,
+                });
+                if (result.success) {
+                  recordedArtifact = { recordId, studyId: requestedStudyId, extractedTextPageCount: 1 };
+                } else {
+                  request.log?.warn?.(
+                    { error: result.error },
+                    'GraphLemur ingest (Exa text): artifact record create failed',
+                  );
+                }
+              } else {
+                recordedArtifact = { recordId, studyId: requestedStudyId, extractedTextPageCount: 1 };
+              }
+            }
+          }
+          return {
+            sourcePdf,
+            sourceProtocolCandidate,
+            extraction: {
+              requestedUrl: resolution.requestedUrl,
+              resolvedPdfUrl: resolution.pdfUrl,
+              resolution: resolution.resolution,
+              artifactPath: '',
+              pageCount: 0,
+              sectionCount: 0,
+              tableCount: 0,
+              diagnostics: [{ code: 'EXA_TEXT_FALLBACK', severity: 'warning', message: blockedMessage }],
+            },
+            ...(recordedArtifact ? { recordedArtifact } : {}),
+          };
+        }
         const extraction = await extractVendorProtocolCandidateFromInput({
           workspaceRoot,
           artifactPath: download.relativePath,

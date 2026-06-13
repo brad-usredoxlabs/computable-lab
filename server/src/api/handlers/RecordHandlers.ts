@@ -24,6 +24,47 @@ import type { MaterialTrackingConfig } from '../../config/types.js';
 import { MaterialUsagePolicyError, normalizeEventGraphMaterialUsage } from '../../materials/AddMaterialSupport.js';
 import { LifecycleEngine } from '../../lifecycle/LifecycleEngine.js';
 import { checkLifecycleTransition } from '../../lifecycle/lifecycleMiddleware.js';
+import type { LocalIdentityService, ResolvedRequestUser } from '../../security/LocalIdentityService.js';
+import type { AuthorizationService } from '../../security/AuthorizationService.js';
+import type { AccessAction } from '../../security/AccessControlService.js';
+
+interface RecordHandlerSecurityOptions {
+  identityService?: LocalIdentityService;
+  authorizationService?: AuthorizationService;
+}
+
+function payloadObject(payload: unknown): Record<string, unknown> {
+  return payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+}
+
+function payloadKind(payload: unknown): string | undefined {
+  const kind = payloadObject(payload).kind;
+  return typeof kind === 'string' ? kind : undefined;
+}
+
+function parentRecordIds(payload: unknown): string[] {
+  const p = payloadObject(payload);
+  const links = p.links && typeof p.links === 'object' ? p.links as Record<string, unknown> : {};
+  const candidates = [
+    p.runId,
+    links.runId,
+    p.plannedRunId,
+    links.plannedRunId,
+    p.experimentId,
+    links.experimentId,
+    p.studyId,
+    links.studyId,
+  ];
+  return [...new Set(candidates.filter((id): id is string => typeof id === 'string' && id.length > 0))];
+}
+
+function accessDeniedError(message: string): ApiError {
+  return { error: 'FORBIDDEN', message };
+}
+
+function unauthenticatedError(message: string): ApiError {
+  return { error: 'UNAUTHENTICATED', message };
+}
 
 /**
  * Create record handlers bound to a RecordStore and optional IndexManager.
@@ -40,7 +81,23 @@ export function createRecordHandlers(
    * its compiled context. Best-effort; debouncing happens in the warmer.
    */
   onEventGraphMutated?: (runId: string) => void,
+  security?: RecordHandlerSecurityOptions,
 ) {
+  const resolveRequestUser = async (request: FastifyRequest, reply: FastifyReply): Promise<ResolvedRequestUser | null> => {
+    if (!security?.identityService) return { userId: null, isSystem: true };
+    const user = await security.identityService.resolveRequestUser(request);
+    if (!user.userId) {
+      reply.status(401);
+      return null;
+    }
+    return user;
+  };
+
+  const canAccess = async (user: ResolvedRequestUser, action: AccessAction, record: Awaited<ReturnType<RecordStore['get']>>): Promise<boolean> => {
+    if (!record || !security?.authorizationService) return true;
+    return security.authorizationService.canAccess(user.userId, action, record);
+  };
+
   return {
     /**
      * GET /records
@@ -53,6 +110,9 @@ export function createRecordHandlers(
       try {
         const { kind, schemaId, idPrefix, limit, offset } = request.query;
         
+        const user = await resolveRequestUser(request, reply);
+        if (!user) return unauthenticatedError('A valid local user is required');
+
         const records = await store.list({
           ...(kind !== undefined ? { kind } : {}),
           ...(schemaId !== undefined ? { schemaId } : {}),
@@ -60,10 +120,15 @@ export function createRecordHandlers(
           ...(limit !== undefined ? { limit: Number(limit) } : {}),
           ...(offset !== undefined ? { offset: Number(offset) } : {}),
         });
+
+        const visibleRecords = [];
+        for (const record of records) {
+          if (await canAccess(user, 'read', record)) visibleRecords.push(record);
+        }
         
         return {
-          records,
-          total: records.length, // Note: This is the returned count, not total available
+          records: visibleRecords,
+          total: visibleRecords.length, // Note: This is the returned count, not total available
           ...(limit !== undefined ? { limit: Number(limit) } : {}),
           ...(offset !== undefined ? { offset: Number(offset) } : {}),
         };
@@ -114,6 +179,13 @@ export function createRecordHandlers(
               message: result.error || `Record not found: ${id}`,
             };
           }
+
+          const user = await resolveRequestUser(request, reply);
+          if (!user) return unauthenticatedError('A valid local user is required');
+          if (!(await canAccess(user, 'read', result.envelope))) {
+            reply.status(404);
+            return { error: 'NOT_FOUND', message: `Record not found: ${id}` };
+          }
           
           return {
             record: result.envelope,
@@ -130,6 +202,13 @@ export function createRecordHandlers(
             error: 'NOT_FOUND',
             message: `Record not found: ${id}`,
           };
+        }
+
+        const user = await resolveRequestUser(request, reply);
+        if (!user) return unauthenticatedError('A valid local user is required');
+        if (!(await canAccess(user, 'read', record))) {
+          reply.status(404);
+          return { error: 'NOT_FOUND', message: `Record not found: ${id}` };
         }
         
         return { record };
@@ -170,6 +249,10 @@ export function createRecordHandlers(
             message: 'payload is required',
           };
         }
+
+        const user = await resolveRequestUser(request, reply);
+        if (!user) return unauthenticatedError('A valid local user is required');
+
         const currentMaterialTracking = getMaterialTracking?.();
         const payload = await normalizeEventGraphMaterialUsage(
           store,
@@ -186,6 +269,29 @@ export function createRecordHandlers(
             error: 'BAD_REQUEST',
             message: 'payload must contain recordId or id field',
           };
+        }
+
+        const kind = payloadKind(payload);
+        if (kind === 'access-policy') {
+          const resourceRef = payloadObject(payload).resourceRef;
+          const resourceId = resourceRef && typeof resourceRef === 'object'
+            ? (resourceRef as Record<string, unknown>).id
+            : undefined;
+          if (typeof resourceId === 'string') {
+            const resource = await store.get(resourceId);
+            if (resource && !(await canAccess(user, 'admin', resource))) {
+              reply.status(403);
+              return accessDeniedError(`User ${user.userId} cannot administer ${resourceId}`);
+            }
+          }
+        } else {
+          for (const parentId of parentRecordIds(payload)) {
+            const parent = await store.get(parentId);
+            if (parent && !(await canAccess(user, 'write', parent))) {
+              reply.status(403);
+              return accessDeniedError(`User ${user.userId} cannot add child records under ${parentId}`);
+            }
+          }
         }
         
         // Inject payload provenance fields that are schema-compatible.
@@ -223,16 +329,11 @@ export function createRecordHandlers(
         const envelope = createEnvelope(
           payloadWithProvenance,
           schemaId,
-          identity
-            ? {
-                createdAt: now,
-                updatedAt: now,
-                createdBy: identity.username,
-              }
-            : {
-                createdAt: now,
-                updatedAt: now,
-              }
+          {
+            createdAt: now,
+            updatedAt: now,
+            createdBy: user.userId ?? identity?.username ?? 'system',
+          }
         );
         if (!envelope) {
           reply.status(400);
@@ -314,6 +415,10 @@ export function createRecordHandlers(
           }
         }
 
+        if (result.envelope && user.userId) {
+          await security?.authorizationService?.ensureOwnerPolicy(result.envelope, user.userId);
+        }
+
         // Update index after successful create
         if (indexManager && result.envelope) {
           try {
@@ -386,6 +491,14 @@ export function createRecordHandlers(
             error: 'NOT_FOUND',
             message: `Record not found: ${id}`,
           };
+        }
+
+        const user = await resolveRequestUser(request, reply);
+        if (!user) return unauthenticatedError('A valid local user is required');
+        const requiredAction: AccessAction = payloadKind(existing.payload) === 'access-policy' ? 'admin' : 'write';
+        if (!(await canAccess(user, requiredAction, existing))) {
+          reply.status(403);
+          return accessDeniedError(`User ${user.userId} cannot update ${id}`);
         }
         
         // Check lifecycle transition if lifecycleEngine is available
@@ -538,10 +651,14 @@ export function createRecordHandlers(
           return { error: 'BAD_REQUEST', message: 'triples must be an array' };
         }
 
+        const user = await resolveRequestUser(request, reply);
+        if (!user) return unauthenticatedError('A valid local user is required');
+
         const existing = await store.list({ kind: 'claim' });
         // Build lookup: "subjectId|predicateId|objectId" → record ID
         const existingKeys = new Map<string, string>();
         for (const env of existing) {
+          if (!(await canAccess(user, 'read', env))) continue;
           const p = env.payload as Record<string, unknown> | undefined;
           if (!p) continue;
           const subj = p.subject as Record<string, unknown> | undefined;
@@ -586,13 +703,21 @@ export function createRecordHandlers(
         const { expectedSha } = request.query;
         
         // Check if record exists
-        const exists = await store.exists(id);
-        if (!exists) {
+        const existing = await store.get(id);
+        if (!existing) {
           reply.status(404);
           return {
             error: 'NOT_FOUND',
             message: `Record not found: ${id}`,
           };
+        }
+
+        const user = await resolveRequestUser(request, reply);
+        if (!user) return unauthenticatedError('A valid local user is required');
+        const requiredAction: AccessAction = payloadKind(existing.payload) === 'access-policy' ? 'admin' : 'write';
+        if (!(await canAccess(user, requiredAction, existing))) {
+          reply.status(403);
+          return accessDeniedError(`User ${user.userId} cannot delete ${id}`);
         }
         
         // Delete record

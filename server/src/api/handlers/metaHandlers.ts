@@ -58,6 +58,12 @@ export interface MetaContext {
   repoConfig?: RepositoryConfig;
   /** Namespace configuration */
   namespace?: NamespaceConfig;
+  /** Storage mode label */
+  storageMode?: string;
+  /** Durable local data directory */
+  dataDir?: string;
+  /** Active workspace root */
+  workspaceRoot?: string;
   /** Lint engine rule count */
   getRuleCount: () => number;
 }
@@ -73,8 +79,11 @@ export interface ServerMetaResponse {
   };
   repository?: {
     id: string;
+    mode?: string;
     url: string;
     branch: string;
+    dataDir?: string;
+    workspaceRoot?: string;
     lastSync?: string;
     status: string;
     ahead?: number;
@@ -160,8 +169,11 @@ export function createMetaHandlers(ctx: MetaContext) {
         const status = await ctx.gitRepoAdapter.getStatus();
         response.repository = {
           id: ctx.repoConfig.id,
+          mode: ctx.storageMode ?? ctx.repoConfig.mode,
           url: redactUrl(ctx.repoConfig.git.url),
           branch: status.branch,
+          ...(ctx.dataDir ? { dataDir: ctx.dataDir } : {}),
+          ...(ctx.workspaceRoot ? { workspaceRoot: ctx.workspaceRoot } : {}),
           status: status.isClean ? 'clean' : 'dirty',
           ahead: status.ahead,
           behind: status.behind,
@@ -169,8 +181,11 @@ export function createMetaHandlers(ctx: MetaContext) {
       } catch {
         response.repository = {
           id: ctx.repoConfig.id,
+          mode: ctx.storageMode ?? ctx.repoConfig.mode,
           url: redactUrl(ctx.repoConfig.git.url),
           branch: ctx.repoConfig.git.branch,
+          ...(ctx.dataDir ? { dataDir: ctx.dataDir } : {}),
+          ...(ctx.workspaceRoot ? { workspaceRoot: ctx.workspaceRoot } : {}),
           status: 'unknown',
         };
       }

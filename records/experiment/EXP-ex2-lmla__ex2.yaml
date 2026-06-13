@@ -1,9 +1,0 @@
-$schema: https://computable-lab.com/schema/computable-lab/experiment.schema.yaml
-recordId: EXP-ex2-lmla
-kind: experiment
-state: draft
-studyId: STU-brad1-yk4l
-title: Ex2
-shortSlug: ex2
-createdAt: 2026-06-12T01:22:48.745Z
-updatedAt: 2026-06-12T01:22:48.745Z

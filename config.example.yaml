@@ -9,7 +9,8 @@ server:
   port: 3001
   host: 0.0.0.0
   logLevel: info # debug | info | warn | error
-  workspaceDir: /tmp/cl-workspaces # ephemeral, disposable
+  dataDir: ~/.computable-lab # durable local app data: embedded Git repos, indexes, threads
+  workspaceDir: ~/.computable-lab/workspaces # remote Git working trees
   cors:
     enabled: true
     origins:
@@ -38,6 +39,8 @@ execution:
 repositories:
 - id: main
   default: true
+
+  mode: remote-git # embedded-git | remote-git | local-filesystem
 
   # Git connection settings
   git:
@@ -77,12 +80,13 @@ repositories:
   records:
     directory: records # Where records are stored
 
-# Example: Local development configuration (no external git)
+# Example: Offline/local-first configuration (durable embedded Git, no external service)
 # repositories:
-#   - id: local
+#   - id: main
 #     default: true
+#     mode: embedded-git
 #     git:
-#       url: ""                     # Empty URL = local mode
+#       url: ""                     # Empty URL = local embedded Git
 #       branch: main
 #       auth:
 #         type: none
@@ -93,7 +97,7 @@ repositories:
 #       context: default
 #     sync:
 #       mode: manual
-#       autoCommit: false
+#       autoCommit: true
 #       autoPush: false
 #     records:
 #       directory: records

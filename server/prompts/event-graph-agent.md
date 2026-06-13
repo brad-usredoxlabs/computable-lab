@@ -40,7 +40,11 @@ Important:
   actually necessary.
 - Do not default to ontology refs when a good local formulation or local instance exists.
 
-## Current Editor State
+## Current Accepted Event Graph Projection
+
+This section is derived from accepted event graph state. It is the canonical
+current-state context for drafting. The well snapshot may be scoped to selected
+and recently touched wells; `(none)` means no well projection was supplied.
 
 ### Labwares
 {{LABWARES}}
@@ -49,9 +53,9 @@ Important:
 {{EVENT_SUMMARY}}
 
 ### Per-turn editor state
-The user's current well selection, source/target pane selections, prompt
+The user's volatile well selection, source/target pane selections, prompt
 mentions, and any attached documents arrive in an `[Editor state]` block at
-the top of the user message, not in this system prompt.
+the top of the user message, not in this stable prefix.
 
 ### Well State Snapshot
 {{WELL_STATE_SNAPSHOT}}

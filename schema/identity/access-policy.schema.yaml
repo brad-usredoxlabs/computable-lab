@@ -1,0 +1,63 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/access-policy.schema.yaml"
+title: "Access Policy"
+description: >
+  Resource-scoped sharing policy for local-first records. Policies can target a
+  project, study, experiment, run, or another record and grant roles to users or
+  groups without relying on GitHub as the identity provider.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "../core/common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- resourceRef
+- visibility
+- ownerUserId
+- grants
+
+properties:
+  kind:
+    const: "access-policy"
+
+  recordId:
+    type: string
+    pattern: "^ACL-[A-Z0-9][A-Z0-9_-]*$"
+
+  resourceRef:
+    allOf:
+    - $ref: "../core/datatypes/ref.schema.yaml"
+    - type: object
+      properties:
+        kind: { const: record }
+
+  visibility:
+    type: string
+    enum: [ private, shared, public ]
+
+  ownerUserId:
+    type: string
+    pattern: "^USR-[A-Z0-9][A-Z0-9_-]*$"
+
+  grants:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [ principalType, principalId, role ]
+      properties:
+        principalType:
+          type: string
+          enum: [ user, group ]
+        principalId:
+          type: string
+        role:
+          type: string
+          enum: [ owner, admin, editor, operator, qa, viewer ]
+    uniqueItems: true
+
+  notes:
+    type: string

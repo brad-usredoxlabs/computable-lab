@@ -1,0 +1,55 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/group.schema.yaml"
+title: "Group"
+description: >
+  Local-first collaboration group used by access policies. Groups are lab-local
+  and can be synchronized through the records repository like any other record.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "../core/common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- name
+- displayName
+- status
+
+properties:
+  kind:
+    const: "group"
+
+  recordId:
+    type: string
+    pattern: "^GRP-[A-Z0-9][A-Z0-9_-]*$"
+
+  name:
+    type: string
+    minLength: 1
+
+  displayName:
+    type: string
+    minLength: 1
+
+  status:
+    type: string
+    enum: [ active, inactive, archived ]
+
+  memberUserIds:
+    type: array
+    items:
+      type: string
+      pattern: "^USR-[A-Z0-9][A-Z0-9_-]*$"
+    uniqueItems: true
+
+  memberGroupIds:
+    type: array
+    items:
+      type: string
+      pattern: "^GRP-[A-Z0-9][A-Z0-9_-]*$"
+    uniqueItems: true
+
+  notes:
+    type: string

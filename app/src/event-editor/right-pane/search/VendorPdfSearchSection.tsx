@@ -42,6 +42,7 @@ export function VendorPdfSearchSection({
   const [searchError, setSearchError] = useState<string | null>(null)
   const [ingestingUrl, setIngestingUrl] = useState<string | null>(null)
   const [ingestError, setIngestError] = useState<string | null>(null)
+  const [ingestNotice, setIngestNotice] = useState<string | null>(null)
   const [lastIngested, setLastIngested] = useState<string | null>(null)
 
   const runSearch = useCallback(async () => {
@@ -67,6 +68,7 @@ export function VendorPdfSearchSection({
     async (result: VendorPdfResult) => {
       setIngestingUrl(result.url)
       setIngestError(null)
+      setIngestNotice(null)
       try {
         const response = await apiClient.ingestGraphLemurVendorPdf({
           url: result.url,
@@ -75,6 +77,18 @@ export function VendorPdfSearchSection({
           studyId,
           query,
         })
+        // The vendor blocked the binary download and the server fell back to
+        // saving the document text via Exa. The artifact is durable but has no
+        // original PDF and no tables/layout — flag that so the user knows.
+        const exaTextFallback = (response.extraction?.diagnostics ?? []).some(
+          (d) => d.code === 'EXA_TEXT_FALLBACK',
+        )
+        if (exaTextFallback) {
+          setIngestNotice(
+            'Vendor blocked the PDF download — saved the document text via web search instead. ' +
+              'No original PDF or table/layout extraction.',
+          )
+        }
         if (response.recordedArtifact) {
           setLastIngested(response.recordedArtifact.recordId)
           onIngested(response.recordedArtifact.recordId, {
@@ -134,6 +148,11 @@ export function VendorPdfSearchSection({
       {ingestError ? (
         <p className="right-panel__error" data-testid="vendor-pdf-ingest-error">
           {ingestError}
+        </p>
+      ) : null}
+      {ingestNotice ? (
+        <p className="vendor-pdf-search__notice" data-testid="vendor-pdf-ingest-notice">
+          ⚠ {ingestNotice}
         </p>
       ) : null}
       {lastIngested ? (

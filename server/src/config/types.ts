@@ -222,7 +222,9 @@ export interface ServerConfig {
   host: string;
   /** Log level (default: 'info') */
   logLevel: 'debug' | 'info' | 'warn' | 'error';
-  /** Directory for ephemeral workspaces (default: '/tmp/cl-workspaces') */
+  /** Durable local application data directory (default: '~/.computable-lab') */
+  dataDir: string;
+  /** Directory for remote-git workspaces (default: '~/.computable-lab/workspaces') */
   workspaceDir: string;
   /** CORS configuration */
   cors: CorsConfig;
@@ -256,6 +258,8 @@ export interface RepositoryConfig {
   id: string;
   /** Whether this is the default repository */
   default?: boolean;
+  /** Storage backend for this repository */
+  mode: RepositoryStorageMode;
   /** Git settings */
   git: GitConfig;
   /** Namespace configuration for JSON-LD identity */
@@ -268,11 +272,13 @@ export interface RepositoryConfig {
   records: RecordsConfig;
 }
 
+export type RepositoryStorageMode = 'embedded-git' | 'remote-git' | 'local-filesystem';
+
 /**
  * Git connection settings.
  */
 export interface GitConfig {
-  /** Repository URL (HTTPS or SSH) */
+  /** Repository URL (HTTPS or SSH). Empty for embedded-git/local-filesystem. */
   url: string;
   /** Branch to use (default: 'main') */
   branch: string;
@@ -348,7 +354,8 @@ export const DEFAULT_CONFIG: AppConfig = {
     port: 3001,
     host: '0.0.0.0',
     logLevel: 'info',
-    workspaceDir: '/tmp/cl-workspaces',
+    dataDir: '~/.computable-lab',
+    workspaceDir: '~/.computable-lab/workspaces',
     cors: {
       enabled: true,
       origins: ['*'],
@@ -377,6 +384,7 @@ export const DEFAULT_CONFIG: AppConfig = {
  */
 export const DEFAULT_REPO_CONFIG: Omit<RepositoryConfig, 'id' | 'git'> = {
   default: false,
+  mode: 'embedded-git',
   namespace: {
     baseUri: 'https://example.org/records/',
     prefix: 'example',
@@ -385,10 +393,10 @@ export const DEFAULT_REPO_CONFIG: Omit<RepositoryConfig, 'id' | 'git'> = {
     context: 'default',
   },
   sync: {
-    mode: 'pull-on-read',
+    mode: 'manual',
     pullIntervalSeconds: 60,
     autoCommit: true,
-    autoPush: true,
+    autoPush: false,
   },
   records: {
     directory: 'records',
