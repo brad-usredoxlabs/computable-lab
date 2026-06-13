@@ -74,6 +74,15 @@ export interface RecordIndex {
  * writeups, training, saved prompts, conclusions). Optional because tree
  * responses emitted before the artifact concept landed don't include it.
  */
+export interface ProjectProtocolLibraryEntry extends IndexEntry {}
+
+export interface ProjectProtocolLibrary {
+  protocols: ProjectProtocolLibraryEntry[];
+  localProtocols: ProjectProtocolLibraryEntry[];
+  plannedRuns: ProjectProtocolLibraryEntry[];
+  inventory: ProjectProtocolLibraryEntry[];
+}
+
 export interface StudyTreeNode {
   recordId: string;
   title: string;
@@ -81,6 +90,7 @@ export interface StudyTreeNode {
   path: string;
   experiments: ExperimentTreeNode[];
   artifacts?: ArtifactSummaryEntry[];
+  protocolLibrary?: ProjectProtocolLibrary;
 }
 
 /**

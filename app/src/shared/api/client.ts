@@ -1521,13 +1521,17 @@ export const apiClient = {
   async listRecordsByKind(
     kind: string,
     limit: number = 50,
-    offset: number = 0
+    offset: number = 0,
+    links?: { studyId?: string; experimentId?: string; runId?: string }
   ): Promise<{ records: RecordEnvelope[]; total: number }> {
     const params = new URLSearchParams({
       kind,
       limit: String(limit),
       offset: String(offset),
     })
+    if (links?.studyId) params.set('studyId', links.studyId)
+    if (links?.experimentId) params.set('experimentId', links.experimentId)
+    if (links?.runId) params.set('runId', links.runId)
     const response = await request<RecordsResponse>(`/records?${params.toString()}`)
     return {
       records: response.records,
@@ -2901,7 +2905,7 @@ export const apiClient = {
 
   async createPlannedRun(body: {
     title: string
-    sourceType: 'protocol' | 'event-graph'
+    sourceType: 'protocol' | 'event-graph' | 'local-protocol'
     sourceRef: { kind: 'record'; id: string; type?: string }
     bindings?: Record<string, unknown>
   }): Promise<{ success: boolean; recordId?: string }> {
@@ -3636,7 +3640,7 @@ export const apiClient = {
    */
   async createPlannedRunFromLocalProtocol(
     localProtocolRef: string,
-    options?: { title?: string },
+    options?: { title?: string; studyId?: string; experimentId?: string; runId?: string },
   ): Promise<{ plannedRunId: string; state: string }> {
     return request('/runs/from-local-protocol', {
       method: 'POST',

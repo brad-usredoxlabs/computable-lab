@@ -17,6 +17,7 @@
  */
 
 import { API_BASE } from '../../../shared/api/base'
+import type { AiClarificationAnswer, AiClarificationRequest } from '../../../types/ai'
 
 export interface AssistStreamRequest {
   prompt: string
@@ -27,6 +28,8 @@ export interface AssistStreamRequest {
   context: Record<string, unknown>
   /** Prior conversation history — server expects `{role, content}`. */
   history?: Array<{ role: 'user' | 'assistant'; content: string }>
+  /** Answers to structured clarification requests from an earlier assistant turn. */
+  clarificationAnswers?: AiClarificationAnswer[]
 }
 
 /**
@@ -44,6 +47,7 @@ export interface AssistDraftResult {
   ontologyBindings?: unknown[]
   clarificationNeeded?: string
   clarification?: { prompt?: string }
+  clarificationRequests?: AiClarificationRequest[]
   error?: string
 }
 
@@ -57,6 +61,12 @@ export type AssistStreamEvent =
 export function summarizeDraftResult(result: AssistDraftResult | undefined): string | undefined {
   if (!result) return undefined
   if (result.error) return `Draft failed: ${result.error}`
+  const clarificationRequests = Array.isArray(result.clarificationRequests) ? result.clarificationRequests : []
+  if (clarificationRequests.length > 0) {
+    return clarificationRequests.length === 1
+      ? clarificationRequests[0]?.prompt
+      : `${clarificationRequests.length} clarifications needed.`
+  }
   const clarification = result.clarification?.prompt ?? result.clarificationNeeded
   if (clarification) return clarification
   const lines: string[] = []

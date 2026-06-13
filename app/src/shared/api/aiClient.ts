@@ -11,6 +11,7 @@ import type {
   AiHealthStatus,
   AiRequestContext,
   AiConversationMessage,
+  AiClarificationAnswer,
 } from '../../types/ai'
 import type { AiSurface } from '../../types/aiContext'
 import { API_BASE } from './base'
@@ -30,7 +31,7 @@ export async function* streamDraftEvents(
   context: AiRequestContext,
   history: AiConversationMessage[] = [],
   signal?: AbortSignal,
-  options?: { deterministicOnly?: boolean; enableThinking?: boolean },
+  options?: { deterministicOnly?: boolean; enableThinking?: boolean; clarificationAnswers?: AiClarificationAnswer[] },
 ): AsyncGenerator<AiStreamEvent> {
   const response = await fetch(`${API_BASE}/ai/draft-events/stream`, {
     method: 'POST',
@@ -41,6 +42,7 @@ export async function* streamDraftEvents(
       history,
       ...(options?.deterministicOnly !== undefined ? { deterministicOnly: options.deterministicOnly } : {}),
       ...(options?.enableThinking !== undefined ? { enableThinking: options.enableThinking } : {}),
+      ...(options?.clarificationAnswers?.length ? { clarificationAnswers: options.clarificationAnswers } : {}),
     }),
     signal,
   })
@@ -128,11 +130,17 @@ export async function draftEvents(
   prompt: string,
   context: AiRequestContext,
   history: AiConversationMessage[] = [],
+  clarificationAnswers: AiClarificationAnswer[] = [],
 ): Promise<AiAgentResult> {
   const response = await fetch(`${API_BASE}/ai/draft-events`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt, context, history }),
+    body: JSON.stringify({
+      prompt,
+      context,
+      history,
+      ...(clarificationAnswers.length ? { clarificationAnswers } : {}),
+    }),
   })
 
   if (!response.ok) {

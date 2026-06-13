@@ -101,12 +101,59 @@ export interface AiClarificationOption {
   id: string
   label: string
   snippet?: string
+  source?: string
+  score?: number
+  ref?: Record<string, unknown>
 }
 
+export type AiClarificationKind =
+  | 'material'
+  | 'aliquot'
+  | 'labware'
+  | 'vendor-product'
+  | 'ontology'
+  | 'parameter'
+  | 'well-selection'
+  | 'sequence'
+  | 'general'
+
+export type AiClarificationMenuProvider = '/m' | '/l' | 'choice'
+
 export interface AiClarification {
+  id?: string
   prompt: string
   entityType: string
   options: AiClarificationOption[]
+  menuProvider?: AiClarificationMenuProvider
+  query?: string
+  roleId?: string
+  slot?: string
+  snippet?: string
+  allowCreateLocal?: boolean
+}
+
+export interface AiClarificationRequest {
+  id: string
+  kind: AiClarificationKind
+  prompt: string
+  entityType?: string
+  menuProvider: AiClarificationMenuProvider
+  query?: string
+  roleId?: string
+  slot?: string
+  snippet?: string
+  sourceSpan?: { start?: number; end?: number }
+  options: AiClarificationOption[]
+  allowCreateLocal?: boolean
+}
+
+export interface AiClarificationAnswer {
+  requestId: string
+  optionId?: string
+  label?: string
+  value?: string
+  mentionToken?: string
+  ref?: Record<string, unknown>
 }
 
 
@@ -260,6 +307,7 @@ export interface AiAgentResult {
   unresolvedRefs?: OntologyRefProposal[]
   clarificationNeeded?: string
   clarification?: AiClarification
+  clarificationRequests?: AiClarificationRequest[]
   error?: string
   labwareAdditions?: AiLabwareAddition[]
   labwareRequirements?: AiLabwareRequirement[]
@@ -303,6 +351,8 @@ export interface ChatMessage {
   attachments?: ChatMessageAttachment[]
   /** Structured clarification (numbered options) from the AI */
   clarification?: AiClarification
+  /** Typed clarification cards that can be answered with menu-backed refs. */
+  clarificationRequests?: AiClarificationRequest[]
   /** Proposed concrete labware additions from the AI */
   labwareAdditions?: AiLabwareAddition[]
   /** Proposed generic/constrained labware requirements from the AI */
@@ -435,10 +485,17 @@ export interface AiCurrentPreviewDraft {
   sourceSkips?: string[]
 }
 
-export interface AiGraphLemurRevisionEntry {
+export interface AiDraftRevisionEntry {
   prompt: string
   createdAt: string
 }
+
+export interface AiDraftRevisionContext {
+  currentPreviewDraft: AiCurrentPreviewDraft
+  revisionHistory?: AiDraftRevisionEntry[]
+}
+
+export type AiGraphLemurRevisionEntry = AiDraftRevisionEntry
 
 export interface AiGraphLemurContext {
   sourceProtocolCandidate?: AiProtocolCandidateSummary
@@ -470,6 +527,8 @@ export interface AiRequestContext {
     mode: 'relaxed' | 'tracked'
     allowAdHocEventInstances: boolean
   }
+  /** Active ghost-preview draft being revised by the current prompt. */
+  draftRevision?: AiDraftRevisionContext
   /** GraphLemur protocol-source and iterative-preview revision context. */
   graphLemur?: AiGraphLemurContext
 }

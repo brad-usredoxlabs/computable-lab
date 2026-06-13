@@ -36,6 +36,18 @@ properties:
   parent_material_instance_ref:
     $ref: "./datatypes/ref.schema.yaml"
 
+  links:
+    type: object
+    description: "Optional project filing links for prepared stocks, cultures, and derived materials."
+    additionalProperties: false
+    properties:
+      studyId:
+        type: string
+      experimentId:
+        type: string
+      runId:
+        type: string
+
   prepared_on:
     type: string
     format: date-time

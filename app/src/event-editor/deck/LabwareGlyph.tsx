@@ -21,6 +21,20 @@ interface LabwareGlyphProps {
 // Layout units (arbitrary; the SVG scales to the tile via viewBox + CSS).
 const CELL = 10
 const PAD = 2
+
+/**
+ * Well radius for tube-rack glyphs, scaled by per-well volume so racks with the
+ * same grid but different tube sizes read differently at a glance — e.g. the
+ * four-way bench rack's 4×8 of 0.5 mL tubes draws finer than its 4×8 of 1.5/2 mL
+ * tubes. Log scale between a 0.2 mL floor and a 50 mL ceiling → 0.30–0.46 CELL.
+ */
+function tubesetWellRadius(maxVolumeUl: number): number {
+  const MIN_UL = 200
+  const MAX_UL = 50000
+  const clamped = Math.min(Math.max(maxVolumeUl, MIN_UL), MAX_UL)
+  const t = (Math.log10(clamped) - Math.log10(MIN_UL)) / (Math.log10(MAX_UL) - Math.log10(MIN_UL))
+  return CELL * (0.3 + 0.16 * t)
+}
 // Above this many rows/columns we draw a representative capped grid rather than
 // every well — keeps the densest tiers (1536) from drawing 1500+ circles.
 const GRID_CAP = { cols: 24, rows: 16 }
@@ -28,7 +42,12 @@ const GRID_CAP = { cols: 24, rows: 16 }
 function inferProfile(labware: Labware): NonNullable<Labware['renderProfile']> {
   if (labware.renderProfile) return labware.renderProfile
   if (labware.layoutFamily === 'reservoir') return 'reservoir'
-  if (labware.layoutFamily === 'tube') return 'tube'
+  if (labware.layoutFamily === 'tube') {
+    // A multi-position rack is a tubeset (grid of tubes); only a lone vessel is
+    // a 'tube'. Without this, every tube rack collapses to a single circle in
+    // the small tile and you can't tell what's on the bench at a glance.
+    return labware.addressing.type === 'single' ? 'tube' : 'tubeset'
+  }
   if (labware.addressing.type === 'single') return 'tube'
   if (labware.addressing.type === 'linear') return 'reservoir'
   return 'plate'
@@ -110,7 +129,7 @@ export function LabwareGlyph({ labware, orientation }: LabwareGlyphProps) {
     // circles, tipracks draw as rings, plates as small wells (round or square).
     const isTubeset = profile === 'tubeset'
     const isTiprack = profile === 'tiprack'
-    const r = isTubeset ? CELL * 0.42 : CELL * 0.34
+    const r = isTubeset ? tubesetWellRadius(labware.geometry.maxVolume_uL) : CELL * 0.34
     for (let row = 0; row < drawnRows; row++) {
       for (let col = 0; col < drawnCols; col++) {
         const cx = PAD + col * CELL + CELL / 2

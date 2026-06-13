@@ -50,6 +50,16 @@ export type LabwareType =
   | 'tubeset_50x1p5ml'
   | 'tubeset_96x0p2ml'
   | 'tubeset_mixed_4x50ml_6x15ml'
+  // Four-way bench tube rack — one physical rack, four orientations (lawn-only,
+  // see LABWARE_CONFIGS lawnOnly + isLawnOnlyLabwareType). It doesn't fit on an
+  // automation deck, so each side is its own definition.
+  | 'tubeset_4way_4x50ml'
+  | 'tubeset_4way_12x15ml'
+  | 'tubeset_4way_32x2ml'
+  | 'tubeset_4way_32x0p5ml'
+  // Classic dense bench tube rack — 5×16 of 1.5/2 mL tubes; too large for an
+  // automation deck, so lawn-only (see LABWARE_CONFIGS).
+  | 'tubeset_80x2ml'
   | 'deepwell_96'
   | 'tiprack_ot2_20'
   | 'tiprack_ot2_200'
@@ -86,6 +96,11 @@ export const LABWARE_TYPE_LABELS: Record<LabwareType, string> = {
   tubeset_50x1p5ml: '50 × 1.5 mL Tube Rack',
   tubeset_96x0p2ml: '96 × 0.2 mL PCR Tube Rack',
   tubeset_mixed_4x50ml_6x15ml: '10-Tube Mixed Rack (4×50mL + 6×15mL)',
+  tubeset_4way_4x50ml: '4-Way Bench Rack — 4 × 50 mL',
+  tubeset_4way_12x15ml: '4-Way Bench Rack — 12 × 15 mL',
+  tubeset_4way_32x2ml: '4-Way Bench Rack — 32 × 1.5/2 mL',
+  tubeset_4way_32x0p5ml: '4-Way Bench Rack — 32 × 0.5 mL',
+  tubeset_80x2ml: '80-Tube Bench Rack — 1.5/2 mL (5×16)',
   deepwell_96: '96-Well Deep Well (2 mL)',
   tiprack_ot2_20: 'OT-2 Tip Rack 20 uL',
   tiprack_ot2_200: 'OT-2 Tip Rack 200 uL',
@@ -123,6 +138,11 @@ export const LABWARE_TYPE_ICONS: Record<LabwareType, string> = {
   tubeset_50x1p5ml: '🧪',
   tubeset_96x0p2ml: '🧪',
   tubeset_mixed_4x50ml_6x15ml: '🧪',
+  tubeset_4way_4x50ml: '🧪',
+  tubeset_4way_12x15ml: '🧪',
+  tubeset_4way_32x2ml: '🧪',
+  tubeset_4way_32x0p5ml: '🧪',
+  tubeset_80x2ml: '🧪',
   deepwell_96: '🔬',
   tiprack_ot2_20: '🪡',
   tiprack_ot2_200: '🪡',
@@ -162,6 +182,11 @@ export const LABWARE_CATEGORIES: Record<LabwareType, LabwareCategory> = {
   tubeset_50x1p5ml: 'tube',
   tubeset_96x0p2ml: 'tube',
   tubeset_mixed_4x50ml_6x15ml: 'tube',
+  tubeset_4way_4x50ml: 'tube',
+  tubeset_4way_12x15ml: 'tube',
+  tubeset_4way_32x2ml: 'tube',
+  tubeset_4way_32x0p5ml: 'tube',
+  tubeset_80x2ml: 'tube',
   deepwell_96: 'plate',
   tiprack_ot2_20: 'tiprack',
   tiprack_ot2_200: 'tiprack',
@@ -256,6 +281,14 @@ export interface Labware {
   requirementSpecificity?: 'generic' | 'constrained' | 'concrete'
   /** Optional per-well geometry overrides for heterogeneous labware (e.g., mixed tube racks) */
   wellOverrides?: Record<string, { maxVolume_uL?: number; wellShape?: 'round' | 'square' | 'v-bottom' | 'conical' }>
+  /**
+   * When true, this labware may only be placed on a freeform bench surface
+   * (a lawn), never an automation deck slot — it's bench equipment that doesn't
+   * fit a robot deck. Enforced by validatePlacement and the add-labware palette.
+   * Source of truth is the type's LABWARE_CONFIGS entry; read it via
+   * isLawnOnlyLabwareType() rather than this (possibly unset) instance flag.
+   */
+  lawnOnly?: boolean
 }
 
 /**
@@ -594,6 +627,117 @@ export const LABWARE_CONFIGS: Record<LabwareType, Omit<Labware, 'labwareId' | 'n
       A5: { maxVolume_uL: 50000, wellShape: 'conical' },
       B5: { maxVolume_uL: 50000, wellShape: 'conical' },
     },
+  },
+  // Four-way bench rack — one physical rack used four ways depending on which
+  // side faces up. Bench equipment that doesn't fit an automation deck, so each
+  // side is its own lawn-only labware type.
+  // Side 1: a row of four 50 mL conicals.
+  tubeset_4way_4x50ml: {
+    labwareType: 'tubeset_4way_4x50ml',
+    addressing: {
+      type: 'grid',
+      rows: 1,
+      columns: 4,
+      rowLabels: ['A'],
+      columnLabels: ['1', '2', '3', '4'],
+    },
+    geometry: {
+      maxVolume_uL: 50000,
+      minVolume_uL: 5000,
+      wellShape: 'conical',
+    },
+    layoutFamily: 'tube',
+    wellPitch_mm: 30,
+    orientationPolicy: 'rotatable',
+    color: '#fd7e14',
+    lawnOnly: true,
+  },
+  // Side 2 (primary): two rows of six 15 mL conicals. Each well also accepts a
+  // 5 mL tube, so 15/5 mL can be mixed freely.
+  tubeset_4way_12x15ml: {
+    labwareType: 'tubeset_4way_12x15ml',
+    addressing: {
+      type: 'grid',
+      rows: 2,
+      columns: 6,
+      rowLabels: ['A', 'B'],
+      columnLabels: ['1', '2', '3', '4', '5', '6'],
+    },
+    geometry: {
+      maxVolume_uL: 15000,
+      minVolume_uL: 1000,
+      wellShape: 'conical',
+    },
+    layoutFamily: 'tube',
+    wellPitch_mm: 25,
+    orientationPolicy: 'rotatable',
+    color: '#fd7e14',
+    lawnOnly: true,
+  },
+  // Side 3: a 4×8 grid; each well holds a 1.5 mL Eppendorf or a 2 mL cryo tube.
+  tubeset_4way_32x2ml: {
+    labwareType: 'tubeset_4way_32x2ml',
+    addressing: {
+      type: 'grid',
+      rows: 4,
+      columns: 8,
+      rowLabels: ['A', 'B', 'C', 'D'],
+      columnLabels: ['1', '2', '3', '4', '5', '6', '7', '8'],
+    },
+    geometry: {
+      maxVolume_uL: 2000,
+      minVolume_uL: 100,
+      wellShape: 'round',
+    },
+    layoutFamily: 'tube',
+    wellPitch_mm: 18,
+    orientationPolicy: 'rotatable',
+    color: '#fd7e14',
+    lawnOnly: true,
+  },
+  // Side 4: the flip side of side 3 — same footprint, smaller holes for 0.5 mL tubes.
+  tubeset_4way_32x0p5ml: {
+    labwareType: 'tubeset_4way_32x0p5ml',
+    addressing: {
+      type: 'grid',
+      rows: 4,
+      columns: 8,
+      rowLabels: ['A', 'B', 'C', 'D'],
+      columnLabels: ['1', '2', '3', '4', '5', '6', '7', '8'],
+    },
+    geometry: {
+      maxVolume_uL: 500,
+      minVolume_uL: 20,
+      wellShape: 'round',
+    },
+    layoutFamily: 'tube',
+    wellPitch_mm: 18,
+    orientationPolicy: 'rotatable',
+    color: '#fd7e14',
+    lawnOnly: true,
+  },
+  // Classic dense bench rack — 5×16 of 1.5/2 mL tubes (80 positions). About
+  // 160% the length of an SBS plate and 85% the depth, so it overhangs an
+  // automation deck slot → lawn-only.
+  tubeset_80x2ml: {
+    labwareType: 'tubeset_80x2ml',
+    addressing: {
+      type: 'grid',
+      rows: 5,
+      columns: 16,
+      rowLabels: ['A', 'B', 'C', 'D', 'E'],
+      columnLabels: Array.from({ length: 16 }, (_, i) => String(i + 1)),
+    },
+    geometry: {
+      maxVolume_uL: 2000,
+      minVolume_uL: 100,
+      wellShape: 'round',
+    },
+    layoutFamily: 'tube',
+    wellPitch_mm: 13,
+    orientationPolicy: 'rotatable',
+    color: '#fd7e14',
+    lawnOnly: true,
   },
   deepwell_96: {
     labwareType: 'deepwell_96',
@@ -977,6 +1121,16 @@ export function isValidWellId(labware: Labware, wellId: WellId): boolean {
 
 export function isTipRackType(labwareType: LabwareType): boolean {
   return labwareType.startsWith('tiprack_')
+}
+
+/**
+ * True when a labware type may only live on a freeform lawn surface, never an
+ * automation deck slot. Driven by the type's LABWARE_CONFIGS entry so it stays
+ * a single source of truth and survives serialization (the instance `lawnOnly`
+ * flag may be absent on a reloaded record).
+ */
+export function isLawnOnlyLabwareType(labwareType: LabwareType): boolean {
+  return LABWARE_CONFIGS[labwareType]?.lawnOnly === true
 }
 
 /**

@@ -743,7 +743,7 @@ export function createExecutionHandlers(ctx: AppContext) {
       request: FastifyRequest<{
         Body: {
           title: string;
-          sourceType: 'protocol' | 'event-graph';
+          sourceType: 'protocol' | 'event-graph' | 'local-protocol';
           sourceRef: { kind: string; id: string; type?: string };
           bindings?: unknown;
         };

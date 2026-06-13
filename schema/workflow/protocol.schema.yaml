@@ -62,6 +62,18 @@ properties:
         $ref: "./datatypes/ref.schema.yaml"
         description: "Optional pointer to the source record (publication-ref, document-ref, or event-graph-ref)."
 
+  links:
+    type: object
+    description: "Optional project filing links. Study/project ownership is queryable by index; protocols are not embedded in study records."
+    additionalProperties: false
+    properties:
+      studyId:
+        type: string
+      experimentId:
+        type: string
+      runId:
+        type: string
+
   tags:
     type: array
     items: { type: string }

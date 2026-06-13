@@ -9,6 +9,7 @@ import type {
   AgentEvent,
   ConversationHistoryMessage,
   FileAttachment,
+  AgentClarificationAnswer,
 } from '../../ai/types.js';
 import { type UploadedFile } from '../../ai/FileContentExtractor.js';
 import { deriveContextCacheKey } from '../../ai/systemPrompt.js';
@@ -19,6 +20,7 @@ export interface DraftEventsBody {
   context: EditorContext;
   history?: ConversationHistoryMessage[];
   attachments?: FileAttachment[];
+  clarificationAnswers?: AgentClarificationAnswer[];
   /**
    * When true, only the deterministic pipeline runs (no LLM call).
    * Used by the event-editor dock's Precompile mode and required when AI is
@@ -43,6 +45,7 @@ export interface AssistBody {
   surface: AiSurface;
   context: Record<string, unknown>;
   history?: ConversationHistoryMessage[];
+  clarificationAnswers?: AgentClarificationAnswer[];
   enableThinking?: boolean;
 }
 
@@ -99,7 +102,7 @@ export function createAIHandlers(
       request: FastifyRequest<{ Body: DraftEventsBody }>,
       reply: FastifyReply,
     ) {
-      const { prompt, context, history, attachments, deterministicOnly, enableThinking } = request.body;
+      const { prompt, context, history, attachments, deterministicOnly, enableThinking, clarificationAnswers } = request.body;
 
       if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
         reply.status(400);
@@ -112,6 +115,7 @@ export function createAIHandlers(
           context,
           ...(history ? { history } : {}),
           ...(attachments ? { attachments } : {}),
+          ...(clarificationAnswers ? { clarificationAnswers } : {}),
           ...(deterministicOnly !== undefined ? { deterministicOnly } : {}),
           ...(!deterministicOnly ? { forceDraftTool: true } : {}),
           ...(enableThinking !== undefined ? { enableThinking } : {}),
@@ -140,6 +144,7 @@ export function createAIHandlers(
       let attachments: FileAttachment[] | undefined;
       let deterministicOnly: boolean | undefined;
       let enableThinking: boolean | undefined;
+      let clarificationAnswers: AgentClarificationAnswer[] | undefined;
 
       if (contentType.includes('multipart/form-data')) {
         // Parse multipart form-data so the event-editor surface can send
@@ -169,6 +174,7 @@ export function createAIHandlers(
           : undefined;
         deterministicOnly = fields['deterministicOnly'] === 'true' ? true : undefined;
         enableThinking = fields['enableThinking'] === 'true' ? true : fields['enableThinking'] === 'false' ? false : undefined;
+        clarificationAnswers = fields['clarificationAnswers'] ? JSON.parse(fields['clarificationAnswers']) as AgentClarificationAnswer[] : undefined;
       } else {
         const body = request.body;
         prompt = body.prompt;
@@ -177,6 +183,7 @@ export function createAIHandlers(
         attachments = body.attachments;
         deterministicOnly = body.deterministicOnly;
         enableThinking = body.enableThinking;
+        clarificationAnswers = body.clarificationAnswers;
       }
 
       reply.raw.writeHead(200, {
@@ -199,6 +206,7 @@ export function createAIHandlers(
           context,
           ...(history ? { history } : {}),
           ...(attachments ? { attachments } : {}),
+          ...(clarificationAnswers ? { clarificationAnswers } : {}),
           ...(deterministicOnly !== undefined ? { deterministicOnly } : {}),
           ...(!deterministicOnly ? { forceDraftTool: true } : {}),
           ...(enableThinking !== undefined ? { enableThinking } : {}),
@@ -228,6 +236,7 @@ export function createAIHandlers(
       let context: Record<string, unknown>;
       let history: ConversationHistoryMessage[] | undefined;
       let enableThinking: boolean | undefined;
+      let clarificationAnswers: AgentClarificationAnswer[] | undefined;
       let fileAttachments: FileAttachment[] = [];
 
       if (contentType.includes('multipart/form-data')) {
@@ -259,6 +268,7 @@ export function createAIHandlers(
         context = fields['context'] ? JSON.parse(fields['context']) : {};
         history = fields['history'] ? JSON.parse(fields['history']) : undefined;
         enableThinking = fields['enableThinking'] === 'true' ? true : undefined;
+        clarificationAnswers = fields['clarificationAnswers'] ? JSON.parse(fields['clarificationAnswers']) as AgentClarificationAnswer[] : undefined;
 
         // Convert to FileAttachment[] for the pipeline (do NOT extract content for inlining)
         fileAttachments = files.map((f) => ({
@@ -274,6 +284,7 @@ export function createAIHandlers(
         context = body.context;
         history = body.history;
         enableThinking = body.enableThinking;
+        clarificationAnswers = body.clarificationAnswers;
       }
 
       if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
@@ -322,6 +333,7 @@ export function createAIHandlers(
           surface: surface as AiSurface,
           ...(history ? { history } : {}),
           ...(fileAttachments.length > 0 ? { attachments: fileAttachments } : {}),
+          ...(clarificationAnswers ? { clarificationAnswers } : {}),
           ...(enableThinking !== undefined ? { enableThinking } : {}),
           onEvent: sendEvent,
         });

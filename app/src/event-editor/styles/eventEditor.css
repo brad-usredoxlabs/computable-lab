@@ -3669,6 +3669,56 @@
   background: rgba(245, 158, 11, 0.26);
 }
 
+/* Generic "revising the proposed draft" hint above the input — surfaces the
+   implicit revision mode (a ghost preview is on the deck, so the next prompt
+   edits it) so the user knows Send acts as Revise. */
+.event-editor .ai-dock__revision-hint {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 14px 6px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--cl-accent) 38%, var(--cl-border));
+  background: color-mix(in srgb, var(--cl-bg-elev-2) 86%, var(--cl-accent) 14%);
+  border-radius: 6px;
+}
+
+.event-editor .ai-dock__revision-icon {
+  color: var(--cl-accent);
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.event-editor .ai-dock__revision-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--cl-text-dim);
+}
+
+.event-editor .ai-dock__revision-discard {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--cl-border);
+  color: var(--cl-text-dim);
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.event-editor .ai-dock__revision-discard:hover:not(:disabled) {
+  color: var(--cl-text);
+  border-color: var(--cl-border-strong);
+}
+
+.event-editor .ai-dock__revision-discard:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .event-editor .ai-dock__input-row {
   /* Grid (not flex) for the row because grid's `minmax(0, 1fr)` reliably
      shrinks the middle column past its intrinsic min-content width,

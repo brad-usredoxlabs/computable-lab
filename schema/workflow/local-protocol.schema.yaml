@@ -46,6 +46,18 @@ properties:
       $ref: "./datatypes/ref.schema.yaml"
     uniqueItems: true
 
+  links:
+    type: object
+    description: "Optional project filing links. A project-scoped local protocol is found by links.studyId, not by embedding it in a study record."
+    additionalProperties: false
+    properties:
+      studyId:
+        type: string
+      experimentId:
+        type: string
+      runId:
+        type: string
+
   overrides:
     type: object
     additionalProperties: false

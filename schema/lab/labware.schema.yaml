@@ -26,7 +26,7 @@ properties:
   labwareType:
     type: string
     description: "High-level category."
-    enum: [ plate, reservoir, tube_rack, tiprack, tube, dish, slide, other, tubeset_6x15ml, tubeset_4x50ml, tubeset_50x1p5ml, tubeset_96x0p2ml, tubeset_mixed_4x50ml_6x15ml ]
+    enum: [ plate, reservoir, tube_rack, tiprack, tube, dish, slide, other, tubeset_6x15ml, tubeset_4x50ml, tubeset_50x1p5ml, tubeset_96x0p2ml, tubeset_mixed_4x50ml_6x15ml, tubeset_4way_4x50ml, tubeset_4way_12x15ml, tubeset_4way_32x2ml, tubeset_4way_32x0p5ml, tubeset_80x2ml ]
 
   format:
     type: object

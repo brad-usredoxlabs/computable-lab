@@ -177,7 +177,7 @@ function formatGraphLemurContext(context: EditorContext): string {
   if (graphLemur.revisionMode) {
     lines.push(
       '',
-      'Mode: revise the current preview draft.',
+      'Mode: revise the current source-backed preview draft.',
       '- Use the current preview draft as the baseline; do not restart from scratch unless the user explicitly asks for a fresh draft.',
       '- Apply the newest user correction as a targeted revision while preserving unaffected events, labware, ontology bindings, and source anchors.',
       '- Return a full replacement draft, not a partial patch.',
@@ -215,13 +215,39 @@ function formatGraphLemurContext(context: EditorContext): string {
   }
 
   if (graphLemur.currentPreviewDraft) {
-    lines.push('', 'Current preview draft to revise:');
+    lines.push('', context.draftRevision ? 'Legacy GraphLemur preview draft:' : 'Current preview draft to revise:');
     lines.push(JSON.stringify(graphLemur.currentPreviewDraft, null, 2));
   }
 
   if (graphLemur.revisionHistory && graphLemur.revisionHistory.length > 0) {
     lines.push('', 'Prior user corrections:');
     for (const entry of graphLemur.revisionHistory.slice(-6)) {
+      lines.push(`- ${entry.createdAt}: ${entry.prompt}`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+function formatDraftRevisionContext(context: EditorContext): string {
+  const draftRevision = context.draftRevision;
+  if (!draftRevision) return '';
+
+  const lines: string[] = ['## Preview Revision Context'];
+  lines.push(
+    '',
+    'Mode: revise the current ghost preview draft.',
+    '- Use the current preview draft as the baseline; do not restart from scratch unless the user explicitly asks for a fresh draft.',
+    '- Apply the newest user correction as a targeted revision while preserving unaffected events, labware, ontology bindings, source prompts, and skipped-preview diagnostics.',
+    '- Return a full replacement draft, not a partial patch.',
+  );
+
+  lines.push('', 'Current preview draft to revise:');
+  lines.push(JSON.stringify(draftRevision.currentPreviewDraft, null, 2));
+
+  if (draftRevision.revisionHistory && draftRevision.revisionHistory.length > 0) {
+    lines.push('', 'Prior user corrections:');
+    for (const entry of draftRevision.revisionHistory.slice(-6)) {
       lines.push(`- ${entry.createdAt}: ${entry.prompt}`);
     }
   }
@@ -395,8 +421,11 @@ export function buildSystemPrompt(
     .replace('{{MATERIAL_TRACKING}}', formatMaterialTracking(context))
     .replace('{{RUN_ID}}', context.runId ?? 'none');
 
-  const graphLemurContext = formatGraphLemurContext(context);
-  return graphLemurContext ? `${prompt}\n\n---\n\n${graphLemurContext}` : prompt;
+  const extraContexts = [
+    formatGraphLemurContext(context),
+    formatDraftRevisionContext(context),
+  ].filter(Boolean);
+  return extraContexts.length > 0 ? `${prompt}\n\n---\n\n${extraContexts.join('\n\n---\n\n')}` : prompt;
 }
 
 /**

@@ -12,6 +12,13 @@ import type { ArtifactSummary } from './artifact'
  * tree handler when artifacts exist for the study; older trees emitted
  * before the artifact concept landed will see an empty array.
  */
+export interface ProjectProtocolLibrary {
+  protocols: IndexEntry[]
+  localProtocols: IndexEntry[]
+  plannedRuns: IndexEntry[]
+  inventory: IndexEntry[]
+}
+
 export interface StudyTreeNode {
   recordId: string
   title: string
@@ -19,6 +26,7 @@ export interface StudyTreeNode {
   path: string
   experiments: ExperimentTreeNode[]
   artifacts?: ArtifactSummary[]
+  protocolLibrary?: ProjectProtocolLibrary
 }
 
 /**

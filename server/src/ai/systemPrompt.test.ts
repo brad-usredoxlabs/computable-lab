@@ -84,11 +84,38 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('## GraphLemur Context');
     expect(prompt).toContain('GraphLemur operating contract:');
     expect(prompt).toContain('Preserve source evidence anchors');
-    expect(prompt).toContain('Mode: revise the current preview draft.');
+    expect(prompt).toContain('Mode: revise the current source-backed preview draft.');
     expect(prompt).toContain('Use the current preview draft as the baseline');
     expect(prompt).toContain('Return a full replacement draft, not a partial patch.');
     expect(prompt).toContain('Current preview draft to revise:');
     expect(prompt).toContain('Prior user corrections:');
+  });
+
+  it('formats generic preview revision context without GraphLemur wording', () => {
+    const prompt = buildSystemPrompt({
+      labwares: [],
+      eventSummary: 'No events yet.',
+      vocabPackId: 'liquid-handling/v1',
+      availableVerbs: ['transfer'],
+      draftRevision: {
+        currentPreviewDraft: {
+          events: [{ event_type: 'transfer', details: { volume: { value: 10, unit: 'uL' } } }],
+          labwareRequirements: [{ classCurie: 'CL:96_well_plate', deckSlot: 'B2' }],
+          labwareAdditions: [],
+          sourcePrompt: 'Transfer 10 uL to row A.',
+          sourceSkips: ['CL:reservoir: deck slot unavailable'],
+        },
+        revisionHistory: [{ prompt: 'Use B2.', createdAt: '2026-06-03T00:00:00.000Z' }],
+      },
+    });
+
+    expect(prompt).toContain('## Preview Revision Context');
+    expect(prompt).toContain('Mode: revise the current ghost preview draft.');
+    expect(prompt).toContain('Current preview draft to revise:');
+    expect(prompt).toContain('Return a full replacement draft, not a partial patch.');
+    expect(prompt).toContain('Prior user corrections:');
+    expect(prompt).toContain('CL:reservoir: deck slot unavailable');
+    expect(prompt).not.toContain('## GraphLemur Context');
   });
 
 });

@@ -39,6 +39,65 @@ function generateNumericId(existingIds: string[], prefix: string): string {
   return `${prefix}_${String(maxNum + 1).padStart(4, '0')}`
 }
 
+function ProjectAssetSection({
+  title,
+  records,
+  selected,
+  onSelect,
+}: {
+  title: string
+  records: IndexEntry[]
+  selected: string | null
+  onSelect: (recordId: string) => void
+}) {
+  if (records.length === 0) return null
+
+  return (
+    <div style={{ padding: '4px 0' }}>
+      <div style={{
+        padding: '4px 12px 4px 32px',
+        fontSize: '11px',
+        color: '#64748b',
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        letterSpacing: '0.04em'
+      }}>
+        {title}
+      </div>
+      {records.map(record => (
+        <div
+          key={record.recordId}
+          onClick={() => onSelect(record.recordId)}
+          style={{
+            padding: '5px 12px 5px 48px',
+            cursor: 'pointer',
+            backgroundColor: selected === record.recordId ? '#e3f2fd' : 'transparent',
+            borderLeft: selected === record.recordId ? '3px solid #2196f3' : '3px solid transparent',
+            fontSize: '12px',
+            color: '#475569',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}
+        >
+          <span style={{ flex: 1 }}>{record.title || record.recordId}</span>
+          {record.kind && (
+            <span style={{
+              fontSize: '11px',
+              color: '#475569',
+              backgroundColor: '#e2e8f0',
+              padding: '2px 6px',
+              borderRadius: '3px'
+            }}>
+              {record.kind}
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function RecordBrowser() {
   const navigate = useNavigate()
   const { platforms } = usePlatformRegistry()
@@ -468,6 +527,22 @@ export default function RecordBrowser() {
       }
     }
     
+    // Check project-scoped protocol library and inventory
+    for (const study of studies) {
+      const library = study.protocolLibrary
+      const projectRecords = [
+        ...(library?.protocols || []),
+        ...(library?.localProtocols || []),
+        ...(library?.plannedRuns || []),
+        ...(library?.inventory || []),
+      ]
+      for (const record of projectRecords) {
+        if (record.recordId === selected) {
+          return { type: 'record', data: record }
+        }
+      }
+    }
+
     // Check inbox
     if (selected === '_inbox') {
       return { type: 'inbox', data: { recordId: '_inbox', title: 'Inbox', count: inbox.length } }
@@ -692,6 +767,35 @@ export default function RecordBrowser() {
               </a>
             </div>
             
+            {expanded.has(study.recordId) && study.protocolLibrary && (
+              <div>
+                <ProjectAssetSection
+                  title="Universal protocols"
+                  records={study.protocolLibrary.protocols}
+                  selected={selected}
+                  onSelect={setSelected}
+                />
+                <ProjectAssetSection
+                  title="Local protocols"
+                  records={study.protocolLibrary.localProtocols}
+                  selected={selected}
+                  onSelect={setSelected}
+                />
+                <ProjectAssetSection
+                  title="Planned runs"
+                  records={study.protocolLibrary.plannedRuns}
+                  selected={selected}
+                  onSelect={setSelected}
+                />
+                <ProjectAssetSection
+                  title="Project inventory"
+                  records={study.protocolLibrary.inventory}
+                  selected={selected}
+                  onSelect={setSelected}
+                />
+              </div>
+            )}
+
             {expanded.has(study.recordId) && study.experiments.map(exp => (
               <div key={exp.recordId} className="tree-node">
                 <div

@@ -13,12 +13,15 @@
  * all transitions in one testable place.
  */
 
+import type { AiClarificationRequest } from '../../../types/ai'
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   text: string
   /** Timestamp pinned at the point the message was added — for ordering and display. */
   ts: number
+  clarificationRequests?: AiClarificationRequest[]
 }
 
 export interface ChatState {
@@ -34,7 +37,7 @@ export type ChatAction =
   | { type: 'send'; userMessage: ChatMessage; pendingAssistantId: string }
   | { type: 'stream-status'; message: string }
   | { type: 'stream-delta'; delta: string }
-  | { type: 'stream-done'; fallbackText?: string }
+  | { type: 'stream-done'; fallbackText?: string; clarificationRequests?: AiClarificationRequest[] }
   | { type: 'stream-error'; message: string }
   | { type: 'stream-cancelled' }
   | { type: 'reset' }
@@ -95,6 +98,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         role: 'assistant',
         text,
         ts: Date.now(),
+        ...(action.clarificationRequests?.length ? { clarificationRequests: action.clarificationRequests } : {}),
       }
       return {
         ...state,

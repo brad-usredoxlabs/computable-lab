@@ -96,6 +96,39 @@ describe('parseSubmitSuggestionArgs', () => {
     expect(r.clarification?.prompt).toContain('fenofibrate');
   });
 
+  it('captures multiple typed clarification requests', () => {
+    const r = parseSubmitSuggestionArgs(
+      {
+        clarificationRequests: [
+          {
+            id: 'cells',
+            kind: 'material',
+            prompt: 'Which HepG2 cells should be used?',
+            menuProvider: '/m',
+            query: 'HepG2',
+            options: [
+              { id: 'MAT-HEPG2', label: 'HepG2 working culture', source: 'local' },
+              { id: 'CLO:0003704', label: 'Hep G2 cell', source: 'ontology' },
+            ],
+          },
+          {
+            id: 'plate',
+            kind: 'labware',
+            prompt: 'Which 96-well plate?',
+            menuProvider: '/l',
+            options: [{ id: 'plate-1', label: 'Assay plate' }],
+          },
+        ],
+      },
+      USAGE,
+      1,
+      0,
+    );
+    expect(r.clarificationRequests).toHaveLength(2);
+    expect(r.clarificationRequests?.[0]).toMatchObject({ id: 'cells', kind: 'material', menuProvider: '/m' });
+    expect(r.clarification?.prompt).toContain('HepG2');
+  });
+
   it('parses labwareAdditions', () => {
     const r = parseSubmitSuggestionArgs(
       { labwareAdditions: [{ recordId: 'LW-1', reason: 'needed' }, { reason: 'no id' }] },

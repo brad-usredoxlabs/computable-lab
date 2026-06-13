@@ -4,6 +4,7 @@ import {
   LABWARE_TYPE_ICONS,
   LABWARE_CATEGORIES,
   createLabware,
+  isLawnOnlyLabwareType,
   type LabwareCategory,
   type LabwareType,
 } from '../../types/labware'
@@ -12,6 +13,12 @@ import type { Labware } from '../../types/labware'
 interface AddLabwareDialogProps {
   open: boolean
   contextLabel: string
+  /**
+   * Which surface this dialog is adding labware to. Slot dialogs hide lawn-only
+   * bench equipment that can't be placed on an automation deck; lawn dialogs
+   * offer everything.
+   */
+  surfaceKind: 'slot' | 'lawn'
   onClose: () => void
   onPick: (labware: Labware) => void
 }
@@ -24,7 +31,7 @@ const CATEGORY_LABELS: Record<LabwareCategory, string> = {
   tiprack: 'Tip Racks',
 }
 
-export function AddLabwareDialog({ open, contextLabel, onClose, onPick }: AddLabwareDialogProps) {
+export function AddLabwareDialog({ open, contextLabel, surfaceKind, onClose, onPick }: AddLabwareDialogProps) {
   const [query, setQuery] = useState('')
   const [customName, setCustomName] = useState('')
 
@@ -47,8 +54,11 @@ export function AddLabwareDialog({ open, contextLabel, onClose, onPick }: AddLab
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     const all = Object.entries(LABWARE_TYPE_LABELS) as Array<[LabwareType, string]>
-    return all.filter(([, label]) => !q || label.toLowerCase().includes(q))
-  }, [query])
+    return all.filter(([type, label]) => {
+      if (surfaceKind === 'slot' && isLawnOnlyLabwareType(type)) return false
+      return !q || label.toLowerCase().includes(q)
+    })
+  }, [query, surfaceKind])
 
   const grouped = useMemo(() => {
     const map = new Map<LabwareCategory, Array<[LabwareType, string]>>()

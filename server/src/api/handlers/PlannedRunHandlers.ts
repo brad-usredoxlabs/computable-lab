@@ -19,11 +19,6 @@ const WELL_ID_PATTERNS: Record<string, RegExp> = {
 };
 
 /**
- * Lenient well-id pattern used when plate kind is unknown.
- */
-const WELL_ID_LENIENT = /^[A-Z]\d+$/;
-
-/**
  * Validate sample-map entries against a plate kind.
  *
  * Returns { ok: true } on success, or { ok: false, reason: string } on failure.
@@ -39,7 +34,7 @@ export function validateSampleMapEntries(
   }
 
   // Default to 96-well pattern when plate kind is unknown (most common case)
-  const pattern = plateKind ? WELL_ID_PATTERNS[plateKind] : WELL_ID_PATTERNS['96'];
+  const pattern = (plateKind ? WELL_ID_PATTERNS[plateKind] : undefined) ?? WELL_ID_PATTERNS['96']!;
 
   const seenWellIds = new Set<string>();
 
@@ -111,14 +106,22 @@ export function createPlannedRunHandlers(ctx: AppContext) {
      */
     async createFromLocalProtocol(
       request: FastifyRequest<{
-        Body: { localProtocolRef: string; title?: string };
+        Body: { localProtocolRef: string; title?: string; studyId?: string; experimentId?: string; runId?: string };
       }>,
       reply: FastifyReply,
     ): Promise<CreatePlannedRunResponse | ApiError> {
-      const { localProtocolRef, title } = request.body ?? {};
+      const { localProtocolRef, title, studyId, experimentId, runId } = request.body ?? {};
+      const links = {
+        ...(studyId ? { studyId } : {}),
+        ...(experimentId ? { experimentId } : {}),
+        ...(runId ? { runId } : {}),
+      };
       const result = await service.createFromLocalProtocol(
         localProtocolRef,
-        title ? { title } : {},
+        {
+          ...(title ? { title } : {}),
+          ...(Object.keys(links).length > 0 ? { links } : {}),
+        },
       );
 
       if (!result.ok) {
@@ -158,7 +161,7 @@ export function createPlannedRunHandlers(ctx: AppContext) {
       const { labware, materials, deckPlatformId } = request.body ?? {};
 
       // Get the planned-run record
-      const record = await ctx.store.getRecord(id);
+      const record = await ctx.store.get(id);
       if (!record) {
         reply.status(404);
         return {
@@ -185,12 +188,12 @@ export function createPlannedRunHandlers(ctx: AppContext) {
         // Replace bindings for the given roleIds
         const labwareRoleIds = new Set(labware.map((b) => b.roleId));
         const filteredLabware = existingLabware.filter(
-          (b: Record<string, unknown>) => !labwareRoleIds.has(b.roleId),
+          (b: Record<string, unknown>) => typeof b.roleId !== 'string' || !labwareRoleIds.has(b.roleId),
         );
         for (const binding of labware) {
           filteredLabware.push({
             roleId: binding.roleId,
-            labwareInstanceRef: { kind: 'record', id: binding.labwareInstanceRef },
+            labwareInstanceRef: { kind: 'record', id: binding.labwareInstanceRef, type: 'labware-instance' },
           });
         }
         updatedBindings.labware = filteredLabware;
@@ -200,12 +203,12 @@ export function createPlannedRunHandlers(ctx: AppContext) {
         const existingMaterials = (updatedBindings.materials as Array<Record<string, unknown>>) ?? [];
         const materialRoleIds = new Set(materials.map((b) => b.roleId));
         const filteredMaterials = existingMaterials.filter(
-          (b: Record<string, unknown>) => !materialRoleIds.has(b.roleId),
+          (b: Record<string, unknown>) => typeof b.roleId !== 'string' || !materialRoleIds.has(b.roleId),
         );
         for (const binding of materials) {
           filteredMaterials.push({
             roleId: binding.roleId,
-            materialRef: { kind: 'record', id: binding.materialInstanceRef },
+            materialRef: { kind: 'record', id: binding.materialInstanceRef, type: 'material-instance' },
           });
         }
         updatedBindings.materials = filteredMaterials;
@@ -219,7 +222,10 @@ export function createPlannedRunHandlers(ctx: AppContext) {
       }
 
       // Save the updated record
-      await ctx.store.updateRecord(id, payload);
+      await ctx.store.update({
+        envelope: { ...record, payload },
+        message: `Update planned-run bindings ${id}`,
+      });
 
       reply.status(200);
       return { success: true };
@@ -340,7 +346,7 @@ export function createPlannedRunHandlers(ctx: AppContext) {
       return {
         status: result.runPlanCompileResult.status,
         diagnostics: result.runPlanCompileResult.diagnostics,
-        eventGraphRef: result.eventGraphRef,
+        ...(result.eventGraphRef ? { eventGraphRef: result.eventGraphRef } : {}),
       };
     },
   };

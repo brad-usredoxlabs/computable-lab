@@ -19,10 +19,12 @@ import {
   type ChatMessage,
 } from './chatReducer'
 import { runAssistStream, summarizeDraftResult, type AssistDraftResult, type AssistStreamRequest } from './assistStream'
+import type { AiClarificationAnswer } from '../../../types/ai'
 
 interface SendOptions {
   /** Override the surface id for this single send. Used by RunInEventEditor. */
   surfaceOverride?: string
+  clarificationAnswers?: AiClarificationAnswer[]
 }
 
 export interface UseChatThreadResult {
@@ -111,6 +113,7 @@ export function useChatThread({
         surface: options?.surfaceOverride ?? surface,
         context,
         history: history.slice(0, -1), // exclude the prompt itself — sent separately
+        ...(options?.clarificationAnswers?.length ? { clarificationAnswers: options.clarificationAnswers } : {}),
       }
 
       const stream = runStream ?? runAssistStream
@@ -137,7 +140,13 @@ export function useChatThread({
                 // result payload (no text deltas); summarize it so the turn
                 // doesn't commit as "(no response)".
                 const fallbackText = summarizeDraftResult(event.result)
-                dispatch({ type: 'stream-done', ...(fallbackText ? { fallbackText } : {}) })
+                dispatch({
+                  type: 'stream-done',
+                  ...(fallbackText ? { fallbackText } : {}),
+                  ...(event.result?.clarificationRequests?.length
+                    ? { clarificationRequests: event.result.clarificationRequests }
+                    : {}),
+                })
                 return
               }
               case 'error':

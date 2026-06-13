@@ -1,0 +1,21 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-tuberack-4way-4x50ml
+name: Four-Way Bench Rack — 4 × 50 mL Conical (seed)
+labwareType: tubeset_4way_4x50ml
+format:
+  rows: 1
+  cols: 4
+  wellCount: 4
+  wellNaming: A1..A4
+tags:
+  - seed
+  - tube-rack
+  - four-way
+  - lawn-only
+  - 50ml
+aliases:
+  - four-way rack 50ml
+  - 4-way tube rack 50ml
+  - bench tube rack 50ml
+notes: "One side of the reversible four-way bench rack (lawn-only — does not fit an automation deck). Holds four 50 mL conical tubes in a row."

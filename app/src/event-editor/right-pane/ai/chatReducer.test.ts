@@ -59,6 +59,29 @@ describe('chatReducer', () => {
     expect(state.messages[1].text).toBe('hello!')
   })
 
+  it('stream-done attaches clarification requests to the assistant message', () => {
+    let state = chatReducer(initialChatState, {
+      type: 'send',
+      userMessage: userMessage('add HepG2 cells'),
+      pendingAssistantId: 'a-1',
+    })
+    state = chatReducer(state, {
+      type: 'stream-done',
+      fallbackText: 'Which HepG2 cells should be used?',
+      clarificationRequests: [
+        {
+          id: 'cells',
+          kind: 'material',
+          prompt: 'Which HepG2 cells should be used?',
+          menuProvider: '/m',
+          options: [{ id: 'MAT-1', label: 'HepG2 working culture' }],
+        },
+      ],
+    })
+    expect(state.messages[1].clarificationRequests).toHaveLength(1)
+    expect(state.messages[1].clarificationRequests?.[0].menuProvider).toBe('/m')
+  })
+
   it('stream-done with no deltas falls back to (no response)', () => {
     let state = chatReducer(initialChatState, {
       type: 'send',

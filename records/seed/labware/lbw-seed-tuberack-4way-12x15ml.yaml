@@ -1,0 +1,22 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-tuberack-4way-12x15ml
+name: Four-Way Bench Rack — 12 × 15 mL Conical (seed)
+labwareType: tubeset_4way_12x15ml
+format:
+  rows: 2
+  cols: 6
+  wellCount: 12
+  wellNaming: A1..B6
+tags:
+  - seed
+  - tube-rack
+  - four-way
+  - lawn-only
+  - 15ml
+  - 5ml
+aliases:
+  - four-way rack 15ml
+  - 4-way tube rack 15ml
+  - bench tube rack 15ml
+notes: "Primary side of the reversible four-way bench rack (lawn-only). Twelve 15 mL conical positions; each well also accepts a 5 mL tube, so 15 mL and 5 mL tubes can be mixed."

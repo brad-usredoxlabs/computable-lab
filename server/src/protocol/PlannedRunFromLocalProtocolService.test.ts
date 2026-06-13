@@ -95,6 +95,33 @@ describe('PlannedRunFromLocalProtocolService', () => {
       expect((bindings as Record<string, unknown>)?.contexts).toEqual([]);
     });
 
+    it('inherits source local-protocol project links and allows explicit overrides', async () => {
+      const localProtocolId = 'LPR-linked';
+      const mockStore = makeMockStore(
+        {
+          ...makeLocalProtocolEnvelope(localProtocolId, 'Linked method'),
+          payload: {
+            ...makeLocalProtocolEnvelope(localProtocolId, 'Linked method').payload as Record<string, unknown>,
+            links: { studyId: 'STU-1', experimentId: 'EXP-source' },
+          },
+        },
+        { success: true },
+      );
+
+      const service = new PlannedRunFromLocalProtocolService(mockStore);
+      const result = await service.createFromLocalProtocol(localProtocolId, {
+        links: { experimentId: 'EXP-override', runId: 'RUN-1' },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error('Expected ok');
+      expect((result.envelope.payload as Record<string, unknown>).links).toEqual({
+        studyId: 'STU-1',
+        experimentId: 'EXP-override',
+        runId: 'RUN-1',
+      });
+    });
+
     it('happy path: uses custom title when provided', async () => {
       const localProtocolId = 'LPR-test-custom';
       const mockStore = makeMockStore(

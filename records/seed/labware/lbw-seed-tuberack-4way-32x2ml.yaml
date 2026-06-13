@@ -1,0 +1,25 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-tuberack-4way-32x2ml
+name: Four-Way Bench Rack — 32 × 1.5/2 mL Tube (seed)
+labwareType: tubeset_4way_32x2ml
+format:
+  rows: 4
+  cols: 8
+  wellCount: 32
+  wellNaming: A1..D8
+tags:
+  - seed
+  - tube-rack
+  - four-way
+  - lawn-only
+  - 1.5ml
+  - 2ml
+  - eppendorf
+  - cryo
+aliases:
+  - four-way rack 1.5ml
+  - four-way rack 2ml
+  - bench tube rack eppendorf
+  - microfuge tube rack
+notes: "One side of the reversible four-way bench rack (lawn-only). 4×8 grid; each well holds a 1.5 mL Eppendorf or a 2 mL cryo tube."

@@ -17,8 +17,10 @@ type ExecutionRunPayload = {
 type PlannedRunPayload = {
   recordId: string;
   title?: string;
-  sourceType?: 'protocol' | 'event-graph';
+  sourceType?: 'protocol' | 'event-graph' | 'local-protocol';
   sourceRef?: { kind?: string; id?: string; type?: string };
+  localProtocolRef?: { kind?: string; id?: string; type?: string };
+  links?: { studyId?: string; experimentId?: string; runId?: string };
 };
 
 type ProtocolPayload = {
@@ -91,7 +93,15 @@ export class ExecutionMaterializer {
     }
     const plannedRun = plannedRunEnvelope.payload as PlannedRunPayload;
 
-    const protocolId = plannedRun.sourceType === 'protocol' ? plannedRun.sourceRef?.id : undefined;
+    let protocolId = plannedRun.sourceType === 'protocol' ? plannedRun.sourceRef?.id : undefined;
+    let localProtocolEnvelope = null;
+    if (plannedRun.sourceType === 'local-protocol') {
+      const localProtocolId = plannedRun.localProtocolRef?.id ?? plannedRun.sourceRef?.id;
+      localProtocolEnvelope = localProtocolId ? await this.ctx.store.get(localProtocolId) : null;
+      const localProtocolPayload = (localProtocolEnvelope?.payload ?? {}) as Record<string, unknown>;
+      const inheritsFrom = localProtocolPayload.inherits_from as { id?: string } | undefined;
+      protocolId = inheritsFrom?.id;
+    }
     const protocolEnvelope = protocolId ? await this.ctx.store.get(protocolId) : null;
     const protocol = (protocolEnvelope?.payload ?? {}) as ProtocolPayload;
 
@@ -113,12 +123,28 @@ export class ExecutionMaterializer {
       events,
       labwares: [],
       implementsRef: plannedRunId,
+      methodContext: {
+        runId: plannedRunId,
+        vocabId: 'liquid-handling/v1',
+        platform: 'manual',
+        deckVariant: 'standard',
+        locked: true,
+        plannedRunRef: { kind: 'record', id: plannedRunId, type: 'planned-run' },
+        ...(plannedRun.localProtocolRef?.id
+          ? { localProtocolRef: { kind: 'record', id: plannedRun.localProtocolRef.id, type: 'local-protocol' } }
+          : {}),
+        ...(protocolId ? { protocolRef: { kind: 'record', id: protocolId, type: 'protocol' } } : {}),
+      },
       executionMeta: {
         startedAt: executionRun.startedAt ?? now,
         completedAt: executionRun.completedAt ?? now,
         status: 'completed',
       },
-      links: {},
+      links: {
+        ...(plannedRun.links?.studyId ? { studyId: plannedRun.links.studyId } : {}),
+        ...(plannedRun.links?.experimentId ? { experimentId: plannedRun.links.experimentId } : {}),
+        ...(plannedRun.links?.runId ? { runId: plannedRun.links.runId } : {}),
+      },
     };
 
     const createResult = await this.ctx.store.create({

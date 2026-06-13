@@ -62,6 +62,12 @@ export interface ListRecordsQuery {
   schemaId?: string;
   /** Filter by ID prefix */
   idPrefix?: string;
+  /** Filter by linked study/project */
+  studyId?: string;
+  /** Filter by linked experiment */
+  experimentId?: string;
+  /** Filter by linked run */
+  runId?: string;
   /** Maximum records to return */
   limit?: number;
   /** Offset for pagination */

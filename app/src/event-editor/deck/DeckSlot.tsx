@@ -205,6 +205,7 @@ export function DeckSlot({ slot }: DeckSlotProps) {
       <AddLabwareDialog
         open={dialogOpen}
         contextLabel={`Slot ${slot.id}`}
+        surfaceKind="slot"
         onClose={() => setDialogOpen(false)}
         onPick={handlePick}
       />

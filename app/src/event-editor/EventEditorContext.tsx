@@ -6,6 +6,7 @@ import { EMPTY_HISTORY, withEditorHistory, type EditorHistory } from './editorHi
 import type { PlatformManifest } from '../types/platformRegistry'
 import { defaultVariantForPlatform, getPlatformManifest, getVariantManifest } from '../shared/lib/platformRegistry'
 import type { Labware } from '../types/labware'
+import { isLawnOnlyLabwareType } from '../types/labware'
 import type {
   EventEditorPlacement,
   LabwareOrientation,
@@ -517,6 +518,9 @@ function normalizePreviewPlacementLocations(
   let changed = false
   const previewPlacements = preview.previewPlacements.map((placement) => {
     if (placement.location.kind !== 'lawn') return placement
+    // Lawn-only bench equipment must never be promoted onto an automation slot.
+    const labware = preview.previewLabwares[placement.labwareId] ?? state.labwares[placement.labwareId]
+    if (labware && isLawnOnlyLabwareType(labware.labwareType)) return placement
     const slotId = nextSlot()
     if (!slotId) return placement
     changed = true

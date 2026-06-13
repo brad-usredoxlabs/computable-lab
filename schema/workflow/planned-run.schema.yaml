@@ -47,9 +47,25 @@ properties:
     $ref: "./datatypes/ref.schema.yaml"
     description: "Reference to the source protocol or event graph."
 
+  links:
+    type: object
+    description: "Optional project filing links for finding planned runs from study/experiment/run surfaces."
+    additionalProperties: false
+    properties:
+      studyId:
+        type: string
+      experimentId:
+        type: string
+      runId:
+        type: string
+
   localProtocolRef:
     $ref: "./datatypes/ref.schema.yaml"
     description: "Optional: reference to the local-protocol (LPR-*) this run is compiled from. Required-when-sourceType=local-protocol enforced by the compiler, not this schema."
+
+  methodEventGraphId:
+    type: string
+    description: "Generated method event-graph recordId for this planned run, when materialized."
 
   operatorRef:
     allOf:

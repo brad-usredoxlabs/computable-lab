@@ -1,0 +1,25 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-tuberack-80x2ml
+name: 80-Tube Bench Rack — 1.5/2 mL, 5×16 (seed)
+labwareType: tubeset_80x2ml
+format:
+  rows: 5
+  cols: 16
+  wellCount: 80
+  wellNaming: A1..E16
+tags:
+  - seed
+  - tube-rack
+  - lawn-only
+  - 1.5ml
+  - 2ml
+  - eppendorf
+aliases:
+  - 80-place tube rack
+  - 80-well tube rack
+  - 1.5ml tube rack
+  - 2ml tube rack
+  - microcentrifuge tube rack
+  - eppendorf rack
+notes: "The classic dense bench rack found in most labs — 5×16 grid of 1.5 mL or 2 mL microcentrifuge tubes (80 positions). Too large for an automation deck (lawn-only)."

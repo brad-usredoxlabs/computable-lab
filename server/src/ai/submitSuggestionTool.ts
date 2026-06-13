@@ -16,6 +16,7 @@ import type {
   AgentResult,
   AgentClarification,
   AgentClarificationOption,
+  AgentClarificationRequest,
   AgentLabwareAddition,
   AgentLabwareRequirement,
   GroundedMaterial,
@@ -23,6 +24,11 @@ import type {
   PlateEventProposal,
   ToolDefinition,
 } from './types.js';
+import {
+  clarificationRequestFromLegacy,
+  legacyClarificationFromRequests,
+  parseClarificationRequests,
+} from './clarifications.js';
 
 export const SUBMIT_SUGGESTION_TOOL_NAME = 'submit_suggestion';
 export const COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME = 'compile_event_graph_draft';
@@ -169,6 +175,51 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
                   id: { type: 'string' },
                   label: { type: 'string' },
                   snippet: { type: 'string' },
+                  source: { type: 'string' },
+                  score: { type: 'number' },
+                  ref: { type: 'object', additionalProperties: true },
+                },
+              },
+            },
+          },
+        },
+        clarificationRequests: {
+          type: 'array',
+          description: 'Typed follow-up questions for ambiguous materials, labware, parameters, wells, or sequence choices. Use menuProvider /m for material-like choices and /l for labware choices.',
+          items: {
+            type: 'object',
+            required: ['id', 'kind', 'prompt'],
+            properties: {
+              id: { type: 'string' },
+              kind: { type: 'string', enum: ['material', 'aliquot', 'labware', 'vendor-product', 'ontology', 'parameter', 'well-selection', 'sequence', 'general'] },
+              prompt: { type: 'string' },
+              entityType: { type: 'string' },
+              menuProvider: { type: 'string', enum: ['/m', '/l', 'choice'] },
+              query: { type: 'string' },
+              roleId: { type: 'string' },
+              slot: { type: 'string' },
+              snippet: { type: 'string' },
+              allowCreateLocal: { type: 'boolean' },
+              sourceSpan: {
+                type: 'object',
+                properties: {
+                  start: { type: 'number' },
+                  end: { type: 'number' },
+                },
+              },
+              options: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  required: ['id', 'label'],
+                  properties: {
+                    id: { type: 'string' },
+                    label: { type: 'string' },
+                    snippet: { type: 'string' },
+                    source: { type: 'string' },
+                    score: { type: 'number' },
+                    ref: { type: 'object', additionalProperties: true },
+                  },
                 },
               },
             },
@@ -312,11 +363,23 @@ function parseClarification(raw: unknown): AgentClarification | undefined {
       if (!oo || typeof oo.id !== 'string' || typeof oo.label !== 'string') return null;
       const out: AgentClarificationOption = { id: oo.id, label: oo.label };
       if (typeof oo.snippet === 'string') out.snippet = oo.snippet;
+      if (typeof oo.source === 'string') out.source = oo.source;
+      if (typeof oo.score === 'number' && Number.isFinite(oo.score)) out.score = oo.score;
+      const ref = asRecord(oo.ref);
+      if (ref) out.ref = ref;
       return out;
     })
     .filter((o): o is AgentClarificationOption => o !== null);
-  if (typeof c.prompt === 'string' && typeof c.entityType === 'string' && options.length > 0) {
-    return { prompt: c.prompt, entityType: c.entityType, options };
+  if (typeof c.prompt === 'string' && typeof c.entityType === 'string' && Array.isArray(c.options)) {
+    const result: AgentClarification = { prompt: c.prompt, entityType: c.entityType, options };
+    if (typeof c.id === 'string') result.id = c.id;
+    if (c.menuProvider === '/m' || c.menuProvider === '/l' || c.menuProvider === 'choice') result.menuProvider = c.menuProvider;
+    if (typeof c.query === 'string') result.query = c.query;
+    if (typeof c.roleId === 'string') result.roleId = c.roleId;
+    if (typeof c.slot === 'string') result.slot = c.slot;
+    if (typeof c.snippet === 'string') result.snippet = c.snippet;
+    if (typeof c.allowCreateLocal === 'boolean') result.allowCreateLocal = c.allowCreateLocal;
+    return result;
   }
   return undefined;
 }
@@ -476,6 +539,10 @@ export function parseSubmitSuggestionArgs(
   const events = parseEvents(args.events);
   const notes = Array.isArray(args.notes) ? args.notes.filter((n): n is string => typeof n === 'string') : [];
   const clarification = parseClarification(args.clarification);
+  const clarificationRequests: AgentClarificationRequest[] = [
+    ...parseClarificationRequests(args.clarificationRequests),
+    ...(clarification ? [clarificationRequestFromLegacy(clarification)] : []),
+  ];
   const rawLabwareAdditions = parseLabwareAdditions(args.labwareAdditions);
   const inferredLabwareRequirements = rawLabwareAdditions
     .map(labwareRequirementFromAddition)
@@ -500,7 +567,11 @@ export function parseSubmitSuggestionArgs(
       toolCalls,
     },
   };
-  if (clarification && !labwareClarificationRequirement) result.clarification = clarification;
+  if (!labwareClarificationRequirement && clarificationRequests.length > 0) {
+    result.clarificationRequests = clarificationRequests;
+    const legacyClarification = legacyClarificationFromRequests(clarificationRequests);
+    if (legacyClarification) result.clarification = legacyClarification;
+  }
   if (labwareAdditions.length > 0) result.labwareAdditions = labwareAdditions;
   if (labwareRequirements.length > 0) result.labwareRequirements = labwareRequirements;
   return result;

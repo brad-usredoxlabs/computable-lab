@@ -194,6 +194,11 @@ export interface AgentRequest {
    * to the LLM agent loop. Required when no LLM is configured.
    */
   deterministicOnly?: boolean;
+  /**
+   * Answers to structured clarification requests from a previous turn.
+   * The orchestrator injects them as grounded context for the next compile.
+   */
+  clarificationAnswers?: AgentClarificationAnswer[];
 }
 
 /**
@@ -280,10 +285,17 @@ export interface CurrentPreviewDraft {
   sourceSkips?: string[];
 }
 
-export interface GraphLemurRevisionEntry {
+export interface DraftRevisionEntry {
   prompt: string;
   createdAt: string;
 }
+
+export interface DraftRevisionContext {
+  currentPreviewDraft: CurrentPreviewDraft;
+  revisionHistory?: DraftRevisionEntry[];
+}
+
+export type GraphLemurRevisionEntry = DraftRevisionEntry;
 
 export interface GraphLemurContext {
   sourceProtocolCandidate?: ProtocolCandidateSummary;
@@ -359,6 +371,8 @@ export interface EditorContext {
     mode: 'relaxed' | 'tracked';
     allowAdHocEventInstances: boolean;
   };
+  /** Active ghost-preview draft being revised by the current prompt. */
+  draftRevision?: DraftRevisionContext;
   /** The run this event graph is attached to (if any). */
   runId?: string;
   /** The event graph record ID (if saved). */
@@ -415,12 +429,59 @@ export interface AgentClarificationOption {
   id: string;
   label: string;
   snippet?: string;
+  source?: string;
+  score?: number;
+  ref?: Record<string, unknown>;
 }
 
+export type AgentClarificationKind =
+  | 'material'
+  | 'aliquot'
+  | 'labware'
+  | 'vendor-product'
+  | 'ontology'
+  | 'parameter'
+  | 'well-selection'
+  | 'sequence'
+  | 'general';
+
+export type AgentClarificationMenuProvider = '/m' | '/l' | 'choice';
+
 export interface AgentClarification {
+  id?: string;
   prompt: string;
   entityType: string;
   options: AgentClarificationOption[];
+  menuProvider?: AgentClarificationMenuProvider;
+  query?: string;
+  roleId?: string;
+  slot?: string;
+  snippet?: string;
+  allowCreateLocal?: boolean;
+}
+
+export interface AgentClarificationRequest {
+  id: string;
+  kind: AgentClarificationKind;
+  prompt: string;
+  entityType?: string;
+  menuProvider: AgentClarificationMenuProvider;
+  query?: string;
+  roleId?: string;
+  slot?: string;
+  snippet?: string;
+  sourceSpan?: { start?: number; end?: number };
+  options: AgentClarificationOption[];
+  allowCreateLocal?: boolean;
+}
+
+export interface AgentClarificationAnswer {
+  requestId: string;
+  optionId?: string;
+  label?: string;
+  value?: string;
+  mentionToken?: string;
+  ref?: Record<string, unknown>;
 }
 
 
@@ -457,6 +518,8 @@ export interface AgentResult {
   clarificationNeeded?: string;
   /** Structured clarification request with options. */
   clarification?: AgentClarification;
+  /** Structured clarification requests for menu-backed follow-up. */
+  clarificationRequests?: AgentClarificationRequest[];
   /** Proposed concrete labware additions to apply before events. */
   labwareAdditions?: AgentLabwareAddition[];
   /** Proposed generic/constrained labware requirements to ghost before concrete binding. */

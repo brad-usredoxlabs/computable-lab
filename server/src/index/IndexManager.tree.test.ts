@@ -218,6 +218,51 @@ describe('IndexManager.getStudyTree — Phase 12 artifact attachment', () => {
     ]);
   });
 
+  it('attaches project-scoped protocols and inventory as a query-derived protocol library', async () => {
+    repo.setIndex([
+      entry({ recordId: 'STU-1', kind: 'study' }),
+      entry({
+        recordId: 'PRT-1',
+        kind: 'protocol',
+        title: 'Vendor protocol',
+        links: { studyId: 'STU-1' },
+      }),
+      entry({
+        recordId: 'LPR-1',
+        kind: 'local-protocol',
+        title: 'Bench method',
+        links: { studyId: 'STU-1' },
+      }),
+      entry({
+        recordId: 'PLR-1',
+        kind: 'planned-run',
+        title: 'Run intent',
+        links: { studyId: 'STU-1' },
+      }),
+      entry({
+        recordId: 'ALQ-1',
+        kind: 'aliquot',
+        title: 'Prepared stock',
+        links: { studyId: 'STU-1' },
+      }),
+    ]);
+
+    const tree = await mgr.getStudyTree();
+
+    expect(tree[0].protocolLibrary?.protocols).toEqual([
+      expect.objectContaining({ recordId: 'PRT-1' }),
+    ]);
+    expect(tree[0].protocolLibrary?.localProtocols).toEqual([
+      expect.objectContaining({ recordId: 'LPR-1' }),
+    ]);
+    expect(tree[0].protocolLibrary?.plannedRuns).toEqual([
+      expect.objectContaining({ recordId: 'PLR-1' }),
+    ]);
+    expect(tree[0].protocolLibrary?.inventory).toEqual([
+      expect.objectContaining({ recordId: 'ALQ-1' }),
+    ]);
+  });
+
   it('study with no artifacts at any level omits the artifacts field', async () => {
     repo.setIndex([
       entry({ recordId: 'STU-1', kind: 'study' }),

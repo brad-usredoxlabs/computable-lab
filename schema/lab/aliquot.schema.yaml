@@ -36,6 +36,18 @@ properties:
   source_lot_ref:
     $ref: "./datatypes/ref.schema.yaml"
 
+  links:
+    type: object
+    description: "Optional project filing links. Aliquots produced by project runs stay project-owned and reusable across experiments."
+    additionalProperties: false
+    properties:
+      studyId:
+        type: string
+      experimentId:
+        type: string
+      runId:
+        type: string
+
   container:
     type: object
     additionalProperties: false

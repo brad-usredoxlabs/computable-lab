@@ -19,7 +19,7 @@ import { apiClient, type AiWarmStatus } from '../../../shared/api/client'
 import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/platformRegistry'
 import { getVerbsForDisplay } from '../../../shared/vocab/registry'
 import { buildAcceptedEventGraphProjection } from '../../../graph/lib/acceptedEventGraphProjection'
-import type { AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
+import type { AiClarificationAnswer, AiClarificationRequest, AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
 import type { PlateEvent } from '../../../types/events'
 import { systemPromptForViewer, systemPromptKindForTab } from './systemPromptForViewer'
 import { SourcesStrip, type AddedSource } from './SourcesStrip'
@@ -125,6 +125,19 @@ export function AiTabPanel() {
           ...(editorState.eventGraphId ? { eventGraphId: editorState.eventGraphId } : {}),
         })
       : {}
+    const previewDraft = editorState?.preview
+      ? {
+          events: editorState.preview.previewEvents,
+          labwareRequirements: editorState.preview.labwareRequirements ?? [],
+          labwareAdditions: editorState.preview.labwareAdditions ?? [],
+          ...(editorState.preview.ontologyBindings ? { ontologyBindings: editorState.preview.ontologyBindings } : {}),
+          ...(editorState.preview.sourcePrompt ? { sourcePrompt: editorState.preview.sourcePrompt } : {}),
+          ...(editorState.preview.sourceSkips ? { sourceSkips: editorState.preview.sourceSkips } : {}),
+        }
+      : null
+    const sourceProtocolCandidate = editorState?.preview?.sourceProtocolCandidate
+      ?? editorState?.graphLemurSource?.sourceProtocolCandidate
+    const sourcePdf = editorState?.preview?.sourcePdf ?? editorState?.graphLemurSource?.sourcePdf
     return {
       studyId: ws.state.studyId,
       activeTabKind: activeTab?.kind ?? null,
@@ -135,6 +148,23 @@ export function AiTabPanel() {
       // Deck tabs send the same accepted event graph projection used by the
       // standalone editor; this context object is shared by warm and draft.
       ...acceptedGraphProjection,
+      ...(previewDraft
+        ? {
+            draftRevision: {
+              currentPreviewDraft: previewDraft,
+              revisionHistory: editorState?.preview?.revisionHistory ?? [],
+            },
+          }
+        : {}),
+      ...(sourceProtocolCandidate || sourcePdf
+        ? {
+            graphLemur: {
+              ...(editorState?.preview ? { revisionMode: true } : {}),
+              ...(sourceProtocolCandidate ? { sourceProtocolCandidate } : {}),
+              ...(sourcePdf ? { sourcePdf } : {}),
+            },
+          }
+        : {}),
     }
   }, [ws.state.studyId, activeTab, systemPrompt, editorState])
 
@@ -162,8 +192,12 @@ export function AiTabPanel() {
       if (!hasPreview) return
       // A follow-up draft while a preview is mounted is a revision: replace
       // the ghosts and append to the revision trail that rides back to the
-      // backend as graphLemur revision context.
+      // backend as structured draftRevision context.
       const previousPreview = state.preview
+      const sourceProtocolCandidate = previousPreview?.sourceProtocolCandidate
+        ?? state.graphLemurSource?.sourceProtocolCandidate
+      const sourcePdf = previousPreview?.sourcePdf ?? state.graphLemurSource?.sourcePdf
+      const graphLemurIngest = previousPreview?.ingest ?? state.graphLemurSource?.ingest
       const revisionHistory = previousPreview
         ? [
             ...(previousPreview.revisionHistory ?? []),
@@ -179,6 +213,9 @@ export function AiTabPanel() {
         ...(result.ontologyBindings?.length
           ? { ontologyBindings: result.ontologyBindings as never }
           : {}),
+        ...(sourceProtocolCandidate ? { sourceProtocolCandidate } : {}),
+        ...(sourcePdf ? { sourcePdf } : {}),
+        ...(graphLemurIngest ? { ingest: graphLemurIngest } : {}),
         ...(revisionHistory ? { revisionHistory } : {}),
       })
     },
@@ -257,6 +294,15 @@ export function AiTabPanel() {
     [chat],
   )
 
+  const handleClarificationAnswer = useCallback(
+    async (answer: AiClarificationAnswer, request: AiClarificationRequest) => {
+      const label = answer.label ?? answer.value ?? answer.optionId ?? 'answer'
+      const prompt = `Use ${label} for ${request.entityType ?? request.kind}.`
+      await chat.send(prompt, { clarificationAnswers: [answer] })
+    },
+    [chat],
+  )
+
   const handleSourceIngested = useCallback(
     (
       artifactId: string,
@@ -283,6 +329,15 @@ export function AiTabPanel() {
     [addedSources, ws],
   )
 
+  // A ghost preview is on the deck → the next prompt revises it (the context
+  // builder attaches draftRevision). Surface that explicitly in the input.
+  const previewActive = Boolean(
+    editorState?.preview &&
+      (editorState.preview.previewPlacements.length > 0 ||
+        editorState.preview.previewEvents.length > 0),
+  )
+  const revisionCount = editorState?.preview?.revisionHistory?.length ?? 0
+
   return (
     <div className="right-panel ai-tab" data-testid="ai-tab">
       <section className="ai-tab__section ai-tab__section--system-prompt">
@@ -306,7 +361,7 @@ export function AiTabPanel() {
       </section>
 
       <section className="ai-tab__section ai-tab__section--log">
-        <MessageLog state={chat.state} />
+        <MessageLog state={chat.state} onClarificationAnswer={handleClarificationAnswer} />
       </section>
 
       <section className="ai-tab__section ai-tab__section--actions">
@@ -317,12 +372,35 @@ export function AiTabPanel() {
         />
       </section>
 
+      {previewActive ? (
+        <section className="ai-tab__section ai-tab__section--revision">
+          <div className="ai-tab__revision-hint" role="status">
+            <span className="ai-tab__revision-icon" aria-hidden>✎</span>
+            <span className="ai-tab__revision-text">
+              {revisionCount > 0
+                ? `Revising the proposed draft (revision ${revisionCount + 1})`
+                : 'Revising the proposed draft'}
+              {' — describe a change and press Revise, or Accept / Discard it on the deck.'}
+            </span>
+            <button
+              type="button"
+              className="ai-tab__revision-discard"
+              onClick={() => editor?.actions.clearPreview()}
+              disabled={chat.isStreaming}
+              title="Discard the proposed draft and start fresh"
+            >Discard</button>
+          </div>
+        </section>
+      ) : null}
+
       <section className="ai-tab__section ai-tab__section--input">
         <ChatInput
           isStreaming={chat.isStreaming}
           onSend={handleSend}
           onStop={chat.stop}
           prefill={prefill}
+          sendLabel={previewActive ? 'Revise' : 'Send'}
+          {...(previewActive ? { placeholder: 'Describe a revision to the proposed draft…' } : {})}
         />
       </section>
 

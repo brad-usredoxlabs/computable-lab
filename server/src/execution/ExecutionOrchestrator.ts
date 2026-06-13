@@ -20,7 +20,7 @@ const EVENT_GRAPH_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/
 const EXECUTION_ENVIRONMENT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/execution-environment.schema.yaml';
 const EXECUTION_PLAN_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/execution-plan.schema.yaml';
 
-type SourceType = 'protocol' | 'event-graph';
+type SourceType = 'protocol' | 'event-graph' | 'local-protocol';
 type DerivedArtifactTarget = 'pylabrobot' | 'pyalab' | 'opentrons_api';
 
 type Ref = {
@@ -47,6 +47,7 @@ type PlannedRunPayload = {
   sourceType: SourceType;
   sourceRef: Ref;
   protocolRef?: Ref;
+  localProtocolRef?: Ref;
   protocolLayer?: 'lab';
   state: 'draft' | 'ready' | 'executing' | 'completed' | 'failed';
   bindings?: PlannedRunBindings;
@@ -258,8 +259,8 @@ export class ExecutionOrchestrator {
     if (typeof input.title !== 'string' || input.title.trim().length === 0) {
       throw new ExecutionError('BAD_REQUEST', 'title is required', 400);
     }
-    if (input.sourceType !== 'protocol' && input.sourceType !== 'event-graph') {
-      throw new ExecutionError('BAD_REQUEST', 'sourceType must be "protocol" or "event-graph"', 400);
+    if (input.sourceType !== 'protocol' && input.sourceType !== 'event-graph' && input.sourceType !== 'local-protocol') {
+      throw new ExecutionError('BAD_REQUEST', 'sourceType must be "protocol", "event-graph", or "local-protocol"', 400);
     }
 
     const sourceRef = assertRecordRef(input.sourceRef);
@@ -287,6 +288,7 @@ export class ExecutionOrchestrator {
       protocolLayer: 'lab',
       state: 'draft',
       ...(input.sourceType === 'protocol' ? { protocolRef: sourceRef } : {}),
+      ...(input.sourceType === 'local-protocol' ? { localProtocolRef: sourceRef } : {}),
       ...(bindings !== undefined ? { bindings } : {}),
       ...(protocolCompilation ? { protocolCompilation } : {}),
     };

@@ -31,6 +31,18 @@ properties:
     type: string
     description: "Optional barcode or externally assigned identifier."
 
+  links:
+    type: object
+    description: "Optional project filing links for concrete labware instances."
+    additionalProperties: false
+    properties:
+      studyId:
+        type: string
+      experimentId:
+        type: string
+      runId:
+        type: string
+
   state:
     type: string
     description: "Optional lifecycle state."

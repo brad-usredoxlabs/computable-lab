@@ -11,7 +11,7 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { runAssistStream, type AssistStreamEvent } from './assistStream'
+import { runAssistStream, summarizeDraftResult, type AssistStreamEvent } from './assistStream'
 
 // Mock the API_BASE module so we don't depend on env vars.
 vi.mock('../../../shared/api/base', () => ({
@@ -151,5 +151,22 @@ describe('runAssistStream', () => {
     )
     expect(events).toHaveLength(1)
     expect(events[0].type).toBe('error')
+  })
+})
+
+describe('summarizeDraftResult', () => {
+  it('summarizes structured clarification requests before legacy text', () => {
+    expect(summarizeDraftResult({
+      clarificationNeeded: 'legacy fallback',
+      clarificationRequests: [
+        {
+          id: 'cells',
+          kind: 'material',
+          prompt: 'Which HepG2 cells should be used?',
+          menuProvider: '/m',
+          options: [],
+        },
+      ],
+    })).toBe('Which HepG2 cells should be used?')
   })
 })

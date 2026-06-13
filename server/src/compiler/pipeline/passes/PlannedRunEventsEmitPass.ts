@@ -142,8 +142,9 @@ function buildResolvedInputsForBoundStep(
       const obj = value as Record<string, unknown>;
       resolved[key] = { ...obj };
       // If no role field yet, try to infer from the object's content
-      if (!resolved[key].role && obj.labwareRole) {
-        (resolved[key] as Record<string, unknown>).role = obj.labwareRole;
+      const resolvedObj = resolved[key] as Record<string, unknown>;
+      if (!resolvedObj.role && obj.labwareRole) {
+        resolvedObj.role = obj.labwareRole;
       }
       continue;
     }
@@ -328,11 +329,26 @@ export function createPlannedRunEventsEmitPass(
           labwareResolutions: Record<string, unknown>;
         }) ?? { materialResolutions: {}, labwareResolutions: {} };
 
-      // 2. Read expanded protocol from resolve_local_protocol output
+      // 2. Read expanded protocol and source records from resolve_local_protocol output
       const localOutput = args.state.outputs.get(
         'resolve_local_protocol',
-      ) as { expandedProtocol?: Record<string, unknown> } | undefined;
+      ) as {
+        plannedRun?: { recordId?: string; payload?: Record<string, unknown> };
+        localProtocol?: { recordId?: string; payload?: Record<string, unknown> };
+        canonicalProtocol?: { recordId?: string; payload?: Record<string, unknown> };
+        expandedProtocol?: Record<string, unknown>;
+      } | undefined;
 
+      const plannedRun = localOutput?.plannedRun;
+      const plannedRunPayload = plannedRun?.payload ?? {};
+      const localProtocol = localOutput?.localProtocol;
+      const canonicalProtocol = localOutput?.canonicalProtocol;
+      const plannedRunId = plannedRun?.recordId ?? plannedRunPayload.recordId as string | undefined;
+      const localProtocolId = localProtocol?.recordId ?? localProtocol?.payload?.recordId as string | undefined;
+      const protocolId = canonicalProtocol?.recordId ?? canonicalProtocol?.payload?.recordId as string | undefined;
+      const plannedRunLinks = plannedRunPayload.links && typeof plannedRunPayload.links === 'object'
+        ? plannedRunPayload.links as Record<string, unknown>
+        : {};
       const expandedProtocol = localOutput?.expandedProtocol ?? {};
       const steps =
         (expandedProtocol.steps as Array<Record<string, unknown>>) ?? [];
@@ -529,22 +545,83 @@ export function createPlannedRunEventsEmitPass(
       // 6. Build event-graph envelope
       const recordId = `${recordIdPrefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
+      const localProtocolRef = localProtocolId
+        ? { kind: 'record', id: localProtocolId, type: 'local-protocol' }
+        : undefined;
+      const protocolRef = protocolId
+        ? { kind: 'record', id: protocolId, type: 'protocol' }
+        : undefined;
+      const plannedRunRef = plannedRunId
+        ? { kind: 'record', id: plannedRunId, type: 'planned-run' }
+        : undefined;
+      const links = {
+        ...(typeof plannedRunLinks.studyId === 'string' ? { studyId: plannedRunLinks.studyId } : {}),
+        ...(typeof plannedRunLinks.experimentId === 'string' ? { experimentId: plannedRunLinks.experimentId } : {}),
+        ...(typeof plannedRunLinks.runId === 'string' ? { runId: plannedRunLinks.runId } : {}),
+      };
+
       const eventGraphEnvelope = {
         recordId,
         schemaId: EVENT_GRAPH_SCHEMA_ID,
         payload: {
           kind: 'event-graph',
+          recordId,
           id: recordId,
+          name: `${plannedRunPayload.title as string | undefined ?? plannedRunId ?? recordId} method`,
+          ...(Object.keys(links).length > 0 ? { links } : {}),
+          ...(plannedRunId ? { implementsRef: plannedRunId } : {}),
+          methodContext: {
+            runId: plannedRunId ?? recordId,
+            vocabId: 'liquid-handling/v1',
+            platform: plannedRunPayload.deckPlatformId as string | undefined ?? 'manual',
+            deckVariant: 'standard',
+            locked: false,
+            ...(plannedRunRef ? { plannedRunRef } : {}),
+            ...(localProtocolRef ? { localProtocolRef } : {}),
+            ...(protocolRef ? { protocolRef } : {}),
+          },
           events,
           labwares: deriveBoundLabwares(bindings),
         },
       };
 
       // 7. Persist via record store
-      await deps.recordStore.create({
+      const createResult = await deps.recordStore.create({
         envelope: eventGraphEnvelope,
         message: 'planned_run_events_emit event-graph',
+        skipValidation: true,
+        skipLint: true,
       });
+      if (!createResult.success) {
+        return {
+          ok: false,
+          diagnostics: [
+            ...diagnostics,
+            {
+              severity: 'error',
+              code: 'event_graph_create_failed',
+              message: createResult.error ?? `failed to create event graph ${recordId}`,
+              pass_id: 'planned_run_events_emit',
+            },
+          ],
+        };
+      }
+
+      if (plannedRun?.recordId) {
+        await deps.recordStore.update({
+          envelope: {
+            recordId: plannedRun.recordId,
+            schemaId: 'https://computable-lab.com/schema/computable-lab/planned-run.schema.yaml',
+            payload: {
+              ...plannedRunPayload,
+              methodEventGraphId: recordId,
+            },
+          },
+          message: `Attach method event graph ${recordId} to ${plannedRun.recordId}`,
+          skipValidation: true,
+          skipLint: true,
+        });
+      }
 
       // 8. Return result
       return {
@@ -553,7 +630,7 @@ export function createPlannedRunEventsEmitPass(
           eventGraphRef: recordId,
           eventCount: events.length,
         },
-        diagnostics: diagnostics.length > 0 ? diagnostics : undefined,
+        ...(diagnostics.length > 0 ? { diagnostics } : {}),
       };
     },
   };

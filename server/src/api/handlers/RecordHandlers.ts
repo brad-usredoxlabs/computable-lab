@@ -7,7 +7,7 @@
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import type { RecordStore } from '../../store/types.js';
+import type { RecordEnvelope, RecordStore } from '../../store/types.js';
 import type { IndexManager } from '../../index/IndexManager.js';
 import { createEnvelope, extractRecordId } from '../../types/RecordEnvelope.js';
 import type {
@@ -108,7 +108,7 @@ export function createRecordHandlers(
       reply: FastifyReply
     ): Promise<ListRecordsResponse | ApiError> {
       try {
-        const { kind, schemaId, idPrefix, limit, offset } = request.query;
+        const { kind, schemaId, idPrefix, limit, offset, studyId, experimentId, runId } = request.query;
         
         const user = await resolveRequestUser(request, reply);
         if (!user) return unauthenticatedError('A valid local user is required');
@@ -117,12 +117,30 @@ export function createRecordHandlers(
           ...(kind !== undefined ? { kind } : {}),
           ...(schemaId !== undefined ? { schemaId } : {}),
           ...(idPrefix !== undefined ? { idPrefix } : {}),
-          ...(limit !== undefined ? { limit: Number(limit) } : {}),
-          ...(offset !== undefined ? { offset: Number(offset) } : {}),
+          ...(limit !== undefined && !studyId && !experimentId && !runId ? { limit: Number(limit) } : {}),
+          ...(offset !== undefined && !studyId && !experimentId && !runId ? { offset: Number(offset) } : {}),
         });
 
+        const linkMatches = (record: RecordEnvelope): boolean => {
+          const payload = payloadObject(record.payload);
+          const links = payload.links && typeof payload.links === 'object' ? payload.links as Record<string, unknown> : {};
+          const recordStudyId = typeof links.studyId === 'string' ? links.studyId : typeof payload.studyId === 'string' ? payload.studyId : undefined;
+          const recordExperimentId = typeof links.experimentId === 'string' ? links.experimentId : typeof payload.experimentId === 'string' ? payload.experimentId : undefined;
+          const recordRunId = typeof links.runId === 'string' ? links.runId : typeof payload.runId === 'string' ? payload.runId : undefined;
+          return (!studyId || recordStudyId === studyId)
+            && (!experimentId || recordExperimentId === experimentId)
+            && (!runId || recordRunId === runId);
+        };
+
+        const scopedRecords = (studyId || experimentId || runId)
+          ? records.filter(linkMatches)
+          : records;
+        const pagedRecords = (studyId || experimentId || runId)
+          ? scopedRecords.slice(Number(offset ?? 0), Number(offset ?? 0) + Number(limit ?? scopedRecords.length))
+          : scopedRecords;
+
         const visibleRecords = [];
-        for (const record of records) {
+        for (const record of pagedRecords) {
           if (await canAccess(user, 'read', record)) visibleRecords.push(record);
         }
         

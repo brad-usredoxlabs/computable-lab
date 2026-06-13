@@ -18,6 +18,8 @@ export interface CreatePlannedRunOptions {
   title?: string;
   /** Prefix for the recordId; default 'PLR-' */
   recordIdPrefix?: string;
+  /** Optional project filing links; defaults to the source local-protocol links. */
+  links?: { studyId?: string; experimentId?: string; runId?: string };
 }
 
 /**
@@ -74,6 +76,18 @@ export class PlannedRunFromLocalProtocolService {
     const shortId = randomUUID().replace(/-/g, '').slice(0, 8);
     const recordId = `${prefix}${slugify(title)}-${shortId}`;
 
+    const sourceLinks = payload.links && typeof payload.links === 'object'
+      ? payload.links as { studyId?: string; experimentId?: string; runId?: string }
+      : {};
+    const links = {
+      ...(sourceLinks.studyId ? { studyId: sourceLinks.studyId } : {}),
+      ...(sourceLinks.experimentId ? { experimentId: sourceLinks.experimentId } : {}),
+      ...(sourceLinks.runId ? { runId: sourceLinks.runId } : {}),
+      ...(options.links?.studyId ? { studyId: options.links.studyId } : {}),
+      ...(options.links?.experimentId ? { experimentId: options.links.experimentId } : {}),
+      ...(options.links?.runId ? { runId: options.links.runId } : {}),
+    };
+
     // Build the envelope
     const envelope: RecordEnvelope = {
       recordId,
@@ -95,6 +109,7 @@ export class PlannedRunFromLocalProtocolService {
           type: 'local-protocol',
           id: localProtocolRef,
         },
+        ...(Object.keys(links).length > 0 ? { links } : {}),
         state: 'draft',
         bindings: {
           labware: [],

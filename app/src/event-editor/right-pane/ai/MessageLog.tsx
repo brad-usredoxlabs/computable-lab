@@ -8,13 +8,91 @@
  */
 
 import { useEffect, useRef } from 'react'
+import type { AiClarificationAnswer, AiClarificationOption, AiClarificationRequest } from '../../../types/ai'
 import type { ChatState } from './chatReducer'
 
 export interface MessageLogProps {
   state: ChatState
+  onClarificationAnswer?: (answer: AiClarificationAnswer, request: AiClarificationRequest) => void
 }
 
-export function MessageLog({ state }: MessageLogProps) {
+function mentionTokenForOption(
+  request: AiClarificationRequest,
+  option: AiClarificationOption,
+): string | undefined {
+  const label = option.label.replace(/]/g, '')
+  const id = option.id.replace(/]/g, '')
+  if (!id) return undefined
+  if (request.menuProvider === '/l' || request.kind === 'labware') {
+    return `[[labware:${id}|${label}]]`
+  }
+  if (request.menuProvider === '/m') {
+    const refKind = typeof option.ref?.kind === 'string' ? option.ref.kind : undefined
+    const kind =
+      refKind === 'material-spec' || refKind === 'aliquot' || refKind === 'material-instance'
+        ? refKind
+        : 'material'
+    return `[[${kind}:${id}|${label}]]`
+  }
+  return undefined
+}
+
+function ClarificationCards({
+  requests,
+  onAnswer,
+}: {
+  requests: AiClarificationRequest[]
+  onAnswer?: (answer: AiClarificationAnswer, request: AiClarificationRequest) => void
+}) {
+  if (requests.length === 0) return null
+  return (
+    <div className="message-log__clarifications" data-testid="ai-clarification-cards">
+      {requests.map((request) => (
+        <section key={request.id} className="message-log__clarification-card">
+          <div className="message-log__clarification-head">
+            <span className="message-log__clarification-menu">{request.menuProvider}</span>
+            <span className="message-log__clarification-kind">{request.entityType ?? request.kind}</span>
+          </div>
+          <p className="message-log__clarification-prompt">{request.prompt}</p>
+          {request.snippet ? <p className="message-log__clarification-snippet">{request.snippet}</p> : null}
+          {request.options.length > 0 ? (
+            <div className="message-log__clarification-options">
+              {request.options.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className="message-log__clarification-option"
+                  onClick={() => onAnswer?.({
+                    requestId: request.id,
+                    optionId: option.id,
+                    label: option.label,
+                    mentionToken: mentionTokenForOption(request, option),
+                    ...(option.ref ? { ref: option.ref } : {}),
+                  }, request)}
+                >
+                  <span>{option.label}</span>
+                  {option.source || option.snippet ? (
+                    <small>{option.source ?? option.snippet}</small>
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="message-log__clarification-option message-log__clarification-option--manual"
+              onClick={() => onAnswer?.({ requestId: request.id, value: request.query ?? request.prompt }, request)}
+            >
+              Answer in chat
+            </button>
+          )}
+        </section>
+      ))}
+    </div>
+  )
+}
+
+export function MessageLog({ state, onClarificationAnswer }: MessageLogProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   // Auto-scroll on every message change. jsdom doesn't ship scrollTo, so
   // we guard it the same way the PDF viewer does.
@@ -61,6 +139,12 @@ export function MessageLog({ state }: MessageLogProps) {
             {m.role === 'user' ? 'You' : 'AI'}
           </header>
           <p className="message-log__text">{m.text}</p>
+          {m.clarificationRequests?.length ? (
+            <ClarificationCards
+              requests={m.clarificationRequests}
+              onAnswer={onClarificationAnswer}
+            />
+          ) : null}
         </article>
       ))}
       {state.pending ? (

@@ -77,6 +77,32 @@ properties:
     type: string
     description: "Active method event-graph instance attached to this run."
 
+  plannedRunRef:
+    type: object
+    additionalProperties: false
+    required: [ kind, id ]
+    properties:
+      kind:
+        const: "record"
+      id:
+        type: string
+      type:
+        type: string
+    description: "Planned-run this run executes or was materialized from."
+
+  localProtocolRef:
+    type: object
+    additionalProperties: false
+    required: [ kind, id ]
+    properties:
+      kind:
+        const: "record"
+      id:
+        type: string
+      type:
+        type: string
+    description: "Local protocol selected as the reusable method for this run."
+
   methodPlatform:
     type: string
     description: "Execution platform lock for the active run method."

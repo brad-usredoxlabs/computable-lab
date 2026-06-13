@@ -18,6 +18,8 @@
  * POST /runs/:id/compile response shape.
  */
 
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { PassRegistry } from './PassRegistry.js';
 import { runPipeline, type PipelineSpec } from './PipelineRunner.js';
 import { loadPipeline } from './PipelineLoader.js';
@@ -54,6 +56,16 @@ function createParsePlannedRunPass(): Pass {
   };
 }
 
+function createNoopAiPlanQualityScoringPass(): Pass {
+  return {
+    id: 'ai_plan_quality_scoring',
+    family: 'derive_context',
+    run() {
+      return { ok: true };
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -69,6 +81,15 @@ export interface RunRunPlanCompileArgs {
 export interface RunRunPlanCompileResult {
   runPlanCompileResult: RunPlanCompileResult;
   eventGraphRef?: string;
+}
+
+function resolveRunPlanPipelinePath(): string {
+  const relativePath = 'schema/registry/compile-pipelines/run-plan-compile.yaml';
+  const cwdPath = resolve(process.cwd(), relativePath);
+  if (existsSync(cwdPath)) return cwdPath;
+  const parentPath = resolve(process.cwd(), '..', relativePath);
+  if (existsSync(parentPath)) return parentPath;
+  return relativePath;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +113,7 @@ export async function runRunPlanCompile(
     createResolveLabwareBindingsPass({ recordStore: args.recordStore }),
     createCapabilityCheckPass(),
     createDerivePerStepContextPass(),
+    createNoopAiPlanQualityScoringPass(),
     createProjectRunPlanResultPass(),
   ];
 
@@ -100,9 +122,7 @@ export async function runRunPlanCompile(
   }
 
   // Load pipeline spec from YAML
-  const spec: PipelineSpec = loadPipeline(
-    'schema/registry/compile-pipelines/run-plan-compile.yaml',
-  );
+  const spec: PipelineSpec = loadPipeline(resolveRunPlanPipelinePath());
 
   // Verify every pass id in the spec is registered
   // Skip passes with 'when' conditions (optional passes)
@@ -139,17 +159,35 @@ export async function runRunPlanCompile(
     bindings: { materialResolutions: {}, labwareResolutions: {} },
   };
 
-  // If planned_run_events_emit ran, extract eventGraphRef
   let eventGraphRef: string | undefined;
-  const eventsEmitOutput = pipelineResult.outputs.get('planned_run_events_emit') as
-    | { eventGraphRef?: string }
-    | undefined;
-  if (eventsEmitOutput?.eventGraphRef) {
-    eventGraphRef = eventsEmitOutput.eventGraphRef;
+  if (runPlanCompileResult.status !== 'blocked') {
+    const eventsEmitPass = createPlannedRunEventsEmitPass({
+      recordStore: args.recordStore,
+      ...(args.buildSemanticKey ? { buildSemanticKey: args.buildSemanticKey } : {}),
+      derivations,
+      loadVerbDefinition: args.loadVerbDefinition ?? (async (canonical: string) => {
+        const env = await args.recordStore.get(`VERB-${canonical.toUpperCase()}`);
+        return (env?.payload as VerbDefinitionLite | undefined) ?? null;
+      }),
+    });
+    const eventsEmitResult = await eventsEmitPass.run({
+      pass_id: 'planned_run_events_emit',
+      state: {
+        input,
+        context: {},
+        meta: {},
+        outputs: pipelineResult.outputs,
+        diagnostics: pipelineResult.diagnostics,
+      },
+    });
+    const eventsEmitOutput = eventsEmitResult.output as { eventGraphRef?: string } | undefined;
+    if (eventsEmitOutput?.eventGraphRef) {
+      eventGraphRef = eventsEmitOutput.eventGraphRef;
+    }
   }
 
   return {
     runPlanCompileResult: runPlanCompileResult,
-    eventGraphRef,
+    ...(eventGraphRef ? { eventGraphRef } : {}),
   };
 }

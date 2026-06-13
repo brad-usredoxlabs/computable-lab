@@ -4,7 +4,7 @@ import type {
   PlatformSlotManifest,
   PlatformVariantManifest,
 } from '../../types/platformRegistry'
-import { getLabwareAllowedOrientations } from '../../types/labware'
+import { getLabwareAllowedOrientations, isLawnOnlyLabwareType } from '../../types/labware'
 import type { Labware } from '../../types/labware'
 import type {
   LabwareOrientation,
@@ -40,6 +40,17 @@ export function validatePlacement(input: ValidatePlacementInput): PlacementValid
       ok: true,
       forcedOrientation: null,
       errors: [],
+      warnings: [],
+    }
+  }
+
+  // Lawn-only bench equipment (e.g. the four-way bench rack) never fits an
+  // automation deck slot, regardless of which slot or orientation.
+  if (isLawnOnlyLabwareType(labware.labwareType)) {
+    return {
+      ok: false,
+      forcedOrientation: null,
+      errors: [`${labware.name} can only be placed on a freeform bench surface, not an automation deck slot.`],
       warnings: [],
     }
   }

@@ -643,6 +643,18 @@ export class IndexManager {
 
       const studyArtifactSummaries = (artifactsByStudy.get(study.recordId) ?? [])
         .map((a) => indexEntryToArtifactSummary(a, study.recordId));
+      const projectLinkedEntries = allEntries.filter(
+        (entry) => entry.links?.studyId === study.recordId && entry.recordId !== study.recordId,
+      );
+      const protocols = projectLinkedEntries.filter((entry) => entry.kind === 'protocol');
+      const localProtocols = projectLinkedEntries.filter((entry) => entry.kind === 'local-protocol');
+      const plannedRuns = projectLinkedEntries.filter((entry) => entry.kind === 'planned-run');
+      const inventory = projectLinkedEntries.filter((entry) =>
+        entry.kind === 'aliquot' ||
+        entry.kind === 'material-instance' ||
+        entry.kind === 'labware-instance',
+      );
+      const hasProtocolLibrary = protocols.length > 0 || localProtocols.length > 0 || plannedRuns.length > 0 || inventory.length > 0;
 
       tree.push({
         recordId: study.recordId,
@@ -651,6 +663,9 @@ export class IndexManager {
         experiments: experimentNodes,
         ...(studyArtifactSummaries.length > 0
           ? { artifacts: studyArtifactSummaries }
+          : {}),
+        ...(hasProtocolLibrary
+          ? { protocolLibrary: { protocols, localProtocols, plannedRuns, inventory } }
           : {}),
       });
     }

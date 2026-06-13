@@ -1,0 +1,21 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware.schema.yaml
+kind: labware
+recordId: lbw-seed-tuberack-4way-32x0p5ml
+name: Four-Way Bench Rack — 32 × 0.5 mL Tube (seed)
+labwareType: tubeset_4way_32x0p5ml
+format:
+  rows: 4
+  cols: 8
+  wellCount: 32
+  wellNaming: A1..D8
+tags:
+  - seed
+  - tube-rack
+  - four-way
+  - lawn-only
+  - 0.5ml
+aliases:
+  - four-way rack 0.5ml
+  - 4-way tube rack 0.5ml
+  - bench tube rack 0.5ml
+notes: "Flip side of the 1.5/2 mL side on the reversible four-way bench rack (lawn-only). Same 4×8 footprint with smaller holes for 0.5 mL tubes."

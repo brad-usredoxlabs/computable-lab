@@ -41,6 +41,9 @@ export interface ChatInputProps {
   disabled?: boolean
   /** Optional placeholder override; defaults to a generic prompt hint. */
   placeholder?: string
+  /** Label for the send button. Defaults to "Send"; set to "Revise" when a
+   *  ghost preview is active so the action reads as editing the proposal. */
+  sendLabel?: string
   /** Allow the parent to push text into the input (e.g. Run-in-event-editor
    *  pre-fills the prompt from a viewer excerpt). */
   prefill?: string
@@ -52,6 +55,7 @@ export function ChatInput({
   onStop,
   disabled,
   placeholder,
+  sendLabel = 'Send',
   prefill,
 }: ChatInputProps) {
   const [text, setText] = useState('')
@@ -174,7 +178,7 @@ export function ChatInput({
             disabled={disabled || !text.trim()}
             data-testid="chat-input-send"
           >
-            Send
+            {sendLabel}
           </button>
         )}
       </div>

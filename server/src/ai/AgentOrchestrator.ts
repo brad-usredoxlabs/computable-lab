@@ -34,6 +34,12 @@ import {
   parseSubmitSuggestionArgs,
 } from './submitSuggestionTool.js';
 import { createMaterialLabeler, enrichAddMaterialRefs } from './materialRefLabels.js';
+import {
+  clarificationRequestFromLegacy,
+  clarificationRequestsFromGaps,
+  legacyClarificationFromRequests,
+  parseClarificationRequests,
+} from './clarifications.js';
 import type { PassProgressEvent } from '../compiler/pipeline/PipelineRunner.js';
 import { getDefaultLabStateCache } from '../compiler/state/LabStateCache.js';
 import { decodeAttachmentText } from '../extract/decodeAttachment.js';
@@ -134,6 +140,18 @@ function parseAgentFinalResponse(
       }
     }
 
+    const clarificationRequests = [
+      ...parseClarificationRequests(parsed.clarificationRequests),
+      ...(result.clarification ? [clarificationRequestFromLegacy(result.clarification)] : []),
+    ];
+    if (clarificationRequests.length > 0) {
+      result.clarificationRequests = clarificationRequests;
+      if (!result.clarification) {
+        const legacyClarification = legacyClarificationFromRequests(clarificationRequests);
+        if (legacyClarification) result.clarification = legacyClarification;
+      }
+    }
+
     // Labware additions (from the labware-additions prompt)
     if (Array.isArray(parsed.labwareAdditions)) {
       const additions: AgentLabwareAddition[] = [];
@@ -170,6 +188,23 @@ function normalizeHistoryMessage(message: ConversationHistoryMessage): ChatMessa
     role: message.role,
     content,
   };
+}
+
+
+function appendClarificationAnswersToPrompt(
+  prompt: string,
+  answers: AgentRequest['clarificationAnswers'],
+): string {
+  if (!Array.isArray(answers) || answers.length === 0) return prompt;
+  const lines = answers.flatMap((answer, index) => {
+    const label = answer.label ?? answer.optionId ?? answer.value ?? answer.requestId;
+    const detail = answer.mentionToken ?? answer.value ?? (answer.ref ? JSON.stringify(answer.ref) : '');
+    return [
+      `- answer ${index + 1} for ${answer.requestId}: ${label}`,
+      ...(detail ? [`  resolved: ${detail}`] : []),
+    ];
+  });
+  return prompt + '\n\n[Answered clarifications]\n' + lines.join('\n');
 }
 
 /**
@@ -289,12 +324,20 @@ function compileResultToAgentResult(
     }
   }
 
+  const clarificationRequests = clarificationRequestsFromGaps(compileResult.terminalArtifacts.gaps);
+  if (clarification && !clarificationRequests.some((request) => request.prompt === clarification)) {
+    clarificationRequests.push(clarificationRequestFromLegacy({ prompt: clarification, entityType: 'general', options: [] }, clarificationRequests.length));
+  }
+
+  const legacyClarification = legacyClarificationFromRequests(clarificationRequests);
+
   return {
     success: true,
     events,
     ...(compileResult.labwareAdditions.length > 0 ? { labwareAdditions: compileResult.labwareAdditions } : {}),
     ...(unresolvedRefs.length > 0 ? { unresolvedRefs: unresolvedRefs as unknown as NonNullable<AgentResult['unresolvedRefs']> } : {}),
-    ...(clarification ? { clarification: { prompt: clarification, entityType: 'general', options: [] } } : {}),
+    ...(clarificationRequests.length > 0 ? { clarificationRequests } : {}),
+    ...(legacyClarification ? { clarification: legacyClarification } : {}),
     ...(compileResult.terminalArtifacts.downstreamQueue?.length ? { downstreamQueue: compileResult.terminalArtifacts.downstreamQueue } : {}),
     ...(compileResult.terminalArtifacts.executionScalePlan ? { executionScalePlan: compileResult.terminalArtifacts.executionScalePlan } : {}),
     ...(compileResult.terminalArtifacts.instrumentApplianceJobs?.length ? { instrumentApplianceJobs: compileResult.terminalArtifacts.instrumentApplianceJobs } : {}),
@@ -639,7 +682,8 @@ export function createAgentOrchestrator(
     buildPrefixRequest,
 
     async run(request: AgentRequest): Promise<AgentResult> {
-      const { prompt, context, history, surface, toolFilter, onEvent, attachments, enableThinking, deterministicOnly } = request;
+      const { prompt, context, history, surface, toolFilter, onEvent, attachments, enableThinking, deterministicOnly, clarificationAnswers } = request;
+      const effectivePrompt = appendClarificationAnswersToPrompt(prompt, clarificationAnswers);
       // Draft-flow gating: an explicit request value always wins (the
       // event-editor dock sends forceDraftTool: true; Precompile mode sends
       // deterministicOnly). Otherwise agentConfig.draftFlowMode decides.
@@ -659,7 +703,7 @@ export function createAgentOrchestrator(
       const t0 = Date.now();
       const surfaceName = surface ?? 'default';
       const model = inferenceConfig.model;
-      console.log(`[agent ${tid}] start surface=${surfaceName} model=${model} promptLen=${prompt.length} historyLen=${Array.isArray(history) ? history.length : 0} attachments=${attachments?.length ?? 0} deterministicOnly=${Boolean(deterministicOnly)}`);
+      console.log(`[agent ${tid}] start surface=${surfaceName} model=${model} promptLen=${prompt.length} effectivePromptLen=${effectivePrompt.length} historyLen=${Array.isArray(history) ? history.length : 0} attachments=${attachments?.length ?? 0} deterministicOnly=${Boolean(deterministicOnly)} clarificationAnswers=${clarificationAnswers?.length ?? 0}`);
 
       // Instrumentation tracking
       const turnStats: TurnStats[] = [];
@@ -675,7 +719,7 @@ export function createAgentOrchestrator(
         : [];
 
       // Resolve mentions and build resolved context message
-      const resolvedMentions = await resolveMentionsForPrompt(prompt, deps);
+      const resolvedMentions = await resolveMentionsForPrompt(effectivePrompt, deps);
       resolvedMentionsCount = resolvedMentions.length;
       const resolvedContextMessage = buildResolvedContextMessage(resolvedMentions);
       
@@ -692,7 +736,7 @@ export function createAgentOrchestrator(
       let preflightLastStatus = 'starting compiler preflight';
       const compileResult = await awaitWithHeartbeat(
         runChatbotCompile({
-          prompt,
+          prompt: effectivePrompt,
           ...(attachments ? { attachments } : {}),
           ...(ctxMentions ? { mentions: ctxMentions } : {}),
           ...(ctxLabwares ? { editorLabwares: ctxLabwares } : {}),
@@ -805,12 +849,20 @@ export function createAgentOrchestrator(
         };
         logAgentSummary(tid, summary);
         console.log(`[agent ${tid}] chatbot-compile pipeline bypass: success, events=${events.length}, gaps=${compileResult.terminalArtifacts.gaps.length}`);
+        const clarificationRequests = clarificationRequestsFromGaps(compileResult.terminalArtifacts.gaps);
+        if (clarification && !clarificationRequests.some((request) => request.prompt === clarification)) {
+          clarificationRequests.push(clarificationRequestFromLegacy({ prompt: clarification, entityType: 'general', options: [] }, clarificationRequests.length));
+        }
+
+        const legacyClarification = legacyClarificationFromRequests(clarificationRequests);
+
         const result: AgentResult = {
           success: true,
           events,
           ...(compileResult.labwareAdditions.length > 0 ? { labwareAdditions: compileResult.labwareAdditions } : {}),
           ...(unresolvedRefs.length > 0 ? { unresolvedRefs: unresolvedRefs as unknown as NonNullable<AgentResult['unresolvedRefs']> } : {}),
-          ...(clarification ? { clarification: { prompt: clarification, entityType: 'general', options: [] } } : {}),
+          ...(clarificationRequests.length > 0 ? { clarificationRequests } : {}),
+          ...(legacyClarification ? { clarification: legacyClarification } : {}),
           ...(compileResult.terminalArtifacts.downstreamQueue?.length ? { downstreamQueue: compileResult.terminalArtifacts.downstreamQueue } : {}),
           ...(compileResult.terminalArtifacts.executionScalePlan ? { executionScalePlan: compileResult.terminalArtifacts.executionScalePlan } : {}),
           ...(compileResult.terminalArtifacts.instrumentApplianceJobs?.length ? { instrumentApplianceJobs: compileResult.terminalArtifacts.instrumentApplianceJobs } : {}),

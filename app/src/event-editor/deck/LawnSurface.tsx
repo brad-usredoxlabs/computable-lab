@@ -290,6 +290,7 @@ export function LawnSurface({ widthMm, heightMm, title, primary = false }: LawnS
       <AddLabwareDialog
         open={dialogState.open}
         contextLabel={`${title} (${dialogState.xMm}, ${dialogState.yMm} mm)`}
+        surfaceKind="lawn"
         onClose={() => setDialogState((s) => ({ ...s, open: false }))}
         onPick={handlePick}
       />

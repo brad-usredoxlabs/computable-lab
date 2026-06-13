@@ -21,6 +21,14 @@
 import type { Pass, PassRunArgs, PassResult, PassDiagnostic } from '../types.js';
 import type { RecordStore } from '../../../store/types.js';
 
+function refId(ref: unknown): string | undefined {
+  if (typeof ref === 'string') return ref;
+  if (ref && typeof ref === 'object' && typeof (ref as Record<string, unknown>).id === 'string') {
+    return (ref as Record<string, unknown>).id as string;
+  }
+  return undefined;
+}
+
 // ---------------------------------------------------------------------------
 // createResolveLocalProtocolPass
 // ---------------------------------------------------------------------------
@@ -149,8 +157,8 @@ export function createResolveLocalProtocolPass(
 
       // 4. Compute expandedProtocol by reusing expand_local_customizations logic
       const expandedProtocol = expandLocalCustomizations(
-        localProtocol,
-        canonicalProtocol,
+        localProtocol as { payload: Record<string, unknown> },
+        canonicalProtocol as { payload: Record<string, unknown> },
       );
 
       return {
@@ -318,7 +326,7 @@ export function createResolveMaterialBindingsPass(
       // Walk plannedRun.bindings.materials[] for entries
       const bindings = (
         plannedRun.payload['bindings'] as
-          | { materials?: Array<{ roleId: string; materialRef: string }> }
+          | { materials?: Array<{ roleId: string; materialRef?: unknown; materialInstanceRef?: unknown }> }
           | undefined
       )?.materials ?? [];
 
@@ -340,7 +348,7 @@ export function createResolveMaterialBindingsPass(
           continue;
         }
 
-        const materialRef = binding.materialRef as string;
+        const materialRef = refId(binding.materialRef ?? binding.materialInstanceRef);
         if (!materialRef) {
           unbound.push(roleId);
           diagnostics.push({
@@ -431,7 +439,7 @@ export function createResolveLabwareBindingsPass(
       // Walk plannedRun.bindings.labware[] for entries
       const bindings = (
         plannedRun.payload['bindings'] as
-          | { labware?: Array<{ roleId: string; labwareInstanceRef: string }> }
+          | { labware?: Array<{ roleId: string; labwareInstanceRef: unknown }> }
           | undefined
       )?.labware ?? [];
 
@@ -453,7 +461,7 @@ export function createResolveLabwareBindingsPass(
           continue;
         }
 
-        const labwareRef = binding.labwareInstanceRef as string;
+        const labwareRef = refId(binding.labwareInstanceRef);
         if (!labwareRef) {
           unbound.push(roleId);
           diagnostics.push({

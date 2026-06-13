@@ -133,6 +133,12 @@ properties:
         type: string
       locked:
         type: boolean
+      plannedRunRef:
+        $ref: "./datatypes/ref.schema.yaml"
+      localProtocolRef:
+        $ref: "./datatypes/ref.schema.yaml"
+      protocolRef:
+        $ref: "./datatypes/ref.schema.yaml"
       templateBindings:
         type: array
         items:
