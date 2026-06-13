@@ -16,9 +16,44 @@
 }
 
 .ai-tab__section--system-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   border-bottom: 1px solid var(--cl-border);
   background: var(--cl-bg-elev);
   padding: 6px 12px;
+}
+
+/* Prefill (KV pre-warm) indicator — three phases: busy / ready / failed. */
+.ai-tab__warm {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  white-space: nowrap;
+  color: var(--cl-text-dim);
+}
+
+.ai-tab__warm--ready {
+  color: var(--cl-success, #3fb950);
+}
+
+.ai-tab__warm--failed {
+  color: var(--cl-text-faint);
+}
+
+.ai-tab__warm-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cl-accent);
+  animation: ai-tab-warm-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ai-tab-warm-pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
 }
 
 .ai-tab__system-prompt-kind {

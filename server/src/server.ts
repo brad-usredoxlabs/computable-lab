@@ -881,6 +881,10 @@ export async function createServer(
       const impl = aiHandlersImpl ?? deterministicAiHandlers;
       return impl.warmContext(request, reply);
     },
+    async warmContextStatus(request, reply) {
+      const impl = aiHandlersImpl ?? deterministicAiHandlers;
+      return impl.warmContextStatus(request, reply);
+    },
   };
 
   const knowledgeAIHandlers: KnowledgeAIHandlers = {

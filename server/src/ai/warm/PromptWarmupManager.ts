@@ -60,6 +60,25 @@ export interface WarmupStats {
   lastWarm?: { key: string; promptTokens?: number; cachedTokens?: number; ms?: number };
 }
 
+/**
+ * Per-key warm lifecycle, exposed so the UI can show a prefill indicator.
+ *   disabled — warming is off (no indicator)
+ *   idle     — key never warmed this process
+ *   pending  — debounce window open or deferred behind interactive traffic
+ *   warming  — prefill request in flight on the GPU
+ *   warmed   — prefix is in the KV cache (token counts from the last warm)
+ *   failed   — last attempt errored or gave up deferring
+ */
+export type WarmKeyState = 'disabled' | 'idle' | 'pending' | 'warming' | 'warmed' | 'failed';
+
+export interface WarmKeyStatus {
+  state: WarmKeyState;
+  promptTokens?: number;
+  cachedTokens?: number;
+  ms?: number;
+  warmedAt?: string;
+}
+
 interface ManifestEntry {
   key: string;
   promptHash: string;
@@ -83,6 +102,8 @@ export interface PromptWarmupManager {
   warmNow(target: WarmTarget): Promise<void>;
   /** Restore persisted compiled contexts after a server restart. */
   restoreLibraryAtBoot(): Promise<void>;
+  /** Lifecycle of one cache key — drives the UI's prefill indicator. */
+  status(key: string): WarmKeyStatus;
   stats(): WarmupStats;
 }
 
@@ -107,7 +128,22 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
   const lastWarmedHash = new Map<string, string>();
   const inFlightKeys = new Set<string>();
   const supersededKeys = new Map<string, WarmTarget>();
+  const keyStatus = new Map<string, WarmKeyStatus>();
   const stats: WarmupStats = { warms: 0, skippedUnchanged: 0, deferrals: 0, failures: 0 };
+
+  function setStatus(key: string, status: WarmKeyStatus): void {
+    keyStatus.set(key, status);
+  }
+
+  function markWarmed(key: string, timings: { prompt_n?: number; cache_n?: number }, ms?: number): void {
+    setStatus(key, {
+      state: 'warmed',
+      ...(timings.prompt_n != null ? { promptTokens: timings.prompt_n } : {}),
+      ...(timings.cache_n != null ? { cachedTokens: timings.cache_n } : {}),
+      ...(ms != null ? { ms } : {}),
+      warmedAt: new Date().toISOString(),
+    });
+  }
 
   function hashPrefix(prefix: WarmPrefix): string {
     return createHash('sha256').update(model).update(JSON.stringify(prefix)).digest('hex');
@@ -156,8 +192,10 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
       stats.deferrals += 1;
       if (deferrals >= MAX_DEFER_RETRIES) {
         log('warn', `[warm ${key}] gave up after ${deferrals} deferrals (interactive traffic)`);
+        setStatus(key, { state: 'failed' });
         return;
       }
+      setStatus(key, { state: 'pending' });
       const timer = setTimeout(() => {
         void executeWarm(target, deferrals + 1);
       }, DEFER_RETRY_MS);
@@ -166,11 +204,23 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
     }
 
     inFlightKeys.add(key);
+    // Carry the previous warm's numbers through the transition so a
+    // skipped-unchanged pass can report them again.
+    const prior = keyStatus.get(key);
+    setStatus(key, { ...(prior?.state === 'warmed' ? prior : {}), state: 'warming' });
     try {
       const prefix = await target.buildPrefix();
       const promptHash = hashPrefix(prefix);
       if (lastWarmedHash.get(key) === promptHash) {
         stats.skippedUnchanged += 1;
+        // Already in cache under this exact hash — keep the previous warm's
+        // numbers when we have them, otherwise just report warmed.
+        const previous = keyStatus.get(key);
+        if (previous?.promptTokens != null || previous?.warmedAt) {
+          setStatus(key, { ...previous, state: 'warmed' });
+        } else {
+          markWarmed(key, {});
+        }
         return;
       }
 
@@ -190,6 +240,7 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
       const ms = Date.now() - t0;
       const timings = response.timings ?? {};
       lastWarmedHash.set(key, promptHash);
+      markWarmed(key, timings, ms);
       stats.warms += 1;
       stats.lastWarm = { key };
       if (timings.prompt_n != null) stats.lastWarm.promptTokens = timings.prompt_n;
@@ -208,7 +259,14 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
       }
     } catch (err) {
       stats.failures += 1;
-      log('warn', `[warm ${key}] failed: ${err instanceof Error ? err.message : String(err)}`);
+      setStatus(key, { state: 'failed' });
+      // Include the top of the stack: "undefined.map" style errors from a
+      // prefix builder are unfindable from the message alone.
+      const detail =
+        err instanceof Error && err.stack
+          ? err.stack.split('\n').slice(0, 4).join(' | ')
+          : String(err);
+      log('warn', `[warm ${key}] failed: ${detail}`);
     } finally {
       inFlightKeys.delete(key);
       const superseded = supersededKeys.get(key);
@@ -224,6 +282,11 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
       if (!settings.enabled) return;
       const existing = timers.get(target.key);
       if (existing) clearTimeout(existing);
+      // Don't demote a live 'warming' — the in-flight pass will pick up the
+      // superseding target in its finally block.
+      if (keyStatus.get(target.key)?.state !== 'warming') {
+        setStatus(target.key, { state: 'pending' });
+      }
       const timer = setTimeout(() => {
         timers.delete(target.key);
         void executeWarm(target);
@@ -266,6 +329,7 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
         });
         const timings = response.timings ?? {};
         lastWarmedHash.set(newest.key, newest.promptHash);
+        markWarmed(newest.key, timings, Date.now() - t0);
         log(
           'info',
           `[warm ${newest.key}] re-prefilled after boot: ${timings.prompt_n ?? '?'} tokens ` +
@@ -274,6 +338,11 @@ export function createPromptWarmupManager(deps: Deps): PromptWarmupManager {
       } catch (err) {
         log('warn', `[warm] boot restore failed: ${err instanceof Error ? err.message : String(err)}`);
       }
+    },
+
+    status(key: string): WarmKeyStatus {
+      if (!settings.enabled) return { state: 'disabled' };
+      return keyStatus.get(key) ?? { state: 'idle' };
     },
 
     stats: () => ({ ...stats }),

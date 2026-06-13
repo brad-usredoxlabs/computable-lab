@@ -55,6 +55,13 @@ export interface AssistBody {
 export interface WarmContextBody {
   context: EditorContext;
   history?: ConversationHistoryMessage[];
+  /**
+   * The surface the NEXT real request will send (e.g. 'workspace.deck').
+   * The warm must render through the same prompt builder as that request —
+   * a warm rendered for the wrong surface produces a prefix that never
+   * matches and the KV cache misses silently.
+   */
+  surface?: AiSurface;
 }
 
 export interface AIHandlers {
@@ -72,6 +79,10 @@ export interface AIHandlers {
   ): Promise<void>;
   warmContext(
     request: FastifyRequest<{ Body: WarmContextBody }>,
+    reply: FastifyReply,
+  ): Promise<unknown>;
+  warmContextStatus(
+    request: FastifyRequest<{ Querystring: { key?: string } }>,
     reply: FastifyReply,
   ): Promise<unknown>;
 }
@@ -330,7 +341,7 @@ export function createAIHandlers(
       request: FastifyRequest<{ Body: WarmContextBody }>,
       reply: FastifyReply,
     ) {
-      const { context, history } = request.body ?? {};
+      const { context, history, surface } = request.body ?? {};
       if (!context || typeof context !== 'object') {
         reply.status(400);
         return { error: 'INVALID_REQUEST', message: 'context is required' };
@@ -343,21 +354,45 @@ export function createAIHandlers(
         return { accepted: false, reason: 'warming disabled' };
       }
 
-      // Mirror the real draft path exactly: /ai/draft-events sets
-      // forceDraftTool and no surface (which also fixes the rendered tool
-      // block), and the key must equal the cache_key the orchestrator
-      // derives, so the server routes the real request to the warmed slot.
+      // Mirror assistStream byte-for-byte: same context defaults, same
+      // surface-aware prompt builder, run()'s own forceDraftTool default,
+      // and the same derived cache_key — so the real request routes to the
+      // slot this warm fills. Any drift here is a silent KV-cache miss.
+      const editorContext: EditorContext = {
+        ...context,
+        labwares: context.labwares ?? [],
+        eventSummary: context.eventSummary ?? '',
+        vocabPackId: context.vocabPackId ?? 'general',
+        availableVerbs: context.availableVerbs ?? [],
+      };
+      const key = deriveContextCacheKey(surface, editorContext);
       warmup.requestWarm({
-        key: deriveContextCacheKey(undefined, context),
+        key,
         buildPrefix: () =>
           buildPrefixRequest({
-            context,
+            context: editorContext,
+            ...(surface ? { surface } : {}),
             ...(history ? { history } : {}),
-            forceDraftTool: true,
           }),
       });
       reply.status(202);
-      return { accepted: true };
+      // Key + current status let the client show a prefill indicator and
+      // poll /ai/context/warm/status while the warm runs.
+      return { accepted: true, key, status: warmup.status(key) };
+    },
+
+    async warmContextStatus(
+      request: FastifyRequest<{ Querystring: { key?: string } }>,
+      reply: FastifyReply,
+    ) {
+      const key = request.query?.key;
+      if (!key) {
+        reply.status(400);
+        return { error: 'INVALID_REQUEST', message: 'key is required' };
+      }
+      const warmup = getWarmup?.();
+      if (!warmup) return { key, status: { state: 'disabled' } };
+      return { key, status: warmup.status(key) };
     },
   };
 }
@@ -501,6 +536,10 @@ export function createDeterministicOnlyAIHandlers(deps: {
       // No LLM configured — nothing to warm.
       reply.status(202);
       return { accepted: false, reason: 'AI not configured' };
+    },
+
+    async warmContextStatus(request, _reply) {
+      return { key: request.query?.key ?? '', status: { state: 'disabled' } };
     },
   };
 }

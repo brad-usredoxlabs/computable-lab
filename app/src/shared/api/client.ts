@@ -175,6 +175,19 @@ export interface ResolveCandidate {
   mint?: { label: string; domain?: string }
 }
 
+/**
+ * Lifecycle of one KV pre-warm key, mirrored from the server's
+ * WarmKeyStatus (PromptWarmupManager). Drives the AI panel's prefill
+ * indicator.
+ */
+export interface AiWarmStatus {
+  state: 'disabled' | 'idle' | 'pending' | 'warming' | 'warmed' | 'failed'
+  promptTokens?: number
+  cachedTokens?: number
+  ms?: number
+  warmedAt?: string
+}
+
 export interface MaterialDraftResponse {
   proposed: {
     name: string
@@ -2539,19 +2552,47 @@ export const apiClient = {
    * will carry, so the server can prefill the (system prompt + tools +
    * event graph) prefix on the idle GPU while the user is still typing.
    * Best-effort and never throws — warming is an optimization, not a
-   * dependency; offline/disabled backends just skip it.
+   * dependency; offline/disabled backends just skip it. Returns the cache
+   * key + current warm status when accepted (so the UI can poll progress),
+   * or null when warming is unavailable.
    */
   async warmAiContext(
     context: Record<string, unknown>,
-    history?: Array<{ role: 'user' | 'assistant'; content: string }>
-  ): Promise<void> {
+    history?: Array<{ role: 'user' | 'assistant'; content: string }>,
+    surface?: string
+  ): Promise<{ key: string; status: AiWarmStatus } | null> {
     try {
-      await request<{ accepted: boolean }>('/ai/context/warm', {
-        method: 'POST',
-        body: JSON.stringify({ context, ...(history?.length ? { history } : {}) }),
-      })
+      const res = await request<{ accepted: boolean; key?: string; status?: AiWarmStatus }>(
+        '/ai/context/warm',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            context,
+            ...(history?.length ? { history } : {}),
+            // Must match the surface the next real request will send, so the
+            // warm renders through the same prompt builder.
+            ...(surface ? { surface } : {}),
+          }),
+        }
+      )
+      return res.accepted && res.key && res.status ? { key: res.key, status: res.status } : null
     } catch {
-      /* best-effort */
+      return null
+    }
+  },
+
+  /**
+   * Poll the lifecycle of one warm key (GET /ai/context/warm/status).
+   * Null on any failure — the indicator just hides.
+   */
+  async getAiWarmStatus(key: string): Promise<AiWarmStatus | null> {
+    try {
+      const res = await request<{ key: string; status: AiWarmStatus }>(
+        `/ai/context/warm/status?key=${encodeURIComponent(key)}`
+      )
+      return res.status ?? null
+    } catch {
+      return null
     }
   },
 

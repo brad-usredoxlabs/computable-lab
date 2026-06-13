@@ -521,6 +521,7 @@ export function registerRoutes(
     fastify.post('/ai/draft-events/stream', aiHandlers.draftEventsStream.bind(aiHandlers));
     fastify.post('/ai/assist/stream', aiHandlers.assistStream.bind(aiHandlers));
     fastify.post('/ai/context/warm', aiHandlers.warmContext.bind(aiHandlers));
+    fastify.get('/ai/context/warm/status', aiHandlers.warmContextStatus.bind(aiHandlers));
   }
 
   const { aiThreadHandlers } = options;

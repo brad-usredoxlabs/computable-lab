@@ -53,10 +53,34 @@ vi.mock('./useChatThread', () => ({
   }),
 }))
 
-import { AiTabPanel } from './AiTabPanel'
+import { AiTabPanel, WarmIndicator } from './AiTabPanel'
 import { systemPromptForViewer } from './systemPromptForViewer'
 
 afterEach(() => cleanup())
+
+describe('WarmIndicator', () => {
+  it('pulses while the prefill is pending or warming', () => {
+    render(<WarmIndicator status={{ state: 'warming' }} />)
+    expect(screen.getByTestId('ai-tab-warm').textContent).toContain('pre-filling context')
+  })
+
+  it('shows the token count once warmed', () => {
+    render(<WarmIndicator status={{ state: 'warmed', promptTokens: 37787, ms: 42000 }} />)
+    const chip = screen.getByTestId('ai-tab-warm')
+    expect(chip.textContent).toContain('context ready')
+    expect(chip.textContent).toContain('37,787 tok')
+  })
+
+  it('notes failure quietly and renders nothing for idle/disabled', () => {
+    render(<WarmIndicator status={{ state: 'failed' }} />)
+    expect(screen.getByTestId('ai-tab-warm').textContent).toContain('pre-fill failed')
+    cleanup()
+    render(<WarmIndicator status={{ state: 'idle' }} />)
+    expect(screen.queryByTestId('ai-tab-warm')).toBeNull()
+    render(<WarmIndicator status={{ state: 'disabled' }} />)
+    expect(screen.queryByTestId('ai-tab-warm')).toBeNull()
+  })
+})
 
 function renderWithTab(
   initialState?: Partial<ReturnType<typeof defaultWorkspaceState>>,

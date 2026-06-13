@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
 import { useOptionalEventEditor } from '../../EventEditorContext'
-import { apiClient } from '../../../shared/api/client'
+import { apiClient, type AiWarmStatus } from '../../../shared/api/client'
 import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/platformRegistry'
 import type { AiLabwareAddition, AiLabwareRequirement } from '../../../types/ai'
 import type { PlateEvent } from '../../../types/events'
@@ -29,6 +29,52 @@ import { buildPreviewFromDraft } from './draftPreview'
 import type { AssistDraftResult } from './assistStream'
 import { AddSourceModal } from './AddSourceModal'
 import './ai.css'
+
+/**
+ * Tiny prefill-progress chip for the panel header. llama.cpp exposes no
+ * mid-prefill percentage, so this is a three-phase indicator: pulsing while
+ * the warm is pending/running, a checkmark with the prefilled token count
+ * once the context is in the KV cache, and a muted failure note otherwise.
+ */
+export function WarmIndicator({ status }: { status: AiWarmStatus }) {
+  if (status.state === 'pending' || status.state === 'warming') {
+    return (
+      <span
+        className="ai-tab__warm ai-tab__warm--busy"
+        data-testid="ai-tab-warm"
+        title="Pre-filling the model's KV cache with the system prompt + current event graph so the next draft starts fast"
+      >
+        <span className="ai-tab__warm-dot" aria-hidden />
+        pre-filling context…
+      </span>
+    )
+  }
+  if (status.state === 'warmed') {
+    const tokens =
+      status.promptTokens != null ? ` · ${status.promptTokens.toLocaleString()} tok` : ''
+    return (
+      <span
+        className="ai-tab__warm ai-tab__warm--ready"
+        data-testid="ai-tab-warm"
+        title={`Context is pre-filled in the model's KV cache${status.ms != null ? ` (warmed in ${(status.ms / 1000).toFixed(1)}s)` : ''} — the next draft only pays prefill for your prompt`}
+      >
+        ✓ context ready{tokens}
+      </span>
+    )
+  }
+  if (status.state === 'failed') {
+    return (
+      <span
+        className="ai-tab__warm ai-tab__warm--failed"
+        data-testid="ai-tab-warm"
+        title="Background pre-fill failed — drafting still works, the first request just pays full prefill"
+      >
+        pre-fill failed
+      </span>
+    )
+  }
+  return null
+}
 
 export function AiTabPanel() {
   const ws = useWorkspace()
@@ -156,16 +202,41 @@ export function AiTabPanel() {
   const messagesRef = useRef(chat.state.messages)
   messagesRef.current = chat.state.messages
   const hasDeckEditor = editorState !== null
+  // Prefill indicator state: the cache key the server warms for this deck
+  // plus its last reported lifecycle. Null until a warm is accepted (also
+  // null on backends with warming disabled — the indicator hides).
+  const [warm, setWarm] = useState<{ key: string; status: AiWarmStatus } | null>(null)
   useEffect(() => {
     if (!hasDeckEditor || chat.isStreaming) return
+    let cancelled = false
     const timer = setTimeout(() => {
       const history = messagesRef.current
         .filter((m) => m.text)
         .map((m) => ({ role: m.role, content: m.text }))
-      void apiClient.warmAiContext(context, history)
+      void apiClient.warmAiContext(context, history, systemPrompt.id).then((res) => {
+        if (!cancelled && res) setWarm(res)
+      })
     }, 600)
-    return () => clearTimeout(timer)
-  }, [hasDeckEditor, chat.isStreaming, chat.state.messages.length, context])
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [hasDeckEditor, chat.isStreaming, chat.state.messages.length, context, systemPrompt.id])
+
+  // While a warm is pending/in-flight, poll its status so the indicator
+  // flips to "ready" (or "failed") without a page interaction. The 38k-token
+  // cold prefill takes tens of seconds on the appliance GPU, so poll gently.
+  const warmState = warm?.status.state
+  useEffect(() => {
+    if (!warm || (warmState !== 'pending' && warmState !== 'warming')) return
+    const interval = setInterval(() => {
+      void apiClient.getAiWarmStatus(warm.key).then((status) => {
+        if (!status) return
+        setWarm((prev) => (prev && prev.key === warm.key ? { key: prev.key, status } : prev))
+      })
+    }, 1500)
+    return () => clearInterval(interval)
+  }, [warm, warmState])
 
   // Run-in-event-editor pushes a composed prompt into ChatInput; the user
   // reviews then sends. We hold the prefill here so a re-render doesn't
@@ -222,6 +293,7 @@ export function AiTabPanel() {
         >
           {systemPrompt.label}
         </span>
+        {warm ? <WarmIndicator status={warm.status} /> : null}
       </section>
 
       <section className="ai-tab__section ai-tab__section--sources">
