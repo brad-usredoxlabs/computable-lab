@@ -20,7 +20,7 @@ import {
   waitFor,
 } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { WorkspaceProvider } from '../../workspace/WorkspaceContext'
+import { WorkspaceProvider, useWorkspace } from '../../workspace/WorkspaceContext'
 import { defaultWorkspaceState } from '../../workspace/types'
 
 const listRecordsByKind = vi.fn()
@@ -128,6 +128,16 @@ const sampleTree = {
   ],
 }
 
+// Surfaces the open workspace tabs so a test can assert a record-edit tab opened.
+function TabsProbe() {
+  const ws = useWorkspace()
+  return (
+    <div data-testid="tabs">
+      {ws.state.tabs.map((t) => `${t.kind}:${t.id}`).join(' ')}
+    </div>
+  )
+}
+
 function renderFind() {
   return render(
     <MemoryRouter>
@@ -138,6 +148,7 @@ function renderFind() {
         saveFn={async (_id, s) => ({ state: s })}
       >
         <FindTabPanel />
+        <TabsProbe />
       </WorkspaceProvider>
     </MemoryRouter>,
   )
@@ -237,6 +248,41 @@ describe('FindTabPanel', () => {
     fireEvent.click(runRow)
     await waitFor(() =>
       expect(getRunMethod).toHaveBeenCalledWith('RUN-001'),
+    )
+  })
+
+  it('clicking the experiment title opens its record (not just expand/collapse)', async () => {
+    listRecordsByKind.mockResolvedValue({ records: [], total: 0 })
+    getStudyTree.mockResolvedValue(sampleTree)
+    renderFind()
+    const expRow = await screen.findByTestId('find-tab-experiment-EXP-001')
+    fireEvent.click(expRow)
+    expect(screen.getByTestId('tabs').textContent).toContain(
+      'record-edit:record:EXP-001',
+    )
+  })
+
+  it('the chevron toggle expands/collapses without opening a record', async () => {
+    listRecordsByKind.mockResolvedValue({ records: [], total: 0 })
+    getStudyTree.mockResolvedValue(sampleTree)
+    renderFind()
+    // Tree starts expanded, so the run is visible.
+    expect(await screen.findByTestId('find-tab-run-RUN-001')).toBeTruthy()
+    const toggle = screen.getByTestId('find-tab-experiment-toggle-EXP-001')
+    fireEvent.click(toggle)
+    // Collapsed: the run is gone and no record-edit tab was opened.
+    expect(screen.queryByTestId('find-tab-run-RUN-001')).toBeNull()
+    expect(screen.getByTestId('tabs').textContent).not.toContain('record-edit')
+  })
+
+  it('clicking the study heading opens the study record', async () => {
+    listRecordsByKind.mockResolvedValue({ records: [], total: 0 })
+    getStudyTree.mockResolvedValue(sampleTree)
+    renderFind()
+    const studyBtn = await screen.findByTestId('find-tab-open-study')
+    fireEvent.click(studyBtn)
+    expect(screen.getByTestId('tabs').textContent).toContain(
+      'record-edit:record:STU-000001',
     )
   })
 

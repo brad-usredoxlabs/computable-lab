@@ -83,6 +83,28 @@
 
 .find-tab__head h3 {
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The study heading doubles as the way back into the study record. */
+.find-tab__study-open {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.find-tab__study-open:hover {
+  background: var(--cl-bg-elev-2);
 }
 
 .find-tab__refresh {
@@ -136,6 +158,26 @@
 .find-tab__tree-row-wrap .find-tab__tree-row {
   flex: 1;
   min-width: 0;
+}
+
+/* Disclosure toggle, split out from the row so the title can navigate. */
+.find-tab__chev-btn {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px 0;
+  flex-shrink: 0;
+}
+
+.find-tab__chev-btn:hover:not(:disabled) {
+  background: var(--cl-bg-elev);
+}
+
+.find-tab__chev-btn:disabled {
+  cursor: default;
 }
 
 .find-tab__create-btn {

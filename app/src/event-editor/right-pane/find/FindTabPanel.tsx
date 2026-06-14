@@ -130,10 +130,30 @@ export function FindTabPanel() {
     })
   }, [studyId, ws])
 
+  // Open the study record itself in a TapTab left-pane tab — the way back
+  // to the study from the Find tree (mirrors InventoryRow's record-edit).
+  const openStudyRecord = useCallback(() => {
+    ws.openTab({
+      id: recordEditTabId(studyId),
+      kind: 'record-edit',
+      recordId: studyId,
+      recordKind: 'study',
+      title: study?.title ?? studyId,
+    })
+  }, [studyId, study, ws])
+
   return (
     <div className="right-panel find-tab" data-testid="find-tab">
       <header className="find-tab__head">
-        <h3 className="right-panel__heading">{studyId}</h3>
+        <button
+          type="button"
+          className="find-tab__study-open"
+          onClick={openStudyRecord}
+          data-testid="find-tab-open-study"
+          title={`Open ${study?.title ?? studyId} record`}
+        >
+          <h3 className="right-panel__heading">{studyId}</h3>
+        </button>
         <button
           type="button"
           className="find-tab__refresh"
@@ -270,19 +290,42 @@ function ExperimentRow({
     })
   }, [experiment.recordId, studyId, ws])
 
+  // Open the experiment record in a TapTab left-pane tab. The chevron stays a
+  // separate disclosure toggle, so clicking the title navigates (file-tree
+  // convention: triangle expands, name opens).
+  const openExperimentRecord = useCallback(() => {
+    ws.openTab({
+      id: recordEditTabId(experiment.recordId),
+      kind: 'record-edit',
+      recordId: experiment.recordId,
+      recordKind: 'experiment',
+      title: experiment.title,
+    })
+  }, [experiment.recordId, experiment.title, ws])
+
   return (
     <li>
       <div className="find-tab__tree-row-wrap">
         <button
           type="button"
-          className="find-tab__tree-row"
-          data-testid={`find-tab-experiment-${experiment.recordId}`}
+          className="find-tab__chev-btn"
+          data-testid={`find-tab-experiment-toggle-${experiment.recordId}`}
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
+          aria-label={`${open ? 'Collapse' : 'Expand'} ${experiment.title}`}
+          disabled={!hasRuns}
         >
           <span className="find-tab__chev" aria-hidden>
             {hasRuns ? (open ? '▾' : '▸') : '·'}
           </span>
+        </button>
+        <button
+          type="button"
+          className="find-tab__tree-row"
+          data-testid={`find-tab-experiment-${experiment.recordId}`}
+          onClick={openExperimentRecord}
+          title={`Open ${experiment.title} record`}
+        >
           <span className="find-tab__row-title">{experiment.title}</span>
           <span className="find-tab__row-meta">{experiment.runs.length}</span>
         </button>
