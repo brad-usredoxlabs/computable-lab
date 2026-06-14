@@ -34,6 +34,7 @@ import {
   parseSubmitSuggestionArgs,
 } from './submitSuggestionTool.js';
 import { createMaterialLabeler, enrichAddMaterialRefs } from './materialRefLabels.js';
+import { forceMaterialClarifications } from './forceMaterialClarifications.js';
 import { expandEventWells } from './wellRange.js';
 import {
   clarificationRequestFromLegacy,
@@ -278,7 +279,7 @@ const FORCED_DRAFT_TOOL_INSTRUCTION = [
   'EVENT-EDITOR DRAFT MODE:',
   `- You MUST finish this turn by calling the ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} tool.`,
   '- Do not answer in prose. Do not leave the assistant message empty.',
-  '- The `resolve` tool is NOT available this turn. Do not output any ontology CURIE you were not given in <resolved_context> — recalling an id from memory is a hallucination. Ground a named material as {mint:{label,domain}}, or, when you are unsure which specific record the user means, emit a material clarification (menuProvider /m) and let them pick.',
+  '- The `resolve` tool is NOT available this turn. Do not output any ontology CURIE you were not given in <resolved_context> — recalling an id from memory is a hallucination. For ANY material named in free text that is not already in <resolved_context>, emit a material clarification (menuProvider /m, allowCreateLocal true) so the user picks an ontology term or creates a local record. Do NOT mint silently, do NOT guess a CURIE, and never leave a material named only in a note with no material_ref.',
   '- If the prompt is underspecified or a named material/labware is ambiguous, call the tool with clarificationRequests[] (and no events) instead of guessing.',
   '- Every well-targeted event\'s details MUST include labwareId (an existing labware id from the editor context) and wells (e.g. ["A1"]). An event without them cannot be rendered or executed.',
   '- If the requested operation is simple labware/deck setup, include labwareRequirements with classCurie and deckSlot. Use labwareAdditions only for concrete known definitions.',
@@ -1446,6 +1447,42 @@ export function createAgentOrchestrator(
               createMaterialLabeler({ store: deps.store, ontology: deps.ontology }),
               { store: deps.store, mentions: ctxMentions },
             );
+
+            // Force a /m clarification for any ungrounded material. In draft
+            // mode the `resolve` tool is off and the post-tool re-compile (the
+            // compiler's gap→clarification net) is skipped, so an unconfirmed
+            // material — minted, a memory-recalled CURIE, or named only in a
+            // note — would otherwise reach the preview unverified. The user
+            // picks an ontology term or creates a local record instead.
+            const resolvedCuries = new Set<string>();
+            for (const m of resolvedMentions) {
+              if (m.id) resolvedCuries.add(m.id);
+              const cls = m.resolved && Array.isArray((m.resolved as Record<string, unknown>).class)
+                ? ((m.resolved as Record<string, unknown>).class as unknown[])
+                : [];
+              for (const c of cls) {
+                const cid = c && typeof c === 'object' ? (c as Record<string, unknown>).id : undefined;
+                if (typeof cid === 'string' && cid) resolvedCuries.add(cid);
+              }
+            }
+            const materialNet = forceMaterialClarifications(
+              parsed.events as unknown as Record<string, unknown>[],
+              // Police unconfirmed CURIEs only in forced-tool mode: there the
+              // compiler re-compile (which would otherwise validate them) is
+              // skipped, so this net is the last gate. Other modes re-compile.
+              { resolvedCuries, policeUnverifiedCuries: draftFlowMode === 'forced-tool' },
+            );
+            if (materialNet.clarificationRequests.length > 0) {
+              parsed.events = materialNet.events as unknown as typeof parsed.events;
+              parsed.clarificationRequests = [
+                ...(parsed.clarificationRequests ?? []),
+                ...materialNet.clarificationRequests,
+              ];
+              if (!parsed.clarification) {
+                const legacy = legacyClarificationFromRequests(parsed.clarificationRequests);
+                if (legacy) parsed.clarification = legacy;
+              }
+            }
           }
           let result = parsed;
           // Post-tool re-compile is a legacy-preflight behavior: it rebuilds
