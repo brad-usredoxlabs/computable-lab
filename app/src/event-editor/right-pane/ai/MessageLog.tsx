@@ -7,13 +7,21 @@
  * otherwise.
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { AiClarificationAnswer, AiClarificationOption, AiClarificationRequest } from '../../../types/ai'
 import type { ChatState } from './chatReducer'
+import { ClarificationPicker } from './ClarificationPicker'
+
+/** Material/labware clarifications get an inline search+mint picker. */
+function hasInlinePicker(request: AiClarificationRequest): boolean {
+  return request.menuProvider === '/m' || request.menuProvider === '/l'
+}
 
 export interface MessageLogProps {
   state: ChatState
-  onClarificationAnswer?: (answer: AiClarificationAnswer, request: AiClarificationRequest) => void
+  /** Fired once per clarification card-set, with all answers, after every card
+   *  is answered — so the model re-drafts the whole prompt in a single turn. */
+  onClarificationsSubmit?: (answers: AiClarificationAnswer[], requests: AiClarificationRequest[]) => void
 }
 
 function safeMentionPart(value: string): string {
@@ -50,60 +58,99 @@ export function mentionTokenForOption(
 
 function ClarificationCards({
   requests,
-  onAnswer,
+  onSubmit,
 }: {
   requests: AiClarificationRequest[]
-  onAnswer?: (answer: AiClarificationAnswer, request: AiClarificationRequest) => void
+  /** Fired ONCE with every answer, after all cards are answered — one re-draft. */
+  onSubmit?: (answers: AiClarificationAnswer[], requests: AiClarificationRequest[]) => void
 }) {
+  // Collect a pick per card and submit them together. Answering each card and
+  // re-drafting individually ping-pongs the user between materials (and re-runs
+  // the model per answer); batching resolves the whole prompt in one turn.
+  const [answers, setAnswers] = useState<Record<string, AiClarificationAnswer>>({})
+  const submittedRef = useRef(false)
+
+  const record = (answer: AiClarificationAnswer, request: AiClarificationRequest) =>
+    setAnswers((prev) => ({ ...prev, [request.id]: answer }))
+
+  const answeredCount = requests.filter((r) => answers[r.id]).length
+  const allAnswered = requests.length > 0 && answeredCount === requests.length
+
+  useEffect(() => {
+    if (allAnswered && !submittedRef.current) {
+      submittedRef.current = true
+      onSubmit?.(requests.map((r) => answers[r.id]!), requests)
+    }
+  }, [allAnswered, answers, requests, onSubmit])
+
   if (requests.length === 0) return null
   return (
     <div className="message-log__clarifications" data-testid="ai-clarification-cards">
-      {requests.map((request) => (
-        <section key={request.id} className="message-log__clarification-card">
-          <div className="message-log__clarification-head">
-            <span className="message-log__clarification-menu">{request.menuProvider}</span>
-            <span className="message-log__clarification-kind">{request.entityType ?? request.kind}</span>
-          </div>
-          <p className="message-log__clarification-prompt">{request.prompt}</p>
-          {request.snippet ? <p className="message-log__clarification-snippet">{request.snippet}</p> : null}
-          {request.options.length > 0 ? (
-            <div className="message-log__clarification-options">
-              {request.options.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  className="message-log__clarification-option"
-                  onClick={() => onAnswer?.({
-                    requestId: request.id,
-                    optionId: option.id,
-                    label: option.label,
-                    mentionToken: mentionTokenForOption(request, option),
-                    ...(option.ref ? { ref: option.ref } : {}),
-                  }, request)}
-                >
-                  <span>{option.label}</span>
-                  {option.source || option.snippet ? (
-                    <small>{option.source ?? option.snippet}</small>
-                  ) : null}
-                </button>
-              ))}
+      {requests.map((request) => {
+        const chosen = answers[request.id]
+        return (
+          <section key={request.id} className="message-log__clarification-card">
+            <div className="message-log__clarification-head">
+              <span className="message-log__clarification-menu">{request.menuProvider}</span>
+              <span className="message-log__clarification-kind">{request.entityType ?? request.kind}</span>
             </div>
-          ) : (
-            <button
-              type="button"
-              className="message-log__clarification-option message-log__clarification-option--manual"
-              onClick={() => onAnswer?.({ requestId: request.id, value: request.query ?? request.prompt }, request)}
-            >
-              Answer in chat
-            </button>
-          )}
-        </section>
-      ))}
+            <p className="message-log__clarification-prompt">{request.prompt}</p>
+            {request.snippet ? <p className="message-log__clarification-snippet">{request.snippet}</p> : null}
+            {chosen ? (
+              <div className="message-log__clarification-answered" data-testid="clarification-answered">
+                ✓ {chosen.label ?? chosen.value ?? 'answered'}
+              </div>
+            ) : (
+              <>
+                {request.options.length > 0 ? (
+                  <div className="message-log__clarification-options">
+                    {request.options.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        className="message-log__clarification-option"
+                        onClick={() => record({
+                          requestId: request.id,
+                          optionId: option.id,
+                          label: option.label,
+                          mentionToken: mentionTokenForOption(request, option),
+                          ...(option.ref ? { ref: option.ref } : {}),
+                        }, request)}
+                      >
+                        <span>{option.label}</span>
+                        {option.source || option.snippet ? (
+                          <small>{option.source ?? option.snippet}</small>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {hasInlinePicker(request) ? (
+                  <ClarificationPicker request={request} onPick={record} />
+                ) : request.options.length === 0 ? (
+                  <button
+                    type="button"
+                    className="message-log__clarification-option message-log__clarification-option--manual"
+                    onClick={() => record({ requestId: request.id, value: request.query ?? request.prompt }, request)}
+                  >
+                    Answer in chat
+                  </button>
+                ) : null}
+              </>
+            )}
+          </section>
+        )
+      })}
+      {requests.length > 1 && !allAnswered ? (
+        <div className="message-log__clarification-progress" data-testid="clarification-progress">
+          {answeredCount} of {requests.length} answered — pick the rest to draft them together.
+        </div>
+      ) : null}
     </div>
   )
 }
 
-export function MessageLog({ state, onClarificationAnswer }: MessageLogProps) {
+export function MessageLog({ state, onClarificationsSubmit }: MessageLogProps) {
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   // Auto-scroll on every message change. jsdom doesn't ship scrollTo, so
   // we guard it the same way the PDF viewer does.
@@ -153,7 +200,7 @@ export function MessageLog({ state, onClarificationAnswer }: MessageLogProps) {
           {m.clarificationRequests?.length ? (
             <ClarificationCards
               requests={m.clarificationRequests}
-              onAnswer={onClarificationAnswer}
+              onSubmit={onClarificationsSubmit}
             />
           ) : null}
         </article>

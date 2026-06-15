@@ -41,10 +41,11 @@ form:
     collapsible: true
     fields:
     - path: "$.tags"
-      widget: "combobox"
+      widget: "chips"
       label: "Tags"
       props:
-        sources: ["local"]
+        sources: ["local", "ols"]
+        ontologies: ["efo", "chebi", "go"]
         field: "tags"
     - path: "$.primaryClaimIds"
       widget: "array"
@@ -53,19 +54,43 @@ form:
     collapsible: true
     collapsed: true
     fields:
+    # Project-level license. Set here on the study; experiments and runs
+    # inherit it (read-only) — see experiment.ui.yaml / run.ui.yaml and the
+    # read-through in UIHandlers.getRecordEditorProjection.
     - path: "$.license"
-      widget: "text"
+      widget: "select"
       label: "License"
+      options:
+        - value: "CC0-1.0"
+          label: "CC0 1.0 (Public Domain Dedication)"
+        - value: "CC-BY-4.0"
+          label: "CC BY 4.0 (Attribution)"
+        - value: "CC-BY-SA-4.0"
+          label: "CC BY-SA 4.0 (Attribution-ShareAlike)"
+        - value: "CC-BY-NC-4.0"
+          label: "CC BY-NC 4.0 (Attribution-NonCommercial)"
+        - value: "CC-BY-NC-SA-4.0"
+          label: "CC BY-NC-SA 4.0 (Attribution-NonCommercial-ShareAlike)"
+        - value: "CC-BY-ND-4.0"
+          label: "CC BY-ND 4.0 (Attribution-NoDerivatives)"
+        - value: "CC-BY-NC-ND-4.0"
+          label: "CC BY-NC-ND 4.0 (Attribution-NonCommercial-NoDerivatives)"
+        - value: "proprietary"
+          label: "All Rights Reserved (Proprietary)"
+        - value: "internal-only"
+          label: "Internal / Confidential"
     - path: "$.keywords"
-      widget: "combobox"
+      widget: "chips"
       label: "Keywords"
       props:
         sources: ["local", "ols"]
         ontologies: ["efo", "chebi", "go"]
         field: "keywords"
+    # Hidden in the editor — auto-filled at export time (DOIs, accessions, etc.).
     - path: "$.relatedIdentifiers"
       widget: "array"
       label: "Related Identifiers"
+      hidden: true
   - title: "Provenance"
     collapsible: true
     collapsed: true

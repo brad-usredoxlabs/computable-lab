@@ -154,6 +154,8 @@ export function buildProjectionDocument(
     help?: string;
     required?: boolean;
     readOnly?: boolean;
+    /** Authoritative display-only value override (wins over `data`). */
+    value?: unknown;
     suggestionProviders?: string[];
     options?: Array<{ value: string | number | boolean; label: string }>;
     refKind?: string;
@@ -174,7 +176,10 @@ export function buildProjectionDocument(
     if (blockSlots.length === 0) continue;
 
     const fieldRows: JSONContent[] = blockSlots.map((slot) => {
-      const rawValue = getValueAtPath(data, slot.path);
+      // A slot-level `value` is an authoritative display-only override supplied
+      // by the projection (e.g. license read-through from the parent study, the
+      // resolved Created By name). It wins over the stored payload value.
+      const rawValue = slot.value !== undefined ? slot.value : getValueAtPath(data, slot.path);
       const value = stripJsonPathValue(rawValue);
 
       const slotOptions = slot.options?.map((opt) => ({ value: String(opt.value), label: opt.label }));
@@ -189,7 +194,9 @@ export function buildProjectionDocument(
         value,
         readOnly: Boolean(slot.readOnly ?? suggestionPlan.ownedByApp ?? false),
         required: slot.required ?? false,
-        options: null,
+        // Option-backed widgets (select/radio) need their options to render the
+        // dropdown and to map stored values to friendly labels in display mode.
+        options: slotOptions ?? null,
         refKind: slot.refKind ?? undefined,
         suggestionPlan,
         help: slot.help ?? undefined,

@@ -30,6 +30,8 @@ export interface AssistStreamRequest {
   history?: Array<{ role: 'user' | 'assistant'; content: string }>
   /** Answers to structured clarification requests from an earlier assistant turn. */
   clarificationAnswers?: AiClarificationAnswer[]
+  /** Opt into the model's chain-of-thought (off by default — it's slow). */
+  enableThinking?: boolean
 }
 
 /**

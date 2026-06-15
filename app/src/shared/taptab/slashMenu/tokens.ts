@@ -57,6 +57,7 @@ export function badgeStyles(
     case 'Vendor':
       return { background: '#fef9c3', color: '#854d0e', border: '#fde68a' }
     case 'Concept':
+    case 'Ontology':
       return { background: '#f3e8ff', color: '#7e22ce', border: '#d8b4fe' }
     case 'Labware':
       return { background: '#fef3c7', color: '#92400e', border: '#fcd34d' }

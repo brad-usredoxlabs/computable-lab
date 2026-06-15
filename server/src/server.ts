@@ -563,6 +563,19 @@ export async function createServer(
   const resolveSpine = createResolveSpineFromContext(ctx);
   const resolveHandlers = createResolveHandlers(resolveSpine);
 
+  // Warm the remote ontology (OLS4) connection at boot. The first request to
+  // EBI pays a cold DNS+TLS handshake that can exceed the spine's remote
+  // timeout (2.5s) — when it does, that tier is aborted and the first user
+  // search returns no ontology hits (the "type 'liver' → nothing, but 'liver '
+  // → matches" report: the trailing space just bought time for the connection
+  // to warm). Paying the handshake here, before anyone types, means the user's
+  // first real search hits a warm connection and resolves normally.
+  // Fire-and-forget and fully best-effort: on an offline appliance this simply
+  // times out in the background and is ignored.
+  void resolveSpine
+    .resolve('cell', { limit: 1 })
+    .catch(() => {});
+
   // Compile hot path uses an OAK-only spine (no records, no remote): fast,
   // offline-safe, and consistent with the appliance's on-box ontologies. Only
   // wired when an OAK service is configured; otherwise the compiler keeps its

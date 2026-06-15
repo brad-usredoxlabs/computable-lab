@@ -8,6 +8,7 @@ import {
 import { OntologyPicker } from '../OntologyPicker'
 import { MultiOntologyRefList } from '../MultiOntologyRefList'
 import type { PickedMaterial } from '../state'
+import { materialConceptPayload, sampleInstancePayload } from '../lib/materialSavePayload'
 
 /**
  * Sample builder ("qPCR cDNA from liver biopsy A4"-style).
@@ -108,14 +109,10 @@ export function BuildSampleForm({
         ...extraRefs,
       ]
 
-      await apiClient.createRecord(MATERIAL_SCHEMA_ID, {
-        kind: 'material',
-        id: materialId,
-        name: trimmedName,
-        domain: 'sample',
-        ...(classRefs.length > 0 ? { class: classRefs } : {}),
-        tags: ['sample', derivationType],
-      })
+      await apiClient.createRecord(
+        MATERIAL_SCHEMA_ID,
+        materialConceptPayload({ materialId, name: trimmedName, domain: 'sample', classRefs, tags: ['sample', derivationType] }),
+      )
 
       const derivedState: Record<string, unknown> = {
         derivation_type: derivationType,
@@ -132,19 +129,15 @@ export function BuildSampleForm({
       if (collectionDate) derivedState.collection_date = collectionDate
       if (notes.trim()) derivedState.clarification_note = notes.trim()
 
-      const response = await apiClient.createMaterialInstance({
-        name: trimmedName,
-        materialRef: {
-          kind: 'record',
-          id: materialId,
-          type: 'material',
-          label: trimmedName,
-        },
-        preparedOn: collectionDate || undefined,
-        derivedState,
-        status: 'available',
-        tags: ['sample', derivationType],
-      } as Parameters<typeof apiClient.createMaterialInstance>[0])
+      const response = await apiClient.createMaterialInstance(
+        sampleInstancePayload({
+          materialId,
+          name: trimmedName,
+          derivationType,
+          derivedState,
+          ...(collectionDate ? { collectionDate } : {}),
+        }),
+      )
 
       onSaved({
         recordId: response.materialInstanceId,

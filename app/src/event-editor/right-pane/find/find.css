@@ -197,3 +197,28 @@
 .find-tab__create-btn:hover {
   border-color: var(--cl-accent, #6b9fff);
 }
+
+/* Project-level usage anchors shown under a Find-tab inventory row. */
+.find-tab__anchors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.find-tab__anchor {
+  font-size: 10px;
+  line-height: 1.3;
+  color: var(--cl-text-dim);
+  background: var(--cl-bg-elev-2);
+  border: 1px solid var(--cl-border);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.find-tab__anchor--more {
+  color: var(--cl-text-dim);
+  font-style: italic;
+  background: transparent;
+  border-style: dashed;
+}

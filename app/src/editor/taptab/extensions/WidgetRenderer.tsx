@@ -16,6 +16,7 @@ import { MultiselectWidget } from '../widgets/MultiselectWidget';
 import { ReflistWidget, type ReflistEntry } from '../widgets/ReflistWidget';
 import { ArrayWidget } from '../widgets/ArrayWidget';
 import { ObjectWidget } from '../widgets/ObjectWidget';
+import { ChipComboboxWidget } from '../widgets/ChipComboboxWidget';
 import type { StructuredValue } from '../../../shared/forms/suggestionPlan';
 
 export interface WidgetRendererProps {
@@ -155,6 +156,18 @@ export function WidgetRenderer({
     );
   }
 
+  if (widget === 'chips') {
+    return (
+      <ChipComboboxWidget
+        value={value}
+        suggestionPlan={suggestionPlan}
+        refKind={refKind}
+        readOnly={readOnly}
+        onCommit={onCommit}
+      />
+    );
+  }
+
   if (widget === 'array') {
     return <ArrayWidget value={value} widget={widget} readOnly={readOnly} onCommit={onCommit} />;
   }
@@ -210,13 +223,19 @@ export function WidgetRenderer({
     return <RichTextField content={String(value ?? '')} onChange={handleRichTextChange} />;
   }
 
+  // For option-backed widgets (e.g. select), show the option's friendly label
+  // in display mode rather than the stored raw value (e.g. "CC BY 4.0" instead
+  // of "CC-BY-4.0", "In Progress" instead of "in_progress").
+  const optionLabel = options?.find((o) => String(o.value) === String(value ?? ''))?.label;
+  const displayText = optionLabel ?? String(value ?? '');
+
   const display = editing ? (
     // autoFocus: edit mode is entered by clicking the display span (or via
     // Tab-nav's synthetic click) — the input that replaces it must take
     // focus itself or keystrokes silently go nowhere.
     <input type={getInputType()} value={localValue} onChange={(e) => setLocalValue(e.target.value)} onBlur={handleInputBlur} onKeyDown={handleKeyDown} className="taptab-inline-input" onClick={(e) => e.stopPropagation()} autoFocus />
   ) : String(value ?? '') !== '' ? (
-    <span>{String(value)}</span>
+    <span>{displayText}</span>
   ) : (
     // Visible affordance for empty editable fields — without it a new
     // record renders as invisible zero-width click targets.

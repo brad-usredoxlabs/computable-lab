@@ -17,6 +17,7 @@ import { recordCreateTabId, recordEditTabId } from '../../workspace/types'
 import { useStudyArtifacts } from '../useStudyArtifacts'
 import {
   useProjectInventory,
+  useProjectUsage,
   deckLabwareItems,
   deckMaterialItems,
   mergeInventoryItems,
@@ -47,6 +48,7 @@ export function FindTabPanel() {
   const studyId = ws.state.studyId
   const { artifacts, loading, error, refresh } = useStudyArtifacts(studyId)
   const inventory = useProjectInventory(studyId)
+  const usage = useProjectUsage(studyId)
   const grouped = useMemo(() => groupByKind(artifacts), [artifacts])
 
   // The currently-open deck (null on non-deck tabs). Labware placed on the deck
@@ -63,18 +65,21 @@ export function FindTabPanel() {
     () => (deckState ? deckMaterialItems(deckState.events) : []),
     [deckState],
   )
+  // Merge each Materials/Labwares section with (a) project-wide usage across the
+  // runs (anchored to experiment/run) and (b) the live deck's items. Usage goes
+  // first so its anchors win the union; deck items add anything unsaved.
   const inventorySections = useMemo(
     () =>
       inventory.sections.map((section) => {
         if (section.label === 'Labwares') {
-          return { ...section, records: mergeInventoryItems(section.records, deckLabwares) }
+          return { ...section, records: mergeInventoryItems(section.records, [...usage.labwares, ...deckLabwares]) }
         }
         if (section.label === 'Materials') {
-          return { ...section, records: mergeInventoryItems(section.records, deckMaterials) }
+          return { ...section, records: mergeInventoryItems(section.records, [...usage.materials, ...deckMaterials]) }
         }
         return section
       }),
-    [inventory.sections, deckLabwares, deckMaterials],
+    [inventory.sections, usage.materials, usage.labwares, deckLabwares, deckMaterials],
   )
 
   const [study, setStudy] = useState<StudyTreeNode | null>(null)
@@ -115,10 +120,11 @@ export function FindTabPanel() {
       refreshTree()
       void refresh()
       inventory.refresh()
+      usage.refresh()
     }
     window.addEventListener('cl:records-changed', onChanged)
     return () => window.removeEventListener('cl:records-changed', onChanged)
-  }, [refreshTree, refresh, inventory])
+  }, [refreshTree, refresh, inventory, usage])
 
   const openNewExperiment = useCallback(() => {
     ws.openTab({
@@ -161,6 +167,7 @@ export function FindTabPanel() {
             refreshTree()
             void refresh()
             inventory.refresh()
+            usage.refresh()
           }}
           data-testid="find-tab-refresh"
           aria-label="Refresh project tree and artifacts"
@@ -440,6 +447,8 @@ function ArtifactRow({ artifact }: { artifact: ArtifactSummary }) {
 function InventoryRow({ record }: { record: InventoryRecord }) {
   const ws = useWorkspace()
   const editable = record.editable !== false
+  const anchors = record.anchors ?? []
+  const VISIBLE_ANCHORS = 3
   return (
     <button
       type="button"
@@ -459,13 +468,29 @@ function InventoryRow({ record }: { record: InventoryRecord }) {
         })
       }}
       title={
-        editable
-          ? `Open ${record.title} for editing`
-          : `${record.title} — on the deck (no saved record to edit yet)`
+        anchors.length > 0
+          ? `${record.title} — used in: ${anchors.map((a) => `${a.experimentTitle} / ${a.runTitle}`).join(', ')}`
+          : editable
+            ? `Open ${record.title} for editing`
+            : `${record.title} — on the deck (no saved record to edit yet)`
       }
     >
       <span className="right-panel__row-title">{record.title}</span>
       <span className="right-panel__row-sub">{record.recordId}</span>
+      {anchors.length > 0 ? (
+        <span className="find-tab__anchors" data-testid={`find-tab-inv-anchors-${record.recordId}`}>
+          {anchors.slice(0, VISIBLE_ANCHORS).map((a) => (
+            <span key={a.runId} className="find-tab__anchor">
+              {a.experimentTitle} / {a.runTitle}
+            </span>
+          ))}
+          {anchors.length > VISIBLE_ANCHORS ? (
+            <span className="find-tab__anchor find-tab__anchor--more">
+              +{anchors.length - VISIBLE_ANCHORS} more
+            </span>
+          ) : null}
+        </span>
+      ) : null}
     </button>
   )
 }

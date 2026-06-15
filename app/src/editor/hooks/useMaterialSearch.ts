@@ -61,7 +61,9 @@ export function useMaterialSearch(opts: UseMaterialSearchOptions): UseMaterialSe
     enabled: enabled && query.length >= minQueryLength,
     debounceMs,
     minQueryLength,
-    maxResults,
+    // The picker dropdown scrolls, so show a wider ranked list than the default;
+    // useResolveOntology re-ranks (exact/shortest first) and returns this many.
+    maxResults: Math.max(maxResults, 40),
   })
 
   // Local record search (debounced)

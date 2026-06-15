@@ -83,6 +83,8 @@ export interface EditorProjectionResponse {
     help?: string;
     required?: boolean;
     readOnly?: boolean;
+    /** Authoritative display-only value override (wins over payload). */
+    value?: unknown;
     suggestionProviders?: string[];
     visible?: { when: string; operator: string; value?: unknown };
   }>;
@@ -93,6 +95,33 @@ export interface EditorProjectionResponse {
     severity: string;
     path?: string;
   }>;
+  /**
+   * Display-only field overrides keyed by payload path (e.g. `license`,
+   * `createdBy`). Merged over the record payload by the editor at render time;
+   * never persisted. Used for read-through inheritance and resolved names.
+   */
+  displayValues?: Record<string, unknown>;
+}
+
+/**
+ * Bake display-only value overrides onto a projection's slots so every editor
+ * surface renders them (the document mapper prefers slot.value over the stored
+ * payload). Keys are payload field names (e.g. `license`); slots are matched by
+ * their `$.<key>` path. Also mirrored onto `displayValues` for any consumer
+ * that reads the map directly. Mutates and returns the projection.
+ */
+function applyDisplayValuesToSlots(
+  projection: EditorProjectionResponse,
+  displayValues: Record<string, unknown>
+): EditorProjectionResponse {
+  const keys = Object.keys(displayValues);
+  if (keys.length === 0) return projection;
+  for (const key of keys) {
+    const slot = projection.slots.find((s) => s.path === `$.${key}`);
+    if (slot) slot.value = displayValues[key];
+  }
+  projection.displayValues = { ...(projection.displayValues ?? {}), ...displayValues };
+  return projection;
 }
 
 // ============================================================================
@@ -261,15 +290,94 @@ export class UIHandlers {
       };
     }
     
-    // Project the record
+    // Project the record from its stored payload.
     const projection = this.editorProjectionService.project(
       uiSpec,
       envelope.payload as Record<string, unknown>,
       envelope.schemaId,
       envelope.recordId
     );
-    
+
+    // Attach display-only field overrides (read-through license, resolved
+    // creator name). These are baked onto the matching slots as authoritative
+    // display values so every editor surface renders them — the projection
+    // carries field *structure*, and the document mapper prefers slot.value
+    // over the stored payload. Never persisted.
+    const displayValues = await this.computeDisplayValues(envelope);
+    applyDisplayValuesToSlots(projection, displayValues);
+
     return projection;
+  }
+
+  /**
+   * Compute display-only field overrides for the editor, keyed by payload path:
+   *
+   *  - **License read-through**: experiments and runs inherit the project's
+   *    license from their parent study, so the read-only field stays in sync
+   *    even if the study's license changes after the child was created.
+   *  - **Created By name**: the creator id lives in envelope `meta.createdBy`
+   *    (never the payload, per the RecordEnvelope contract). Resolve it to the
+   *    user's display name so the read-only "Created By" field shows a name.
+   *
+   * Returns only the overridden keys; the stored record is untouched.
+   */
+  private async computeDisplayValues(
+    envelope: RecordEnvelope
+  ): Promise<Record<string, unknown>> {
+    const payload = (envelope.payload as Record<string, unknown>) ?? {};
+    const overrides: Record<string, unknown> = {};
+
+    // License read-through from the parent study (experiments + runs).
+    const kind = payload.kind;
+    if (kind === 'experiment' || kind === 'run') {
+      const studyId = await this.resolveParentStudyId(payload);
+      if (studyId) {
+        const study = await this.store.get(studyId);
+        const studyLicense = (study?.payload as Record<string, unknown> | undefined)?.license;
+        if (typeof studyLicense === 'string' && studyLicense) {
+          overrides.license = studyLicense;
+        }
+      }
+    }
+
+    // Resolve the creator id (from envelope meta, falling back to any legacy
+    // payload value) to a display name.
+    const creatorId =
+      envelope.meta?.createdBy ??
+      (typeof payload.createdBy === 'string' ? (payload.createdBy as string) : undefined);
+    if (creatorId) {
+      overrides.createdBy = await this.resolveUserDisplayName(creatorId);
+    }
+
+    return overrides;
+  }
+
+  /** Resolve the studyId for an experiment/run payload (run → experiment → study). */
+  private async resolveParentStudyId(
+    payload: Record<string, unknown>
+  ): Promise<string | undefined> {
+    if (typeof payload.studyId === 'string' && payload.studyId) {
+      return payload.studyId;
+    }
+    if (typeof payload.experimentId === 'string' && payload.experimentId) {
+      const experiment = await this.store.get(payload.experimentId);
+      const sid = (experiment?.payload as Record<string, unknown> | undefined)?.studyId;
+      if (typeof sid === 'string' && sid) return sid;
+    }
+    return undefined;
+  }
+
+  /** Resolve a user id (USR-*) to its display name; non-user ids pass through. */
+  private async resolveUserDisplayName(userId: string): Promise<string> {
+    try {
+      const user = await this.store.get(userId);
+      const up = user?.payload as Record<string, unknown> | undefined;
+      const name = up?.displayName ?? up?.username;
+      if (typeof name === 'string' && name) return name;
+    } catch {
+      // Non-fatal: fall back to the raw id.
+    }
+    return userId;
   }
   
   /**
@@ -316,6 +424,15 @@ export class UIHandlers {
       decodedSchemaId,
       '__draft__'
     );
+
+    // Pre-fill Created By with the current user's display name so a new record
+    // shows who will own it before the first save (display-only; the real
+    // createdBy is written server-side at creation from the request identity).
+    const userId = request.headers['x-user-id'];
+    if (typeof userId === 'string' && userId) {
+      const name = await this.resolveUserDisplayName(userId);
+      applyDisplayValuesToSlots(projection, { createdBy: name });
+    }
 
     return projection;
   }

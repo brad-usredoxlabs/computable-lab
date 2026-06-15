@@ -5,6 +5,7 @@ import {
   type MaterialSearchItem,
   type ResolveCandidate,
 } from '../../shared/api/client'
+import { rankByLabelMatch } from '../../shared/search/rankByLabelMatch'
 
 /**
  * Debounced material search combining local DB (records + formulations)
@@ -26,6 +27,20 @@ const LOCAL_DEBOUNCE_MS = 200
 // the local DB layer to avoid hammering it on every keystroke.
 const ONTOLOGY_DEBOUNCE_MS = 350
 const SEARCH_LIMIT = 12
+// Ontology hits get re-ranked client-side (exact/shortest first), so fetch a
+// wider window than we'd show — otherwise the bare term ("isopropanol") can be
+// buried below the spine's fetch cutoff by longer derivatives ("isopropanol
+// dehydrogenase"). The list is scrollable, so a larger set is fine.
+const ONTOLOGY_LIMIT = 40
+
+/**
+ * Re-rank ontology hits so the closest term is on top (exact → prefix →
+ * substring → other; shorter label first). Spine input is score-sorted, so the
+ * stable sort keeps score order within a tie. See {@link rankByLabelMatch}.
+ */
+export function rankOntologyCandidates(candidates: ResolveCandidate[], query: string): ResolveCandidate[] {
+  return rankByLabelMatch(candidates, (c) => c.label, query)
+}
 
 export interface UseMaterialSearchResult {
   /** Current input value the modal binds to. */
@@ -105,17 +120,17 @@ export function useMaterialSearch(): UseMaterialSearchResult {
         term: trimmed,
         surface: 'material-picker',
         kinds: ['material'],
-        limit: SEARCH_LIMIT,
+        limit: ONTOLOGY_LIMIT,
       })
       if (latestQueryRef.current.trim() !== trimmed) return
       // Keep the true ontology tiers (on-box OAK snapshot + remote OLS4) that
       // carry a CURIE. Local records are already in their own section, and the
-      // tier-5 "mint" affordance is handled by "Create new material…".
-      setOntologyResults(
-        (candidates ?? []).filter(
-          (c) => (c.source === 'oak' || c.source === 'ols4') && Boolean(c.curie),
-        ),
+      // tier-5 "mint" affordance is handled by "Create new material…". Re-rank
+      // so the exact/shortest match leads (see rankOntologyCandidates).
+      const filtered = (candidates ?? []).filter(
+        (c) => (c.source === 'oak' || c.source === 'ols4') && Boolean(c.curie),
       )
+      setOntologyResults(rankOntologyCandidates(filtered, trimmed))
     } catch (err) {
       if (latestQueryRef.current.trim() !== trimmed) return
       setError(err instanceof Error ? err.message : 'Ontology search failed')

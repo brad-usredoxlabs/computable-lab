@@ -165,23 +165,45 @@ export function serializeResolvedContext(mentions: ResolvedMention[]): string {
   lines.push('resolved:');
 
   for (const mention of mentions) {
-    // Only include mentions that resolved successfully
-    if (!mention.resolved) continue;
+    // Include mentions that resolved to a record, AND explicit [[...]] refs whose
+    // record couldn't be fetched (e.g. a draft material-spec). The token itself
+    // is the user's grounded choice, so it still belongs here — otherwise the
+    // agent re-asks for a clarification it already has.
+    if (!mention.resolved && !isExplicitPromptRef(mention)) continue;
 
     lines.push(`  - raw: "${escapeYamlString(mention.raw)}"`);
     lines.push(`    kind: ${mention.kind}`);
     lines.push(`    id: ${escapeYamlString(mention.id)}`);
     lines.push(`    label: "${escapeYamlString(mention.label)}"`);
-    
-    // Serialize the resolved entity data with extra indentation
-    const resolvedJson = JSON.stringify(mention.resolved, null, 2);
-    const indentedResolved = resolvedJson.split('\n').map(line => '    ' + line).join('\n');
-    lines.push(`    resolved: ${indentedResolved}`);
+
+    if (mention.resolved) {
+      // Serialize the resolved entity data with extra indentation
+      const resolvedJson = JSON.stringify(mention.resolved, null, 2);
+      const indentedResolved = resolvedJson.split('\n').map(line => '    ' + line).join('\n');
+      lines.push(`    resolved: ${indentedResolved}`);
+    } else {
+      // Grounded by reference: the record isn't preloaded, but the id + label are
+      // the user's explicit choice — treat as resolved, do not re-clarify.
+      lines.push(
+        `    resolved: { "kind": "${escapeYamlString(mention.kind)}", "id": "${escapeYamlString(mention.id)}", "label": "${escapeYamlString(mention.label)}", "groundedByReference": true }`,
+      );
+    }
   }
 
   lines.push('</resolved_context>');
-  
+
   return lines.join('\n');
+}
+
+/**
+ * An explicit `[[kind:id|label]]` reference the user (or a prior grounded answer)
+ * placed in the prompt. Such a token is an authoritative choice even when the
+ * record can't be fetched (e.g. a draft material-spec that was never persisted),
+ * so it still belongs in resolved_context. Selection mentions are excluded —
+ * they're resolved client-side and carry no fetchable record id.
+ */
+function isExplicitPromptRef(mention: ResolvedMention): boolean {
+  return mention.kind !== 'selection' && Boolean(mention.id && mention.id.trim());
 }
 
 /**
@@ -201,8 +223,8 @@ function escapeYamlString(value: string): string {
  * Returns null if there are no successfully resolved mentions.
  */
 export function buildResolvedContextMessage(mentions: ResolvedMention[]): string | null {
-  const successful = mentions.filter(m => m.resolved);
-  if (successful.length === 0) return null;
-  
-  return serializeResolvedContext(successful);
+  const usable = mentions.filter((m) => m.resolved || isExplicitPromptRef(m));
+  if (usable.length === 0) return null;
+
+  return serializeResolvedContext(usable);
 }

@@ -27,6 +27,7 @@ export type WidgetType =
   | 'ref'
   | 'reflist'
   | 'combobox'
+  | 'chips'
   | 'textarea'
   | 'markdown'
   | 'array'

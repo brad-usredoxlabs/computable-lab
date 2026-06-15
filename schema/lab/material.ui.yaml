@@ -43,7 +43,7 @@ form:
       props:
         ownedByApp: true
     - path: "$.class"
-      widget: "array"
+      widget: "chips"
       label: "Classifications"
       props:
         sources: ["ols"]

@@ -93,6 +93,24 @@
   background: var(--cl-bg-elev);
 }
 
+.message-log__clarification-answered {
+  margin-top: 8px;
+  padding: 7px 8px;
+  border: 1px solid color-mix(in srgb, var(--cl-accent) 40%, var(--cl-border));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--cl-bg-elev-2) 80%, var(--cl-accent) 20%);
+  color: var(--cl-text);
+  font-size: 12px;
+}
+
+.message-log__clarification-progress {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--cl-text-dim);
+  font-style: italic;
+}
+
+
 /* ---- SourcesStrip --------------------------------------------------- */
 
 .sources-strip {
@@ -567,4 +585,32 @@
 .message-log__clarification-option--manual {
   margin-top: 8px;
   color: var(--cl-accent);
+}
+
+.message-log__clarification-picker {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.message-log__clarification-search {
+  width: 100%;
+  appearance: none;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  padding: 7px 8px;
+  font: inherit;
+  font-size: 12px;
+}
+
+.message-log__clarification-search:focus {
+  outline: none;
+  border-color: var(--cl-accent);
+}
+
+.message-log__clarification-search:disabled {
+  opacity: 0.6;
+  cursor: progress;
 }

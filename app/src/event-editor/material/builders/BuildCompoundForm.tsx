@@ -10,6 +10,7 @@ import { MultiOntologyRefList } from '../MultiOntologyRefList'
 import { SolventPicker, type PickedSolvent } from '../SolventPicker'
 import { useOntologyConfig } from '../useOntologyConfig'
 import type { PickedMaterial } from '../state'
+import { materialConceptPayload, singleActiveFormulationPayload } from '../lib/materialSavePayload'
 
 /**
  * Compound formulation builder for a primary compound dissolved in a solvent.
@@ -93,14 +94,10 @@ export function BuildCompoundForm({
     try {
       const trimmedName = name.trim()
       const materialId = generateMaterialId(trimmedName)
-      const conceptPayload: Record<string, unknown> = {
-        kind: 'material',
-        id: materialId,
-        name: trimmedName,
-        domain: 'chemical',
-        ...(classRefs.length > 0 ? { class: classRefs } : {}),
-      }
-      await apiClient.createRecord(MATERIAL_SCHEMA_ID, conceptPayload)
+      await apiClient.createRecord(
+        MATERIAL_SCHEMA_ID,
+        materialConceptPayload({ materialId, name: trimmedName, domain: 'chemical', classRefs }),
+      )
 
       const solventRef = solvent
         ? solvent.kind === 'record'
@@ -108,44 +105,16 @@ export function BuildCompoundForm({
           : { kind: 'ontology' as const, id: solvent.id, namespace: solvent.namespace, label: solvent.label, uri: solvent.uri }
         : undefined
 
-      const formulationResp = await apiClient.createFormulation({
-        material: {
-          id: materialId,
-          name: trimmedName,
-          domain: 'chemical',
-          ...(classRefs.length > 0
-            ? {
-                classRefs: classRefs.map((r) => ({
-                  kind: 'ontology' as const,
-                  id: r.id,
-                  namespace: r.namespace,
-                  label: r.label,
-                  uri: r.uri,
-                })),
-              }
-            : {}),
-        },
-        outputSpec: {
-          name: outputName.trim(),
+      const formulationResp = await apiClient.createFormulation(
+        singleActiveFormulationPayload({
+          materialId,
+          conceptName: trimmedName,
+          outputName: outputName.trim(),
+          classRefs,
           ...(concentration ? { concentration } : {}),
           ...(solventRef ? { solventRef } : {}),
-        },
-        recipe: {
-          name: `${trimmedName} stock`,
-          inputRoles: [],
-          // Placeholder step. Users refine the actual prep in the
-          // Labware Editor when they care; the inline modal stays
-          // focused on getting the material reference into the well.
-          steps: [
-            {
-              order: 1,
-              instruction: `Dissolve ${trimmedName} in ${
-                solventRef?.label ?? 'solvent'
-              } to ${concentrationValue} ${concentrationUnit}.`,
-            },
-          ],
-        },
-      })
+        }),
+      )
 
       onSaved({
         recordId: formulationResp.materialSpecId,

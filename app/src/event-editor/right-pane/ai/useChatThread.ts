@@ -25,6 +25,8 @@ interface SendOptions {
   /** Override the surface id for this single send. Used by RunInEventEditor. */
   surfaceOverride?: string
   clarificationAnswers?: AiClarificationAnswer[]
+  /** Opt into the model's chain-of-thought for this send (off by default). */
+  enableThinking?: boolean
 }
 
 export interface UseChatThreadResult {
@@ -114,6 +116,7 @@ export function useChatThread({
         context,
         history: history.slice(0, -1), // exclude the prompt itself — sent separately
         ...(options?.clarificationAnswers?.length ? { clarificationAnswers: options.clarificationAnswers } : {}),
+        ...(options?.enableThinking !== undefined ? { enableThinking: options.enableThinking } : {}),
       }
 
       const stream = runStream ?? runAssistStream

@@ -19,7 +19,13 @@ import type { OLSResultRef } from '../../shared/api/olsClient'
  * state, so the only way to advance is via the typed actions below.
  */
 
-export type MaterialKind = 'compound' | 'mixture' | 'cells' | 'sample'
+/**
+ * The material-creation seed is keyed by backend material-profile id (driven by
+ * `GET /materials/profiles` via `useMaterialProfiles`), not a hand-rolled enum.
+ * The four profiles with a placeable-material builder live in
+ * `profileBuilderRegistry` (`MaterialProfileId`).
+ */
+export type MaterialProfileId = 'chemical' | 'media_composition' | 'cell_line' | 'sample'
 
 /**
  * What the configure step has to know about the chosen material to
@@ -51,7 +57,7 @@ export type AddMaterialState =
    * selection + per-type builder). An optional ontology seed jumps straight to
    * the right builder pre-filled (the "create from this term" path).
    */
-  | { phase: 'intent'; seed?: { kind: MaterialKind; ontologyRef: OLSResultRef } }
+  | { phase: 'intent'; seed?: { kind: MaterialProfileId; ontologyRef: OLSResultRef } }
   /** Submitting createRecord / createFormulation / createMaterialInstance. */
   | { phase: 'creating' }
   /** Terminal error before close. */
@@ -60,7 +66,7 @@ export type AddMaterialState =
 export type AddMaterialAction =
   | { type: 'pick'; material: PickedMaterial }
   | { type: 'open-intent' }
-  | { type: 'seed-intent'; kind: MaterialKind; ontologyRef: OLSResultRef }
+  | { type: 'seed-intent'; kind: MaterialProfileId; ontologyRef: OLSResultRef }
   | { type: 'set-volume'; value: string }
   | { type: 'set-count'; value: string }
   | { type: 'set-role'; value: string }

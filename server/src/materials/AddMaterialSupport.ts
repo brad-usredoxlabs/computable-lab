@@ -188,7 +188,7 @@ function canonicalCompositionSnapshot(value: unknown): Record<string, unknown>[]
   });
 }
 
-function lifecycleProvenance(sourceLabel: string, eventGraphId: string, eventId: string): Record<string, unknown> {
+function lifecycleProvenance(sourceLabel: string, eventGraphId: string, eventId: string, note?: string): Record<string, unknown> {
   return {
     status: 'proposed',
     lifecycleId: 'lab-vocabulary-control',
@@ -197,7 +197,7 @@ function lifecycleProvenance(sourceLabel: string, eventGraphId: string, eventId:
       sourceLabel,
       createdBy: 'add-material-normalizer',
       createdAt: new Date().toISOString(),
-      note: `Created as a proposed local formulation record from accepted add-material composition snapshot ${eventGraphId}:${eventId}.`,
+      note: note ?? `Created as a proposed local formulation record from accepted add-material composition snapshot ${eventGraphId}:${eventId}.`,
     },
   };
 }
@@ -253,6 +253,104 @@ async function upsertProposedMaterialSpecFromComposition(
     }
   }
   return toRecordRef(specId, 'material-spec', name);
+}
+
+/**
+ * A single compound added to a well at a concentration IS a formulation. When
+ * an add_material grounds to a bare concept + carries a concentration (and is
+ * not already a composition/spec/instance), materialize a proposed `single_active`
+ * material-spec (the concept @ that concentration) so the well references a
+ * formulation, never a bare concept.
+ */
+async function upsertProposedMaterialSpecFromSingleActive(
+  store: RecordStore,
+  eventGraphId: string,
+  eventId: string,
+  details: Record<string, unknown>,
+): Promise<RefShape | null> {
+  if (normalizeRef(details['material_spec_ref'], 'material-spec')) return null;
+  if (normalizeRef(details['aliquot_ref'], 'aliquot')) return null;
+  if (normalizeRef(details['material_instance_ref'], 'material-instance')) return null;
+  if (normalizeRef(details['vendor_product_ref'], 'vendor-product')) return null;
+  const materialRef = normalizeRef(details['material_ref'], 'material');
+  if (!materialRef || materialRef.kind !== 'record') return null;
+  // Composition (a mixture) is handled by the composition path; this is the
+  // single-active case only.
+  if (canonicalCompositionSnapshot(details['composition_snapshot']).length > 0) return null;
+  const concentration = extractConcentration(details);
+  if (!concentration) return null;
+
+  const specId = implicitMaterialSpecId(eventGraphId, eventId);
+  const conc = concentration as { value?: unknown; unit?: unknown };
+  const concLabel = typeof conc.value === 'number' && typeof conc.unit === 'string' ? `${conc.value} ${conc.unit} ` : '';
+  const name = `${concLabel}${refLabel(materialRef) ?? materialRef.id}`.trim();
+  const payload: Record<string, unknown> = {
+    kind: 'material-spec',
+    id: specId,
+    name,
+    material_ref: materialRef,
+    formulation_kind: 'single_active',
+    ...lifecycleProvenance(name, eventGraphId, eventId, `Created as a proposed single-active formulation from accepted add-material ${eventGraphId}:${eventId}.`),
+    formulation: {
+      concentration,
+      composition: [{ component_ref: materialRef, role: 'solute', concentration }],
+    },
+    tags: ['ai-draft', 'single_active'],
+  };
+  if (!(await store.get(specId))) {
+    const created = await store.create({
+      envelope: { recordId: specId, schemaId: MATERIAL_SPEC_SCHEMA_ID, payload, meta: { kind: 'material-spec' } },
+      message: `Create proposed single-active material spec ${specId} from ${eventGraphId}:${eventId}`,
+    });
+    if (!created.success) {
+      throw new MaterialUsagePolicyError(storeFailureMessage(created, `Failed to create proposed material spec ${specId}`));
+    }
+  }
+  return toRecordRef(specId, 'material-spec', name);
+}
+
+/**
+ * Cells added to a well are counted, not concentrated — a count makes the add a
+ * material INSTANCE, not a bare concept. When an add_material grounds to a bare
+ * concept + carries a `count` (and no concentration/spec/instance), materialize
+ * a proposed material-instance (tagged `cells`).
+ */
+async function upsertProposedCellsInstance(
+  store: RecordStore,
+  eventGraphId: string,
+  eventId: string,
+  details: Record<string, unknown>,
+): Promise<RefShape | null> {
+  if (normalizeRef(details['material_spec_ref'], 'material-spec')) return null;
+  if (normalizeRef(details['aliquot_ref'], 'aliquot')) return null;
+  if (normalizeRef(details['material_instance_ref'], 'material-instance')) return null;
+  if (normalizeRef(details['vendor_product_ref'], 'vendor-product')) return null;
+  const materialRef = normalizeRef(details['material_ref'], 'material');
+  if (!materialRef || materialRef.kind !== 'record') return null;
+  const count = details['count'];
+  if (typeof count !== 'number' || !Number.isFinite(count) || count <= 0) return null;
+
+  const instanceId = implicitMaterialInstanceId(eventGraphId, eventId);
+  const name = refLabel(materialRef) ?? materialRef.id;
+  const payload: Record<string, unknown> = {
+    kind: 'material-instance',
+    id: instanceId,
+    name,
+    material_ref: materialRef,
+    status: 'proposed',
+    ...lifecycleProvenance(name, eventGraphId, eventId, `Created as a proposed cells instance from accepted add-material ${eventGraphId}:${eventId}.`),
+    tags: ['ai-draft', 'cells'],
+  };
+  if (!(await store.get(instanceId))) {
+    const created = await store.create({
+      envelope: { recordId: instanceId, schemaId: MATERIAL_INSTANCE_SCHEMA_ID, payload, meta: { kind: 'material-instance' } },
+      message: `Create proposed cells instance ${instanceId} from ${eventGraphId}:${eventId}`,
+    });
+    if (!created.success) {
+      throw new MaterialUsagePolicyError(storeFailureMessage(created, `Failed to create proposed material instance ${instanceId}`));
+    }
+  }
+  return toRecordRef(instanceId, 'material-instance', name);
 }
 
 function toRecordRef(id: string, type: string, label?: string): RefShape {
@@ -535,15 +633,25 @@ export async function normalizeEventGraphMaterialUsage(
     if (!details) return event;
     const groundedDetails = await normalizeAddMaterialDetailsMaterialRefs(store, details);
     changed = true;
-    const proposedSpecRef = await upsertProposedMaterialSpecFromComposition(store, eventGraphId, eventId, groundedDetails);
+    // A bare concept in a well is never right. Materialize it: a composition or a
+    // concept+concentration → a formulation (material-spec); cells+count → an
+    // instance. The well then references a formulation/instance, not a concept.
+    const proposedSpecRef =
+      (await upsertProposedMaterialSpecFromComposition(store, eventGraphId, eventId, groundedDetails))
+      ?? (await upsertProposedMaterialSpecFromSingleActive(store, eventGraphId, eventId, groundedDetails));
+    const proposedInstanceRef = proposedSpecRef
+      ? null
+      : await upsertProposedCellsInstance(store, eventGraphId, eventId, groundedDetails);
     const detailsWithProposedSpec = proposedSpecRef
       ? {
           ...groundedDetails,
           material_spec_ref: proposedSpecRef,
           material_source_requirement: groundedDetails['material_source_requirement'] ?? unresolvedSourceRequirement('material_spec_ref', proposedSpecRef),
         }
-      : groundedDetails;
-    if (proposedSpecRef) changed = true;
+      : proposedInstanceRef
+        ? { ...groundedDetails, material_instance_ref: proposedInstanceRef }
+        : groundedDetails;
+    if (proposedSpecRef || proposedInstanceRef) changed = true;
     if (normalizeRef(detailsWithProposedSpec['aliquot_ref'], 'aliquot')) return { ...event, details: detailsWithProposedSpec };
     if (normalizeRef(detailsWithProposedSpec['material_instance_ref'], 'material-instance')) return { ...event, details: detailsWithProposedSpec };
 

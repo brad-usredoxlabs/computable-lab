@@ -129,6 +129,13 @@ describe('resolveMaterial', () => {
         id: 'MINST-HEPG2',
       },
     })
+    // A bare material concept reads as an ontology term to biologists.
+    expect(out[2]).toMatchObject({
+      key: 'material:MAT-TRIS',
+      badge: 'Ontology',
+      subtitle: 'Ontology term',
+      mention: { type: 'material', entityKind: 'material', id: 'MAT-TRIS' },
+    })
   })
 })
 

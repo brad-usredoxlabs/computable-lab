@@ -23,6 +23,7 @@ import {
   type TemplateOutputArtifact,
   type TemplateSearchResult,
 } from '../../protocol/TemplateMaterializationService.js';
+import { resolveAddMaterialRef } from '../../materials/AddMaterialSupport.js';
 
 /**
  * Response types for tree endpoints.
@@ -46,6 +47,28 @@ export interface RebuildIndexResponse {
   success: boolean;
   count: number;
   generatedAt: string;
+}
+
+/** Where a project-level material/labware usage came from (experiment + run). */
+export interface InventoryUsageAnchor {
+  experimentId: string;
+  experimentTitle: string;
+  runId: string;
+  runTitle: string;
+}
+
+/** A material or labware used somewhere in the project, with its run anchors. */
+export interface InventoryUsageItem {
+  refId: string;
+  kind: string;
+  title: string;
+  anchors: InventoryUsageAnchor[];
+}
+
+export interface StudyInventoryUsageResponse {
+  studyId: string;
+  materials: InventoryUsageItem[];
+  labwares: InventoryUsageItem[];
 }
 
 export interface RunMethodSummaryResponse {
@@ -1252,6 +1275,94 @@ export function createTreeHandlers(
     ): Promise<StudyTreeResponse> {
       const studies = await indexManager.getStudyTree();
       return { studies };
+    },
+
+    /**
+     * GET /studies/:studyId/inventory-usage
+     * Aggregate the materials and labware USED across the project's runs (their
+     * method event graphs), each anchored to the experiment/run it appears in.
+     * Materials/labware live inside run event graphs, not as studyId-linked
+     * records, so the project Find tab can't see them otherwise. Reads are local
+     * (~2 per run); ref extraction reuses resolveAddMaterialRef.
+     */
+    async getStudyInventoryUsage(
+      request: FastifyRequest<{ Params: { studyId: string } }>,
+      reply: FastifyReply
+    ): Promise<StudyInventoryUsageResponse | { error: string; message: string }> {
+      const { studyId } = request.params;
+      const studies = await indexManager.getStudyTree();
+      const study = studies.find((s) => s.recordId === studyId);
+      if (!study) {
+        reply.status(404);
+        return { error: 'NOT_FOUND', message: `Study not found: ${studyId}` };
+      }
+
+      const materials = new Map<string, InventoryUsageItem>();
+      const labwares = new Map<string, InventoryUsageItem>();
+      const record = (
+        map: Map<string, InventoryUsageItem>,
+        base: Omit<InventoryUsageItem, 'anchors'>,
+        anchor: InventoryUsageAnchor,
+      ): void => {
+        const existing = map.get(base.refId);
+        if (existing) {
+          if (!existing.anchors.some((a) => a.runId === anchor.runId)) existing.anchors.push(anchor);
+        } else {
+          map.set(base.refId, { ...base, anchors: [anchor] });
+        }
+      };
+
+      for (const exp of study.experiments) {
+        for (const run of exp.runs) {
+          const runRec = await recordStore.get(run.recordId);
+          const runPayload = (runRec?.payload ?? {}) as Record<string, unknown>;
+          const egId =
+            typeof runPayload['methodEventGraphId'] === 'string' && runPayload['methodEventGraphId'].length > 0
+              ? runPayload['methodEventGraphId']
+              : undefined;
+          if (!egId) continue;
+          const graph = await recordStore.get(egId);
+          if (!graph) continue;
+          const gp = (graph.payload ?? {}) as Record<string, unknown>;
+          const anchor: InventoryUsageAnchor = {
+            experimentId: exp.recordId,
+            experimentTitle: exp.title,
+            runId: run.recordId,
+            runTitle: run.title,
+          };
+
+          const events = Array.isArray(gp['events']) ? gp['events'] : [];
+          for (const ev of events) {
+            const e = ev as Record<string, unknown>;
+            if (e?.['event_type'] !== 'add_material') continue;
+            const details = (e['details'] ?? {}) as Record<string, unknown>;
+            const ref = resolveAddMaterialRef(details);
+            if (!ref?.id) continue;
+            record(
+              materials,
+              { refId: ref.id, kind: ref.type ?? (ref.kind === 'record' ? 'material' : ref.kind), title: ref.label ?? ref.id },
+              anchor,
+            );
+          }
+
+          const lws = Array.isArray(gp['labwares']) ? gp['labwares'] : [];
+          for (const lw of lws) {
+            const l = (lw ?? {}) as Record<string, unknown>;
+            const sourceId = typeof l['sourceRecordId'] === 'string' && l['sourceRecordId'].length > 0 ? l['sourceRecordId'] : undefined;
+            const lid = sourceId ?? (typeof l['labwareId'] === 'string' ? l['labwareId'] : undefined);
+            if (!lid) continue;
+            const title = typeof l['name'] === 'string' && l['name'].length > 0 ? l['name'] : lid;
+            record(labwares, { refId: lid, kind: 'labware', title }, anchor);
+          }
+        }
+      }
+
+      const byTitle = (a: InventoryUsageItem, b: InventoryUsageItem) => a.title.localeCompare(b.title);
+      return {
+        studyId,
+        materials: [...materials.values()].sort(byTitle),
+        labwares: [...labwares.values()].sort(byTitle),
+      };
     },
 
     async searchTemplates(

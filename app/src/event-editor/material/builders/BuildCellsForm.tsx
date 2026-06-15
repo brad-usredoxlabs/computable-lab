@@ -7,6 +7,7 @@ import {
 } from '../../../types/material'
 import { OntologyPicker } from '../OntologyPicker'
 import type { PickedMaterial } from '../state'
+import { cellsInstancePayload, materialConceptPayload } from '../lib/materialSavePayload'
 
 /**
  * Cells builder ("HepG2 in growth phase"-style).
@@ -91,14 +92,10 @@ export function BuildCellsForm({
       if (cellType) classRefs.push(cellType)
       if (tissue) classRefs.push(tissue)
 
-      await apiClient.createRecord(MATERIAL_SCHEMA_ID, {
-        kind: 'material',
-        id: materialId,
-        name: trimmedName,
-        domain: 'cell_line',
-        ...(classRefs.length > 0 ? { class: classRefs } : {}),
-        tags: ['cells'],
-      })
+      await apiClient.createRecord(
+        MATERIAL_SCHEMA_ID,
+        materialConceptPayload({ materialId, name: trimmedName, domain: 'cell_line', classRefs, tags: ['cells'] }),
+      )
 
       const biologicalState: Record<string, unknown> = {}
       if (passage.trim()) {
@@ -108,19 +105,9 @@ export function BuildCellsForm({
       if (vesselType.trim()) biologicalState.vessel_type = vesselType.trim()
       if (seedingDensity.trim()) biologicalState.seeding_density = seedingDensity.trim()
 
-      const response = await apiClient.createMaterialInstance({
-        name: trimmedName,
-        materialRef: {
-          kind: 'record',
-          id: materialId,
-          type: 'material',
-          label: trimmedName,
-        },
-        preparedOn,
-        ...(Object.keys(biologicalState).length > 0 ? { biologicalState } : {}),
-        status: 'available',
-        tags: ['cells'],
-      } as Parameters<typeof apiClient.createMaterialInstance>[0])
+      const response = await apiClient.createMaterialInstance(
+        cellsInstancePayload({ materialId, name: trimmedName, preparedOn, biologicalState }),
+      )
 
       onSaved({
         recordId: response.materialInstanceId,

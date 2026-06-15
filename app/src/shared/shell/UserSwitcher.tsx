@@ -16,6 +16,10 @@ export function UserSwitcher() {
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [editFields, setEditFields] = useState({ displayName: '', username: '', email: '', notes: '' })
+  const [saving, setSaving] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -38,7 +42,7 @@ export function UserSwitcher() {
 
   // Render nothing outside a CurrentUserProvider (e.g. isolated unit tests).
   if (!currentUserCtx) return null
-  const { users, currentUserId, currentUser, isSystem, setCurrentUser } = currentUserCtx
+  const { users, currentUserId, currentUser, isSystem, setCurrentUser, reload } = currentUserCtx
 
   const label = currentUser?.displayName ?? currentUser?.username ?? (currentUserId ?? 'Unknown user')
 
@@ -54,6 +58,35 @@ export function UserSwitcher() {
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : String(err))
       setCreating(false)
+    }
+  }
+
+  function startEdit() {
+    setEditFields({
+      displayName: currentUser?.displayName ?? '',
+      username: currentUser?.username ?? '',
+      email: currentUser?.email ?? '',
+      notes: currentUser?.notes ?? '',
+    })
+    setEditError(null)
+    setEditing(true)
+  }
+
+  async function handleSaveProfile() {
+    setSaving(true)
+    setEditError(null)
+    try {
+      await apiClient.updateMe({
+        displayName: editFields.displayName.trim(),
+        username: editFields.username.trim(),
+        email: editFields.email.trim(),
+        notes: editFields.notes,
+      })
+      // Reload so the switcher label and any derived Created By names refresh.
+      reload()
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : String(err))
+      setSaving(false)
     }
   }
 
@@ -105,6 +138,66 @@ export function UserSwitcher() {
             })
           )}
           <li className="user-switcher__divider" role="separator" />
+          {!isSystem && currentUser ? (
+            editing ? (
+              <li className="user-switcher__edit-form">
+                <label>
+                  <span>Display name</span>
+                  <input
+                    type="text"
+                    autoFocus
+                    value={editFields.displayName}
+                    onChange={(e) => setEditFields((f) => ({ ...f, displayName: e.target.value }))}
+                    disabled={saving}
+                  />
+                </label>
+                <label>
+                  <span>Username</span>
+                  <input
+                    type="text"
+                    value={editFields.username}
+                    onChange={(e) => setEditFields((f) => ({ ...f, username: e.target.value }))}
+                    disabled={saving}
+                  />
+                </label>
+                <label>
+                  <span>Email</span>
+                  <input
+                    type="email"
+                    value={editFields.email}
+                    onChange={(e) => setEditFields((f) => ({ ...f, email: e.target.value }))}
+                    disabled={saving}
+                  />
+                </label>
+                <label>
+                  <span>Notes</span>
+                  <textarea
+                    rows={2}
+                    value={editFields.notes}
+                    onChange={(e) => setEditFields((f) => ({ ...f, notes: e.target.value }))}
+                    disabled={saving}
+                  />
+                </label>
+                <div className="user-switcher__edit-actions">
+                  <button type="button" onClick={() => setEditing(false)} disabled={saving}>Cancel</button>
+                  <button
+                    type="button"
+                    className="user-switcher__edit-save"
+                    onClick={() => void handleSaveProfile()}
+                    disabled={saving || !editFields.displayName.trim()}
+                  >{saving ? '…' : 'Save'}</button>
+                </div>
+                {editError ? <div className="user-switcher__add-error">{editError}</div> : null}
+              </li>
+            ) : (
+              <li>
+                <button type="button" onClick={startEdit}>
+                  <span className="user-switcher__check" aria-hidden>✎</span>
+                  <span>Edit profile…</span>
+                </button>
+              </li>
+            )
+          ) : null}
           {adding ? (
             <li className="user-switcher__add-form">
               <input
@@ -233,4 +326,31 @@ const userSwitcherStyles = `
 }
 .user-switcher__add-form button:disabled { opacity: 0.5; cursor: default; }
 .user-switcher__add-error { padding: 4px 12px 8px; color: var(--cl-danger); font-size: 0.78rem; }
+.user-switcher__edit-form { display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; }
+.user-switcher__edit-form label { display: flex; flex-direction: column; gap: 2px; }
+.user-switcher__edit-form label span { font-size: 0.7rem; color: var(--cl-text-faint); }
+.user-switcher__edit-form input,
+.user-switcher__edit-form textarea {
+  font: inherit;
+  font-size: 0.85rem;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  padding: 4px 6px;
+  resize: vertical;
+}
+.user-switcher__edit-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 2px; }
+.user-switcher__edit-actions button {
+  font: inherit;
+  width: auto !important;
+  padding: 4px 10px !important;
+  border: 1px solid var(--cl-border) !important;
+  border-radius: 4px;
+  background: var(--cl-bg-elev-2) !important;
+  color: var(--cl-text);
+  cursor: pointer;
+}
+.user-switcher__edit-actions button:disabled { opacity: 0.5; cursor: default; }
+.user-switcher__edit-save { background: var(--cl-accent) !important; color: var(--cl-on-accent) !important; border-color: var(--cl-accent) !important; }
 `

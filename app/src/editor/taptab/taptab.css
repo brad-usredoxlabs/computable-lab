@@ -582,7 +582,7 @@
   border: 1px solid #d1d5db;
   border-radius: 0.25rem;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  max-height: 250px;
+  max-height: 320px;
   overflow-y: auto;
   margin: 0;
   padding: 0;
@@ -665,19 +665,97 @@
   background-color: transparent;
 }
 
-/* RichTextField styles */
+/* "Create new" funnel-floor row — visually demoted (it's the last resort),
+   separated from real matches by a hairline. */
+.ref-dropdown .ref-create-item {
+  border-top: 1px solid #e5e7eb;
+  color: #6b7280;
+}
+
+.ref-dropdown .ref-create-item .result-label {
+  font-weight: 400;
+}
+
+/* ChipComboboxWidget — multi-value ontology/local chips (tags, keywords).
+   Renders inline as part of the document: a wrapping row of RefBadge pills
+   followed by an unobtrusive add affordance. */
+.taptab-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.taptab-chips-list {
+  display: contents;
+}
+
+.taptab-chips-add {
+  border: 1px dashed #d1d5db;
+  border-radius: 9999px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 0.8125rem;
+  padding: 0.0625rem 0.5rem;
+  cursor: pointer;
+  transition: border-color 0.1s ease, color 0.1s ease;
+}
+
+.taptab-chips-add:hover {
+  border-color: var(--shell-accent);
+  color: var(--shell-accent);
+}
+
+.taptab-chips-adding {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+}
+
+.taptab-chips-done {
+  border: none;
+  background: transparent;
+  color: var(--shell-accent);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  padding: 0.0625rem 0.25rem;
+}
+
+/* RichTextField styles — render as part of the document, not an HTML form
+   input. No box/border at rest; a faint accent rail appears only while the
+   field has focus, to signal editability without the form-y grey box. */
 .taptab-richtext {
-  border: 1px solid #d1d5db;
-  border-radius: 0.25rem;
-  padding: 0.5rem;
-  min-height: 80px;
-  background-color: #ffffff;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  background-color: transparent;
 }
 
 .taptab-richtext .ProseMirror {
   outline: none;
-  min-height: 60px;
-  padding: 0.25rem;
+  padding: 0.125rem 0 0.125rem 0.5rem;
+  border-left: 2px solid transparent;
+  transition: border-color 0.1s ease;
+}
+
+.taptab-richtext:focus-within .ProseMirror {
+  border-left-color: var(--shell-accent);
+}
+
+/* In prose posture the rich-text field (markdown/textarea, e.g. Description)
+ * claims the whole line as one click target — matching the one-line widgets'
+ * `flex: 1 1 auto`. Without this the field shrinks to content width and the
+ * inner ProseMirror only captures clicks where text already is, so an empty
+ * Description becomes a near-zero-width target you have to hit precisely. */
+.taptab--prose .taptab-richtext {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.taptab--prose .taptab-richtext .ProseMirror {
+  width: 100%;
+  min-height: 1.65em;
+  cursor: text;
 }
 
 .taptab-richtext .ProseMirror:focus {

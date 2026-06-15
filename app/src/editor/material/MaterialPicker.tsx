@@ -76,7 +76,7 @@ function kindBadgeLabel(kind?: string): string {
   if (kind === 'vendor-product') return 'Vendor Reagent'
   if (kind === 'material-instance') return 'Prepared Tube/Plate'
   if (kind === 'aliquot') return 'Prepared Tube/Plate'
-  if (kind === 'material') return 'Concept Only'
+  if (kind === 'material') return 'Ontology'
   return kind || 'Record'
 }
 
@@ -85,7 +85,9 @@ function kindSubtitle(kind?: string): string | null {
   if (kind === 'vendor-product') return 'Commercial reagent linked to a material concept'
   if (kind === 'material-instance') return 'Existing prepared material'
   if (kind === 'aliquot') return 'Existing prepared material'
-  if (kind === 'material') return 'Bare concept record'
+  // A concept-only material here is a record ALREADY saved in the lab/project —
+  // nudge the user to reuse it rather than mint a duplicate.
+  if (kind === 'material') return 'Already in your project — pick this'
   return null
 }
 

@@ -31,6 +31,7 @@ interface UserSummary {
   displayName?: string;
   status?: string;
   email?: string;
+  notes?: string;
 }
 
 interface GroupSummary {
@@ -73,6 +74,8 @@ function summarizeUser(env: RecordEnvelope): UserSummary {
   if (status) out.status = status;
   const email = str(p.email);
   if (email) out.email = email;
+  const notes = str(p.notes);
+  if (notes) out.notes = notes;
   return out;
 }
 
@@ -170,6 +173,52 @@ export function createIdentityHandlers(options: IdentityHandlerOptions) {
         groups: groups.map((g) => ({ recordId: g.recordId, name: g.name, displayName: g.displayName })),
         ...(resolved.reason ? { reason: resolved.reason } : {}),
       };
+    },
+
+    // PATCH /api/me  { displayName?, username?, email?, notes? }
+    //
+    // Self-service profile edit: the user is resolved from the request (the
+    // x-user-id header), so a caller can only ever edit their OWN user record —
+    // no admin/ACL check is needed and no other id is honored. System/anonymous
+    // identities (no concrete user) are rejected.
+    async updateMe(
+      request: FastifyRequest<{
+        Body: { displayName?: string; username?: string; email?: string; notes?: string };
+      }>,
+      reply: FastifyReply,
+    ) {
+      const resolved = await identityService.resolveRequestUser(request);
+      if (!resolved.userId || resolved.isSystem || !resolved.userRecord) {
+        reply.status(403);
+        return { error: 'NO_CURRENT_USER', message: 'No concrete current user to edit (system identity).' };
+      }
+
+      const env = resolved.userRecord;
+      const body = request.body ?? {};
+      const next: Record<string, unknown> = { ...payloadOf(env) };
+
+      const displayName = str(body.displayName);
+      if (displayName) next.displayName = displayName;
+      const username = str(body.username);
+      if (username) next.username = username;
+      // email/notes are optional free-text; allow clearing by sending "".
+      if (typeof body.email === 'string') next.email = body.email.trim();
+      if (typeof body.notes === 'string') next.notes = body.notes;
+
+      const now = new Date().toISOString();
+      next.updatedAt = now;
+      const updated: RecordEnvelope = {
+        ...env,
+        payload: next,
+        meta: { ...(env.meta ?? {}), updatedAt: now },
+      };
+
+      const result = await store.update({ envelope: updated, message: `Update profile ${env.recordId}` });
+      if (!result.success) {
+        reply.status(400);
+        return { error: 'PROFILE_UPDATE_FAILED', message: result.error ?? 'Failed to update profile' };
+      }
+      return summarizeUser(result.envelope ?? updated);
     },
 
     // GET /api/users

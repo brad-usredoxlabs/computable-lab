@@ -425,6 +425,28 @@ type TypedRecordEnvelope<TPayload extends object> = Omit<RecordEnvelope, 'payloa
   payload: TPayload
 }
 
+/** Where a project-level material/labware usage came from (experiment + run). */
+export interface InventoryUsageAnchor {
+  experimentId: string
+  experimentTitle: string
+  runId: string
+  runTitle: string
+}
+
+/** A material or labware used somewhere in the project, with its run anchors. */
+export interface InventoryUsageItem {
+  refId: string
+  kind: string
+  title: string
+  anchors: InventoryUsageAnchor[]
+}
+
+export interface StudyInventoryUsageResponse {
+  studyId: string
+  materials: InventoryUsageItem[]
+  labwares: InventoryUsageItem[]
+}
+
 export interface RunWorkspaceResponse {
   run: RecordEnvelope
   eventGraph: TypedRecordEnvelope<EventGraphSummaryRecord> | null
@@ -1386,6 +1408,7 @@ export interface UserSummary {
   displayName?: string
   status?: string
   email?: string
+  notes?: string
 }
 
 export interface GroupSummary {
@@ -1445,6 +1468,19 @@ export const apiClient = {
 
   async createUser(body: { displayName: string; username?: string }): Promise<UserSummary> {
     return request<UserSummary>('/users', { method: 'POST', body: JSON.stringify(body) })
+  },
+
+  /**
+   * Self-edit the current user's profile (PATCH /api/me). The server resolves
+   * the user from the request, so only the active user can be edited here.
+   */
+  async updateMe(body: {
+    displayName?: string
+    username?: string
+    email?: string
+    notes?: string
+  }): Promise<UserSummary> {
+    return request<UserSummary>('/me', { method: 'PATCH', body: JSON.stringify(body) })
   },
 
   async getAccessPolicy(recordId: string): Promise<AccessPolicyResponse> {
@@ -2123,6 +2159,15 @@ export const apiClient = {
 
   async getRunWorkspace(runId: string): Promise<RunWorkspaceResponse> {
     return request(`/runs/${encodeURIComponent(runId)}/workspace`)
+  },
+
+  /**
+   * Materials + labware used across a project's runs (their method event
+   * graphs), each anchored to the experiment/run it appears in. Surfaces
+   * run-embedded usage that isn't a studyId-linked record in the Find tab.
+   */
+  async getStudyInventoryUsage(studyId: string): Promise<StudyInventoryUsageResponse> {
+    return request(`/studies/${encodeURIComponent(studyId)}/inventory-usage`)
   },
 
   async getRunAnalysisBundle(runId: string): Promise<RunAnalysisBundle> {

@@ -206,6 +206,7 @@ export function registerRoutes(
   const { identityHandlers } = options;
   if (identityHandlers) {
     fastify.get('/me', identityHandlers.getMe.bind(identityHandlers));
+    fastify.patch('/me', identityHandlers.updateMe.bind(identityHandlers));
     fastify.get('/users', identityHandlers.listUsers.bind(identityHandlers));
     fastify.post('/users', identityHandlers.createUser.bind(identityHandlers));
     fastify.get('/records/:id/access-policy', identityHandlers.getAccessPolicy.bind(identityHandlers));
@@ -318,6 +319,9 @@ export function registerRoutes(
 
     // Get study hierarchy tree
     fastify.get('/tree/studies', treeHandlers.getStudies.bind(treeHandlers));
+
+    // Materials + labware used across a project's runs, anchored to experiment/run
+    fastify.get('/studies/:studyId/inventory-usage', treeHandlers.getStudyInventoryUsage.bind(treeHandlers));
 
     // Get records for a run
     fastify.get('/tree/records', treeHandlers.getRecordsForRun.bind(treeHandlers));

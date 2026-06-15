@@ -15,6 +15,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { apiClient } from '../../shared/api/client'
+import { rankByLabelMatch } from '../../shared/search/rankByLabelMatch'
 import type { OLSSearchResult } from '../../shared/api/olsClient'
 
 export interface UseResolveOntologyOptions {
@@ -54,18 +55,22 @@ export function useResolveOntology(opts: UseResolveOntologyOptions): UseResolveO
     timerRef.current = setTimeout(async () => {
       const q = query.trim()
       try {
-        const { candidates } = await apiClient.resolve({ term: q, kinds: ['material'], limit: maxResults })
+        // Fetch a wider window than we return so the exact/shortest term isn't
+        // buried below the spine's cutoff by longer derivatives; then re-rank
+        // (exact → prefix → substring → other, shortest first) and return the
+        // caller's requested count with the closest match on top.
+        const fetchLimit = Math.max(maxResults, 40)
+        const { candidates } = await apiClient.resolve({ term: q, kinds: ['material'], limit: fetchLimit })
         if (latestQueryRef.current !== query) return
-        setResults(
-          candidates
-            .filter((c) => (c.source === 'oak' || c.source === 'ols4') && c.curie)
-            .map((c) => ({
-              obo_id: c.curie,
-              label: c.label,
-              iri: c.uri ?? '',
-              ontology_name: c.namespace.toLowerCase(),
-            })),
-        )
+        const mapped: OLSSearchResult[] = candidates
+          .filter((c) => (c.source === 'oak' || c.source === 'ols4') && c.curie)
+          .map((c) => ({
+            obo_id: c.curie,
+            label: c.label,
+            iri: c.uri ?? '',
+            ontology_name: c.namespace.toLowerCase(),
+          }))
+        setResults(rankByLabelMatch(mapped, (r) => r.label, q).slice(0, maxResults))
       } catch {
         if (latestQueryRef.current === query) setResults([])
       } finally {

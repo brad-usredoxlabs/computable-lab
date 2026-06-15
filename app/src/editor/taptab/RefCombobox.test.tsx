@@ -25,22 +25,20 @@ vi.mock('../../shared/hooks/useTagSuggestions', () => ({
   })),
 }));
 
-vi.mock('../../shared/hooks/useOLSSearch', () => ({
-  useOLSSearch: vi.fn((_opts: { query: string; ontologies?: string[]; enabled?: boolean }) => ({
+// Ontology search now flows through the resolve() spine (useResolveOntology),
+// the same path the slash menu / agent / material picker use.
+vi.mock('../hooks/useResolveOntology', () => ({
+  useResolveOntology: vi.fn((_opts: { query: string; enabled?: boolean }) => ({
     results: [
       {
+        obo_id: 'CL:0000084',
         label: 'T cell',
         iri: 'http://purl.obolibrary.org/obo/CL_0000084',
         ontology_name: 'cl',
-        description: ['A type of lymphocyte'],
-        synonyms: ['lymphocyte T', 'T lymphocyte'],
       },
     ],
     loading: false,
-    error: null,
     fromCache: false,
-    refetch: vi.fn(),
-    clear: vi.fn(),
   })),
 }));
 

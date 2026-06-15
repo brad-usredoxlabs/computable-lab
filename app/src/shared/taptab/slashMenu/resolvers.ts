@@ -414,12 +414,14 @@ function materialSuggestions(
         key: `${entityKind}:${item.recordId}`,
         label: item.title,
         badge: materialBadge(entityKind),
-        subtitle: item.subtitle || item.recordId,
+        // A bare material concept reads as an ontology term to a biologist —
+        // label it that way rather than the internal "Bare concept record".
+        subtitle: entityKind === 'material' ? 'Ontology term' : (item.subtitle || item.recordId),
         detail: {
           source: 'Workspace record (this lab)',
           ontology: 'local',
           id: item.recordId,
-          ...(item.subtitle ? { definition: item.subtitle } : {}),
+          ...(item.subtitle && entityKind !== 'material' ? { definition: item.subtitle } : {}),
           extra: [
             { label: 'Kind', value: item.kind },
             { label: 'Category', value: item.category },
@@ -442,7 +444,7 @@ function materialBadge(kind: MaterialMentionKind): string {
   if (kind === 'material-spec') return 'Formulation'
   if (kind === 'material-instance' || kind === 'aliquot') return 'Instance'
   if (kind === 'vendor-product') return 'Vendor'
-  return 'Concept'
+  return 'Ontology'
 }
 
 function abortIfNeeded(ctx: SlashResolverContext): void {

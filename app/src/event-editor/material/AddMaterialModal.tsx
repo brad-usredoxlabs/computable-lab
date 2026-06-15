@@ -7,7 +7,6 @@ import {
   pickedFromFormulation,
   pickedFromSearchItem,
   reducer,
-  type MaterialKind,
   type PickedMaterial,
 } from './state'
 import type { Labware } from '../../types/labware'
@@ -18,55 +17,8 @@ import { DetailTooltip } from '../../shared/taptab/slashMenu/SlashSuggestionList
 import { candidateDetail } from '../../shared/taptab/slashMenu/resolvers'
 import type { SlashSuggestionDetail } from '../../shared/taptab/slashMenu/types'
 import { MaterialIntentSurface } from '../../shared/material-intent/MaterialIntentSurface'
-import type { MaterialIntentOption } from '../../shared/material-intent/types'
-import { BuildCompoundForm } from './builders/BuildCompoundForm'
-import { BuildCellsForm } from './builders/BuildCellsForm'
-import { BuildMixtureForm } from './builders/BuildMixtureForm'
-import { BuildSampleForm } from './builders/BuildSampleForm'
-
-/**
- * The event editor's material kinds — placeable materials counted into wells.
- * Each renders its inline builder, pre-filled with the ontology seed when the
- * user arrived via "create from this term". Disjoint from `MaterialPicker`'s
- * record-ref kinds; both plug into the same shared `MaterialIntentSurface`.
- */
-function eventEditorMaterialOptions(seedOntologyRef?: OLSResultRef): MaterialIntentOption[] {
-  const seed = seedOntologyRef ? { seedOntologyRef } : {}
-  return [
-    {
-      kind: 'compound',
-      title: 'Compound + solvent',
-      detail: '10 uM test compound in DMSO — single primary compound dissolved in a solvent',
-      render: ({ onResolved, onCancel, onError }) => (
-        <BuildCompoundForm {...seed} onSaved={onResolved} onCancel={onCancel} onError={onError} />
-      ),
-    },
-    {
-      kind: 'mixture',
-      title: 'Mixture',
-      detail: 'Cell media, buffers — multiple components, no dominant ontology ref',
-      render: ({ onResolved, onCancel, onError }) => (
-        <BuildMixtureForm {...seed} onSaved={onResolved} onCancel={onCancel} onError={onError} />
-      ),
-    },
-    {
-      kind: 'cells',
-      title: 'Cells',
-      detail: 'HepG2, primary cultures — counted in cells/well, not concentration',
-      render: ({ onResolved, onCancel, onError }) => (
-        <BuildCellsForm {...seed} onSaved={onResolved} onCancel={onCancel} onError={onError} />
-      ),
-    },
-    {
-      kind: 'sample',
-      title: 'Sample',
-      detail: 'DNA / cDNA / RNA preps with origin and parent-experiment metadata',
-      render: ({ onResolved, onCancel, onError }) => (
-        <BuildSampleForm {...seed} onSaved={onResolved} onCancel={onCancel} onError={onError} />
-      ),
-    },
-  ]
-}
+import { useMaterialProfiles } from '../../shared/material-intent/useMaterialProfiles'
+import { materialIntentOptions, toPickerProfileId } from './profileBuilderRegistry'
 
 /**
  * Replaces the two `window.prompt()` calls that the well-context-menu
@@ -103,16 +55,9 @@ export function inferMaterialProfileIdForOntologyCandidate(candidate: Pick<Resol
   return 'other'
 }
 
-export function inferMaterialKindForOntologyCandidate(candidate: Pick<ResolveCandidate, 'namespace' | 'label' | 'curie'>): MaterialKind {
-  const profileId = inferMaterialProfileIdForOntologyCandidate(candidate)
-  if (profileId === 'cell_line') return 'cells'
-  if (profileId === 'media_composition') return 'mixture'
-  if (profileId === 'sample') return 'sample'
-  return 'compound'
-}
-
 export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMaterialModalProps) {
   const { actions } = useEventEditor()
+  const { profiles } = useMaterialProfiles()
   const [state, dispatch] = useReducer(reducer, undefined, initialState)
   const search = useMaterialSearch()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -245,7 +190,7 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
               }
               dispatch({
                 type: 'seed-intent',
-                kind: inferMaterialKindForOntologyCandidate(candidate),
+                kind: toPickerProfileId(inferMaterialProfileIdForOntologyCandidate(candidate)),
                 ontologyRef: ref,
               })
             }}
@@ -269,7 +214,10 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
 
         {state.phase === 'intent' ? (
           <MaterialIntentSurface
-            options={eventEditorMaterialOptions(state.seed?.ontologyRef)}
+            options={materialIntentOptions({
+              profiles,
+              ...(state.seed?.ontologyRef ? { seedOntologyRef: state.seed.ontologyRef } : {}),
+            })}
             seedKind={state.seed?.kind ?? null}
             cancelLabel="Back to search"
             onResolved={(picked) => dispatch({ type: 'pick', material: picked })}
@@ -297,6 +245,17 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
   // viewport and isn't clipped by the root's overflow.
   const themeRoot = document.querySelector('.cl-app') ?? document.body
   return createPortal(node, themeRoot)
+}
+
+/**
+ * Friendly meta line for a local search hit. A concept-only material is a record
+ * already saved in the lab/project — relabel it as an ontology term the user
+ * should reuse, instead of the internal "concept only · Bare concept record".
+ */
+function localResultMeta(item: MaterialSearchItem): string {
+  if (item.category === 'concept-only') return 'Ontology · already in your project — pick this'
+  const category = item.category.replace(/-/g, ' ')
+  return item.subtitle ? `${category} · ${item.subtitle}` : category
 }
 
 interface SearchViewProps {
@@ -329,6 +288,13 @@ function SearchView({
 
   const trimmed = query.trim()
   const hasOntologyHits = ontologyResults.length > 0
+
+  // You add a FORMULATION or an INSTANCE to a well — not a bare ontology
+  // concept. Hide concept-only records from the addable list; the user reaches
+  // those terms through the ontology hits below (which route into a builder that
+  // creates a formulation/instance). This also stops accidental reuse of the
+  // stray bare concepts the AI mint path used to leave behind.
+  const addableLocalResults = localResults.filter((item) => item.category !== 'concept-only')
 
   // Definition hover card — reuses the AI route's DetailTooltip so a moused-over
   // ontology hit shows its definition + provenance, docked beside the list.
@@ -396,11 +362,11 @@ function SearchView({
             </section>
           ) : null}
 
-          {localResults.length > 0 ? (
+          {addableLocalResults.length > 0 ? (
             <section className="add-material-section">
               <div className="add-material-section-title">Materials</div>
               <ul className="add-material-list">
-                {localResults.map((item) => (
+                {addableLocalResults.map((item) => (
                   <li key={item.recordId}>
                     <button
                       type="button"
@@ -410,8 +376,7 @@ function SearchView({
                     >
                       <span className="add-material-row-title">{item.title}</span>
                       <span className="add-material-row-meta">
-                        {item.category.replace(/-/g, ' ')}
-                        {item.subtitle ? ` · ${item.subtitle}` : ''}
+                        {localResultMeta(item)}
                       </span>
                     </button>
                   </li>
@@ -426,7 +391,7 @@ function SearchView({
               {loadingOntology ? <span className="add-material-spinner" aria-hidden /> : null}
             </div>
             {hasOntologyHits ? (
-              <ul className="add-material-list" ref={ontologyListRef}>
+              <ul className="add-material-list add-material-list--scroll" ref={ontologyListRef}>
                 {ontologyResults.map((candidate) => (
                   <li key={candidate.curie}>
                     <button

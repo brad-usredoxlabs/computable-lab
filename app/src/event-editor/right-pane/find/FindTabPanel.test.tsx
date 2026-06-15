@@ -24,9 +24,11 @@ import { WorkspaceProvider, useWorkspace } from '../../workspace/WorkspaceContex
 import { defaultWorkspaceState } from '../../workspace/types'
 
 const listRecordsByKind = vi.fn()
+const getStudyInventoryUsage = vi.fn()
 vi.mock('../../../shared/api/client', () => ({
   apiClient: {
     listRecordsByKind: (...args: unknown[]) => listRecordsByKind(...args),
+    getStudyInventoryUsage: (...args: unknown[]) => getStudyInventoryUsage(...args),
   },
 }))
 
@@ -156,6 +158,8 @@ function renderFind() {
 
 beforeEach(() => {
   listRecordsByKind.mockReset()
+  getStudyInventoryUsage.mockReset()
+  getStudyInventoryUsage.mockResolvedValue({ studyId: 'STU-000001', materials: [], labwares: [] })
   getStudyTree.mockReset()
   getRunMethod.mockReset()
 })

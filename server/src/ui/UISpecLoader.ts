@@ -20,7 +20,7 @@ const VALID_WIDGET_TYPES: Set<string> = new Set([
   'text', 'textarea', 'number', 'select', 'multiselect',
   'checkbox', 'radio', 'date', 'datetime', 'ref', 'reflist',
   'array', 'object', 'hidden', 'readonly', 'custom', 'markdown',
-  'combobox',
+  'combobox', 'chips',
 ]);
 
 /**

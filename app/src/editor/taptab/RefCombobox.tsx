@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, useMemo, KeyboardEvent, MouseEvent } from 'react';
+import { useState, useRef, useEffect, KeyboardEvent, MouseEvent } from 'react';
 import { useTagSuggestions } from '../../shared/hooks/useTagSuggestions';
-import { useOLSSearch } from '../../shared/hooks/useOLSSearch';
+import { useResolveOntology } from '../hooks/useResolveOntology';
+import { focusAdjacentTapTabField } from './tabNavPlugin';
 import type { StructuredValue } from '../../shared/forms/suggestionPlan';
 
 export interface RefComboboxProps {
@@ -31,6 +32,13 @@ export interface RefComboboxProps {
     } & { __structured__?: StructuredValue }
   ) => void;
   onCancel: () => void;
+  /**
+   * Offer a "create new" last-resort item (the funnel floor). When set and the
+   * query is non-empty, a pinned-bottom "Create …" row appears; it is never the
+   * keyboard default — Enter only triggers it when no result is highlightable.
+   */
+  allowCreate?: boolean;
+  onCreateNew?: (query: string) => void;
 }
 
 /**
@@ -58,10 +66,13 @@ interface DropdownItem {
 
 export function RefCombobox({
   value,
-  refKind,
+  // refKind is accepted (callers pass it as the vocab domain) but local/ontology
+  // search is driven entirely by suggestionPlan now, so it's intentionally unused.
   suggestionPlan,
   onSelect,
   onCancel,
+  allowCreate = false,
+  onCreateNew,
 }: RefComboboxProps) {
   const [query, setQuery] = useState(value);
   const [highlightIndex, setHighlightIndex] = useState(0);
@@ -69,13 +80,6 @@ export function RefCombobox({
   const listRef = useRef<HTMLUListElement>(null);
 
   // Extract suggestion plan values (fall back to defaults).
-  // ontologies is memoized on a stable string key so a fresh array reference
-  // on every parent render doesn't trigger useOLSSearch's effect (which has
-  // `ontologies` in its dep array) into an infinite re-render loop.
-  const ontologies = useMemo(
-    () => suggestionPlan?.ontologies ?? (refKind ? [refKind] : []),
-    [refKind, (suggestionPlan?.ontologies ?? []).join(',')],
-  );
   const sources = suggestionPlan?.sources ?? ['local'];
   const searchField = suggestionPlan?.searchField ?? 'tags';
   const useOls = sources.includes('ols');
@@ -87,12 +91,18 @@ export function RefCombobox({
     enabled: query.length >= 1,
   });
 
-  // Get ontology search results — restricted to configured ontologies
-  const { results: ontologyResults, loading: ontologyLoading } = useOLSSearch({
+  // Ontology results come from the resolve() spine (POST /resolve: local OAK →
+  // remote OLS4, ranked) — the SAME path the slash menu, the agent, and the
+  // material picker use, so the combobox agrees with the rest of the app.
+  // (The previous direct browser→EBI useOLSSearch returned nothing on the
+  // appliance, where the network path to OLS4 isn't available.)
+  const { results: ontologyResults, loading: ontologyLoading } = useResolveOntology({
     query,
-    ontologies: useOls ? ontologies : [],
     enabled: useOls && query.length >= 2,
     debounceMs: 400,
+    // Show a wider ranked list (exact/shortest first) — the dropdown scrolls,
+    // so the long tail is reachable instead of capped at the default 10.
+    maxResults: 40,
   });
 
   // Combine results into a single list (headers are NOT included in this array)
@@ -192,6 +202,51 @@ export function RefCombobox({
     return currentIndex;
   };
 
+  // Commit the currently highlighted result (if any). Returns true when a real
+  // result was committed, false when there was nothing highlightable. Shared by
+  // Enter and Tab so both keys turn the highlighted term into a chip; the parent
+  // ChipComboboxWidget remounts this combobox (key={addSeq}) to clear+refocus,
+  // so the user can keep typing the next term without leaving the keyboard.
+  const commitHighlighted = (): boolean => {
+    const selectedItem = dropdownItems[highlightIndex];
+    const hasResult = selectedItem && selectedItem.kind === 'result' && selectedItem.resultIndex !== undefined;
+    if (!hasResult) return false;
+    const result = combinedResults[selectedItem.resultIndex!];
+    if (result.type === 'ontology') {
+      onSelect(result.value, 'ontology', {
+        label: result.label,
+        iri: result.iri || '',
+        definition: result.definition,
+        synonyms: result.synonyms,
+        ontology: result.ontology,
+        oboId: result.oboId,
+        __structured__: {
+          value: result.value,
+          source: 'ols',
+          metadata: {
+            iri: result.iri,
+            ontology: result.ontology,
+            oboId: result.oboId,
+            definition: result.definition,
+          },
+        },
+      });
+    } else {
+      onSelect(result.value, 'local', {
+        label: result.label,
+        __structured__: {
+          value: result.value,
+          source: 'local',
+          metadata: {
+            searchField,
+            sources,
+          },
+        },
+      });
+    }
+    return true;
+  };
+
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -199,48 +254,42 @@ export function RefCombobox({
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setHighlightIndex((prev) => findNextResultIndex(prev, -1));
+    } else if (e.key === 'Tab') {
+      // Tab commits the highlighted term as a chip and keeps the search open
+      // (the parent remounts us to clear+refocus). Only intercept when there's
+      // a real result to commit — otherwise let Tab do its normal focus-advance
+      // so an empty/unmatched field doesn't trap the keyboard.
+      if (commitHighlighted()) {
+        e.preventDefault();
+      }
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const selectedItem = dropdownItems[highlightIndex];
-      if (selectedItem && selectedItem.kind === 'result' && selectedItem.resultIndex !== undefined) {
-        const result = combinedResults[selectedItem.resultIndex];
-        if (result.type === 'ontology') {
-          onSelect(result.value, 'ontology', {
-            label: result.label,
-            iri: result.iri || '',
-            definition: result.definition,
-            synonyms: result.synonyms,
-            ontology: result.ontology,
-            oboId: result.oboId,
-            __structured__: {
-              value: result.value,
-              source: 'ols',
-              metadata: {
-                iri: result.iri,
-                ontology: result.ontology,
-                oboId: result.oboId,
-                definition: result.definition,
-              },
-            },
-          });
-        } else {
-          onSelect(result.value, 'local', {
-            label: result.label,
-            __structured__: {
-              value: result.value,
-              source: 'local',
-              metadata: {
-                searchField,
-                sources,
-              },
-            },
-          });
+      if (!commitHighlighted()) {
+        // No highlightable result — Enter falls through to "create new" when
+        // offered, so a typed-but-unmatched term isn't lost. Never overrides
+        // a real result selection.
+        if (allowCreate && onCreateNew && query.trim().length >= 1) {
+          onCreateNew(query.trim());
         }
       }
     } else if (e.key === 'Escape') {
+      // Dismiss the search without picking anything, and advance to the next
+      // field — Escape gets the user out of an unwanted dropdown and moving
+      // again without reaching for the mouse.
       e.preventDefault();
+      e.stopPropagation();
+      const from = e.currentTarget as HTMLElement;
       onCancel();
+      focusAdjacentTapTabField(from, false);
     }
+  };
+
+  // Close the dropdown when focus leaves the field (e.g. the user clicks into
+  // another field instead of picking a result). Option clicks call
+  // preventDefault on mousedown, so selecting a result does NOT blur-close
+  // before the click commits.
+  const handleBlur = () => {
+    onCancel();
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -381,6 +430,24 @@ export function RefCombobox({
       );
     }
 
+    // Funnel floor: a pinned-bottom "create new" affordance, always offered
+    // (when enabled and the query is non-empty) and always last, never the
+    // keyboard default — click or Enter-with-no-result to use it.
+    if (allowCreate && onCreateNew && query.trim().length >= 1) {
+      items.push(
+        <li
+          key="create-new"
+          className="result-item ref-create-item"
+          data-type="create"
+          onClick={() => onCreateNew(query.trim())}
+          onMouseDown={handleMouseDown}
+        >
+          <span className="result-label">Create “{query.trim()}”</span>
+          <span className="result-count">new</span>
+        </li>
+      );
+    }
+
     return items;
   };
 
@@ -392,6 +459,7 @@ export function RefCombobox({
         value={query}
         onChange={handleInputChange}
         onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
         className="taptab-inline-input"
         onClick={(e) => e.stopPropagation()}
         placeholder="Search local or ontology..."

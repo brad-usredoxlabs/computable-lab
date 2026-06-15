@@ -33,6 +33,9 @@ form:
     - path: "$.studyId"
       widget: "ref"
       label: "Study"
+      # System-assigned parent link — set when the experiment is created and
+      # never edited from the record form (mirrors recordId / kind).
+      readonly: true
     - path: "$.description"
       widget: "markdown"
       label: "Description"
@@ -40,31 +43,63 @@ form:
     collapsible: true
     fields:
     - path: "$.tags"
-      widget: "combobox"
+      widget: "chips"
       label: "Tags"
       props:
-        sources: ["local"]
+        sources: ["local", "ols"]
+        ontologies: ["efo", "chebi", "go"]
         field: "tags"
     - path: "$.claimIds"
       widget: "array"
-      label: "Claim IDs"
+      label: "Claims"
+      # Claims are the authoritative locus of meaning (hypotheses/assertions this
+      # experiment tests) and link to Claim *records*, not ontology terms. They
+      # aren't authored from the experiment editor, so the field is hidden here
+      # until a dedicated Claim picker exists. Revisit when that lands.
+      hidden: true
   - title: "FAIR"
     collapsible: true
     collapsed: true
     fields:
+    # Inherited from the parent study (read-only). The value is copied at
+    # creation and kept in sync via read-through in UIHandlers; set the license
+    # on the study, not here. Options are listed so the read-only display can
+    # render the friendly label.
     - path: "$.license"
-      widget: "text"
+      widget: "select"
       label: "License"
+      readonly: true
+      options:
+        - value: "CC0-1.0"
+          label: "CC0 1.0 (Public Domain Dedication)"
+        - value: "CC-BY-4.0"
+          label: "CC BY 4.0 (Attribution)"
+        - value: "CC-BY-SA-4.0"
+          label: "CC BY-SA 4.0 (Attribution-ShareAlike)"
+        - value: "CC-BY-NC-4.0"
+          label: "CC BY-NC 4.0 (Attribution-NonCommercial)"
+        - value: "CC-BY-NC-SA-4.0"
+          label: "CC BY-NC-SA 4.0 (Attribution-NonCommercial-ShareAlike)"
+        - value: "CC-BY-ND-4.0"
+          label: "CC BY-ND 4.0 (Attribution-NoDerivatives)"
+        - value: "CC-BY-NC-ND-4.0"
+          label: "CC BY-NC-ND 4.0 (Attribution-NonCommercial-NoDerivatives)"
+        - value: "proprietary"
+          label: "All Rights Reserved (Proprietary)"
+        - value: "internal-only"
+          label: "Internal / Confidential"
     - path: "$.keywords"
-      widget: "combobox"
+      widget: "chips"
       label: "Keywords"
       props:
         sources: ["local", "ols"]
         ontologies: ["efo", "chebi", "go"]
         field: "keywords"
+    # Hidden in the editor — auto-filled at export time (DOIs, accessions, etc.).
     - path: "$.relatedIdentifiers"
       widget: "array"
       label: "Related Identifiers"
+      hidden: true
   - title: "Provenance"
     collapsible: true
     collapsed: true

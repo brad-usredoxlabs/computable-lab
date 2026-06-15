@@ -11,9 +11,11 @@ import { WorkspaceProvider, useWorkspace } from '../../workspace/WorkspaceContex
 import { defaultWorkspaceState } from '../../workspace/types'
 
 const listRecordsByKind = vi.fn()
+const getStudyInventoryUsage = vi.fn()
 vi.mock('../../../shared/api/client', () => ({
   apiClient: {
     listRecordsByKind: (...args: unknown[]) => listRecordsByKind(...args),
+    getStudyInventoryUsage: (...args: unknown[]) => getStudyInventoryUsage(...args),
   },
 }))
 
@@ -56,6 +58,8 @@ function renderFind() {
 }
 
 beforeEach(() => {
+  getStudyInventoryUsage.mockReset()
+  getStudyInventoryUsage.mockResolvedValue({ studyId: 'STU-000001', materials: [], labwares: [] })
   listRecordsByKind.mockReset()
   listRecordsByKind.mockImplementation((kind: string, _l: number, _o: number, links?: { studyId?: string }) => {
     // Study-scoped inventory only resolves when a studyId filter is passed.
@@ -81,6 +85,31 @@ describe('FindTabPanel — project inventory & protocol libraries', () => {
     expect(listRecordsByKind).toHaveBeenCalledWith('labware', expect.any(Number), expect.any(Number), { studyId: 'STU-000001' })
     expect(listRecordsByKind).toHaveBeenCalledWith('protocol', expect.any(Number), expect.any(Number), { studyId: 'STU-000001' })
     expect(listRecordsByKind).toHaveBeenCalledWith('local-protocol', expect.any(Number), expect.any(Number), { studyId: 'STU-000001' })
+  })
+
+  it('shows project-wide run usage with experiment/run anchors', async () => {
+    getStudyInventoryUsage.mockResolvedValue({
+      studyId: 'STU-000001',
+      materials: [
+        {
+          refId: 'MAT-dmem',
+          kind: 'material',
+          title: 'DMEM',
+          anchors: [
+            { experimentId: 'EXP-1', experimentTitle: 'Exp A', runId: 'RUN-1', runTitle: 'Run 1' },
+            { experimentId: 'EXP-1', experimentTitle: 'Exp A', runId: 'RUN-2', runTitle: 'Run 2' },
+          ],
+        },
+      ],
+      labwares: [],
+    })
+    renderFind()
+    // The run-used material shows even though it isn't a studyId-linked record…
+    expect(await screen.findByTestId('find-tab-inv-MAT-dmem')).toBeTruthy()
+    // …and each anchor identifies the experiment/run it's used in.
+    const anchors = screen.getByTestId('find-tab-inv-anchors-MAT-dmem')
+    expect(anchors.textContent).toContain('Exp A / Run 1')
+    expect(anchors.textContent).toContain('Exp A / Run 2')
   })
 
   it('clicking a row opens an in-workspace record-edit tab (no navigation)', async () => {

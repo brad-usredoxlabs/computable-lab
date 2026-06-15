@@ -41,6 +41,22 @@ export function clarificationAnswerPrompt(
   return `Use ${value} for ${target}.`
 }
 
+/** Combine a batch of clarification answers into a single prompt sentence-set. */
+export function clarificationAnswersPrompt(
+  answers: AiClarificationAnswer[],
+  requests: AiClarificationRequest[],
+): string {
+  const byId = new Map(requests.map((r) => [r.id, r]))
+  return answers
+    .map((a) => {
+      const req = byId.get(a.requestId)
+      const target = req?.entityType ?? req?.kind ?? 'material'
+      const value = a.mentionToken ?? a.label ?? a.value ?? a.optionId ?? 'answer'
+      return `Use ${value} for ${target}.`
+    })
+    .join(' ')
+}
+
 /**
  * Tiny prefill-progress chip for the panel header. llama.cpp exposes no
  * mid-prefill percentage, so this is a three-phase indicator: pulsing while
@@ -314,17 +330,40 @@ export function AiTabPanel() {
   const [addSourceOpen, setAddSourceOpen] = useState(false)
   const [addedSources, setAddedSources] = useState<AddedSource[]>([])
 
+  // Extended thinking is always OFF for the workspace agent: on this appliance
+  // the model's chain-of-thought consumes the turn before it emits the draft
+  // tool call (so the native tool call never lands and the slow compiler-arg
+  // fallback fires), with no offsetting quality gain. We send enableThinking:
+  // false explicitly because the chat template defaults reasoning ON. The
+  // user-facing toggle was removed; re-add it here if a future model benefits.
+
+  // Clarification answers accumulated across a multi-turn resolution, keyed by
+  // the grounded material id (request ids aren't material-stable across
+  // re-drafts). Every clarification submit re-sends the FULL set so a material
+  // resolved earlier never re-surfaces — no ping-pong if the model re-grounds
+  // inconsistently. Reset when the user types a fresh prompt.
+  const resolvedClarificationsRef = useRef<Map<string, AiClarificationAnswer>>(new Map())
+
   const handleSend = useCallback(
     async (text: string) => {
       setPrefill(undefined)
-      await chat.send(text)
+      resolvedClarificationsRef.current.clear()
+      await chat.send(text, { enableThinking: false })
     },
     [chat],
   )
 
-  const handleClarificationAnswer = useCallback(
-    async (answer: AiClarificationAnswer, request: AiClarificationRequest) => {
-      await chat.send(clarificationAnswerPrompt(answer, request), { clarificationAnswers: [answer] })
+  const handleClarificationsSubmit = useCallback(
+    async (answers: AiClarificationAnswer[], requests: AiClarificationRequest[]) => {
+      for (const a of answers) {
+        const refId = a.ref && typeof a.ref.id === 'string' ? a.ref.id : undefined
+        resolvedClarificationsRef.current.set(refId ?? a.requestId, a)
+      }
+      const all = [...resolvedClarificationsRef.current.values()]
+      await chat.send(clarificationAnswersPrompt(answers, requests), {
+        clarificationAnswers: all,
+        enableThinking: false,
+      })
     },
     [chat],
   )
@@ -387,7 +426,7 @@ export function AiTabPanel() {
       </section>
 
       <section className="ai-tab__section ai-tab__section--log">
-        <MessageLog state={chat.state} onClarificationAnswer={handleClarificationAnswer} />
+        <MessageLog state={chat.state} onClarificationsSubmit={handleClarificationsSubmit} />
       </section>
 
       <section className="ai-tab__section ai-tab__section--actions">

@@ -25,7 +25,8 @@ export type WidgetType =
   | 'hidden'         // Hidden field
   | 'readonly'       // Read-only display
   | 'custom'         // Custom widget (requires renderer)
-  | 'combobox';      // Autocomplete combobox (local + ontology suggestions)
+  | 'combobox'       // Autocomplete combobox (local + ontology suggestions)
+  | 'chips';         // Multi-value ontology/local chip input (tags, keywords)
 
 /**
  * Layout direction for form sections.
@@ -522,6 +523,12 @@ export interface ProjectionSlot {
   readOnly?: boolean;
   /** Default value (if not in payload) */
   defaultValue?: unknown;
+  /**
+   * Authoritative display-only value override. When present the editor renders
+   * this instead of the stored payload value (e.g. license read-through from a
+   * parent study, the resolved Created By display name). Never persisted.
+   */
+  value?: unknown;
   /** Suggestion providers available for this slot */
   suggestionProviders?: SuggestionProviderKind[];
   /** Visibility condition */
@@ -556,6 +563,12 @@ export interface EditorProjectionResponse {
   diagnostics: EditorDiagnostic[];
   /** TapTab posture (Phase 4) — forwarded from the schema's UI spec. */
   taptab?: TapTabConfig;
+  /**
+   * Display-only field overrides keyed by payload path (e.g. `license`,
+   * `createdBy`). Merged over the record payload by the editor at render time;
+   * never persisted. Used for read-through inheritance and resolved names.
+   */
+  displayValues?: Record<string, unknown>;
 }
 
 /**

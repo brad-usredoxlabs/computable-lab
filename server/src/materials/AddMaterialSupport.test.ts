@@ -338,4 +338,120 @@ describe('normalizeEventGraphMaterialUsage', () => {
     expect((createdSpec.payload as Record<string, unknown>).provenance).not.toHaveProperty('eventGraphId');
     expect((createdSpec.payload as Record<string, unknown>).provenance).not.toHaveProperty('eventId');
   });
+
+  it('creates a single_active material-spec from a concept + concentration (no bare concept in the well)', async () => {
+    const store = new MemoryRecordStore();
+    // "add 10 µL of 1 µM clofibrate to A1": one compound at one concentration —
+    // a single-active formulation, not a bare concept.
+    const graph = {
+      kind: 'event-graph',
+      id: 'EVG-SA',
+      events: [
+        {
+          eventId: 'evt-sa',
+          event_type: 'add_material',
+          details: {
+            wells: ['A1'],
+            volume: { value: 10, unit: 'uL' },
+            concentration: { value: 1, unit: 'uM' },
+            material_ref_domain: 'chemical',
+            material_ref: { kind: 'draft', id: 'mint:clofibrate', label: 'clofibrate' },
+          },
+        },
+      ],
+    };
+
+    const normalized = await normalizeEventGraphMaterialUsage(store, EVENT_GRAPH_SCHEMA_ID, graph);
+    const event = (normalized as { events: Array<{ details: Record<string, unknown> }> }).events[0]!;
+
+    // The well now references a formulation, not the bare compound concept.
+    const specRef = event.details.material_spec_ref as Record<string, unknown>;
+    expect(specRef).toMatchObject({ kind: 'record', type: 'material-spec' });
+    expect(event.details.material_source_requirement).toMatchObject({
+      status: 'unresolved',
+      material_spec_ref: { id: specRef.id },
+    });
+
+    const createdSpec = store.created.find((record) => record.recordId === specRef.id)!;
+    expect(createdSpec.schemaId).toBe(MATERIAL_SPEC_SCHEMA_ID);
+    expect(createdSpec.payload).toMatchObject({
+      kind: 'material-spec',
+      formulation_kind: 'single_active',
+      status: 'proposed',
+      lifecycleId: 'lab-vocabulary-control',
+      name: '1 uM clofibrate',
+    });
+    const formulation = (createdSpec.payload as Record<string, unknown>).formulation as Record<string, unknown>;
+    expect(formulation.concentration).toMatchObject({ value: 1, unit: 'uM' });
+    const composition = formulation.composition as Array<Record<string, unknown>>;
+    expect(composition).toHaveLength(1);
+    expect(composition[0]).toMatchObject({ role: 'solute', concentration: { value: 1, unit: 'uM' } });
+    // The spec wraps a real local concept record (the minted compound).
+    expect((createdSpec.payload as Record<string, unknown>).material_ref).toMatchObject({ kind: 'record', type: 'material' });
+  });
+
+  it('does not invent a spec for a single compound with no concentration (and no count/composition)', async () => {
+    const store = new MemoryRecordStore();
+    const graph = {
+      kind: 'event-graph',
+      id: 'EVG-NOQTY',
+      events: [
+        {
+          eventId: 'evt-noqty',
+          event_type: 'add_material',
+          details: {
+            wells: ['A1'],
+            material_ref_domain: 'chemical',
+            material_ref: { kind: 'draft', id: 'mint:clofibrate', label: 'clofibrate' },
+          },
+        },
+      ],
+    };
+
+    const normalized = await normalizeEventGraphMaterialUsage(store, EVENT_GRAPH_SCHEMA_ID, graph);
+    const event = (normalized as { events: Array<{ details: Record<string, unknown> }> }).events[0]!;
+
+    // The concept is still grounded to a real local record (no mint: survives)…
+    expect(event.details.material_ref).toMatchObject({ kind: 'record', type: 'material' });
+    // …but with no quantity there is no formulation/instance to build.
+    expect(event.details.material_spec_ref).toBeUndefined();
+    expect(event.details.material_instance_ref).toBeUndefined();
+    expect(store.created.some((record) => record.payload && (record.payload as Record<string, unknown>).kind === 'material-spec')).toBe(false);
+    expect(store.created.some((record) => record.payload && (record.payload as Record<string, unknown>).kind === 'material-instance')).toBe(false);
+  });
+
+  it('creates a material-instance from a concept + cell count (cells are instances, not formulations)', async () => {
+    const store = new MemoryRecordStore();
+    const graph = {
+      kind: 'event-graph',
+      id: 'EVG-CELLS-INST',
+      events: [
+        {
+          eventId: 'evt-cells',
+          event_type: 'add_material',
+          details: {
+            wells: ['A1'],
+            material_ref: { kind: 'ontology', id: 'EFO:0001187', namespace: 'EFO', label: 'HepG2' },
+            count: 100000,
+          },
+        },
+      ],
+    };
+
+    const normalized = await normalizeEventGraphMaterialUsage(store, EVENT_GRAPH_SCHEMA_ID, graph);
+    const event = (normalized as { events: Array<{ details: Record<string, unknown> }> }).events[0]!;
+
+    const instanceRef = event.details.material_instance_ref as Record<string, unknown>;
+    expect(instanceRef).toMatchObject({ kind: 'record', type: 'material-instance' });
+    expect(event.details.material_spec_ref).toBeUndefined();
+
+    const createdInstance = store.created.find((record) => record.recordId === instanceRef.id)!;
+    expect(createdInstance.payload).toMatchObject({
+      kind: 'material-instance',
+      status: 'proposed',
+      name: 'HepG2',
+    });
+    expect((createdInstance.payload as Record<string, unknown>).tags).toContain('cells');
+    expect((createdInstance.payload as Record<string, unknown>).material_ref).toMatchObject({ kind: 'record', type: 'material' });
+  });
 });

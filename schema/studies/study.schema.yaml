@@ -44,6 +44,25 @@ properties:
     type: string
     description: "Optional high-level description of the study."
 
+  # Project-level license, constrained to a fixed vocabulary (Creative Commons
+  # family + private options). Experiments and runs inherit this value. The
+  # shared FAIRCommon.license stays a lenient string so other record kinds and
+  # legacy free-text values are not broken; only the authoritative study field
+  # is enum-validated here.
+  license:
+    type: string
+    description: "Project license (SPDX-style identifier from the allowed set)."
+    enum:
+    - "CC0-1.0"
+    - "CC-BY-4.0"
+    - "CC-BY-SA-4.0"
+    - "CC-BY-NC-4.0"
+    - "CC-BY-NC-SA-4.0"
+    - "CC-BY-ND-4.0"
+    - "CC-BY-NC-ND-4.0"
+    - "proprietary"
+    - "internal-only"
+
   tags:
     type: array
     items: { type: string }

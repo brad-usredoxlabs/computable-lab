@@ -313,12 +313,21 @@ export function createRecordHandlers(
         }
         
         // Inject payload provenance fields that are schema-compatible.
-        // Keep actor provenance in envelope meta so strict schemas are not violated.
+        // Keep actor provenance (createdBy) in envelope meta only — per the
+        // RecordEnvelope contract it must NOT be smuggled into the payload. The
+        // editor resolves a display name from meta.createdBy at projection time.
         const now = new Date().toISOString();
+        const creator = user.userId ?? identity?.username ?? 'system';
+        // createdBy is a tool-generated FAIRCommon provenance field (like
+        // createdAt) and is the durable home for the creator: the file store
+        // derives envelope meta from repo state and does not persist
+        // meta.createdBy, so the payload is where the creator id must live. The
+        // editor resolves it to a display name read-only at projection time.
         const payloadWithProvenance = {
           ...(payload as Record<string, unknown>),
           createdAt: now,
           updatedAt: now,
+          createdBy: creator,
         };
 
         // Inherit FAIR fields from parent record
@@ -350,7 +359,7 @@ export function createRecordHandlers(
           {
             createdAt: now,
             updatedAt: now,
-            createdBy: user.userId ?? identity?.username ?? 'system',
+            createdBy: creator,
           }
         );
         if (!envelope) {
@@ -551,6 +560,16 @@ export function createRecordHandlers(
           ...(normalizedPayload as Record<string, unknown>),
           updatedAt: new Date().toISOString(),
         };
+        // createdBy is immutable after creation. The editor surfaces it as a
+        // read-only field populated with a resolved display name, which the
+        // client serializes back on save — never trust it. Restore the original
+        // creator id from the stored record (preserving legacy absence).
+        const existingCreatedBy = (existing.payload as Record<string, unknown>).createdBy;
+        if (typeof existingCreatedBy === 'string') {
+          (payloadWithProvenance as Record<string, unknown>).createdBy = existingCreatedBy;
+        } else {
+          delete (payloadWithProvenance as Record<string, unknown>).createdBy;
+        }
 
         // Create updated envelope (handle meta per exactOptionalPropertyTypes)
         const envelope = {

@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
-import { apiClient } from '../../shared/api/client'
+import { apiClient, type InventoryUsageAnchor } from '../../shared/api/client'
 import type { Labware } from '../../types/labware'
 import type { AddMaterialDetails, PlateEvent } from '../../types/events'
 import { getAddMaterialRef, parseMaterialLikeRef } from '../../types/events'
@@ -28,6 +28,12 @@ export interface InventoryRecord {
    * backing record yet). Such rows render disabled.
    */
   editable?: boolean
+  /**
+   * Experiment/run(s) this item is used in across the project. Present on
+   * project-level usage items (from `useProjectUsage`); absent on studyId-linked
+   * inventory records and live-deck items.
+   */
+  anchors?: InventoryUsageAnchor[]
 }
 
 export interface InventorySection {
@@ -162,9 +168,89 @@ export function deckMaterialItems(events: PlateEvent[]): InventoryRecord[] {
   return [...seen.values()]
 }
 
-/** Merge deck-derived items into a section's records, deduped by recordId. */
+/**
+ * Merge extra items (project usage, live deck) into a section's records, deduped
+ * by recordId. When an item is already present, its anchors are unioned in — so a
+ * studyId-linked material that's also used in runs still shows where it's used.
+ */
 export function mergeInventoryItems(base: InventoryRecord[], extra: InventoryRecord[]): InventoryRecord[] {
   const byId = new Map(base.map((record) => [record.recordId, record]))
-  for (const item of extra) if (!byId.has(item.recordId)) byId.set(item.recordId, item)
+  for (const item of extra) {
+    const existing = byId.get(item.recordId)
+    if (!existing) {
+      byId.set(item.recordId, item)
+      continue
+    }
+    if (item.anchors?.length) {
+      const merged = [...(existing.anchors ?? [])]
+      for (const a of item.anchors) {
+        if (!merged.some((m) => m.runId === a.runId)) merged.push(a)
+      }
+      byId.set(item.recordId, { ...existing, anchors: merged })
+    }
+  }
   return [...byId.values()].sort((a, b) => a.title.localeCompare(b.title))
+}
+
+/** Is this ref an openable local record (vs. an ontology CURIE like CHEBI:5001)? */
+function isOpenableRecordId(refId: string): boolean {
+  return !/^[A-Za-z]+:/.test(refId)
+}
+
+interface UseProjectUsageResult {
+  materials: InventoryRecord[]
+  labwares: InventoryRecord[]
+  loading: boolean
+  error: string | null
+  refresh: () => void
+}
+
+/**
+ * Project-level material & labware usage aggregated across the project's runs'
+ * event graphs (server-side, `GET /studies/:id/inventory-usage`). Each item
+ * carries the experiment/run anchors it's used in. Merged into the Find tab's
+ * Materials/Labwares sections so the project view shows run-embedded usage that
+ * isn't a studyId-linked record.
+ */
+export function useProjectUsage(studyId: string): UseProjectUsageResult {
+  const [materials, setMaterials] = useState<InventoryRecord[]>([])
+  const [labwares, setLabwares] = useState<InventoryRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    apiClient
+      .getStudyInventoryUsage(studyId)
+      .then((res) => {
+        if (cancelled) return
+        const toRecord = (item: { refId: string; kind: string; title: string; anchors: InventoryUsageAnchor[] }): InventoryRecord => ({
+          recordId: item.refId,
+          kind: item.kind,
+          title: item.title,
+          editable: isOpenableRecordId(item.refId),
+          anchors: item.anchors,
+        })
+        setMaterials(res.materials.map(toRecord))
+        setLabwares(res.labwares.map(toRecord))
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [studyId])
+
+  useEffect(() => {
+    const dispose = load()
+    return dispose
+  }, [load])
+
+  return { materials, labwares, loading, error, refresh: load }
 }

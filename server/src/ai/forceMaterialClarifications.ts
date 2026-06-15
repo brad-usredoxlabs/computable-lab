@@ -10,22 +10,30 @@
  * ontology CURIE from memory — none of which gives the user a chance to confirm
  * which term they meant.
  *
- * Policy (user decision): a free-text material with no confirmed grounding must
- * ALWAYS surface a clarification so the user picks an ontology term or creates a
- * local record. This module is that enforcement, mirroring the compiler's
- * gap→clarification behavior for the path where the compiler doesn't run.
+ * Policy (user decision): biologists add a compound to a well with a volume and
+ * a concentration in mind — and a compound *at a concentration* is a formulation,
+ * not a bare concept. So this net polices two distinct things:
  *
- * A material is treated as already grounded ("trusted") only when:
- *   - it points at an existing local record (kind 'record', e.g. MAT-…), or
- *   - it carries an ontology CURIE that the user explicitly resolved (the CURIE
- *     appears in <resolved_context>), or
- *   - the live `resolve` tool was available this turn (non-draft mode), so the
- *     model's CURIEs came from a real lookup rather than memory.
+ *   1. WHICH material — a memory-recalled (un-resolved) ontology CURIE, or no
+ *      material reference at all, surfaces a /m "which material?" clarification.
  *
- * Anything else — a mint/draft ref, a memory-recalled CURIE, a bare free-text
- * name, or no material reference at all on an add_material event — is held back
- * and converted into a /m clarification (allowCreateLocal: true) seeded with the
- * best-effort label.
+ *   2. HOW MUCH — a clearly named material (record concept, mint, free text, or
+ *      a resolved CURIE) with NO quantity (no concentration, no cell count, no
+ *      ≥2-component snapshot) would land in the well as a bare concept. Rather
+ *      than persist that, ask in plain language: "I need a volume and a
+ *      concentration for <label>." (reason `needs-quantity`, no picker).
+ *
+ * A material passes the net untouched ("trusted") when:
+ *   - the event already carries a well-ready material — a material-spec
+ *     (formulation), material-instance / aliquot (instance), or vendor-product
+ *     (`hasTrustedSpecOrAliquot`); or
+ *   - it names a concept AND carries a quantity, so accept-time
+ *     (`AddMaterialSupport.normalizeEventGraphMaterialUsage`) can mint a proposed
+ *     single_active material-spec (compound @ concentration) or instance (cells @
+ *     count) — no bare concept is ever persisted.
+ *
+ * The happy path ("add 10 µL of 1 µM clofibrate to A1") therefore flows with no
+ * clicks; only a missing concentration or an unconfirmed term interrupts.
  */
 import type { AgentClarificationRequest } from './types.js';
 
@@ -64,7 +72,7 @@ function draftLabel(ref: Dict): string {
   return id.startsWith('mint:') ? id.slice('mint:'.length).trim() : '';
 }
 
-export type MaterialGapReason = 'no-ref' | 'mint' | 'unverified-curie' | 'freetext';
+export type MaterialGapReason = 'no-ref' | 'unverified-curie' | 'needs-quantity';
 
 export interface MaterialGap {
   eventIndex: number;
@@ -73,6 +81,9 @@ export interface MaterialGap {
   label: string;
   /** First targeted well, used to phrase a no-ref prompt. */
   well: string;
+  /** The event's note, shown in the card so the user sees WHICH material this
+   * clarification is about even when the ref carried no usable label. */
+  snippet: string;
 }
 
 export interface ForceClarificationsOptions {
@@ -100,14 +111,41 @@ function firstWell(details: Dict): string {
   return typeof first === 'string' ? first.trim() : '';
 }
 
-/** Does the event already carry a non-material grounding that stands in for the
- * material (a record-backed aliquot or material-spec)? Those are concrete local
- * records and need no further confirmation. */
+/** Does the event already carry a grounding that IS a well-ready material — a
+ * formulation (material-spec), a concrete instance (aliquot / material-instance),
+ * or a catalog item (vendor-product)? Those need no concentration prompt: a
+ * spec already fixes a concentration, an instance/aliquot a quantity, a
+ * vendor-product a catalog identity. (A bare `material_ref` concept does NOT
+ * count — it's the thing the concentration gate below polices.) */
 function hasTrustedSpecOrAliquot(details: Dict): boolean {
-  for (const key of ['aliquot_ref', 'material_spec_ref'] as const) {
+  for (const key of [
+    'aliquot_ref',
+    'material_spec_ref',
+    'material_instance_ref',
+    'vendor_product_ref',
+  ] as const) {
     const ref = asDict(details[key]);
     if (ref && asString(ref.kind) === 'record' && asString(ref.id)) return true;
   }
+  return false;
+}
+
+/**
+ * Does the add carry a quantity that makes its material a *formulation* or an
+ * *instance* rather than a bare concept? A compound at a concentration is a
+ * formulation; cells at a count are an instance; a ≥2-component snapshot is a
+ * mixture. Any of these means accept-time materialization
+ * (`AddMaterialSupport.normalizeEventGraphMaterialUsage`) can mint a proposed
+ * material-spec / instance, so we don't have to ask the biologist anything.
+ */
+function hasQuantitySignal(details: Dict): boolean {
+  const conc = asDict(details['concentration']);
+  if (conc && typeof conc['value'] === 'number' && asString(conc['unit'])) return true;
+  if (asDict(details['concentration_range'])) return true;
+  const count = details['count'];
+  if (typeof count === 'number' && Number.isFinite(count) && count > 0) return true;
+  const snapshot = details['composition_snapshot'];
+  if (Array.isArray(snapshot) && snapshot.length >= 2) return true;
   return false;
 }
 
@@ -122,56 +160,77 @@ function classifyEvent(
   policeUnverifiedCuries: boolean,
 ): MaterialGap | null {
   const details = eventDetails(e);
+  // Already a well-ready material (formulation / instance / aliquot / vendor).
   if (hasTrustedSpecOrAliquot(details)) return null;
 
   const well = firstWell(details);
+  const snippet = asString(details.note);
+  const quantity = hasQuantitySignal(details);
   const mr = details.material_ref;
+  const gap = (reason: MaterialGapReason, label: string): MaterialGap => ({ eventIndex, reason, label, well, snippet });
+
+  // A concept-ish material (record concept, mint, free text, or resolved CURIE)
+  // becomes a *bare concept* in the well unless the add carries a quantity. A
+  // compound at a concentration is a formulation; cells at a count are an
+  // instance — accept-time materializes those. Without any quantity there's
+  // nothing to build, so ask the biologist for one (plain language, no picker).
+  const conceptGap = (label: string): MaterialGap | null =>
+    quantity ? null : gap('needs-quantity', label);
 
   // No material reference at all — the material survived only as free text
   // (typically in `note`). We can't reconstruct which term it is, so ask.
   if (mr === undefined || mr === null || mr === '') {
-    return { eventIndex, reason: 'no-ref', label: '', well };
+    return gap('no-ref', '');
   }
 
-  // String material_ref: a bare CURIE is trusted under the same rules as an
-  // object ontology ref; anything else is free text.
+  // String material_ref: a bare CURIE follows the ontology rules below;
+  // anything else is a free-text concept name.
   if (typeof mr === 'string') {
     const value = mr.trim();
     if (isCurieShaped(value)) {
-      if (!policeUnverifiedCuries || resolved.has(value)) return null;
-      return { eventIndex, reason: 'unverified-curie', label: '', well };
+      // Memory-recalled CURIE in forced-tool mode → confirm WHICH term first.
+      if (policeUnverifiedCuries && !resolved.has(value)) return gap('unverified-curie', '');
+      return conceptGap('');
     }
-    return { eventIndex, reason: 'freetext', label: value, well };
+    return conceptGap(value);
   }
 
   const ref = asDict(mr);
-  if (!ref) return { eventIndex, reason: 'no-ref', label: '', well };
+  if (!ref) return gap('no-ref', '');
 
   const kind = asString(ref.kind);
   const id = asString(ref.id);
   const label = asString(ref.label);
 
-  // A record ref points at an existing local record (e.g. MAT-…) — already
-  // committed to the lab's vocabulary, no confirmation needed.
-  if (kind === 'record' && id) return null;
-
-  // Draft / mint ref: minted from the user's words, never confirmed.
-  if (kind === 'draft' || id.startsWith('mint:')) {
-    return { eventIndex, reason: 'mint', label: draftLabel(ref), well };
-  }
-
-  // Ontology ref: trusted unless we're policing CURIEs and this one was not
-  // user-resolved (i.e. a memory-recalled guess in forced-tool mode).
+  // Ontology ref: a memory-recalled (un-resolved) CURIE in forced-tool mode is a
+  // guess at WHICH material — confirm that before anything else. A resolved /
+  // non-policed CURIE is a real concept and falls to the concentration gate.
   if (kind === 'ontology' || isCurieShaped(id)) {
-    if (!policeUnverifiedCuries || (id && resolved.has(id))) return null;
-    return { eventIndex, reason: 'unverified-curie', label, well };
+    if (policeUnverifiedCuries && !(id && resolved.has(id))) return gap('unverified-curie', label);
+    return conceptGap(label);
   }
 
-  // kind 'local', empty/unknown kind, or label-only — free text.
-  return { eventIndex, reason: 'freetext', label: label || id, well };
+  // A record ref points at an existing local concept record (e.g. MAT-…). It's a
+  // known term but still a bare concept — needs a quantity to become a
+  // formulation/instance.
+  if (kind === 'record' && id) return conceptGap(label);
+
+  // Draft / mint ref: minted from the user's words.
+  if (kind === 'draft' || id.startsWith('mint:')) return conceptGap(draftLabel(ref));
+
+  // kind 'local', empty/unknown kind, or label-only — free-text concept.
+  return conceptGap(label || id);
 }
 
 function promptForGap(gap: MaterialGap): string {
+  // Missing quantity: the material is clear, the concentration/volume isn't.
+  // Ask in the biologist's own terms — no jargon, no picker.
+  if (gap.reason === 'needs-quantity') {
+    if (gap.label) return `I need a volume and a concentration for "${gap.label}".`;
+    if (gap.well) return `I need a volume and a concentration for the material added to ${gap.well}.`;
+    return 'I need a volume and a concentration for that material.';
+  }
+  // Unknown / unconfirmed material: ask WHICH term (ontology or local record).
   if (gap.label) {
     return `Which material is "${gap.label}"? Pick an ontology term or create a local record.`;
   }
@@ -182,6 +241,22 @@ function promptForGap(gap: MaterialGap): string {
 }
 
 function requestForGap(gap: MaterialGap): AgentClarificationRequest {
+  // needs-quantity is answered in plain chat ("10 µL of 1 µM"), not with the /m
+  // material picker — so it's a parameter clarification with no menu. The
+  // client renders a no-options 'choice' request as an "Answer in chat" prompt.
+  if (gap.reason === 'needs-quantity') {
+    const request: AgentClarificationRequest = {
+      id: `material-${gap.eventIndex + 1}`,
+      kind: 'parameter',
+      prompt: promptForGap(gap),
+      entityType: 'parameter',
+      menuProvider: 'choice',
+      options: [],
+    };
+    if (gap.snippet) request.snippet = gap.snippet;
+    return request;
+  }
+
   const request: AgentClarificationRequest = {
     id: `material-${gap.eventIndex + 1}`,
     kind: 'material',
@@ -192,6 +267,11 @@ function requestForGap(gap: MaterialGap): AgentClarificationRequest {
     options: [],
   };
   if (gap.label) request.query = gap.label;
+  // Surface the event note so the card shows WHICH material is being asked
+  // about (e.g. "Added 10 uL 1 uM clofibrate to B2") even when no label was
+  // carried on the ref — otherwise a multi-material prompt yields an ambiguous
+  // "which material for B2?".
+  if (gap.snippet) request.snippet = gap.snippet;
   return request;
 }
 

@@ -19,3 +19,6 @@ export type { ArrayWidgetProps } from './ArrayWidget';
 
 export { ObjectWidget } from './ObjectWidget';
 export type { ObjectWidgetProps } from './ObjectWidget';
+
+export { ChipComboboxWidget } from './ChipComboboxWidget';
+export type { ChipComboboxWidgetProps, ChipEntry } from './ChipComboboxWidget';

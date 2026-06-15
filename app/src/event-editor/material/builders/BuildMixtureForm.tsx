@@ -14,6 +14,7 @@ import {
   type CompositionDraftEntry,
 } from '../CompositionEditor'
 import type { PickedMaterial } from '../state'
+import { compositionFormulationPayload, materialConceptPayload } from '../lib/materialSavePayload'
 
 /**
  * Mixture builder ("DMEM + 10% FBS + 1× Pen/Strep"-style).
@@ -82,49 +83,28 @@ export function BuildMixtureForm({
       const materialId = generateMaterialId(trimmedName)
       const isMedia = composition.some((e) => e.role === 'cells' || e.role === 'activity_source')
 
-      await apiClient.createRecord(MATERIAL_SCHEMA_ID, {
-        kind: 'material',
-        id: materialId,
-        name: trimmedName,
-        domain: isMedia ? 'media' : 'reagent',
-        ...(classRefs.length > 0 ? { class: classRefs } : {}),
-        tags: hasCells ? ['mixture', 'cell-bearing'] : ['mixture'],
-      })
-
-      const response = await apiClient.createFormulation({
-        material: {
-          id: materialId,
+      const domain = isMedia ? 'media' : 'reagent'
+      await apiClient.createRecord(
+        MATERIAL_SCHEMA_ID,
+        materialConceptPayload({
+          materialId,
           name: trimmedName,
-          domain: isMedia ? 'media' : 'reagent',
-          ...(classRefs.length > 0
-            ? {
-                classRefs: classRefs.map((r) => ({
-                  kind: 'ontology' as const,
-                  id: r.id,
-                  namespace: r.namespace,
-                  label: r.label,
-                  uri: r.uri,
-                })),
-              }
-            : {}),
-        },
-        outputSpec: {
-          name: outputName.trim(),
+          domain,
+          classRefs,
+          tags: hasCells ? ['mixture', 'cell-bearing'] : ['mixture'],
+        }),
+      )
+
+      const response = await apiClient.createFormulation(
+        compositionFormulationPayload({
+          materialId,
+          conceptName: trimmedName,
+          outputName: outputName.trim(),
+          domain,
+          classRefs,
           composition,
-        },
-        recipe: {
-          name: `${trimmedName} mix`,
-          inputRoles: [],
-          steps: [
-            {
-              order: 1,
-              instruction: `Combine the ${composition.length} component${
-                composition.length === 1 ? '' : 's'
-              } above to produce ${outputName.trim()}.`,
-            },
-          ],
-        },
-      })
+        }),
+      )
 
       onSaved({
         recordId: response.materialSpecId,

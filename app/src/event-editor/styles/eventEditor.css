@@ -4266,6 +4266,13 @@
   gap: 4px;
 }
 
+/* Ontology hits can be numerous; cap the height and scroll so the re-ranked
+   top matches stay visible without pushing the rest of the modal off-screen. */
+.add-material-list--scroll {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
 .add-material-row {
   appearance: none;
   width: 100%;

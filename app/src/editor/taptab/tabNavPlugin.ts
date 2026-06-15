@@ -19,7 +19,14 @@ const FIELD_SELECTOR =
 
 /** Enter a field's edit mode: focus its sub-editor or trigger click-to-edit. */
 function activateField(target: HTMLElement): void {
-  const editable = target.querySelector<HTMLElement>('[contenteditable="true"]');
+  // Prefer an already-mounted editable control: a rich-text contenteditable, or
+  // a combobox/chips text input that's still open. Without this, tabbing into a
+  // chips field whose add-combobox is already open (the persistent state after
+  // committing a chip) falls through to target.click(), which is a no-op while
+  // `adding` is already true — so focus never lands in the search input.
+  const editable = target.querySelector<HTMLElement>(
+    '[contenteditable="true"], input:not([type="hidden"]), textarea',
+  );
   if (editable) {
     editable.focus();
   } else {

@@ -41,7 +41,7 @@ export const COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME = 'compile_event_graph_draft';
 export const SUBMIT_SUGGESTION_INSTRUCTION = [
   'FINALIZING YOUR ANSWER:',
   '- Ground every material/reagent/noun before referencing it. A {curie} is legitimate ONLY when it came from the `resolve` tool or appears in <resolved_context>. When `resolve` is available, call it first and use the top-ranked CURIE; when it is not (draft mode), NEVER recall, guess, or reconstruct a CURIE from memory.',
-  '- For a named material you cannot ground to a resolved/known CURIE, prefer {mint:{label,domain}} — it becomes a local proposed record. But when the user named something specific that should already exist and you are unsure which record they mean (e.g. "CHO cells" could be several cell lines), do NOT guess or mint silently: ask a material clarification so the user picks.',
+  '- For a named material you cannot ground to a resolved/known CURIE, GROUND IT with {mint:{label:<the user\'s exact words>,domain}} — it becomes a local proposed record, and the system then asks the user to confirm it. Do NOT guess a CURIE, and do NOT author the clarification yourself.',
   '- Finish by calling the `compile_event_graph_draft` tool exactly once. Do NOT print JSON in your text reply.',
   "- In each event's `materials[]`, reference a material only as {curie} (from `resolve`) or {mint:{label,domain}} when no ontology term fits — never a bare free-text name. Use `role` for mixture semantics such as cells, buffer_component, or additive, `concentration` for component contributions such as 10% FBS, and `count` for absolute cell counts.",
   '- For requested labware, prefer `labwareRequirements[]` with a computable classCurie such as CL:96_well_plate, CL:384_well_plate, CL:96_deepwell_plate, CL:8_well_reservoir_horizontal, CL:12_well_reservoir_vertical, CL:single_well_reservoir_sbs, CL:16_well_reservoir_horizontal_384_pitch, CL:24_well_reservoir_vertical_384_pitch, or CL:tube_rack_15ml.',
@@ -49,8 +49,8 @@ export const SUBMIT_SUGGESTION_INSTRUCTION = [
   '- Ask a labware clarification only when no baseline classCurie can be inferred at all.',
   '- Use `labwareAdditions[]` only when you have a concrete known labware record or definition id. Never invent LBW-* record ids.',
   '- If the context includes an active deck scope, do not propose labwareRequirements, labwareAdditions, deckSlot values, or lawn placements outside that scope. Ask for a layout-switch clarification instead.',
-  '- If you need more information, call `compile_event_graph_draft` with atomic `clarificationRequests[]` (and no events) instead.',
-  "- DISAMBIGUATION INTERVIEW: clarify ambiguous materials, labware, concentrations, or wells — this includes a named material/cell line/reagent you cannot confidently ground, not only vague wording. Emit a material clarification with menuProvider /m (labware /l) and let the user pick inline. One request per ambiguity; never decide a specific record on the user's behalf when you are unsure.",
+  '- MATERIALS ARE NEVER A CLARIFICATION YOU AUTHOR. Always DRAFT the add_material event and {mint} any material you cannot ground. Do NOT emit material clarificationRequests, do NOT invent their options (CURIEs/formulation ids/mint-pseudo-ids), and do NOT return events:[] for an add-materials request — the system confirms each minted material with the user via a live search.',
+  '- Reserve `clarificationRequests[]` for genuinely non-material ambiguities you truly cannot draft past (and never to confirm a quantity/concentration the user already stated).',
   '- Do not ask the user to choose aliquots, vials, inventory sources, lots, or physical instances unless the user explicitly asked for a specific physical source. Draft concept/formulation additions first; inventory binding is a later refinement.',
   '- Never combine unrelated questions into one multiple-choice clarification. For example, concentration ambiguity and well-range ambiguity must be separate clarificationRequests.',
 ].join('\n');
@@ -99,7 +99,7 @@ export const SUBMIT_SUGGESTION_TOOL_DEF: ToolDefinition = {
       'named material (e.g. {mint:{label:"CHO cells",domain:"cell_line"}}) is the correct, expected action, not "inventing" it. ' +
       'Use {curie} ONLY for a CURIE that appears verbatim in <resolved_context> or that resolve returned this session. ' +
       'NEVER write an ontology id (CHEBI:/EFO:/NCBITaxon:/…) recalled from memory — that is a hallucination. When unsure which ' +
-      'specific record the user means, ask a material clarification instead of guessing.',
+      'specific record the user means, {mint} it with their words and let the system ask — do NOT author the clarification or invent its options.',
     parameters: {
       type: 'object',
       additionalProperties: false,

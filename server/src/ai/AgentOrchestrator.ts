@@ -24,7 +24,7 @@ import type {
 } from './types.js';
 import type { AiSurface } from './systemPrompt.js';
 import { buildSystemPrompt, buildSurfaceAwarePrompt, buildVolatileContextMessage, deriveContextCacheKey } from './systemPrompt.js';
-import { resolveMentionsForPrompt, buildResolvedContextMessage } from './resolveMentions.js';
+import { resolveMentionsForPrompt, buildResolvedContextMessage, type ResolvedMention } from './resolveMentions.js';
 import { runChatbotCompile } from './runChatbotCompile.js';
 import {
   SUBMIT_SUGGESTION_TOOL_NAME,
@@ -210,6 +210,43 @@ function appendClarificationAnswersToPrompt(
 }
 
 /**
+ * A clarification answer the user picked is already resolved (the client grounds
+ * ontology picks to a local record before sending). Trust its ref and inject it
+ * straight into the resolved-context block instead of re-fetching via the store
+ * — a just-minted material may not be `store.get`-able yet, and re-resolving it
+ * is what caused the clarification to loop. The model then sees the material as
+ * grounded and stops re-asking.
+ */
+function resolvedMentionsFromAnswers(
+  answers: AgentRequest['clarificationAnswers'],
+): ResolvedMention[] {
+  if (!Array.isArray(answers)) return [];
+  const out: ResolvedMention[] = [];
+  for (const answer of answers) {
+    const ref = answer.ref as Record<string, unknown> | undefined;
+    const id = ref && typeof ref.id === 'string' ? ref.id : undefined;
+    if (!ref || !id) continue;
+    const refType = typeof ref.type === 'string' ? ref.type : undefined;
+    const kind: ResolvedMention['kind'] =
+      refType === 'labware' || ref.kind === 'labware'
+        ? 'labware'
+        : refType === 'material-spec'
+          ? 'material-spec'
+          : refType === 'aliquot'
+            ? 'aliquot'
+            : 'material';
+    out.push({
+      raw: answer.mentionToken ?? `[[${kind}:${id}]]`,
+      kind,
+      id,
+      label: answer.label ?? id,
+      resolved: ref,
+    });
+  }
+  return out;
+}
+
+/**
  * Overwrite provenance stamps on model-drafted events. The system prompt is
  * deterministic (no timestamps/ids — see buildSystemPrompt) so models copy
  * placeholder values; the server is the authority for when a draft was made.
@@ -258,6 +295,58 @@ function normalizeDraftLabwareRefs<T>(events: T[], context: EditorContext): T[] 
   });
 }
 
+/** A local-record id shape (MAT-/MSP-/ALQ-/VND-/LBW-, optionally `local:`). */
+const LOCAL_RECORD_ID = /^(?:local:)?(?:MAT|MSP|ALQ|VND|LBW)-/i;
+
+/**
+ * Repair a drafted `material_ref` against the authoritative resolved mentions.
+ * The model frequently mangles a grounded pick — e.g. it stuffs a local-record
+ * id (`MAT-…`) into an `ontology`-kind ref and copies the id into the label
+ * (observed: `{kind:'ontology', id:'MAT-clofibrate-wzj2', label:'MAT-clofibrate-wzj2'}`).
+ * When the ref's id matches a resolved mention (a clarification answer or an
+ * explicit `[[…]]` the user picked) we rewrite it to a clean record ref with the
+ * resolved label; an ontology ref carrying a local-record id is fixed even
+ * without a match. Only `material_ref` on `add_material` is touched — a correct
+ * `material_spec_ref`/record ref is left alone.
+ */
+export function normalizeDraftMaterialRefs<T>(events: T[], resolved: readonly ResolvedMention[]): T[] {
+  if (!Array.isArray(events) || events.length === 0) return events;
+  const byId = new Map<string, ResolvedMention>();
+  for (const m of resolved) if (m.id) byId.set(m.id, m);
+
+  const repair = (ref: Record<string, unknown>): Record<string, unknown> | null => {
+    const id = typeof ref.id === 'string' ? ref.id.trim() : '';
+    if (!id) return null;
+    const match = byId.get(id);
+    if (match) {
+      return {
+        kind: 'record',
+        id,
+        type: match.kind,
+        label: match.label || (typeof ref.label === 'string' ? ref.label : '') || id,
+      };
+    }
+    if (ref.kind === 'ontology' && LOCAL_RECORD_ID.test(id)) {
+      const label = typeof ref.label === 'string' ? ref.label.trim() : '';
+      return { kind: 'record', id, type: 'material', label: label && label !== id ? label : id };
+    }
+    return null;
+  };
+
+  return events.map((ev) => {
+    if (!ev || typeof ev !== 'object') return ev;
+    const e = ev as Record<string, unknown>;
+    if ((e.event_type ?? e.verb) !== 'add_material') return ev;
+    const details = e.details;
+    if (!details || typeof details !== 'object') return ev;
+    const d = details as Record<string, unknown>;
+    const mr = d.material_ref;
+    if (!mr || typeof mr !== 'object' || Array.isArray(mr)) return ev;
+    const repaired = repair(mr as Record<string, unknown>);
+    return repaired ? ({ ...e, details: { ...d, material_ref: repaired } } as T) : ev;
+  });
+}
+
 function stampDraftProvenance<T>(events: T[]): T[] {
   const timestamp = new Date().toISOString();
   const actionGroupId = `ag-${Date.now().toString(36)}`;
@@ -279,8 +368,9 @@ const FORCED_DRAFT_TOOL_INSTRUCTION = [
   'EVENT-EDITOR DRAFT MODE:',
   `- You MUST finish this turn by calling the ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} tool.`,
   '- Do not answer in prose. Do not leave the assistant message empty.',
-  '- The `resolve` tool is NOT available this turn. Do not output any ontology CURIE you were not given in <resolved_context> — recalling an id from memory is a hallucination. For ANY material named in free text that is not already in <resolved_context>, emit a material clarification (menuProvider /m, allowCreateLocal true) so the user picks an ontology term or creates a local record. Do NOT mint silently, do NOT guess a CURIE, and never leave a material named only in a note with no material_ref.',
-  '- If the prompt is underspecified or a named material/labware is ambiguous, call the tool with clarificationRequests[] (and no events) instead of guessing.',
+  '- The `resolve` tool is NOT available this turn. Do not output any ontology CURIE you were not given in <resolved_context> — recalling an id from memory is a hallucination. For ANY material you cannot reference as a known record or a <resolved_context> CURIE, GROUND IT IN THE EVENT as {mint:{label:<the user\'s exact words>,domain}} (e.g. {mint:{label:"fenofibrate",domain:"chemical"}}). Never leave a material only in a note, never guess a CURIE.',
+  '- DRAFT the events. Do NOT author your own material clarificationRequests, and do NOT invent clarification options (CURIEs, formulation ids, or mint-pseudo-ids) — you have no resolve tool, so any options you list are fabricated. The SYSTEM automatically asks the user to confirm each minted/ungrounded material via a live search; your job is only to draft + mint.',
+  '- ALWAYS return the events for an add-materials request (with {mint} for unknowns). NEVER return "events": [] for such a request, and never ask the user to confirm a volume or concentration they already stated.',
   '- Every well-targeted event\'s details MUST include labwareId (an existing labware id from the editor context) and wells (e.g. ["A1"]). An event without them cannot be rendered or executed.',
   '- If the requested operation is simple labware/deck setup, include labwareRequirements with classCurie and deckSlot. Use labwareAdditions only for concrete known definitions.',
   '- Do not ask which vendor/catalog/plate subtype for generic labware such as a 96-well plate; emit a generic labwareRequirement and let the user refine it later.',
@@ -469,6 +559,40 @@ function extractJsonObject(text: string): Record<string, unknown> | null {
       // Try the next extraction strategy.
     }
   }
+  return null;
+}
+
+/** Top-level keys that mark a bare forced-draft argument object. */
+const DRAFT_ARG_KEYS = ['events', 'labwareRequirements', 'labwareAdditions', 'clarification', 'clarificationRequests', 'unresolvedRefs', 'notes'];
+
+/**
+ * Recover forced-draft tool arguments from a response that arrived as plain
+ * content instead of a native tool call — the common case when the appliance's
+ * tool-call parser is off, so the model emits `<tool_call>{…}</tool_call>` or a
+ * fenced JSON block into `content`. Returns the bare argument object (unwrapping
+ * a `{name, arguments}` envelope, where `arguments` may itself be a JSON string)
+ * or null when the content carries no usable draft JSON — in which case the
+ * caller re-asks the model. Parsing this inline skips a second inference call.
+ */
+export function coerceDraftArgsFromContent(content: unknown): Record<string, unknown> | null {
+  if (typeof content !== 'string') return null;
+  const obj = extractJsonObject(content);
+  if (!obj) return null;
+  if ('arguments' in obj) {
+    const args = obj.arguments;
+    if (args && typeof args === 'object' && !Array.isArray(args)) return args as Record<string, unknown>;
+    if (typeof args === 'string') {
+      try {
+        const parsed = JSON.parse(args) as unknown;
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed as Record<string, unknown>;
+      } catch {
+        /* not a JSON-encoded arguments string — fall through */
+      }
+    }
+  }
+  // Bare argument object: require a known draft key so unrelated prose-JSON
+  // (an example, a code block) is never fed to the compiler.
+  if (DRAFT_ARG_KEYS.some((k) => k in obj)) return obj;
   return null;
 }
 
@@ -721,8 +845,17 @@ export function createAgentOrchestrator(
         ? history.map(normalizeHistoryMessage).filter((message): message is ChatMessage => message !== null)
         : [];
 
-      // Resolve mentions and build resolved context message
-      const resolvedMentions = await resolveMentionsForPrompt(effectivePrompt, deps);
+      // Resolve mentions and build resolved context message. Answered
+      // clarifications are authoritative (already grounded client-side), so they
+      // go in first and shadow any same-id prompt mention that failed to fetch —
+      // otherwise an un-fetchable just-minted record loops the clarification.
+      const answerMentions = resolvedMentionsFromAnswers(clarificationAnswers);
+      const answerIds = new Set(answerMentions.map((m) => m.id));
+      const promptMentions = await resolveMentionsForPrompt(effectivePrompt, deps);
+      const resolvedMentions = [
+        ...answerMentions,
+        ...promptMentions.filter((m) => !answerIds.has(m.id)),
+      ];
       resolvedMentionsCount = resolvedMentions.length;
       const resolvedContextMessage = buildResolvedContextMessage(resolvedMentions);
       
@@ -1248,6 +1381,27 @@ export function createAgentOrchestrator(
           const contentPreview = typeof assistantMsg.content === 'string'
             ? assistantMsg.content.replace(/\s+/g, ' ').slice(0, 400)
             : '<empty>';
+          // Fast path: the appliance usually returns the tool call as plain
+          // content (its tool-call parser is off). Parse those args directly so
+          // the common case costs ONE inference call, not two.
+          const inlineArgs = coerceDraftArgsFromContent(assistantMsg.content);
+          if (inlineArgs) {
+            assistantMsg.content = null;
+            assistantMsg.tool_calls = [{
+              id: `call-inline-${Date.now().toString(36)}`,
+              type: 'function',
+              function: {
+                name: COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME,
+                arguments: JSON.stringify(inlineArgs),
+              },
+            }];
+            choice.finish_reason = 'tool_calls';
+            onEvent?.({
+              type: 'status',
+              message: `Parsed the draft from the response; invoking ${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME}…`,
+            });
+            console.log(`[agent ${tid}] recovered forced-draft args from content; skipped the second call`);
+          } else {
           onEvent?.({
             type: 'status',
             message: `${COMPILE_EVENT_GRAPH_DRAFT_TOOL_NAME} was not emitted natively; asking AI for compiler arguments…`,
@@ -1303,6 +1457,7 @@ export function createAgentOrchestrator(
             }
           } catch (err) {
             console.warn(`[agent ${tid}] compiler-arg coercion failed: ${err instanceof Error ? err.message : String(err)}`);
+          }
           }
         }
 
@@ -1447,6 +1602,10 @@ export function createAgentOrchestrator(
               createMaterialLabeler({ store: deps.store, ontology: deps.ontology }),
               { store: deps.store, mentions: ctxMentions },
             );
+            // Repair material refs the model mangled (e.g. a grounded local
+            // record stuffed into an ontology-kind ref) against the resolved
+            // mentions, so a confirmed pick renders as the clean record it is.
+            parsed.events = normalizeDraftMaterialRefs(parsed.events, resolvedMentions);
 
             // Force a /m clarification for any ungrounded material. In draft
             // mode the `resolve` tool is off and the post-tool re-compile (the
@@ -1473,7 +1632,13 @@ export function createAgentOrchestrator(
               { resolvedCuries, policeUnverifiedCuries: draftFlowMode === 'forced-tool' },
             );
             if (materialNet.clarificationRequests.length > 0) {
-              parsed.events = materialNet.events as unknown as typeof parsed.events;
+              // Ask per-material UP FRONT: when any material needs confirming,
+              // hold the WHOLE draft (not just the ungrounded subset) and show a
+              // named card for each ambiguous material. This avoids "mixing" — a
+              // half-draft ghost of the grounded materials alongside the
+              // questions. Once every card is answered the model re-drafts the
+              // complete graph in one shot.
+              parsed.events = [] as unknown as typeof parsed.events;
               parsed.clarificationRequests = [
                 ...(parsed.clarificationRequests ?? []),
                 ...materialNet.clarificationRequests,
@@ -1482,6 +1647,19 @@ export function createAgentOrchestrator(
                 const legacy = legacyClarificationFromRequests(parsed.clarificationRequests);
                 if (legacy) parsed.clarification = legacy;
               }
+            }
+          }
+          // Forced-draft mode: the model has no resolve tool, so any options it
+          // authored on a clarification are fabricated (invented CURIEs like
+          // XCO:0000988 / mint-pseudo-ids). Strip them so only the live /m and
+          // /l search (real records + ontologies) is ever offered — picking a
+          // hallucinated option grounds to a record that doesn't exist.
+          if (draftFlowMode === 'forced-tool') {
+            if (Array.isArray(parsed.clarificationRequests)) {
+              parsed.clarificationRequests = parsed.clarificationRequests.map((r) => ({ ...r, options: [] }));
+            }
+            if (parsed.clarification) {
+              parsed.clarification = { ...parsed.clarification, options: [] };
             }
           }
           let result = parsed;
