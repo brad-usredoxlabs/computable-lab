@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { createContext, useContext, useState, type ReactNode } from 'react'
 import { RecordPreviewPanel } from './RecordPreviewPanel'
@@ -44,11 +44,11 @@ const mockRecord: RecordEnvelope = {
     title: 'Test Study',
     status: 'draft',
     description: 'A test study for preview panel',
+    createdAt: '2024-01-15T10:00:00.000Z',
+    updatedAt: '2024-01-16T14:30:00.000Z',
   },
   meta: {
     path: '/studies/REC_0001__test-record',
-    createdAt: '2024-01-15T10:00:00.000Z',
-    updatedAt: '2024-01-16T14:30:00.000Z',
   },
 }
 

@@ -91,8 +91,9 @@ describe('CreateNodeModal', () => {
     mockOnClose.mockReset()
     vi.mocked(apiClient.getEditorDraftProjection).mockResolvedValue(mockProjection)
     vi.mocked(apiClient.createRecord).mockResolvedValue({
-      success: true,
       record: { recordId: 'STD_0001__test', schemaId: '', payload: {} },
+      validation: { valid: true, errors: [] },
+      lint: { passed: true, diagnostics: [] },
     })
   })
 
@@ -220,7 +221,6 @@ describe('CreateNodeModal', () => {
 
     // Should show loading spinner with text
     await waitFor(() => {
-      const loadingText = document.querySelector('span')
       // Find the span that contains "Loading form..."
       const spans = document.querySelectorAll('span')
       const loadingSpan = Array.from(spans).find(

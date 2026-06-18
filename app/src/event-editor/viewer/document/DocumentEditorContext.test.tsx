@@ -14,6 +14,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { MockedFunction } from 'vitest'
 import {
   act,
   cleanup,
@@ -63,9 +64,12 @@ function makeArtifact(overrides?: Partial<Artifact>): Artifact {
   }
 }
 
+type LoadFn = (artifactId: string) => Promise<Artifact>
+type SaveFn = (artifactId: string, payload: Artifact) => Promise<void>
+
 function wrap(children: ReactNode, opts: {
-  loadFn: ReturnType<typeof vi.fn>
-  saveFn: ReturnType<typeof vi.fn>
+  loadFn: MockedFunction<LoadFn>
+  saveFn: MockedFunction<SaveFn>
   saveDebounceMs?: number
   artifactId?: string
 }) {
@@ -73,8 +77,8 @@ function wrap(children: ReactNode, opts: {
     <DocumentStateProvider
       artifactId={opts.artifactId ?? 'ART-000002'}
       title="Buffer prep protocol"
-      loadFn={opts.loadFn as never}
-      saveFn={opts.saveFn as never}
+      loadFn={opts.loadFn}
+      saveFn={opts.saveFn}
       saveDebounceMs={opts.saveDebounceMs ?? 0}
     >
       {children}
@@ -93,8 +97,10 @@ describe('DocumentStateProvider', () => {
   })
 
   it('loads the artifact and exposes the editor', async () => {
-    const loadFn = vi.fn(async () => makeArtifact())
-    const saveFn = vi.fn(async () => undefined)
+    const loadFn = vi.fn() as MockedFunction<LoadFn>
+    loadFn.mockReturnValue(Promise.resolve(makeArtifact()))
+    const saveFn = vi.fn() as MockedFunction<SaveFn>
+    saveFn.mockReturnValue(Promise.resolve())
     wrap(<Consumer probe={probe} />, { loadFn, saveFn })
     await waitFor(() =>
       expect(screen.getByTestId('load-state').textContent).toBe('ready'),
@@ -105,8 +111,10 @@ describe('DocumentStateProvider', () => {
   })
 
   it('debounced save fires with the new JSON body when the editor changes', async () => {
-    const loadFn = vi.fn(async () => makeArtifact())
-    const saveFn = vi.fn(async () => undefined)
+    const loadFn = vi.fn() as MockedFunction<LoadFn>
+    loadFn.mockReturnValue(Promise.resolve(makeArtifact()))
+    const saveFn = vi.fn() as MockedFunction<SaveFn>
+    saveFn.mockReturnValue(Promise.resolve())
     wrap(<Consumer probe={probe} />, { loadFn, saveFn, saveDebounceMs: 0 })
     await waitFor(() =>
       expect(screen.getByTestId('load-state').textContent).toBe('ready'),
@@ -126,19 +134,19 @@ describe('DocumentStateProvider', () => {
       })
     })
     await waitFor(() => expect(saveFn).toHaveBeenCalled())
-    const [savedId, savedPayload] = saveFn.mock.calls[0]
+    const [savedId, savedPayload] = saveFn.mock.calls[0] as [string, Artifact]
     expect(savedId).toBe('ART-000002')
-    expect((savedPayload as Artifact).body).toBeDefined()
+    expect(savedPayload.body).toBeDefined()
     // The save payload is the artifact spliced with the new body.
-    const newBodyText = JSON.stringify((savedPayload as Artifact).body)
+    const newBodyText = JSON.stringify(savedPayload.body)
     expect(newBodyText).toContain('Edited!')
   })
 
   it('rejects wrong artifactKind with a load error', async () => {
-    const loadFn = vi.fn(async () =>
-      makeArtifact({ artifactKind: 'pdf' }),
-    )
-    const saveFn = vi.fn(async () => undefined)
+    const loadFn = vi.fn() as MockedFunction<LoadFn>
+    loadFn.mockReturnValue(Promise.resolve(makeArtifact({ artifactKind: 'pdf' })))
+    const saveFn = vi.fn() as MockedFunction<SaveFn>
+    saveFn.mockReturnValue(Promise.resolve())
     wrap(<Consumer probe={probe} />, { loadFn, saveFn })
     await waitFor(() =>
       expect(screen.getByTestId('load-state').textContent).toBe('error'),
@@ -147,10 +155,10 @@ describe('DocumentStateProvider', () => {
   })
 
   it('load failure surfaces in loadState without leaving the UI in loading', async () => {
-    const loadFn = vi.fn(async () => {
-      throw new Error('records endpoint is down')
-    })
-    const saveFn = vi.fn(async () => undefined)
+    const loadFn = vi.fn() as MockedFunction<LoadFn>
+    loadFn.mockImplementation(() => { throw new Error('records endpoint is down') })
+    const saveFn = vi.fn() as MockedFunction<SaveFn>
+    saveFn.mockReturnValue(Promise.resolve())
     wrap(<Consumer probe={probe} />, { loadFn, saveFn })
     await waitFor(() =>
       expect(screen.getByTestId('load-state').textContent).toBe('error'),

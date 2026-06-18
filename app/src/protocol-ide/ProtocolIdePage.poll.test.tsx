@@ -96,7 +96,7 @@ describe('ProtocolIdePage Foundry inbox poll', () => {
 
     // First poll tick at 5s while still queued → second fetch.
     await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
-    expect(apiClient.getFoundryReviewContext.mock.calls.length).toBeGreaterThanOrEqual(2)
+    expect(vi.mocked(apiClient.getFoundryReviewContext).mock.calls.length).toBeGreaterThanOrEqual(2)
 
     // Flip to terminal status; the next tick fires once and then tears down.
     status = 'implemented'
@@ -105,7 +105,7 @@ describe('ProtocolIdePage Foundry inbox poll', () => {
 
     // No more polls after the status becomes terminal.
     await act(async () => { await vi.advanceTimersByTimeAsync(30000) })
-    expect(apiClient.getFoundryReviewContext.mock.calls.length).toBe(callsBeforeIdle)
+    expect(vi.mocked(apiClient.getFoundryReviewContext).mock.calls.length).toBe(callsBeforeIdle)
   })
 
   it('does not poll when no review is selected', async () => {

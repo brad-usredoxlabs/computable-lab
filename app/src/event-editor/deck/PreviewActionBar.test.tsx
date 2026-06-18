@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Labware } from '../../types/labware'
 import type { PlateEvent } from '../../types/events'
 import type { EventEditorPreview, EventEditorState } from '../EventEditorContext'
+import { EMPTY_HISTORY } from '../editorHistory'
 import { PreviewActionBar } from './PreviewActionBar'
 
 const mocks = vi.hoisted(() => ({
@@ -99,6 +100,7 @@ function makeState(overrides: Partial<EventEditorState> = {}): EventEditorState 
     tipState: { kind: 'empty' },
     preview,
     graphLemurSource: null,
+    runDeckLock: null,
     fixIt: {
       isOpen: false,
       seed: null,
@@ -115,6 +117,7 @@ function makeState(overrides: Partial<EventEditorState> = {}): EventEditorState 
       pendingRetryPrompt: null,
     },
     plateRail: {},
+    history: EMPTY_HISTORY,
     ...overrides,
   }
 }
