@@ -511,9 +511,6 @@ async function upsertImplicitAliquot(
         const mergedPayload: Record<string, unknown> = {
           ...(existing.payload as Record<string, unknown>),
           ...payload,
-          createdAt: (existing.payload as Record<string, unknown>)['createdAt'],
-          createdBy: (existing.payload as Record<string, unknown>)['createdBy'],
-          updatedAt: new Date().toISOString(),
         };
         if (!lot) delete mergedPayload.lot;
         return {
@@ -588,9 +585,6 @@ async function upsertImplicitMaterialInstance(
         const mergedPayload: Record<string, unknown> = {
           ...(existing.payload as Record<string, unknown>),
           ...payload,
-          createdAt: (existing.payload as Record<string, unknown>)['createdAt'],
-          createdBy: (existing.payload as Record<string, unknown>)['createdBy'],
-          updatedAt: new Date().toISOString(),
         };
         if (!lot) delete mergedPayload.lot;
         return {

@@ -323,12 +323,21 @@ export function createRecordHandlers(
         // derives envelope meta from repo state and does not persist
         // meta.createdBy, so the payload is where the creator id must live. The
         // editor resolves it to a display name read-only at projection time.
-        const payloadWithProvenance = {
-          ...(payload as Record<string, unknown>),
-          createdAt: now,
-          updatedAt: now,
-          createdBy: creator,
-        };
+        //
+        // NOTE: material-instance and aliquot schemas use unevaluatedProperties:false
+        // at root level and do NOT include FAIRCommon via allOf. Ajv rejects
+        // createdAt/createdBy/updatedAt for these types, so we skip injecting them
+        // into the payload and rely on envelope meta instead.
+        const payloadObj = payload as Record<string, unknown>;
+        const isInventoryRecord = payloadObj.kind === 'material-instance' || payloadObj.kind === 'aliquot';
+        const payloadWithProvenance = isInventoryRecord
+          ? payloadObj
+          : {
+              ...payloadObj,
+              createdAt: now,
+              updatedAt: now,
+              createdBy: creator,
+            };
 
         // Inherit FAIR fields from parent record
         const typedPayload = payloadWithProvenance as Record<string, unknown>;
@@ -556,19 +565,29 @@ export function createRecordHandlers(
           request.body.payload,
           currentMaterialTracking ? { materialTracking: currentMaterialTracking } : {},
         );
-        const payloadWithProvenance = {
-          ...(normalizedPayload as Record<string, unknown>),
-          updatedAt: new Date().toISOString(),
-        };
+        // NOTE: material-instance and aliquot schemas use unevaluatedProperties:false
+        // at root level and do NOT include FAIRCommon via allOf. Ajv rejects
+        // createdAt/createdBy/updatedAt for these types, so we skip injecting them
+        // into the payload and rely on envelope meta instead.
+        const payloadObj = normalizedPayload as Record<string, unknown>;
+        const isInventoryRecord = payloadObj.kind === 'material-instance' || payloadObj.kind === 'aliquot';
+        const payloadWithProvenance = isInventoryRecord
+          ? payloadObj
+          : {
+              ...payloadObj,
+              updatedAt: new Date().toISOString(),
+            };
         // createdBy is immutable after creation. The editor surfaces it as a
         // read-only field populated with a resolved display name, which the
         // client serializes back on save — never trust it. Restore the original
         // creator id from the stored record (preserving legacy absence).
-        const existingCreatedBy = (existing.payload as Record<string, unknown>).createdBy;
-        if (typeof existingCreatedBy === 'string') {
-          (payloadWithProvenance as Record<string, unknown>).createdBy = existingCreatedBy;
-        } else {
-          delete (payloadWithProvenance as Record<string, unknown>).createdBy;
+        if (!isInventoryRecord) {
+          const existingCreatedBy = (existing.payload as Record<string, unknown>).createdBy;
+          if (typeof existingCreatedBy === 'string') {
+            (payloadWithProvenance as Record<string, unknown>).createdBy = existingCreatedBy;
+          } else {
+            delete (payloadWithProvenance as Record<string, unknown>).createdBy;
+          }
         }
 
         // Create updated envelope (handle meta per exactOptionalPropertyTypes)
