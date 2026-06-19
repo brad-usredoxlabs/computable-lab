@@ -126,6 +126,20 @@ The frontend is a React SPA that consumes the backend API. It is organized into 
 
 ## Non-Negotiable Rules
 
+### Declarative Rules, Imperative Drools
+
+**Declarative = data files that describe WHAT is true.** Schemas, lint specs, UI specs, configuration, records. Human-readable YAML files. If it can be data, it MUST be data.
+
+**Imperative = code that enforces rules and creates records.** Code reads data files, validates, creates records, drives the machine.
+
+```
+Data (YAML) → Schema (YAML) → Lint (YAML) → Code reads all three → Creates records → Lints records
+```
+
+Code creates records. Records are linted against schemas. Schemas are data files. Business logic lives in lint YAML. Code never makes policy decisions — it follows the rules declared in data.
+
+### The Rules
+
 1. **Specs first, code second.** Before editing TypeScript, identify what belongs in schema/lint/UI specs.
 2. **No hard-coded domain logic in TS.** No schema-name branching, no inline business rules. Business logic lives in lint YAML.
 3. **Ajv is the single validation authority.** No fake validation, no runtime Ajv mutation.
@@ -134,3 +148,7 @@ The frontend is a React SPA that consumes the backend API. It is organized into 
 6. **`exactOptionalPropertyTypes` is on** (backend). Optional means absent OR value — never `undefined`.
 7. **Controlled vocabularies over free text.** The repo is schema-driven and ontology-based. Nouns used by users are purposefully ontology terms. Without controlled vocabularies, we're pushed back into Babel. Ontology search exists in this repo (`server/src/foundry/`) and locally in `cl-appliance`. Users who insist on new nouns/verbs should author them as CURIE-style terms with a local namespace punned to the lab (e.g., `cf:ROS`, `cf:PPARalpha`, `cf:conditioned-medium`). The AI should always prefer ontology terms over free text, and suggest CURIE-style local terms when a new concept arises.
 8. **Materials are a hierarchy of provenance, not a flat list.** A material concept (clofibrate) is NOT a formulation (1mM in DMSO) which is NOT a material instance (weighed 43.2mg, dissolved 2024-03-15) which is NOT an aliquot (cryobox A1, 50µL). Each layer adds provenance. Biological materials have temporal state (passage number, differentiation state). Compositions have components at specified concentrations. Derived materials (conditioned medium, cell lysate) are defined by their biological context of creation. Containers, consumables, and lots are materials too — the plate type changes fluorescence. The AI must distinguish: concept ≠ formulation ≠ instance ≠ aliquot ≠ composition. Never collapse the hierarchy.
+
+### The Hard Boundary
+
+**If the system can fake something by hardcoding it, that is a hard stop. Never hardcode.** The system MUST work if all hardcoded values are instantly ripped out. No passwords, no API keys, no test data, no stub responses, no mock configurations baked into code. Data that the system needs comes from data files. The AI will stop and ask the user when it encounters a missing configuration rather than fabricating one.
