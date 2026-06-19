@@ -11,8 +11,10 @@ unevaluatedProperties: false
 allOf:
 - $ref: "./common.schema.yaml#/$defs/FAIRCommon"
 
-required: [ kind, id, name ]
-
+# Explicitly allow FAIRCommon provenance fields at root level.
+# The allOf $ref to FAIRCommon defines these, but Ajv unevaluatedProperties
+# resolution can be fragile with relative refs. Inlining ensures they're
+# always recognized as evaluated properties.
 properties:
   kind:
     const: "material-instance"
@@ -135,6 +137,23 @@ properties:
         type: string
       source_note:
         type: string
+
+  # FAIRCommon provenance fields (explicitly allowed for Ajv unevaluatedProperties)
+  createdAt:
+    type: string
+    format: date-time
+    readOnly: true
+
+  updatedAt:
+    type: string
+    format: date-time
+    readOnly: true
+
+  createdBy:
+    type: string
+    readOnly: true
+
+required: [ kind, id, name ]
 
 anyOf:
   - required: [ material_ref ]
