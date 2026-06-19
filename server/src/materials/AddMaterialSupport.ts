@@ -337,8 +337,7 @@ async function upsertProposedCellsInstance(
     id: instanceId,
     name,
     material_ref: materialRef,
-    status: 'proposed',
-    ...lifecycleProvenance(name, eventGraphId, eventId, `Created as a proposed cells instance from accepted add-material ${eventGraphId}:${eventId}.`),
+    status: 'available',
     tags: ['ai-draft', 'cells'],
   };
   if (!(await store.get(instanceId))) {

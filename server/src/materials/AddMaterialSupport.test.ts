@@ -448,7 +448,7 @@ describe('normalizeEventGraphMaterialUsage', () => {
     const createdInstance = store.created.find((record) => record.recordId === instanceRef.id)!;
     expect(createdInstance.payload).toMatchObject({
       kind: 'material-instance',
-      status: 'proposed',
+      status: 'available',
       name: 'HepG2',
     });
     expect((createdInstance.payload as Record<string, unknown>).tags).toContain('cells');
