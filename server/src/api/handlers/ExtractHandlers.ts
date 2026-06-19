@@ -85,7 +85,7 @@ export function createExtractHandlers(
 
       if (pdf.diagnostics.some(d => d.severity === 'error')) {
         reply.code(422);
-        return { error: 'PDF_PARSE_FAILED', message: pdf.diagnostics[0].message };
+        return { error: 'PDF_PARSE_FAILED', message: pdf.diagnostics[0]?.message ?? 'PDF parse error' };
       }
 
       const draftBody = await runner.run({

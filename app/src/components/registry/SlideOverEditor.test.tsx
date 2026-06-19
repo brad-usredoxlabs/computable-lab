@@ -130,10 +130,10 @@ const mockRecord = {
 function renderEditor({
   open = true,
   record = mockRecord,
-  mode = 'edit',
+  mode = 'edit' as 'edit' | 'create',
   onClose = vi.fn(),
   onSaved = vi.fn(),
-} = {}) {
+}: Partial<Parameters<typeof SlideOverEditor>[0] & { mode: 'edit' | 'create' }> = {}) {
   return render(
     <SlideOverEditor
       open={open}

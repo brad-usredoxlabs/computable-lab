@@ -14,7 +14,7 @@ vi.mock('../../shared/hooks/usePlatformRegistry', () => ({
       { id: 'integra_assist', label: 'Integra Assist Plus', allowedVocabIds: [], defaultVariant: 'assist_plus', toolTypeIds: [], variants: [] },
       { id: 'opentrons_ot2', label: 'Opentrons OT-2', allowedVocabIds: [], defaultVariant: 'ot2_standard', toolTypeIds: [], variants: [] },
       { id: 'opentrons_flex', label: 'Opentrons Flex', allowedVocabIds: [], defaultVariant: 'flex_standard', toolTypeIds: [], variants: [] },
-    ] as PlatformManifest[],
+    ] as unknown as PlatformManifest[],
     loading: false,
   }),
 }))
@@ -35,7 +35,8 @@ vi.mock('../../shared/api/client', () => ({
 
 const mockPlannedRun: RecordEnvelope = {
   recordId: 'PLR-000001',
-  kind: 'planned-run',
+  schemaId: 'planned-run',
+  meta: { kind: 'planned-run' },
   payload: {
     kind: 'planned-run',
     state: 'draft',
@@ -50,7 +51,8 @@ const mockPlannedRun: RecordEnvelope = {
 
 const mockLocalProtocol: RecordEnvelope = {
   recordId: 'LPR-000001',
-  kind: 'local-protocol',
+  schemaId: 'local-protocol',
+  meta: { kind: 'local-protocol' },
   payload: {
     kind: 'local-protocol',
     labwareRoles: [
@@ -66,12 +68,14 @@ const mockLocalProtocol: RecordEnvelope = {
 const mockLabwareInstances: RecordEnvelope[] = [
   {
     recordId: 'LWI-PLATE1',
-    kind: 'labware-instance',
+    schemaId: 'labware-instance',
+    meta: { kind: 'labware-instance' },
     payload: { kind: 'labware-instance', name: 'Source Plate 1' },
   },
   {
     recordId: 'LWI-RES1',
-    kind: 'labware-instance',
+    schemaId: 'labware-instance',
+    meta: { kind: 'labware-instance' },
     payload: { kind: 'labware-instance', name: 'Reservoir 1' },
   },
 ]
@@ -79,7 +83,8 @@ const mockLabwareInstances: RecordEnvelope[] = [
 const mockMaterialInstances: RecordEnvelope[] = [
   {
     recordId: 'MAT-WASH1',
-    kind: 'material-instance',
+    schemaId: 'material-instance',
+    meta: { kind: 'material-instance' },
     payload: { kind: 'material-instance', name: 'Wash Buffer Batch 1' },
   },
 ]

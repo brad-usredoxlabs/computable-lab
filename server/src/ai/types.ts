@@ -300,6 +300,8 @@ export type GraphLemurRevisionEntry = DraftRevisionEntry;
 export interface GraphLemurContext {
   sourceProtocolCandidate?: ProtocolCandidateSummary;
   sourcePdf?: SourcePdfSummary;
+  /** User's implementation notes for adapting the vendor protocol. */
+  implementationContext?: string;
   currentPreviewDraft?: CurrentPreviewDraft;
   revisionHistory?: GraphLemurRevisionEntry[];
   revisionMode?: boolean;
@@ -623,6 +625,20 @@ export interface DraftOntologyBinding {
 // Agent streaming events
 // ============================================================================
 
+export interface AgentProtocolExtractedEvent {
+  type: 'protocol_extracted'
+  candidate: {
+    title: string
+    scope?: string
+    materials?: Array<{ label: string; role?: string; normalizedId?: string; notes?: string[]; confidence?: number }>
+    labware?: Array<{ label: string; role?: string }>
+    equipment?: Array<{ label: string }>
+    steps?: Array<{ stepNumber?: number; title?: string; text: string; materials?: string[]; labware?: string[]; equipment?: string[]; notes?: string[]; uncertainty?: string; confidence?: number }>
+    diagnostics?: Array<{ code: string; severity: string; message: string }>
+  }
+  sourcePdf?: { artifactPath?: string; url?: string; title?: string; vendor?: string; sha256?: string }
+}
+
 export type AgentEvent =
   | { type: 'status'; message: string }
   | { type: 'tool_call'; toolName: string; args: Record<string, unknown> }
@@ -632,7 +648,8 @@ export type AgentEvent =
   | { type: 'draft'; events: PlateEventProposal[] }
   | { type: 'done'; result: AgentResult }
   | { type: 'error'; message: string }
-  | { type: 'pipeline_diagnostics'; outcome: import('../compiler/pipeline/CompileContracts.js').CompileOutcome; diagnostics: Array<{ pass_id: string; code: string; severity: 'info' | 'warning' | 'error'; message: string }> };
+  | { type: 'pipeline_diagnostics'; outcome: import('../compiler/pipeline/CompileContracts.js').CompileOutcome; diagnostics: Array<{ pass_id: string; code: string; severity: 'info' | 'warning' | 'error'; message: string }> }
+  | AgentProtocolExtractedEvent;
 
 // ============================================================================
 // Inference client interface

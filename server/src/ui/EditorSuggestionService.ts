@@ -11,7 +11,7 @@
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import type { RecordStore, RecordEnvelope } from '../store/types.js';
+import type { RecordStore } from '../store/types.js';
 import type { SchemaRegistry } from '../schema/SchemaRegistry.js';
 import type { UISpecLoader } from './UISpecLoader.js';
 import type { EditorProjectionService } from './EditorProjectionService.js';
@@ -21,7 +21,7 @@ import type {
   UISpec,
 } from './types.js';
 import type { VendorName } from '../api/handlers/VendorSearchHandlers.js';
-import type { RequirementLine, ProcurementManifest } from '../procurement/ProcurementManifestService.js';
+import type { ProcurementManifest } from '../procurement/ProcurementManifestService.js';
 import { createEditorProjectionService } from './EditorProjectionService.js';
 
 // ============================================================================
@@ -125,7 +125,7 @@ function resolveSlot(
  * local-records provider: returns matching records from the store.
  */
 async function resolveLocalRecords(
-  store: RecordStore,
+  _store: RecordStore,
   schemaRegistry: SchemaRegistry,
   query: string,
   limit: number
@@ -216,8 +216,9 @@ export function resolveLocalVocab(
   // Only activate local search if 'local' is in sources
   if (sources.includes('local')) {
     // Use the slot's path to determine the root field for vocabulary lookup
-    const slotPath = slot.path.replace(/^\$\./, '');
+    const slotPath = slot.path.replace(/^\\$\\./, '');
     const rootField = slotPath.split('.')[0];
+    if (!rootField) return items;
 
     // Query the tag suggestions API with the extracted search field
     // This replaces the old hard-coded keyword-only lookup
@@ -228,7 +229,7 @@ export function resolveLocalVocab(
       priority: ['low', 'medium', 'high', 'critical'],
     };
 
-    const terms = commonTerms[rootField] ?? [];
+    const terms: string[] = (commonTerms as Record<string, string[]>)[rootField] ?? [];
 
     for (const term of terms) {
       if (query === '' || term.toLowerCase().includes(query.toLowerCase())) {
@@ -378,18 +379,19 @@ export async function resolveVendorSearch(
       }>;
     };
     for (const product of data.items) {
-      items.push({
+      const suggestion: SuggestionItem = {
         source: 'vendor-search',
         label: product.name,
         value: product.catalogNumber,
         subtitle: `${product.vendor} — ${product.catalogNumber}`,
-        url: product.productUrl,
         metadata: {
           vendor: product.vendor,
           catalogNumber: product.catalogNumber,
-          description: product.description,
         },
-      });
+      };
+      if (product.productUrl !== undefined) suggestion.url = product.productUrl;
+      if (product.description !== undefined) suggestion.metadata = { ...suggestion.metadata, description: product.description };
+      items.push(suggestion);
       if (items.length >= limit) break;
     }
   } catch {
@@ -525,7 +527,7 @@ export async function resolveSuggestions(
     manifest?: ProcurementManifest;
   }
 ): Promise<SuggestionResponse> {
-  const { store, schemaRegistry, uiSpecLoader, editorProjectionService, manifest } = context;
+  const { store, schemaRegistry, uiSpecLoader, manifest } = context;
 
   // 1. Load the record to get its schema
   const envelope = await store.get(recordId);
@@ -661,7 +663,7 @@ export class EditorSuggestionService {
     this.uiSpecLoader = uiSpecLoader;
     this.editorProjectionService =
       editorProjectionService ?? createEditorProjectionService();
-    this.manifest = manifest;
+    if (manifest !== undefined) this.manifest = manifest;
   }
 
   /**
@@ -673,13 +675,20 @@ export class EditorSuggestionService {
     query: string = '',
     limit: number = 20
   ): Promise<SuggestionResponse> {
-    return resolveSuggestions(recordId, slotId, query, limit, {
+    const resolveContext: {
+      store: RecordStore;
+      schemaRegistry: SchemaRegistry;
+      uiSpecLoader: UISpecLoader;
+      editorProjectionService: EditorProjectionService;
+      manifest?: ProcurementManifest;
+    } = {
       store: this.store,
       schemaRegistry: this.schemaRegistry,
       uiSpecLoader: this.uiSpecLoader,
       editorProjectionService: this.editorProjectionService,
-      manifest: this.manifest,
-    });
+    };
+    if (this.manifest !== undefined) resolveContext.manifest = this.manifest;
+    return resolveSuggestions(recordId, slotId, query, limit, resolveContext);
   }
 }
 

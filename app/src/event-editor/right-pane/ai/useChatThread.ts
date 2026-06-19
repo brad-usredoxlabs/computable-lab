@@ -35,6 +35,7 @@ export interface UseChatThreadResult {
   send: (text: string, options?: SendOptions) => Promise<void>
   stop: () => void
   reset: () => void
+  clearProtocolCandidate: () => void
 }
 
 let nextMessageId = 1
@@ -155,6 +156,13 @@ export function useChatThread({
               case 'error':
                 dispatch({ type: 'stream-error', message: event.message })
                 return
+              case 'protocol_extracted':
+                dispatch({
+                  type: 'stream-protocol-extracted',
+                  candidate: event.candidate,
+                  ...(event.sourcePdf ? { sourcePdf: event.sourcePdf } : {}),
+                })
+                return
               default: {
                 const _exhaustive: never = event
                 return _exhaustive
@@ -186,5 +194,9 @@ export function useChatThread({
     dispatch({ type: 'reset' })
   }, [])
 
-  return { state, isStreaming, send, stop, reset }
+  const clearProtocolCandidate = useCallback(() => {
+    dispatch({ type: 'clear-protocol-candidate' })
+  }, [])
+
+  return { state, isStreaming, send, stop, reset, clearProtocolCandidate }
 }

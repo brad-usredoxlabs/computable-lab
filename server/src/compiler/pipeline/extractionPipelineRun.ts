@@ -19,13 +19,13 @@ export interface RunExtractionPipelineArgs {
   pipelinePath: string;                                                 // path to extraction-compile.yaml
   extractor: ExtractorAdapter;
   candidatesByKind: ReadonlyMap<string, ReadonlyArray<ResolutionCandidate>>;
-  source_artifact: { kind: 'file' | 'publication' | 'freetext'; id: string; locator?: string };
+  source_artifact: { kind: 'file' | 'publication' | 'freetext'; id: string; locator?: string } | undefined;
   text: string;
-  recordIdPrefix?: string;
+  recordIdPrefix?: string | undefined;
   /** Optional target kinds the extractor should look for. */
-  target_kinds?: string[];
+  target_kinds?: string[] | undefined;
   /** Optional hint object passed through to downstream passes. */
-  hint?: Record<string, unknown>;
+  hint?: Record<string, unknown> | undefined;
 }
 
 /**
@@ -47,7 +47,7 @@ export async function runExtractionPipeline(args: RunExtractionPipelineArgs) {
   registry.register(createMentionResolvePass(args.candidatesByKind));
   registry.register(createDraftAssemblePass({
     recordIdPrefix: args.recordIdPrefix ?? 'XDR-run-',
-    source_artifact: args.source_artifact,
+    source_artifact: args.source_artifact ?? { kind: 'freetext', id: 'unknown' },
   }));
   
   // Load the pipeline specification

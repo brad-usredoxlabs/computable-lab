@@ -17,7 +17,7 @@
  */
 
 import { API_BASE } from '../../../shared/api/base'
-import type { AiClarificationAnswer, AiClarificationRequest } from '../../../types/ai'
+import type { AiClarificationAnswer, AiClarificationRequest, AiProtocolCandidateSummary, AiSourcePdfSummary } from '../../../types/ai'
 
 export interface AssistStreamRequest {
   prompt: string
@@ -58,6 +58,7 @@ export type AssistStreamEvent =
   | { type: 'text_delta'; delta: string }
   | { type: 'done'; result?: AssistDraftResult }
   | { type: 'error'; message: string }
+  | { type: 'protocol_extracted'; candidate: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary }
 
 /** Render a draft-tool result as chat text for panels with no preview canvas. */
 export function summarizeDraftResult(result: AssistDraftResult | undefined): string | undefined {
@@ -175,7 +176,7 @@ function dispatchFrame(
   }
   if (dataLines.length === 0) return
   const payload = dataLines.join('\n')
-  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult }
+  let parsed: { type?: string; message?: string; delta?: string; result?: AssistDraftResult; candidate?: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary }
   try {
     parsed = JSON.parse(payload)
   } catch {
@@ -196,6 +197,15 @@ function dispatchFrame(
       return
     case 'error':
       onEvent({ type: 'error', message: parsed.message ?? 'Unknown error' })
+      return
+    case 'protocol_extracted':
+      if (parsed.candidate) {
+        onEvent({
+          type: 'protocol_extracted',
+          candidate: parsed.candidate,
+          ...(parsed.sourcePdf ? { sourcePdf: parsed.sourcePdf } : {}),
+        })
+      }
       return
     default:
       // thinking / tool_call / tool_result / draft / pipeline_diagnostics

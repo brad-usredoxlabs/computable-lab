@@ -1095,6 +1095,35 @@ export interface AnalyzeIngestionResponse {
   error?: string
 }
 
+/**
+ * Response from POST /ai/extract-protocol: a structured ProtocolCandidate
+ * extracted from an uploaded vendor protocol PDF.
+ */
+export interface ExtractProtocolResponse {
+  /** The structured protocol candidate extracted from the PDF. */
+  candidate: Record<string, unknown>
+  /** Source metadata about the uploaded file. */
+  source: {
+    /** Whether the input was treated as a PDF or plain text. */
+    inputKind: 'pdf' | 'text'
+    /** Original file name from the upload. */
+    fileName: string
+    /** SHA-256 hash of the uploaded file bytes. */
+    sha256: string
+  }
+  /** Summary of the parsed document structure. */
+  document: {
+    /** Page count of the source document. */
+    pageCount: number
+    /** Number of sections detected. */
+    sectionCount: number
+    /** Number of tables detected. */
+    tableCount: number
+  }
+  /** Path to the persisted candidate artifact (if persisted). */
+  candidatePath?: string
+}
+
 async function request<T>(
   path: string,
   options: RequestInit = {}
@@ -2461,6 +2490,34 @@ export const apiClient = {
       }
       if (error instanceof TypeError) {
         throw new NetworkError(`Failed to connect to server (/ai/analyze-ingestion): ${error.message}`)
+      }
+      throw error
+    }
+  },
+
+  async extractProtocol(file: File): Promise<ExtractProtocolResponse> {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const url = `${API_BASE}/ai/extract-protocol`
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw await ApiError.fromResponse(response)
+      }
+
+      return await response.json() as ExtractProtocolResponse
+    } catch (error) {
+      if (ApiError.isApiError(error)) {
+        throw error
+      }
+      if (error instanceof TypeError) {
+        throw new NetworkError(`Failed to connect to server (/ai/extract-protocol): ${error.message}`)
       }
       throw error
     }

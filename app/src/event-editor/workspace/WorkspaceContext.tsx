@@ -28,7 +28,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { apiClient } from '../../shared/api/client'
+import { apiClient, type WorkspaceStateApi } from '../../shared/api/client'
 import {
   defaultWorkspaceState,
   type WorkspaceRightPaneMode,
@@ -155,15 +155,15 @@ export function WorkspaceProvider({
     }
     const fn = saveFnRef.current ?? apiClient.saveWorkspace
     if (saveDebounceMs <= 0) {
-      void fn(studyId, state).catch((err) => {
+      void fn(studyId, state as WorkspaceStateApi & WorkspaceState).catch((err) => {
         const message = err instanceof Error ? err.message : String(err)
         setError(`Failed to save workspace: ${message}`)
       })
       return
     }
     saveTimerRef.current = setTimeout(() => {
-      saveTimerRef.current = null
-      void fn(studyId, state).catch((err) => {
+    saveTimerRef.current = null
+    void fn(studyId, state as WorkspaceStateApi & WorkspaceState).catch((err) => {
         const message = err instanceof Error ? err.message : String(err)
         setError(`Failed to save workspace: ${message}`)
       })

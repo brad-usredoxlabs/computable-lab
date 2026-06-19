@@ -19,7 +19,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { ProtocolIdeSourcePane, buildEvidenceModel } from './ProtocolIdeSourcePane'
 import type { ProtocolIdeSession } from './types'
-import type { IngestionArtifactRecord, IngestionIssueRecord } from '../../types/ingestion'
+import type { IngestionArtifactRecord, IngestionIssueRecord } from '../types/ingestion'
 
 // ---------------------------------------------------------------------------
 // Mocks

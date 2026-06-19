@@ -8,7 +8,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useBrowser } from '../../shared/context/BrowserContext'
 import { apiClient } from '../../shared/api/client'
 import { ProjectionTapTabEditor } from '../../editor/taptab/TapTabEditor'
-import { serializeDocument, isDirty } from '../../editor/taptab/recordSerializer'
+import { serializeDocument } from '../../editor/taptab/recordSerializer'
 import type { EditorProjectionResponse } from '../../types/uiSpec'
 import type { TapTabEditorHandle } from '../../editor/taptab'
 
@@ -66,8 +66,8 @@ export function CreateNodeModal({
   const [projection, setProjection] = useState<EditorProjectionResponse | null>(null)
   const [projectionError, setProjectionError] = useState<string | null>(null)
   const [formData, setFormData] = useState<Record<string, unknown>>({})
-  const [originalData, setOriginalData] = useState<Record<string, unknown>>({})
-  const [isDirtyState, setIsDirtyState] = useState(false)
+  const [_originalData, setOriginalData] = useState<Record<string, unknown>>({})
+  const [_isDirtyState, setIsDirtyState] = useState(false)
   const [loadingSpec, setLoadingSpec] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)

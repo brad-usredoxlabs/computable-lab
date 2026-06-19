@@ -32,6 +32,7 @@ import type { TagHandlers } from './handlers/TagHandlers.js';
 import type { MaterialPrepHandlers } from './handlers/MaterialPrepHandlers.js';
 import type { MaterialLifecycleHandlers } from './handlers/MaterialLifecycleHandlers.js';
 import type { MaterialProfileHandlers } from './handlers/MaterialProfileHandlers.js';
+import type { ExtractProtocolHandlers } from './handlers/ExtractProtocolHandler.js';
 import type { PlatformHandlers } from './handlers/PlatformHandlers.js';
 import type { LabSettingsHandlers } from './handlers/LabSettingsHandlers.js';
 import type { VendorSearchHandlers } from './handlers/VendorSearchHandlers.js';
@@ -96,6 +97,7 @@ export interface RouteOptions {
   materialPrepHandlers?: MaterialPrepHandlers;
   materialLifecycleHandlers?: MaterialLifecycleHandlers;
   materialProfileHandlers?: MaterialProfileHandlers;
+  extractProtocolHandlers?: ExtractProtocolHandlers;
   platformHandlers?: PlatformHandlers;
   labSettingsHandlers?: LabSettingsHandlers;
   vendorSearchHandlers?: VendorSearchHandlers;
@@ -551,6 +553,12 @@ export function registerRoutes(
     fastify.post('/ai/assist/stream', aiHandlers.assistStream.bind(aiHandlers));
     fastify.post('/ai/context/warm', aiHandlers.warmContext.bind(aiHandlers));
     fastify.get('/ai/context/warm/status', aiHandlers.warmContextStatus.bind(aiHandlers));
+  }
+
+  const { extractProtocolHandlers } = options;
+
+  if (extractProtocolHandlers) {
+    fastify.post('/ai/extract-protocol', extractProtocolHandlers.extractProtocol.bind(extractProtocolHandlers));
   }
 
   const { aiThreadHandlers } = options;

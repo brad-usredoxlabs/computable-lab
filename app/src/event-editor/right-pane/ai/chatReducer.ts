@@ -13,7 +13,7 @@
  * all transitions in one testable place.
  */
 
-import type { AiClarificationRequest } from '../../../types/ai'
+import type { AiClarificationRequest, AiProtocolCandidateSummary, AiSourcePdfSummary } from '../../../types/ai'
 
 export interface ChatMessage {
   id: string
@@ -31,6 +31,10 @@ export interface ChatState {
   pending: { id: string; text: string } | null
   status: string | null
   error: string | null
+  /** Protocol candidate auto-extracted from a PDF attachment. */
+  protocolCandidate?: AiProtocolCandidateSummary
+  /** Source PDF metadata for the extracted candidate. */
+  sourcePdf?: AiSourcePdfSummary
 }
 
 export type ChatAction =
@@ -41,6 +45,8 @@ export type ChatAction =
   | { type: 'stream-error'; message: string }
   | { type: 'stream-cancelled' }
   | { type: 'reset' }
+  | { type: 'stream-protocol-extracted'; candidate: AiProtocolCandidateSummary; sourcePdf?: AiSourcePdfSummary }
+  | { type: 'clear-protocol-candidate' }
 
 export const initialChatState: ChatState = {
   messages: [],
@@ -126,6 +132,19 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
     case 'reset': {
       return { ...initialChatState }
+    }
+
+    case 'stream-protocol-extracted': {
+      return {
+        ...state,
+        protocolCandidate: action.candidate,
+        ...(action.sourcePdf ? { sourcePdf: action.sourcePdf } : {}),
+      }
+    }
+
+    case 'clear-protocol-candidate': {
+      const { protocolCandidate, sourcePdf, ...rest } = state
+      return rest
     }
 
     default: {

@@ -333,7 +333,6 @@ describe('ProtocolIdeActionRail — rolling issue summary', () => {
 
   it('shows the summary content when expanded', () => {
     renderActionRail({ rollingIssueSummary: '1 issue found: missing wash step' })
-    const summary = screen.getByTestId('action-rail-rolling-summary')
     const summaryContent = screen.getByTestId('action-rail-summary-content')
     expect(summaryContent).toHaveTextContent('1 issue found: missing wash step')
   })

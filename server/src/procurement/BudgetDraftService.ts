@@ -9,7 +9,7 @@
  * No vendor-offer auto-selection happens in this spec.
  */
 
-import type { RequirementLine, ProcurementManifest } from './ProcurementManifestService.js';
+import type { RequirementLine, ProcurementManifest, RequirementCategory } from './ProcurementManifestService.js';
 
 // ---------------------------------------------------------------------------
 // Domain types
@@ -87,11 +87,11 @@ export class BudgetDraftService {
         unitPrice: null,
         totalPrice: null,
         approved: false,
-        notes: reqLine.provenance === 'unresolved'
-          ? 'Unresolved requirement — no vendor offer available yet'
+        ...(reqLine.provenance === 'unresolved'
+          ? { notes: 'Unresolved requirement — no vendor offer available yet' }
           : reqLine.provenance === 'inferred'
-            ? 'Inferred consumable — quantity is approximate'
-            : undefined,
+            ? { notes: 'Inferred consumable — quantity is approximate' }
+            : {}),
       });
     }
 

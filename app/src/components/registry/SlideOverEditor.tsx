@@ -21,8 +21,6 @@ export function SlideOverEditor({
   open,
   onClose,
   record,
-  uiSpec,
-  schema,
   onSaved,
   mode = 'edit',
 }: SlideOverEditorProps) {

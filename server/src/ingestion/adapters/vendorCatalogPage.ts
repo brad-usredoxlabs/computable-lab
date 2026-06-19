@@ -66,7 +66,7 @@ function extractMetaContent(html: string, name: string): string | undefined {
     'i',
   );
   const m = re.exec(html);
-  return m ? m[1].trim() : undefined;
+  return m ? m[1]!.trim() : undefined;
 }
 
 function extractTextContent(html: string): string {
@@ -88,8 +88,8 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   'R$': 'BRL',
   'R': 'ZAR',
   'kr': 'SEK',
-  'kr': 'NOK',
-  'kr': 'DKK',
+  'NOK': 'NOK',
+  'DKK': 'DKK',
   'CHF': 'CHF',
   'C$': 'CAD',
   'A$': 'AUD',
@@ -104,17 +104,7 @@ function detectCurrencyFromSymbol(symbol: string): string | undefined {
   return undefined;
 }
 
-function detectCurrencyFromText(text: string): string | undefined {
-  const upper = text.toUpperCase();
-  // Try ISO codes first
-  const isoMatch = upper.match(/\b(USD|EUR|GBP|JPY|CAD|AUD|CHF|CNY|INR|BRL|KRW|MXN|SGD|HKD|NOK|SEK|DKK|NZD|ZAR|PHP|TWD|THB|MYR|IDR|PLN|CZK|HUF|RON|BGN|HRK|RUB|TRY|ILS|AED|SAR|QAR|KWD|BHD|OMR|JOD|EGP|NGN|KES|GHS|TZS|UGX|MAD|TND|DZD|LKR|PKR|BDT|VND|MMK|KHR|LAK|TMT|UZS|KZT|GEL|AMD|AZN|BYN|MDL|UAH|RON|BAM|RSD|MKD|ALL|BAM)\b/);
-  if (isoMatch) return isoMatch[1];
-  // Try symbols
-  for (const [sym, code] of Object.entries(CURRENCY_SYMBOLS)) {
-    if (text.includes(sym)) return code;
-  }
-  return undefined;
-}
+// detectCurrencyFromText removed (unused)
 
 function extractPriceFromText(text: string): { price: number; currency: string | undefined } | undefined {
   // Look for patterns like "$123.45", "€ 123,45", "123.45 EUR", etc.
@@ -129,7 +119,7 @@ function extractPriceFromText(text: string): { price: number; currency: string |
   for (const pattern of patterns) {
     const matches = [...text.matchAll(pattern)];
     for (const match of matches) {
-      const raw = match[1];
+      const raw = match[1]!;
       const priceStr = raw.replace(/[,.]/g, (m, offset, str) => {
         // If followed by exactly 3 digits and not a decimal point, treat as thousands separator
         if (m === ',' && /\d{3}$/.test(str.slice(offset + 1))) return '';
@@ -142,7 +132,7 @@ function extractPriceFromText(text: string): { price: number; currency: string |
         if (match[2]) {
           currency = match[2].toUpperCase();
         } else {
-          currency = detectCurrencyFromSymbol(match[0][0]);
+          currency = detectCurrencyFromSymbol(match[0]![0]!);
         }
         return { price, currency };
       }
@@ -192,12 +182,12 @@ function extractVendor(html: string, text: string): string {
   if (ogTitle) {
     // Try to extract vendor from og:title
     const vendorMatch = ogTitle.match(/^([A-Z][A-Za-z0-9\s&]+?)\s*[-–—:]/);
-    if (vendorMatch) return vendorMatch[1].trim();
+    if (vendorMatch) return vendorMatch[1]!.trim();
   }
   // Try title tag
   const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
   if (titleMatch) {
-    const title = titleMatch[1].trim();
+    const title = titleMatch[1]!.trim();
     // Common vendor patterns in title
     const vendorPatterns = [
       /^Fisher\s+Scientific/i,
@@ -245,10 +235,10 @@ function extractProductTitle(html: string, text: string): string {
   if (ogTitle) return ogTitle;
   // Try h1
   const h1Match = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
-  if (h1Match) return h1Match[1].trim();
+  if (h1Match) return h1Match[1]!.trim();
   // Try title tag
   const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-  if (titleMatch) return titleMatch[1].trim();
+  if (titleMatch) return titleMatch[1]!.trim();
   // Fallback to first meaningful text
   return text.slice(0, 200).trim() || 'Unknown Product';
 }
@@ -268,7 +258,7 @@ function extractPackageSize(text: string): string | undefined {
   const p1 = /(?:package\s*size|pack(?:age)?\s*size)\s*[:\-]?\s*(.+?)(?:\n|$)/i;
   const m1 = p1.exec(text);
   if (m1) {
-    const val = m1[1].trim();
+    const val = m1[1]!.trim();
     if (val && val.length > 0 && !/^(of|a|an|the|per|each)$/i.test(val)) {
       return val;
     }
@@ -308,7 +298,7 @@ function extractSummary(html: string, text: string): string {
   if (metaDesc) return metaDesc;
   // Try to find a short paragraph near the product info
   const paragraphs = text.split(/\n+/).filter((p) => p.trim().length > 20 && p.trim().length < 500);
-  if (paragraphs.length > 0) return paragraphs[0].trim();
+  if (paragraphs.length > 0) return paragraphs[0]!.trim();
   // Fallback
   return text.slice(0, 300).trim();
 }

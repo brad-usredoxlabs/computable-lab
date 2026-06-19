@@ -35,7 +35,7 @@ import type { LabwareOrientation, WellSelection } from '../types'
  * with the viewport without any media-query duplication here.
  */
 const MAX_FOCUS_SIZE_PX = 720
-const MIN_FOCUS_SIZE_PX = 200
+const MIN_FOCUS_SIZE_PX = 120
 
 export function LabwareFocus() {
   const { state, actions } = useEventEditor()
@@ -80,6 +80,7 @@ export function LabwareFocus() {
   // the SVG shrinks smoothly with the viewport on mobile and stays at
   // 720 on desktop.
   const [focusSize, setFocusSize] = useState(MAX_FOCUS_SIZE_PX)
+  const focusOrientation = placement?.orientation ?? 'landscape'
 
   // Phase 13: AddMaterialModal is hosted by FocusModalsProvider so the
   // right-pane Details tab can trigger the same modal instance. The
@@ -125,7 +126,11 @@ export function LabwareFocus() {
       const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
       const w = el.clientWidth - padX
       const h = el.clientHeight - padY
-      const long = Math.max(w, h)
+      if (w <= 0 || h <= 0) return
+      const frameAspect = 127 / 85
+      const long = focusOrientation === 'portrait'
+        ? Math.min(h, w * frameAspect)
+        : Math.min(w, h * frameAspect)
       const next = Math.max(MIN_FOCUS_SIZE_PX, Math.min(long, MAX_FOCUS_SIZE_PX))
       setFocusSize((prev) => (Math.abs(prev - next) < 1 ? prev : next))
     }
@@ -133,7 +138,7 @@ export function LabwareFocus() {
     const observer = new ResizeObserver(update)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [])
+  }, [focusOrientation])
 
   const activePipette = useMemo(
     () => resolveActivePipette(state.toolTypeId, state.assistPipetteId),
@@ -237,6 +242,16 @@ export function LabwareFocus() {
   }, [state.selection, labware])
 
   const [selectionWarning, setSelectionWarning] = useState<string | null>(null)
+
+  const handleWellRangeSelect = useCallback(
+    (anchorWellId: WellId, targetWellId: WellId) => {
+      if (!labware) return
+      const wells = expandRangeSelection(labware, anchorWellId, targetWellId)
+      actions.setSelection({ labwareId: labware.labwareId, wells, anchor: anchorWellId })
+      setSelectionWarning(null)
+    },
+    [actions, labware],
+  )
 
   const handleWellClick = useCallback(
     (wellId: WellId, event: React.MouseEvent) => {
@@ -356,9 +371,10 @@ export function LabwareFocus() {
       ? `slot ${placement.location.slotId}`
       : `lawn (${placement.location.xMm}, ${placement.location.yMm} mm)`
 
-  const selectionCount = state.selection?.labwareId === labware.labwareId
-    ? state.selection.wells.length
-    : 0
+  const selectedWells = state.selection?.labwareId === labware.labwareId
+    ? state.selection.wells
+    : []
+  const selectionCount = selectedWells.length
 
   return (
     <div className="focus" onClick={handleBackdropClick}>
@@ -437,6 +453,30 @@ export function LabwareFocus() {
           <button
             type="button"
             className="focus__btn"
+            disabled={selectionCount === 0}
+            onClick={() => {
+              if (selectionCount === 0) return
+              openAddMaterial(selectedWells)
+            }}
+          >Add material</button>
+          <button
+            type="button"
+            className="focus__btn"
+            disabled={selectionCount === 0}
+            onClick={(event) => {
+              if (selectionCount === 0) return
+              const rect = event.currentTarget.getBoundingClientRect()
+              setMenu({
+                open: true,
+                x: rect.left,
+                y: rect.bottom + 4,
+                targetWells: selectedWells,
+              })
+            }}
+          >Actions</button>
+          <button
+            type="button"
+            className="focus__btn"
             onClick={() => setReadPlateOpen(true)}
           >Read plate</button>
           <button
@@ -469,6 +509,7 @@ export function LabwareFocus() {
               setHover({ wellId, clientX: event.clientX, clientY: event.clientY })
             }}
             onWellClick={handleWellClick}
+            onWellRangeSelect={handleWellRangeSelect}
             onWellContextMenu={(wellId, event) => {
               const targetWells = selectedSet.has(wellId)
                 ? Array.from(selectedSet)

@@ -3,7 +3,7 @@
  * Shows auxiliary anchor count when anchors.length > 1.
  */
 
-import type { CommentAnchor, FeedbackComment } from './ProtocolIdeGraphReviewSurface'
+import type { FeedbackComment } from './ProtocolIdeGraphReviewSurface'
 
 // ---------------------------------------------------------------------------
 // Comment badge component

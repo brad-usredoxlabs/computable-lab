@@ -227,6 +227,11 @@ function formatGraphLemurContext(context: EditorContext): string {
     }, null, 2));
   }
 
+  if (graphLemur.implementationContext) {
+    lines.push('', 'User implementation context:');
+    lines.push(graphLemur.implementationContext);
+  }
+
   if (graphLemur.currentPreviewDraft) {
     lines.push('', context.draftRevision ? 'Legacy GraphLemur preview draft:' : 'Current preview draft to revise:');
     lines.push(JSON.stringify(graphLemur.currentPreviewDraft, null, 2));

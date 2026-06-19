@@ -309,10 +309,8 @@ export function createExpandLocalCustomizationsPass(
         | Array<Record<string, unknown>>
         | undefined;
       if (Array.isArray(steps)) {
-        for (const step of steps) {
-          // Ensure phaseId is preserved (it's already in the deep copy)
-          // No mutation needed — deep copy already has it
-        }
+        // Ensure phaseId is preserved (it's already in the deep copy)
+        // No mutation needed — deep copy already has it
       }
 
       return {

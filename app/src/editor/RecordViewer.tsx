@@ -6,7 +6,7 @@ import { ApiError, NetworkError } from '../shared/api/errors'
 import { DiagnosticsPanel } from './DiagnosticsPanel'
 import { ProjectionTapTabEditor } from './taptab/TapTabEditor'
 import type { RecordEnvelope, ValidationResult, LintResult } from '../types/kernel'
-import type { UISpec } from '../types/uiSpec'
+import type { ProjectionBlock, ProjectionSlot } from '../types/uiSpec'
 import { ShareRecordDialog } from '../shared/sharing/ShareRecordDialog'
 import { isPolicyRootKind } from '../shared/sharing/policyRoots'
 
@@ -20,25 +20,8 @@ export function RecordViewer() {
   const { recordId } = useParams<{ recordId: string }>()
   const [data, setData] = useState<RecordWithDiagnostics | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
-  const [uiSpec, setUiSpec] = useState<UISpec | null>(null)
-  const [schema, setSchema] = useState<Record<string, unknown> | null>(null)
-  const [blocks, setBlocks] = useState<
-    Array<{ id: string; kind: string; label?: string; help?: string; slotIds?: string[] }>
-  >([])
-  const [slots, setSlots] = useState<
-    Array<{
-      id: string
-      path: string
-      label: string
-      widget: string
-      help?: string
-      required?: boolean
-      readOnly?: boolean
-      suggestionProviders?: string[]
-      options?: Array<{ value: string; label: string }>
-      properties?: Array<{ name: string; widget: string; label: string; help?: string; required?: boolean }>
-    }>
-  >([])
+  const [blocks, setBlocks] = useState<ProjectionBlock[]>([])
+  const [slots, setSlots] = useState<ProjectionSlot[]>([])
   const [projectionError, setProjectionError] = useState<Error | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
@@ -57,8 +40,6 @@ export function RecordViewer() {
           setData(null)
         } else {
           setData({ record: combined.record as unknown as RecordEnvelope })
-          setUiSpec(combined.uiSpec)
-          setSchema(combined.schema)
         }
       } catch {
         // Fallback: fetch record separately
@@ -67,13 +48,6 @@ export function RecordViewer() {
           setData(null)
         } else {
           setData({ record })
-          // Try to get UISpec
-          try {
-            const spec = await apiClient.getUiSpec(record.schemaId)
-            setUiSpec(spec)
-          } catch {
-            setUiSpec(null)
-          }
         }
       }
 

@@ -181,8 +181,8 @@ export interface ProtocolAdaptationGap {
   code: string;
   severity: 'info' | 'warning' | 'error';
   message: string;
-  sourceStepNumbers?: number[];
-  provenance?: VendorProtocolProvenance;
+  sourceStepNumbers?: number[] | undefined;
+  provenance?: VendorProtocolProvenance | undefined;
 }
 
 export interface ProtocolAdaptationRoleBinding {

@@ -19,6 +19,7 @@ import { randomUUID } from 'node:crypto';
 import type { Pass, PassRunArgs, PassResult, PassDiagnostic } from '../types.js';
 import type { RecordStore } from '../../../store/types.js';
 import type { runPromotionCompile } from '../PromotionCompileRunner.js';
+import type { RecordEnvelope } from '../../../types/RecordEnvelope.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,12 +44,6 @@ export interface LabContext {
 
 const DEFAULT_PROTOCOL_PREFIX = 'PRT-realized-';
 const DEFAULT_LOCAL_PROTOCOL_PREFIX = 'LPR-realized-';
-
-// Schema ID for local-protocol records.
-// NOTE: The local-protocol.schema.yaml references ./common.schema.yaml which
-// resolves to the core common schema. We use the canonical schema URI here.
-const LOCAL_PROTOCOL_SCHEMA_ID =
-  'https://computable-lab.com/schema/computable-lab/local-protocol.schema.yaml';
 
 // The local-protocol schema does NOT have a `customizations` field.
 // We fold labContext into `notes` as a JSON string for v1.
@@ -260,7 +255,7 @@ export function createProtocolRealizePass(
         pipelinePath:
           'schema/registry/compile-pipelines/promotion-compile.yaml',
         candidate: {
-          target_kind: selectedCandidate.target_kind ?? 'protocol',
+          target_kind: (selectedCandidate.target_kind as string) ?? 'protocol',
           draft: draftObj ?? {},
           confidence: (selectedCandidate.confidence as number) ?? 0.5,
         },
@@ -320,7 +315,7 @@ export function createProtocolRealizePass(
         });
 
       await deps.recordStore.create({
-        envelope: localProtocolEnvelope as Record<string, unknown>,
+        envelope: localProtocolEnvelope as unknown as RecordEnvelope,
         message: 'protocol_realize local-protocol',
       });
 

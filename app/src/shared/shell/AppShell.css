@@ -387,3 +387,56 @@
   background: var(--cl-accent);
   width: 2px;
 }
+
+/* Mobile landscape runs inside a very short visual viewport once browser
+   chrome is visible. Keep the workspace usable by allowing the app frame to
+   scroll and by reducing the workspace chrome before the main surface. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .cl-app {
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .cl-app--workspace {
+    grid-template-rows: auto minmax(260px, 1fr) auto;
+  }
+
+  .cl-app .topbar--workspace {
+    min-height: 28px;
+  }
+
+  .cl-app .topbar--workspace > .topbar__tabs,
+  .cl-app .topbar--workspace > .project-tab-strip {
+    min-height: 28px;
+  }
+
+  .cl-app--workspace .cl-workspace {
+    min-height: 260px;
+    overflow: visible;
+  }
+
+  .cl-app--workspace .cl-workspace__toolbar {
+    min-height: 28px;
+    padding: 2px 8px;
+  }
+
+  .cl-app--workspace .cl-workspace__panels {
+    min-height: 224px;
+  }
+
+  .cl-app--workspace .cl-workspace__handle {
+    width: 2px;
+  }
+}
+
+@supports (height: 100dvh) {
+  @media (max-height: 500px) and (orientation: landscape) {
+    .cl-app {
+      bottom: auto;
+      height: 100dvh;
+      max-height: 100dvh;
+    }
+  }
+}
+

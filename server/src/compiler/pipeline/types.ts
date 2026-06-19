@@ -65,16 +65,16 @@ export type CompilerDiagnosticOutcome =
  */
 export interface PassResult {
   ok: boolean;
-  output?: unknown;                                         // may include { context?, meta?, ... } patch keys
-  diagnostics?: PassDiagnostic[];
-  outcome?: CompilerDiagnosticOutcome;                      // optional per-pass outcome (see 60-compiler.md §6)
+  output?: unknown | undefined;                                         // may include { context?, meta?, ... } patch keys
+  diagnostics?: PassDiagnostic[] | undefined;
+  outcome?: CompilerDiagnosticOutcome | undefined;                      // optional per-pass outcome (see 60-compiler.md §6)
   /**
    * Secondary outputs: additional keys to write to state.outputs beyond the pass's own id.
    * Used for passthrough patterns (e.g., deterministic_precompile writing a stripped
    * AiPrecompileOutput to 'ai_precompile' so downstream passes can read it when
    * ai_precompile is gated off).
    */
-  secondaryOutputs?: Record<string, unknown>;
+  secondaryOutputs?: Record<string, unknown> | undefined;
 }
 
 /**

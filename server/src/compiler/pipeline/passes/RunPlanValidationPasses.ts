@@ -370,11 +370,6 @@ export function createDerivePerStepContextPass(): Pass {
       const labwareResolutions = labwareBindings?.labwareResolutions ?? {};
 
       // 3. Read resolved material bindings for sample info
-      const materialBindings = args.state.outputs.get('resolve_material_bindings') as
-        | { materialResolutions: Record<string, unknown> }
-        | undefined;
-      const materialResolutions = materialBindings?.materialResolutions ?? {};
-
       // 4. Read lab context
       const sampleCount = (expandedProtocol['resolvedSampleCount'] as number) ?? 0;
       const labwareKind = (expandedProtocol['resolvedLabwareKind'] as string) ?? '96-well-plate';
@@ -385,7 +380,7 @@ export function createDerivePerStepContextPass(): Pass {
       for (const step of steps) {
         const stepId = (step['stepId'] as string) ?? 'unknown';
         const stepKind = (step['kind'] as string) ?? 'unknown';
-        const volume_uL = (step['volume_uL'] as number) | undefined;
+        const volume_uL = step['volume_uL'] as number | undefined;
 
         // Determine which labware role this step targets
         const target = step['target'] as
@@ -440,12 +435,12 @@ export function createDerivePerStepContextPass(): Pass {
  */
 function deriveSampleContextsForStep(
   stepKind: string,
-  stepId: string,
+  _stepId: string,
   sampleCount: number,
   labwareKind: string,
   volume_uL: number | undefined,
-  sourceLabware: Record<string, unknown> | undefined,
-  destLabware: Record<string, unknown> | undefined,
+  _sourceLabware: Record<string, unknown> | undefined,
+  _destLabware: Record<string, unknown> | undefined,
 ): SampleContextEntry[] {
   if (sampleCount <= 0) return [];
 
@@ -456,15 +451,15 @@ function deriveSampleContextsForStep(
 
   for (let i = 0; i < sampleCount && i < wellIds.length; i++) {
     const sampleContext: SampleContextEntry = {
-      wellId: wellIds[i],
+      wellId: wellIds[i]!,
       sampleIndex: i + 1,
-      volume_uL,
+      ...(typeof volume_uL === 'number' ? { volume_uL } : {}),
     };
 
     // For transfer steps, include source/dest well info
     if (stepKind === 'transfer') {
-      sampleContext.sourceWell = wellIds[i];
-      sampleContext.destWell = wellIds[i];
+      sampleContext.sourceWell = wellIds[i]!;
+      sampleContext.destWell = wellIds[i]!;
     }
 
     sampleContexts.push(sampleContext);

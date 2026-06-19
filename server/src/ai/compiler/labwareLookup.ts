@@ -33,8 +33,6 @@ const LABWARE_ALIAS_MAP: Record<string, string> = {
   generic_24_well_reservoir: 'lbw-def-generic-24-well-reservoir',
   // Tip rack hints
   generic_96_tip_rack: 'lbw-def-generic-96-tip-rack',
-  // Deep well plate hints
-  generic_96_well_deep_plate: 'lbw-def-generic-96-well-deepwell-plate',
   // PCR rack hints
   generic_96x0p2ml_pcr_rack: 'lbw-def-generic-96x0p2ml-pcr-rack',
   // Integra tip rack hints

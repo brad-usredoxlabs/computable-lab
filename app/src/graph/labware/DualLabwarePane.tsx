@@ -953,7 +953,7 @@ export function DualLabwarePane({
           transform: translateY(-1px);
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 768px) and (orientation: portrait) {
           .dual-labware-pane {
             flex-direction: column;
           }
@@ -964,6 +964,65 @@ export function DualLabwarePane({
 
           .swap-button {
             transform: rotate(90deg);
+          }
+        }
+
+        @media (max-width: 932px) and (orientation: landscape) {
+          .dual-labware-pane {
+            gap: 0.45rem;
+            padding: 0.45rem;
+            min-height: 0;
+            border-radius: 12px;
+          }
+
+          .dual-pane {
+            min-width: 0;
+            border-radius: 10px;
+          }
+
+          .pane-header {
+            min-height: 34px;
+            gap: 0.35rem;
+            padding: 0.4rem 0.5rem;
+          }
+
+          .pane-label {
+            height: 1.25rem;
+            padding: 0 0.4rem;
+            font-size: 0.58rem;
+          }
+
+          .pane-name {
+            font-size: 0.76rem;
+          }
+
+          .pane-focus-badge {
+            display: none;
+          }
+
+          .pane-focus-info {
+            display: none;
+          }
+
+          .pane-content {
+            min-height: 220px;
+            padding: 0.35rem;
+          }
+
+          .dual-pane-center {
+            padding: 0;
+          }
+
+          .swap-button {
+            width: 32px;
+            height: 32px;
+            font-size: 0.95rem;
+          }
+
+          .rotate-btn {
+            width: 26px;
+            height: 26px;
+            font-size: 0.78rem;
           }
         }
       `}</style>

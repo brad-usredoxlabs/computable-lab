@@ -30,6 +30,7 @@ import { useChatThread } from './useChatThread'
 import { buildPreviewFromDraft } from './draftPreview'
 import type { AssistDraftResult } from './assistStream'
 import { AddSourceModal } from './AddSourceModal'
+import { ProtocolSourcePanel } from './ProtocolSourcePanel'
 import './ai.css'
 
 export function clarificationAnswerPrompt(
@@ -117,6 +118,35 @@ export function AiTabPanel() {
   const editor = useOptionalEventEditor()
   const editorState = editor?.state ?? null
 
+  // Active deck scope for preview placement validation — computed outside
+  // useMemo so it's accessible as a stable reference in useCallback deps.
+  const activeDeckScope = useMemo(() => {
+    if (!editorState) return undefined
+    const variant = getVariantManifest(editorState.platforms, editorState.platformId, editorState.variantId)
+    if (!variant) return undefined
+    const surfaces = [
+      ...(variant.slots.length > 0 ? ['slot' as const] : []),
+      ...(variant.surface || variant.sideLawn ? ['lawn' as const] : []),
+    ]
+    if (!surfaces.length) return undefined
+    const placement = editorState.focusPlacementId
+      ? editorState.placements.find((p) => p.placementId === editorState.focusPlacementId) ?? null
+      : null
+    const allowedSlots = variant.slots
+      .filter((slot) => slot.kind !== 'trash' && slot.kind !== 'special' && slot.reachable !== false)
+      .map((slot) => slot.id)
+    return {
+      locked: Boolean(editorState.runId),
+      ...(editorState.runId ? { runId: editorState.runId } : {}),
+      platformId: editorState.platformId,
+      variantId: editorState.variantId,
+      allowedSurfaces: surfaces,
+      allowedSlots,
+      allowedLabwareIds: Object.keys(editorState.labwares),
+      ...(placement?.labwareId ? { focusedLabwareId: placement.labwareId } : {}),
+    }
+  }, [editorState])
+
   // Context the agent should know about. Keep this small — full bodies
   // ride in `attachments` when Phase 9 adds upload support; today the
   // agent can ask the user to dispatch via Run-in-event-editor when it
@@ -181,6 +211,7 @@ export function AiTabPanel() {
     const sourceProtocolCandidate = editorState?.preview?.sourceProtocolCandidate
       ?? editorState?.graphLemurSource?.sourceProtocolCandidate
     const sourcePdf = editorState?.preview?.sourcePdf ?? editorState?.graphLemurSource?.sourcePdf
+    const implCtx = editorState?.graphLemurSource?.implementationContext
     return {
       studyId: ws.state.studyId,
       activeTabKind: activeTab?.kind ?? null,
@@ -188,6 +219,7 @@ export function AiTabPanel() {
       activeEventGraphId,
       systemPromptId: systemPrompt.id,
       systemPromptBody: systemPrompt.body,
+      activeDeckScope,
       // Deck tabs send the same accepted event graph projection used by the
       // standalone editor; this context object is shared by warm and draft.
       ...acceptedGraphProjection,
@@ -199,17 +231,18 @@ export function AiTabPanel() {
             },
           }
         : {}),
-      ...(sourceProtocolCandidate || sourcePdf
+      ...(sourceProtocolCandidate || sourcePdf || implCtx
         ? {
             graphLemur: {
               ...(editorState?.preview ? { revisionMode: true } : {}),
               ...(sourceProtocolCandidate ? { sourceProtocolCandidate } : {}),
               ...(sourcePdf ? { sourcePdf } : {}),
+              ...(implCtx ? { implementationContext: implCtx } : {}),
             },
           }
         : {}),
     }
-  }, [ws.state.studyId, activeTab, systemPrompt, editorState])
+  }, [ws.state.studyId, activeTab, systemPrompt, editorState, activeDeckScope])
 
   // Promote draft results into the editor's ghost preview so the user gets
   // the draft → ghost → Accept/Discard loop the standalone dock has.
@@ -229,7 +262,7 @@ export function AiTabPanel() {
         labwareAdditions,
         labwareRequirements,
         existingLabwares: state.labwares,
-        activeDeckScope: context.activeDeckScope,
+        activeDeckScope,
       })
       const hasPreview =
         preview.previewPlacements.length > 0 || preview.previewEvents.length > 0
@@ -263,7 +296,7 @@ export function AiTabPanel() {
         ...(revisionHistory ? { revisionHistory } : {}),
       })
     },
-    [context.activeDeckScope, editor],
+    [activeDeckScope, editor],
   )
 
   const chat = useChatThread({
@@ -343,6 +376,10 @@ export function AiTabPanel() {
   // resolved earlier never re-surfaces — no ping-pong if the model re-grounds
   // inconsistently. Reset when the user types a fresh prompt.
   const resolvedClarificationsRef = useRef<Map<string, AiClarificationAnswer>>(new Map())
+
+  // Implementation context for protocol-to-graph generation — persists
+  // across renders so the user can refine before clicking Generate.
+  const [implementationContext, setImplementationContext] = useState('')
 
   const handleSend = useCallback(
     async (text: string) => {
@@ -424,6 +461,39 @@ export function AiTabPanel() {
           onOpenSource={handleOpenSource}
         />
       </section>
+
+      {/* Protocol source panel — appears when a PDF auto-extracted a candidate */}
+      {chat.state.protocolCandidate ? (
+        <section className="ai-tab__section ai-tab__section--protocol">
+          <ProtocolSourcePanel
+            candidate={chat.state.protocolCandidate}
+            sourcePdf={chat.state.sourcePdf}
+            implementationContext={implementationContext}
+            onImplementationContextChange={setImplementationContext}
+            onGenerate={(prompt) => {
+              setImplementationContext('')
+              resolvedClarificationsRef.current.clear()
+
+              // Push the chat's protocol candidate + implementation context into the
+              // editor's graphLemurSource so the context builder includes it in the
+              // graphLemur block that rides to the server system prompt.
+              if (editor && chat.state.protocolCandidate) {
+                editor.actions.setGraphLemurSource({
+                  sourceProtocolCandidate: chat.state.protocolCandidate,
+                  ...(chat.state.sourcePdf ? { sourcePdf: chat.state.sourcePdf } : {}),
+                  ...(implementationContext.trim() ? { implementationContext: implementationContext.trim() } : {}),
+                })
+              }
+
+              setPrefill(prompt)
+            }}
+            onDismiss={() => {
+              chat.clearProtocolCandidate()
+              setImplementationContext('')
+            }}
+          />
+        </section>
+      ) : null}
 
       <section className="ai-tab__section ai-tab__section--log">
         <MessageLog state={chat.state} onClarificationsSubmit={handleClarificationsSubmit} />

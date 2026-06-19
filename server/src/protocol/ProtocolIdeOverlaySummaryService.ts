@@ -25,9 +25,8 @@ import type {
   TerminalArtifacts,
   DeckLayoutPlan,
   ResourceManifest,
-  LabStateDelta,
 } from '../compiler/pipeline/CompileContracts.js';
-import type { LabStateSnapshot } from '../compiler/state/LabState.js';
+import type { LabStateSnapshot, LabwareInstance } from '../compiler/state/LabState.js';
 import type { DirectiveNode } from '../compiler/directives/Directive.js';
 
 // ---------------------------------------------------------------------------
@@ -272,8 +271,8 @@ export class ProtocolIdeOverlaySummaryService {
       return {
         slot: slotInfo.slot,
         labwareType: instance?.labwareType ?? 'unknown',
-        instanceId,
-        orientation: instance?.orientation,
+        ...(instanceId ? { instanceId } : {}),
+        ...(instance?.orientation ? { orientation: instance.orientation } : {}),
         evidenceLinks: this._buildDeckEvidenceLinks(
           instanceId,
           slotInfo.slot,
@@ -441,7 +440,8 @@ export class ProtocolIdeOverlaySummaryService {
     }
     // Default heuristic: check for channel number in type
     const match = pipetteType.match(/(\d+)/);
-    return match ? parseInt(match[1], 10) : 1;
+    const firstGroup = match?.[1];
+    return firstGroup ? parseInt(firstGroup, 10) : 1;
   }
 
   /**
@@ -473,11 +473,11 @@ export class ProtocolIdeOverlaySummaryService {
     // Link to pipette mount/swap directives
     for (const directive of directives) {
       if (
-        directive.kind === 'pipette_mount' ||
-        directive.kind === 'pipette_swap'
+        directive.kind === 'mount_pipette' ||
+        directive.kind === 'swap_pipette'
       ) {
         links.push({
-          nodeId: directive.id,
+          nodeId: directive.directiveId,
           label: `Directive: ${directive.kind}`,
           kind: 'directive',
         });
@@ -720,7 +720,7 @@ export class ProtocolIdeOverlaySummaryService {
 
     return {
       summary,
-      totalCost: totalCost > 0 ? totalCost : undefined,
+      ...(totalCost > 0 ? { totalCost } : {}),
       currency: 'USD',
       lines,
       evidenceLinks,
@@ -738,8 +738,8 @@ export class ProtocolIdeOverlaySummaryService {
 
     const reagentCosts = new Map<string, { totalVolumeUl: number; currency: string; materialId?: string }>();
 
-    for (const [instanceId, instance] of Object.entries(labware)) {
-      for (const [well, materials] of Object.entries(instance.wells)) {
+    for (const [_instanceId, instance] of Object.entries(labware)) {
+      for (const [_well, materials] of Object.entries(instance.wells)) {
         for (const material of materials) {
           const kind = material.kind ?? 'unknown';
           const economics = material.economics;

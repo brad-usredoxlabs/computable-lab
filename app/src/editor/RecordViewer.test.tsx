@@ -41,7 +41,7 @@ vi.mock('./taptab/TapTabEditor', () => ({
   ),
 }))
 
-const mockClient = client.apiClient as ReturnType<typeof vi.mocked>
+const mockClient = vi.mocked(client.apiClient)
 
 // ---------------------------------------------------------------------------
 // Helpers

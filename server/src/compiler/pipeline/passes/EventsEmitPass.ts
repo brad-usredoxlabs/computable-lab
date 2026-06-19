@@ -197,7 +197,7 @@ export function createEventsEmitPass(deps: CreateEventsEmitPassDeps): Pass {
 
       const expanded = expandedOutput.expandedProtocol;
       const steps = (expanded.steps as Array<Record<string, unknown>>) ?? [];
-      const phases = (expanded.phases as Array<Record<string, unknown>>) ?? [];
+      // phases intentionally ignored here — events come from steps
       const sampleCount =
         (expanded.resolvedSampleCount as number) ?? 1;
       const plateCount =

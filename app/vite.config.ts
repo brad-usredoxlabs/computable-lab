@@ -132,10 +132,10 @@ export default defineConfig({
         name: 'Event Editor',
         short_name: 'Editor',
         description: 'Plan experiments and run the Fix-it compiler loop from any device.',
-        theme_color: '#0e1116',
-        background_color: '#0e1116',
+        theme_color: '#000000',
+        background_color: '#000000',
         display: 'standalone',
-        orientation: 'portrait-primary',
+        orientation: 'landscape',
         scope: '/',
         start_url: '/event-editor',
         icons: [

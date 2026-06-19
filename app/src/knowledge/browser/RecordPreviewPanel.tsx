@@ -10,11 +10,12 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useBrowser } from '../../shared/context/BrowserContext'
 import { apiClient } from '../../shared/api/client'
-import { ProjectionTapTabEditor, buildProjectionDocument } from '../../editor/taptab/TapTabEditor'
+import { ProjectionTapTabEditor } from '../../editor/taptab/TapTabEditor'
+import { buildProjectionDocument } from '../../editor/taptab'
 import type { IndexEntry } from '../../types/tree'
+import type { ProjectionBlock, ProjectionSlot } from '../../types/uiSpec'
 import type { RecordEnvelope } from '../../types/kernel'
 import type { UISpec, EditorProjectionResponse } from '../../types/uiSpec'
-import type { JSONContent } from '../../editor/taptab/documentMapper'
 
 // Simple cn utility
 const cn = (...classes: (string | boolean | undefined | null)[]): string =>
@@ -159,19 +160,8 @@ function CompactTapTabSurface({
   slots,
   data,
 }: {
-  blocks: Array<{ id: string; kind: string; label?: string; help?: string; slotIds?: string[] }>
-  slots: Array<{
-    id: string
-    path: string
-    label: string
-    widget: string
-    help?: string
-    required?: boolean
-    readOnly?: boolean
-    suggestionProviders?: string[]
-    options?: Array<{ value: string; label: string }>
-    properties?: Array<{ name: string; widget: string; label: string; help?: string; required?: boolean }>
-  }>
+  blocks: ProjectionBlock[]
+  slots: ProjectionSlot[]
   data: Record<string, unknown>
 }) {
   return (
@@ -202,7 +192,7 @@ function CompactTapTabLegacySurface({
       id: `section-${idx}`,
       kind: 'section',
       label: section.title || '',
-      slotIds: section.fields.map((f, fi) => `slot-${idx}-${fi}`),
+      slotIds: section.fields.map((_f, fi) => `slot-${idx}-${fi}`),
     })) ?? [],
     uiSpec.form?.sections?.flatMap((section, idx) =>
       section.fields.map((field, fi) => ({
@@ -228,10 +218,10 @@ function CompactTapTabLegacySurface({
     <div className="compact-taptab-surface">
       <div className="taptab-editor-container">
         <div className="taptab-editor-prose" contentEditable={false} suppressContentEditableWarning>
-          {document.content.map((section) => {
+          {document.content.map((section, si) => {
             if (section.type !== 'section' || !section.content) return null
             return (
-              <div key={section.attrs?.id || `section`} className="taptab-section">
+              <div key={typeof section.attrs?.id === 'string' ? section.attrs.id : `section-${si}`} className="taptab-section">
                 {section.content.map((node) => {
                   if (node.type === 'sectionHeading') {
                     const text = node.content?.[0]?.text
@@ -241,6 +231,9 @@ function CompactTapTabLegacySurface({
                   }
                   if (node.type === 'fieldRow' && node.attrs) {
                     const attrs = node.attrs as Record<string, unknown>
+                    if (!attrs.path) {
+                      return null
+                    }
                     return (
                       <div
                         key={attrs.path as string}

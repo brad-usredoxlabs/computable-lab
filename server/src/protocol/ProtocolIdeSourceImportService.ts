@@ -23,7 +23,7 @@ import {
   buildVendorDocumentExtraction,
   type VendorDocumentUpload,
 } from '../vendor-documents/service.js';
-import { createHash } from 'node:crypto';
+
 
 // ---------------------------------------------------------------------------
 // Optional PDF extraction override for testing
@@ -35,7 +35,6 @@ type PdfExtractor = (buffer: Buffer, fileName: string) => Promise<{ pages: PdfPa
 // Session status constants
 // ---------------------------------------------------------------------------
 
-const SESSION_STATUS_IMPORTING = 'importing' as const;
 const SESSION_STATUS_IMPORTED = 'imported' as const;
 const SESSION_STATUS_IMPORT_FAILED = 'import_failed' as const;
 
@@ -138,10 +137,9 @@ function classifySnippet(line: string): string {
 
 function buildEvidenceCitations(
   pages: PdfPageText[],
-  lines: string[],
+  _lines: string[],
 ): EvidenceCitation[] {
   const citations: EvidenceCitation[] = [];
-  let pageIndex = 0;
   let lineOffset = 0;
 
   for (const page of pages) {
@@ -232,6 +230,7 @@ async function updateSessionInPlace(
 // ---------------------------------------------------------------------------
 
 export class ProtocolIdeSourceImportService {
+  private readonly store: RecordStore;
   private readonly pdfExtractor: PdfExtractor;
 
   constructor(
@@ -311,9 +310,9 @@ export class ProtocolIdeSourceImportService {
       const vendorUpload: VendorDocumentUpload = {
         fileName,
         mediaType,
-        contentBase64: request.upload?.contentBase64,
-        sourceUrl,
-        title: request.vendor?.title,
+        ...(request.upload?.contentBase64 ? { contentBase64: request.upload.contentBase64 } : {}),
+        ...(sourceUrl ? { sourceUrl } : {}),
+        ...(request.vendor?.title ? { title: request.vendor.title } : {}),
       };
       try {
         vendorDocumentExtraction = await buildVendorDocumentExtraction(vendorUpload);
@@ -345,13 +344,13 @@ export class ProtocolIdeSourceImportService {
             contentBase64: request.upload?.contentBase64 ?? '',
           },
           {
-            extractPdfText: async (buf: Buffer, name: string) => {
+            extractPdfText: async (buf: Buffer, name?: string) => {
               // pdfExtractor returns {pages, sha256} — pass through directly so
               // the inner extract() call in ProtocolImportService gets the
               // canonical shape (the previous code double-wrapped pages,
               // producing {pages: {pages: [...], sha256: '...'}, sha256} which
               // crashed pages.flatMap downstream).
-              return this.pdfExtractor(buf, name);
+              return this.pdfExtractor(buf, name ?? fileName);
             },
           },
         );

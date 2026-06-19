@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { RecordSearchCombobox } from '../components/registry/RecordSearchCombobox';
 import { CsvImportModal } from '../components/registry/CsvImportModal';
 import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor';

@@ -54,11 +54,8 @@ vi.mock('../shared/api/client', () => ({
 
 vi.mock('../components/registry/RecordSearchCombobox', () => ({
   RecordSearchCombobox: ({
-    kinds,
-    schemaId,
     placeholder,
     onSelect,
-    disabled,
   }: {
     kinds: string[]
     schemaId: string

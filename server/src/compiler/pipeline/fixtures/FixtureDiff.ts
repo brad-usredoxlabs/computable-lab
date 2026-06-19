@@ -44,47 +44,6 @@ function deepEqual(a: unknown, b: unknown): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// expectedContainsActual — "contains" semantics: every key in expected
-// must match in actual; extra keys in actual are fine.
-// ---------------------------------------------------------------------------
-
-function expectedContainsActual(expected: unknown, actual: unknown): boolean {
-  if (expected === null || expected === undefined) return true;
-  if (actual === null || actual === undefined) return false;
-
-  // If expected is a primitive, compare strictly
-  if (typeof expected !== 'object') {
-    return deepEqual(expected, actual);
-  }
-
-  // If expected is an array, compare element-by-element with contains semantics
-  if (Array.isArray(expected)) {
-    if (!Array.isArray(actual)) return false;
-    if (expected.length === 0) return true;
-    if (actual.length === 0) return false;
-    // Compare element-by-element: expected[i] must be contained in actual[i]
-    const len = Math.min(expected.length, actual.length);
-    for (let i = 0; i < len; i++) {
-      if (!expectedContainsActual(expected[i], actual[i])) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  // expected is an object: every key must match in actual
-  const expKeys = Object.keys(expected as object);
-  for (const key of expKeys) {
-    const expVal = (expected as Record<string, unknown>)[key];
-    const actVal = (actual as Record<string, unknown>)[key];
-    if (!expectedContainsActual(expVal, actVal)) {
-      return false;
-    }
-  }
-  return true;
-}
-
-// ---------------------------------------------------------------------------
 // walkExpected — recursively walk expected.terminalArtifacts and compare
 // ---------------------------------------------------------------------------
 
@@ -223,7 +182,7 @@ function findExtra(
 
   for (const key of Object.keys(actual)) {
     if (!expectedKeys.has(key)) {
-      const val = (actual as Record<string, unknown>)[key];
+      const val = (actual as unknown as Record<string, unknown>)[key];
       // Only report non-empty extras
       if (val !== null && val !== undefined && !(Array.isArray(val) && val.length === 0)) {
         extra.push(key);

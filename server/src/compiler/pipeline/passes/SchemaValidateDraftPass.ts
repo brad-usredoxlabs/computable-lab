@@ -10,7 +10,7 @@
  * validate the draft against the resolved target schema.
  */
 
-import type { Pass, PassDiagnostic, PassRunArgs, PassResult } from '../types.js';
+import type { Pass, PassRunArgs, PassResult } from '../types.js';
 
 const PASS_ID = 'schema_validate_draft';
 

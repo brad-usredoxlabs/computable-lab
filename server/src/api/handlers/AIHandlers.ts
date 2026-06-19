@@ -10,7 +10,10 @@ import type {
   ConversationHistoryMessage,
   FileAttachment,
   AgentClarificationAnswer,
+  AgentProtocolExtractedEvent,
 } from '../../ai/types.js';
+import { extractVendorProtocolCandidateFromInput } from '../../ingestion/vendor-protocol/VendorProtocolCandidateService.js';
+import type { ProtocolCandidate } from '../../ingestion/vendor-protocol/types.js';
 import { type UploadedFile } from '../../ai/FileContentExtractor.js';
 import { deriveContextCacheKey } from '../../ai/systemPrompt.js';
 import type { PromptWarmupManager } from '../../ai/warm/PromptWarmupManager.js';
@@ -88,6 +91,56 @@ export interface AIHandlers {
     request: FastifyRequest<{ Querystring: { key?: string } }>,
     reply: FastifyReply,
   ): Promise<unknown>;
+}
+
+/**
+ * Map a ProtocolCandidate (from VendorProtocolCandidateService) to the
+ * AgentProtocolExtractedEvent shape expected by the SSE stream consumer.
+ */
+function buildProtocolExtractedEvent(
+  candidate: ProtocolCandidate,
+  sha256: string,
+): AgentProtocolExtractedEvent {
+  return {
+    type: 'protocol_extracted' as const,
+    candidate: {
+      title: candidate.title,
+      ...(candidate.scope ? { scope: candidate.scope } : {}),
+      materials: candidate.materials.map((m) => {
+        const entry: { label: string; role?: string; confidence?: number } = { label: m.label };
+        if (m.role) entry.role = m.role;
+        if (m.confidence != null) entry.confidence = m.confidence;
+        return entry;
+      }),
+      labware: candidate.labware.map((l) => {
+        const entry: { label: string; role?: string } = { label: l.label };
+        if (l.role) entry.role = l.role;
+        return entry;
+      }),
+      equipment: candidate.equipment.map((e) => ({
+        label: e.label,
+      })),
+      steps: candidate.steps.map((s) => ({
+        ...(s.stepNumber ? { stepNumber: s.stepNumber } : {}),
+        text: s.sourceText,
+        ...(s.materials.length ? { materials: s.materials } : {}),
+        ...(s.labware.length ? { labware: s.labware } : {}),
+        ...(s.equipment.length ? { equipment: s.equipment } : {}),
+        ...(s.notes.length ? { notes: s.notes } : {}),
+        ...(s.confidence ? { confidence: s.confidence } : {}),
+      })),
+      diagnostics: candidate.diagnostics.map((d) => ({
+        code: d.code,
+        severity: d.severity,
+        message: d.message,
+      })),
+    },
+    sourcePdf: {
+      ...(candidate.source.title ? { title: candidate.source.title } : {}),
+      ...(candidate.source.vendor ? { vendor: candidate.source.vendor } : {}),
+      sha256,
+    },
+  };
 }
 
 /**
@@ -238,12 +291,12 @@ export function createAIHandlers(
       let enableThinking: boolean | undefined;
       let clarificationAnswers: AgentClarificationAnswer[] | undefined;
       let fileAttachments: FileAttachment[] = [];
+      let uploadedFiles: UploadedFile[] = [];
 
       if (contentType.includes('multipart/form-data')) {
         // Parse multipart form data
         const parts = request.parts();
         const fields: Record<string, string> = {};
-        const files: UploadedFile[] = [];
 
         for await (const part of parts) {
           if (part.type === 'field') {
@@ -254,7 +307,7 @@ export function createAIHandlers(
               chunks.push(chunk);
             }
             const buffer = Buffer.concat(chunks);
-            files.push({
+            uploadedFiles.push({
               originalName: part.filename ?? 'unknown',
               mimeType: part.mimetype ?? 'application/octet-stream',
               sizeBytes: buffer.length,
@@ -271,7 +324,7 @@ export function createAIHandlers(
         clarificationAnswers = fields['clarificationAnswers'] ? JSON.parse(fields['clarificationAnswers']) as AgentClarificationAnswer[] : undefined;
 
         // Convert to FileAttachment[] for the pipeline (do NOT extract content for inlining)
-        fileAttachments = files.map((f) => ({
+        fileAttachments = uploadedFiles.map((f) => ({
           name: f.originalName,
           mime_type: f.mimeType,
           content: f.buffer,
@@ -311,6 +364,36 @@ export function createAIHandlers(
         reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
       };
 
+      // ----------------------------------------------------------------
+      // Auto-extract protocol candidates from PDF attachments before
+      // the orchestrator runs, so the candidate is ready to stream.
+      // ----------------------------------------------------------------
+      async function extractProtocolFromPdfs(): Promise<void> {
+        const pdfFiles = uploadedFiles.filter(
+          (f) => f.mimeType === 'application/pdf' || f.originalName.toLowerCase().endsWith('.pdf'),
+        );
+        if (pdfFiles.length === 0) return;
+
+        for (const pf of pdfFiles) {
+          try {
+            sendEvent({ type: 'status', message: `Extracting protocol from "${pf.originalName}"...` });
+            const result = await extractVendorProtocolCandidateFromInput({
+              workspaceRoot: '',
+              contentBase64: pf.buffer.toString('base64'),
+              fileName: pf.originalName,
+              persist: false,
+            });
+            const c = result.candidate;
+
+            const event: AgentProtocolExtractedEvent = buildProtocolExtractedEvent(c, result.source.sha256);
+            sendEvent(event);
+          } catch (extractionErr) {
+            request.log.warn(extractionErr, `Protocol extraction failed for ${pf.originalName}`);
+            sendEvent({ type: 'status', message: `Protocol extraction from "${pf.originalName}" failed.` });
+          }
+        }
+      }
+
       // Build an EditorContext-compatible object from the surface context.
       const editorContext: EditorContext = {
         labwares: [],
@@ -325,6 +408,10 @@ export function createAIHandlers(
       // is the sole consumer of attachment content.
 
       try {
+        // Auto-extract protocol candidates from PDF attachments before
+        // the orchestrator runs so the candidate is ready to stream.
+        await extractProtocolFromPdfs();
+
         sendEvent({ type: 'status', message: `Processing ${surface} request...` });
 
         const result = await orchestrator.run({

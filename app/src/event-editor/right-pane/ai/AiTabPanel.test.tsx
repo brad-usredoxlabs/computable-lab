@@ -47,9 +47,10 @@ vi.mock('./useChatThread', () => ({
   useChatThread: () => ({
     state: { messages: [], pending: null, status: null, error: null },
     isStreaming: false,
-    send: async () => undefined,
-    stop: () => undefined,
-    reset: () => undefined,
+    send: vi.fn(),
+    stop: vi.fn(),
+    reset: vi.fn(),
+    clearProtocolCandidate: vi.fn(),
   }),
 }))
 

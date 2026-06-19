@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import type { Labware } from '../../types/labware'
 import { isTipRackType } from '../../types/labware'
@@ -49,13 +49,15 @@ interface WellGridProps {
   onHover: (wellId: WellId | null, event: React.MouseEvent | null) => void
   onWellClick?: (wellId: WellId, event: React.MouseEvent) => void
   onWellContextMenu?: (wellId: WellId, event: React.MouseEvent) => void
+  onWellRangeSelect?: (anchorWellId: WellId, targetWellId: WellId, event: React.PointerEvent) => void
 }
 
 // SBS labware long edge ≈ 127 mm, short edge ≈ 85 mm. We model the canvas
 // in mm space then scale to pixels via `size`.
 const FRAME_LONG_MM = 127
 const FRAME_SHORT_MM = 85
-const FRAME_PADDING_MM = 8
+const DEFAULT_FRAME_PADDING_MM = 8
+const GRID_FRAME_PADDING_MM = 3.5
 
 const EMPTY_WELLS: ReadonlySet<WellId> = new Set()
 const EMPTY_TUBES: ReadonlyMap<WellId, { sizeLabel: string; maxVolume_uL: number }> = new Map()
@@ -73,6 +75,7 @@ export function WellGrid({
   onHover,
   onWellClick,
   onWellContextMenu,
+  onWellRangeSelect,
 }: WellGridProps) {
   const layout = useMemo(() => computeLayout(labware, orientation), [labware, orientation])
 
@@ -89,12 +92,105 @@ export function WellGrid({
   // on individual wells.
   const longPress = useLongPress((event) => {
     if (!onWellContextMenu) return
-    const target = event.target as Element | null
-    const node = target?.closest?.('[data-well-id]') as Element | null
-    const wellId = node?.getAttribute('data-well-id')
+    const wellId = wellIdFromEventTarget(event.target)
     if (!wellId) return
     onWellContextMenu(wellId, event as unknown as React.MouseEvent)
   })
+
+  const dragRef = useRef<{
+    pointerId: number
+    anchorWellId: WellId
+    lastWellId: WellId
+    startX: number
+    startY: number
+    dragging: boolean
+  } | null>(null)
+  const suppressClickRef = useRef(false)
+  const nativeDragListenersRef = useRef<{
+    move: (event: PointerEvent) => void
+    finish: (event: PointerEvent) => void
+  } | null>(null)
+
+  const removeNativeDragListeners = () => {
+    const listeners = nativeDragListenersRef.current
+    if (!listeners) return
+    window.removeEventListener('pointermove', listeners.move, true)
+    window.removeEventListener('pointerup', listeners.finish, true)
+    window.removeEventListener('pointercancel', listeners.finish, true)
+    nativeDragListenersRef.current = null
+  }
+
+  useEffect(() => removeNativeDragListeners, [])
+
+  const updatePointerDrag = (event: React.PointerEvent<SVGSVGElement> | PointerEvent, svg: SVGSVGElement) => {
+    const drag = dragRef.current
+    if (!drag || drag.pointerId !== event.pointerId || !onWellRangeSelect) return
+    const wellId = wellIdFromPointerEvent(event, svg)
+    if (!wellId) return
+    const dx = event.clientX - drag.startX
+    const dy = event.clientY - drag.startY
+    if (!drag.dragging && dx * dx + dy * dy < 36) return
+    const wasDragging = drag.dragging
+    drag.dragging = true
+    suppressClickRef.current = true
+    if (wellId === drag.lastWellId && wasDragging) return
+    drag.lastWellId = wellId
+    event.preventDefault()
+    onWellRangeSelect(drag.anchorWellId, wellId, event as unknown as React.PointerEvent)
+  }
+
+  const finishPointerDrag = (event: React.PointerEvent<SVGSVGElement> | PointerEvent, svg: SVGSVGElement) => {
+    longPress.handlers.onPointerUp(event as unknown as React.PointerEvent)
+    const drag = dragRef.current
+    if (drag?.pointerId === event.pointerId) {
+      svg.releasePointerCapture?.(event.pointerId)
+      dragRef.current = null
+    }
+    removeNativeDragListeners()
+  }
+
+  const handlePointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
+    longPress.handlers.onPointerDown(event)
+    if (!onWellRangeSelect) return
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    const svg = event.currentTarget
+    const wellId = wellIdFromPointerEvent(event, svg)
+    if (!wellId) return
+    dragRef.current = {
+      pointerId: event.pointerId,
+      anchorWellId: wellId,
+      lastWellId: wellId,
+      startX: event.clientX,
+      startY: event.clientY,
+      dragging: false,
+    }
+    svg.setPointerCapture?.(event.pointerId)
+
+    removeNativeDragListeners()
+    const move = (nativeEvent: PointerEvent) => {
+      longPress.handlers.onPointerMove(nativeEvent as unknown as React.PointerEvent)
+      updatePointerDrag(nativeEvent, svg)
+    }
+    const finish = (nativeEvent: PointerEvent) => finishPointerDrag(nativeEvent, svg)
+    window.addEventListener('pointermove', move, true)
+    window.addEventListener('pointerup', finish, true)
+    window.addEventListener('pointercancel', finish, true)
+    nativeDragListenersRef.current = { move, finish }
+  }
+
+  const handlePointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
+    longPress.handlers.onPointerMove(event)
+    updatePointerDrag(event, event.currentTarget)
+  }
+
+  const handlePointerUp = (event: React.PointerEvent<SVGSVGElement>) => {
+    finishPointerDrag(event, event.currentTarget)
+  }
+
+  const handlePointerLeave = (event: React.PointerEvent<SVGSVGElement>) => {
+    longPress.handlers.onPointerLeave(event)
+  }
 
   return (
     <svg
@@ -103,7 +199,11 @@ export function WellGrid({
       height={heightPx}
       viewBox={`0 0 ${layout.width} ${layout.height}`}
       onMouseLeave={() => onHover(null, null)}
-      {...longPress.handlers}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onPointerLeave={handlePointerLeave}
     >
       <rect
         x={0.5}
@@ -147,7 +247,8 @@ export function WellGrid({
                 // After a long-press, the OS still dispatches a synthetic
                 // click. Drop it so we don't both open the context menu
                 // AND select the well.
-                if (longPress.consumeDidFire()) {
+                if (longPress.consumeDidFire() || suppressClickRef.current) {
+                  suppressClickRef.current = false
                   event.preventDefault()
                   return
                 }
@@ -205,12 +306,15 @@ function computeLayout(labware: Labware, orientation: LabwareOrientation): Compu
   const isPortrait = orientation === 'portrait'
   const width = isPortrait ? FRAME_SHORT_MM : FRAME_LONG_MM
   const height = isPortrait ? FRAME_LONG_MM : FRAME_SHORT_MM
-  const innerW = width - FRAME_PADDING_MM * 2
-  const innerH = height - FRAME_PADDING_MM * 2
+  const addressing = labware.addressing
   const isTipRack = isTipRackType(labware.labwareType)
+  const framePadding = addressing.type === 'grid' && !isTipRack
+    ? GRID_FRAME_PADDING_MM
+    : DEFAULT_FRAME_PADDING_MM
+  const innerW = width - framePadding * 2
+  const innerH = height - framePadding * 2
 
   const wells: WellGeometry[] = []
-  const addressing = labware.addressing
 
   if (addressing.type === 'grid') {
     const rows = addressing.rowLabels ?? []
@@ -229,8 +333,8 @@ function computeLayout(labware: Labware, orientation: LabwareOrientation): Compu
         const wellId = `${rowLabel}${colLabel}`
         wells.push({
           wellId,
-          cx: FRAME_PADDING_MM + c * cellW + cellW / 2,
-          cy: FRAME_PADDING_MM + r * cellH + cellH / 2,
+          cx: framePadding + c * cellW + cellW / 2,
+          cy: framePadding + r * cellH + cellH / 2,
           rx: wellRx,
           ry: wellRy,
           shape: isTipRack ? 'tip' : 'circle',
@@ -248,7 +352,7 @@ function computeLayout(labware: Labware, orientation: LabwareOrientation): Compu
       labels.forEach((label, i) => {
         wells.push({
           wellId: label,
-          cx: FRAME_PADDING_MM + i * cellW + cellW / 2,
+          cx: framePadding + i * cellW + cellW / 2,
           cy: height / 2,
           rx: wellRx,
           ry: wellRy,
@@ -263,7 +367,7 @@ function computeLayout(labware: Labware, orientation: LabwareOrientation): Compu
         wells.push({
           wellId: label,
           cx: width / 2,
-          cy: FRAME_PADDING_MM + i * cellH + cellH / 2,
+          cy: framePadding + i * cellH + cellH / 2,
           rx: wellRx,
           ry: wellRy,
           shape: 'rect',
@@ -283,4 +387,21 @@ function computeLayout(labware: Labware, orientation: LabwareOrientation): Compu
   }
 
   return { width, height, wells }
+}
+
+function wellIdFromEventTarget(target: EventTarget | null): WellId | null {
+  const node = target instanceof Element ? target.closest('[data-well-id]') : null
+  return node?.getAttribute('data-well-id') ?? null
+}
+
+function wellIdFromPointerEvent(
+  event: React.PointerEvent<SVGSVGElement> | PointerEvent,
+  svg: SVGSVGElement,
+): WellId | null {
+  const direct = wellIdFromEventTarget(event.target)
+  if (direct) return direct
+
+  const hit = document.elementFromPoint(event.clientX, event.clientY)
+  if (!hit || !svg.contains(hit)) return null
+  return wellIdFromEventTarget(hit)
 }

@@ -105,7 +105,7 @@ function isValidWell(
 ): boolean {
   const m = well.match(/^([A-Z]+)(\d+)$/);
   if (!m) return false;
-  const rowIdx = m[1].charCodeAt(0) - 65;
+  const rowIdx = m[1]!.charCodeAt(0) - 65;
   const col = Number(m[2]);
   return rowIdx >= 0 && rowIdx < geom.rows && col >= 1 && col <= geom.cols;
 }

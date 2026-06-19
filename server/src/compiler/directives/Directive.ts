@@ -12,7 +12,7 @@
  *   - swap_pipette:     replaces the pipette at a given mount side
  */
 
-import type { LabStateSnapshot, LabwareOrientation, MountedPipette } from '../state/LabState.js';
+import type { LabStateSnapshot, LabwareOrientation } from '../state/LabState.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -86,7 +86,7 @@ function applyReorient(
     labwareInstanceId ??
     (labwareHint
       ? Object.keys(snapshot.labware).find(
-          (id) => snapshot.labware[id].instanceId === labwareHint,
+          (id) => snapshot.labware[id]?.instanceId === labwareHint,
         )
       : undefined);
 

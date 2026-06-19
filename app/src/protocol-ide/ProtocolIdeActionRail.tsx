@@ -30,7 +30,7 @@
  *   - Unanchored comments are accepted and stored at the current iteration.
  */
 
-import { useState, useCallback, useRef } from 'react'
+import { useCallback, useRef } from 'react'
 import type { ProtocolIdeSession } from './types'
 import type { IssueCardRef, CommentAnchor, FeedbackComment } from './ProtocolIdeGraphReviewSurface'
 import { FeedbackCommentForm } from './FeedbackCommentForm'
@@ -163,7 +163,7 @@ function RollingIssueSummary({
 // ---------------------------------------------------------------------------
 
 export function ProtocolIdeActionRail({
-  session,
+  session: _session,
   directiveText,
   onDirectiveChange,
   commentText,

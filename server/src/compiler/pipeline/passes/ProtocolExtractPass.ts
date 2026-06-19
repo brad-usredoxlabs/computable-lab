@@ -72,15 +72,8 @@ export function createProtocolExtractPass(
         };
       }
 
-      const evidenceCitations =
-        (args.state.input['evidenceCitations'] as unknown[]) ?? [];
-
       // Invoke the existing chunked extraction service with retry budget
       const result = await deps.runChunkedExtraction(
-        // @ts-expect-error — deps.runChunkedExtraction is the real service;
-        // the type is `typeof runChunkedExtractionService` which expects
-        // (service, request, opts) but we pass the service directly.
-        // In production the wrapper adapts this; in tests the mock returns directly.
         undefined as unknown as Parameters<
           typeof runChunkedExtractionService
         >[0],

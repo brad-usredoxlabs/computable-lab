@@ -18,7 +18,7 @@ export interface SchemaValidator {
 }
 
 export interface PromoteCandidateArgs {
-  candidate: ExtractionCandidate & { ambiguity_spans?: AmbiguitySpan[] };
+  candidate: ExtractionCandidate & { ambiguity_spans?: AmbiguitySpan[] | undefined };
   draftRecordId: string;             // the XDR-* recordId the candidate came from
   candidatePath: string;             // JSON-path into XDR.candidates[] (e.g. "candidates[2]")
   sourceArtifactRef: { kind: 'file' | 'publication' | 'freetext'; id: string; locator?: string };

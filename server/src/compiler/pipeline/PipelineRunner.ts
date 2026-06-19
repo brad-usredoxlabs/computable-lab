@@ -117,10 +117,13 @@ export const DEFAULT_WHEN_EVALUATOR: WhenEvaluator = (condition: string, state: 
   if (parts[0] === 'outputs' && parts.length >= 2) {
     // Resolve through state.outputs map
     const passId = parts[1];
+    if (!passId) return false;
     v = state.outputs.get(passId);
     for (let i = 2; i < parts.length; i++) {
       if (v === undefined || v === null || typeof v !== 'object') return false;
-      v = (v as Record<string, unknown>)[parts[i]];
+      const key = parts[i];
+      if (!key) return false;
+      v = (v as Record<string, unknown>)[key];
     }
   } else {
     // Walk state directly (e.g. 'input.labState')

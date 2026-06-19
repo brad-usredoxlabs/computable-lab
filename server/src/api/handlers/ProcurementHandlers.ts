@@ -7,7 +7,7 @@
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import type { RecordStore, RecordEnvelope } from '../../store/types.js';
+import type { RecordStore } from '../../store/types.js';
 import { ProcurementManifestService } from '../../procurement/ProcurementManifestService.js';
 import { BudgetDraftService } from '../../procurement/BudgetDraftService.js';
 
@@ -55,7 +55,6 @@ export function createProcurementHandlers(store: RecordStore): ProcurementHandle
       }
 
       const plannedRunPayload = plannedRunEnvelope.payload as Record<string, unknown>;
-      const sourceType = plannedRunPayload.sourceType as string | undefined;
 
       // 2. Derive the procurement manifest
       const manifest = manifestService.derive(plannedRunEnvelope);

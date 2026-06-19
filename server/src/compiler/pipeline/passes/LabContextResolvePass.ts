@@ -14,7 +14,7 @@
  */
 
 import { z } from 'zod';
-import type { Pass, PassRunArgs, PassResult, PassDiagnostic } from '../types.js';
+import type { Pass, PassRunArgs, PassResult } from '../types.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -77,7 +77,7 @@ function extractJson(raw: string): unknown | null {
   const fenceMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
   if (fenceMatch) {
     try {
-      return JSON.parse(fenceMatch[1].trim());
+      return JSON.parse(fenceMatch[1]!.trim());
     } catch {
       // fall through
     }

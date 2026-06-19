@@ -82,7 +82,7 @@ export function BudgetDocumentSurface({
       const payload = {
         ...serialized,
         summary: {
-          ...serialized.summary,
+          ...(serialized.summary as Record<string, unknown>),
           ...computedTotals,
         },
       }

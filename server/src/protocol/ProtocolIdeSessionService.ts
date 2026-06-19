@@ -10,7 +10,7 @@
  * Import and projection details belong to later specs.
  */
 
-import type { RecordStore, StoreResult } from '../store/types.js';
+import type { RecordStore } from '../store/types.js';
 import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import type {
   ProtocolIdeIntakeRequest,
@@ -211,7 +211,7 @@ export class ProtocolIdeSessionService {
       limit: 1,
     });
 
-    return sessions.length > 0 ? sessions[0] : null;
+    return sessions.length > 0 ? sessions[0]! : null;
   }
 
   /**

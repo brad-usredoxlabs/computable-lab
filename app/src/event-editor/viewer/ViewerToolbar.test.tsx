@@ -7,9 +7,34 @@
  *    (mocked here to avoid the full provider)
  */
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import type { WorkspaceTab } from '../workspace/types'
+
+const eventEditorMock = vi.hoisted(() => ({
+  state: {
+    platformId: 'manual',
+    variantId: 'manual_single_plate',
+    platforms: [{
+      id: 'manual',
+      label: 'Manual',
+      compilerFamily: 'manual',
+      allowedVocabIds: ['liquid-handling/v1'],
+      toolTypeIds: ['pipette_1ch'],
+      variants: [{ id: 'manual_single_plate', title: 'Single plate', slots: [] }],
+    }],
+    vocabPackId: 'liquid-handling/v1',
+    toolTypeId: 'pipette_1ch',
+    assistPipetteId: null,
+    tipState: { kind: 'empty' },
+    eventGraphId: null,
+    eventGraphCommit: null,
+    runId: null as string | null,
+    dirty: false,
+    history: { past: [], future: [] },
+    runDeckLock: null as null | { locked: true; platformId: string; variantId: string; source: string; lockedAt: string },
+  },
+}))
 
 // The chips inside DeckToolbar (DeckModeSwitcher / VocabSwitcher /
 // ToolSwitcher / TipChip / EventGraphChip) all useEventEditor. Mock the
@@ -17,25 +42,12 @@ import type { WorkspaceTab } from '../workspace/types'
 // pulling in EventEditorProvider.
 vi.mock('../EventEditorContext', () => ({
   useEventEditor: () => ({
-    state: {
-      platformId: 'flex',
-      variantId: 'a1',
-      platforms: [],
-      vocabPackId: 'core',
-      toolType: 'p300',
-      tipState: { kind: 'empty' },
-      eventGraphId: null,
-      eventGraphCommit: null,
-      runId: null,
-      dirty: false,
-      history: { past: [], future: [] },
-      // Anything else a chip reads — return a sane default so render doesn't crash.
-    },
+    state: eventEditorMock.state,
     actions: {
       setPlatform: () => undefined,
       setVariant: () => undefined,
-      setVocabPack: () => undefined,
-      setToolType: () => undefined,
+      setVocab: () => undefined,
+      setTool: () => undefined,
       dropTip: () => undefined,
       undo: () => undefined,
       redo: () => undefined,
@@ -71,6 +83,10 @@ vi.mock('./document/DocumentToolbar', () => ({
 
 import { ViewerToolbar } from './ViewerToolbar'
 
+beforeEach(() => {
+  eventEditorMock.state.runDeckLock = null
+})
+
 afterEach(() => cleanup())
 
 describe('ViewerToolbar dispatcher', () => {
@@ -102,7 +118,7 @@ describe('ViewerToolbar dispatcher', () => {
     expect(screen.getByText(/Rich-text toolbar/)).toBeTruthy()
   })
 
-  it('renders the DeckToolbar (and chip CSS classes) for kind=deck', () => {
+  it('renders the DeckToolbar unlocked controls for kind=deck', () => {
     const tab: WorkspaceTab = {
       id: 't1',
       kind: 'deck',
@@ -112,5 +128,29 @@ describe('ViewerToolbar dispatcher', () => {
     render(<ViewerToolbar tab={tab} />)
     // The DeckToolbar's wrapper class confirms the deck branch was taken.
     expect(document.querySelector('.viewer-toolbar--deck')).toBeTruthy()
+    expect(screen.getByText('Deck')).toBeTruthy()
+    expect(screen.getByText('Vocab')).toBeTruthy()
+    expect(screen.getByText('Tool')).toBeTruthy()
+  })
+
+  it('hides locked deck context controls for deck tabs', () => {
+    eventEditorMock.state.runDeckLock = {
+      locked: true,
+      platformId: 'manual',
+      variantId: 'manual_single_plate',
+      source: 'first-edit',
+      lockedAt: '2026-06-15T00:00:00.000Z',
+    }
+    const tab: WorkspaceTab = {
+      id: 't1',
+      kind: 'deck',
+      eventGraphId: 'EVG-000001',
+      title: 'Run 1',
+    }
+    render(<ViewerToolbar tab={tab} />)
+    expect(document.querySelector('.viewer-toolbar--deck')).toBeTruthy()
+    expect(screen.queryByText('Deck')).toBeNull()
+    expect(screen.queryByText('Vocab')).toBeNull()
+    expect(screen.getByText('Tool')).toBeTruthy()
   })
 })

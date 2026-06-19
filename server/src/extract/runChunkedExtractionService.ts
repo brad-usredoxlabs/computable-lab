@@ -30,17 +30,17 @@ export type OnChunkProgress = (event: {
 }) => void;
 
 export interface RunChunkedExtractionOpts {
-  thresholdChars?: number;
-  chunkOpts?: ChunkOptions;
+  thresholdChars?: number | undefined;
+  chunkOpts?: ChunkOptions | undefined;
   /** Optional callback invoked after each chunk completes. */
-  onChunkProgress?: OnChunkProgress;
+  onChunkProgress?: OnChunkProgress | undefined;
   /**
    * Shared retry budget for validation/repair across all chunks.
    * Each retry attempt decrements this counter. When exhausted,
    * subsequent chunks skip retry and log directly.
    * Default: 6 (bounded LLM cost per pipeline run).
    */
-  retryBudget?: number;
+  retryBudget?: number | undefined;
 }
 
 /**

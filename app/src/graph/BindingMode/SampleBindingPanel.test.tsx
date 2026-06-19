@@ -61,7 +61,7 @@ describe('SampleBindingPanel', () => {
 
     // Toggle to CSV mode using the radio button with value csv
     const radios = container.querySelectorAll('input[type="radio"]')
-    const csvRadio = Array.from(radios).find((r) => r.value === 'csv')
+    const csvRadio = Array.from(radios).find((r) => (r as HTMLInputElement).value === 'csv')
     expect(csvRadio).toBeTruthy()
     fireEvent.click(csvRadio!)
 
@@ -74,7 +74,7 @@ describe('SampleBindingPanel', () => {
 
     // Toggle to CSV mode
     const radios = container.querySelectorAll('input[type="radio"]')
-    const csvRadio = Array.from(radios).find((r) => r.value === 'csv')
+    const csvRadio = Array.from(radios).find((r) => (r as HTMLInputElement).value === 'csv')
     fireEvent.click(csvRadio!)
 
     // Create a CSV file
@@ -100,7 +100,7 @@ describe('SampleBindingPanel', () => {
 
     // Toggle to CSV mode
     const radios = container.querySelectorAll('input[type="radio"]')
-    const csvRadio = Array.from(radios).find((r) => r.value === 'csv')
+    const csvRadio = Array.from(radios).find((r) => (r as HTMLInputElement).value === 'csv')
     fireEvent.click(csvRadio!)
 
     // Create an invalid CSV file
@@ -122,7 +122,7 @@ describe('SampleBindingPanel', () => {
 
     // Toggle to CSV mode
     const radios = container.querySelectorAll('input[type="radio"]')
-    const csvRadio = Array.from(radios).find((r) => r.value === 'csv')
+    const csvRadio = Array.from(radios).find((r) => (r as HTMLInputElement).value === 'csv')
     fireEvent.click(csvRadio!)
 
     // Create an invalid CSV file
@@ -145,7 +145,7 @@ describe('SampleBindingPanel', () => {
 
     // Toggle to CSV mode
     const radios = container.querySelectorAll('input[type="radio"]')
-    const csvRadio = Array.from(radios).find((r) => r.value === 'csv')
+    const csvRadio = Array.from(radios).find((r) => (r as HTMLInputElement).value === 'csv')
     fireEvent.click(csvRadio!)
 
     // Create a valid CSV file
@@ -198,7 +198,7 @@ describe('SampleBindingPanel', () => {
 
     // Toggle to CSV mode
     const radios = container.querySelectorAll('input[type="radio"]')
-    const csvRadio = Array.from(radios).find((r) => r.value === 'csv')
+    const csvRadio = Array.from(radios).find((r) => (r as HTMLInputElement).value === 'csv')
     fireEvent.click(csvRadio!)
 
     // Create a CSV with 15 rows

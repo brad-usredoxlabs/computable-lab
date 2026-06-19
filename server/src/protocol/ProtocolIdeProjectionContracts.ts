@@ -376,15 +376,25 @@ export function validateProjectionRequest(
         label: (r['label'] as string).trim(),
         kind: (r['kind'] as string).trim(),
       })),
-      overlaySummaryToggles: toggles
+      ...(toggles !== undefined && toggles !== null
         ? {
-            includeDeckSummary: (toggles as Record<string, unknown>)['includeDeckSummary'] ?? true,
-            includeToolsSummary: (toggles as Record<string, unknown>)['includeToolsSummary'] ?? true,
-            includeReagentsSummary: (toggles as Record<string, unknown>)['includeReagentsSummary'] ?? true,
-            includeBudgetSummary: (toggles as Record<string, unknown>)['includeBudgetSummary'] ?? true,
+            overlaySummaryToggles: {
+              includeDeckSummary: typeof (toggles as Record<string, unknown>)['includeDeckSummary'] === 'boolean'
+                ? (toggles as Record<string, unknown>)['includeDeckSummary'] as boolean
+                : true,
+              includeToolsSummary: typeof (toggles as Record<string, unknown>)['includeToolsSummary'] === 'boolean'
+                ? (toggles as Record<string, unknown>)['includeToolsSummary'] as boolean
+                : true,
+              includeReagentsSummary: typeof (toggles as Record<string, unknown>)['includeReagentsSummary'] === 'boolean'
+                ? (toggles as Record<string, unknown>)['includeReagentsSummary'] as boolean
+                : true,
+              includeBudgetSummary: typeof (toggles as Record<string, unknown>)['includeBudgetSummary'] === 'boolean'
+                ? (toggles as Record<string, unknown>)['includeBudgetSummary'] as boolean
+                : true,
+            } as OverlaySummaryToggles,
           }
-        : undefined,
-      enableThinking: typeof obj['enableThinking'] === 'boolean' ? (obj['enableThinking'] as boolean) : undefined,
+        : {}),
+      ...(typeof obj['enableThinking'] === 'boolean' ? { enableThinking: obj['enableThinking'] as boolean } : {}),
     },
   };
 }
@@ -498,29 +508,29 @@ export function validateProjectionResponse(
         eventCount: egd['eventCount'] as number,
         description: typeof egd['description'] === 'string' ? (egd['description'] as string).trim() : '',
       },
-      projectedProtocolRef: typeof obj['projectedProtocolRef'] === 'string' ? (obj['projectedProtocolRef'] as string) : undefined,
-      projectedRunRef: typeof obj['projectedRunRef'] === 'string' ? (obj['projectedRunRef'] as string) : undefined,
+      ...(typeof obj['projectedProtocolRef'] === 'string' ? { projectedProtocolRef: obj['projectedProtocolRef'] as string } : {}),
+      ...(typeof obj['projectedRunRef'] === 'string' ? { projectedRunRef: obj['projectedRunRef'] as string } : {}),
       evidenceMap: evidenceMap as EvidenceMap,
       overlaySummaries: overlaySummaries as ProjectionResponse['overlaySummaries'] ?? {},
       diagnostics: diagnostics as CompactDiagnostic[],
-      labContext: labContext !== undefined && labContext !== null
-        ? {
-            labwareKind: (lc['labwareKind'] as string).trim(),
-            plateCount: lc['plateCount'] as number,
-            sampleCount: lc['sampleCount'] as number,
-            source: {
-              labwareKind: (src['labwareKind'] as 'default' | 'directive' | 'manual'),
-              plateCount: (src['plateCount'] as 'default' | 'directive' | 'manual'),
-              sampleCount: (src['sampleCount'] as 'default' | 'directive' | 'manual'),
-            },
-          }
-        : undefined,
-      awaitingVariantSelection: obj['awaitingVariantSelection'] !== undefined && obj['awaitingVariantSelection'] !== null
-        ? {
-            extractionDraftRef: (obj['awaitingVariantSelection'] as Record<string, unknown>)['extractionDraftRef'] as string,
-            variants: (obj['awaitingVariantSelection'] as Record<string, unknown>)['variants'] as VariantSummary[],
-          }
-        : undefined,
+      ...(labContext !== undefined && labContext !== null ? {
+        labContext: {
+          labwareKind: (lc!['labwareKind'] as string).trim(),
+          plateCount: lc!['plateCount'] as number,
+          sampleCount: lc!['sampleCount'] as number,
+          source: {
+            labwareKind: src!['labwareKind'] as 'default' | 'directive' | 'manual',
+            plateCount: src!['plateCount'] as 'default' | 'directive' | 'manual',
+            sampleCount: src!['sampleCount'] as 'default' | 'directive' | 'manual',
+          },
+        },
+      } : {}),
+      ...(obj['awaitingVariantSelection'] !== undefined && obj['awaitingVariantSelection'] !== null ? {
+        awaitingVariantSelection: {
+          extractionDraftRef: (obj['awaitingVariantSelection'] as Record<string, unknown>)['extractionDraftRef'] as string,
+          variants: (obj['awaitingVariantSelection'] as Record<string, unknown>)['variants'] as VariantSummary[],
+        },
+      } : {}),
     },
   };
 }

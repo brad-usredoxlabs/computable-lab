@@ -14,7 +14,7 @@ export function FeedbackCommentForm({
   text,
   onChange,
   onAnchorsChange,
-  onSubmit,
+  onSubmit: _onSubmit,
   issueCards,
 }: {
   text: string
@@ -41,7 +41,7 @@ export function FeedbackCommentForm({
   }, [onAnchorsChange])
 
   const handleSelectAnchor = useCallback(
-    (semanticKey: string, label: string) => {
+    (semanticKey: string, _label: string) => {
       const newAnchors: CommentAnchor[] = [{ kind: 'node', semanticKey, instanceId: semanticKey }]
       setAnchors(newAnchors)
       onAnchorsChange(newAnchors)

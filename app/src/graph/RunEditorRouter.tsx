@@ -29,7 +29,7 @@ function RunEditorRouterContent({ record, loading }: RunEditorRouterProps) {
 
   return (
     <Suspense fallback={<div className="run-editor-router">Loading editor...</div>}>
-      <LabwareEventEditor recordId={runId!} />
+      <LabwareEventEditor />
     </Suspense>
   )
 }
@@ -45,7 +45,7 @@ export function RunEditorRouter() {
     import('../shared/api/client').then(({ apiClient }) => {
       apiClient.getRecord(runId).then((r) => {
         if (active) {
-          setRecord({ kind: r.kind, state: (r.payload as Record<string, unknown>).state as string })
+          setRecord({ kind: r.meta?.kind ?? '', state: (r.payload as Record<string, unknown>).state as string })
           setLoading(false)
         }
       }).catch(() => {

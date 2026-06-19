@@ -6,7 +6,7 @@
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import type { UISpec } from '../../ui/types.js';
+import type { UISpec, EditorProjectionResponse } from '../../ui/types.js';
 import type { RecordEnvelope } from '../../types/RecordEnvelope.js';
 import type { UISpecLoader } from '../../ui/UISpecLoader.js';
 import type { RecordStore } from '../../store/types.js';
@@ -52,58 +52,6 @@ export interface UIErrorResponse {
 }
 
 /**
- * Response for the editor projection endpoint.
- */
-export interface EditorProjectionResponse {
-  /** The schema ID of the record */
-  schemaId: string;
-  /** The record ID */
-  recordId: string;
-  /** Display title derived from the record */
-  title: string;
-  /** Document blocks */
-  blocks: Array<{
-    id: string;
-    kind: string;
-    label?: string;
-    help?: string;
-    collapsible?: boolean;
-    collapsed?: boolean;
-    path?: string;
-    columns?: Array<{ path: string; label: string; width?: string | number; widget?: string }>;
-    visible?: { when: string; operator: string; value?: unknown };
-    slotIds?: string[];
-  }>;
-  /** Document slots */
-  slots: Array<{
-    id: string;
-    path: string;
-    label: string;
-    widget: string;
-    help?: string;
-    required?: boolean;
-    readOnly?: boolean;
-    /** Authoritative display-only value override (wins over payload). */
-    value?: unknown;
-    suggestionProviders?: string[];
-    visible?: { when: string; operator: string; value?: unknown };
-  }>;
-  /** Non-fatal diagnostics */
-  diagnostics: Array<{
-    code: string;
-    message: string;
-    severity: string;
-    path?: string;
-  }>;
-  /**
-   * Display-only field overrides keyed by payload path (e.g. `license`,
-   * `createdBy`). Merged over the record payload by the editor at render time;
-   * never persisted. Used for read-through inheritance and resolved names.
-   */
-  displayValues?: Record<string, unknown>;
-}
-
-/**
  * Bake display-only value overrides onto a projection's slots so every editor
  * surface renders them (the document mapper prefers slot.value over the stored
  * payload). Keys are payload field names (e.g. `license`); slots are matched by
@@ -136,7 +84,7 @@ export class UIHandlers {
   private readonly store: RecordStore;
   private readonly schemaRegistry: SchemaRegistry;
   private readonly editorProjectionService: EditorProjectionService;
-  private readonly manifest?: ProcurementManifest;
+  private readonly manifest: ProcurementManifest | undefined;
   
   constructor(
     uiSpecLoader: UISpecLoader,
@@ -451,8 +399,7 @@ export class UIHandlers {
     }>,
     reply: FastifyReply
   ): Promise<SuggestionResponse | { error: string; message: string }> {
-    const { recordId } = request.params;
-    const { slotId, query = '', limit = 20 } = request.body;
+    const { slotId } = request.body;
     
     if (!slotId || slotId.length === 0) {
       reply.status(400);
@@ -461,8 +408,6 @@ export class UIHandlers {
         message: 'slotId is required.',
       };
     }
-    
-    const resolvedLimit = Math.min(Math.max(limit, 1), 100);
     
     const suggestionHandlers = createEditorSuggestionHandlers(
       this.store,

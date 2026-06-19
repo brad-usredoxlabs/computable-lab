@@ -26,10 +26,9 @@ export interface BuildExtractionDraftArgs {
  * A candidate in an extraction draft with optional status tracking.
  */
 export interface ExtractionDraftCandidate extends ExtractionCandidate {
-  ambiguity_spans?: AmbiguitySpan[];
+  ambiguity_spans?: AmbiguitySpan[] | undefined;
   status?: 'promoted' | 'rejected';
-  evidence_span?: string;
-  uncertainty?: string;
+  uncertainty?: 'unresolved' | 'inferred' | 'low' | 'medium' | 'high' | undefined;
 }
 
 /**
@@ -71,7 +70,7 @@ export function buildExtractionDraft(args: BuildExtractionDraftArgs): Extraction
   }
 
   // Build per-candidate ambiguity spans by folding provided spans with existing ones
-  const candidatesWithSpans: Array<ExtractionCandidate & { ambiguity_spans?: AmbiguitySpan[] }> =
+  const candidatesWithSpans: ExtractionDraftCandidate[] =
     args.candidates.map((candidate, index) => {
       const existingSpans = candidate.ambiguity_spans ?? [];
       const providedSpans = args.ambiguity_spans_by_candidate?.[index] ?? [];

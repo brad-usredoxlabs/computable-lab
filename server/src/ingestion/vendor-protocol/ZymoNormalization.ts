@@ -149,6 +149,7 @@ export function normalizeZymoProtocolCandidate(candidate: ProtocolCandidate): No
         message: `Could not resolve Zymo material role ${role.roleId}.`,
       });
     }
+    const pv = roleProvenance(candidate, sourceLabels);
     return {
       roleId: role.roleId,
       label: role.label,
@@ -156,7 +157,7 @@ export function normalizeZymoProtocolCandidate(candidate: ProtocolCandidate): No
       roleKind: role.roleId === 'eluted_dna' ? 'output' : 'material',
       status: found ? 'resolved' : 'unresolved',
       sourceLabels,
-      provenance: roleProvenance(candidate, sourceLabels),
+      ...(pv ? { provenance: pv } : {}),
     };
   });
 
@@ -170,28 +171,33 @@ export function normalizeZymoProtocolCandidate(candidate: ProtocolCandidate): No
         message: 'Waste handling is not specified by the vendor protocol or current platform context.',
       });
     }
+    const pv = roleProvenance(candidate, sourceLabels);
+    const nid = typeof role === 'object' && 'normalizedId' in role ? (role as { normalizedId: string }).normalizedId : undefined;
     return {
       roleId: role.roleId,
       label: role.label,
-      ...(role.normalizedId ? { normalizedId: role.normalizedId } : {}),
+      ...(nid ? { normalizedId: nid } : {}),
       roleKind: 'labware',
       status: unresolved ? 'unresolved' : 'resolved',
       sourceLabels,
-      provenance: roleProvenance(candidate, sourceLabels),
+      ...(pv ? { provenance: pv } : {}),
     };
   });
 
   const instrumentRoles: NormalizedProtocolRole[] = ZYMO_INSTRUMENT_ROLE_MAP.map((role) => {
     const sourceLabels = role.sourceIncludes.length > 0 ? findSourceLabels(candidate, role.sourceIncludes) : [role.label];
+    const pv = roleProvenance(candidate, sourceLabels);
+    const rawStatus: 'resolved' | 'unresolved' | 'manual' | undefined =
+      'status' in role ? ((role as { status?: string }).status as 'resolved' | 'unresolved' | 'manual' | undefined) : undefined;
     return {
       roleId: role.roleId,
       label: role.label,
       normalizedId: role.normalizedId,
       roleKind: 'instrument',
-      status: role.status ?? 'resolved',
+      status: rawStatus ?? 'resolved',
       sourceLabels,
-      provenance: roleProvenance(candidate, sourceLabels),
-      ...(role.status === 'manual' ? { notes: ['Manual/off-deck in v1 adaptation unless platform capabilities say otherwise.'] } : {}),
+      ...(pv ? { provenance: pv } : {}),
+      ...(rawStatus === 'manual' ? { notes: ['Manual/off-deck in v1 adaptation unless platform capabilities say otherwise.'] } : {}),
     };
   });
 
@@ -288,13 +294,13 @@ function allocateReservoirWells(input: {
 function createReservoirPlan(candidate: ProtocolCandidate, sampleCount: number): ProtocolReservoirPlan {
   const used = new Set<string>();
   const perSample = derivePerSampleVolumes(candidate);
-  const allocationInputs = [
-    ['magbinding_buffer', 'ZymoBIOMICS MagBinding Buffer', 'A1', perSample.magbinding_buffer],
-    ['dnase_rnase_free_water', 'ZymoBIOMICS DNase/RNase Free Water', 'A2', perSample.dnase_rnase_free_water],
-    ['magwash_1', 'ZymoBIOMICS MagWash 1', 'A3', perSample.magwash_1],
-    ['magwash_2', 'ZymoBIOMICS MagWash 2', 'A5', perSample.magwash_2],
-    ['magbinding_beads', 'ZymoBIOMICS MagBinding Beads', 'A7', perSample.magbinding_beads],
-  ] as const;
+  const allocationInputs: Array<[string, string, string, number]> = [
+    ['magbinding_buffer', 'ZymoBIOMICS MagBinding Buffer', 'A1', perSample.magbinding_buffer!],
+    ['dnase_rnase_free_water', 'ZymoBIOMICS DNase/RNase Free Water', 'A2', perSample.dnase_rnase_free_water!],
+    ['magwash_1', 'ZymoBIOMICS MagWash 1', 'A3', perSample.magwash_1!],
+    ['magwash_2', 'ZymoBIOMICS MagWash 2', 'A5', perSample.magwash_2!],
+    ['magbinding_beads', 'ZymoBIOMICS MagBinding Beads', 'A7', perSample.magbinding_beads!],
+  ];
   const allocations = allocationInputs.map(([roleId, materialLabel, preferredWell, perSampleVolumeUl]) =>
     allocateReservoirWells({ roleId, materialLabel, preferredWell, perSampleVolumeUl, sampleCount, used }));
   const totalRequiredVolumeUl = allocations.reduce((sum, allocation) => sum + allocation.requiredVolumeUl, 0);
@@ -369,10 +375,11 @@ function createStepPlan(candidate: ProtocolCandidate): ProtocolStepAdaptation[] 
   return candidate.steps.map((step) => {
     const adaptedActions = step.actions.map((action) => {
       const support = actionSupport(action);
+      const eh = support.support === 'automatable' ? action.actionKind : undefined;
       return {
         actionKind: action.actionKind,
         support: support.support,
-        eventHint: support.support === 'automatable' ? action.actionKind : undefined,
+        ...(eh ? { eventHint: eh } : {}),
         roleRefs: [
           ...(action.material ? [materialRoleForLabel(action.material)] : []),
           ...(action.equipment ? [instrumentRoleForLabel(action.equipment)] : []),

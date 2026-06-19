@@ -11,13 +11,8 @@
 import type {
   UISpec,
   EditorConfig,
-  EditorBlock,
-  EditorSlot,
   FormSection,
-  FieldHint,
-  VisibilityCondition,
   EditorBlockKind,
-  SuggestionProviderKind,
   EditorDiagnostic,
   ProjectionBlock,
   ProjectionSlot,
@@ -27,27 +22,6 @@ import type {
 // ============================================================================
 // Helpers
 // ============================================================================
-
-/**
- * Build a visibility condition from a FieldHint's visible field.
- */
-function buildVisibilityCondition(
-  hint: FieldHint | EditorSlot
-): VisibilityCondition | undefined {
-  if ('visible' in hint && hint.visible) {
-    return hint.visible;
-  }
-  return undefined;
-}
-
-/**
- * Build a visibility condition from an EditorBlock's visible field.
- */
-function buildBlockVisibilityCondition(
-  block: EditorBlock
-): VisibilityCondition | undefined {
-  return block.visible;
-}
 
 /**
  * Extract a display title from a record payload.
@@ -82,14 +56,14 @@ function projectBlocksFromEditorConfig(
   return editorConfig.blocks.map((block) => ({
     id: block.id,
     kind: block.kind,
-    label: block.label,
-    help: block.help,
     collapsible: block.collapsible ?? false,
     collapsed: block.collapsed ?? false,
-    path: block.path,
-    columns: block.columns,
-    visible: buildBlockVisibilityCondition(block),
-    slotIds: [], // Will be populated below
+    ...(block.label !== undefined && { label: block.label }),
+    ...(block.help !== undefined && { help: block.help }),
+    ...(block.path !== undefined && { path: block.path }),
+    ...(block.columns !== undefined && { columns: block.columns }),
+    ...(block.visible !== undefined && { visible: block.visible }),
+    slotIds: [],
   }));
 }
 
@@ -111,18 +85,16 @@ function projectSlotsFromEditorConfig(
     path: slot.path,
     label: slot.label,
     widget: slot.widget,
-    help: slot.help,
     required: slot.required ?? false,
-    readOnly: false, // Editor config doesn't specify readOnly
-    suggestionProviders: slot.suggestionProviders,
-    visible: buildVisibilityCondition(slot),
-    // Preserve combobox/ref semantics from slot metadata
-    // (sources, ontologies, field, refKind, options, etc.)
-    options: slot.options,
-    refKind: slot.refKind,
-    items: slot.items,
-    fields: slot.fields,
-    props: slot.props,
+    readOnly: false,
+    ...(slot.help !== undefined && { help: slot.help }),
+    ...(slot.suggestionProviders !== undefined && { suggestionProviders: slot.suggestionProviders }),
+    ...(slot.visible !== undefined && { visible: slot.visible }),
+    ...(slot.options !== undefined && { options: slot.options }),
+    ...(slot.refKind !== undefined && { refKind: slot.refKind }),
+    ...(slot.items !== undefined && { items: slot.items }),
+    ...(slot.fields !== undefined && { fields: slot.fields }),
+    ...(slot.props !== undefined && { props: slot.props }),
   }));
 }
 
@@ -136,8 +108,9 @@ function assignSlotsToBlocks(
 ): void {
   for (const block of blocks) {
     if (!block.path) continue;
+    const blockPath = block.path;
     block.slotIds = slots
-      .filter((slot) => slot.path.startsWith(block.path))
+      .filter((slot) => slot.path.startsWith(blockPath))
       .map((slot) => slot.id);
   }
 }
@@ -155,11 +128,11 @@ function projectBlocksFromFormSections(
   return sections.map((section, index) => ({
     id: section.id ?? `section-${index}`,
     kind: 'section' as EditorBlockKind,
-    label: section.title,
-    help: section.description,
     collapsible: section.collapsible ?? false,
     collapsed: section.collapsed ?? false,
-    visible: buildVisibilityCondition(section),
+    ...(section.title !== undefined && { label: section.title }),
+    ...(section.description !== undefined && { help: section.description }),
+    ...(section.visible !== undefined && { visible: section.visible }),
     slotIds: [],
   }));
 }
@@ -186,27 +159,27 @@ function projectSlotsFromFormSections(
       // Determine required state
       const required = field.required ?? false;
 
-      // Determine readOnly state (accept both readOnly and readonly)
-      const readOnly =
-        field.readOnly ?? field.readonly ?? false;
+      // Determine readOnly state
+      const readOnly = field.readOnly ?? false;
 
-      slots.push({
+      const slot: ProjectionSlot = {
         id: `slot-${field.path.replace(/\$/g, '').replace(/\./g, '_')}`,
         path: field.path,
         label: field.label ?? field.path,
         widget,
-        help: field.help,
-        placeholder: field.placeholder,
         required,
         readOnly,
-        defaultValue: field.defaultValue,
-        visible: buildVisibilityCondition(field),
-        options: field.options,
-        refKind: field.refKind,
-        items: field.items,
-        fields: field.fields,
-        props: field.props,
-      });
+      };
+      if (field.help !== undefined) slot.help = field.help;
+      if (field.placeholder !== undefined) slot.placeholder = field.placeholder;
+      if (field.defaultValue !== undefined) slot.defaultValue = field.defaultValue;
+      if (field.visible !== undefined) slot.visible = field.visible;
+      if (field.options !== undefined) slot.options = field.options;
+      if (field.refKind !== undefined) slot.refKind = field.refKind;
+      if (field.items !== undefined) slot.items = field.items;
+      if (field.fields !== undefined) slot.fields = field.fields;
+      if (field.props !== undefined) slot.props = field.props;
+      slots.push(slot);
     }
   }
 

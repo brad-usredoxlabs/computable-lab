@@ -1,7 +1,4 @@
-import { expect } from 'vitest';
-import * as matchers from '@testing-library/jest-dom/matchers';
-
-expect.extend(matchers);
+import '@testing-library/jest-dom/vitest';
 
 // jsdom doesn't implement elementFromPoint/caretRangeFromPoint, but the
 // TipTap @ProseMirror viewport-tracking plugin (used by the Placeholder

@@ -13,7 +13,7 @@ import { runChatbotCompile } from '../../../ai/runChatbotCompile.js';
 import type { Fixture, FixtureResult } from './FixtureTypes.js';
 import type { ExtractionRunnerService, RunExtractionServiceArgs } from '../../../extract/ExtractionRunnerService.js';
 import type { ExtractionDraftBody } from '../../../extract/ExtractionDraftBuilder.js';
-import type { FileAttachment } from '../../../ai/types.js';
+
 
 // Ensure pattern expanders are registered (side-effect import)
 import '../../../compiler/patterns/index.js';
@@ -28,9 +28,12 @@ import '../../../compiler/patterns/index.js';
 function buildTestExtractionService(): ExtractionRunnerService {
   return {
     run: async (_req: RunExtractionServiceArgs): Promise<ExtractionDraftBody> => ({
-      target_kind: _req.target_kind,
-      source: _req.source,
+      kind: 'extraction-draft',
+      recordId: `xdr-test-${Date.now()}`,
+      source_artifact: _req.source,
+      status: 'pending_review',
       candidates: [],
+      created_at: new Date().toISOString(),
       diagnostics: [],
     }),
   } as unknown as ExtractionRunnerService;

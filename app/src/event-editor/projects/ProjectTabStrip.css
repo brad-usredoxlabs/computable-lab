@@ -200,3 +200,52 @@
   align-items: center;
   margin-right: 2px;
 }
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .project-tab-strip {
+    align-items: center;
+  }
+
+  .project-tab {
+    gap: 4px;
+    padding: 2px 6px 3px;
+    max-width: 132px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+  }
+
+  .project-tab__label {
+    font-size: 11px;
+    max-width: 104px;
+  }
+
+  .project-tab__close {
+    display: none;
+  }
+
+  .project-tab__add,
+  .settings-menu-button__trigger,
+  .workspace-share-button__trigger {
+    width: 24px;
+    height: 22px;
+    font-size: 13px;
+  }
+
+  .project-tab__add {
+    margin-left: 2px;
+    font-size: 16px;
+  }
+
+  .project-tab-strip__spacer {
+    min-width: 4px;
+  }
+
+  .project-tab-strip .user-switcher {
+    display: none;
+  }
+
+  .settings-menu-button {
+    padding-right: 4px;
+  }
+}
+

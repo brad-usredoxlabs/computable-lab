@@ -48,7 +48,7 @@ vi.mock('./taptab/TapTabEditor', () => ({
   ProjectionTapTabEditor: () => <div data-testid="projection-taptab-editor" />,
 }))
 
-const mockClient = client.apiClient as ReturnType<typeof vi.mocked>
+const mockClient = vi.mocked(client.apiClient)
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -76,6 +76,7 @@ describe('RawRecordEditor — TapTab-first default', () => {
       recordId: 'rec-1',
       schemaId: 'test-schema',
       payload: { name: 'Test' },
+      meta: { kind: 'planned-run' },
     } as any)
     mockClient.getSchema.mockResolvedValue({
       schemaId: 'test-schema',

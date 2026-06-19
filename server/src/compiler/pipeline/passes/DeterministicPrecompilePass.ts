@@ -123,6 +123,7 @@ export interface DeterministicCompileIrAction {
     wavelengthNm?: number;
     integrationMs?: number;
     simulate?: boolean;
+    deckSlot?: string;
   };
   unresolvedReason?: ResidualClause['reason'];
 }
@@ -282,7 +283,7 @@ export function createDeterministicPrecompilePass(
             let lastLabwareHint: string | undefined;
             for (let i = candidateLabwares.length - 1; i >= 0; i--) {
               if (candidateLabwares[i]?.deckSlot) {
-                lastLabwareHint = candidateLabwares[i].hint;
+                lastLabwareHint = candidateLabwares[i]!.hint;
                 break;
               }
             }
@@ -630,25 +631,30 @@ async function runFromTags(
   };
 }
 
-function parametersFromTags(tags: MaterializedPromptTag[], sourceText = ''): DeterministicCompileIrAction['parameters'] {
+function parametersFromTags(_tags: MaterializedPromptTag[], sourceText = ''): DeterministicCompileIrAction['parameters'] {
   const deckSlotSpans = extractDeckSlotSpans(sourceText);
   if (deckSlotSpans.length > 0) {
-    const [start, end] = deckSlotSpans[0];
+    const [start, end] = deckSlotSpans[0]!;
     const slotName = sourceText.slice(start, end).trim();
     return { deckSlot: slotName };
   }
   // Check for bare deck slots (A-D + 1-4) that follow placement prepositions
   const bareDeckSlotSpans = extractBareDeckSlotSpans(sourceText);
   if (bareDeckSlotSpans.length > 0) {
-    const [start, end] = bareDeckSlotSpans[0];
+    const [start, end] = bareDeckSlotSpans[0]!;
     const slotName = sourceText.slice(start, end).trim();
     return { deckSlot: slotName };
   }
-  const wells = extractNonDeckSlotWells(sourceText);
+  const wells = extractNonDeckSlotWells(sourceText).flatMap((w) => w.wells);
   const volumes = extractVolumes(sourceText);
   const counts = extractCounts(sourceText);
   const durations = extractDurations(sourceText);
-  return { wells, volumes, counts, durations };
+  const params: DeterministicCompileIrAction['parameters'] = {};
+  if (wells.length > 0) params.wells = wells;
+  if (volumes.length > 0) params.volume_uL = volumes[0]!.value;
+  if (counts.length > 0) params.count = counts[0]!.value;
+  if (durations.length > 0) params.duration_seconds = durations[0]!.value_seconds;
+  return params;
 }
 
 function extractConcentrationParameters(text: string): Pick<
@@ -1385,7 +1391,7 @@ function inferBareDeckSlot(text: string): string | undefined {
   const lower = text.toLowerCase();
   const prepMatch = lower.match(/\b(?:on|onto|in|into|at|to)\b/);
   if (!prepMatch) return undefined;
-  const afterPrep = lower.slice(prepMatch.index + prepMatch[0].length);
+  const afterPrep = lower.slice(prepMatch.index! + prepMatch[0].length);
   const slotMatch = afterPrep.match(/^\s*([A-Da-d][1-4])\b/);
   if (slotMatch) return slotMatch[1]!.toUpperCase();
   return undefined;

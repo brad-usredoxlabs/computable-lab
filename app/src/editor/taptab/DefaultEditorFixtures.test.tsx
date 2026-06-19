@@ -18,32 +18,12 @@
  * No live network calls. No SchemaRecordForm fallback.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { serializeDocument, isDirty, buildProjectionDocument } from './index'
-import type { EditorProjectionResponse, ProjectionBlock, ProjectionSlot } from '../../types/uiSpec'
-
+import type { ProjectionBlock, ProjectionSlot } from '../../types/uiSpec'
 // ============================================================================
 // Shared helpers
 // ============================================================================
-
-/**
- * Build a minimal EditorProjectionResponse for a given schema.
- */
-function makeProjection(
-  schemaId: string,
-  recordId: string,
-  blocks: ProjectionBlock[],
-  slots: ProjectionSlot[],
-): EditorProjectionResponse {
-  return {
-    schemaId,
-    recordId,
-    title: `${schemaId} — ${recordId}`,
-    blocks,
-    slots,
-    diagnostics: [],
-  }
-}
 
 /**
  * Assert that a serialized payload contains expected top-level keys.
@@ -59,9 +39,6 @@ function expectPayload(payload: Record<string, unknown>, keys: string[]): void {
 // ============================================================================
 
 describe('Fixture: planned-run (composite widgets + conditional visibility)', () => {
-  const schemaId = 'planned-run'
-  const recordId = 'pr-001'
-
   const blocks: ProjectionBlock[] = [
     {
       id: 'b-identity',
@@ -228,9 +205,6 @@ describe('Fixture: planned-run (composite widgets + conditional visibility)', ()
 // ============================================================================
 
 describe('Fixture: experiment (structured refs via reflist)', () => {
-  const schemaId = 'experiment'
-  const recordId = 'exp-001'
-
   const blocks: ProjectionBlock[] = [
     {
       id: 'b-identity',
@@ -356,9 +330,6 @@ describe('Fixture: experiment (structured refs via reflist)', () => {
 // ============================================================================
 
 describe('Fixture: material (combobox suggestions + multiselect)', () => {
-  const schemaId = 'material'
-  const recordId = 'mat-001'
-
   const blocks: ProjectionBlock[] = [
     {
       id: 'b-identity',
@@ -496,9 +467,6 @@ describe('Fixture: material (combobox suggestions + multiselect)', () => {
 // ============================================================================
 
 describe('Fixture: instrument (primitive fields + readonly + datetime)', () => {
-  const schemaId = 'instrument'
-  const recordId = 'inst-001'
-
   const blocks: ProjectionBlock[] = [
     {
       id: 'b-identity',

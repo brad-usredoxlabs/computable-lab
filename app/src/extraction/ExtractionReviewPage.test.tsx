@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { ExtractionReviewPage } from './ExtractionReviewPage'
@@ -238,7 +238,6 @@ describe('ExtractionReviewPage', () => {
     )
 
     // Wait for the page to load within this container
-    const page = container.querySelector('.extraction-review')
     await waitFor(() => {
       expect(container.textContent).toContain('Extraction Review: XDR-test-003')
     })

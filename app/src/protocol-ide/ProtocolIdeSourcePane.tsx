@@ -24,7 +24,7 @@
 
 import { useEffect, useRef, type Ref } from 'react'
 import type { ProtocolIdeSession } from './types'
-import type { IngestionArtifactRecord, IngestionIssueRecord } from '../../types/ingestion'
+import type { IngestionArtifactRecord, IngestionIssueRecord } from '../types/ingestion'
 
 // ---------------------------------------------------------------------------
 // Evidence model types — shared between pane and graph nodes / issue cards
@@ -110,7 +110,7 @@ export interface ProtocolIdeSourcePaneProps {
  * This is the shared model that graph nodes and issue cards consume.
  */
 export function buildEvidenceModel(
-  session: ProtocolIdeSession,
+  _session: ProtocolIdeSession,
   artifacts: IngestionArtifactRecord[] = [],
   citations: EvidenceCitation[] = [],
 ): EvidenceModel {

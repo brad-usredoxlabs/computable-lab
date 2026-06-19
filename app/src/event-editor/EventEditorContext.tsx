@@ -54,6 +54,7 @@ export interface EventEditorGraphLemurIngestSummary {
 export interface EventEditorGraphLemurSource {
   sourceProtocolCandidate?: AiProtocolCandidateSummary
   sourcePdf?: AiSourcePdfSummary
+  implementationContext?: string
   ingest?: EventEditorGraphLemurIngestSummary
 }
 

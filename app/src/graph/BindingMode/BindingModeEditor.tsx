@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { apiClient } from '../../shared/api/client'
 import type { RecordEnvelope } from '../../types/kernel'
-import type { PlatformManifest } from '../../types/platformRegistry'
+import type { Labware } from '../../types/labware'
 import { usePlatformRegistry } from '../../shared/hooks/usePlatformRegistry'
 import { DeckVisualizationPanel, type DeckPlacement } from '../labware/DeckVisualizationPanel'
 import { DeckPickerSelect } from './DeckPickerSelect'
@@ -74,7 +74,7 @@ interface BindingChange {
 
 export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
   const { runId: routeId } = useParams<{ runId: string }>()
-  const id = plannedRunId || routeId
+  const id = (plannedRunId || routeId)!
 
   const [plannedRun, setPlannedRun] = useState<RecordEnvelope | null>(null)
   const [localProtocol, setLocalProtocol] = useState<RecordEnvelope | null>(null)
@@ -91,7 +91,7 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
   // Compile state
   const [compileResult, setCompileResult] = useState<RunPlanCompileResult | null>(null)
   const [isCompiling, setIsCompiling] = useState(false)
-  const [compileError, setCompileError] = useState<string | null>(null)
+  const [_compileError, setCompileError] = useState<string | null>(null)
   const [lastEditAt, setLastEditAt] = useState<number | null>(null)
 
   // Debounced binding changes
@@ -109,7 +109,7 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
         if (!active) return
         setPlannedRun(pr)
 
-        const prPayload = pr.payload as PlannedRunPayload
+        const prPayload = pr.payload as unknown as PlannedRunPayload
         if (prPayload.deckPlatformId) {
           setCurrentPlatformId(prPayload.deckPlatformId)
         }
@@ -151,7 +151,7 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
   // Build current bindings from planned-run
   const currentBindings = useMemo<Record<string, { instanceRef: string }>>(() => {
     if (!plannedRun) return {}
-    const prPayload = plannedRun.payload as PlannedRunPayload
+    const prPayload = plannedRun.payload as unknown as PlannedRunPayload
     const bindings: Record<string, { instanceRef: string }> = {}
     const lwBindings = prPayload.bindings?.labware ?? []
     for (const b of lwBindings) {
@@ -170,11 +170,11 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
 
   // Roles from local-protocol
   const labwareRoles = useMemo(
-    () => ((localProtocol?.payload as LocalProtocolPayload)?.labwareRoles ?? []),
+    () => ((localProtocol?.payload as unknown as LocalProtocolPayload)?.labwareRoles ?? []),
     [localProtocol],
   )
   const materialRoles = useMemo(
-    () => ((localProtocol?.payload as LocalProtocolPayload)?.materialRoles ?? []),
+    () => ((localProtocol?.payload as unknown as LocalProtocolPayload)?.materialRoles ?? []),
     [localProtocol],
   )
 
@@ -249,7 +249,7 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
       setIsCompiling(true)
       try {
         const result = await apiClient.compileRunPlan(id)
-        setCompileResult(result)
+        setCompileResult(result as RunPlanCompileResult)
         setCompileError(null)
       } catch (err) {
         setCompileError(err instanceof Error ? err.message : String(err))
@@ -282,11 +282,11 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
   if (error) return <div className="binding-mode-editor binding-mode-editor--error">{error}</div>
   if (!plannedRun) return <div className="binding-mode-editor">Planned-run not found</div>
 
-  const prPayload = plannedRun.payload as PlannedRunPayload
+  const prPayload = plannedRun.payload as unknown as PlannedRunPayload
   const title = prPayload.title || 'Untitled Plan'
 
   // Extract labContext from local-protocol notes
-  const localProtocolPayload = localProtocol?.payload as LocalProtocolPayload | undefined
+  const localProtocolPayload = localProtocol?.payload as unknown as LocalProtocolPayload | undefined
   const labContext = extractLabContextFromNotes(localProtocolPayload?.notes)
 
   return (
@@ -316,8 +316,8 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
         {/* Left: Role bindings */}
         <div className="binding-mode-editor__sidebar">
           <RoleBindingPanel
-            labwareRoles={labwareRoles}
-            materialRoles={materialRoles}
+            labwareRoles={labwareRoles.map(r => ({ ...r, roleType: r.roleType ?? '' }))}
+            materialRoles={materialRoles.map(r => ({ ...r, roleType: r.roleType ?? '' }))}
             currentBindings={currentBindings}
             labwareInstances={labwareInstances}
             materialInstances={materialInstances}
@@ -326,7 +326,7 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
           />
           <SampleBindingPanel
             plannedRunId={id}
-            sampleCount={labContext?.sampleCount ?? 96}
+            sampleCount={Number(labContext?.sampleCount ?? 96)}
             currentSampleMap={prPayload.sampleMap?.entries}
             onChange={() => setLastEditAt(Date.now())}
           />
@@ -339,7 +339,7 @@ export function BindingModeEditor({ plannedRunId }: BindingModeEditorProps) {
               platform={currentPlatformId}
               variant=""
               platforms={platforms}
-              labwares={deckLabwares}
+              labwares={deckLabwares as Labware[]}
               placements={deckPlacements}
               onPlatformChange={handlePlatformChange}
               onVariantChange={() => {}}

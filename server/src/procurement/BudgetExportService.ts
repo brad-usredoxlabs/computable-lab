@@ -68,8 +68,8 @@ export class BudgetExportService {
         // Parse vendor info from the offer ref (format: "vendor:catalogNumber" or similar)
         const parts = selectedOfferRef.split(':');
         if (parts.length >= 2) {
-          vendorName = parts[0];
-          vendorLink = `https://example.com/vendor/${parts[0]}/product/${parts[1]}`;
+          vendorName = parts[0] ?? null;
+          vendorLink = `https://example.com/vendor/${parts[0] ?? ''}/product/${parts[1] ?? ''}`;
         }
       }
 

@@ -18,9 +18,9 @@ import type { AiPrecompileOutput } from '../passes/ChatbotCompilePasses.js';
 
 export interface FixtureInput {
   prompt: string;
-  attachments?: Array<{ filename: string; mimeType: string; content: string }>;
-  history?: Array<{ role: 'user' | 'assistant'; content: string }>;
-  conversationId?: string;
+  attachments?: Array<{ filename: string; mimeType: string; content: string }> | undefined;
+  history?: Array<{ role: 'user' | 'assistant'; content: string }> | undefined;
+  conversationId?: string | undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -38,7 +38,7 @@ export interface FixtureExpected {
 
 export interface Fixture {
   name: string;
-  description?: string;
+  description?: string | undefined;
   input: FixtureInput;
   /**
    * Replaces the LLM-backed ai_precompile pass with these candidate
@@ -46,14 +46,14 @@ export interface Fixture {
    * skipped when `deterministicOnly: true` (the deterministic precompile
    * does the work).
    */
-  mocked_ai_precompile_output?: AiPrecompileOutput;
+  mocked_ai_precompile_output?: AiPrecompileOutput | undefined;
   /**
    * When true, the runner sets deterministicOnly on runChatbotCompile so the
    * deterministic precompile is the only source of candidate events/labwares.
    * Used by event-editor fix-it fixtures that capture "this prompt should
    * produce that ghost preview without any LLM in the loop."
    */
-  deterministicOnly?: boolean;
+  deterministicOnly?: boolean | undefined;
   expected: FixtureExpected;
 }
 

@@ -47,3 +47,4 @@ export * from './OntologyTermHandlers.js';
 export * from './VerbActionMapHandlers.js';
 export * from './FoundryJobHandlers.js';
 export * from './MaterialProfileHandlers.js';
+export * from './ExtractProtocolHandler.js';

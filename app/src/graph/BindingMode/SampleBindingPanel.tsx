@@ -33,7 +33,6 @@ function lastWellLabel(count: number): string {
 export function SampleBindingPanel({
   plannedRunId,
   sampleCount,
-  currentSampleMap,
   onChange,
 }: SampleBindingPanelProps) {
   const [mode, setMode] = useState<'implicit' | 'csv'>('implicit')

@@ -15,9 +15,9 @@ export interface ExtractionCandidate {
   ambiguity_spans?: Array<{
     path: string;                 // JSON-path into draft; matches extraction-draft schema (spec-035)
     reason: string;               // e.g., "material name matched 3 records"
-  }>;
-  evidence_span?: string;         // verbatim text slice from source proving the claim
-  uncertainty?: 'low' | 'medium' | 'high' | 'unresolved' | 'inferred'; // reviewer-facing uncertainty bucket
+  }> | undefined;
+  evidence_span?: string | undefined;         // verbatim text slice from source proving the claim
+  uncertainty?: 'low' | 'medium' | 'high' | 'unresolved' | 'inferred' | undefined; // reviewer-facing uncertainty bucket
 }
 
 /**

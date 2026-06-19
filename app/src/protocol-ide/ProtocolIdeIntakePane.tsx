@@ -25,7 +25,6 @@
 import { useState, useCallback, useRef } from 'react'
 import type {
   ProtocolIdeSourceMode,
-  ProtocolIdeSession,
 } from './types'
 
 // ---------------------------------------------------------------------------
@@ -231,6 +230,7 @@ export function ProtocolIdeIntakePane({
         return
       }
 
+      // Build the intake payload
       let source: IntakePayload['source']
 
       switch (activeMode) {
@@ -261,23 +261,22 @@ export function ProtocolIdeIntakePane({
         case 'upload': {
           if (!uploadedFile) return
           // Read the file as a data URL, strip the prefix, and include base64 bytes
-          const reader = new FileReader()
-          await new Promise<void>((resolve, reject) => {
+          const contentBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader()
             reader.onload = () => {
               const result = reader.result?.toString() ?? ''
-              const contentBase64 = result.split(',')[1] ?? ''
-              source = {
-                sourceKind: 'uploaded_pdf',
-                uploadId: `upload-${Date.now().toString(36)}`,
-                fileName: uploadedFile.name,
-                mediaType: uploadedFile.type || 'application/pdf',
-                contentBase64,
-              }
-              resolve()
+              resolve(result.split(',')[1] ?? '')
             }
             reader.onerror = reject
             reader.readAsDataURL(uploadedFile)
           })
+          source = {
+            sourceKind: 'uploaded_pdf',
+            uploadId: `upload-${Date.now().toString(36)}`,
+            fileName: uploadedFile.name,
+            mediaType: uploadedFile.type || 'application/pdf',
+            contentBase64,
+          }
           break
         }
 

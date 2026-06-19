@@ -4,7 +4,6 @@
  */
 
 import { useState } from 'react';
-import type { WidgetType } from '../types';
 
 export interface ReflistEntry {
   value: string;
@@ -20,7 +19,7 @@ export interface ReflistEntry {
 
 export interface ReflistWidgetProps {
   value: unknown;
-  widget: WidgetType;
+  widget: import('../types').WidgetType;
   refKind: string | undefined;
   readOnly: boolean;
   onCommit: (newValue: unknown) => void;
@@ -56,10 +55,10 @@ function parseReflistValue(value: unknown): ReflistEntry[] {
 export function ReflistWidget({
   value,
   widget,
-  refKind,
+  refKind: _refKind,
   readOnly,
   onCommit,
-  onRefSelect,
+  onRefSelect: _onRefSelect,
 }: ReflistWidgetProps) {
   const [editing, setEditing] = useState(false);
   const entries = parseReflistValue(value);

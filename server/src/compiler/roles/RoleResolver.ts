@@ -94,7 +94,7 @@ function expandCellRegion(ctx: RoleResolutionContext): string[] {
  * Expand perturbant_col_N to concrete well addresses.
  * Rows B-G in the specified column.
  */
-function perturbantCol(n: number, ctx: RoleResolutionContext): string[] {
+function perturbantCol(n: number, _ctx: RoleResolutionContext): string[] {
   const rows = ['B', 'C', 'D', 'E', 'F', 'G'];
   return rows.map(r => `${r}${n}`);
 }

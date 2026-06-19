@@ -14,16 +14,24 @@ import { VocabSwitcher } from '../../topbar/VocabSwitcher'
 import { ToolSwitcher } from '../../topbar/ToolSwitcher'
 import { TipChip } from '../../topbar/TipChip'
 import { EventGraphChip } from '../../topbar/EventGraphChip'
+import { useEventEditor } from '../../EventEditorContext'
 
 export function DeckToolbar() {
+  const { state } = useEventEditor()
+  const runDeckLocked = state.runDeckLock?.locked === true
+
   return (
     // `event-editor` scopes the chip/undo/tip/graph styles, which are written
     // as `.event-editor .x`. The workspace AppShell doesn't add that scope to
     // the toolbar slot, so (mirroring DeckViewer) we self-scope here.
     <div className="event-editor viewer-toolbar viewer-toolbar--deck">
       <UndoRedoControls />
-      <DeckModeSwitcher />
-      <VocabSwitcher />
+      {!runDeckLocked ? (
+        <>
+          <DeckModeSwitcher />
+          <VocabSwitcher />
+        </>
+      ) : null}
       <ToolSwitcher />
       <TipChip />
       <EventGraphChip />

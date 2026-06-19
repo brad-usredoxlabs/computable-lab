@@ -69,6 +69,7 @@ import {
   createVerbActionMapHandlers,
   createFoundryJobHandlers,
   createMaterialProfileHandlers,
+  createExtractProtocolHandlers,
 } from './api/handlers/index.js';
 import { createResolveSpine, createResolveSpineFromContext, resolveOakServiceUrl } from './resolve/index.js';
 import { buildResidentContext } from './ai/residentContext.js';
@@ -608,6 +609,7 @@ export async function createServer(
   const materialPrepHandlers = createMaterialPrepHandlers(ctx.store, ctx.indexManager);
   const materialLifecycleHandlers = createMaterialLifecycleHandlers(ctx.store, ctx.indexManager, ctx.lifecycleEngine);
   const materialProfileHandlers = createMaterialProfileHandlers(ctx.materialProfileRegistry, ctx.store);
+  const extractProtocolHandlers = createExtractProtocolHandlers(ctx.workspaceRoot);
   const semanticsHandlers = createSemanticsHandlers(ctx);
   const runWorkspaceHandlers = createRunWorkspaceHandlers(ctx);
   const runContextAssembler = new RunContextAssembler(ctx.store);
@@ -1100,6 +1102,7 @@ export async function createServer(
       materialPrepHandlers,
       materialLifecycleHandlers,
       materialProfileHandlers,
+      extractProtocolHandlers,
       semanticsHandlers,
       runWorkspaceHandlers,
       runDraftHandlers,

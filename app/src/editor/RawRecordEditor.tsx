@@ -8,8 +8,7 @@ import { apiClient } from '../shared/api/client'
 import { ApiError, NetworkError } from '../shared/api/errors'
 import { DiagnosticsPanel } from './DiagnosticsPanel'
 import { SchemaRecordForm } from './forms/SchemaRecordForm'
-import { TapTabEditor, serializeDocument, isDirty } from './taptab'
-import { ProjectionTapTabEditor } from './taptab/TapTabEditor'
+import { serializeDocument, isDirty, ProjectionTapTabEditor } from './taptab'
 import type { TapTabEditorHandle } from './taptab'
 import type {
   RecordEnvelope,

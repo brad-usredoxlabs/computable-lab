@@ -87,6 +87,12 @@ export interface AiPipelineDiagnosticsEvent {
   diagnostics: AiPipelineDiagnostic[]
 }
 
+export interface AiProtocolExtractedEvent {
+  type: 'protocol_extracted'
+  candidate: AiProtocolCandidateSummary
+  sourcePdf?: AiSourcePdfSummary
+}
+
 export type AiStreamEvent =
   | AiStatusEvent
   | AiToolCallEvent
@@ -97,6 +103,7 @@ export type AiStreamEvent =
   | AiPipelineDiagnosticsEvent
   | AiDoneEvent
   | AiErrorEvent
+  | AiProtocolExtractedEvent
 
 // =============================================================================
 // Agent Result (final output from AI)
@@ -511,9 +518,10 @@ export type AiGraphLemurRevisionEntry = AiDraftRevisionEntry
 export interface AiGraphLemurContext {
   sourceProtocolCandidate?: AiProtocolCandidateSummary
   sourcePdf?: AiSourcePdfSummary
+  implementationContext?: string
+  revisionMode?: boolean
   currentPreviewDraft?: AiCurrentPreviewDraft
   revisionHistory?: AiGraphLemurRevisionEntry[]
-  revisionMode?: boolean
 }
 
 export interface AiRequestContext {

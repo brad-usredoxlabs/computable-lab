@@ -269,12 +269,13 @@ function buildEvidenceCitationsFromComment(
 ): EvidenceCitation[] {
   const citations: EvidenceCitation[] = [];
 
-  if (comment.sourceAnchor) {
-    citations.push({
-      sourceRef: comment.sourceAnchor.sourceRef,
-      snippet: comment.sourceAnchor.snippet,
-      page: comment.sourceAnchor.page,
-    });
+  for (const anchor of comment.anchors) {
+    if (anchor.kind === 'source') {
+      citations.push({
+        sourceRef: anchor.documentRef,
+        page: anchor.page,
+      });
+    }
   }
 
   return citations;
@@ -340,18 +341,20 @@ function generateUserCards(
       full_body: comment.body,
     });
 
-    cards.push({
+    // Extract graph anchor from node anchors
+    const nodeAnchor = comment.anchors.find((a) => a.kind === 'node');
+
+    const card: IssueCard = {
       id: generateIssueCardId(),
       title: rendered.title,
       body: rendered.body,
       origin: 'user',
       evidenceCitations: buildEvidenceCitationsFromComment(comment),
-      graphAnchor: comment.graphAnchor
-        ? { nodeId: comment.graphAnchor.nodeId, label: comment.graphAnchor.label }
-        : undefined,
-      suggestedChange: rendered.suggestedChange,
       generatedAt: new Date().toISOString(),
-    });
+      ...(nodeAnchor ? { graphAnchor: { nodeId: nodeAnchor.semanticKey, label: nodeAnchor.semanticKey } } : {}),
+      ...(rendered.suggestedChange ? { suggestedChange: rendered.suggestedChange } : {}),
+    };
+    cards.push(card);
   }
 
   return cards;
@@ -541,7 +544,7 @@ export class ProtocolIdeIssueCardService {
 
     // Replace the current card set on the session
     const updatedPayload = {
-      ...envelope.payload,
+      ...(envelope.payload as Record<string, unknown>),
       issueCards: allCards,
     };
 
@@ -616,7 +619,7 @@ export class ProtocolIdeIssueCardService {
     }
 
     const updatedPayload = {
-      ...envelope.payload,
+      ...(envelope.payload as Record<string, unknown>),
       issueCards: cards,
     };
 

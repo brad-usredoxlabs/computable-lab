@@ -3117,6 +3117,13 @@
 
 .event-editor .well-grid {
   display: block;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.event-editor .well-grid * {
+  touch-action: none;
 }
 
 .event-editor .well-grid__frame {
@@ -5433,3 +5440,92 @@
   margin-top: 4px;
   font-size: 11px;
 }
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .viewer-toolbar {
+    min-height: 26px;
+    gap: 4px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  .viewer-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .event-editor .chip,
+  .event-editor .chip-select {
+    padding: 2px 6px;
+    font-size: 11px;
+  }
+
+  .event-editor .chip-select select {
+    max-width: 128px;
+  }
+
+  .event-editor .graph-chip {
+    min-height: 24px;
+    max-width: 124px;
+    padding: 0 7px;
+    font-size: 11px;
+  }
+
+  .event-editor .stage {
+    padding: 6px;
+  }
+
+  .event-editor .deck__title {
+    display: none;
+  }
+
+  .event-editor .focus {
+    align-items: stretch;
+    justify-content: stretch;
+    padding: 0;
+    background: var(--cl-bg);
+    backdrop-filter: none;
+  }
+
+  .event-editor .focus__canvas {
+    flex: 1;
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .event-editor .focus__header {
+    gap: 6px;
+    min-height: 30px;
+    padding: 3px 6px;
+  }
+
+  .event-editor .focus__icon,
+  .event-editor .focus__meta,
+  .event-editor .focus__footer,
+  .event-editor .focus__legend {
+    display: none;
+  }
+
+  .event-editor .focus__name {
+    font-size: 12px;
+  }
+
+  .event-editor .focus__btn {
+    padding: 3px 6px;
+    font-size: 11px;
+    border-radius: 4px;
+  }
+
+  .event-editor .focus__stage {
+    flex: 1;
+    width: 100%;
+    padding: 0;
+    overflow: hidden;
+  }
+}
+

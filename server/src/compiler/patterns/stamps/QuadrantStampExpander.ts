@@ -32,7 +32,7 @@ export const quadrantStampExpander: PatternExpander = {
     const toHint = event.toLabwareHint ?? '';
     const events: PlateEventPrimitive[] = [];
     const perPosition = event.perPosition ?? {};
-    const volumeUl = (event as Record<string, unknown>).volumeUl as number | undefined ?? 0;
+    const volumeUl = (event as unknown as Record<string, unknown>).volumeUl as number | undefined ?? 0;
     let counter = 0;
 
     for (let sr = 0; sr < SOURCE_ROWS.length; sr++) {

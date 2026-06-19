@@ -25,8 +25,6 @@ const VENDOR_DISPLAY_NAMES: Record<VendorName, string> = {
   thomas: 'Thomas Scientific',
 }
 
-const VENDOR_SEARCH_VENDORS: VendorName[] = ['thermo', 'sigma', 'fisher', 'vwr', 'cayman', 'thomas']
-
 interface VendorProductBuilderModalProps {
   isOpen: boolean
   onClose: () => void

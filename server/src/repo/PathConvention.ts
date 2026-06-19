@@ -78,7 +78,7 @@ const RECORD_ID_PATTERNS = [
  * @param text - Text to slugify
  * @returns URL-safe slug
  */
-export function slugify(text: string): string {
+function slugify(text: string): string {
   return text
     .toLowerCase()
     .trim()
