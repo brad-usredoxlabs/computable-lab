@@ -1,10 +1,20 @@
-# Top 10 Principles of Computable-Lab
+# Foundational Principles of Computable-Lab
 
 > The foundational principles that distinguish computable-lab from laboratory information management hacks. These principles govern how the system is designed, how data is captured, and how the AI reasons over experimental knowledge.
 
 **Last Updated:** 2026-06-19
 **Author:** Brad (computable-lab founder)
 **Status:** Canonical — these are the principles that define the project.
+
+---
+
+## The Problem We're Solving
+
+Instrument vendors capture data but lock it into proprietary software. One license. One user. One physical computer. The data exists, but the user cannot express their freedom to analyze it, share it, or connect it to other experiments. This is a 1990s licensing strategy carried into the AI era.
+
+Computable-lab is the alternative: **your data, your ontology, your knowledge layer**. Not trapped in binary files behind a paywall. Not siloed by vendor ecosystem. The data belongs to the scientist, expressed in open formats, queryable by AI, portable across instruments.
+
+These principles exist because biology is complicated, and vendor software treats it like a CSV export.
 
 ---
 
@@ -40,15 +50,19 @@ Data (YAML) → Schema (YAML) → Lint (YAML) → Code reads all three → Creat
 
 Data files must be readable by both humans AND computers. Schemas, lint specs, UI specs, configuration, records — all YAML. Human-readable. Machine-parsable. No binary configs. If it can be expressed as data, it must be expressed as data.
 
-## 8. The Hard Boundary: Never Hardcode
+## 8. Data Sovereignty Over Vendor Lock-in
+
+Your experimental data belongs to you, not to a vendor's software ecosystem. Proprietary formats trap data in silos — one license, one user, one machine. Computable-lab liberates data: open YAML records, portable across instruments, queryable without paywalls. The system ingests from vendor software (pyLabRobot bridges the gap) but exports to open formats. The scientist controls the data, not the license manager.
+
+## 9. The Hard Boundary: Never Hardcode
 
 If the system can fake something by hardcoding it, that is a hard stop. The system MUST work if all hardcoded values are instantly ripped out. No passwords, no API keys, no test data, no stub responses, no mock configurations baked into code. The AI stops and asks the user — it does NOT fabricate.
 
-## 9. Code Creates Records, Records Are Linted
+## 10. Code Creates Records, Records Are Linted
 
 The pipeline: Data → Schema → Lint → Code reads all three → Creates records → Lints records. Code never validates business logic — it follows rules declared in data files. Ajv is the single validation authority. No fake validation, no runtime Ajv mutation.
 
-## 10. Schema-Driven Design
+## 11. Schema-Driven Design
 
 Every record type has three YAML specs: schema (structural validation), lint (business rules), UI (rendering hints). Before editing TypeScript, identify what belongs in schema/lint/UI specs. Specs first, code second. No hard-coded domain logic in TypeScript. No schema-name branching. No inline business rules.
 
@@ -98,6 +112,7 @@ The conditioned medium **is** the context. You can't describe the material witho
 4. **Follow the declarative/imperative split** — business logic in lint YAML
 5. **Stop and ask the user** when missing configuration — never fabricate
 6. **Propose evidence** by referencing complete context: "supports assertion because context contains all necessary components for [role] and measurement shows [quantitative result]"
+7. **Liberate data from vendor lock-in** — ingest from proprietary formats, export to open YAML, keep the scientist in control
 
 ---
 
