@@ -41,6 +41,18 @@ The backend resolves `schema/` and `records/` relative to `APP_BASE_PATH` (defau
 
 The substance of computable-lab is the **knowledge layer**: a plate sets the *biological context* for a scientist's *assertions* about *globally reusable claims*; a plate read produces *evidence* that supports or refutes those assertions in that context.
 
+### The "Computable Lab Way" — Controls Are Contexts, Not Chemicals
+
+A positive control is NOT a chemical. It is a **complete biological system in a specific state**. Rotenone does not create ROS in a vacuum. It requires: viable cells + functional mitochondria + culture medium + perturbation + detection method. The knowledge layer captures WHY a control works, not WHERE it sits.
+
+- **Context** = biological state (cells + medium + perturbation + detection)
+- **Context-Role** = reusable role properties (e.g., "positive-control" requires: living system + functional target machinery + known perturbation + detection method)
+- **Assertion** = "This context produces [effect]" with scope and predicted outcome
+- **Measurement-Context** = how we read it (plate, instrument, channel)
+- **Evidence** = post-read: supports/refutes assertion with quantitative data
+
+Remove any component (dead cells, broken ETC, no detection) → no longer a control. When the AI proposes evidence, it must reference the complete context: "supports assertion because context contains all necessary components for [role] and measurement shows [quantitative result]." Not well positions — the full context graph.
+
 Before authoring or editing anything that touches `claim`, `context`, `context-role`, `assertion`, `evidence`, `mechanism-model`, or `experiment-narrative` records — or any UI/orchestration that drives them — read `docs/knowledge-layer-canonical-example.md`. It works the PPARα → ROS hypothesis through the full record graph and pins down the model that conflates easily otherwise (claim ≠ context ≠ assertion; mechanism chains live in `mechanism-model`, not as nested claims; context-roles are reusable records with optional machine-checkable prerequisites).
 
 ## Backend Architecture (server/)
