@@ -7,9 +7,9 @@ import {
   singleActiveFormulationPayload,
 } from './materialSavePayload'
 import type { CompositionEntryValue } from '../../../types/material'
-import type { OLSResultRef } from '../../../shared/api/olsClient'
+import type { ResolveRef } from '../../../shared/api/resolveUtil'
 
-const chebi: OLSResultRef = { kind: 'ontology', id: 'CHEBI:5001', namespace: 'CHEBI', label: 'fenofibrate', uri: 'http://x/CHEBI_5001' }
+const chebi: ResolveRef = { kind: 'ontology', id: 'CHEBI:5001', namespace: 'CHEBI', label: 'fenofibrate', uri: 'http://x/CHEBI_5001' }
 
 describe('materialConceptPayload', () => {
   it('builds the material concept record, omitting empty class/tags', () => {

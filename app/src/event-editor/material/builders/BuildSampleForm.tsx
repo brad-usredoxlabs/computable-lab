@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiClient } from '../../../shared/api/client'
-import type { OLSResultRef } from '../../../shared/api/olsClient'
+import type { ResolveRef } from '../../../shared/api/resolveUtil'
 import {
   MATERIAL_SCHEMA_ID,
   generateMaterialId,
@@ -43,16 +43,16 @@ const DERIVATION_TYPES = [
 type DerivationType = typeof DERIVATION_TYPES[number]['value']
 
 export interface BuildSampleFormProps {
-  seedOntologyRef?: OLSResultRef
+  seedOntologyRef?: ResolveRef
   onSaved: (next: PickedMaterial) => void
   onCancel: () => void
   onError: (message: string) => void
 }
 
-function classifySeed(seed?: OLSResultRef): {
-  organism?: OLSResultRef
-  tissue?: OLSResultRef
-  classRefs: OLSResultRef[]
+function classifySeed(seed?: ResolveRef): {
+  organism?: ResolveRef
+  tissue?: ResolveRef
+  classRefs: ResolveRef[]
 } {
   if (!seed) return { classRefs: [] }
   const ns = seed.namespace.toUpperCase()
@@ -72,9 +72,9 @@ export function BuildSampleForm({
   const seed = classifySeed(seedOntologyRef)
   const [name, setName] = useState('')
   const [derivationType, setDerivationType] = useState<DerivationType>('cdna_prep')
-  const [organism, setOrganism] = useState<OLSResultRef | null>(seed.organism ?? null)
-  const [tissue, setTissue] = useState<OLSResultRef | null>(seed.tissue ?? null)
-  const [extraRefs, setExtraRefs] = useState<OLSResultRef[]>(
+  const [organism, setOrganism] = useState<ResolveRef | null>(seed.organism ?? null)
+  const [tissue, setTissue] = useState<ResolveRef | null>(seed.tissue ?? null)
+  const [extraRefs, setExtraRefs] = useState<ResolveRef[]>(
     // Avoid double-listing the organism/tissue in the multi-ref slot.
     seed.classRefs.filter((r) => r !== seed.organism && r !== seed.tissue),
   )

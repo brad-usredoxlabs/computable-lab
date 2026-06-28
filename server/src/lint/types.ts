@@ -234,7 +234,7 @@ export interface LintRule {
   /** Rule severity */
   severity: LintSeverity;
   /** Scope of rule application */
-  scope: LintScope;
+  scope?: LintScope;
   /** Schema this rule applies to (if specific) */
   schemaId?: string;
   /** Optional condition for when rule applies */

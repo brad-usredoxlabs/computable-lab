@@ -14,6 +14,7 @@ export type AiSurface =
   | 'ingestion'
   | 'literature'
   | 'protocol-ide'
+  | 'protocol-builder'
   | 'browser'
 
 export interface AiContext {

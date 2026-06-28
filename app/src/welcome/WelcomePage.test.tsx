@@ -4,10 +4,10 @@
  *  - empty open-studies → renders the welcome-page-empty hint
  *  - non-empty → renders one welcome-card per recent study
  *  - clicking a card navigates to `/project/<studyId>`
- *  - "Open all projects" toggles the StudyPickerPopover
+ *  - "Search Projects" toggles the StudyPickerPopover
  *
  * The picker's keyboard/search behavior has its own focused test file;
- * here we just verify it MOUNTS when "Open all projects" is clicked.
+ * here we just verify it MOUNTS when "Search Projects" is clicked.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,6 +22,7 @@ import {
 vi.mock('../shared/api/client', () => ({
   apiClient: {
     listRecordsByKind: vi.fn(async () => ({ records: [], total: 0 })),
+    searchProjects: vi.fn(async () => ({ studies: [], total: 0 })),
   },
 }))
 
@@ -66,7 +67,7 @@ describe('WelcomePage', () => {
   it('renders the empty hint when no open studies', () => {
     renderWelcome()
     expect(screen.getByTestId('welcome-page-empty')).toBeTruthy()
-    expect(screen.getByTestId('welcome-page-open-all')).toBeTruthy()
+    expect(screen.getByTestId('welcome-page-search')).toBeTruthy()
   })
 
   it('renders a card per open study', () => {
@@ -87,10 +88,10 @@ describe('WelcomePage', () => {
     )
   })
 
-  it('"Open all projects" mounts the StudyPickerPopover', () => {
+  it('"Search Projects" mounts the StudyPickerPopover', () => {
     renderWelcome()
     expect(screen.queryByTestId('study-picker-popover')).toBeNull()
-    fireEvent.click(screen.getByTestId('welcome-page-open-all'))
+    fireEvent.click(screen.getByTestId('welcome-page-search'))
     expect(screen.getByTestId('study-picker-popover')).toBeTruthy()
   })
 })

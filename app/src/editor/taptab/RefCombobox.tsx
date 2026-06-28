@@ -116,13 +116,13 @@ export function RefCombobox({
     // Ontology results
     ...ontologyResults.map((r): CombinedResult => ({
       type: 'ontology',
-      value: r.label,
+      value: r.curie,
       label: r.label,
-      iri: r.iri,
-      definition: r.description?.[0],
-      synonyms: r.synonyms,
-      ontology: r.ontology_name,
-      oboId: r.obo_id,
+      iri: r.uri,
+      definition: r.definition,
+      synonyms: undefined,
+      ontology: r.namespace,
+      oboId: r.curie,
     })),
   ];
 
@@ -385,32 +385,32 @@ export function RefCombobox({
     }
 
     // Add ontology results
-    for (let i = 0; i < ontologyCount; i++) {
-      const result = ontologyResults[i];
-      const resultIndex = localCount + i;
-      // Find the display index for this ontology result
-      const displayIndex = dropdownItems.findIndex((item) => item.kind === 'result' && item.resultIndex === resultIndex);
-      
-      items.push(
-        <li
-          key={`ontology-${result.obo_id || result.iri}`}
-          className={`result-item ${displayIndex === highlightIndex ? 'highlighted' : ''}`}
-          data-type="ontology"
-          onClick={() => handleOptionSelect(result.label, 'ontology', {
-            label: result.label,
-            iri: result.iri,
-            definition: result.description?.[0],
-            synonyms: result.synonyms,
-            ontology: result.ontology_name,
-            oboId: result.obo_id,
-          })}
-          onMouseDown={handleMouseDown}
-        >
-          <span className="result-label">{result.label}</span>
-          {result.iri && <span className="ontology-iri">{result.iri}</span>}
-        </li>
-      );
-    }
+     for (let i = 0; i < ontologyCount; i++) {
+       const result = ontologyResults[i];
+       const resultIndex = localCount + i;
+       // Find the display index for this ontology result
+       const displayIndex = dropdownItems.findIndex((item) => item.kind === 'result' && item.resultIndex === resultIndex);
+
+       items.push(
+         <li
+           key={`ontology-${result.curie || result.uri}`}
+           className={`result-item ${displayIndex === highlightIndex ? 'highlighted' : ''}`}
+           data-type="ontology"
+           onClick={() => handleOptionSelect(result.label, 'ontology', {
+             label: result.label,
+             iri: result.uri,
+             definition: result.definition,
+             synonyms: undefined,
+             ontology: result.namespace,
+             oboId: result.curie,
+           })}
+           onMouseDown={handleMouseDown}
+         >
+           <span className="result-label">{result.label}</span>
+           {result.uri && <span className="ontology-iri">{result.uri}</span>}
+         </li>
+       );
+     }
 
     // Show loading indicator if no results but loading
     if (combinedResults.length === 0 && (localLoading || ontologyLoading)) {

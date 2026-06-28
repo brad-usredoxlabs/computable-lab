@@ -57,6 +57,7 @@ import { findMatchingLibraryExtractor } from '../../extract/LibraryExtractorMatc
 import { ExtractionMetrics } from '../../extract/ExtractionMetrics.js';
 import { runChatbotCompile } from '../../ai/runChatbotCompile.js';
 import type { LlmClient } from '../../compiler/pipeline/passes/ChatbotCompilePasses.js';
+import { createInferenceClient } from '../../ai/InferenceClient.js';
 import { createLabwareLookup } from '../../ai/compiler/labwareLookup.js';
 import {
   FoundryHumanReviewService,
@@ -168,24 +169,20 @@ export function createProtocolIdeHandlers(
   const aiConfig = ctx.appConfig?.ai;
   const inferenceConfig = aiConfig?.inference;
   const llmClient = inferenceConfig?.baseUrl
-    ? {
-        complete: async (args: { prompt: string; maxTokens?: number }) => {
-          const response = await fetch(inferenceConfig.baseUrl!, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(inferenceConfig.apiKey ? { Authorization: `Bearer ${inferenceConfig.apiKey}` } : {}),
-            },
-            body: JSON.stringify({
+    ? (() => {
+        const inferenceClient = createInferenceClient(inferenceConfig);
+        return {
+          complete: async (args: { prompt: string; maxTokens?: number }) => {
+            const data = await inferenceClient.complete({
               model: inferenceConfig.model,
               messages: [{ role: 'user', content: args.prompt }],
               max_tokens: args.maxTokens ?? 500,
-            }),
-          });
-          const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-          return data.choices?.[0]?.message?.content ?? '';
-        },
-      }
+              temperature: inferenceConfig.temperature ?? 0.1,
+            });
+            return data.choices?.[0]?.message?.content ?? '';
+          },
+        };
+      })()
     : {
         complete: async () => '',
       };

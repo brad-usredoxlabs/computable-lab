@@ -2,6 +2,7 @@
  * SearchResultCard — Single search result from a bio-source.
  */
 
+import { useNavigate } from 'react-router-dom'
 import type { BioSourceResult } from '../../types/biosource'
 
 interface SearchResultCardProps {
@@ -11,11 +12,20 @@ interface SearchResultCardProps {
 }
 
 export function SearchResultCard({ result, onExtract, extracting }: SearchResultCardProps) {
+  const navigate = useNavigate()
+
   const truncatedDesc = result.description
     ? result.description.length > 250
       ? result.description.slice(0, 250) + '...'
       : result.description
     : null
+
+  // Navigate to the protocol-builder view with the result URL
+  const handleBuildProtocol = () => {
+    if (result.url) {
+      navigate(`/literature?view=build&pdfUrl=${encodeURIComponent(result.url)}`)
+    }
+  }
 
   return (
     <>
@@ -65,6 +75,14 @@ export function SearchResultCard({ result, onExtract, extracting }: SearchResult
         )}
 
         <div className="search-result-card__actions">
+          <button
+            className="search-result-card__build-btn"
+            onClick={handleBuildProtocol}
+            disabled={!result.url}
+            title="Open in protocol builder"
+          >
+            Build Protocol
+          </button>
           <button
             className="search-result-card__extract-btn"
             onClick={() => onExtract(result)}
@@ -142,7 +160,27 @@ export function SearchResultCard({ result, onExtract, extracting }: SearchResult
         .search-result-card__actions {
           margin-top: 0.5rem;
           display: flex;
+          gap: 0.5rem;
           justify-content: flex-end;
+        }
+        .search-result-card__build-btn {
+          padding: 0.3rem 0.75rem;
+          font-size: 0.75rem;
+          font-weight: 500;
+          border: 1px solid #40c057;
+          border-radius: 6px;
+          background: white;
+          color: #2b8a3e;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+        .search-result-card__build-btn:hover:not(:disabled) {
+          background: #40c057;
+          color: white;
+        }
+        .search-result-card__build-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
         .search-result-card__extract-btn {
           padding: 0.3rem 0.75rem;

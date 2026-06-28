@@ -132,7 +132,7 @@ describe('config loader', () => {
       const config = await loadConfig({ configPath });
       expect(config.ai?.extractor).toBeDefined();
       expect(config.ai?.extractor?.enabled).toBe(false);
-      expect(config.ai?.extractor?.baseUrl).toBe('http://127.0.0.1:11434/v1');
+      expect(config.ai?.extractor?.baseUrl).toBe('http://appliance-2:8000/v1');
       expect(config.ai?.extractor?.model).toBe('Qwen/Qwen3.5-9B-Instruct');
       expect(config.ai?.extractor?.provider).toBe('openai-compatible');
       expect(config.ai?.extractor?.temperature).toBe(0.0);
@@ -174,10 +174,49 @@ describe('config loader', () => {
       expect(config.ai?.extractor?.enabled).toBe(true);
       expect(config.ai?.extractor?.model).toBe('custom-model');
       // Other fields should be at defaults
-      expect(config.ai?.extractor?.baseUrl).toBe('http://127.0.0.1:11434/v1');
+      expect(config.ai?.extractor?.baseUrl).toBe('http://appliance-2:8000/v1');
       expect(config.ai?.extractor?.provider).toBe('openai-compatible');
       expect(config.ai?.extractor?.temperature).toBe(0.0);
       expect(config.ai?.extractor?.max_tokens).toBe(2048);
+    });
+
+
+    it('allows extractor and inference to point at the same local appliance endpoint', async () => {
+      tempDir = await mkdtemp(join(tmpdir(), 'cl-config-'));
+      const configPath = join(tempDir, 'config.yaml');
+      await writeFile(
+        configPath,
+        [
+          'server:',
+          '  port: 3001',
+          '  host: 0.0.0.0',
+          '  logLevel: info',
+          '  workspaceDir: /tmp/cl-workspaces',
+          '  cors:',
+          '    enabled: true',
+          '    origins: ["*"]',
+          'schemas:',
+          '  source: bundled',
+          '  bundledDir: ./schema',
+          'repositories: []',
+          'ai:',
+          '  inference:',
+          '    provider: openai-compatible',
+          '    baseUrl: http://appliance-2:8000/v1',
+          '    model: local-protocol-model',
+          '  agent: {}',
+          '  extractor:',
+          '    enabled: true',
+          '    baseUrl: http://appliance-2:8000/v1',
+          '    model: local-protocol-model',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const config = await loadConfig({ configPath });
+      expect(config.ai?.inference.baseUrl).toBe('http://appliance-2:8000/v1');
+      expect(config.ai?.extractor?.baseUrl).toBe('http://appliance-2:8000/v1');
+      expect(config.ai?.extractor?.enabled).toBe(true);
     });
 
     it('applies baseUrl override while keeping other defaults', async () => {

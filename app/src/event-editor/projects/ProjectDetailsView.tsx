@@ -21,9 +21,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useWorkspace } from '../workspace/WorkspaceContext'
-import { recordCreateTabId } from '../workspace/types'
+import { recordCreateTabId, recordEditTabId } from '../workspace/types'
 import { getStudyTree, getRunMethod } from '../../shared/api/treeClient'
-import { apiClient } from '../../shared/api/client'
+import { apiClient, type ProtocolContextResponse } from '../../shared/api/client'
 import { useStudyArtifacts } from '../right-pane/useStudyArtifacts'
 import {
   artifactKindLabel,
@@ -46,6 +46,47 @@ const KIND_ORDER: ArtifactSummary['artifactKind'][] = [
   'saved-prompt',
 ]
 
+const PROTOCOL_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml'
+
+function protocolSlug(title: string): string {
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32) || 'protocol'
+}
+
+function newProtocolId(title: string): string {
+  return `PRT-${protocolSlug(title)}-${Math.random().toString(36).slice(2, 6)}`
+}
+
+type ProtocolContextRecord = ProtocolContextResponse['projectTemplates'][number]
+
+function protocolRecordTitle(record: ProtocolContextRecord): string {
+  const payload = record.payload as Record<string, unknown>
+  return typeof payload.title === 'string' ? payload.title : record.recordId
+}
+
+function protocolRecordExperimentId(record: ProtocolContextRecord): string | null {
+  const payload = record.payload as Record<string, unknown>
+  const links = payload.links && typeof payload.links === 'object'
+    ? payload.links as Record<string, unknown>
+    : {}
+  return typeof links.experimentId === 'string' ? links.experimentId : null
+}
+
+function chooseProtocolRecord(records: ProtocolContextRecord[], promptTitle: string): ProtocolContextRecord | null {
+  if (records.length === 0) return null
+  if (records.length === 1) return records[0] ?? null
+  const options = records.map((record, index) => `${index + 1}. ${record.recordId} - ${protocolRecordTitle(record)}`).join('\n')
+  const answer = window.prompt(`${promptTitle}\n\n${options}`, '1')?.trim()
+  if (!answer) return null
+  const byIndex = Number(answer)
+  if (Number.isInteger(byIndex) && byIndex >= 1 && byIndex <= records.length) return records[byIndex - 1] ?? null
+  return records.find((record) => record.recordId === answer) ?? null
+}
+
 interface ProjectDetailsViewProps {
   studyId: string
 }
@@ -62,12 +103,34 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
   // Bumped by the cl:records-changed event so a created experiment/run
   // shows up without a manual refresh.
   const [treeEpoch, setTreeEpoch] = useState(0)
+  const [protocolContext, setProtocolContext] = useState<ProtocolContextResponse | null>(null)
+  const [protocolContextLoading, setProtocolContextLoading] = useState(true)
+  const [protocolContextError, setProtocolContextError] = useState<string | null>(null)
 
   useEffect(() => {
     const onChanged = () => setTreeEpoch((e) => e + 1)
     window.addEventListener('cl:records-changed', onChanged)
     return () => window.removeEventListener('cl:records-changed', onChanged)
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    setProtocolContextLoading(true)
+    setProtocolContextError(null)
+    apiClient.getProtocolContext({ studyId })
+      .then((res) => {
+        if (!cancelled) setProtocolContext(res)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setProtocolContextError(err instanceof Error ? err.message : String(err))
+      })
+      .finally(() => {
+        if (!cancelled) setProtocolContextLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [studyId, treeEpoch])
 
   useEffect(() => {
     let cancelled = false
@@ -172,11 +235,21 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
                 experiment={exp}
                 studyId={studyId}
                 canEdit={canEdit}
+                projectTemplates={protocolContext?.projectTemplates ?? []}
+                experimentProtocols={protocolContext?.experimentProtocols ?? []}
               />
             ))}
           </ul>
         )}
       </section>
+
+      <ProtocolContextSection
+        studyId={studyId}
+        canEdit={canEdit}
+        context={protocolContext}
+        loading={protocolContextLoading}
+        error={protocolContextError}
+      />
 
       <section
         className="project-details-view__section"
@@ -222,10 +295,14 @@ function ExperimentRow({
   experiment,
   studyId,
   canEdit,
+  projectTemplates,
+  experimentProtocols,
 }: {
   experiment: ExperimentTreeNode
   studyId: string
   canEdit: boolean
+  projectTemplates: ProtocolContextRecord[]
+  experimentProtocols: ProtocolContextRecord[]
 }) {
   const ws = useWorkspace()
   const [open, setOpen] = useState(true)
@@ -241,6 +318,32 @@ function ExperimentRow({
       title: 'New run',
     })
   }, [experiment.recordId, studyId, ws])
+
+  const createExperimentProtocol = useCallback(async () => {
+    const source = chooseProtocolRecord(projectTemplates, 'Choose a project protocol to specialize for this experiment. Enter a number or recordId.')
+    if (!source) return
+    const title = window.prompt('Experiment protocol title', `${protocolRecordTitle(source)} - ${experiment.title}`)?.trim()
+    try {
+      const result = await apiClient.specializeProtocolForExperiment({
+        protocolId: source.recordId,
+        studyId,
+        experimentId: experiment.recordId,
+        ...(title ? { title } : {}),
+      })
+      window.dispatchEvent(new CustomEvent('cl:records-changed'))
+      const payload = result.record.payload as Record<string, unknown>
+      const resolvedTitle = typeof payload.title === 'string' ? payload.title : result.record.recordId
+      ws.openTab({
+        id: recordEditTabId(result.record.recordId),
+        kind: 'record-edit',
+        recordId: result.record.recordId,
+        recordKind: 'local-protocol',
+        title: resolvedTitle,
+      })
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err))
+    }
+  }, [experiment.recordId, experiment.title, projectTemplates, studyId, ws])
 
   return (
     <li className="project-details-view__tree-item">
@@ -263,21 +366,41 @@ function ExperimentRow({
           </span>
         </button>
         {canEdit ? (
-          <button
-            type="button"
-            className="project-details-view__create-btn project-details-view__create-btn--row"
-            onClick={openNewRun}
-            data-testid={`project-details-new-run-${experiment.recordId}`}
-            title={`Create a run under ${experiment.title}`}
-          >
-            + Run
-          </button>
+          <>
+            <button
+              type="button"
+              className="project-details-view__create-btn project-details-view__create-btn--row"
+              onClick={() => void createExperimentProtocol()}
+              disabled={projectTemplates.length === 0}
+              data-testid={`project-details-new-protocol-${experiment.recordId}`}
+              title={projectTemplates.length === 0 ? 'Create a project protocol first' : `Specialize a protocol for ${experiment.title}`}
+            >
+              + Protocol
+            </button>
+            <button
+              type="button"
+              className="project-details-view__create-btn project-details-view__create-btn--row"
+              onClick={openNewRun}
+              data-testid={`project-details-new-run-${experiment.recordId}`}
+              title={`Create a run under ${experiment.title}`}
+            >
+              + Run
+            </button>
+          </>
         ) : null}
       </div>
       {open && hasRuns ? (
         <ul className="project-details-view__tree project-details-view__tree--nested">
           {experiment.runs.map((run) => (
-            <RunRow key={run.recordId} run={run} />
+            <RunRow
+              key={run.recordId}
+              run={run}
+              canEdit={canEdit}
+              availableProtocols={[
+                ...experimentProtocols.filter((record) => protocolRecordExperimentId(record) === experiment.recordId),
+                ...projectTemplates,
+              ]}
+            />
           ))}
         </ul>
       ) : null}
@@ -285,7 +408,15 @@ function ExperimentRow({
   )
 }
 
-function RunRow({ run }: { run: RunTreeNode }) {
+function RunRow({
+  run,
+  canEdit,
+  availableProtocols,
+}: {
+  run: RunTreeNode
+  canEdit: boolean
+  availableProtocols: ProtocolContextRecord[]
+}) {
   const ws = useWorkspace()
   const [busy, setBusy] = useState(false)
   const [missing, setMissing] = useState(false)
@@ -322,28 +453,69 @@ function RunRow({ run }: { run: RunTreeNode }) {
     }
   }, [run.recordId, run.title, ws])
 
+  const attachProtocolMethod = useCallback(async () => {
+    const source = chooseProtocolRecord(availableProtocols, 'Choose a protocol to use in this run. Enter a number or recordId.')
+    if (!source) return
+    setBusy(true)
+    setMissing(false)
+    try {
+      const result = await apiClient.useProtocolInRun({
+        protocolId: source.recordId,
+        runId: run.recordId,
+        studyId: run.studyId,
+        experimentId: run.experimentId,
+      })
+      window.dispatchEvent(new CustomEvent('cl:records-changed'))
+      ws.openTab({
+        id: `tab-deck-${result.methodEventGraphId}`,
+        kind: 'deck',
+        eventGraphId: result.methodEventGraphId,
+        runId: run.recordId,
+        title: run.title,
+      })
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }, [availableProtocols, run.experimentId, run.recordId, run.studyId, run.title, ws])
+
   return (
     <li className="project-details-view__tree-item project-details-view__tree-item--run">
-      <button
-        type="button"
-        className="project-details-view__tree-toggle project-details-view__tree-toggle--run"
-        data-testid={`project-details-run-${run.recordId}`}
-        onClick={() => void openMethodDeck()}
-        disabled={busy}
-        title={
-          missing
-            ? 'This run has no method event graph yet'
-            : `Open ${run.title} in the event editor`
-        }
-      >
-        <span className="project-details-view__chev" aria-hidden>
-          ▶
-        </span>
-        <span className="project-details-view__tree-title">{run.title}</span>
-        {missing ? (
-          <span className="project-details-view__tree-meta">no method</span>
+      <div className="project-details-view__tree-row">
+        <button
+          type="button"
+          className="project-details-view__tree-toggle project-details-view__tree-toggle--run"
+          data-testid={`project-details-run-${run.recordId}`}
+          onClick={() => void openMethodDeck()}
+          disabled={busy}
+          title={
+            missing
+              ? 'This run has no method event graph yet'
+              : `Open ${run.title} in the event editor`
+          }
+        >
+          <span className="project-details-view__chev" aria-hidden>
+            ▶
+          </span>
+          <span className="project-details-view__tree-title">{run.title}</span>
+          {missing ? (
+            <span className="project-details-view__tree-meta">no method</span>
+          ) : null}
+        </button>
+        {canEdit ? (
+          <button
+            type="button"
+            className="project-details-view__create-btn project-details-view__create-btn--row"
+            onClick={() => void attachProtocolMethod()}
+            disabled={busy || availableProtocols.length === 0}
+            data-testid={`project-details-use-protocol-${run.recordId}`}
+            title={availableProtocols.length === 0 ? 'Create or specialize a protocol first' : `Use a protocol in ${run.title}`}
+          >
+            + Method
+          </button>
         ) : null}
-      </button>
+      </div>
     </li>
   )
 }
@@ -391,4 +563,140 @@ function groupByKind(
     out[a.artifactKind] = arr
   }
   return out
+}
+
+function ProtocolContextSection({
+  studyId,
+  canEdit,
+  context,
+  loading,
+  error,
+}: {
+  studyId: string
+  canEdit: boolean
+  context: ProtocolContextResponse | null
+  loading: boolean
+  error: string | null
+}) {
+  const ws = useWorkspace()
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const projectTemplates = context?.projectTemplates ?? []
+  const experimentProtocols = context?.experimentProtocols ?? []
+
+  const createProtocolTemplate = async () => {
+    const title = window.prompt('Protocol title', 'New protocol template')?.trim()
+    if (!title) return
+    const recordId = newProtocolId(title)
+    setCreating(true)
+    setCreateError(null)
+    try {
+      await apiClient.createRecord(PROTOCOL_SCHEMA_ID, {
+        kind: 'protocol',
+        protocolLayer: 'universal',
+        recordId,
+        title,
+        state: 'draft',
+        links: { studyId },
+        overview: '',
+        purpose: '',
+        notes: '',
+        steps: [
+          {
+            stepId: 'step-001',
+            kind: 'other',
+            description: 'Draft protocol step.',
+          },
+        ],
+      })
+      window.dispatchEvent(new CustomEvent('cl:records-changed'))
+      ws.openTab({
+        id: recordEditTabId(recordId),
+        kind: 'record-edit',
+        recordId,
+        recordKind: 'protocol',
+        title,
+      })
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  return (
+    <section
+      className="project-details-view__section"
+      data-testid="project-details-protocols"
+    >
+      <div className="project-details-view__section-head">
+        <h3 className="project-details-view__section-title">Protocols</h3>
+        {canEdit ? (
+          <button
+            type="button"
+            className="project-details-view__create-btn"
+            onClick={() => void createProtocolTemplate()}
+            disabled={creating}
+            data-testid="project-details-new-protocol"
+          >
+            + New protocol
+          </button>
+        ) : null}
+      </div>
+      {createError ? <p className="project-details-view__error">{createError}</p> : null}
+      {error ? (
+        <p className="project-details-view__error">{error}</p>
+      ) : loading ? (
+        <p className="project-details-view__hint">Loading protocols…</p>
+      ) : projectTemplates.length === 0 && experimentProtocols.length === 0 ? (
+        <p className="project-details-view__hint">No project or experiment protocols filed for this study.</p>
+      ) : (
+        <>
+          <ProtocolRecordGroup title="Project templates" records={projectTemplates} />
+          <ProtocolRecordGroup title="Experiment protocols" records={experimentProtocols} />
+        </>
+      )}
+    </section>
+  )
+}
+
+function ProtocolRecordGroup({ title, records }: { title: string; records: ProtocolContextResponse['projectTemplates'] }) {
+  if (records.length === 0) return null
+  return (
+    <div className="project-details-view__artifact-group">
+      <h4 className="project-details-view__group-title">{title} ({records.length})</h4>
+      <ul className="project-details-view__artifact-list">
+        {records.map((record) => (
+          <ProtocolRecordRow key={record.recordId} record={record} />
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function ProtocolRecordRow({ record }: { record: ProtocolContextResponse['projectTemplates'][number] }) {
+  const ws = useWorkspace()
+  const payload = record.payload as Record<string, unknown>
+  const title = typeof payload.title === 'string' ? payload.title : record.recordId
+  const kind = typeof payload.kind === 'string' ? payload.kind : 'protocol'
+  return (
+    <li>
+      <button
+        type="button"
+        className="project-details-view__artifact-row"
+        data-testid={`project-details-protocol-${record.recordId}`}
+        onClick={() => ws.openTab({
+          id: recordEditTabId(record.recordId),
+          kind: 'record-edit',
+          recordId: record.recordId,
+          recordKind: kind,
+          title,
+        })}
+        title={`Open ${title}`}
+      >
+        <span className="project-details-view__artifact-title">{title}</span>
+        <span className="project-details-view__artifact-sub">{record.recordId} · {kind}</span>
+      </button>
+    </li>
+  )
 }

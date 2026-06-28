@@ -312,31 +312,26 @@ export function createRecordHandlers(
           }
         }
         
-        // Inject payload provenance fields that are schema-compatible.
-        // Keep actor provenance (createdBy) in envelope meta only — per the
-        // RecordEnvelope contract it must NOT be smuggled into the payload. The
-        // editor resolves a display name from meta.createdBy at projection time.
+        // Inject payload provenance fields only where the target schema accepts them.
+        // Actor provenance always exists in envelope meta; some FAIRCommon payloads
+        // also carry createdBy for durable file-level provenance.
         const now = new Date().toISOString();
         const creator = user.userId ?? identity?.username ?? 'system';
-        // createdBy is a tool-generated FAIRCommon provenance field (like
-        // createdAt) and is the durable home for the creator: the file store
-        // derives envelope meta from repo state and does not persist
-        // meta.createdBy, so the payload is where the creator id must live. The
-        // editor resolves it to a display name read-only at projection time.
-        //
         // NOTE: material-instance and aliquot schemas use unevaluatedProperties:false
         // at root level and do NOT include FAIRCommon via allOf. Ajv rejects
         // createdAt/createdBy/updatedAt for these types, so we skip injecting them
-        // into the payload and rely on envelope meta instead.
+        // into the payload and rely on envelope meta instead. Event graphs accept
+        // createdAt/updatedAt but not createdBy, so actor provenance stays in meta.
         const payloadObj = payload as Record<string, unknown>;
         const isInventoryRecord = payloadObj.kind === 'material-instance' || payloadObj.kind === 'aliquot';
+        const supportsPayloadCreatedBy = payloadObj.kind !== 'event-graph';
         const payloadWithProvenance = isInventoryRecord
           ? payloadObj
           : {
               ...payloadObj,
               createdAt: now,
               updatedAt: now,
-              createdBy: creator,
+              ...(supportsPayloadCreatedBy ? { createdBy: creator } : {}),
             };
 
         // Inherit FAIR fields from parent record
@@ -571,6 +566,7 @@ export function createRecordHandlers(
         // into the payload and rely on envelope meta instead.
         const payloadObj = normalizedPayload as Record<string, unknown>;
         const isInventoryRecord = payloadObj.kind === 'material-instance' || payloadObj.kind === 'aliquot';
+        const supportsPayloadCreatedBy = payloadObj.kind !== 'event-graph' && !existing.schemaId.includes('event-graph');
         const payloadWithProvenance = isInventoryRecord
           ? payloadObj
           : {
@@ -581,13 +577,15 @@ export function createRecordHandlers(
         // read-only field populated with a resolved display name, which the
         // client serializes back on save — never trust it. Restore the original
         // creator id from the stored record (preserving legacy absence).
-        if (!isInventoryRecord) {
+        if (!isInventoryRecord && supportsPayloadCreatedBy) {
           const existingCreatedBy = (existing.payload as Record<string, unknown>).createdBy;
           if (typeof existingCreatedBy === 'string') {
             (payloadWithProvenance as Record<string, unknown>).createdBy = existingCreatedBy;
           } else {
             delete (payloadWithProvenance as Record<string, unknown>).createdBy;
           }
+        } else {
+          delete (payloadWithProvenance as Record<string, unknown>).createdBy;
         }
 
         // Create updated envelope (handle meta per exactOptionalPropertyTypes)

@@ -1,24 +1,32 @@
 /**
  * ComboboxWidget — Autocomplete array input backed by local tag suggestions
- * and optional OLS ontology search.
+ * and resolve-spine ontology search.
  *
  * Config comes from field.props:
  *   sources: ['local'] | ['local', 'ols']
  *   ontologies: ['efo', 'chebi', 'go']   (only when ols in sources)
  *   field: 'keywords' | 'tags'
+ *
+ * When 'ols' is in sources, searches route through the backend resolve() spine
+ * (POST /api/resolve) which implements a 5-tier resolution strategy.
  */
 
 import { useState, useRef, useEffect } from 'react'
 import type { WidgetProps } from './types'
 import { useTagSuggestions, type TagSuggestion } from '../../../shared/hooks/useTagSuggestions'
-import { useOLSSearch } from '../../../shared/hooks/useOLSSearch'
+import { useResolveSearch } from '../../../shared/hooks/useResolveSearch'
+import { isLocalCandidate } from '../../../shared/api/resolveUtil'
 
 interface DropdownItem {
   value: string
   label: string
-  source: 'local' | 'ols'
+  source: 'local' | 'resolve-local' | 'resolve-remote'
   count?: number
   namespace?: string
+  /** Definition text from the resolve candidate */
+  definition?: string
+  /** Resolve candidate tier for sorting/display */
+  tier?: number
 }
 
 export function ComboboxWidget({ field, value, onChange, readOnly, disabled, errors, compact }: WidgetProps) {
@@ -31,7 +39,6 @@ export function ComboboxWidget({ field, value, onChange, readOnly, disabled, err
 
   // Extract props from field spec
   const sources: string[] = (field.props?.sources as string[] | undefined) ?? ['local']
-  const ontologies: string[] = (field.props?.ontologies as string[] | undefined) ?? []
   const fieldName = (field.props?.field as string | undefined) ?? 'tags'
   const useOls = sources.includes('ols')
 
@@ -42,10 +49,9 @@ export function ComboboxWidget({ field, value, onChange, readOnly, disabled, err
     enabled: inputVal.length >= 1,
   })
 
-  // OLS suggestions (only if configured)
-  const { results: olsResults } = useOLSSearch({
+  // Resolve-spine suggestions (replaces direct OLS calls)
+  const { results: resolveResults } = useResolveSearch({
     query: inputVal,
-    ontologies,
     enabled: useOls && inputVal.length >= 2,
     debounceMs: 400,
     maxResults: 8,
@@ -63,18 +69,20 @@ export function ComboboxWidget({ field, value, onChange, readOnly, disabled, err
       count: s.count,
     }))
 
-  const olsItems: DropdownItem[] = useOls
-    ? olsResults
+  const resolveItems: DropdownItem[] = useOls
+    ? resolveResults
         .filter((r) => !selectedSet.has(r.label.toLowerCase()))
         .map((r) => ({
-          value: r.label,
+          value: r.curie,
           label: r.label,
-          source: 'ols' as const,
-          namespace: r.ontology_name,
+          source: isLocalCandidate(r) ? 'resolve-local' as const : 'resolve-remote' as const,
+          namespace: r.namespace,
+          definition: r.definition,
+          tier: r.tier,
         }))
     : []
 
-  const allItems = [...localItems, ...olsItems]
+  const allItems = [...localItems, ...resolveItems]
 
   // Close on outside click
   useEffect(() => {
@@ -146,6 +154,29 @@ export function ComboboxWidget({ field, value, onChange, readOnly, disabled, err
   }
 
   const showDropdown = open && allItems.length > 0
+
+  // Badge styles for resolve tier source
+  const sourceBadgeStyle = (source: string) => {
+    switch (source) {
+      case 'resolve-local':
+        return 'bg-emerald-50 text-emerald-600'
+      case 'resolve-remote':
+        return 'bg-purple-50 text-purple-600'
+      default:
+        return 'bg-purple-50 text-purple-600'
+    }
+  }
+
+  const sourceLabel = (source: string) => {
+    switch (source) {
+      case 'resolve-local':
+        return 'Local'
+      case 'resolve-remote':
+        return 'Remote'
+      default:
+        return 'Ontology'
+    }
+  }
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -235,16 +266,16 @@ export function ComboboxWidget({ field, value, onChange, readOnly, disabled, err
               })}
             </>
           )}
-          {olsItems.length > 0 && (
+          {resolveItems.length > 0 && (
             <>
               <li className="px-2 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wide bg-gray-50">
-                Ontology
+                Resolve
               </li>
-              {olsItems.map((item, rawIdx) => {
+              {resolveItems.map((item, rawIdx) => {
                 const idx = localItems.length + rawIdx
                 return (
                   <li
-                    key={`ols-${item.value}-${item.namespace}`}
+                    key={`resolve-${item.value}`}
                     role="option"
                     aria-selected={highlightIdx === idx}
                     className={`px-2.5 py-1.5 text-sm cursor-pointer flex items-center gap-2 ${
@@ -255,10 +286,13 @@ export function ComboboxWidget({ field, value, onChange, readOnly, disabled, err
                   >
                     <span>{item.label}</span>
                     {item.namespace && (
-                      <span className="text-[10px] bg-purple-50 text-purple-600 rounded px-1 py-0.5 font-mono">
+                      <span className={`text-[10px] ${sourceBadgeStyle(item.source)} rounded px-1 py-0.5 font-mono`}>
                         {item.namespace}
                       </span>
                     )}
+                    <span className={`text-[9px] ${sourceBadgeStyle(item.source)} rounded px-1 py-0.5`}>
+                      {sourceLabel(item.source)}
+                    </span>
                   </li>
                 )
               })}

@@ -5,9 +5,9 @@
  * landing surface is a deck of recently-opened studies, sourced from
  * `useOpenStudies` (per-user localStorage). Clicking a card → `/project/<id>`.
  *
- * Below the deck, an "Open all projects" button mounts `StudyPickerPopover`
- * which fetches the full study list (`apiClient.listRecordsByKind('study')`)
- * and offers fuzzy search + open. Picked → adds to open-studies + navigates.
+ * Below the deck, a "Search Projects" button mounts `StudyPickerPopover`
+ * which uses JSON-LD full-text search (`apiClient.searchProjects`) to find
+ * studies by content — not just title. Picked → adds to open-studies + navigates.
  *
  * Shell shape mirrors the workspace: ONLY the project tab strip in the
  * topbar (no chrome row), gear icon for Settings/Theme/About. Layout is
@@ -42,12 +42,15 @@ export function WelcomePage() {
       topbarTabs={<ProjectTabStrip />}
       layout="workspace"
       leftPane={
-        <div className="welcome-page" data-testid="welcome-page">
+        <div
+          className={pickerOpen ? 'welcome-page welcome-page--picker-open' : 'welcome-page'}
+          data-testid="welcome-page"
+        >
           <header className="welcome-page__head">
             <h1 className="welcome-page__title">Computable Lab</h1>
             <p className="welcome-page__sub">
               Open a project to start. Recently opened projects appear below;
-              "Open all projects" lists every study on this appliance.
+              "Search Projects" searches across all studies on this appliance.
             </p>
           </header>
 
@@ -59,8 +62,8 @@ export function WelcomePage() {
                 data-testid="welcome-page-empty"
               >
                 You haven't opened any projects yet. Create one with
-                "New project" below, or choose an existing one from
-                "Open all projects".
+                "New project" below, or search for an existing one with
+                "Search Projects".
               </p>
             ) : (
               <ul className="welcome-page__grid">
@@ -114,10 +117,10 @@ export function WelcomePage() {
                 <button
                   type="button"
                   className="welcome-page__open-all"
-                  data-testid="welcome-page-open-all"
+                  data-testid="welcome-page-search"
                   onClick={() => setPickerOpen((o) => !o)}
                 >
-                  Open all projects
+                  Search Projects
                 </button>
                 {pickerOpen ? (
                   <StudyPickerPopover

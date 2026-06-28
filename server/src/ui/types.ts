@@ -26,7 +26,13 @@ export type WidgetType =
   | 'readonly'       // Read-only display
   | 'custom'         // Custom widget (requires renderer)
   | 'combobox'       // Autocomplete combobox (local + ontology suggestions)
-  | 'chips';         // Multi-value ontology/local chip input (tags, keywords)
+  | 'chips'          // Multi-value ontology/local chip input (tags, keywords)
+  | 'protocol-prose-authoring'
+  | 'protocol-material-roles'
+  | 'protocol-labware-roles'
+  | 'protocol-equipment-roles'
+  | 'protocol-step-roles'
+  | 'protocol-ai-suggestions';
 
 /**
  * Layout direction for form sections.

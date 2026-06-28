@@ -29,9 +29,12 @@ const ExtractionReviewPage = lazy(() =>
     default: m.ExtractionReviewPage,
   })),
 )
+const PdfProtocolBuilder = lazy(() =>
+  import('./PdfProtocolBuilder').then((m) => ({ default: m.PdfProtocolBuilder })),
+)
 
-export type LiteratureView = 'explore' | 'ingest' | 'drafts' | 'review'
-const KNOWN_VIEWS: LiteratureView[] = ['explore', 'ingest', 'drafts', 'review']
+export type LiteratureView = 'explore' | 'ingest' | 'drafts' | 'review' | 'build'
+const KNOWN_VIEWS: LiteratureView[] = ['explore', 'ingest', 'drafts', 'review', 'build']
 
 export function resolveLiteratureView(raw: string | null): LiteratureView {
   if (raw && KNOWN_VIEWS.includes(raw as LiteratureView)) return raw as LiteratureView
@@ -86,6 +89,7 @@ function LiteratureBodyInner() {
           ['ingest', 'Ingest'],
           ['drafts', 'Drafts'],
           ['review', 'Review'],
+          ['build', 'Build'],
         ] as Array<[LiteratureView, string]>).map(([key, label]) => (
           <button
             key={key}
@@ -104,6 +108,7 @@ function LiteratureBodyInner() {
         {view === 'ingest' && <IngestionPage />}
         {view === 'drafts' && <ExtractionDraftsListPage />}
         {view === 'review' && <ExtractionReviewPage />}
+        {view === 'build' && <PdfProtocolBuilder />}
       </Suspense>
       <style>{styles}</style>
     </div>

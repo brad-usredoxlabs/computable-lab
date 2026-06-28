@@ -9,13 +9,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { RefBadge } from '../../shared/ref'
 import type { OntologyRef, RecordRef } from '../../shared/ref'
-import { useOLSSearch } from '../../shared/hooks/useOLSSearch'
-import { olsResultToRef, lookupOLSTerm, type OLSSearchResult } from '../../shared/api/olsClient'
-import { apiClient } from '../../shared/api/client'
+import { useResolveSearch } from '../../shared/hooks/useResolveSearch'
+import { resolveCandidateToRef } from '../../shared/api/resolveUtil'
+import { apiClient, type ResolveCandidate } from '../../shared/api/client'
 import { formatMolecularWeightResolutionNote, formatResolvedMolecularWeightValue } from '../lib/molecularWeight'
 import {
   MATERIAL_DOMAINS,
-  MATERIAL_OLS_ONTOLOGIES,
   MATERIAL_SCHEMA_ID,
   generateMaterialId,
   inferDomainFromNamespace,
@@ -101,13 +100,12 @@ export function MaterialBuilderModal({
   const refInputRef = useRef<HTMLInputElement>(null)
   const refListRef = useRef<HTMLUListElement>(null)
 
-  // OLS search for additional refs
+  // Resolve-spine search for additional refs
   const {
     results: refSearchResults,
     loading: refSearchLoading,
-  } = useOLSSearch({
+  } = useResolveSearch({
     query: refQuery,
-    ontologies: MATERIAL_OLS_ONTOLOGIES,
     enabled: refQuery.length >= 2,
     minQueryLength: 2,
     maxResults: 8,
@@ -132,18 +130,6 @@ export function MaterialBuilderModal({
       setDefinition(null)
       setError(null)
       setTimeout(() => nameRef.current?.focus(), 100)
-
-      // Fetch synonyms + definition from OLS for the primary ref
-      if (primaryRef?.uri) {
-        lookupOLSTerm(primaryRef.uri).then((term) => {
-          if (term?.synonyms?.length) {
-            setSynonyms(dedupeSynonyms(term.synonyms))
-          }
-          if (term?.description?.length) {
-            setDefinition(term.description[0])
-          }
-        })
-      }
     }
   }, [initialName, isOpen, primaryRef])
 
@@ -203,8 +189,8 @@ export function MaterialBuilderModal({
     setMaterialId(generateMaterialId(name))
   }
 
-  function handleAddRef(result: OLSSearchResult) {
-    const ref = olsResultToRef(result) as OntologyRef
+  function handleAddRef(candidate: ResolveCandidate) {
+    const ref = resolveCandidateToRef(candidate) as OntologyRef
     if (!additionalRefs.some(r => r.id === ref.id)) {
       setAdditionalRefs(prev => [...prev, ref])
     }
@@ -560,16 +546,16 @@ export function MaterialBuilderModal({
                   )}
                   {refSearchResults.map(result => (
                     <li
-                      key={result.obo_id}
+                      key={result.curie}
                       onClick={() => handleAddRef(result)}
                       className="px-2 py-1 cursor-pointer hover:bg-blue-50 text-xs"
                     >
                       <div className="font-semibold text-blue-800">{result.label}</div>
                       <span className="inline-block px-1 py-px bg-green-50 text-green-800 text-[10px] font-mono rounded border border-green-200 mr-1">
-                        {result.obo_id}
+                        {result.curie}
                       </span>
                       <span className="text-[10px] text-gray-400 uppercase">
-                        {result.ontology_name}
+                        {result.namespace}
                       </span>
                     </li>
                   ))}

@@ -151,6 +151,10 @@ describe('JsonLdIndex', () => {
     const res = index.query({ q: 'pcr ("mix' });
     expect(res.total).toBe(1);
     expect(res.hits[0]?.recordId).toBe('A');
+    // Angle brackets are FTS5 phrase-distance operators — also sanitized.
+    const res2 = index.query({ q: 'pcr<mix' });
+    expect(res2.total).toBe(1);
+    expect(res2.hits[0]?.recordId).toBe('A');
   });
 
   it('persists across reopen', () => {

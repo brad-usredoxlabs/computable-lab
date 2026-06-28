@@ -33,7 +33,13 @@ export type WidgetType =
   | 'array'
   | 'object'
   | 'readonly'
-  | 'hidden';
+  | 'hidden'
+  | 'protocol-prose-authoring'
+  | 'protocol-material-roles'
+  | 'protocol-labware-roles'
+  | 'protocol-equipment-roles'
+  | 'protocol-step-roles'
+  | 'protocol-ai-suggestions';
 
 /**
  * Field configuration for a FieldRow component.
@@ -69,6 +75,8 @@ export interface FieldRowAttrs {
   refKind?: string;
   /** Help text for the field */
   help?: string;
+  /** Current canonical record ID, used by record-scoped custom widgets. */
+  recordId?: string;
   /** Array item schema for array widgets */
   arraySchema?: Record<string, unknown>;
   /** Object widget config for object widgets */

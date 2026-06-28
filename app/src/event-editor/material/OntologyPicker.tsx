@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { olsResultToRef, searchOLS, type OLSResultRef, type OLSSearchResult } from '../../shared/api/olsClient'
-
+import { useState } from 'react'
+import { useResolveSearch } from '../../shared/hooks/useResolveSearch'
+import { resolveCandidateToRef, tierBadge, type ResolveRef } from '../../shared/api/resolveUtil'
 /**
  * Single-value ontology picker. Renders as either a search input with
  * inline result list, or a chip + clear button when a term is picked.
@@ -9,13 +9,9 @@ import { olsResultToRef, searchOLS, type OLSResultRef, type OLSSearchResult } fr
  * "the one cell type" / "the one tissue" slots — fields where exactly
  * one ontology ref is expected, unlike the multi-ref `class` array.
  *
- * `ontologies` narrows the OLS query (e.g., `['ncbitaxon']` for
- * organisms). Falls back to the default material ontology list when
- * empty, but the caller almost always wants to narrow it.
+ * Searches now route through the backend resolve() spine (POST /api/resolve)
+ * which implements a 5-tier resolution strategy (local records → OAK → OLS4 → vendor → mint).
  */
-
-const DEBOUNCE_MS = 200
-const RESULT_LIMIT = 6
 
 export interface OntologyPickerProps {
   label: string
@@ -23,55 +19,30 @@ export interface OntologyPickerProps {
   placeholder?: string
   /** Field hint rendered below the search input. */
   hint?: string
-  /** OLS ontology slugs to search (e.g. ['ncbitaxon'] for organisms). */
-  ontologies: string[]
+  /** OLS ontology slugs — kept for backward compatibility, backend resolves via config. */
+  ontologies?: string[]
   /** Optional flag for required slots — drives the label decoration. */
   required?: boolean
-  picked: OLSResultRef | null
-  onChange: (next: OLSResultRef | null) => void
+  picked: ResolveRef | null
+  onChange: (next: ResolveRef | null) => void
 }
 
 export function OntologyPicker({
   label,
   placeholder = 'Search ontology…',
   hint,
-  ontologies,
   required,
   picked,
   onChange,
 }: OntologyPickerProps) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<OLSSearchResult[]>([])
-  const [loading, setLoading] = useState(false)
-  const latestQueryRef = useRef('')
-  latestQueryRef.current = query
 
-  useEffect(() => {
-    const trimmed = query.trim()
-    if (trimmed.length < 2 || picked) {
-      setResults([])
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    const handle = window.setTimeout(async () => {
-      try {
-        const hits = await searchOLS({
-          query: trimmed,
-          ontologies,
-          rows: RESULT_LIMIT,
-        })
-        if (latestQueryRef.current !== query) return
-        setResults(hits ?? [])
-      } catch {
-        if (latestQueryRef.current !== query) return
-        setResults([])
-      } finally {
-        if (latestQueryRef.current === query) setLoading(false)
-      }
-    }, DEBOUNCE_MS)
-    return () => window.clearTimeout(handle)
-  }, [query, picked, ontologies])
+  const { results, loading } = useResolveSearch({
+    query,
+    enabled: !picked && query.trim().length >= 2,
+    debounceMs: 200,
+    maxResults: 6,
+  })
 
   if (picked) {
     return (
@@ -115,23 +86,30 @@ export function OntologyPicker({
       {hint ? <span className="add-material-field-hint">{hint}</span> : null}
       {results.length > 0 ? (
         <ul className="add-material-ref-results">
-          {results.map((result) => (
-            <li key={result.iri}>
+          {results.map((candidate) => (
+            <li key={candidate.curie}>
               <button
                 type="button"
                 className="add-material-row"
                 data-category="ontology"
-                onClick={() => onChange(olsResultToRef(result))}
+                onClick={() => onChange(resolveCandidateToRef(candidate))}
               >
                 <span className="add-material-row-title">
-                  {result.label}
+                  {candidate.label}
                   <span className="add-material-row-ontology">
-                    {result.ontology_prefix ?? result.ontology_name}
+                    {candidate.namespace}
                   </span>
                 </span>
                 <span className="add-material-row-meta">
-                  {result.obo_id}
-                  {result.description?.[0] ? ` · ${result.description[0]}` : ''}
+                  {candidate.curie}
+                  {candidate.definition ? ` · ${candidate.definition}` : ''}
+                </span>
+                <span className={`text-[9px] ${
+                  candidate.source === 'mint' ? 'bg-orange-50 text-orange-600' :
+                  candidate.tier <= 2 ? 'bg-emerald-50 text-emerald-600' :
+                  'bg-purple-50 text-purple-600'
+                } rounded px-1 py-0.5`}>
+                  {tierBadge(candidate).label}
                 </span>
               </button>
             </li>

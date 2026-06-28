@@ -4,7 +4,7 @@
  * and composite widgets (datetime, multiselect, reflist, array, object, readonly).
  */
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { focusAdjacentTapTabField } from '../tabNavPlugin';
 import type { WidgetType } from '../types';
 import { EnumCombobox } from '../EnumCombobox';
@@ -17,7 +17,51 @@ import { ReflistWidget, type ReflistEntry } from '../widgets/ReflistWidget';
 import { ArrayWidget } from '../widgets/ArrayWidget';
 import { ObjectWidget } from '../widgets/ObjectWidget';
 import { ChipComboboxWidget } from '../widgets/ChipComboboxWidget';
+import {
+  ProtocolAiSuggestionsWidget,
+  ProtocolEquipmentRolesWidget,
+  ProtocolLabwareRolesWidget,
+  ProtocolMaterialRolesWidget,
+  ProtocolProseAuthoringWidget,
+  ProtocolStepRolesWidget,
+} from '../widgets/ProtocolAuthoringWidgets';
 import type { StructuredValue } from '../../../shared/forms/suggestionPlan';
+
+function isRecordLikeRef(value: unknown): value is { id?: unknown; label?: unknown; type?: unknown; kind?: unknown } {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    ('id' in value || 'label' in value) &&
+    ('kind' in value || 'type' in value || 'id' in value),
+  );
+}
+
+function formatWidgetDisplayValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (isRecordLikeRef(value)) {
+    const label = typeof value.label === 'string' ? value.label : '';
+    const id = typeof value.id === 'string' ? value.id : '';
+    if (label && id) return `${label} (${id})`;
+    return label || id || JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => formatWidgetDisplayValue(item)).filter(Boolean).join(', ');
+  }
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+function formatWidgetEditValue(value: unknown): string {
+  if (isRecordLikeRef(value) && typeof value.id === 'string') return value.id;
+  return formatWidgetDisplayValue(value);
+}
+
+function hasWidgetValue(value: unknown): boolean {
+  return value !== null && value !== undefined && !(typeof value === 'string' && value === '');
+}
 
 export interface WidgetRendererProps {
   widget: WidgetType;
@@ -55,6 +99,12 @@ export interface WidgetRendererProps {
   objectProperties?: Array<{ name: string; widget: WidgetType; label: string; help?: string; required?: boolean; options?: Array<{ value: string; label: string }> }>;
   /** Multiselect options (for 'multiselect' widget type) */
   multiselectOptions?: Array<{ value: string; label: string }>;
+  /** Canonical record ID for record-scoped custom widgets. */
+  recordId?: string;
+  /** Patch sibling fields from record-scoped widgets (path -> value). */
+  onRecordPatch?: (patch: Record<string, unknown>) => void;
+  /** Read current sibling field value by JSON path. */
+  getRecordValue?: (path: string) => unknown;
 }
 
 export function WidgetRenderer({
@@ -69,9 +119,17 @@ export function WidgetRenderer({
   onRefSelect,
   objectProperties,
   multiselectOptions,
+  recordId,
+  onRecordPatch,
+  getRecordValue,
 }: WidgetRendererProps) {
   const [editing, setEditing] = useState(false);
-  const [localValue, setLocalValue] = useState(String(value ?? ''));
+  const editText = useMemo(() => formatWidgetEditValue(value), [value]);
+  const [localValue, setLocalValue] = useState(editText);
+
+  useEffect(() => {
+    if (!editing) setLocalValue(editText);
+  }, [editing, editText]);
 
   const handleInputBlur = () => {
     if (editing) { onCommit(localValue); setEditing(false); }
@@ -79,7 +137,7 @@ export function WidgetRenderer({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') { e.preventDefault(); onCommit(localValue); setEditing(false); }
-    else if (e.key === 'Escape') { e.preventDefault(); setLocalValue(String(value ?? '')); setEditing(false); onCancel(); }
+    else if (e.key === 'Escape') { e.preventDefault(); setLocalValue(editText); setEditing(false); onCancel(); }
     else if (e.key === 'Tab') {
       // Keydowns inside the React NodeView never reach ProseMirror's
       // tab-nav plugin, so Word-style commit-and-advance is handled here.
@@ -93,7 +151,7 @@ export function WidgetRenderer({
   };
 
   const handleComboboxSelect = (v: string) => { onCommit(v); setEditing(false); };
-  const handleComboboxCancel = () => { setLocalValue(String(value ?? '')); setEditing(false); onCancel(); };
+  const handleComboboxCancel = () => { setLocalValue(editText); setEditing(false); onCancel(); };
 
   // Handle ref/combobox selection — commit structured value with provenance
   const handleRefSelect = (
@@ -111,7 +169,7 @@ export function WidgetRenderer({
     onRefSelect(v, s, t);
     setEditing(false);
   };
-  const handleRefCancel = () => { setLocalValue(String(value ?? '')); setEditing(false); onCancel(); };
+  const handleRefCancel = () => { setLocalValue(editText); setEditing(false); onCancel(); };
   const handleRichTextChange = (html: string) => { onCommit(html); };
 
   const getInputType = () => widget === 'number' ? 'number' : widget === 'date' ? 'date' : 'text';
@@ -119,6 +177,30 @@ export function WidgetRenderer({
   // ========================================================================
   // Composite widgets — dedicated renderers
   // ========================================================================
+
+  if (widget === 'protocol-prose-authoring') {
+    return <ProtocolProseAuthoringWidget value={value} readOnly={readOnly} recordId={recordId} onCommit={onCommit} onRecordPatch={onRecordPatch} getRecordValue={getRecordValue} />;
+  }
+
+  if (widget === 'protocol-material-roles') {
+    return <ProtocolMaterialRolesWidget value={value} readOnly={readOnly} recordId={recordId} onCommit={onCommit} />;
+  }
+
+  if (widget === 'protocol-labware-roles') {
+    return <ProtocolLabwareRolesWidget value={value} readOnly={readOnly} recordId={recordId} onCommit={onCommit} />;
+  }
+
+  if (widget === 'protocol-equipment-roles') {
+    return <ProtocolEquipmentRolesWidget value={value} readOnly={readOnly} recordId={recordId} onCommit={onCommit} />;
+  }
+
+  if (widget === 'protocol-step-roles') {
+    return <ProtocolStepRolesWidget value={value} readOnly={readOnly} recordId={recordId} onCommit={onCommit} onRecordPatch={onRecordPatch} getRecordValue={getRecordValue} />;
+  }
+
+  if (widget === 'protocol-ai-suggestions') {
+    return <ProtocolAiSuggestionsWidget value={value} readOnly={readOnly} recordId={recordId} onCommit={onCommit} />;
+  }
 
   if (widget === 'readonly') {
     return <ReadonlyWidget value={value} widget={widget} />;
@@ -210,7 +292,7 @@ export function WidgetRenderer({
   if ((widget === 'ref' || widget === 'combobox') && editing) {
     return (
       <RefCombobox
-        value={String(value ?? '')}
+        value={editText}
         refKind={refKind || 'default'}
         suggestionPlan={suggestionPlan}
         onSelect={handleRefSelect}
@@ -227,14 +309,14 @@ export function WidgetRenderer({
   // in display mode rather than the stored raw value (e.g. "CC BY 4.0" instead
   // of "CC-BY-4.0", "In Progress" instead of "in_progress").
   const optionLabel = options?.find((o) => String(o.value) === String(value ?? ''))?.label;
-  const displayText = optionLabel ?? String(value ?? '');
+  const displayText = optionLabel ?? formatWidgetDisplayValue(value);
 
   const display = editing ? (
     // autoFocus: edit mode is entered by clicking the display span (or via
     // Tab-nav's synthetic click) — the input that replaces it must take
     // focus itself or keystrokes silently go nowhere.
     <input type={getInputType()} value={localValue} onChange={(e) => setLocalValue(e.target.value)} onBlur={handleInputBlur} onKeyDown={handleKeyDown} className="taptab-inline-input" onClick={(e) => e.stopPropagation()} autoFocus />
-  ) : String(value ?? '') !== '' ? (
+  ) : hasWidgetValue(value) ? (
     <span>{displayText}</span>
   ) : (
     // Visible affordance for empty editable fields — without it a new

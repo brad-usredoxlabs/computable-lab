@@ -12,7 +12,7 @@ import {
 import type { Labware } from '../../types/labware'
 import type { WellId } from '../../types/plate'
 import type { FormulationSummary, MaterialSearchItem, ResolveCandidate } from '../../shared/api/client'
-import type { OLSResultRef } from '../../shared/api/olsClient'
+import type { ResolveRef } from '../../shared/api/resolveUtil'
 import { DetailTooltip } from '../../shared/taptab/slashMenu/SlashSuggestionList'
 import { candidateDetail } from '../../shared/taptab/slashMenu/resolvers'
 import type { SlashSuggestionDetail } from '../../shared/taptab/slashMenu/types'
@@ -181,7 +181,7 @@ export function AddMaterialModal({ isOpen, labware, wells, onClose }: AddMateria
               // CL / NCBITaxon / Uberon → cells (anything biological);
               // everything else → compound (the canonical "create
               // formulation from this ChEBI term" path).
-              const ref: OLSResultRef = {
+              const ref: ResolveRef = {
                 kind: 'ontology',
                 id: candidate.curie,
                 namespace: candidate.namespace,

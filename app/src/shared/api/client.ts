@@ -53,6 +53,21 @@ import type { DeckSummary, ToolsSummary, ReagentsSummary, BudgetSummary } from '
 import { ApiError, NetworkError } from './errors'
 import { API_BASE, getCurrentUserId } from './base'
 
+export interface ProtocolContextResponse {
+  projectTemplates: RecordEnvelope[]
+  experimentProtocols: RecordEnvelope[]
+  runMethods: RecordEnvelope[]
+  promotableRunMethods: RecordEnvelope[]
+  availableProtocols: RecordEnvelope[]
+}
+
+export interface UseProtocolInRunResponse {
+  success: true
+  plannedRunId: string
+  methodEventGraphId: string
+  runId: string
+}
+
 export interface QuantityValue {
   value: number
   unit: string
@@ -419,6 +434,28 @@ export interface MeasurementUploadResponse {
   path: string
   fileName: string
   size: number
+}
+
+/** Match info for a record that matched in a study search result. */
+export interface StudySearchMatch {
+  recordId: string
+  kind: string
+  label: string
+  path: string
+  snippet?: string
+}
+
+/** One study in the search results, with its matching records and hierarchical paths. */
+export interface StudySearchHit {
+  studyId: string
+  title: string
+  matches: StudySearchMatch[]
+}
+
+/** Response from POST /api/search/projects. */
+export interface SearchProjectsResponse {
+  studies: StudySearchHit[]
+  total: number
 }
 
 type TypedRecordEnvelope<TPayload extends object> = Omit<RecordEnvelope, 'payload'> & {
@@ -1207,6 +1244,44 @@ export type ProtocolIdeStreamEvent =
   | { type: 'done'; result: ProtocolIdeSessionCreateResult }
   | { type: 'error'; message: string }
 
+export type ProtocolStructureSuggestionKind =
+  | 'material'
+  | 'equipment'
+  | 'step'
+  | 'unresolved_reference'
+  | 'variant'
+
+export interface ProtocolStructureSuggestion {
+  id: string
+  kind: ProtocolStructureSuggestionKind
+  label: string
+  roleId?: string
+  description?: string
+  sourceText?: string
+  confidence?: number
+  draft?: Record<string, unknown>
+}
+
+export interface ProtocolAuthoringSessionResult {
+  success: true
+  protocolId: string
+  sessionId: string
+  status: string
+}
+
+export interface ProtocolStructureSuggestionResult {
+  success: true
+  protocolId: string
+  suggestions: ProtocolStructureSuggestion[]
+}
+
+export interface ProtocolApplySuggestionResult {
+  success: true
+  protocolId: string
+  applied: { materialRoles: number; equipmentRoles: number; steps: number }
+  protocol: Record<string, unknown>
+}
+
 export type FoundryReviewStatus =
   | 'unreviewed'
   | 'reviewing'
@@ -1626,6 +1701,19 @@ export const apiClient = {
       records: response.records,
       total: response.total ?? response.records.length,
     }
+  },
+
+  /**
+   * Search for projects (studies) by full-text query.
+   * Calls POST /api/search/projects with { q, limit }.
+   * Returns studies grouped by search hits with hierarchical match paths.
+   */
+  async searchProjects(q: string, limit?: number): Promise<SearchProjectsResponse> {
+    return request<SearchProjectsResponse>('/search/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q, limit }),
+    })
   },
 
   /**
@@ -3329,6 +3417,32 @@ export const apiClient = {
     })
   },
 
+  async createProtocolAuthoringSession(protocolId: string): Promise<ProtocolAuthoringSessionResult> {
+    return request(`/protocols/${encodeURIComponent(protocolId)}/authoring-session`, {
+      method: 'POST',
+    })
+  },
+
+  async suggestProtocolStructure(protocolId: string): Promise<ProtocolStructureSuggestionResult> {
+    return request(`/protocols/${encodeURIComponent(protocolId)}/suggest-structure`, {
+      method: 'POST',
+    })
+  },
+
+  async applyProtocolSuggestions(
+    protocolId: string,
+    body: {
+      suggestions?: ProtocolStructureSuggestion[]
+      acceptedSuggestions?: ProtocolStructureSuggestion[]
+      acceptedSuggestionIds?: string[]
+    },
+  ): Promise<ProtocolApplySuggestionResult> {
+    return request(`/protocols/${encodeURIComponent(protocolId)}/apply-suggestions`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
   async listFoundryReviews(): Promise<FoundryReviewSummary[]> {
     const response = await request<{ success: true; reviews: FoundryReviewSummary[] }>('/protocol-ide/foundry/reviews')
     return response.reviews
@@ -3775,6 +3889,56 @@ export const apiClient = {
     return request(`/protocol-ide/sessions/${encodeURIComponent(sessionId)}/select-variant`, {
       method: 'POST',
       body: JSON.stringify({ variantIndex }),
+    })
+  },
+
+  // === Protocol context and actions ===
+
+  async getProtocolContext(query: { studyId?: string; experimentId?: string; runId?: string }): Promise<ProtocolContextResponse> {
+    const params = new URLSearchParams()
+    if (query.studyId) params.set('studyId', query.studyId)
+    if (query.experimentId) params.set('experimentId', query.experimentId)
+    if (query.runId) params.set('runId', query.runId)
+    const suffix = params.toString()
+    return request<ProtocolContextResponse>(`/protocol-context${suffix ? `?${suffix}` : ''}`)
+  },
+
+  async useProtocolInRun(payload: {
+    protocolId: string
+    runId: string
+    studyId?: string
+    experimentId?: string
+    title?: string
+    replace?: boolean
+  }): Promise<UseProtocolInRunResponse> {
+    return request<UseProtocolInRunResponse>('/protocol-actions/use-in-run', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  async specializeProtocolForExperiment(payload: {
+    protocolId: string
+    studyId: string
+    experimentId: string
+    title?: string
+  }): Promise<{ success: true; record: RecordEnvelope }> {
+    return request<{ success: true; record: RecordEnvelope }>('/protocol-actions/specialize-for-experiment', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  async promoteRunMethodToProjectTemplate(payload: {
+    runId?: string
+    plannedRunId?: string
+    eventGraphId?: string
+    studyId?: string
+    title?: string
+  }): Promise<{ success: true; record: RecordEnvelope }> {
+    return request<{ success: true; record: RecordEnvelope }>('/protocol-actions/promote-to-project-template', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     })
   },
 

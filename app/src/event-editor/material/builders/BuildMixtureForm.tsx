@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiClient } from '../../../shared/api/client'
-import type { OLSResultRef } from '../../../shared/api/olsClient'
+import type { ResolveRef } from '../../../shared/api/resolveUtil'
 import {
   MATERIAL_SCHEMA_ID,
   generateMaterialId,
@@ -35,7 +35,7 @@ import { compositionFormulationPayload, materialConceptPayload } from '../lib/ma
  */
 
 export interface BuildMixtureFormProps {
-  seedOntologyRef?: OLSResultRef
+  seedOntologyRef?: ResolveRef
   onSaved: (next: PickedMaterial) => void
   onCancel: () => void
   onError: (message: string) => void
@@ -48,7 +48,7 @@ export function BuildMixtureForm({
   onError,
 }: BuildMixtureFormProps) {
   const [name, setName] = useState(seedOntologyRef?.label ?? '')
-  const [classRefs, setClassRefs] = useState<OLSResultRef[]>(
+  const [classRefs, setClassRefs] = useState<ResolveRef[]>(
     seedOntologyRef ? [seedOntologyRef] : [],
   )
   // Cell-media-shaped default: base medium (solvent) + activity source

@@ -222,3 +222,47 @@
   background: transparent;
   border-style: dashed;
 }
+
+.find-tab__create-menu-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.find-tab__create-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 10;
+  min-width: 138px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg-elev-2);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
+}
+
+.find-tab__create-menu button {
+  appearance: none;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cl-text);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.find-tab__create-menu button:hover:not(:disabled) {
+  background: var(--cl-bg-elev);
+}
+
+.find-tab__create-menu button:disabled {
+  color: var(--cl-text-faint);
+  cursor: not-allowed;
+}

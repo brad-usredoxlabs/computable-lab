@@ -31,6 +31,7 @@ import {
 vi.mock('../../shared/api/client', () => ({
   apiClient: {
     listRecordsByKind: vi.fn(async () => ({ records: [], total: 0 })),
+    searchProjects: vi.fn(async () => ({ studies: [], total: 0 })),
   },
 }))
 

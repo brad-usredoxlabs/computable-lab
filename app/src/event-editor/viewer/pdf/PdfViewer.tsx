@@ -24,9 +24,11 @@ export interface PdfViewerProps {
    *  a sanity-check guard against tab/state desync. */
   artifactId: string
   title: string
+  /** Called when the user selects text from the extracted text panel. */
+  onSendSelection?: (text: string, pageNumber: number) => void
 }
 
-export function PdfViewer({ artifactId, title }: PdfViewerProps) {
+export function PdfViewer({ artifactId, title, onSendSelection }: PdfViewerProps) {
   const v = usePdfViewer()
 
   // Guard against the rare desync where a stale leftPane render asks for
@@ -76,6 +78,7 @@ export function PdfViewer({ artifactId, title }: PdfViewerProps) {
             pages={v.extractedText}
             scrollToPage={v.scrollToPageInTextPanel}
             highlight={v.search.trim() ? v.search : undefined}
+            onSendSelection={onSendSelection}
           />
         </Panel>
       </PanelGroup>

@@ -60,6 +60,37 @@ export class JsonLdIndex implements RecordIndexer {
     this.db.close();
   }
 
+  /**
+   * Fetch refs for a set of record ids from the record_refs table.
+   * Returns a map from record_id to its outgoing references.
+   */
+  getRefs(
+    recordIds: string[],
+  ): Map<string, Array<{ recordId: string; kind?: string }>> {
+    const out = new Map<string, Array<{ recordId: string; kind?: string }>>();
+    if (recordIds.length === 0) return out;
+    const placeholders = recordIds.map(() => '?').join(', ');
+    const rows = this.db
+      .prepare<string[], { record_id: string; target_id: string; target_kind: string | null }>(
+        `SELECT record_id, target_id, target_kind FROM record_refs
+          WHERE record_id IN (${placeholders})`,
+      )
+      .all(...recordIds);
+    for (const r of rows) {
+      const entry: { recordId: string; kind?: string } = { recordId: r.target_id };
+      if (r.target_kind) {
+        entry.kind = r.target_kind;
+      }
+      let bucket = out.get(r.record_id);
+      if (!bucket) {
+        bucket = [];
+        out.set(r.record_id, bucket);
+      }
+      bucket.push(entry);
+    }
+    return out;
+  }
+
   /** Total number of live (non-tombstoned) records currently indexed. */
   size(): number {
     const row = this.db
@@ -407,7 +438,7 @@ function sanitizeFtsQuery(raw: string): string {
   // a literal.
   const tokens = trimmed
     .replace(/[\x00-\x1f]/g, ' ')
-    .replace(/["()*:^-]/g, ' ')
+    .replace(/["()*:^<>-]/g, ' ')
     .split(/\s+/)
     .filter(Boolean);
   if (tokens.length === 0) return '';

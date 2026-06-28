@@ -1,11 +1,17 @@
 /**
  * RichTextField component for rendering a nested TipTap editor.
  * Used for fields with widget 'textarea' or 'markdown'.
+ *
+ * Free-text TapTab fields mount the ontology copilot directly because nested
+ * editors do not inherit extensions from the outer TapTab document. Typing
+ * @<term> searches the backend resolve spine and inserts a grounded mention.
  */
 
 import { useEditor, EditorContent } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import { focusAdjacentTapTabField } from './tabNavPlugin';
+import { MentionNode } from '../../shared/taptab/slashMenu';
+import { buildOntologyCopilotExtension } from '../../shared/taptab/ontologyCopilot/OntologyCopilotExtension';
 
 export interface RichTextFieldProps {
   /** HTML string content */
@@ -16,7 +22,7 @@ export interface RichTextFieldProps {
 
 export function RichTextField({ content, onChange }: RichTextFieldProps) {
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [StarterKit, MentionNode, buildOntologyCopilotExtension()],
     content,
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());

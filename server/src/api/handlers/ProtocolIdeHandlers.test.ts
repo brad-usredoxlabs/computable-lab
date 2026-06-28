@@ -11,6 +11,12 @@ import { createProtocolIdeHandlers } from './ProtocolIdeHandlers.js';
 // Use vi.hoisted to create mock methods that are available at the hoisted position
 const mockImportSourceFn = vi.hoisted(() => vi.fn());
 const mockExecuteProjectionFn = vi.hoisted(() => vi.fn());
+const mockProjectionDepsFn = vi.hoisted(() => vi.fn());
+const mockInferenceCompleteFn = vi.hoisted(() => vi.fn());
+const mockCreateInferenceClientFn = vi.hoisted(() => vi.fn(() => ({
+  complete: mockInferenceCompleteFn,
+  completeStream: vi.fn(),
+})));
 
 vi.mock('../../protocol/ProtocolIdeSourceImportService.js', () => ({
   ProtocolIdeSourceImportService: function() {
@@ -19,9 +25,14 @@ vi.mock('../../protocol/ProtocolIdeSourceImportService.js', () => ({
 }));
 
 vi.mock('../../protocol/ProtocolIdeProjectionService.js', () => ({
-  ProtocolIdeProjectionService: function() {
+  ProtocolIdeProjectionService: function(_store: unknown, deps: unknown) {
+    mockProjectionDepsFn(deps);
     return { executeProjection: mockExecuteProjectionFn };
   },
+}));
+
+vi.mock('../../ai/InferenceClient.js', () => ({
+  createInferenceClient: mockCreateInferenceClientFn,
 }));
 
 // ---------------------------------------------------------------------------
@@ -71,6 +82,46 @@ function makeMockReply() {
     send: vi.fn().mockReturnThis(),
   } as unknown as FastifyReply;
 }
+
+describe('ProtocolIdeHandlers — inference wiring', () => {
+  beforeEach(() => {
+    mockCreateInferenceClientFn.mockClear();
+    mockInferenceCompleteFn.mockReset();
+    mockProjectionDepsFn.mockClear();
+  });
+
+  it('adapts Protocol IDE projection LLM calls through the shared InferenceClient', async () => {
+    mockInferenceCompleteFn.mockResolvedValue({ choices: [{ message: { content: 'ok' } }] });
+    const store = makeMockStore();
+    const ctx = {
+      ...makeMockCtx(store),
+      appConfig: {
+        ai: {
+          inference: {
+            provider: 'openai-compatible',
+            baseUrl: 'http://appliance-2:8000/v1',
+            model: 'local-protocol-model',
+            temperature: 0.2,
+          },
+          agent: {},
+        },
+      },
+    } as unknown as AppContext;
+
+    createProtocolIdeHandlers(ctx);
+    const deps = mockProjectionDepsFn.mock.calls.at(-1)?.[0] as { llmClient: { complete: (args: { prompt: string; maxTokens?: number }) => Promise<string> } };
+    const text = await deps.llmClient.complete({ prompt: 'resolve protocol context', maxTokens: 123 });
+
+    expect(text).toBe('ok');
+    expect(mockCreateInferenceClientFn).toHaveBeenCalledWith(ctx.appConfig!.ai!.inference);
+    expect(mockInferenceCompleteFn).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'local-protocol-model',
+      messages: [{ role: 'user', content: 'resolve protocol context' }],
+      max_tokens: 123,
+      temperature: 0.2,
+    }));
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Feedback helpers

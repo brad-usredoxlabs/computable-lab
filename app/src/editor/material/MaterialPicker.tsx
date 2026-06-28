@@ -11,7 +11,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { RefBadge } from '../../shared/ref'
 import type { Ref, OntologyRef, RecordRef } from '../../shared/ref'
-import { olsResultToRef } from '../../shared/api/olsClient'
+import { resolveCandidateToRef } from '../../shared/api/resolveUtil'
 import { apiClient } from '../../shared/api/client'
 import { useMaterialSearch } from '../hooks/useMaterialSearch'
 import type { MaterialSearchItem, MaterialSmartSearchResult, VendorSearchResult, VendorName } from '../../shared/api/client'
@@ -441,7 +441,7 @@ export function MaterialPicker({
   }
 
   function selectOLS(result: typeof olsResults[number]) {
-    const ref = olsResultToRef(result) as OntologyRef
+    const ref = resolveCandidateToRef(result) as OntologyRef
     if (ontologySelectionMode === 'route') {
       setIntentRef(ref)
     } else {
@@ -462,7 +462,7 @@ export function MaterialPicker({
   }
 
   function selectLiveVendor(result: VendorSearchResult) {
-    const ontologyRef = olsResults.length > 0 ? (olsResultToRef(olsResults[0]) as OntologyRef) : null
+    const ontologyRef = olsResults.length > 0 ? (resolveCandidateToRef(olsResults[0]) as OntologyRef) : null
     setVendorProductSeed({ ontologyRef, result })
     setLocalCreateName('')
     setQuery('')
@@ -1064,10 +1064,10 @@ export function MaterialPicker({
               </div>
               {olsResults.map((result, olsIdx) => {
                 const combinedIndex = visibleLocalResults.length + liveVendorResults.length + olsIdx
-                const description = result.description?.[0] ?? null
+                const description = result.definition ?? null
                 return (
                   <div
-                    key={result.obo_id}
+                    key={result.curie}
                     data-option
                     role="option"
                     aria-selected={focusedIndex === combinedIndex}
@@ -1098,7 +1098,7 @@ export function MaterialPicker({
                         border: '1px solid #bbf7d0',
                         flexShrink: 0,
                       }}>
-                        {result.obo_id}
+                        {result.curie}
                       </span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
@@ -1109,7 +1109,7 @@ export function MaterialPicker({
                         letterSpacing: '0.03em',
                         fontWeight: 600,
                       }}>
-                        {result.ontology_name}
+                        {result.namespace}
                       </span>
                       {description && (
                         <span style={{

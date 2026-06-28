@@ -22,6 +22,13 @@ export type WidgetType =
   | 'custom'
   | 'markdown'
   | 'combobox'
+  | 'chips'
+  | 'protocol-prose-authoring'
+  | 'protocol-material-roles'
+  | 'protocol-labware-roles'
+  | 'protocol-equipment-roles'
+  | 'protocol-step-roles'
+  | 'protocol-ai-suggestions'
 
 export type LayoutDirection = 'vertical' | 'horizontal' | 'grid' | 'sections'
 

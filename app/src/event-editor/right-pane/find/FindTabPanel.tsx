@@ -26,6 +26,7 @@ import {
 import { useOptionalEventEditor } from '../../EventEditorContext'
 import { artifactKindLabel, tabForArtifact } from '../openArtifactInViewer'
 import { getRunMethod, getStudyTree } from '../../../shared/api/treeClient'
+import { apiClient, type ProtocolContextResponse } from '../../../shared/api/client'
 import type {
   ExperimentTreeNode,
   RunTreeNode,
@@ -42,6 +43,75 @@ const KIND_ORDER: ArtifactSummary['artifactKind'][] = [
   'training',
   'saved-prompt',
 ]
+
+const PROTOCOL_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml'
+
+type ProtocolContextRecord = ProtocolContextResponse['projectTemplates'][number]
+
+function protocolSlug(title: string): string {
+  return title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 32) || 'protocol'
+}
+
+function newProtocolId(title: string): string {
+  return `PRT-${protocolSlug(title)}-${Math.random().toString(36).slice(2, 6)}`
+}
+
+function protocolRecordTitle(record: ProtocolContextRecord): string {
+  const payload = record.payload as Record<string, unknown>
+  return typeof payload.title === 'string' ? payload.title : record.recordId
+}
+
+function protocolRecordExperimentId(record: ProtocolContextRecord): string | null {
+  const payload = record.payload as Record<string, unknown>
+  const links = payload.links && typeof payload.links === 'object'
+    ? payload.links as Record<string, unknown>
+    : {}
+  return typeof links.experimentId === 'string' ? links.experimentId : null
+}
+
+function chooseProtocolRecord(records: ProtocolContextRecord[], promptTitle: string): ProtocolContextRecord | null {
+  if (records.length === 0) return null
+  if (records.length === 1) return records[0] ?? null
+  const options = records.map((record, index) => `${index + 1}. ${record.recordId} - ${protocolRecordTitle(record)}`).join('\n')
+  const answer = window.prompt(`${promptTitle}\n\n${options}`, '1')?.trim()
+  if (!answer) return null
+  const byIndex = Number(answer)
+  if (Number.isInteger(byIndex) && byIndex >= 1 && byIndex <= records.length) return records[byIndex - 1] ?? null
+  return records.find((record) => record.recordId === answer) ?? null
+}
+
+async function createProjectProtocolRecord(studyId: string, title: string): Promise<ProtocolContextRecord> {
+  const recordId = newProtocolId(title)
+  const payload = {
+    kind: 'protocol',
+    protocolLayer: 'universal',
+    recordId,
+    title,
+    state: 'draft',
+    links: { studyId },
+    overview: '',
+    purpose: '',
+    notes: '',
+    steps: [{ stepId: 'step-001', kind: 'other', description: 'Draft protocol step.' }],
+  }
+  await apiClient.createRecord(PROTOCOL_SCHEMA_ID, payload)
+  return {
+    recordId,
+    schemaId: PROTOCOL_SCHEMA_ID,
+    payload,
+  }
+}
+
+function promptForNewProjectProtocol(studyId: string, defaultTitle: string): Promise<ProtocolContextRecord | null> {
+  const title = window.prompt('Protocol title', defaultTitle)?.trim()
+  if (!title) return Promise.resolve(null)
+  return createProjectProtocolRecord(studyId, title)
+}
 
 export function FindTabPanel() {
   const ws = useWorkspace()
@@ -85,6 +155,8 @@ export function FindTabPanel() {
   const [study, setStudy] = useState<StudyTreeNode | null>(null)
   const [treeError, setTreeError] = useState<string | null>(null)
   const [treeLoading, setTreeLoading] = useState(true)
+  const [protocolContext, setProtocolContext] = useState<ProtocolContextResponse | null>(null)
+  const [createMenuOpen, setCreateMenuOpen] = useState(false)
 
   const refreshTree = useCallback(() => {
     let cancelled = false
@@ -108,25 +180,45 @@ export function FindTabPanel() {
     }
   }, [studyId])
 
+  const refreshProtocolContext = useCallback(() => {
+    let cancelled = false
+    apiClient.getProtocolContext({ studyId })
+      .then((result) => {
+        if (!cancelled) setProtocolContext(result)
+      })
+      .catch(() => {
+        if (!cancelled) setProtocolContext(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [studyId])
+
   useEffect(() => {
-    const dispose = refreshTree()
-    return dispose
-  }, [refreshTree])
+    const disposeTree = refreshTree()
+    const disposeProtocols = refreshProtocolContext()
+    return () => {
+      disposeTree()
+      disposeProtocols()
+    }
+  }, [refreshTree, refreshProtocolContext])
 
   // Stay live when the creation spine adds an experiment/run (the
   // record-create surface dispatches cl:records-changed on save).
   useEffect(() => {
     const onChanged = () => {
       refreshTree()
+      refreshProtocolContext()
       void refresh()
       inventory.refresh()
       usage.refresh()
     }
     window.addEventListener('cl:records-changed', onChanged)
     return () => window.removeEventListener('cl:records-changed', onChanged)
-  }, [refreshTree, refresh, inventory, usage])
+  }, [refreshTree, refreshProtocolContext, refresh, inventory, usage])
 
   const openNewExperiment = useCallback(() => {
+    setCreateMenuOpen(false)
     ws.openTab({
       id: recordCreateTabId('experiment', studyId),
       kind: 'record-create',
@@ -134,6 +226,25 @@ export function FindTabPanel() {
       studyId,
       title: 'New experiment',
     })
+  }, [studyId, ws])
+
+  const createProjectProtocol = useCallback(async () => {
+    setCreateMenuOpen(false)
+    try {
+      const record = await promptForNewProjectProtocol(studyId, 'New protocol template')
+      if (!record) return
+      const title = protocolRecordTitle(record)
+      window.dispatchEvent(new CustomEvent('cl:records-changed'))
+      ws.openTab({
+        id: recordEditTabId(record.recordId),
+        kind: 'record-edit',
+        recordId: record.recordId,
+        recordKind: 'protocol',
+        title,
+      })
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err))
+    }
   }, [studyId, ws])
 
   // Open the study record itself in a TapTab left-pane tab — the way back
@@ -165,6 +276,7 @@ export function FindTabPanel() {
           className="find-tab__refresh"
           onClick={() => {
             refreshTree()
+            refreshProtocolContext()
             void refresh()
             inventory.refresh()
             usage.refresh()
@@ -182,15 +294,25 @@ export function FindTabPanel() {
           <h4 className="right-panel__heading find-tab__group-heading">
             Experiments
           </h4>
-          <button
-            type="button"
-            className="find-tab__create-btn"
-            onClick={openNewExperiment}
-            data-testid="find-tab-new-experiment"
-            title="Create an experiment in this project"
-          >
-            +
-          </button>
+          <div className="find-tab__create-menu-wrap">
+            <button
+              type="button"
+              className="find-tab__create-btn"
+              onClick={() => setCreateMenuOpen((open) => !open)}
+              data-testid="find-tab-new-experiment"
+              title="Add to this project"
+              aria-haspopup="menu"
+              aria-expanded={createMenuOpen}
+            >
+              +
+            </button>
+            {createMenuOpen ? (
+              <div className="find-tab__create-menu" role="menu">
+                <button type="button" role="menuitem" onClick={openNewExperiment}>Experiment</button>
+                <button type="button" role="menuitem" onClick={() => void createProjectProtocol()}>Protocol</button>
+              </div>
+            ) : null}
+          </div>
         </div>
         {treeError ? (
           <p className="right-panel__error">{treeError}</p>
@@ -208,6 +330,8 @@ export function FindTabPanel() {
                 key={exp.recordId}
                 experiment={exp}
                 studyId={studyId}
+                projectTemplates={protocolContext?.projectTemplates ?? []}
+                experimentProtocols={protocolContext?.experimentProtocols ?? []}
               />
             ))}
           </ul>
@@ -278,15 +402,21 @@ export function FindTabPanel() {
 function ExperimentRow({
   experiment,
   studyId,
+  projectTemplates,
+  experimentProtocols,
 }: {
   experiment: ExperimentTreeNode
   studyId: string
+  projectTemplates: ProtocolContextRecord[]
+  experimentProtocols: ProtocolContextRecord[]
 }) {
   const ws = useWorkspace()
   const [open, setOpen] = useState(true)
+  const [createMenuOpen, setCreateMenuOpen] = useState(false)
   const hasRuns = experiment.runs.length > 0
 
   const openNewRun = useCallback(() => {
+    setCreateMenuOpen(false)
     ws.openTab({
       id: recordCreateTabId('run', experiment.recordId),
       kind: 'record-create',
@@ -296,6 +426,35 @@ function ExperimentRow({
       title: 'New run',
     })
   }, [experiment.recordId, studyId, ws])
+
+  const createExperimentProtocol = useCallback(async () => {
+    setCreateMenuOpen(false)
+    try {
+      const source = projectTemplates.length > 0
+        ? chooseProtocolRecord(projectTemplates, 'Choose a project protocol to specialize for this experiment. Enter a number or recordId.')
+        : await promptForNewProjectProtocol(studyId, `${experiment.title} protocol template`)
+      if (!source) return
+      const title = window.prompt('Experiment protocol title', `${protocolRecordTitle(source)} - ${experiment.title}`)?.trim()
+      const result = await apiClient.specializeProtocolForExperiment({
+        protocolId: source.recordId,
+        studyId,
+        experimentId: experiment.recordId,
+        ...(title ? { title } : {}),
+      })
+      window.dispatchEvent(new CustomEvent('cl:records-changed'))
+      const payload = result.record.payload as Record<string, unknown>
+      const resolvedTitle = typeof payload.title === 'string' ? payload.title : result.record.recordId
+      ws.openTab({
+        id: recordEditTabId(result.record.recordId),
+        kind: 'record-edit',
+        recordId: result.record.recordId,
+        recordKind: 'local-protocol',
+        title: resolvedTitle,
+      })
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err))
+    }
+  }, [experiment.recordId, experiment.title, projectTemplates, studyId, ws])
 
   // Open the experiment record in a TapTab left-pane tab. The chevron stays a
   // separate disclosure toggle, so clicking the title navigates (file-tree
@@ -336,20 +495,37 @@ function ExperimentRow({
           <span className="find-tab__row-title">{experiment.title}</span>
           <span className="find-tab__row-meta">{experiment.runs.length}</span>
         </button>
-        <button
-          type="button"
-          className="find-tab__create-btn"
-          onClick={openNewRun}
-          data-testid={`find-tab-new-run-${experiment.recordId}`}
-          title={`Create a run under ${experiment.title}`}
-        >
-          +
-        </button>
+        <div className="find-tab__create-menu-wrap">
+          <button
+            type="button"
+            className="find-tab__create-btn"
+            onClick={() => setCreateMenuOpen((open) => !open)}
+            data-testid={`find-tab-new-run-${experiment.recordId}`}
+            title={`Add under ${experiment.title}`}
+            aria-haspopup="menu"
+            aria-expanded={createMenuOpen}
+          >
+            +
+          </button>
+          {createMenuOpen ? (
+            <div className="find-tab__create-menu" role="menu">
+              <button type="button" role="menuitem" onClick={openNewRun}>Run</button>
+              <button type="button" role="menuitem" onClick={() => void createExperimentProtocol()}>Protocol</button>
+            </div>
+          ) : null}
+        </div>
       </div>
       {open && hasRuns ? (
         <ul className="find-tab__tree-list find-tab__tree-list--nested">
           {experiment.runs.map((run) => (
-            <RunRow key={run.recordId} run={run} />
+            <RunRow
+              key={run.recordId}
+              run={run}
+              availableProtocols={[
+                ...experimentProtocols.filter((record) => protocolRecordExperimentId(record) === experiment.recordId),
+                ...projectTemplates,
+              ]}
+            />
           ))}
         </ul>
       ) : null}
@@ -357,10 +533,17 @@ function ExperimentRow({
   )
 }
 
-function RunRow({ run }: { run: RunTreeNode }) {
+function RunRow({
+  run,
+  availableProtocols,
+}: {
+  run: RunTreeNode
+  availableProtocols: ProtocolContextRecord[]
+}) {
   const ws = useWorkspace()
   const [busy, setBusy] = useState(false)
   const [missing, setMissing] = useState(false)
+  const [createMenuOpen, setCreateMenuOpen] = useState(false)
   const openMethodDeck = useCallback(async () => {
     setBusy(true)
     setMissing(false)
@@ -390,28 +573,80 @@ function RunRow({ run }: { run: RunTreeNode }) {
       setBusy(false)
     }
   }, [run.recordId, run.title, ws])
+
+  const attachProtocolMethod = useCallback(async () => {
+    setCreateMenuOpen(false)
+    setBusy(true)
+    setMissing(false)
+    try {
+      const source = availableProtocols.length > 0
+        ? chooseProtocolRecord(availableProtocols, 'Choose a protocol to use in this run. Enter a number or recordId.')
+        : await promptForNewProjectProtocol(run.studyId, `${run.title} protocol template`)
+      if (!source) return
+      const result = await apiClient.useProtocolInRun({
+        protocolId: source.recordId,
+        runId: run.recordId,
+        studyId: run.studyId,
+        experimentId: run.experimentId,
+      })
+      window.dispatchEvent(new CustomEvent('cl:records-changed'))
+      ws.openTab({
+        id: `tab-deck-${result.methodEventGraphId}`,
+        kind: 'deck',
+        eventGraphId: result.methodEventGraphId,
+        runId: run.recordId,
+        title: run.title,
+      })
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusy(false)
+    }
+  }, [availableProtocols, run.experimentId, run.recordId, run.studyId, run.title, ws])
+
   return (
     <li>
-      <button
-        type="button"
-        className="find-tab__tree-row"
-        data-testid={`find-tab-run-${run.recordId}`}
-        onClick={() => void openMethodDeck()}
-        disabled={busy}
-        title={
-          missing
-            ? 'This run has no method event graph yet'
-            : `Open ${run.title} in the event editor`
-        }
-      >
-        <span className="find-tab__chev" aria-hidden>
-          ▶
-        </span>
-        <span className="find-tab__row-title">{run.title}</span>
-        {missing ? (
-          <span className="find-tab__row-meta">no method</span>
-        ) : null}
-      </button>
+      <div className="find-tab__tree-row-wrap">
+        <button
+          type="button"
+          className="find-tab__tree-row"
+          data-testid={`find-tab-run-${run.recordId}`}
+          onClick={() => void openMethodDeck()}
+          disabled={busy}
+          title={
+            missing
+              ? 'This run has no method event graph yet'
+              : `Open ${run.title} in the event editor`
+          }
+        >
+          <span className="find-tab__chev" aria-hidden>
+            ▶
+          </span>
+          <span className="find-tab__row-title">{run.title}</span>
+          {missing ? (
+            <span className="find-tab__row-meta">no method</span>
+          ) : null}
+        </button>
+        <div className="find-tab__create-menu-wrap">
+          <button
+            type="button"
+            className="find-tab__create-btn"
+            onClick={() => setCreateMenuOpen((open) => !open)}
+            disabled={busy}
+            data-testid={`find-tab-use-protocol-${run.recordId}`}
+            title={`Add method to ${run.title}`}
+            aria-haspopup="menu"
+            aria-expanded={createMenuOpen}
+          >
+            +
+          </button>
+          {createMenuOpen ? (
+            <div className="find-tab__create-menu" role="menu">
+              <button type="button" role="menuitem" onClick={() => void attachProtocolMethod()}>Method from protocol</button>
+            </div>
+          ) : null}
+        </div>
+      </div>
     </li>
   )
 }

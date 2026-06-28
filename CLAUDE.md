@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Agent Modes
+
+**Default mode: Analyze, converse, and submit specs.** The primary workflow is to understand the codebase, discuss approaches, and drop spec `.md` files into `~/.hermes/specs/inbox/` for the kanban pipeline (architect → coder → reviewer → browser-reviewer) to process asynchronously.
+
+**Intervention mode: Direct code fixes.** When the user explicitly asks to "intervene" or "fix this", switch to direct implementation mode. This is necessary when the coding loop itself is broken and can't self-repair, or when infrastructure/tooling issues block the pipeline. The agent will fix code directly, run tests, and verify the fix works.
+
 ## Monorepo Structure
 
 ```

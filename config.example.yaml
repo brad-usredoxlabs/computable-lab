@@ -144,7 +144,7 @@ repositories:
 # ai:
 #   inference:
 #     provider: openai-compatible
-#     baseUrl: http://127.0.0.1:11434/v1
+#     baseUrl: http://appliance-2:8000/v1
 #     model: qwen3.6-35b-a3b
 #   agent:
 #     maxTurns: 15
@@ -155,6 +155,15 @@ repositories:
 #     #                             passes), forced-tool LLM call on fallthrough
 #     #   preflight-llm           — legacy: LLM-assisted preflight + open agent loop
 #     draftFlowMode: forced-tool
+#   # Optional PDF/prose extraction can use the same OpenAI-compatible local
+#   # appliance endpoint as interactive inference.
+#   extractor:
+#     enabled: true
+#     provider: openai-compatible
+#     baseUrl: http://appliance-2:8000/v1
+#     model: qwen3.6-35b-a3b
+#     temperature: 0
+#     max_tokens: 4096
 #   # Background KV-context warming ("compiled contexts") — llama.cpp servers
 #   # only. After an event-graph Accept or edit, the server re-prefills the
 #   # (system prompt + graph) prefix on the idle GPU so the next draft prompt

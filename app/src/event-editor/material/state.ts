@@ -3,7 +3,7 @@ import type {
   ConcentrationValue,
 } from '../../types/material'
 import type { Ref } from '../../types/ref'
-import type { OLSResultRef } from '../../shared/api/olsClient'
+import type { ResolveRef as OLSResultRef } from '../../shared/api/resolveUtil'
 
 /**
  * State machine for the `AddMaterialModal`. The modal walks the user

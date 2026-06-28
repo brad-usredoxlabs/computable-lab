@@ -33,7 +33,7 @@ import { DEFAULT_CONFIG, DEFAULT_REPO_CONFIG } from './types.js';
 export const DEFAULT_EXTRACTOR_CONFIG: ExtractorProfileConfig = {
   enabled: false,
   provider: 'openai-compatible',
-  baseUrl: 'http://127.0.0.1:11434/v1',
+  baseUrl: 'http://appliance-2:8000/v1',
   model: 'Qwen/Qwen3.5-9B-Instruct',
   temperature: 0.0,
   max_tokens: 2048,

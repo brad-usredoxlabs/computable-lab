@@ -39,6 +39,40 @@ properties:
   description:
     type: string
 
+  overview:
+    type: string
+    description: "Optional human-readable overview of when and how this protocol is used."
+
+  purpose:
+    type: string
+    description: "Optional statement of the scientific or operational purpose for this protocol."
+
+  notes:
+    type: string
+    description: "Optional authoring notes, caveats, or project-specific guidance."
+
+  authoring:
+    type: object
+    additionalProperties: false
+    description: "Optional TapTab authoring sidecar state linked to Protocol IDE-style AI workspaces. Advisory AI state lives here; the protocol remains canonical."
+    properties:
+      sessionRef:
+        allOf:
+        - $ref: "./datatypes/ref.schema.yaml"
+        - type: object
+          properties:
+            kind: { const: record }
+            type: { const: protocol-ide-session }
+      linkedAt:
+        type: string
+        format: date-time
+      lastSuggestedAt:
+        type: string
+        format: date-time
+      lastSuggestionCount:
+        type: integer
+        minimum: 0
+
   version:
     type: string
     description: "Optional semantic version for human use (e.g., '1.2.0')."

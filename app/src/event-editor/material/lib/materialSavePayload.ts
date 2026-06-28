@@ -19,10 +19,10 @@ import type {
   RecipeInputRole,
 } from '../../../shared/api/client'
 import type { CompositionEntryValue, ConcentrationValue } from '../../../types/material'
-import type { OLSResultRef } from '../../../shared/api/olsClient'
+import type { ResolveRef } from '../../../shared/api/resolveUtil'
 
 /** Map the builders' ontology refs onto the formulation `material.classRefs` shape. */
-function toClassRefs(classRefs: OLSResultRef[]): NonNullable<CreateFormulationRequest['material']>['classRefs'] {
+function toClassRefs(classRefs: ResolveRef[]): NonNullable<CreateFormulationRequest['material']>['classRefs'] {
   return classRefs.map((r) => ({
     kind: 'ontology' as const,
     id: r.id,
@@ -37,7 +37,7 @@ export function materialConceptPayload(args: {
   materialId: string
   name: string
   domain: string
-  classRefs?: OLSResultRef[]
+  classRefs?: ResolveRef[]
   tags?: string[]
 }): Record<string, unknown> {
   return {
@@ -55,7 +55,7 @@ export function singleActiveFormulationPayload(args: {
   materialId: string
   conceptName: string
   outputName: string
-  classRefs: OLSResultRef[]
+  classRefs: ResolveRef[]
   concentration?: ConcentrationValue
   solventRef?: MaterialRefInput
 }): CreateFormulationRequest {
@@ -110,7 +110,7 @@ export function compositionFormulationPayload(args: {
   conceptName: string
   outputName: string
   domain: string
-  classRefs: OLSResultRef[]
+  classRefs: ResolveRef[]
   composition: CompositionEntryValue[]
 }): CreateFormulationRequest {
   const { materialId, conceptName, outputName, domain, classRefs, composition } = args

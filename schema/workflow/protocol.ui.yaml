@@ -6,6 +6,9 @@ display:
   titleField: "$.title"
   icon: "protocol"
 
+taptab:
+  style: "prose"
+
 form:
   layout: "sections"
   sections:
@@ -29,20 +32,45 @@ form:
     - path: "$.version"
       widget: "text"
       label: "Version"
+    - path: "$.createdBy"
+      widget: "readonly"
+      label: "Author"
+      readonly: true
+    - path: "$.purpose"
+      widget: "textarea"
+      label: "Purpose"
     - path: "$.description"
-      widget: "markdown"
-      label: "Description"
+      widget: "protocol-prose-authoring"
+      label: "Protocol"
+      help: "Human-authored prose remains valid without accepted AI structure."
+    - path: "$.notes"
+      widget: "textarea"
+      label: "Notes"
+  - title: "AI Suggestions"
+    collapsible: true
+    fields:
+    - path: "$.authoring"
+      widget: "protocol-ai-suggestions"
+      label: "Structure Suggestions"
   - title: "Phases"
     collapsible: true
     fields:
     - path: "$.phases"
       widget: "array"
       label: "Phases"
-  - title: "Protocol Steps"
-    collapsible: true
+  - title: "Protocol Structure"
     fields:
+    - path: "$.roles.materialRoles"
+      widget: "protocol-material-roles"
+      label: "Materials"
+    - path: "$.roles.labwareRoles"
+      widget: "protocol-labware-roles"
+      label: "Consumables / Labware"
+    - path: "$.roles.instrumentRoles"
+      widget: "protocol-equipment-roles"
+      label: "Equipment"
     - path: "$.steps"
-      widget: "array"
+      widget: "protocol-step-roles"
       label: "Steps"
   - title: "Document Control"
     fields:

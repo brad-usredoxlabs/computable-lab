@@ -22,3 +22,12 @@ export type { ObjectWidgetProps } from './ObjectWidget';
 
 export { ChipComboboxWidget } from './ChipComboboxWidget';
 export type { ChipComboboxWidgetProps, ChipEntry } from './ChipComboboxWidget';
+
+export {
+  ProtocolAiSuggestionsWidget,
+  ProtocolEquipmentRolesWidget,
+  ProtocolLabwareRolesWidget,
+  ProtocolMaterialRolesWidget,
+  ProtocolProseAuthoringWidget,
+  ProtocolStepRolesWidget,
+} from './ProtocolAuthoringWidgets';

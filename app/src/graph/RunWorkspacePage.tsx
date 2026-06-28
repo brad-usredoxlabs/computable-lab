@@ -90,7 +90,7 @@ export function RunWorkspacePage() {
       : activeTab === 'overview'
         ? <RunOverviewTab summary={summary} runId={resolvedRunId} chat={aiChat} />
         : activeTab === 'plan'
-          ? <RunPlanTab summary={summary} />
+          ? <RunPlanTab summary={summary} workspace={workspace} onRefresh={refresh} />
           : activeTab === 'biology'
             ? <RunBiologyTab summary={summary} runId={resolvedRunId} chat={aiChat} />
             : activeTab === 'readouts'
@@ -163,7 +163,8 @@ export function RunWorkspacePage() {
 
         .run-workspace-header__primary,
         .run-workspace-header__secondary,
-        .run-workspace-card__link {
+        .run-workspace-card__link,
+        .run-workspace-card__button {
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -173,8 +174,15 @@ export function RunWorkspacePage() {
           font-weight: 700;
         }
 
+        .run-workspace-card__button {
+          border: 0;
+          cursor: pointer;
+          font: inherit;
+        }
+
         .run-workspace-header__primary,
-        .run-workspace-card__link {
+        .run-workspace-card__link,
+        .run-workspace-card__button {
           background: #0969da;
           color: #ffffff;
         }
@@ -185,9 +193,53 @@ export function RunWorkspacePage() {
           border: 1px solid #b6d1ff;
         }
 
-        .run-workspace-header__secondary:disabled {
+        .run-workspace-header__secondary:disabled,
+        .run-workspace-card__button:disabled {
           opacity: 0.65;
-          cursor: wait;
+          cursor: not-allowed;
+        }
+
+        .run-workspace-protocol-list {
+          list-style: none;
+          margin: 0.75rem 0 1rem;
+          padding: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 0.65rem;
+        }
+
+        .run-workspace-protocol-list li {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 0.75rem;
+          border-top: 1px solid #e2e8f0;
+          padding-top: 0.65rem;
+        }
+
+        .run-workspace-protocol-list span {
+          min-width: 0;
+        }
+
+        .run-workspace-protocol-list strong,
+        .run-workspace-protocol-list small {
+          display: block;
+        }
+
+        .run-workspace-protocol-list small {
+          color: #64748b;
+          font-size: 0.78rem;
+          margin-top: 0.15rem;
+        }
+
+        .run-workspace-card__status {
+          color: #166534;
+          font-weight: 700;
+        }
+
+        .run-workspace-card__error {
+          color: #b91c1c;
+          font-weight: 700;
         }
 
         .run-workspace-nav {

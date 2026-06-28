@@ -244,6 +244,31 @@
   max-width: 540px;
 }
 
+/* Floating "Send to AI" button that appears when text is selected. */
+.pdf-extracted-text__send-btn {
+  appearance: none;
+  background: var(--cl-accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: background 120ms ease, transform 120ms ease;
+  pointer-events: auto;
+}
+
+.pdf-extracted-text__send-btn:hover {
+  background: color-mix(in srgb, var(--cl-accent) 85%, #000);
+  transform: translate(-50%, -100%) scale(1.05);
+}
+
+.pdf-extracted-text__send-btn:active {
+  transform: translate(-50%, -100%) scale(0.97);
+}
+
 /* ---- Toolbar -------------------------------------------------------- */
 
 .viewer-toolbar--pdf {

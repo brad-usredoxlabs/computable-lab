@@ -3,15 +3,11 @@
  * per-page extracted text below the PDF canvas. Mirrors the order of the
  * pages in the document so the user can scroll-and-grab arbitrary spans.
  *
- * The plan calls for a `RichTextField (read-only)` here. In practice the
- * extracted text has no formatting to preserve — pdfjs's TextLayer flattens
- * paragraphs to whitespace-separated runs — so a TipTap editor would add
- * weight without value. A plain selectable block per page is what makes
- * cross-PDF search and "send to AI as context" work; the TipTap-shaped
- * upgrade can come if we ever want inline editing of the extracted text
- * (which would diverge from the canonical PDF anyway).
+ * Selection flow: select text by dragging → floating "Send to AI" button
+ * appears → click sends the text to the AI chat in the right pane.
  */
 
+import { useCallback, useEffect, useState } from 'react'
 import type { ArtifactExtractedPage } from '../../../types/artifact'
 
 export interface ExtractedTextPanelProps {
@@ -20,13 +16,75 @@ export interface ExtractedTextPanelProps {
   scrollToPage?: number | null
   /** Substring to visually mark in the rendered text. Undefined → no marks. */
   highlight?: string
+  /** Called when the user selects text and clicks "Send to AI". */
+  onSendSelection?: (text: string, pageNumber: number) => void
 }
 
 export function ExtractedTextPanel({
   pages,
   scrollToPage,
   highlight,
+  onSendSelection,
 }: ExtractedTextPanelProps) {
+  const [selection, setSelection] = useState<{
+    text: string
+    x: number
+    y: number
+    pageNumber: number
+  } | null>(null)
+
+  const handleSelection = useCallback(() => {
+    if (!onSendSelection) return
+    const sel = window.getSelection()
+    const text = sel?.toString().trim()
+    if (!text || text.length < 2) {
+      setSelection(null)
+      return
+    }
+    const range = sel?.getRangeAt(0)
+    if (!range) return
+    const rect = range.getBoundingClientRect()
+    // Find the page number by walking up the DOM
+    const startNode = range.startContainer as HTMLElement
+    const pageEl = startNode.closest?.('[data-page-number]') as HTMLElement | null
+      ?? startNode.parentElement?.closest?.('[data-page-number]')
+    const pageNumber = pageEl
+      ? parseInt(pageEl.dataset.pageNumber || '0', 10)
+      : 1
+    setSelection({
+      text,
+      x: rect.left + rect.width / 2,
+      y: rect.top - 8,
+      pageNumber,
+    })
+  }, [onSendSelection])
+
+  const handleClickSend = useCallback(() => {
+    if (selection && onSendSelection) {
+      onSendSelection(selection.text, selection.pageNumber)
+    }
+    setSelection(null)
+  }, [selection, onSendSelection])
+
+  useEffect(() => {
+    document.addEventListener('selectionchange', handleSelection)
+    return () => document.removeEventListener('selectionchange', handleSelection)
+  }, [handleSelection])
+
+  // Clear selection on mousedown outside the button
+  useEffect(() => {
+    const handler = () => setSelection(null)
+    const handler2 = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelection(null)
+    }
+    document.addEventListener('mousedown', handler)
+    document.addEventListener('keydown', handler2)
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      document.removeEventListener('keydown', handler2)
+    }
+  }, [])
+
   if (pages.length === 0) {
     return (
       <div className="pdf-extracted-text pdf-extracted-text--empty">
@@ -51,6 +109,22 @@ export function ExtractedTextPanel({
           scrollIntoView={scrollToPage === page.pageNumber}
         />
       ))}
+      {/* Floating Send to AI button */}
+      {selection && (
+        <button
+          className="pdf-extracted-text__send-btn"
+          style={{
+            position: 'fixed',
+            left: selection.x,
+            top: selection.y,
+            transform: 'translate(-50%, -100%)',
+            zIndex: 1000,
+          }}
+          onClick={handleClickSend}
+        >
+          Send to AI
+        </button>
+      )}
     </div>
   )
 }

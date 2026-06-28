@@ -8,6 +8,8 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { AppContext } from '../../server.js';
 import type { ApiError } from '../types.js';
+import { createInferenceClient } from '../../ai/InferenceClient.js';
+import { resolveAiProfile } from '../../config/types.js';
 import { ExecutionOrchestrator, ExecutionError } from '../../execution/ExecutionOrchestrator.js';
 import {
   MaterialCompilerService,
@@ -21,6 +23,15 @@ import {
   type LabProtocolReviewRequest,
   type LabProtocolReviewResponse,
 } from '../../protocol/ProtocolLabReviewService.js';
+import {
+  ProtocolAuthoringError,
+  ProtocolAuthoringService,
+  type ProtocolStructureSuggestion,
+} from '../../protocol/ProtocolAuthoringService.js';
+import {
+  ProtocolContextError,
+  ProtocolContextService,
+} from '../../protocol/ProtocolContextService.js';
 
 type ProtocolMaterialCompileRequest = {
   requests: Array<{
@@ -73,8 +84,126 @@ export function createProtocolHandlers(ctx: AppContext) {
   const orchestrator = new ExecutionOrchestrator(ctx);
   const extraction = new ProtocolExtractionService(ctx);
   const materialCompiler = new MaterialCompilerService(ctx.store);
+  const aiProfile = ctx.appConfig?.ai ? resolveAiProfile(ctx.appConfig.ai) : undefined;
+  const authoring = new ProtocolAuthoringService(ctx.store, aiProfile?.inference?.baseUrl ? {
+    inferenceClient: createInferenceClient(aiProfile.inference),
+    inferenceConfig: aiProfile.inference,
+  } : {});
+  const protocolContext = new ProtocolContextService(ctx.store);
+
+  const handleProtocolContextError = (err: unknown, reply: FastifyReply): ApiError => {
+    if (err instanceof ProtocolContextError) {
+      reply.status(err.statusCode);
+      return { error: err.code, message: err.message };
+    }
+    reply.status(500);
+    return { error: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : String(err) };
+  };
 
   return {
+    /**
+     * GET /protocol-context?studyId=&experimentId=&runId=
+     * Resolve protocol templates and run methods for the current workspace scope.
+     */
+    async getProtocolContext(
+      request: FastifyRequest<{
+        Querystring: { studyId?: string; experimentId?: string; runId?: string };
+      }>,
+      reply: FastifyReply,
+    ) {
+      try {
+        reply.status(200);
+        return await protocolContext.getContext(request.query ?? {});
+      } catch (err) {
+        return handleProtocolContextError(err, reply);
+      }
+    },
+
+    /**
+     * POST /protocol-actions/use-in-run
+     * Create a planned-run and run-attached method event graph from a protocol.
+     */
+    async useProtocolInRun(
+      request: FastifyRequest<{
+        Body: {
+          protocolId: string;
+          runId: string;
+          studyId?: string;
+          experimentId?: string;
+          title?: string;
+          replace?: boolean;
+        };
+      }>,
+      reply: FastifyReply,
+    ) {
+      try {
+        const body = request.body ?? {};
+        const result = await protocolContext.useProtocolInRun({
+          protocolId: body.protocolId,
+          runId: body.runId,
+          ...(body.studyId ? { studyId: body.studyId } : {}),
+          ...(body.experimentId ? { experimentId: body.experimentId } : {}),
+          ...(body.title ? { title: body.title } : {}),
+          ...(body.replace !== undefined ? { replace: body.replace } : {}),
+        });
+        reply.status(201);
+        return { success: true, ...result };
+      } catch (err) {
+        return handleProtocolContextError(err, reply);
+      }
+    },
+
+    /**
+     * POST /protocol-actions/specialize-for-experiment
+     * Create an experiment-linked local-protocol from a project/global protocol.
+     */
+    async specializeForExperiment(
+      request: FastifyRequest<{
+        Body: { protocolId: string; studyId: string; experimentId: string; title?: string };
+      }>,
+      reply: FastifyReply,
+    ) {
+      try {
+        const body = request.body ?? {};
+        const envelope = await protocolContext.specializeForExperiment({
+          protocolId: body.protocolId,
+          studyId: body.studyId,
+          experimentId: body.experimentId,
+          ...(body.title ? { title: body.title } : {}),
+        });
+        reply.status(201);
+        return { success: true, record: envelope };
+      } catch (err) {
+        return handleProtocolContextError(err, reply);
+      }
+    },
+
+    /**
+     * POST /protocol-actions/promote-to-project-template
+     * Promote a run/planned-run/event-graph method to a project local-protocol template.
+     */
+    async promoteToProjectTemplate(
+      request: FastifyRequest<{
+        Body: { runId?: string; plannedRunId?: string; eventGraphId?: string; studyId?: string; title?: string };
+      }>,
+      reply: FastifyReply,
+    ) {
+      try {
+        const body = request.body ?? {};
+        const envelope = await protocolContext.promoteRunMethod({
+          ...(body.runId ? { runId: body.runId } : {}),
+          ...(body.plannedRunId ? { plannedRunId: body.plannedRunId } : {}),
+          ...(body.eventGraphId ? { eventGraphId: body.eventGraphId } : {}),
+          ...(body.studyId ? { studyId: body.studyId } : {}),
+          ...(body.title ? { title: body.title } : {}),
+        });
+        reply.status(201);
+        return { success: true, record: envelope };
+      } catch (err) {
+        return handleProtocolContextError(err, reply);
+      }
+    },
+
     /**
      * POST /protocols/from-event-graph
      * Save an event graph as a protocol record.
@@ -195,6 +324,88 @@ export function createProtocolHandlers(ctx: AppContext) {
           error: 'INTERNAL_ERROR',
           message: err instanceof Error ? err.message : String(err),
         };
+      }
+    },
+
+    /**
+     * POST /protocols/:id/authoring-session
+     * Link a canonical protocol to a Protocol IDE-style authoring sidecar.
+     */
+    async createAuthoringSession(
+      request: FastifyRequest<{ Params: { id: string } }>,
+      reply: FastifyReply,
+    ): Promise<{ success: true; protocolId: string; sessionId: string; status: string } | ApiError> {
+      try {
+        const result = await authoring.createAuthoringSession(request.params.id);
+        reply.status(201);
+        return result;
+      } catch (err) {
+        if (err instanceof ProtocolAuthoringError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return { error: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    /**
+     * POST /protocols/:id/suggest-structure
+     * Return advisory structure suggestions without mutating roles or steps.
+     */
+    async suggestStructure(
+      request: FastifyRequest<{ Params: { id: string } }>,
+      reply: FastifyReply,
+    ): Promise<{ success: true; protocolId: string; suggestions: ProtocolStructureSuggestion[] } | ApiError> {
+      try {
+        const result = await authoring.suggestStructure(request.params.id);
+        reply.status(200);
+        return result;
+      } catch (err) {
+        if (err instanceof ProtocolAuthoringError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return { error: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : String(err) };
+      }
+    },
+
+    /**
+     * POST /protocols/:id/apply-suggestions
+     * Apply only accepted advisory suggestions to canonical protocol roles/steps.
+     */
+    async applySuggestions(
+      request: FastifyRequest<{
+        Params: { id: string };
+        Body: {
+          suggestions?: ProtocolStructureSuggestion[];
+          acceptedSuggestions?: ProtocolStructureSuggestion[];
+          acceptedSuggestionIds?: string[];
+        };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: true; protocolId: string; applied: { materialRoles: number; equipmentRoles: number; steps: number }; protocol: unknown } | ApiError> {
+      try {
+        const body = request.body ?? {};
+        const suggestions = Array.isArray(body.acceptedSuggestions)
+          ? body.acceptedSuggestions
+          : Array.isArray(body.suggestions)
+            ? body.suggestions.filter((suggestion) => {
+                if (!Array.isArray(body.acceptedSuggestionIds)) return true;
+                return body.acceptedSuggestionIds.includes(suggestion.id);
+              })
+            : [];
+        const result = await authoring.applySuggestions(request.params.id, suggestions);
+        reply.status(200);
+        return result;
+      } catch (err) {
+        if (err instanceof ProtocolAuthoringError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return { error: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : String(err) };
       }
     },
 

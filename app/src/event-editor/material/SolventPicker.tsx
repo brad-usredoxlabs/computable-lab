@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { searchOLS, olsResultToRef, type OLSResultRef, type OLSSearchResult } from '../../shared/api/olsClient'
-import { apiClient, type MaterialSearchItem } from '../../shared/api/client'
+import { apiClient, type MaterialSearchItem, type ResolveCandidate } from '../../shared/api/client'
+import { resolveCandidateToRef, tierBadge, type ResolveRef } from '../../shared/api/resolveUtil'
 
 /**
  * Inline picker for the solvent slot in BuildCompoundForm. Searches
  * local materials first (preferring records the user already created)
- * and then ChEBI for solvent ontology terms. Returns a `MaterialRef`-
- * compatible shape that `createFormulation`'s `solventRef` accepts.
+ * and then the backend resolve() spine for ontology solvent terms.
+ * Returns a `MaterialRef`-compatible shape that `createFormulation`'s
+ * `solventRef` accepts.
  *
- * Bias toward chemistry: only searches ChEBI for the ontology fallback,
- * because solvents are almost always ChEBI terms.
+ * Bias toward chemistry: resolve spine will naturally surface ChEBI
+ * terms for solvent queries since those are the most relevant ontology
+ * matches for chemical solvents.
  */
 
 const DEBOUNCE_MS = 200
@@ -17,17 +19,29 @@ const RESULT_LIMIT = 6
 
 export type PickedSolvent =
   | { kind: 'record'; recordId: string; label: string }
-  | OLSResultRef
+  | ResolveRef
 
 export interface SolventPickerProps {
   picked: PickedSolvent | null
   onChange: (next: PickedSolvent | null) => void
 }
 
+/** Tier badge style helper */
+function tierBadgeStyle(variant: string) {
+  switch (variant) {
+    case 'local':
+      return 'bg-emerald-50 text-emerald-600'
+    case 'new':
+      return 'bg-orange-50 text-orange-600'
+    default:
+      return 'bg-purple-50 text-purple-600'
+  }
+}
+
 export function SolventPicker({ picked, onChange }: SolventPickerProps) {
   const [query, setQuery] = useState('')
   const [localResults, setLocalResults] = useState<MaterialSearchItem[]>([])
-  const [ontologyResults, setOntologyResults] = useState<OLSSearchResult[]>([])
+  const [ontologyResults, setOntologyResults] = useState<ResolveCandidate[]>([])
   const [loading, setLoading] = useState(false)
   const latestQueryRef = useRef('')
   latestQueryRef.current = query
@@ -43,13 +57,13 @@ export function SolventPicker({ picked, onChange }: SolventPickerProps) {
     setLoading(true)
     const handle = window.setTimeout(async () => {
       try {
-        const [local, ontology] = await Promise.all([
+        const [local, resolve] = await Promise.all([
           apiClient.searchMaterials({ q: trimmed, limit: RESULT_LIMIT }),
-          searchOLS({ query: trimmed, ontologies: ['chebi'], rows: RESULT_LIMIT }),
+          apiClient.resolve({ term: trimmed, limit: RESULT_LIMIT }),
         ])
         if (latestQueryRef.current !== query) return
         setLocalResults(local.items ?? [])
-        setOntologyResults(ontology ?? [])
+        setOntologyResults(resolve.candidates ?? [])
       } catch {
         if (latestQueryRef.current !== query) return
         setLocalResults([])
@@ -123,24 +137,33 @@ export function SolventPicker({ picked, onChange }: SolventPickerProps) {
               </button>
             </li>
           ))}
-          {ontologyResults.map((result) => (
-            <li key={result.iri}>
-              <button
-                type="button"
-                className="add-material-row"
-                data-category="ontology"
-                onClick={() => onChange(olsResultToRef(result))}
-              >
-                <span className="add-material-row-title">
-                  {result.label}
-                  <span className="add-material-row-ontology">
-                    {result.ontology_prefix ?? result.ontology_name}
+          {ontologyResults.map((candidate) => {
+            const ref = resolveCandidateToRef(candidate)
+            const badge = tierBadge(candidate)
+            return (
+              <li key={candidate.curie}>
+                <button
+                  type="button"
+                  className="add-material-row"
+                  data-category="ontology"
+                  onClick={() => onChange(ref)}
+                >
+                  <span className="add-material-row-title">
+                    {candidate.label}
+                    <span className="add-material-row-ontology">
+                      {candidate.namespace}
+                    </span>
                   </span>
-                </span>
-                <span className="add-material-row-meta">{result.obo_id}</span>
-              </button>
-            </li>
-          ))}
+                  <span className="add-material-row-meta">
+                    {candidate.curie}
+                    <span className={`text-[9px] ${tierBadgeStyle(badge.variant)} rounded px-1 py-0.5 ml-1`}>
+                      {badge.label}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            )
+          })}
         </ul>
       ) : null}
     </div>

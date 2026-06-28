@@ -4,17 +4,16 @@
  * `apiClient.listRecordsByKind('study')`), filterable by title; click a
  * row to call `onPick(studyId, title)`.
  *
- * Intentionally minimal — for the workspace redesign's first cut this
- * does not support search-as-you-type against a remote endpoint (the
- * record set is small enough to fetch once and filter client-side) and
- * does not differentiate state (draft / accepted) since the user can see
- * the title.
+ * When the user types a search query, it delegates to the JSON-LD search
+ * index via `apiClient.searchProjects()` which returns full-text matches
+ * grouped by study with hierarchical paths (Study → Experiment → Run →
+ * Component). Empty query still shows all studies (existing behavior).
  *
  * Tap-outside and Escape both dismiss via `onDismiss`.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { apiClient } from '../../shared/api/client'
+import { apiClient, type StudySearchHit, type StudySearchMatch } from '../../shared/api/client'
 import './StudyPickerPopover.css'
 
 interface StudyOption {
@@ -38,12 +37,20 @@ export interface StudyPickerPopoverProps {
 
 export function StudyPickerPopover({ onPick, onDismiss, onCreateNew }: StudyPickerPopoverProps) {
   const [studies, setStudies] = useState<StudyOption[] | null>(null)
+  const [searchHits, setSearchHits] = useState<StudySearchHit[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [highlightedIndex, setHighlightedIndex] = useState(0)
+  const [isSearching, setIsSearching] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const searchSeqRef = useRef(0)
+  // Guard: when onPick fires, the mousedown tap-outside handler must not
+  // dismiss before the pick handler completes (§1: click-race fix).
+  const pickedRef = useRef(false)
 
+  // Fetch all studies for the empty-query case.
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -56,7 +63,9 @@ export function StudyPickerPopover({ onPick, onDismiss, onCreateNew }: StudyPick
           const title = typeof payload.title === 'string' ? payload.title : env.recordId
           options.push({ studyId: env.recordId, title })
         }
-        options.sort((a, b) => a.title.localeCompare(b.title))
+        options.sort((a, b) =>
+          (a.title || a.studyId).localeCompare(b.title || b.studyId),
+        )
         setStudies(options)
       } catch (err) {
         if (cancelled) return
@@ -69,6 +78,60 @@ export function StudyPickerPopover({ onPick, onDismiss, onCreateNew }: StudyPick
     }
   }, [])
 
+  const handleQueryChange = useCallback((nextQuery: string) => {
+    const trimmed = nextQuery.trim()
+    const seq = searchSeqRef.current + 1
+    searchSeqRef.current = seq
+
+    if (searchTimerRef.current !== null) {
+      clearTimeout(searchTimerRef.current)
+      searchTimerRef.current = null
+    }
+
+    setQuery(nextQuery)
+    setHighlightedIndex(0)
+
+    if (!trimmed) {
+      setSearchHits(null)
+      setIsSearching(false)
+      setError(null)
+      return
+    }
+
+    setIsSearching(true)
+    setSearchHits(null)
+    setError(null)
+
+    searchTimerRef.current = setTimeout(() => {
+      searchTimerRef.current = null
+      void (async () => {
+        try {
+          const result = await apiClient.searchProjects(trimmed)
+          if (searchSeqRef.current !== seq) return
+          setSearchHits(result.studies)
+          setError(null)
+        } catch (err) {
+          if (searchSeqRef.current !== seq) return
+          setSearchHits([])
+          const message = err instanceof Error ? err.message : String(err)
+          setError('Search failed: ' + message)
+        } finally {
+          if (searchSeqRef.current === seq) setIsSearching(false)
+        }
+      })()
+    }, 300)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      searchSeqRef.current += 1
+      if (searchTimerRef.current !== null) {
+        clearTimeout(searchTimerRef.current)
+        searchTimerRef.current = null
+      }
+    }
+  }, [])
+
   // Autofocus the search input so keyboard users can type immediately.
   useEffect(() => {
     inputRef.current?.focus()
@@ -77,6 +140,10 @@ export function StudyPickerPopover({ onPick, onDismiss, onCreateNew }: StudyPick
   // Tap-outside to dismiss.
   useEffect(() => {
     function onDocClick(event: MouseEvent) {
+      if (pickedRef.current) {
+        pickedRef.current = false
+        return
+      }
       const target = event.target as Node | null
       if (target && containerRef.current?.contains(target)) return
       onDismiss()
@@ -85,16 +152,33 @@ export function StudyPickerPopover({ onPick, onDismiss, onCreateNew }: StudyPick
     return () => document.removeEventListener('mousedown', onDocClick)
   }, [onDismiss])
 
+  // When query is non-empty, use search hits; otherwise use all studies.
+  const isSearchMode = query.trim().length > 0
+
   const filtered = useMemo(() => {
+    if (isSearchMode) {
+      // searchHits is already filtered by the backend
+      return searchHits ?? []
+    }
     if (!studies) return []
     const q = query.trim().toLowerCase()
-    if (!q) return studies
-    return studies.filter(
-      (s) =>
-        s.title.toLowerCase().includes(q) ||
-        s.studyId.toLowerCase().includes(q),
-    )
-  }, [studies, query])
+    if (!q) return studies.map((s) => ({
+      studyId: s.studyId,
+      title: s.title,
+      matches: [] as StudySearchMatch[],
+    }))
+    return studies
+      .filter(
+        (s) =>
+          s.title.toLowerCase().includes(q) ||
+          s.studyId.toLowerCase().includes(q),
+      )
+      .map((s) => ({
+        studyId: s.studyId,
+        title: s.title,
+        matches: [] as StudySearchMatch[],
+      }))
+  }, [studies, searchHits, query, isSearchMode])
 
   // Clamp highlightedIndex into the visible range so arrow keys can never
   // point at an unrendered row.
@@ -127,6 +211,7 @@ export function StudyPickerPopover({ onPick, onDismiss, onCreateNew }: StudyPick
         event.preventDefault()
         const choice = filtered[clampedHighlight]
         if (choice) {
+          pickedRef.current = true
           onPick(choice.studyId, choice.title)
         } else if (onCreateNew && query.trim()) {
           // No match — Enter flows into creating what was searched for.
@@ -151,10 +236,7 @@ export function StudyPickerPopover({ onPick, onDismiss, onCreateNew }: StudyPick
         className="study-picker-popover__input"
         placeholder="Search studies"
         value={query}
-        onChange={(e) => {
-          setQuery(e.target.value)
-          setHighlightedIndex(0)
-        }}
+        onChange={(e) => handleQueryChange(e.target.value)}
         onKeyDown={handleKeyDown}
         data-testid="study-picker-input"
       />
@@ -163,10 +245,19 @@ export function StudyPickerPopover({ onPick, onDismiss, onCreateNew }: StudyPick
           {error}
         </div>
       ) : null}
+      {isSearching ? (
+        <div className="study-picker-popover__empty" role="status">
+          Searching projects for "{query.trim().slice(0, 40)}{query.trim().length > 40 ? '…' : ''}"…
+        </div>
+      ) : null}
+      {/* aria-live region for result count (§9: accessibility). */}
+      <div className="study-picker-popover__sr-only" aria-live="polite" aria-atomic="true">
+        {filtered.length} {filtered.length === 1 ? 'result' : 'results'} available
+      </div>
       <div className="study-picker-popover__list" role="listbox">
-        {studies === null ? (
+        {studies === null && !isSearchMode ? (
           <div className="study-picker-popover__empty">Loading…</div>
-        ) : filtered.length === 0 ? (
+        ) : isSearching ? null : filtered.length === 0 ? (
           onCreateNew ? (
             <button
               type="button"
@@ -175,38 +266,46 @@ export function StudyPickerPopover({ onPick, onDismiss, onCreateNew }: StudyPick
               data-testid="study-picker-create-from-query"
             >
               {query.trim()
-                ? `No studies match — create "${query.trim()}"`
+                ? `No studies match — create "${query.trim().slice(0, 30)}${query.trim().length > 30 ? '…' : ''}"`
                 : 'No studies yet — create the first project'}
             </button>
           ) : (
             <div className="study-picker-popover__empty">No studies match.</div>
           )
         ) : (
-          filtered.map((s, i) => {
+          filtered.map((hit, i) => {
             const isHighlighted = i === clampedHighlight
             return (
-              <button
-                key={s.studyId}
-                type="button"
-                role="option"
-                aria-selected={isHighlighted}
+              <div
+                key={hit.studyId}
                 className={
                   isHighlighted
                     ? 'study-picker-popover__row study-picker-popover__row--highlighted'
                     : 'study-picker-popover__row'
                 }
+                role="option"
+                aria-selected={isHighlighted}
                 onMouseEnter={() => setHighlightedIndex(i)}
-                onClick={() => onPick(s.studyId, s.title)}
-                data-testid={`study-picker-row-${s.studyId}`}
+                onClick={() => {
+                  pickedRef.current = true
+                  onPick(hit.studyId, hit.title)
+                }}
+                data-testid={`study-picker-row-${hit.studyId}`}
               >
-                <span className="study-picker-popover__row-title">{s.title}</span>
-                <span className="study-picker-popover__row-id">{s.studyId}</span>
-              </button>
+                <span className="study-picker-popover__row-title">{hit.title}</span>
+                <span className="study-picker-popover__row-id">{hit.studyId}</span>
+                {hit.matches && hit.matches.length > 0 ? (
+                  <span className="study-picker-popover__match-path">
+                    Matched in: {hit.matches[0].path}
+                    {hit.matches.length > 1 && ` (+${hit.matches.length - 1} more)`}
+                  </span>
+                ) : null}
+              </div>
             )
           })
         )}
       </div>
-      {studies !== null && studies.length >= FETCH_LIMIT ? (
+      {studies !== null && studies.length >= FETCH_LIMIT && !isSearchMode ? (
         <div className="study-picker-popover__footer-note">
           First {FETCH_LIMIT} studies shown — refine your search.
         </div>

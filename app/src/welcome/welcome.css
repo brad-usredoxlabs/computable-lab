@@ -12,6 +12,10 @@
   color: var(--cl-text);
 }
 
+.welcome-page--picker-open {
+  padding-bottom: 392px;
+}
+
 .welcome-page__head {
   display: flex;
   flex-direction: column;

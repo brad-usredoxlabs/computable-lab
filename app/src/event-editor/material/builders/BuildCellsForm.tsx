@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiClient } from '../../../shared/api/client'
-import type { OLSResultRef } from '../../../shared/api/olsClient'
+import type { ResolveRef } from '../../../shared/api/resolveUtil'
 import {
   MATERIAL_SCHEMA_ID,
   generateMaterialId,
@@ -31,16 +31,16 @@ import { cellsInstancePayload, materialConceptPayload } from '../lib/materialSav
  */
 
 export interface BuildCellsFormProps {
-  seedOntologyRef?: OLSResultRef
+  seedOntologyRef?: ResolveRef
   onSaved: (next: PickedMaterial) => void
   onCancel: () => void
   onError: (message: string) => void
 }
 
-function classifySeed(seed?: OLSResultRef): {
-  organism?: OLSResultRef
-  cellType?: OLSResultRef
-  tissue?: OLSResultRef
+function classifySeed(seed?: ResolveRef): {
+  organism?: ResolveRef
+  cellType?: ResolveRef
+  tissue?: ResolveRef
   name?: string
 } {
   if (!seed) return {}
@@ -61,9 +61,9 @@ export function BuildCellsForm({
 }: BuildCellsFormProps) {
   const seed = classifySeed(seedOntologyRef)
   const [name, setName] = useState(seed.name ?? '')
-  const [organism, setOrganism] = useState<OLSResultRef | null>(seed.organism ?? null)
-  const [cellType, setCellType] = useState<OLSResultRef | null>(seed.cellType ?? null)
-  const [tissue, setTissue] = useState<OLSResultRef | null>(seed.tissue ?? null)
+  const [organism, setOrganism] = useState<ResolveRef | null>(seed.organism ?? null)
+  const [cellType, setCellType] = useState<ResolveRef | null>(seed.cellType ?? null)
+  const [tissue, setTissue] = useState<ResolveRef | null>(seed.tissue ?? null)
   const [passage, setPassage] = useState('')
   const [vesselType, setVesselType] = useState('')
   const [seedingDensity, setSeedingDensity] = useState('')
@@ -87,7 +87,7 @@ export function BuildCellsForm({
     try {
       const trimmedName = name.trim()
       const materialId = generateMaterialId(trimmedName)
-      const classRefs: OLSResultRef[] = []
+      const classRefs: ResolveRef[] = []
       if (organism) classRefs.push(organism)
       if (cellType) classRefs.push(cellType)
       if (tissue) classRefs.push(tissue)

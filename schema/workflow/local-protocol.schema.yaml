@@ -35,6 +35,14 @@ properties:
   title:
     type: string
 
+  overview:
+    type: string
+    description: "Optional human-readable overview of this lab-specific protocol realization."
+
+  purpose:
+    type: string
+    description: "Optional statement of the experiment or lab purpose for this local protocol."
+
   inherits_from:
     $ref: "./datatypes/ref.schema.yaml"
     description: "Required: the global protocol this realizes."

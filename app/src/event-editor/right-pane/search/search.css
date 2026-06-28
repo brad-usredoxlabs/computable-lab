@@ -82,6 +82,11 @@
   margin-top: 4px;
 }
 
+.vendor-pdf-search__result-row {
+  display: flex;
+  gap: 6px;
+}
+
 .vendor-pdf-search__result {
   appearance: none;
   background: transparent;
@@ -92,9 +97,11 @@
   padding: 8px 10px;
   cursor: pointer;
   font: inherit;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-width: 0;
 }
 
 .vendor-pdf-search__result:hover:not(:disabled) {
@@ -148,4 +155,29 @@
   font-size: 11px;
   line-height: 1.4;
   margin: 0;
+}
+
+/* "Build Protocol" button — green accent, sits beside the ingest button. */
+.vendor-pdf-search__result-build {
+  appearance: none;
+  background: #059669;
+  color: #fff;
+  border: 0;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  align-self: stretch;
+}
+
+.vendor-pdf-search__result-build:hover:not(:disabled) {
+  background: #047857;
+}
+
+.vendor-pdf-search__result-build:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

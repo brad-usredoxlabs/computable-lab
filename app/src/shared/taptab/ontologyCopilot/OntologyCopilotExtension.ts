@@ -13,9 +13,9 @@
  * `SlashSuggestionList` renderer and the `insertMention` command from
  * `MentionNode`, so it adds no new rendering surface.
  *
- * Opt-in: mount it in an editor's extension list to enable. Local-record
- * matches and the tier-5 mint affordance are intentionally excluded here —
- * those flow through `/m` and the material picker respectively.
+ * Opt-in: mount it in an editor's extension list to enable. The result list
+ * exposes the same five-tier funnel as the backend spine: local records, OAK,
+ * OLS4, vendor, then mint-local as the deliberate last resort.
  */
 
 import { Extension } from '@tiptap/core'
@@ -30,7 +30,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { createElement } from 'react'
 import { SlashSuggestionList, type SlashSuggestionListHandle } from '../slashMenu/SlashSuggestionList'
 import type { SlashMention, SlashSuggestion } from '../slashMenu/types'
-import { apiClient } from '../../api/client'
+import { candidateDetail } from '../slashMenu/resolvers'
+import { apiClient, type ResolveCandidate } from '../../api/client'
 
 const LIMIT = 8
 
@@ -59,22 +60,53 @@ async function resolveOntologyItems(
   try {
     const { candidates } = await apiClient.resolve({ term: q, kinds, limit: LIMIT })
     // Mention type follows the requested kind set; with several kinds the
-    // first one wins as the pill type (ontology CURIEs are material-shaped
-    // in practice — OAK/OLS4 don't index labware or protocols).
+    // first one wins as the pill type.
     const primaryKind = kinds[0] ?? 'material'
-    return candidates
-      .filter((c) => (c.source === 'oak' || c.source === 'ols4') && c.curie)
-      .map((c) => ({
-        key: `ontology:${c.curie}`,
-        label: c.label,
-        badge: c.namespace ? c.namespace.toUpperCase() : 'Ontology',
-        subtitle: c.curie,
-        mention: mentionFor(primaryKind, c.curie, c.label),
-      }))
+    return candidates.map((candidate) => suggestionForCandidate(candidate, primaryKind, q))
   } catch {
     // Spine unavailable (older backend / offline) — degrade silently.
     return []
   }
+}
+
+function suggestionForCandidate(
+  candidate: ResolveCandidate,
+  primaryKind: CopilotKind,
+  query: string,
+): SlashSuggestion {
+  if (candidate.source === 'mint') {
+    const label = candidate.mint?.label || query
+    return {
+      key: `mint:${label}`,
+      label: `Create local term "${label}"`,
+      badge: 'New',
+      subtitle: 'Mint in this lab namespace',
+      detail: candidateDetail(candidate),
+      mention: mentionFor(primaryKind, `local:${label}`, label),
+      pinBottom: true,
+      resolveMention: async () => {
+        const minted = await apiClient.mintLocalTerm('material', label, query)
+        return mentionFor(primaryKind, `local:${minted.recordId}`, minted.label)
+      },
+    }
+  }
+
+  return {
+    key: `${candidate.source}:${candidate.curie}`,
+    label: candidate.label,
+    badge: badgeForCandidate(candidate),
+    subtitle: candidate.curie,
+    detail: candidateDetail(candidate),
+    mention: mentionFor(primaryKind, candidate.curie, candidate.label),
+  }
+}
+
+function badgeForCandidate(candidate: ResolveCandidate): string {
+  if (candidate.source === 'local-record') return 'Local'
+  if (candidate.source === 'oak') return candidate.namespace ? `${candidate.namespace} local` : 'OAK'
+  if (candidate.source === 'ols4') return candidate.namespace || 'OLS'
+  if (candidate.source === 'vendor') return 'Vendor'
+  return candidate.namespace || 'Ontology'
 }
 
 export interface OntologyCopilotOptions {
@@ -113,6 +145,18 @@ export function buildOntologyCopilotExtension(
           command: ({ editor, range, props }) => {
             const item = props as SlashSuggestion
             if (item.disabled) return
+            if (item.resolveMention) {
+              editor.chain().focus().deleteRange(range).run()
+              void item
+                .resolveMention()
+                .then((mention) => {
+                  if (mention) editor.chain().focus().insertMention(mention).run()
+                })
+                .catch((err) => {
+                  console.warn('Ontology mention resolution failed:', err)
+                })
+              return
+            }
             editor.chain().focus().deleteRange(range).insertMention(item.mention).run()
           },
           items: ({ query }) => resolveOntologyItems(query, kinds),

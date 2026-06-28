@@ -138,6 +138,16 @@ export function SearchTabPanel() {
         onIngested={() => {
           void refresh()
         }}
+        onBuildProtocol={(artifactId, info) => {
+          // Open the PDF as a viewer tab and switch to AI mode
+          ws.openTab({
+            id: `tab-pdf-${artifactId}`,
+            kind: 'pdf',
+            artifactId,
+            title: info.title ?? 'PDF protocol',
+          })
+          ws.setRightPaneMode('ai')
+        }}
       />
     </div>
   )

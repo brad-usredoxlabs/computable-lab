@@ -431,6 +431,23 @@ export function AiTabPanel() {
     [addedSources, ws],
   )
 
+  // Listen for text selection events from the PDF viewer.
+  // When the user selects text and clicks "Send to AI", the PDF viewer dispatches
+  // a custom event with the selected text. This handler catches it and sends it
+  // as a message to the AI chat.
+  useEffect(() => {
+    const handlePdfSelection = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { text: string; pageNumber: number }
+      if (!detail || !detail.text) return
+      // Send the selected text as a prompt to the AI chat
+      void chat.send(`Here is a protocol section from the PDF (page ${detail.pageNumber}):\n\n${detail.text}`, {
+        enableThinking: false,
+      })
+    }
+    window.addEventListener('pdf-text-selection', handlePdfSelection)
+    return () => window.removeEventListener('pdf-text-selection', handlePdfSelection)
+  }, [chat])
+
   // A ghost preview is on the deck → the next prompt revises it (the context
   // builder attaches draftRevision). Surface that explicitly in the input.
   const previewActive = Boolean(

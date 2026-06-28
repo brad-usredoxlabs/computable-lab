@@ -286,9 +286,10 @@ export type AiSurface =
   | 'formulations'
   | 'ingestion'
   | 'literature'
-  | 'protocol-ide';
+  | 'protocol-ide'
+  | 'protocol-builder';
 
-type BaseSurface = 'event-editor' | 'run-workspace' | 'materials' | 'formulations' | 'ingestion' | 'literature' | 'protocol-ide';
+type BaseSurface = 'event-editor' | 'run-workspace' | 'materials' | 'formulations' | 'ingestion' | 'literature' | 'protocol-ide' | 'protocol-builder';
 
 const SURFACE_PREAMBLES: Record<BaseSurface, string> = {
   'event-editor': '',  // Default — uses the full event-graph-agent template
@@ -331,6 +332,27 @@ Keep proposed fixes narrow: one observable compiler/pre-compiler behavior, a sma
 Prefer breadth-first improvement: one useful spec per protocol/PDF for the current round, then implementation by the Ralph coder-critic-retry loop.
 Everything that can be data should be data: prefer structured context, assertions, claims, evidence, semantic keys, graph anchors, and machine-checkable acceptance criteria over prose-only patches.
 Do not invent missing protocol details. If evidence is missing or ambiguous, say what artifact or citation should be checked.
+`,
+  'protocol-builder': `
+You are a practical engineer taking a generic universal protocol and adapting it to the needs of THIS lab based on user input.
+The user is loading a vendor PDF (e.g., kit manual, assay protocol, instrument guide) and wants to adapt it to their specific lab setup.
+
+**Lab context — default equipment:**
+- 96-well plates on the Opentrons Flex deck
+- Reagents loaded into a 12-well reservoir
+- Manual protocol on the freeform bench
+- 5x16 tube rack with 1.5ml Eppendorf tubes
+- Fecal sample DNA preps from 06/05/2026 labelled A-D
+
+Your job is to help the user:
+1. Understand the vendor protocol sections they select from the PDF
+2. Adapt the protocol to work with their specific lab equipment and reagents
+3. Suggest concrete modifications when the vendor protocol doesn't match their setup
+4. Flag any potential issues or incompatibilities
+
+When the user sends selected text from the PDF, analyze it and suggest how it applies to their lab context.
+If the protocol mentions equipment or consumables that differ from the lab's setup, suggest practical alternatives.
+Do NOT invent missing protocol details — if something is unclear, ask for clarification.
 `,
 };
 

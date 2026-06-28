@@ -2,6 +2,8 @@
  * Unit tests for documentMapper.ts
  */
 
+import { readFileSync } from 'node:fs';
+import YAML from 'yaml';
 import { describe, it, expect } from 'vitest';
 import { buildDocument } from './documentMapper';
 import type { UISpec } from '../../types/uiSpec';
@@ -225,3 +227,39 @@ describe('buildDocument', () => {
     expect((fieldRow.attrs as { label: string }).label).toBe('someField');
   });
 });
+
+
+describe('protocol UI projection', () => {
+  it('shows structured protocol authoring fields and hides Overview', () => {
+    const uiSpec = YAML.parse(
+      readFileSync(new URL('../../../../schema/workflow/protocol.ui.yaml', import.meta.url), 'utf8'),
+    ) as UISpec
+    const doc = buildDocument(uiSpec, {
+      recordId: 'PRT-test',
+      kind: 'protocol',
+      title: 'Cell seeding',
+      version: '1.0.0',
+      createdBy: 'Dr Example',
+      purpose: 'Prepare seeded plates.',
+      overview: 'Legacy overview should not be rendered.',
+      description: '',
+      roles: { materialRoles: [], labwareRoles: [], instrumentRoles: [] },
+      steps: [{ stepId: 'step_1', kind: 'other', description: 'Seed cells' }],
+    })
+
+    const fields = doc.content.flatMap((section: JSONContent) =>
+      (section.content ?? []).filter((item: JSONContent) => item.type === 'fieldRow'),
+    ) as JSONContent[]
+    const labels = fields.map((field) => (field.attrs as { label: string }).label)
+    const widgets = fields.map((field) => (field.attrs as { widget: string }).widget)
+
+    expect(labels).toContain('Author')
+    expect(labels).toContain('Purpose')
+    expect(labels).toContain('Materials')
+    expect(labels).toContain('Consumables / Labware')
+    expect(labels).toContain('Equipment')
+    expect(labels).toContain('Steps')
+    expect(labels).not.toContain('Overview')
+    expect(widgets).toContain('protocol-labware-roles')
+  })
+})

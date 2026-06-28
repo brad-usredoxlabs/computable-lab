@@ -1,7 +1,8 @@
 /**
- * OntologyAxisPicker — small popover that searches OLS for ontology terms,
- * scoped to a single recipe axis (chemical/CHEBI, organism/NCBITaxon,
- * anatomy/Uberon, cellular-compartment/GO, cell-line/CL, or open).
+ * OntologyAxisPicker — small popover that searches the backend resolve() spine
+ * for ontology terms, scoped to a single recipe axis (chemical/CHEBI,
+ * organism/NCBITaxon, anatomy/Uberon, cellular-compartment/GO, cell-line/CL,
+ * or open).
  *
  * Used inside the wizard's Recipe and Mechanism panels. The picker only
  * surfaces ontology terms; local-material search is intentionally out of
@@ -10,7 +11,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { searchOLS, olsResultToRef, type OLSSearchResult } from '../../../shared/api/olsClient'
+import { apiClient, type ResolveCandidate } from '../../../shared/api/client'
+import { resolveCandidateToRef, tierBadge, type ResolveRef } from '../../../shared/api/resolveUtil'
 import type { Ref } from '../../../types/ref'
 import type { RecipeAxis } from './WizardDraft'
 
@@ -52,10 +54,23 @@ interface Props {
 const SEARCH_DEBOUNCE_MS = 250
 const SEARCH_LIMIT = 12
 
+/** Tier badge style helper */
+function tierBadgeStyle(variant: string) {
+  switch (variant) {
+    case 'local':
+      return 'bg-emerald-50 text-emerald-600'
+    case 'new':
+      return 'bg-orange-50 text-orange-600'
+    default:
+      return 'bg-purple-50 text-purple-600'
+  }
+}
+
 export function OntologyAxisPicker({ axis, value, onChange, placeholder, buttonLabel }: Props) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<OLSSearchResult[]>([])
+  const [results, setResults] = useState<ResolveRef[]>([])
+  const [candidates, setCandidates] = useState<ResolveCandidate[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -73,6 +88,7 @@ export function OntologyAxisPicker({ axis, value, onChange, placeholder, buttonL
     const trimmed = query.trim()
     if (trimmed.length < 2) {
       setResults([])
+      setCandidates([])
       setLoading(false)
       return
     }
@@ -80,9 +96,17 @@ export function OntologyAxisPicker({ axis, value, onChange, placeholder, buttonL
     setError(null)
     const handle = window.setTimeout(async () => {
       try {
-        const ontologies = AXIS_TO_ONTOLOGIES[axis]
-        const hits = await searchOLS({ query: trimmed, ontologies, rows: SEARCH_LIMIT })
-        setResults(hits ?? [])
+        const { candidates } = await apiClient.resolve({
+          term: trimmed,
+          limit: SEARCH_LIMIT,
+        })
+        const filtered = (candidates ?? []).filter((c) => {
+          const ns = c.namespace.toUpperCase()
+          const axisOntos = AXIS_TO_ONTOLOGIES[axis].map((o) => o.toUpperCase())
+          return axisOntos.includes(ns)
+        })
+        setCandidates(filtered)
+        setResults(filtered.map(resolveCandidateToRef))
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Ontology search failed')
       } finally {
@@ -124,11 +148,13 @@ export function OntologyAxisPicker({ axis, value, onChange, placeholder, buttonL
           ) : null}
           {loading ? <div className="cl-axis-picker__hint">Searching…</div> : null}
           {error ? <div className="cl-axis-picker__error">{error}</div> : null}
-          {results.map((result) => {
-            const ref = olsResultToRef(result)
+          {candidates.map((candidate, idx) => {
+            const ref = results[idx]
+            if (!ref) return null
+            const badge = tierBadge(candidate)
             return (
               <button
-                key={result.iri}
+                key={candidate.curie}
                 type="button"
                 className="cl-axis-picker__row-btn"
                 onClick={() => {
@@ -136,11 +162,15 @@ export function OntologyAxisPicker({ axis, value, onChange, placeholder, buttonL
                   setOpen(false)
                   setQuery('')
                   setResults([])
+                  setCandidates([])
                 }}
               >
                 <span className="cl-axis-picker__row-title">{ref.label || ref.id}</span>
                 <span className="cl-axis-picker__row-meta">
-                  {ref.kind === 'ontology' ? ref.namespace || result.ontology_prefix : 'ontology'} · {ref.id}
+                  {ref.kind === 'ontology' ? ref.namespace : 'ontology'} · {ref.id}
+                  <span className={`text-[9px] ${tierBadgeStyle(badge.variant)} rounded px-1 py-0.5 ml-1`}>
+                    {badge.label}
+                  </span>
                 </span>
               </button>
             )

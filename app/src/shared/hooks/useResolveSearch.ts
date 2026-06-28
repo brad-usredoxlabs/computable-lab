@@ -1,30 +1,25 @@
 /**
- * useOLSSearch - React hook for searching OLS with debouncing and caching.
- * 
+ * useResolveSearch — React hook for searching via the backend resolve() spine.
+ *
+ * Replaces useOLSSearch: all ontology searches now route through POST /api/resolve
+ * which implements a 5-tier resolution strategy (local records → OAK → OLS4 → vendor → mint).
+ *
  * Features:
  * - Debounced search (default 300ms)
- * - Local cache layer
  * - Loading/error state
  * - Automatic abort on unmount or new search
+ * - Server-side caching (no localStorage needed)
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { searchOLS, type OLSSearchResult, type OLSSearchOptions } from '../api/olsClient'
-import {
-  getCachedOLSResults,
-  setCachedOLSResults,
-  makeCacheKey,
-  cacheLabelsFromResults,
-} from '../api/olsCache'
+import { apiClient, type ResolveCandidate } from '../api/client'
 
 /**
- * Options for the useOLSSearch hook
+ * Options for the useResolveSearch hook
  */
-export interface UseOLSSearchOptions {
+export interface UseResolveSearchOptions {
   /** Search query string */
   query: string
-  /** Ontology names to search (e.g., ['cl', 'chebi']) */
-  ontologies?: string[]
   /** Whether search is enabled (default: true) */
   enabled?: boolean
   /** Debounce delay in ms (default: 300) */
@@ -33,22 +28,24 @@ export interface UseOLSSearchOptions {
   minQueryLength?: number
   /** Maximum results to fetch (default: 10) */
   maxResults?: number
-  /** Additional OLS search options */
-  searchOptions?: Partial<OLSSearchOptions>
+  /** Skip remote tiers (OLS4, vendor) — local only */
+  localOnly?: boolean
+  /** Restrict to candidate kinds (e.g. ['material','labware']) */
+  kinds?: string[]
+  /** Material layer to bias toward */
+  level?: ResolveCandidate['level']
 }
 
 /**
- * Return type for useOLSSearch
+ * Return type for useResolveSearch
  */
-export interface UseOLSSearchResult {
-  /** Search results */
-  results: OLSSearchResult[]
+export interface UseResolveSearchResult {
+  /** Ranked candidates from the resolve spine */
+  results: ResolveCandidate[]
   /** Loading state */
   loading: boolean
   /** Error if search failed */
   error: Error | null
-  /** Whether results came from cache */
-  fromCache: boolean
   /** Manually trigger a search */
   refetch: () => Promise<void>
   /** Clear results */
@@ -56,30 +53,29 @@ export interface UseOLSSearchResult {
 }
 
 /**
- * Hook for searching OLS with debouncing and caching.
- * 
+ * Hook for searching via the backend resolve() spine with debouncing.
+ *
  * @example
- * const { results, loading, error } = useOLSSearch({
+ * const { results, loading, error } = useResolveSearch({
  *   query: searchTerm,
- *   ontologies: ['cl', 'chebi'],
  *   enabled: searchTerm.length >= 2
  * })
  */
-export function useOLSSearch(opts: UseOLSSearchOptions): UseOLSSearchResult {
+export function useResolveSearch(opts: UseResolveSearchOptions): UseResolveSearchResult {
   const {
     query,
-    ontologies = [],
     enabled = true,
     debounceMs = 300,
     minQueryLength = 2,
     maxResults = 10,
-    searchOptions,
+    localOnly = false,
+    kinds,
+    level,
   } = opts
 
-  const [results, setResults] = useState<OLSSearchResult[]>([])
+  const [results, setResults] = useState<ResolveCandidate[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
-  const [fromCache, setFromCache] = useState(false)
 
   // Abort controller for canceling pending requests
   const abortRef = useRef<AbortController | null>(null)
@@ -92,18 +88,6 @@ export function useOLSSearch(opts: UseOLSSearchOptions): UseOLSSearchResult {
       setResults([])
       setLoading(false)
       setError(null)
-      setFromCache(false)
-      return
-    }
-
-    // Check cache first
-    const cacheKey = makeCacheKey(query, ontologies)
-    const cached = getCachedOLSResults(cacheKey)
-    if (cached) {
-      setResults(cached)
-      setFromCache(true)
-      setLoading(false)
-      setError(null)
       return
     }
 
@@ -113,14 +97,14 @@ export function useOLSSearch(opts: UseOLSSearchOptions): UseOLSSearchResult {
 
     setLoading(true)
     setError(null)
-    setFromCache(false)
 
     try {
-      const data = await searchOLS({
-        query,
-        ontologies,
-        rows: maxResults,
-        ...searchOptions,
+      const data = await apiClient.resolve({
+        term: query,
+        limit: maxResults,
+        localOnly,
+        kinds,
+        level,
       })
 
       // Check if this request was aborted
@@ -128,11 +112,7 @@ export function useOLSSearch(opts: UseOLSSearchOptions): UseOLSSearchResult {
         return
       }
 
-      // Cache the results
-      setCachedOLSResults(cacheKey, data)
-      cacheLabelsFromResults(data)
-
-      setResults(data)
+      setResults(data.candidates ?? [])
       setError(null)
     } catch (e) {
       // Don't set error if aborted
@@ -144,7 +124,7 @@ export function useOLSSearch(opts: UseOLSSearchOptions): UseOLSSearchResult {
     } finally {
       setLoading(false)
     }
-  }, [query, ontologies, enabled, minQueryLength, maxResults, searchOptions])
+  }, [query, enabled, minQueryLength, maxResults, localOnly, kinds, level])
 
   // Debounced effect
   useEffect(() => {
@@ -156,18 +136,6 @@ export function useOLSSearch(opts: UseOLSSearchOptions): UseOLSSearchResult {
     // If not enabled or query too short, clear results immediately
     if (!enabled || query.length < minQueryLength) {
       setResults([])
-      setLoading(false)
-      setError(null)
-      setFromCache(false)
-      return
-    }
-
-    // Check cache synchronously
-    const cacheKey = makeCacheKey(query, ontologies)
-    const cached = getCachedOLSResults(cacheKey)
-    if (cached) {
-      setResults(cached)
-      setFromCache(true)
       setLoading(false)
       setError(null)
       return
@@ -187,7 +155,7 @@ export function useOLSSearch(opts: UseOLSSearchOptions): UseOLSSearchResult {
         clearTimeout(timerRef.current)
       }
     }
-  }, [query, ontologies, enabled, minQueryLength, debounceMs, doSearch])
+  }, [query, enabled, minQueryLength, debounceMs, doSearch])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -201,21 +169,13 @@ export function useOLSSearch(opts: UseOLSSearchOptions): UseOLSSearchResult {
 
   // Manual refetch
   const refetch = useCallback(async () => {
-    // Clear cache entry and search again
-    const cacheKey = makeCacheKey(query, ontologies)
-    try {
-      localStorage.removeItem(`ols_cache_${cacheKey}`)
-    } catch {
-      // Ignore storage errors
-    }
     await doSearch()
-  }, [query, ontologies, doSearch])
+  }, [doSearch])
 
   // Clear results
   const clear = useCallback(() => {
     setResults([])
     setError(null)
-    setFromCache(false)
     setLoading(false)
   }, [])
 
@@ -223,24 +183,7 @@ export function useOLSSearch(opts: UseOLSSearchOptions): UseOLSSearchResult {
     results,
     loading,
     error,
-    fromCache,
     refetch,
     clear,
   }
-}
-
-/**
- * Hook for searching a single ontology.
- * Convenience wrapper around useOLSSearch.
- */
-export function useOntologySearch(
-  query: string,
-  ontology: string,
-  opts?: Partial<UseOLSSearchOptions>
-): UseOLSSearchResult {
-  return useOLSSearch({
-    query,
-    ontologies: [ontology],
-    ...opts,
-  })
 }

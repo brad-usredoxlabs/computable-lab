@@ -83,16 +83,41 @@
   font-weight: 500;
 }
 
+/* Screen-reader-only helper for aria-live region. */
+.study-picker-popover__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .study-picker-popover__row-id {
   font-size: 11px;
   color: var(--cl-text-faint);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
 }
 
+.study-picker-popover__match-path {
+  font-size: 11px;
+  color: var(--cl-text-dim);
+  padding-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Creation affordances (creation-entry-points spec §4.1/§4.4). */
 .study-picker-popover__row--create {
   color: var(--cl-accent, #6b9fff);
   font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .study-picker-popover__footer-note {

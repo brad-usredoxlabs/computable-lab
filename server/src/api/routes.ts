@@ -572,6 +572,7 @@ export function registerRoutes(
   if (jsonLdSearchHandlers) {
     fastify.post('/search/jsonld', jsonLdSearchHandlers.search.bind(jsonLdSearchHandlers));
     fastify.post('/search/jsonld/reindex', jsonLdSearchHandlers.reindex.bind(jsonLdSearchHandlers));
+    fastify.post('/search/projects', jsonLdSearchHandlers.searchProjects.bind(jsonLdSearchHandlers));
   }
 
   // Labware-definition search — backs the slash menu /l so a fresh
@@ -728,6 +729,11 @@ export function registerRoutes(
   const { protocolHandlers } = options;
 
   if (protocolHandlers) {
+    fastify.get('/protocol-context', protocolHandlers.getProtocolContext.bind(protocolHandlers));
+    fastify.post('/protocol-actions/use-in-run', protocolHandlers.useProtocolInRun.bind(protocolHandlers));
+    fastify.post('/protocol-actions/specialize-for-experiment', protocolHandlers.specializeForExperiment.bind(protocolHandlers));
+    fastify.post('/protocol-actions/promote-to-project-template', protocolHandlers.promoteToProjectTemplate.bind(protocolHandlers));
+
     // Legacy endpoint - keeps backward compatibility
     fastify.post('/protocols/from-event-graph', protocolHandlers.saveFromEventGraph.bind(protocolHandlers));
     
@@ -738,6 +744,9 @@ export function registerRoutes(
     fastify.post('/protocols/import', protocolHandlers.importProtocolPdf.bind(protocolHandlers));
     fastify.post('/protocols/materials/compile', protocolHandlers.compileMaterialIntents.bind(protocolHandlers));
     fastify.post('/protocols/lab-review', protocolHandlers.reviewLabProtocol.bind(protocolHandlers));
+    fastify.post('/protocols/:id/authoring-session', protocolHandlers.createAuthoringSession.bind(protocolHandlers));
+    fastify.post('/protocols/:id/suggest-structure', protocolHandlers.suggestStructure.bind(protocolHandlers));
+    fastify.post('/protocols/:id/apply-suggestions', protocolHandlers.applySuggestions.bind(protocolHandlers));
     fastify.get('/protocols/:id/load', protocolHandlers.loadProtocol.bind(protocolHandlers));
     fastify.post('/protocols/:id/bind', protocolHandlers.bindProtocol.bind(protocolHandlers));
   }

@@ -30,11 +30,21 @@ export interface VendorPdfSearchSectionProps {
     artifactId: string,
     info: { title?: string; sourceUrl: string; vendor?: string },
   ) => void
+  /**
+   * Called when the user wants to "Build Protocol" from a search result.
+   * The component ingests the PDF first, then calls this with the artifact
+   * info so the parent can open a PDF viewer tab and switch to AI mode.
+   */
+  onBuildProtocol?: (
+    artifactId: string,
+    info: { title?: string; sourceUrl: string; vendor?: string },
+  ) => void
 }
 
 export function VendorPdfSearchSection({
   studyId,
   onIngested,
+  onBuildProtocol,
 }: VendorPdfSearchSectionProps) {
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
@@ -65,7 +75,7 @@ export function VendorPdfSearchSection({
   }, [query])
 
   const runIngest = useCallback(
-    async (result: VendorPdfResult) => {
+    async (result: VendorPdfResult, buildProtocol: boolean = false) => {
       setIngestingUrl(result.url)
       setIngestError(null)
       setIngestNotice(null)
@@ -89,13 +99,19 @@ export function VendorPdfSearchSection({
               'No original PDF or table/layout extraction.',
           )
         }
+        const info = {
+          ...(result.title ? { title: result.title } : {}),
+          sourceUrl: result.url,
+          ...(result.vendor ? { vendor: result.vendor } : {}),
+        }
         if (response.recordedArtifact) {
           setLastIngested(response.recordedArtifact.recordId)
-          onIngested(response.recordedArtifact.recordId, {
-            ...(result.title ? { title: result.title } : {}),
-            sourceUrl: result.url,
-            ...(result.vendor ? { vendor: result.vendor } : {}),
-          })
+          onIngested(response.recordedArtifact.recordId, info)
+          // If this was a "Build Protocol" ingest, notify the parent so it can
+          // open a PDF viewer tab and switch to AI mode.
+          if (buildProtocol) {
+            onBuildProtocol?.(response.recordedArtifact.recordId, info)
+          }
         } else {
           // Server didn't write a record — most likely the studyId wasn't
           // accepted (e.g. workspace root not configured). Surface so the
@@ -110,7 +126,7 @@ export function VendorPdfSearchSection({
         setIngestingUrl(null)
       }
     },
-    [studyId, query, onIngested],
+    [studyId, query, onIngested, onBuildProtocol],
   )
 
   return (
@@ -169,32 +185,42 @@ export function VendorPdfSearchSection({
       {results.length > 0 ? (
         <div className="vendor-pdf-search__results">
           {results.map((r) => (
-            <button
-              key={r.url}
-              type="button"
-              className="vendor-pdf-search__result"
-              disabled={ingestingUrl !== null}
-              onClick={() => void runIngest(r)}
-              data-testid={`vendor-pdf-result-${hashKey(r.url)}`}
-              title={r.url}
-            >
-              <span className="vendor-pdf-search__result-title">
-                {r.title ?? r.url}
-              </span>
-              {r.vendor || r.documentType ? (
-                <span className="vendor-pdf-search__result-meta">
-                  {[r.vendor, r.documentType].filter(Boolean).join(' · ')}
+            <div key={r.url} className="vendor-pdf-search__result-row">
+              <button
+                type="button"
+                className="vendor-pdf-search__result"
+                disabled={ingestingUrl !== null}
+                onClick={() => void runIngest(r)}
+                data-testid={`vendor-pdf-result-${hashKey(r.url)}`}
+                title={r.url}
+              >
+                <span className="vendor-pdf-search__result-title">
+                  {r.title ?? r.url}
                 </span>
-              ) : null}
-              {r.snippet ? (
-                <span className="vendor-pdf-search__result-snippet">
-                  {r.snippet}
+                {r.vendor || r.documentType ? (
+                  <span className="vendor-pdf-search__result-meta">
+                    {[r.vendor, r.documentType].filter(Boolean).join(' · ')}
+                  </span>
+                ) : null}
+                {r.snippet ? (
+                  <span className="vendor-pdf-search__result-snippet">
+                    {r.snippet}
+                  </span>
+                ) : null}
+                <span className="vendor-pdf-search__result-cta">
+                  {ingestingUrl === r.url ? 'Ingesting…' : 'Ingest as artifact'}
                 </span>
-              ) : null}
-              <span className="vendor-pdf-search__result-cta">
-                {ingestingUrl === r.url ? 'Ingesting…' : 'Ingest as artifact'}
-              </span>
-            </button>
+              </button>
+              <button
+                type="button"
+                className="vendor-pdf-search__result-build"
+                disabled={ingestingUrl !== null}
+                onClick={() => void runIngest(r, true)}
+                title="Open PDF viewer and start building a protocol"
+              >
+                Build Protocol
+              </button>
+            </div>
           ))}
         </div>
       ) : null}

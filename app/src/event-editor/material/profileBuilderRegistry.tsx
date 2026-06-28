@@ -7,7 +7,7 @@
  * builder hint, and the four builders stay hand-written).
  */
 
-import type { OLSResultRef } from '../../shared/api/olsClient'
+import type { ResolveRef } from '../../shared/api/resolveUtil'
 import type { MaterialIntentOption } from '../../shared/material-intent/types'
 import type { PickedMaterial } from './state'
 import { BuildCompoundForm } from './builders/BuildCompoundForm'
@@ -20,7 +20,7 @@ export const PICKER_PROFILE_IDS = ['chemical', 'media_composition', 'cell_line',
 export type MaterialProfileId = (typeof PICKER_PROFILE_IDS)[number]
 
 type BuilderProps = {
-  seedOntologyRef?: OLSResultRef
+  seedOntologyRef?: ResolveRef
   onSaved: (next: PickedMaterial) => void
   onCancel: () => void
   onError: (message: string) => void
@@ -60,7 +60,7 @@ export function toPickerProfileId(inferred: string): MaterialProfileId {
  * shown so the picker never blanks. Titles prefer the backend `profile.label`.
  */
 export function materialIntentOptions(args: {
-  seedOntologyRef?: OLSResultRef
+  seedOntologyRef?: ResolveRef
   profiles: ReadonlyArray<{ id: string; label: string }>
 }): MaterialIntentOption[] {
   const seed = args.seedOntologyRef ? { seedOntologyRef: args.seedOntologyRef } : {}

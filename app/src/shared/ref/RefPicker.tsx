@@ -1,13 +1,14 @@
 /**
  * RefPicker - Combobox/autocomplete component for selecting Refs.
- * 
- * Supports searching both local records and OLS ontologies based on config.
+ *
+ * Supports searching the backend resolve() spine (POST /api/resolve) which
+ * implements a 5-tier resolution strategy (local records → OAK → OLS4 → vendor → mint).
  */
 
 import { useState, useRef, useEffect } from 'react'
-import { useOLSSearch } from '../hooks/useOLSSearch'
-import { olsResultToRef, type OLSSearchResult } from '../api/olsClient'
-import { RefBadge, type Ref, type OntologyRef } from './RefBadge'
+import { useResolveSearch } from '../hooks/useResolveSearch'
+import { resolveCandidateToRef, tierBadge, type ResolveRef } from '../api/resolveUtil'
+import { RefBadge, type Ref } from './RefBadge'
 
 /**
  * RefPicker props
@@ -17,7 +18,7 @@ export interface RefPickerProps {
   value?: Ref | null
   /** Called when value changes */
   onChange: (ref: Ref | null) => void
-  /** OLS ontologies to search */
+  /** Legacy ontology scope. Backend resolve config is authoritative. */
   olsOntologies?: string[]
   /** Placeholder text */
   placeholder?: string
@@ -59,13 +60,24 @@ function SpinnerIcon({ size = 16 }: { size?: number }) {
   )
 }
 
+/** Tier badge style helper */
+function tierBadgeStyle(variant: string) {
+  switch (variant) {
+    case 'local':
+      return 'bg-emerald-50 text-emerald-600'
+    case 'new':
+      return 'bg-orange-50 text-orange-600'
+    default:
+      return 'bg-purple-50 text-purple-600'
+  }
+}
+
 /**
  * RefPicker component
  */
 export function RefPicker({
   value,
   onChange,
-  olsOntologies = [],
   placeholder = 'Search...',
   label,
   disabled = false,
@@ -77,40 +89,40 @@ export function RefPicker({
   const [query, setQuery] = useState('')
   const [isOpen, setIsOpen] = useState(false)
   const [focusedIndex, setFocusedIndex] = useState(-1)
-  
+
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLUListElement>(null)
-  
-  // OLS search hook
+
+  // Resolve-spine search hook (replaces direct OLS4 calls)
   const {
-    results: olsResults,
-    loading: olsLoading,
-    fromCache,
-  } = useOLSSearch({
+    results: resolveResults,
+    loading: resolveLoading,
+  } = useResolveSearch({
     query,
-    ontologies: olsOntologies,
-    enabled: query.length >= minQueryLength && olsOntologies.length > 0,
+    enabled: query.length >= minQueryLength,
     minQueryLength,
     maxResults,
   })
-  
-  // Convert OLS results to refs
-  const suggestions: Ref[] = olsResults.map((r: OLSSearchResult) => olsResultToRef(r) as OntologyRef)
-  
+
+  const selectableResults = resolveResults.filter((candidate) => candidate.source !== 'mint' && candidate.curie)
+
+  // Convert resolve results to refs
+  const suggestions: ResolveRef[] = selectableResults.map((c) => resolveCandidateToRef(c))
+
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       const target = e.target as Node
-      if (inputRef.current && !inputRef.current.contains(target) && 
+      if (inputRef.current && !inputRef.current.contains(target) &&
           listRef.current && !listRef.current.contains(target)) {
         setIsOpen(false)
       }
     }
-    
+
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
-  
+
   // Scroll focused item into view
   useEffect(() => {
     if (focusedIndex >= 0 && listRef.current) {
@@ -118,7 +130,7 @@ export function RefPicker({
       item?.scrollIntoView({ block: 'nearest' })
     }
   }, [focusedIndex])
-  
+
   // Handle keyboard navigation
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'ArrowDown') {
@@ -136,7 +148,7 @@ export function RefPicker({
       setIsOpen(false)
     }
   }
-  
+
   // Select a ref
   function selectRef(ref: Ref) {
     onChange(ref)
@@ -144,16 +156,16 @@ export function RefPicker({
     setIsOpen(false)
     setFocusedIndex(-1)
   }
-  
+
   // Clear selection
   function clearSelection() {
     onChange(null)
     setQuery('')
     inputRef.current?.focus()
   }
-  
+
   const showDropdown = isOpen && query.length >= minQueryLength
-  
+
   return (
     <div className={`relative ${className}`}>
       {label && (
@@ -161,24 +173,24 @@ export function RefPicker({
           {label}
         </label>
       )}
-      
+
       {/* Selected value display */}
       {value && (
         <div className="mb-2">
           <RefBadge value={value} onRemove={clearSelection} />
         </div>
       )}
-      
+
       {/* Search input */}
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none" style={{ color: '#9ca3af' }}>
-          {olsLoading ? (
+          {resolveLoading ? (
             <SpinnerIcon size={16} />
           ) : (
             <SearchIcon size={16} />
           )}
         </div>
-        
+
         <input
           ref={inputRef}
           type="text"
@@ -193,28 +205,22 @@ export function RefPicker({
           placeholder={placeholder}
           disabled={disabled}
           className={`
-            block w-full pl-10 pr-3 py-2 
+            block w-full pl-10 pr-3 py-2
             border rounded-md shadow-sm
             text-sm
             ${error ? 'border-red-300' : 'border-gray-300'}
             ${disabled ? 'bg-gray-100' : 'bg-white'}
-            focus:outline-none focus:ring-1 
+            focus:outline-none focus:ring-1
             ${error ? 'focus:ring-red-500 focus:border-red-500' : 'focus:ring-blue-500 focus:border-blue-500'}
           `}
         />
-        
-        {fromCache && query.length >= minQueryLength && (
-          <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-xs text-gray-400">
-            cached
-          </span>
-        )}
       </div>
-      
+
       {/* Error message */}
       {error && (
         <p className="mt-1 text-sm text-red-600">{error}</p>
       )}
-      
+
       {/* Dropdown */}
       {showDropdown && (
         <ul
@@ -235,50 +241,51 @@ export function RefPicker({
             padding: '4px 0',
           }}
         >
-          {olsResults.length === 0 && !olsLoading && (
+          {selectableResults.length === 0 && !resolveLoading && (
             <li style={{ padding: '12px 16px', color: '#94a3b8', fontSize: '0.875rem' }}>
               No results found
             </li>
           )}
-          
-          {olsLoading && olsResults.length === 0 && (
+
+          {resolveLoading && selectableResults.length === 0 && (
             <li style={{ padding: '12px 16px', color: '#94a3b8', fontSize: '0.875rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <SpinnerIcon size={16} />
               Searching ontologies...
             </li>
           )}
-          
-          {olsResults.map((result, index) => {
+
+          {selectableResults.map((candidate, index) => {
             const ref = suggestions[index]
-            const description = result.description?.[0] || null
-            
+            const badge = tierBadge(candidate)
+            const definition = candidate.definition || null
+
             return (
               <li
-                key={result.obo_id}
+                key={candidate.curie}
                 role="option"
                 aria-selected={focusedIndex === index}
-                title={description || undefined}
+                title={definition || undefined}
                 style={{
                   padding: '10px 16px',
                   cursor: 'pointer',
                   backgroundColor: focusedIndex === index ? '#eff6ff' : 'white',
-                  borderBottom: index < olsResults.length - 1 ? '1px solid #f1f5f9' : 'none',
+                  borderBottom: index < selectableResults.length - 1 ? '1px solid #f1f5f9' : 'none',
                   transition: 'background-color 0.1s ease',
                 }}
                 onMouseEnter={() => setFocusedIndex(index)}
                 onClick={() => selectRef(ref)}
               >
                 {/* Term label - bold and colored */}
-                <div style={{ 
-                  fontWeight: 600, 
-                  fontSize: '0.9rem', 
+                <div style={{
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
                   color: '#1e40af',
                   marginBottom: '2px',
                 }}>
-                  {result.label}
+                  {candidate.label}
                 </div>
-                
-                {/* CURIE ID - styled badge */}
+
+                {/* CURIE ID + tier badge */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                   <span style={{
                     display: 'inline-block',
@@ -291,7 +298,7 @@ export function RefPicker({
                     borderRadius: '4px',
                     border: '1px solid #bbf7d0',
                   }}>
-                    {result.obo_id}
+                    {candidate.curie}
                   </span>
                   <span style={{
                     fontSize: '0.7rem',
@@ -299,12 +306,15 @@ export function RefPicker({
                     textTransform: 'uppercase',
                     letterSpacing: '0.025em',
                   }}>
-                    {result.ontology_name}
+                    {candidate.namespace}
+                  </span>
+                  <span className={`text-[9px] ${tierBadgeStyle(badge.variant)} rounded px-1 py-0.5`}>
+                    {badge.label}
                   </span>
                 </div>
-                
-                {/* Description preview - truncated */}
-                {description && (
+
+                {/* Definition preview - truncated */}
+                {definition && (
                   <div style={{
                     fontSize: '0.75rem',
                     color: '#64748b',
@@ -316,7 +326,7 @@ export function RefPicker({
                     WebkitLineClamp: 2,
                     WebkitBoxOrient: 'vertical',
                   }}>
-                    {description}
+                    {definition}
                   </div>
                 )}
               </li>
@@ -324,7 +334,7 @@ export function RefPicker({
           })}
         </ul>
       )}
-      
+
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }

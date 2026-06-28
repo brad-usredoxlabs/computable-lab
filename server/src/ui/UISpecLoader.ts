@@ -21,6 +21,9 @@ const VALID_WIDGET_TYPES: Set<string> = new Set([
   'checkbox', 'radio', 'date', 'datetime', 'ref', 'reflist',
   'array', 'object', 'hidden', 'readonly', 'custom', 'markdown',
   'combobox', 'chips',
+  'protocol-prose-authoring', 'protocol-material-roles',
+  'protocol-labware-roles', 'protocol-equipment-roles', 'protocol-step-roles',
+  'protocol-ai-suggestions',
 ]);
 
 /**

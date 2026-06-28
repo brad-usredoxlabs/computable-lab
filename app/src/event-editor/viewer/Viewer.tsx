@@ -25,15 +25,23 @@ import type { WorkspaceTab } from '../workspace/types'
 export interface ViewerProps {
   /** The active workspace tab, or null when no tab is open. */
   tab: WorkspaceTab | null
+  /** Called when the user selects text from a PDF and wants to send it to AI. */
+  onSendSelection?: (text: string, pageNumber: number) => void
 }
 
-export function Viewer({ tab }: ViewerProps) {
+export function Viewer({ tab, onSendSelection }: ViewerProps) {
   if (!tab) return <EmptyViewerState />
   switch (tab.kind) {
     case 'deck':
       return <DeckViewer />
     case 'pdf':
-      return <PdfViewer artifactId={tab.artifactId} title={tab.title} />
+      return (
+        <PdfViewer
+          artifactId={tab.artifactId}
+          title={tab.title}
+          onSendSelection={onSendSelection}
+        />
+      )
     case 'document':
       return <DocumentEditor artifactId={tab.artifactId} title={tab.title} />
     case 'project-details':

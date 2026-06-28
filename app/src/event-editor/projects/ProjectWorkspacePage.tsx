@@ -197,6 +197,16 @@ interface LeftPaneProps {
 
 function LeftPane({ activeTab, studyId }: LeftPaneProps) {
   const ws = useWorkspace()
+  const handleSendSelection = (text: string, pageNumber: number) => {
+    // Switch right pane to AI mode
+    ws.setRightPaneMode('ai')
+    // Store the selection text in a custom data attribute so the AI panel can read it
+    // This is a bridge between the PDF viewer and the AI chat
+    const event = new CustomEvent('pdf-text-selection', {
+      detail: { text, pageNumber },
+    })
+    window.dispatchEvent(event)
+  }
   if (!activeTab) {
     // Falls through to a brief loading state — the workspace effect
     // above will open project-details on the next tick.
@@ -233,5 +243,5 @@ function LeftPane({ activeTab, studyId }: LeftPaneProps) {
       />
     )
   }
-  return <Viewer tab={activeTab} />
+  return <Viewer tab={activeTab} onSendSelection={handleSendSelection} />
 }

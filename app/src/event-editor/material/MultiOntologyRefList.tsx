@@ -1,85 +1,52 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { olsResultToRef, searchOLS, type OLSResultRef, type OLSSearchResult } from '../../shared/api/olsClient'
-import { MATERIAL_OLS_ONTOLOGIES } from '../../types/material'
+import { useCallback, useState } from 'react'
+import { useResolveSearch } from '../../shared/hooks/useResolveSearch'
+import { resolveCandidateToRef, tierBadge, type ResolveRef } from '../../shared/api/resolveUtil'
+import type { ResolveCandidate } from '../../shared/api/client'
 
 /**
  * Edits an array of ontology refs. Renders each ref as a removable chip
- * plus an inline mini-search to add more from the configured OLS
- * ontologies. Used by every builder form (compound / mixture / cells /
- * sample) to populate the eventual `material.class` array — which the
- * schema already accepts as `Array<Ref>` with `uniqueItems: true`.
+ * plus an inline mini-search to add more via the backend resolve() spine.
+ * Used by every builder form (compound / mixture / cells / sample) to populate
+ * the eventual `material.class` array — which the schema already accepts as
+ * `Array<Ref>` with `uniqueItems: true`.
  *
- * Deduplicates by IRI on add, so accidental double-clicks are harmless.
+ * Searches route through POST /api/resolve (5-tier: local records → OAK → OLS4 → vendor → mint).
+ *
+ * Deduplicates by CURIE on add, so accidental double-clicks are harmless.
  */
 
-const DEBOUNCE_MS = 200
-const RESULT_LIMIT = 8
-
 export interface MultiOntologyRefListProps {
-  refs: OLSResultRef[]
-  onChange: (next: OLSResultRef[]) => void
-  /**
-   * Override the default ontology list (`MATERIAL_OLS_ONTOLOGIES`) — e.g.,
-   * the cells builder may want to bias toward CL + NCBITaxon. Empty array
-   * falls back to the default list.
-   */
-  ontologies?: string[]
+  refs: ResolveRef[]
+  onChange: (next: ResolveRef[]) => void
   /** Hint text rendered above the input. */
   label?: string
+  /** Legacy scoped ontology list; backend resolve config is authoritative. */
+  ontologies?: string[]
 }
 
 export function MultiOntologyRefList({
   refs,
   onChange,
-  ontologies,
   label = 'Ontology references',
 }: MultiOntologyRefListProps) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<OLSSearchResult[]>([])
-  const [loading, setLoading] = useState(false)
-  const latestQueryRef = useRef('')
-  latestQueryRef.current = query
 
-  const effectiveOntologies = ontologies && ontologies.length > 0
-    ? ontologies
-    : MATERIAL_OLS_ONTOLOGIES
+  const { results, loading } = useResolveSearch({
+    query,
+    enabled: query.trim().length >= 2,
+    debounceMs: 200,
+    maxResults: 8,
+  })
 
-  useEffect(() => {
-    const trimmed = query.trim()
-    if (trimmed.length < 2) {
-      setResults([])
-      setLoading(false)
-      return
-    }
-    setLoading(true)
-    const handle = window.setTimeout(async () => {
-      try {
-        const hits = await searchOLS({
-          query: trimmed,
-          ontologies: effectiveOntologies,
-          rows: RESULT_LIMIT,
-        })
-        if (latestQueryRef.current !== query) return
-        setResults(hits ?? [])
-      } catch {
-        if (latestQueryRef.current !== query) return
-        setResults([])
-      } finally {
-        if (latestQueryRef.current === query) setLoading(false)
-      }
-    }, DEBOUNCE_MS)
-    return () => window.clearTimeout(handle)
-  }, [query, effectiveOntologies])
-
-  const handleAdd = useCallback((result: OLSSearchResult) => {
-    const ref = olsResultToRef(result)
+  const handleAdd = useCallback((candidate: ResolveCandidate) => {
+    const ref = resolveCandidateToRef(candidate)
+    // Deduplicate by curie or uri
     if (refs.some((existing) => existing.uri === ref.uri || existing.id === ref.id)) return
     onChange([...refs, ref])
     setQuery('')
-    setResults([])
   }, [onChange, refs])
 
-  const handleRemove = useCallback((target: OLSResultRef) => {
+  const handleRemove = useCallback((target: ResolveRef) => {
     onChange(refs.filter((existing) => existing.uri !== target.uri))
   }, [onChange, refs])
 
@@ -120,23 +87,30 @@ export function MultiOntologyRefList({
 
       {results.length > 0 ? (
         <ul className="add-material-ref-results">
-          {results.map((result) => (
-            <li key={result.iri}>
+          {results.map((candidate) => (
+            <li key={candidate.curie}>
               <button
                 type="button"
                 className="add-material-row"
                 data-category="ontology"
-                onClick={() => handleAdd(result)}
+                onClick={() => handleAdd(candidate)}
               >
                 <span className="add-material-row-title">
-                  {result.label}
+                  {candidate.label}
                   <span className="add-material-row-ontology">
-                    {result.ontology_prefix ?? result.ontology_name}
+                    {candidate.namespace}
                   </span>
                 </span>
                 <span className="add-material-row-meta">
-                  {result.obo_id}
-                  {result.description?.[0] ? ` · ${result.description[0]}` : ''}
+                  {candidate.curie}
+                  {candidate.definition ? ` · ${candidate.definition}` : ''}
+                </span>
+                <span className={`text-[9px] ${
+                  candidate.source === 'mint' ? 'bg-orange-50 text-orange-600' :
+                  candidate.tier <= 2 ? 'bg-emerald-50 text-emerald-600' :
+                  'bg-purple-50 text-purple-600'
+                } rounded px-1 py-0.5`}>
+                  {tierBadge(candidate).label}
                 </span>
               </button>
             </li>

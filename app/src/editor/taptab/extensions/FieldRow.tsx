@@ -33,7 +33,7 @@ function curieFromOntologyTerm(term: SelectedOntologyTerm): { curie: string; nam
   return { curie: `${namespace}:${id}`, namespace };
 }
 
-function FieldRowView({ node, updateAttributes }: NodeViewProps) {
+function FieldRowView({ node, updateAttributes, editor }: NodeViewProps) {
   const attrs = node.attrs as FieldRowAttrs;
   const [sidebarTerm, setSidebarTerm] = useState<OntologyTerm | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -95,6 +95,32 @@ function FieldRowView({ node, updateAttributes }: NodeViewProps) {
 
   const handleSidebarClose = () => { setSidebarOpen(false); setSidebarTerm(null); };
 
+  const getRecordValue = (path: string): unknown => {
+    let value: unknown;
+    editor.state.doc.descendants((child) => {
+      if (child.type.name === 'fieldRow' && child.attrs.path === path) {
+        value = child.attrs.value;
+        return false;
+      }
+      return true;
+    });
+    return value;
+  };
+
+  const handleRecordPatch = (patch: Record<string, unknown>) => {
+    const paths = new Set(Object.keys(patch));
+    if (paths.size === 0) return;
+    let tr = editor.state.tr;
+    editor.state.doc.descendants((child, pos) => {
+      if (child.type.name !== 'fieldRow') return true;
+      const path = child.attrs.path;
+      if (typeof path !== 'string' || !paths.has(path)) return true;
+      tr = tr.setNodeMarkup(pos, undefined, { ...child.attrs, value: patch[path] }, child.marks);
+      return true;
+    });
+    if (tr.docChanged) editor.view.dispatch(tr);
+  };
+
   if (attrs.widget === 'hidden') return null;
 
   // Row-level Tab fallback: the plain inline input handles its own Tab
@@ -123,6 +149,9 @@ function FieldRowView({ node, updateAttributes }: NodeViewProps) {
         onCancel={() => {}}
         objectProperties={attrs.objectConfig?.properties}
         multiselectOptions={attrs.multiselectConfig?.options}
+        recordId={attrs.recordId}
+        onRecordPatch={handleRecordPatch}
+        getRecordValue={getRecordValue}
       />
       {attrs.help && <span className="taptab-field-help">{attrs.help}</span>}
       {sidebarOpen && sidebarTerm && <OntologySidebar term={sidebarTerm} onAddToVocab={handleAddToVocab} onClose={handleSidebarClose} open={sidebarOpen} />}
@@ -144,6 +173,7 @@ export const FieldRow = Node.create({
       suggestionPlan: { default: null },
       refKind: { default: null },
       help: { default: null },
+      recordId: { default: null },
       arraySchema: { default: null },
       objectConfig: { default: null },
       reflistConfig: { default: null },

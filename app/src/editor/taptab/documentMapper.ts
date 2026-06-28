@@ -99,6 +99,7 @@ function buildFieldRowNode(field: FieldHint, data: Record<string, unknown>): JSO
     refKind: field.refKind ?? undefined,
     suggestionPlan,
     help: field.help ?? undefined,
+    recordId: typeof data.recordId === 'string' ? data.recordId : undefined,
   };
 
   return {
@@ -200,6 +201,7 @@ export function buildProjectionDocument(
         refKind: slot.refKind ?? undefined,
         suggestionPlan,
         help: slot.help ?? undefined,
+        recordId: typeof data.recordId === 'string' ? data.recordId : undefined,
       };
 
       // Handle composite widget configs

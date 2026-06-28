@@ -4,15 +4,14 @@
  * Runs both searches in parallel and guards against stale responses.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { apiClient, type MaterialSearchItem } from '../../shared/api/client'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { apiClient, type MaterialSearchItem, type ResolveCandidate } from '../../shared/api/client'
 import { useResolveOntology } from './useResolveOntology'
 import { formatConcentration } from '../../types/material'
-import type { OLSSearchResult } from '../../shared/api/olsClient'
 
 export interface UseMaterialSearchResult {
   localResults: MaterialSearchItem[]
-  olsResults: OLSSearchResult[]
+  olsResults: ResolveCandidate[]
   localLoading: boolean
   olsLoading: boolean
   loading: boolean

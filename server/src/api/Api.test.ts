@@ -51,13 +51,15 @@ properties:
   kind: { const: event-graph }
   id: { type: string }
   name: { type: string }
+  createdAt: { type: string }
+  updatedAt: { type: string }
   events:
     type: array
     items: { type: object }
   labwares:
     type: array
     items: { type: object }
-additionalProperties: true
+additionalProperties: false
 `;
     await writeFile(resolve(testDir, 'schema/event-graph.schema.yaml'), eventGraphSchema);
 
@@ -122,6 +124,20 @@ properties:
 additionalProperties: true
 `;
     await writeFile(resolve(testDir, 'schema/aliquot.schema.yaml'), aliquotSchema);
+
+    await mkdir(resolve(testDir, 'schema/lab'), { recursive: true });
+    await writeFile(resolve(testDir, 'schema/lab/material-profile.registry.yaml'), [
+      'version: 1',
+      'profiles:',
+      '  chemical: { label: Chemical, applies_when: { domain: [chemical] }, layers: [concept], fields: [{ path: name, layer: concept, label: Name, widget: text, control: free-text }], quick_add: [name] }',
+      '  cell_line: { label: Cell, applies_when: { domain: [cell_line] }, layers: [concept], fields: [{ path: name, layer: concept, label: Name, widget: text, control: free-text }], quick_add: [name] }',
+      '  media_composition: { label: Media, applies_when: { domain: [media] }, layers: [concept], fields: [{ path: name, layer: concept, label: Name, widget: text, control: free-text }], quick_add: [name] }',
+      '  single_active_formulation: { label: Single, applies_when: { formulation_kind: [single_active] }, layers: [formulation], fields: [{ path: name, layer: formulation, label: Name, widget: text, control: free-text }], quick_add: [name] }',
+      '  sample: { label: Sample, applies_when: { domain: [sample] }, layers: [concept], fields: [{ path: name, layer: concept, label: Name, widget: text, control: free-text }], quick_add: [name] }',
+      '  other: { label: Other, applies_when: { domain: [other] }, layers: [concept], fields: [{ path: name, layer: concept, label: Name, widget: text, control: free-text }], quick_add: [name] }',
+      '',
+    ].join('\n'));
+
     
     // Initialize app with test directory
     ctx = await initializeApp(testDir, {
@@ -314,6 +330,13 @@ additionalProperties: true
     });
 
     it('should mint and attach an implicit aliquot when saving add_material with a material-spec ref', async () => {
+      const suffix = Date.now().toString(36);
+      const materialSpecId = 'MSP-API-' + suffix;
+      const eventGraphId = 'EVG-API-' + suffix;
+      const eventId = 'evt-api-' + suffix;
+      const seed = (eventGraphId + '_' + eventId).toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+      const expectedAliquotId = 'ALQ-IMPLICIT-' + seed;
+
       const seedSpec = await app.inject({
         method: 'POST',
         url: '/api/records',
@@ -321,7 +344,7 @@ additionalProperties: true
           schemaId: 'https://computable-lab.com/schema/computable-lab/material-spec.schema.yaml',
           payload: {
             kind: 'material-spec',
-            id: 'MSP-001',
+            id: materialSpecId,
             name: '1 mM Clofibrate in DMSO',
             material_ref: { kind: 'record', id: 'MAT-001', type: 'material', label: 'Clofibrate' },
           },
@@ -336,18 +359,19 @@ additionalProperties: true
           schemaId: 'https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml',
           payload: {
             kind: 'event-graph',
-            id: 'EVG-001',
+            id: eventGraphId,
             name: 'Spec-first add material',
             labwares: [],
             events: [
               {
-                eventId: 'evt-001',
+                eventId,
                 event_type: 'add_material',
                 details: {
                   wells: ['A1'],
                   labwareId: 'plate-1',
-                  material_spec_ref: { kind: 'record', id: 'MSP-001', type: 'material-spec', label: '1 mM Clofibrate in DMSO' },
+                  material_spec_ref: { kind: 'record', id: materialSpecId, type: 'material-spec', label: '1 mM Clofibrate in DMSO' },
                   volume: { value: 10, unit: 'uL' },
+                  instance_lot: { vendor: 'Sigma', lot_number: 'L123' },
                 },
               },
             ],
@@ -357,15 +381,16 @@ additionalProperties: true
 
       expect(response.statusCode).toBe(201);
       const body = JSON.parse(response.payload);
-      expect(body.record?.payload?.events?.[0]?.details?.aliquot_ref?.id).toBe('ALQ-IMPLICIT-EVG_001_EVT_001');
+      expect(body.record?.payload?.createdBy).toBeUndefined();
+      expect(body.record?.payload?.events?.[0]?.details?.aliquot_ref?.id).toBe(expectedAliquotId);
 
       const aliquot = await app.inject({
         method: 'GET',
-        url: '/api/records/ALQ-IMPLICIT-EVG_001_EVT_001',
+        url: '/api/records/' + expectedAliquotId,
       });
       expect(aliquot.statusCode).toBe(200);
       const aliquotBody = JSON.parse(aliquot.payload);
-      expect(aliquotBody.record.payload.material_spec_ref.id).toBe('MSP-001');
+      expect(aliquotBody.record.payload.material_spec_ref.id).toBe(materialSpecId);
       expect(aliquotBody.record.payload.tags).toContain('implicit');
     });
     

@@ -123,8 +123,9 @@ export class LintEngine {
    * @returns Rule evaluation result
    */
   evaluateRule(rule: LintRule, ctx: LintContext): RuleEvaluationResult {
-    // Check scope
-    if (rule.scope !== 'record') {
+    // Check scope — default to 'record' when not specified (most rules are record-scoped)
+    const scope = rule.scope ?? 'record';
+    if (scope !== 'record') {
       // For now, only record scope is supported
       return {
         ruleId: rule.id,

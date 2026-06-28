@@ -30,9 +30,16 @@ form:
       widget: "text"
       label: "Inherits from (global protocol ref)"
       required: true
+      readonly: true
     - path: "$.status"
       widget: "select"
       label: "Status"
+    - path: "$.overview"
+      widget: "textarea"
+      label: "Overview"
+    - path: "$.purpose"
+      widget: "textarea"
+      label: "Purpose"
   - title: "Notes"
     fields:
     - path: "$.notes"

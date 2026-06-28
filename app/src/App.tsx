@@ -33,6 +33,7 @@ const EventEditorPage = lazy(async () => import('./event-editor/EventEditorPage'
 const ProjectWorkspacePage = lazy(async () => import('./event-editor/projects/ProjectWorkspacePage').then((m) => ({ default: m.ProjectWorkspacePage })))
 const SettingsRoute = lazy(async () => import('./settings/SettingsRoute').then((m) => ({ default: m.SettingsRoute })))
 const LegacyModeRedirect = lazy(async () => import('./event-editor/projects/LegacyModeRedirect').then((m) => ({ default: m.LegacyModeRedirect })))
+const LiteraturePage = lazy(async () => import('./literature/LiteraturePage').then((m) => ({ default: m.LiteraturePage })))
 const WelcomePage = lazy(async () => import('./welcome/WelcomePage').then((m) => ({ default: m.WelcomePage })))
 const CreateStudyPage = lazy(async () => import('./welcome/CreateStudyPage').then((m) => ({ default: m.CreateStudyPage })))
 
@@ -89,7 +90,7 @@ export function App() {
                   to ?view=foundry / ?type=material / etc. survive. */}
               <Route path="/browser" element={<DeferredRoute><LegacyModeRedirect mode="browser" /></DeferredRoute>} />
               <Route path="/protocols" element={<DeferredRoute><LegacyModeRedirect mode="protocols" /></DeferredRoute>} />
-              <Route path="/literature" element={<DeferredRoute><LegacyModeRedirect mode="literature" /></DeferredRoute>} />
+              <Route path="/literature" element={<DeferredRoute><LiteraturePage /></DeferredRoute>} />
               {/* /settings is a real page in the new UI: off-nav, reached
                   from the brand menu, but with a URL, deep linking, and
                   browser-back like every other shell page. */}
