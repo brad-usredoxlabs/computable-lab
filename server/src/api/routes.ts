@@ -32,7 +32,9 @@ import type { TagHandlers } from './handlers/TagHandlers.js';
 import type { MaterialPrepHandlers } from './handlers/MaterialPrepHandlers.js';
 import type { MaterialLifecycleHandlers } from './handlers/MaterialLifecycleHandlers.js';
 import type { MaterialProfileHandlers } from './handlers/MaterialProfileHandlers.js';
+import type { EquipmentHandlers } from './handlers/EquipmentHandlers.js';
 import type { ExtractProtocolHandlers } from './handlers/ExtractProtocolHandler.js';
+import type { ProtocolBuilderHandlers } from './handlers/ProtocolBuilderHandlers.js';
 import type { PlatformHandlers } from './handlers/PlatformHandlers.js';
 import type { LabSettingsHandlers } from './handlers/LabSettingsHandlers.js';
 import type { VendorSearchHandlers } from './handlers/VendorSearchHandlers.js';
@@ -97,7 +99,9 @@ export interface RouteOptions {
   materialPrepHandlers?: MaterialPrepHandlers;
   materialLifecycleHandlers?: MaterialLifecycleHandlers;
   materialProfileHandlers?: MaterialProfileHandlers;
+  equipmentHandlers?: EquipmentHandlers;
   extractProtocolHandlers?: ExtractProtocolHandlers;
+  protocolBuilderHandlers?: ProtocolBuilderHandlers;
   platformHandlers?: PlatformHandlers;
   labSettingsHandlers?: LabSettingsHandlers;
   vendorSearchHandlers?: VendorSearchHandlers;
@@ -438,6 +442,12 @@ export function registerRoutes(
     fastify.post('/vendors/graph-lemur/pdfs/ingest', vendorSearchHandlers.ingestGraphLemurPdf.bind(vendorSearchHandlers));
   }
 
+  const { equipmentHandlers } = options;
+  if (equipmentHandlers) {
+    fastify.get('/equipment/exa-search', equipmentHandlers.searchExa.bind(equipmentHandlers));
+    fastify.post('/equipment/from-exa', equipmentHandlers.createFromExa.bind(equipmentHandlers));
+  }
+
   const { vendorDocumentHandlers } = options;
 
   if (vendorDocumentHandlers) {
@@ -559,6 +569,13 @@ export function registerRoutes(
 
   if (extractProtocolHandlers) {
     fastify.post('/ai/extract-protocol', extractProtocolHandlers.extractProtocol.bind(extractProtocolHandlers));
+  }
+
+  const { protocolBuilderHandlers } = options;
+
+  if (protocolBuilderHandlers) {
+    fastify.post('/protocol-builder/extract', protocolBuilderHandlers.extractProtocol.bind(protocolBuilderHandlers));
+    fastify.post('/protocol-builder/redraft', protocolBuilderHandlers.redraft.bind(protocolBuilderHandlers));
   }
 
   const { aiThreadHandlers } = options;
@@ -771,6 +788,7 @@ export function registerRoutes(
     fastify.post('/protocol-ide/sessions', protocolIdeHandlers.createSession.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/stream', protocolIdeHandlers.createSessionStream.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/:sessionId/rerun', protocolIdeHandlers.rerunSession.bind(protocolIdeHandlers));
+    fastify.post('/protocol-ide/sessions/:sessionId/draft-graph', protocolIdeHandlers.draftGraph.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/:sessionId/select-variant', protocolIdeHandlers.selectVariant.bind(protocolIdeHandlers));
     fastify.post('/protocol-ide/sessions/:sessionId/feedback', protocolIdeHandlers.submitFeedback.bind(protocolIdeHandlers));
     fastify.get('/protocol-ide/sessions/:sessionId/rolling-summary', protocolIdeHandlers.getRollingSummary.bind(protocolIdeHandlers));
