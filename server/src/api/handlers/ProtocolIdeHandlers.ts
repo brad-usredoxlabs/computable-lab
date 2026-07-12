@@ -59,6 +59,12 @@ import { runChatbotCompile } from '../../ai/runChatbotCompile.js';
 import type { LlmClient } from '../../compiler/pipeline/passes/ChatbotCompilePasses.js';
 import { createInferenceClient } from '../../ai/InferenceClient.js';
 import { createLabwareLookup } from '../../ai/compiler/labwareLookup.js';
+import type {
+  AgentClarificationAnswer,
+  AgentClarificationRequest,
+  AgentOrchestrator,
+  EditorContext,
+} from '../../ai/types.js';
 import {
   FoundryHumanReviewService,
   isFoundryRejectionReasonClass,
@@ -84,8 +90,265 @@ export interface ProtocolIdeAiDepsHolder {
   current: {
     extractionService: ExtractionRunnerService;
     llmClient: LlmClient;
+    orchestrator?: AgentOrchestrator;
     model?: string;
   } | undefined;
+}
+
+const EVENT_GRAPH_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/event-graph.schema.yaml';
+
+export interface ProtocolIdeDraftGraphRequest {
+  directiveText?: string;
+  clarificationAnswers?: AgentClarificationAnswer[];
+  resetClarifications?: boolean;
+  enableThinking?: boolean;
+}
+
+export interface ProtocolIdeDraftGraphResponse {
+  success: true;
+  status: 'projected' | 'projection_failed';
+  eventGraphRef: { kind: 'record'; id: string; type: 'event-graph' } | null;
+  eventGraphData: {
+    recordId: string | null;
+    events: unknown[];
+    labwares: unknown[];
+    deckPlacements: unknown[];
+    eventCount: number;
+  };
+  clarificationRequests: AgentClarificationRequest[];
+  diagnostics: Array<{ severity: 'info' | 'warning' | 'error'; code: string; message: string }>;
+  draftIteration: number;
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function refId(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  const obj = asObject(value);
+  const id = obj?.id;
+  return typeof id === 'string' && id.trim() ? id.trim() : null;
+}
+
+function extractTextFromPayload(payload: unknown): string {
+  const obj = asObject(payload);
+  if (!obj) return '';
+  const directFields = ['text', 'content', 'body', 'fullText', 'extractedText', 'rawText'];
+  for (const field of directFields) {
+    const value = obj[field];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  const pages = obj.pages;
+  if (Array.isArray(pages)) {
+    return pages
+      .map((page) => {
+        if (typeof page === 'string') return page;
+        const pageObj = asObject(page);
+        return typeof pageObj?.text === 'string' ? pageObj.text : '';
+      })
+      .filter(Boolean)
+      .join('\n\n')
+      .trim();
+  }
+  const document = asObject(obj.document);
+  if (document) {
+    const sections = Array.isArray(document.sections)
+      ? document.sections.map((section) => {
+        const sectionObj = asObject(section);
+        return [sectionObj?.title, sectionObj?.body].filter((v): v is string => typeof v === 'string').join('\n');
+      })
+      : [];
+    const steps = Array.isArray(document.steps)
+      ? document.steps.map((step, index) => {
+        const stepObj = asObject(step);
+        const instruction = typeof stepObj?.instruction === 'string' ? stepObj.instruction : '';
+        return instruction ? `${index + 1}. ${instruction}` : '';
+      })
+      : [];
+    return [
+      typeof document.title === 'string' ? `Title: ${document.title}` : '',
+      typeof document.objective === 'string' ? `Objective: ${document.objective}` : '',
+      typeof document.overview === 'string' ? `Overview: ${document.overview}` : '',
+      ...sections,
+      ...steps,
+    ].filter(Boolean).join('\n\n').trim();
+  }
+  return '';
+}
+
+function answerMergeKey(answer: AgentClarificationAnswer): string {
+  const ref = asObject(answer.ref);
+  const refIdValue = typeof ref?.id === 'string' ? ref.id : undefined;
+  const refCurie = typeof ref?.curie === 'string' ? ref.curie : undefined;
+  return answer.requestId || refIdValue || refCurie || answer.optionId || answer.label || answer.value || JSON.stringify(answer);
+}
+
+function mergeClarificationAnswers(
+  existing: unknown,
+  incoming: AgentClarificationAnswer[] | undefined,
+  reset: boolean,
+): AgentClarificationAnswer[] {
+  const map = new Map<string, AgentClarificationAnswer>();
+  if (!reset && Array.isArray(existing)) {
+    for (const raw of existing) {
+      const answer = asObject(raw) as AgentClarificationAnswer | null;
+      if (!answer || typeof answer.requestId !== 'string') continue;
+      map.set(answerMergeKey(answer), answer);
+    }
+  }
+  for (const answer of incoming ?? []) {
+    if (!answer || typeof answer.requestId !== 'string') continue;
+    map.set(answerMergeKey(answer), answer);
+  }
+  return Array.from(map.values());
+}
+
+function compactAnswersForPrompt(answers: AgentClarificationAnswer[]): string {
+  if (answers.length === 0) return 'None.';
+  return answers.map((answer, index) => {
+    const ref = asObject(answer.ref);
+    const resolved = answer.mentionToken
+      ?? (ref ? JSON.stringify(ref) : undefined)
+      ?? answer.value
+      ?? answer.optionId
+      ?? '';
+    return `${index + 1}. ${answer.requestId}: ${answer.label ?? answer.value ?? answer.optionId ?? 'answer'}${resolved ? ` (${resolved})` : ''}`;
+  }).join('\n');
+}
+
+function buildEventSummary(events: unknown[]): EditorContext['eventSummary'] {
+  return {
+    totalEvents: events.length,
+    recentEvents: events.slice(-10).map((event, index) => {
+      const obj = asObject(event) ?? {};
+      const details = asObject(obj.details) ?? {};
+      const targetWells = Array.isArray(details.wells)
+        ? details.wells.filter((w): w is string => typeof w === 'string')
+        : undefined;
+      return {
+        eventId: typeof obj.eventId === 'string' ? obj.eventId : `event-${index + 1}`,
+        event_type: typeof obj.event_type === 'string'
+          ? obj.event_type
+          : typeof obj.verb === 'string'
+            ? obj.verb
+            : 'unknown',
+        verb: typeof obj.verb === 'string'
+          ? obj.verb
+          : typeof obj.event_type === 'string'
+            ? obj.event_type
+            : 'unknown',
+        ...(targetWells ? { targetWells } : {}),
+      };
+    }),
+  };
+}
+
+function buildProtocolIdeDraftPrompt(input: {
+  sourceText: string;
+  sourceSummary?: string;
+  structuredProtocolText: string;
+  directiveText: string;
+  answers: AgentClarificationAnswer[];
+  latestEvents: unknown[];
+  latestLabState?: unknown;
+}): string {
+  const sourceText = input.sourceText.trim() || input.structuredProtocolText.trim() || 'No extracted source text record was available; use the source summary and directive.';
+  return [
+    'Draft the next Protocol IDE event graph from the source protocol.',
+    '',
+    'Return an event graph draft, not a review memo. Map each source procedure step to zero or more executable events. For every drafted event, include source evidence in provenance/details when available: protocol step number, source snippet, page, or section. Ground materials, labware, and equipment to known refs when provided by answered clarifications. If a material, labware, equipment item, deck placement, count, well layout, or parameter is still ambiguous, emit structured clarificationRequests using /m, /l, /e, or choice instead of guessing.',
+    '',
+    '[Source summary]',
+    input.sourceSummary?.trim() || 'None.',
+    '',
+    '[Directive]',
+    input.directiveText.trim() || 'Draft the event graph faithfully from the source protocol.',
+    '',
+    '[Accumulated clarification answers]',
+    compactAnswersForPrompt(input.answers),
+    '',
+    '[Current draft context]',
+    input.latestEvents.length > 0
+      ? JSON.stringify({ events: input.latestEvents.slice(-40), labState: input.latestLabState ?? null }, null, 2)
+      : 'No prior draft events.',
+    '',
+    '[Structured protocol fields]',
+    input.structuredProtocolText.trim() || 'None.',
+    '',
+    '[Extracted source text]',
+    sourceText.slice(0, 80_000),
+  ].join('\n');
+}
+
+
+function stringFrom(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function numberFrom(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value);
+  return undefined;
+}
+
+function normalizeEventSourceEvidence(event: unknown): unknown {
+  const obj = asObject(event);
+  if (!obj) return event;
+  const details = asObject(obj.details) ?? {};
+  const provenance = asObject(obj.provenance) ?? asObject(details.provenance) ?? {};
+  const source = asObject(obj.source) ?? asObject(details.sourceEvidence) ?? asObject(details.source) ?? {};
+
+  const sourceStep = numberFrom(details.sourceStep)
+    ?? numberFrom(details.protocolStep)
+    ?? numberFrom(details.stepNumber)
+    ?? numberFrom(details.source_step)
+    ?? numberFrom(provenance.sourceStep)
+    ?? numberFrom(provenance.stepNumber)
+    ?? numberFrom(source.sourceStep)
+    ?? numberFrom(source.stepNumber);
+  const sourceSnippet = stringFrom(details.sourceSnippet)
+    ?? stringFrom(details.source_snippet)
+    ?? stringFrom(details.snippet)
+    ?? stringFrom(provenance.sourceSnippet)
+    ?? stringFrom(provenance.snippet)
+    ?? stringFrom(source.sourceSnippet)
+    ?? stringFrom(source.snippet);
+  const sourcePage = numberFrom(details.sourcePage)
+    ?? numberFrom(details.page)
+    ?? numberFrom(details.pageNumber)
+    ?? numberFrom(provenance.sourcePage)
+    ?? numberFrom(provenance.page)
+    ?? numberFrom(provenance.pageNumber)
+    ?? numberFrom(source.sourcePage)
+    ?? numberFrom(source.page)
+    ?? numberFrom(source.pageNumber);
+  const sourceSection = stringFrom(details.sourceSection)
+    ?? stringFrom(details.section)
+    ?? stringFrom(details.sectionId)
+    ?? stringFrom(provenance.sourceSection)
+    ?? stringFrom(provenance.section)
+    ?? stringFrom(provenance.sectionId)
+    ?? stringFrom(source.sourceSection)
+    ?? stringFrom(source.section)
+    ?? stringFrom(source.sectionId);
+
+  if (sourceStep === undefined && sourceSnippet === undefined && sourcePage === undefined && sourceSection === undefined) {
+    return event;
+  }
+
+  return {
+    ...obj,
+    details: {
+      ...details,
+      ...(sourceStep !== undefined ? { sourceStep } : {}),
+      ...(sourceSnippet ? { sourceSnippet } : {}),
+      ...(sourcePage !== undefined ? { sourcePage } : {}),
+      ...(sourceSection ? { sourceSection } : {}),
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -966,6 +1229,292 @@ export function createProtocolIdeHandlers(
     },
 
     /**
+     * POST /protocol-ide/sessions/:sessionId/draft-graph
+     *
+     * AI-draft an event graph from the current Protocol IDE source state.
+     * This is the iterative Protocol IDE path: source text + directive + all
+     * accumulated clarification answers go through the same AgentOrchestrator
+     * draft flow used by the Event Editor, then the latest session refs and
+     * clarification card state are updated in place.
+     */
+    async draftGraph(
+      request: FastifyRequest<{
+        Params: { sessionId: string };
+        Body: ProtocolIdeDraftGraphRequest;
+      }>,
+      reply: FastifyReply,
+    ): Promise<ProtocolIdeDraftGraphResponse | ApiError> {
+      const { sessionId } = request.params;
+      const body = request.body ?? {};
+
+      const sessionEnvelope = await sessionService.getSession(sessionId);
+      if (!sessionEnvelope) {
+        reply.status(404);
+        return {
+          error: 'SESSION_NOT_FOUND',
+          message: `Session '${sessionId}' not found`,
+        };
+      }
+
+      const orchestrator = aiDeps?.current?.orchestrator;
+      if (!orchestrator) {
+        reply.status(503);
+        return {
+          error: 'AI_RUNTIME_UNAVAILABLE',
+          message: 'AI runtime is not initialized; cannot draft a Protocol IDE event graph.',
+        };
+      }
+
+      const payload = sessionEnvelope.payload as Record<string, unknown>;
+      const directiveText = typeof body.directiveText === 'string' && body.directiveText.trim()
+        ? body.directiveText.trim()
+        : typeof payload.latestDirectiveText === 'string'
+          ? payload.latestDirectiveText
+          : '';
+      const resetClarifications = body.resetClarifications === true;
+      const resolvedAnswers = mergeClarificationAnswers(
+        payload.resolvedClarificationAnswers,
+        Array.isArray(body.clarificationAnswers) ? body.clarificationAnswers : [],
+        resetClarifications,
+      );
+
+      const extractedTextRecordId = refId(payload.extractedTextRef);
+      const protocolImportRecordId = refId(payload.protocolImportRef);
+      const latestEventGraphRecordId = refId(payload.latestEventGraphRef);
+      const [extractedTextEnv, protocolImportEnv, latestEventGraphEnv] = await Promise.all([
+        extractedTextRecordId ? ctx.store.get(extractedTextRecordId).catch(() => null) : Promise.resolve(null),
+        protocolImportRecordId ? ctx.store.get(protocolImportRecordId).catch(() => null) : Promise.resolve(null),
+        latestEventGraphRecordId ? ctx.store.get(latestEventGraphRecordId).catch(() => null) : Promise.resolve(null),
+      ]);
+
+      const evidenceCitations = Array.isArray(payload.evidenceCitations)
+        ? payload.evidenceCitations.filter((entry): entry is Record<string, unknown> => Boolean(asObject(entry)))
+        : [];
+      const citationText = evidenceCitations.map((entry, index) => {
+        const page = typeof entry.pageNumber === 'number' ? `page ${entry.pageNumber}` : undefined;
+        const snippet = typeof entry.snippet === 'string'
+          ? entry.snippet
+          : typeof entry.description === 'string'
+            ? entry.description
+            : '';
+        const context = typeof entry.context === 'string' ? ` Context: ${entry.context}` : '';
+        return `${index + 1}. ${page ? `${page}: ` : ''}${snippet}${context}`;
+      }).filter((line) => line.trim()).join('\n');
+
+      const latestGraphPayload = asObject(latestEventGraphEnv?.payload);
+      const latestEvents = Array.isArray(latestGraphPayload?.events)
+        ? latestGraphPayload.events
+        : Array.isArray((payload.latestTerminalArtifacts as TerminalArtifacts | undefined)?.events)
+          ? (payload.latestTerminalArtifacts as TerminalArtifacts).events
+          : [];
+      const latestLabState = payload.latestLabState;
+      const labStateObject = asObject(latestLabState);
+      const latestLabwares = Array.isArray(latestGraphPayload?.labwares)
+        ? latestGraphPayload.labwares
+        : labStateObject && asObject(labStateObject.labware)
+          ? Object.values(asObject(labStateObject.labware)!)
+          : [];
+      const latestDeckPlacements = Array.isArray(latestGraphPayload?.deckPlacements)
+        ? latestGraphPayload.deckPlacements
+        : Array.isArray(latestGraphPayload?.deck_placements)
+          ? latestGraphPayload.deck_placements
+          : Array.isArray(labStateObject?.deck)
+            ? labStateObject.deck
+            : [];
+
+      const structuredProtocolText = extractTextFromPayload(protocolImportEnv?.payload);
+      const sourceText = [
+        extractTextFromPayload(extractedTextEnv?.payload),
+        citationText,
+      ].filter((part) => part.trim()).join('\n\n');
+
+      const prompt = buildProtocolIdeDraftPrompt({
+        sourceText,
+        ...(typeof payload.sourceSummary === 'string' ? { sourceSummary: payload.sourceSummary } : {}),
+        structuredProtocolText,
+        directiveText,
+        answers: resolvedAnswers,
+        latestEvents,
+        ...(latestLabState !== undefined ? { latestLabState } : {}),
+      });
+
+      const context: EditorContext = {
+        labwares: latestLabwares.map((labware, index) => {
+          const lw = asObject(labware) ?? {};
+          const labwareId = typeof lw.labwareId === 'string'
+            ? lw.labwareId
+            : typeof lw.instanceId === 'string'
+              ? lw.instanceId
+              : `draft-labware-${index + 1}`;
+          const labwareType = typeof lw.labwareType === 'string'
+            ? lw.labwareType
+            : typeof lw.type === 'string'
+              ? lw.type
+              : 'generic';
+          return {
+            labwareId,
+            labwareType,
+            name: typeof lw.name === 'string' ? lw.name : labwareId,
+          };
+        }),
+        eventSummary: buildEventSummary(latestEvents),
+        vocabPackId: 'general',
+        availableVerbs: [],
+        deckPlacements: latestDeckPlacements.map((placement) => {
+          const p = asObject(placement) ?? {};
+          return {
+            slotId: typeof p.slotId === 'string' ? p.slotId : typeof p.slot === 'string' ? p.slot : 'unknown',
+            ...(typeof p.labwareId === 'string' ? { labwareId: p.labwareId } : {}),
+            ...(typeof p.moduleId === 'string' ? { moduleId: p.moduleId } : {}),
+          };
+        }),
+        ...(latestEventGraphRecordId ? { eventGraphId: latestEventGraphRecordId } : {}),
+      };
+
+      try {
+        const result = await orchestrator.run({
+          prompt,
+          context,
+          surface: 'protocol-ide',
+          forceDraftTool: true,
+          clarificationAnswers: resolvedAnswers,
+          ...(body.enableThinking !== undefined ? { enableThinking: body.enableThinking } : {}),
+        });
+
+        const events = Array.isArray(result.events) ? result.events.map(normalizeEventSourceEvidence) : [];
+        const answeredRequestIds = new Set(resolvedAnswers.map((answer) => answer.requestId));
+        const clarificationRequests = (result.clarificationRequests ?? [])
+          .filter((clarification) => !answeredRequestIds.has(clarification.id));
+        const draftIteration = (typeof payload.draftIteration === 'number' ? payload.draftIteration : 0) + 1;
+        const now = new Date().toISOString();
+        const noEventDiagnostics: ProtocolIdeDraftGraphResponse['diagnostics'] = events.length === 0
+          ? clarificationRequests.length > 0
+            ? [{ severity: 'info' as const, code: 'AWAITING_CLARIFICATION', message: 'The draft produced clarification cards before emitting a replacement graph.' }]
+            : [{ severity: 'warning' as const, code: 'NO_EVENTS_DRAFTED', message: 'The draft completed without event graph events.' }]
+          : [];
+        const diagnostics: ProtocolIdeDraftGraphResponse['diagnostics'] = [
+          ...noEventDiagnostics,
+          ...(result.error ? [{ severity: 'error' as const, code: 'AGENT_ERROR', message: result.error }] : []),
+          ...(result.unresolvedRefs ?? []).slice(0, 10).map((ref, index) => {
+            const refObj = asObject(ref);
+            return {
+              severity: 'warning' as const,
+              code: `UNRESOLVED_REF_${index + 1}`,
+              message: typeof refObj?.reason === 'string' ? refObj.reason : JSON.stringify(ref),
+            };
+          }),
+        ];
+
+        let eventGraphRef: ProtocolIdeDraftGraphResponse['eventGraphRef'] = null;
+        let eventGraphRecordId: string | null = null;
+        if (events.length > 0) {
+          eventGraphRecordId = `EVG-${sessionId}-DRAFT-${draftIteration}`;
+          const eventGraphPayload: Record<string, unknown> = {
+            kind: 'event-graph',
+            recordId: eventGraphRecordId,
+            id: eventGraphRecordId,
+            name: `Protocol IDE draft ${draftIteration}`,
+            description: `AI-drafted event graph for ${sessionId}`,
+            protocolId: sessionId,
+            status: 'draft',
+            events,
+            labwares: latestLabwares,
+            deckPlacements: latestDeckPlacements,
+            createdAt: now,
+            updatedAt: now,
+          };
+          const envelope: RecordEnvelope = {
+            recordId: eventGraphRecordId,
+            schemaId: EVENT_GRAPH_SCHEMA_ID,
+            payload: eventGraphPayload,
+            meta: {
+              kind: 'event-graph',
+              createdAt: now,
+              updatedAt: now,
+            },
+          };
+          const writeResult = await ctx.store.create({
+            envelope,
+            message: `Create Protocol IDE draft event graph ${eventGraphRecordId}`,
+            skipValidation: true,
+            skipLint: true,
+          });
+          if (!writeResult.success) {
+            throw new Error(writeResult.error ?? `Failed to create event graph ${eventGraphRecordId}`);
+          }
+          eventGraphRef = { kind: 'record', id: eventGraphRecordId, type: 'event-graph' };
+        }
+
+        const updatedPayload: Record<string, unknown> = {
+          ...payload,
+          status: result.success ? 'projected' : 'projection_failed',
+          latestDirectiveText: directiveText,
+          draftIteration,
+          resolvedClarificationAnswers: resolvedAnswers,
+          latestClarificationRequests: clarificationRequests,
+          latestProjectionDiagnostics: diagnostics,
+          ...(eventGraphRef ? { latestEventGraphRef: eventGraphRef, latestEventGraphCacheKey: eventGraphRef.id } : {}),
+          updatedAt: now,
+        };
+
+        await ctx.store.update({
+          envelope: {
+            ...sessionEnvelope,
+            payload: updatedPayload,
+            meta: { ...sessionEnvelope.meta, updatedAt: now },
+          },
+          message: `Update session ${sessionId} with Protocol IDE graph draft ${draftIteration}`,
+          skipLint: true,
+          skipValidation: true,
+        });
+
+        reply.status(200);
+        return {
+          success: true,
+          status: result.success ? 'projected' : 'projection_failed',
+          eventGraphRef,
+          eventGraphData: {
+            recordId: eventGraphRecordId,
+            events,
+            labwares: latestLabwares,
+            deckPlacements: latestDeckPlacements,
+            eventCount: events.length,
+          },
+          clarificationRequests,
+          diagnostics,
+          draftIteration,
+        };
+      } catch (err) {
+        const now = new Date().toISOString();
+        const draftIteration = (typeof payload.draftIteration === 'number' ? payload.draftIteration : 0) + 1;
+        const diagnostics = [{ severity: 'error' as const, code: 'DRAFT_GRAPH_FAILED', message: err instanceof Error ? err.message : String(err) }];
+        await ctx.store.update({
+          envelope: {
+            ...sessionEnvelope,
+            payload: {
+              ...payload,
+              status: 'projection_failed',
+              latestDirectiveText: directiveText,
+              draftIteration,
+              resolvedClarificationAnswers: resolvedAnswers,
+              latestProjectionDiagnostics: diagnostics,
+              updatedAt: now,
+            },
+            meta: { ...sessionEnvelope.meta, updatedAt: now },
+          },
+          message: `Record failed Protocol IDE graph draft ${draftIteration} for ${sessionId}`,
+          skipLint: true,
+          skipValidation: true,
+        });
+        reply.status(500);
+        return {
+          error: 'DRAFT_GRAPH_FAILED',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
      * POST /protocol-ide/sessions/:sessionId/feedback
      *
      * Submit a feedback comment for the given session.
@@ -1442,7 +1991,26 @@ export function createProtocolIdeHandlers(
           return { success: true, events: [], labwares: [], deckPlacements: [] };
         }
 
-        // v1 projection may not persist artifacts — fall through to empty arrays
+        const graphRecordId = refId(payload.latestEventGraphRef);
+        if (graphRecordId) {
+          const graphEnvelope = await ctx.store.get(graphRecordId).catch(() => null);
+          const graphPayload = asObject(graphEnvelope?.payload);
+          if (graphPayload && Array.isArray(graphPayload.events)) {
+            return {
+              success: true,
+              events: graphPayload.events,
+              labwares: Array.isArray(graphPayload.labwares) ? graphPayload.labwares : [],
+              deckPlacements: Array.isArray(graphPayload.deckPlacements)
+                ? graphPayload.deckPlacements
+                : Array.isArray(graphPayload.deck_placements)
+                  ? graphPayload.deck_placements
+                  : [],
+            };
+          }
+        }
+
+        // Legacy projection may not persist an event-graph record; fall back to
+        // terminal artifacts and lab state snapshots when present.
         const artifacts = payload.latestTerminalArtifacts as TerminalArtifacts | undefined;
         const labState = payload.latestLabState as LabStateSnapshot | undefined;
 

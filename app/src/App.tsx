@@ -36,6 +36,7 @@ const LegacyModeRedirect = lazy(async () => import('./event-editor/projects/Lega
 const LiteraturePage = lazy(async () => import('./literature/LiteraturePage').then((m) => ({ default: m.LiteraturePage })))
 const WelcomePage = lazy(async () => import('./welcome/WelcomePage').then((m) => ({ default: m.WelcomePage })))
 const CreateStudyPage = lazy(async () => import('./welcome/CreateStudyPage').then((m) => ({ default: m.CreateStudyPage })))
+const ProtocolBuilderPage = lazy(async () => import('./protocol-builder/ProtocolBuilderPage').then((m) => ({ default: m.ProtocolBuilderPage })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -91,6 +92,8 @@ export function App() {
               <Route path="/browser" element={<DeferredRoute><LegacyModeRedirect mode="browser" /></DeferredRoute>} />
               <Route path="/protocols" element={<DeferredRoute><LegacyModeRedirect mode="protocols" /></DeferredRoute>} />
               <Route path="/literature" element={<DeferredRoute><LiteraturePage /></DeferredRoute>} />
+              {/* Standalone Protocol Builder page */}
+              <Route path="/protocol-builder" element={<DeferredRoute><ProtocolBuilderPage /></DeferredRoute>} />
               {/* /settings is a real page in the new UI: off-nav, reached
                   from the brand menu, but with a URL, deep linking, and
                   browser-back like every other shell page. */}

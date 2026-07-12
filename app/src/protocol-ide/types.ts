@@ -83,6 +83,10 @@ export interface ProtocolIdeSession {
   latestEventGraphCacheKey?: string
   latestTerminalArtifacts?: Record<string, unknown>
   latestLabState?: Record<string, unknown>
+  latestClarificationRequests?: import('../types/ai').AiClarificationRequest[]
+  resolvedClarificationAnswers?: import('../types/ai').AiClarificationAnswer[]
+  draftIteration?: number
+  latestProjectionDiagnostics?: Array<{ severity?: string; code?: string; message?: string }>
 
   // Latest overlay summaries
   latestDeckSummaryRef?: Ref

@@ -21,6 +21,7 @@ export function normalizeClarificationKind(raw: unknown): AgentClarificationKind
   if (value.includes('aliquot')) return 'aliquot';
   if (value.includes('labware') || value.includes('plate') || value.includes('tube') || value.includes('reservoir')) return 'labware';
   if (value.includes('vendor')) return 'vendor-product';
+  if (value.includes('equipment') || value.includes('instrument')) return 'equipment';
   if (value.includes('material') || value.includes('reagent') || value.includes('cell')) return 'material';
   if (value.includes('ontology')) return 'ontology';
   if (value.includes('well')) return 'well-selection';
@@ -31,6 +32,7 @@ export function normalizeClarificationKind(raw: unknown): AgentClarificationKind
 
 export function menuProviderForKind(kind: AgentClarificationKind): AgentClarificationMenuProvider {
   if (kind === 'labware') return '/l';
+  if (kind === 'equipment') return '/e';
   if (kind === 'material' || kind === 'aliquot' || kind === 'vendor-product' || kind === 'ontology') return '/m';
   return 'choice';
 }
@@ -112,7 +114,7 @@ export function parseClarificationRequests(raw: unknown): AgentClarificationRequ
       : [];
     const menuProviderRaw = asString(r.menuProvider);
     const menuProvider: AgentClarificationMenuProvider =
-      menuProviderRaw === '/m' || menuProviderRaw === '/l' || menuProviderRaw === 'choice'
+      menuProviderRaw === '/m' || menuProviderRaw === '/l' || menuProviderRaw === '/e' || menuProviderRaw === 'choice'
         ? menuProviderRaw
         : menuProviderForKind(kind);
 

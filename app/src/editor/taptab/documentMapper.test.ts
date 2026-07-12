@@ -247,19 +247,34 @@ describe('protocol UI projection', () => {
       steps: [{ stepId: 'step_1', kind: 'other', description: 'Seed cells' }],
     })
 
+    const headings = doc.content.flatMap((section: JSONContent) =>
+      (section.content ?? [])
+        .filter((item: JSONContent) => item.type === 'sectionHeading')
+        .map((item: JSONContent) => item.content?.[0]?.text),
+    )
     const fields = doc.content.flatMap((section: JSONContent) =>
       (section.content ?? []).filter((item: JSONContent) => item.type === 'fieldRow'),
     ) as JSONContent[]
     const labels = fields.map((field) => (field.attrs as { label: string }).label)
     const widgets = fields.map((field) => (field.attrs as { widget: string }).widget)
 
-    expect(labels).toContain('Author')
-    expect(labels).toContain('Purpose')
-    expect(labels).toContain('Materials')
-    expect(labels).toContain('Consumables / Labware')
-    expect(labels).toContain('Equipment')
-    expect(labels).toContain('Steps')
+    expect(headings).toEqual(['Protocol'])
+    expect(labels).toEqual([
+      'Title',
+      'Version',
+      'Author',
+      'Purpose',
+      'Materials',
+      'Consumables / Labware',
+      'Equipment',
+      'Steps',
+      'Notes',
+    ])
     expect(labels).not.toContain('Overview')
+    expect(labels).not.toContain('Protocol Structure')
+    expect(labels).not.toContain('Structure Suggestions')
+    expect(widgets.filter((widget) => widget === 'protocol-prose-authoring')).toHaveLength(2)
+    expect(widgets).not.toContain('protocol-ai-suggestions')
     expect(widgets).toContain('protocol-labware-roles')
   })
 })

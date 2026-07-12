@@ -14,7 +14,7 @@ import { ClarificationPicker } from './ClarificationPicker'
 
 /** Material/labware clarifications get an inline search+mint picker. */
 function hasInlinePicker(request: AiClarificationRequest): boolean {
-  return request.menuProvider === '/m' || request.menuProvider === '/l'
+  return request.menuProvider === '/m' || request.menuProvider === '/l' || request.menuProvider === '/e'
 }
 
 export interface MessageLogProps {
@@ -44,6 +44,9 @@ export function mentionTokenForOption(
   if (!id) return undefined
   if (request.menuProvider === '/l' || request.kind === 'labware') {
     return `[[labware:${id}|${label}]]`
+  }
+  if (request.menuProvider === '/e') {
+    return `[[equipment:${id}|${label}]]`
   }
   if (request.menuProvider === '/m') {
     const refKind = typeof option.ref?.kind === 'string' ? option.ref.kind : undefined

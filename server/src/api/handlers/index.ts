@@ -48,3 +48,5 @@ export * from './VerbActionMapHandlers.js';
 export * from './FoundryJobHandlers.js';
 export * from './MaterialProfileHandlers.js';
 export * from './ExtractProtocolHandler.js';
+export * from './EquipmentHandlers.js';
+export * from './ProtocolBuilderHandlers.js';

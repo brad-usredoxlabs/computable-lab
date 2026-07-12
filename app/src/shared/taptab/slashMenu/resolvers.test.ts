@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  resolveEquipment,
   resolveLabware,
   resolveMaterial,
   resolveProtocol,
@@ -145,6 +146,65 @@ describe('resolveLabware', () => {
     const out = await resolveLabware('96', ctx())
     expect(out[0]?.badge).toBe('Labware')
     expect(out[0]?.mention).toMatchObject({ type: 'labware', id: 'LBW-96' })
+  })
+})
+
+
+describe('resolveEquipment', () => {
+  it('maps local equipment records to equipment suggestions', async () => {
+    mockSearchResponse([{ recordId: 'EQP-CENTRIFUGE', kind: 'equipment', label: 'Benchtop centrifuge' }])
+
+    const out = await resolveEquipment('centrifuge', ctx())
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({
+      key: 'equipment:EQP-CENTRIFUGE',
+      badge: 'Equipment',
+      mention: { type: 'equipment', id: 'EQP-CENTRIFUGE', label: 'Benchtop centrifuge' },
+    })
+  })
+
+  it('offers Exa-backed equipment creation when local search misses', async () => {
+    mockSearchResponse([])
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        configured: true,
+        query: 'centrifuge',
+        items: [{
+          id: 'exa-1',
+          title: 'Eppendorf 5424R centrifuge',
+          url: 'https://example.com/5424r',
+          snippet: 'Benchtop laboratory centrifuge',
+          manufacturer: 'Eppendorf',
+          model: '5424R',
+          source: 'exa',
+        }],
+      }),
+    } as Response)
+
+    const out = await resolveEquipment('centrifuge', ctx())
+    expect(out[0]).toMatchObject({
+      key: 'equipment-exa:exa-1',
+      badge: 'Web',
+      mention: { type: 'equipment', id: '', label: 'Eppendorf 5424R centrifuge' },
+    })
+    expect(out[0]?.resolveMention).toBeTypeOf('function')
+
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      status: 201,
+      json: async () => ({
+        success: true,
+        recordId: 'EQP-EPPENDORF-5424R',
+        label: 'Eppendorf 5424R centrifuge',
+        record: {},
+      }),
+    } as Response)
+    await expect(out[0]!.resolveMention!()).resolves.toEqual({
+      type: 'equipment',
+      id: 'EQP-EPPENDORF-5424R',
+      label: 'Eppendorf 5424R centrifuge',
+    })
   })
 })
 

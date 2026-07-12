@@ -82,7 +82,7 @@ export interface WellComputedState {
   tube?: {
     sizeLabel: string
     maxVolume_uL: number
-    wellShape?: 'round' | 'square' | 'v-bottom' | 'conical'
+    wellShape?: 'round' | 'square' | 'v-bottom' | 'conical' | 'cylindrical'
     /** True when this tube was auto-implied (material added without an explicit place_tube). */
     implied?: boolean
   }

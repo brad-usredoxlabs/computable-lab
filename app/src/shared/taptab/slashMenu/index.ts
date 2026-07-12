@@ -3,6 +3,7 @@ export * from './tokens'
 export {
   resolveMaterial,
   resolveLabware,
+  resolveEquipment,
   resolveProtocol,
   resolveSource,
   resolveTarget,

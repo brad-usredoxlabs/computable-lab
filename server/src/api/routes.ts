@@ -576,6 +576,10 @@ export function registerRoutes(
   if (protocolBuilderHandlers) {
     fastify.post('/protocol-builder/extract', protocolBuilderHandlers.extractProtocol.bind(protocolBuilderHandlers));
     fastify.post('/protocol-builder/redraft', protocolBuilderHandlers.redraft.bind(protocolBuilderHandlers));
+    fastify.post('/protocol-builder/promote', protocolBuilderHandlers.promote.bind(protocolBuilderHandlers));
+    fastify.post('/protocol-builder/export', protocolBuilderHandlers.exportProtocol.bind(protocolBuilderHandlers));
+    fastify.post('/protocol-builder/extract-pdf-text', protocolBuilderHandlers.fetchPdfText.bind(protocolBuilderHandlers));
+    fastify.post('/protocol-builder/draft', protocolBuilderHandlers.draft.bind(protocolBuilderHandlers));
   }
 
   const { aiThreadHandlers } = options;

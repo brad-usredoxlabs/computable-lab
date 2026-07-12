@@ -3,11 +3,11 @@
  *
  * This module exports parsing semantics that mirror the app-side parser
  * for material, material-spec, material-instance, aliquot, vendor-product,
- * labware, and selection tokens.
+ * labware, equipment, and selection tokens.
  */
 
 export interface PromptMention {
-  type: 'material' | 'labware' | 'selection' | 'protocol' | 'tube';
+  type: 'material' | 'labware' | 'equipment' | 'selection' | 'protocol' | 'tube';
   entityKind?: 'material' | 'material-spec' | 'material-instance' | 'aliquot' | 'vendor-product' | 'protocol' | 'graph-component';
   selectionKind?: 'source' | 'target';
   id?: string;
@@ -32,7 +32,7 @@ export type PromptMentionMatch = ParsedPromptMention;
  * The regex pattern for matching mention tokens.
  * Format: [[kind:id|label]] or [[kind:id|label|extra]]
  */
-const MENTION_PATTERN = /\[\[(material|material-spec|material-instance|aliquot|vendor-product|labware|selection|protocol|graph-component|tube):(.*?)\]\]/g;
+const MENTION_PATTERN = /\[\[(material|material-spec|material-instance|aliquot|vendor-product|labware|equipment|selection|protocol|graph-component|tube):(.*?)\]\]/g;
 
 /**
  * Parse all mention matches from a prompt string.
@@ -72,12 +72,12 @@ export function parsePromptMentionMatches(prompt: string): ParsedPromptMention[]
       continue;
     }
 
-    if (kind === 'labware') {
+    if (kind === 'labware' || kind === 'equipment') {
       const [id = '', label = id] = body.split('|');
       if (!id) continue;
       mentions.push({
         mention: {
-          type: 'labware',
+          type: kind,
           id,
           label,
         },

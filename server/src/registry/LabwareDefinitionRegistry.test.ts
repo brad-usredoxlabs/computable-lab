@@ -40,6 +40,24 @@ describe('LabwareDefinitionRegistry', () => {
     expect(entry!.topology.columns).toBe(12);
   });
 
+  it('includes generic beaker definitions for protocol labware search', () => {
+    const registry = getLabwareDefinitionRegistry();
+    const entry = registry.get('beaker_250ml');
+    expect(entry).toBeDefined();
+    expect(entry!.display_name).toBe('250 mL Beaker');
+    expect(entry!.topology.addressing).toBe('single');
+    expect(entry!.capacity.max_well_volume_uL).toBe(250000);
+  });
+
+  it('includes generic flask definitions for protocol labware search', () => {
+    const registry = getLabwareDefinitionRegistry();
+    const entry = registry.get('flask_1000ml');
+    expect(entry).toBeDefined();
+    expect(entry!.display_name).toBe('1 L Flask');
+    expect(entry!.topology.addressing).toBe('single');
+    expect(entry!.capacity.max_well_volume_uL).toBe(1000000);
+  });
+
   it('getByAlias finds by platform alias', () => {
     const registry = getLabwareDefinitionRegistry();
     const entry = registry.getByAlias('plate_96');

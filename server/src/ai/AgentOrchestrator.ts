@@ -230,11 +230,13 @@ function resolvedMentionsFromAnswers(
     const kind: ResolvedMention['kind'] =
       refType === 'labware' || ref.kind === 'labware'
         ? 'labware'
-        : refType === 'material-spec'
-          ? 'material-spec'
-          : refType === 'aliquot'
-            ? 'aliquot'
-            : 'material';
+        : refType === 'equipment' || ref.kind === 'equipment'
+          ? 'equipment'
+          : refType === 'material-spec'
+            ? 'material-spec'
+            : refType === 'aliquot'
+              ? 'aliquot'
+              : 'material';
     out.push({
       raw: answer.mentionToken ?? `[[${kind}:${id}]]`,
       kind,

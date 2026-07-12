@@ -14,6 +14,8 @@ import {
 } from '../../../shared/taptab/slashMenu'
 import type { SlashMention } from '../../../shared/taptab/slashMenu'
 import { buildOntologyCopilotExtension } from '../../../shared/taptab/ontologyCopilot/OntologyCopilotExtension'
+import { RefBadge, type Ref } from '../../../shared/ref/RefBadge'
+import { focusAdjacentTapTabField } from '../tabNavPlugin'
 
 interface ProtocolWidgetProps {
   value: unknown
@@ -35,7 +37,7 @@ export function ProtocolProseAuthoringWidget({ value, readOnly, onCommit, onReco
   return (
     <ProtocolMentionEditor
       value={String(value ?? '')}
-      placeholder="Write protocol prose. Use /m for materials, /l or /t for labware, @ for ontology."
+      placeholder="Write protocol prose. Use /m for materials, /l or /t for labware, /e for equipment, @ for ontology."
       className="taptab-protocol-prose"
       serialize="wire"
       onCommit={handleCommit}
@@ -55,69 +57,74 @@ export function ProtocolEquipmentRolesWidget(props: ProtocolWidgetProps) {
   return <ProtocolRoleListWidget {...props} label="Equipment" allowedKey="allowedInstrumentIds" />
 }
 
-function ProtocolRoleListWidget({ value, readOnly, onCommit, label, allowedKey }: ProtocolWidgetProps & { label: string; allowedKey: string }) {
+function ProtocolRoleListWidget({ value, readOnly, onCommit, label, allowedKey, onRecordPatch, getRecordValue }: ProtocolWidgetProps & { label: string; allowedKey: string }) {
   const roles = Array.isArray(value) ? value as Array<Record<string, unknown>> : []
   const [newRole, setNewRole] = useState('')
+  const [newRoleFocusSignal, setNewRoleFocusSignal] = useState(0)
+  const newRoleMentions = useRef<SlashMention[]>([])
+  const addButtonRef = useRef<HTMLButtonElement | null>(null)
   const commitRoles = (next: Array<Record<string, unknown>>) => onCommit(next)
+  const syncExternalMentions = useCallback((mentions: SlashMention[]) => {
+    const external = mentions.filter((mention) => !mentionMatchesAllowedKey(mention, allowedKey))
+    const patch = buildMentionRolePatch(external, getRecordValue)
+    if (Object.keys(patch).length > 0) onRecordPatch?.(patch)
+  }, [allowedKey, getRecordValue, onRecordPatch])
   const addRole = () => {
-    const roleId = normalizeRoleId(newRole)
-    if (!roleId || roles.some((role) => role.roleId === roleId)) return
-    commitRoles([...roles, { roleId, description: newRole.trim() }])
+    const description = newRole.trim()
+    const ids = roleMentionIds(newRoleMentions.current, allowedKey)
+    const primaryId = ids[0] ?? description
+    const roleId = normalizeRoleId(primaryId || description)
+    if (!roleId || roles.some((role) => role.roleId === roleId || asStringArray(role[allowedKey]).some((id) => ids.includes(id)))) return
+    commitRoles([...roles, {
+      roleId,
+      description,
+      ...(ids.length > 0 ? { [allowedKey]: ids } : {}),
+    }])
+    syncExternalMentions(newRoleMentions.current)
+    newRoleMentions.current = []
     setNewRole('')
+    setNewRoleFocusSignal((signal) => signal + 1)
   }
+  const chips = roles.flatMap((role, index) => roleChips(role, index, allowedKey))
   return (
     <div className="taptab-protocol-list">
-      {roles.length === 0 && <span className="taptab-widget-empty">No {label.toLowerCase()} roles</span>}
-      {roles.map((role, index) => (
-        <div className="taptab-protocol-row" key={`${role.roleId ?? index}`}>
-          <label>
-            <span>Role</span>
-            <input
-              value={String(role.roleId ?? '')}
-              disabled={readOnly}
-              onChange={(event) => {
-                const next = roles.map((item, i) => i === index ? { ...item, roleId: normalizeRoleId(event.target.value) } : item)
-                commitRoles(next)
-              }}
+      {chips.length === 0 && <span className="taptab-widget-empty">No {emptyRoleLabel(label)}</span>}
+      {chips.length > 0 && (
+        <span className="taptab-chips-list taptab-protocol-chip-list">
+          {chips.map((chip) => (
+            <RefBadge
+              key={`${chip.roleIndex}:${chip.ref.id}`}
+              value={chip.ref}
+              size="md"
+              showExternalLink={false}
+              onRemove={readOnly ? undefined : () => commitRoles(roles.filter((_, i) => i !== chip.roleIndex))}
             />
-          </label>
-          <label>
-            <span>Description</span>
-            <input
-              value={String(role.description ?? '')}
-              disabled={readOnly}
-              onChange={(event) => {
-                const next = roles.map((item, i) => i === index ? { ...item, description: event.target.value } : item)
-                commitRoles(next)
-              }}
-            />
-          </label>
-          {Array.isArray(role[allowedKey]) && role[allowedKey].length > 0 && (
-            <span className="taptab-protocol-grounding">
-              {(role[allowedKey] as unknown[]).map((id) => (
-                <code key={String(id)}>{String(id)}</code>
-              ))}
-            </span>
-          )}
-          {!readOnly && (
-            <button type="button" onClick={() => commitRoles(roles.filter((_, i) => i !== index))} aria-label={`Remove ${String(role.roleId ?? label)}`}>x</button>
-          )}
-        </div>
-      ))}
+          ))}
+        </span>
+      )}
       {!readOnly && (
         <div className="taptab-protocol-add">
-          <input
+          <ProtocolMentionEditor
             value={newRole}
-            placeholder={`Add ${label.toLowerCase()} role`}
-            onChange={(event) => setNewRole(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                addRole()
-              }
+            placeholder={`Add ${addRoleLabel(label)}`}
+            className="taptab-protocol-role-editor"
+            serialize="readable"
+            defaultSlashCommand={defaultRoleSlashCommand(allowedKey)}
+            focusSignal={newRoleFocusSignal}
+            onMentionSelected={() => {
+              removeSlashMenuRoots()
+              window.setTimeout(() => addButtonRef.current?.focus(), 0)
+            }}
+            onDraftChange={(text, mentions) => {
+              setNewRole(text)
+              newRoleMentions.current = mentions
+            }}
+            onCommit={(text, mentions) => {
+              setNewRole(text)
+              newRoleMentions.current = mentions
             }}
           />
-          <button type="button" onClick={addRole}>Add</button>
+          <button ref={addButtonRef} type="button" onFocus={removeSlashMenuRoots} onClick={addRole}>Add</button>
         </div>
       )}
     </div>
@@ -148,9 +155,11 @@ export function ProtocolStepRolesWidget({ value, readOnly, onCommit, onRecordPat
   return (
     <div className="taptab-protocol-list taptab-protocol-steps">
       {steps.length === 0 && <span className="taptab-widget-empty">No steps</span>}
-      {steps.map((step, index) => (
-        <div className="taptab-protocol-step" key={`${step.stepId ?? index}`}>
-          <span className="taptab-protocol-step-index">{index + 1}</span>
+      {steps.length > 0 && (
+        <ol className="taptab-protocol-numbered-list">
+          {steps.map((step, index) => (
+        <li className="taptab-protocol-step-item" key={`${step.stepId ?? index}`}>
+          <div className="taptab-protocol-step">
           {readOnly ? (
             <span>{String(step.description ?? step.label ?? step.kind ?? 'Step')}</span>
           ) : (
@@ -163,8 +172,11 @@ export function ProtocolStepRolesWidget({ value, readOnly, onCommit, onRecordPat
             />
           )}
           {!readOnly && <button type="button" onClick={() => onCommit(steps.filter((_, i) => i !== index))} aria-label={`Remove step ${index + 1}`}>x</button>}
-        </div>
-      ))}
+          </div>
+        </li>
+          ))}
+        </ol>
+      )}
       {!readOnly && (
         <div className="taptab-protocol-add taptab-protocol-add-step">
           <ProtocolMentionEditor
@@ -295,6 +307,67 @@ function title(value: string): string {
   return value.replace(/_/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase())
 }
 
+function addRoleLabel(label: string): string {
+  if (label === 'Material') return 'material'
+  if (label === 'Consumables / Labware') return 'labware or consumable'
+  if (label === 'Equipment') return 'equipment'
+  return label.toLowerCase()
+}
+
+function emptyRoleLabel(label: string): string {
+  if (label === 'Material') return 'materials'
+  if (label === 'Consumables / Labware') return 'labware or consumables'
+  if (label === 'Equipment') return 'equipment'
+  return label.toLowerCase()
+}
+
+function roleChips(role: Record<string, unknown>, roleIndex: number, allowedKey: string): Array<{ roleIndex: number; ref: Ref }> {
+  const ids = asStringArray(role[allowedKey])
+  const label = String(role.description ?? role.roleId ?? ids[0] ?? '')
+  if (ids.length === 0 && label) return [{ roleIndex, ref: roleRef(label, label, allowedKey) }]
+  return ids.map((id) => ({ roleIndex, ref: roleRef(id, label || id, allowedKey) }))
+}
+
+function roleRef(id: string, label: string, allowedKey: string): Ref {
+  if (/^[A-Za-z][A-Za-z0-9_]*:[A-Za-z0-9_]+$/.test(id)) {
+    const [namespace = '', ...rest] = id.split(':')
+    return { kind: 'ontology', id, namespace: namespace.toUpperCase(), label: label || rest.join(':') }
+  }
+  const type = allowedKey === 'allowedMaterialIds'
+    ? 'material'
+    : allowedKey === 'expectedLabwareKinds'
+      ? 'labware'
+      : 'equipment'
+  return { kind: 'record', type, id, label: label || id }
+}
+
+
+
+function defaultRoleSlashCommand(allowedKey: string): string | undefined {
+  if (allowedKey === 'allowedMaterialIds') return 'm'
+  if (allowedKey === 'expectedLabwareKinds') return 'l'
+  if (allowedKey === 'allowedInstrumentIds') return 'e'
+  return undefined
+}
+
+function mentionMatchesAllowedKey(mention: SlashMention, allowedKey: string): boolean {
+  if (allowedKey === 'allowedMaterialIds') return mention.type === 'material'
+  if (allowedKey === 'expectedLabwareKinds') return mention.type === 'labware' || mention.type === 'tube'
+  if (allowedKey === 'allowedInstrumentIds') return mention.type === 'equipment'
+  return false
+}
+
+function roleMentionIds(mentions: SlashMention[], allowedKey: string): string[] {
+  const ids: string[] = []
+  for (const mention of mentions) {
+    if (allowedKey === 'allowedMaterialIds' && mention.type === 'material' && mention.id) ids.push(mention.id)
+    if (allowedKey === 'expectedLabwareKinds' && mention.type === 'labware' && mention.id) ids.push(mention.id)
+    if (allowedKey === 'expectedLabwareKinds' && mention.type === 'tube' && mention.sizeLabel) ids.push(mention.sizeLabel)
+    if (allowedKey === 'allowedInstrumentIds' && mention.type === 'equipment' && mention.id) ids.push(mention.id)
+  }
+  return uniqueStrings(ids)
+}
+
 function ProtocolMentionEditor({
   value,
   placeholder,
@@ -302,6 +375,9 @@ function ProtocolMentionEditor({
   serialize,
   onCommit,
   onDraftChange,
+  defaultSlashCommand,
+  onMentionSelected,
+  focusSignal,
 }: {
   value: string
   placeholder: string
@@ -309,6 +385,9 @@ function ProtocolMentionEditor({
   serialize: 'wire' | 'readable'
   onCommit: (text: string, mentions: SlashMention[]) => void
   onDraftChange?: (text: string, mentions: SlashMention[]) => void
+  defaultSlashCommand?: string
+  onMentionSelected?: (mention: SlashMention) => void
+  focusSignal?: number
 }) {
   const commitRef = useRef(onCommit)
   commitRef.current = onCommit
@@ -316,6 +395,8 @@ function ProtocolMentionEditor({
   draftRef.current = onDraftChange
   const editorRef = useRef<Editor | null>(null)
   const latestValueRef = useRef(value)
+  const focusSignalRef = useRef(focusSignal)
+  const [hasPrimedSlash, setHasPrimedSlash] = useState(false)
 
   const editor = useEditor({
     extensions: [
@@ -325,10 +406,24 @@ function ProtocolMentionEditor({
       HardBreak,
       Placeholder.configure({ placeholder }),
       MentionNode,
-      buildSlashMenuExtension(),
+      buildSlashMenuExtension({
+        defaultCommand: defaultSlashCommand,
+        onEmptyDefaultTab: (event) => {
+          const currentEditor = editorRef.current
+          if (!currentEditor) return false
+          currentEditor.commands.setContent(protocolTextToDoc(''), { emitUpdate: false })
+          latestValueRef.current = ''
+          setHasPrimedSlash(false)
+          removeSlashMenuRoots()
+          const from = currentEditor.view.dom as HTMLElement
+          window.setTimeout(() => focusAdjacentTapTabField(from, event.shiftKey), 0)
+          return true
+        },
+        onMentionSelected,
+      }),
       buildOntologyCopilotExtension({ kinds: ['material', 'labware'] }),
     ],
-    content: textToDoc(value),
+    content: protocolTextToDoc(value),
     editorProps: {
       attributes: { class: 'taptab-protocol-mention-editor__content' },
       handleDOMEvents: {
@@ -336,15 +431,28 @@ function ProtocolMentionEditor({
           const target = event.relatedTarget as Node | null
           const root = view.dom.parentElement
           if (target && root?.contains(target)) return false
-          commitEditor(serialize, commitRef.current, editorRef.current)
+          commitEditor(serialize, commitRef.current, editorRef.current, defaultSlashCommand)
+          return false
+        },
+        focus: () => {
+          primeDefaultSlashCommand(editorRef.current, defaultSlashCommand)
+          setHasPrimedSlash(isPrimedSlashText(editorRef.current, defaultSlashCommand))
+          return false
+        },
+        keydown: (_view, event) => {
+          if ((event.key === 'Backspace' || event.key === 'Delete') && isPrimedSlashOnly(editorRef.current, defaultSlashCommand)) {
+            event.preventDefault()
+            return true
+          }
           return false
         },
       },
     },
     onUpdate({ editor }) {
       const mentions = collectMentions(editor.getJSON())
-      const text = serialize === 'wire' ? editorToText(editor) : editorContentToReadableText(editor.getJSON())
+      const text = editorText(editor, serialize, defaultSlashCommand)
       latestValueRef.current = text
+      setHasPrimedSlash(isPrimedSlashText(editor, defaultSlashCommand))
       draftRef.current?.(text, mentions)
     },
   })
@@ -354,24 +462,73 @@ function ProtocolMentionEditor({
     if (!editor) return
     if (value === latestValueRef.current) return
     latestValueRef.current = value
-    editor.commands.setContent(textToDoc(value), { emitUpdate: false })
-  }, [editor, value])
+    editor.commands.setContent(protocolTextToDoc(value), { emitUpdate: false })
+    setHasPrimedSlash(isPrimedSlashText(editor, defaultSlashCommand))
+  }, [defaultSlashCommand, editor, value])
+
+  useEffect(() => {
+    if (!editor || focusSignal === undefined || focusSignalRef.current === focusSignal) return
+    focusSignalRef.current = focusSignal
+    latestValueRef.current = value
+    editor.commands.setContent(protocolTextToDoc(value), { emitUpdate: false })
+    setHasPrimedSlash(false)
+    window.setTimeout(() => {
+      editor.chain().focus().run()
+      primeDefaultSlashCommand(editor, defaultSlashCommand)
+      setHasPrimedSlash(isPrimedSlashText(editor, defaultSlashCommand))
+    }, 0)
+  }, [defaultSlashCommand, editor, focusSignal, value])
 
   return (
-    <div className={`taptab-protocol-mention-editor ${className}`}>
+    <div className={`taptab-protocol-mention-editor ${hasPrimedSlash ? 'taptab-protocol-mention-editor--primed' : ''} ${className}`}>
       <EditorContent editor={editor} />
     </div>
   )
 }
 
-function commitEditor(mode: 'wire' | 'readable', commit: (text: string, mentions: SlashMention[]) => void, editor: Editor | null) {
+function removeSlashMenuRoots() {
+  document.querySelectorAll('[data-slash-menu-root="true"]').forEach((node) => node.remove())
+}
+
+function primeDefaultSlashCommand(editor: Editor | null, command: string | undefined) {
+  if (!editor || !command) return
+  const rawText = editorContentToReadableText(editor.getJSON())
+  if (stripPrimedSlashCommandText(rawText, command)) return
+  if (rawText.trim()) editor.commands.setContent(protocolTextToDoc(''), { emitUpdate: false })
+  editor.chain().focus().insertContent(`/${command} `).run()
+}
+
+function isPrimedSlashText(editor: Editor | null, command: string | undefined): boolean {
+  if (!editor || !command) return false
+  return editorContentToReadableText(editor.getJSON()).trimStart().toLowerCase().startsWith(`/${command.toLowerCase()}`)
+}
+
+function isPrimedSlashOnly(editor: Editor | null, command: string | undefined): boolean {
+  if (!editor || !command) return false
+  return stripPrimedSlashCommandText(editorContentToReadableText(editor.getJSON()), command) === ''
+}
+
+function commitEditor(mode: 'wire' | 'readable', commit: (text: string, mentions: SlashMention[]) => void, editor: Editor | null, defaultSlashCommand?: string) {
   if (!editor) return
   const mentions = collectMentions(editor.getJSON())
-  const text = mode === 'wire' ? editorToText(editor) : editorContentToReadableText(editor.getJSON())
+  const text = editorText(editor, mode, defaultSlashCommand)
   commit(text, mentions)
 }
 
-function textToDoc(value: string): JSONContent {
+function editorText(editor: Editor, mode: 'wire' | 'readable', defaultSlashCommand?: string): string {
+  const text = mode === 'wire' ? editorToText(editor) : editorContentToReadableText(editor.getJSON())
+  return stripPrimedSlashCommandText(text, defaultSlashCommand)
+}
+
+export function stripPrimedSlashCommandText(text: string, defaultSlashCommand?: string): string {
+  if (!defaultSlashCommand) return text
+  const trimmedCommand = defaultSlashCommand.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  if (!trimmedCommand) return text
+  const pattern = new RegExp(`^\\s*/${trimmedCommand}(?:\\s+|$)`, 'i')
+  return text.replace(pattern, '').trimStart()
+}
+
+export function protocolTextToDoc(value: string): JSONContent {
   const paragraphs = (value || '').split(/\n{2,}/)
   return {
     type: 'doc',
@@ -389,9 +546,68 @@ function paragraphToContent(value: string): JSONContent[] {
   const content: JSONContent[] = []
   lines.forEach((line, index) => {
     if (index > 0) content.push({ type: 'hardBreak' })
-    if (line) content.push({ type: 'text', text: line })
+    content.push(...inlineContentFromMentionTokens(line))
   })
   return content
+}
+
+const MENTION_TOKEN_PATTERN = /\[\[(material|material-spec|material-instance|aliquot|vendor-product|labware|tube|equipment|protocol|graph-component|selection):(.*?)\]\]/g
+
+function inlineContentFromMentionTokens(value: string): JSONContent[] {
+  const content: JSONContent[] = []
+  MENTION_TOKEN_PATTERN.lastIndex = 0
+  let cursor = 0
+  let match: RegExpExecArray | null
+  while ((match = MENTION_TOKEN_PATTERN.exec(value)) !== null) {
+    const raw = match[0]
+    const start = match.index
+    if (start > cursor) content.push({ type: 'text', text: value.slice(cursor, start) })
+    const mention = mentionFromToken(match[1] ?? '', match[2] ?? '')
+    content.push(mention ? { type: 'slashMention', attrs: { mention } } : { type: 'text', text: raw })
+    cursor = start + raw.length
+  }
+  if (cursor < value.length) content.push({ type: 'text', text: value.slice(cursor) })
+  return content
+}
+
+function mentionFromToken(kind: string, body: string): SlashMention | null {
+  if (kind === 'material' || kind === 'material-spec' || kind === 'material-instance' || kind === 'aliquot' || kind === 'vendor-product') {
+    const [id = '', label = id] = body.split('|')
+    if (!id) return null
+    return { type: 'material', entityKind: kind, id, label }
+  }
+  if (kind === 'labware') {
+    const [id = '', label = id] = body.split('|')
+    if (!id) return null
+    return { type: 'labware', id, label }
+  }
+  if (kind === 'tube') {
+    const [sizeLabel = '', label = sizeLabel] = body.split('|')
+    if (!sizeLabel) return null
+    return { type: 'tube', sizeLabel, maxVolume_uL: 0, label }
+  }
+  if (kind === 'equipment') {
+    const [id = '', label = id] = body.split('|')
+    if (!id) return null
+    return { type: 'equipment', id, label }
+  }
+  if (kind === 'protocol' || kind === 'graph-component') {
+    const [id = '', label = id] = body.split('|')
+    if (!id) return null
+    return { type: 'protocol', entityKind: kind, id, label }
+  }
+  if (kind === 'selection') {
+    const [selectionKindRaw = '', labwareId = '', wellsRaw = '', label = ''] = body.split('|')
+    if ((selectionKindRaw !== 'source' && selectionKindRaw !== 'target') || !labwareId) return null
+    return {
+      type: 'selection',
+      selectionKind: selectionKindRaw,
+      labwareId,
+      wells: wellsRaw ? wellsRaw.split(',').filter(Boolean) : [],
+      label: label || `${selectionKindRaw}:${labwareId}`,
+    }
+  }
+  return null
 }
 
 export function collectMentions(content: JSONContent): SlashMention[] {
@@ -448,9 +664,14 @@ export function buildMentionRolePatch(
     asRoleArray(getRecordValue?.('$.roles.labwareRoles')),
     mentions.filter((mention): mention is Extract<SlashMention, { type: 'labware' | 'tube' }> => mention.type === 'labware' || mention.type === 'tube'),
   )
+  const equipmentRoles = mergeEquipmentMentions(
+    asRoleArray(getRecordValue?.('$.roles.instrumentRoles')),
+    mentions.filter((mention): mention is Extract<SlashMention, { type: 'equipment' }> => mention.type === 'equipment'),
+  )
   const patch: Record<string, unknown> = {}
   if (materialRoles.changed) patch['$.roles.materialRoles'] = materialRoles.roles
   if (labwareRoles.changed) patch['$.roles.labwareRoles'] = labwareRoles.roles
+  if (equipmentRoles.changed) patch['$.roles.instrumentRoles'] = equipmentRoles.roles
   return patch
 }
 
@@ -503,6 +724,31 @@ function mergeLabwareMentions(
     const ids = uniqueStrings([...existing, id])
     if (ids.length !== existing.length) {
       roles[index] = { ...roles[index], expectedLabwareKinds: ids }
+      changed = true
+    }
+  }
+  return { roles, changed }
+}
+
+function mergeEquipmentMentions(
+  current: Array<Record<string, unknown>>,
+  mentions: Array<Extract<SlashMention, { type: 'equipment' }>>,
+): { roles: Array<Record<string, unknown>>; changed: boolean } {
+  let changed = false
+  const roles = current.map((role) => ({ ...role }))
+  for (const mention of mentions) {
+    if (!mention.id) continue
+    const roleId = normalizeRoleId(mention.label || mention.id)
+    const index = findRoleIndex(roles, roleId, 'allowedInstrumentIds', mention.id)
+    if (index === -1) {
+      roles.push({ roleId, description: mention.label, allowedInstrumentIds: [mention.id] })
+      changed = true
+      continue
+    }
+    const existing = asStringArray(roles[index].allowedInstrumentIds)
+    const ids = uniqueStrings([...existing, mention.id])
+    if (ids.length !== existing.length) {
+      roles[index] = { ...roles[index], allowedInstrumentIds: ids }
       changed = true
     }
   }

@@ -15,7 +15,9 @@ import type { EditorView } from '@tiptap/pm/view';
 const FIELD_SELECTOR =
   '.taptab-field-row:not(.readonly) .taptab-widget-value, ' +
   '.taptab-field-row:not(.readonly) .taptab-field-value, ' +
-  '.taptab-field-row:not(.readonly) .taptab-richtext';
+  '.taptab-field-row:not(.readonly) .taptab-richtext, ' +
+  '.taptab-field-row:not(.readonly) .taptab-protocol-mention-editor, ' +
+  '.taptab-field-row:not(.readonly) .taptab-protocol-focusable';
 
 /** Enter a field's edit mode: focus its sub-editor or trigger click-to-edit. */
 function activateField(target: HTMLElement): void {

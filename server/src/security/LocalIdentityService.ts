@@ -28,7 +28,7 @@ export class LocalIdentityService {
 
   async ensureLocalAdminUser(): Promise<RecordEnvelope | null> {
     const existingUsers = await this.store.list({ kind: 'user', limit: 1000 });
-    const activeUser = existingUsers.find((user) => isActiveUser(user));
+    const activeUser = existingUsers.find((user) => isActiveUser(user) && user.recordId !== LOCAL_ADMIN_USER_ID);
     if (activeUser) return activeUser;
 
     const existingAdmin = await this.store.get(LOCAL_ADMIN_USER_ID);
@@ -72,6 +72,17 @@ export class LocalIdentityService {
       headerString(request.headers['x-computable-user-id']);
 
     if (explicitUserId) {
+      if (explicitUserId === LOCAL_ADMIN_USER_ID) {
+        const fallback = await this.ensureLocalAdminUser();
+        if (isActiveUser(fallback)) {
+          return {
+            userId: fallback.recordId,
+            userRecord: fallback,
+            isSystem: fallback.recordId === LOCAL_ADMIN_USER_ID,
+          };
+        }
+      }
+
       const record = await this.store.get(explicitUserId);
       if (!isActiveUser(record)) {
         return {
@@ -92,6 +103,10 @@ export class LocalIdentityService {
       };
     }
 
-    return { userId: LOCAL_ADMIN_USER_ID, userRecord: admin, isSystem: true };
+    return {
+      userId: admin.recordId,
+      userRecord: admin,
+      isSystem: admin.recordId === LOCAL_ADMIN_USER_ID,
+    };
   }
 }

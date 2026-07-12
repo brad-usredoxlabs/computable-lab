@@ -30,7 +30,7 @@ import { useChatThread } from './useChatThread'
 import { buildPreviewFromDraft } from './draftPreview'
 import type { AssistDraftResult } from './assistStream'
 import { AddSourceModal } from './AddSourceModal'
-import { ProtocolSourcePanel } from './ProtocolSourcePanel'
+import { ProtocolBuilderOrchestrator } from '../../protocol-builder'
 import './ai.css'
 
 export function clarificationAnswerPrompt(
@@ -377,10 +377,6 @@ export function AiTabPanel() {
   // inconsistently. Reset when the user types a fresh prompt.
   const resolvedClarificationsRef = useRef<Map<string, AiClarificationAnswer>>(new Map())
 
-  // Implementation context for protocol-to-graph generation — persists
-  // across renders so the user can refine before clicking Generate.
-  const [implementationContext, setImplementationContext] = useState('')
-
   const handleSend = useCallback(
     async (text: string) => {
       setPrefill(undefined)
@@ -479,36 +475,73 @@ export function AiTabPanel() {
         />
       </section>
 
-      {/* Protocol source panel — appears when a PDF auto-extracted a candidate */}
+      {/* Protocol builder — interactive configuration surface for extracted
+       *  protocol candidates. Replaces the flat ProtocolSourcePanel with:
+       *  - Step preview with inline overrides (skip, quantities)
+       *  - Labware mapping panel (concrete record + deck slot assignment)
+       *  - Draft → ghost → feedback → redraft → promote workflow
+       *
+       *  When active tab is a PDF but no candidate has been extracted yet,
+       *  show a CTA banner so the user can trigger extraction without typing
+       *  a manual prompt. */}
       {chat.state.protocolCandidate ? (
         <section className="ai-tab__section ai-tab__section--protocol">
-          <ProtocolSourcePanel
+          <ProtocolBuilderOrchestrator
             candidate={chat.state.protocolCandidate}
-            sourcePdf={chat.state.sourcePdf}
-            implementationContext={implementationContext}
-            onImplementationContextChange={setImplementationContext}
-            onGenerate={(prompt) => {
-              setImplementationContext('')
+            availableLabware={
+              editorState
+                ? Object.values(editorState.labwares).map((lw) => ({
+                    id: lw.labwareId,
+                    label: lw.name ?? lw.labwareId,
+                    type: lw.labwareType ?? 'plate',
+                  }))
+                : []
+            }
+            onDraft={(draftPrompt) => {
               resolvedClarificationsRef.current.clear()
 
-              // Push the chat's protocol candidate + implementation context into the
-              // editor's graphLemurSource so the context builder includes it in the
-              // graphLemur block that rides to the server system prompt.
+              // Push the protocol candidate into the editor's graphLemurSource
+              // so the context builder includes it in the graphLemur block.
               if (editor && chat.state.protocolCandidate) {
                 editor.actions.setGraphLemurSource({
                   sourceProtocolCandidate: chat.state.protocolCandidate,
                   ...(chat.state.sourcePdf ? { sourcePdf: chat.state.sourcePdf } : {}),
-                  ...(implementationContext.trim() ? { implementationContext: implementationContext.trim() } : {}),
                 })
               }
 
-              setPrefill(prompt)
+              void chat.send(draftPrompt, { enableThinking: false })
             }}
-            onDismiss={() => {
+            onPromote={() => {
+              // Accept the ghost preview events into the event graph
+              editor?.actions.commitPreview()
               chat.clearProtocolCandidate()
-              setImplementationContext('')
             }}
+            previewActive={previewActive}
+            isStreaming={chat.isStreaming}
           />
+        </section>
+      ) : activeTab && activeTab.kind === 'pdf' && !chat.isStreaming ? (
+        <section className="ai-tab__section ai-tab__section--protocol-cta" data-testid="ai-tab-protocol-cta">
+          <div className="ai-tab__protocol-cta-banner">
+            <h3 className="ai-tab__protocol-cta-title">Extract Protocol from PDF</h3>
+            <p className="ai-tab__protocol-cta-desc">
+              Click below to extract steps, materials, and labware from the active PDF viewer tab.
+            </p>
+            <button
+              type="button"
+              className="ai-tab__protocol-cta-btn"
+              onClick={() => {
+                resolvedClarificationsRef.current.clear()
+                void chat.send(
+                  `Extract a protocol from the PDF in the active tab. Identify the procedure steps, materials, and labware.`,
+                  { enableThinking: false },
+                )
+              }}
+              data-testid="ai-tab-extract-protocol-btn"
+            >
+              Extract Protocol
+            </button>
+          </div>
         </section>
       ) : null}
 
@@ -524,7 +557,7 @@ export function AiTabPanel() {
         />
       </section>
 
-      {previewActive ? (
+      {previewActive && !chat.state.protocolCandidate ? (
         <section className="ai-tab__section ai-tab__section--revision">
           <div className="ai-tab__revision-hint" role="status">
             <span className="ai-tab__revision-icon" aria-hidden>✎</span>

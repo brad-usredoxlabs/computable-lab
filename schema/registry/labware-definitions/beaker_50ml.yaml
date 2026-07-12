@@ -1,0 +1,25 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-beaker-50ml
+type: labware_definition
+id: beaker_50ml
+display_name: 50 mL Beaker
+source:
+  kind: curated
+  version: v1
+platform_aliases:
+  - platform: generic
+    alias: generic/beaker_50ml@v1
+topology:
+  addressing: single
+capacity:
+  max_well_volume_uL: 50000
+  min_working_volume_uL: 2000
+compatibility_tags:
+  - glassware
+  - beaker
+  - lawn-only
+legacy_labware_types:
+  - beaker_50ml
+render_hints:
+  profile: beaker

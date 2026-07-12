@@ -215,6 +215,59 @@ export const resolveLabware: SlashResolver = async (query, ctx) => {
   return [...records, ...defs].slice(0, PAGE)
 }
 
+export const resolveEquipment: SlashResolver = async (query, ctx) => {
+  const q = query.trim()
+  const recordRes = await searchJsonLd({
+    q: q || undefined,
+    type: 'equipment',
+    limit: PAGE,
+  })
+  abortIfNeeded(ctx)
+
+  const records: SlashSuggestion[] = recordRes.hits.map((hit) => ({
+    key: `equipment:${hit.recordId}`,
+    label: hit.label,
+    badge: 'Equipment',
+    subtitle: hit.recordId,
+    detail: {
+      source: 'Workspace record (this lab)',
+      ontology: 'local',
+      id: hit.recordId,
+      extra: [{ label: 'Kind', value: 'equipment' }],
+    },
+    mention: { type: 'equipment', id: hit.recordId, label: hit.label },
+  }))
+
+  if (records.length > 0 || q.length < 2) return records
+
+  try {
+    const exa = await apiClient.searchEquipmentExa({ q, limit: PAGE })
+    abortIfNeeded(ctx)
+    return exa.items.map((item) => ({
+      key: `equipment-exa:${item.id}`,
+      label: item.title,
+      badge: 'Web',
+      subtitle: item.manufacturer || item.model ? [item.manufacturer, item.model].filter(Boolean).join(' ') : item.url,
+      detail: {
+        source: 'Exa web search',
+        id: item.url,
+        ...(item.snippet ? { definition: item.snippet } : {}),
+        extra: [
+          ...(item.manufacturer ? [{ label: 'Manufacturer', value: item.manufacturer }] : []),
+          ...(item.model ? [{ label: 'Model', value: item.model }] : []),
+        ],
+      },
+      mention: { type: 'equipment', id: '', label: item.title },
+      resolveMention: async () => {
+        const created = await apiClient.createEquipmentFromExaCandidate(item)
+        return { type: 'equipment', id: created.recordId, label: created.label }
+      },
+    }))
+  } catch {
+    return []
+  }
+}
+
 export const resolveProtocol: SlashResolver = async (query, ctx) => {
   const res = await searchJsonLd({
     q: query.trim() || undefined,

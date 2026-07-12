@@ -13,7 +13,7 @@ import { parsePromptMentionMatches, type ParsedPromptMention } from './promptMen
  */
 export interface ResolvedMention {
   raw: string;                              // the original [[...]] token
-  kind: 'material-spec' | 'aliquot' | 'material' | 'labware' | 'selection' | 'protocol' | 'graph-component';
+  kind: 'material-spec' | 'aliquot' | 'material' | 'labware' | 'equipment' | 'selection' | 'protocol' | 'graph-component';
   id: string;
   label: string;
   resolved?: Record<string, unknown>;       // entity data, if lookup succeeded
@@ -29,6 +29,7 @@ export interface ResolveMentionDeps {
   fetchAliquot?: (id: string) => Promise<Record<string, unknown> | null>;
   fetchMaterial?: (id: string) => Promise<Record<string, unknown> | null>;
   fetchLabware?: (id: string) => Promise<Record<string, unknown> | null>;
+  fetchEquipment?: (id: string) => Promise<Record<string, unknown> | null>;
   fetchProtocol?: (id: string) => Promise<Record<string, unknown> | null>;
   fetchGraphComponent?: (id: string) => Promise<Record<string, unknown> | null>;
 }
@@ -62,7 +63,7 @@ export async function resolveMentionsForPrompt(
   for (const entry of uniqueParsed) {
     const { mention, raw } = entry;
     // Derive kind from mention.type, with entityKind as override for material mentions
-    let kind: 'material-spec' | 'aliquot' | 'material' | 'labware' | 'selection' | 'protocol' | 'graph-component';
+    let kind: 'material-spec' | 'aliquot' | 'material' | 'labware' | 'equipment' | 'selection' | 'protocol' | 'graph-component';
     if (mention.type === 'tube') {
       // Tube mentions are size literals, not records — don't resolve them as a
       // material (which would trigger a bogus fetch). The token stays in the
@@ -70,6 +71,8 @@ export async function resolveMentionsForPrompt(
       continue;
     } else if (mention.type === 'labware') {
       kind = 'labware';
+    } else if (mention.type === 'equipment') {
+      kind = 'equipment';
     } else if (mention.type === 'selection') {
       kind = 'selection';
     } else if (mention.type === 'protocol') {
@@ -113,6 +116,11 @@ export async function resolveMentionsForPrompt(
           fetched = await deps.fetchLabware(id);
         }
         break;
+      case 'equipment':
+        if (deps.fetchEquipment) {
+          fetched = await deps.fetchEquipment(id);
+        }
+        break;
       case 'protocol':
         if (deps.fetchProtocol) {
           fetched = await deps.fetchProtocol(id);
@@ -131,13 +139,14 @@ export async function resolveMentionsForPrompt(
     if (fetched) {
       result.resolved = fetched;
     } else if (fetched === null && (
-      kind === 'material-spec' || kind === 'aliquot' || kind === 'material' || kind === 'labware' || kind === 'protocol' || kind === 'graph-component'
+      kind === 'material-spec' || kind === 'aliquot' || kind === 'material' || kind === 'labware' || kind === 'equipment' || kind === 'protocol' || kind === 'graph-component'
     )) {
       // Only set error if a fetcher was provided but returned null
       const fetcherName = kind === 'material-spec' ? 'fetchMaterialSpec' :
                          kind === 'aliquot' ? 'fetchAliquot' :
                          kind === 'material' ? 'fetchMaterial' :
                          kind === 'labware' ? 'fetchLabware' :
+                         kind === 'equipment' ? 'fetchEquipment' :
                          kind === 'protocol' ? 'fetchProtocol' :
                          kind === 'graph-component' ? 'fetchGraphComponent' : null;
       

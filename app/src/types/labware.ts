@@ -62,6 +62,19 @@ export type LabwareType =
   // Classic dense bench tube rack — 5×16 of 1.5/2 mL tubes; too large for an
   // automation deck, so lawn-only (see LABWARE_CONFIGS).
   | 'tubeset_80x2ml'
+  // Glassware — single-vessel, lawn-only bench equipment.
+  | 'beaker_25ml'
+  | 'beaker_50ml'
+  | 'beaker_100ml'
+  | 'beaker_250ml'
+  | 'beaker_500ml'
+  | 'beaker_1000ml'
+  | 'flask_25ml'
+  | 'flask_50ml'
+  | 'flask_100ml'
+  | 'flask_250ml'
+  | 'flask_500ml'
+  | 'flask_1000ml'
   | 'deepwell_96'
   | 'tiprack_ot2_20'
   | 'tiprack_ot2_200'
@@ -103,6 +116,18 @@ export const LABWARE_TYPE_LABELS: Record<LabwareType, string> = {
   tubeset_4way_32x2ml: '4-Way Bench Rack — 32 × 1.5/2 mL',
   tubeset_4way_32x0p5ml: '4-Way Bench Rack — 32 × 0.5 mL',
   tubeset_80x2ml: '80-Tube Bench Rack — 1.5/2 mL (5×16)',
+  beaker_25ml: '25 mL Beaker',
+  beaker_50ml: '50 mL Beaker',
+  beaker_100ml: '100 mL Beaker',
+  beaker_250ml: '250 mL Beaker',
+  beaker_500ml: '500 mL Beaker',
+  beaker_1000ml: '1 L Beaker',
+  flask_25ml: '25 mL Flask',
+  flask_50ml: '50 mL Flask',
+  flask_100ml: '100 mL Flask',
+  flask_250ml: '250 mL Flask',
+  flask_500ml: '500 mL Flask',
+  flask_1000ml: '1 L Flask',
   deepwell_96: '96-Well Deep Well (2 mL)',
   tiprack_ot2_20: 'OT-2 Tip Rack 20 uL',
   tiprack_ot2_200: 'OT-2 Tip Rack 200 uL',
@@ -145,6 +170,18 @@ export const LABWARE_TYPE_ICONS: Record<LabwareType, string> = {
   tubeset_4way_32x2ml: '🧪',
   tubeset_4way_32x0p5ml: '🧪',
   tubeset_80x2ml: '🧪',
+  beaker_25ml: '🧫',
+  beaker_50ml: '🧫',
+  beaker_100ml: '🧫',
+  beaker_250ml: '🧫',
+  beaker_500ml: '🧫',
+  beaker_1000ml: '🧫',
+  flask_25ml: '🍶',
+  flask_50ml: '🍶',
+  flask_100ml: '🍶',
+  flask_250ml: '🍶',
+  flask_500ml: '🍶',
+  flask_1000ml: '🍶',
   deepwell_96: '🔬',
   tiprack_ot2_20: '🪡',
   tiprack_ot2_200: '🪡',
@@ -162,7 +199,7 @@ export const LABWARE_TYPE_ICONS: Record<LabwareType, string> = {
 /**
  * Labware category for grouping in UI
  */
-export type LabwareCategory = 'plate' | 'reservoir' | 'tube' | 'tiprack'
+export type LabwareCategory = 'plate' | 'reservoir' | 'tube' | 'tiprack' | 'glassware'
 
 export const LABWARE_CATEGORIES: Record<LabwareType, LabwareCategory> = {
   plate_96: 'plate',
@@ -189,6 +226,18 @@ export const LABWARE_CATEGORIES: Record<LabwareType, LabwareCategory> = {
   tubeset_4way_32x2ml: 'tube',
   tubeset_4way_32x0p5ml: 'tube',
   tubeset_80x2ml: 'tube',
+  beaker_25ml: 'glassware',
+  beaker_50ml: 'glassware',
+  beaker_100ml: 'glassware',
+  beaker_250ml: 'glassware',
+  beaker_500ml: 'glassware',
+  beaker_1000ml: 'glassware',
+  flask_25ml: 'glassware',
+  flask_50ml: 'glassware',
+  flask_100ml: 'glassware',
+  flask_250ml: 'glassware',
+  flask_500ml: 'glassware',
+  flask_1000ml: 'glassware',
   deepwell_96: 'plate',
   tiprack_ot2_20: 'tiprack',
   tiprack_ot2_200: 'tiprack',
@@ -230,7 +279,7 @@ export interface LabwareGeometry {
   /** Minimum recommended volume in µL */
   minVolume_uL: number
   /** Well shape (optional for visualization) */
-  wellShape?: 'round' | 'square' | 'v-bottom' | 'conical'
+  wellShape?: 'round' | 'square' | 'v-bottom' | 'conical' | 'cylindrical'
   /** Well diameter in mm (optional) */
   wellDiameter_mm?: number
 }
@@ -282,7 +331,7 @@ export interface Labware {
   /** Requirement specificity before binding to a concrete vendor/platform definition. */
   requirementSpecificity?: 'generic' | 'constrained' | 'concrete'
   /** Optional per-well geometry overrides for heterogeneous labware (e.g., mixed tube racks) */
-  wellOverrides?: Record<string, { maxVolume_uL?: number; wellShape?: 'round' | 'square' | 'v-bottom' | 'conical' }>
+  wellOverrides?: Record<string, { maxVolume_uL?: number; wellShape?: 'round' | 'square' | 'v-bottom' | 'conical' | 'cylindrical' }>
   /**
    * When true, this labware may only be placed on a freeform bench surface
    * (a lawn), never an automation deck slot — it's bench equipment that doesn't
@@ -764,6 +813,115 @@ export const LABWARE_CONFIGS: Record<LabwareType, Omit<Labware, 'labwareId' | 'n
       { sizeLabel: '1.5 mL', maxVolume_uL: 1500, wellShape: 'round' },
     ],
     defaultTubeSizeLabel: '2 mL',
+  },
+  // Glassware — single-vessel, lawn-only bench equipment.
+  beaker_25ml: {
+    labwareType: 'beaker_25ml',
+    addressing: { type: 'single' },
+    geometry: { maxVolume_uL: 25000, minVolume_uL: 1000, wellShape: 'cylindrical' },
+    layoutFamily: 'tube',
+    orientationPolicy: 'fixed_columns',
+    color: '#20c997',
+    lawnOnly: true,
+  },
+  beaker_50ml: {
+    labwareType: 'beaker_50ml',
+    addressing: { type: 'single' },
+    geometry: { maxVolume_uL: 50000, minVolume_uL: 2000, wellShape: 'cylindrical' },
+    layoutFamily: 'tube',
+    orientationPolicy: 'fixed_columns',
+    color: '#20c997',
+    lawnOnly: true,
+  },
+  beaker_100ml: {
+    labwareType: 'beaker_100ml',
+    addressing: { type: 'single' },
+    geometry: { maxVolume_uL: 100000, minVolume_uL: 5000, wellShape: 'cylindrical' },
+    layoutFamily: 'tube',
+    orientationPolicy: 'fixed_columns',
+    color: '#20c997',
+    lawnOnly: true,
+  },
+  beaker_250ml: {
+    labwareType: 'beaker_250ml',
+    addressing: { type: 'single' },
+    geometry: { maxVolume_uL: 250000, minVolume_uL: 5000, wellShape: 'cylindrical' },
+    layoutFamily: 'tube',
+    orientationPolicy: 'fixed_columns',
+    color: '#20c997',
+    lawnOnly: true,
+  },
+  beaker_500ml: {
+    labwareType: 'beaker_500ml',
+    addressing: { type: 'single' },
+    geometry: { maxVolume_uL: 500000, minVolume_uL: 10000, wellShape: 'cylindrical' },
+    layoutFamily: 'tube',
+    orientationPolicy: 'fixed_columns',
+    color: '#20c997',
+    lawnOnly: true,
+  },
+  beaker_1000ml: {
+    labwareType: 'beaker_1000ml',
+    addressing: { type: 'single' },
+    geometry: { maxVolume_uL: 1000000, minVolume_uL: 20000, wellShape: 'cylindrical' },
+    layoutFamily: 'tube',
+    orientationPolicy: 'fixed_columns',
+    color: '#20c997',
+    lawnOnly: true,
+  },
+  flask_25ml: {
+    labwareType: 'flask_25ml',
+    addressing: { type: 'single' },
+    geometry: { maxVolume_uL: 25000, minVolume_uL: 1000, wellShape: 'cylindrical' },
+    layoutFamily: 'tube',
+    orientationPolicy: 'fixed_columns',
+    color: '#7950f2',
+    lawnOnly: true,
+  },
+  flask_50ml: {
+    labwareType: 'flask_50ml',
+    addressing: { type: 'single' },
+    geometry: { maxVolume_uL: 50000, minVolume_uL: 2000, wellShape: 'cylindrical' },
+    layoutFamily: 'tube',
+    orientationPolicy: 'fixed_columns',
+    color: '#7950f2',
+    lawnOnly: true,
+  },
+  flask_100ml: {
+    labwareType: 'flask_100ml',
+    addressing: { type: 'single' },
+    geometry: { maxVolume_uL: 100000, minVolume_uL: 5000, wellShape: 'cylindrical' },
+    layoutFamily: 'tube',
+    orientationPolicy: 'fixed_columns',
+    color: '#7950f2',
+    lawnOnly: true,
+  },
+  flask_250ml: {
+    labwareType: 'flask_250ml',
+    addressing: { type: 'single' },
+    geometry: { maxVolume_uL: 250000, minVolume_uL: 5000, wellShape: 'cylindrical' },
+    layoutFamily: 'tube',
+    orientationPolicy: 'fixed_columns',
+    color: '#7950f2',
+    lawnOnly: true,
+  },
+  flask_500ml: {
+    labwareType: 'flask_500ml',
+    addressing: { type: 'single' },
+    geometry: { maxVolume_uL: 500000, minVolume_uL: 10000, wellShape: 'cylindrical' },
+    layoutFamily: 'tube',
+    orientationPolicy: 'fixed_columns',
+    color: '#7950f2',
+    lawnOnly: true,
+  },
+  flask_1000ml: {
+    labwareType: 'flask_1000ml',
+    addressing: { type: 'single' },
+    geometry: { maxVolume_uL: 1000000, minVolume_uL: 20000, wellShape: 'cylindrical' },
+    layoutFamily: 'tube',
+    orientationPolicy: 'fixed_columns',
+    color: '#7950f2',
+    lawnOnly: true,
   },
   deepwell_96: {
     labwareType: 'deepwell_96',

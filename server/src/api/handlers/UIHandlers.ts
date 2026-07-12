@@ -13,6 +13,7 @@ import type { RecordStore } from '../../store/types.js';
 import type { SchemaRegistry } from '../../schema/SchemaRegistry.js';
 import type { EditorProjectionService } from '../../ui/EditorProjectionService.js';
 import type { ProcurementManifest } from '../../procurement/ProcurementManifestService.js';
+import type { LocalIdentityService } from '../../security/LocalIdentityService.js';
 import { createEditorProjectionService } from '../../ui/EditorProjectionService.js';
 import type { SuggestionResponse, SuggestionRequest } from '../../ui/EditorSuggestionService.js';
 import { createEditorSuggestionHandlers } from '../../ui/EditorSuggestionService.js';
@@ -85,19 +86,22 @@ export class UIHandlers {
   private readonly schemaRegistry: SchemaRegistry;
   private readonly editorProjectionService: EditorProjectionService;
   private readonly manifest: ProcurementManifest | undefined;
+  private readonly identityService: LocalIdentityService | undefined;
   
   constructor(
     uiSpecLoader: UISpecLoader,
     store: RecordStore,
     schemaRegistry: SchemaRegistry,
     editorProjectionService?: EditorProjectionService,
-    manifest?: ProcurementManifest
+    manifest?: ProcurementManifest,
+    identityService?: LocalIdentityService
   ) {
     this.uiSpecLoader = uiSpecLoader;
     this.store = store;
     this.schemaRegistry = schemaRegistry;
     this.editorProjectionService = editorProjectionService ?? createEditorProjectionService();
     this.manifest = manifest;
+    this.identityService = identityService;
   }
   
   /**
@@ -376,8 +380,9 @@ export class UIHandlers {
     // Pre-fill Created By with the current user's display name so a new record
     // shows who will own it before the first save (display-only; the real
     // createdBy is written server-side at creation from the request identity).
-    const userId = request.headers['x-user-id'];
-    if (typeof userId === 'string' && userId) {
+    const resolvedUser = await this.identityService?.resolveRequestUser(request);
+    const userId = resolvedUser?.userId;
+    if (userId) {
       const name = await this.resolveUserDisplayName(userId);
       applyDisplayValuesToSlots(projection, { createdBy: name });
     }
@@ -443,7 +448,8 @@ export interface UISpecSummary {
 export function createUIHandlers(
   uiSpecLoader: UISpecLoader,
   store: RecordStore,
-  schemaRegistry: SchemaRegistry
+  schemaRegistry: SchemaRegistry,
+  identityService?: LocalIdentityService
 ): UIHandlers {
-  return new UIHandlers(uiSpecLoader, store, schemaRegistry);
+  return new UIHandlers(uiSpecLoader, store, schemaRegistry, undefined, undefined, identityService);
 }

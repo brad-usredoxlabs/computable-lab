@@ -1,0 +1,25 @@
+$schema: https://computable-lab.com/schema/computable-lab/labware-definition.schema.yaml
+kind: labware-definition
+recordId: lbw-def-generic-flask-250ml
+type: labware_definition
+id: flask_250ml
+display_name: 250 mL Flask
+source:
+  kind: curated
+  version: v1
+platform_aliases:
+  - platform: generic
+    alias: generic/flask_250ml@v1
+topology:
+  addressing: single
+capacity:
+  max_well_volume_uL: 250000
+  min_working_volume_uL: 5000
+compatibility_tags:
+  - glassware
+  - flask
+  - lawn-only
+legacy_labware_types:
+  - flask_250ml
+render_hints:
+  profile: flask

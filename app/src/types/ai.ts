@@ -128,6 +128,7 @@ export type AiClarificationKind =
   | 'material'
   | 'aliquot'
   | 'labware'
+  | 'equipment'
   | 'vendor-product'
   | 'ontology'
   | 'parameter'
@@ -135,7 +136,7 @@ export type AiClarificationKind =
   | 'sequence'
   | 'general'
 
-export type AiClarificationMenuProvider = '/m' | '/l' | 'choice'
+export type AiClarificationMenuProvider = '/m' | '/l' | '/e' | 'choice'
 
 export interface AiClarification {
   id?: string

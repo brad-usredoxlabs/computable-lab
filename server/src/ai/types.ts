@@ -145,7 +145,7 @@ export interface ToolExecutionResult {
 
 export interface ResolvedMention {
   raw: string;                              // the original [[...]] token
-  kind: 'material-spec' | 'aliquot' | 'material' | 'labware' | 'selection';
+  kind: 'material-spec' | 'aliquot' | 'material' | 'labware' | 'equipment' | 'selection';
   id: string;
   label: string;
   resolved?: Record<string, unknown>;       // entity data, if lookup succeeded
@@ -157,6 +157,7 @@ export interface ResolveMentionDeps {
   fetchAliquot?: (id: string) => Promise<Record<string, unknown> | null>;
   fetchMaterial?: (id: string) => Promise<Record<string, unknown> | null>;
   fetchLabware?: (id: string) => Promise<Record<string, unknown> | null>;
+  fetchEquipment?: (id: string) => Promise<Record<string, unknown> | null>;
   fetchProtocol?: (id: string) => Promise<Record<string, unknown> | null>;
   fetchGraphComponent?: (id: string) => Promise<Record<string, unknown> | null>;
   searchLabwareByHint?: (hint: string) => Promise<Array<{ recordId: string; title: string }>>;
@@ -453,6 +454,7 @@ export type AgentClarificationKind =
   | 'material'
   | 'aliquot'
   | 'labware'
+  | 'equipment'
   | 'vendor-product'
   | 'ontology'
   | 'parameter'
@@ -460,7 +462,7 @@ export type AgentClarificationKind =
   | 'sequence'
   | 'general';
 
-export type AgentClarificationMenuProvider = '/m' | '/l' | 'choice';
+export type AgentClarificationMenuProvider = '/m' | '/l' | '/e' | 'choice';
 
 export interface AgentClarification {
   id?: string;

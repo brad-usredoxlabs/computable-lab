@@ -15,7 +15,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { AiClarificationAnswer, AiClarificationRequest } from '../../../types/ai'
-import { resolveMaterial, resolveLabware } from '../../../shared/taptab/slashMenu/resolvers'
+import { resolveMaterial, resolveLabware, resolveEquipment } from '../../../shared/taptab/slashMenu/resolvers'
 import { SlashSuggestionList } from '../../../shared/taptab/slashMenu/SlashSuggestionList'
 import type {
   SlashMention,
@@ -29,6 +29,7 @@ const CURIE_RE = /^[A-Za-z][\w.-]*:\S+$/
 
 function resolverFor(request: AiClarificationRequest): SlashResolver | null {
   if (request.menuProvider === '/l' || request.kind === 'labware') return resolveLabware
+  if (request.menuProvider === '/e') return resolveEquipment
   if (request.menuProvider === '/m') return resolveMaterial
   return null
 }
@@ -100,6 +101,16 @@ export function answerFromMention(
       label: mention.label,
       mentionToken: `[[labware:${id}|${safeMentionPart(mention.label)}]]`,
       ref: { kind: 'labware', id, label: mention.label },
+    }
+  }
+  if (mention.type === 'equipment') {
+    const id = safeMentionPart(mention.id)
+    if (!id) return null
+    return {
+      requestId: request.id,
+      label: mention.label,
+      mentionToken: `[[equipment:${id}|${safeMentionPart(mention.label)}]]`,
+      ref: { kind: 'record', id, type: 'equipment', label: mention.label },
     }
   }
   if (mention.type === 'material') {
@@ -180,7 +191,11 @@ export function ClarificationPicker({ request, onPick }: ClarificationPickerProp
     })()
   }
 
-  const placeholder = resolver === resolveLabware ? 'Search labware…' : 'Search materials or mint a local term…'
+  const placeholder = resolver === resolveLabware
+    ? 'Search labware…'
+    : resolver === resolveEquipment
+      ? 'Search equipment…'
+      : 'Search materials or mint a local term…'
 
   return (
     <div className="message-log__clarification-picker">

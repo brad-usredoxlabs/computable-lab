@@ -76,8 +76,10 @@ function makeMockSessionEnvelope(
  * A deterministic mock PDF extractor that returns predictable page text.
  * This avoids relying on system commands (pdftotext, pdfinfo) in tests.
  */
-function makeMockPdfExtractor(): (buffer: Buffer, fileName: string) => Promise<Array<{ pageNumber: number; text: string }>> {
-  return async (_buffer: Buffer, _fileName: string) => [
+function makeMockPdfExtractor(): (buffer: Buffer, fileName: string) => Promise<{ pages: Array<{ pageNumber: number; text: string }>; sha256: string }> {
+  return async (_buffer: Buffer, _fileName: string) => ({
+    sha256: 'mock-sha256',
+    pages: [
     {
       pageNumber: 1,
       text: [
@@ -105,7 +107,8 @@ function makeMockPdfExtractor(): (buffer: Buffer, fileName: string) => Promise<A
         '- Ethanol 70%',
       ].join('\n'),
     },
-  ];
+  ],
+  });
 }
 
 function makePdfFixture(): { contentBase64: string; fileName: string; mediaType: string } {
@@ -156,9 +159,27 @@ describe('ProtocolIdeSourceImportService — importSource (uploaded_pdf)', () =>
     const updateCall = store.update.mock.calls[0][0];
     expect(updateCall.envelope.recordId).toBe(session.recordId);
     expect(updateCall.envelope.payload.status).toBe('imported');
-    expect(updateCall.envelope.payload.vendorDocumentRef).toBe(result.vendorDocumentRef);
-    expect(updateCall.envelope.payload.protocolImportRef).toBe(result.protocolImportRef);
-    expect(updateCall.envelope.payload.evidenceRefs).toEqual(result.evidenceRefs);
+    expect(updateCall.envelope.payload.vendorDocumentRef).toMatchObject({ id: result.vendorDocumentRef });
+    expect(updateCall.envelope.payload.protocolImportRef).toMatchObject({ id: result.protocolImportRef });
+    expect(updateCall.envelope.payload.extractedTextRef).toMatchObject({ id: result.extractedTextRef });
+    expect(updateCall.envelope.payload.evidenceRefs).toEqual(
+      result.evidenceRefs.map((id) => ({ kind: 'record', id, type: 'evidence' })),
+    );
+
+    expect(store.create).toHaveBeenCalledWith(expect.objectContaining({
+      envelope: expect.objectContaining({
+        recordId: result.extractedTextRef,
+        meta: expect.objectContaining({ kind: 'extracted-text' }),
+        payload: expect.objectContaining({
+          kind: 'extracted-text',
+          content: expect.stringContaining('Add lysis buffer to each well'),
+          pages: expect.arrayContaining([expect.objectContaining({ pageNumber: 1 })]),
+          sha256: 'mock-sha256',
+        }),
+      }),
+      skipValidation: true,
+      skipLint: true,
+    }));
   });
 
   it('evidence citations carry page and snippet provenance', async () => {
@@ -254,7 +275,7 @@ describe('ProtocolIdeSourceImportService — importSource (vendor_document)', ()
     // Verify session was updated in place
     expect(store.update).toHaveBeenCalledTimes(1);
     const updateCall = store.update.mock.calls[0][0];
-    expect(updateCall.envelope.payload.vendorDocumentRef).toBe(result.vendorDocumentRef);
+    expect(updateCall.envelope.payload.vendorDocumentRef).toMatchObject({ id: result.vendorDocumentRef });
   });
 });
 

@@ -183,15 +183,15 @@ export function WidgetRenderer({
   }
 
   if (widget === 'protocol-material-roles') {
-    return <ProtocolMaterialRolesWidget value={value} readOnly={readOnly} recordId={recordId} onCommit={onCommit} />;
+    return <ProtocolMaterialRolesWidget value={value} readOnly={readOnly} recordId={recordId} onCommit={onCommit} onRecordPatch={onRecordPatch} getRecordValue={getRecordValue} />;
   }
 
   if (widget === 'protocol-labware-roles') {
-    return <ProtocolLabwareRolesWidget value={value} readOnly={readOnly} recordId={recordId} onCommit={onCommit} />;
+    return <ProtocolLabwareRolesWidget value={value} readOnly={readOnly} recordId={recordId} onCommit={onCommit} onRecordPatch={onRecordPatch} getRecordValue={getRecordValue} />;
   }
 
   if (widget === 'protocol-equipment-roles') {
-    return <ProtocolEquipmentRolesWidget value={value} readOnly={readOnly} recordId={recordId} onCommit={onCommit} />;
+    return <ProtocolEquipmentRolesWidget value={value} readOnly={readOnly} recordId={recordId} onCommit={onCommit} onRecordPatch={onRecordPatch} getRecordValue={getRecordValue} />;
   }
 
   if (widget === 'protocol-step-roles') {

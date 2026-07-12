@@ -58,6 +58,11 @@ describe('mentionToToken', () => {
     expect(mentionToToken(m)).toBe('[[labware:lbw-1|96 well]]')
   })
 
+  it('equipment', () => {
+    const m: SlashMention = { type: 'equipment', id: 'EQP-CENTRIFUGE', label: 'Benchtop centrifuge' }
+    expect(mentionToToken(m)).toBe('[[equipment:EQP-CENTRIFUGE|Benchtop centrifuge]]')
+  })
+
   it('protocol', () => {
     const m: SlashMention = {
       type: 'protocol',
@@ -137,6 +142,9 @@ describe('mentionBadge', () => {
   it('labware', () => {
     expect(mentionBadge({ type: 'labware', id: 'x', label: 'x' })).toBe('Labware')
   })
+  it('equipment', () => {
+    expect(mentionBadge({ type: 'equipment', id: 'EQP-CENTRIFUGE', label: 'Benchtop centrifuge' })).toBe('Equipment')
+  })
   it('protocol vs graph-component', () => {
     expect(
       mentionBadge({ type: 'protocol', entityKind: 'protocol', id: 'x', label: 'x' }),
@@ -175,7 +183,7 @@ describe('mentionBadge', () => {
 describe('badgeStyles', () => {
   it('returns distinct colours per known badge', () => {
     const seen = new Set<string>()
-    for (const badge of ['Formulation', 'Instance', 'Concept', 'Labware', 'Source', 'Target', 'Protocol', 'Component']) {
+    for (const badge of ['Formulation', 'Instance', 'Concept', 'Labware', 'Equipment', 'Source', 'Target', 'Protocol', 'Component']) {
       const css = badgeStyles(badge)
       seen.add(css.background)
     }

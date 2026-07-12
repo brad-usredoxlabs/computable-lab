@@ -147,6 +147,23 @@ describe('parsePromptMentionMatches', () => {
     });
   });
 
+  describe('equipment tokens', () => {
+    it('should parse a single equipment mention', () => {
+      const prompt = 'Use [[equipment:EQP-CENTRIFUGE|Benchtop centrifuge]] for spin steps';
+      const result = parsePromptMentionMatches(prompt);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        raw: '[[equipment:EQP-CENTRIFUGE|Benchtop centrifuge]]',
+        mention: {
+          type: 'equipment',
+          id: 'EQP-CENTRIFUGE',
+          label: 'Benchtop centrifuge',
+        },
+      });
+    });
+  });
+
   describe('selection tokens', () => {
     it('should parse a source selection mention', () => {
       const prompt = 'Transfer from [[selection:source|PLATE-A|A1,B1,C1|Source wells]]';

@@ -12,19 +12,13 @@ taptab:
 form:
   layout: "sections"
   sections:
-  - title: "Identity"
+  - title: "Protocol"
     fields:
-    - path: "$.recordId"
-      widget: "text"
-      label: "Record ID"
-      readonly: true
     - path: "$.kind"
       widget: "text"
       label: "Kind"
       readonly: true
       hidden: true
-  - title: "Basic Information"
-    fields:
     - path: "$.title"
       widget: "text"
       label: "Title"
@@ -37,29 +31,8 @@ form:
       label: "Author"
       readonly: true
     - path: "$.purpose"
-      widget: "textarea"
-      label: "Purpose"
-    - path: "$.description"
       widget: "protocol-prose-authoring"
-      label: "Protocol"
-      help: "Human-authored prose remains valid without accepted AI structure."
-    - path: "$.notes"
-      widget: "textarea"
-      label: "Notes"
-  - title: "AI Suggestions"
-    collapsible: true
-    fields:
-    - path: "$.authoring"
-      widget: "protocol-ai-suggestions"
-      label: "Structure Suggestions"
-  - title: "Phases"
-    collapsible: true
-    fields:
-    - path: "$.phases"
-      widget: "array"
-      label: "Phases"
-  - title: "Protocol Structure"
-    fields:
+      label: "Purpose"
     - path: "$.roles.materialRoles"
       widget: "protocol-material-roles"
       label: "Materials"
@@ -72,18 +45,9 @@ form:
     - path: "$.steps"
       widget: "protocol-step-roles"
       label: "Steps"
-  - title: "Document Control"
-    fields:
-    - path: "$.reviewerRef"
-      widget: "ref"
-      label: "Reviewer"
-      refKind: "person"
-      help: "Person assigned to review this document."
-    - path: "$.approverRef"
-      widget: "ref"
-      label: "Approver"
-      refKind: "person"
-      help: "Person with authority to approve this document."
+    - path: "$.notes"
+      widget: "protocol-prose-authoring"
+      label: "Notes"
 
 list:
   columns:

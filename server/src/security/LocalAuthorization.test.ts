@@ -143,6 +143,28 @@ describe('local identity and authorization substrate', () => {
     expect(await store.get(LOCAL_ADMIN_USER_ID)).toBeTruthy();
   });
 
+  it('resolves the active local user when no explicit user header is sent', async () => {
+    const store = new MemoryRecordStore([user('USR-BRAD')]);
+    const identity = new LocalIdentityService(store);
+
+    const resolved = await identity.resolveRequestUser(request({ headers: {} }));
+
+    expect(resolved.userId).toBe('USR-BRAD');
+    expect(resolved.userRecord?.recordId).toBe('USR-BRAD');
+    expect(resolved.isSystem).toBe(false);
+  });
+
+  it('falls back to the active local user for a stale local-admin header', async () => {
+    const store = new MemoryRecordStore([user(LOCAL_ADMIN_USER_ID), user('USR-BRAD')]);
+    const identity = new LocalIdentityService(store);
+
+    const resolved = await identity.resolveRequestUser(request({ headers: { 'x-user-id': LOCAL_ADMIN_USER_ID } }));
+
+    expect(resolved.userId).toBe('USR-BRAD');
+    expect(resolved.userRecord?.recordId).toBe('USR-BRAD');
+    expect(resolved.isSystem).toBe(false);
+  });
+
   it('inherits a parent study policy for child experiment access', async () => {
     const store = new MemoryRecordStore([
       user('USR-OWNER'),
@@ -220,7 +242,7 @@ describe('local identity and authorization substrate', () => {
     expect('error' in update ? update.error : '').toBe('FORBIDDEN');
   });
 
-  it('creates an owner policy after RecordHandlers creates a study', async () => {
+  it('stamps new project, experiment, run, and protocol records with the active local user', async () => {
     const store = new MemoryRecordStore([user('USR-OWNER')]);
     const handlers = createRecordHandlers(
       store,
@@ -235,20 +257,42 @@ describe('local identity and authorization substrate', () => {
       },
     );
 
-    const createReply = reply();
-    const created = await handlers.createRecord(
-      request<{ Body: { schemaId: string; payload: unknown } }>({
-        body: {
-          schemaId: 'https://computable-lab.com/schema/computable-lab/study.schema.yaml',
-          payload: { kind: 'study', recordId: 'STU-NEW', title: 'New Study', shortSlug: 'new-study' },
-        },
-        headers: { 'x-user-id': 'USR-OWNER' },
-      }),
-      createReply,
-    );
+    const cases: Array<{ schemaId: string; payload: Record<string, unknown> }> = [
+      {
+        schemaId: 'https://computable-lab.com/schema/computable-lab/study.schema.yaml',
+        payload: { kind: 'study', recordId: 'STU-NEW', title: 'New Study', shortSlug: 'new-study' },
+      },
+      {
+        schemaId: 'https://computable-lab.com/schema/computable-lab/experiment.schema.yaml',
+        payload: { kind: 'experiment', recordId: 'EXP-NEW', title: 'New Experiment', shortSlug: 'new-experiment', studyId: 'STU-NEW' },
+      },
+      {
+        schemaId: 'https://computable-lab.com/schema/computable-lab/run.schema.yaml',
+        payload: { kind: 'run', recordId: 'RUN-NEW', title: 'New Run', shortSlug: 'new-run', studyId: 'STU-NEW', experimentId: 'EXP-NEW' },
+      },
+      {
+        schemaId: 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml',
+        payload: { kind: 'protocol', recordId: 'PRT-NEW', title: 'New Protocol', steps: [] },
+      },
+    ];
 
-    expect(createReply.statusCode).toBe(201);
-    expect('success' in created ? created.success : false).toBe(true);
-    expect(await store.get('ACL-STU-NEW')).toBeTruthy();
+    for (const { schemaId, payload } of cases) {
+      const createReply = reply();
+      const created = await handlers.createRecord(
+        request<{ Body: { schemaId: string; payload: unknown } }>({
+          body: { schemaId, payload },
+          headers: {},
+        }),
+        createReply,
+      );
+
+      expect(createReply.statusCode).toBe(201);
+      expect('success' in created ? created.success : false).toBe(true);
+      const createdRecord = await store.get(payload.recordId as string);
+      expect((createdRecord?.payload as Record<string, unknown>).createdBy).toBe('USR-OWNER');
+      expect(createdRecord?.meta?.createdBy).toBe('USR-OWNER');
+    }
+
+    expect((await store.get('ACL-STU-NEW'))?.meta?.createdBy).toBe('USR-OWNER');
   });
 });

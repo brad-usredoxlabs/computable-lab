@@ -37,6 +37,7 @@ type PdfExtractor = (buffer: Buffer, fileName: string) => Promise<{ pages: PdfPa
 
 const SESSION_STATUS_IMPORTED = 'imported' as const;
 const SESSION_STATUS_IMPORT_FAILED = 'import_failed' as const;
+const EXTRACTED_TEXT_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/extracted-text.schema.yaml';
 
 // ---------------------------------------------------------------------------
 // Evidence citation shape
@@ -174,6 +175,61 @@ function buildEvidenceCitations(
   }
 
   return citations;
+}
+
+
+async function createExtractedTextRecord(
+  store: RecordStore,
+  input: {
+    sessionId: string;
+    fileName: string;
+    mediaType: string;
+    pages: PdfPageText[];
+    sha256?: string;
+  },
+): Promise<string | null> {
+  const now = new Date().toISOString();
+  const recordId = `TEXT-${input.sessionId}-${Date.now().toString(36)}`;
+  const content = input.pages
+    .map((page) => `--- page ${page.pageNumber} ---\n${page.text}`)
+    .join('\n\n')
+    .trim();
+  const envelope: RecordEnvelope = {
+    recordId,
+    schemaId: EXTRACTED_TEXT_SCHEMA_ID,
+    payload: {
+      kind: 'extracted-text',
+      recordId,
+      sessionId: input.sessionId,
+      fileName: input.fileName,
+      mediaType: input.mediaType,
+      content,
+      fullText: content,
+      pages: input.pages.map((page) => ({
+        pageNumber: page.pageNumber,
+        text: page.text,
+      })),
+      ...(input.sha256 ? { sha256: input.sha256 } : {}),
+      createdAt: now,
+      updatedAt: now,
+    },
+    meta: {
+      kind: 'extracted-text',
+      createdAt: now,
+      updatedAt: now,
+    },
+  };
+  const result = await store.create({
+    envelope,
+    message: `Create extracted text for Protocol IDE session ${input.sessionId}`,
+    skipValidation: true,
+    skipLint: true,
+  });
+  if (!result.success) {
+    console.warn(`Failed to persist extracted text for session ${input.sessionId}: ${result.error ?? 'unknown error'}`);
+    return null;
+  }
+  return recordId;
 }
 
 // ---------------------------------------------------------------------------
@@ -361,10 +417,21 @@ export class ProtocolIdeSourceImportService {
 
         // 5. Build evidence citations from extracted pages
         const extracted = await this.pdfExtractor(pdfBuffer, fileName);
-        evidenceCitations = buildEvidenceCitations(extracted.pages, []);
+        const extractedPages = Array.isArray(extracted as unknown)
+          ? extracted as unknown as PdfPageText[]
+          : extracted.pages;
+        const extractedSha256 = Array.isArray(extracted as unknown)
+          ? undefined
+          : extracted.sha256;
+        evidenceCitations = buildEvidenceCitations(extractedPages, []);
 
-        // Create extracted text ref (a synthetic ref pointing to the evidence)
-        extractedTextRef = `TEXT-${request.sessionId}-${Date.now().toString(36)}`;
+        extractedTextRef = await createExtractedTextRecord(this.store, {
+          sessionId: request.sessionId,
+          fileName,
+          mediaType,
+          pages: extractedPages,
+          ...(extractedSha256 ? { sha256: extractedSha256 } : {}),
+        });
       } catch (err) {
         // Protocol import failed — still update session with partial data
         protocolImportRef = null;

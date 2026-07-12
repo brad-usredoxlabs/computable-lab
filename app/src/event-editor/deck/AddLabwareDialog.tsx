@@ -23,12 +23,13 @@ interface AddLabwareDialogProps {
   onPick: (labware: Labware) => void
 }
 
-const CATEGORY_ORDER: LabwareCategory[] = ['plate', 'reservoir', 'tube', 'tiprack']
+const CATEGORY_ORDER: LabwareCategory[] = ['plate', 'reservoir', 'tube', 'tiprack', 'glassware']
 const CATEGORY_LABELS: Record<LabwareCategory, string> = {
   plate: 'Plates',
   reservoir: 'Reservoirs',
   tube: 'Tubes',
   tiprack: 'Tip Racks',
+  glassware: 'Glassware',
 }
 
 export function AddLabwareDialog({ open, contextLabel, surfaceKind, onClose, onPick }: AddLabwareDialogProps) {

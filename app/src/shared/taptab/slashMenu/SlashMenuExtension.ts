@@ -27,6 +27,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { createElement } from 'react'
 import { SlashSuggestionList, type SlashSuggestionListHandle } from './SlashSuggestionList'
 import {
+  resolveEquipment,
   resolveLabware,
   resolveMaterial,
   resolveProtocol,
@@ -37,6 +38,7 @@ import {
 import type {
   SlashCommandKind,
   SlashCommandSpec,
+  SlashMention,
   SlashResolverContext,
   SlashSuggestion,
 } from './types'
@@ -45,6 +47,7 @@ import type { SelectionContextValue } from '../../context/SelectionContext'
 const DEFAULT_COMMANDS: SlashCommandSpec[] = [
   { kind: 'material', aliases: ['m', 'material'], resolve: resolveMaterial },
   { kind: 'labware', aliases: ['l', 'labware'], resolve: resolveLabware },
+  { kind: 'equipment', aliases: ['e'], resolve: resolveEquipment },
   { kind: 'protocol', aliases: ['p', 'protocol'], resolve: resolveProtocol },
   { kind: 'source', aliases: ['s', 'source', 'src'], resolve: resolveSource },
   // `/t` now means tube; target keeps its `tar`/`target` aliases.
@@ -55,6 +58,12 @@ const DEFAULT_COMMANDS: SlashCommandSpec[] = [
 export interface SlashMenuOptions {
   /** Custom command list — defaults to material/labware/protocol/source/target. */
   commands?: SlashCommandSpec[]
+  /** Command alias preloaded by a controlled field, e.g. `m` for material. */
+  defaultCommand?: string
+  /** Handles Tab out of a controlled field before the user has typed a query. */
+  onEmptyDefaultTab?: (event: KeyboardEvent) => boolean
+  /** Called after a mention has been inserted from the menu. */
+  onMentionSelected?: (mention: SlashMention) => void
   /**
    * Snapshot getter for the cross-endpoint selection. We accept a getter
    * (rather than a value) so the extension can be configured once at editor
@@ -85,6 +94,7 @@ function matchCommand(commands: SlashCommandSpec[], query: string): {
 export function buildSlashMenuExtension(options: SlashMenuOptions = {}): Extension {
   const commands = options.commands ?? DEFAULT_COMMANDS
   const getSelection = options.getSelection ?? (() => null)
+  const defaultCommand = options.defaultCommand?.trim().toLowerCase()
 
   return Extension.create({
     name: 'slashMenu',
@@ -137,6 +147,7 @@ export function buildSlashMenuExtension(options: SlashMenuOptions = {}): Extensi
                 .then((mention) => {
                   if (mention) {
                     editor.chain().focus().insertMention(mention).run()
+                    options.onMentionSelected?.(mention)
                   }
                 })
                 .catch((err) => {
@@ -150,6 +161,7 @@ export function buildSlashMenuExtension(options: SlashMenuOptions = {}): Extensi
               .deleteRange(range)
               .insertMention(item.mention)
               .run()
+            options.onMentionSelected?.(item.mention)
           },
           items: async ({ query }) => {
             // New query: cancel any in-flight late updates from the previous
@@ -191,7 +203,10 @@ export function buildSlashMenuExtension(options: SlashMenuOptions = {}): Extensi
               return []
             }
           },
-          render: () => createRenderer(commands, session),
+          render: () => createRenderer(commands, session, {
+            defaultCommand,
+            onEmptyDefaultTab: options.onEmptyDefaultTab,
+          }),
         } as SuggestionOptions<SlashSuggestion>),
       ]
     },
@@ -220,7 +235,21 @@ interface ProgressiveSession {
  * logic in one place. The shared `session` lets the items() handler push
  * late updates back into the menu via `session.repaint`.
  */
-function createRenderer(commands: SlashCommandSpec[], session: ProgressiveSession) {
+function isDefaultCommandOnly(commands: SlashCommandSpec[], query: string, defaultCommand: string | undefined): boolean {
+  if (!defaultCommand) return false
+  const match = matchCommand(commands, query)
+  if (!match) return false
+  return match.command.aliases.includes(defaultCommand) && match.innerQuery.trim() === ''
+}
+
+function createRenderer(
+  commands: SlashCommandSpec[],
+  session: ProgressiveSession,
+  options: {
+    defaultCommand?: string
+    onEmptyDefaultTab?: (event: KeyboardEvent) => boolean
+  } = {},
+) {
   let container: HTMLDivElement | null = null
   let root: Root | null = null
   let listHandle: SlashSuggestionListHandle | null = null
@@ -255,6 +284,22 @@ function createRenderer(commands: SlashCommandSpec[], session: ProgressiveSessio
     paint({ ...lastProps, items })
   }
 
+  function dispose() {
+    session.query = null
+    session.repaint = null
+    session.controller?.abort()
+    session.controller = null
+    if (root) {
+      root.unmount()
+      root = null
+    }
+    if (container) {
+      container.remove()
+      container = null
+    }
+    listHandle = null
+  }
+
   function position(props: SuggestionProps<SlashSuggestion>) {
     if (!container) return
     const rect = props.clientRect?.()
@@ -278,9 +323,9 @@ function createRenderer(commands: SlashCommandSpec[], session: ProgressiveSessio
     const popoverEl = container.firstElementChild as HTMLElement | null
     const spaceAbove = rect.top - MARGIN
     const spaceBelow = window.innerHeight - rect.bottom - MARGIN
-    // Prefer above (so the popover doesn't cover what the user is typing),
-    // but fall through to below when above is genuinely tighter.
-    const placeAbove = spaceAbove >= 140 || spaceAbove >= spaceBelow
+    // Prefer below so the popover does not cover already-authored protocol
+    // structure. Flip above only when below is genuinely too tight.
+    const placeAbove = spaceBelow < 140 && spaceAbove > spaceBelow
 
     if (placeAbove) {
       // Pin the bottom near rect.top; clear `top` so the popover can grow
@@ -297,6 +342,7 @@ function createRenderer(commands: SlashCommandSpec[], session: ProgressiveSessio
 
   return {
     onStart(props: SuggestionProps<SlashSuggestion>) {
+      document.querySelectorAll('[data-slash-menu-root="true"]').forEach((node) => node.remove())
       container = document.createElement('div')
       container.dataset.slashMenuRoot = 'true'
       document.body.appendChild(container)
@@ -310,23 +356,17 @@ function createRenderer(commands: SlashCommandSpec[], session: ProgressiveSessio
       position(props)
     },
     onKeyDown(props: { event: KeyboardEvent }) {
-      if (props.event.key === 'Escape') return true
+      if (props.event.key === 'Escape') {
+        dispose()
+        return true
+      }
+      if (props.event.key === 'Tab' && lastProps && isDefaultCommandOnly(commands, lastProps.query, options.defaultCommand)) {
+        if (options.onEmptyDefaultTab?.(props.event)) return true
+      }
       return listHandle?.onKeyDown(props.event) ?? false
     },
     onExit() {
-      session.query = null
-      session.repaint = null
-      session.controller?.abort()
-      session.controller = null
-      if (root) {
-        root.unmount()
-        root = null
-      }
-      if (container) {
-        container.remove()
-        container = null
-      }
-      listHandle = null
+      dispose()
     },
   }
 }

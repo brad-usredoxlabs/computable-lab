@@ -10,7 +10,7 @@
 
 import type { SelectionContextValue } from '../../context/SelectionContext'
 
-export type SlashCommandKind = 'material' | 'labware' | 'protocol' | 'source' | 'target' | 'tube'
+export type SlashCommandKind = 'material' | 'labware' | 'protocol' | 'source' | 'target' | 'tube' | 'equipment'
 
 /**
  * Rich hover detail for a suggestion row. Shown as a side tooltip on
@@ -98,6 +98,11 @@ export type SlashMention =
       type: 'tube'
       sizeLabel: string
       maxVolume_uL: number
+      label: string
+    }
+  | {
+      type: 'equipment'
+      id: string
       label: string
     }
 

@@ -25,6 +25,8 @@ export function mentionToToken(mention: SlashMention): string {
       )}|${mention.label}]]`
     case 'tube':
       return `[[tube:${mention.sizeLabel}|${mention.label}]]`
+    case 'equipment':
+      return `[[equipment:${mention.id}|${mention.label}]]`
   }
 }
 
@@ -42,6 +44,7 @@ export function mentionBadge(mention: SlashMention): string {
     return mention.entityKind === 'graph-component' ? 'Component' : 'Protocol'
   }
   if (mention.type === 'tube') return 'Tube'
+  if (mention.type === 'equipment') return 'Equipment'
   return mention.selectionKind === 'source' ? 'Source' : 'Target'
 }
 
@@ -71,6 +74,8 @@ export function badgeStyles(
       return { background: '#ede9fe', color: '#5b21b6', border: '#ddd6fe' }
     case 'Tube':
       return { background: '#ffedd5', color: '#9a3412', border: '#fdba74' }
+    case 'Equipment':
+      return { background: '#ecfdf5', color: '#047857', border: '#a7f3d0' }
     default:
       return { background: '#e5e7eb', color: '#374151', border: '#d1d5db' }
   }

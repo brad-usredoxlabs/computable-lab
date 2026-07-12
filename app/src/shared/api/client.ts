@@ -1030,6 +1030,30 @@ export interface GraphLemurPdfSearchResponse {
   }>
 }
 
+export interface EquipmentExaSearchResult {
+  id: string
+  title: string
+  url: string
+  snippet?: string
+  score?: number
+  manufacturer?: string
+  model?: string
+  source: 'exa'
+}
+
+export interface EquipmentExaSearchResponse {
+  configured: boolean
+  query: string
+  items: EquipmentExaSearchResult[]
+}
+
+export interface EquipmentFromExaResponse {
+  success: true
+  recordId: string
+  label: string
+  record: RecordEnvelope
+}
+
 export interface GraphLemurPdfIngestResponse {
   sourcePdf: AiSourcePdfSummary
   sourceProtocolCandidate: AiProtocolCandidateSummary
@@ -1159,6 +1183,26 @@ export interface ExtractProtocolResponse {
   }
   /** Path to the persisted candidate artifact (if persisted). */
   candidatePath?: string
+}
+
+/**
+ * Response from POST /protocol-builder/extract-pdf-text
+ */
+export interface ExtractPdfFromUrlResponse {
+  text: string
+  page_count: number
+  diagnostics: Array<{ severity: string; code: string; message: string }>
+}
+
+/**
+ * Extract text from a PDF at a given URL.
+ * Calls POST /protocol-builder/extract-pdf-text
+ */
+export async function extractPdfFromUrl(url: string): Promise<ExtractPdfFromUrlResponse> {
+  return request<ExtractPdfFromUrlResponse>('/protocol-builder/extract-pdf-text', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+  })
 }
 
 async function request<T>(
@@ -2043,6 +2087,22 @@ export const apiClient = {
     return request<GraphLemurPdfIngestResponse>('/vendors/graph-lemur/pdfs/ingest', {
       method: 'POST',
       body: JSON.stringify(params),
+    })
+  },
+
+  async searchEquipmentExa(params: {
+    q: string
+    limit?: number
+  }): Promise<EquipmentExaSearchResponse> {
+    const qs = new URLSearchParams({ q: params.q })
+    if (typeof params.limit === 'number') qs.set('limit', String(params.limit))
+    return request<EquipmentExaSearchResponse>(`/equipment/exa-search?${qs.toString()}`)
+  },
+
+  async createEquipmentFromExaCandidate(candidate: EquipmentExaSearchResult): Promise<EquipmentFromExaResponse> {
+    return request<EquipmentFromExaResponse>('/equipment/from-exa', {
+      method: 'POST',
+      body: JSON.stringify({ candidate }),
     })
   },
 
@@ -3758,6 +3818,34 @@ export const apiClient = {
   async listCuratedVendors(): Promise<Array<{ vendor: string; label: string }>> {
     const response = await request<{ success: true; vendors: Array<{ vendor: string; label: string }> }>('/protocol-ide/curated-vendors')
     return response.vendors
+  },
+
+  /**
+   * Draft or re-draft the Protocol IDE event graph, carrying any batched
+   * clarification answers into the next AI draft round.
+   * Calls POST /protocol-ide/sessions/:id/draft-graph
+   */
+  async draftProtocolIdeGraph(
+    sessionId: string,
+    body: {
+      directiveText?: string
+      clarificationAnswers?: import('../../types/ai').AiClarificationAnswer[]
+      resetClarifications?: boolean
+      enableThinking?: boolean
+    },
+  ): Promise<{
+    success: true
+    status: 'projected' | 'projection_failed'
+    eventGraphRef: { kind: 'record'; id: string; type: 'event-graph' } | null
+    eventGraphData: { recordId: string | null; events: unknown[]; labwares: unknown[]; deckPlacements: unknown[]; eventCount: number }
+    clarificationRequests: import('../../types/ai').AiClarificationRequest[]
+    diagnostics: Array<{ severity: 'info' | 'warning' | 'error'; code: string; message: string }>
+    draftIteration: number
+  }> {
+    return request(`/protocol-ide/sessions/${encodeURIComponent(sessionId)}/draft-graph`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
   },
 
   /**

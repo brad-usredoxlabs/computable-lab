@@ -11,6 +11,7 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import { isAbsolute, resolve, join } from 'node:path';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 
 import { SchemaRegistry, createSchemaRegistry } from './schema/SchemaRegistry.js';
@@ -70,6 +71,7 @@ import {
   createFoundryJobHandlers,
   createMaterialProfileHandlers,
   createExtractProtocolHandlers,
+  createProtocolBuilderHandlers,
 } from './api/handlers/index.js';
 import { createResolveSpine, createResolveSpineFromContext, resolveOakServiceUrl } from './resolve/index.js';
 import { buildResidentContext } from './ai/residentContext.js';
@@ -227,11 +229,21 @@ export async function initializeApp(
   const opts = { ...DEFAULT_CONFIG, ...config };
   
   console.log(`Initializing app with base path: ${basePath}`);
-  
+
   // Try to load configuration from config.yaml
+  // Search: env var -> current basePath -> parent directory (server/ -> repo root) -> fallback
+  function findConfigPath(base: string): string {
+    if (process.env.CONFIG_PATH) return process.env.CONFIG_PATH;
+    const direct = resolve(base, 'config.yaml');
+    if (existsSync(direct)) return direct;
+    const parent = resolve(base, '..', 'config.yaml');
+    if (existsSync(parent)) return parent;
+    return direct;
+  }
+
   let appConfig: AppConfig | undefined;
   let repoConfig: RepositoryConfig | undefined;
-  const configPath = process.env.CONFIG_PATH || resolve(basePath, 'config.yaml');
+  const configPath = findConfigPath(basePath);
 
   try {
     appConfig = await loadConfig({ configPath });
@@ -610,6 +622,19 @@ export async function createServer(
   const materialLifecycleHandlers = createMaterialLifecycleHandlers(ctx.store, ctx.indexManager, ctx.lifecycleEngine);
   const materialProfileHandlers = createMaterialProfileHandlers(ctx.materialProfileRegistry, ctx.store);
   const extractProtocolHandlers = createExtractProtocolHandlers(ctx.workspaceRoot);
+  const aiProfile = ctx.appConfig?.ai ? resolveAiProfile(ctx.appConfig.ai) : undefined;
+  // Mutable ref so the orchestrator can be wired after lazy AI init completes.
+  const pbOrchestratorRef = { current: undefined as import('./ai/types.js').AgentOrchestrator | undefined };
+  const protocolBuilderHandlers = createProtocolBuilderHandlers(
+    ctx.workspaceRoot,
+    aiProfile?.inference ? {
+      baseUrl: aiProfile.inference.baseUrl,
+      model: aiProfile.inference.model,
+      ...(aiProfile.inference.apiKey ? { apiKey: aiProfile.inference.apiKey } : {}),
+      ...(aiProfile.inference.temperature ? { temperature: aiProfile.inference.temperature } : {}),
+    } : undefined,
+    pbOrchestratorRef,
+  );
   const semanticsHandlers = createSemanticsHandlers(ctx);
   const runWorkspaceHandlers = createRunWorkspaceHandlers(ctx);
   const runContextAssembler = new RunContextAssembler(ctx.store);
@@ -841,6 +866,8 @@ export async function createServer(
         placeholderDeps,
       );
       currentOrchestrator = orchestrator;
+      // Wire the orchestrator into the protocol-builder handlers (for draft endpoint).
+      pbOrchestratorRef.current = orchestrator;
       currentWarmup = createPromptWarmupManager({
         inferenceClient: rawInferenceClient,
         cacheClient: warmupSettings.slotPersistence
@@ -1103,6 +1130,7 @@ export async function createServer(
       materialLifecycleHandlers,
       materialProfileHandlers,
       extractProtocolHandlers,
+      protocolBuilderHandlers,
       semanticsHandlers,
       runWorkspaceHandlers,
       runDraftHandlers,

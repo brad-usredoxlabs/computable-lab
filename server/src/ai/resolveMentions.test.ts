@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildResolvedContextMessage, type ResolvedMention } from './resolveMentions.js';
+import { buildResolvedContextMessage, resolveMentionsForPrompt, type ResolvedMention } from './resolveMentions.js';
 
 describe('buildResolvedContextMessage', () => {
   it('includes a mention whose record was fetched', () => {
@@ -37,5 +37,29 @@ describe('buildResolvedContextMessage', () => {
 
   it('returns null when there is nothing to ground', () => {
     expect(buildResolvedContextMessage([])).toBeNull();
+  });
+});
+
+
+describe('resolveMentionsForPrompt', () => {
+  it('resolves equipment mentions with the equipment fetcher', async () => {
+    const fetchEquipment = async (id: string) => id === 'EQP-CENTRIFUGE'
+      ? { kind: 'equipment', recordId: id, label: 'Benchtop centrifuge' }
+      : null;
+
+    const mentions = await resolveMentionsForPrompt(
+      'Spin with [[equipment:EQP-CENTRIFUGE|Benchtop centrifuge]]',
+      { fetchEquipment },
+    );
+
+    expect(mentions).toEqual([
+      expect.objectContaining({
+        raw: '[[equipment:EQP-CENTRIFUGE|Benchtop centrifuge]]',
+        kind: 'equipment',
+        id: 'EQP-CENTRIFUGE',
+        label: 'Benchtop centrifuge',
+        resolved: expect.objectContaining({ kind: 'equipment' }),
+      }),
+    ]);
   });
 });

@@ -247,6 +247,29 @@ properties:
     items:
       type: object
 
+  latestClarificationRequests:
+    type: array
+    description: >
+      Structured AgentClarificationRequest objects from the latest Protocol IDE
+      graph-draft round. These drive the visible clarification card set.
+    items:
+      type: object
+      additionalProperties: true
+
+  resolvedClarificationAnswers:
+    type: array
+    description: >
+      Accumulated AgentClarificationAnswer objects merged across graph-draft
+      rounds and replayed into subsequent drafts.
+    items:
+      type: object
+      additionalProperties: true
+
+  draftIteration:
+    type: integer
+    minimum: 0
+    description: Monotonic latest graph-draft iteration counter.
+
   notes:
     type: string
     description: >

@@ -271,7 +271,7 @@ export interface MacroProgramDetails extends BaseEventDetails {
 export interface TubeDescriptor {
   sizeLabel: string
   maxVolume_uL: number
-  wellShape?: 'round' | 'square' | 'v-bottom' | 'conical'
+  wellShape?: 'round' | 'square' | 'v-bottom' | 'conical' | 'cylindrical'
 }
 
 /**

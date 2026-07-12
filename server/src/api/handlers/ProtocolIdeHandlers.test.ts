@@ -1533,3 +1533,187 @@ describe('ProtocolIdeHandlers — selectVariant', () => {
     });
   });
 });
+
+
+// ---------------------------------------------------------------------------
+// Protocol IDE draft graph loop
+// ---------------------------------------------------------------------------
+
+describe('ProtocolIdeHandlers — draftGraph', () => {
+  function makeDraftStore(records: Record<string, RecordEnvelope>): RecordStore {
+    const current = new Map(Object.entries(records));
+    return {
+      create: vi.fn().mockImplementation(({ envelope }) => {
+        current.set(envelope.recordId, envelope);
+        return Promise.resolve({ success: true });
+      }),
+      get: vi.fn().mockImplementation((id: string) => Promise.resolve(current.get(id) ?? null)),
+      getByPath: vi.fn().mockResolvedValue(null),
+      getWithValidation: vi.fn().mockResolvedValue({ success: true }),
+      list: vi.fn().mockResolvedValue([]),
+      update: vi.fn().mockImplementation(({ envelope }) => {
+        current.set(envelope.recordId, envelope);
+        return Promise.resolve({ success: true });
+      }),
+      delete: vi.fn().mockResolvedValue({ success: true }),
+      validate: vi.fn().mockResolvedValue({ valid: true }),
+      lint: vi.fn().mockResolvedValue({ valid: true }),
+      exists: vi.fn().mockImplementation((id: string) => Promise.resolve(current.has(id))),
+    } as unknown as RecordStore;
+  }
+
+  function makeSessionEnvelope(payload: Record<string, unknown>): RecordEnvelope {
+    return {
+      kind: 'protocol-ide-session',
+      recordId: 'PIS-draft-001',
+      schemaId: 'https://computable-lab.com/schema/computable-lab/protocol-ide-session.schema.yaml',
+      payload: {
+        kind: 'protocol-ide-session',
+        status: 'imported',
+        sourceMode: 'directive',
+        latestDirectiveText: 'Draft the graph',
+        ...payload,
+      },
+      meta: { createdAt: '2026-06-28T00:00:00.000Z', updatedAt: '2026-06-28T00:00:00.000Z' },
+    } as RecordEnvelope;
+  }
+
+  it('builds the draft prompt from source text, answers, and prior graph context', async () => {
+    const session = makeSessionEnvelope({
+      extractedTextRef: { kind: 'record', id: 'TXT-draft-001', type: 'extracted-text' },
+      latestEventGraphRef: { kind: 'record', id: 'EVG-prior-001', type: 'event-graph' },
+      draftIteration: 1,
+      resolvedClarificationAnswers: [
+        { requestId: 'mat-buffer', label: 'PBS', mentionToken: '[[material:MAT-pbs|PBS]]' },
+      ],
+      evidenceCitations: [{ pageNumber: 2, snippet: 'Spin the plate for 5 minutes.' }],
+    });
+    const store = makeDraftStore({
+      'PIS-draft-001': session,
+      'TXT-draft-001': {
+        recordId: 'TXT-draft-001',
+        payload: { text: 'Step 1. Add PBS to each well. Step 2. Spin the plate.' },
+        meta: { createdAt: '2026-06-28T00:00:00.000Z' },
+      } as RecordEnvelope,
+      'EVG-prior-001': {
+        recordId: 'EVG-prior-001',
+        payload: {
+          events: [{ eventId: 'prior-1', verb: 'dispense', details: { wells: ['A1'] } }],
+          labwares: [{ labwareId: 'plate-1', labwareType: '96_well_plate', name: 'Assay plate' }],
+          deckPlacements: [{ slotId: '1', labwareId: 'plate-1' }],
+        },
+        meta: { createdAt: '2026-06-28T00:00:00.000Z' },
+      } as RecordEnvelope,
+    });
+    const orchestrator = {
+      run: vi.fn().mockResolvedValue({
+        success: true,
+        events: [{ eventId: 'draft-1', verb: 'dispense', details: {}, provenance: { stepNumber: 1, snippet: 'Add PBS', pageNumber: 3 } }],
+        clarificationRequests: [
+          { id: 'mat-buffer', kind: 'material', menuProvider: '/m', prompt: 'Which PBS?', options: [] },
+          { id: 'equip-spin', kind: 'equipment', menuProvider: '/e', prompt: 'Which centrifuge?', options: [], query: 'centrifuge' },
+        ],
+        unresolvedRefs: [],
+      }),
+    };
+    const handlers = createProtocolIdeHandlers(makeMockCtx(store), {
+      current: {
+        extractionService: {} as any,
+        llmClient: {} as any,
+        orchestrator: orchestrator as any,
+      },
+    });
+
+    const reply = makeMockReply();
+    const result = await handlers.draftGraph({
+      params: { sessionId: 'PIS-draft-001' },
+      body: {
+        directiveText: 'Prefer executable liquid handling events.',
+        clarificationAnswers: [{ requestId: 'labware-plate', label: 'Corning 96 well plate', mentionToken: '[[labware:LW-96|Corning 96 well plate]]' }],
+      },
+    } as unknown as FastifyRequest<any>, reply);
+
+    expect(reply.status).toHaveBeenCalledWith(200);
+    expect(orchestrator.run).toHaveBeenCalledWith(expect.objectContaining({
+      surface: 'protocol-ide',
+      forceDraftTool: true,
+      clarificationAnswers: expect.arrayContaining([
+        expect.objectContaining({ requestId: 'mat-buffer' }),
+        expect.objectContaining({ requestId: 'labware-plate' }),
+      ]),
+    }));
+    const prompt = orchestrator.run.mock.calls[0][0].prompt as string;
+    expect(prompt).toContain('Step 1. Add PBS to each well');
+    expect(prompt).toContain('Prefer executable liquid handling events.');
+    expect(prompt).toContain('[[material:MAT-pbs|PBS]]');
+    expect(prompt).toContain('prior-1');
+
+    expect(result).toMatchObject({
+      success: true,
+      status: 'projected',
+      eventGraphRef: { kind: 'record', id: 'EVG-PIS-draft-001-DRAFT-2', type: 'event-graph' },
+      draftIteration: 2,
+      clarificationRequests: [expect.objectContaining({ id: 'equip-spin', menuProvider: '/e' })],
+    });
+    expect(store.create).toHaveBeenCalledWith(expect.objectContaining({
+      envelope: expect.objectContaining({
+        recordId: 'EVG-PIS-draft-001-DRAFT-2',
+        meta: expect.objectContaining({ kind: 'event-graph' }),
+        payload: expect.objectContaining({
+          kind: 'event-graph',
+          events: [expect.objectContaining({ eventId: 'draft-1', details: expect.objectContaining({ sourceStep: 1, sourceSnippet: 'Add PBS', sourcePage: 3 }) })],
+        }),
+      }),
+      skipValidation: true,
+      skipLint: true,
+    }));
+    const updatedPayload = (store.update as ReturnType<typeof vi.fn>).mock.calls[0][0].envelope.payload;
+    expect(updatedPayload).toMatchObject({
+      latestEventGraphRef: { kind: 'record', id: 'EVG-PIS-draft-001-DRAFT-2', type: 'event-graph' },
+      latestEventGraphCacheKey: 'EVG-PIS-draft-001-DRAFT-2',
+      draftIteration: 2,
+      latestClarificationRequests: [expect.objectContaining({ id: 'equip-spin' })],
+    });
+    expect(updatedPayload.resolvedClarificationAnswers).toHaveLength(2);
+  });
+
+  it('deduplicates clarification answers by stable request id before rerunning the draft', async () => {
+    const session = makeSessionEnvelope({
+      draftIteration: 0,
+      resolvedClarificationAnswers: [
+        { requestId: 'mat-buffer', label: 'old buffer', value: 'old buffer' },
+      ],
+    });
+    const store = makeDraftStore({ 'PIS-draft-001': session });
+    const orchestrator = {
+      run: vi.fn().mockResolvedValue({ success: true, events: [], clarificationRequests: [], unresolvedRefs: [] }),
+    };
+    const handlers = createProtocolIdeHandlers(makeMockCtx(store), {
+      current: {
+        extractionService: {} as any,
+        llmClient: {} as any,
+        orchestrator: orchestrator as any,
+      },
+    });
+
+    const result = await handlers.draftGraph({
+      params: { sessionId: 'PIS-draft-001' },
+      body: {
+        clarificationAnswers: [
+          { requestId: 'mat-buffer', label: 'PBS', value: 'PBS' },
+          { requestId: 'mat-buffer', label: 'DPBS', value: 'DPBS' },
+        ],
+      },
+    } as unknown as FastifyRequest<any>, makeMockReply());
+
+    expect(result).toMatchObject({
+      success: true,
+      eventGraphRef: null,
+      diagnostics: [expect.objectContaining({ code: 'NO_EVENTS_DRAFTED' })],
+    });
+    const passedAnswers = orchestrator.run.mock.calls[0][0].clarificationAnswers;
+    expect(passedAnswers).toEqual([{ requestId: 'mat-buffer', label: 'DPBS', value: 'DPBS' }]);
+    const updatedPayload = (store.update as ReturnType<typeof vi.fn>).mock.calls[0][0].envelope.payload;
+    expect(updatedPayload.resolvedClarificationAnswers).toEqual([{ requestId: 'mat-buffer', label: 'DPBS', value: 'DPBS' }]);
+  });
+});

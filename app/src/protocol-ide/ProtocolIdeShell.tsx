@@ -40,7 +40,7 @@ import { ProtocolIdeExportActions } from './ProtocolIdeExportActions'
 import { ProtocolIdeLabContextPanel } from './ProtocolIdeLabContextPanel'
 import { ProtocolIdeCandidateReviewPanel } from './ProtocolIdeCandidateReviewPanel'
 import type { AwaitingVariantSelection } from './ProtocolIdeCandidateReviewPanel'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { apiClient } from '../shared/api/client'
 import type {
@@ -50,6 +50,9 @@ import type {
   BudgetSummary,
 } from './overlaySummaries.types'
 import type { FoundryReviewContext } from '../shared/api/client'
+import type { AiClarificationAnswer, AiClarificationRequest } from '../types/ai'
+import { ClarificationPicker } from '../event-editor/right-pane/ai/ClarificationPicker'
+import { mentionTokenForOption } from '../event-editor/right-pane/ai/MessageLog'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -427,6 +430,132 @@ function EventGraphSurface({
 }
 
 // ---------------------------------------------------------------------------
+// Protocol IDE clarification cards
+// ---------------------------------------------------------------------------
+
+function hasInlinePicker(request: AiClarificationRequest): boolean {
+  return request.menuProvider === '/m' || request.menuProvider === '/l' || request.menuProvider === '/e'
+}
+
+function ProtocolIdeClarificationCards({
+  requests,
+  answerHistory,
+  submitting,
+  onSubmit,
+}: {
+  requests: AiClarificationRequest[]
+  answerHistory: AiClarificationAnswer[]
+  submitting: boolean
+  onSubmit: (answers: AiClarificationAnswer[], requests: AiClarificationRequest[]) => void
+}): JSX.Element | null {
+  const [answers, setAnswers] = useState<Record<string, AiClarificationAnswer>>({})
+  const submittedRef = useRef(false)
+  const requestKey = requests.map((request) => request.id).join('|')
+
+  useEffect(() => {
+    setAnswers({})
+    submittedRef.current = false
+  }, [requestKey])
+
+  const record = (answer: AiClarificationAnswer, request: AiClarificationRequest) => {
+    if (submitting) return
+    setAnswers((prev) => ({ ...prev, [request.id]: answer }))
+  }
+
+  const answeredCount = requests.filter((request) => answers[request.id]).length
+  const allAnswered = requests.length > 0 && answeredCount === requests.length
+
+  useEffect(() => {
+    if (allAnswered && !submittedRef.current) {
+      submittedRef.current = true
+      onSubmit(requests.map((request) => answers[request.id]!), requests)
+    }
+  }, [allAnswered, answers, requests, onSubmit])
+
+  if (requests.length === 0 && answerHistory.length === 0) return null
+
+  return (
+    <section className="action-rail-section protocol-ide-clarifications" data-testid="protocol-ide-clarifications">
+      <h3>Clarifications</h3>
+      {requests.length > 0 ? (
+        <div className="message-log__clarifications" data-testid="protocol-ide-clarification-cards">
+          {requests.map((request) => {
+            const chosen = answers[request.id]
+            return (
+              <section key={request.id} className="message-log__clarification-card">
+                <div className="message-log__clarification-head">
+                  <span className="message-log__clarification-menu">{request.menuProvider}</span>
+                  <span className="message-log__clarification-kind">{request.entityType ?? request.kind}</span>
+                </div>
+                <p className="message-log__clarification-prompt">{request.prompt}</p>
+                {request.snippet ? <p className="message-log__clarification-snippet">{request.snippet}</p> : null}
+                {chosen ? (
+                  <div className="message-log__clarification-answered" data-testid="protocol-ide-clarification-answered">
+                    {chosen.label ?? chosen.value ?? 'answered'}
+                  </div>
+                ) : (
+                  <>
+                    {request.options.length > 0 ? (
+                      <div className="message-log__clarification-options">
+                        {request.options.map((option) => (
+                          <button
+                            key={option.id}
+                            type="button"
+                            className="message-log__clarification-option"
+                            disabled={submitting}
+                            onClick={() => record({
+                              requestId: request.id,
+                              optionId: option.id,
+                              label: option.label,
+                              mentionToken: mentionTokenForOption(request, option),
+                              ...(option.ref ? { ref: option.ref } : {}),
+                            }, request)}
+                          >
+                            <span>{option.label}</span>
+                            {option.source || option.snippet ? <small>{option.source ?? option.snippet}</small> : null}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    {hasInlinePicker(request) ? (
+                      <ClarificationPicker request={request} onPick={record} />
+                    ) : request.options.length === 0 ? (
+                      <button
+                        type="button"
+                        className="message-log__clarification-option message-log__clarification-option--manual"
+                        disabled={submitting}
+                        onClick={() => record({ requestId: request.id, value: request.query ?? request.prompt }, request)}
+                      >
+                        Use prompt text
+                      </button>
+                    ) : null}
+                  </>
+                )}
+              </section>
+            )
+          })}
+          {requests.length > 1 && !allAnswered ? (
+            <div className="message-log__clarification-progress" data-testid="protocol-ide-clarification-progress">
+              {answeredCount} of {requests.length} answered
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {answerHistory.length > 0 ? (
+        <details className="protocol-ide-clarification-history">
+          <summary>{answerHistory.length} answered</summary>
+          <ul>
+            {answerHistory.slice(-8).map((answer, index) => (
+              <li key={`${answer.requestId}-${index}`}>{answer.label ?? answer.value ?? answer.optionId ?? answer.requestId}</li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Summary / Actions rail (right — secondary)
 // ---------------------------------------------------------------------------
 
@@ -448,6 +577,7 @@ function ActionRailPane({
   const [issueCards, setIssueCards] = useState<IssueCardRef[]>([])
   const [rollingSummary, setRollingSummary] = useState<string | null>(null)
   const [isRerunning, setIsRerunning] = useState(false)
+  const [draftError, setDraftError] = useState<string | null>(null)
   const [planError, setPlanError] = useState<string | null>(null)
   const navigate = useNavigate()
 
@@ -510,13 +640,30 @@ function ActionRailPane({
 
   const handleRerun = useCallback(async () => {
     setIsRerunning(true)
+    setDraftError(null)
     try {
-      await apiClient.rerunProtocolIdeSession(session.recordId, {
+      await apiClient.draftProtocolIdeGraph(session.recordId, {
         directiveText: directiveText.trim(),
       })
       onVersionIncrement()
-    } catch {
-      // Rerun fails — surface as a banner, do NOT increment versionCounter
+    } catch (err) {
+      setDraftError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setIsRerunning(false)
+    }
+  }, [directiveText, session.recordId, onVersionIncrement])
+
+  const handleClarificationsSubmit = useCallback(async (answers: AiClarificationAnswer[]) => {
+    setIsRerunning(true)
+    setDraftError(null)
+    try {
+      await apiClient.draftProtocolIdeGraph(session.recordId, {
+        directiveText: directiveText.trim(),
+        clarificationAnswers: answers,
+      })
+      onVersionIncrement()
+    } catch (err) {
+      setDraftError(err instanceof Error ? err.message : String(err))
     } finally {
       setIsRerunning(false)
     }
@@ -568,6 +715,31 @@ function ActionRailPane({
         isRerunning={isRerunning}
         rollingIssueSummary={rollingSummary}
         issueCards={issueCards}
+      />
+      {draftError && (
+        <div className="action-rail-section error" data-testid="protocol-ide-draft-error">
+          {draftError}
+        </div>
+      )}
+      {session.latestProjectionDiagnostics?.length ? (
+        <section className="action-rail-section protocol-ide-diagnostics" data-testid="protocol-ide-diagnostics">
+          <h3>Draft status</h3>
+          <ul>
+            {session.latestProjectionDiagnostics.slice(0, 4).map((diagnostic, index) => (
+              <li key={`${diagnostic.code ?? 'diagnostic'}-${index}`}>
+                <span>{diagnostic.severity ?? 'info'}</span>
+                {diagnostic.code ? <code>{diagnostic.code}</code> : null}
+                {diagnostic.message ?? diagnostic.code ?? 'Draft diagnostic'}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      <ProtocolIdeClarificationCards
+        requests={session.latestClarificationRequests ?? []}
+        answerHistory={session.resolvedClarificationAnswers ?? []}
+        submitting={isRerunning}
+        onSubmit={handleClarificationsSubmit}
       />
       <ProtocolIdeExportActions
         sessionId={session.recordId}

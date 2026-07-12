@@ -979,6 +979,11 @@
   border-left-color: var(--shell-accent);
 }
 
+.taptab-protocol-mention-editor--primed .taptab-protocol-mention-editor__content {
+  overflow: hidden;
+  text-indent: -2.2em;
+}
+
 .taptab-protocol-prose .taptab-protocol-mention-editor__content {
   min-height: 9rem;
 }
@@ -993,14 +998,51 @@
   width: 100%;
 }
 
+.taptab-protocol-bullet-list,
+.taptab-protocol-numbered-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.taptab-protocol-bullet-list {
+  list-style: disc;
+}
+
+.taptab-protocol-numbered-list {
+  list-style: decimal;
+}
+
+.taptab-protocol-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  width: 100%;
+}
+
+.taptab-protocol-row,
+.taptab-protocol-step,
+.taptab-protocol-add,
+.taptab-protocol-suggestion {
+  align-items: flex-start;
+  gap: 0.5rem;
+  width: 100%;
+}
+
 .taptab-protocol-row,
 .taptab-protocol-step,
 .taptab-protocol-add,
 .taptab-protocol-suggestion {
   display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  width: 100%;
+}
+
+.taptab-protocol-list-item::marker,
+.taptab-protocol-step-item::marker {
+  color: var(--shell-text-secondary);
+  font-weight: 600;
 }
 
 .taptab-protocol-row {

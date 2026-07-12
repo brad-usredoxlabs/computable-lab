@@ -229,6 +229,30 @@ describe('ProtocolIdeGraphReviewSurface — review-only graph rendering', () => 
     expect(screen.getByTestId('event-item-1')).toBeTruthy()
   })
 
+  it('renders source-step evidence for drafted events', () => {
+    const eventGraphData = {
+      ...makeEventGraphData(),
+      events: [
+        {
+          eventId: 'evt-source-001',
+          event_type: 'add_material',
+          details: {
+            labwareId: 'lw-001',
+            wells: ['A1'],
+            sourceStep: 2,
+            sourcePage: 5,
+            sourceSnippet: 'Add lysis buffer to each well.',
+          },
+        },
+      ],
+    } as unknown as EventGraphData
+
+    renderSurface({ eventGraphData })
+
+    expect(screen.getByTestId('event-source-0')).toHaveTextContent('Step 2 / p. 5')
+    expect(screen.getByTestId('event-source-snippet-0')).toHaveTextContent('Add lysis buffer to each well.')
+  })
+
   it('shows event count in the graph header', () => {
     renderSurface({
       eventGraphData: makeEventGraphData(),

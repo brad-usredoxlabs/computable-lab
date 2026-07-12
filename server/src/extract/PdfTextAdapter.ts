@@ -10,6 +10,9 @@
 import type { ExtractionDiagnostic } from './ExtractorAdapter.js';
 import { PDFParse } from 'pdf-parse';
 import { spawn } from 'node:child_process';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 /**
  * Result of PDF text extraction.
@@ -166,6 +169,10 @@ async function defaultPdftotextRunner(buf: Buffer): Promise<PdftotextResult> {
       chunks.push(chunk);
     });
 
+    proc.stderr.on('data', () => {
+      // Consume stderr to prevent pipe buffer blocking
+    });
+
     proc.on('error', () => {
       resolve({ stdout: '', code: -1 });
     });
@@ -179,6 +186,53 @@ async function defaultPdftotextRunner(buf: Buffer): Promise<PdftotextResult> {
 
     proc.stdin.end(buf);
   });
+}
+
+/**
+ * Get page count from a PDF buffer using pdfinfo.
+ * Writes the buffer to a temp file since pdfinfo requires a file path.
+ * 
+ * @param buf - The PDF buffer to inspect
+ * @returns The page count, or 0 if pdfinfo is unavailable or fails
+ */
+async function getPageCountFromPdf(buf: Buffer): Promise<number> {
+  try {
+    const tempDir = await mkdtemp(join(tmpdir() || '/tmp', 'pdfinfo-'));
+    const tempFile = join(tempDir, 'temp.pdf');
+    await writeFile(tempFile, buf);
+    try {
+      return await new Promise((resolve) => {
+        const proc = spawn('pdfinfo', [tempFile]);
+        const chunks: Buffer[] = [];
+
+        proc.stdout.on('data', (chunk: Buffer) => {
+          chunks.push(chunk);
+        });
+
+        proc.stderr.on('data', () => {
+          // Consume stderr to prevent pipe buffer blocking
+        });
+
+        proc.on('error', () => {
+          resolve(0);
+        });
+
+        proc.on('close', (code) => {
+          if (code !== 0) {
+            resolve(0);
+            return;
+          }
+          const output = Buffer.concat(chunks).toString('utf8');
+          const match = output.match(/^Pages:\s*(\d+)/m);
+          resolve(match ? parseInt(match[1], 10) : 0);
+        });
+      });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -201,9 +255,10 @@ export async function extractPdfLayoutText(
   try {
     const result = await runner(pdfBuffer);
     if (result.code === 0 && result.stdout) {
+      const page_count = await getPageCountFromPdf(pdfBuffer);
       return {
         text: result.stdout,
-        page_count: 0,
+        page_count,
         diagnostics: [],
       };
     }

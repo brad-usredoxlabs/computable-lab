@@ -69,14 +69,20 @@ export const SlashSuggestionList = forwardRef<
   useImperativeHandle(ref, () => ({
     onKeyDown(event) {
       if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        event.stopPropagation()
         setSelected((idx) => Math.min(idx + 1, Math.max(items.length - 1, 0)))
         return true
       }
       if (event.key === 'ArrowUp') {
+        event.preventDefault()
+        event.stopPropagation()
         setSelected((idx) => Math.max(idx - 1, 0))
         return true
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault()
+        event.stopPropagation()
         const item = items[selected]
         if (item && !item.disabled) {
           command(item)

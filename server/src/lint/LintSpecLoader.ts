@@ -53,12 +53,17 @@ function normalizeLegacyPredicate(obj: Record<string, unknown>): Predicate {
       return { op: 'regex', path: String(args[0] ?? ''), pattern: String(args[1] ?? '') };
     case 'equals':
       return { op: 'equals', path: String(args[0] ?? ''), value: args[1] };
-    case 'in':
-      return {
-        op: 'in',
-        path: String(args[0] ?? ''),
-        values: Array.isArray(args[1]) ? args[1] : undefined,
-      };
+    case 'in': {
+      const vals = args[1];
+      if (Array.isArray(vals)) {
+        return {
+          op: 'in',
+          path: String(args[0] ?? ''),
+          values: vals as Array<string | number | boolean>,
+        };
+      }
+      return { op: 'in', path: String(args[0] ?? '') };
+    }
     case 'all':
     case 'any': {
       const subPreds = args.map((a: unknown) =>
@@ -92,24 +97,25 @@ function normalizeLegacyPredicate(obj: Record<string, unknown>): Predicate {
 function normalizePredicate(obj: Record<string, unknown>): Predicate {
   // Already canonical?
   if ('op' in obj) {
-    const result = { ...obj } as Predicate;
+    const result = { ...obj } as unknown as Predicate;
 
     // Handle `rules:` → `predicates:` (legacy all/any use `rules`)
-    if ((result.op === 'all' || result.op === 'any') && 'rules' in result && !('predicates' in result)) {
-      const rules = result.rules as unknown[];
+    if ((result.op === 'all' || result.op === 'any') && 'rules' in result) {
+      const rulesObj = result as Record<string, unknown>;
+      const rules = rulesObj.rules as unknown[];
       result.predicates = rules.map((r) => {
         if (isLegacyPredicate(r)) {
           return normalizeLegacyPredicate(r as Record<string, unknown>);
         }
         return normalizePredicate(r as Record<string, unknown>);
       }) as Predicate[];
-      delete (result as Record<string, unknown>).rules;
+      delete rulesObj.rules;
     }
 
     // Handle nested predicates in `all`/`any` that are still legacy format
     if (result.op === 'all' || result.op === 'any') {
       result.predicates = result.predicates.map((p) => {
-        const pObj = p as Record<string, unknown>;
+        const pObj = p as unknown as Record<string, unknown>;
         if (isLegacyPredicate(pObj)) {
           return normalizeLegacyPredicate(pObj);
         }
@@ -119,7 +125,7 @@ function normalizePredicate(obj: Record<string, unknown>): Predicate {
 
     // Handle `not` with legacy nested predicate
     if (result.op === 'not' && result.not) {
-      const notObj = result.not as Record<string, unknown>;
+      const notObj = result.not as unknown as Record<string, unknown>;
       if (isLegacyPredicate(notObj)) {
         result.not = normalizeLegacyPredicate(notObj);
       } else if ('op' in notObj || 'predicate' in notObj) {
@@ -136,7 +142,7 @@ function normalizePredicate(obj: Record<string, unknown>): Predicate {
   }
 
   // Fallback: return as-is
-  return obj as Predicate;
+  return obj as unknown as Predicate;
 }
 
 /**
@@ -185,7 +191,9 @@ function normalizeRule(rule: Record<string, unknown>): Record<string, unknown> {
 function normalizeLintSpec(spec: LintSpec): LintSpec {
   return {
     ...spec,
-    rules: spec.rules.map((rule) => normalizeRule(rule as Record<string, unknown>)) as LintSpec['rules'],
+    rules: spec.rules.map((rule) =>
+      normalizeRule(rule as unknown as Record<string, unknown>),
+    ) as unknown as LintSpec['rules'],
   };
 }
 

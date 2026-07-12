@@ -577,6 +577,95 @@ function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined
 }
 
+function readNumber(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim() && Number.isFinite(Number(value))) return Number(value)
+  return undefined
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+}
+
+function eventTypeLabel(event: PlateEvent): string {
+  return event.event_type ?? readString((event as unknown as Record<string, unknown>).verb) ?? 'event'
+}
+
+function compactEventDetails(event: PlateEvent): string {
+  const details = asRecord(event.details)
+  const {
+    sourceStep: _sourceStep,
+    sourceSnippet: _sourceSnippet,
+    sourcePage: _sourcePage,
+    sourceSection: _sourceSection,
+    provenance: _provenance,
+    sourceEvidence: _sourceEvidence,
+    ...rest
+  } = details
+  if (eventTypeLabel(event) === 'transfer') {
+    return `transfer -> ${JSON.stringify(rest.wells ?? rest.dest_wells ?? asRecord(rest.target).wells ?? [])}`
+  }
+  return JSON.stringify(rest)
+}
+
+function extractEventSourceEvidence(event: PlateEvent): {
+  step?: number
+  page?: number
+  section?: string
+  snippet?: string
+} | null {
+  const details = asRecord(event.details)
+  const provenance = asRecord(details.provenance)
+  const sourceEvidence = asRecord(details.sourceEvidence)
+  const source = asRecord(details.source)
+  const step = readNumber(details.sourceStep)
+    ?? readNumber(details.protocolStep)
+    ?? readNumber(details.stepNumber)
+    ?? readNumber(provenance.sourceStep)
+    ?? readNumber(provenance.stepNumber)
+    ?? readNumber(sourceEvidence.sourceStep)
+    ?? readNumber(sourceEvidence.stepNumber)
+    ?? readNumber(source.sourceStep)
+    ?? readNumber(source.stepNumber)
+  const page = readNumber(details.sourcePage)
+    ?? readNumber(details.page)
+    ?? readNumber(details.pageNumber)
+    ?? readNumber(provenance.sourcePage)
+    ?? readNumber(provenance.page)
+    ?? readNumber(provenance.pageNumber)
+    ?? readNumber(sourceEvidence.sourcePage)
+    ?? readNumber(sourceEvidence.page)
+    ?? readNumber(sourceEvidence.pageNumber)
+  const section = readString(details.sourceSection)
+    ?? readString(details.section)
+    ?? readString(details.sectionId)
+    ?? readString(provenance.sourceSection)
+    ?? readString(provenance.section)
+    ?? readString(provenance.sectionId)
+    ?? readString(sourceEvidence.sourceSection)
+    ?? readString(sourceEvidence.section)
+    ?? readString(sourceEvidence.sectionId)
+  const snippet = readString(details.sourceSnippet)
+    ?? readString(details.snippet)
+    ?? readString(provenance.sourceSnippet)
+    ?? readString(provenance.snippet)
+    ?? readString(sourceEvidence.sourceSnippet)
+    ?? readString(sourceEvidence.snippet)
+    ?? readString(source.snippet)
+  return step === undefined && page === undefined && !section && !snippet
+    ? null
+    : { ...(step !== undefined ? { step } : {}), ...(page !== undefined ? { page } : {}), ...(section ? { section } : {}), ...(snippet ? { snippet } : {}) }
+}
+
+function sourceEvidenceLabel(evidence: NonNullable<ReturnType<typeof extractEventSourceEvidence>>): string {
+  const parts = [
+    evidence.step !== undefined ? `Step ${evidence.step}` : null,
+    evidence.page !== undefined ? `p. ${evidence.page}` : null,
+    evidence.section ?? null,
+  ].filter(Boolean)
+  return parts.length > 0 ? parts.join(' / ') : 'Source evidence'
+}
+
 function inferEditorLabwareType(raw: RawLabware): LabwareType {
   const payload = {
     kind: 'labware' as const,
@@ -800,18 +889,31 @@ function ProtocolIdeLabwareReviewContent({
             highlightedEvidenceRefId !== null &&
             highlightedEvidenceRefId !== undefined &&
             cardForEvent?.evidenceRefId === highlightedEvidenceRefId
+          const sourceEvidence = extractEventSourceEvidence(event)
           return (
             <div
               key={event.eventId || `event-${i}`}
               className={`protocol-ide-event-item${isHighlighted ? ' protocol-ide-graph-node-highlighted' : ''}`}
               data-testid={`event-item-${i}`}
             >
-              <span className="protocol-ide-event-item__type">{event.event_type}</span>
+              <span className="protocol-ide-event-item__type">{eventTypeLabel(event)}</span>
               <span className="protocol-ide-event-item__summary">
-                {event.event_type === 'transfer'
-                  ? `transfer -> ${JSON.stringify((event.details as Record<string, unknown> | undefined)?.wells ?? [])}`
-                  : JSON.stringify(event.details ?? {})}
+                {compactEventDetails(event)}
               </span>
+              {sourceEvidence ? (
+                <span
+                  className="protocol-ide-event-item__source"
+                  data-testid={`event-source-${i}`}
+                  title={sourceEvidence.snippet ?? sourceEvidenceLabel(sourceEvidence)}
+                >
+                  {sourceEvidenceLabel(sourceEvidence)}
+                </span>
+              ) : null}
+              {sourceEvidence?.snippet ? (
+                <span className="protocol-ide-event-item__snippet" data-testid={`event-source-snippet-${i}`}>
+                  {sourceEvidence.snippet}
+                </span>
+              ) : null}
             </div>
           )
         })}
@@ -966,7 +1068,8 @@ function EventGraphCanvas({
           gap: 0.3rem;
         }
         .protocol-ide-event-item {
-          display: flex;
+          display: grid;
+          grid-template-columns: minmax(80px, max-content) minmax(160px, 1fr) auto;
           align-items: center;
           gap: 0.5rem;
           padding: 0.35rem 0.5rem;
@@ -985,6 +1088,28 @@ function EventGraphCanvas({
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
+        }
+        .protocol-ide-event-item__source {
+          justify-self: end;
+          max-width: 180px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          border: 1px solid #bfdbfe;
+          background: #eff6ff;
+          color: #1d4ed8;
+          border-radius: 999px;
+          padding: 0.12rem 0.45rem;
+          font-weight: 700;
+          font-size: 0.7rem;
+        }
+        .protocol-ide-event-item__snippet {
+          grid-column: 2 / 4;
+          color: #64748b;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: 0.72rem;
         }
         .protocol-ide-event-graph-empty {
           display: flex;

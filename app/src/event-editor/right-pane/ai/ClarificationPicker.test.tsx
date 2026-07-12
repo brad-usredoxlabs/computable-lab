@@ -7,9 +7,11 @@ import type { SlashSuggestion } from '../../../shared/taptab/slashMenu/types'
 // Stub the slash-menu resolvers so we control the suggestions deterministically.
 const resolveMaterial = vi.fn()
 const resolveLabware = vi.fn()
+const resolveEquipment = vi.fn()
 vi.mock('../../../shared/taptab/slashMenu/resolvers', () => ({
   resolveMaterial: (q: string, ctx: unknown) => resolveMaterial(q, ctx),
   resolveLabware: (q: string, ctx: unknown) => resolveLabware(q, ctx),
+  resolveEquipment: (q: string, ctx: unknown) => resolveEquipment(q, ctx),
 }))
 
 // Ground ontology picks to a local record (the real one hits the API).
@@ -31,6 +33,7 @@ afterEach(() => {
   cleanup()
   resolveMaterial.mockReset()
   resolveLabware.mockReset()
+  resolveEquipment.mockReset()
   groundMaterialRef.mockReset()
 })
 
@@ -142,6 +145,19 @@ describe('ClarificationPicker', () => {
     expect(onPick.mock.calls[0][0].ref).toEqual({ kind: 'record', id: 'MAT-minted', type: 'material', label: 'CHO' })
   })
 
+  it('maps an equipment mention', () => {
+    const answer = answerFromMention(
+      { ...materialRequest, kind: 'equipment', menuProvider: '/e' },
+      { type: 'equipment', id: 'EQP-reader-1', label: 'Plate reader' },
+    )
+    expect(answer).toEqual({
+      requestId: 'clar-1',
+      label: 'Plate reader',
+      mentionToken: '[[equipment:EQP-reader-1|Plate reader]]',
+      ref: { kind: 'record', id: 'EQP-reader-1', type: 'equipment', label: 'Plate reader' },
+    })
+  })
+
   it('uses the labware resolver for /l clarifications', async () => {
     resolveLabware.mockResolvedValue([])
     render(
@@ -153,5 +169,20 @@ describe('ClarificationPicker', () => {
     expect(screen.getByPlaceholderText(/Search labware/i)).toBeTruthy()
     await waitFor(() => expect(resolveLabware).toHaveBeenCalled())
     expect(resolveMaterial).not.toHaveBeenCalled()
+  })
+
+
+  it('uses the equipment resolver for /e clarifications', async () => {
+    resolveEquipment.mockResolvedValue([])
+    render(
+      <ClarificationPicker
+        request={{ ...materialRequest, kind: 'equipment', menuProvider: '/e', query: 'reader' }}
+        onPick={vi.fn()}
+      />,
+    )
+    expect(screen.getByPlaceholderText(/Search equipment/i)).toBeTruthy()
+    await waitFor(() => expect(resolveEquipment).toHaveBeenCalled())
+    expect(resolveMaterial).not.toHaveBeenCalled()
+    expect(resolveLabware).not.toHaveBeenCalled()
   })
 })

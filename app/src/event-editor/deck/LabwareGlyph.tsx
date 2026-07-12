@@ -18,6 +18,10 @@ interface LabwareGlyphProps {
   orientation: LabwareOrientation
 }
 
+interface GlasswareSvgProps {
+  color: string
+}
+
 // Layout units (arbitrary; the SVG scales to the tile via viewBox + CSS).
 const CELL = 10
 const PAD = 2
@@ -53,6 +57,14 @@ function inferProfile(labware: Labware): NonNullable<Labware['renderProfile']> {
   return 'plate'
 }
 
+/** Detect beaker / flask glassware by labwareType prefix. */
+function inferGlasswareType(labware: Labware): 'beaker' | 'flask' | null {
+  const lt = labware.labwareType ?? ''
+  if (lt.startsWith('beaker_')) return 'beaker'
+  if (lt.startsWith('flask_')) return 'flask'
+  return null
+}
+
 /** Grid dimensions in landscape (more columns than rows), pre-orientation. */
 function landscapeDims(labware: Labware): { cols: number; rows: number } {
   const a = labware.addressing
@@ -66,8 +78,77 @@ function landscapeDims(labware: Labware): { cols: number; rows: number } {
   return { cols: 1, rows: 1 }
 }
 
+/**
+ * Side-view SVG of a cylindrical beaker with spout and graduation ticks.
+ */
+function BeakerSvg({ color }: GlasswareSvgProps) {
+  return (
+    <svg
+      className="tile__glyph"
+      viewBox="0 0 50 50"
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden
+    >
+      {/* Cylindrical body with spout on the left */}
+      <path
+        d="M 9 10 L 9 38 L 7 42 L 7 44 L 11 44 L 11 40 L 39 40 L 39 10 Z"
+        fill={color}
+        fillOpacity={0.25}
+        stroke={color}
+        strokeWidth={1.5}
+      />
+      {/* Top rim */}
+      <path
+        d="M 8 10 L 40 10"
+        stroke={color}
+        strokeWidth={2}
+        fill="none"
+      />
+      {/* Graduation ticks (right wall) */}
+      <line x1={36} y1={17} x2={39} y2={17} stroke={color} strokeWidth={1.2} />
+      <line x1={36} y1={25} x2={39} y2={25} stroke={color} strokeWidth={1.2} />
+      <line x1={36} y1={33} x2={39} y2={33} stroke={color} strokeWidth={1.2} />
+    </svg>
+  )
+}
+
+/**
+ * Side-view SVG of an Erlenmeyer flask with narrow neck and conical body.
+ */
+function FlaskSvg({ color }: GlasswareSvgProps) {
+  return (
+    <svg
+      className="tile__glyph"
+      viewBox="0 0 50 50"
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden
+    >
+      {/* Flask body: neck + conical body + flat base */}
+      <path
+        d="M 18 2 L 18 12 L 6 42 L 44 42 L 32 12 L 32 2 Z"
+        fill={color}
+        fillOpacity={0.25}
+        stroke={color}
+        strokeWidth={1.5}
+      />
+      {/* Neck rim */}
+      <path
+        d="M 17 2 L 33 2"
+        stroke={color}
+        strokeWidth={2}
+        fill="none"
+      />
+      {/* Graduation ticks (right side of conical body) */}
+      <line x1={35} y1={20} x2={38} y2={20} stroke={color} strokeWidth={1.2} />
+      <line x1={32} y1={30} x2={35} y2={30} stroke={color} strokeWidth={1.2} />
+      <line x1={29} y1={38} x2={32} y2={38} stroke={color} strokeWidth={1.2} />
+    </svg>
+  )
+}
+
 export function LabwareGlyph({ labware, orientation }: LabwareGlyphProps) {
   const profile = inferProfile(labware)
+  const glasswareType = inferGlasswareType(labware)
   // Fall back to currentColor (the tile text color) — SVG presentation
   // attributes don't resolve CSS var(), so a custom-property fallback wouldn't
   // paint. In practice every standard type carries a color via LABWARE_CONFIGS.
@@ -75,6 +156,15 @@ export function LabwareGlyph({ labware, orientation }: LabwareGlyphProps) {
   const square = labware.geometry.wellShape === 'square'
   const conical =
     labware.geometry.wellShape === 'conical' || labware.geometry.wellShape === 'v-bottom'
+
+  // Glassware (beaker/flask) renders as a side-view SVG, bypassing the grid
+  // schematic entirely — a single circle doesn't communicate what the object is.
+  if (glasswareType === 'beaker') {
+    return <BeakerSvg color={color} />
+  }
+  if (glasswareType === 'flask') {
+    return <FlaskSvg color={color} />
+  }
 
   let { cols, rows } = landscapeDims(labware)
   // Portrait tiles are rotated 90°, so the schematic transposes to match.
