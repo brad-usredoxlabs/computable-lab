@@ -76,17 +76,15 @@ interface RedraftRequest {
 }
 
 /**
- * Response shape for the redraft endpoint.
+ * Response shape for the redraft endpoint — matches DraftResponse so the
+ * frontend can use the same handler for initial drafts and redrafts.
  */
 interface RedraftResponse {
   success: true;
   events: unknown[];
   revisionNumber: number;
-  diagnostics: Array<{
-    severity: 'info' | 'warning' | 'error';
-    code: string;
-    message: string;
-  }>;
+  labwares: Array<{ labwareId: string; labwareType: string; name: string; deckSlot?: string; reason?: string }>;
+  diagnostics: Array<{ severity: 'info' | 'warning' | 'error'; code: string; message: string }>;
 }
 
 interface PromoteRequest {
@@ -402,19 +400,123 @@ export function createProtocolBuilderHandlers(
         };
       }
 
+      if (previousDraft && Array.isArray(previousDraft.events) && previousDraft.events.length === 0) {
+        reply.status(400);
+        return {
+          error: 'INVALID_REQUEST',
+          message: 'previousDraft.events must be a non-empty array',
+        };
+      }
+
+      // Prefer orchestrator (same path as the draft endpoint)
+      const orchestrator = orchestratorRef?.current;
+      if (orchestrator) {
+        const prompt = [
+          'Revise this protocol event graph draft based on user remarks.',
+          '',
+          'User remarks:',
+          remarks,
+          '',
+          'Protocol candidate:',
+          JSON.stringify(candidate, null, 2),
+          '',
+          'Source text:',
+          sourceText?.slice(0, 10000) ?? '(none)',
+          '',
+          'Previous draft events:',
+          previousDraft?.events
+            ? JSON.stringify(previousDraft.events, null, 2)
+            : 'No previous draft.',
+          '',
+          'Generate revised events reflecting the user feedback. Add or modify labware as needed.',
+        ].join('\n');
+
+        const agentContext: EditorContext = {
+          labwares: [],
+          eventSummary: {
+            totalEvents: previousDraft?.events?.length ?? 0,
+            recentEvents: [],
+          },
+          vocabPackId: 'default',
+          availableVerbs: [],
+        };
+
+        try {
+          const result: AgentResult = await orchestrator.run({
+            prompt,
+            context: agentContext,
+            forceDraftTool: true,
+          });
+
+          const diagnostics: Array<{ severity: 'info' | 'warning' | 'error'; code: string; message: string }> = [];
+
+          if (result.error) {
+            diagnostics.push({ severity: 'error', code: 'ORCHESTRATOR_ERROR', message: result.error });
+          }
+          if (result.notes?.length) {
+            result.notes.forEach((note) => diagnostics.push({ severity: 'info', code: 'AGENT_NOTE', message: note }));
+          }
+
+          const events: unknown[] = (result.events ?? []).map((evt) => ({
+            event_id: evt.eventId,
+            event_type: evt.event_type,
+            verb: evt.verb,
+            details: evt.details,
+            materials: evt.materials,
+            notes: evt.notes,
+            ...(evt.t_offset ? { t_offset: evt.t_offset } : {}),
+          }));
+
+          const labwares: Array<{ labwareId: string; labwareType: string; name: string; deckSlot?: string; reason?: string }> = [];
+          if (result.labwareAdditions) {
+            for (const la of result.labwareAdditions) {
+              labwares.push({
+                labwareId: la.recordId,
+                labwareType: 'unknown',
+                name: la.recordId,
+                ...(la.deckSlot ? { deckSlot: la.deckSlot } : {}),
+                ...(la.reason ? { reason: la.reason } : {}),
+              });
+            }
+          }
+          if (result.labwareRequirements) {
+            for (const lr of result.labwareRequirements) {
+              labwares.push({
+                labwareId: lr.classCurie,
+                labwareType: lr.classCurie.split(':').pop() ?? 'unknown',
+                name: lr.classCurie,
+                ...(lr.deckSlot ? { deckSlot: lr.deckSlot } : {}),
+                ...(lr.reason ? { reason: lr.reason } : {}),
+              });
+            }
+          }
+
+          if (events.length > 0) {
+            diagnostics.push({ severity: 'info', code: 'REDRAFT_SUCCESS', message: `Generated ${events.length} events and ${labwares.length} labware placements via agent orchestrator` });
+          } else if (!result.error) {
+            diagnostics.push({ severity: 'warning', code: 'EMPTY_DRAFT', message: 'Agent returned no events' });
+          }
+
+          return { success: true, events, revisionNumber: previousDraft ? 2 : 1, labwares, diagnostics };
+        } catch (err) {
+          request.log.error(err, 'Redraft via orchestrator failed');
+          reply.status(500);
+          return {
+            error: 'INTERNAL_ERROR',
+            message: err instanceof Error ? err.message : String(err),
+          };
+        }
+      }
+
+      // Fallback: raw inference call when orchestrator is not available
       if (!inferenceClient) {
         reply.status(503);
         return {
           success: true,
           events: [],
-          revisionNumber: 0,
-          diagnostics: [
-            {
-              severity: 'error',
-              code: 'AI_UNAVAILABLE',
-              message: 'AI inference is not configured',
-            },
-          ],
+          revisionNumber: previousDraft ? 2 : 1,
+          labwares: [],
+          diagnostics: [{ severity: 'error', code: 'AI_UNAVAILABLE', message: 'AI inference is not configured' }],
         };
       }
 
@@ -435,7 +537,7 @@ export function createProtocolBuilderHandlers(
           ? JSON.stringify(previousDraft.events, null, 2)
           : 'No previous draft.',
         '',
-        'Return a JSON array of revised events. Each event should have: event_id, event_type, source, target, volume_ul, details.',
+        'Return a JSON object with "events" (array of revised events) and "labwares" (array of labware placements).',
       ].join('\n');
 
       try {
@@ -448,50 +550,17 @@ export function createProtocolBuilderHandlers(
 
         const text = result.choices?.[0]?.message?.content ?? '';
         let events: unknown[] = [];
-        const diagnostics: Array<{
-          severity: 'info' | 'warning' | 'error';
-          code: string;
-          message: string;
-        }> = [];
-
-        /**
-         * Bracket-balanced extraction for JSON arrays — handles nested arrays/objects,
-         * preamble text, markdown code blocks, and strings containing brackets.
-         */
-        function findBalancedBrackets(src: string, open: string, close: string): string[] {
-          const results: string[] = [];
-          let i = 0;
-          while (i < src.length) {
-            const start = src.indexOf(open, i);
-            if (start === -1) break;
-            let depth = 0;
-            let inString = false;
-            let escape = false;
-            for (let j = start; j < src.length; j++) {
-              const ch = src[j];
-              if (escape) { escape = false; continue; }
-              if (ch === '\\') { escape = inString; continue; }
-              if (ch === '"') { inString = !inString; continue; }
-              if (inString) continue;
-              if (ch === open) { depth++; }
-              else if (ch === close) { depth--; if (depth === 0) { results.push(src.substring(start, j + 1)); i = j + 1; break; } }
-            }
-            if (depth > 0) i = start + 1;
-          }
-          return results;
-        }
+        let labwares: Array<{ labwareId: string; labwareType: string; name: string; deckSlot?: string; reason?: string }> = [];
+        const diagnostics: Array<{ severity: 'info' | 'warning' | 'error'; code: string; message: string }> = [];
 
         try {
-          // 1. Try direct parse
           const trimmed = text.trim();
+          // 1. Try direct parse
           try {
-            const directParsed = JSON.parse(trimmed);
-            events = Array.isArray(directParsed) ? directParsed : (directParsed.events ?? []);
-            diagnostics.push({
-              severity: 'info',
-              code: 'REDRAFT_SUCCESS',
-              message: `Generated ${Array.isArray(events) ? events.length : 0} events`,
-            });
+            const parsed = JSON.parse(trimmed);
+            events = Array.isArray(parsed.events) ? parsed.events : (Array.isArray(parsed) ? parsed : []);
+            labwares = Array.isArray(parsed.labwares) ? parsed.labwares : [];
+            diagnostics.push({ severity: 'info', code: 'REDRAFT_SUCCESS', message: `Generated ${events.length} events and ${labwares.length} labware placements` });
           } catch {
             // 2. Try markdown code blocks
             const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/gi;
@@ -501,68 +570,58 @@ export function createProtocolBuilderHandlers(
               if (codeMatch[1]) {
                 try {
                   const blockParsed = JSON.parse(codeMatch[1].trim());
-                  events = Array.isArray(blockParsed) ? blockParsed : (blockParsed.events ?? []);
+                  events = Array.isArray(blockParsed.events) ? blockParsed.events : (Array.isArray(blockParsed) ? blockParsed : []);
+                  labwares = Array.isArray(blockParsed.labwares) ? blockParsed.labwares : [];
                   parsed = true;
                 } catch {}
               }
             }
             if (parsed) {
-              diagnostics.push({
-                severity: 'info',
-                code: 'REDRAFT_SUCCESS',
-                message: `Generated ${Array.isArray(events) ? events.length : 0} events`,
-              });
+              diagnostics.push({ severity: 'info', code: 'REDRAFT_SUCCESS', message: `Generated ${events.length} events and ${labwares.length} labware placements` });
             } else {
-              // 3. Bracket-balanced array extraction
-              const balancedArrays = findBalancedBrackets(trimmed, '[', ']');
-              for (const candidate of balancedArrays) {
-                try {
-                  const arrayParsed = JSON.parse(candidate);
-                  if (Array.isArray(arrayParsed)) {
-                    events = arrayParsed;
-                    parsed = true;
-                    break;
+              // 3. Bracket-balanced extraction
+              const findBalancedBraces = (src: string): string[] => {
+                const results: string[] = [];
+                let i = 0;
+                while (i < src.length) {
+                  const start = src.indexOf('{', i);
+                  if (start === -1) break;
+                  let depth = 0;
+                  let inStr = false;
+                  let esc = false;
+                  for (let j = start; j < src.length; j++) {
+                    const ch = src[j];
+                    if (esc) { esc = false; continue; }
+                    if (ch === '\\') { esc = inStr; continue; }
+                    if (ch === '"') { inStr = !inStr; continue; }
+                    if (inStr) continue;
+                    if (ch === '{') { depth++; }
+                    else if (ch === '}') { depth--; if (depth === 0) { results.push(src.substring(start, j + 1)); i = j + 1; break; } }
                   }
+                  if (depth > 0) i = start + 1;
+                }
+                return results;
+              };
+              for (const balanced of findBalancedBraces(trimmed)) {
+                try {
+                  const objParsed = JSON.parse(balanced);
+                  events = Array.isArray(objParsed.events) ? objParsed.events : (Array.isArray(objParsed) ? objParsed : []);
+                  labwares = Array.isArray(objParsed.labwares) ? objParsed.labwares : [];
+                  break;
                 } catch {}
               }
-              if (parsed) {
-                diagnostics.push({
-                  severity: 'info',
-                  code: 'REDRAFT_SUCCESS',
-                  message: `Generated ${Array.isArray(events) ? events.length : 0} events`,
-                });
+              if (events.length > 0) {
+                diagnostics.push({ severity: 'info', code: 'REDRAFT_SUCCESS', message: `Generated ${events.length} events and ${labwares.length} labware placements` });
               } else {
-                // 4. Fallback: try parsing entire response as object with .events
-                try {
-                  const fallbackParsed = JSON.parse(trimmed);
-                  events = Array.isArray(fallbackParsed.events) ? fallbackParsed.events : [];
-                  diagnostics.push({
-                    severity: 'info',
-                    code: 'REDRAFT_SUCCESS',
-                    message: `Generated ${Array.isArray(events) ? events.length : 0} events`,
-                  });
-                  parsed = true;
-                } catch {
-                  diagnostics.push({
-                    severity: 'warning',
-                    code: 'PARSE_FAILED',
-                    message: 'Could not parse AI response as JSON events',
-                  });
-                }
+                diagnostics.push({ severity: 'warning', code: 'PARSE_FAILED', message: 'Could not parse AI response as JSON events' });
               }
             }
           }
         } catch {
-          diagnostics.push({
-            severity: 'warning',
-            code: 'PARSE_FAILED',
-            message: 'Could not parse AI response as JSON events',
-          });
+          diagnostics.push({ severity: 'warning', code: 'PARSE_FAILED', message: 'Could not parse AI response as JSON events' });
         }
 
-        const revisionNumber = previousDraft?.events ? 2 : 1;
-
-        return { success: true, events, revisionNumber, diagnostics };
+        return { success: true, events, revisionNumber: previousDraft ? 2 : 1, labwares, diagnostics };
       } catch (err) {
         request.log.error(err, 'Redraft failed');
         reply.status(500);

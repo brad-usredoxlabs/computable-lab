@@ -224,7 +224,7 @@ async function getPageCountFromPdf(buf: Buffer): Promise<number> {
           }
           const output = Buffer.concat(chunks).toString('utf8');
           const match = output.match(/^Pages:\s*(\d+)/m);
-          resolve(match ? parseInt(match[1], 10) : 0);
+          resolve(match?.[1] ? parseInt(match[1], 10) : 0);
         });
       });
     } finally {

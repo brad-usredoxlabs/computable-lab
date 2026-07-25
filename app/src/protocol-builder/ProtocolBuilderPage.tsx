@@ -19,6 +19,7 @@ import { SourceIntakePanel } from './SourceIntakePanel'
 import { ExtractionPanel } from '../components/protocol-builder/ExtractionPanel'
 import { RightPanel } from './RightPanel'
 import { DraftPreviewPanel } from './DraftPreviewPanel'
+import { FeedbackChat } from './FeedbackChat'
 import { PromoteSuccessPanel } from './PromoteSuccessPanel'
 import { ConfigPanel } from './ConfigPanel'
 import { API_BASE } from '../shared/api/base'
@@ -114,6 +115,34 @@ function ProtocolBuilderPageInner() {
       actions.setPromoting(false)
     }
   }, [state.draftEvents, state.draftLabwares, state.candidate, state.sourceText, actions])
+
+  const handleRedraft = useCallback(async (remarks: string) => {
+    if (!state.candidate || !state.sourceText || !state.draftEvents) return
+    actions.setDrafting(true)
+    try {
+      const response = await fetch(`${API_BASE}/protocol-builder/redraft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceText: state.sourceText,
+          candidate: state.candidate,
+          previousDraft: { events: state.draftEvents },
+          remarks,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.message || `Server returned ${response.status}`)
+      }
+      if (data.success && data.events) {
+        actions.setDraft(data.events, data.labwares || [], state.draftIteration + 1)
+      } else {
+        throw new Error('Redraft returned no events')
+      }
+    } finally {
+      actions.setDrafting(false)
+    }
+  }, [state.candidate, state.sourceText, state.draftEvents, state.draftIteration, actions])
 
   const handleExport = useCallback(async () => {
     if (!state.draftEvents || state.draftEvents.length === 0) return
@@ -240,14 +269,21 @@ function ProtocolBuilderPageInner() {
                 </div>
               ),
               draft: hasDraft ? (
-                <DraftPreviewPanel
-                  events={state.draftEvents!}
-                  labwares={state.draftLabwares || undefined}
-                  iteration={state.draftIteration}
-                  onPromote={handlePromote}
-                  onExport={handleExport}
-                  isPromoting={state.isPromoting}
-                />
+                <>
+                  <DraftPreviewPanel
+                    events={state.draftEvents!}
+                    labwares={state.draftLabwares || undefined}
+                    iteration={state.draftIteration}
+                    onPromote={handlePromote}
+                    onExport={handleExport}
+                    isPromoting={state.isPromoting}
+                  />
+                  <FeedbackChat
+                    iteration={state.draftIteration}
+                    isProcessing={state.isDrafting}
+                    onRedraft={handleRedraft}
+                  />
+                </>
               ) : (
                 <div className="protocol-builder-page__right-placeholder">
                   <p className="protocol-builder-page__right-placeholder-text">

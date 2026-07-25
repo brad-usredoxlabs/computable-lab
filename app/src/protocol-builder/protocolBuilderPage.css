@@ -773,3 +773,99 @@
   flex-direction: column;
   height: 100%;
 }
+
+/* ==========================================================================
+   FeedbackChat — iterative feedback loop for draft refinement
+   ========================================================================== */
+
+.protocol-feedback-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0 0 0;
+  border-top: 1px solid var(--cl-border);
+  margin-top: 12px;
+}
+
+.protocol-feedback-chat__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.protocol-feedback-chat__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cl-text);
+}
+
+.protocol-feedback-chat__badge {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--cl-accent);
+  background: color-mix(in srgb, var(--cl-accent) 12%, transparent);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.protocol-feedback-chat__error {
+  font-size: 12px;
+  color: #c92a2a;
+  background: #fff5f5;
+  border: 1px solid #feb2b2;
+  border-radius: 4px;
+  padding: 6px 10px;
+}
+
+.protocol-feedback-chat__form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.protocol-feedback-chat__textarea {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--cl-text);
+  background: var(--cl-bg);
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  outline: none;
+  resize: vertical;
+  line-height: 1.5;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.protocol-feedback-chat__textarea:focus {
+  border-color: var(--cl-accent);
+}
+
+.protocol-feedback-chat__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.protocol-feedback-chat__btn {
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  background: var(--cl-accent);
+  color: white;
+  transition: opacity 0.15s;
+}
+
+.protocol-feedback-chat__btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.protocol-feedback-chat__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
