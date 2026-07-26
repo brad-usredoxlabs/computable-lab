@@ -104,6 +104,36 @@ $defs:
       plate_events:
         type: array
         items: { $ref: "#/$defs/plate_event" }
+      executionEvents:
+        type: array
+        description: "Per-event execution tracking for this protocol segment."
+        items:
+          type: object
+          additionalProperties: false
+          required: [ eventRef, state ]
+          properties:
+            eventRef:
+              type: string
+              description: "Reference to the plate event being tracked."
+            state:
+              type: string
+              enum: [ pending, current, running, completed, skipped, deviated ]
+              description: "Current execution state of this event."
+            startedAt:
+              type: string
+              format: date-time
+              description: "ISO8601 timestamp when execution started."
+            completedAt:
+              type: string
+              format: date-time
+              description: "ISO8601 timestamp when execution completed."
+            deviationNote:
+              type: string
+              description: "Optional note about any deviation from the planned execution."
+            deviationDetails:
+              type: object
+              description: "Structured details about the deviation."
+              additionalProperties: true
       derived_cache:
         type: object
         additionalProperties: false

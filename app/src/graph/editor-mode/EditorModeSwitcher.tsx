@@ -10,6 +10,7 @@ const LABELS: Record<EditorMode, string> = {
   biology: 'Biology',
   readouts: 'Readouts',
   results: 'Results',
+  execution: 'Execution',
 }
 
 export function EditorModeSwitcher({ mode, onChange }: EditorModeSwitcherProps) {

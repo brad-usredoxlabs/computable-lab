@@ -6,6 +6,7 @@ const DEFAULT_DRAWER_TAB: Record<EditorMode, string> = {
   biology: 'assign',
   readouts: 'contexts',
   results: 'queue',
+  execution: 'queue',
 }
 
 interface UseEditorModeOptions {

@@ -92,6 +92,11 @@ interface EventRibbonProps {
   draftEventIds?: Set<string>
   /** Optional material refs surfaced as quick-pick inputs for add-material events */
   prefillMaterials?: Ref[]
+  /** When true, enable execution-mode UI: playback controls, per-event state indicators */
+  executionMode?: boolean
+  /** Execution mode props for execution tracking */
+  executionStates?: Map<string, { state: 'pending' | 'current' | 'running' | 'completed' | 'skipped' | 'deviated'; startedAt?: string; completedAt?: string; deviationNote?: string }>
+  onExecutionStateChange?: (eventId: string, state: 'pending' | 'current' | 'running' | 'completed' | 'skipped' | 'deviated') => void
 }
 
 type DetailsRecord = Record<string, unknown>

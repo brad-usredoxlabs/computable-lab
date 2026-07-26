@@ -1,4 +1,4 @@
-type RunWorkspaceTab = 'overview' | 'plan' | 'biology' | 'readouts' | 'results' | 'claims' | 'budget'
+type RunWorkspaceTab = 'overview' | 'plan' | 'biology' | 'readouts' | 'results' | 'claims' | 'budget' | 'execution'
 
 interface RunWorkspaceNavProps {
   activeTab: RunWorkspaceTab
@@ -12,6 +12,7 @@ const TAB_LABELS = {
   biology: 'Biology',
   readouts: 'Readouts',
   results: 'Results',
+  execution: 'Execution',
   claims: 'Claims',
   budget: 'Budget',
 } as const
@@ -27,7 +28,7 @@ export function RunWorkspaceNav({ activeTab, onTabChange, counts }: RunWorkspace
           onClick={() => onTabChange(tab)}
         >
           <span>{TAB_LABELS[tab]}</span>
-          {tab !== 'overview' && <small>{counts[tab]}</small>}
+          {tab !== 'overview' && tab !== 'execution' && <small>{counts[tab]}</small>}
         </button>
       ))}
     </nav>

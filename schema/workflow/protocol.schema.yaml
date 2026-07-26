@@ -96,6 +96,29 @@ properties:
         $ref: "./datatypes/ref.schema.yaml"
         description: "Optional pointer to the source record (publication-ref, document-ref, or event-graph-ref)."
 
+  evolvedFrom:
+    type: array
+    description: "History of protocol evolution — tracks how this protocol was derived from previous versions or sources."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ sourceType, sourceRef, reason, evolvedAt ]
+      properties:
+        sourceType:
+          type: string
+          enum: [ run, event-graph, protocol ]
+          description: "Type of source this protocol was evolved from."
+        sourceRef:
+          $ref: "./datatypes/ref.schema.yaml"
+          description: "Reference to the source record (run, event-graph, or protocol)."
+        reason:
+          type: string
+          description: "Reason for this evolution (e.g., 'adapted from execution', 'corrected deviation', 'localized from template')."
+        evolvedAt:
+          type: string
+          format: date-time
+          description: "ISO8601 timestamp when this evolution occurred."
+
   links:
     type: object
     description: "Optional project filing links. Study/project ownership is queryable by index; protocols are not embedded in study records."

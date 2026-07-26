@@ -19,7 +19,7 @@ import { RunWorkspaceShell } from './run-workspace/RunWorkspaceShell'
 import { useRunWorkspace } from './hooks/useRunWorkspace'
 import { RunBudgetTab } from './run-workspace/RunBudgetTab'
 
-type WorkspaceTab = 'overview' | 'plan' | 'biology' | 'readouts' | 'results' | 'claims' | 'budget'
+type WorkspaceTab = 'overview' | 'plan' | 'biology' | 'readouts' | 'results' | 'claims' | 'budget' | 'execution'
 
 export function RunWorkspacePage() {
   const { runId } = useParams<{ runId: string }>()

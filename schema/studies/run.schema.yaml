@@ -198,6 +198,31 @@ properties:
         snapshotId:
           type: string
 
+  executionTracking:
+    type: object
+    additionalProperties: false
+    description: "Runtime execution tracking state for in-progress runs."
+    properties:
+      startedAt:
+        type: string
+        format: date-time
+      executedBy:
+        type: string
+        description: "Operator identifier."
+      currentEventIndex:
+        type: integer
+        minimum: 0
+        description: "Index of the current event being executed."
+      totalEvents:
+        type: integer
+        minimum: 0
+      completedEvents:
+        type: integer
+        minimum: 0
+      deviationCount:
+        type: integer
+        minimum: 0
+
   attachments:
     type: array
     items:

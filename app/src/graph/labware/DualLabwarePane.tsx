@@ -26,7 +26,7 @@ import { getWellCenterSvg } from '../lib/labwareView'
 
 interface DualLabwarePaneProps {
   /** Active editor mode */
-  mode?: 'plan' | 'biology' | 'readouts' | 'results'
+  mode?: 'plan' | 'biology' | 'readouts' | 'results' | 'execution'
   /** Events to calculate well contents from */
   events?: PlateEvent[]
   /** Number of events applied from timeline playback (0..events.length) */

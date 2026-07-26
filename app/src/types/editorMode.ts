@@ -1,4 +1,4 @@
-export const EDITOR_MODES = ['plan', 'biology', 'readouts', 'results'] as const
+export const EDITOR_MODES = ['plan', 'biology', 'readouts', 'results', 'execution'] as const
 
 export type EditorMode = typeof EDITOR_MODES[number]
 

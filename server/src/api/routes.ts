@@ -580,6 +580,7 @@ export function registerRoutes(
     fastify.post('/protocol-builder/export', protocolBuilderHandlers.exportProtocol.bind(protocolBuilderHandlers));
     fastify.post('/protocol-builder/extract-pdf-text', protocolBuilderHandlers.fetchPdfText.bind(protocolBuilderHandlers));
     fastify.post('/protocol-builder/draft', protocolBuilderHandlers.draft.bind(protocolBuilderHandlers));
+    fastify.post('/protocols/derive-from-run', protocolBuilderHandlers.deriveFromRun.bind(protocolBuilderHandlers));
   }
 
   const { aiThreadHandlers } = options;

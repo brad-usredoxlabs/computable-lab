@@ -313,6 +313,29 @@ export type EventDetails =
   | OtherDetails
 
 /**
+ * Execution state of an individual event during a live run.
+ */
+export type ExecutionEventState =
+  | 'pending'
+  | 'current'
+  | 'running'
+  | 'completed'
+  | 'skipped'
+  | 'deviated'
+
+/**
+ * Per-event execution tracking metadata.
+ */
+export interface ExecutionState {
+  state: ExecutionEventState
+  startedAt?: string
+  completedAt?: string
+  deviationNote?: string
+  deviationDetails?: Record<string, unknown>
+  operatorRef?: string
+}
+
+/**
  * PlateEvent - A single event in the event graph
  */
 export interface PlateEvent {
@@ -322,6 +345,7 @@ export interface PlateEvent {
   t_offset?: string // ISO duration - planned offset from run start
   notes?: string
   details: EventDetails
+  executionState?: ExecutionState
 }
 
 function serialDilutionPathsForRead(program: MacroProgram): WellId[] {

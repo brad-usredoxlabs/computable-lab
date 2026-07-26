@@ -303,11 +303,13 @@ $defs:
         - other
         - create_container
         - aliquot
+        - deviation
         - seal
         - unseal
         - place_tube
         - move_tube
         - remove_tube
+        - deviation
         description: "Type of the event."
       at:
         type: string
@@ -352,6 +354,34 @@ $defs:
             reportedAt:
               type: string
               format: date-time
+
+      executionState:
+        type: object
+        description: "Execution state tracking for this plate event."
+        additionalProperties: false
+        properties:
+          state:
+            type: string
+            enum: [ pending, current, running, completed, skipped, deviated ]
+            description: "Current execution state of this event."
+          startedAt:
+            type: string
+            format: date-time
+            description: "ISO8601 timestamp when execution started."
+          completedAt:
+            type: string
+            format: date-time
+            description: "ISO8601 timestamp when execution completed."
+          deviationNote:
+            type: string
+            description: "Optional note about any deviation from the planned execution."
+          deviationDetails:
+            type: object
+            description: "Structured details about the deviation."
+            additionalProperties: true
+          operatorRef:
+            type: string
+            description: "Reference to the operator who executed this event."
 
       semanticKey:
         type: string

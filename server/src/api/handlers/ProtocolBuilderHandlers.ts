@@ -122,6 +122,41 @@ interface FetchPdfTextRequest {
 }
 
 /**
+ * Request body for the derive-from-run endpoint.
+ */
+interface DeriveFromRunRequest {
+  runId: string;
+  title: string;
+  purpose?: string;
+  notes?: string;
+}
+
+/**
+ * Response shape for the derive-from-run endpoint.
+ */
+interface DeriveFromRunResponse {
+  success: true;
+  protocol: {
+    recordId: string;
+    title: string;
+    purpose?: string;
+    notes?: string;
+    source: {
+      type: 'derived';
+      ref: { kind: 'record'; type: 'run'; id: string };
+    };
+    steps: unknown[];
+    evolvedFrom: Array<{
+      sourceType: 'run';
+      sourceRef: { kind: 'record'; type: 'run'; id: string };
+      reason: string;
+      evolvedAt: string;
+    }>;
+  };
+  message?: string;
+}
+
+/**
  * Request body for the draft endpoint.
  */
 interface DraftRequest {
@@ -169,6 +204,10 @@ export interface ProtocolBuilderHandlers {
     request: FastifyRequest<{ Body: FetchPdfTextRequest }>,
     reply: FastifyReply,
   ): Promise<{ text: string; pageCount: number } | ApiError>;
+  deriveFromRun(
+    request: FastifyRequest<{ Body: DeriveFromRunRequest }>,
+    reply: FastifyReply,
+  ): Promise<DeriveFromRunResponse | ApiError>;
 }
 
 /**
@@ -1061,6 +1100,57 @@ export function createProtocolBuilderHandlers(
           message: err instanceof Error ? err.message : String(err),
         } as unknown as ApiError;
       }
+    },
+
+    async deriveFromRun(request, reply) {
+      const { runId, title, purpose, notes } = request.body;
+
+      if (!runId || typeof runId !== 'string' || runId.trim().length === 0) {
+        reply.status(400);
+        return {
+          error: 'INVALID_REQUEST',
+          message: 'runId is required and must be a non-empty string',
+        } as unknown as ApiError;
+      }
+
+      if (!title || typeof title !== 'string' || title.trim().length === 0) {
+        reply.status(400);
+        return {
+          error: 'INVALID_REQUEST',
+          message: 'title is required and must be a non-empty string',
+        } as unknown as ApiError;
+      }
+
+      const recordId = `PRT-derive-${runId.slice(-6)}-${Date.now().toString(36).slice(-4)}`;
+      const evolvedAt = new Date().toISOString();
+
+      const protocol = {
+        kind: 'protocol' as const,
+        recordId,
+        title: title.trim(),
+        ...(purpose ? { purpose: purpose.trim() } : {}),
+        ...(notes ? { notes: notes.trim() } : {}),
+        source: {
+          type: 'derived' as const,
+          ref: { kind: 'record' as const, type: 'run' as const, id: runId },
+        },
+        evolvedFrom: [
+          {
+            sourceType: 'run' as const,
+            sourceRef: { kind: 'record' as const, type: 'run' as const, id: runId },
+            reason: 'Protocol derived from execution run',
+            evolvedAt,
+          },
+        ],
+        state: 'draft' as const,
+        steps: [],
+      };
+
+      return {
+        success: true,
+        protocol,
+        message: `Protocol derived from run ${runId}`,
+      };
     },
   };
 }
