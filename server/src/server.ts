@@ -72,6 +72,7 @@ import {
   createMaterialProfileHandlers,
   createExtractProtocolHandlers,
   createProtocolBuilderHandlers,
+  createCheckinHandlers,
 } from './api/handlers/index.js';
 import { createResolveSpine, createResolveSpineFromContext, resolveOakServiceUrl } from './resolve/index.js';
 import { buildResidentContext } from './ai/residentContext.js';
@@ -637,6 +638,17 @@ export async function createServer(
   );
   const semanticsHandlers = createSemanticsHandlers(ctx);
   const runWorkspaceHandlers = createRunWorkspaceHandlers(ctx);
+  const checkinHandlers = createCheckinHandlers({
+    ctx,
+    ...(aiProfile?.inference ? {
+      inferenceConfig: {
+        baseUrl: aiProfile.inference.baseUrl,
+        model: aiProfile.inference.model,
+        ...(aiProfile.inference.apiKey ? { apiKey: aiProfile.inference.apiKey } : {}),
+        ...(aiProfile.inference.temperature ? { temperature: aiProfile.inference.temperature } : {}),
+      },
+    } : {}),
+  });
   const runContextAssembler = new RunContextAssembler(ctx.store);
   const platformHandlers = createPlatformHandlers(ctx.platformRegistry);
   const labSettingsHandlers = createLabSettingsHandlers(ctx.appConfig, ctx.policyBundleService);
@@ -1131,6 +1143,7 @@ export async function createServer(
       materialProfileHandlers,
       extractProtocolHandlers,
       protocolBuilderHandlers,
+      checkinHandlers,
       semanticsHandlers,
       runWorkspaceHandlers,
       runDraftHandlers,

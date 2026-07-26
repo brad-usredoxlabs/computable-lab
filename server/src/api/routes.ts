@@ -35,6 +35,7 @@ import type { MaterialProfileHandlers } from './handlers/MaterialProfileHandlers
 import type { EquipmentHandlers } from './handlers/EquipmentHandlers.js';
 import type { ExtractProtocolHandlers } from './handlers/ExtractProtocolHandler.js';
 import type { ProtocolBuilderHandlers } from './handlers/ProtocolBuilderHandlers.js';
+import type { CheckinHandlers } from './handlers/CheckinHandlers.js';
 import type { PlatformHandlers } from './handlers/PlatformHandlers.js';
 import type { LabSettingsHandlers } from './handlers/LabSettingsHandlers.js';
 import type { VendorSearchHandlers } from './handlers/VendorSearchHandlers.js';
@@ -102,6 +103,7 @@ export interface RouteOptions {
   equipmentHandlers?: EquipmentHandlers;
   extractProtocolHandlers?: ExtractProtocolHandlers;
   protocolBuilderHandlers?: ProtocolBuilderHandlers;
+  checkinHandlers?: CheckinHandlers;
   platformHandlers?: PlatformHandlers;
   labSettingsHandlers?: LabSettingsHandlers;
   vendorSearchHandlers?: VendorSearchHandlers;
@@ -581,6 +583,12 @@ export function registerRoutes(
     fastify.post('/protocol-builder/extract-pdf-text', protocolBuilderHandlers.fetchPdfText.bind(protocolBuilderHandlers));
     fastify.post('/protocol-builder/draft', protocolBuilderHandlers.draft.bind(protocolBuilderHandlers));
     fastify.post('/protocols/derive-from-run', protocolBuilderHandlers.deriveFromRun.bind(protocolBuilderHandlers));
+  }
+
+  const { checkinHandlers } = options;
+
+  if (checkinHandlers) {
+    fastify.post('/runs/:runId/checkin', checkinHandlers.parseCheckin.bind(checkinHandlers));
   }
 
   const { aiThreadHandlers } = options;
