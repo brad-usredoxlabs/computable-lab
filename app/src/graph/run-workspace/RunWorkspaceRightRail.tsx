@@ -35,7 +35,7 @@ export function RunWorkspaceRightRail({ summary, showChat = false }: RunWorkspac
       )}
 
       {activeTab === 'chat' ? (
-        <RunChatPanel />
+        <RunChatPanel runId={summary.runId} />
       ) : (
         <>
           <section>

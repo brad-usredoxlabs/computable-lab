@@ -589,6 +589,7 @@ export function registerRoutes(
 
   if (checkinHandlers) {
     fastify.post('/runs/:runId/checkin', checkinHandlers.parseCheckin.bind(checkinHandlers));
+    fastify.get('/runs/:runId/execution-events', checkinHandlers.getExecutionEvents.bind(checkinHandlers));
   }
 
   const { aiThreadHandlers } = options;

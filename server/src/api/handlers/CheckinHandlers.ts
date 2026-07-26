@@ -3,6 +3,7 @@
  *
  * Parses natural-language check-in messages into structured execution data:
  * state changes, observations, or deviations from the planned protocol.
+ * Auto-persists the parsed data to the in-memory execution events store.
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
@@ -42,6 +43,52 @@ export interface CheckinResponse {
   suggestedStateChange?: CheckinStateChange;
   observation?: CheckinObservation;
   deviation?: CheckinDeviation;
+  persistedEvent?: ExecutionEvent;
+}
+
+export interface ExecutionEvent {
+  id: string;
+  eventRef: string;
+  state?: 'pending' | 'current' | 'running' | 'completed' | 'skipped' | 'deviated';
+  observations: CheckinObservationWithTimestamp[];
+  deviations: CheckinDeviationWithTimestamp[];
+  timestamp: string;
+}
+
+export interface CheckinObservationWithTimestamp {
+  text: string;
+  timestamp: string;
+  eventRef?: string;
+}
+
+export interface CheckinDeviationWithTimestamp {
+  eventRef: string;
+  parameter: string;
+  plannedValue: string;
+  actualValue: string;
+  note?: string;
+  timestamp: string;
+}
+
+export interface ExecutionEventsResponse {
+  runId: string;
+  events: ExecutionEvent[];
+}
+
+// ---------------------------------------------------------------------------
+// In-memory execution events store
+// ---------------------------------------------------------------------------
+
+const executionEventsStore = new Map<string, ExecutionEvent[]>();
+
+function getEventsForRun(runId: string): ExecutionEvent[] {
+  return executionEventsStore.get(runId) ?? [];
+}
+
+function addEventForRun(runId: string, event: ExecutionEvent): void {
+  const list = executionEventsStore.get(runId) ?? [];
+  list.push(event);
+  executionEventsStore.set(runId, list);
 }
 
 // ---------------------------------------------------------------------------
@@ -53,6 +100,11 @@ export interface CheckinHandlers {
     request: FastifyRequest<{ Params: { runId: string }; Body: CheckinBody }>,
     reply: FastifyReply,
   ): Promise<CheckinResponse | ApiError>;
+
+  getExecutionEvents(
+    request: FastifyRequest<{ Params: { runId: string } }>,
+    reply: FastifyReply,
+  ): Promise<ExecutionEventsResponse | ApiError>;
 }
 
 // ---------------------------------------------------------------------------
@@ -189,6 +241,72 @@ function extractJsonFromResponse(text: string): unknown {
   throw new Error(`Could not extract JSON from response (${trimmed.slice(0, 200)}${trimmed.length > 200 ? '...' : ''})`);
 }
 
+function generateEventId(): string {
+  return `ee-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/**
+ * Build a persisted ExecutionEvent from the parsed check-in result.
+ */
+function buildExecutionEvent(
+  response: CheckinResponse,
+): ExecutionEvent | null {
+  const now = new Date().toISOString();
+  const observations: CheckinObservationWithTimestamp[] = [];
+  const deviations: CheckinDeviationWithTimestamp[] = [];
+  let eventRef = '';
+
+  // Extract observation
+  if (response.observation) {
+    eventRef = response.observation.eventRef ?? eventRef;
+    observations.push({
+      text: response.observation.text,
+      timestamp: now,
+      ...(typeof response.observation.eventRef === 'string' ? { eventRef: response.observation.eventRef } : {}),
+    });
+  }
+
+  // Extract deviation
+  if (response.deviation) {
+    eventRef = response.deviation.eventRef ?? eventRef;
+    const devEntry: CheckinDeviationWithTimestamp = {
+      eventRef: response.deviation.eventRef,
+      parameter: response.deviation.parameter,
+      plannedValue: response.deviation.plannedValue,
+      actualValue: response.deviation.actualValue,
+      timestamp: now,
+    };
+    if (typeof response.deviation.note === 'string') {
+      devEntry.note = response.deviation.note;
+    }
+    deviations.push(devEntry);
+  }
+
+  // Extract state change event ref
+  if (response.suggestedStateChange) {
+    eventRef = response.suggestedStateChange.eventRef;
+  }
+
+  if (!eventRef && observations.length === 0 && deviations.length === 0) {
+    return null;
+  }
+
+  const evt: ExecutionEvent = {
+    id: generateEventId(),
+    eventRef: eventRef || 'unknown',
+    observations,
+    deviations,
+    timestamp: now,
+  };
+
+  // Add state if present
+  if (response.suggestedStateChange) {
+    evt.state = response.suggestedStateChange.toState;
+  }
+
+  return evt;
+}
+
 // ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
@@ -223,9 +341,20 @@ export function createCheckinHandlers(options: CheckinHandlersOptions): CheckinH
       // If no inference client configured, return a basic interpretation
       if (!inferenceClient) {
         reply.status(200);
-        return {
+        const basicResponse: CheckinResponse = {
           interpretation: `(AI not configured) Raw check-in: "${text.trim()}"`,
         };
+        // Still persist as an observation even without AI
+        const evt: ExecutionEvent = {
+          id: generateEventId(),
+          eventRef: 'unknown',
+          observations: [{ text: text.trim(), timestamp: new Date().toISOString() }],
+          deviations: [],
+          timestamp: new Date().toISOString(),
+        };
+        addEventForRun(runId, evt);
+        basicResponse.persistedEvent = evt;
+        return basicResponse;
       }
 
       const systemPrompt = buildCheckinSystemPrompt(plannedEvents);
@@ -273,7 +402,9 @@ export function createCheckinHandlers(options: CheckinHandlersOptions): CheckinH
           const observation: CheckinObservation = {
             text: typeof obs.text === 'string' ? obs.text : '',
           };
-          if (typeof obs.eventRef === 'string') observation.eventRef = obs.eventRef;
+          if (typeof obs.eventRef === 'string') {
+            observation.eventRef = obs.eventRef;
+          }
           response.observation = observation;
         }
 
@@ -288,6 +419,13 @@ export function createCheckinHandlers(options: CheckinHandlersOptions): CheckinH
           };
         }
 
+        // AUTO-PERSIST the structured data
+        const persisted = buildExecutionEvent(response);
+        if (persisted) {
+          addEventForRun(runId, persisted);
+          response.persistedEvent = persisted;
+        }
+
         return response;
       } catch (err) {
         request.log.error(err, 'Check-in AI parsing failed');
@@ -297,6 +435,24 @@ export function createCheckinHandlers(options: CheckinHandlersOptions): CheckinH
           message: err instanceof Error ? err.message : 'Failed to parse check-in message',
         };
       }
+    },
+
+    async getExecutionEvents(request, reply) {
+      const { runId } = request.params;
+
+      // Verify the run exists
+      const workspace = await service.getRunWorkspace(runId);
+      if (!workspace) {
+        reply.status(404);
+        return { error: 'NOT_FOUND', message: `Run not found: ${runId}` };
+      }
+
+      const events = getEventsForRun(runId);
+
+      return {
+        runId,
+        events,
+      };
     },
   };
 }

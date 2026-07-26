@@ -7,6 +7,11 @@ export interface RunMessage {
   type: 'user' | 'system'
 }
 
+export interface RunChatPanelProps {
+  runId?: string
+  onStateChange?: (eventRef: string, state: string) => void
+}
+
 const SYSTEM_WELCOME: RunMessage = {
   id: 'sys-0',
   text: 'Run session started. Use this chat to log observations, ask questions, or receive execution updates.',
@@ -23,9 +28,35 @@ function formatTime(iso: string): string {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
-export function RunChatPanel() {
+/**
+ * Build a summary of the AI's interpretation for display in chat.
+ */
+function formatInterpretation(
+  interpretation: string,
+  data: Record<string, unknown>,
+): string {
+  const parts: string[] = [interpretation]
+
+  if (data.suggestedStateChange) {
+    const sc = data.suggestedStateChange as { eventRef?: string; toState?: string }
+    parts.push(`State change: ${sc.eventRef ?? '?'} → ${sc.toState ?? '?'}`)
+  }
+  if (data.observation) {
+    const obs = data.observation as { text?: string }
+    if (obs.text) parts.push(`Observation: ${obs.text}`)
+  }
+  if (data.deviation) {
+    const dev = data.deviation as { parameter?: string; plannedValue?: string; actualValue?: string }
+    parts.push(`Deviation: ${dev.parameter ?? '?'} was ${dev.plannedValue ?? '?'}, now ${dev.actualValue ?? '?'}`)
+  }
+
+  return parts.join('\n')
+}
+
+export function RunChatPanel({ runId, onStateChange }: RunChatPanelProps) {
   const [messages, setMessages] = useState<RunMessage[]>([SYSTEM_WELCOME])
   const [input, setInput] = useState('')
+  const [sending, setSending] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Auto-scroll to bottom on new messages
@@ -35,9 +66,9 @@ export function RunChatPanel() {
     }
   }, [messages])
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     const trimmed = input.trim()
-    if (!trimmed) return
+    if (!trimmed || sending) return
 
     const userMsg: RunMessage = {
       id: generateId(),
@@ -48,16 +79,71 @@ export function RunChatPanel() {
 
     setMessages((prev) => [...prev, userMsg])
     setInput('')
+    setSending(true)
 
-    // Echo a system acknowledgment
-    const sysMsg: RunMessage = {
-      id: generateId(),
-      text: `Received: "${trimmed.slice(0, 80)}${trimmed.length > 80 ? '…' : ''}"`,
-      timestamp: new Date().toISOString(),
-      type: 'system',
+    if (!runId) {
+      // No runId — echo locally (Phase 1 behavior)
+      const sysMsg: RunMessage = {
+        id: generateId(),
+        text: `(No run selected) Received: "${trimmed.slice(0, 80)}${trimmed.length > 80 ? '…' : ''}"`,
+        timestamp: new Date().toISOString(),
+        type: 'system',
+      }
+      setMessages((prev) => [...prev, sysMsg])
+      setSending(false)
+      return
     }
-    setMessages((prev) => [...prev, sysMsg])
-  }, [input])
+
+    // Call the check-in API
+    try {
+      const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/checkin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: trimmed }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.message || `API returned ${res.status}`)
+      }
+
+      const data = await res.json() as Record<string, unknown>
+
+      // Build the AI interpretation display
+      const interpretation = typeof data.interpretation === 'string'
+        ? data.interpretation
+        : 'Check-in received'
+
+      const displayText = formatInterpretation(interpretation, data)
+
+      // Show AI interpretation as system message
+      const sysMsg: RunMessage = {
+        id: generateId(),
+        text: displayText,
+        timestamp: new Date().toISOString(),
+        type: 'system',
+      }
+      setMessages((prev) => [...prev, sysMsg])
+
+      // On suggested state change, dispatch event to update graph chips
+      if (data.suggestedStateChange && onStateChange) {
+        const sc = data.suggestedStateChange as { eventRef?: string; toState?: string }
+        if (sc.eventRef && sc.toState) {
+          onStateChange(sc.eventRef, sc.toState)
+        }
+      }
+    } catch (err) {
+      const sysMsg: RunMessage = {
+        id: generateId(),
+        text: `Error: ${err instanceof Error ? err.message : 'Failed to send check-in'}`,
+        timestamp: new Date().toISOString(),
+        type: 'system',
+      }
+      setMessages((prev) => [...prev, sysMsg])
+    } finally {
+      setSending(false)
+    }
+  }, [input, sending, runId, onStateChange])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -80,7 +166,7 @@ export function RunChatPanel() {
             className={`run-chat-panel__message run-chat-panel__message--${msg.type}`}
           >
             <div className="run-chat-panel__bubble">
-              <div className="run-chat-panel__text">{msg.text}</div>
+              <div className="run-chat-panel__text" style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</div>
               <div className="run-chat-panel__time">{formatTime(msg.timestamp)}</div>
             </div>
           </div>
@@ -99,10 +185,10 @@ export function RunChatPanel() {
         <button
           className="run-chat-panel__send"
           onClick={handleSend}
-          disabled={!input.trim()}
+          disabled={!input.trim() || sending}
           title="Send message"
         >
-          Send
+          {sending ? '…' : 'Send'}
         </button>
       </div>
 

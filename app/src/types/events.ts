@@ -729,3 +729,40 @@ export function createEmptyEvent(eventType: EventType): PlateEvent {
         : { wells: [] },
   }
 }
+
+// ---------------------------------------------------------------------------
+// Check-in types — mirror backend CheckinHandlers
+// ---------------------------------------------------------------------------
+
+/**
+ * Observation recorded via the check-in chat.
+ */
+export interface CheckinObservation {
+  text: string
+  timestamp: string
+  eventRef?: string
+}
+
+/**
+ * Deviation recorded via the check-in chat.
+ */
+export interface CheckinDeviation {
+  eventRef: string
+  parameter: string
+  plannedValue: string
+  actualValue: string
+  note?: string
+  timestamp: string
+}
+
+/**
+ * Persisted execution event (observation, deviation, or state change).
+ */
+export interface ExecutionEvent {
+  id: string
+  eventRef: string
+  state?: 'pending' | 'current' | 'running' | 'completed' | 'skipped' | 'deviated'
+  observations: CheckinObservation[]
+  deviations: CheckinDeviation[]
+  timestamp: string
+}

@@ -134,6 +134,42 @@ $defs:
               type: object
               description: "Structured details about the deviation."
               additionalProperties: true
+            observations:
+              type: array
+              description: "Qualitative observations attached to this event."
+              items:
+                type: object
+                additionalProperties: false
+                required: [text, timestamp]
+                properties:
+                  text:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+                  eventRef:
+                    type: string
+            deviations:
+              type: array
+              description: "Parameter deviations from the planned protocol for this event."
+              items:
+                type: object
+                additionalProperties: false
+                required: [eventRef, parameter, plannedValue, actualValue, timestamp]
+                properties:
+                  eventRef:
+                    type: string
+                  parameter:
+                    type: string
+                  plannedValue:
+                    type: string
+                  actualValue:
+                    type: string
+                  note:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
       derived_cache:
         type: object
         additionalProperties: false
