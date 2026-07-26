@@ -19,6 +19,7 @@ import { RunWorkspaceRightRail } from './run-workspace/RunWorkspaceRightRail'
 import { RunWorkspaceShell } from './run-workspace/RunWorkspaceShell'
 import { useRunWorkspace } from './hooks/useRunWorkspace'
 import { RunBudgetTab } from './run-workspace/RunBudgetTab'
+import { ExecutionView } from './execution/ExecutionView'
 
 type WorkspaceTab = 'overview' | 'plan' | 'biology' | 'readouts' | 'results' | 'claims' | 'budget' | 'execution'
 
@@ -26,7 +27,7 @@ export function RunWorkspacePage() {
   const { runId } = useParams<{ runId: string }>()
   const { summary, workspace, loading, error, refresh } = useRunWorkspace(runId)
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('overview')
-  // selectedEventId tracks which event is currently selected for drill-down in the chat panel
+  // selectedEventId tracks which event is selected for drill-down in the chat panel
   // This would be wired to EventPillBar onSelectEvent in a full integration
   const [selectedEventId] = useState<string | null>(null)
   const [exportingAnalysis, setExportingAnalysis] = useState(false)
@@ -34,6 +35,7 @@ export function RunWorkspacePage() {
   const [exportError, setExportError] = useState<string | null>(null)
   const { mode } = useEditorMode({})
   const showChat = mode === 'run'
+  const isExecutionMode = mode === 'execution'
 
   // AI panel
   const aiContext = useMemo((): AiContext => ({
@@ -93,19 +95,38 @@ export function RunWorkspacePage() {
     ? <section className="run-workspace-card"><h2>Loading</h2><p>Loading run workspace…</p></section>
     : error
       ? <section className="run-workspace-card"><h2>Error</h2><p>{error}</p></section>
-      : activeTab === 'overview'
-        ? <RunOverviewTab summary={summary} runId={resolvedRunId} chat={aiChat} />
-        : activeTab === 'plan'
-          ? <RunPlanTab summary={summary} workspace={workspace} onRefresh={refresh} />
-          : activeTab === 'biology'
-            ? <RunBiologyTab summary={summary} runId={resolvedRunId} chat={aiChat} />
-            : activeTab === 'readouts'
-              ? <RunReadoutsTab summary={summary} runId={resolvedRunId} chat={aiChat} />
-            : activeTab === 'results'
-              ? <RunResultsTab summary={summary} runId={resolvedRunId} chat={aiChat} interpretation={interpretation} assembly={assembly} workspace={workspace} />
-              : activeTab === 'claims'
-                ? <RunClaimsTab workspace={workspace} onRefresh={refresh} onExportAnalysis={handleExportAnalysis} exportingAnalysis={exportingAnalysis} runId={resolvedRunId} chat={aiChat} assembly={assembly} />
-                : <RunBudgetTab runId={resolvedRunId} />
+      : isExecutionMode
+        ? workspace?.eventGraph
+          ? <ExecutionView
+              runId={resolvedRunId}
+              events={[]}
+              executionStates={workspace.executionStates ? Object.fromEntries(workspace.executionStates) : {}}
+              onExecutionStateChange={async (eventId, state) => {
+                // TODO: Implement actual API call to update execution state
+                console.log('Execution state changed:', eventId, state)
+              }}
+              onDeviationCaptured={(deviationId) => {
+                console.log('Deviation captured:', deviationId)
+                refresh()
+              }}
+            />
+          : <section className="run-workspace-card">
+              <h2>Execution Mode Not Available</h2>
+              <p>No event graph loaded for this run. Please load a run with an event graph first.</p>
+            </section>
+        : activeTab === 'overview'
+          ? <RunOverviewTab summary={summary} runId={resolvedRunId} chat={aiChat} />
+          : activeTab === 'plan'
+            ? <RunPlanTab summary={summary} workspace={workspace} onRefresh={refresh} />
+            : activeTab === 'biology'
+              ? <RunBiologyTab summary={summary} runId={resolvedRunId} chat={aiChat} />
+              : activeTab === 'readouts'
+                ? <RunReadoutsTab summary={summary} runId={resolvedRunId} chat={aiChat} />
+                : activeTab === 'results'
+                  ? <RunResultsTab summary={summary} runId={resolvedRunId} chat={aiChat} interpretation={interpretation} assembly={assembly} workspace={workspace} />
+                  : activeTab === 'claims'
+                    ? <RunClaimsTab workspace={workspace} onRefresh={refresh} onExportAnalysis={handleExportAnalysis} exportingAnalysis={exportingAnalysis} runId={resolvedRunId} chat={aiChat} assembly={assembly} />
+                    : <RunBudgetTab runId={resolvedRunId} />
 
   return (
     <div>

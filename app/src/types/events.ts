@@ -26,6 +26,7 @@ export type EventType =
   | 'place_tube'
   | 'move_tube'
   | 'remove_tube'
+  | 'deviation'
   | 'other'
 
 /**
@@ -46,6 +47,7 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   place_tube: 'Place Tube',
   move_tube: 'Move Tube',
   remove_tube: 'Remove Tube',
+  deviation: 'Deviation',
   other: 'Other',
 }
 
@@ -67,6 +69,7 @@ export const EVENT_TYPE_ICONS: Record<EventType, string> = {
   place_tube: '🧪',
   move_tube: '↪️',
   remove_tube: '🗑️',
+  deviation: '⚠️',
   other: '📝',
 }
 
@@ -88,6 +91,7 @@ export const EVENT_TYPE_COLORS: Record<EventType, string> = {
   place_tube: '#fd7e14',
   move_tube: '#fd7e14',
   remove_tube: '#fd7e14',
+  deviation: '#e03131',
   other: '#868e96',
 }
 
