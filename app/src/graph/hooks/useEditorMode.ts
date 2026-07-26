@@ -7,6 +7,7 @@ const DEFAULT_DRAWER_TAB: Record<EditorMode, string> = {
   readouts: 'contexts',
   results: 'queue',
   execution: 'queue',
+  run: 'chat',
 }
 
 interface UseEditorModeOptions {

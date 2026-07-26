@@ -5,6 +5,7 @@ import { useAiChat } from '../shared/hooks/useAiChat'
 import { useRegisterAiChat } from '../shared/context/AiPanelContext'
 import { useResultInterpretation } from './hooks/useResultInterpretation'
 import { useEvidenceAssembly } from './hooks/useEvidenceAssembly'
+import { useEditorMode } from './hooks/useEditorMode'
 import type { AiContext } from '../types/aiContext'
 import { RunBiologyTab } from './run-workspace/RunBiologyTab'
 import { RunClaimsTab } from './run-workspace/RunClaimsTab'
@@ -28,6 +29,8 @@ export function RunWorkspacePage() {
   const [exportingAnalysis, setExportingAnalysis] = useState(false)
   const [exportMessage, setExportMessage] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  const { mode } = useEditorMode({})
+  const showChat = mode === 'run'
 
   // AI panel
   const aiContext = useMemo((): AiContext => ({
@@ -107,7 +110,7 @@ export function RunWorkspacePage() {
         header={<RunWorkspaceHeader summary={summary} onExportAnalysis={handleExportAnalysis} exporting={exportingAnalysis} />}
         nav={<RunWorkspaceNav activeTab={activeTab} onTabChange={setActiveTab} counts={summary.counts} />}
         main={main}
-        rightRail={<RunWorkspaceRightRail summary={summary} />}
+        rightRail={<RunWorkspaceRightRail summary={summary} showChat={showChat} />}
       />
       {exportMessage ? <div className="run-workspace-toast run-workspace-toast--success">{exportMessage}</div> : null}
       {exportError ? <div className="run-workspace-toast run-workspace-toast--error">{exportError}</div> : null}

@@ -8,6 +8,8 @@ import type { PlateEvent, EventType } from '../../../types/events'
 import { EVENT_TYPE_LABELS, EVENT_TYPE_ICONS, EVENT_TYPE_COLORS } from '../../../types/events'
 import { getEventSummary } from '../../../types/events'
 
+type ExecutionEventState = 'pending' | 'current' | 'running' | 'completed' | 'skipped' | 'deviated'
+
 interface EventPillBarProps {
   events: PlateEvent[]
   selectedEventId: string | null
@@ -18,6 +20,10 @@ interface EventPillBarProps {
   onPlaybackPositionChange?: (position: number) => void
   /** Event ids staged by AI preview rather than committed to the graph */
   draftEventIds?: Set<string>
+  /** Per-event execution states (from RUN mode) */
+  executionStates?: Map<string, { state: ExecutionEventState; startedAt?: string; completedAt?: string; deviationNote?: string }>
+  /** Callback when execution state changes */
+  onExecutionStateChange?: (eventId: string, state: ExecutionEventState) => void
 }
 
 /**
@@ -68,6 +74,8 @@ export function EventPillBar({
   onDeleteEvent,
   onPlaybackPositionChange,
   draftEventIds,
+  executionStates,
+  onExecutionStateChange,
 }: EventPillBarProps) {
   const timelineEvents = useMemo(() => {
     const seen = new Set<string>()
@@ -269,19 +277,52 @@ export function EventPillBar({
             <div className="scrubber-ticks">
               {timelineEvents.map((event, index) => {
                 const isDraft = draftEventIds?.has(event.eventId) ?? false
+                const execState = executionStates?.get(event.eventId)
                 return (
                   <div
                     key={event.eventId}
                     className={`scrubber-tick ${index < playbackPosition ? 'scrubber-tick--active' : ''} ${
                       selectedEventId === event.eventId ? 'scrubber-tick--selected' : ''
                     } ${isDraft ? 'scrubber-tick--draft' : ''}`}
-                    style={{ 
+                    style={{
                       left: `${((index + 1) / (timelineEvents.length + 1)) * 100}%`,
                       backgroundColor: index < playbackPosition ? EVENT_TYPE_COLORS[event.event_type] : undefined
                     }}
                     onClick={() => handleTickClick(index)}
-                    title={`${index + 1}. ${isDraft ? 'Draft - ' : ''}${EVENT_TYPE_LABELS[event.event_type]}`}
-                  />
+                    title={`${index + 1}. ${isDraft ? 'Draft - ' : ''}${EVENT_TYPE_LABELS[event.event_type]}${execState ? ` [${execState.state}]` : ''}`}
+                  >
+                    {execState && (
+                      <span
+                        className={`exec-state-chip exec-state-chip--${execState.state}`}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (onExecutionStateChange) {
+                            const cycle: Record<ExecutionEventState, ExecutionEventState> = {
+                              pending: 'running',
+                              current: 'running',
+                              running: 'completed',
+                              completed: 'pending',
+                              skipped: 'pending',
+                              deviated: 'pending',
+                            }
+                            onExecutionStateChange(event.eventId, cycle[execState.state])
+                          }
+                        }}
+                        title={`Click to advance: ${execState.state} → ${
+                          execState.state === 'pending' ? 'running'
+                          : execState.state === 'current' ? 'running'
+                          : execState.state === 'running' ? 'completed'
+                          : 'pending'
+                        }`}
+                      >
+                        {execState.state === 'completed' ? '✓'
+                         : execState.state === 'running' ? '◉'
+                         : execState.state === 'deviated' ? '!'
+                         : execState.state === 'skipped' ? '—'
+                         : '○'}
+                      </span>
+                    )}
+                  </div>
                 )
               })}
             </div>
@@ -585,6 +626,63 @@ export function EventPillBar({
 
         .add-event-menu__icon {
           font-size: 1rem;
+        }
+
+        .exec-state-chip {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          position: absolute;
+          top: -8px;
+          right: -8px;
+          width: 16px;
+          height: 16px;
+          font-size: 0.6rem;
+          font-weight: 700;
+          border-radius: 50%;
+          cursor: pointer;
+          line-height: 1;
+          transition: transform 0.15s ease;
+        }
+
+        .exec-state-chip:hover {
+          transform: scale(1.3);
+        }
+
+        .exec-state-chip--pending {
+          background: #adb5bd;
+          color: #fff;
+        }
+
+        .exec-state-chip--current {
+          background: #ffd43b;
+          color: #370617;
+        }
+
+        .exec-state-chip--running {
+          background: #ffd43b;
+          color: #370617;
+          animation: exec-state-pulse 1.2s ease-in-out infinite;
+        }
+
+        .exec-state-chip--completed {
+          background: #40c057;
+          color: #fff;
+        }
+
+        .exec-state-chip--skipped {
+          background: #868e96;
+          color: #fff;
+        }
+
+        .exec-state-chip--deviated {
+          background: #ff6b6b;
+          color: #fff;
+        }
+
+        @keyframes exec-state-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.6; }
         }
       `}</style>
     </div>

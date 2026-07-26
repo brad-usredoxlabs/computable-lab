@@ -11,6 +11,7 @@ const LABELS: Record<EditorMode, string> = {
   readouts: 'Readouts',
   results: 'Results',
   execution: 'Execution',
+  run: 'Run',
 }
 
 export function EditorModeSwitcher({ mode, onChange }: EditorModeSwitcherProps) {

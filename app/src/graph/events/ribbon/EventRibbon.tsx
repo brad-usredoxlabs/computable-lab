@@ -1358,6 +1358,8 @@ export function EventRibbon({
   onPlaybackPositionChange,
   draftEventIds,
   prefillMaterials = [],
+  executionStates,
+  onExecutionStateChange,
 }: EventRibbonProps) {
   // Get first verb from vocab pack for default
   const defaultEventType = useMemo(() => {
@@ -1838,6 +1840,8 @@ export function EventRibbon({
         onDeleteEvent={onDeleteEvent}
         onPlaybackPositionChange={onPlaybackPositionChange}
         draftEventIds={draftEventIds}
+        executionStates={executionStates}
+        onExecutionStateChange={onExecutionStateChange}
       />
 
       {/* Always-visible form */}
