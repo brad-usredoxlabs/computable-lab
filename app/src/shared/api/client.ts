@@ -494,6 +494,7 @@ export interface RunWorkspaceResponse {
   claims: Array<RecordEnvelope>
   evidence: Array<RecordEnvelope>
   assertions: Array<RecordEnvelope>
+  executionStates?: Map<string, { state: string; startedAt?: string; completedAt?: string; deviationNote?: string }>
 }
 
 export interface RunAnalysisBundle {

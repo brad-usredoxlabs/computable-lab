@@ -8,9 +8,13 @@ interface RunWorkspaceRightRailProps {
   summary: RunWorkspaceSummary
   /** When true, show the chat tab (RUN mode only) */
   showChat?: boolean
+  /** The currently selected event ref for filtering chat */
+  selectedEventRef?: string | null
+  /** Execution states for all events */
+  executionStates?: Map<string, { state: string; startedAt?: string; completedAt?: string; deviationNote?: string }>
 }
 
-export function RunWorkspaceRightRail({ summary, showChat = false }: RunWorkspaceRightRailProps) {
+export function RunWorkspaceRightRail({ summary, showChat = false, selectedEventRef, executionStates }: RunWorkspaceRightRailProps) {
   const [activeTab, setActiveTab] = useState<RightRailTab>(showChat ? 'chat' : 'copilot')
 
   return (
@@ -35,7 +39,7 @@ export function RunWorkspaceRightRail({ summary, showChat = false }: RunWorkspac
       )}
 
       {activeTab === 'chat' ? (
-        <RunChatPanel runId={summary.runId} />
+        <RunChatPanel runId={summary.runId} selectedEventRef={selectedEventRef} executionStates={executionStates} />
       ) : (
         <>
           <section>

@@ -24,6 +24,8 @@ interface EventPillBarProps {
   executionStates?: Map<string, { state: ExecutionEventState; startedAt?: string; completedAt?: string; deviationNote?: string }>
   /** Callback when execution state changes */
   onExecutionStateChange?: (eventId: string, state: ExecutionEventState) => void
+  /** Counts of observations and deviations per event for badge display */
+  eventExecutionCounts?: Map<string, { observations: number; deviations: number }>
 }
 
 /**
@@ -76,6 +78,7 @@ export function EventPillBar({
   draftEventIds,
   executionStates,
   onExecutionStateChange,
+  eventExecutionCounts,
 }: EventPillBarProps) {
   const timelineEvents = useMemo(() => {
     const seen = new Set<string>()
@@ -322,6 +325,17 @@ export function EventPillBar({
                          : '○'}
                       </span>
                     )}
+                    {/* Observation/Deviation badges */}
+                    {eventExecutionCounts && (() => {
+                      const counts = eventExecutionCounts.get(event.eventId)
+                      if (!counts || (counts.observations === 0 && counts.deviations === 0)) return null
+                      return (
+                        <span className="exec-count-badge" title={`Observations: ${counts.observations}, Deviations: ${counts.deviations}`}>
+                          {counts.observations > 0 && <span className="exec-count-badge--obs" title={`${counts.observations} observation(s)`}>📝{counts.observations}</span>}
+                          {counts.deviations > 0 && <span className="exec-count-badge--dev" title={`${counts.deviations} deviation(s)`}>⚠️{counts.deviations}</span>}
+                        </span>
+                      )
+                    })()}
                   </div>
                 )
               })}
@@ -673,6 +687,39 @@ export function EventPillBar({
         .exec-state-chip--skipped {
           background: #868e96;
           color: #fff;
+        }
+
+        .exec-state-chip--deviated {
+          background: #fa5252;
+          color: #fff;
+        }
+
+        /* Observation/Deviation badges */
+        .exec-count-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.15rem;
+          position: absolute;
+          bottom: -10px;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 0.55rem;
+          white-space: nowrap;
+          background: rgba(255, 255, 255, 0.95);
+          border: 1px solid #dee2e6;
+          border-radius: 8px;
+          padding: 0.1rem 0.25rem;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .exec-count-badge--obs {
+          color: #15aabf;
+          font-weight: 600;
+        }
+
+        .exec-count-badge--dev {
+          color: #e03131;
+          font-weight: 600;
         }
 
         .exec-state-chip--deviated {

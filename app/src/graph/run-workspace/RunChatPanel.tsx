@@ -4,12 +4,23 @@ export interface RunMessage {
   id: string
   text: string
   timestamp: string
-  type: 'user' | 'system'
+  type: 'user' | 'system' | 'timeline'
+}
+
+export interface ExecutionEvent {
+  id: string
+  eventRef: string
+  state?: 'pending' | 'current' | 'running' | 'completed' | 'skipped' | 'deviated'
+  observations: Array<{ text: string; timestamp: string; eventRef?: string }>
+  deviations: Array<{ eventRef: string; parameter: string; plannedValue: string; actualValue: string; note?: string; timestamp: string }>
+  timestamp: string
 }
 
 export interface RunChatPanelProps {
   runId?: string
   onStateChange?: (eventRef: string, state: string) => void
+  selectedEventRef?: string | null
+  executionStates?: Map<string, { state: string; startedAt?: string; completedAt?: string; deviationNote?: string }>
 }
 
 const SYSTEM_WELCOME: RunMessage = {
@@ -53,11 +64,38 @@ function formatInterpretation(
   return parts.join('\n')
 }
 
-export function RunChatPanel({ runId, onStateChange }: RunChatPanelProps) {
+export function RunChatPanel({ runId, onStateChange, selectedEventRef, executionStates }: RunChatPanelProps) {
   const [messages, setMessages] = useState<RunMessage[]>([SYSTEM_WELCOME])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [executionEvents, setExecutionEvents] = useState<ExecutionEvent[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Fetch execution events when selectedEventRef changes
+  useEffect(() => {
+    if (!runId || !selectedEventRef) {
+      // Reset to normal chat mode
+      setExecutionEvents([])
+      return
+    }
+
+    const fetchExecutionEvents = async () => {
+      try {
+        const res = await fetch(`/api/runs/${encodeURIComponent(runId)}/execution-events`)
+        if (!res.ok) {
+          throw new Error(`Failed to fetch execution events: ${res.status}`)
+        }
+        const data = await res.json() as { events: ExecutionEvent[] }
+        // Filter for the selected event
+        const filtered = data.events.filter((evt) => evt.eventRef === selectedEventRef)
+        setExecutionEvents(filtered)
+      } catch (err) {
+        console.error('Failed to fetch execution events:', err)
+      }
+    }
+
+    fetchExecutionEvents()
+  }, [runId, selectedEventRef])
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -155,11 +193,65 @@ export function RunChatPanel({ runId, onStateChange }: RunChatPanelProps) {
   return (
     <div className="run-chat-panel">
       <div className="run-chat-panel__header">
-        <span className="run-chat-panel__title">Run Chat</span>
+        <span className="run-chat-panel__title">
+          {selectedEventRef ? `Execution History: ${selectedEventRef}` : 'Run Chat'}
+        </span>
         <span className="run-chat-panel__count">{messages.length} messages</span>
       </div>
 
       <div className="run-chat-panel__messages" ref={scrollRef}>
+        {/* Show execution timeline if event is selected */}
+        {selectedEventRef && executionEvents.length > 0 && (
+          <>
+            <div className="run-chat-panel__timeline-header">
+              <strong>Execution Timeline for "{selectedEventRef}"</strong>
+              <button
+                className="run-chat-panel__clear-filter"
+                onClick={() => { /* Parent will handle clearing via prop change */ }}
+                type="button"
+                title="Clear event filter"
+              >
+                ✕ Clear filter
+              </button>
+            </div>
+            {executionEvents.flatMap((evt) => {
+              const timelineEntries: RunMessage[] = []
+              
+              // State change entry
+              if (evt.state) {
+                timelineEntries.push({
+                  id: `timeline-${evt.id}-state`,
+                  text: `${formatTime(evt.timestamp)} — ${evt.state === 'running' ? 'Started' : evt.state === 'completed' ? 'Completed' : evt.state === 'deviated' ? 'Deviated' : evt.state === 'skipped' ? 'Skipped' : 'Pending'}${executionStates?.get(evt.eventRef)?.deviationNote ? ` (${executionStates.get(evt.eventRef)?.deviationNote})` : ''}`,
+                  timestamp: evt.timestamp,
+                  type: 'timeline',
+                })
+              }
+              
+              // Observations
+              for (const obs of evt.observations) {
+                timelineEntries.push({
+                  id: `timeline-${evt.id}-obs-${obs.timestamp}`,
+                  text: `${formatTime(obs.timestamp)} — Observation: ${obs.text}`,
+                  timestamp: obs.timestamp,
+                  type: 'timeline',
+                })
+              }
+              
+              // Deviations
+              for (const dev of evt.deviations) {
+                timelineEntries.push({
+                  id: `timeline-${evt.id}-dev-${dev.timestamp}`,
+                  text: `${formatTime(dev.timestamp)} — Deviation: ${dev.parameter} was ${dev.plannedValue}, now ${dev.actualValue}${dev.note ? ` (${dev.note})` : ''}`,
+                  timestamp: dev.timestamp,
+                  type: 'timeline',
+                })
+              }
+              
+              return timelineEntries
+            })}
+          </>
+        )}
+
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -222,6 +314,38 @@ export function RunChatPanel({ runId, onStateChange }: RunChatPanelProps) {
           color: #94a3b8;
         }
 
+        .run-chat-panel__timeline-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0.5rem 0.75rem;
+          margin-bottom: 0.5rem;
+          background: #fffbeb;
+          border: 1px solid #fcd34d;
+          border-radius: 8px;
+          font-size: 0.78rem;
+        }
+
+        .run-chat-panel__timeline-header strong {
+          color: #92400e;
+        }
+
+        .run-chat-panel__clear-filter {
+          border: none;
+          background: #f59e0b;
+          color: #fff;
+          border-radius: 4px;
+          padding: 0.25rem 0.5rem;
+          font-size: 0.7rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background 0.15s;
+        }
+
+        .run-chat-panel__clear-filter:hover {
+          background: #d97706;
+        }
+
         .run-chat-panel__messages {
           flex: 1;
           overflow-y: auto;
@@ -261,6 +385,15 @@ export function RunChatPanel({ runId, onStateChange }: RunChatPanelProps) {
           background: #f1f5f9;
           color: #1e293b;
           border-bottom-left-radius: 2px;
+        }
+
+        .run-chat-panel__message--timeline .run-chat-panel__bubble {
+          background: #fef3c7;
+          color: #92400e;
+          border-left: 3px solid #f59e0b;
+          border-bottom-left-radius: 2px;
+          font-family: 'Courier New', monospace;
+          font-size: 0.78rem;
         }
 
         .run-chat-panel__time {

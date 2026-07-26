@@ -26,6 +26,9 @@ export function RunWorkspacePage() {
   const { runId } = useParams<{ runId: string }>()
   const { summary, workspace, loading, error, refresh } = useRunWorkspace(runId)
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('overview')
+  // selectedEventId tracks which event is currently selected for drill-down in the chat panel
+  // This would be wired to EventPillBar onSelectEvent in a full integration
+  const [selectedEventId] = useState<string | null>(null)
   const [exportingAnalysis, setExportingAnalysis] = useState(false)
   const [exportMessage, setExportMessage] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
@@ -110,7 +113,7 @@ export function RunWorkspacePage() {
         header={<RunWorkspaceHeader summary={summary} onExportAnalysis={handleExportAnalysis} exporting={exportingAnalysis} />}
         nav={<RunWorkspaceNav activeTab={activeTab} onTabChange={setActiveTab} counts={summary.counts} />}
         main={main}
-        rightRail={<RunWorkspaceRightRail summary={summary} showChat={showChat} />}
+        rightRail={<RunWorkspaceRightRail summary={summary} showChat={showChat} selectedEventRef={selectedEventId} executionStates={workspace?.executionStates} />}
       />
       {exportMessage ? <div className="run-workspace-toast run-workspace-toast--success">{exportMessage}</div> : null}
       {exportError ? <div className="run-workspace-toast run-workspace-toast--error">{exportError}</div> : null}
