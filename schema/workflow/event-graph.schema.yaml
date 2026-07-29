@@ -287,6 +287,9 @@ $defs:
       eventId:
         type: string
         description: "Unique identifier for this event."
+      stepId:
+        type: string
+        description: "Optional reference to the originating protocol step."
       event_type:
         type: string
         enum:

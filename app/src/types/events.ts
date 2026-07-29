@@ -340,15 +340,31 @@ export interface ExecutionState {
 }
 
 /**
+ * Deviation data for inline tracking
+ */
+export interface DeviationData {
+  code: string
+  message: string
+  severity: 'info' | 'warning' | 'error'
+  reportedBy: string
+  reportedAt: string
+  expectedValue?: unknown
+  actualValue?: unknown
+  deviationType?: 'operator' | 'system' | 'environmental' | 'inserted'
+}
+
+/**
  * PlateEvent - A single event in the event graph
  */
 export interface PlateEvent {
   eventId: string
   event_type: EventType
-  at?: string       // ISO datetime - actual execution time
-  t_offset?: string // ISO duration - planned offset from run start
+  stepId?: string       // Optional reference to the originating protocol step
+  at?: string           // ISO datetime - actual execution time
+  t_offset?: string     // ISO duration - planned offset from run start
   notes?: string
   details: EventDetails
+  deviations?: DeviationData[]
   executionState?: ExecutionState
 }
 
