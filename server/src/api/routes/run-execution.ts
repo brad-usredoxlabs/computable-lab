@@ -11,6 +11,7 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { AppContext } from '../../server.js';
+import { computeDiff, type EventDiff, type GraphEvent } from '../../utils/eventGraphDiff.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -888,6 +889,388 @@ export function registerRunExecutionRoutes(
         return {
           error: 'INTERNAL_ERROR',
           message: error instanceof Error ? error.message : 'Failed to save setting',
+        };
+      }
+    },
+  );
+
+  // ========================================================================
+  // Deviation tracking types
+  // ========================================================================
+
+  /** Deviation record for a run. */
+  interface DeviationRecord {
+    /** Unique deviation identifier. */
+    deviationId: string;
+    /** Human-readable description of the deviation. */
+    description: string;
+    /** Machine-readable deviation code. */
+    code?: string;
+    /** Severity level. */
+    severity: 'info' | 'warning' | 'error' | 'critical';
+    /** Event/step this deviation relates to. */
+    eventId?: string;
+    /** ISO-8601 timestamp when deviation was recorded. */
+    recordedAt: string;
+    /** ISO-8601 timestamp when deviation occurred. */
+    occurredAt?: string;
+    /** Operator who reported this deviation. */
+    reportedBy?: string;
+    /** Whether the deviation has been resolved. */
+    resolved?: boolean;
+    /** Resolution notes. */
+    resolutionNotes?: string;
+  }
+
+  /** Request body for creating a deviation record. */
+  interface CreateDeviationRequest {
+    deviationId: string;
+    description: string;
+    code?: string;
+    severity: 'info' | 'warning' | 'error' | 'critical';
+    eventId?: string;
+    occurredAt?: string;
+    reportedBy?: string;
+  }
+
+  /** Request body for updating a deviation record. */
+  interface UpdateDeviationRequest {
+    resolved?: boolean;
+    resolutionNotes?: string;
+    description?: string;
+  }
+
+  // ========================================================================
+  // POST /api/runs/:runId/deviations
+  // ========================================================================
+  /**
+   * Store a deviation record for a run.
+   *
+   * Appends the deviation to the run's deviationHistory array and increments
+   * the deviation counter in executionTracking.
+   *
+   * Body: { deviationId, description, severity, ... }
+   * Returns: { success: true, deviation: DeviationRecord }
+   */
+  fastify.post<
+    { Params: { runId: string }; Body: CreateDeviationRequest },
+    { success: true; deviation: DeviationRecord } | ErrorResponse
+  >(
+    '/runs/:runId/deviations',
+    async (
+      request: FastifyRequest<{ Params: { runId: string }; Body: CreateDeviationRequest }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        const runId = request.params.runId;
+        const body = request.body ?? {};
+
+        // Validate required fields
+        if (!body.deviationId) {
+          reply.status(400);
+          return { error: 'MISSING_FIELD', message: 'deviationId is required' };
+        }
+        if (!body.description) {
+          reply.status(400);
+          return { error: 'MISSING_FIELD', message: 'description is required' };
+        }
+        if (!body.severity) {
+          reply.status(400);
+          return { error: 'MISSING_FIELD', message: 'severity is required' };
+        }
+
+        // Load the run record
+        const record = await ctx.store.get(runId);
+        if (!record) {
+          reply.status(404);
+          return { error: 'RUN_NOT_FOUND', message: `Run '${runId}' not found` };
+        }
+
+        const payload = record.payload as RunPayload;
+        if (payload.kind !== 'run') {
+          reply.status(400);
+          return { error: 'NOT_A_RUN', message: `Record '${runId}' is not a run` };
+        }
+
+        // Validate that the run is in a mutable state
+        const transition = validateTransition(
+          payload.status,
+          ['planned', 'in_progress'],
+          'add deviation',
+          runId,
+        );
+        if (!transition.ok) {
+          reply.status(400);
+          return transition;
+        }
+
+        // Build deviation record
+        const deviation: DeviationRecord = {
+          deviationId: body.deviationId,
+          description: body.description,
+          severity: body.severity,
+          recordedAt: new Date().toISOString(),
+          resolved: false,
+          ...(body.code && { code: body.code }),
+          ...(body.eventId && { eventId: body.eventId }),
+          ...(body.occurredAt && { occurredAt: body.occurredAt }),
+          ...(body.reportedBy && { reportedBy: body.reportedBy }),
+        };
+
+        // Append to deviationHistory
+        const deviationHistory: Array<DeviationRecord> =
+          Array.isArray(payload.deviationHistory) ? (payload.deviationHistory as Array<DeviationRecord>) : [];
+        deviationHistory.push(deviation);
+        payload.deviationHistory = deviationHistory;
+
+        // Update deviation counter in executionTracking
+        const tracking = (payload.executionTracking as Record<string, unknown>) ?? {};
+        const updatedTracking: Record<string, unknown> = { ...tracking };
+        updatedTracking.deviationCount =
+          (typeof updatedTracking.deviationCount === 'number' ? updatedTracking.deviationCount : 0) + 1;
+        payload.executionTracking = updatedTracking;
+
+        // Save updated run record
+        await ctx.store.update({
+          envelope: { ...record, payload },
+          message: `Deviation '${body.deviationId}' added to run '${runId}'`,
+        });
+
+        reply.status(200);
+        return { success: true, deviation };
+      } catch (error) {
+        fastify.log.error({ error }, `Error adding deviation: ${error}`);
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to add deviation',
+        };
+      }
+    },
+  );
+
+  // ========================================================================
+  // PATCH /api/runs/:runId/deviations/:deviationId
+  // ========================================================================
+  /**
+   * Update a deviation record (e.g., mark as resolved).
+   *
+   * Body: { resolved?: boolean, resolutionNotes?: string, description?: string }
+   * Returns: { success: true, deviation: DeviationRecord }
+   */
+  fastify.patch<
+    { Params: { runId: string; deviationId: string }; Body: UpdateDeviationRequest },
+    { success: true; deviation: DeviationRecord } | ErrorResponse
+  >(
+    '/runs/:runId/deviations/:deviationId',
+    async (
+      request: FastifyRequest<{ Params: { runId: string; deviationId: string }; Body: UpdateDeviationRequest }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        const runId = request.params.runId;
+        const deviationId = request.params.deviationId;
+        const body = request.body ?? {};
+
+        // Load the run record
+        const record = await ctx.store.get(runId);
+        if (!record) {
+          reply.status(404);
+          return { error: 'RUN_NOT_FOUND', message: `Run '${runId}' not found` };
+        }
+
+        const payload = record.payload as RunPayload;
+        if (payload.kind !== 'run') {
+          reply.status(400);
+          return { error: 'NOT_A_RUN', message: `Record '${runId}' is not a run` };
+        }
+
+        // Find the deviation in history
+        const deviationHistory: Array<DeviationRecord> =
+          Array.isArray(payload.deviationHistory) ? (payload.deviationHistory as Array<DeviationRecord>) : [];
+        const idx = deviationHistory.findIndex((d: DeviationRecord) => d.deviationId === deviationId);
+        if (idx === -1) {
+          reply.status(404);
+          return { error: 'DEVIATION_NOT_FOUND', message: `Deviation '${deviationId}' not found in run '${runId}'` };
+        }
+
+        // Apply updates
+        const deviation = deviationHistory[idx]!;
+        if (body.resolved !== undefined) deviation.resolved = body.resolved;
+        if (body.resolutionNotes !== undefined) deviation.resolutionNotes = body.resolutionNotes;
+        if (body.description !== undefined) deviation.description = body.description;
+        deviationHistory[idx] = deviation;
+
+        // Save updated run record
+        await ctx.store.update({
+          envelope: { ...record, payload },
+          message: `Deviation '${deviationId}' updated in run '${runId}'`,
+        });
+
+        reply.status(200);
+        return { success: true, deviation };
+      } catch (error) {
+        fastify.log.error({ error }, `Error updating deviation: ${error}`);
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to update deviation',
+        };
+      }
+    },
+  );
+
+  // ========================================================================
+  // GET /api/runs/:runId/deviations
+  // ========================================================================
+  /**
+   * Retrieve all deviation records for a run.
+   *
+   * Supports optional filtering by severity and resolved status.
+   *
+   * Query: { severity?: string, resolved?: boolean }
+   * Returns: { deviations: DeviationRecord[], total: number, filtered: number }
+   */
+  fastify.get<
+    { Params: { runId: string }; Querystring: { severity?: string; resolved?: string } },
+    { deviations: DeviationRecord[]; total: number; filtered: number } | ErrorResponse
+  >(
+    '/runs/:runId/deviations',
+    async (
+      request: FastifyRequest<{ Params: { runId: string }; Querystring: { severity?: string; resolved?: string } }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        const runId = request.params.runId;
+
+        // Load the run record
+        const record = await ctx.store.get(runId);
+        if (!record) {
+          reply.status(404);
+          return { error: 'RUN_NOT_FOUND', message: `Run '${runId}' not found` };
+        }
+
+        const payload = record.payload as RunPayload;
+        if (payload.kind !== 'run') {
+          reply.status(400);
+          return { error: 'NOT_A_RUN', message: `Record '${runId}' is not a run` };
+        }
+
+        const deviationHistory: Array<DeviationRecord> =
+          Array.isArray(payload.deviationHistory) ? (payload.deviationHistory as Array<DeviationRecord>) : [];
+
+        const total = deviationHistory.length;
+        let filtered: DeviationRecord[] = deviationHistory;
+
+        // Apply severity filter
+        if (request.query.severity) {
+          filtered = filtered.filter((d: DeviationRecord) => d.severity === request.query.severity);
+        }
+
+        // Apply resolved filter
+        if (request.query.resolved !== undefined) {
+          const resolved = request.query.resolved === 'true';
+          filtered = filtered.filter((d: DeviationRecord) => d.resolved === resolved);
+        }
+
+        reply.status(200);
+        return {
+          deviations: filtered,
+          total,
+          filtered: filtered.length,
+        };
+      } catch (error) {
+        fastify.log.error({ error }, `Error getting deviations: ${error}`);
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to get deviations',
+        };
+      }
+    },
+  );
+
+  // ========================================================================
+  // GET /api/runs/:runId/deviations/diff
+  // ========================================================================
+  /**
+   * Compute planned vs executed event graph diff.
+   *
+   * Loads the planned and executed event graphs referenced by this run and
+   * compares their events. Returns an array of EventDiff entries showing
+   * modified, added, and removed events.
+   *
+   * Returns: { diffs: EventDiff[], plannedEventGraphId?: string, executedEventGraphId?: string }
+   */
+  fastify.get<
+    { Params: { runId: string } },
+    { diffs: EventDiff[]; plannedEventGraphId?: string; executedEventGraphId?: string } | ErrorResponse
+  >(
+    '/runs/:runId/deviations/diff',
+    async (
+      request: FastifyRequest<{ Params: { runId: string } }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        const runId = request.params.runId;
+
+        // Load the run record
+        const record = await ctx.store.get(runId);
+        if (!record) {
+          reply.status(404);
+          return { error: 'RUN_NOT_FOUND', message: `Run '${runId}' not found` };
+        }
+
+        const payload = record.payload as RunPayload;
+        if (payload.kind !== 'run') {
+          reply.status(400);
+          return { error: 'NOT_A_RUN', message: `Record '${runId}' is not a run` };
+        }
+
+        const plannedId = payload.plannedEventGraphId;
+        const executedId = payload.executedEventGraphId;
+
+        if (!plannedId) {
+          reply.status(400);
+          return { error: 'MISSING_FIELD', message: `Run '${runId}' has no plannedEventGraphId` };
+        }
+        if (!executedId) {
+          reply.status(400);
+          return { error: 'MISSING_FIELD', message: `Run '${runId}' has no executedEventGraphId` };
+        }
+
+        // Load planned event graph
+        const plannedRecord = await ctx.store.get(plannedId);
+        if (!plannedRecord) {
+          reply.status(404);
+          return { error: 'GRAPH_NOT_FOUND', message: `Planned event graph '${plannedId}' not found` };
+        }
+
+        // Load executed event graph
+        const executedRecord = await ctx.store.get(executedId);
+        if (!executedRecord) {
+          reply.status(404);
+          return { error: 'GRAPH_NOT_FOUND', message: `Executed event graph '${executedId}' not found` };
+        }
+
+        const plannedGraph = plannedRecord.payload as { events?: GraphEvent[] };
+        const executedGraph = executedRecord.payload as { events?: GraphEvent[] };
+
+        // Compute diff
+        const diffs = computeDiff(plannedGraph, executedGraph);
+
+        reply.status(200);
+        return {
+          diffs,
+          plannedEventGraphId: plannedId,
+          executedEventGraphId: executedId,
+        };
+      } catch (error) {
+        fastify.log.error({ error }, `Error computing diff: ${error}`);
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to compute diff',
         };
       }
     },
