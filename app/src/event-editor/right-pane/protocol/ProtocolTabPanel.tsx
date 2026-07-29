@@ -24,6 +24,17 @@ import type { AiProtocolCandidateStepSummary } from '../../../types/ai'
 /* Types                                                                */
 /* ------------------------------------------------------------------ */
 
+/** Minimal shape of an event graph returned by the sub-graph API. */
+interface EventGraph {
+  id: string
+  name?: string
+  description?: string
+  stepId?: string
+  phaseId?: string
+  events: Array<Record<string, unknown>>
+  labwares: Array<Record<string, unknown>>
+}
+
 export interface ProtocolStep {
   /** Unique step identifier. */
   stepId: string
@@ -51,6 +62,8 @@ export interface ProtocolStep {
   }
   /** Uncertainty from the AI extraction. */
   uncertainty?: 'ambiguous' | 'inferred' | 'unresolved' | 'table-derived'
+  /** Compiled sub-graph for this step (fetched on demand). */
+  subGraph?: EventGraph
 }
 
 export interface ProtocolTabPanelProps {
@@ -342,6 +355,8 @@ function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
   const [activeStepId, setActiveStepId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // Cached sub-graphs keyed by stepId
+  const [stepGraphs, setStepGraphs] = useState<Record<string, EventGraph>>({})
 
   // Step execution modal state
   const [modalOpen, setModalOpen] = useState(false)
@@ -403,9 +418,35 @@ function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
     return () => { cancelled = true }
   }, [runId])
 
-  const handleToggleVisibility = useCallback((stepId: string) => {
-    setSteps(prev => prev.map(s => s.stepId === stepId ? { ...s, visible: !s.visible } : s))
-  }, [])
+  /** Fetch the compiled sub-graph for a single step. */
+  const fetchStepGraph = useCallback(async (stepId: string): Promise<EventGraph | null> => {
+    // Return cached graph if available
+    if (stepGraphs[stepId]) {
+      return stepGraphs[stepId];
+    }
+    try {
+      const res = await fetch(`/api/protocols/${runId}/steps/${stepId}/graph`);
+      if (!res.ok) {
+        console.warn(`Failed to fetch sub-graph for step ${stepId}: ${res.status}`);
+        return null;
+      }
+      const data = await res.json();
+      const graph: EventGraph = data?.graph ?? data;
+      if (graph) {
+        setStepGraphs(prev => ({ ...prev, [stepId]: graph }));
+      }
+      return graph ?? null;
+    } catch (err) {
+      console.error(`Error fetching sub-graph for step ${stepId}:`, err);
+      return null;
+    }
+  }, [runId, stepGraphs]);
+
+  const handleToggleVisibility = useCallback(async (stepId: string) => {
+    // Fetch sub-graph before toggling visibility
+    await fetchStepGraph(stepId);
+    setSteps(prev => prev.map(s => s.stepId === stepId ? { ...s, visible: !s.visible } : s));
+  }, [fetchStepGraph]);
 
   const handlePlayStep = useCallback((step: ProtocolStep) => {
     setPendingStep(step)
