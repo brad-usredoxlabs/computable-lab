@@ -8,7 +8,7 @@
  */
 
 import { useState, useCallback, useEffect, useMemo, type FormEvent, type KeyboardEvent } from 'react'
-import type { PlateEvent, EventDetails } from '../../types/events'
+import type { PlateEvent, EventDetails } from '../types/events'
 
 // ---------------------------------------------------------------------------
 // Types

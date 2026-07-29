@@ -12,7 +12,7 @@
  * - Save button disabled when no changes
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import { SettingsPanel, validateSetting, type StepSetting } from '../SettingsPanel'
 

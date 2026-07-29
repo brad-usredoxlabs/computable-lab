@@ -4,7 +4,7 @@
 
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { cleanup, render, screen, fireEvent } from '@testing-library/react'
-import { DeviationRecorder, detectDeviations, type DetectedChange, type DeviationSavePayload } from '../DeviationRecorder'
+import { DeviationRecorder, detectDeviations, type DeviationSavePayload } from '../DeviationRecorder'
 import type { PlateEvent, EventDetails } from '../../types/events'
 
 afterEach(() => {
