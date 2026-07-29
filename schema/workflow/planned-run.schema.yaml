@@ -407,6 +407,44 @@ $defs:
         type: boolean
       notes:
         type: string
+      subGraphTemplate:
+        type: object
+        description: "Event graph template for this step"
+        additionalProperties: false
+        properties:
+          events:
+            type: array
+            description: "Array of plate events for this step"
+            items:
+              $ref: "./event-graph.schema.yaml#/$defs/PlateEvent"
+          labwares:
+            type: array
+            description: "Array of labware definitions used by this step"
+            items:
+              $ref: "./event-graph.schema.yaml#/$defs/Labware"
+          deckLayout:
+            type: object
+            description: "Deck placement layout for this step"
+            additionalProperties: false
+            properties:
+              placements:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [ slotId ]
+                  properties:
+                    slotId:
+                      type: string
+                    labwareId:
+                      type: string
+                    moduleId:
+                      type: string
+              labwareOrientations:
+                type: object
+                additionalProperties:
+                  type: string
+                  enum: [ portrait, landscape ]
 
   ProtocolCompilerDiagnostic:
     type: object
