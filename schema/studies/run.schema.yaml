@@ -77,6 +77,28 @@ properties:
     type: string
     description: "Active method event-graph instance attached to this run."
 
+  plannedEventGraphId:
+    type: string
+    description: "Event graph representing the planned execution, created when the run is first set up with protocol steps."
+
+  executedEventGraphId:
+    type: string
+    description: "Event graph representing the actual execution, populated as steps are executed and finalized when the run completes."
+
+  protocolVersion:
+    type: string
+    description: "Version of the protocol used for this run. Important for controlled protocols that get versioned."
+
+  isControlled:
+    type: boolean
+    default: false
+    description: "If true, this run is based on a controlled protocol with limited editing of planned events and settings."
+
+  executedBy:
+    type: string
+    pattern: "^USR-"
+    description: "Operator who executed this run. References a user recordId (e.g., USR-00001)."
+
   plannedRunRef:
     type: object
     additionalProperties: false
