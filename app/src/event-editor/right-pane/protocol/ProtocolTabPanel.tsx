@@ -21,6 +21,7 @@ import { StepExecutionModal } from '../../../components/StepExecutionModal'
 import type { StepInfo } from '../../../components/StepExecutionModal'
 import type { AiProtocolCandidateStepSummary } from '../../../types/ai'
 import { updateExecutionState } from '../../../shared/api/execution'
+import { SettingsPanel, type Setting } from './SettingsPanel'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                                */
@@ -621,6 +622,9 @@ function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
   // Cached sub-graphs keyed by stepId
   const [stepGraphs, setStepGraphs] = useState<Record<string, EventGraph>>({})
 
+  // Step settings keyed by stepId (fetched on demand when a step is selected)
+  const [stepSettings, setStepSettings] = useState<Record<string, Setting[]>>({})
+
   // Step execution modal state
   const [modalOpen, setModalOpen] = useState(false)
   const [pendingStep, setPendingStep] = useState<ProtocolStep | null>(null)
@@ -732,6 +736,31 @@ function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
       return null;
     }
   }, [runId, stepGraphs]);
+
+  /** Fetch settings for a single step. */
+  const fetchStepSettings = useCallback(async (stepId: string): Promise<void> => {
+    // Return early if already cached
+    if (stepSettings[stepId]) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/protocols/${runId}/steps/${stepId}/settings`);
+      if (!res.ok) {
+        console.warn(`Failed to fetch settings for step ${stepId}: ${res.status}`);
+        return;
+      }
+      const data = await res.json();
+      const fetchedSettings: Setting[] = data?.settings ?? [];
+      setStepSettings(prev => ({ ...prev, [stepId]: fetchedSettings }));
+    } catch (err) {
+      console.error(`Error fetching settings for step ${stepId}:`, err);
+    }
+  }, [runId, stepSettings]);
+
+  /** Called when settings are saved for a step. */
+  const handleSettingsSave = useCallback((stepId: string, savedSettings: Setting[]) => {
+    setStepSettings(prev => ({ ...prev, [stepId]: savedSettings }));
+  }, []);
 
   const handleToggleVisibility = useCallback(async (stepId: string) => {
     // Fetch sub-graph before toggling visibility
@@ -901,11 +930,27 @@ function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
             isActive={activeStepId === step.stepId}
             onToggle={() => handleToggleVisibility(step.stepId)}
             onPlay={() => handlePlayStep(step)}
-            onSelect={() => setActiveStepId(activeStepId === step.stepId ? null : step.stepId)}
+            onSelect={async () => {
+              const wasActive = activeStepId === step.stepId
+              if (!wasActive) {
+                await fetchStepSettings(step.stepId)
+              }
+              setActiveStepId(wasActive ? null : step.stepId)
+            }}
             onCompletionChange={handleCompletionChange}
           />
         ))}
       </div>
+
+      {/* Settings panel for the selected step */}
+      {activeStepId && stepSettings[activeStepId] !== undefined && (
+        <SettingsPanel
+          protocolId={runId}
+          stepId={activeStepId}
+          settings={stepSettings[activeStepId]}
+          onSave={(savedSettings) => handleSettingsSave(activeStepId, savedSettings)}
+        />
+      )}
 
       {/* Step execution modal */}
       {pendingStep && (
