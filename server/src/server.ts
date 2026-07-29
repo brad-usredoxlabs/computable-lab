@@ -1192,6 +1192,61 @@ export async function createServer(
     routeOpts.configHandlers = configHandlers;
     routeOpts.identityHandlers = identityHandlers;
     registerRoutes(instance, routeOpts);
+    
+    // Protocol Steps Routes (CRUD for protocol step sub-graphs, settings, etc.)
+    {
+      const { registerProtocolStepsRoutes } = await import('./api/routes/protocol-steps.js');
+      registerProtocolStepsRoutes(instance, ctx);
+    }
+
+    // Extraction Protocol Steps Routes
+    {
+      const { registerExtractionProtocolStepsRoutes } = await import('./api/routes/extraction-protocol-steps.js');
+      registerExtractionProtocolStepsRoutes(instance, ctx);
+    }
+
+    // Run Execution Routes (planned → in_progress → completed lifecycle)
+    {
+      const { registerRunExecutionRoutes } = await import('./api/routes/run-execution.js');
+      registerRunExecutionRoutes(instance, ctx);
+    }
+
+    // Protocol Evolution Routes (need ctx access)
+    instance.get('/protocols/:id/evolution-suggestions', async (request, reply) => {
+      try {
+        const { createProtocolEvolutionService } = await import('./services/ProtocolEvolutionService.js');
+        const protocolId = (request.params as { id: string }).id;
+        const evolutionService = createProtocolEvolutionService(ctx);
+        const analysis = await evolutionService.analyzeProtocolEvolution(protocolId);
+        return reply.send(analysis);
+      } catch (error) {
+        console.error('Error analyzing protocol evolution:', error);
+        return reply.status(500).send({ 
+          error: error instanceof Error ? error.message : 'Failed to analyze protocol evolution' 
+        });
+      }
+    });
+    
+    instance.post('/protocols/:id/evolve', async (request, reply) => {
+      try {
+        const { createProtocolEvolutionService } = await import('./services/ProtocolEvolutionService.js');
+        const protocolId = (request.params as { id: string }).id;
+        const body = request.body as { suggestionId: string; changes: Array<{ stepOrdinal: number; proposedAction: string; rationale: string }>; userNotes?: string };
+        const evolutionService = createProtocolEvolutionService(ctx);
+        const result = await evolutionService.createProtocolVersion(
+          protocolId,
+          body.suggestionId,
+          body.changes,
+          body.userNotes
+        );
+        return reply.send(result);
+      } catch (error) {
+        console.error('Error creating protocol version:', error);
+        return reply.status(500).send({ 
+          error: error instanceof Error ? error.message : 'Failed to create protocol version' 
+        });
+      }
+    });
   }, { prefix: '/api' });
 
   // Rebuild library index on startup

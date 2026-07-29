@@ -358,16 +358,27 @@ function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
         // Try to get protocol steps from the run's protocol context
         const res = await fetch(`/api/protocols/${runId}/steps`)
         if (!res.ok) {
-          // Fallback: try getting the protocol candidate from the run
-          const fallbackRes = await fetch(`/api/runs/${runId}/protocol-candidate`)
-          if (!fallbackRes.ok) {
-            throw new Error(`Failed to load protocol steps (${res.status} / ${fallbackRes.status})`)
-          }
-          const fallbackData = await fallbackRes.json()
-          const candidateSteps = fallbackData?.candidate?.steps ?? fallbackData?.steps ?? []
-          if (!cancelled) {
-            setSteps(candidateSteps.map((s: any, i: number) => toProtocolStep(s, i)))
-            setError(null)
+          // Fallback 1: try the extraction API
+          const extRes = await fetch(`/api/extractions/${runId}/protocol-steps`)
+          if (!extRes.ok) {
+            // Fallback 2: try getting the protocol candidate from the run
+            const fallbackRes = await fetch(`/api/runs/${runId}/protocol-candidate`)
+            if (!fallbackRes.ok) {
+              throw new Error(`Failed to load protocol steps (${res.status} / ${extRes.status} / ${fallbackRes.status})`)
+            }
+            const fallbackData = await fallbackRes.json()
+            const candidateSteps = fallbackData?.candidate?.steps ?? fallbackData?.steps ?? []
+            if (!cancelled) {
+              setSteps(candidateSteps.map((s: any, i: number) => toProtocolStep(s, i)))
+              setError(null)
+            }
+          } else {
+            const extData = await extRes.json()
+            const extSteps = extData?.steps ?? extData ?? []
+            if (!cancelled) {
+              setSteps(extSteps.map((s: any, i: number) => toProtocolStep(s, i)))
+              setError(null)
+            }
           }
         } else {
           const data = await res.json()
