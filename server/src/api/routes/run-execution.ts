@@ -800,4 +800,96 @@ export function registerRunExecutionRoutes(
       }
     },
   );
+
+  // ========================================================================
+  // POST /api/runs/:runId/settings
+  // ========================================================================
+  /**
+   * Save a setting value for a step in a run.
+   *
+   * Stores operator-provided setting overrides in the run's executionSettings
+   * under executionSettings[stepId][settingId]. Used to capture what values
+   * an operator actually used during execution (may differ from protocol defaults).
+   *
+   * Body: { stepId: string, settingId: string, value: unknown }
+   * Returns: { success: true, stepId: string, settingId: string, value: unknown }
+   */
+  fastify.post<
+    { Params: { runId: string }; Body: { stepId: string; settingId: string; value: unknown } },
+    { success: true; stepId: string; settingId: string; value: unknown } | ErrorResponse
+  >(
+    '/runs/:runId/settings',
+    async (
+      request: FastifyRequest<{ Params: { runId: string }; Body: { stepId: string; settingId: string; value: unknown } }>,
+      reply: FastifyReply,
+    ) => {
+      try {
+        const runId = request.params.runId;
+        const body = request.body ?? {};
+
+        // Validate required fields
+        if (!body.stepId) {
+          reply.status(400);
+          return { error: 'MISSING_FIELD', message: 'stepId is required' };
+        }
+        if (!body.settingId) {
+          reply.status(400);
+          return { error: 'MISSING_FIELD', message: 'settingId is required' };
+        }
+
+        // Load the run record
+        const record = await ctx.store.get(runId);
+        if (!record) {
+          reply.status(404);
+          return { error: 'RUN_NOT_FOUND', message: `Run '${runId}' not found` };
+        }
+
+        const payload = record.payload as RunPayload;
+        if (payload.kind !== 'run') {
+          reply.status(400);
+          return { error: 'NOT_A_RUN', message: `Record '${runId}' is not a run` };
+        }
+
+        // Validate that the run is in_progress
+        const transition = validateTransition(
+          payload.status,
+          ['in_progress'],
+          'save setting',
+          runId,
+        );
+        if (!transition.ok) {
+          reply.status(400);
+          return transition;
+        }
+
+        // Initialize executionSettings if needed
+        const executionSettings = (payload.executionSettings as Record<string, Record<string, unknown>>) ?? {};
+        const stepSettings = (executionSettings[body.stepId] as Record<string, unknown>) ?? {};
+        stepSettings[body.settingId] = body.value;
+        executionSettings[body.stepId] = stepSettings;
+        payload.executionSettings = executionSettings;
+
+        // Save updated run record
+        await ctx.store.update({
+          envelope: { ...record, payload },
+          message: `Set setting '${body.settingId}' for step '${body.stepId}' in run '${runId}'`,
+        });
+
+        reply.status(200);
+        return {
+          success: true,
+          stepId: body.stepId,
+          settingId: body.settingId,
+          value: body.value,
+        };
+      } catch (error) {
+        fastify.log.error({ error }, `Error saving setting: ${error}`);
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to save setting',
+        };
+      }
+    },
+  );
 }

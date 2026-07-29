@@ -80,6 +80,16 @@ interface StepResponse {
   step: ProtocolStep;
 }
 
+/** GET /:id/steps/:stepId/settings response */
+interface SettingsResponse {
+  settings: Setting[];
+}
+
+/** PATCH /:id/steps/:stepId/settings request body */
+interface UpdateSettingsRequest {
+  settings: Setting[];
+}
+
 /** PATCH /:id/steps/:stepId request body (partial step update) */
 interface UpdateStepRequest {
   label?: string;
@@ -517,6 +527,104 @@ export function registerProtocolStepsRoutes(
       return {
         error: 'INTERNAL_ERROR',
         message: error instanceof Error ? error.message : 'Failed to compile step graph',
+      };
+    }
+  });
+
+  // ========================================================================
+  // GET /api/protocols/:protocolId/steps/:stepId/settings
+  // ========================================================================
+  fastify.get<
+    { Params: { protocolId: string; stepId: string } },
+    SettingsResponse | ErrorResponse
+  >('/protocols/:protocolId/steps/:stepId/settings', async (
+    request: FastifyRequest<{ Params: { protocolId: string; stepId: string } }>,
+    reply: FastifyReply,
+  ) => {
+    try {
+      const protocolId = request.params.protocolId;
+      const stepId = request.params.stepId;
+
+      const record = await ctx.store.get(protocolId);
+      if (!record) {
+        reply.status(404);
+        return { error: 'PROTOCOL_NOT_FOUND', message: `Protocol '${protocolId}' not found` };
+      }
+
+      const payload = record.payload as Record<string, unknown>;
+      if (payload.kind !== 'protocol') {
+        reply.status(400);
+        return { error: 'NOT_A_PROTOCOL', message: `Record '${protocolId}' is not a protocol` };
+      }
+
+      const steps = (payload.steps as ProtocolStep[]) ?? [];
+      const result = findStep(steps, stepId);
+      if (!result) {
+        reply.status(404);
+        return { error: 'STEP_NOT_FOUND', message: `Step '${stepId}' not found in protocol '${protocolId}'` };
+      }
+
+      return { settings: result.step.settings ?? [] };
+    } catch (error) {
+      console.error('Error fetching step settings:', error);
+      reply.status(500);
+      return {
+        error: 'INTERNAL_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to fetch step settings',
+      };
+    }
+  });
+
+  // ========================================================================
+  // PATCH /api/protocols/:protocolId/steps/:stepId/settings
+  // ========================================================================
+  fastify.patch<
+    { Params: { protocolId: string; stepId: string }; Body: UpdateSettingsRequest },
+    SettingsResponse | ErrorResponse
+  >('/protocols/:protocolId/steps/:stepId/settings', async (
+    request: FastifyRequest<{ Params: { protocolId: string; stepId: string }; Body: UpdateSettingsRequest }>,
+    reply: FastifyReply,
+  ) => {
+    try {
+      const protocolId = request.params.protocolId;
+      const stepId = request.params.stepId;
+      const body = request.body;
+
+      const record = await ctx.store.get(protocolId);
+      if (!record) {
+        reply.status(404);
+        return { error: 'PROTOCOL_NOT_FOUND', message: `Protocol '${protocolId}' not found` };
+      }
+
+      const payload = record.payload as Record<string, unknown>;
+      if (payload.kind !== 'protocol') {
+        reply.status(400);
+        return { error: 'NOT_A_PROTOCOL', message: `Record '${protocolId}' is not a protocol` };
+      }
+
+      const steps = (payload.steps as ProtocolStep[]) ?? [];
+      const result = findStep(steps, stepId);
+      if (!result) {
+        reply.status(404);
+        return { error: 'STEP_NOT_FOUND', message: `Step '${stepId}' not found in protocol '${protocolId}'` };
+      }
+
+      // Update settings on the step
+      result.step.settings = body.settings ?? [];
+      payload.steps = steps;
+
+      await ctx.store.update({
+        envelope: { ...record, payload },
+        message: `Update settings for step '${stepId}' in protocol '${protocolId}'`,
+      });
+
+      return { settings: result.step.settings ?? [] };
+    } catch (error) {
+      console.error('Error updating step settings:', error);
+      reply.status(500);
+      return {
+        error: 'INTERNAL_ERROR',
+        message: error instanceof Error ? error.message : 'Failed to update step settings',
       };
     }
   });
