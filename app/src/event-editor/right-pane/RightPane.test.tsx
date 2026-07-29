@@ -30,6 +30,12 @@ vi.mock('./find/FindTabPanel', () => ({
 vi.mock('./details/DetailsTabPanel', () => ({
   DetailsTabPanel: () => <div data-testid="panel-details">DETAILS</div>,
 }))
+vi.mock('./execution/ExecutionTabPanel', () => ({
+  ExecutionTabPanel: () => <div data-testid="panel-execution">EXECUTION</div>,
+}))
+vi.mock('./protocol/ProtocolTabPanel', () => ({
+  ProtocolTabPanel: () => <div data-testid="panel-protocol">PROTOCOL</div>,
+}))
 
 import { RightPane } from './RightPane'
 
@@ -99,11 +105,11 @@ describe('RightPane', () => {
     expect(screen.queryByTestId('panel-find')).toBeNull()
   })
 
-  it('renders all four tab buttons in order: AI · Find · Search · Details', async () => {
+  it('renders all six tab buttons in order: AI · Find · Search · Details · Execution · Protocol', async () => {
     renderRightPane()
     await screen.findByTestId('panel-find')
     const tabs = screen.getAllByRole('tab').map((el) => el.textContent)
-    expect(tabs).toEqual(['AI', 'Find', 'Search', 'Details'])
+    expect(tabs).toEqual(['AI', 'Find', 'Search', 'Details', 'Execution', 'Protocol'])
   })
 
   it('aria-selected reflects the active mode', async () => {

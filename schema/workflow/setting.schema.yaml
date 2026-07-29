@@ -1,0 +1,92 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/setting.schema.yaml"
+title: "Setting"
+description: >
+  A Setting is a step-level editable parameter. Settings define the inputs
+  that an operator can adjust at execution time (e.g., incubation time,
+  temperature, shaking speed, sample names, volumes). They carry a type,
+  optional constraints, and flags that control mutability during execution.
+
+type: object
+unevaluatedProperties: false
+
+required:
+- settingId
+- label
+- type
+
+properties:
+  settingId:
+    type: string
+    pattern: "^[a-z][a-z0-9-]*$"
+    description: "Unique identifier within a protocol step (lowercase alphanumeric with hyphens)."
+
+  label:
+    type: string
+    minLength: 1
+    description: "Human-readable label shown to the operator (e.g., 'Incubation Time')."
+
+  description:
+    type: string
+    description: "Optional detailed description of this setting and its role in the step."
+
+  type:
+    type: string
+    enum: [ string, number, boolean, duration, temperature, volume, select ]
+    description: >
+      Data type of the setting value. Specialized types (duration, temperature, volume)
+      imply appropriate UI widgets and unit handling.
+
+  defaultValue:
+    description: "Default value if not overridden. Type depends on the setting type."
+    oneOf:
+      - type: string
+      - type: number
+      - type: boolean
+      - type: null
+
+  isControlled:
+    type: boolean
+    default: false
+    description: >
+      When true, changes to this setting require approval before they take effect.
+      Controlled settings are typically critical experimental parameters (e.g., drug
+      concentration, temperature setpoints).
+
+  isVariable:
+    type: boolean
+    default: true
+    description: >
+      When true, this setting can be edited during execution. Variable settings are
+      expected to change between runs or even within a run (e.g., sample names,
+      operator notes).
+
+  options:
+    type: array
+    items:
+      type: string
+    uniqueItems: true
+    minItems: 1
+    description: "List of allowed values when type is 'select'."
+
+  unit:
+    type: string
+    description: >
+      Human-readable unit hint displayed alongside the value. Examples:
+      'min', 's', 'C', 'uL', 'mL', 'RPM', 'mg/mL'.
+
+  constraints:
+    type: object
+    unevaluatedProperties: false
+    description: "Numeric bounds applied when type is number, duration, temperature, or volume."
+    properties:
+      minimum:
+        type: number
+        description: "Inclusive lower bound."
+      maximum:
+        type: number
+        description: "Inclusive upper bound."
+      step:
+        type: number
+        exclusiveMinimum: 0
+        description: "Preferred increment for step-up/down controls."
