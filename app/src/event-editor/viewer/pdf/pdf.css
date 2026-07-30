@@ -350,3 +350,336 @@
   height: 18px;
   background: var(--cl-border);
 }
+
+.pdf-toolbar__convert-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--cl-accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pdf-toolbar__convert-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---- Convert to Protocol Modal ------------------------------------ */
+
+.convert-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.convert-modal-overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.convert-modal {
+  position: relative;
+  background: var(--cl-bg);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  width: 90%;
+  max-width: 640px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.convert-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--cl-border);
+  flex-shrink: 0;
+}
+
+.convert-modal__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--cl-text);
+}
+
+.convert-modal__close {
+  appearance: none;
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  color: var(--cl-text-dim);
+  padding: 4px;
+  line-height: 1;
+}
+
+.convert-modal__close:hover {
+  color: var(--cl-text);
+}
+
+.convert-modal__body {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.convert-modal__body--center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.convert-modal__info {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: var(--cl-text-dim);
+  line-height: 1.5;
+}
+
+.convert-modal__warning {
+  color: var(--cl-danger);
+  font-weight: 500;
+}
+
+.convert-modal__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--cl-border);
+  border-top-color: var(--cl-accent);
+  border-radius: 50%;
+  animation: convert-modal-spin 0.8s linear infinite;
+}
+
+@keyframes convert-modal-spin {
+  to { transform: rotate(360deg); }
+}
+
+.convert-modal__label {
+  margin: 0;
+  font-size: 14px;
+  color: var(--cl-text-dim);
+}
+
+.convert-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.convert-modal__btn--primary,
+.convert-modal__btn--secondary {
+  appearance: none;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid var(--cl-border);
+  font: inherit;
+}
+
+.convert-modal__btn--primary {
+  background: var(--cl-accent);
+  color: #fff;
+  border-color: var(--cl-accent);
+}
+
+.convert-modal__btn--primary:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.convert-modal__btn--secondary {
+  background: var(--cl-bg-elev);
+  color: var(--cl-text);
+}
+
+.convert-modal__btn--secondary:hover:not(:disabled) {
+  background: var(--cl-bg-elev-2);
+}
+
+/* Preview */
+.convert-modal__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.convert-modal__preview-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--cl-text);
+}
+
+.convert-modal__preview-scope {
+  margin: 0;
+  font-size: 13px;
+  color: var(--cl-text-dim);
+  font-style: italic;
+}
+
+.convert-modal__stats {
+  display: flex;
+  gap: 16px;
+  padding: 12px;
+  background: var(--cl-bg-elev);
+  border-radius: 6px;
+}
+
+.convert-modal__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.convert-modal__stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--cl-text);
+}
+
+.convert-modal__stat-label {
+  font-size: 11px;
+  color: var(--cl-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.convert-modal__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.convert-modal__step {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--cl-border);
+  font-size: 13px;
+}
+
+.convert-modal__step:last-child {
+  border-bottom: none;
+}
+
+.convert-modal__step-num {
+  font-weight: 600;
+  color: var(--cl-text-dim);
+  flex-shrink: 0;
+  min-width: 24px;
+}
+
+.convert-modal__step-label {
+  font-weight: 500;
+  color: var(--cl-text);
+  flex-shrink: 0;
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.convert-modal__step-text {
+  margin: 0;
+  color: var(--cl-text-dim);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Diagnostics */
+.convert-modal__diagnostics {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.convert-modal__diagnostics--warning {
+  background: color-mix(in srgb, var(--cl-danger) 8%, transparent);
+  color: var(--cl-danger);
+}
+
+.convert-modal__diagnostics--error {
+  background: color-mix(in srgb, var(--cl-danger) 12%, transparent);
+  color: var(--cl-danger);
+  font-weight: 500;
+}
+
+.convert-modal__diagnostic {
+  display: flex;
+  gap: 8px;
+}
+
+.convert-modal__diagnostic-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* Error state */
+.convert-modal__error {
+  padding: 10px 14px;
+  background: color-mix(in srgb, var(--cl-danger) 8%, transparent);
+  color: var(--cl-danger);
+  border-radius: 6px;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+/* Done state */
+.convert-modal__done-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--cl-accent);
+  color: #fff;
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.convert-modal__done-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--cl-text);
+}
+
+.convert-modal__done-id {
+  margin: 0;
+  font-size: 13px;
+  color: var(--cl-text-dim);
+}
+
+.convert-modal__done-id code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: var(--cl-bg-elev);
+  padding: 2px 8px;
+  border-radius: 4px;
+}

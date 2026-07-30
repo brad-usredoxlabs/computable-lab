@@ -15,6 +15,7 @@
 
 import { useState, type FormEvent } from 'react'
 import { usePdfViewer } from './PdfViewerContext'
+import { ConvertToProtocolModal } from './ConvertToProtocolModal'
 
 export interface PdfToolbarProps {
   /** Provided by the dispatcher; redundant with context but kept for symmetry. */
@@ -29,6 +30,7 @@ export function PdfToolbar({ artifactId }: PdfToolbarProps) {
   // Same for search — only commit on Enter / blur so we don't run
   // findInDocument on every keystroke.
   const [searchInput, setSearchInput] = useState('')
+  const [convertModalOpen, setConvertModalOpen] = useState(false)
 
   const isReady = v.pdfState.kind === 'ready'
 
@@ -45,7 +47,8 @@ export function PdfToolbar({ artifactId }: PdfToolbarProps) {
   }
 
   return (
-    <div
+    <>
+      <div
       className="viewer-toolbar viewer-toolbar--pdf"
       data-testid="pdf-toolbar"
       data-artifact-id={artifactId}
@@ -132,6 +135,24 @@ export function PdfToolbar({ artifactId }: PdfToolbarProps) {
           Find
         </button>
       </form>
+      <span className="pdf-toolbar__divider" aria-hidden />
+      <button
+        type="button"
+        className="pdf-toolbar__convert-btn"
+        onClick={() => setConvertModalOpen(true)}
+        disabled={!isReady}
+        data-testid="pdf-toolbar-convert-protocol"
+        title="Extract a universal protocol from this PDF"
+      >
+        Convert to Protocol
+      </button>
     </div>
+    <ConvertToProtocolModal
+      isOpen={convertModalOpen}
+      onClose={() => setConvertModalOpen(false)}
+      artifactId={artifactId}
+      artifactTitle={v.title}
+    />
+    </>
   )
 }
