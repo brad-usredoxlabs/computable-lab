@@ -22,8 +22,10 @@ import type { StepInfo } from '../../../components/StepExecutionModal'
 import type { AiProtocolCandidateStepSummary } from '../../../types/ai'
 import type { PlateEvent } from '../../../types/events'
 import { updateExecutionState } from '../../../shared/api/execution'
+import { apiClient, type ProtocolContextResponse } from '../../../shared/api/client'
 import { SettingsPanel, type Setting } from './SettingsPanel'
 import { useProtocolSelection, ProtocolSelectionProvider, type ProtocolStepGraph } from '../../protocol/ProtocolSelectionContext'
+import { ProtocolSelector } from './ProtocolSelector'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                                */
@@ -616,7 +618,7 @@ function RunHeader({
 /* Inner panel (uses ExecutionProvider)                                 */
 /* ------------------------------------------------------------------ */
 
-function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
+function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   const [steps, setSteps] = useState<ProtocolStep[]>([])
   const protocolSelection = useProtocolSelection()
   const activeStepId = protocolSelection?.activeStepId ?? null
@@ -628,6 +630,9 @@ function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
   const setContextStepGraph = protocolSelection?.setStepGraph ?? (() => {})
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [noProtocol, setNoProtocol] = useState(false)
+  const [protocolContext, setProtocolContext] = useState<ProtocolContextResponse | null>(null)
+  const [refetchTrigger, setRefetchTrigger] = useState(0)
 
   // Step settings keyed by stepId (fetched on demand when a step is selected)
   const [stepSettings, setStepSettings] = useState<Record<string, Setting[]>>({})
@@ -706,10 +711,17 @@ function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
         }
       } catch (err) {
         if (!cancelled) {
-          // If the API doesn't exist yet, start with empty steps
-          // The execution tab panel uses MOCK_STEPS as a pattern
-          setError(err instanceof Error ? err.message : String(err))
+          // All three endpoints failed — no protocol is attached to this run.
+          // Show the protocol selector instead of an error.
+          setError(null)
+          setNoProtocol(true)
           setSteps([])
+          try {
+            const ctx = await apiClient.getProtocolContext({ studyId })
+            if (!cancelled) setProtocolContext(ctx)
+          } catch {
+            // If context fetch also fails, selector will show empty state
+          }
         }
       } finally {
         if (!cancelled) setIsLoading(false)
@@ -718,7 +730,7 @@ function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
 
     void fetchSteps()
     return () => { cancelled = true }
-  }, [runId])
+  }, [runId, refetchTrigger])
 
   // Initialize visibleSteps when steps are first loaded — all steps
   // default to visible so their events ghost onto the canvas.
@@ -919,6 +931,19 @@ function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
     }
   }, [runId, steps, operatorName, mode, setExecStep])
 
+  if (noProtocol) {
+    return (
+      <ProtocolSelector
+        runId={runId}
+        studyId={studyId}
+        context={protocolContext}
+        onAttached={() => {
+          setNoProtocol(false)
+          setRefetchTrigger(n => n + 1)
+        }}
+      />
+    )
+  }
   if (isLoading) return <LoadingState />
   if (error && steps.length === 0) return <ErrorState error={error} />
   if (steps.length === 0) return <EmptyState />
