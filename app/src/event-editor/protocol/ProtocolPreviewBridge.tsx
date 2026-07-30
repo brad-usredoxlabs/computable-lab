@@ -24,8 +24,11 @@ import type { Labware } from '../../types/labware'
 import type { EventEditorPlacement } from '../types'
 
 export function ProtocolPreviewBridge() {
-  const { visibleSteps, stepGraphs } = useProtocolSelection()
+  const protocolSelection = useProtocolSelection()
   const { state, actions } = useEventEditor()
+
+  const visibleSteps = protocolSelection?.visibleSteps ?? new Set<string>()
+  const stepGraphs = protocolSelection?.stepGraphs ?? {}
 
   useEffect(() => {
     const allEvents: PlateEvent[] = []

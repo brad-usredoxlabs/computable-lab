@@ -618,15 +618,14 @@ function RunHeader({
 
 function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
   const [steps, setSteps] = useState<ProtocolStep[]>([])
-  const {
-    activeStepId,
-    setActiveStepId,
-    visibleSteps,
-    toggleStepVisibility,
-    setVisibleSteps,
-    stepGraphs: contextStepGraphs,
-    setStepGraph: setContextStepGraph,
-  } = useProtocolSelection()
+  const protocolSelection = useProtocolSelection()
+  const activeStepId = protocolSelection?.activeStepId ?? null
+  const setActiveStepId = protocolSelection?.setActiveStepId ?? (() => {})
+  const visibleSteps = protocolSelection?.visibleSteps ?? new Set<string>()
+  const toggleStepVisibility = protocolSelection?.toggleStepVisibility ?? (() => {})
+  const setVisibleSteps = protocolSelection?.setVisibleSteps ?? (() => {})
+  const contextStepGraphs = protocolSelection?.stepGraphs ?? {}
+  const setContextStepGraph = protocolSelection?.setStepGraph ?? (() => {})
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 

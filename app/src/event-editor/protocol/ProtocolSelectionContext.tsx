@@ -100,10 +100,6 @@ export function ProtocolSelectionProvider({ children }: { children: ReactNode })
   )
 }
 
-export function useProtocolSelection(): ProtocolSelectionState {
-  const ctx = useContext(ProtocolSelectionContext)
-  if (!ctx) {
-    throw new Error('useProtocolSelection must be used inside <ProtocolSelectionProvider>')
-  }
-  return ctx
+export function useProtocolSelection(): ProtocolSelectionState | null {
+  return useContext(ProtocolSelectionContext)
 }
