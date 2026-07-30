@@ -23,7 +23,7 @@ import type { AiProtocolCandidateStepSummary } from '../../../types/ai'
 import type { PlateEvent } from '../../../types/events'
 import { updateExecutionState } from '../../../shared/api/execution'
 import { SettingsPanel, type Setting } from './SettingsPanel'
-import { useProtocolSelection, type ProtocolStepGraph } from '../../protocol/ProtocolSelectionContext'
+import { useProtocolSelection, ProtocolSelectionProvider, type ProtocolStepGraph } from '../../protocol/ProtocolSelectionContext'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                                */
@@ -1000,8 +1000,10 @@ export function ProtocolTabPanel({ runId, studyId: _studyId }: ProtocolTabPanelP
   // studyId kept in the props interface for backward compatibility with RightPane
   void _studyId
   return (
-    <ExecutionProvider>
-      <ProtocolTabPanelInner runId={runId} studyId={_studyId} />
-    </ExecutionProvider>
+    <ProtocolSelectionProvider>
+      <ExecutionProvider>
+        <ProtocolTabPanelInner runId={runId} studyId={_studyId} />
+      </ExecutionProvider>
+    </ProtocolSelectionProvider>
   )
 }
