@@ -211,26 +211,69 @@ export interface ProtocolBuilderHandlers {
 }
 
 /**
- * Build the extraction prompt for AI-based protocol extraction.
+ * Split text into chunks of approximately maxChars characters, preferring
+ * to break on double newlines (paragraph boundaries). Each chunk is at most
+ * maxChars characters.
  */
-function buildExtractionPrompt(
-  text: string,
+function chunkText(text: string, maxChars = 10000): string[] {
+  if (text.length <= maxChars) return [text];
+
+  const chunks: string[] = [];
+  let start = 0;
+
+  while (start < text.length) {
+    let end = start + maxChars;
+    if (end >= text.length) {
+      chunks.push(text.slice(start));
+      break;
+    }
+
+    // Try to find a paragraph break near the end
+    const searchStart = Math.max(start, end - 500);
+    const breakPoint = text.lastIndexOf('\n\n', end);
+    if (breakPoint > searchStart) {
+      end = breakPoint + 2; // include the newline
+    } else {
+      // Try single newline
+      const singleBreak = text.lastIndexOf('\n', end);
+      if (singleBreak > searchStart) {
+        end = singleBreak + 1;
+      }
+    }
+
+    chunks.push(text.slice(start, end));
+    start = end;
+  }
+
+  return chunks.filter((c) => c.trim().length > 0);
+}
+
+/**
+ * Build a prompt for extracting protocol data from a single chunk of a larger document.
+ */
+function buildChunkExtractionPrompt(
+  chunk: string,
+  chunkIndex: number,
+  totalChunks: number,
   documentId?: string,
   vendor?: string,
 ): string {
   const parts = [
-    'You are an AI assistant that extracts structured protocol information from vendor documentation text.',
+    'You are an AI assistant that extracts structured protocol information from a section of a vendor protocol document.',
     '',
-    'Extract the following from the text below:',
-    '- title: A concise title for the protocol',
-    '- scope: What the protocol covers (optional)',
-    '- materials: Array of materials used (each with label, role, confidence)',
-    '- labware: Array of labware items (each with label, role)',
-    '- equipment: Array of equipment items (each with label)',
-    '- steps: Array of protocol steps (each with stepNumber, text, materials, labware, equipment, notes, confidence)',
-    '- diagnostics: Any extraction issues or warnings (each with code, severity, message)',
+    `You are processing section ${chunkIndex + 1} of ${totalChunks} of the document.`,
+    'Extract ONLY the protocol steps and materials mentioned in THIS section.',
+    'Do not invent steps that are not in the text. If this section contains no protocol steps, return empty arrays.',
     '',
-    'Return ONLY a JSON object with this structure:',
+    'Extract:',
+    '- title: Only include if this is the FIRST section and contains the protocol title',
+    '- materials: Materials mentioned in this section',
+    '- labware: Labware mentioned in this section',
+    '- equipment: Equipment mentioned in this section',
+    '- steps: Protocol steps in this section (each with stepNumber relative to this section, text, materials, labware, equipment, notes, confidence)',
+    '- diagnostics: Any extraction issues',
+    '',
+    'Return ONLY a JSON object:',
     JSON.stringify({
       kind: 'vendor-protocol-candidate',
       title: '',
@@ -244,10 +287,195 @@ function buildExtractionPrompt(
     '',
     ...(documentId ? [`Document ID: ${documentId}`, ''] : []),
     ...(vendor ? [`Vendor: ${vendor}`, ''] : []),
-    'Protocol text:',
-    text,
+    'Section text:',
+    chunk,
   ];
   return parts.join('\n');
+}
+
+/**
+ * Repair common JSON issues: trailing commas, unquoted keys, single quotes.
+ */
+function repairJson(text: string): string {
+  let s = text;
+  // Quote unquoted keys: identifier followed by colon
+  s = s.replace(/(?<=[{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '"$1":');
+  // Remove trailing commas before } or ]
+  s = s.replace(/,(\s*[\}\]])/g, '$1');
+  // Replace single quotes with double quotes (rough approximation)
+  // Only replace single quotes that are not inside a double-quoted string
+  s = s.replace(/'(\\'|[^']*?)'/g, (m, _escaped, offset, str) => {
+    let inDq = 0;
+    for (let i = 0; i < offset; i++) {
+      if (str[i] === '\\' && str[i - 1] === '\\') continue;
+      if (str[i] === '"') inDq++;
+    }
+    return inDq % 2 === 0 ? `"${m.slice(1, -1)}"` : m;
+  });
+  return s;
+}
+
+/**
+ * Extract JSON from AI response — handles markdown code blocks,
+ * direct JSON, bracket-balanced extraction, and common JSON repair.
+ */
+function extractJsonFromResponse(text: string): unknown {
+  const trimmed = text.trim();
+
+  // 1. Try direct parse first
+  try { return JSON.parse(trimmed); } catch {}
+
+  // 2. Try to extract from markdown code blocks
+  const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/gi;
+  let match: RegExpExecArray | null;
+  while ((match = codeBlockRegex.exec(trimmed)) !== null) {
+    if (match[1]) {
+      try { return JSON.parse(match[1].trim()); } catch {}
+    }
+  }
+
+  // 3. Bracket-balanced extraction — find outermost { ... } with matching braces
+  function findBalancedBraces(src: string): string[] {
+    const results: string[] = [];
+    let i = 0;
+    while (i < src.length) {
+      const start = src.indexOf('{', i);
+      if (start === -1) break;
+      let depth = 0;
+      let inString = false;
+      let escape = false;
+      for (let j = start; j < src.length; j++) {
+        const ch = src[j];
+        if (escape) { escape = false; continue; }
+        if (ch === '\\') { escape = inString; continue; }
+        if (ch === '"') { inString = !inString; continue; }
+        if (inString) continue;
+        if (ch === '{') { depth++; }
+        else if (ch === '}') { depth--; if (depth === 0) { results.push(src.substring(start, j + 1)); i = j + 1; break; } }
+      }
+      if (depth > 0) i = start + 1;
+    }
+    return results;
+  }
+
+  for (const balanced of findBalancedBraces(trimmed)) {
+    try { return JSON.parse(balanced); } catch {}
+    // Try repaired version
+    try { return JSON.parse(repairJson(balanced)); } catch {}
+  }
+
+  // 4. Try repairing the entire text and parsing
+  try { return JSON.parse(repairJson(trimmed)); } catch {}
+
+  throw new Error(`Could not extract valid JSON from AI response (${trimmed.slice(0, 300)}${trimmed.length > 300 ? '...' : ''})`);
+}
+
+/**
+ * Merge multiple per-chunk extraction results into a single candidate.
+ * - Title taken from first chunk that has one
+ * - Steps concatenated and renumbered
+ * - Materials/labware/equipment deduplicated by label
+ * - Diagnostics concatenated
+ */
+function mergeChunkResults(chunks: AiProtocolCandidateSummary[]): AiProtocolCandidateSummary {
+  if (chunks.length === 0) {
+    return {
+      kind: 'vendor-protocol-candidate',
+      title: 'Untitled Protocol',
+      steps: [],
+      diagnostics: [{ code: 'NO_CONTENT', severity: 'warning', message: 'No protocol content was extracted from the document' }],
+    };
+  }
+  if (chunks.length === 1) return chunks[0]!;
+
+  // Title: first non-empty
+  const title = chunks.find((c) => c.title?.trim())?.title ?? 'Untitled Protocol';
+
+  // Scope: first non-empty
+  const scope = chunks.find((c) => c.scope?.trim())?.scope;
+
+  // Steps: concatenate and renumber
+  const allSteps: Array<{
+    stepNumber?: number;
+    title?: string;
+    text: string;
+    materials?: string[];
+    labware?: string[];
+    equipment?: string[];
+    notes?: string[];
+    confidence?: number;
+    uncertainty?: 'ambiguous' | 'inferred' | 'unresolved' | 'table-derived';
+  }> = [];
+  let stepNum = 1;
+  for (const chunk of chunks) {
+    for (const step of (chunk.steps ?? [])) {
+      allSteps.push({
+        ...step,
+        stepNumber: stepNum++,
+      });
+    }
+  }
+
+  // Materials: deduplicate by label
+  const materialLabels = new Set<string>();
+  const materials: Array<{ label: string; role?: string; confidence?: number }> = [];
+  for (const chunk of chunks) {
+    for (const mat of (chunk.materials ?? [])) {
+      if (!materialLabels.has(mat.label)) {
+        materialLabels.add(mat.label);
+        materials.push(mat);
+      }
+    }
+  }
+
+  // Labware: deduplicate by label
+  const labwareLabels = new Set<string>();
+  const labware: Array<{ label: string; role?: string }> = [];
+  for (const chunk of chunks) {
+    for (const lw of (chunk.labware ?? [])) {
+      if (!labwareLabels.has(lw.label)) {
+        labwareLabels.add(lw.label);
+        labware.push(lw);
+      }
+    }
+  }
+
+  // Equipment: deduplicate by label
+  const equipmentLabels = new Set<string>();
+  const equipment: Array<{ label: string }> = [];
+  for (const chunk of chunks) {
+    for (const eq of (chunk.equipment ?? [])) {
+      if (!equipmentLabels.has(eq.label)) {
+        equipmentLabels.add(eq.label);
+        equipment.push(eq);
+      }
+    }
+  }
+
+  // Diagnostics: concatenate
+  const diagnostics: Array<{ code: string; severity: 'info' | 'warning' | 'error'; message: string }> = [];
+  for (const chunk of chunks) {
+    diagnostics.push(...(chunk.diagnostics ?? []));
+  }
+  // Add a diagnostic about chunking if we had multiple chunks
+  if (chunks.length > 1) {
+    diagnostics.push({
+      code: 'CHUNKED_EXTRACTION',
+      severity: 'info',
+      message: `Document was processed in ${chunks.length} sections and merged`,
+    });
+  }
+
+  return {
+    kind: 'vendor-protocol-candidate',
+    title,
+    ...(scope ? { scope } : {}),
+    ...(materials.length > 0 ? { materials } : {}),
+    ...(labware.length > 0 ? { labware } : {}),
+    ...(equipment.length > 0 ? { equipment } : {}),
+    steps: allSteps,
+    ...(diagnostics.length > 0 ? { diagnostics } : {}),
+  };
 }
 
 export function createProtocolBuilderHandlers(
@@ -272,136 +500,36 @@ export function createProtocolBuilderHandlers(
       }
 
       if (inferenceClient) {
-        const prompt = buildExtractionPrompt(text.trim(), documentId, vendor);
-        const result = await inferenceClient.complete({
-          model: inferenceConfig!.model,
-          messages: [{ role: 'user' as const, content: prompt }],
-          max_tokens: 4096,
-          temperature: inferenceConfig?.temperature ?? 0.1,
-        });
+        // Chunk the text for models with limited context windows
+        const chunks = chunkText(text.trim());
 
-        const responseText = result.choices?.[0]?.message?.content ?? '';
-        let candidate: AiProtocolCandidateSummary;
-
-        /**
-         * Extract JSON from AI response — handles markdown code blocks,
-         * direct JSON, bracket-balanced extraction, and common JSON repair.
-         */
-        function extractJsonFromResponse(text: string): unknown {
-          const trimmed = text.trim();
-
-          // 1. Try direct parse first
-          try { return JSON.parse(trimmed); } catch {}
-
-          // 2. Try to extract from markdown code blocks
-          const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/gi;
-          let match: RegExpExecArray | null;
-          while ((match = codeBlockRegex.exec(trimmed)) !== null) {
-            if (match[1]) {
-              try { return JSON.parse(match[1].trim()); } catch {}
-            }
-          }
-
-          // 3. Bracket-balanced extraction — find outermost { ... } with matching braces
-          function findBalancedBraces(src: string): string[] {
-            const results: string[] = [];
-            let i = 0;
-            while (i < src.length) {
-              const start = src.indexOf('{', i);
-              if (start === -1) break;
-              let depth = 0;
-              let inString = false;
-              let escape = false;
-              for (let j = start; j < src.length; j++) {
-                const ch = src[j];
-                if (escape) { escape = false; continue; }
-                if (ch === '\\') { escape = inString; continue; }
-                if (ch === '"') { inString = !inString; continue; }
-                if (inString) continue;
-                if (ch === '{') { depth++; }
-                else if (ch === '}') { depth--; if (depth === 0) { results.push(src.substring(start, j + 1)); i = j + 1; break; } }
-              }
-              if (depth > 0) i = start + 1;
-            }
-            return results;
-          }
-
-          for (const balanced of findBalancedBraces(trimmed)) {
-            try { return JSON.parse(balanced); } catch {}
-            // Try repaired version
-            try { return JSON.parse(repairJson(balanced)); } catch {}
-          }
-
-          // 4. Try repairing the entire text and parsing
-          try { return JSON.parse(repairJson(trimmed)); } catch {}
-
-          throw new Error(`Could not extract valid JSON from AI response (${trimmed.slice(0, 300)}${trimmed.length > 300 ? '...' : ''})`);
-        }
-
-        /**
-         * Repair common JSON issues: trailing commas, unquoted keys, single quotes.
-         */
-        function repairJson(text: string): string {
-          let s = text;
-          // Quote unquoted keys: identifier followed by colon
-          s = s.replace(/(?<=[{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)\s*:/g, '"$1":');
-          // Remove trailing commas before } or ]
-          s = s.replace(/,(\s*[}\]])/g, '$1');
-          // Replace single quotes with double quotes (rough approximation)
-          // Only replace single quotes that are not inside a double-quoted string
-          s = s.replace(/'(\\'|[^']*?)'/g, (m, _escaped, offset, str) => {
-            let inDq = 0;
-            for (let i = 0; i < offset; i++) {
-              if (str[i] === '\\' && str[i - 1] === '\\') continue;
-              if (str[i] === '"') inDq++;
-            }
-            return inDq % 2 === 0 ? `"${m.slice(1, -1)}"` : m;
+        // Process each chunk
+        const chunkResults: AiProtocolCandidateSummary[] = [];
+        for (let i = 0; i < chunks.length; i++) {
+          const chunkPrompt = buildChunkExtractionPrompt(chunks[i]!, i, chunks.length, documentId, vendor);
+          const chunkResult = await inferenceClient.complete({
+            model: inferenceConfig!.model,
+            messages: [{ role: 'user' as const, content: chunkPrompt }],
+            max_tokens: 4096,
+            temperature: inferenceConfig?.temperature ?? 0.1,
           });
-          return s;
+
+          const chunkResponseText = chunkResult.choices?.[0]?.message?.content ?? '';
+          if (chunkResponseText.trim()) {
+            try {
+              const parsed = extractJsonFromResponse(chunkResponseText) as AiProtocolCandidateSummary;
+              if (parsed && parsed.kind === 'vendor-protocol-candidate') {
+                chunkResults.push(parsed);
+              }
+            } catch (err) {
+              // Log but continue — a failed chunk shouldn't kill the whole extraction
+              request.log.warn({ chunkIndex: i, error: err }, 'Failed to parse chunk extraction response');
+            }
+          }
         }
 
-         try {
-          const raw = extractJsonFromResponse(responseText);
-          const parsed = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
-          const steps = Array.isArray(parsed.steps)
-            ? parsed.steps.map((step: unknown) => {
-                const s = typeof step === 'object' && step !== null ? (step as Record<string, unknown>) : {};
-                const stepObj: { stepNumber?: number; text: string; materials?: string[]; labware?: string[]; equipment?: string[]; notes?: string[]; confidence?: number } = {
-                  text: typeof s.text === 'string' ? s.text : '',
-                };
-                if (typeof s.stepNumber === 'number') stepObj.stepNumber = s.stepNumber;
-                if (Array.isArray(s.materials)) stepObj.materials = s.materials;
-                if (Array.isArray(s.labware)) stepObj.labware = s.labware;
-                if (Array.isArray(s.equipment)) stepObj.equipment = s.equipment;
-                if (Array.isArray(s.notes)) stepObj.notes = s.notes;
-                else if (typeof s.notes === 'string') stepObj.notes = [s.notes];
-                if (typeof s.confidence === 'number') stepObj.confidence = s.confidence;
-                return stepObj;
-              })
-            : undefined;
-          const materials = Array.isArray(parsed.materials) ? parsed.materials : undefined;
-          const labware = Array.isArray(parsed.labware) ? parsed.labware : undefined;
-          const equipment = Array.isArray(parsed.equipment) ? parsed.equipment : undefined;
-          const diagnostics = Array.isArray(parsed.diagnostics) ? parsed.diagnostics : undefined;
-          const scope = parsed.scope && typeof parsed.scope === 'string' ? parsed.scope : undefined;
-          candidate = {
-            kind: 'vendor-protocol-candidate' as const,
-            title: (typeof parsed.title === 'string' && parsed.title) ? parsed.title : 'Untitled Protocol',
-            ...(scope ? { scope } : {}),
-            ...(materials ? { materials } : {}),
-            ...(labware ? { labware } : {}),
-            ...(equipment ? { equipment } : {}),
-            ...(steps ? { steps } : {}),
-            ...(diagnostics ? { diagnostics } : {}),
-          };
-        } catch (parseErr) {
-          request.log.error({ fullResponse: responseText }, 'All JSON extraction strategies exhausted — protocol extraction failed');
-          reply.status(500);
-          return {
-            error: 'EXTRACTION_ERROR',
-            message: `Could not parse AI response: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`,
-          };
-        }
+        // Merge all chunk results
+        const candidate = mergeChunkResults(chunkResults);
 
         return {
           candidate,
