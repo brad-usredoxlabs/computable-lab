@@ -295,6 +295,15 @@ describe('WorkspaceHandlers', () => {
       const def = defaultWorkspaceState('STU-000001');
       expect(parseWorkspaceState(def)).toEqual(def);
     });
+
+    it('migrates v3 execution rightPaneMode to protocol', () => {
+      const input = {
+        ...defaultWorkspaceState('STU-test'),
+        rightPaneMode: 'execution',
+      }
+      const result = parseWorkspaceState(input)
+      expect(result?.rightPaneMode).toBe('protocol')
+    });
   });
 
   // Silence Fastify-style logger noise that some envs surface from the

@@ -1,6 +1,6 @@
 /**
  * RightPane — workspace right-pane shell. Modes (AI / Find / Search /
- * Details / Execution / Protocol), one at a time. The active mode is
+ * Details / Protocol), one at a time. The active mode is
  * held in WorkspaceContext so it persists per-study to workspace.yaml.
  *
  * Phase 12 renamed the 'browse' mode to 'find' (server's parser migrates
@@ -9,7 +9,7 @@
  * focused-plate left pane. Protocol tab shows protocol steps when
  * viewing a run.
  *
- * Tab order: AI · Find · Search · Details · Execution · Protocol —
+ * Tab order: AI · Find · Search · Details · Protocol —
  * Protocol is last because it's only meaningful when a run context
  * is active.
  *
@@ -23,7 +23,6 @@ import { AiTabPanel } from './ai/AiTabPanel'
 import { SearchTabPanel } from './search/SearchTabPanel'
 import { FindTabPanel } from './find/FindTabPanel'
 import { DetailsTabPanel } from './details/DetailsTabPanel'
-import { ExecutionTabPanel } from './execution/ExecutionTabPanel'
 import { ProtocolTabPanel } from './protocol/ProtocolTabPanel'
 import './rightPane.css'
 
@@ -32,7 +31,6 @@ const TABS: { mode: WorkspaceRightPaneMode; label: string }[] = [
   { mode: 'find', label: 'Find' },
   { mode: 'search', label: 'Search' },
   { mode: 'details', label: 'Details' },
-  { mode: 'execution', label: 'Execution' },
   { mode: 'protocol', label: 'Protocol' },
 ]
 
@@ -72,7 +70,6 @@ export function RightPane() {
         {active === 'search' ? <SearchTabPanel /> : null}
         {active === 'find' ? <FindTabPanel /> : null}
         {active === 'details' ? <DetailsTabPanel /> : null}
-        {active === 'execution' ? <ExecutionTabPanel studyId={ws.state.studyId} /> : null}
         {active === 'protocol' ? <ProtocolTabPanel runId={runId} studyId={ws.state.studyId} /> : null}
       </div>
       {ws.error ? (

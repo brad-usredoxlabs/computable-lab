@@ -22,6 +22,7 @@ import type { StepInfo } from '../../../components/StepExecutionModal'
 import type { AiProtocolCandidateStepSummary } from '../../../types/ai'
 import { updateExecutionState } from '../../../shared/api/execution'
 import { SettingsPanel, type Setting } from './SettingsPanel'
+import { useProtocolSelection, type ProtocolStepGraph } from '../../protocol/ProtocolSelectionContext'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                                */
@@ -616,11 +617,17 @@ function RunHeader({
 
 function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
   const [steps, setSteps] = useState<ProtocolStep[]>([])
-  const [activeStepId, setActiveStepId] = useState<string | null>(null)
+  const {
+    activeStepId,
+    setActiveStepId,
+    visibleSteps,
+    toggleStepVisibility,
+    setVisibleSteps,
+    stepGraphs: contextStepGraphs,
+    setStepGraph: setContextStepGraph,
+  } = useProtocolSelection()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  // Cached sub-graphs keyed by stepId
-  const [stepGraphs, setStepGraphs] = useState<Record<string, EventGraph>>({})
 
   // Step settings keyed by stepId (fetched on demand when a step is selected)
   const [stepSettings, setStepSettings] = useState<Record<string, Setting[]>>({})
@@ -713,11 +720,19 @@ function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
     return () => { cancelled = true }
   }, [runId])
 
+  // Initialize visibleSteps when steps are first loaded — all steps
+  // default to visible so their events ghost onto the canvas.
+  useEffect(() => {
+    if (steps.length > 0 && visibleSteps.size === 0) {
+      setVisibleSteps(steps.map(s => s.stepId))
+    }
+  }, [steps, visibleSteps.size, setVisibleSteps])
+
   /** Fetch the compiled sub-graph for a single step. */
   const fetchStepGraph = useCallback(async (stepId: string): Promise<EventGraph | null> => {
-    // Return cached graph if available
-    if (stepGraphs[stepId]) {
-      return stepGraphs[stepId];
+    // Return cached graph if available (from ProtocolSelectionContext)
+    if (contextStepGraphs[stepId]) {
+      return contextStepGraphs[stepId] as unknown as EventGraph;
     }
     try {
       const res = await fetch(`/api/protocols/${runId}/steps/${stepId}/graph`);
@@ -728,14 +743,14 @@ function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
       const data = await res.json();
       const graph: EventGraph = data?.graph ?? data;
       if (graph) {
-        setStepGraphs(prev => ({ ...prev, [stepId]: graph }));
+        setContextStepGraph(stepId, graph as unknown as ProtocolStepGraph);
       }
       return graph ?? null;
     } catch (err) {
       console.error(`Error fetching sub-graph for step ${stepId}:`, err);
       return null;
     }
-  }, [runId, stepGraphs]);
+  }, [runId, contextStepGraphs, setContextStepGraph]);
 
   /** Fetch settings for a single step. */
   const fetchStepSettings = useCallback(async (stepId: string): Promise<void> => {
@@ -763,10 +778,11 @@ function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
   }, []);
 
   const handleToggleVisibility = useCallback(async (stepId: string) => {
-    // Fetch sub-graph before toggling visibility
+    // Fetch sub-graph before toggling visibility so the canvas has events to show
     await fetchStepGraph(stepId);
+    toggleStepVisibility(stepId);
     setSteps(prev => prev.map(s => s.stepId === stepId ? { ...s, visible: !s.visible } : s));
-  }, [fetchStepGraph]);
+  }, [fetchStepGraph, toggleStepVisibility]);
 
   const handlePlayStep = useCallback((step: ProtocolStep) => {
     // Set execution step context

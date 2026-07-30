@@ -39,7 +39,10 @@ import { ProjectTabStrip } from './ProjectTabStrip'
 import { ProjectDetailsView } from './ProjectDetailsView'
 import { RecordCreatePanel } from '../create/RecordCreatePanel'
 import { RecordEditPanel } from '../create/RecordEditPanel'
+import { ExecutionTabShell } from '../execution/ExecutionTabShell'
 import { RightPane } from '../right-pane/RightPane'
+import { ProtocolSelectionProvider } from '../protocol/ProtocolSelectionContext'
+import { ProtocolPreviewBridge } from '../protocol/ProtocolPreviewBridge'
 import type { WorkspaceTab } from '../workspace/types'
 import { projectDetailsTabId } from '../workspace/types'
 import '../viewer/viewer.css'
@@ -124,18 +127,32 @@ function WorkspaceShellHost({
     ws.openTab({ id, kind: 'project-details', title: 'Project' })
   }, [studyId, ws.ready, ws.state.tabs.length, ws.openTab])
 
+  // When the active tab is a deck tab with a runId, auto-switch the right
+  // pane to Protocol mode so the user immediately sees protocol steps
+  // alongside the event graph canvas. This is the "execute mode" entry —
+  // the canvas shows the event graph, the right pane shows protocol chips.
+  useEffect(() => {
+    if (!ws.ready) return
+    const tab = findActiveTab(ws.state.tabs, ws.state.activeTabId)
+    if (tab?.kind === 'deck' && tab.runId) {
+      ws.setRightPaneMode('protocol')
+    }
+  }, [ws.ready, ws.state.tabs, ws.state.activeTabId, ws.setRightPaneMode])
+
   const activeTab = findActiveTab(ws.state.tabs, ws.state.activeTabId)
 
   const shellContent = (
-    <AppShell
-      brand="Project"
-      topbarTabs={<ProjectTabStrip />}
-      layout="workspace"
-      panelAutoSaveId={`project:${studyId}`}
-      viewerToolbar={<ViewerToolbar tab={activeTab} />}
-      leftPane={<LeftPane activeTab={activeTab} studyId={studyId} />}
-      rightPane={<RightPane />}
-    />
+    <ProtocolSelectionProvider>
+      <AppShell
+        brand="Project"
+        topbarTabs={<ProjectTabStrip />}
+        layout="workspace"
+        panelAutoSaveId={`project:${studyId}`}
+        viewerToolbar={<ViewerToolbar tab={activeTab} />}
+        leftPane={<LeftPane activeTab={activeTab} studyId={studyId} />}
+        rightPane={<RightPane />}
+      />
+    </ProtocolSelectionProvider>
   )
 
   if (activeTab?.kind === 'deck') {
@@ -152,7 +169,24 @@ function WorkspaceShellHost({
           : {})}
         {...(activeTab.runId ? { runId: activeTab.runId } : {})}
       >
-        <FocusModalsProvider>{shellContent}</FocusModalsProvider>
+        <FocusModalsProvider>
+          {shellContent}
+          <ProtocolPreviewBridge />
+        </FocusModalsProvider>
+      </EventEditorProvider>
+    )
+  }
+  if (activeTab?.kind === 'execution') {
+    return (
+      <EventEditorProvider
+        key={activeTab.id}
+        eventGraphId={activeTab.eventGraphId}
+        runId={activeTab.runId}
+      >
+        <FocusModalsProvider>
+          {shellContent}
+          <ProtocolPreviewBridge />
+        </FocusModalsProvider>
       </EventEditorProvider>
     )
   }
@@ -240,6 +274,14 @@ function LeftPane({ activeTab, studyId }: LeftPaneProps) {
         recordId={activeTab.recordId}
         title={activeTab.title}
         onClose={() => ws.closeTab(activeTab.id)}
+      />
+    )
+  }
+  if (activeTab.kind === 'execution') {
+    return (
+      <ExecutionTabShell
+        key={activeTab.id}
+        tab={activeTab}
       />
     )
   }

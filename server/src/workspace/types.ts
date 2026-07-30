@@ -20,6 +20,9 @@
  *    right-pane 'browse' mode to 'find'. parseWorkspaceState below
  *    accepts BOTH versions; v1 inputs are migrated to v2 in memory and
  *    re-saved on the next PUT.
+ *  - v3 — Phase 1 (this task). Adds `execution` tab kind for unified
+ *    execution view inside the workspace shell. parseWorkspaceState accepts
+ *    v2 inputs and migrates them to v3 unchanged (no data migration needed).
  *
  * The shape mirrors `app/src/event-editor/workspace/types.ts`. Keep
  * the two in sync when the schema evolves.
@@ -60,6 +63,13 @@ export type WorkspaceTab =
       title: string;
       studyId?: string;
       experimentId?: string;
+    }
+  | {
+      id: string;
+      kind: 'execution';
+      eventGraphId: string;
+      runId: string;
+      title: string;
     };
 
 /**
@@ -67,15 +77,15 @@ export type WorkspaceTab =
  * Phase 13 adds `details` for the single-plate workflow that used to
  * ride as a sidebar column inside the focused-plate left pane.
  */
-export type WorkspaceRightPaneMode = 'ai' | 'search' | 'find' | 'details';
+export type WorkspaceRightPaneMode = 'ai' | 'search' | 'find' | 'details' | 'protocol';
 
 /**
  * Full workspace state for a single study. `studyId` is redundant with
  * the file path but kept on disk for self-describing reads in the YAML.
  */
 export interface WorkspaceState {
-  /** Schema version. v2 as of Phase 12; v1 inputs are migrated on read. */
-  version: 2;
+  /** Schema version. v3 as of Phase 1 (execution tab integration); v1/v2 inputs are migrated on read. */
+  version: 3;
   studyId: string;
   tabs: WorkspaceTab[];
   activeTabId: string | null;
@@ -93,12 +103,12 @@ export function projectDetailsTabId(studyId: string): string {
 /**
  * Default workspace state for a study that has no `workspace.yaml` yet.
  * Phase 12 lands on a project-details tab so the user sees the project
- * overview, not an empty viewer.
+ * overview, not an empty canvas. Phase 1 adds execution tab support.
  */
 export function defaultWorkspaceState(studyId: string): WorkspaceState {
   const detailsId = projectDetailsTabId(studyId);
   return {
-    version: 2,
+    version: 3,
     studyId,
     tabs: [{ id: detailsId, kind: 'project-details', title: 'Project' }],
     activeTabId: detailsId,
@@ -114,10 +124,9 @@ export function defaultWorkspaceState(studyId: string): WorkspaceState {
  * the write path (a misbehaving client might post garbage). Returns the
  * value narrowed to WorkspaceState when valid, null otherwise.
  *
- * Accepts both v1 and v2 inputs. v1 'browse' mode migrates to v2 'find';
- * v1 files lacking project-details get a fresh one inserted on read so
- * the workspace always has somewhere to land. The returned object is
- * always v2 — older builds re-saving will write v2 in place.
+ * Accepts v1, v2, and v3 inputs. v1 'browse' migrates to v2 'find';
+ * v2 inputs migrate to v3 unchanged (no data changes needed). The returned
+ * object is always v3 — older builds re-saving will write v3 in place.
  */
 export function parseWorkspaceState(value: unknown): WorkspaceState | null {
   if (!value || typeof value !== 'object') return null;
@@ -165,6 +174,18 @@ export function parseWorkspaceState(value: unknown): WorkspaceState | null {
           ? { experimentId: t.experimentId }
           : {}),
       });
+    } else if (
+      t.kind === 'execution' &&
+      typeof t.eventGraphId === 'string' &&
+      typeof t.runId === 'string'
+    ) {
+      tabs.push({
+        id: t.id,
+        kind: 'execution',
+        eventGraphId: t.eventGraphId,
+        runId: t.runId,
+        title: t.title,
+      });
     } else {
       // Unknown kind — drop silently rather than refuse the whole file.
       // Older builds opening a future-versioned file degrade by losing
@@ -177,11 +198,16 @@ export function parseWorkspaceState(value: unknown): WorkspaceState | null {
   let mode: WorkspaceRightPaneMode;
   if (v.rightPaneMode === 'browse') {
     mode = 'find';
+  } else if (v.rightPaneMode === 'execution') {
+    // v3 'execution' mode migrated to 'protocol' — the execution
+    // right-pane tab was merged into the protocol tab.
+    mode = 'protocol';
   } else if (
     v.rightPaneMode === 'ai' ||
     v.rightPaneMode === 'search' ||
     v.rightPaneMode === 'find' ||
-    v.rightPaneMode === 'details'
+    v.rightPaneMode === 'details' ||
+    v.rightPaneMode === 'protocol'
   ) {
     mode = v.rightPaneMode;
   } else {
@@ -213,7 +239,7 @@ export function parseWorkspaceState(value: unknown): WorkspaceState | null {
     : detailsId;
 
   return {
-    version: 2,
+    version: 3,
     studyId: v.studyId,
     tabs,
     activeTabId,

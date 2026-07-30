@@ -15,8 +15,11 @@
  *    No project-details. Right-pane mode 'ai' | 'search' | 'browse'.
  *  - v2 — Phase 12 extension. Adds project-details tab kind. Right pane
  *    mode 'browse' renames to 'find' (browse is migrated on load).
+ *  - v3 — Phase 1 (this task). Adds execution tab kind for unified
+ *    execution view inside the workspace shell. No data migration needed
+ *    from v2.
  * Both versions round-trip through `parseWorkspaceState`; older
- * client builds opening a v2 file degrade by dropping unknown kinds.
+ * client builds opening a v3 file degrade by dropping unknown kinds.
  */
 
 export type WorkspaceViewerKind = 'deck' | 'pdf' | 'document'
@@ -57,6 +60,13 @@ export type WorkspaceTab =
       recordKind?: string
       title: string
     }
+  | {
+      id: string
+      kind: 'execution'
+      eventGraphId: string
+      runId: string
+      title: string
+    }
 
 /**
  * Stable id for a creation tab so re-clicking "New …" focuses the open
@@ -78,15 +88,24 @@ export function recordEditTabId(recordId: string): string {
 }
 
 /**
+ * Stable id for an execution tab so re-clicking "Execute" focuses the open
+ * execution view instead of stacking duplicates. One in-flight execution
+ * tab per event graph.
+ */
+export function executionTabId(eventGraphId: string): string {
+  return `execution:${eventGraphId}`
+}
+
+/**
  * Phase 12 renamed `browse` to `find`. Phase 13 adds `details` — the
  * single-plate workflow (Materials / Groups / Notes / Read) that used
  * to ride as a column inside the focused-plate left pane.
  * The server parser migrates v1 `browse` → v2 `find` on read.
  */
-export type WorkspaceRightPaneMode = 'ai' | 'search' | 'find' | 'details'
+export type WorkspaceRightPaneMode = 'ai' | 'search' | 'find' | 'details' | 'protocol'
 
 export interface WorkspaceState {
-  version: 2
+  version: 3
   studyId: string
   tabs: WorkspaceTab[]
   activeTabId: string | null
@@ -103,14 +122,14 @@ export function projectDetailsTabId(studyId: string): string {
 
 /**
  * Default state for a study with no `workspace.yaml` yet. Phase 12: lands
- * on a project-details tab so the user sees the project overview, not
- * an empty viewer. Mirrors the server's `defaultWorkspaceState` — keep
- * the two in sync.
+ * on a project-details tab so the user sees the project overview, not an
+ * empty viewer. Mirrors the server's `defaultWorkspaceState` — keep
+ * the two in sync. Phase 1 adds execution tab support.
  */
 export function defaultWorkspaceState(studyId: string): WorkspaceState {
   const detailsTabId = projectDetailsTabId(studyId)
   return {
-    version: 2,
+    version: 3,
     studyId,
     tabs: [
       {
