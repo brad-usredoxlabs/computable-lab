@@ -33,6 +33,10 @@ export function PdfToolbar({ artifactId }: PdfToolbarProps) {
   const [convertModalOpen, setConvertModalOpen] = useState(false)
 
   const isReady = v.pdfState.kind === 'ready'
+  // Convert to Protocol only needs extracted text, not the PDF binary.
+  // Enable it whenever we have any extracted text pages, even if the PDF
+  // image can't render (e.g. Exa captured text but not the actual PDF).
+  const canConvert = v.extractedText.length > 0 && v.extractedText.some(p => p.text.trim().length > 0)
 
   function commitPage(event?: FormEvent) {
     event?.preventDefault()
@@ -140,7 +144,7 @@ export function PdfToolbar({ artifactId }: PdfToolbarProps) {
         type="button"
         className="pdf-toolbar__convert-btn"
         onClick={() => setConvertModalOpen(true)}
-        disabled={!isReady}
+        disabled={!canConvert}
         data-testid="pdf-toolbar-convert-protocol"
         title="Extract a universal protocol from this PDF"
       >
