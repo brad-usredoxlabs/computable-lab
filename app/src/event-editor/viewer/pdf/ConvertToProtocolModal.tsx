@@ -133,7 +133,8 @@ export function ConvertToProtocolModal({
         throw new Error(`Extraction failed (${res.status}): ${body || res.statusText}`)
       }
 
-      const candidate: AiProtocolCandidateSummary = await res.json()
+      const data = await res.json()
+      const candidate: AiProtocolCandidateSummary = data.candidate ?? data
       setResult({ candidate })
       setPhase('preview')
     } catch (err) {
