@@ -39,11 +39,6 @@ properties:
 
   defaultValue:
     description: "Default value if not overridden. Type depends on the setting type."
-    oneOf:
-      - type: string
-      - type: number
-      - type: boolean
-      - type: null
 
   isControlled:
     type: boolean
