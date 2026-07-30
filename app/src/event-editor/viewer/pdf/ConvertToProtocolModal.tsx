@@ -46,6 +46,8 @@ interface ExtractionResult {
 function buildProtocolPayload(
   candidate: AiProtocolCandidateSummary,
   artifactId: string,
+  scope: 'lab' | 'project',
+  studyId: string,
 ): Record<string, unknown> {
   const recordId = `PRT-${Date.now()}`
   const steps = (candidate.steps ?? []).map((step, i) => ({
@@ -69,6 +71,7 @@ function buildProtocolPayload(
       ref: { kind: 'record' as const, type: 'artifact', id: artifactId },
     },
     steps,
+    ...(scope === 'project' ? { links: { studyId } } : {}),
   }
 }
 
@@ -87,6 +90,7 @@ export function ConvertToProtocolModal({
   const [phase, setPhase] = useState<Phase>('idle')
   const [result, setResult] = useState<ExtractionResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [scope, setScope] = useState<'lab' | 'project'>('project')
 
   /* Reset state when the modal is opened */
   useEffect(() => {
@@ -94,6 +98,7 @@ export function ConvertToProtocolModal({
       setPhase('idle')
       setResult(null)
       setError(null)
+      setScope('project')
     }
   }, [isOpen])
 
@@ -150,7 +155,7 @@ export function ConvertToProtocolModal({
     setError(null)
 
     try {
-      const payload = buildProtocolPayload(result.candidate, artifactId)
+      const payload = buildProtocolPayload(result.candidate, artifactId, scope, ws.state.studyId)
       const writeResponse = await apiClient.createRecord(
         'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml',
         payload,
@@ -163,7 +168,7 @@ export function ConvertToProtocolModal({
       setError(err instanceof Error ? err.message : String(err))
       setPhase('preview')
     }
-  }, [result, artifactId])
+  }, [result, artifactId, scope, ws.state.studyId])
 
   const handleOpenProtocol = useCallback(() => {
     if (!result?.candidate || !result.recordId) return
@@ -241,6 +246,58 @@ export function ConvertToProtocolModal({
         {phase === 'preview' && result?.candidate && (
           <div className="convert-modal__body">
             <PreviewCandidate candidate={result.candidate} error={error} />
+            {/* Scope selector */}
+            <div style={{ marginBottom: '12px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--cl-text-dim)', display: 'block', marginBottom: '6px' }}>
+                Protocol Scope
+              </label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setScope('project')}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    background: scope === 'project' ? 'var(--cl-accent)' : 'var(--cl-bg-elev)',
+                    color: scope === 'project' ? '#fff' : 'var(--cl-text)',
+                    border: `1px solid ${scope === 'project' ? 'var(--cl-accent)' : 'var(--cl-border)'}`,
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <strong>Project</strong>
+                  <br />
+                  <span style={{ fontSize: '10px', opacity: 0.8 }}>
+                    Scoped to {ws.state.studyId}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScope('lab')}
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    background: scope === 'lab' ? 'var(--cl-accent)' : 'var(--cl-bg-elev)',
+                    color: scope === 'lab' ? '#fff' : 'var(--cl-text)',
+                    border: `1px solid ${scope === 'lab' ? 'var(--cl-accent)' : 'var(--cl-border)'}`,
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <strong>Lab</strong>
+                  <br />
+                  <span style={{ fontSize: '10px', opacity: 0.8 }}>
+                    Shared across all projects
+                  </span>
+                </button>
+              </div>
+            </div>
             <div className="convert-modal__actions">
               <button
                 type="button"
