@@ -54,7 +54,7 @@ function buildProtocolPayload(
     description: step.text,
     ordinal: i + 1,
     kind: 'other' as const,
-    ...(step.notes?.length ? { notes: step.notes.join('; ') } : {}),
+    ...(step.notes ? { notes: Array.isArray(step.notes) ? step.notes.join('; ') : String(step.notes) } : {}),
   }))
 
   return {
