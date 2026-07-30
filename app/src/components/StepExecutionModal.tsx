@@ -14,6 +14,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { DeviationRecorder } from './DeviationRecorder'
+import type { PlateEvent } from '../types/events'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                                */
@@ -81,6 +83,10 @@ export interface StepExecutionModalProps {
   onClose: () => void
   onSubmit: (data: StepExecutionData) => void
   step: StepInfo
+  /** Optional: planned event for auto-diff comparison */
+  plannedEvent?: PlateEvent
+  /** Optional: executed event for auto-diff comparison */
+  executedEvent?: PlateEvent
 }
 
 /* ------------------------------------------------------------------ */
@@ -158,7 +164,7 @@ function getInputType(type: string): 'text' | 'number' | 'checkbox' | 'select' {
 /* Component                                                            */
 /* ------------------------------------------------------------------ */
 
-export function StepExecutionModal({ isOpen, onClose, onSubmit, step }: StepExecutionModalProps) {
+export function StepExecutionModal({ isOpen, onClose, onSubmit, step, plannedEvent, executedEvent }: StepExecutionModalProps) {
   // Portal mount point — use document.body so the modal renders above everything
   const mountRef = useRef<HTMLElement | null>(null)
 
@@ -169,6 +175,7 @@ export function StepExecutionModal({ isOpen, onClose, onSubmit, step }: StepExec
   const [deviations, setDeviations] = useState<DeviationEntry[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showAutoDiff, setShowAutoDiff] = useState(false)
 
   // Mount portal container
   useEffect(() => {
@@ -617,6 +624,42 @@ export function StepExecutionModal({ isOpen, onClose, onSubmit, step }: StepExec
               + Add Deviation
             </button>
           </fieldset>
+
+          {/* Auto-diff deviation detection */}
+          {plannedEvent && executedEvent ? (
+            <fieldset style={{ marginBottom: 20, border: 'none', padding: 0, margin: 0 }}>
+              <legend style={{ fontSize: '12px', fontWeight: 600, color: 'var(--cl-text-dim)', marginBottom: 8 }}>
+                Auto-detected Changes
+              </legend>
+              <button
+                type="button"
+                onClick={() => setShowAutoDiff(!showAutoDiff)}
+                style={{
+                  padding: '4px 12px', fontSize: '12px', fontWeight: 600,
+                  background: 'var(--cl-bg-elev-2)', color: 'var(--cl-text)',
+                  border: '1px solid var(--cl-border)', borderRadius: '4px', cursor: 'pointer',
+                }}
+              >
+                {showAutoDiff ? 'Hide' : 'Compare with Plan'}
+              </button>
+              {showAutoDiff ? (
+                <DeviationRecorder
+                  event={executedEvent}
+                  originalEvent={plannedEvent}
+                  isOpen={showAutoDiff}
+                  onSave={(payload) => {
+                    setDeviations(prev => [...prev, {
+                      code: 'other' as DeviationCode,
+                      message: payload.reason || 'Auto-detected deviation',
+                      severity: payload.severity as DeviationSeverity,
+                    }])
+                    setShowAutoDiff(false)
+                  }}
+                  onCancel={() => setShowAutoDiff(false)}
+                />
+              ) : null}
+            </fieldset>
+          ) : null}
 
           {/* Action buttons */}
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 8 }}>

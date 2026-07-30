@@ -5,8 +5,9 @@
  * notes, timestamps) and lifecycle actions (start, setStep, complete,
  * abort). Consumed by ExecutionTabPanel and child execution UI.
  *
- * Usage:
- *   const { isActive, startExecution } = useExecution();
+ * On start, persists the execution to the backend via POST /api/runs/:runId/start
+ * so the run record transitions from 'planned' to 'in_progress'. This
+ * survives page reloads — the run's executionTracking field holds the state.
  */
 
 import { createContext, useContext, useReducer, useCallback, type ReactNode } from 'react'
@@ -93,8 +94,8 @@ function executionReducer(
 
 export interface ExecutionContextValue {
   state: ExecutionContextState
-  /** Begin a new execution with provenance metadata. */
-  startExecution: (metadata: Omit<ExecutionMetadata, 'timestamp'>, protocolId: string, eventGraphId: string) => ExecutionContextState
+  /** Begin a new execution with provenance metadata. Persists to backend. */
+  startExecution: (metadata: Omit<ExecutionMetadata, 'timestamp'>, protocolId: string, eventGraphId: string) => Promise<ExecutionContextState>
   /** Advance or set the current step. */
   setStep: (stepId: string) => void
   /** Mark the execution as completed. */
@@ -113,21 +114,38 @@ export function ExecutionProvider({ children }: ExecutionProviderProps) {
   const [state, dispatch] = useReducer(executionReducer, initialState)
 
   const startExecution = useCallback(
-    (metadata: Omit<ExecutionMetadata, 'timestamp'>, protocolId: string, eventGraphId: string): ExecutionContextState => {
+    async (metadata: Omit<ExecutionMetadata, 'timestamp'>, protocolId: string, eventGraphId: string): Promise<ExecutionContextState> => {
       const withTimestamp: ExecutionMetadata = {
         ...metadata,
         timestamp: new Date().toISOString(),
       }
-      const nextState = executionReducer(state, {
+      dispatch({ type: 'start', metadata: withTimestamp, protocolId, eventGraphId })
+
+      // Persist to backend so the run transitions from 'planned' to 'in_progress'.
+      // This is fire-and-forget — the local state is already updated and the
+      // user can proceed immediately. If the API call fails, the run record
+      // stays in 'planned' but the UI still works (step execution PATCH calls
+      // will fail with INVALID_STATE_TRANSITION, surfacing the error).
+      const runId = protocolId
+      void fetch(`/api/runs/${encodeURIComponent(runId)}/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          executedBy: metadata.operatorName,
+          startedAt: withTimestamp.timestamp,
+        }),
+      }).catch((err) => {
+        console.warn('Failed to persist run start to backend:', err)
+      })
+
+      return executionReducer(undefined as never, {
         type: 'start',
         metadata: withTimestamp,
         protocolId,
         eventGraphId,
-      })
-      dispatch({ type: 'start', metadata: withTimestamp, protocolId, eventGraphId })
-      return nextState
+      }) as ExecutionContextState
     },
-    [state],
+    [],
   )
 
   const setStep = useCallback((stepId: string) => {

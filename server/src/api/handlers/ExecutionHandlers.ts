@@ -2156,6 +2156,200 @@ export function createExecutionHandlers(ctx: AppContext) {
         };
       }
     },
+
+    /**
+     * PUT /api/execution/run/:runId/event/:eventId/state
+     * Update execution state for a specific event.
+     * Note: This stores execution state as a runtime-note observation with the state in the notes.
+     */
+    async updateExecutionState(
+      request: FastifyRequest<{
+        Params: { runId: string; eventId: string };
+        Body: { state: string; details?: Record<string, unknown> };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: boolean; eventId: string; state: string } | ApiError> {
+      try {
+        const { runId, eventId } = request.params;
+        const { state, details } = request.body;
+
+        // Validate state value
+        const validStates = ['pending', 'current', 'running', 'completed', 'skipped', 'deviated'];
+        if (!validStates.includes(state)) {
+          reply.status(400);
+          return {
+            error: 'BAD_REQUEST',
+            message: `Invalid state. Must be one of: ${validStates.join(', ')}`,
+          };
+        }
+
+        // Record as a runtime-note observation with state metadata
+        await evidenceService.recordObservation(runId, {
+          observationType: 'runtime-note',
+          actor: { actorId: 'execution-api', role: 'system' },
+          observedOutcome: {
+            outcomeCode: 'state-change',
+            status: state,
+            details: { ...details, note: `Execution state: ${state}` },
+          },
+          stepId: eventId,
+          recordedAt: new Date().toISOString(),
+        });
+
+        return {
+          success: true,
+          eventId,
+          state,
+        };
+      } catch (err) {
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
+     * POST /api/execution/run/:runId/deviation
+     * Capture a deviation for an event during execution.
+     */
+    async captureDeviation(
+      request: FastifyRequest<{
+        Params: { runId: string };
+        Body: { eventId: string; deviationType: string; expectedValue?: string; actualValue?: string; notes?: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: boolean; deviationId: string } | ApiError> {
+      try {
+        const { runId } = request.params;
+        const { eventId, deviationType, expectedValue, actualValue, notes } = request.body;
+
+        // Map custom deviation types to schema types
+        const schemaDeviationType: 'remediation' | 'operator' | 'runtime' = 
+          deviationType === 'remediation' ? 'remediation' :
+          deviationType === 'operator' ? 'operator' : 'runtime';
+
+        // Use ExecutionEvidenceService to record the deviation
+        const result = await evidenceService.recordDeviation(runId, {
+          deviationType: schemaDeviationType,
+          actor: { actorId: 'execution-ui', role: 'run-operator' },
+          rationale: notes || `Deviation at step ${eventId}: ${expectedValue} -> ${actualValue}`,
+          stepId: eventId,
+          recordedAt: new Date().toISOString(),
+        });
+
+        return {
+          success: true,
+          deviationId: result.recordId,
+        };
+      } catch (err) {
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
+     * GET /api/execution/run/:runId/state
+     * Get full execution state for all events in a run.
+     * Returns observations that contain execution state information.
+     */
+    async getExecutionState(
+      request: FastifyRequest<{ Params: { runId: string } }>,
+      reply: FastifyReply,
+    ): Promise<{ runId: string; executionStates: Record<string, { state: string; updatedAt: string; details?: Record<string, unknown> }> } | ApiError> {
+      try {
+        const { runId } = request.params;
+
+        // Get all execution evidence (observations)
+        const { observations } = await evidenceService.listExecutionEvidence(runId);
+
+        // Extract execution state from runtime-note observations
+        const executionStates: Record<string, { state: string; updatedAt: string; details?: Record<string, unknown> }> = {};
+        
+        for (const obs of observations) {
+          if (obs.observationType === 'runtime-note') {
+            const outcome = obs.observedOutcome;
+            if (outcome.status) {
+              const stepId = outcome.stepId || 'unknown';
+              executionStates[stepId] = {
+                state: outcome.status,
+                updatedAt: obs.recordedAt,
+                details: outcome.details as Record<string, unknown>,
+              };
+            }
+          }
+        }
+
+        // Find the most recent current-step observation
+        let currentEventId: string | undefined;
+        for (const obs of observations) {
+          if (obs.observationType === 'runtime-note') {
+            const outcome = obs.observedOutcome;
+            if (outcome.outcomeCode === 'current-step' && outcome.details?.stepId) {
+              currentEventId = outcome.details.stepId as string;
+            }
+          }
+        }
+
+        return {
+          runId,
+          executionStates,
+          ...(currentEventId ? { currentEventId } : {}),
+        };
+      } catch (err) {
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
+     * PUT /api/execution/run/:runId/current-step
+     * Set the current step for an execution run.
+     */
+    async setCurrentStep(
+      request: FastifyRequest<{
+        Params: { runId: string };
+        Body: { eventId: string };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: boolean; runId: string; currentEventId: string } | ApiError> {
+      try {
+        const { runId } = request.params;
+        const { eventId } = request.body;
+
+        if (!eventId || typeof eventId !== 'string') {
+          reply.status(400);
+          return { error: 'BAD_REQUEST', message: 'eventId is required' };
+        }
+
+        await evidenceService.recordObservation(runId, {
+          observationType: 'runtime-note',
+          actor: { actorId: 'execution-api', role: 'system' },
+          observedOutcome: {
+            outcomeCode: 'current-step',
+            status: 'current',
+            details: { note: `Current step set to: ${eventId}`, stepId: eventId },
+          },
+          stepId: eventId,
+          recordedAt: new Date().toISOString(),
+        });
+
+        return { success: true, runId, currentEventId: eventId };
+      } catch (err) {
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
   };
 }
 

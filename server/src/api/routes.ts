@@ -65,6 +65,7 @@ import type { WorkspaceHandlers } from './handlers/WorkspaceHandlers.js';
 import type { ArtifactBlobHandlers } from './handlers/ArtifactBlobHandlers.js';
 import { getLabwareDefinitionRegistry } from '../registry/LabwareDefinitionRegistry.js';
 import type { PredicatesHandlers } from './handlers/PredicatesHandlers.js';
+import type { ProtocolPromotionHandlers } from './handlers/ProtocolPromotionHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -103,6 +104,7 @@ export interface RouteOptions {
   equipmentHandlers?: EquipmentHandlers;
   extractProtocolHandlers?: ExtractProtocolHandlers;
   protocolBuilderHandlers?: ProtocolBuilderHandlers;
+  protocolPromotionHandlers?: ProtocolPromotionHandlers;
   checkinHandlers?: CheckinHandlers;
   platformHandlers?: PlatformHandlers;
   labSettingsHandlers?: LabSettingsHandlers;
@@ -585,6 +587,12 @@ export function registerRoutes(
     fastify.post('/protocols/derive-from-run', protocolBuilderHandlers.deriveFromRun.bind(protocolBuilderHandlers));
   }
 
+  const { protocolPromotionHandlers } = options;
+  if (protocolPromotionHandlers) {
+    fastify.post('/protocols/promote-from-run', protocolPromotionHandlers.promoteFromRun.bind(protocolPromotionHandlers));
+    fastify.post('/protocols/create-from-draft', protocolPromotionHandlers.createProtocolFromDraft.bind(protocolPromotionHandlers));
+  }
+
   const { checkinHandlers } = options;
 
   if (checkinHandlers) {
@@ -920,6 +928,11 @@ export function registerRoutes(
     fastify.post('/execution/retry-worker/stop', executionHandlers.stopRetryWorker.bind(executionHandlers));
     fastify.post('/execution/retry-worker/run-once', executionHandlers.runRetryWorkerOnce.bind(executionHandlers));
     fastify.post('/execution/recovery/reconcile', executionHandlers.reconcileRecovery.bind(executionHandlers));
+    // Execution state API — used by the Event Editor execution view
+    fastify.get('/execution/run/:runId/state', executionHandlers.getExecutionState.bind(executionHandlers));
+    fastify.put('/execution/run/:runId/event/:eventId/state', executionHandlers.updateExecutionState.bind(executionHandlers));
+    fastify.post('/execution/run/:runId/deviation', executionHandlers.captureDeviation.bind(executionHandlers));
+    fastify.put('/execution/run/:runId/current-step', executionHandlers.setCurrentStep.bind(executionHandlers));
     fastify.post('/execution-runs/:id/materialize', executionHandlers.materializeExecutionRun.bind(executionHandlers));
     fastify.post('/execution/orchestrate', executionHandlers.orchestrateExecution.bind(executionHandlers));
     fastify.post('/measurements/validate-parser', executionHandlers.validateMeasurementParser.bind(executionHandlers));

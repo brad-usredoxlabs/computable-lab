@@ -20,6 +20,7 @@ import { ExecutionProvider, useExecution } from '../../execution/ExecutionContex
 import { StepExecutionModal } from '../../../components/StepExecutionModal'
 import type { StepInfo } from '../../../components/StepExecutionModal'
 import type { AiProtocolCandidateStepSummary } from '../../../types/ai'
+import type { PlateEvent } from '../../../types/events'
 import { updateExecutionState } from '../../../shared/api/execution'
 import { SettingsPanel, type Setting } from './SettingsPanel'
 import { useProtocolSelection, type ProtocolStepGraph } from '../../protocol/ProtocolSelectionContext'
@@ -975,6 +976,9 @@ function ProtocolTabPanelInner({ runId }: ProtocolTabPanelProps) {
           onClose={() => { setModalOpen(false); setPendingStep(null) }}
           onSubmit={handleModalSubmit}
           step={buildStepInfo(pendingStep)}
+          {...(pendingStep.subGraph?.events?.[0] ? {
+            plannedEvent: pendingStep.subGraph.events[0] as unknown as PlateEvent
+          } : {})}
         />
       )}
     </div>
