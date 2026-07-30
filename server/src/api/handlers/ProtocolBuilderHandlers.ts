@@ -517,13 +517,30 @@ export function createProtocolBuilderHandlers(
           const chunkResponseText = chunkResult.choices?.[0]?.message?.content ?? '';
           if (chunkResponseText.trim()) {
             try {
-              const parsed = extractJsonFromResponse(chunkResponseText) as AiProtocolCandidateSummary;
-              if (parsed && parsed.kind === 'vendor-protocol-candidate') {
-                chunkResults.push(parsed);
+              const parsed = extractJsonFromResponse(chunkResponseText) as Record<string, unknown>;
+              if (parsed && typeof parsed === 'object') {
+                if (parsed.kind === 'vendor-protocol-candidate') {
+                  chunkResults.push(parsed as unknown as AiProtocolCandidateSummary);
+                } else if (Array.isArray(parsed.steps)) {
+                  // Fallback: accept any JSON that has a steps array, even if
+                  // kind is missing or different. Coerce into expected shape.
+                  chunkResults.push({
+                    kind: 'vendor-protocol-candidate' as const,
+                    title: (parsed.title as string) ?? '',
+                    ...(parsed.scope ? { scope: parsed.scope as string } : {}),
+                    ...(Array.isArray(parsed.materials) ? { materials: parsed.materials as AiProtocolCandidateSummary['materials'] } : {}),
+                    ...(Array.isArray(parsed.labware) ? { labware: parsed.labware as AiProtocolCandidateSummary['labware'] } : {}),
+                    ...(Array.isArray(parsed.equipment) ? { equipment: parsed.equipment as AiProtocolCandidateSummary['equipment'] } : {}),
+                    steps: parsed.steps as AiProtocolCandidateSummary['steps'],
+                    ...(Array.isArray(parsed.diagnostics) ? { diagnostics: parsed.diagnostics as AiProtocolCandidateSummary['diagnostics'] } : {}),
+                  } as AiProtocolCandidateSummary);
+                } else {
+                  request.log.warn({ chunkIndex: i, kind: parsed.kind, responsePreview: chunkResponseText.slice(0, 200) }, 'Chunk result missing expected kind field and no steps array found');
+                }
               }
             } catch (err) {
               // Log but continue — a failed chunk shouldn't kill the whole extraction
-              request.log.warn({ chunkIndex: i, error: err }, 'Failed to parse chunk extraction response');
+              request.log.warn({ chunkIndex: i, error: err, responsePreview: chunkResponseText.slice(0, 200) }, 'Failed to parse chunk extraction response');
             }
           }
         }
