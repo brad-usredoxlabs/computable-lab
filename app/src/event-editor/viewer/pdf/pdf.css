@@ -352,15 +352,24 @@
 }
 
 .pdf-toolbar__convert-btn {
-  padding: 4px 12px;
+  appearance: none;
+  padding: 6px 14px;
   font-size: 12px;
   font-weight: 600;
   background: var(--cl-accent);
   color: #fff;
-  border: none;
+  border: none !important;
   border-radius: 4px;
   cursor: pointer;
   white-space: nowrap;
+  width: auto;
+  height: auto;
+  display: inline-flex;
+  align-items: center;
+}
+
+.pdf-toolbar__convert-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--cl-accent) 85%, #000);
 }
 
 .pdf-toolbar__convert-btn:disabled {
