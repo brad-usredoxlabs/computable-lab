@@ -273,6 +273,7 @@ function LeftPane({ activeTab, studyId }: LeftPaneProps) {
         key={activeTab.id}
         recordId={activeTab.recordId}
         title={activeTab.title}
+        recordKind={activeTab.recordKind}
         onClose={() => ws.closeTab(activeTab.id)}
       />
     )

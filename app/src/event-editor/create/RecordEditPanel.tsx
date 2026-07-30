@@ -24,6 +24,7 @@ import './RecordCreatePanel.css'
 export interface RecordEditPanelProps {
   recordId: string
   title: string
+  recordKind?: string
   onClose?: () => void
 }
 
@@ -31,7 +32,7 @@ export interface RecordEditPanelProps {
 // fork the record's identity rather than edit it.
 const IDENTITY_PATHS = new Set(['recordId', 'kind'])
 
-export function RecordEditPanel({ recordId, title, onClose }: RecordEditPanelProps) {
+export function RecordEditPanel({ recordId, title, recordKind, onClose }: RecordEditPanelProps) {
   const [projection, setProjection] = useState<EditorProjectionResponse | null>(null)
   const [projectionError, setProjectionError] = useState<string | null>(null)
   const [formData, setFormData] = useState<Record<string, unknown>>({})
@@ -40,6 +41,8 @@ export function RecordEditPanel({ recordId, title, onClose }: RecordEditPanelPro
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState<number | null>(null)
+  const [isCreatingRun, setIsCreatingRun] = useState(false)
+  const [createRunError, setCreateRunError] = useState<string | null>(null)
 
   const taptabEditorRef = useRef<TapTabEditorHandle | null>(null)
 
@@ -116,6 +119,26 @@ export function RecordEditPanel({ recordId, title, onClose }: RecordEditPanelPro
     [formData, recordId],
   )
 
+  const handleCreateRun = useCallback(async () => {
+    setIsCreatingRun(true)
+    setCreateRunError(null)
+    try {
+      const result = await apiClient.createPlannedRun({
+        title: `Run: ${title}`,
+        sourceType: 'protocol',
+        sourceRef: { kind: 'record', id: recordId, type: 'protocol' },
+      })
+      if (!result.recordId) {
+        throw new Error('Server did not return a record ID')
+      }
+      if (onClose) onClose()
+    } catch (err) {
+      setCreateRunError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setIsCreatingRun(false)
+    }
+  }, [recordId, title, onClose])
+
   const useProjection = projection !== null && !loading && !loadError
 
   return (
@@ -178,7 +201,24 @@ export function RecordEditPanel({ recordId, title, onClose }: RecordEditPanelPro
           >
             {isSaving ? 'Saving…' : 'Save'}
           </button>
+          {recordKind === 'protocol' ? (
+            <button
+              type="button"
+              className="record-create-panel__btn record-create-panel__btn--primary"
+              onClick={() => void handleCreateRun()}
+              disabled={isCreatingRun || isSaving || loading || Boolean(loadError)}
+              data-testid="record-edit-create-run"
+              style={{ marginLeft: '8px' }}
+            >
+              {isCreatingRun ? 'Creating…' : 'Create Run'}
+            </button>
+          ) : null}
         </footer>
+        {createRunError ? (
+          <div className="record-create-panel__error" role="alert" style={{ marginTop: '8px' }}>
+            {createRunError}
+          </div>
+        ) : null}
       </form>
     </div>
   )
