@@ -510,8 +510,13 @@ export function createProtocolBuilderHandlers(
           const chunkResult = await inferenceClient.complete({
             model: inferenceConfig!.model,
             messages: [{ role: 'user' as const, content: chunkPrompt }],
-            max_tokens: 4096,
+            max_tokens: 8192,
             temperature: inferenceConfig?.temperature ?? 0.1,
+            // Disable thinking mode for extraction — we need direct JSON output,
+            // not reasoning. Without this, Qwen3.5/3.6 thinking models use all
+            // tokens on internal reasoning and return null content.
+            enableThinking: false,
+            chat_template_kwargs: { enable_thinking: false },
           });
 
           const chunkResponseText = chunkResult.choices?.[0]?.message?.content ?? '';
