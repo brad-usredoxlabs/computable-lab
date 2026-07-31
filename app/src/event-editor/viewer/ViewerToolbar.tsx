@@ -26,7 +26,7 @@ export function ViewerToolbar({ tab }: ViewerToolbarProps) {
   if (!tab) return null
   switch (tab.kind) {
     case 'deck':
-      return <DeckToolbar />
+      return <DeckToolbar tab={tab} />
     case 'pdf':
       return <PdfToolbar artifactId={tab.artifactId} />
     case 'document':

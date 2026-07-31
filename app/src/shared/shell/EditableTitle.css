@@ -1,0 +1,37 @@
+/* EditableTitle — inline-editable title for the deck toolbar. */
+
+.editable-title__display {
+  cursor: text;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cl-text);
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  border-bottom: 1px dashed var(--cl-text-dim);
+  transition: border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+  display: inline-block;
+  outline: none;
+}
+
+.editable-title__display:hover {
+  background: var(--cl-bg-elev-2);
+  border-color: var(--cl-border);
+}
+
+.editable-title__input {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cl-text);
+  padding: 2px 6px;
+  border: 1px solid var(--cl-accent);
+  border-radius: 3px;
+  background: var(--cl-bg);
+  outline: none;
+  max-width: 300px;
+  font-family: inherit;
+}
