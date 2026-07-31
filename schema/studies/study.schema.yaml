@@ -69,13 +69,32 @@ properties:
     uniqueItems: true
 
   # Optional, lightweight intent anchors (not required)
+  # DEPRECATED: Use claimRelationships or relationship records with
+  # verb=investigates/depends_on/aims_to_establish instead.
   primaryClaimIds:
     type: array
     description: >
-      Optional curated list of claim recordIds that define the study's primary intent. Claims remain the authoritative holders of meaning/evidence.
+      DEPRECATED: Use claimRelationships or relationship records with typed verbs instead. Optional curated list of claim recordIds that define the study's primary intent.
     items:
       type: string
     uniqueItems: true
+
+  # Typed claim relationships — inline convenience for the most common
+  # project→claim verbs. Authoritative relationships live as relationship
+  # records (kind: "relationship") which carry provenance and are queryable.
+  claimRelationships:
+    type: array
+    description: "Inline typed relationships to claims. Verbs: investigates, depends_on, aims_to_establish, assumes."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ verb, claimId ]
+      properties:
+        verb:
+          type: string
+          enum: [ investigates, depends_on, aims_to_establish, assumes ]
+        claimId:
+          type: string
 
   attachments:
     type: array
