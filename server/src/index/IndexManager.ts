@@ -88,6 +88,12 @@ function buildIndexEntry(
   const targetId = (payload.targetId as string) ?? undefined;
   const targetType = (payload.targetType as string) ?? undefined;
   const verb = (payload.verb as string) ?? undefined;
+
+  // Capture projectIds[] for multi-project run linking
+  const rawProjectIds = payload.projectIds;
+  const projectIds = Array.isArray(rawProjectIds)
+    ? (rawProjectIds as string[])
+    : undefined;
   
   // Build links object conditionally
   const links: IndexEntry['links'] = hasLinks ? {
@@ -113,6 +119,7 @@ function buildIndexEntry(
     ...(targetId !== undefined ? { targetId } : {}),
     ...(targetType !== undefined ? { targetType } : {}),
     ...(verb !== undefined ? { verb } : {}),
+    ...(projectIds !== undefined ? { projectIds } : {}),
   };
 }
 
@@ -413,7 +420,23 @@ export class IndexManager {
     }
     return this.entries.get(recordId) || null;
   }
-  
+
+  /**
+   * Get all runs linked to a project (study), checking both studyId
+   * (legacy singular link) and projectIds[] (new multi-project link).
+   * Returns a flat list — no hierarchy.
+   */
+  getRunsForProject(studyId: string): IndexEntry[] {
+    return Array.from(this.entries.values()).filter(e => {
+      if (e.kind !== 'run') return false;
+      // Check singular studyId (legacy/backward compat)
+      if (e.links?.studyId === studyId) return true;
+      // Check projectIds[] (new multi-project linking)
+      if (e.projectIds?.includes(studyId)) return true;
+      return false;
+    });
+  }
+
   /**
    * Query entries with filters.
    */

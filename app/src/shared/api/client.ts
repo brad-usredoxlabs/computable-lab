@@ -1829,6 +1829,26 @@ export const apiClient = {
   },
 
   /**
+   * List typed relationships between first-class objects.
+   * Calls GET /relationships with optional filters.
+   */
+  async listRelationships(filters: {
+    sourceId?: string
+    sourceType?: string
+    targetId?: string
+    targetType?: string
+    verb?: string
+  } = {}): Promise<{ relationships: unknown[]; total: number }> {
+    const params = new URLSearchParams()
+    if (filters.sourceId) params.set('sourceId', filters.sourceId)
+    if (filters.sourceType) params.set('sourceType', filters.sourceType)
+    if (filters.targetId) params.set('targetId', filters.targetId)
+    if (filters.targetType) params.set('targetType', filters.targetType)
+    if (filters.verb) params.set('verb', filters.verb)
+    return request(`/relationships?${params.toString()}`)
+  },
+
+  /**
    * Get all UI specs.
    * Calls GET /ui/specs and returns the array of specs.
    */
