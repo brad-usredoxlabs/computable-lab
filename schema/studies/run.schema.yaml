@@ -12,8 +12,9 @@ allOf:
 required:
 - kind
 - recordId
-- studyId
 - status
+# studyId and projectIds are mutually optional — at least one should
+# be present in practice, but the schema doesn't enforce this (lint rules can).
 
 properties:
   kind:
@@ -37,7 +38,14 @@ properties:
 
   studyId:
     type: string
-    description: "Parent study (project) recordId. The primary parent reference — runs link directly to projects."
+    description: "Parent study (project) recordId. Convenience field — when projectIds is present, this is auto-populated from projectIds[0]."
+
+  projectIds:
+    type: array
+    description: "Projects this run is linked to. A run MAY link to multiple projects (spec §2.2). When present, this replaces the singular studyId as the primary project link."
+    items:
+      type: string
+    uniqueItems: true
 
   label:
     type: string
