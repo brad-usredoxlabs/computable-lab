@@ -1,0 +1,131 @@
+/* WorkspaceTabStrip — color-coded browser-tab style strip.
+ * Generalized from ProjectTabStrip to support any entity type. */
+
+.workspace-tab-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding: 0 8px;
+}
+
+.workspace-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: none;
+  border-top: 2px solid transparent;
+  background: transparent;
+  color: var(--cl-text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 13px;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  outline: none;
+}
+
+.workspace-tab:hover {
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+}
+
+.workspace-tab--active {
+  color: var(--cl-text);
+  background: var(--cl-bg-elev);
+}
+
+/* Type color-coding: top border tint on active tabs */
+.workspace-tab--project.workspace-tab--active {
+  border-top-color: var(--cl-type-project);
+}
+.workspace-tab--run.workspace-tab--active {
+  border-top-color: var(--cl-type-run);
+}
+.workspace-tab--claim.workspace-tab--active {
+  border-top-color: var(--cl-type-claim);
+}
+.workspace-tab--lab.workspace-tab--active {
+  border-top-color: var(--cl-type-lab);
+}
+
+/* Non-active typed tabs get a subtle top-edge tint */
+.workspace-tab--project:not(.workspace-tab--active) {
+  border-top-color: var(--cl-type-project-soft);
+}
+.workspace-tab--run:not(.workspace-tab--active) {
+  border-top-color: var(--cl-type-run-soft);
+}
+.workspace-tab--claim:not(.workspace-tab--active) {
+  border-top-color: var(--cl-type-claim-soft);
+}
+.workspace-tab--lab:not(.workspace-tab--active) {
+  border-top-color: var(--cl-type-lab-soft);
+}
+
+/* Type badge — small colored letter */
+.workspace-tab__type-badge {
+  font-weight: 700;
+  font-size: 10px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.workspace-tab--project .workspace-tab__type-badge {
+  background: var(--cl-type-project-soft);
+  color: var(--cl-type-project);
+}
+.workspace-tab--run .workspace-tab__type-badge {
+  background: var(--cl-type-run-soft);
+  color: var(--cl-type-run);
+}
+.workspace-tab--claim .workspace-tab__type-badge {
+  background: var(--cl-type-claim-soft);
+  color: var(--cl-type-claim);
+}
+.workspace-tab--lab .workspace-tab__type-badge {
+  background: var(--cl-type-lab-soft);
+  color: var(--cl-type-lab);
+}
+
+.workspace-tab__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.workspace-tab__close {
+  margin-left: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--cl-text-faint);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+.workspace-tab__close:hover {
+  opacity: 1;
+  color: var(--cl-text);
+}
+
+.workspace-tab__add {
+  border: none;
+  background: transparent;
+  color: var(--cl-text-dim);
+  cursor: pointer;
+  padding: 6px 10px;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.workspace-tab__add:hover {
+  color: var(--cl-text);
+}
