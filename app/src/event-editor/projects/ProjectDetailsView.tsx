@@ -23,6 +23,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useWorkspace } from '../workspace/WorkspaceContext'
 import { recordCreateTabId, recordEditTabId } from '../workspace/types'
 import { getStudyTree, getRunMethod } from '../../shared/api/treeClient'
+import { quickCreateRun } from '../create/quickCreateRun'
 import { apiClient, type ProtocolContextResponse } from '../../shared/api/client'
 import { useStudyArtifacts } from '../right-pane/useStudyArtifacts'
 import {
@@ -176,14 +177,25 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
 
   // Phase 4: Allow creating a run directly from the project, without
   // requiring an experiment container. Spec §2.2: "Open project → New Run → work"
-  const openNewRunDirect = useCallback(() => {
-    ws.openTab({
-      id: recordCreateTabId('run', studyId),
-      kind: 'record-create',
-      nodeType: 'run',
-      studyId,
-      title: 'New run',
-    })
+  const [creatingRun, setCreatingRun] = useState(false)
+
+  const openNewRunDirect = useCallback(async () => {
+    setCreatingRun(true)
+    try {
+      const result = await quickCreateRun({ studyId })
+      ws.openTab({
+        id: `tab-deck-new-${result.recordId}`,
+        kind: 'deck',
+        eventGraphId: '',
+        runId: result.recordId,
+        title: result.title,
+      })
+      ws.setRightPaneMode('protocol')
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err))
+    } finally {
+      setCreatingRun(false)
+    }
   }, [studyId, ws])
 
   const {
@@ -225,11 +237,12 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
               <button
                 type="button"
                 className="project-details-view__create-btn"
-                onClick={openNewRunDirect}
+                onClick={() => void openNewRunDirect()}
+                disabled={creatingRun}
                 data-testid="project-details-new-run-direct"
-                title="Create a run directly under this project"
+                title="Create a run and open the event editor"
               >
-                + New Run
+                {creatingRun ? 'Creating…' : '+ New Run'}
               </button>
             </>
           ) : (
@@ -331,15 +344,28 @@ function ExperimentRow({
   const [open, setOpen] = useState(true)
   const hasRuns = experiment.runs.length > 0
 
-  const openNewRun = useCallback(() => {
-    ws.openTab({
-      id: recordCreateTabId('run', experiment.recordId),
-      kind: 'record-create',
-      nodeType: 'run',
-      studyId,
-      experimentId: experiment.recordId,
-      title: 'New run',
-    })
+  const [creatingRun, setCreatingRun] = useState(false)
+
+  const openNewRun = useCallback(async () => {
+    setCreatingRun(true)
+    try {
+      const result = await quickCreateRun({
+        studyId,
+        experimentId: experiment.recordId,
+      })
+      ws.openTab({
+        id: `tab-deck-new-${result.recordId}`,
+        kind: 'deck',
+        eventGraphId: '',
+        runId: result.recordId,
+        title: result.title,
+      })
+      ws.setRightPaneMode('protocol')
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : String(err))
+    } finally {
+      setCreatingRun(false)
+    }
   }, [experiment.recordId, studyId, ws])
 
   const createExperimentProtocol = useCallback(async () => {
@@ -403,11 +429,12 @@ function ExperimentRow({
             <button
               type="button"
               className="project-details-view__create-btn project-details-view__create-btn--row"
-              onClick={openNewRun}
+              onClick={() => void openNewRun()}
+              disabled={creatingRun}
               data-testid={`project-details-new-run-${experiment.recordId}`}
               title={`Create a run under ${experiment.title}`}
             >
-              + Run
+              {creatingRun ? '…' : '+ Run'}
             </button>
           </>
         ) : null}
