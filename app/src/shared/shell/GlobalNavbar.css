@@ -1,0 +1,72 @@
+/* GlobalNavbar — persistent top-level navigation bar.
+ * Sits above the workspace tab strip in the AppShell workspace header. */
+
+.global-navbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--cl-topbar-height);
+  padding: 0 12px;
+  background: var(--cl-bg-elev);
+  border-bottom: 1px solid var(--cl-border);
+  flex-shrink: 0;
+}
+
+.global-navbar__brand {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  margin-right: 8px;
+}
+
+.global-navbar__brand-text {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--cl-text);
+  white-space: nowrap;
+}
+
+.global-navbar__destinations {
+  display: flex;
+  gap: 0;
+}
+
+.global-navbar__dest {
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--cl-text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+
+.global-navbar__dest:hover {
+  color: var(--cl-text);
+  background: var(--cl-bg-elev-2);
+}
+
+.global-navbar__dest--active {
+  color: var(--cl-accent);
+  background: var(--cl-accent-soft);
+}
+
+.global-navbar__search {
+  flex: 1;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.global-navbar__actions {
+  display: flex;
+  align-items: center;
+}
+
+.global-navbar__trailing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}

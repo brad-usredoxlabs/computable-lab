@@ -1,27 +1,30 @@
 /**
  * App.tsx — root router.
  *
- * Phase 7 retired every legacy route. The appliance now has four endpoint
- * routes plus supporting routes:
- *   - `/browser`     (Phase 3) — schema-driven record browser.
- *   - `/event-editor` (proven Phase 0 model) — live deck authoring.
- *   - `/event-editor/:eventGraphId` — resume a saved event graph.
- *   - `/protocols`   (Phase 5) — protocol authoring + foundry + jobs.
- *   - `/literature`  (Phase 6) — intake funnel.
- *   - `/event-editor/fixit` — standalone full-screen Fix-It tab.
- *   - `/settings` — off-nav settings page reached from the brand menu.
+ * UI Overhaul Phase 1: adds collection routes (/projects, /runs, /claims,
+ * /lab), redirects / to /projects, and redirects the old run workspace URL
+ * to /runs/:runId.
  *
- * `/runs/:runId/event-editor` is the same EventEditorPage at a deep-link
- * URL; it isn't a separate endpoint. Settings, Theme, and About are exposed
- * through the brand menu inside AppShell (top-left brand click), not the nav.
+ * Active routes:
+ *   - `/projects`               — project collection grid (Phase 1 stub)
+ *   - `/runs`                   — run collection (Phase 1 stub)
+ *   - `/claims`                 — claim collection (Phase 1 stub)
+ *   - `/lab` and `/lab/:category` — lab collection (Phase 1 stub)
+ *   - `/project/:studyId`        — project workspace (existing, fully implemented)
+ *   - `/project/:studyId/event-graph/:eventGraphId` — deep-link to deck
+ *   - `/create/study`            — TapTab-first project creation
+ *   - `/event-editor/*`          — legacy redirects
+ *   - `/literature`              — intake funnel
+ *   - `/protocol-builder`       — standalone protocol builder
+ *   - `/settings`                — off-nav settings
  *
- * The mention click handler (`MentionNavigator`) sits inside BrowserRouter
- * so it can call useNavigate; it routes `[[kind:id|label]]` pill clicks
- * to `/browser?id=…&type=…`.
+ * Redirects:
+ *   - `/` → `/projects`
+ *   - `/project/:studyId/run/:runId` → `/runs/:runId`
  */
 
 import { Suspense, lazy } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { ErrorBoundary } from './shell/ErrorBoundary'
 import { SelectionProvider } from './shared/context/SelectionContext'
 import { ThemeProvider } from './shared/shell'
@@ -34,9 +37,14 @@ const ProjectWorkspacePage = lazy(async () => import('./event-editor/projects/Pr
 const SettingsRoute = lazy(async () => import('./settings/SettingsRoute').then((m) => ({ default: m.SettingsRoute })))
 const LegacyModeRedirect = lazy(async () => import('./event-editor/projects/LegacyModeRedirect').then((m) => ({ default: m.LegacyModeRedirect })))
 const LiteraturePage = lazy(async () => import('./literature/LiteraturePage').then((m) => ({ default: m.LiteraturePage })))
-const WelcomePage = lazy(async () => import('./welcome/WelcomePage').then((m) => ({ default: m.WelcomePage })))
 const CreateStudyPage = lazy(async () => import('./welcome/CreateStudyPage').then((m) => ({ default: m.CreateStudyPage })))
 const ProtocolBuilderPage = lazy(async () => import('./protocol-builder/ProtocolBuilderPage').then((m) => ({ default: m.ProtocolBuilderPage })))
+const RunWorkspacePage = lazy(async () => import('./run/RunWorkspacePage').then((m) => ({ default: m.RunWorkspacePage })))
+// Phase 1: collection view stubs
+const ProjectCollectionView = lazy(async () => import('./collections/ProjectCollectionView').then((m) => ({ default: m.ProjectCollectionView })))
+const RunCollectionView = lazy(async () => import('./collections/RunCollectionView').then((m) => ({ default: m.RunCollectionView })))
+const ClaimCollectionView = lazy(async () => import('./collections/ClaimCollectionView').then((m) => ({ default: m.ClaimCollectionView })))
+const LabCollectionView = lazy(async () => import('./collections/LabCollectionView').then((m) => ({ default: m.LabCollectionView })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -58,6 +66,13 @@ function NotFoundRoute() {
   )
 }
 
+/** Redirect /project/:studyId/run/:runId → /runs/:runId.
+ *  Navigate doesn't interpolate route params, so we read them with useParams. */
+function RunWorkspaceRedirect() {
+  const { runId } = useParams<{ runId: string }>()
+  return <Navigate to={runId ? `/runs/${runId}` : '/runs'} replace />
+}
+
 export function App() {
   return (
     <ErrorBoundary>
@@ -66,12 +81,17 @@ export function App() {
           <BrowserRouter>
             <MentionNavigator />
             <Routes>
-              {/* Phase 12: `/` is the Welcome screen — a deck of recently-
-                  opened projects + an "Open all projects" picker. The
-                  project workspace lives at `/project/:studyId` and there
-                  are no in-workspace modes; navigation within a project is
-                  the right-pane Find tab. */}
-              <Route path="/" element={<DeferredRoute><WelcomePage /></DeferredRoute>} />
+              {/* Phase 1: `/` redirects to `/projects` (WelcomePage subsumed
+                  by the ProjectCollectionView). */}
+              <Route path="/" element={<Navigate to="/projects" replace />} />
+
+              {/* Phase 1: collection views */}
+              <Route path="/projects" element={<DeferredRoute><ProjectCollectionView /></DeferredRoute>} />
+              <Route path="/runs" element={<DeferredRoute><RunCollectionView /></DeferredRoute>} />
+              <Route path="/claims" element={<DeferredRoute><ClaimCollectionView /></DeferredRoute>} />
+              <Route path="/lab" element={<DeferredRoute><LabCollectionView /></DeferredRoute>} />
+              <Route path="/lab/:category" element={<DeferredRoute><LabCollectionView /></DeferredRoute>} />
+
               {/* Creation-entry-points spec §4.1: project creation needs a
                   home before any workspace exists. TapTab-first surface;
                   ?title= carries the picker's unmatched search query. */}
@@ -94,6 +114,12 @@ export function App() {
               <Route path="/literature" element={<DeferredRoute><LiteraturePage /></DeferredRoute>} />
               {/* Standalone Protocol Builder page */}
               <Route path="/protocol-builder" element={<DeferredRoute><ProtocolBuilderPage /></DeferredRoute>} />
+
+              {/* Phase 1: Run workspace moved from /project/:studyId/run/:runId
+                  to /runs/:runId. Old route redirects for one release cycle. */}
+              <Route path="/project/:studyId/run/:runId" element={<RunWorkspaceRedirect />} />
+              <Route path="/runs/:runId" element={<DeferredRoute><RunWorkspacePage /></DeferredRoute>} />
+
               {/* /settings is a real page in the new UI: off-nav, reached
                   from the brand menu, but with a URL, deep linking, and
                   browser-back like every other shell page. */}

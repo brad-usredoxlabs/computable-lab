@@ -1,0 +1,21 @@
+/* GlobalSearchBar — stub styling for Phase 1.
+ * Full dropdown results styling comes in Phase 6. */
+
+.global-search-bar {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg);
+  color: var(--cl-text);
+  font-size: 13px;
+  outline: none;
+}
+
+.global-search-bar:focus {
+  border-color: var(--cl-accent);
+}
+
+.global-search-bar::placeholder {
+  color: var(--cl-text-faint);
+}

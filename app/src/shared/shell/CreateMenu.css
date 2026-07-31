@@ -1,0 +1,20 @@
+/* CreateMenu — stub styling for Phase 1.
+ * Full dropdown styling comes in Phase 6. */
+
+.create-menu {
+  padding: 6px 12px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.create-menu:hover {
+  background: var(--cl-accent-soft);
+  border-color: var(--cl-accent);
+  color: var(--cl-accent);
+}

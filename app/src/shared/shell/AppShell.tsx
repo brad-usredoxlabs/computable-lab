@@ -3,6 +3,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { useTheme } from './useTheme'
 import { useViewport } from './useViewport'
 import { BrandMenu } from './BrandMenu'
+import { GlobalNavbar } from './GlobalNavbar'
 import './AppShell.css'
 
 /**
@@ -106,13 +107,15 @@ export function AppShell({
   return (
     <div className={cls} data-theme={resolvedTheme}>
       {isWorkspace ? (
-        // Phase 12: the workspace topbar is ONLY the project tab strip.
-        // Brand / middle / right slots are dropped entirely in this mode —
-        // Settings / Theme / About live in a gear icon hosted by the tab
-        // strip itself (Phase 12.3). The legacy stacked layout below keeps
-        // its multi-slot topbar untouched for /protocols, /browser,
-        // /literature, /event-editor, /settings.
-        <header className="topbar topbar--workspace">{topbarTabs}</header>
+        // Phase 1: the workspace header is two rows:
+        //   1. GlobalNavbar — persistent 4-destination nav + search + create
+        //   2. Tab strip — open workspace tabs (passed via topbarTabs prop)
+        // The legacy stacked layout below keeps its multi-slot topbar
+        // untouched for /protocols, /browser, /literature, /settings.
+        <header className="topbar topbar--workspace">
+          <GlobalNavbar />
+          <div className="topbar__tabs">{topbarTabs}</div>
+        </header>
       ) : (
         <AppShellTopBar
           brand={brand}

@@ -125,8 +125,10 @@
   /* The strip might render directly as the header's only child, or be
      wrapped in `.topbar__tabs` for the mobile-tabs path; either way,
      drop the now-stale border-top and let the workspace topbar's
-     border-bottom carry the divider. */
-  border-top: 0;
+     border-bottom carry the divider.
+     Phase 1: restore a border-top to visually separate the tab strip
+     from the GlobalNavbar row above it. */
+  border-top: 1px solid var(--cl-border);
   background: transparent;
   flex: 1;
   min-height: var(--cl-topbar-height);
