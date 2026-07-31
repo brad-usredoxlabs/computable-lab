@@ -9,12 +9,19 @@
 import { AppShell } from '../shared/shell'
 
 export function RunCollectionView() {
-  return (
-    <AppShell brand="Runs" layout="workspace" topbarTabs={<div />}>
-      <div data-testid="run-collection-view">
+  const collectionContent = (
+    <div data-testid="run-collection-view">
         <h1>Runs</h1>
         <p>Run collection with chronological grouping will appear here.</p>
       </div>
-    </AppShell>
+  )
+
+  return (
+    <AppShell
+      brand="Runs"
+      layout="workspace"
+      topbarTabs={<div />}
+      leftPane={collectionContent}
+    />
   )
 }

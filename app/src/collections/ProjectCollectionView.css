@@ -1,0 +1,112 @@
+/* ProjectCollectionView — card grid for /projects */
+
+.project-collection {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.project-collection__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.project-collection__title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--cl-text);
+  margin: 0;
+}
+
+.project-collection__new-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--cl-type-project);
+  border-radius: 4px;
+  background: var(--cl-type-project-soft);
+  color: var(--cl-type-project);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.project-collection__new-btn:hover {
+  background: var(--cl-type-project);
+  color: var(--cl-bg);
+}
+
+.project-collection__error,
+.project-collection__hint {
+  color: var(--cl-text-dim);
+  font-size: 14px;
+}
+
+.project-collection__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 48px 0;
+}
+
+.project-collection__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.project-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg-elev);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.project-card:hover {
+  border-color: var(--cl-type-project);
+  background: var(--cl-bg-elev-2);
+}
+
+.project-card__type-badge {
+  font-weight: 700;
+  font-size: 12px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: var(--cl-type-project-soft);
+  color: var(--cl-type-project);
+  flex-shrink: 0;
+}
+
+.project-card__body {
+  min-width: 0;
+}
+
+.project-card__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cl-text);
+  margin: 0 0 4px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-card__id {
+  font-size: 12px;
+  color: var(--cl-text-faint);
+}

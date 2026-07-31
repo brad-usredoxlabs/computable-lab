@@ -9,12 +9,19 @@
 import { AppShell } from '../shared/shell'
 
 export function ClaimCollectionView() {
-  return (
-    <AppShell brand="Claims" layout="workspace" topbarTabs={<div />}>
-      <div data-testid="claim-collection-view">
+  const collectionContent = (
+    <div data-testid="claim-collection-view">
         <h1>Claims</h1>
         <p>Claim collection with operational views will appear here.</p>
       </div>
-    </AppShell>
+  )
+
+  return (
+    <AppShell
+      brand="Claims"
+      layout="workspace"
+      topbarTabs={<div />}
+      leftPane={collectionContent}
+    />
   )
 }

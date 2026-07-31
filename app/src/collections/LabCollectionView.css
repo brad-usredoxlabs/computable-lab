@@ -1,0 +1,114 @@
+/* LabCollectionView — lab entity collection with category navigation */
+
+.lab-collection {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.lab-collection__header {
+  margin-bottom: 16px;
+}
+
+.lab-collection__title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--cl-text);
+  margin: 0;
+}
+
+.lab-collection__categories {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.lab-collection__category {
+  padding: 6px 12px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cl-text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.lab-collection__category:hover {
+  color: var(--cl-text);
+  background: var(--cl-bg-elev-2);
+}
+
+.lab-collection__category--active {
+  color: var(--cl-type-lab);
+  background: var(--cl-type-lab-soft);
+  border-color: var(--cl-type-lab);
+}
+
+.lab-collection__error,
+.lab-collection__hint {
+  color: var(--cl-text-dim);
+  font-size: 14px;
+}
+
+.lab-collection__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.lab-entity-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg-elev);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.lab-entity-card:hover {
+  border-color: var(--cl-type-lab);
+  background: var(--cl-bg-elev-2);
+}
+
+.lab-entity-card__type-badge {
+  font-weight: 700;
+  font-size: 11px;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: var(--cl-type-lab-soft);
+  color: var(--cl-type-lab);
+  flex-shrink: 0;
+}
+
+.lab-entity-card__body {
+  min-width: 0;
+}
+
+.lab-entity-card__title {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--cl-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lab-entity-card__id {
+  font-size: 11px;
+  color: var(--cl-text-faint);
+}
