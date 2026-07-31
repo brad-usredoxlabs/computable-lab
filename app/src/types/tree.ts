@@ -56,7 +56,9 @@ export interface RunTreeNode {
   shortSlug?: string
   path: string
   studyId: string
-  experimentId: string
+  experimentId?: string
+  /** Projects this run is linked to (multi-project linking, spec §2.2). */
+  projectIds?: string[]
   recordCounts: {
     eventGraphs: number
     plates: number
@@ -109,6 +111,8 @@ export type SelectedNode =
 export interface RunContext {
   runId: string
   studyId: string
-  experimentId: string
+  experimentId?: string
+  /** Projects this run is linked to (multi-project linking, spec §2.2). */
+  projectIds?: string[]
   runTitle: string
 }
