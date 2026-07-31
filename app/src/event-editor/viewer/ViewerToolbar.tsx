@@ -14,6 +14,7 @@
 import { DeckToolbar } from './deck/DeckToolbar'
 import { PdfToolbar } from './pdf/PdfToolbar'
 import { DocumentToolbar } from './document/DocumentToolbar'
+import { DeckModeSwitcher } from '../topbar/DeckModeSwitcher'
 import type { WorkspaceTab } from '../workspace/types'
 
 export interface ViewerToolbarProps {
@@ -33,9 +34,20 @@ export function ViewerToolbar({ tab }: ViewerToolbarProps) {
     case 'project-details':
     case 'record-create':
     case 'record-edit':
+    case 'project':
+    case 'run':
+    case 'claim':
+    case 'lab-entity':
       // These surfaces carry their own headers inside the viewer body —
       // no per-surface toolbar.
       return null
+    case 'execution':
+      // Show mode switcher so user can navigate back to plan/deck view.
+      return (
+        <div className="event-editor viewer-toolbar viewer-toolbar--execution">
+          <DeckModeSwitcher />
+        </div>
+      )
     default: {
       const _exhaustive: never = tab
       return _exhaustive ?? null

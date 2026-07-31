@@ -47,10 +47,16 @@ export function Viewer({ tab, onSendSelection }: ViewerProps) {
     case 'project-details':
     case 'record-create':
     case 'record-edit':
+    case 'execution':
+    case 'project':
+    case 'run':
+    case 'claim':
+    case 'lab-entity':
       // ProjectWorkspacePage's LeftPane renders these kinds directly
-      // (ProjectDetailsView / RecordCreatePanel / RecordEditPanel) and doesn't
-      // call Viewer; these arms exist so a future caller can't crash by
-      // handing one in.
+      // (ProjectDetailsView / RecordCreatePanel / RecordEditPanel / ExecutionTabShell)
+      // and doesn't call Viewer; these arms exist so a future caller can't crash by
+      // handing one in. The new entity-type tabs (project/run/claim/lab-entity)
+      // also render their own workspace views, not the Viewer dispatcher.
       return <EmptyViewerState />
     default: {
       const _exhaustive: never = tab

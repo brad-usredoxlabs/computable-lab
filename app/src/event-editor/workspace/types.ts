@@ -67,6 +67,40 @@ export type WorkspaceTab =
       runId: string
       title: string
     }
+  | {
+      id: string
+      kind: 'project'
+      /** Study record ID. */
+      studyId: string
+      title: string
+    }
+  | {
+      id: string
+      kind: 'run'
+      /** Run record ID. */
+      runId: string
+      /** The event graph ID for the run's method deck, if it has one. */
+      eventGraphId?: string
+      title: string
+    }
+  | {
+      id: string
+      kind: 'claim'
+      /** Claim record ID. */
+      claimId: string
+      title: string
+    }
+  | {
+      id: string
+      kind: 'lab-entity'
+      /** Schema ID of the lab entity (protocol, material, labware, equipment, person). */
+      schemaId: string
+      /** Record ID of the lab entity. */
+      recordId: string
+      /** Short label for the entity type (e.g. "protocol", "material"). */
+      entityType: string
+      title: string
+    }
 
 /**
  * Stable id for a creation tab so re-clicking "New …" focuses the open
@@ -94,6 +128,56 @@ export function recordEditTabId(recordId: string): string {
  */
 export function executionTabId(eventGraphId: string): string {
   return `execution:${eventGraphId}`
+}
+
+/** Stable id for a project tab — one per study. */
+export function projectTabId(studyId: string): string {
+  return `project:${studyId}`
+}
+
+/** Stable id for a run tab so re-clicking the same run focuses it. */
+export function runTabId(runId: string): string {
+  return `run:${runId}`
+}
+
+/** Stable id for a claim tab. */
+export function claimTabId(claimId: string): string {
+  return `claim:${claimId}`
+}
+
+/** Stable id for a lab-entity tab. */
+export function labEntityTabId(recordId: string): string {
+  return `lab:${recordId}`
+}
+
+/** The primary entity type of a workspace tab, for color-coding and
+ *  right-pane context selection. Returns null for viewer-only tabs
+ *  (deck, pdf, document) that don't represent a primary entity. */
+export type EntityTabType = 'project' | 'run' | 'claim' | 'lab'
+
+export function entityTabType(tab: WorkspaceTab): EntityTabType | null {
+  switch (tab.kind) {
+    case 'project':
+      return 'project'
+    case 'run':
+    case 'execution':
+    case 'deck':
+      return 'run'
+    case 'claim':
+      return 'claim'
+    case 'lab-entity':
+    case 'record-edit':
+      return 'lab'
+    case 'pdf':
+    case 'document':
+    case 'project-details':
+    case 'record-create':
+      return null
+    default: {
+      const _exhaustive: never = tab
+      return _exhaustive ?? null
+    }
+  }
 }
 
 /**

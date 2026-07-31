@@ -14,20 +14,32 @@
 
 import type { WorkspaceTab, WorkspaceViewerKind } from '../../workspace/types'
 
-/** The tab kinds the AI panel can derive a system prompt from. Phase 12
+/** The tab kinds the AI panel can derive a system prompt from. Phase 1
  *  added `project-details`, which uses the same NO_VIEWER preamble as
- *  the null case (no viewer is open, ask the agent to help navigate). */
-type SystemPromptKind = WorkspaceViewerKind | 'project-details' | null
+ *  the null case (no viewer is open, ask the agent to navigate). Phase 1
+ *  added `execution`, which provides execution-specific context for
+ *  real-time guidance during protocol execution. */
+type SystemPromptKind = WorkspaceViewerKind | 'project-details' | 'execution' | null
 
 /** Convenience: get the SystemPromptKind from a WorkspaceTab (or null). */
 export function systemPromptKindForTab(
   tab: WorkspaceTab | null,
 ): SystemPromptKind {
   if (!tab) return null
-  // The record-create and record-edit surfaces have no viewer document to
-  // ground on; the NO_VIEWER preamble (navigate / advise) is the right
-  // scope for them.
-  if (tab.kind === 'record-create' || tab.kind === 'record-edit') return null
+  // The record-create, record-edit, and execution surfaces have no viewer
+  // document to ground on; the NO_VIEWER preamble (navigate / advise) is
+  // the right scope for them.
+  if (
+    tab.kind === 'record-create' ||
+    tab.kind === 'record-edit' ||
+    tab.kind === 'execution' ||
+    tab.kind === 'project' ||
+    tab.kind === 'run' ||
+    tab.kind === 'claim' ||
+    tab.kind === 'lab-entity'
+  ) {
+    return null
+  }
   return tab.kind
 }
 
@@ -87,6 +99,29 @@ const PROJECT_DETAILS: ViewerSystemPrompt = {
   body: 'You are assisting with a computable-lab study at the project-overview level — the user is looking at the experiments / runs tree and artifact sections. Help them navigate the project, summarize what they have, or pick a record to open. Do not draft event graphs unless the user explicitly opens a deck.',
 }
 
+const EXECUTION: ViewerSystemPrompt = {
+  id: 'execution',
+  label: 'Execution (real-time guidance)',
+  body: 'You are assisting with an active protocol execution run. The user is currently executing a step-by-step workflow and may need:\n' +
+    '1. Real-time guidance: Help the operator understand the current step, what to do next, and any important notes\n' +
+    '2. Deviation reporting: When the user reports a deviation (e.g., "took 35 min instead of 30"), update the current event\'s deviations field with:\n' +
+    '   - code: Appropriate deviation code (timing_deviation, insufficient_volume, etc.)\n' +
+    '   - message: Description of what happened\n' +
+    '   - severity: info, warning, or error\n' +
+    '   - reportedBy: Operator identifier\n' +
+    '   - reportedAt: ISO timestamp\n' +
+    '   - expectedValue: What was planned\n' +
+    '   - actualValue: What actually happened\n' +
+    '3. Mid-graph editing: When the user requests to insert an event at a specific position, use insert_at in your response\n' +
+    '4. Execution context: Reference the current step and execution state when providing guidance\n' +
+    '\n' +
+    'Key principles:\n' +
+    '- Do not suggest changes that would disrupt the active execution\n' +
+    '- When reporting deviations, update the existing event inline (do not create new events)\n' +
+    '- Use insert_at when the user asks to add an event between existing steps\n' +
+    '- Focus on practical, actionable guidance for the operator at the current step',
+}
+
 export function systemPromptForViewer(
   kind: SystemPromptKind,
 ): ViewerSystemPrompt {
@@ -99,6 +134,8 @@ export function systemPromptForViewer(
       return DOCUMENT
     case 'project-details':
       return PROJECT_DETAILS
+    case 'execution':
+      return EXECUTION
     case null:
       return NO_VIEWER
     default: {

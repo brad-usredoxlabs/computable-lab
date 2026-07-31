@@ -70,6 +70,33 @@ export type WorkspaceTab =
       eventGraphId: string;
       runId: string;
       title: string;
+    }
+  | {
+      id: string;
+      kind: 'project';
+      studyId: string;
+      title: string;
+    }
+  | {
+      id: string;
+      kind: 'run';
+      runId: string;
+      eventGraphId?: string;
+      title: string;
+    }
+  | {
+      id: string;
+      kind: 'claim';
+      claimId: string;
+      title: string;
+    }
+  | {
+      id: string;
+      kind: 'lab-entity';
+      schemaId: string;
+      recordId: string;
+      entityType: string;
+      title: string;
     };
 
 /**
@@ -184,6 +211,51 @@ export function parseWorkspaceState(value: unknown): WorkspaceState | null {
         kind: 'execution',
         eventGraphId: t.eventGraphId,
         runId: t.runId,
+        title: t.title,
+      });
+    } else if (
+      t.kind === 'project' &&
+      typeof t.studyId === 'string'
+    ) {
+      tabs.push({
+        id: t.id,
+        kind: 'project',
+        studyId: t.studyId,
+        title: t.title,
+      });
+    } else if (
+      t.kind === 'run' &&
+      typeof t.runId === 'string'
+    ) {
+      tabs.push({
+        id: t.id,
+        kind: 'run',
+        runId: t.runId,
+        title: t.title,
+        ...(typeof t.eventGraphId === 'string' ? { eventGraphId: t.eventGraphId } : {}),
+      });
+    } else if (
+      t.kind === 'claim' &&
+      typeof t.claimId === 'string'
+    ) {
+      tabs.push({
+        id: t.id,
+        kind: 'claim',
+        claimId: t.claimId,
+        title: t.title,
+      });
+    } else if (
+      t.kind === 'lab-entity' &&
+      typeof t.schemaId === 'string' &&
+      typeof t.recordId === 'string' &&
+      typeof t.entityType === 'string'
+    ) {
+      tabs.push({
+        id: t.id,
+        kind: 'lab-entity',
+        schemaId: t.schemaId,
+        recordId: t.recordId,
+        entityType: t.entityType,
         title: t.title,
       });
     } else {
