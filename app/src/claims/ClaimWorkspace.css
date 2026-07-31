@@ -1,0 +1,119 @@
+/* ClaimWorkspace — individual claim view. */
+
+.claim-workspace {
+  padding: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.claim-workspace__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.claim-workspace__type-badge {
+  font-weight: 700;
+  font-size: 14px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: var(--cl-type-claim-soft);
+  color: var(--cl-type-claim);
+  flex-shrink: 0;
+}
+
+.claim-workspace__statement {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--cl-text);
+  margin: 0 0 4px 0;
+  flex: 1;
+}
+
+.claim-workspace__id {
+  font-size: 12px;
+  color: var(--cl-text-faint);
+}
+
+.claim-workspace__status {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.claim-workspace__status--active {
+  background: var(--cl-type-run-soft);
+  color: var(--cl-type-run);
+}
+
+.claim-workspace__status--retracted {
+  background: var(--cl-accent-soft);
+  color: var(--cl-danger);
+}
+
+.claim-workspace__section {
+  margin-bottom: 24px;
+  padding: 16px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg-elev);
+}
+
+.claim-workspace__section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--cl-text);
+  margin: 0 0 12px 0;
+}
+
+.claim-workspace__evidence-groups {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.claim-workspace__evidence-group h3 {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--cl-text-dim);
+  margin: 0 0 8px 0;
+}
+
+.claim-workspace__connections-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.claim-workspace__connections-grid h3 {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--cl-text-dim);
+  margin: 0 0 8px 0;
+}
+
+.claim-workspace__placeholder {
+  font-size: 13px;
+  color: var(--cl-text-faint);
+}
+
+.claim-workspace__error,
+.claim-workspace__hint {
+  color: var(--cl-text-dim);
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .claim-workspace__evidence-groups,
+  .claim-workspace__connections-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -45,6 +45,10 @@ const ProjectCollectionView = lazy(async () => import('./collections/ProjectColl
 const RunCollectionView = lazy(async () => import('./collections/RunCollectionView').then((m) => ({ default: m.RunCollectionView })))
 const ClaimCollectionView = lazy(async () => import('./collections/ClaimCollectionView').then((m) => ({ default: m.ClaimCollectionView })))
 const LabCollectionView = lazy(async () => import('./collections/LabCollectionView').then((m) => ({ default: m.LabCollectionView })))
+// Phase 7: Claim workspace
+const ClaimWorkspace = lazy(async () => import('./claims/ClaimWorkspace').then((m) => ({ default: m.ClaimWorkspace })))
+// Phase 8: Lab entity workspace
+const LabEntityWorkspace = lazy(async () => import('./lab/LabEntityWorkspace').then((m) => ({ default: m.LabEntityWorkspace })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -89,8 +93,10 @@ export function App() {
               <Route path="/projects" element={<DeferredRoute><ProjectCollectionView /></DeferredRoute>} />
               <Route path="/runs" element={<DeferredRoute><RunCollectionView /></DeferredRoute>} />
               <Route path="/claims" element={<DeferredRoute><ClaimCollectionView /></DeferredRoute>} />
+              <Route path="/claims/:claimId" element={<DeferredRoute><ClaimWorkspace /></DeferredRoute>} />
               <Route path="/lab" element={<DeferredRoute><LabCollectionView /></DeferredRoute>} />
               <Route path="/lab/:category" element={<DeferredRoute><LabCollectionView /></DeferredRoute>} />
+              <Route path="/lab/:category/:entityId" element={<DeferredRoute><LabEntityWorkspace /></DeferredRoute>} />
 
               {/* Creation-entry-points spec §4.1: project creation needs a
                   home before any workspace exists. TapTab-first surface;
