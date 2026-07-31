@@ -203,6 +203,9 @@ export function registerRoutes(
   // Delete record
   fastify.delete('/records/:id', recordHandlers.deleteRecord.bind(recordHandlers));
 
+  // List claims
+  fastify.get('/claims', recordHandlers.listClaims.bind(recordHandlers));
+
   // Check claim duplicates
   fastify.post('/claims/check-duplicates', recordHandlers.checkClaimDuplicates.bind(recordHandlers));
 
@@ -341,6 +344,9 @@ export function registerRoutes(
 
     // Search records by title
     fastify.get('/tree/search', treeHandlers.searchRecords.bind(treeHandlers));
+
+    // List all runs across studies (flat, non-hierarchical)
+    fastify.get('/runs', treeHandlers.listRuns.bind(treeHandlers));
 
     // File a record from inbox into a run
     fastify.post('/records/:id/file', treeHandlers.fileRecord.bind(treeHandlers));

@@ -49,6 +49,25 @@ export interface RebuildIndexResponse {
   generatedAt: string;
 }
 
+/** A run record returned by the cross-study run list endpoint. */
+export interface RunListItem {
+  recordId: string;
+  title: string;
+  status: string;
+  studyId: string;
+  studyTitle: string;
+  experimentId: string;
+  experimentTitle: string;
+  updatedAt: string;
+  startedAt?: string;
+}
+
+/** Response from GET /runs — flat list of all runs across studies. */
+export interface RunsListResponse {
+  runs: RunListItem[];
+  total: number;
+}
+
 /** Where a project-level material/labware usage came from (experiment + run). */
 export interface InventoryUsageAnchor {
   experimentId: string;
@@ -1587,7 +1606,7 @@ export function createTreeHandlers(
       _reply: FastifyReply
     ): Promise<RecordsListResponse> {
       const { q, kind, limit } = request.query;
-      
+
       // If no query, return empty (or optionally filter by kind)
       if (!q || q.trim().length === 0) {
         if (kind) {
@@ -1596,20 +1615,97 @@ export function createTreeHandlers(
         }
         return { records: [], total: 0 };
       }
-      
+
       const limitNum = limit ? parseInt(limit, 10) : 50;
-      
+
       // Use full-text search
       let records = await indexManager.search(q, limitNum);
-      
+
       // Filter by kind if specified
       if (kind) {
         records = records.filter(r => r.kind === kind);
       }
-      
+
       return {
         records,
         total: records.length,
+      };
+    },
+
+    /**
+     * GET /runs
+     * List all runs across studies, flat (non-hierarchical).
+     * Filters: studyId, experimentId, status, limit, offset.
+     * Returns run metadata enriched with parent study/experiment titles,
+     * sorted by updatedAt descending.
+     */
+    async listRuns(
+      request: FastifyRequest<{
+        Querystring: {
+          studyId?: string;
+          experimentId?: string;
+          status?: string;
+          limit?: string;
+          offset?: string;
+        };
+      }>,
+      _reply: FastifyReply
+    ): Promise<RunsListResponse> {
+      const { studyId, experimentId, status, limit, offset } = request.query;
+
+      const limitNum = limit ? parseInt(limit, 10) : 200;
+      const offsetNum = offset ? parseInt(offset, 10) : 0;
+
+      // Get the full study tree to resolve parent titles
+      const studies = await indexManager.getStudyTree();
+
+      // Collect every run across all studies, enriched with parent info
+      const allRuns: RunListItem[] = [];
+
+      for (const study of studies) {
+        for (const experiment of study.experiments) {
+          for (const run of experiment.runs) {
+            // Read the actual run payload to get status and timestamps
+            const runRecord = await recordStore.get(run.recordId);
+            const runPayload = (runRecord?.payload ?? {}) as Record<string, unknown>;
+
+            // Apply filters
+            if (studyId && study.recordId !== studyId) continue;
+            if (experimentId && experiment.recordId !== experimentId) continue;
+            const runStatus = typeof runPayload['status'] === 'string' ? runPayload['status'] : 'planned';
+            if (status && runStatus !== status) continue;
+
+            const updatedAt = typeof runPayload['updatedAt'] === 'string'
+              ? runPayload['updatedAt']
+              : (runRecord?.meta?.updatedAt ?? '');
+            const startedAt = typeof runPayload['startedAt'] === 'string'
+              ? runPayload['startedAt']
+              : undefined;
+
+            allRuns.push({
+              recordId: run.recordId,
+              title: run.title || run.recordId,
+              status: runStatus,
+              studyId: study.recordId,
+              studyTitle: study.title,
+              experimentId: experiment.recordId,
+              experimentTitle: experiment.title,
+              updatedAt,
+              ...(startedAt ? { startedAt } : {}),
+            });
+          }
+        }
+      }
+
+      // Sort by updatedAt descending (most recent first)
+      allRuns.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+      // Apply pagination
+      const paged = allRuns.slice(offsetNum, offsetNum + limitNum);
+
+      return {
+        runs: paged,
+        total: allRuns.length,
       };
     },
   };

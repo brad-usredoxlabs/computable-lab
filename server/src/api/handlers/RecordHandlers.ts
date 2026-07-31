@@ -689,6 +689,57 @@ export function createRecordHandlers(
     },
     
     /**
+     * GET /claims
+     * List all claim records with optional status-based filtering.
+     * Claims are standalone knowledge records (not study-scoped).
+     */
+    async listClaims(
+      request: FastifyRequest<{ Querystring: { status?: string; limit?: number; offset?: number } }>,
+      reply: FastifyReply
+    ): Promise<{ claims: RecordEnvelope[]; total?: number; offset?: number; limit?: number } | ApiError> {
+      try {
+        const { status, limit, offset } = request.query;
+
+        const user = await resolveRequestUser(request, reply);
+        if (!user) return unauthenticatedError('A valid local user is required');
+
+        const allClaims = await store.list({ kind: 'claim' });
+
+        // Filter by status if provided
+        const filtered = status
+          ? allClaims.filter(env => {
+              const p = env.payload as Record<string, unknown> | undefined;
+              return p?.status === status;
+            })
+          : allClaims;
+
+        // Apply access control
+        const visibleClaims: RecordEnvelope[] = [];
+        for (const claim of filtered) {
+          if (await canAccess(user, 'read', claim)) visibleClaims.push(claim);
+        }
+
+        // Apply pagination
+        const start = offset ?? 0;
+        const end = limit !== undefined ? start + Number(limit) : visibleClaims.length;
+        const paged = visibleClaims.slice(start, end);
+
+        const result: { claims: RecordEnvelope[]; total?: number; offset?: number; limit?: number } = {
+          claims: paged,
+          total: visibleClaims.length,
+        };
+        if (limit !== undefined) result.limit = Number(limit);
+        if (offset !== undefined) result.offset = Number(offset);
+
+        return result;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        reply.status(500);
+        return { error: 'INTERNAL_ERROR', message: `Failed to list claims: ${message}` };
+      }
+    },
+
+    /**
      * POST /claims/check-duplicates
      * Check if any of the given SPO triples already exist as claims.
      */

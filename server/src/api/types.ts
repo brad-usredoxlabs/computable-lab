@@ -123,6 +123,36 @@ export interface ListRecordsResponse {
 }
 
 // ============================================================================
+// Claim Endpoints
+// ============================================================================
+
+/**
+ * Query parameters for listing claims.
+ */
+export interface ListClaimsQuery {
+  /** Filter by claim status (active | retracted) */
+  status?: string;
+  /** Maximum records to return */
+  limit?: number;
+  /** Offset for pagination */
+  offset?: number;
+}
+
+/**
+ * Response for listing claims.
+ */
+export interface ListClaimsResponse {
+  /** Array of claim record envelopes */
+  claims: RecordEnvelope[];
+  /** Total count (if available) */
+  total?: number;
+  /** Offset used */
+  offset?: number;
+  /** Limit used */
+  limit?: number;
+}
+
+// ============================================================================
 // Schema Endpoints
 // ============================================================================
 

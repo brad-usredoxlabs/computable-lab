@@ -458,6 +458,34 @@ export interface SearchProjectsResponse {
   total: number
 }
 
+/** A run listed in the cross-study /runs endpoint. */
+export interface RunListItem {
+  recordId: string
+  title: string
+  status: string
+  studyId: string
+  studyTitle: string
+  experimentId: string
+  experimentTitle: string
+  updatedAt: string
+  startedAt?: string
+}
+
+/** Response from GET /runs. */
+export interface RunsListResponse {
+  runs: RunListItem[]
+  total: number
+}
+
+/** Optional query filters for listRuns. */
+export interface ListRunsParams {
+  studyId?: string
+  experimentId?: string
+  status?: string
+  limit?: number
+  offset?: number
+}
+
 type TypedRecordEnvelope<TPayload extends object> = Omit<RecordEnvelope, 'payload'> & {
   payload: TPayload
 }
@@ -1749,6 +1777,28 @@ export const apiClient = {
   },
 
   /**
+   * List claim records with optional status filtering.
+   * Calls GET /claims with optional status, limit, offset query params.
+   */
+  async listClaims(options?: {
+    status?: 'active' | 'retracted'
+    limit?: number
+    offset?: number
+  }): Promise<{ claims: RecordEnvelope[]; total: number }> {
+    const params = new URLSearchParams()
+    if (options?.status) params.set('status', options.status)
+    if (options?.limit !== undefined) params.set('limit', String(options.limit))
+    if (options?.offset !== undefined) params.set('offset', String(options.offset))
+    const qs = params.toString()
+    const path = qs ? `/claims?${qs}` : '/claims'
+    const response = await request<{ claims: RecordEnvelope[]; total: number }>(path)
+    return {
+      claims: response.claims,
+      total: response.total ?? response.claims.length,
+    }
+  },
+
+  /**
    * Search for projects (studies) by full-text query.
    * Calls POST /api/search/projects with { q, limit }.
    * Returns studies grouped by search hits with hierarchical match paths.
@@ -1759,6 +1809,23 @@ export const apiClient = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ q, limit }),
     })
+  },
+
+  /**
+   * List all runs across all studies (non-hierarchical).
+   * Calls GET /runs with optional filters (studyId, experimentId, status, limit, offset).
+   * Runs are sorted by updatedAt descending.
+   */
+  async listRuns(params: ListRunsParams = {}): Promise<RunsListResponse> {
+    const searchParams = new URLSearchParams()
+    if (params.studyId) searchParams.set('studyId', params.studyId)
+    if (params.experimentId) searchParams.set('experimentId', params.experimentId)
+    if (params.status) searchParams.set('status', params.status)
+    if (params.limit !== undefined) searchParams.set('limit', String(params.limit))
+    if (params.offset !== undefined) searchParams.set('offset', String(params.offset))
+    const qs = searchParams.toString()
+    const url = qs ? `/runs?${qs}` : '/runs'
+    return request<RunsListResponse>(url)
   },
 
   /**
