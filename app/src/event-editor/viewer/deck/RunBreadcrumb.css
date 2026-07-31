@@ -1,0 +1,40 @@
+/* RunBreadcrumb — project path breadcrumb in the deck toolbar. */
+
+.run-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--cl-text-dim);
+  flex-shrink: 0;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-breadcrumb__link {
+  border: none;
+  background: transparent;
+  color: var(--cl-text-dim);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+.run-breadcrumb__link:hover {
+  color: var(--cl-type-project);
+  background: var(--cl-type-project-soft);
+}
+
+.run-breadcrumb__sep {
+  color: var(--cl-text-faint);
+  font-size: 14px;
+  flex-shrink: 0;
+}

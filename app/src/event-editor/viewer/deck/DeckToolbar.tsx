@@ -7,10 +7,10 @@
  * the same `EventEditorProvider` subtree that wraps `DeckViewer`. The
  * provider is set up in `ProjectWorkspacePage` so it covers both slots.
  *
- * Phase 2 of quick-run-creation plan: when the deck tab has a runId, the
- * run name is shown as an EditableTitle at the left of the toolbar.
- * Clicking it opens an inline input; Enter commits the rename to both
- * the workspace tab (optimistic) and the run record on the server.
+ * When the deck tab has a runId:
+ *   1. RunBreadcrumb shows the project path (clickable, navigates back)
+ *   2. EditableTitle shows the run name (click-to-edit, persists to server)
+ * Together they read: [Project] › [Run Name]
  */
 
 import { UndoRedoControls } from '../../topbar/UndoRedoControls'
@@ -22,6 +22,7 @@ import { EventGraphChip } from '../../topbar/EventGraphChip'
 import { useEventEditor } from '../../EventEditorContext'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
 import { EditableTitle } from '../../../shared/shell/EditableTitle'
+import { RunBreadcrumb } from './RunBreadcrumb'
 import { apiClient } from '../../../shared/api/client'
 import type { WorkspaceTab } from '../../workspace/types'
 
@@ -58,6 +59,9 @@ export function DeckToolbar({ tab }: DeckToolbarProps) {
 
   return (
     <div className="event-editor viewer-toolbar viewer-toolbar--deck">
+      {hasRun ? (
+        <RunBreadcrumb runId={runId} />
+      ) : null}
       {hasRun ? (
         <EditableTitle
           title={tabTitle ?? 'Untitled Run'}
