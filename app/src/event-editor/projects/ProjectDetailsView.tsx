@@ -174,6 +174,18 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
     })
   }, [studyId, ws])
 
+  // Phase 4: Allow creating a run directly from the project, without
+  // requiring an experiment container. Spec §2.2: "Open project → New Run → work"
+  const openNewRunDirect = useCallback(() => {
+    ws.openTab({
+      id: recordCreateTabId('run', studyId),
+      kind: 'record-create',
+      nodeType: 'run',
+      studyId,
+      title: 'New run',
+    })
+  }, [studyId, ws])
+
   const {
     artifacts,
     loading: artifactsLoading,
@@ -201,14 +213,25 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
         <div className="project-details-view__section-head">
           <h3 className="project-details-view__section-title">Experiments</h3>
           {canEdit ? (
-            <button
-              type="button"
-              className="project-details-view__create-btn"
-              onClick={openNewExperiment}
-              data-testid="project-details-new-experiment"
-            >
-              + New experiment
-            </button>
+            <>
+              <button
+                type="button"
+                className="project-details-view__create-btn"
+                onClick={openNewExperiment}
+                data-testid="project-details-new-experiment"
+              >
+                + New experiment
+              </button>
+              <button
+                type="button"
+                className="project-details-view__create-btn"
+                onClick={openNewRunDirect}
+                data-testid="project-details-new-run-direct"
+                title="Create a run directly under this project"
+              >
+                + New Run
+              </button>
+            </>
           ) : (
             <span
               className="project-details-view__readonly-hint"
