@@ -1,7 +1,12 @@
-/* GlobalSearchBar — stub styling for Phase 1.
- * Full dropdown results styling comes in Phase 6. */
+/* GlobalSearchBar — search input with dropdown results.
+ * Uses existing /tree/search endpoint for cross-entity-type search. */
 
 .global-search-bar {
+  position: relative;
+  width: 100%;
+}
+
+.global-search-bar__input {
   width: 100%;
   padding: 6px 10px;
   border: 1px solid var(--cl-border);
@@ -10,12 +15,97 @@
   color: var(--cl-text);
   font-size: 13px;
   outline: none;
+  transition: border-color 0.15s;
 }
 
-.global-search-bar:focus {
+.global-search-bar__input:focus {
   border-color: var(--cl-accent);
 }
 
-.global-search-bar::placeholder {
+.global-search-bar__input::placeholder {
   color: var(--cl-text-faint);
+}
+
+.global-search-bar__results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--cl-bg-elev);
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.global-search-bar__result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--cl-text);
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.1s;
+}
+
+.global-search-bar__result:hover {
+  background: var(--cl-bg-elev-2);
+}
+
+.global-search-bar__result-type {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text-dim);
+  min-width: 60px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* Type-colored result badges */
+.global-search-bar__result-type--project {
+  color: var(--cl-type-project);
+  background: var(--cl-type-project-soft);
+}
+.global-search-bar__result-type--run {
+  color: var(--cl-type-run);
+  background: var(--cl-type-run-soft);
+}
+.global-search-bar__result-type--claim {
+  color: var(--cl-type-claim);
+  background: var(--cl-type-claim-soft);
+}
+.global-search-bar__result-type--lab {
+  color: var(--cl-type-lab);
+  background: var(--cl-type-lab-soft);
+}
+
+.global-search-bar__result-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.global-search-bar__loading {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  padding: 6px 10px;
+  background: var(--cl-bg-elev);
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  color: var(--cl-text-dim);
+  font-size: 12px;
+  z-index: 100;
 }

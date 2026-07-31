@@ -1,7 +1,10 @@
-/* CreateMenu — stub styling for Phase 1.
- * Full dropdown styling comes in Phase 6. */
+/* CreateMenu — "+ Create" dropdown in the navbar. */
 
 .create-menu {
+  position: relative;
+}
+
+.create-menu__button {
   padding: 6px 12px;
   border: 1px solid var(--cl-border);
   border-radius: 4px;
@@ -13,8 +16,51 @@
   transition: background 0.15s, border-color 0.15s;
 }
 
-.create-menu:hover {
+.create-menu__button:hover {
   background: var(--cl-accent-soft);
   border-color: var(--cl-accent);
   color: var(--cl-accent);
+}
+
+.create-menu__dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 160px;
+  background: var(--cl-bg-elev);
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  padding: 4px 0;
+}
+
+.create-menu__item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--cl-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.create-menu__item:hover {
+  background: var(--cl-bg-elev-2);
+}
+
+/* Dominant action (New Run) — accent-colored */
+.create-menu__item--dominant {
+  color: var(--cl-type-run);
+  font-weight: 600;
+  border-bottom: 1px solid var(--cl-border);
+  margin-bottom: 2px;
+  padding-bottom: 10px;
+}
+
+.create-menu__item--dominant:hover {
+  background: var(--cl-type-run-soft);
 }
