@@ -51,6 +51,18 @@ export interface IndexEntry {
   
   /** Content hash for staleness detection */
   hash?: string;
+
+  /* -- Relationship fields (kind: 'relationship') -- */
+  /** Relationship edge: source object ID */
+  sourceId?: string;
+  /** Relationship edge: source object type */
+  sourceType?: string;
+  /** Relationship edge: target object ID */
+  targetId?: string;
+  /** Relationship edge: target object type */
+  targetType?: string;
+  /** Relationship edge: verb / predicate */
+  verb?: string;
 }
 
 /**

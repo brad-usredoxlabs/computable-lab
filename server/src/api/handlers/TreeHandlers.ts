@@ -1633,6 +1633,34 @@ export function createTreeHandlers(
     },
 
     /**
+     * GET /relationships
+     * Query typed relationship edges between first-class objects.
+     * Filters: sourceId, sourceType, targetId, targetType, verb.
+     */
+    async listRelationships(
+      request: FastifyRequest<{
+        Querystring: {
+          sourceId?: string;
+          sourceType?: string;
+          targetId?: string;
+          targetType?: string;
+          verb?: string;
+        };
+      }>,
+      _reply: FastifyReply
+    ): Promise<{ relationships: IndexEntry[]; total: number }> {
+      const { sourceId, sourceType, targetId, targetType, verb } = request.query;
+      const allRecords = await indexManager.query({ kind: 'relationship' });
+      let filtered = allRecords;
+      if (sourceId) filtered = filtered.filter(e => e.sourceId === sourceId);
+      if (sourceType) filtered = filtered.filter(e => e.sourceType === sourceType);
+      if (targetId) filtered = filtered.filter(e => e.targetId === targetId);
+      if (targetType) filtered = filtered.filter(e => e.targetType === targetType);
+      if (verb) filtered = filtered.filter(e => e.verb === verb);
+      return { relationships: filtered, total: filtered.length };
+    },
+
+    /**
      * GET /runs
      * List all runs across studies, flat (non-hierarchical).
      * Filters: studyId, experimentId, status, limit, offset.

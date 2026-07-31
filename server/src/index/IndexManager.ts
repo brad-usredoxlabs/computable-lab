@@ -82,6 +82,13 @@ function buildIndexEntry(
       ? (payload.artifactKind as string)
       : undefined;
   
+  // Capture relationship edge fields so index queries can filter directly
+  const sourceId = (payload.sourceId as string) ?? undefined;
+  const sourceType = (payload.sourceType as string) ?? undefined;
+  const targetId = (payload.targetId as string) ?? undefined;
+  const targetType = (payload.targetType as string) ?? undefined;
+  const verb = (payload.verb as string) ?? undefined;
+  
   // Build links object conditionally
   const links: IndexEntry['links'] = hasLinks ? {
     ...(rawStudyId ? { studyId: rawStudyId as string } : {}),
@@ -101,6 +108,11 @@ function buildIndexEntry(
     ...(links !== undefined ? { links } : {}),
     ...(createdAt !== undefined ? { createdAt } : {}),
     ...(updatedAt !== undefined ? { updatedAt } : {}),
+    ...(sourceId !== undefined ? { sourceId } : {}),
+    ...(sourceType !== undefined ? { sourceType } : {}),
+    ...(targetId !== undefined ? { targetId } : {}),
+    ...(targetType !== undefined ? { targetType } : {}),
+    ...(verb !== undefined ? { verb } : {}),
   };
 }
 

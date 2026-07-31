@@ -348,6 +348,9 @@ export function registerRoutes(
     // List all runs across studies (flat, non-hierarchical)
     fastify.get('/runs', treeHandlers.listRuns.bind(treeHandlers));
 
+    // Relationships — query typed edges between first-class objects
+    fastify.get('/relationships', treeHandlers.listRelationships.bind(treeHandlers));
+
     // File a record from inbox into a run
     fastify.post('/records/:id/file', treeHandlers.fileRecord.bind(treeHandlers));
 
