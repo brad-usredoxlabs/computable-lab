@@ -28,6 +28,18 @@
   --cl-warn: #d29922;
   --cl-preview: #be4bdb;
 
+  /* Entity-type accent colors for tab coding, chips, and icons.
+     Each type gets a hue; the accent is used for tab borders, chip
+     backgrounds, and icon tints. Soft variants for backgrounds. */
+  --cl-type-project: #58a6ff;        /* blue — same as --cl-accent */
+  --cl-type-project-soft: rgba(88, 166, 255, 0.12);
+  --cl-type-run: #3fb950;            /* green */
+  --cl-type-run-soft: rgba(63, 185, 80, 0.12);
+  --cl-type-claim: #d29922;           /* amber */
+  --cl-type-claim-soft: rgba(210, 153, 34, 0.12);
+  --cl-type-lab: #be4bdb;             /* purple — same as --cl-preview */
+  --cl-type-lab-soft: rgba(190, 75, 219, 0.12);
+
   /* Text used on top of the accent fill (e.g., primary buttons). Inverts
      with theme so it reads correctly against the accent in both modes. */
   --cl-on-accent: #0e1116;
@@ -73,6 +85,14 @@
   --cl-danger: #cf222e;
   --cl-warn: #9a6700;
   --cl-preview: #8250df;
+  --cl-type-project: #0969da;
+  --cl-type-project-soft: rgba(9, 105, 218, 0.1);
+  --cl-type-run: #1a7f37;
+  --cl-type-run-soft: rgba(26, 127, 55, 0.1);
+  --cl-type-claim: #9a6700;
+  --cl-type-claim-soft: rgba(154, 103, 0, 0.1);
+  --cl-type-lab: #8250df;
+  --cl-type-lab-soft: rgba(130, 80, 223, 0.1);
   --cl-on-accent: #ffffff;
 
   --cl-tile-bg-top: #f6f8fa;
