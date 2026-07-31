@@ -19,7 +19,7 @@ import type { WorkspaceTab, WorkspaceViewerKind } from '../../workspace/types'
  *  the null case (no viewer is open, ask the agent to navigate). Phase 1
  *  added `execution`, which provides execution-specific context for
  *  real-time guidance during protocol execution. */
-type SystemPromptKind = WorkspaceViewerKind | 'project-details' | 'execution' | null
+type SystemPromptKind = WorkspaceViewerKind | 'project-details' | 'execution' | 'project' | 'run' | 'claim' | 'lab-entity' | null
 
 /** Convenience: get the SystemPromptKind from a WorkspaceTab (or null). */
 export function systemPromptKindForTab(
@@ -87,6 +87,33 @@ const DOCUMENT: ViewerSystemPrompt = {
   body: 'You are helping author a scientific document (protocol, write-up, training record, or conclusion). Suggest edits as concrete prose; rewrite sections when asked. Slash-menu mentions of materials / labware / protocols should resolve through the local ontology service before being inserted.',
 }
 
+// Phase 5: Per-entity-type system prompts for project, run, claim, and
+// lab-entity contexts. These are used when the active workspace tab is a
+// typed entity tab (project/run/claim/lab-entity), not a viewer tab.
+const PROJECT: ViewerSystemPrompt = {
+  id: 'entity.project',
+  label: 'Project (overview)',
+  body: 'You are assisting with a computable-lab project. The project is a durable statement of purpose that gathers related graph objects. Help the user with: project questions, summaries, planning, and graph-grounded recommendations. Answer "what changed this week?", "which assumption is weakest?", "what should happen next?" Help identify active questions, recent work, and claims being tested.',
+}
+
+const RUN: ViewerSystemPrompt = {
+  id: 'entity.run',
+  label: 'Run (execution)',
+  body: 'You are assisting with a computable-lab run — the primary unit of laboratory work. The run contains the event graph, plate state, protocol execution, materials, instruments, results, and evidence. Help the user: compare results to prior controls, draft claims from results, understand the event graph, and interpret semantic context. The run is the most feature-complete context.',
+}
+
+const CLAIM: ViewerSystemPrompt = {
+  id: 'entity.claim',
+  label: 'Claim (evidence)',
+  body: 'You are assisting with a computable-lab claim — an addressable scientific statement that accumulates supporting, contradictory, or qualifying evidence. Help the user: summarize contradictory evidence, identify missing evidence, propose discriminating experiments, and compare claim revisions. Claims are universal graph objects and MUST NOT belong to a single project.',
+}
+
+const LAB_ENTITY: ViewerSystemPrompt = {
+  id: 'entity.lab',
+  label: 'Lab entity (resource)',
+  body: 'You are assisting with a reusable lab entity (protocol, material, labware, instrument, or person). Help the user understand the entity capabilities, versions, history, relationships to runs and claims, and calibration/maintenance status. Distinguish model definitions from physical instances.',
+}
+
 const NO_VIEWER: ViewerSystemPrompt = {
   id: 'workspace.none',
   label: 'Project workspace (no viewer)',
@@ -136,6 +163,14 @@ export function systemPromptForViewer(
       return PROJECT_DETAILS
     case 'execution':
       return EXECUTION
+    case 'project':
+      return PROJECT
+    case 'run':
+      return RUN
+    case 'claim':
+      return CLAIM
+    case 'lab-entity':
+      return LAB_ENTITY
     case null:
       return NO_VIEWER
     default: {
