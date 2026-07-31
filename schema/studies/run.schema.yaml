@@ -12,7 +12,7 @@ allOf:
 required:
 - kind
 - recordId
-- experimentId
+- studyId
 - status
 
 properties:
@@ -33,11 +33,11 @@ properties:
 
   experimentId:
     type: string
-    description: "Parent experiment recordId (or @id if you standardize on that)."
+    description: "Optional experiment recordId. Experiments are now optional grouping (saved views), not a required parent."
 
   studyId:
     type: string
-    description: "Optional parent study recordId."
+    description: "Parent study (project) recordId. The primary parent reference — runs link directly to projects."
 
   label:
     type: string
