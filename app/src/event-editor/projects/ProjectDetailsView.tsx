@@ -3,20 +3,14 @@
  * kind. Phase 12 landing surface for an opened study.
  *
  *  - Header: study title + record id
- *  - Experiments → runs tree (collapsible)
- *  - Artifact sections grouped by kind (Protocols / PDFs / Write-ups /
- *    Training / Conclusions / Saved prompts)
+ *  - RUNS: flat list of all runs linked to this project (via GET /runs?studyId=)
+ *    Shows ALL runs regardless of experiment grouping. Runs with no
+ *    experiment parent appear here too.
+ *  - Experiments → runs tree (collapsible, legacy grouping)
+ *  - Protocols section
+ *  - Artifact sections grouped by kind
  *
- * Clicking a node anywhere in the view delegates to the workspace's
- * `openTab`:
- *   - Run → open the run's method event graph as a deck tab (one extra
- *     fetch via `getRunMethod`; runs without a method are non-clickable)
- *   - Artifact → open via `tabForArtifact`
- *
- * Navigation plus the creation spine's in-project entry points
- * (specifications/creation-entry-points.md §4.2/§4.3): "New experiment"
- * on the Experiments section, "New run" on each experiment row. Both open
- * a `record-create` workspace tab hosting the TapTab creation surface.
+ * Clicking a run opens its method event graph as a deck tab.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -24,7 +18,7 @@ import { useWorkspace } from '../workspace/WorkspaceContext'
 import { recordCreateTabId, recordEditTabId } from '../workspace/types'
 import { getStudyTree, getRunMethod } from '../../shared/api/treeClient'
 import { quickCreateRun } from '../create/quickCreateRun'
-import { apiClient, type ProtocolContextResponse } from '../../shared/api/client'
+import { apiClient, type ProtocolContextResponse, type RunListItem } from '../../shared/api/client'
 import { useStudyArtifacts } from '../right-pane/useStudyArtifacts'
 import {
   artifactKindLabel,
@@ -97,22 +91,32 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
   const [study, setStudy] = useState<StudyTreeNode | null>(null)
   const [treeError, setTreeError] = useState<string | null>(null)
   const [treeLoading, setTreeLoading] = useState(true)
-  // Whether the current user can add experiments/runs here. Default true so the
-  // owner (the common case) sees no flicker; flips to false once we learn this
-  // study is owned by someone else / not shared with edit access.
   const [canEdit, setCanEdit] = useState(true)
-  // Bumped by the cl:records-changed event so a created experiment/run
-  // shows up without a manual refresh.
   const [treeEpoch, setTreeEpoch] = useState(0)
   const [protocolContext, setProtocolContext] = useState<ProtocolContextResponse | null>(null)
   const [protocolContextLoading, setProtocolContextLoading] = useState(true)
   const [protocolContextError, setProtocolContextError] = useState<string | null>(null)
+  const [allRuns, setAllRuns] = useState<RunListItem[]>([])
+  const [runsLoading, setRunsLoading] = useState(true)
 
   useEffect(() => {
     const onChanged = () => setTreeEpoch((e) => e + 1)
     window.addEventListener('cl:records-changed', onChanged)
     return () => window.removeEventListener('cl:records-changed', onChanged)
   }, [])
+
+  // Fetch all runs for this project (flat, non-hierarchical)
+  useEffect(() => {
+    let cancelled = false
+    setRunsLoading(true)
+    apiClient.listRuns({ studyId, limit: 200 })
+      .then((res) => {
+        if (!cancelled) setAllRuns(res.runs)
+      })
+      .catch(() => { if (!cancelled) setAllRuns([]) })
+      .finally(() => { if (!cancelled) setRunsLoading(false) })
+    return () => { cancelled = true }
+  }, [studyId, treeEpoch])
 
   useEffect(() => {
     let cancelled = false
@@ -155,7 +159,6 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
     }
   }, [studyId, treeEpoch])
 
-  // Resolve edit permission so we can hide add affordances the user can't use.
   useEffect(() => {
     let cancelled = false
     apiClient
@@ -175,8 +178,6 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
     })
   }, [studyId, ws])
 
-  // Phase 4: Allow creating a run directly from the project, without
-  // requiring an experiment container. Spec §2.2: "Open project → New Run → work"
   const [creatingRun, setCreatingRun] = useState(false)
 
   const openNewRunDirect = useCallback(async () => {
@@ -191,6 +192,7 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
         title: result.title,
       })
       ws.setRightPaneMode('protocol')
+      window.dispatchEvent(new CustomEvent('cl:records-changed'))
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err))
     } finally {
@@ -218,6 +220,51 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
         <span className="project-details-view__sub">{studyId}</span>
       </header>
 
+      {/* RUNS — flat list of all runs linked to this project */}
+      <section
+        className="project-details-view__section"
+        data-testid="project-details-runs"
+      >
+        <div className="project-details-view__section-head">
+          <h3 className="project-details-view__section-title">Runs</h3>
+          {canEdit ? (
+            <button
+              type="button"
+              className="project-details-view__create-btn"
+              onClick={() => void openNewRunDirect()}
+              disabled={creatingRun}
+              data-testid="project-details-new-run-direct"
+              title="Create a run and open the event editor"
+            >
+              {creatingRun ? 'Creating…' : '+ New Run'}
+            </button>
+          ) : (
+            <span
+              className="project-details-view__readonly-hint"
+              title="This study belongs to another user."
+            >
+              read-only
+            </span>
+          )}
+        </div>
+        {runsLoading ? (
+          <p className="project-details-view__hint">Loading runs…</p>
+        ) : allRuns.length === 0 ? (
+          <p className="project-details-view__hint">
+            No runs yet. Click "+ New Run" to create one and start working.
+          </p>
+        ) : (
+          <ul className="project-details-view__tree">
+            {allRuns.map((run) => (
+              <FlatRunRow
+                key={run.recordId}
+                run={run}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
+
       <section
         className="project-details-view__section"
         data-testid="project-details-tree"
@@ -225,34 +272,15 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
         <div className="project-details-view__section-head">
           <h3 className="project-details-view__section-title">Experiments</h3>
           {canEdit ? (
-            <>
-              <button
-                type="button"
-                className="project-details-view__create-btn"
-                onClick={openNewExperiment}
-                data-testid="project-details-new-experiment"
-              >
-                + New experiment
-              </button>
-              <button
-                type="button"
-                className="project-details-view__create-btn"
-                onClick={() => void openNewRunDirect()}
-                disabled={creatingRun}
-                data-testid="project-details-new-run-direct"
-                title="Create a run and open the event editor"
-              >
-                {creatingRun ? 'Creating…' : '+ New Run'}
-              </button>
-            </>
-          ) : (
-            <span
-              className="project-details-view__readonly-hint"
-              title="This study belongs to another user. Switch user or ask the owner to share it with edit access."
+            <button
+              type="button"
+              className="project-details-view__create-btn"
+              onClick={openNewExperiment}
+              data-testid="project-details-new-experiment"
             >
-              read-only
-            </span>
-          )}
+              + New experiment
+            </button>
+          ) : null}
         </div>
         {treeError ? (
           <p className="project-details-view__error">{treeError}</p>
@@ -260,8 +288,7 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
           <p className="project-details-view__hint">Loading project tree…</p>
         ) : !study || study.experiments.length === 0 ? (
           <p className="project-details-view__hint">
-            No experiments yet — "New experiment" above creates the first
-            one under this study.
+            No experiments yet. Experiments are optional groupings for runs.
           </p>
         ) : (
           <ul className="project-details-view__tree">
@@ -327,6 +354,73 @@ export function ProjectDetailsView({ studyId }: ProjectDetailsViewProps) {
   )
 }
 
+/**
+ * FlatRunRow — a run in the flat RUNS section. Takes a RunListItem
+ * (from GET /runs?studyId=) instead of a RunTreeNode. Opens the
+ * run's method event graph as a deck tab on click.
+ */
+function FlatRunRow({
+  run,
+}: {
+  run: RunListItem
+}) {
+  const ws = useWorkspace()
+  const [busy, setBusy] = useState(false)
+
+  const openDeck = useCallback(async () => {
+    setBusy(true)
+    try {
+      const summary = await getRunMethod(run.recordId)
+      if (!summary.hasMethod || !summary.methodEventGraphId) {
+        ws.openTab({
+          id: `tab-deck-new-${run.recordId}`,
+          kind: 'deck',
+          eventGraphId: '',
+          runId: run.recordId,
+          title: run.title,
+        })
+        return
+      }
+      ws.openTab({
+        id: `tab-deck-${summary.methodEventGraphId}`,
+        kind: 'deck',
+        eventGraphId: summary.methodEventGraphId,
+        runId: run.recordId,
+        title: run.title,
+      })
+    } catch {
+      ws.openTab({
+        id: `tab-deck-new-${run.recordId}`,
+        kind: 'deck',
+        eventGraphId: '',
+        runId: run.recordId,
+        title: run.title,
+      })
+    } finally {
+      setBusy(false)
+    }
+  }, [run.recordId, run.title, ws])
+
+  return (
+    <li className="project-details-view__tree-item project-details-view__tree-item--run">
+      <div className="project-details-view__tree-row">
+        <button
+          type="button"
+          className="project-details-view__tree-toggle project-details-view__tree-toggle--run"
+          data-testid={`project-details-run-${run.recordId}`}
+          onClick={() => void openDeck()}
+          disabled={busy}
+          title={`Open ${run.title} in the event editor`}
+        >
+          <span className="project-details-view__chev" aria-hidden>▶</span>
+          <span className="project-details-view__tree-title">{run.title}</span>
+          <span className="project-details-view__tree-meta">{run.status}</span>
+        </button>
+      </div>
+    </li>
+  )
+}
+
 function ExperimentRow({
   experiment,
   studyId,
@@ -361,6 +455,7 @@ function ExperimentRow({
         title: result.title,
       })
       ws.setRightPaneMode('protocol')
+      window.dispatchEvent(new CustomEvent('cl:records-changed'))
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err))
     } finally {
@@ -477,9 +572,6 @@ function RunRow({
     try {
       const summary = await getRunMethod(run.recordId)
       if (!summary.hasMethod || !summary.methodEventGraphId) {
-        // No method yet — open a fresh canvas bound to the run. Saving
-        // from it creates the event graph with links.runId and the server
-        // back-fills the run's methodEventGraphId.
         setMissing(true)
         ws.openTab({
           id: `tab-deck-new-${run.recordId}`,
