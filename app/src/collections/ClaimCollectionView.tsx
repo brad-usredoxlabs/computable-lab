@@ -114,9 +114,8 @@ export function ClaimCollectionView() {
   }, [claims])
 
   /* Render */
-  return (
-    <AppShell brand="Claims" layout="workspace" topbarTabs={<div />}>
-      <div className="claims-collection" data-testid="claim-collection-view">
+  const collectionContent = (
+    <div className="claims-collection" data-testid="claim-collection-view">
         {/* Header */}
         <div className="claims-collection__header">
           <span className="claims-collection__header-icon" aria-hidden>◇</span>
@@ -167,7 +166,15 @@ export function ClaimCollectionView() {
           </div>
         )}
       </div>
-    </AppShell>
+  )
+
+  return (
+    <AppShell
+      brand="Claims"
+      layout="workspace"
+      topbarTabs={<div />}
+      leftPane={collectionContent}
+    />
   )
 }
 
