@@ -1,0 +1,81 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/relationship.schema.yaml"
+title: "Relationship"
+description: >
+  A typed, directed edge between two first-class objects (project, run, claim,
+  protocol, material, labware, equipment, person, document). Relationships carry a
+  verb that carries scientific meaning (e.g. "tests", "supports", "uses",
+  "investigates"). Relationships are themselves records — they are addressable,
+  queryable, and can carry provenance (who created the relationship, when, and why).
+
+  This is the metadata that connects first-class objects. Projects, runs, and
+  claims do not own each other — they are linked by relationship records.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, recordId, sourceType, sourceId, targetType, targetId, verb ]
+
+properties:
+  kind:
+    const: "relationship"
+
+  recordId:
+    type: string
+    description: "Stable local identifier (e.g., REL-0001)."
+
+  sourceType:
+    type: string
+    enum: [ project, run, claim, protocol, material, labware, equipment, person, document ]
+    description: "The type of the source object."
+
+  sourceId:
+    type: string
+    description: "Record ID of the source object."
+
+  targetType:
+    type: string
+    enum: [ project, run, claim, protocol, material, labware, equipment, person, document ]
+    description: "The type of the target object."
+
+  targetId:
+    type: string
+    description: "Record ID of the target object."
+
+  verb:
+    type: string
+    enum:
+      # Run → Claim
+      - tests
+      - supports
+      - contradicts
+      - qualifies
+      - inconclusive_for
+      # Project → Claim
+      - investigates
+      - depends_on
+      - aims_to_establish
+      - assumes
+      # Run → Resource
+      - uses
+      - operates
+      # Run → Person
+      - performed_by
+      # Calibration → Instrument
+      - evaluates
+      # Generic
+      - references
+      - related_to
+    description: "The typed relationship verb. Carries scientific meaning."
+
+  note:
+    type: string
+    description: "Optional human-readable note about why this relationship exists."
+
+  provenance:
+    type: string
+    enum: [ user_entered, derived, imported, ai_suggested_unreviewed, ai_suggested_accepted, generated_by_instrument, generated_by_compiler ]
+    default: user_entered
+    description: "How this relationship was established."
