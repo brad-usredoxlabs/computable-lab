@@ -79,11 +79,11 @@ export function RunWorkspacePage() {
   }
 
   return (
-    <RunWorkspaceShell rightPane={<RightPane />}>
-      <WorkspaceProvider studyId={resolvedStudyId}>
+    <WorkspaceProvider studyId={resolvedStudyId}>
+      <RunWorkspaceShell rightPane={<RightPane />}>
         <RunWorkspaceContent runId={runId} mode={mode} />
-      </WorkspaceProvider>
-    </RunWorkspaceShell>
+      </RunWorkspaceShell>
+    </WorkspaceProvider>
   )
 }
 
