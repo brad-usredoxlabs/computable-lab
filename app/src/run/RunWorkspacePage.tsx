@@ -11,11 +11,14 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { EventEditorProvider } from '../event-editor/EventEditorContext'
+import { WorkspaceProvider } from '../event-editor/workspace/WorkspaceContext'
 import { RightPane } from '../event-editor/right-pane/RightPane'
 import { RunWorkspaceShell } from './RunWorkspaceShell'
 import { useModeToggle } from './lib/mode-toggle'
 import { ExecutionView } from '../graph/execution/ExecutionView'
 import { apiClient } from '../shared/api/client'
+import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
+import { runTabId } from '../event-editor/workspace/types'
 import { SCRATCH_STUDY_ID } from '../event-editor/legacyRouteResolution'
 import type { PlateEvent } from '../types/events'
 import './RunWorkspacePage.css'
@@ -24,6 +27,7 @@ export function RunWorkspacePage() {
   const { studyId: urlStudyId, runId } = useParams<{ studyId?: string; runId: string }>()
   const { mode } = useModeToggle()
   const [resolvedStudyId, setResolvedStudyId] = useState<string | null>(urlStudyId ?? null)
+  const openTabs = useOptionalOpenTabs()
 
   // When studyId is not in the URL (route /runs/:runId), fetch it from
   // the run record's payload. Fall back to scratch study if not found.
@@ -46,6 +50,17 @@ export function RunWorkspacePage() {
     return () => { cancelled = true }
   }, [urlStudyId, runId])
 
+  // Open a run tab in the tab strip on mount
+  useEffect(() => {
+    if (!runId || !openTabs) return
+    openTabs.openTab({
+      id: runTabId(runId),
+      kind: 'run',
+      runId,
+      title: `Run ${runId}`,
+    }, true)
+  }, [runId])
+
   if (!runId) {
     return (
       <div className="run-workspace-page__error">
@@ -64,14 +79,15 @@ export function RunWorkspacePage() {
   }
 
   return (
-    <RunWorkspaceShell>
-      <RunWorkspaceContent studyId={resolvedStudyId} runId={runId} mode={mode} />
+    <RunWorkspaceShell rightPane={<RightPane />}>
+      <WorkspaceProvider studyId={resolvedStudyId}>
+        <RunWorkspaceContent runId={runId} mode={mode} />
+      </WorkspaceProvider>
     </RunWorkspaceShell>
   )
 }
 
 interface RunWorkspaceContentProps {
-  studyId: string
   runId: string
   mode: 'plan' | 'execute'
 }
@@ -116,7 +132,6 @@ function RunWorkspaceContent({ runId, mode }: RunWorkspaceContentProps) {
         <p>Plan Mode: Event Editor</p>
         <p>Run ID: {runId}</p>
       </div>
-      <RightPane />
     </EventEditorProvider>
   )
 }
