@@ -2,8 +2,7 @@
  * ProjectCollectionView — collection view for /projects.
  *
  * Fetches all studies via apiClient.listRecordsByKind('study') and renders
- * a responsive card grid. Each card shows title, record ID, and a
- * "+ New Run" action.
+ * a single-column chip list with search filtering and sort controls.
  *
  * Spec reference: specs/computable-lab-ui-specification.md §5.1
  */
@@ -15,10 +14,16 @@ import { apiClient } from '../shared/api/client'
 import type { RecordEnvelope } from '../types/kernel'
 import './ProjectCollectionView.css'
 
-export function ProjectCollectionView() {
+export type ProjectSortField = 'name' | 'date_created' | 'date_updated'
+export type ProjectSortDirection = 'asc' | 'desc'
+
+export function ProjectCollectionView({ embedded = false }: { embedded?: boolean } = {}) {
   const [projects, setProjects] = useState<RecordEnvelope[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [sortField, setSortField] = useState<ProjectSortField>('name')
+  const [sortDirection, setSortDirection] = useState<ProjectSortDirection>('asc')
+  const [searchQuery, setSearchQuery] = useState('')
   const navigate = useNavigate()
 
   const fetchProjects = useCallback(async () => {
@@ -38,10 +43,104 @@ export function ProjectCollectionView() {
     void fetchProjects()
   }, [fetchProjects])
 
+  // Filter by search query
+  const query = searchQuery.toLowerCase().trim()
+  const filteredProjects = query
+    ? projects.filter((record) => {
+        const payload = record.payload as Record<string, unknown>
+        const title = (typeof payload.title === 'string' ? payload.title : '').toLowerCase()
+        const id = record.recordId.toLowerCase()
+        return title.includes(query) || id.includes(query)
+      })
+    : projects
+
+  // Sort projects
+  const sortedProjects = [...filteredProjects].sort((a, b) => {
+    const payloadA = a.payload as Record<string, unknown>
+    const payloadB = b.payload as Record<string, unknown>
+
+    let comparison = 0
+    switch (sortField) {
+      case 'name': {
+        const titleA = (typeof payloadA.title === 'string' ? payloadA.title : a.recordId).toLowerCase()
+        const titleB = (typeof payloadB.title === 'string' ? payloadB.title : b.recordId).toLowerCase()
+        comparison = titleA.localeCompare(titleB)
+        break
+      }
+      case 'date_created': {
+        const createdA = (payloadA.createdAt as string) ?? (a as { createdAt?: string }).createdAt ?? ''
+        const createdB = (payloadB.createdAt as string) ?? (b as { createdAt?: string }).createdAt ?? ''
+        comparison = createdA.localeCompare(createdB)
+        break
+      }
+      case 'date_updated': {
+        const updatedA = (payloadA.updatedAt as string) ?? (a as { updatedAt?: string }).updatedAt ?? (payloadA.createdAt as string) ?? (a as { createdAt?: string }).createdAt ?? ''
+        const updatedB = (payloadB.updatedAt as string) ?? (b as { updatedAt?: string }).updatedAt ?? (payloadB.createdAt as string) ?? (b as { createdAt?: string }).createdAt ?? ''
+        comparison = updatedA.localeCompare(updatedB)
+        break
+      }
+    }
+
+    return sortDirection === 'asc' ? comparison : -comparison
+  })
+
+  // Handle sort field change
+  const handleSortFieldChange = (field: ProjectSortField) => {
+    if (field === sortField) {
+      setSortDirection(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('asc')
+    }
+  }
+
+  // Sort control UI with search — mirrors LabCollectionView pattern
+  const sortControls = (
+    <div className="project-collection__sort-controls">
+      <input
+        type="text"
+        className="project-collection__search"
+        placeholder="Filter…"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        aria-label="Filter projects"
+      />
+      <span className="project-collection__sort-label">Sort:</span>
+      <div className="project-collection__sort-buttons">
+        {(['name', 'date_created', 'date_updated'] as ProjectSortField[]).map(field => (
+          <button
+            key={field}
+            type="button"
+            className={`project-collection__sort-btn ${sortField === field ? 'project-collection__sort-btn--active' : ''}`}
+            onClick={() => handleSortFieldChange(field)}
+            title={`Sort by ${field.replace('_', ' ')}`}
+          >
+            {field === 'name' ? 'Name' : field === 'date_created' ? 'Date Created' : 'Date Updated'}
+            {sortField === field && (
+              <span className="project-collection__sort-arrow">
+                {sortDirection === 'asc' ? '↑' : '↓'}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+
   const collectionContent = (
     <div className="project-collection" data-testid="project-collection-view">
-        <header className="project-collection__header">
-          <h1 className="project-collection__title">Projects</h1>
+      {/* Header with title and sort controls */}
+      <header className="project-collection__header">
+        <h1 className="project-collection__title">Projects</h1>
+        {sortControls}
+      </header>
+
+      <div className="project-collection__body">
+        {/* Actions bar (total + new button) */}
+        <div className="project-collection__actions">
+          {projects.length > 0 && (
+            <span className="project-collection__total">{projects.length} total</span>
+          )}
           <button
             type="button"
             className="project-collection__new-btn"
@@ -50,28 +149,30 @@ export function ProjectCollectionView() {
           >
             + New Project
           </button>
-        </header>
+        </div>
 
         {error ? (
           <p className="project-collection__error">{error}</p>
         ) : loading ? (
           <p className="project-collection__hint">Loading projects…</p>
-        ) : projects.length === 0 ? (
+        ) : sortedProjects.length === 0 ? (
           <div className="project-collection__empty">
             <p className="project-collection__hint">
-              No projects yet. Create one to get started.
+              {query ? 'No projects match your filter.' : 'No projects yet. Create one to get started.'}
             </p>
-            <button
-              type="button"
-              className="project-collection__new-btn"
-              onClick={() => navigate('/create/study')}
-            >
-              + New Project
-            </button>
+            {!query && (
+              <button
+                type="button"
+                className="project-collection__new-btn"
+                onClick={() => navigate('/create/study')}
+              >
+                + New Project
+              </button>
+            )}
           </div>
         ) : (
-          <ul className="project-collection__grid">
-            {projects.map((record) => {
+          <ul className="project-collection__list">
+            {sortedProjects.map((record) => {
               const payload = record.payload as Record<string, unknown>
               const title = typeof payload.title === 'string' ? payload.title : record.recordId
               const studyId = record.recordId
@@ -95,7 +196,10 @@ export function ProjectCollectionView() {
           </ul>
         )}
       </div>
+    </div>
   )
+
+  if (embedded) return collectionContent
 
   return (
     <AppShell

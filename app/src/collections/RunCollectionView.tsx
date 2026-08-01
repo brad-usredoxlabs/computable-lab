@@ -2,18 +2,22 @@
  * RunCollectionView — collection view for /runs.
  *
  * Fetches all runs across studies via apiClient.listRuns() and renders them
- * in chronologically grouped sections: In Progress, Today, Yesterday, This
- * week, All runs.  Supports filtering by status.
+ * in a two-column grid with filtering, sorting, and status-based tabs.
  *
  * Spec reference: specs/computable-lab-ui-specification.md §6.1
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
 import { apiClient } from '../shared/api/client'
 import type { RunListItem, RunsListResponse } from '../shared/api/client'
+import { quickCreateRun } from '../event-editor/create/quickCreateRun'
+import { SCRATCH_STUDY_ID } from '../event-editor/legacyRouteResolution'
 import './RunCollectionView.css'
+
+export type RunSortField = 'name' | 'date_created' | 'date_updated'
+export type RunSortDirection = 'asc' | 'desc'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                              */
@@ -29,52 +33,18 @@ const RUN_STATUSES = [
 ] as const
 
 /* ------------------------------------------------------------------ */
-/* Date helpers                                                       */
-/* ------------------------------------------------------------------ */
-
-function getChronologicalGroup(run: RunListItem): string {
-  if (run.status === 'in_progress') return 'in-progress'
-
-  const updatedAt = run.updatedAt ? new Date(run.updatedAt) : null
-  if (!updatedAt || isNaN(updatedAt.getTime())) return 'all'
-
-  const now = new Date()
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const yesterday = new Date(today.getTime() - 86400000)
-  const thisWeek = new Date(today.getTime() - 7 * 86400000)
-
-  if (updatedAt >= today) return 'today'
-  if (updatedAt >= yesterday) return 'yesterday'
-  if (updatedAt >= thisWeek) return 'this-week'
-  return 'all'
-}
-
-const GROUP_ORDER = [
-  'in-progress',
-  'today',
-  'yesterday',
-  'this-week',
-  'all',
-] as const
-
-const GROUP_LABELS: Record<string, string> = {
-  'in-progress': 'In Progress',
-  today: 'Today',
-  yesterday: 'Yesterday',
-  'this-week': 'This Week',
-  all: 'All Runs',
-}
-
-/* ------------------------------------------------------------------ */
 /* Component                                                          */
 /* ------------------------------------------------------------------ */
 
-export function RunCollectionView() {
+export function RunCollectionView({ embedded = false }: { embedded?: boolean } = {}) {
   const [runs, setRuns] = useState<RunListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
   const [totalCount, setTotalCount] = useState(0)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [sortField, setSortField] = useState<RunSortField>('date_updated')
+  const [sortDirection, setSortDirection] = useState<RunSortDirection>('desc')
   const navigate = useNavigate()
 
   const fetchRuns = useCallback(async () => {
@@ -101,138 +71,182 @@ export function RunCollectionView() {
     void fetchRuns()
   }, [fetchRuns])
 
-  /* Group runs chronologically */
-  const groups = useMemo(() => {
-    const map = new Map<string, RunListItem[]>()
-    for (const key of GROUP_ORDER) {
-      map.set(key, [])
-    }
-    for (const run of runs) {
-      const group = getChronologicalGroup(run)
-      const bucket = map.get(group)!
-      bucket.push(run)
-    }
-    return map
-  }, [runs])
+  /* Filter by search query */
+  const query = searchQuery.toLowerCase().trim()
+  const filteredRuns = query
+    ? runs.filter((run) => {
+        const searchable = `${run.title} ${run.studyTitle} ${run.experimentTitle} ${run.recordId} ${run.status}`.toLowerCase()
+        return searchable.includes(query)
+      })
+    : runs
 
-  /* Active groups (only those with runs) */
-  const visibleGroups = useMemo(
-    () => GROUP_ORDER.filter((key) => groups.get(key)!.length > 0),
-    [groups],
-  )
+  /* Sort runs */
+  const sortedRuns = [...filteredRuns].sort((a, b) => {
+    let comparison = 0
+    switch (sortField) {
+      case 'name': {
+        comparison = a.title.localeCompare(b.title)
+        break
+      }
+      case 'date_created': {
+        const createdA = a.startedAt ?? a.updatedAt ?? ''
+        const createdB = b.startedAt ?? b.updatedAt ?? ''
+        comparison = createdA.localeCompare(createdB)
+        break
+      }
+      case 'date_updated': {
+        comparison = (a.updatedAt ?? '').localeCompare(b.updatedAt ?? '')
+        break
+      }
+    }
+    return sortDirection === 'asc' ? comparison : -comparison
+  })
 
-  const handleNewRun = () => {
-    navigate('/create/study')
+  /* Sort control handler */
+  const handleSortFieldChange = (field: RunSortField) => {
+    if (field === sortField) {
+      setSortDirection(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('asc')
+    }
+  }
+
+  const handleNewRun = async () => {
+    try {
+      const { recordId } = await quickCreateRun({ studyId: SCRATCH_STUDY_ID })
+      navigate(`/runs/${recordId}/event-editor`)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error('Failed to create run:', msg)
+    }
   }
 
   const handleStatusFilter = (status: string | null) => {
     setStatusFilter(status)
   }
 
-  const collectionContent = (
-    <div className="run-collection" data-testid="run-collection-view">
-      {/* Header */}
-      <header className="run-collection__header">
-        <h1 className="run-collection__title">Runs</h1>
-        <div className="run-collection__header-actions">
-          {totalCount > 0 && (
-            <span className="run-collection__total">{totalCount} total</span>
-          )}
+  /* Sort control UI with search — mirrors LabCollectionView pattern */
+  const sortControls = (
+    <div className="run-collection__sort-controls">
+      <input
+        type="text"
+        className="run-collection__search"
+        placeholder="Filter…"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        aria-label="Filter runs"
+      />
+      <span className="run-collection__sort-label">Sort:</span>
+      <div className="run-collection__sort-buttons">
+        {(['name', 'date_created', 'date_updated'] as RunSortField[]).map(field => (
           <button
+            key={field}
             type="button"
-            className="run-collection__new-btn"
-            data-testid="run-collection-new"
-            onClick={handleNewRun}
+            className={`run-collection__sort-btn ${sortField === field ? 'run-collection__sort-btn--active' : ''}`}
+            onClick={() => handleSortFieldChange(field)}
+            title={`Sort by ${field.replace('_', ' ')}`}
           >
-            + New Run
-          </button>
-        </div>
-      </header>
-
-      {/* Status filter bar */}
-      <div
-        className="run-collection__filters"
-        role="tablist"
-        aria-label="Run status filters"
-      >
-        <button
-          role="tab"
-          aria-selected={statusFilter === null}
-          className={`run-collection__filter-tab${statusFilter === null ? ' run-collection__filter-tab--active' : ''}`}
-          onClick={() => handleStatusFilter(null)}
-        >
-          All
-        </button>
-        {RUN_STATUSES.map((status) => (
-          <button
-            key={status}
-            role="tab"
-            aria-selected={statusFilter === status}
-            className={`run-collection__filter-tab run-collection__filter-tab--status run-collection__filter-tab--${status}${statusFilter === status ? ' run-collection__filter-tab--active' : ''}`}
-            onClick={() => handleStatusFilter(status === statusFilter ? null : status)}
-          >
-            {status.replace('_', ' ')}
+            {field === 'name' ? 'Name' : field === 'date_created' ? 'Date Created' : 'Date Updated'}
+            {sortField === field && (
+              <span className="run-collection__sort-arrow">
+                {sortDirection === 'asc' ? '↑' : '↓'}
+              </span>
+            )}
           </button>
         ))}
       </div>
-
-      {/* Content */}
-      {loading ? (
-        <div className="run-collection__loading" data-testid="runs-loading">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="run-collection__skeleton" />
-          ))}
-        </div>
-      ) : error ? (
-        <div className="run-collection__error" data-testid="runs-error">
-          <span className="run-collection__error-icon" aria-hidden>
-            ⚠
-          </span>
-          <p>{error}</p>
-        </div>
-      ) : runs.length === 0 ? (
-        <div className="run-collection__empty" data-testid="runs-empty">
-          <span className="run-collection__empty-icon" aria-hidden>
-            ◆
-          </span>
-          <p>
-            {statusFilter
-              ? `No runs with status "${statusFilter}".`
-              : 'No runs yet.'}
-          </p>
-        </div>
-      ) : (
-        <div className="run-collection__content">
-          {visibleGroups.map((groupKey) => {
-            const groupRuns = groups.get(groupKey)!
-            if (groupRuns.length === 0) return null
-            return (
-              <section
-                key={groupKey}
-                className="run-collection__group"
-                data-testid={`runs-group-${groupKey}`}
-              >
-                <h2
-                  className="run-collection__group-header"
-                  data-testid={`runs-group-header-${groupKey}`}
-                >
-                  {GROUP_LABELS[groupKey]}
-                  <span className="run-collection__group-count">
-                    {groupRuns.length}
-                  </span>
-                </h2>
-                <ul className="run-collection__list">
-                  {groupRuns.map((run) => (
-                    <RunRow key={run.recordId} run={run} onNavigate={navigate} />
-                  ))}
-                </ul>
-              </section>
-            )
-          })}
-        </div>
-      )}
     </div>
   )
+
+  const collectionContent = (
+    <div className="run-collection" data-testid="run-collection-view">
+      {/* Header with title, sort controls, and action buttons */}
+      <header className="run-collection__header">
+        <h1 className="run-collection__title">Runs</h1>
+        {sortControls}
+      </header>
+
+      {/* Actions bar (total + new button) — outside scrollable body */}
+      <div className="run-collection__actions">
+        {totalCount > 0 && (
+          <span className="run-collection__total">{totalCount} total</span>
+        )}
+        <button
+          type="button"
+          className="run-collection__new-btn"
+          data-testid="run-collection-new"
+          onClick={handleNewRun}
+        >
+          + New Run
+        </button>
+      </div>
+
+      <div className="run-collection__body">
+        {/* Status filter bar — sticky at top of scrollable area */}
+        <div
+          className="run-collection__filters"
+          role="tablist"
+          aria-label="Run status filters"
+        >
+          <button
+            role="tab"
+            aria-selected={statusFilter === null}
+            className={`run-collection__filter-tab${statusFilter === null ? ' run-collection__filter-tab--active' : ''}`}
+            onClick={() => handleStatusFilter(null)}
+          >
+            All
+          </button>
+          {RUN_STATUSES.map((status) => (
+            <button
+              key={status}
+              role="tab"
+              aria-selected={statusFilter === status}
+              className={`run-collection__filter-tab run-collection__filter-tab--status run-collection__filter-tab--${status}${statusFilter === status ? ' run-collection__filter-tab--active' : ''}`}
+              onClick={() => handleStatusFilter(status === statusFilter ? null : status)}
+            >
+              {status.replace('_', ' ')}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        {loading ? (
+          <div className="run-collection__loading" data-testid="runs-loading">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="run-collection__skeleton" />
+            ))}
+          </div>
+        ) : error ? (
+          <div className="run-collection__error" data-testid="runs-error">
+            <span className="run-collection__error-icon" aria-hidden>
+              ⚠
+            </span>
+            <p>{error}</p>
+          </div>
+        ) : sortedRuns.length === 0 ? (
+          <div className="run-collection__empty" data-testid="runs-empty">
+            <span className="run-collection__empty-icon" aria-hidden>
+              ◆
+            </span>
+            <p>
+              {statusFilter
+                ? `No runs with status "${statusFilter}".`
+                : 'No runs yet.'}
+            </p>
+          </div>
+        ) : (
+          <ul className="run-collection__list">
+            {sortedRuns.map((run) => (
+              <RunRow key={run.recordId} run={run} onNavigate={navigate} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+
+  if (embedded) return collectionContent
 
   return (
     <AppShell
