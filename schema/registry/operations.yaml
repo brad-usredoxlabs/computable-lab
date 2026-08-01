@@ -1,0 +1,268 @@
+kind: operation-registry
+version: 0.1.0
+operations:
+  - id: create_container
+    label: Create Container
+    primitive: create_container
+    aliases: [make, build]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0000652
+    notes: Create a new labware container
+
+  - id: add_material
+    label: Add Material
+    primitive: add_material
+    aliases: [add, dispense, deliver, place, load, put, set, mount]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0000652
+      - source: EXACT
+        id: EXACT:Class_9
+    notes: Introduce reagent or material
+
+  - id: transfer
+    label: Transfer
+    primitive: transfer
+    aliases: [move, aspirate, pipette]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0000293
+    notes: Move liquid from source to destination
+
+  - id: incubate
+    label: Incubate
+    primitive: incubate
+    aliases: [hold, rest, sit, heat, warm, equilibrate, maintain_environment, control_temperature]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0000838
+      - source: EXACT
+        id: EXACT:Class_49
+    notes: Hold sample at controlled conditions for duration
+
+  - id: mix
+    label: Mix
+    primitive: mix
+    aliases: [combine, blend, vortex, shake, agitate, orbital_shake]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0000652
+      - source: EXACT
+        id: EXACT:Class_45
+    notes: Combine or homogenize materials
+
+  - id: read
+    label: Read
+    primitive: read
+    aliases: [measure, scan, quantify, image, acquire_measurement]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0000070
+      - source: EXACT
+        id: EXACT:Measure
+    notes: Acquire measurement from instrument
+
+  - id: centrifuge
+    label: Centrifuge
+    primitive: centrifuge
+    aliases: [spin, pellet, sediment]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0302886
+      - source: EXACT
+        id: EXACT:Class_53
+    notes: Apply centrifugal force to separate components
+
+  - id: load_plate
+    label: Load Plate
+    primitive: load_plate
+    aliases: [plate_map]
+    notes: Load plate into instrument
+
+  - id: set_well_contents
+    label: Set Well Contents
+    primitive: set_well_contents
+    aliases: []
+    notes: Directly set well contents (testing/debugging)
+
+  - id: wash
+    label: Wash
+    primitive: null
+    expands_to: [add_material, transfer]
+    aliases: [rinse]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0302888
+      - source: EXACT
+        id: EXACT:Class_54
+    notes: Remove contaminants by solution cycles
+
+  - id: seed
+    label: Seed
+    primitive: null
+    expands_to: [add_material]
+    aliases: [plant, inoculate, distribute_biological_material]
+    notes: Seed cells into wells
+
+  - id: harvest
+    label: Harvest
+    primitive: null
+    expands_to: [add_material, incubate, transfer]
+    aliases: [collect, pick]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0000659
+    notes: Collect specimen from culture
+
+  - id: elute
+    label: Elute
+    primitive: null
+    expands_to: [add_material, incubate, transfer]
+    aliases: [extract]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0302905
+    notes: Extract material from adsorbent with solvent
+
+  - id: resuspend
+    label: Resuspend
+    primitive: null
+    expands_to: [mix]
+    aliases: [redissolve]
+    ontology_refs:
+      - source: EXACT
+        id: EXACT:Class_57
+    notes: Re-dissolve pelleted material
+
+  - id: dilute
+    label: Dilute
+    primitive: null
+    expands_to: [add_material, mix]
+    aliases: [thin, prepare]
+    ontology_refs:
+      - source: EXACT
+        id: EXACT:Dilute
+    notes: Reduce concentration by adding solvent
+
+  - id: stain
+    label: Stain
+    primitive: null
+    expands_to: [add_material, incubate]
+    aliases: [dye]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0302887
+    notes: Apply dye for visualization
+
+  - id: fix
+    label: Fix
+    primitive: null
+    expands_to: [add_material, incubate]
+    aliases: [fixate, preserve]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0600021
+      - source: EXACT
+        id: EXACT:Fixate
+    notes: Chemically preserve cellular structure
+
+  - id: permeabilize
+    label: Permeabilize
+    primitive: null
+    expands_to: [add_material, incubate]
+    aliases: [permeable]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0600033
+    notes: Disrupt membrane to allow molecular access
+
+  - id: block
+    label: Block
+    primitive: null
+    expands_to: [add_material, incubate]
+    aliases: [blocking]
+    notes: Block non-specific binding
+
+  - id: quench
+    label: Quench
+    primitive: null
+    expands_to: [add_material, incubate]
+    aliases: [stop, halt]
+    notes: Stop a reaction
+
+  - id: count
+    label: Count
+    primitive: null
+    expands_to: [read]
+    aliases: [enumerate, tally]
+    ontology_refs:
+      - source: EXACT
+        id: EXACT:Count
+    notes: Enumerate cells or particles
+
+  - id: label
+    label: Label
+    primitive: null
+    expands_to: [add_material, incubate]
+    aliases: [tag]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0600067
+      - source: EXACT
+        id: EXACT:Label
+    notes: Attach detectable marker to target
+
+  - id: transfect
+    label: Transfect
+    primitive: null
+    expands_to: [add_material, incubate]
+    aliases: [transduce]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0001152
+    notes: Introduce nucleic acid into cells
+
+  - id: passage
+    label: Passage
+    primitive: null
+    expands_to: [harvest, seed]
+    aliases: [subculture]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0002747
+    notes: Subculture and re-seed cells
+
+  - id: freeze
+    label: Freeze
+    primitive: null
+    expands_to: [incubate]
+    aliases: [chill, cryopreserve]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0001953
+      - source: EXACT
+        id: EXACT:Freeze
+    notes: Reduce temperature to preserve material
+
+  - id: thaw
+    label: Thaw
+    primitive: null
+    expands_to: [incubate]
+    aliases: [warm]
+    ontology_refs:
+      - source: EXACT
+        id: EXACT:Class_38
+    notes: Raise temperature of frozen material
+
+  - id: aliquot
+    label: Aliquot
+    primitive: null
+    expands_to: [transfer]
+    aliases: [partition, split]
+    ontology_refs:
+      - source: OBI
+        id: OBI:0600018
+      - source: EXACT
+        id: EXACT:Aliquot
+    notes: Partition material into equal portions
