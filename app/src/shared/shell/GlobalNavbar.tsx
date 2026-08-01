@@ -40,7 +40,7 @@ export function GlobalNavbar() {
 
   const handleDestination = (dest: { id: string; path: string; label: string }) => {
     if (openTabs) {
-      // Inside workspace — open as a collection tab
+      // Inside workspace — open as a collection tab AND navigate
       const tab: WorkspaceTab = {
         id: collectionTabId(dest.id),
         kind: 'collection',
@@ -48,6 +48,7 @@ export function GlobalNavbar() {
         title: dest.label,
       }
       openTabs.openTab(tab, true)
+      navigate(dest.path)
     } else {
       // Standalone — navigate normally
       navigate(dest.path)

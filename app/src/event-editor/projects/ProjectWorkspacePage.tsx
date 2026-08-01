@@ -35,7 +35,7 @@ import { PdfStateProvider } from '../viewer/pdf/PdfViewerContext'
 import { DocumentStateProvider } from '../viewer/document/DocumentEditorContext'
 import { Viewer } from '../viewer/Viewer'
 import { ViewerToolbar } from '../viewer/ViewerToolbar'
-import { ProjectTabStrip } from './ProjectTabStrip'
+import { WorkspaceTabStrip } from '../../shared/shell/WorkspaceTabStrip'
 import { ProjectDetailsView } from './ProjectDetailsView'
 import { RecordCreatePanel } from '../create/RecordCreatePanel'
 import { RecordEditPanel } from '../create/RecordEditPanel'
@@ -163,7 +163,7 @@ function WorkspaceShellHost({
     <ProtocolSelectionProvider>
       <AppShell
         brand="Project"
-        topbarTabs={<ProjectTabStrip />}
+        topbarTabs={<WorkspaceTabStrip />}
         layout="workspace"
         panelAutoSaveId={`project:${studyId}`}
         viewerToolbar={<ViewerToolbar tab={activeTab} />}
