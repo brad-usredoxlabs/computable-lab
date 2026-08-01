@@ -34,7 +34,9 @@ export function WorkspaceTabStrip() {
 
   return (
     <div className="workspace-tab-strip" role="tablist" data-testid="workspace-tab-strip">
-      {state.tabs.map(({ tab }) => {
+      {state.tabs
+        .filter(({ tab }) => tab.kind !== 'collection')
+        .map(({ tab }) => {
         const entityType = entityTabType(tab)
         const typeClass = entityType ? `workspace-tab--${entityType}` : ''
         const isActive = tab.id === state.activeTabId

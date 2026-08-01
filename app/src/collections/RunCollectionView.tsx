@@ -11,6 +11,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
+import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
+import { runTabId } from '../event-editor/workspace/types'
 import { apiClient } from '../shared/api/client'
 import type { RunListItem, RunsListResponse } from '../shared/api/client'
 import { CollectionSearchSort } from '../shared/components/CollectionSearchSort'
@@ -48,6 +50,7 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
   const [sortField, setSortField] = useState<RunSortField>('date_updated')
   const [sortDirection, setSortDirection] = useState<RunSortDirection>('desc')
   const navigate = useNavigate()
+  const openTabs = useOptionalOpenTabs()
 
   const fetchRuns = useCallback(async () => {
     setLoading(true)
@@ -220,7 +223,7 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
         ) : (
           <ul className="run-collection__list">
             {sortedRuns.map((run) => (
-              <RunRow key={run.recordId} run={run} onNavigate={navigate} />
+              <RunRow key={run.recordId} run={run} onNavigate={navigate} openTabs={openTabs} />
             ))}
           </ul>
         )}
@@ -256,9 +259,11 @@ const STATUS_ICONS: Record<string, string> = {
 function RunRow({
   run,
   onNavigate,
+  openTabs,
 }: {
   run: RunListItem
   onNavigate: (to: string) => void
+  openTabs: ReturnType<typeof useOptionalOpenTabs>
 }) {
   const statusIcon = STATUS_ICONS[run.status] ?? '?'
 
@@ -268,7 +273,17 @@ function RunRow({
         type="button"
         className="run-card"
         data-testid={`run-card-${run.recordId}`}
-        onClick={() => onNavigate(`/runs/${run.recordId}`)}
+        onClick={() => {
+          if (openTabs) {
+            openTabs.openTab({
+              id: runTabId(run.recordId),
+              kind: 'run',
+              runId: run.recordId,
+              title: run.title ?? run.recordId,
+            }, true)
+          }
+          onNavigate(`/runs/${run.recordId}`)
+        }}
         aria-label={`Run ${run.title} (${run.status})`}
       >
         <span

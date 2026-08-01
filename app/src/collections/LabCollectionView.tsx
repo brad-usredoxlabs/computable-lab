@@ -11,6 +11,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
+import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
+import { labEntityTabId } from '../event-editor/workspace/types'
 import { CollectionSearchSort } from '../shared/components/CollectionSearchSort'
 import { apiClient } from '../shared/api/client'
 import type { RecordEnvelope } from '../types/kernel'
@@ -179,6 +181,7 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
   const [sortField, setSortField] = useState<SortField>('name')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
   const [searchQuery, setSearchQuery] = useState('')
+  const openTabs = useOptionalOpenTabs()
 
   const activeKind = CATEGORIES.find((c) => c.id === activeCategory)?.kind ?? 'protocol'
 
@@ -317,7 +320,19 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
                     type="button"
                     className="lab-entity-card"
                     data-testid={`lab-entity-${record.recordId}`}
-                    onClick={() => navigate(`/lab/${activeCategory}/${record.recordId}`)}
+                    onClick={() => {
+                      if (openTabs) {
+                        openTabs.openTab({
+                          id: labEntityTabId(record.recordId),
+                          kind: 'lab-entity',
+                          schemaId: activeKind,
+                          recordId: record.recordId,
+                          entityType: activeCategory,
+                          title: displayName,
+                        }, true)
+                      }
+                      navigate(`/lab/${activeCategory}/${record.recordId}`)
+                    }}
                   >
                     <div className="lab-entity-card__type-badge">
                       {activeCategory.charAt(0).toUpperCase()}

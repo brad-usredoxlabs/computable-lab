@@ -11,6 +11,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
+import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
+import { projectTabId } from '../event-editor/workspace/types'
 import { apiClient } from '../shared/api/client'
 import { CollectionSearchSort } from '../shared/components/CollectionSearchSort'
 import type { RecordEnvelope } from '../types/kernel'
@@ -27,6 +29,7 @@ export function ProjectCollectionView({ embedded = false }: { embedded?: boolean
   const [sortDirection, setSortDirection] = useState<ProjectSortDirection>('asc')
   const [searchQuery, setSearchQuery] = useState('')
   const navigate = useNavigate()
+  const openTabs = useOptionalOpenTabs()
 
   const fetchProjects = useCallback(async () => {
     setLoading(true)
@@ -159,7 +162,17 @@ export function ProjectCollectionView({ embedded = false }: { embedded?: boolean
                     type="button"
                     className="project-card"
                     data-testid={`project-card-${studyId}`}
-                    onClick={() => navigate(`/project/${studyId}`)}
+                    onClick={() => {
+                      if (openTabs) {
+                        openTabs.openTab({
+                          id: projectTabId(studyId),
+                          kind: 'project',
+                          studyId,
+                          title,
+                        }, true)
+                      }
+                      navigate(`/project/${studyId}`)
+                    }}
                   >
                     <div className="project-card__type-badge">P</div>
                     <div className="project-card__body">
