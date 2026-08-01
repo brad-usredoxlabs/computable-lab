@@ -21,6 +21,7 @@ import type { StampPatternSpec } from '../../../registry/StampPatternRegistry.js
 import type { CompoundClass } from '../../../registry/CompoundClassRegistry.js';
 import type { OntologyTerm } from '../../../registry/OntologyTermRegistry.js';
 import { getOntologyTermRegistry } from '../../../registry/OntologyTermRegistry.js';
+import { getOperationRegistry } from '../../../registry/OperationRegistry.js';
 import type { LabStateSnapshot } from '../../../compiler/state/LabState.js';
 import { applyEventToLabState, emptyLabState } from '../../../compiler/state/LabState.js';
 import { applyDirectiveToLabState, type DirectiveNode } from '../../../compiler/directives/Directive.js';
@@ -370,29 +371,9 @@ function _createAiPrecompileOutputSchema() {
 }
 
 function normalizeCandidateActionVerb(verb: string): string {
-  const normalized = verb.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-  const aliases: Record<string, string> = {
-    add: 'add_material',
-    pipette: 'transfer',
-    dispense: 'transfer',
-    aspirate: 'transfer',
-    transfer: 'transfer',
-    incubate: 'incubate',
-    mix: 'mix',
-    vortex: 'mix',
-    resuspend: 'resuspend',
-    wash: 'wash',
-    rinse: 'wash',
-    spin: 'spin',
-    centrifuge: 'spin',
-    pellet: 'pellet',
-    seed: 'seed',
-    read: 'read',
-    measure: 'read',
-    quantify: 'read',
-    run: 'run_protocol',
-  };
-  return aliases[normalized] ?? normalized;
+  const op = getOperationRegistry().lookup(verb);
+  if (!op) return verb;
+  return op.id;
 }
 
 function lowerCandidateActionsToEvents(actions: unknown[] | undefined): Array<{ verb: string; [key: string]: unknown }> {
