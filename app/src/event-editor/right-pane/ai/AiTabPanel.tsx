@@ -25,6 +25,7 @@ import { systemPromptForViewer, systemPromptKindForTab } from './systemPromptFor
 import { SourcesStrip, type AddedSource } from './SourcesStrip'
 import { MessageLog } from './MessageLog'
 import { ChatInput } from './ChatInput'
+import { QuestionsPanel } from './QuestionsPanel'
 import { RunInEventEditorButton } from './RunInEventEditorButton'
 import { useChatThread } from './useChatThread'
 import { buildPreviewFromDraft } from './draftPreview'
@@ -567,8 +568,25 @@ export function AiTabPanel() {
       ) : null}
 
       <section className="ai-tab__section ai-tab__section--log">
-        <MessageLog state={chat.state} onClarificationsSubmit={handleClarificationsSubmit} />
+        <MessageLog state={chat.state} />
       </section>
+
+      {sidebar.mode === 'clarifying' ? (
+        <section className="ai-tab__section ai-tab__section--questions">
+          <QuestionsPanel
+            questions={sidebar.questions}
+            answers={sidebar.answers}
+            activeQuestionId={sidebar.activeQuestionId}
+            onAnswer={(qId, ans) => sidebarDispatch({ type: 'answer-question', questionId: qId, answer: ans })}
+            onChangeQuestion={(qId) => sidebarDispatch({ type: 'change-question', questionId: qId })}
+            onSubmit={() => {
+              if (sidebar.mode !== 'clarifying') return
+              void handleClarificationsSubmit(Object.values(sidebar.answers), sidebar.questions)
+            }}
+            onCancel={handleCancelDraft}
+          />
+        </section>
+      ) : null}
 
       <section className="ai-tab__section ai-tab__section--actions">
         <RunInEventEditorButton
