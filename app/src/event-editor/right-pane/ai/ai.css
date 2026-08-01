@@ -670,6 +670,34 @@
 
 /* ---- Disabled input (clarifying / other non-chat states) ----------- */
 
+.ai-tab__subtabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--cl-border, #e0e0e0);
+  flex-shrink: 0;
+}
+.ai-tab__subtab {
+  padding: 4px 10px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--cl-text-muted, #666);
+  border-bottom: 2px solid transparent;
+  transition: border-color 0.15s, color 0.15s;
+}
+.ai-tab__subtab:hover {
+  color: var(--cl-text, #333);
+}
+.ai-tab__subtab--active {
+  color: var(--cl-accent, #2563eb);
+  border-bottom-color: var(--cl-accent, #2563eb);
+  font-weight: 500;
+}
+
+/* ---- Disabled input (clarifying / other non-chat states) ----------- */
+
 .ai-tab__section--input-disabled {
   display: flex;
   flex-direction: column;

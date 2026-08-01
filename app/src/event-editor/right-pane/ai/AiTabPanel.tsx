@@ -26,6 +26,8 @@ import { SourcesStrip, type AddedSource } from './SourcesStrip'
 import { MessageLog } from './MessageLog'
 import { ChatInput } from './ChatInput'
 import { QuestionsPanel } from './QuestionsPanel'
+import { InterpretationPanel } from './InterpretationPanel'
+import { ChangesPanel } from './ChangesPanel'
 import { RunInEventEditorButton } from './RunInEventEditorButton'
 import { useChatThread } from './useChatThread'
 import { buildPreviewFromDraft } from './draftPreview'
@@ -390,6 +392,27 @@ export function AiTabPanel() {
   // Coexists alongside the chat reducer — it adds state-driven UI behavior on top of the existing chat.
   const [sidebar, sidebarDispatch] = useReducer(sidebarReducer, initialSidebarState)
 
+  // Sub-tab navigation: auto-switches based on sidebar mode, user can override
+  type AiSubTab = 'chat' | 'questions' | 'interpretation' | 'changes'
+
+  const [manualSubTab, setManualSubTab] = useState<AiSubTab | null>(null)
+
+  // Auto-select sub-tab based on sidebar mode, unless user manually overrode
+  const activeSubTab: AiSubTab = useMemo(() => {
+    if (manualSubTab) return manualSubTab
+    switch (sidebar.mode) {
+      case 'clarifying': return 'questions'
+      case 'interpreting': return 'interpretation'
+      case 'reviewing': return 'changes'
+      default: return 'chat'
+    }
+  }, [sidebar.mode, manualSubTab])
+
+  // Reset manual override when mode changes
+  useEffect(() => {
+    setManualSubTab(null)
+  }, [sidebar.mode])
+
   const handleSend = useCallback(
     async (text: string) => {
       setPrefill(undefined)
@@ -497,6 +520,27 @@ export function AiTabPanel() {
         />
       </section>
 
+      <div className="ai-tab__subtabs">
+        {([
+          { tab: 'chat' as const, label: 'Chat', show: true },
+          { tab: 'questions' as const, label: 'Questions', show: sidebar.mode === 'clarifying' },
+          { tab: 'interpretation' as const, label: 'Interpretation', show: sidebar.mode === 'interpreting' || sidebar.mode === 'reviewing' },
+          { tab: 'changes' as const, label: 'Changes', show: sidebar.mode === 'reviewing' },
+        ])
+          .filter((t) => t.show)
+          .map((t) => (
+            <button
+              key={t.tab}
+              type="button"
+              className={activeSubTab === t.tab ? 'ai-tab__subtab ai-tab__subtab--active' : 'ai-tab__subtab'}
+              onClick={() => setManualSubTab(t.tab)}
+              data-testid={`ai-subtab-${t.tab}`}
+            >
+              {t.label}
+            </button>
+          ))}
+      </div>
+
       {/* Protocol builder — interactive configuration surface for extracted
        *  protocol candidates. Replaces the flat ProtocolSourcePanel with:
        *  - Step preview with inline overrides (skip, quantities)
@@ -567,11 +611,13 @@ export function AiTabPanel() {
         </section>
       ) : null}
 
-      <section className="ai-tab__section ai-tab__section--log">
-        <MessageLog state={chat.state} />
-      </section>
+      {activeSubTab === 'chat' ? (
+        <section className="ai-tab__section ai-tab__section--log">
+          <MessageLog state={chat.state} />
+        </section>
+      ) : null}
 
-      {sidebar.mode === 'clarifying' ? (
+      {activeSubTab === 'questions' && sidebar.mode === 'clarifying' ? (
         <section className="ai-tab__section ai-tab__section--questions">
           <QuestionsPanel
             questions={sidebar.questions}
@@ -584,6 +630,28 @@ export function AiTabPanel() {
               void handleClarificationsSubmit(Object.values(sidebar.answers), sidebar.questions)
             }}
             onCancel={handleCancelDraft}
+          />
+        </section>
+      ) : null}
+
+      {activeSubTab === 'interpretation' && (sidebar.mode === 'interpreting' || sidebar.mode === 'reviewing') ? (
+        <section className="ai-tab__section ai-tab__section--interpretation">
+          <InterpretationPanel
+            interpretation={sidebar.mode === 'reviewing' ? sidebar.interpretation : { operations: [] }}
+          />
+        </section>
+      ) : null}
+
+      {activeSubTab === 'changes' && sidebar.mode === 'reviewing' ? (
+        <section className="ai-tab__section ai-tab__section--changes">
+          <ChangesPanel
+            changes={sidebar.changes}
+            warnings={sidebar.warnings}
+            onApply={() => {
+              sidebarDispatch({ type: 'commit' })
+              editor?.actions.commitPreview()
+            }}
+            onDiscard={handleCancelDraft}
           />
         </section>
       ) : null}
