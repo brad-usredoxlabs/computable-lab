@@ -252,6 +252,16 @@ export function AiTabPanel() {
   // the draft → ghost → Accept/Discard loop the standalone dock has.
   const onDraftResult = useCallback(
     (result: AssistDraftResult, prompt: string) => {
+      // Transition sidebar state FIRST — this must happen even when the
+      // draft has no preview events (e.g. forceMaterialClarifications held
+      // the whole draft because of an ungrounded material).
+      const draftId = `draft-${Date.now()}`
+      if (result.clarificationRequests && result.clarificationRequests.length > 0) {
+        sidebarDispatch({ type: 'clarifications-needed', draftId, questions: result.clarificationRequests })
+      } else {
+        sidebarDispatch({ type: 'draft-ready', draftId, interpretation: { operations: [] }, changes: [], warnings: [] })
+      }
+
       if (!editor) return
       const { state, actions } = editor
       const events = (result.events ?? []) as PlateEvent[]
@@ -299,13 +309,6 @@ export function AiTabPanel() {
         ...(graphLemurIngest ? { ingest: graphLemurIngest } : {}),
         ...(revisionHistory ? { revisionHistory } : {}),
       })
-      // Transition sidebar state based on draft result
-      const draftId = `draft-${Date.now()}`
-      if (result.clarificationRequests && result.clarificationRequests.length > 0) {
-        sidebarDispatch({ type: 'clarifications-needed', draftId, questions: result.clarificationRequests })
-      } else {
-        sidebarDispatch({ type: 'draft-ready', draftId, interpretation: { operations: [] }, changes: [], warnings: [] })
-      }
     },
     [activeDeckScope, editor],
   )
