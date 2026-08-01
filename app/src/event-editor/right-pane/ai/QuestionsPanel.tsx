@@ -7,6 +7,7 @@
  * works through multiple questions — the draft is paused until all are resolved.
  */
 
+import { useEffect } from 'react'
 import { ClarificationPicker } from './ClarificationPicker'
 import type { AiClarificationAnswer, AiClarificationRequest } from '../../../types/ai'
 
@@ -30,7 +31,16 @@ export function QuestionsPanel({
   onCancel,
 }: QuestionsPanelProps) {
   const answeredCount = questions.filter((q) => answers[q.id]).length
-  const allAnswered = answeredCount === questions.length
+  const allAnswered = answeredCount === questions.length && questions.length > 0
+
+  // Auto-submit when all questions are answered — don't make the user
+  // hunt for a button. The old ClarificationCards did this via useEffect.
+  useEffect(() => {
+    if (allAnswered) {
+      const timer = setTimeout(() => onSubmit(), 300)
+      return () => clearTimeout(timer)
+    }
+  }, [allAnswered, onSubmit])
 
   return (
     <div className="questions-panel" data-testid="questions-panel">
