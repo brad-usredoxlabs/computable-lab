@@ -44,9 +44,19 @@ export async function searchOls4(
     const ontKey = String(doc.ontology_name ?? doc.ontology_prefix ?? '').toLowerCase();
     const curie = oboId || iri;
     const definition = firstText(doc.description) ?? firstText(doc.definition);
+    // Use the primary label, but also check related_synonyms for lexical
+    // matching. OLS4 often indexes synonyms that are closer to the user's
+    // search term than the canonical label (e.g. "MatLyLu cell" is a synonym
+    // of "Mat-Ly-Lu Cell" in BTO). If a synonym is a closer match to the
+    // search term, use it as the label so hasLexicalSupport passes.
+    const primaryLabel = String(doc.label ?? '');
+    const synonyms = Array.isArray(doc.related_synonyms)
+      ? (doc.related_synonyms as unknown[]).filter((s): s is string => typeof s === 'string')
+      : [];
+    const label = pickBestLabel(primaryLabel, synonyms, term);
     return {
       curie,
-      label: String(doc.label ?? ''),
+      label,
       namespace: curie.includes(':') ? (curie.split(':')[0] ?? ontKey) : ontKey,
       level: 'concept',
       ...(iri ? { uri: iri } : {}),
@@ -63,6 +73,31 @@ function firstText(value: unknown): string | undefined {
     if (typeof first === 'string') return first.trim();
   }
   return undefined;
+}
+
+/**
+ * Pick the best label for lexical matching. If a synonym is a closer match
+ * to the search term than the canonical label (e.g. the synonym matches
+ * exactly or as a prefix), use the synonym so hasLexicalSupport passes.
+ * Otherwise return the canonical label.
+ */
+function pickBestLabel(primary: string, synonyms: string[], term: string): string {
+  if (!primary) return synonyms[0] ?? '';
+  if (synonyms.length === 0) return primary;
+  const t = term.trim().toLowerCase();
+  // If the primary label already matches well, keep it
+  const primaryLower = primary.toLowerCase();
+  if (primaryLower === t || primaryLower.startsWith(t) || primaryLower.includes(t)) {
+    return primary;
+  }
+  // Check if any synonym is a closer match
+  for (const syn of synonyms) {
+    const synLower = syn.toLowerCase();
+    if (synLower === t || synLower.startsWith(t) || t.startsWith(synLower)) {
+      return syn;
+    }
+  }
+  return primary;
 }
 
 /** Build the tier-3 OLS4 provider. */

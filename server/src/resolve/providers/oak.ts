@@ -11,7 +11,7 @@ import type { OntologyConfig } from '../../config/types.js';
 import type { ProviderHit, ResolveProvider } from '../types.js';
 
 /** Bundled OAK ontologies queried when none are configured. */
-const DEFAULT_LOCAL_ONTOLOGIES = ['chebi', 'go', 'ncit', 'uberon', 'ncbitaxon'];
+const DEFAULT_LOCAL_ONTOLOGIES = ['chebi', 'go', 'ncit', 'uberon', 'ncbitaxon', 'bto'];
 
 interface OakSearchResponse {
   q?: string;

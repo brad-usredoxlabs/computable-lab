@@ -89,18 +89,26 @@ function hasLexicalSupport(term: string, label: string, definition?: string): bo
   if (!t || !l) return false;
   if (l === t || l.startsWith(t) || l.includes(t) || t.includes(l)) return true;
 
+  // Try singular/plural normalization (e.g. "cells" vs "cell")
+  const tSingular = t.endsWith('s') ? t.slice(0, -1) : t;
+  const lSingular = l.endsWith('s') ? l.slice(0, -1) : l;
+  if (tSingular === lSingular || lSingular.startsWith(tSingular) || tSingular.includes(lSingular)) return true;
+
   const labelAcronym = acronym(label);
   if (labelAcronym && labelAcronym === t.replace(/[^a-z0-9]/g, '')) return true;
 
   const termTokens = tokens(term);
   if (termTokens.length === 0) return false;
   const labelTokens = new Set(tokens(label));
-  const overlap = termTokens.filter((token) => labelTokens.has(token)).length;
+  // Also try singular forms of tokens for matching
+  const labelTokensSingular = new Set([...labelTokens].map((tok) => tok.endsWith('s') ? tok.slice(0, -1) : tok));
+  const termTokensSingular = termTokens.map((tok) => tok.endsWith('s') ? tok.slice(0, -1) : tok);
+  const overlap = termTokensSingular.filter((tok) => labelTokensSingular.has(tok)).length;
   if (overlap / Math.max(termTokens.length, 1) >= 0.5) return true;
 
   if (definition) {
     const definitionTokens = new Set(tokens(definition));
-    const definitionOverlap = termTokens.filter((token) => definitionTokens.has(token)).length;
+    const definitionOverlap = termTokensSingular.filter((tok) => definitionTokens.has(tok) || definitionTokens.has(tok.endsWith('s') ? tok.slice(0, -1) : tok + 's')).length;
     return definitionOverlap / Math.max(termTokens.length, 1) >= 0.75;
   }
   return false;
