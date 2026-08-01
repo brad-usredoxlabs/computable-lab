@@ -237,11 +237,18 @@ function classifyEvent(
     return conceptGap(label);
   }
 
-  // Draft / mint ref: minted from the user's words.
-  if (kind === 'draft' || id.startsWith('mint:')) return conceptGap(draftLabel(ref));
+  // Draft / mint ref: minted from the user's words. ALWAYS ask which
+  // material this is — a minted label is ungrounded by definition, even
+  // if the event carries a quantity (e.g. "100,000 MatLyLu cells"). The
+  // user needs to confirm the identity before the event is trusted.
+  if (kind === 'draft' || id.startsWith('mint:')) {
+    return gap('no-ref', draftLabel(ref));
+  }
 
   // kind 'local', empty/unknown kind, or label-only — free-text concept.
-  return conceptGap(label || id);
+  // Like mint refs, these are ungrounded — always ask which material,
+  // even if a quantity is present.
+  return gap('no-ref', label || id);
 }
 
 /**
