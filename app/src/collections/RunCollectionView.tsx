@@ -13,6 +13,7 @@ import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { apiClient } from '../shared/api/client'
 import type { RunListItem, RunsListResponse } from '../shared/api/client'
+import { CollectionSearchSort } from '../shared/components/CollectionSearchSort'
 import { quickCreateRun } from '../event-editor/create/quickCreateRun'
 import { SCRATCH_STUDY_ID } from '../event-editor/legacyRouteResolution'
 import './RunCollectionView.css'
@@ -103,14 +104,9 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
     return sortDirection === 'asc' ? comparison : -comparison
   })
 
-  /* Sort control handler */
-  const handleSortFieldChange = (field: RunSortField) => {
-    if (field === sortField) {
-      setSortDirection(d => d === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortField(field)
-      setSortDirection('asc')
-    }
+  /* Sort control handler — for onSortFieldChange prop compatibility */
+  const handleSortFieldChange = (field: string) => {
+    setSortField(field as RunSortField)
   }
 
   const handleNewRun = async () => {
@@ -129,35 +125,20 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
 
   /* Sort control UI with search — mirrors LabCollectionView pattern */
   const sortControls = (
-    <div className="run-collection__sort-controls">
-      <input
-        type="text"
-        className="run-collection__search"
-        placeholder="Filter…"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        aria-label="Filter runs"
-      />
-      <span className="run-collection__sort-label">Sort:</span>
-      <div className="run-collection__sort-buttons">
-        {(['name', 'date_created', 'date_updated'] as RunSortField[]).map(field => (
-          <button
-            key={field}
-            type="button"
-            className={`run-collection__sort-btn ${sortField === field ? 'run-collection__sort-btn--active' : ''}`}
-            onClick={() => handleSortFieldChange(field)}
-            title={`Sort by ${field.replace('_', ' ')}`}
-          >
-            {field === 'name' ? 'Name' : field === 'date_created' ? 'Date Created' : 'Date Updated'}
-            {sortField === field && (
-              <span className="run-collection__sort-arrow">
-                {sortDirection === 'asc' ? '↑' : '↓'}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
+    <CollectionSearchSort
+      query={searchQuery}
+      onQueryChange={setSearchQuery}
+      sortField={sortField}
+      onSortFieldChange={handleSortFieldChange}
+      sortDirection={sortDirection}
+      onSortDirectionChange={(dir) => setSortDirection(dir)}
+      sortFields={[
+        { id: 'name', label: 'Name' },
+        { id: 'date_created', label: 'Date Created' },
+        { id: 'date_updated', label: 'Date Updated' },
+      ]}
+      placeholder="Search runs…"
+    />
   )
 
   const collectionContent = (

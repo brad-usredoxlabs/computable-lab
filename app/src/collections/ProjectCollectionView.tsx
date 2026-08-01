@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { apiClient } from '../shared/api/client'
+import { CollectionSearchSort } from '../shared/components/CollectionSearchSort'
 import type { RecordEnvelope } from '../types/kernel'
 import './ProjectCollectionView.css'
 
@@ -85,55 +86,30 @@ export function ProjectCollectionView({ embedded = false }: { embedded?: boolean
     return sortDirection === 'asc' ? comparison : -comparison
   })
 
-  // Handle sort field change
-  const handleSortFieldChange = (field: ProjectSortField) => {
-    if (field === sortField) {
-      setSortDirection(d => d === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortField(field)
-      setSortDirection('asc')
-    }
+  // Sort control handler — for onSortFieldChange prop compatibility
+  const handleSortFieldChange = (field: string) => {
+    setSortField(field as ProjectSortField)
   }
-
-  // Sort control UI with search — mirrors LabCollectionView pattern
-  const sortControls = (
-    <div className="project-collection__sort-controls">
-      <input
-        type="text"
-        className="project-collection__search"
-        placeholder="Filter…"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        aria-label="Filter projects"
-      />
-      <span className="project-collection__sort-label">Sort:</span>
-      <div className="project-collection__sort-buttons">
-        {(['name', 'date_created', 'date_updated'] as ProjectSortField[]).map(field => (
-          <button
-            key={field}
-            type="button"
-            className={`project-collection__sort-btn ${sortField === field ? 'project-collection__sort-btn--active' : ''}`}
-            onClick={() => handleSortFieldChange(field)}
-            title={`Sort by ${field.replace('_', ' ')}`}
-          >
-            {field === 'name' ? 'Name' : field === 'date_created' ? 'Date Created' : 'Date Updated'}
-            {sortField === field && (
-              <span className="project-collection__sort-arrow">
-                {sortDirection === 'asc' ? '↑' : '↓'}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
 
   const collectionContent = (
     <div className="project-collection" data-testid="project-collection-view">
       {/* Header with title and sort controls */}
       <header className="project-collection__header">
         <h1 className="project-collection__title">Projects</h1>
-        {sortControls}
+        <CollectionSearchSort
+          query={searchQuery}
+          onQueryChange={setSearchQuery}
+          sortField={sortField}
+          onSortFieldChange={handleSortFieldChange}
+          sortDirection={sortDirection}
+          onSortDirectionChange={(dir) => setSortDirection(dir)}
+          sortFields={[
+            { id: 'name', label: 'Name' },
+            { id: 'date_created', label: 'Date Created' },
+            { id: 'date_updated', label: 'Date Updated' },
+          ]}
+          placeholder="Search projects…"
+        />
       </header>
 
       <div className="project-collection__body">

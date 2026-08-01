@@ -11,6 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
+import { CollectionSearchSort } from '../shared/components/CollectionSearchSort'
 import { apiClient } from '../shared/api/client'
 import type { RecordEnvelope } from '../types/kernel'
 import './LabCollectionView.css'
@@ -246,48 +247,27 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
     return sortDirection === 'asc' ? comparison : -comparison
   })
 
-  // Handle sort field change
-  const handleSortFieldChange = (field: SortField) => {
-    if (field === sortField) {
-      // Toggle direction when clicking the same field
-      setSortDirection(d => d === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortField(field)
-      setSortDirection('asc')
-    }
+  // Sort control handler — for onSortFieldChange prop compatibility
+  const handleSortFieldChange = (field: string) => {
+    setSortField(field as SortField)
   }
 
   // Sort control UI with search
   const sortControls = (
-    <div className="lab-collection__sort-controls">
-      <input
-        type="text"
-        className="lab-collection__search"
-        placeholder="Filter…"
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        aria-label="Filter records"
-      />
-      <span className="lab-collection__sort-label">Sort:</span>
-      <div className="lab-collection__sort-buttons">
-        {(['name', 'date_created', 'date_updated'] as SortField[]).map(field => (
-          <button
-            key={field}
-            type="button"
-            className={`lab-collection__sort-btn ${sortField === field ? 'lab-collection__sort-btn--active' : ''}`}
-            onClick={() => handleSortFieldChange(field)}
-            title={`Sort by ${field.replace('_', ' ')}`}
-          >
-            {field === 'name' ? 'Name' : field === 'date_created' ? 'Date Created' : 'Date Updated'}
-            {sortField === field && (
-              <span className="lab-collection__sort-arrow">
-                {sortDirection === 'asc' ? '↑' : '↓'}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
+    <CollectionSearchSort
+      query={searchQuery}
+      onQueryChange={setSearchQuery}
+      sortField={sortField}
+      onSortFieldChange={handleSortFieldChange}
+      sortDirection={sortDirection}
+      onSortDirectionChange={(dir) => setSortDirection(dir)}
+      sortFields={[
+        { id: 'name', label: 'Name' },
+        { id: 'date_created', label: 'Date Created' },
+        { id: 'date_updated', label: 'Date Updated' },
+      ]}
+      placeholder="Search lab…"
+    />
   )
 
   const collectionContent = (

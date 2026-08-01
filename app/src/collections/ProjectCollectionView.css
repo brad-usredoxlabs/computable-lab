@@ -1,16 +1,27 @@
-/* ProjectCollectionView — card grid for /projects */
+/* ProjectCollectionView — project collection with single-column chip list */
 
 .project-collection {
-  padding: 24px;
-  width: 100%;
-  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+  max-width: 960px;
+  margin: 0 auto;
+  overflow: hidden;
 }
 
+/* ------------------------------------------------------------------ */
+/* Header                                                             */
+/* ------------------------------------------------------------------ */
+
 .project-collection__header {
+  flex-shrink: 0;
+  padding: 24px 24px 0;
+  margin-bottom: 16px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 24px;
+  gap: 12px;
 }
 
 .project-collection__title {
@@ -20,21 +31,65 @@
   margin: 0;
 }
 
-.project-collection__new-btn {
-  padding: 6px 14px;
-  border: 1px solid var(--cl-type-project);
-  border-radius: 4px;
-  background: var(--cl-type-project-soft);
-  color: var(--cl-type-project);
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.15s;
+/* ------------------------------------------------------------------ */
+/* Body (scrollable)                                                  */
+/* ------------------------------------------------------------------ */
+
+.project-collection__body {
+  flex: 1;
+  min-height: 0;
+  padding: 20px 24px 24px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
-.project-collection__new-btn:hover {
-  background: var(--cl-type-project);
-  color: var(--cl-bg);
+.project-collection__body::-webkit-scrollbar {
+  width: 6px;
 }
+.project-collection__body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.project-collection__body::-webkit-scrollbar-thumb {
+  background: var(--cl-border);
+  border-radius: 3px;
+}
+.project-collection__body::-webkit-scrollbar-thumb:hover {
+  background: var(--cl-border-strong);
+}
+
+/* ------------------------------------------------------------------ */
+/* Actions bar (total + new button)                                   */
+/* ------------------------------------------------------------------ */
+
+.project-collection__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.project-collection__total {
+  font-size: 13px;
+  color: var(--cl-text-dim);
+}
+
+/* ------------------------------------------------------------------ */
+/* Single-column chip list                                            */
+/* ------------------------------------------------------------------ */
+
+.project-collection__list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Empty / error states                                               */
+/* ------------------------------------------------------------------ */
 
 .project-collection__error,
 .project-collection__hint {
@@ -50,33 +105,16 @@
   padding: 48px 0;
 }
 
-.project-collection__grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-@media (max-width: 900px) {
-  .project-collection__grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 600px) {
-  .project-collection__grid {
-    grid-template-columns: 1fr;
-  }
-}
+/* ------------------------------------------------------------------ */
+/* Project card                                                       */
+/* ------------------------------------------------------------------ */
 
 .project-card {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   width: 100%;
-  padding: 16px;
+  padding: 14px 16px;
   border: 1px solid var(--cl-border);
   border-radius: 8px;
   background: var(--cl-bg-elev);
@@ -109,7 +147,7 @@
 }
 
 .project-card__title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--cl-text);
   margin: 0 0 4px 0;
@@ -121,4 +159,40 @@
 .project-card__id {
   font-size: 12px;
   color: var(--cl-text-faint);
+}
+
+/* ------------------------------------------------------------------ */
+/* New button                                                         */
+/* ------------------------------------------------------------------ */
+
+.project-collection__new-btn {
+  padding: 6px 14px;
+  border: 1px solid var(--cl-type-project);
+  border-radius: 4px;
+  background: var(--cl-type-project-soft);
+  color: var(--cl-type-project);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.project-collection__new-btn:hover {
+  background: var(--cl-type-project);
+  color: var(--cl-bg);
+}
+
+/* ------------------------------------------------------------------ */
+/* Mobile                                                             */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 768px) {
+  .project-collection__header {
+    padding: 12px 12px 0;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .project-collection__body {
+    padding: 12px;
+  }
 }
