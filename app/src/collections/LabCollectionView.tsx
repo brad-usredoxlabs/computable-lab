@@ -97,7 +97,7 @@ export function LabCollectionView() {
                       type="button"
                       className="lab-entity-card"
                       data-testid={`lab-entity-${record.recordId}`}
-                      onClick={() => navigate(`/lab/${record.recordId}`)}
+                      onClick={() => navigate(`/lab/${activeCategory}/${record.recordId}`)}
                     >
                       <div className="lab-entity-card__type-badge">L</div>
                       <div className="lab-entity-card__body">
