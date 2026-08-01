@@ -370,6 +370,14 @@ function requestForGap(gap: MaterialGap): AgentClarificationRequest {
     options: [],
   };
   if (gap.label) request.query = gap.label;
+  // If the gap has no label (e.g. no-ref with empty label), try the
+  // snippet/note text so the ClarificationPicker has a search seed.
+  // Otherwise the picker searches with an empty query and returns ALL
+  // local records, which is useless.
+  else if (gap.snippet) {
+    const trimmed = gap.snippet.trim();
+    if (trimmed) request.query = trimmed;
+  }
   // Surface the event note so the card shows WHICH material is being asked
   // about (e.g. "Added 10 uL 1 uM clofibrate to B2") even when no label was
   // carried on the ref — otherwise a multi-material prompt yields an ambiguous
@@ -398,6 +406,10 @@ export function forceMaterialClarifications<T extends Dict>(
 
   const kept: T[] = [];
   const clarificationRequests: AgentClarificationRequest[] = [];
+  // Track which labels we've already asked about — if two events have the
+  // same ungrounded material, only ask once (not two pickers for the same
+  // search term). Dedup by case-insensitive label.
+  const askedLabels = new Set<string>();
 
   events.forEach((ev, index) => {
     const e = ev as Dict;
@@ -417,6 +429,15 @@ export function forceMaterialClarifications<T extends Dict>(
       kept.push(ev);
       return;
     }
+    // Dedup: if we already asked about this label, skip the clarification
+    // and keep the event (it will be re-drafted when the user answers the
+    // first clarification).
+    const dedupKey = gap.label.trim().toLowerCase();
+    if (dedupKey && askedLabels.has(dedupKey)) {
+      kept.push(ev);
+      return;
+    }
+    if (dedupKey) askedLabels.add(dedupKey);
     clarificationRequests.push(requestForGap(gap));
   });
 

@@ -29,7 +29,9 @@ describe('forceMaterialClarifications', () => {
     });
     // No label to seed from; prompt falls back to the well.
     expect(clarificationRequests[0]!.prompt).toContain('A3');
-    expect(clarificationRequests[0]!.query).toBeUndefined();
+    // No label on the ref, but the note snippet is used as the search seed
+    // so the ClarificationPicker doesn't search with an empty query.
+    expect(clarificationRequests[0]!.query).toContain('fenofibrate');
     // …but the note rides along as the snippet so the card still shows WHICH
     // material is being asked about (disambiguates a multi-material prompt).
     expect(clarificationRequests[0]!.snippet).toContain('fenofibrate');
