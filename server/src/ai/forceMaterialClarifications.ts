@@ -72,7 +72,13 @@ function draftLabel(ref: Dict): string {
   return id.startsWith('mint:') ? id.slice('mint:'.length).trim() : '';
 }
 
-export type MaterialGapReason = 'no-ref' | 'unverified-curie' | 'needs-quantity';
+export type MaterialGapReason =
+  | 'no-ref'
+  | 'unverified-curie'
+  | 'needs-quantity'
+  | 'instance-gap'
+  | 'capability-gap'
+  | 'semantic-conflict';
 
 export interface MaterialGap {
   eventIndex: number;
@@ -84,6 +90,8 @@ export interface MaterialGap {
   /** The event's note, shown in the card so the user sees WHICH material this
    * clarification is about even when the ref carried no usable label. */
   snippet: string;
+  /** RPM value for capability-gap (orbital_shaking) prompts. */
+  rpm?: number;
 }
 
 export interface ForceClarificationsOptions {
@@ -103,6 +111,13 @@ export interface ForceClarificationsOptions {
    * regardless of this flag — they carry no ontology binding at all.
    */
   policeUnverifiedCuries?: boolean;
+  /**
+   * When 'tracked', a concept-only material (ontology or record ref) that lacks
+   * a concrete instance reference (material_instance_ref or aliquot_ref) surfaces
+   * an `instance-gap` clarification asking which preparation or lot to use.
+   * Defaults to 'relaxed' (no instance tracking).
+   */
+  materialTrackingMode?: 'tracked' | 'relaxed';
 }
 
 function firstWell(details: Dict): string {
@@ -158,6 +173,7 @@ function classifyEvent(
   eventIndex: number,
   resolved: Set<string>,
   policeUnverifiedCuries: boolean,
+  materialTrackingMode: 'tracked' | 'relaxed',
 ): MaterialGap | null {
   const details = eventDetails(e);
   // Already a well-ready material (formulation / instance / aliquot / vendor).
@@ -207,19 +223,55 @@ function classifyEvent(
   // non-policed CURIE is a real concept and falls to the concentration gate.
   if (kind === 'ontology' || isCurieShaped(id)) {
     if (policeUnverifiedCuries && !(id && resolved.has(id))) return gap('unverified-curie', label);
+    // Instance tracking: a named concept without a concrete instance ref needs
+    // the user to pick which preparation/lot to use.
+    if (materialTrackingMode === 'tracked') return gap('instance-gap', label);
     return conceptGap(label);
   }
 
   // A record ref points at an existing local concept record (e.g. MAT-…). It's a
   // known term but still a bare concept — needs a quantity to become a
   // formulation/instance.
-  if (kind === 'record' && id) return conceptGap(label);
+  if (kind === 'record' && id) {
+    if (materialTrackingMode === 'tracked') return gap('instance-gap', label);
+    return conceptGap(label);
+  }
 
   // Draft / mint ref: minted from the user's words.
   if (kind === 'draft' || id.startsWith('mint:')) return conceptGap(draftLabel(ref));
 
   // kind 'local', empty/unknown kind, or label-only — free-text concept.
   return conceptGap(label || id);
+}
+
+/**
+ * Detect capability gaps — operation parameters that no registered instrument
+ * can satisfy. This is a placeholder; the real instrument-registry check comes
+ * in Phase 6.
+ */
+function detectCapabilityGap(e: Dict, eventIndex: number): MaterialGap | null {
+  const verb = eventVerb(e);
+  const details = eventDetails(e);
+
+  // Placeholder: mix with orbital_shaking at >3000 rpm exceeds available instruments.
+  if (verb === 'mix') {
+    const mode = asString(details['mode']);
+    const rpm = typeof details['rpm'] === 'number' ? details['rpm'] : null;
+    if (mode === 'orbital_shaking' && rpm !== null && rpm > 3000) {
+      const well = firstWell(details);
+      const snippet = asString(details['note']);
+      return {
+        eventIndex,
+        reason: 'capability-gap',
+        label: '',
+        well,
+        snippet,
+        rpm,
+      };
+    }
+  }
+
+  return null;
 }
 
 function promptForGap(gap: MaterialGap): string {
@@ -229,6 +281,18 @@ function promptForGap(gap: MaterialGap): string {
     if (gap.label) return `I need a volume and a concentration for "${gap.label}".`;
     if (gap.well) return `I need a volume and a concentration for the material added to ${gap.well}.`;
     return 'I need a volume and a concentration for that material.';
+  }
+  // Instance gap: the material is a known concept but no concrete instance
+  // (preparation, lot, aliquot) was specified. Ask which one to use.
+  if (gap.reason === 'instance-gap') {
+    if (gap.label) return `Which preparation or lot of "${gap.label}" should this run use?`;
+    if (gap.well) return `Which preparation or lot should be used for the material added to ${gap.well}?`;
+    return 'Which preparation or lot should this run use?';
+  }
+  // Capability gap: operation parameters exceed what any available instrument can do.
+  if (gap.reason === 'capability-gap') {
+    if (gap.rpm !== undefined) return `No available instrument can shake this plate at ${gap.rpm} rpm.`;
+    return 'This operation requires equipment that is not available.';
   }
   // Unknown / unconfirmed material: ask WHICH term (ontology or local record).
   if (gap.label) {
@@ -253,6 +317,38 @@ function requestForGap(gap: MaterialGap): AgentClarificationRequest {
       menuProvider: 'choice',
       options: [],
     };
+    if (gap.snippet) request.snippet = gap.snippet;
+    return request;
+  }
+
+  // capability-gap is a general clarification — the user needs to acknowledge
+  // the constraint and pick an alternative approach.
+  if (gap.reason === 'capability-gap') {
+    const request: AgentClarificationRequest = {
+      id: `material-${gap.eventIndex + 1}`,
+      kind: 'general',
+      prompt: promptForGap(gap),
+      entityType: 'general',
+      menuProvider: 'choice',
+      options: [],
+    };
+    if (gap.snippet) request.snippet = gap.snippet;
+    return request;
+  }
+
+  // instance-gap: kind is 'material' with /m menu provider to search local
+  // inventory for preparations/lots.
+  if (gap.reason === 'instance-gap') {
+    const request: AgentClarificationRequest = {
+      id: `material-${gap.eventIndex + 1}`,
+      kind: 'material',
+      prompt: promptForGap(gap),
+      entityType: 'material',
+      menuProvider: '/m',
+      allowCreateLocal: true,
+      options: [],
+    };
+    if (gap.label) request.query = gap.label;
     if (gap.snippet) request.snippet = gap.snippet;
     return request;
   }
@@ -291,17 +387,25 @@ export function forceMaterialClarifications<T extends Dict>(
     if (v) resolved.add(v);
   }
   const policeUnverifiedCuries = options.policeUnverifiedCuries ?? false;
+  const materialTrackingMode = options.materialTrackingMode ?? 'relaxed';
 
   const kept: T[] = [];
   const clarificationRequests: AgentClarificationRequest[] = [];
 
   events.forEach((ev, index) => {
     const e = ev as Dict;
+    // Capability gaps apply to any event type (mix, centrifuge, etc.).
+    const capGap = detectCapabilityGap(e, index);
+    if (capGap) {
+      clarificationRequests.push(requestForGap(capGap));
+      return;
+    }
+    // Material gaps apply to material-bearing verbs.
     if (!MATERIAL_BEARING_VERBS.has(eventVerb(e))) {
       kept.push(ev);
       return;
     }
-    const gap = classifyEvent(e, index, resolved, policeUnverifiedCuries);
+    const gap = classifyEvent(e, index, resolved, policeUnverifiedCuries, materialTrackingMode);
     if (!gap) {
       kept.push(ev);
       return;

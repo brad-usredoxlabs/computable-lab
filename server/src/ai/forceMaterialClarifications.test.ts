@@ -234,4 +234,139 @@ describe('forceMaterialClarifications', () => {
     const { clarificationRequests } = forceMaterialClarifications(events);
     expect(clarificationRequests[0]!.id).toBe('material-2');
   });
+
+  // ===== instance-gap =====
+
+  it('surfaces instance-gap for ontology concept without instance ref when tracked', () => {
+    const events = [
+      addMaterial({
+        labwareId: 'lw-1',
+        wells: ['A3'],
+        material_ref: { kind: 'ontology', id: 'CHEBI:5001', label: 'fenofibrate' },
+      }),
+    ];
+    const { events: kept, clarificationRequests } = forceMaterialClarifications(events, {
+      materialTrackingMode: 'tracked',
+    });
+    expect(kept).toHaveLength(0);
+    expect(clarificationRequests).toHaveLength(1);
+    expect(clarificationRequests[0]).toMatchObject({
+      kind: 'material',
+      menuProvider: '/m',
+      query: 'fenofibrate',
+    });
+    expect(clarificationRequests[0]!.prompt).toContain('preparation or lot');
+    expect(clarificationRequests[0]!.prompt).toContain('fenofibrate');
+  });
+
+  it('surfaces instance-gap for record concept without instance ref when tracked', () => {
+    const events = [
+      addMaterial({
+        labwareId: 'lw-1',
+        wells: ['A3'],
+        material_ref: { kind: 'record', id: 'MAT-fenofibrate-3k9a', label: 'fenofibrate' },
+      }),
+    ];
+    const { events: kept, clarificationRequests } = forceMaterialClarifications(events, {
+      materialTrackingMode: 'tracked',
+    });
+    expect(kept).toHaveLength(0);
+    expect(clarificationRequests).toHaveLength(1);
+    expect(clarificationRequests[0]).toMatchObject({
+      kind: 'material',
+      menuProvider: '/m',
+      query: 'fenofibrate',
+    });
+  });
+
+  it('does NOT surface instance-gap when materialTrackingMode is relaxed', () => {
+    const events = [
+      addMaterial({
+        labwareId: 'lw-1',
+        wells: ['A3'],
+        material_ref: { kind: 'record', id: 'MAT-fenofibrate-3k9a', label: 'fenofibrate' },
+      }),
+    ];
+    // Default mode is relaxed — should fall through to needs-quantity.
+    const { events: kept, clarificationRequests } = forceMaterialClarifications(events);
+    expect(kept).toHaveLength(0);
+    expect(clarificationRequests).toHaveLength(1);
+    // needs-quantity, not instance-gap.
+    expect(clarificationRequests[0]).toMatchObject({ kind: 'parameter', menuProvider: 'choice' });
+    expect(clarificationRequests[0]!.prompt).toContain('volume and a concentration');
+  });
+
+  it('does NOT surface instance-gap when event already has material_instance_ref', () => {
+    const events = [
+      addMaterial({
+        labwareId: 'lw-1',
+        wells: ['A3'],
+        material_ref: { kind: 'ontology', id: 'CHEBI:5001', label: 'fenofibrate' },
+        material_instance_ref: { kind: 'record', id: 'MINST-001' },
+      }),
+    ];
+    const { events: kept, clarificationRequests } = forceMaterialClarifications(events, {
+      materialTrackingMode: 'tracked',
+    });
+    // hasTrustedSpecOrAliquot catches material_instance_ref first → trusted.
+    expect(kept).toHaveLength(1);
+    expect(clarificationRequests).toHaveLength(0);
+  });
+
+  // ===== capability-gap =====
+
+  it('surfaces capability-gap for mix with orbital_shaking >3000 rpm', () => {
+    const events = [
+      { event_type: 'mix', details: { labwareId: 'lw-1', mode: 'orbital_shaking', rpm: 5000 } },
+    ];
+    const { events: kept, clarificationRequests } = forceMaterialClarifications(events);
+    expect(kept).toHaveLength(0);
+    expect(clarificationRequests).toHaveLength(1);
+    expect(clarificationRequests[0]).toMatchObject({
+      kind: 'general',
+      menuProvider: 'choice',
+    });
+    expect(clarificationRequests[0]!.prompt).toContain('5000 rpm');
+    expect(clarificationRequests[0]!.prompt).toContain('No available instrument');
+  });
+
+  it('does NOT surface capability-gap for mix with orbital_shaking <=3000 rpm', () => {
+    const events = [
+      { event_type: 'mix', details: { labwareId: 'lw-1', mode: 'orbital_shaking', rpm: 3000 } },
+    ];
+    const { events: kept, clarificationRequests } = forceMaterialClarifications(events);
+    // Not a material-bearing verb and not >3000 rpm → kept as-is.
+    expect(kept).toHaveLength(1);
+    expect(clarificationRequests).toHaveLength(0);
+  });
+
+  it('does NOT surface capability-gap for mix without orbital_shaking mode', () => {
+    const events = [
+      { event_type: 'mix', details: { labwareId: 'lw-1', mode: 'vortex', rpm: 5000 } },
+    ];
+    const { events: kept, clarificationRequests } = forceMaterialClarifications(events);
+    expect(kept).toHaveLength(1);
+    expect(clarificationRequests).toHaveLength(0);
+  });
+
+  it('does NOT surface capability-gap for mix without rpm', () => {
+    const events = [
+      { event_type: 'mix', details: { labwareId: 'lw-1', mode: 'orbital_shaking' } },
+    ];
+    const { events: kept, clarificationRequests } = forceMaterialClarifications(events);
+    expect(kept).toHaveLength(1);
+    expect(clarificationRequests).toHaveLength(0);
+  });
+
+  it('capability-gap keeps non-mix events untouched', () => {
+    const events = [
+      { event_type: 'incubate', details: { labwareId: 'lw-1', durationMinutes: 30 } },
+      { event_type: 'mix', details: { labwareId: 'lw-1', mode: 'orbital_shaking', rpm: 5000 } },
+      { event_type: 'read', details: { labwareId: 'lw-1' } },
+    ];
+    const { events: kept, clarificationRequests } = forceMaterialClarifications(events);
+    expect(kept).toHaveLength(2);
+    expect(clarificationRequests).toHaveLength(1);
+    expect(clarificationRequests[0]).toMatchObject({ kind: 'general', menuProvider: 'choice' });
+  });
 });
