@@ -71,7 +71,9 @@ function matchBonus(term: string, label: string): number {
 }
 
 function tokens(value: string): string[] {
-  return value.toLowerCase().match(/[a-z0-9]+/g)?.filter((token) => token.length > 1) ?? [];
+  // Split camelCase boundaries first (MatLyLu → Mat Ly Lu), then split on non-alnum
+  const normalized = value.replace(/([a-z])([A-Z])/g, '$1 $2');
+  return normalized.toLowerCase().match(/[a-z0-9]+/g)?.filter((token) => token.length > 1) ?? [];
 }
 
 function acronym(value: string): string | undefined {
@@ -88,6 +90,11 @@ function hasLexicalSupport(term: string, label: string, definition?: string): bo
   const l = label.trim().toLowerCase();
   if (!t || !l) return false;
   if (l === t || l.startsWith(t) || l.includes(t) || t.includes(l)) return true;
+
+  // Try with hyphens/spaces stripped (mat-ly-lu → matlylu)
+  const tNaked = t.replace(/[-_.\s]+/g, '');
+  const lNaked = l.replace(/[-_.\s]+/g, '');
+  if (tNaked && lNaked && (lNaked.includes(tNaked) || tNaked.includes(lNaked))) return true;
 
   // Try singular/plural normalization (e.g. "cells" vs "cell")
   const tSingular = t.endsWith('s') ? t.slice(0, -1) : t;
