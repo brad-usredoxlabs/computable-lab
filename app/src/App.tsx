@@ -28,6 +28,7 @@ import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-
 import { ErrorBoundary } from './shell/ErrorBoundary'
 import { SelectionProvider } from './shared/context/SelectionContext'
 import { ThemeProvider } from './shared/shell'
+import { OpenTabsProvider } from './shared/shell/OpenTabsContext'
 import { useMentionNavigation } from './shared/taptab/slashMenu'
 import { Slot } from './extensions'
 import './shared/styles/tokens.css'
@@ -82,9 +83,10 @@ export function App() {
     <ErrorBoundary>
       <ThemeProvider>
         <SelectionProvider>
-          <BrowserRouter>
-            <MentionNavigator />
-            <Routes>
+          <OpenTabsProvider>
+            <BrowserRouter>
+              <MentionNavigator />
+              <Routes>
               {/* Phase 1: `/` redirects to `/projects` (WelcomePage subsumed
                   by the ProjectCollectionView). */}
               <Route path="/" element={<Navigate to="/projects" replace />} />
@@ -132,8 +134,9 @@ export function App() {
               <Route path="/settings" element={<DeferredRoute><SettingsRoute /></DeferredRoute>} />
               {/* Phase 7: retired legacy URLs do not redirect. */}
               <Route path="*" element={<NotFoundRoute />} />
-            </Routes>
-          </BrowserRouter>
+              </Routes>
+            </BrowserRouter>
+          </OpenTabsProvider>
         </SelectionProvider>
       </ThemeProvider>
     </ErrorBoundary>

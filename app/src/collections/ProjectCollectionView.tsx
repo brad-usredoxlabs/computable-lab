@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
+import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { apiClient } from '../shared/api/client'
 import type { RecordEnvelope } from '../types/kernel'
 import './ProjectCollectionView.css'
@@ -205,7 +206,7 @@ export function ProjectCollectionView({ embedded = false }: { embedded?: boolean
     <AppShell
       brand="Projects"
       layout="workspace"
-      topbarTabs={<div />}
+      topbarTabs={<WorkspaceTabStrip />}
       leftPane={collectionContent}
     />
   )

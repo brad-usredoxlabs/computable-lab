@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
+import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { apiClient } from '../shared/api/client'
 import type { RunListItem, RunsListResponse } from '../shared/api/client'
 import { quickCreateRun } from '../event-editor/create/quickCreateRun'
@@ -252,7 +253,7 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
     <AppShell
       brand="Runs"
       layout="workspace"
-      topbarTabs={<div />}
+      topbarTabs={<WorkspaceTabStrip />}
       leftPane={collectionContent}
     />
   )

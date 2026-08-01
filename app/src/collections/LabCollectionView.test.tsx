@@ -6,6 +6,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { ThemeProvider } from '../shared/shell'
+import { OpenTabsProvider } from '../shared/shell/OpenTabsContext'
 import { LabCollectionView } from './LabCollectionView'
 
 afterEach(() => {
@@ -15,7 +16,9 @@ afterEach(() => {
 function renderWithProviders(ui: React.ReactElement) {
   render(
     <MemoryRouter>
-      <ThemeProvider>{ui}</ThemeProvider>
+      <ThemeProvider>
+        <OpenTabsProvider>{ui}</OpenTabsProvider>
+      </ThemeProvider>
     </MemoryRouter>,
   )
 }
