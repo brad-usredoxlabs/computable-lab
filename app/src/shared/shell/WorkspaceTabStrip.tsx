@@ -13,8 +13,10 @@
  * Spec reference: specs/computable-lab-ui-specification.md §4.2
  */
 
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useOpenTabs } from './OpenTabsContext'
+import { SplashPage } from './SplashPage'
 import { entityTabType, type WorkspaceTab } from '../../event-editor/workspace/types'
 import './WorkspaceTabStrip.css'
 
@@ -28,6 +30,7 @@ const TYPE_LABELS: Record<string, string> = {
 export function WorkspaceTabStrip() {
   const { state, closeTab, activateTab } = useOpenTabs()
   const navigate = useNavigate()
+  const [splashOpen, setSplashOpen] = useState(false)
 
   return (
     <div className="workspace-tab-strip" role="tablist" data-testid="workspace-tab-strip">
@@ -81,14 +84,20 @@ export function WorkspaceTabStrip() {
           </div>
         )
       })}
-      <button
-        className="workspace-tab__add"
-        type="button"
-        aria-label="Open new tab"
-        data-testid="workspace-tab-add"
-      >
-        +
-      </button>
+      <div className="workspace-tab__add-wrap">
+        <button
+          className="workspace-tab__add"
+          type="button"
+          aria-label="Open new tab"
+          data-testid="workspace-tab-add"
+          onClick={() => setSplashOpen(v => !v)}
+        >
+          +
+        </button>
+        {splashOpen ? (
+          <SplashPage onDismiss={() => setSplashOpen(false)} />
+        ) : null}
+      </div>
     </div>
   )
 }
