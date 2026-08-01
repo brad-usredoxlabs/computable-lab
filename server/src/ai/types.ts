@@ -557,6 +557,22 @@ export interface AgentResult {
   instrumentApplianceJobs?: InstrumentApplianceJob[];
   /** Ontology terms bound during draft compile; draftOnly entries materialize on human accept. */
   ontologyBindings?: DraftOntologyBinding[];
+  /** Semantic interpretation of the parsed prompt — operations, materials, parameters. */
+  interpretation?: {
+    operations: Array<{
+      type: string
+      target?: string
+      material?: string
+      parameters?: Record<string, unknown>
+      resolved: boolean
+    }>
+  };
+  /** Proposed event-graph changes for the Changes panel review. */
+  changes?: Array<{
+    op: 'add' | 'modify' | 'remove'
+    description: string
+    eventId?: string
+  }>;
 }
 
 /**

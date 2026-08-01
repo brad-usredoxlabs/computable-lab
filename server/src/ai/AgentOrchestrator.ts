@@ -376,9 +376,19 @@ const FORCED_DRAFT_TOOL_INSTRUCTION = [
   '- Every well-targeted event\'s details MUST include labwareId (an existing labware id from the editor context) and wells (e.g. ["A1"]). An event without them cannot be rendered or executed.',
   '- If the requested operation is simple labware/deck setup, include labwareRequirements with classCurie and deckSlot. Use labwareAdditions only for concrete known definitions.',
   '- Do not ask which vendor/catalog/plate subtype for generic labware such as a 96-well plate; emit a generic labwareRequirement and let the user refine it later.',
+  '- For operations, use canonical operation names when possible: dispense, transfer, mix, shake, incubate, centrifuge, wash, read, seed, harvest, etc. The system normalizes verbs automatically.',
 ].join('\n');
 
 type ChatbotCompileResult = Awaited<ReturnType<typeof runChatbotCompile>>;
+
+function summarizeEvent(e: PlateEventProposal): string {
+  const verb = e.verb ?? e.event_type ?? 'operation';
+  const details = e.details as Record<string, unknown>;
+  const wells = Array.isArray(details?.wells) ? (details.wells as string[]).join(', ') : '';
+  const material = typeof details?.material === 'string' ? details.material : '';
+  const volume = details?.volume ? ` ${details.volume}` : '';
+  return `${verb}${material ? ` ${material}` : ''}${volume}${wells ? ` → ${wells}` : ''}`;
+}
 
 function compileResultToAgentResult(
   compileResult: ChatbotCompileResult,
@@ -426,6 +436,29 @@ function compileResultToAgentResult(
 
   const legacyClarification = legacyClarificationFromRequests(clarificationRequests);
 
+  // Build interpretation from compiled events
+  const interpretation = {
+    operations: events.map((e) => ({
+      type: e.event_type ?? e.verb ?? 'unknown',
+      ...(e.details && typeof e.details === 'object' && 'wells' in e.details
+        ? { target: Array.isArray((e.details as Record<string, unknown>).wells)
+            ? ((e.details as Record<string, unknown>).wells as string[]).join(', ')
+            : String((e.details as Record<string, unknown>).wells) }
+        : {}),
+      ...(e.details && typeof e.details === 'object' && 'material' in e.details
+        ? { material: String((e.details as Record<string, unknown>).material) }
+        : {}),
+      resolved: true,
+    })),
+  };
+
+  // Build changes list from compiled events
+  const changes = events.map((e) => ({
+    op: 'add' as const,
+    description: summarizeEvent(e),
+    ...(e.eventId ? { eventId: e.eventId } : {}),
+  }));
+
   return {
     success: true,
     events,
@@ -437,6 +470,8 @@ function compileResultToAgentResult(
     ...(compileResult.terminalArtifacts.executionScalePlan ? { executionScalePlan: compileResult.terminalArtifacts.executionScalePlan } : {}),
     ...(compileResult.terminalArtifacts.instrumentApplianceJobs?.length ? { instrumentApplianceJobs: compileResult.terminalArtifacts.instrumentApplianceJobs } : {}),
     ...(compileResult.ontologyBindings?.length ? { ontologyBindings: compileResult.ontologyBindings } : {}),
+    interpretation,
+    ...(changes.length > 0 ? { changes } : {}),
     usage: {
       ...usage,
       totalTokens: usage.promptTokens + usage.completionTokens,
