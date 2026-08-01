@@ -41,6 +41,9 @@ import { RecordCreatePanel } from '../create/RecordCreatePanel'
 import { RecordEditPanel } from '../create/RecordEditPanel'
 import { ExecutionTabShell } from '../execution/ExecutionTabShell'
 import { RightPane } from '../right-pane/RightPane'
+import { ProjectCollectionView } from '../../collections/ProjectCollectionView'
+import { RunCollectionView } from '../../collections/RunCollectionView'
+import { LabCollectionView } from '../../collections/LabCollectionView'
 import { ProtocolSelectionProvider } from '../protocol/ProtocolSelectionContext'
 import { ProtocolPreviewBridge } from '../protocol/ProtocolPreviewBridge'
 import type { WorkspaceTab } from '../workspace/types'
@@ -127,17 +130,32 @@ function WorkspaceShellHost({
     ws.openTab({ id, kind: 'project-details', title: 'Project' })
   }, [studyId, ws.ready, ws.state.tabs.length, ws.openTab])
 
-  // When the active tab is a deck tab with a runId, auto-switch the right
-  // pane to Protocol mode so the user immediately sees protocol steps
-  // alongside the event graph canvas. This is the "execute mode" entry —
-  // the canvas shows the event graph, the right pane shows protocol chips.
+  // When the active tab becomes a deck tab with a runId, auto-switch the
+  // right pane to Protocol mode so the user immediately sees protocol steps
+  // alongside the event graph canvas. Only fire once per tab activation so
+  // that the user can still manually switch the right pane (AI / Find etc.)
+  // and their choice is respected.
+  const deckWithRunRef = useRef<string | null>(null)
   useEffect(() => {
     if (!ws.ready) return
     const tab = findActiveTab(ws.state.tabs, ws.state.activeTabId)
     if (tab?.kind === 'deck' && tab.runId) {
-      ws.setRightPaneMode('protocol')
+      // Only auto-switch if this tab is newly active (not already handled).
+      // When the user manually switches away from Protocol and back to
+      // another tab, we still remember we auto-switched for this deck
+      // tab — their manual choice wins until they switch to a different
+      // left-pane tab.
+      if (deckWithRunRef.current !== tab.id) {
+        deckWithRunRef.current = tab.id
+        ws.setRightPaneMode('protocol')
+      }
+    } else {
+      // Reset when the active tab is no longer a deck+runId combo.
+      if (tab) {
+        deckWithRunRef.current = null
+      }
     }
-  }, [ws.ready, ws.state.tabs, ws.state.activeTabId, ws.setRightPaneMode])
+  }, [ws.ready, ws.state.activeTabId, ws.state.tabs, ws.setRightPaneMode])
 
   const activeTab = findActiveTab(ws.state.tabs, ws.state.activeTabId)
 
@@ -285,6 +303,15 @@ function LeftPane({ activeTab, studyId }: LeftPaneProps) {
         tab={activeTab}
       />
     )
+  }
+  if (activeTab.kind === 'collection') {
+    switch (activeTab.collection) {
+      case 'projects': return <ProjectCollectionView embedded />
+      case 'runs': return <RunCollectionView embedded />
+      case 'lab': return <LabCollectionView embedded />
+      case 'claims': return <div className="workspace-empty">Claims collection — coming soon</div>
+      default: return null
+    }
   }
   return <Viewer tab={activeTab} onSendSelection={handleSendSelection} />
 }
