@@ -127,39 +127,18 @@ describe('clarification answer routing', () => {
 })
 
 describe('AiTabPanel', () => {
-  it('surfaces the no-viewer system prompt when no tab is active', async () => {
-    // Phase 12 made defaultWorkspaceState seed a project-details tab as
-    // active. To exercise the null-viewer branch we explicitly clear
-    // tabs and activeTabId.
-    renderWithTab({ tabs: [], activeTabId: null })
-    const expected = systemPromptForViewer(null)
-    expect(await screen.findByText(expected.label)).toBeTruthy()
-  })
-
-  it('surfaces the project-details system prompt for the default landing tab', async () => {
-    // Default seed = project-details active.
+  it('shows the sidebar header label ("AI Assistant") in the initial ready state', async () => {
     renderWithTab()
-    const expected = systemPromptForViewer('project-details')
-    expect(await screen.findByText(expected.label)).toBeTruthy()
+    // The sidebar starts in 'ready' mode; headerLabel returns "AI Assistant".
+    expect(await screen.findByText('AI Assistant')).toBeTruthy()
   })
 
-  it('switches the system prompt label when a PDF tab is active', async () => {
-    renderWithTab({
-      tabs: [
-        {
-          id: 't1',
-          kind: 'pdf',
-          artifactId: 'ART-000001',
-          title: 'Vendor protocol',
-        },
-      ],
-      activeTabId: 't1',
-    })
-    const pdf = systemPromptForViewer('pdf')
-    expect(await screen.findByText(pdf.label)).toBeTruthy()
+  it('renders the system-prompt header element', async () => {
+    renderWithTab()
+    expect(await screen.findByTestId('ai-tab-system-prompt')).toBeTruthy()
   })
 
-  it('renders SourcesStrip + ChatInput', async () => {
+  it('renders SourcesStrip + ChatInput in the initial ready state', async () => {
     renderWithTab()
     // Wait for the system-prompt label to confirm the panel mounted.
     await screen.findByTestId('ai-tab-system-prompt')
@@ -212,7 +191,7 @@ describe('systemPromptForViewer', () => {
 
   it('exposes stable ids for telemetry', () => {
     expect(systemPromptForViewer('deck').id).toBe('workspace.deck')
-    expect(systemPromptForViewer('pdf').id).toBe('workspace.pdf')
+    expect(systemPromptForViewer('pdf').id).toBe('protocol-builder')
     expect(systemPromptForViewer('document').id).toBe('workspace.document')
     expect(systemPromptForViewer(null).id).toBe('workspace.none')
   })

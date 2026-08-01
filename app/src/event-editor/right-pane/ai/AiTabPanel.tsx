@@ -12,7 +12,7 @@
  * fork on it without bumping the API.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useReducer, useState } from 'react'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
 import { useOptionalEventEditor } from '../../EventEditorContext'
 import { apiClient, type AiWarmStatus } from '../../../shared/api/client'
@@ -31,6 +31,7 @@ import { buildPreviewFromDraft } from './draftPreview'
 import type { AssistDraftResult } from './assistStream'
 import { AddSourceModal } from './AddSourceModal'
 import { ProtocolBuilderOrchestrator } from '../../protocol-builder'
+import { sidebarReducer, initialSidebarState, isChatEnabled, headerLabel } from './sidebarState'
 import './ai.css'
 
 export function clarificationAnswerPrompt(
@@ -295,6 +296,13 @@ export function AiTabPanel() {
         ...(graphLemurIngest ? { ingest: graphLemurIngest } : {}),
         ...(revisionHistory ? { revisionHistory } : {}),
       })
+      // Transition sidebar state based on draft result
+      const draftId = `draft-${Date.now()}`
+      if (result.clarificationRequests && result.clarificationRequests.length > 0) {
+        sidebarDispatch({ type: 'clarifications-needed', draftId, questions: result.clarificationRequests })
+      } else {
+        sidebarDispatch({ type: 'draft-ready', draftId, interpretation: { operations: [] }, changes: [], warnings: [] })
+      }
     },
     [activeDeckScope, editor],
   )
@@ -377,10 +385,15 @@ export function AiTabPanel() {
   // inconsistently. Reset when the user types a fresh prompt.
   const resolvedClarificationsRef = useRef<Map<string, AiClarificationAnswer>>(new Map())
 
+  // Sidebar state machine: drives UI transitions (ready → interpreting → clarifying → reviewing).
+  // Coexists alongside the chat reducer — it adds state-driven UI behavior on top of the existing chat.
+  const [sidebar, sidebarDispatch] = useReducer(sidebarReducer, initialSidebarState)
+
   const handleSend = useCallback(
     async (text: string) => {
       setPrefill(undefined)
       resolvedClarificationsRef.current.clear()
+      sidebarDispatch({ type: 'start-interpreting', prompt: text })
       await chat.send(text, { enableThinking: false })
     },
     [chat],
@@ -393,6 +406,8 @@ export function AiTabPanel() {
         resolvedClarificationsRef.current.set(refId ?? a.requestId, a)
       }
       const all = [...resolvedClarificationsRef.current.values()]
+      const answerMap = Object.fromEntries(answers.map((a) => [a.requestId, a]))
+      sidebarDispatch({ type: 'submit-answers', answers: answerMap })
       await chat.send(clarificationAnswersPrompt(answers, requests), {
         clarificationAnswers: all,
         enableThinking: false,
@@ -400,6 +415,12 @@ export function AiTabPanel() {
     },
     [chat],
   )
+
+  const handleCancelDraft = useCallback(() => {
+    sidebarDispatch({ type: 'cancel' })
+    resolvedClarificationsRef.current.clear()
+    editor?.actions.clearPreview()
+  }, [editor])
 
   const handleSourceIngested = useCallback(
     (
@@ -460,7 +481,7 @@ export function AiTabPanel() {
           className="ai-tab__system-prompt-kind"
           data-testid="ai-tab-system-prompt"
         >
-          {systemPrompt.label}
+          {headerLabel(sidebar)}
         </span>
         {warm ? <WarmIndicator status={warm.status} /> : null}
       </section>
@@ -578,16 +599,31 @@ export function AiTabPanel() {
         </section>
       ) : null}
 
-      <section className="ai-tab__section ai-tab__section--input">
-        <ChatInput
-          isStreaming={chat.isStreaming}
-          onSend={handleSend}
-          onStop={chat.stop}
-          prefill={prefill}
-          sendLabel={previewActive ? 'Revise' : 'Send'}
-          {...(previewActive ? { placeholder: 'Describe a revision to the proposed draft…' } : {})}
-        />
-      </section>
+      {isChatEnabled(sidebar) ? (
+        <section className="ai-tab__section ai-tab__section--input">
+          <ChatInput
+            isStreaming={chat.isStreaming}
+            onSend={handleSend}
+            onStop={chat.stop}
+            prefill={prefill}
+            sendLabel={previewActive ? 'Revise' : 'Send'}
+            {...(previewActive ? { placeholder: 'Describe a revision to the proposed draft…' } : {})}
+          />
+        </section>
+      ) : sidebar.mode === 'clarifying' ? (
+        <section className="ai-tab__section ai-tab__section--input-disabled">
+          <p className="ai-tab__input-disabled-text">
+            Answer the questions above to continue.
+          </p>
+          <button
+            type="button"
+            className="ai-tab__input-cancel"
+            onClick={handleCancelDraft}
+          >
+            Cancel this draft and start a new prompt
+          </button>
+        </section>
+      ) : null}
 
       <AddSourceModal
         isOpen={addSourceOpen}
