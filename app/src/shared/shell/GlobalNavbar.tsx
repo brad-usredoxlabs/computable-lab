@@ -14,6 +14,8 @@ import { SettingsMenuButton } from '../../event-editor/projects/SettingsMenuButt
 import { UserSwitcher } from './UserSwitcher'
 import { GlobalSearchBar } from './GlobalSearchBar'
 import { CreateMenu } from './CreateMenu'
+import { useOptionalOpenTabs } from './OpenTabsContext'
+import { collectionTabId, type WorkspaceTab } from '../../event-editor/workspace/types'
 import './GlobalNavbar.css'
 
 type PrimaryDestination = 'projects' | 'runs' | 'claims' | 'lab'
@@ -28,12 +30,29 @@ const DESTINATIONS: { id: PrimaryDestination; label: string; path: string }[] = 
 export function GlobalNavbar() {
   const navigate = useNavigate()
   const location = useLocation()
+  const openTabs = useOptionalOpenTabs()
 
   // Determine active destination from URL. /project/:studyId also
   // counts as "projects" active since it's a project workspace.
   const activeDest = DESTINATIONS.find((d) =>
     location.pathname === d.path || location.pathname.startsWith(d.path + '/'),
   ) ?? (location.pathname.startsWith('/project/') ? DESTINATIONS[0] : null)
+
+  const handleDestination = (dest: { id: string; path: string; label: string }) => {
+    if (openTabs) {
+      // Inside workspace — open as a collection tab
+      const tab: WorkspaceTab = {
+        id: collectionTabId(dest.id),
+        kind: 'collection',
+        collection: dest.id as 'projects' | 'runs' | 'claims' | 'lab',
+        title: dest.label,
+      }
+      openTabs.openTab(tab, true)
+    } else {
+      // Standalone — navigate normally
+      navigate(dest.path)
+    }
+  }
 
   return (
     <div className="global-navbar" data-testid="global-navbar">
@@ -55,7 +74,7 @@ export function GlobalNavbar() {
                 : 'global-navbar__dest'
             }
             data-testid={`global-nav-${dest.id}`}
-            onClick={() => navigate(dest.path)}
+            onClick={() => handleDestination(dest)}
           >
             {dest.label}
           </button>
