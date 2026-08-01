@@ -443,6 +443,27 @@ export const transferExpander: BiologyVerbExpander = {
   },
 };
 
+export const shakeExpander: BiologyVerbExpander = {
+  verb: 'shake',
+  expand(input) {
+    const { params } = input;
+    return [{
+      eventId: makeEventId('shake'),
+      event_type: 'mix',
+      details: {
+        mode: 'orbital_shaking',
+        rpm: (params.rpm as number) ?? 600,
+        duration: (params.duration as string) ?? 'PT5M',
+        ...(params.temperature !== undefined
+          ? { temperature: params.temperature as number }
+          : {}),
+      },
+      ...(params.labware_id ? { labwareId: params.labware_id as string } : {}),
+      t_offset: (params.duration as string) ?? 'PT5M',
+    }];
+  },
+};
+
 // Register all expanders at module import time
 registerVerbExpander(seedExpander);
 registerVerbExpander(incubateExpander);
@@ -461,3 +482,4 @@ registerVerbExpander(addMaterialExpander);
 registerVerbExpander(createContainerExpander);
 registerVerbExpander(readExpander);
 registerVerbExpander(transferExpander);
+registerVerbExpander(shakeExpander);

@@ -28,6 +28,7 @@ import {
   quenchExpander,
   labelExpander,
   transfectExpander,
+  shakeExpander,
 } from './verbs/simpleVerbs.js';
 
 // Allowed event types
@@ -120,6 +121,7 @@ describe('BiologyVerbExpander verb expanders', () => {
     quench: quenchExpander,
     label: labelExpander,
     transfect: transfectExpander,
+    shake: shakeExpander,
   };
 
   for (const [verb, expander] of Object.entries(expanderMap)) {
@@ -268,5 +270,24 @@ describe('BiologyVerbExpander verb expanders', () => {
       expect(events[1].event_type).toBe('incubate');
       expect(events[1].details.duration).toBe('PT24H');
     });
+  });
+});
+
+
+describe('shake expander', () => {
+  it('lowers shake to mix event with orbital shaking parameters', () => {
+    const events = shakeExpander.expand({
+      verb: 'shake',
+      params: { rpm: 600, duration: 'PT5M', labware_id: 'lab-1' },
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0].event_type).toBe('mix');
+    expect(events[0].details).toMatchObject({ rpm: 600, duration: 'PT5M', mode: 'orbital_shaking' });
+    expect(events[0].labwareId).toBe('lab-1');
+  });
+
+  it('uses default rpm and duration when not provided', () => {
+    const events = shakeExpander.expand({ verb: 'shake', params: {} });
+    expect(events[0].details).toMatchObject({ rpm: 600, duration: 'PT5M' });
   });
 });
