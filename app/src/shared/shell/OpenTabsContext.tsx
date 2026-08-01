@@ -128,6 +128,8 @@ function defaultRightPaneMode(tab: WorkspaceTab): WorkspaceRightPaneMode {
       return 'ai'
     case 'record-edit':
       return 'ai'
+    case 'collection':
+      return 'find'
     default: {
       const _exhaustive: never = tab
       return _exhaustive ?? 'ai'

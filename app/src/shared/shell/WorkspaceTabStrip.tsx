@@ -119,6 +119,8 @@ function tabPath(tab: WorkspaceTab): string | null {
     case 'record-create':
     case 'record-edit':
       return null
+    case 'collection':
+      return `/${tab.collection}`
     default: {
       const _exhaustive: never = tab
       return _exhaustive ?? null

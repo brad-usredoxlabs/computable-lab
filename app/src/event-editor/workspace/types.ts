@@ -101,6 +101,13 @@ export type WorkspaceTab =
       entityType: string
       title: string
     }
+  | {
+      id: string
+      kind: 'collection'
+      /** Which collection: projects, runs, claims, lab */
+      collection: 'projects' | 'runs' | 'claims' | 'lab'
+      title: string
+    }
 
 /**
  * Stable id for a creation tab so re-clicking "New …" focuses the open
@@ -150,6 +157,11 @@ export function labEntityTabId(recordId: string): string {
   return `lab:${recordId}`
 }
 
+/** Stable id for a collection tab. */
+export function collectionTabId(collection: string): string {
+  return `collection:${collection}`
+}
+
 /** The primary entity type of a workspace tab, for color-coding and
  *  right-pane context selection. Returns null for viewer-only tabs
  *  (deck, pdf, document) that don't represent a primary entity. */
@@ -172,6 +184,8 @@ export function entityTabType(tab: WorkspaceTab): EntityTabType | null {
     case 'document':
     case 'project-details':
     case 'record-create':
+      return null
+    case 'collection':
       return null
     default: {
       const _exhaustive: never = tab

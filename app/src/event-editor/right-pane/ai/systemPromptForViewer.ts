@@ -19,7 +19,7 @@ import type { WorkspaceTab, WorkspaceViewerKind } from '../../workspace/types'
  *  the null case (no viewer is open, ask the agent to navigate). Phase 1
  *  added `execution`, which provides execution-specific context for
  *  real-time guidance during protocol execution. */
-type SystemPromptKind = WorkspaceViewerKind | 'project-details' | 'execution' | 'project' | 'run' | 'claim' | 'lab-entity' | null
+type SystemPromptKind = WorkspaceViewerKind | 'project-details' | 'execution' | 'project' | 'run' | 'claim' | 'lab-entity' | 'collection' | null
 
 /** Convenience: get the SystemPromptKind from a WorkspaceTab (or null). */
 export function systemPromptKindForTab(
@@ -36,7 +36,8 @@ export function systemPromptKindForTab(
     tab.kind === 'project' ||
     tab.kind === 'run' ||
     tab.kind === 'claim' ||
-    tab.kind === 'lab-entity'
+    tab.kind === 'lab-entity' ||
+    tab.kind === 'collection'
   ) {
     return null
   }
@@ -171,6 +172,8 @@ export function systemPromptForViewer(
       return CLAIM
     case 'lab-entity':
       return LAB_ENTITY
+    case 'collection':
+      return NO_VIEWER
     case null:
       return NO_VIEWER
     default: {
