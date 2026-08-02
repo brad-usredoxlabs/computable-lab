@@ -36,6 +36,8 @@ import {
   type WorkspaceTab,
 } from './types'
 import { workspaceReducer, type WorkspaceAction } from './reducer'
+import { useOptionalOpenTabs } from '../../shared/shell/OpenTabsContext'
+import { workspaceTabsToOpenTabs } from './rehydrateTabs'
 
 export interface WorkspaceContextValue {
   /** The current state for the active study. */
@@ -99,6 +101,11 @@ export function WorkspaceProvider({
   )
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Phase 4.2: additive rehydration target — surfaces persisted per-study
+  // sub-tabs in the top-level OpenTabs strip. Present because WorkspaceProvider
+  // always mounts inside the root <OpenTabsProvider>; null only in tests that
+  // render WorkspaceProvider in isolation.
+  const openTabs = useOptionalOpenTabs()
 
   // Refs so the save effect can read the latest functions without
   // re-subscribing every render.
@@ -106,6 +113,10 @@ export function WorkspaceProvider({
   const saveFnRef = useRef(saveFn)
   loadFnRef.current = loadFn
   saveFnRef.current = saveFn
+  // Ref for the (state-dependent identity) OpenTabs context so `load` can stay
+  // memoized on [studyId] without being recreated/re-fired every tab change.
+  const openTabsRef = useRef(openTabs)
+  openTabsRef.current = openTabs
 
   // Track whether the current state was just loaded from the server. We
   // suppress the save effect immediately after a load so we don't echo
@@ -126,6 +137,16 @@ export function WorkspaceProvider({
       const next = result.state as WorkspaceState
       justLoadedRef.current = true
       dispatch({ type: 'replace', state: next })
+      // Phase 4.2 — additive rehydration: mirror the persisted per-study
+      // sub-tabs into the top-level OpenTabs strip (activate=false so we
+      // don't steal the landing focus). workspace.yaml is left untouched; the
+      // mapping is idempotent (openTab replaces an existing tab by id).
+      const openTabsCtx = openTabsRef.current
+      if (openTabsCtx && next.tabs.length > 0) {
+        for (const t of workspaceTabsToOpenTabs(next.tabs)) {
+          openTabsCtx.openTab(t, false)
+        }
+      }
       setReady(true)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
