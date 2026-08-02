@@ -53,6 +53,7 @@ export function Viewer({ tab, onSendSelection }: ViewerProps) {
     case 'claim':
     case 'lab-entity':
     case 'collection':
+    case 'splash':
       // ProjectWorkspacePage's LeftPane renders these kinds directly
       // (ProjectDetailsView / RecordCreatePanel / RecordEditPanel / ExecutionTabShell)
       // and doesn't call Viewer; these arms exist so a future caller can't crash by

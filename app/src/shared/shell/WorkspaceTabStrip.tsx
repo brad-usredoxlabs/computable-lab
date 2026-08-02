@@ -13,11 +13,9 @@
  * Spec reference: specs/computable-lab-ui-specification.md §4.2
  */
 
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useOpenTabs } from './OpenTabsContext'
-import { SplashPage } from './SplashPage'
-import { entityTabType, type WorkspaceTab } from '../../event-editor/workspace/types'
+import { entityTabType, splashTabId, type WorkspaceTab } from '../../event-editor/workspace/types'
 import './WorkspaceTabStrip.css'
 
 const TYPE_LABELS: Record<string, string> = {
@@ -28,9 +26,14 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 export function WorkspaceTabStrip() {
-  const { state, closeTab, activateTab } = useOpenTabs()
+  const { state, closeTab, activateTab, openTab } = useOpenTabs()
   const navigate = useNavigate()
-  const [splashOpen, setSplashOpen] = useState(false)
+
+  const handleAddTab = () => {
+    const tab: WorkspaceTab = { id: splashTabId(), kind: 'splash', title: 'New Tab' }
+    openTab(tab, true)
+    navigate('/splash')
+  }
 
   return (
     <div className="workspace-tab-strip" role="tablist" data-testid="workspace-tab-strip">
@@ -92,13 +95,10 @@ export function WorkspaceTabStrip() {
           type="button"
           aria-label="Open new tab"
           data-testid="workspace-tab-add"
-          onClick={() => setSplashOpen(v => !v)}
+          onClick={() => handleAddTab()}
         >
           +
         </button>
-        {splashOpen ? (
-          <SplashPage onDismiss={() => setSplashOpen(false)} />
-        ) : null}
       </div>
     </div>
   )
@@ -109,7 +109,7 @@ export function WorkspaceTabStrip() {
  *  Viewer tabs (deck/pdf/document/project-details/record-create/record-edit)
  *  are within-project tabs that don't have standalone routes — they're
  *  rendered inside the project workspace, so we don't navigate for them. */
-function tabPath(tab: WorkspaceTab): string | null {
+export function tabPath(tab: WorkspaceTab): string | null {
   switch (tab.kind) {
     case 'project':
       return `/project/${tab.studyId}`
@@ -132,6 +132,8 @@ function tabPath(tab: WorkspaceTab): string | null {
       return null
     case 'collection':
       return `/${tab.collection}`
+    case 'splash':
+      return '/splash'
     default: {
       const _exhaustive: never = tab
       return _exhaustive ?? null

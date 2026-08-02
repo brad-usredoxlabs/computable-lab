@@ -108,6 +108,11 @@ export type WorkspaceTab =
       collection: 'projects' | 'runs' | 'claims' | 'lab'
       title: string
     }
+  | {
+      id: string
+      kind: 'splash'
+      title: string
+    }
 
 /**
  * Stable id for a creation tab so re-clicking "New …" focuses the open
@@ -162,6 +167,11 @@ export function collectionTabId(collection: string): string {
   return `collection:${collection}`
 }
 
+/** Stable id for the splash (new-tab launcher) tab. One per open splash. */
+export function splashTabId(): string {
+  return `splash:${Date.now()}`
+}
+
 /** The primary entity type of a workspace tab, for color-coding and
  *  right-pane context selection. Returns null for viewer-only tabs
  *  (deck, pdf, document) that don't represent a primary entity. */
@@ -186,6 +196,7 @@ export function entityTabType(tab: WorkspaceTab): EntityTabType | null {
     case 'record-create':
       return null
     case 'collection':
+    case 'splash':
       return null
     default: {
       const _exhaustive: never = tab

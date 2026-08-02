@@ -37,7 +37,8 @@ export function systemPromptKindForTab(
     tab.kind === 'run' ||
     tab.kind === 'claim' ||
     tab.kind === 'lab-entity' ||
-    tab.kind === 'collection'
+    tab.kind === 'collection' ||
+    tab.kind === 'splash'
   ) {
     return null
   }

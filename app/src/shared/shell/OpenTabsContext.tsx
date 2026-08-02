@@ -129,6 +129,7 @@ function defaultRightPaneMode(tab: WorkspaceTab): WorkspaceRightPaneMode {
     case 'record-edit':
       return 'ai'
     case 'collection':
+    case 'splash':
       return 'find'
     default: {
       const _exhaustive: never = tab

@@ -39,6 +39,7 @@ export function ViewerToolbar({ tab }: ViewerToolbarProps) {
     case 'claim':
     case 'lab-entity':
     case 'collection':
+    case 'splash':
       // These surfaces carry their own headers inside the viewer body —
       // no per-surface toolbar.
       return null

@@ -50,6 +50,8 @@ const LabCollectionView = lazy(async () => import('./collections/LabCollectionVi
 const ClaimWorkspace = lazy(async () => import('./claims/ClaimWorkspace').then((m) => ({ default: m.ClaimWorkspace })))
 // Phase 8: Lab entity workspace
 const LabEntityWorkspace = lazy(async () => import('./lab/LabEntityWorkspace').then((m) => ({ default: m.LabEntityWorkspace })))
+const SplashRoute = lazy(async () => import('./shared/shell/SplashRoute').then((m) => ({ default: m.SplashRoute })))
+const HomeRedirect = lazy(async () => import('./shared/shell/HomeRedirect').then((m) => ({ default: m.HomeRedirect })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -89,7 +91,7 @@ export function App() {
               <Routes>
               {/* Phase 1: `/` redirects to `/projects` (WelcomePage subsumed
                   by the ProjectCollectionView). */}
-              <Route path="/" element={<Navigate to="/projects" replace />} />
+              <Route path="/" element={<DeferredRoute><HomeRedirect /></DeferredRoute>} />
 
               {/* Phase 1: collection views */}
               <Route path="/projects" element={<DeferredRoute><ProjectCollectionView /></DeferredRoute>} />
@@ -99,6 +101,7 @@ export function App() {
               <Route path="/lab" element={<DeferredRoute><LabCollectionView /></DeferredRoute>} />
               <Route path="/lab/:category" element={<DeferredRoute><LabCollectionView /></DeferredRoute>} />
               <Route path="/lab/:category/:entityId" element={<DeferredRoute><LabEntityWorkspace /></DeferredRoute>} />
+              <Route path="/splash" element={<DeferredRoute><SplashRoute /></DeferredRoute>} />
 
               {/* Creation-entry-points spec §4.1: project creation needs a
                   home before any workspace exists. TapTab-first surface;

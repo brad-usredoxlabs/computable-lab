@@ -1,14 +1,15 @@
 /**
- * SplashPage — new-tab landing surface shown when clicking "+" in the tab strip.
- *
- * Shows top-level nav chips (Projects, Runs, Lab, Claims) and a searchable
- * list of recently opened items as chips.
+ * SplashPage — new-tab landing surface. Fills the main window of a tab,
+ * keeps GlobalNavbar + the tab strip above it (via AppShell workspace
+ * layout), and provides breadcrumbs to steer the tab anywhere.
  */
-
-import { useState, type KeyboardEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useOpenTabs } from './OpenTabsContext'
-import { collectionTabId, entityTabType, type WorkspaceTab } from '../../event-editor/workspace/types'
+import { useOptionalOpenTabs } from './OpenTabsContext'
+import {
+  runTabId, collectionTabId,
+} from '../../event-editor/workspace/types'
+import { quickCreateRun } from '../../event-editor/create/quickCreateRun'
+import { SCRATCH_STUDY_ID } from '../../event-editor/legacyRouteResolution'
 import './SplashPage.css'
 
 const COLLECTIONS = [
@@ -18,137 +19,89 @@ const COLLECTIONS = [
   { id: 'claims', label: 'Claims' },
 ] as const
 
-export interface SplashPageProps {
-  onDismiss: () => void
-}
-
-export function SplashPage({ onDismiss }: SplashPageProps) {
+export function SplashPage() {
   const navigate = useNavigate()
-  const openTabs = useOpenTabs()
-  const [query, setQuery] = useState('')
+  const openTabs = useOptionalOpenTabs()
 
-  // Recent items: the current open tabs are the "recent" items
-  // (they persist in localStorage via OpenTabsContext)
-  const recent = openTabs.state.tabs
-    .map((t) => t.tab)
-    .filter((tab) => {
-      if (!query.trim()) return true
-      return tab.title.toLowerCase().includes(query.trim().toLowerCase())
-    })
-
-  const handleOpenCollection = (collectionId: string) => {
-    const tab: WorkspaceTab = {
-      id: collectionTabId(collectionId),
-      kind: 'collection',
-      collection: collectionId as 'projects' | 'runs' | 'claims' | 'lab',
-      title: collectionId.charAt(0).toUpperCase() + collectionId.slice(1),
+  const handleNewRun = async () => {
+    try {
+      const { recordId } = await quickCreateRun({ studyId: SCRATCH_STUDY_ID })
+      openTabs?.openTab({
+        id: runTabId(recordId), kind: 'run', runId: recordId, title: 'New Run',
+      }, true)
+      navigate(`/runs/${recordId}`)
+    } catch (err) {
+      console.error('Failed to create run:', err)
     }
-    openTabs.openTab(tab, true)
-    navigate(`/${collectionId}`)
-    onDismiss()
   }
 
-  const handleOpenEntity = (tab: WorkspaceTab) => {
-    openTabs.activateTab(tab.id)
-    // Navigate to the tab's route
-    switch (tab.kind) {
-      case 'project': navigate(`/project/${tab.studyId}`); break
-      case 'run': navigate(`/runs/${tab.runId}`); break
-      case 'claim': navigate(`/claims/${tab.claimId}`); break
-      case 'collection': navigate(`/${tab.collection}`); break
-    }
-    onDismiss()
-  }
-
-  const handleCreateNew = (type: string) => {
-    onDismiss()
-    if (type === 'study') navigate('/create/study')
-    else if (type === 'run') navigate('/runs')
-  }
+  const handleNewProject = () => navigate('/create/study')
 
   return (
     <div className="splash-page" data-testid="splash-page">
-      <div className="splash-page__header">
+      <div className="splash-page__hero">
+        <h1 className="splash-page__title">What do you want to open?</h1>
         <input
-          type="text"
           className="splash-page__search"
-          placeholder="Search or type a command..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          data-testid="splash-search"
+          placeholder="Search everything…"
+          type="text"
           autoFocus
-          onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-            if (e.key === 'Escape') onDismiss()
-          }}
+          onChange={() => {}}
         />
-        <button type="button" className="splash-page__close" onClick={onDismiss}>
-          ×
-        </button>
       </div>
 
-      <div className="splash-page__nav">
-        {COLLECTIONS.map((col) => (
-          <button
-            key={col.id}
-            type="button"
-            className="splash-page__nav-chip"
-            data-testid={`splash-nav-${col.id}`}
-            onClick={() => handleOpenCollection(col.id)}
-          >
-            {col.label}
-          </button>
-        ))}
-      </div>
-
-      {recent.length > 0 ? (
-        <div className="splash-page__recent">
-          <h3 className="splash-page__section-title">Recent</h3>
-          <div className="splash-page__chips">
-            {recent.map((tab) => {
-              const entityType = entityTabType(tab)
-              const typeLabel = entityType
-                ? entityType.charAt(0).toUpperCase()
-                : null
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  className={
-                    entityType
-                      ? `splash-page__chip splash-page__chip--${entityType}`
-                      : 'splash-page__chip'
-                  }
-                  onClick={() => handleOpenEntity(tab)}
-                >
-                  {typeLabel ? (
-                    <span className="splash-page__chip-badge">{typeLabel}</span>
-                  ) : null}
-                  <span className="splash-page__chip-title">{tab.title}</span>
-                </button>
-              )
-            })}
-          </div>
+      <section className="splash-page__section">
+        <h2 className="splash-page__section-title">Browse a type</h2>
+        <div className="splash-page__chips">
+          {(['protocols','materials','labware','equipment','people','documents'] as const)
+            .map((cat) => (
+              <button key={cat} type="button" className="splash-page__chip"
+                data-testid={`splash-type-${cat}`}
+                onClick={() => navigate(`/lab/${cat}`)}>
+                {cat}
+              </button>
+            ))}
         </div>
-      ) : null}
+      </section>
 
-      <div className="splash-page__create">
-        <h3 className="splash-page__section-title">Create New</h3>
+      <section className="splash-page__section">
+        <h2 className="splash-page__section-title">Collections</h2>
+        <div className="splash-page__chips">
+          {COLLECTIONS.map((col) => (
+            <button key={col.id} type="button" className="splash-page__chip"
+              data-testid={`splash-nav-${col.id}`}
+              onClick={() => {
+                openTabs?.openTab({
+                  id: collectionTabId(col.id), kind: 'collection',
+                  collection: col.id, title: col.label,
+                }, true)
+                navigate(`/${col.id}`)
+              }}>
+              {col.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="splash-page__section" data-testid="splash-recent">
+        <h2 className="splash-page__section-title">Recent</h2>
+        <p className="splash-page__hint">Recently viewed items will appear here.</p>
+      </section>
+
+      <section className="splash-page__section">
+        <h2 className="splash-page__section-title">Create</h2>
         <div className="splash-page__create-actions">
-          <button
-            type="button"
-            className="splash-page__create-btn splash-page__create-btn--primary"
-            onClick={() => handleCreateNew('run')}
-          >
+          <button type="button" className="splash-page__create-btn splash-page__create-btn--primary"
+            data-testid="splash-new-run" onClick={handleNewRun}>
             + New Run
           </button>
-          <button
-            type="button"
-            className="splash-page__create-btn"
-            onClick={() => handleCreateNew('study')}
-          >
+          <button type="button" className="splash-page__create-btn"
+            data-testid="splash-new-project" onClick={handleNewProject}>
             + New Project
           </button>
         </div>
-      </div>
+      </section>
     </div>
   )
 }
