@@ -16,6 +16,7 @@ import { RightPane } from '../event-editor/right-pane/RightPane'
 import { RunWorkspaceShell } from './RunWorkspaceShell'
 import { useModeToggle } from './lib/mode-toggle'
 import { ExecutionView } from '../graph/execution/ExecutionView'
+import { DeckViewer } from '../event-editor/viewer/deck/DeckViewer'
 import { apiClient } from '../shared/api/client'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
 import { runTabId } from '../event-editor/workspace/types'
@@ -126,12 +127,7 @@ function RunWorkspaceContent({ runId, mode }: RunWorkspaceContentProps) {
     )
   }
 
-  // Plan mode — EventEditorProvider is already wrapping the entire shell
-  return (
-    <div className="run-workspace__plan-mode">
-      {/* Event editor content will be rendered here */}
-      <p>Plan Mode: Event Editor</p>
-      <p>Run ID: {runId}</p>
-    </div>
-  )
+  // Plan mode — render the DeckViewer (deck stage + event graph editor).
+  // EventEditorProvider is already wrapping the entire shell one level up.
+  return <DeckViewer />
 }
