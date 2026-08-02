@@ -110,14 +110,14 @@ function defaultRightPaneMode(tab: WorkspaceTab): WorkspaceRightPaneMode {
   switch (tab.kind) {
     case 'project':
     case 'project-details':
-      return 'find'
+      return 'ai'
     case 'run':
     case 'execution':
       return 'protocol'
     case 'claim':
       return 'ai'
     case 'lab-entity':
-      return 'find'
+      return 'ai'
     case 'deck':
       return 'ai'
     case 'pdf':
@@ -130,7 +130,7 @@ function defaultRightPaneMode(tab: WorkspaceTab): WorkspaceRightPaneMode {
       return 'ai'
     case 'collection':
     case 'splash':
-      return 'find'
+      return 'ai'
     default: {
       const _exhaustive: never = tab
       return _exhaustive ?? 'ai'

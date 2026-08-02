@@ -167,9 +167,8 @@ describe('WorkspaceProvider', () => {
     expect(screen.getByTestId('error').textContent).toContain('network down')
     // Default state should still be available, not a spinner-forever.
     expect(screen.getByTestId('study').textContent).toBe('STU-000001')
-    // Phase 12: defaultWorkspaceState lands on 'find' so the freshly-
-    // opened study shows the in-project tree first.
-    expect(screen.getByTestId('mode').textContent).toBe('find')
+    // DefaultWorkspaceState rightPaneMode is 'ai' (find was deprecated).
+    expect(screen.getByTestId('mode').textContent).toBe('ai')
   })
 
   it('reloads when studyId prop changes', async () => {

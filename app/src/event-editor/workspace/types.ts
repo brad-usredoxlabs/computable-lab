@@ -206,10 +206,17 @@ export function entityTabType(tab: WorkspaceTab): EntityTabType | null {
 }
 
 /**
- * Phase 12 renamed `browse` to `find`. Phase 13 adds `details` — the
- * single-plate workflow (Materials / Groups / Notes / Read) that used
- * to ride as a column inside the focused-plate left pane.
- * The server parser migrates v1 `browse` → v2 `find` on read.
+ * Phase 12 renamed `browse` to `find`. The `find` tab was removed —
+ * it was wrong to surface an in-project tree while viewing a run.
+ * `'find'` is kept in the union for backward-compat with persisted
+ * workspace.yaml files; RightPane normalizes it to `'ai'` at render
+ * time. Phase 13 adds `details` — the single-plate workflow
+ * (Materials / Groups / Notes / Read) lifted out of the focused-plate
+ * left pane. `protocol` is for showing protocol steps when viewing a
+ * run.
+ * @deprecated `'find'` is legacy — no longer surfaced as a tab;
+ * treated as `'ai'` at render time. Kept for persisted workspace.yaml
+ * back-compat (server parser still accepts it).
  */
 export type WorkspaceRightPaneMode = 'ai' | 'search' | 'find' | 'details' | 'protocol'
 
@@ -248,7 +255,7 @@ export function defaultWorkspaceState(studyId: string): WorkspaceState {
       },
     ],
     activeTabId: detailsTabId,
-    rightPaneMode: 'find',
+    rightPaneMode: 'ai',
     rightPaneCollapsed: false,
     paneWidths: { left: 0.6, right: 0.4 },
   }

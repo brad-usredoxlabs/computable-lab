@@ -24,9 +24,6 @@ vi.mock('./ai/AiTabPanel', () => ({
 vi.mock('./search/SearchTabPanel', () => ({
   SearchTabPanel: () => <div data-testid="panel-search">SEARCH</div>,
 }))
-vi.mock('./find/FindTabPanel', () => ({
-  FindTabPanel: () => <div data-testid="panel-find">FIND</div>,
-}))
 vi.mock('./details/DetailsTabPanel', () => ({
   DetailsTabPanel: () => <div data-testid="panel-details">DETAILS</div>,
 }))
@@ -67,56 +64,53 @@ function renderRightPane(initialMode?: WorkspaceContextValue['state']['rightPane
 }
 
 describe('RightPane', () => {
-  it('renders the Find panel by default', async () => {
-    // Phase 12: defaultWorkspaceState lands on 'find' so a freshly-
-    // opened study shows the in-project tree first instead of an empty
-    // chat. AI is one click away.
+  it('renders the AI panel by default', async () => {
+    // Default rightPaneMode is 'ai', so a freshly-opened study shows
+    // the AI panel first.
     renderRightPane()
-    await screen.findByTestId('panel-find')
-    expect(screen.queryByTestId('panel-ai')).toBeNull()
-  })
-
-  it('clicking AI switches the active panel', async () => {
-    renderRightPane()
-    await screen.findByTestId('panel-find')
-    fireEvent.click(screen.getByTestId('right-pane-tab-ai'))
-    expect(screen.getByTestId('panel-ai')).toBeTruthy()
-    expect(screen.queryByTestId('panel-find')).toBeNull()
+    await screen.findByTestId('panel-ai')
+    expect(screen.queryByTestId('panel-search')).toBeNull()
   })
 
   it('clicking Search switches the active panel', async () => {
     renderRightPane()
-    await screen.findByTestId('panel-find')
+    await screen.findByTestId('panel-ai')
     fireEvent.click(screen.getByTestId('right-pane-tab-search'))
     expect(screen.getByTestId('panel-search')).toBeTruthy()
+    expect(screen.queryByTestId('panel-ai')).toBeNull()
   })
 
   it('clicking Details switches the active panel', async () => {
-    // Phase 13: Details surfaces the per-plate workflow rail (Materials
-    // / Groups / Notes / Read) that used to ride inside the focused
-    // plate's left pane.
     renderRightPane()
-    await screen.findByTestId('panel-find')
+    await screen.findByTestId('panel-ai')
     fireEvent.click(screen.getByTestId('right-pane-tab-details'))
     expect(screen.getByTestId('panel-details')).toBeTruthy()
-    expect(screen.queryByTestId('panel-find')).toBeNull()
+    expect(screen.queryByTestId('panel-ai')).toBeNull()
   })
 
-  it('renders all five tab buttons in order: AI · Find · Search · Details · Protocol', async () => {
+  it('renders four tab buttons in order: AI · Search · Details · Protocol', async () => {
     renderRightPane()
-    await screen.findByTestId('panel-find')
+    await screen.findByTestId('panel-ai')
     const tabs = screen.getAllByRole('tab').map((el) => el.textContent)
-    expect(tabs).toEqual(['AI', 'Find', 'Search', 'Details', 'Protocol'])
+    expect(tabs).toEqual(['AI', 'Search', 'Details', 'Protocol'])
   })
 
   it('aria-selected reflects the active mode', async () => {
-    renderRightPane('find')
-    await screen.findByTestId('panel-find')
-    expect(
-      screen.getByTestId('right-pane-tab-find').getAttribute('aria-selected'),
-    ).toBe('true')
+    renderRightPane('ai')
+    await screen.findByTestId('panel-ai')
     expect(
       screen.getByTestId('right-pane-tab-ai').getAttribute('aria-selected'),
+    ).toBe('true')
+    expect(
+      screen.getByTestId('right-pane-tab-search').getAttribute('aria-selected'),
     ).toBe('false')
+  })
+
+  it('persisted find mode normalizes to AI panel', async () => {
+    // Legacy back-compat: workspace.yaml still carries 'find' for old
+    // workspace files. RightPane should treat it as 'ai'.
+    renderRightPane('find')
+    await screen.findByTestId('panel-ai')
+    expect(screen.queryByTestId('panel-search')).toBeNull()
   })
 })

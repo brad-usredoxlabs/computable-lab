@@ -191,6 +191,14 @@ describe('workspaceReducer', () => {
       expect(next.rightPaneMode).toBe('find')
     })
 
+    it('can still be set to legacy find mode (reducer stores whatever)', () => {
+      const next = workspaceReducer(base, {
+        type: 'set-right-pane-mode',
+        mode: 'ai',
+      })
+      expect(next.rightPaneMode).toBe('ai')
+    })
+
     it('toggles collapsed', () => {
       const next = workspaceReducer(base, {
         type: 'set-right-pane-collapsed',
@@ -216,7 +224,7 @@ describe('workspaceReducer', () => {
       const swapped = workspaceReducer(base, {
         type: 'replace',
         state: {
-          version: 2,
+          version: 3,
           studyId: 'STU-OTHER',
           tabs: [
             {
