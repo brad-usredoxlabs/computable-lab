@@ -8,14 +8,15 @@
  *     (a tree of experiments → runs + artifact sections). Clicking a
  *     node opens it as a left-pane viewer tab.
  *   - The project-details tab is the always-present landing surface;
- *     defaults open one for any study with no other tabs.
+ *     defaults open one for any study with no other tabs. It now renders
+ *     the Find homepage (Experiments tree + inventory + artifacts).
  *
  * Phase 11's mode dispatcher (event-editor / protocols / browser /
  * literature) is gone. ProtocolsBody / BrowserBody / LiteratureBody no
  * longer mount inline here — those routes redirect to `/` (Phase 12.6).
  *
  * Left-pane dispatch on `activeTab.kind`:
- *   - 'project-details' → <ProjectDetailsView /> (Phase 12.5)
+ *   - 'project-details' → <FindTabPanel /> (Phase C — project homepage)
  *   - 'deck'            → DeckStage via <Viewer /> + EventEditorProvider
  *   - 'pdf'             → <PdfViewer /> + PdfStateProvider
  *   - 'document'        → <DocumentEditor /> + DocumentStateProvider
@@ -36,7 +37,7 @@ import { DocumentStateProvider } from '../viewer/document/DocumentEditorContext'
 import { Viewer } from '../viewer/Viewer'
 import { ViewerToolbar } from '../viewer/ViewerToolbar'
 import { WorkspaceTabStrip } from '../../shared/shell/WorkspaceTabStrip'
-import { ProjectDetailsView } from './ProjectDetailsView'
+import { FindTabPanel } from '../right-pane/find/FindTabPanel'
 import { RecordCreatePanel } from '../create/RecordCreatePanel'
 import { RecordEditPanel } from '../create/RecordEditPanel'
 import { ExecutionTabShell } from '../execution/ExecutionTabShell'
@@ -271,7 +272,11 @@ function LeftPane({ activeTab, studyId }: LeftPaneProps) {
     )
   }
   if (activeTab.kind === 'project-details') {
-    return <ProjectDetailsView studyId={studyId} />
+    return (
+      <div className="project-home" data-testid="project-home">
+        <FindTabPanel />
+      </div>
+    )
   }
   if (activeTab.kind === 'record-create') {
     return (

@@ -55,7 +55,7 @@ export function Viewer({ tab, onSendSelection }: ViewerProps) {
     case 'collection':
     case 'splash':
       // ProjectWorkspacePage's LeftPane renders these kinds directly
-      // (ProjectDetailsView / RecordCreatePanel / RecordEditPanel / ExecutionTabShell)
+      // (FindTabPanel / RecordCreatePanel / RecordEditPanel / ExecutionTabShell)
       // and doesn't call Viewer; these arms exist so a future caller can't crash by
       // handing one in. The new entity-type tabs (project/run/claim/lab-entity)
       // also render their own workspace views, not the Viewer dispatcher.

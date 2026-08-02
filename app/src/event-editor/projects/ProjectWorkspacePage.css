@@ -88,3 +88,70 @@
 .project-workspace__error-line {
   color: var(--cl-danger);
 }
+
+/* Phase C — project homepage: FindTabPanel rendered full-width in the left
+   pane instead of the record-oriented ProjectDetailsView. Overrides from
+   rightPane.css/find.css so the content reads well at full width. */
+
+.project-home {
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px 28px 40px;
+}
+
+/* Widen the Find content for full-width display — override right-rail styles.
+   .right-panel gets padding:12px and a cramped layout; .find-tab__head has
+   negative margins tuned for the narrow rail. */
+.project-home .find-tab .right-panel {
+  max-width: 1100px;
+  padding: 0;
+}
+
+.project-home .find-tab .find-tab__head {
+  margin: 0 0 16px;
+  padding: 12px 0 8px;
+}
+
+.project-home .find-tab .right-panel__heading {
+  font-size: 13px;
+}
+
+.project-home .find-tab .find-tab__tree {
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.project-home .find-tab .find-tab__group {
+  margin-bottom: 16px;
+}
+
+.project-home .find-tab .find-tab__group-heading {
+  margin: 10px 0 6px;
+}
+
+.project-home .find-tab .find-tab__tree-list {
+  gap: 4px;
+}
+
+.project-home .find-tab .find-tab__tree-row {
+  padding: 6px 10px;
+  font-size: 14px;
+}
+
+.project-home .find-tab .right-panel__row {
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.project-home .find-tab .right-panel__row-title {
+  font-size: 14px;
+}
+
+.project-home .find-tab .right-panel__hint,
+.project-home .find-tab .right-panel__error {
+  font-size: 13px;
+}
+
+.project-home .find-tab .find-tab__row-meta {
+  font-size: 12px;
+}
