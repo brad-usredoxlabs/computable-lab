@@ -102,6 +102,8 @@ export function RunWorkspacePage() {
     title,
   }
 
+  const runBreadcrumb = openTabs?.state.tabs.find((t) => t.tab.id === runTabId(runId))?.breadcrumb ?? []
+
   return (
     <WorkspaceProvider studyId={resolvedStudyId}>
       <RunPaneMode />
@@ -112,7 +114,7 @@ export function RunWorkspacePage() {
         <FocusModalsProvider>
           <RunWorkspaceShell
             rightPane={<RightPane />}
-            viewerToolbar={<DeckToolbar tab={deckTab} />}
+            viewerToolbar={<DeckToolbar tab={deckTab} breadcrumb={runBreadcrumb} />}
           >
             <RunWorkspaceContent runId={runId} mode={mode} />
           </RunWorkspaceShell>

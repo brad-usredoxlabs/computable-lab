@@ -57,4 +57,16 @@ describe('TabBreadcrumb', () => {
     const breadcrumb = container.querySelector('[data-testid="tab-breadcrumb"]')
     expect(breadcrumb).toBeNull()
   })
+
+  it('renders crumbs only when current is omitted', () => {
+    renderComponent({ crumbs })
+
+    // Both crumbs should still render
+    expect(screen.getByTestId('tab-crumb-0')).toHaveTextContent('Projects')
+    expect(screen.getByTestId('tab-crumb-1')).toHaveTextContent('My Project')
+
+    // No current item should be present
+    const container = screen.getByTestId('tab-breadcrumb')
+    expect(container.querySelector('[data-testid="tab-breadcrumb-current"]')).toBeNull()
+  })
 })

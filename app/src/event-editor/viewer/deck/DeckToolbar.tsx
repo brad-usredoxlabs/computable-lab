@@ -64,7 +64,15 @@ export function DeckToolbar({ tab, breadcrumb }: DeckToolbarProps) {
   return (
     <div className="event-editor viewer-toolbar viewer-toolbar--deck">
       {useBreadcrumb ? (
-        <TabBreadcrumb crumbs={breadcrumb} current={tabTitle ?? 'Untitled Run'} />
+        <>
+          <TabBreadcrumb crumbs={breadcrumb} />
+          <span className="deck-toolbar__separator" aria-hidden />
+          <EditableTitle
+            title={tabTitle ?? 'Untitled Run'}
+            onCommit={handleRename}
+            testId="run-title"
+          />
+        </>
       ) : hasRun ? (
         <>
           <RunBreadcrumb runId={runId} />

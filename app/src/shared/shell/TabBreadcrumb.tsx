@@ -9,8 +9,9 @@ import './TabBreadcrumb.css'
 
 export interface TabBreadcrumbProps {
   crumbs: BreadcrumbItem[]
-  /** The current surface label (the "you are here" item). */
-  current: string
+  /** The current surface label (the "you are here" item). Optional — omit when the
+   *  run name is rendered separately (e.g. as EditableTitle in DeckToolbar). */
+  current?: string
 }
 
 export function TabBreadcrumb({ crumbs, current }: TabBreadcrumbProps) {
@@ -36,8 +37,12 @@ export function TabBreadcrumb({ crumbs, current }: TabBreadcrumbProps) {
           )}
         </span>
       ))}
-      <span className="tab-breadcrumb__sep" aria-hidden>›</span>
-      <span className="tab-breadcrumb__current" data-testid="tab-breadcrumb-current">{current}</span>
+      {current ? (
+        <>
+          <span className="tab-breadcrumb__sep" aria-hidden>›</span>
+          <span className="tab-breadcrumb__current" data-testid="tab-breadcrumb-current">{current}</span>
+        </>
+      ) : null}
     </span>
   )
 }

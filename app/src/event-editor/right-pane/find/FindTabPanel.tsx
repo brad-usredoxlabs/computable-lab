@@ -2,18 +2,20 @@
  * FindTabPanel — Phase 12 right-pane mode for in-project navigation.
  * Renamed from `BrowseTabPanel`; the artifact list at the bottom is
  * unchanged, but a study tree (experiments → runs) now sits above it
- * so the user can jump straight into a run's method deck.
+ * so the user can jump straight into a run.
  *
  *  - Tree: experiments + runs, fetched from `getStudyTree()` and filtered
- *    to the active study. Clicking a run resolves its method event graph
- *    via `getRunMethod` and opens it as a deck tab.
+ *    to the active study. Clicking a run opens it as its own top-level tab
+ *    at `/runs/:runId` with a project-origin breadcrumb.
  *  - Artifact rows: grouped by kind (Protocols / PDFs / Write-ups / etc.)
  *    via `useStudyArtifacts`. Click → openTab via `tabForArtifact`.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
-import { recordCreateTabId, recordEditTabId } from '../../workspace/types'
+import { recordCreateTabId, recordEditTabId, runTabId, type BreadcrumbItem } from '../../workspace/types'
+import { useOptionalOpenTabs } from '../../../shared/shell/OpenTabsContext'
 import { useStudyArtifacts } from '../useStudyArtifacts'
 import {
   useProjectInventory,
@@ -25,7 +27,7 @@ import {
 } from '../useProjectInventory'
 import { useOptionalEventEditor } from '../../EventEditorContext'
 import { artifactKindLabel, tabForArtifact } from '../openArtifactInViewer'
-import { getRunMethod, getStudyTree } from '../../../shared/api/treeClient'
+import { getStudyTree } from '../../../shared/api/treeClient'
 import { apiClient, type ProtocolContextResponse } from '../../../shared/api/client'
 import type {
   ExperimentTreeNode,
@@ -180,6 +182,10 @@ export function FindTabPanel() {
     }
   }, [studyId])
 
+  const projectCrumb: BreadcrumbItem | undefined = study
+    ? { label: study.title, entityType: 'project' as const, id: study.recordId, route: `/project/${study.recordId}` }
+    : undefined
+
   const refreshProtocolContext = useCallback(() => {
     let cancelled = false
     apiClient.getProtocolContext({ studyId })
@@ -332,6 +338,7 @@ export function FindTabPanel() {
                 studyId={studyId}
                 projectTemplates={protocolContext?.projectTemplates ?? []}
                 experimentProtocols={protocolContext?.experimentProtocols ?? []}
+                projectCrumb={projectCrumb}
               />
             ))}
           </ul>
@@ -404,11 +411,13 @@ function ExperimentRow({
   studyId,
   projectTemplates,
   experimentProtocols,
+  projectCrumb,
 }: {
   experiment: ExperimentTreeNode
   studyId: string
   projectTemplates: ProtocolContextRecord[]
   experimentProtocols: ProtocolContextRecord[]
+  projectCrumb?: BreadcrumbItem
 }) {
   const ws = useWorkspace()
   const [open, setOpen] = useState(true)
@@ -525,6 +534,7 @@ function ExperimentRow({
                 ...experimentProtocols.filter((record) => protocolRecordExperimentId(record) === experiment.recordId),
                 ...projectTemplates,
               ]}
+              projectCrumb={projectCrumb}
             />
           ))}
         </ul>
@@ -536,49 +546,30 @@ function ExperimentRow({
 function RunRow({
   run,
   availableProtocols,
+  projectCrumb,
 }: {
   run: RunTreeNode
   availableProtocols: ProtocolContextRecord[]
+  projectCrumb?: BreadcrumbItem
 }) {
   const ws = useWorkspace()
+  const navigate = useNavigate()
+  const openTabs = useOptionalOpenTabs()
   const [busy, setBusy] = useState(false)
-  const [missing, setMissing] = useState(false)
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
-  const openMethodDeck = useCallback(async () => {
-    setBusy(true)
-    setMissing(false)
-    try {
-      const summary = await getRunMethod(run.recordId)
-      if (!summary.hasMethod || !summary.methodEventGraphId) {
-        // No method yet — open a fresh canvas bound to the run.
-        setMissing(true)
-        ws.openTab({
-          id: `tab-deck-new-${run.recordId}`,
-          kind: 'deck',
-          eventGraphId: '',
-          runId: run.recordId,
-          title: run.title,
-        })
-        return
-      }
-      ws.openTab({
-        id: `tab-deck-${summary.methodEventGraphId}`,
-        kind: 'deck',
-        eventGraphId: summary.methodEventGraphId,
-        runId: run.recordId,
-        title: run.title,
-      })
-    } catch {
-      setMissing(true)
-    } finally {
-      setBusy(false)
-    }
-  }, [run.recordId, run.title, ws])
+
+  const openRun = useCallback(() => {
+    openTabs?.openTab(
+      { id: runTabId(run.recordId), kind: 'run', runId: run.recordId, title: run.title },
+      true,
+      projectCrumb ? [projectCrumb] : undefined,
+    )
+    navigate(`/runs/${run.recordId}`)
+  }, [run.recordId, run.title, projectCrumb, openTabs, navigate])
 
   const attachProtocolMethod = useCallback(async () => {
     setCreateMenuOpen(false)
     setBusy(true)
-    setMissing(false)
     try {
       const source = availableProtocols.length > 0
         ? chooseProtocolRecord(availableProtocols, 'Choose a protocol to use in this run. Enter a number or recordId.')
@@ -612,21 +603,13 @@ function RunRow({
           type="button"
           className="find-tab__tree-row"
           data-testid={`find-tab-run-${run.recordId}`}
-          onClick={() => void openMethodDeck()}
-          disabled={busy}
-          title={
-            missing
-              ? 'This run has no method event graph yet'
-              : `Open ${run.title} in the event editor`
-          }
+          onClick={() => void openRun()}
+          title={`Open ${run.title} in its own tab`}
         >
           <span className="find-tab__chev" aria-hidden>
             ▶
           </span>
           <span className="find-tab__row-title">{run.title}</span>
-          {missing ? (
-            <span className="find-tab__row-meta">no method</span>
-          ) : null}
         </button>
         <div className="find-tab__create-menu-wrap">
           <button
