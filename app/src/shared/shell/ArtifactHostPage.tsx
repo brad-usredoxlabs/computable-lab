@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { AppShell } from './AppShell'
 import { WorkspaceTabStrip } from './WorkspaceTabStrip'
+import { useOptionalOpenTabs } from './OpenTabsContext'
 import { RightPane } from '../../event-editor/right-pane/RightPane'
 import { WorkspaceProvider } from '../../event-editor/workspace/WorkspaceContext'
 import { PdfStateProvider } from '../../event-editor/viewer/pdf/PdfViewerContext'
@@ -24,6 +25,7 @@ import type { WorkspaceTab } from '../../event-editor/workspace/types'
 
 export function ArtifactHostPage() {
   const { kind, artifactId } = useParams<{ kind: string; artifactId: string }>()
+  const openTabs = useOptionalOpenTabs()
 
   // Resolve the artifact record to get studyId + title (needed by the
   // WorkspaceProvider + viewer providers).
@@ -45,6 +47,19 @@ export function ArtifactHostPage() {
       })
     return () => { cancelled = true }
   }, [artifactId])
+
+  // Register/refresh the top-level tab so a deep link or refresh keeps it in
+  // the strip. openTab on an existing id replaces the tab but preserves the
+  // breadcrumb (the opener, e.g. SearchTabPanel, seeds the origin trail).
+  const title = artifact?.title ?? artifactId ?? 'Artifact'
+  useEffect(() => {
+    if (!artifactId || !kind || !openTabs) return
+    const tab: WorkspaceTab =
+      kind === 'pdf'
+        ? { id: `tab-pdf-${artifactId}`, kind: 'pdf', artifactId, title }
+        : { id: `tab-doc-${artifactId}`, kind: 'document', artifactId, title }
+    openTabs.openTab(tab, true)
+  }, [kind, artifactId, title, openTabs])
 
   if (!artifactId || !kind) {
     return (
@@ -71,7 +86,6 @@ export function ArtifactHostPage() {
   }
 
   const studyId = artifact.studyId
-  const title = artifact.title ?? artifactId
 
   // Build the tab shape matching what tabForArtifact produces so the
   // WorkspaceTabStrip can render it and tabPath resolves the route.
