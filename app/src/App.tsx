@@ -31,6 +31,7 @@ import { ThemeProvider } from './shared/shell'
 import { OpenTabsProvider } from './shared/shell/OpenTabsContext'
 import { useMentionNavigation } from './shared/taptab/slashMenu'
 import { Slot } from './extensions'
+import { useRecordHistory } from './shared/shell/useRecordHistory'
 import './shared/styles/tokens.css'
 
 const EventEditorPage = lazy(async () => import('./event-editor/EventEditorPage').then((m) => ({ default: m.EventEditorPage })))
@@ -64,6 +65,12 @@ function MentionNavigator(): null {
   return null
 }
 
+/** Records entity views to the recent store on route change. */
+function RecordHistoryListener(): null {
+  useRecordHistory()
+  return null
+}
+
 function NotFoundRoute() {
   return (
     <main style={{ padding: '2rem' }} data-testid="not-found-route">
@@ -88,6 +95,7 @@ export function App() {
           <OpenTabsProvider>
             <BrowserRouter>
               <MentionNavigator />
+              <RecordHistoryListener />
               <Routes>
               {/* Phase 1: `/` redirects to `/projects` (WelcomePage subsumed
                   by the ProjectCollectionView). */}

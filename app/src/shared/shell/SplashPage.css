@@ -39,3 +39,7 @@
   background: var(--cl-type-run-soft, #e8f5e9);
   color: var(--cl-type-run, #2e7d32);
 }
+.splash-page__recent-group { display: flex; flex-direction: column; gap: 8px; }
+.splash-page__recent-label {
+  font-size: 12px; font-weight: 600; color: var(--cl-text-dim, #666); margin: 0;
+}

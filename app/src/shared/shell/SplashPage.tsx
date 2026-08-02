@@ -6,10 +6,14 @@
 import { useNavigate } from 'react-router-dom'
 import { useOptionalOpenTabs } from './OpenTabsContext'
 import {
-  runTabId, collectionTabId,
+  projectTabId, runTabId, claimTabId, labEntityTabId, collectionTabId,
+  type WorkspaceTab,
 } from '../../event-editor/workspace/types'
 import { quickCreateRun } from '../../event-editor/create/quickCreateRun'
 import { SCRATCH_STUDY_ID } from '../../event-editor/legacyRouteResolution'
+import { loadRecentItems, groupRecentByType } from './recentStore'
+import type { RecentItem } from './recentStore'
+import { KIND_TO_LAB_CATEGORY } from '../lib/kindMeta'
 import './SplashPage.css'
 
 const COLLECTIONS = [
@@ -22,6 +26,26 @@ const COLLECTIONS = [
 export function SplashPage() {
   const navigate = useNavigate()
   const openTabs = useOptionalOpenTabs()
+
+  const openEntity = (tab: WorkspaceTab, path: string) => {
+    openTabs?.openTab(tab, true)
+    navigate(path)
+  }
+
+  const recent = groupRecentByType(loadRecentItems())
+
+  const openRecent = (item: RecentItem) => {
+    if (item.entityType === 'project') {
+      openEntity({ id: projectTabId(item.recordId), kind: 'project', studyId: item.recordId, title: item.title }, `/project/${item.recordId}`)
+    } else if (item.entityType === 'run') {
+      openEntity({ id: runTabId(item.recordId), kind: 'run', runId: item.recordId, title: item.title }, `/runs/${item.recordId}`)
+    } else if (item.entityType === 'claim') {
+      openEntity({ id: claimTabId(item.recordId), kind: 'claim', claimId: item.recordId, title: item.title }, `/claims/${item.recordId}`)
+    } else {
+      const cat = KIND_TO_LAB_CATEGORY[item.kind]
+      openEntity({ id: labEntityTabId(item.recordId), kind: 'lab-entity', schemaId: '', recordId: item.recordId, entityType: item.kind, title: item.title }, cat ? `/lab/${cat}/${item.recordId}` : `/lab/materials/${item.recordId}`)
+    }
+  }
 
   const handleNewRun = async () => {
     try {
@@ -86,7 +110,32 @@ export function SplashPage() {
 
       <section className="splash-page__section" data-testid="splash-recent">
         <h2 className="splash-page__section-title">Recent</h2>
-        <p className="splash-page__hint">Recently viewed items will appear here.</p>
+        {(['project', 'run', 'claim', 'lab'] as const).map((type) => {
+          const items = recent[type] ?? []
+          if (items.length === 0) return null
+          const label =
+            type === 'project' ? 'Recent Projects'
+            : type === 'run' ? 'Recent Runs'
+            : type === 'claim' ? 'Recent Claims'
+            : 'Recent Lab Items'
+          return (
+            <div key={type} className="splash-page__recent-group">
+              <h3 className="splash-page__recent-label">{label}</h3>
+              <div className="splash-page__chips">
+                {items.map((item) => (
+                  <button key={item.recordId} type="button" className="splash-page__chip"
+                    data-testid={`splash-recent-${item.recordId}`}
+                    onClick={() => openRecent(item)}>
+                    {item.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+        {Object.keys(recent).length === 0 ? (
+          <p className="splash-page__hint">Recently viewed items will appear here.</p>
+        ) : null}
       </section>
 
       <section className="splash-page__section">
