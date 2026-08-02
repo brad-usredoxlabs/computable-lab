@@ -17,3 +17,33 @@ export const KIND_LABEL: Record<string, string> = {
   equipment: 'Equipment', instrument: 'Instrument', 'calibration-record': 'Calibration',
   person: 'Person', document: 'Document', relationship: 'Relationship',
 }
+
+/** Entity-type buckets for search grouping / color coding. */
+export type SearchEntityType = 'project' | 'run' | 'claim' | 'lab'
+
+/** Map a record `kind` to its search entity-type bucket (null → not a
+ *  first-class, routable entity kind — drop from results). */
+export function kindToSearchEntityType(kind: string): SearchEntityType | null {
+  if (kind === 'study') return 'project'
+  if (kind === 'run') return 'run'
+  if (kind === 'claim') return 'claim'
+  if (KIND_TO_LAB_CATEGORY[kind]) return 'lab'
+  return null
+}
+
+/** Resolve a record to its app route. */
+export function recordRoute(recordId: string, kind: string, entityType?: SearchEntityType): string {
+  const et = entityType ?? kindToSearchEntityType(kind) ?? 'lab'
+  switch (et) {
+    case 'project':
+      return `/project/${recordId}`
+    case 'run':
+      return `/runs/${recordId}`
+    case 'claim':
+      return `/claims/${recordId}`
+    case 'lab': {
+      const cat = KIND_TO_LAB_CATEGORY[kind]
+      return cat ? `/lab/${cat}/${recordId}` : `/lab/materials/${recordId}`
+    }
+  }
+}

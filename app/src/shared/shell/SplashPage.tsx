@@ -14,6 +14,7 @@ import { SCRATCH_STUDY_ID } from '../../event-editor/legacyRouteResolution'
 import { loadRecentItems, groupRecentByType } from './recentStore'
 import type { RecentItem } from './recentStore'
 import { KIND_TO_LAB_CATEGORY } from '../lib/kindMeta'
+import { SplashSearch } from './SplashSearch'
 import './SplashPage.css'
 
 const COLLECTIONS = [
@@ -65,14 +66,7 @@ export function SplashPage() {
     <div className="splash-page" data-testid="splash-page">
       <div className="splash-page__hero">
         <h1 className="splash-page__title">What do you want to open?</h1>
-        <input
-          className="splash-page__search"
-          data-testid="splash-search"
-          placeholder="Search everything…"
-          type="text"
-          autoFocus
-          onChange={() => {}}
-        />
+        <SplashSearch />
       </div>
 
       <section className="splash-page__section">

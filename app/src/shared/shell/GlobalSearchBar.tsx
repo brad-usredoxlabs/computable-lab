@@ -11,6 +11,10 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { searchRecords } from '../../shared/api/treeClient'
 import type { IndexEntry } from '../../types/tree'
+import {
+  kindToSearchEntityType, KIND_LABEL, recordRoute,
+  type SearchEntityType,
+} from '../lib/kindMeta'
 import './GlobalSearchBar.css'
 
 interface SearchResult {
@@ -18,56 +22,11 @@ interface SearchResult {
   title: string
   kind: string
   typeLabel: string
-  entityType: 'project' | 'run' | 'claim' | 'lab'
-}
-
-/** Map record kind to entity type for color-coding and routing. */
-function kindToEntityType(kind: string): SearchResult['entityType'] | null {
-  if (kind === 'study') return 'project'
-  if (kind === 'run') return 'run'
-  if (kind === 'claim') return 'claim'
-  if (['protocol', 'material', 'labware', 'equipment', 'person', 'document',
-       'material-instance', 'material-spec', 'material-lot', 'aliquot',
-       'labware-instance', 'instrument', 'calibration-record'].includes(kind)) {
-    return 'lab'
-  }
-  return null
-}
-
-/** Map record kind to short type label. */
-function kindToLabel(kind: string): string {
-  const labels: Record<string, string> = {
-    study: 'Project',
-    run: 'Run',
-    claim: 'Claim',
-    protocol: 'Protocol',
-    material: 'Material',
-    material_spec: 'Material Spec',
-    'material-instance': 'Material Instance',
-    labware: 'Labware',
-    'labware-instance': 'Labware Instance',
-    equipment: 'Equipment',
-    instrument: 'Instrument',
-    person: 'Person',
-    document: 'Document',
-    experiment: 'Experiment',
-  }
-  return labels[kind] ?? kind
+  entityType: SearchEntityType
 }
 
 function resultPath(result: SearchResult): string {
-  switch (result.entityType) {
-    case 'project':
-      return `/project/${result.recordId}`
-    case 'run':
-      return `/runs/${result.recordId}`
-    case 'claim':
-      return `/claims/${result.recordId}`
-    case 'lab':
-      return `/lab/${result.recordId}`
-    default:
-      return '/'
-  }
+  return recordRoute(result.recordId, result.kind, result.entityType)
 }
 
 export function GlobalSearchBar() {
@@ -89,13 +48,13 @@ export function GlobalSearchBar() {
         const response = await searchRecords(query, { limit: 20 })
         const mapped: SearchResult[] = response.records
           .map((entry: IndexEntry) => {
-            const entityType = kindToEntityType(entry.kind ?? '')
+            const entityType = kindToSearchEntityType(entry.kind ?? '')
             if (!entityType) return null
             return {
               recordId: entry.recordId,
               title: entry.title ?? entry.recordId,
               kind: entry.kind ?? '',
-              typeLabel: kindToLabel(entry.kind ?? ''),
+              typeLabel: KIND_LABEL[entry.kind ?? ''] ?? entry.kind ?? '',
               entityType,
             }
           })
