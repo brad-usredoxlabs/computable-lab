@@ -23,6 +23,8 @@ import { runTabId } from '../event-editor/workspace/types'
 import { SCRATCH_STUDY_ID } from '../event-editor/legacyRouteResolution'
 import type { PlateEvent } from '../types/events'
 import './RunWorkspacePage.css'
+import '../event-editor/viewer/viewer.css'
+import '../event-editor/styles/eventEditor.css'
 
 export function RunWorkspacePage() {
   const { studyId: urlStudyId, runId } = useParams<{ studyId?: string; runId: string }>()
