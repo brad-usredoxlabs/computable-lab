@@ -18,6 +18,7 @@ import { useModeToggle } from './lib/mode-toggle'
 import { ExecutionView } from '../graph/execution/ExecutionView'
 import { DeckViewer } from '../event-editor/viewer/deck/DeckViewer'
 import { DeckToolbar } from '../event-editor/viewer/deck/DeckToolbar'
+import { FocusModalsProvider } from '../event-editor/focus/FocusModalsProvider'
 import { apiClient } from '../shared/api/client'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
 import { runTabId, type WorkspaceTab } from '../event-editor/workspace/types'
@@ -101,12 +102,14 @@ export function RunWorkspacePage() {
         runId={runId}
         {...(resolvedEventGraphId ? { eventGraphId: resolvedEventGraphId } : {})}
       >
-        <RunWorkspaceShell
-          rightPane={<RightPane />}
-          viewerToolbar={<DeckToolbar tab={deckTab} />}
-        >
-          <RunWorkspaceContent runId={runId} mode={mode} />
-        </RunWorkspaceShell>
+        <FocusModalsProvider>
+          <RunWorkspaceShell
+            rightPane={<RightPane />}
+            viewerToolbar={<DeckToolbar tab={deckTab} />}
+          >
+            <RunWorkspaceContent runId={runId} mode={mode} />
+          </RunWorkspaceShell>
+        </FocusModalsProvider>
       </EventEditorProvider>
     </WorkspaceProvider>
   )
