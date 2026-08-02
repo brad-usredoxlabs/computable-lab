@@ -15,6 +15,9 @@ import {
   kindToSearchEntityType, KIND_LABEL, recordRoute,
   type SearchEntityType,
 } from '../lib/kindMeta'
+import { resolveProtocolPick, isProtocolKind } from '../lib/protocolRouting'
+import { projectTabId } from '../../event-editor/workspace/types'
+import { useOptionalOpenTabs } from '../shell/OpenTabsContext'
 import './GlobalSearchBar.css'
 
 interface SearchResult {
@@ -36,6 +39,7 @@ export function GlobalSearchBar() {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const containerRef = useRef<HTMLDivElement>(null)
+  const openTabs = useOptionalOpenTabs()
 
   useEffect(() => {
     if (query.length < 2) {
@@ -81,10 +85,18 @@ export function GlobalSearchBar() {
     return () => document.removeEventListener('mousedown', onClick)
   }, [open])
 
-  const handleSelect = (result: SearchResult) => {
+  const handleSelect = async (result: SearchResult) => {
     setOpen(false)
     setQuery('')
     setResults([])
+    if (isProtocolKind(result.kind)) {
+      const dest = await resolveProtocolPick(result.recordId, resultPath(result))
+      if (dest.kind === 'project' && dest.studyId) {
+        openTabs?.openTab({ id: projectTabId(dest.studyId), kind: 'project', studyId: dest.studyId, title: result.title }, true)
+        navigate(dest.route)
+        return
+      }
+    }
     navigate(resultPath(result))
   }
 

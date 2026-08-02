@@ -118,18 +118,17 @@ function WorkspaceShellHost({
     })
   })
 
-  // Phase 12: when the workspace loads with no tabs (e.g. fresh study,
-  // no workspace.yaml yet), make sure there's at least the canonical
-  // project-details tab so the user lands somewhere. parseWorkspaceState
-  // also inserts this on the server, but client-side defaultWorkspaceState
-  // already does it too — this is the "loaded from server returned
-  // partial state" safety net.
+  // Phase R: bare /project/:id always lands on the project homepage
+  // (project-details tab showing find content: experiments/runs/artifacts).
+  // Deep links (/project/:studyId/event-graph/:eventGraphId) open their
+  // own deck tab via the effect above — this effect skips when one exists.
   useEffect(() => {
     if (!ws.ready) return
-    if (ws.state.tabs.length > 0) return
+    if (autoOpenEventGraphId) return   // deep link opens its own deck tab
     const id = projectDetailsTabId(studyId)
-    ws.openTab({ id, kind: 'project-details', title: 'Project' })
-  }, [studyId, ws.ready, ws.state.tabs.length, ws.openTab])
+    if (ws.state.activeTabId === id) return // already landed on the homepage
+    ws.openTab({ id, kind: 'project-details', title: 'Project' }, true)
+  }, [studyId, ws.ready, autoOpenEventGraphId, ws.state.activeTabId, ws.openTab])
 
   // When the active tab becomes a deck tab with a runId, auto-switch the
   // right pane to Protocol mode so the user immediately sees protocol steps

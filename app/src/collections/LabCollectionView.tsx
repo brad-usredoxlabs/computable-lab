@@ -12,7 +12,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
-import { labEntityTabId } from '../event-editor/workspace/types'
+import { labEntityTabId, projectTabId } from '../event-editor/workspace/types'
+import { resolveProtocolPick } from '../shared/lib/protocolRouting'
 import { CollectionSearchSort } from '../shared/components/CollectionSearchSort'
 import { apiClient } from '../shared/api/client'
 import type { RecordEnvelope } from '../types/kernel'
@@ -320,7 +321,16 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
                     type="button"
                     className="lab-entity-card"
                     data-testid={`lab-entity-${record.recordId}`}
-                    onClick={() => {
+                    onClick={async () => {
+                      const isProtocolCat = activeCategory === 'protocols'
+                      if (isProtocolCat) {
+                        const dest = await resolveProtocolPick(record.recordId, `/lab/${activeCategory}/${record.recordId}`)
+                        if (dest.kind === 'project' && dest.studyId) {
+                          if (openTabs) openTabs.openTab({ id: projectTabId(dest.studyId), kind: 'project', studyId: dest.studyId, title: displayName }, true)
+                          navigate(dest.route)
+                          return
+                        }
+                      }
                       if (openTabs) {
                         openTabs.openTab({
                           id: labEntityTabId(record.recordId),

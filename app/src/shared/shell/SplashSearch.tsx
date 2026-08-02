@@ -15,6 +15,7 @@ import {
   projectTabId, runTabId, claimTabId, labEntityTabId,
   type WorkspaceTab,
 } from '../../event-editor/workspace/types'
+import { resolveProtocolPick, isProtocolKind } from '../lib/protocolRouting'
 import './SplashSearch.css'
 
 export interface SplashSearchResult {
@@ -88,7 +89,16 @@ export function SplashSearch() {
 
   const countFor = (t: SearchEntityType) => grouped[t].length
 
-  const openResult = (r: SplashSearchResult) => {
+  const openResult = async (r: SplashSearchResult) => {
+    if (isProtocolKind(r.kind)) {
+      const dest = await resolveProtocolPick(r.recordId, r.path)
+      if (dest.kind === 'project' && dest.studyId) {
+        openTabs?.openTab({ id: projectTabId(dest.studyId), kind: 'project', studyId: dest.studyId, title: r.title }, true)
+        navigate(dest.route)
+        return
+      }
+      // fall through: lab-global protocol → open as lab-entity
+    }
     let tab: WorkspaceTab
     if (r.entityType === 'project') {
       tab = { id: projectTabId(r.recordId), kind: 'project', studyId: r.recordId, title: r.title }
