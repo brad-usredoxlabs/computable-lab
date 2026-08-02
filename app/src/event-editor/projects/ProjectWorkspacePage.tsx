@@ -118,17 +118,23 @@ function WorkspaceShellHost({
     })
   })
 
-  // Phase R: bare /project/:id always lands on the project homepage
-  // (project-details tab showing find content: experiments/runs/artifacts).
-  // Deep links (/project/:studyId/event-graph/:eventGraphId) open their
-  // own deck tab via the effect above — this effect skips when one exists.
+  // Phase R: a bare /project/:id lands on the project homepage (project-details
+  // tab showing find content: experiments/runs/artifacts). Deep links
+  // (/project/:studyId/event-graph/:eventGraphId) open their own deck tab via
+  // the effect above — this effect skips when one exists.
+  //
+  // IMPORTANT: this must run ONCE per mount (first ready), NOT on every tab
+  // activation. The landing-homed guard prevents it from force-reopening the
+  // homepage and yanking the user away when they open a run/artifact deck tab.
+  const landedOnHomeRef = useRef(false)
   useEffect(() => {
-    if (!ws.ready) return
+    if (!ws.ready || landedOnHomeRef.current) return
     if (autoOpenEventGraphId) return   // deep link opens its own deck tab
+    landedOnHomeRef.current = true
     const id = projectDetailsTabId(studyId)
     if (ws.state.activeTabId === id) return // already landed on the homepage
     ws.openTab({ id, kind: 'project-details', title: 'Project' }, true)
-  }, [studyId, ws.ready, autoOpenEventGraphId, ws.state.activeTabId, ws.openTab])
+  }, [studyId, ws.ready, autoOpenEventGraphId, ws.openTab])
 
   // When the active tab becomes a deck tab with a runId, auto-switch the
   // right pane to Protocol mode so the user immediately sees protocol steps
