@@ -28,10 +28,13 @@ export function RunWorkspacePage() {
   const { studyId: urlStudyId, runId } = useParams<{ studyId?: string; runId: string }>()
   const { mode } = useModeToggle()
   const [resolvedStudyId, setResolvedStudyId] = useState<string | null>(urlStudyId ?? null)
+  const [resolvedEventGraphId, setResolvedEventGraphId] = useState<string | undefined>(undefined)
   const openTabs = useOptionalOpenTabs()
 
   // When studyId is not in the URL (route /runs/:runId), fetch it from
-  // the run record's payload. Fall back to scratch study if not found.
+  // the run record's payload. Also fetch the methodEventGraphId so the
+  // EventEditorProvider can load the run's method deck. Fall back to
+  // scratch study if not found.
   useEffect(() => {
     if (urlStudyId) {
       setResolvedStudyId(urlStudyId)
@@ -44,6 +47,8 @@ export function RunWorkspacePage() {
         const payload = env.payload as Record<string, unknown>
         const sid = typeof payload.studyId === 'string' ? payload.studyId : null
         if (!cancelled) setResolvedStudyId(sid ?? SCRATCH_STUDY_ID)
+        const egId = typeof payload.methodEventGraphId === 'string' ? payload.methodEventGraphId : undefined
+        if (!cancelled) setResolvedEventGraphId(egId)
       })
       .catch(() => {
         if (!cancelled) setResolvedStudyId(SCRATCH_STUDY_ID)
@@ -81,7 +86,10 @@ export function RunWorkspacePage() {
 
   return (
     <WorkspaceProvider studyId={resolvedStudyId}>
-      <EventEditorProvider runId={runId}>
+      <EventEditorProvider
+        runId={runId}
+        {...(resolvedEventGraphId ? { eventGraphId: resolvedEventGraphId } : {})}
+      >
         <RunWorkspaceShell rightPane={<RightPane />}>
           <RunWorkspaceContent runId={runId} mode={mode} />
         </RunWorkspaceShell>
