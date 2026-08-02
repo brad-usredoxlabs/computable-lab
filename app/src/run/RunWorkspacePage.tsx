@@ -17,9 +17,10 @@ import { RunWorkspaceShell } from './RunWorkspaceShell'
 import { useModeToggle } from './lib/mode-toggle'
 import { ExecutionView } from '../graph/execution/ExecutionView'
 import { DeckViewer } from '../event-editor/viewer/deck/DeckViewer'
+import { DeckToolbar } from '../event-editor/viewer/deck/DeckToolbar'
 import { apiClient } from '../shared/api/client'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
-import { runTabId } from '../event-editor/workspace/types'
+import { runTabId, type WorkspaceTab } from '../event-editor/workspace/types'
 import { SCRATCH_STUDY_ID } from '../event-editor/legacyRouteResolution'
 import type { PlateEvent } from '../types/events'
 import './RunWorkspacePage.css'
@@ -86,13 +87,24 @@ export function RunWorkspacePage() {
     )
   }
 
+  const deckTab: WorkspaceTab = {
+    id: runTabId(runId),
+    kind: 'deck',
+    eventGraphId: resolvedEventGraphId ?? '',
+    ...(runId ? { runId } : {}),
+    title: `Run ${runId}`,
+  }
+
   return (
     <WorkspaceProvider studyId={resolvedStudyId}>
       <EventEditorProvider
         runId={runId}
         {...(resolvedEventGraphId ? { eventGraphId: resolvedEventGraphId } : {})}
       >
-        <RunWorkspaceShell rightPane={<RightPane />}>
+        <RunWorkspaceShell
+          rightPane={<RightPane />}
+          viewerToolbar={<DeckToolbar tab={deckTab} />}
+        >
           <RunWorkspaceContent runId={runId} mode={mode} />
         </RunWorkspaceShell>
       </EventEditorProvider>

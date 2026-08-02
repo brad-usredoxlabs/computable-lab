@@ -12,9 +12,10 @@ import './RunWorkspaceShell.css'
 export interface RunWorkspaceShellProps {
   children: ReactNode
   rightPane?: ReactNode
+  viewerToolbar?: ReactNode
 }
 
-export function RunWorkspaceShell({ children, rightPane }: RunWorkspaceShellProps) {
+export function RunWorkspaceShell({ children, rightPane, viewerToolbar }: RunWorkspaceShellProps) {
   const { mode, setMode } = useModeToggle()
 
   return (
@@ -25,6 +26,7 @@ export function RunWorkspaceShell({ children, rightPane }: RunWorkspaceShellProp
       topbarTabs={<WorkspaceTabStrip />}
       leftPane={children}
       {...(rightPane ? { rightPane } : {})}
+      {...(viewerToolbar ? { viewerToolbar } : {})}
     />
   )
 }
