@@ -142,6 +142,12 @@ export function executionTabId(eventGraphId: string): string {
   return `execution:${eventGraphId}`
 }
 
+/** Stable id for a top-level deck tab — one per event graph. Re-opening the
+ *  same graph focuses the existing tab instead of stacking duplicates. */
+export function deckTabId(eventGraphId: string): string {
+  return `deck:${eventGraphId}`
+}
+
 /** Stable id for a project tab — one per study. */
 export function projectTabId(studyId: string): string {
   return `project:${studyId}`

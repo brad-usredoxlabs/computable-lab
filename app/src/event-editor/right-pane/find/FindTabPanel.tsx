@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
-import { recordCreateTabId, recordEditTabId, runTabId, type BreadcrumbItem, type WorkspaceTab } from '../../workspace/types'
+import { recordCreateTabId, recordEditTabId, runTabId, deckTabId, type BreadcrumbItem, type WorkspaceTab } from '../../workspace/types'
 import { useOptionalOpenTabs } from '../../../shared/shell/OpenTabsContext'
 import { useStudyArtifacts } from '../useStudyArtifacts'
 import {
@@ -548,7 +548,6 @@ function RunRow({
   availableProtocols: ProtocolContextRecord[]
   projectCrumb?: BreadcrumbItem
 }) {
-  const ws = useWorkspace()
   const navigate = useNavigate()
   const openTabs = useOptionalOpenTabs()
   const [busy, setBusy] = useState(false)
@@ -578,19 +577,23 @@ function RunRow({
         experimentId: run.experimentId,
       })
       window.dispatchEvent(new CustomEvent('cl:records-changed'))
-      ws.openTab({
-        id: `tab-deck-${result.methodEventGraphId}`,
+      // The run's method deck opens as its OWN top-level tab (Phase 4.1),
+      // seeded with the project-origin breadcrumb, and we navigate to it.
+      const deckTab: WorkspaceTab = {
+        id: deckTabId(result.methodEventGraphId),
         kind: 'deck',
         eventGraphId: result.methodEventGraphId,
         runId: run.recordId,
         title: run.title,
-      })
+      }
+      openTabs?.openTab(deckTab, true, projectCrumb ? [projectCrumb] : undefined)
+      navigate(`/deck/${result.methodEventGraphId}/${run.recordId}`)
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err))
     } finally {
       setBusy(false)
     }
-  }, [availableProtocols, run.experimentId, run.recordId, run.studyId, run.title, ws])
+  }, [availableProtocols, run.experimentId, run.recordId, run.studyId, run.title, projectCrumb, openTabs, navigate])
 
   return (
     <li>

@@ -57,6 +57,8 @@ const HomeRedirect = lazy(async () => import('./shared/shell/HomeRedirect').then
 // Phase 2a: standalone artifact viewer routes
 const ArtifactHostPage = lazy(async () => import('./shared/shell/ArtifactHostPage').then((m) => ({ default: m.ArtifactHostPage })))
 const RecordHostPage = lazy(async () => import('./shared/shell/RecordHostPage').then((m) => ({ default: m.RecordHostPage })))
+// Phase 4.1: standalone deck (event-graph) route
+const DeckHostPage = lazy(async () => import('./shared/shell/DeckHostPage').then((m) => ({ default: m.DeckHostPage })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -151,6 +153,9 @@ export function App() {
               {/* Phase 2b: record editors as their own top-level tabs */}
               <Route path="/record/:recordId" element={<DeferredRoute><RecordHostPage /></DeferredRoute>} />
               <Route path="/record/new/:nodeType/:parentId?" element={<DeferredRoute><RecordHostPage /></DeferredRoute>} />
+
+              {/* Phase 4.1: deck (event graph) as its own top-level tab */}
+              <Route path="/deck/:eventGraphId/:runId?" element={<DeferredRoute><DeckHostPage /></DeferredRoute>} />
 
               {/* /settings is a real page in the new UI: off-nav, reached
                   from the brand menu, but with a URL, deep linking, and
