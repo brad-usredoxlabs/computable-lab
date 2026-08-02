@@ -56,6 +56,7 @@ const SplashRoute = lazy(async () => import('./shared/shell/SplashRoute').then((
 const HomeRedirect = lazy(async () => import('./shared/shell/HomeRedirect').then((m) => ({ default: m.HomeRedirect })))
 // Phase 2a: standalone artifact viewer routes
 const ArtifactHostPage = lazy(async () => import('./shared/shell/ArtifactHostPage').then((m) => ({ default: m.ArtifactHostPage })))
+const RecordHostPage = lazy(async () => import('./shared/shell/RecordHostPage').then((m) => ({ default: m.RecordHostPage })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -146,6 +147,10 @@ export function App() {
 
               {/* Phase 2a: standalone artifact routes (PDF + document) */}
               <Route path="/artifact/:kind/:artifactId" element={<DeferredRoute><ArtifactHostPage /></DeferredRoute>} />
+
+              {/* Phase 2b: record editors as their own top-level tabs */}
+              <Route path="/record/:recordId" element={<DeferredRoute><RecordHostPage /></DeferredRoute>} />
+              <Route path="/record/new/:nodeType/:parentId?" element={<DeferredRoute><RecordHostPage /></DeferredRoute>} />
 
               {/* /settings is a real page in the new UI: off-nav, reached
                   from the brand menu, but with a URL, deep linking, and

@@ -14,7 +14,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
-import { recordCreateTabId, recordEditTabId, runTabId, type BreadcrumbItem } from '../../workspace/types'
+import { recordCreateTabId, recordEditTabId, runTabId, type BreadcrumbItem, type WorkspaceTab } from '../../workspace/types'
 import { useOptionalOpenTabs } from '../../../shared/shell/OpenTabsContext'
 import { useStudyArtifacts } from '../useStudyArtifacts'
 import {
@@ -186,6 +186,16 @@ export function FindTabPanel() {
     ? { label: study.title, entityType: 'project' as const, id: study.recordId, route: `/project/${study.recordId}` }
     : undefined
 
+  const navigate = useNavigate()
+  const openTabs = useOptionalOpenTabs()
+
+  // Open a record editor / creator as ITS OWN top-level tab (Phase 2b),
+  // carrying the project-origin breadcrumb, and navigate to its route.
+  const openRecordTab = useCallback((tab: WorkspaceTab, route: string) => {
+    openTabs?.openTab(tab, true, projectCrumb ? [projectCrumb] : undefined)
+    navigate(route)
+  }, [openTabs, navigate, projectCrumb])
+
   const refreshProtocolContext = useCallback(() => {
     let cancelled = false
     apiClient.getProtocolContext({ studyId })
@@ -225,14 +235,11 @@ export function FindTabPanel() {
 
   const openNewExperiment = useCallback(() => {
     setCreateMenuOpen(false)
-    ws.openTab({
-      id: recordCreateTabId('experiment', studyId),
-      kind: 'record-create',
-      nodeType: 'experiment',
-      studyId,
-      title: 'New experiment',
-    })
-  }, [studyId, ws])
+    openRecordTab(
+      { id: recordCreateTabId('experiment', studyId), kind: 'record-create', nodeType: 'experiment', studyId, title: 'New experiment' },
+      `/record/new/experiment/${studyId}`,
+    )
+  }, [studyId, openRecordTab])
 
   const createProjectProtocol = useCallback(async () => {
     setCreateMenuOpen(false)
@@ -241,29 +248,22 @@ export function FindTabPanel() {
       if (!record) return
       const title = protocolRecordTitle(record)
       window.dispatchEvent(new CustomEvent('cl:records-changed'))
-      ws.openTab({
-        id: recordEditTabId(record.recordId),
-        kind: 'record-edit',
-        recordId: record.recordId,
-        recordKind: 'protocol',
-        title,
-      })
+      openRecordTab(
+        { id: recordEditTabId(record.recordId), kind: 'record-edit', recordId: record.recordId, recordKind: 'protocol', title },
+        `/record/${record.recordId}`,
+      )
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err))
     }
-  }, [studyId, ws])
+  }, [studyId, openRecordTab])
 
-  // Open the study record itself in a TapTab left-pane tab — the way back
-  // to the study from the Find tree (mirrors InventoryRow's record-edit).
+  // Open the study record itself in its own top-level tab.
   const openStudyRecord = useCallback(() => {
-    ws.openTab({
-      id: recordEditTabId(studyId),
-      kind: 'record-edit',
-      recordId: studyId,
-      recordKind: 'study',
-      title: study?.title ?? studyId,
-    })
-  }, [studyId, study, ws])
+    openRecordTab(
+      { id: recordEditTabId(studyId), kind: 'record-edit', recordId: studyId, recordKind: 'study', title: study?.title ?? studyId },
+      `/record/${studyId}`,
+    )
+  }, [studyId, study, openRecordTab])
 
   return (
     <div className="right-panel find-tab" data-testid="find-tab">
@@ -363,7 +363,7 @@ export function FindTabPanel() {
                 </h4>
                 <div className="right-panel__group">
                   {section.records.map((record) => (
-                    <InventoryRow key={record.recordId} record={record} />
+                    <InventoryRow key={record.recordId} record={record} projectCrumb={projectCrumb} />
                   ))}
                 </div>
               </section>
@@ -419,22 +419,24 @@ function ExperimentRow({
   experimentProtocols: ProtocolContextRecord[]
   projectCrumb?: BreadcrumbItem
 }) {
-  const ws = useWorkspace()
+  const navigate = useNavigate()
+  const openTabs = useOptionalOpenTabs()
   const [open, setOpen] = useState(true)
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
   const hasRuns = experiment.runs.length > 0
 
+  const openRecordTab = useCallback((tab: WorkspaceTab, route: string) => {
+    openTabs?.openTab(tab, true, projectCrumb ? [projectCrumb] : undefined)
+    navigate(route)
+  }, [openTabs, navigate, projectCrumb])
+
   const openNewRun = useCallback(() => {
     setCreateMenuOpen(false)
-    ws.openTab({
-      id: recordCreateTabId('run', experiment.recordId),
-      kind: 'record-create',
-      nodeType: 'run',
-      studyId,
-      experimentId: experiment.recordId,
-      title: 'New run',
-    })
-  }, [experiment.recordId, studyId, ws])
+    openRecordTab(
+      { id: recordCreateTabId('run', experiment.recordId), kind: 'record-create', nodeType: 'run', studyId, experimentId: experiment.recordId, title: 'New run' },
+      `/record/new/run/${experiment.recordId}`,
+    )
+  }, [experiment.recordId, studyId, openRecordTab])
 
   const createExperimentProtocol = useCallback(async () => {
     setCreateMenuOpen(false)
@@ -453,30 +455,24 @@ function ExperimentRow({
       window.dispatchEvent(new CustomEvent('cl:records-changed'))
       const payload = result.record.payload as Record<string, unknown>
       const resolvedTitle = typeof payload.title === 'string' ? payload.title : result.record.recordId
-      ws.openTab({
-        id: recordEditTabId(result.record.recordId),
-        kind: 'record-edit',
-        recordId: result.record.recordId,
-        recordKind: 'local-protocol',
-        title: resolvedTitle,
-      })
+      openRecordTab(
+        { id: recordEditTabId(result.record.recordId), kind: 'record-edit', recordId: result.record.recordId, recordKind: 'local-protocol', title: resolvedTitle },
+        `/record/${result.record.recordId}`,
+      )
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err))
     }
-  }, [experiment.recordId, experiment.title, projectTemplates, studyId, ws])
+  }, [experiment.recordId, experiment.title, projectTemplates, studyId, openRecordTab])
 
-  // Open the experiment record in a TapTab left-pane tab. The chevron stays a
+  // Open the experiment record in its own top-level tab. The chevron stays a
   // separate disclosure toggle, so clicking the title navigates (file-tree
   // convention: triangle expands, name opens).
   const openExperimentRecord = useCallback(() => {
-    ws.openTab({
-      id: recordEditTabId(experiment.recordId),
-      kind: 'record-edit',
-      recordId: experiment.recordId,
-      recordKind: 'experiment',
-      title: experiment.title,
-    })
-  }, [experiment.recordId, experiment.title, ws])
+    openRecordTab(
+      { id: recordEditTabId(experiment.recordId), kind: 'record-edit', recordId: experiment.recordId, recordKind: 'experiment', title: experiment.title },
+      `/record/${experiment.recordId}`,
+    )
+  }, [experiment.recordId, experiment.title, openRecordTab])
 
   return (
     <li>
@@ -672,9 +668,10 @@ function ArtifactRow({ artifact, projectCrumb }: { artifact: ArtifactSummary; pr
   )
 }
 
-function InventoryRow({ record }: { record: InventoryRecord }) {
-  const ws = useWorkspace()
+function InventoryRow({ record, projectCrumb }: { record: InventoryRecord; projectCrumb?: BreadcrumbItem }) {
   const editable = record.editable !== false
+  const navigate = useNavigate()
+  const openTabs = useOptionalOpenTabs()
   const anchors = record.anchors ?? []
   const VISIBLE_ANCHORS = 3
   return (
@@ -685,15 +682,13 @@ function InventoryRow({ record }: { record: InventoryRecord }) {
       disabled={!editable}
       onClick={() => {
         if (!editable) return
-        // Open the record in a TapTab left-pane tab — stays in the project,
-        // keeps the right panel, no navigation.
-        ws.openTab({
-          id: recordEditTabId(record.recordId),
-          kind: 'record-edit',
-          recordId: record.recordId,
-          recordKind: record.kind,
-          title: record.title,
-        })
+        // Open the record in its own top-level tab (Phase 2b).
+        openTabs?.openTab(
+          { id: recordEditTabId(record.recordId), kind: 'record-edit', recordId: record.recordId, recordKind: record.kind, title: record.title },
+          true,
+          projectCrumb ? [projectCrumb] : undefined,
+        )
+        navigate(`/record/${record.recordId}`)
       }}
       title={
         anchors.length > 0

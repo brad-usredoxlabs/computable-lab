@@ -130,9 +130,13 @@ export function tabPath(tab: WorkspaceTab): string | null {
     case 'document':
       return `/artifact/document/${tab.artifactId}`
     case 'project-details':
-    case 'record-create':
-    case 'record-edit':
       return null
+    case 'record-create': {
+      const parent = tab.nodeType === 'run' ? tab.experimentId : (tab.nodeType === 'experiment' ? tab.studyId : undefined)
+      return `/record/new/${tab.nodeType}${parent ? '/' + parent : ''}`
+    }
+    case 'record-edit':
+      return `/record/${tab.recordId}`
     case 'collection':
       return `/${tab.collection}`
     case 'splash':
