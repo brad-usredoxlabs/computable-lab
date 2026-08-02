@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { openTabsReducer, type OpenTabsState } from './OpenTabsContext'
-import type { WorkspaceTab } from '../../event-editor/workspace/types'
+import type { WorkspaceTab, BreadcrumbItem } from '../../event-editor/workspace/types'
 
 const projectTab: WorkspaceTab = {
   id: 'project:STU-1',
@@ -29,6 +29,20 @@ const claimTab: WorkspaceTab = {
 
 const emptyState: OpenTabsState = { tabs: [], activeTabId: null }
 
+const sampleCrumb: BreadcrumbItem = {
+  label: 'DHVC Project',
+  entityType: 'project',
+  id: 'STU-1',
+  route: '/project/STU-1',
+}
+
+const sampleCrumb2: BreadcrumbItem = {
+  label: 'First Titration',
+  entityType: 'run',
+  id: 'RUN-1',
+  route: '/project/STU-1/run/RUN-1',
+}
+
 describe('openTabsReducer', () => {
   it('opens a new tab and activates it', () => {
     const next = openTabsReducer(emptyState, { type: 'open', tab: projectTab })
@@ -39,7 +53,7 @@ describe('openTabsReducer', () => {
 
   it('opens a tab without activating when activate=false', () => {
     const state: OpenTabsState = {
-      tabs: [{ tab: projectTab, activeRightPaneMode: 'find' }],
+      tabs: [{ tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] }],
       activeTabId: 'project:STU-1',
     }
     const next = openTabsReducer(state, { type: 'open', tab: runTab, activate: false })
@@ -49,7 +63,7 @@ describe('openTabsReducer', () => {
 
   it('opens a duplicate tab id — replaces and activates', () => {
     const state: OpenTabsState = {
-      tabs: [{ tab: projectTab, activeRightPaneMode: 'find' }],
+      tabs: [{ tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [sampleCrumb] }],
       activeTabId: 'project:STU-1',
     }
     const updatedTab: WorkspaceTab = {
@@ -59,13 +73,15 @@ describe('openTabsReducer', () => {
     const next = openTabsReducer(state, { type: 'open', tab: updatedTab })
     expect(next.tabs).toHaveLength(1)
     expect(next.tabs[0]?.tab.title).toBe('DHVC Updated')
+    // Breadcrumb should be preserved on dedup
+    expect(next.tabs[0]?.breadcrumb).toEqual([sampleCrumb])
   })
 
   it('closes a tab and falls back to sibling', () => {
     const state: OpenTabsState = {
       tabs: [
-        { tab: projectTab, activeRightPaneMode: 'find' },
-        { tab: runTab, activeRightPaneMode: 'protocol' },
+        { tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] },
+        { tab: runTab, activeRightPaneMode: 'protocol', breadcrumb: [] },
       ],
       activeTabId: 'run:RUN-1',
     }
@@ -76,7 +92,7 @@ describe('openTabsReducer', () => {
 
   it('closes the last tab and sets activeTabId to null', () => {
     const state: OpenTabsState = {
-      tabs: [{ tab: projectTab, activeRightPaneMode: 'find' }],
+      tabs: [{ tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] }],
       activeTabId: 'project:STU-1',
     }
     const next = openTabsReducer(state, { type: 'close', tabId: 'project:STU-1' })
@@ -87,8 +103,8 @@ describe('openTabsReducer', () => {
   it('activates an existing tab', () => {
     const state: OpenTabsState = {
       tabs: [
-        { tab: projectTab, activeRightPaneMode: 'find' },
-        { tab: claimTab, activeRightPaneMode: 'ai' },
+        { tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] },
+        { tab: claimTab, activeRightPaneMode: 'ai', breadcrumb: [] },
       ],
       activeTabId: 'project:STU-1',
     }
@@ -98,7 +114,7 @@ describe('openTabsReducer', () => {
 
   it('rejects activation of unknown tab', () => {
     const state: OpenTabsState = {
-      tabs: [{ tab: projectTab, activeRightPaneMode: 'find' }],
+      tabs: [{ tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] }],
       activeTabId: 'project:STU-1',
     }
     const next = openTabsReducer(state, { type: 'activate', tabId: 'unknown' })
@@ -108,8 +124,8 @@ describe('openTabsReducer', () => {
   it('sets right-pane mode per tab', () => {
     const state: OpenTabsState = {
       tabs: [
-        { tab: projectTab, activeRightPaneMode: 'find' },
-        { tab: runTab, activeRightPaneMode: 'protocol' },
+        { tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] },
+        { tab: runTab, activeRightPaneMode: 'protocol', breadcrumb: [] },
       ],
       activeTabId: 'project:STU-1',
     }
@@ -124,7 +140,7 @@ describe('openTabsReducer', () => {
 
   it('renames a tab', () => {
     const state: OpenTabsState = {
-      tabs: [{ tab: projectTab, activeRightPaneMode: 'find' }],
+      tabs: [{ tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] }],
       activeTabId: 'project:STU-1',
     }
     const next = openTabsReducer(state, {
@@ -133,5 +149,72 @@ describe('openTabsReducer', () => {
       title: 'New Title',
     })
     expect(next.tabs[0]?.tab.title).toBe('New Title')
+  })
+
+  // ── Breadcrumb tests ──
+
+  it('opens with seedBreadcrumb and stores it', () => {
+    const next = openTabsReducer(emptyState, {
+      type: 'open',
+      tab: projectTab,
+      seedBreadcrumb: [sampleCrumb],
+    })
+    expect(next.tabs[0]?.breadcrumb).toEqual([sampleCrumb])
+  })
+
+  it('opens without seedBreadcrumb defaults to empty array', () => {
+    const next = openTabsReducer(emptyState, { type: 'open', tab: projectTab })
+    expect(next.tabs[0]?.breadcrumb).toEqual([])
+  })
+
+  it('navigate replaces tab content and appends a crumb', () => {
+    const state: OpenTabsState = {
+      tabs: [{ tab: projectTab, activeRightPaneMode: 'ai', breadcrumb: [sampleCrumb] }],
+      activeTabId: 'project:STU-1',
+    }
+    const next = openTabsReducer(state, {
+      type: 'navigate',
+      tabId: 'project:STU-1',
+      tab: runTab,
+      crumb: sampleCrumb2,
+    })
+    expect(next.tabs[0]?.tab.id).toBe('run:RUN-1')
+    expect(next.tabs[0]?.breadcrumb).toEqual([sampleCrumb, sampleCrumb2])
+  })
+
+  it('navigate without crumb keeps breadcrumb unchanged', () => {
+    const state: OpenTabsState = {
+      tabs: [{ tab: projectTab, activeRightPaneMode: 'ai', breadcrumb: [sampleCrumb] }],
+      activeTabId: 'project:STU-1',
+    }
+    const next = openTabsReducer(state, {
+      type: 'navigate',
+      tabId: 'project:STU-1',
+      tab: runTab,
+    })
+    expect(next.tabs[0]?.tab.id).toBe('run:RUN-1')
+    expect(next.tabs[0]?.breadcrumb).toEqual([sampleCrumb])
+  })
+
+  it('navigate skips tabs that do not match tabId', () => {
+    const state: OpenTabsState = {
+      tabs: [
+        { tab: projectTab, activeRightPaneMode: 'ai', breadcrumb: [] },
+        { tab: claimTab, activeRightPaneMode: 'ai', breadcrumb: [] },
+      ],
+      activeTabId: 'project:STU-1',
+    }
+    const next = openTabsReducer(state, {
+      type: 'navigate',
+      tabId: 'claim:CLM-1',
+      tab: runTab,
+      crumb: sampleCrumb2,
+    })
+    // project tab unchanged
+    expect(next.tabs[0]?.tab.id).toBe('project:STU-1')
+    expect(next.tabs[0]?.breadcrumb).toEqual([])
+    // claim tab navigated
+    expect(next.tabs[1]?.tab.id).toBe('run:RUN-1')
+    expect(next.tabs[1]?.breadcrumb).toEqual([sampleCrumb2])
   })
 })

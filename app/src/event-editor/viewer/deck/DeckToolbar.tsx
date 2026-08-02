@@ -22,15 +22,17 @@ import { EventGraphChip } from '../../topbar/EventGraphChip'
 import { useEventEditor } from '../../EventEditorContext'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
 import { EditableTitle } from '../../../shared/shell/EditableTitle'
+import { TabBreadcrumb } from '../../../shared/shell/TabBreadcrumb'
 import { RunBreadcrumb } from './RunBreadcrumb'
 import { apiClient } from '../../../shared/api/client'
-import type { WorkspaceTab } from '../../workspace/types'
+import type { BreadcrumbItem, WorkspaceTab } from '../../workspace/types'
 
 export interface DeckToolbarProps {
   tab: WorkspaceTab | null
+  breadcrumb?: BreadcrumbItem[]
 }
 
-export function DeckToolbar({ tab }: DeckToolbarProps) {
+export function DeckToolbar({ tab, breadcrumb }: DeckToolbarProps) {
   const { state } = useEventEditor()
   const ws = useWorkspace()
   const runDeckLocked = state.runDeckLock?.locked === true
@@ -57,17 +59,21 @@ export function DeckToolbar({ tab }: DeckToolbarProps) {
     }
   }
 
+  const useBreadcrumb = hasRun && breadcrumb && breadcrumb.length > 0
+
   return (
     <div className="event-editor viewer-toolbar viewer-toolbar--deck">
-      {hasRun ? (
-        <RunBreadcrumb runId={runId} />
-      ) : null}
-      {hasRun ? (
-        <EditableTitle
-          title={tabTitle ?? 'Untitled Run'}
-          onCommit={handleRename}
-          testId="run-title"
-        />
+      {useBreadcrumb ? (
+        <TabBreadcrumb crumbs={breadcrumb} current={tabTitle ?? 'Untitled Run'} />
+      ) : hasRun ? (
+        <>
+          <RunBreadcrumb runId={runId} />
+          <EditableTitle
+            title={tabTitle ?? 'Untitled Run'}
+            onCommit={handleRename}
+            testId="run-title"
+          />
+        </>
       ) : null}
       {hasRun ? <span className="deck-toolbar__separator" aria-hidden /> : null}
       <UndoRedoControls />

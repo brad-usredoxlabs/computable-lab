@@ -19,11 +19,13 @@ import {
   useEffect,
   type ReactNode,
 } from 'react'
-import type { WorkspaceRightPaneMode, WorkspaceTab } from '../../event-editor/workspace/types'
+import type { BreadcrumbItem, WorkspaceRightPaneMode, WorkspaceTab } from '../../event-editor/workspace/types'
 
 export interface OpenTabState {
   tab: WorkspaceTab
   activeRightPaneMode: WorkspaceRightPaneMode
+  /** Each tab's origin trail ("how I got here"), oldest → most recent. */
+  breadcrumb: BreadcrumbItem[]
 }
 
 export interface OpenTabsState {
@@ -32,7 +34,8 @@ export interface OpenTabsState {
 }
 
 export type OpenTabsAction =
-  | { type: 'open'; tab: WorkspaceTab; activate?: boolean }
+  | { type: 'open'; tab: WorkspaceTab; activate?: boolean; seedBreadcrumb?: BreadcrumbItem[] }
+  | { type: 'navigate'; tabId: string; tab: WorkspaceTab; crumb?: BreadcrumbItem }
   | { type: 'close'; tabId: string }
   | { type: 'activate'; tabId: string }
   | { type: 'rename'; tabId: string; title: string }
@@ -58,6 +61,7 @@ export function openTabsReducer(state: OpenTabsState, action: OpenTabsAction): O
       const newEntry: OpenTabState = {
         tab: action.tab,
         activeRightPaneMode: defaultRightPaneMode(action.tab),
+        breadcrumb: action.seedBreadcrumb ?? [],
       }
       return {
         tabs: [...state.tabs, newEntry],
@@ -94,6 +98,17 @@ export function openTabsReducer(state: OpenTabsState, action: OpenTabsAction): O
           t.tab.id === action.tabId
             ? { ...t, activeRightPaneMode: action.mode }
             : t,
+        ),
+      }
+    }
+    case 'navigate': {
+      const crumbOk = action.crumb && action.crumb.label
+      return {
+        ...state,
+        tabs: state.tabs.map((entry) =>
+          entry.tab.id === action.tabId
+            ? { ...entry, tab: action.tab, breadcrumb: crumbOk ? entry.breadcrumb.concat([action.crumb as BreadcrumbItem]) : entry.breadcrumb }
+            : entry,
         ),
       }
     }
@@ -145,6 +160,7 @@ const STORAGE_KEY = 'cl-open-tabs'
 interface StoredTabEntry {
   tab: WorkspaceTab
   activeRightPaneMode: WorkspaceRightPaneMode
+  breadcrumb?: BreadcrumbItem[]
 }
 
 interface StoredState {
@@ -163,6 +179,7 @@ function loadFromStorage(userId?: string): OpenTabsState {
       tabs: parsed.tabs.map((t) => ({
         tab: t.tab,
         activeRightPaneMode: t.activeRightPaneMode ?? 'ai',
+        breadcrumb: t.breadcrumb ?? [],
       })),
       activeTabId: parsed.activeTabId ?? null,
     }
@@ -178,6 +195,7 @@ function saveToStorage(state: OpenTabsState, userId?: string) {
       tabs: state.tabs.map((t) => ({
         tab: t.tab,
         activeRightPaneMode: t.activeRightPaneMode,
+        breadcrumb: t.breadcrumb,
       })),
       activeTabId: state.activeTabId,
     }
@@ -191,7 +209,8 @@ function saveToStorage(state: OpenTabsState, userId?: string) {
 
 export interface OpenTabsContextValue {
   state: OpenTabsState
-  openTab: (tab: WorkspaceTab, activate?: boolean) => void
+  openTab: (tab: WorkspaceTab, activate?: boolean, seedBreadcrumb?: BreadcrumbItem[]) => void
+  navigateTab: (tabId: string, tab: WorkspaceTab, crumb?: BreadcrumbItem) => void
   closeTab: (tabId: string) => void
   activateTab: (tabId: string) => void
   renameTab: (tabId: string, title: string) => void
@@ -221,8 +240,11 @@ export function OpenTabsProvider({ userId, children }: OpenTabsProviderProps) {
 
   const value: OpenTabsContextValue = {
     state,
-    openTab: useCallback((tab: WorkspaceTab, activate?: boolean) => {
-      dispatch({ type: 'open', tab, ...(activate !== undefined ? { activate } : {}) })
+    openTab: useCallback((tab: WorkspaceTab, activate?: boolean, seedBreadcrumb?: BreadcrumbItem[]) => {
+      dispatch({ type: 'open', tab, ...(activate !== undefined ? { activate } : {}), ...(seedBreadcrumb ? { seedBreadcrumb } : {}) })
+    }, []),
+    navigateTab: useCallback((tabId: string, tab: WorkspaceTab, crumb?: BreadcrumbItem) => {
+      dispatch({ type: 'navigate', tabId, tab, ...(crumb ? { crumb } : {}) })
     }, []),
     closeTab: useCallback((tabId: string) => {
       dispatch({ type: 'close', tabId })

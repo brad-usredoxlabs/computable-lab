@@ -205,6 +205,14 @@ export function entityTabType(tab: WorkspaceTab): EntityTabType | null {
   }
 }
 
+/** One crumb in a tab's origin trail ("how I got here"). */
+export interface BreadcrumbItem {
+  label: string
+  entityType: 'project' | 'run' | 'claim' | 'lab' | 'collection' | null
+  id?: string
+  route?: string
+}
+
 /**
  * Phase 12 renamed `browse` to `find`. The `find` tab was removed —
  * it was wrong to surface an in-project tree while viewing a run.

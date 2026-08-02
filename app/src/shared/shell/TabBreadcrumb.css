@@ -1,0 +1,16 @@
+.tab-breadcrumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  color: var(--cl-text-dim, #555);
+  white-space: nowrap;
+}
+.tab-breadcrumb__sep { color: var(--cl-text-faint, #999); margin: 0 4px; }
+.tab-breadcrumb__link {
+  border: none; background: none; padding: 2px 2px; cursor: pointer;
+  color: var(--cl-accent, #2563eb); font-size: 13px; font-weight: 500;
+}
+.tab-breadcrumb__link:hover { text-decoration: underline; }
+.tab-breadcrumb__static { color: var(--cl-text-dim, #555); }
+.tab-breadcrumb__current { font-weight: 600; color: var(--cl-text, #1a1a1a); max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
