@@ -565,6 +565,7 @@ function RunRow({
         id: `tab-deck-${summary.methodEventGraphId}`,
         kind: 'deck',
         eventGraphId: summary.methodEventGraphId,
+        runId: run.recordId,
         title: run.title,
       })
     } catch {
