@@ -8,7 +8,8 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { AppShell } from '../shared/shell'
+import { AppShell } from "../shared/shell"
+import { WorkspaceTabStrip } from "../shared/shell/WorkspaceTabStrip"
 import { apiClient } from '../shared/api/client'
 import type { RecordEnvelope } from '../types/kernel'
 import './ClaimCollectionView.css'
@@ -172,7 +173,7 @@ export function ClaimCollectionView() {
     <AppShell
       brand="Claims"
       layout="workspace"
-      topbarTabs={<div />}
+      topbarTabs={<WorkspaceTabStrip />}
       leftPane={collectionContent}
     />
   )
