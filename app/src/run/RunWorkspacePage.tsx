@@ -8,10 +8,10 @@
  * - Right rail adapts: Plan → AI tab; Execute → Chat tab with run conversation
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { EventEditorProvider } from '../event-editor/EventEditorContext'
-import { WorkspaceProvider } from '../event-editor/workspace/WorkspaceContext'
+import { WorkspaceProvider, useWorkspace } from '../event-editor/workspace/WorkspaceContext'
 import { RightPane } from '../event-editor/right-pane/RightPane'
 import { RunWorkspaceShell } from './RunWorkspaceShell'
 import { useModeToggle } from './lib/mode-toggle'
@@ -33,6 +33,7 @@ export function RunWorkspacePage() {
   const { mode } = useModeToggle()
   const [resolvedStudyId, setResolvedStudyId] = useState<string | null>(urlStudyId ?? null)
   const [resolvedEventGraphId, setResolvedEventGraphId] = useState<string | undefined>(undefined)
+  const [runTitle, setRunTitle] = useState<string | null>(null)
   const openTabs = useOptionalOpenTabs()
 
   // When studyId is not in the URL (route /runs/:runId), fetch it from
@@ -53,6 +54,8 @@ export function RunWorkspacePage() {
         if (!cancelled) setResolvedStudyId(sid ?? SCRATCH_STUDY_ID)
         const egId = typeof payload.methodEventGraphId === 'string' ? payload.methodEventGraphId : undefined
         if (!cancelled) setResolvedEventGraphId(egId)
+        const t = typeof payload.title === 'string' && payload.title.trim() ? payload.title : null
+        if (!cancelled) setRunTitle(t)
       })
       .catch(() => {
         if (!cancelled) setResolvedStudyId(SCRATCH_STUDY_ID)
@@ -63,13 +66,14 @@ export function RunWorkspacePage() {
   // Open a run tab in the tab strip on mount
   useEffect(() => {
     if (!runId || !openTabs) return
+    const title = runTitle ?? `Run ${runId}`
     openTabs.openTab({
       id: runTabId(runId),
       kind: 'run',
       runId,
-      title: `Run ${runId}`,
+      title,
     }, true)
-  }, [runId])
+  }, [runId, runTitle])
 
   if (!runId) {
     return (
@@ -88,16 +92,19 @@ export function RunWorkspacePage() {
     )
   }
 
+  const title = runTitle ?? `Run ${runId}`
+
   const deckTab: WorkspaceTab = {
     id: runTabId(runId),
     kind: 'deck',
     eventGraphId: resolvedEventGraphId ?? '',
     ...(runId ? { runId } : {}),
-    title: `Run ${runId}`,
+    title,
   }
 
   return (
     <WorkspaceProvider studyId={resolvedStudyId}>
+      <RunPaneMode />
       <EventEditorProvider
         runId={runId}
         {...(resolvedEventGraphId ? { eventGraphId: resolvedEventGraphId } : {})}
@@ -113,6 +120,20 @@ export function RunWorkspacePage() {
       </EventEditorProvider>
     </WorkspaceProvider>
   )
+}
+
+/** Set the run workspace's right pane to Protocol once on mount (mirrors
+ *  ProjectWorkspacePage's deck+run auto-switch). A ref guard lets the user's
+ *  manual mode choice win afterward. */
+function RunPaneMode() {
+  const ws = useWorkspace()
+  const done = useRef(false)
+  useEffect(() => {
+    if (!ws.ready || done.current) return
+    done.current = true
+    ws.setRightPaneMode('protocol')
+  }, [ws.ready, ws.setRightPaneMode])
+  return null
 }
 
 interface RunWorkspaceContentProps {
