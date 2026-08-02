@@ -12,6 +12,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { usePdfViewer } from './PdfViewerContext'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
 import { recordEditTabId } from '../../workspace/types'
+import { useNavigate } from 'react-router-dom'
+import { useOptionalOpenTabs } from '../../../shared/shell/OpenTabsContext'
 import { apiClient } from '../../../shared/api/client'
 import type { AiProtocolCandidateSummary } from '../../../types/ai'
 
@@ -86,6 +88,8 @@ export function ConvertToProtocolModal({
 }: ConvertToProtocolModalProps) {
   const v = usePdfViewer()
   const ws = useWorkspace()
+  const navigate = useNavigate()
+  const openTabs = useOptionalOpenTabs()
 
   const [phase, setPhase] = useState<Phase>('idle')
   const [result, setResult] = useState<ExtractionResult | null>(null)
@@ -173,16 +177,13 @@ export function ConvertToProtocolModal({
   const handleOpenProtocol = useCallback(() => {
     if (!result?.candidate || !result.recordId) return
 
-    ws.openTab({
-      id: recordEditTabId(result.recordId),
-      kind: 'record-edit',
-      recordId: result.recordId,
-      recordKind: 'protocol',
-      title: result.candidate.title ?? 'Protocol',
-    })
-    ws.setRightPaneMode('find')
+    openTabs?.openTab(
+      { id: recordEditTabId(result.recordId), kind: 'record-edit', recordId: result.recordId, recordKind: 'protocol', title: result.candidate.title ?? 'Protocol' },
+      true,
+    )
+    navigate(`/record/${result.recordId}`)
     onClose()
-  }, [result, ws, onClose])
+  }, [result, openTabs, navigate, onClose])
 
   /* ---- Guard: return null when closed ---- */
   if (!isOpen) return null
