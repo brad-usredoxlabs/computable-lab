@@ -10,6 +10,38 @@
   padding: 0 8px;
 }
 
+/* Leading Back/Forward controls (browser-style across-tab history). */
+.workspace-tab-strip__nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px 0 0;
+  margin-right: 4px;
+  border-right: 1px solid var(--cl-border);
+  flex-shrink: 0;
+}
+
+.workspace-tab__nav-btn {
+  border: none;
+  background: transparent;
+  color: var(--cl-text-dim);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 15px;
+  line-height: 1;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.workspace-tab__nav-btn:hover:not(:disabled) {
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+}
+.workspace-tab__nav-btn:disabled {
+  color: var(--cl-text-faint);
+  cursor: default;
+  opacity: 0.5;
+}
+
 .workspace-tab {
   display: flex;
   align-items: center;

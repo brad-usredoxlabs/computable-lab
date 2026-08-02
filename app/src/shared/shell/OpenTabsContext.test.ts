@@ -27,7 +27,7 @@ const claimTab: WorkspaceTab = {
   title: 'Cytation 5 quantifies dsDNA',
 }
 
-const emptyState: OpenTabsState = { tabs: [], activeTabId: null }
+const emptyState: OpenTabsState = { tabs: [], activeTabId: null, history: [], historyCursor: -1 }
 
 const sampleCrumb: BreadcrumbItem = {
   label: 'DHVC Project',
@@ -55,6 +55,8 @@ describe('openTabsReducer', () => {
     const state: OpenTabsState = {
       tabs: [{ tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] }],
       activeTabId: 'project:STU-1',
+      history: [],
+      historyCursor: -1,
     }
     const next = openTabsReducer(state, { type: 'open', tab: runTab, activate: false })
     expect(next.tabs).toHaveLength(2)
@@ -65,6 +67,8 @@ describe('openTabsReducer', () => {
     const state: OpenTabsState = {
       tabs: [{ tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [sampleCrumb] }],
       activeTabId: 'project:STU-1',
+      history: [],
+      historyCursor: -1,
     }
     const updatedTab: WorkspaceTab = {
       ...projectTab,
@@ -84,6 +88,8 @@ describe('openTabsReducer', () => {
         { tab: runTab, activeRightPaneMode: 'protocol', breadcrumb: [] },
       ],
       activeTabId: 'run:RUN-1',
+      history: [],
+      historyCursor: -1,
     }
     const next = openTabsReducer(state, { type: 'close', tabId: 'run:RUN-1' })
     expect(next.tabs).toHaveLength(1)
@@ -94,6 +100,8 @@ describe('openTabsReducer', () => {
     const state: OpenTabsState = {
       tabs: [{ tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] }],
       activeTabId: 'project:STU-1',
+      history: [],
+      historyCursor: -1,
     }
     const next = openTabsReducer(state, { type: 'close', tabId: 'project:STU-1' })
     expect(next.tabs).toHaveLength(0)
@@ -107,6 +115,8 @@ describe('openTabsReducer', () => {
         { tab: claimTab, activeRightPaneMode: 'ai', breadcrumb: [] },
       ],
       activeTabId: 'project:STU-1',
+      history: [],
+      historyCursor: -1,
     }
     const next = openTabsReducer(state, { type: 'activate', tabId: 'claim:CLM-1' })
     expect(next.activeTabId).toBe('claim:CLM-1')
@@ -116,6 +126,8 @@ describe('openTabsReducer', () => {
     const state: OpenTabsState = {
       tabs: [{ tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] }],
       activeTabId: 'project:STU-1',
+      history: [],
+      historyCursor: -1,
     }
     const next = openTabsReducer(state, { type: 'activate', tabId: 'unknown' })
     expect(next.activeTabId).toBe('project:STU-1')
@@ -128,6 +140,8 @@ describe('openTabsReducer', () => {
         { tab: runTab, activeRightPaneMode: 'protocol', breadcrumb: [] },
       ],
       activeTabId: 'project:STU-1',
+      history: [],
+      historyCursor: -1,
     }
     const next = openTabsReducer(state, {
       type: 'set-right-pane-mode',
@@ -142,6 +156,8 @@ describe('openTabsReducer', () => {
     const state: OpenTabsState = {
       tabs: [{ tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] }],
       activeTabId: 'project:STU-1',
+      history: [],
+      historyCursor: -1,
     }
     const next = openTabsReducer(state, {
       type: 'rename',
@@ -171,6 +187,8 @@ describe('openTabsReducer', () => {
     const state: OpenTabsState = {
       tabs: [{ tab: projectTab, activeRightPaneMode: 'ai', breadcrumb: [sampleCrumb] }],
       activeTabId: 'project:STU-1',
+      history: [],
+      historyCursor: -1,
     }
     const next = openTabsReducer(state, {
       type: 'navigate',
@@ -186,6 +204,8 @@ describe('openTabsReducer', () => {
     const state: OpenTabsState = {
       tabs: [{ tab: projectTab, activeRightPaneMode: 'ai', breadcrumb: [sampleCrumb] }],
       activeTabId: 'project:STU-1',
+      history: [],
+      historyCursor: -1,
     }
     const next = openTabsReducer(state, {
       type: 'navigate',
@@ -203,6 +223,8 @@ describe('openTabsReducer', () => {
         { tab: claimTab, activeRightPaneMode: 'ai', breadcrumb: [] },
       ],
       activeTabId: 'project:STU-1',
+      history: [],
+      historyCursor: -1,
     }
     const next = openTabsReducer(state, {
       type: 'navigate',

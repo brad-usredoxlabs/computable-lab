@@ -14,7 +14,7 @@
  */
 
 import { useNavigate } from 'react-router-dom'
-import { useOpenTabs } from './OpenTabsContext'
+import { useOpenTabs, backTargetId, forwardTargetId } from './OpenTabsContext'
 import { entityTabType, splashTabId, type WorkspaceTab } from '../../event-editor/workspace/types'
 import './WorkspaceTabStrip.css'
 
@@ -26,7 +26,7 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 export function WorkspaceTabStrip() {
-  const { state, closeTab, activateTab, openTab } = useOpenTabs()
+  const { state, closeTab, activateTab, openTab, canGoBack, canGoForward, back, forward } = useOpenTabs()
   const navigate = useNavigate()
 
   const handleAddTab = () => {
@@ -35,8 +35,48 @@ export function WorkspaceTabStrip() {
     navigate('/splash')
   }
 
+  const handleBack = () => {
+    const targetId = backTargetId(state)
+    if (targetId === null) return
+    back()
+    const target = state.tabs.find((t) => t.tab.id === targetId)
+    const path = target ? tabPath(target.tab) : null
+    if (path) navigate(path)
+  }
+
+  const handleForward = () => {
+    const targetId = forwardTargetId(state)
+    if (targetId === null) return
+    forward()
+    const target = state.tabs.find((t) => t.tab.id === targetId)
+    const path = target ? tabPath(target.tab) : null
+    if (path) navigate(path)
+  }
+
   return (
     <div className="workspace-tab-strip" role="tablist" data-testid="workspace-tab-strip">
+      <div className="workspace-tab-strip__nav" data-testid="tab-history-nav">
+        <button
+          type="button"
+          className="workspace-tab__nav-btn"
+          disabled={!canGoBack}
+          aria-label="Back"
+          title="Back to previous tab"
+          onClick={handleBack}
+        >
+          ←
+        </button>
+        <button
+          type="button"
+          className="workspace-tab__nav-btn"
+          disabled={!canGoForward}
+          aria-label="Forward"
+          title="Forward to next tab"
+          onClick={handleForward}
+        >
+          →
+        </button>
+      </div>
       {state.tabs
         .filter(({ tab }) => tab.kind !== 'collection')
         .map(({ tab }) => {
