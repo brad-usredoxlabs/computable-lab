@@ -80,9 +80,11 @@ export function RunWorkspacePage() {
 
   return (
     <WorkspaceProvider studyId={resolvedStudyId}>
-      <RunWorkspaceShell rightPane={<RightPane />}>
-        <RunWorkspaceContent runId={runId} mode={mode} />
-      </RunWorkspaceShell>
+      <EventEditorProvider runId={runId}>
+        <RunWorkspaceShell rightPane={<RightPane />}>
+          <RunWorkspaceContent runId={runId} mode={mode} />
+        </RunWorkspaceShell>
+      </EventEditorProvider>
     </WorkspaceProvider>
   )
 }
@@ -124,14 +126,12 @@ function RunWorkspaceContent({ runId, mode }: RunWorkspaceContentProps) {
     )
   }
 
-  // Plan mode - use EventEditorProvider
+  // Plan mode — EventEditorProvider is already wrapping the entire shell
   return (
-    <EventEditorProvider runId={runId}>
-      <div className="run-workspace__plan-mode">
-        {/* Event editor content will be rendered here */}
-        <p>Plan Mode: Event Editor</p>
-        <p>Run ID: {runId}</p>
-      </div>
-    </EventEditorProvider>
+    <div className="run-workspace__plan-mode">
+      {/* Event editor content will be rendered here */}
+      <p>Plan Mode: Event Editor</p>
+      <p>Run ID: {runId}</p>
+    </div>
   )
 }
