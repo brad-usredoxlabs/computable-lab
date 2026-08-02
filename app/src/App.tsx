@@ -51,8 +51,11 @@ const LabCollectionView = lazy(async () => import('./collections/LabCollectionVi
 const ClaimWorkspace = lazy(async () => import('./claims/ClaimWorkspace').then((m) => ({ default: m.ClaimWorkspace })))
 // Phase 8: Lab entity workspace
 const LabEntityWorkspace = lazy(async () => import('./lab/LabEntityWorkspace').then((m) => ({ default: m.LabEntityWorkspace })))
+const IngestionPage = lazy(async () => import('./ingestion/IngestionPage').then((m) => ({ default: m.IngestionPage })))
 const SplashRoute = lazy(async () => import('./shared/shell/SplashRoute').then((m) => ({ default: m.SplashRoute })))
 const HomeRedirect = lazy(async () => import('./shared/shell/HomeRedirect').then((m) => ({ default: m.HomeRedirect })))
+// Phase 2a: standalone artifact viewer routes
+const ArtifactHostPage = lazy(async () => import('./shared/shell/ArtifactHostPage').then((m) => ({ default: m.ArtifactHostPage })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -109,6 +112,8 @@ export function App() {
               <Route path="/lab" element={<DeferredRoute><LabCollectionView /></DeferredRoute>} />
               <Route path="/lab/:category" element={<DeferredRoute><LabCollectionView /></DeferredRoute>} />
               <Route path="/lab/:category/:entityId" element={<DeferredRoute><LabEntityWorkspace /></DeferredRoute>} />
+              <Route path="/ingestion" element={<DeferredRoute><IngestionPage /></DeferredRoute>} />
+              <Route path="/ingestion/:tab" element={<DeferredRoute><IngestionPage /></DeferredRoute>} />
               <Route path="/splash" element={<DeferredRoute><SplashRoute /></DeferredRoute>} />
 
               {/* Creation-entry-points spec §4.1: project creation needs a
@@ -138,6 +143,9 @@ export function App() {
                   to /runs/:runId. Old route redirects for one release cycle. */}
               <Route path="/project/:studyId/run/:runId" element={<RunWorkspaceRedirect />} />
               <Route path="/runs/:runId" element={<DeferredRoute><RunWorkspacePage /></DeferredRoute>} />
+
+              {/* Phase 2a: standalone artifact routes (PDF + document) */}
+              <Route path="/artifact/:kind/:artifactId" element={<DeferredRoute><ArtifactHostPage /></DeferredRoute>} />
 
               {/* /settings is a real page in the new UI: off-nav, reached
                   from the brand menu, but with a URL, deep linking, and

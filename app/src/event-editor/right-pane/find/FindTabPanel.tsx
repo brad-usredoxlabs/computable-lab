@@ -394,7 +394,7 @@ export function FindTabPanel() {
                 </h4>
                 <div className="right-panel__group">
                   {rows.map((row) => (
-                    <ArtifactRow key={row.recordId} artifact={row} />
+                    <ArtifactRow key={row.recordId} artifact={row} projectCrumb={projectCrumb} />
                   ))}
                 </div>
               </section>
@@ -635,8 +635,9 @@ function RunRow({
   )
 }
 
-function ArtifactRow({ artifact }: { artifact: ArtifactSummary }) {
-  const ws = useWorkspace()
+function ArtifactRow({ artifact, projectCrumb }: { artifact: ArtifactSummary; projectCrumb?: BreadcrumbItem }) {
+  const openTabs = useOptionalOpenTabs()
+  const navigate = useNavigate()
   const tab = tabForArtifact(artifact)
   const disabled = tab === null
   return (
@@ -646,7 +647,15 @@ function ArtifactRow({ artifact }: { artifact: ArtifactSummary }) {
       data-testid={`find-tab-row-${artifact.recordId}`}
       disabled={disabled}
       onClick={() => {
-        if (tab) ws.openTab(tab)
+        if (!tab) return
+        if (tab.kind === 'pdf' || tab.kind === 'document') {
+          const route =
+            tab.kind === 'pdf'
+              ? `/artifact/pdf/${tab.artifactId}`
+              : `/artifact/document/${tab.artifactId}`
+          openTabs?.openTab(tab, true, projectCrumb ? [projectCrumb] : undefined)
+          navigate(route)
+        }
       }}
       title={
         disabled

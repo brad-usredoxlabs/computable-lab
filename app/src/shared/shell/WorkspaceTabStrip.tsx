@@ -124,8 +124,11 @@ export function tabPath(tab: WorkspaceTab): string | null {
     // Viewer tabs don't have standalone routes — they live within a
     // project workspace. Return null to skip navigation.
     case 'deck':
+      return null
     case 'pdf':
+      return `/artifact/pdf/${tab.artifactId}`
     case 'document':
+      return `/artifact/document/${tab.artifactId}`
     case 'project-details':
     case 'record-create':
     case 'record-edit':

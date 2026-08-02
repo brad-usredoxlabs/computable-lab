@@ -16,12 +16,15 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
+import { useOptionalOpenTabs } from '../../../shared/shell/OpenTabsContext'
 import { useStudyArtifacts } from '../useStudyArtifacts'
 import { apiClient } from '../../../shared/api/client'
 import { artifactKindLabel, tabForArtifact } from '../openArtifactInViewer'
 import { VendorPdfSearchSection } from './VendorPdfSearchSection'
 import type { Artifact, ArtifactSummary } from '../../../types/artifact'
+import type { WorkspaceTab } from '../../workspace/types'
 import './search.css'
 
 interface RowMatch {
@@ -32,6 +35,8 @@ interface RowMatch {
 
 export function SearchTabPanel() {
   const ws = useWorkspace()
+  const openTabs = useOptionalOpenTabs()
+  const navigate = useNavigate()
   const { artifacts, loading, error, refresh } = useStudyArtifacts(
     ws.state.studyId,
   )
@@ -139,14 +144,15 @@ export function SearchTabPanel() {
           void refresh()
         }}
         onBuildProtocol={(artifactId, info) => {
-          // Open the PDF as a viewer tab and switch to AI mode
-          ws.openTab({
+          // Open the PDF as its own top-level tab at a standalone route
+          const tab: WorkspaceTab = {
             id: `tab-pdf-${artifactId}`,
             kind: 'pdf',
             artifactId,
             title: info.title ?? 'PDF protocol',
-          })
-          ws.setRightPaneMode('ai')
+          }
+          openTabs?.openTab(tab, true)
+          navigate(`/artifact/pdf/${artifactId}`)
         }}
       />
     </div>
@@ -154,7 +160,8 @@ export function SearchTabPanel() {
 }
 
 function SearchRow({ match }: { match: RowMatch }) {
-  const ws = useWorkspace()
+  const openTabs = useOptionalOpenTabs()
+  const navigate = useNavigate()
   const tab = tabForArtifact(match.artifact)
   const disabled = tab === null
   return (
@@ -164,7 +171,15 @@ function SearchRow({ match }: { match: RowMatch }) {
       data-testid={`search-tab-row-${match.artifact.recordId}`}
       disabled={disabled}
       onClick={() => {
-        if (tab) ws.openTab(tab)
+        if (!tab) return
+        if (tab.kind === 'pdf' || tab.kind === 'document') {
+          const route =
+            tab.kind === 'pdf'
+              ? `/artifact/pdf/${tab.artifactId}`
+              : `/artifact/document/${tab.artifactId}`
+          openTabs?.openTab(tab, true)
+          navigate(route)
+        }
       }}
     >
       <span className="right-panel__row-title">{match.artifact.title}</span>

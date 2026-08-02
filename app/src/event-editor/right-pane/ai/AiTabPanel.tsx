@@ -13,8 +13,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useReducer, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
 import { useOptionalEventEditor } from '../../EventEditorContext'
+import { useOptionalOpenTabs } from '../../../shared/shell/OpenTabsContext'
 import { apiClient, type AiWarmStatus } from '../../../shared/api/client'
 import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/platformRegistry'
 import { getVerbsForDisplay } from '../../../shared/vocab/registry'
@@ -110,6 +112,8 @@ export function WarmIndicator({ status }: { status: AiWarmStatus }) {
 
 export function AiTabPanel() {
   const ws = useWorkspace()
+  const openTabs = useOptionalOpenTabs()
+  const navigate = useNavigate()
   const activeTab = useMemo(() => {
     if (!ws.state.activeTabId) return null
     return ws.state.tabs.find((t) => t.id === ws.state.activeTabId) ?? null
@@ -276,6 +280,7 @@ export function AiTabPanel() {
         labwareAdditions,
         labwareRequirements,
         existingLabwares: state.labwares,
+        existingPlacements: state.placements,
         activeDeckScope,
       })
       const hasPreview =
@@ -465,14 +470,16 @@ export function AiTabPanel() {
   const handleOpenSource = useCallback(
     (artifactId: string) => {
       const existing = addedSources.find((s) => s.artifactId === artifactId)
-      ws.openTab({
+      const tab = {
         id: `tab-pdf-${artifactId}`,
-        kind: 'pdf',
+        kind: 'pdf' as const,
         artifactId,
         title: existing?.title ?? artifactId,
-      })
+      }
+      openTabs?.openTab(tab, true)
+      navigate(`/artifact/pdf/${artifactId}`)
     },
-    [addedSources, ws],
+    [addedSources, openTabs, navigate],
   )
 
   // Listen for text selection events from the PDF viewer.
