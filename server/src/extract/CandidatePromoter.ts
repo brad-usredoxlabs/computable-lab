@@ -46,6 +46,7 @@ export interface ExtractionPromotion {
   source_content_hash: string;
   promoted_at: string;
   version: 1;
+  status?: 'active' | 'retracted';
 }
 
 export type PromotionOutcome =
@@ -153,7 +154,8 @@ export function promoteCandidate(args: PromoteCandidateArgs): PromotionOutcome {
     output_ref: { kind: 'record', id: targetRecordId, type: candidate.target_kind },
     source_content_hash: sourceContentHash,
     promoted_at: (now ? now() : new Date()).toISOString(),
-    version: 1
+    version: 1,
+    status: 'active'
   };
 
   return {

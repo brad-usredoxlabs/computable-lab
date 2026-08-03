@@ -164,6 +164,7 @@ export function ExtractionReviewPage(): JSX.Element {
       const response = await fetch(`/api/extraction/drafts/${recordId}/candidates/0/promote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
       });
       if (response.ok) {
         const result = (await response.json()) as { recordId?: string; promotionId?: string };
@@ -201,6 +202,7 @@ export function ExtractionReviewPage(): JSX.Element {
       const response = await fetch(`/api/extraction/drafts/${recordId}/candidates/0/reject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
       });
       if (response.ok) {
         setPrimaryStatus('rejected');

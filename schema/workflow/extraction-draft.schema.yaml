@@ -9,7 +9,7 @@ description: >
 type: object
 unevaluatedProperties: false
 allOf:
-  - $ref: "../core/common.schema.yaml#/$defs/FAIRCommon"
+  - $ref: "../common.schema.yaml#/$defs/FAIRCommon"
 
 required: [kind, recordId, source_artifact, candidates, status]
 
@@ -80,6 +80,11 @@ properties:
           type: string
           enum: [low, medium, high, unresolved, inferred]
           description: "Reviewer-facing uncertainty bucket. Distinct from numeric confidence."
+
+        status:
+          type: string
+          enum: [promoted, rejected]
+          description: "Per-candidate review status set by Promote/Reject."
 
   status:
     type: string
