@@ -1,0 +1,235 @@
+/* Extraction review + drafts list — styled with app design tokens. */
+
+.extraction-review,
+.extraction-drafts-list {
+  padding: 24px 28px;
+  max-width: 1200px;
+  margin: 0 auto;
+  color: var(--cl-text);
+}
+
+.extraction-review h1,
+.extraction-drafts-list h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.extraction-review__sub {
+  color: var(--cl-text-dim);
+  margin: 0 0 20px;
+  font-size: 13px;
+}
+
+.extraction-review section,
+.extraction-drafts-list section {
+  background: var(--cl-bg-elev);
+  border: 1px solid var(--cl-border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+}
+
+.extraction-review section h2,
+.extraction-drafts-list section h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  color: var(--cl-text);
+}
+
+/* Source definition list */
+.extraction-review dl,
+.extraction-drafts-list dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 4px 12px;
+}
+.extraction-review dt,
+.extraction-drafts-list dt {
+  color: var(--cl-text-dim);
+  font-size: 13px;
+}
+.extraction-review dd,
+.extraction-drafts-list dd {
+  margin: 0;
+  font-size: 13px;
+}
+
+/* Candidate table */
+.extraction-review table,
+.extraction-drafts-list table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.extraction-review th,
+.extraction-drafts-list th {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--cl-border);
+  color: var(--cl-text-dim);
+  font-weight: 600;
+}
+.extraction-review td,
+.extraction-drafts-list td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--cl-border);
+}
+.extraction-review tbody tr {
+  cursor: pointer;
+}
+.extraction-review tbody tr:hover {
+  background: var(--cl-bg-elev-2);
+}
+.extraction-review tbody tr[aria-selected='true'] {
+  background: var(--cl-bg-elev-2);
+}
+
+/* Candidate detail panel (the extracted-protocol steps) */
+.extraction-review .candidate-detail {
+  background: var(--cl-bg-elev);
+  border: 1px solid var(--cl-border);
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+.extraction-review .candidate-detail__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.extraction-review .candidate-detail h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+}
+.extraction-review .candidate-detail .candidate-detail__close {
+  margin-left: auto;
+  border: none;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.extraction-review .candidate-detail__meta {
+  color: var(--cl-text-dim);
+  font-size: 13px;
+}
+.extraction-review .candidate-detail h4 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 14px 0 6px;
+  color: var(--cl-text);
+}
+.extraction-review blockquote {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  background: var(--cl-bg-elev-2);
+  border-left: 3px solid var(--cl-accent, #2563eb);
+  border-radius: 4px;
+  font-size: 13px;
+}
+.extraction-review header .candidate-detail__meta ul,
+.extraction-review ul {
+  margin: 4px 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+.extraction-review .candidate-detail__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.extraction-review .candidate-detail__actions button {
+  border: 1px solid var(--cl-border);
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+.extraction-review .candidate-detail__actions button:hover:not(:disabled) {
+  background: var(--cl-accent, #2563eb);
+  color: #fff;
+}
+.extraction-review .candidate-detail__actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Structured fallback / status chips */
+.candidate-draft-fallback .fallback-dl {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 4px 12px;
+}
+.candidate-draft-fallback .fallback-label {
+  color: var(--cl-text-dim);
+  font-size: 13px;
+}
+.candidate-draft-fallback .fallback-value {
+  font-size: 13px;
+  margin: 0;
+}
+.candidate-draft-fallback .fallback-value-pre {
+  max-height: 240px;
+  overflow: auto;
+  background: var(--cl-bg-elev-2);
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* Scrollable body inside the AppShell left pane */
+.extraction-scroll {
+  height: 100%;
+  overflow: auto;
+}
+
+/* List page toolbar + row hover */
+.extraction-drafts-list__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--cl-text-dim);
+}
+.extraction-drafts-list__toolbar select {
+  padding: 5px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg-elev);
+  color: var(--cl-text);
+}
+.extraction-drafts-list__upload {
+  border: 1px solid var(--cl-border);
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.extraction-drafts-list__upload:hover:not(:disabled) {
+  background: var(--cl-accent, #2563eb);
+  color: #fff;
+}
+.extraction-drafts-list__upload:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.extraction-drafts-list__error {
+  color: #dc2626;
+  font-size: 13px;
+}
+.extraction-drafts-list tbody tr {
+  cursor: pointer;
+}
+.extraction-drafts-list tbody tr:hover {
+  background: var(--cl-bg-elev-2);
+}

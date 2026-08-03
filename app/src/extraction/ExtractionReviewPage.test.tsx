@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, cleanup, within } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { ExtractionReviewPage } from './ExtractionReviewPage'
+import { ThemeProvider } from '../shared/shell'
+import { OpenTabsProvider } from '../shared/shell/OpenTabsContext'
 
 describe('ExtractionReviewPage', () => {
   afterEach(() => {
@@ -14,11 +16,11 @@ describe('ExtractionReviewPage', () => {
     vi.spyOn(global, 'fetch').mockImplementation(() => new Promise(() => {}))
     
     render(
-      <MemoryRouter initialEntries={['/extraction/review/XDR-test-001']}>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-001']}>
         <Routes>
           <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     )
     
     expect(screen.getByText('Loading extraction draft...')).toBeInTheDocument()
@@ -59,11 +61,11 @@ describe('ExtractionReviewPage', () => {
     } as Response)
 
     render(
-      <MemoryRouter initialEntries={['/extraction/review/XDR-test-001']}>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-001']}>
         <Routes>
           <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     )
 
     await waitFor(() => {
@@ -93,32 +95,33 @@ describe('ExtractionReviewPage', () => {
     const rows = screen.getAllByRole('row')
     expect(rows).toHaveLength(3) // 1 header + 2 data rows
 
-    // Check first candidate
-    expect(screen.getByText('1')).toBeInTheDocument()
-    expect(screen.getByText('protocol')).toBeInTheDocument()
-    expect(screen.getByText('Protocol A')).toBeInTheDocument()
-    expect(screen.getByText('0.95')).toBeInTheDocument()
-    expect(screen.getByText('low')).toBeInTheDocument()
-    expect(screen.getByText('Mix 5ml of solution A')).toBeInTheDocument()
+    // Check first candidate (scoped to the table; the auto-opened detail
+    // drawer also renders these values, so query within the table only)
+    expect(within(table).getByText('1')).toBeInTheDocument()
+    expect(within(table).getByText('protocol')).toBeInTheDocument()
+    expect(within(table).getByText('Protocol A')).toBeInTheDocument()
+    expect(within(table).getByText('0.95')).toBeInTheDocument()
+    expect(within(table).getByText('low')).toBeInTheDocument()
+    expect(within(table).getByText('Mix 5ml of solution A')).toBeInTheDocument()
 
     // Check second candidate
-    expect(screen.getByText('2')).toBeInTheDocument()
-    expect(screen.getByText('equipment')).toBeInTheDocument()
-    expect(screen.getByText('Centrifuge Model X')).toBeInTheDocument()
-    expect(screen.getByText('0.87')).toBeInTheDocument()
-    expect(screen.getByText('medium')).toBeInTheDocument()
-    expect(screen.getByText('Use centrifuge at 3000rpm')).toBeInTheDocument()
+    expect(within(table).getByText('2')).toBeInTheDocument()
+    expect(within(table).getByText('equipment')).toBeInTheDocument()
+    expect(within(table).getByText('Centrifuge Model X')).toBeInTheDocument()
+    expect(within(table).getByText('0.87')).toBeInTheDocument()
+    expect(within(table).getByText('medium')).toBeInTheDocument()
+    expect(within(table).getByText('Use centrifuge at 3000rpm')).toBeInTheDocument()
   })
 
   it('renders error state when fetch fails', async () => {
     vi.spyOn(global, 'fetch').mockRejectedValueOnce(new Error('Network error'))
 
     render(
-      <MemoryRouter initialEntries={['/extraction/review/XDR-test-001']}>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-001']}>
         <Routes>
           <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     )
 
     await waitFor(() => {
@@ -135,11 +138,11 @@ describe('ExtractionReviewPage', () => {
     } as Response)
 
     render(
-      <MemoryRouter initialEntries={['/extraction/review/XDR-test-001']}>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-001']}>
         <Routes>
           <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     )
 
     await waitFor(() => {
@@ -172,18 +175,18 @@ describe('ExtractionReviewPage', () => {
     } as Response)
 
     render(
-      <MemoryRouter initialEntries={['/extraction/review/XDR-test-002']}>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-002']}>
         <Routes>
           <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     )
 
     await waitFor(() => {
       expect(screen.getByText('Extraction Review: XDR-test-002')).toBeInTheDocument()
     })
 
-    expect(screen.getByText('Test Tube')).toBeInTheDocument()
+    expect(within(screen.getByRole('table')).getByText('Test Tube')).toBeInTheDocument()
     // Use queryAllByText to handle multiple "—" cells
     const dashes = screen.getAllByText('—')
     expect(dashes.length).toBeGreaterThanOrEqual(3) // confidence, uncertainty, evidence
@@ -230,11 +233,11 @@ describe('ExtractionReviewPage', () => {
     } as Response)
 
     const { container, unmount } = render(
-      <MemoryRouter initialEntries={['/extraction/review/XDR-test-003']}>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-003']}>
         <Routes>
           <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     )
 
     // Wait for the page to load within this container
@@ -311,11 +314,11 @@ describe('ExtractionReviewPage', () => {
     } as Response)
 
     const { container } = render(
-      <MemoryRouter initialEntries={['/extraction/review/XDR-test-004']}>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-004']}>
         <Routes>
           <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     )
 
     await waitFor(() => {
@@ -358,11 +361,11 @@ describe('ExtractionReviewPage', () => {
     vi.spyOn(global, 'fetch').mockImplementation(mockFetch as unknown as typeof fetch)
 
     const { container } = render(
-      <MemoryRouter initialEntries={['/extraction/review/XDR-test-005']}>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-005']}>
         <Routes>
           <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     )
 
     await waitFor(() => {
@@ -413,11 +416,11 @@ describe('ExtractionReviewPage', () => {
     vi.spyOn(global, 'fetch').mockImplementation(mockFetch as unknown as typeof fetch)
 
     const { container } = render(
-      <MemoryRouter initialEntries={['/extraction/review/XDR-test-006']}>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-006']}>
         <Routes>
           <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     )
 
     await waitFor(() => {
@@ -473,11 +476,11 @@ describe('ExtractionReviewPage', () => {
     } as Response)
 
     const { container } = render(
-      <MemoryRouter initialEntries={['/extraction/review/XDR-taptab-001']}>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-taptab-001']}>
         <Routes>
           <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     )
 
     await waitFor(() => {
@@ -534,11 +537,11 @@ describe('ExtractionReviewPage', () => {
     } as Response)
 
     const { container } = render(
-      <MemoryRouter initialEntries={['/extraction/review/XDR-fallback-001']}>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-fallback-001']}>
         <Routes>
           <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     )
 
     await waitFor(() => {
@@ -590,11 +593,11 @@ describe('ExtractionReviewPage', () => {
     } as Response)
 
     const { container } = render(
-      <MemoryRouter initialEntries={['/extraction/review/XDR-empty-001']}>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-empty-001']}>
         <Routes>
           <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     )
 
     await waitFor(() => {
@@ -640,11 +643,11 @@ describe('ExtractionReviewPage', () => {
     vi.spyOn(global, 'fetch').mockImplementation(mockFetch as unknown as typeof fetch)
 
     const { container } = render(
-      <MemoryRouter initialEntries={['/extraction/review/XDR-actions-001']}>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-actions-001']}>
         <Routes>
           <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     )
 
     await waitFor(() => {
@@ -700,11 +703,11 @@ describe('ExtractionReviewPage', () => {
     } as Response)
 
     const { container } = render(
-      <MemoryRouter initialEntries={['/extraction/review/XDR-close-001']}>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-close-001']}>
         <Routes>
           <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     )
 
     await waitFor(() => {
@@ -755,11 +758,11 @@ describe('ExtractionReviewPage', () => {
       } as Response)
 
       const { container } = render(
-        <MemoryRouter initialEntries={[`/extraction/review/XDR-${kind}-001`]}>
+        <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={[`/extraction/review/XDR-${kind}-001`]}>
           <Routes>
             <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
           </Routes>
-        </MemoryRouter>
+        </MemoryRouter></OpenTabsProvider></ThemeProvider>
       )
 
       await waitFor(() => {

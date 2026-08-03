@@ -1,5 +1,8 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, type JSX, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AppShell } from '../shared/shell';
+import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip';
+import './extraction.css';
 
 interface ExtractionDraft {
   recordId: string;
@@ -35,6 +38,15 @@ export function ExtractionDraftsListPage(): JSX.Element {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const renderShell = (body: ReactNode): JSX.Element => (
+    <AppShell
+      brand="Extraction Drafts"
+      layout="workspace"
+      topbarTabs={<WorkspaceTabStrip />}
+      leftPane={<div className="extraction-scroll">{body}</div>}
+    />
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -119,22 +131,20 @@ export function ExtractionDraftsListPage(): JSX.Element {
   };
 
   if (loading) {
-    return <div>Loading extraction drafts...</div>;
+    return renderShell(<div className="extraction-drafts-list"><p>Loading extraction drafts...</p></div>);
   }
 
   if (error) {
-    return (
-      <div role="alert" style={{ color: 'red' }}>
-        Failed to load extraction drafts: {error}
-      </div>
+    return renderShell(
+      <div className="extraction-drafts-list"><p role="alert">Failed to load extraction drafts: {error}</p></div>,
     );
   }
 
-  return (
+  return renderShell(
     <div className="extraction-drafts-list">
       <h1>Extraction Drafts</h1>
 
-      <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+      <div className="extraction-drafts-list__toolbar">
         <input
           ref={fileInputRef}
           type="file"
@@ -150,25 +160,12 @@ export function ExtractionDraftsListPage(): JSX.Element {
         />
         <button
           type="button"
+          className="extraction-drafts-list__upload"
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          style={{
-            padding: '6px 12px',
-            backgroundColor: uploading ? '#ccc' : '#007bff',
-            color: 'white',
-            borderRadius: '4px',
-            border: 'none',
-            cursor: uploading ? 'not-allowed' : 'pointer',
-          }}
         >
-          Upload PDF
+          {uploading ? 'Uploading…' : 'Upload PDF'}
         </button>
-        {uploadError && (
-          <span style={{ color: 'red', fontSize: '0.9rem' }}>{uploadError}</span>
-        )}
-      </div>
-
-      <div style={{ marginBottom: '1rem' }}>
         <label htmlFor="status-filter">Status: </label>
         <select
           id="status-filter"
@@ -181,62 +178,59 @@ export function ExtractionDraftsListPage(): JSX.Element {
             </option>
           ))}
         </select>
+        {uploadError && <span className="extraction-drafts-list__error">{uploadError}</span>}
       </div>
 
       {filteredDrafts.length === 0 ? (
         <div>No extraction drafts found.</div>
       ) : (
-        <table role="table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '2px solid #ccc' }}>
-              <th style={{ textAlign: 'left', padding: '8px' }}>Record ID</th>
-              <th style={{ textAlign: 'left', padding: '8px' }}>Source Artifact</th>
-              <th style={{ textAlign: 'left', padding: '8px' }}>Candidates</th>
-              <th style={{ textAlign: 'left', padding: '8px' }}>Status</th>
-              <th style={{ textAlign: 'left', padding: '8px' }}>Created At</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredDrafts.map((draft) => (
-              <tr
-                key={draft.recordId}
-                onClick={() => navigate(`/extraction/review/${draft.recordId}`)}
-                style={{
-                  cursor: 'pointer',
-                  borderBottom: '1px solid #eee',
-                  backgroundColor: 'white',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#f5f5f5')}
-                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'white')}
-              >
-                <td style={{ padding: '8px' }}>{draft.recordId}</td>
-                <td style={{ padding: '8px' }}>
-                  {draft.source_artifact.kind}:{draft.source_artifact.id}
-                </td>
-                <td style={{ padding: '8px' }}>{draft.candidates.length}</td>
-                <td style={{ padding: '8px' }}>
-                  <span
-                    style={{
-                      color:
-                        draft.status === 'promoted'
-                          ? 'green'
-                          : draft.status === 'rejected'
-                          ? 'red'
-                          : draft.status === 'pending_review'
-                          ? 'orange'
-                          : 'blue',
-                    }}
-                  >
-                    {draft.status}
-                  </span>
-                </td>
-                <td style={{ padding: '8px' }}>{draft.created_at ?? '—'}</td>
+        <section>
+          <table role="table">
+            <thead>
+              <tr>
+                <th>Record ID</th>
+                <th>Source Artifact</th>
+                <th>Candidates</th>
+                <th>Status</th>
+                <th>Created At</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredDrafts.map((draft) => (
+                <tr
+                  key={draft.recordId}
+                  onClick={() => navigate(`/extraction/review/${draft.recordId}`)}
+                >
+                  <td>{draft.recordId}</td>
+                  <td>
+                    {draft.source_artifact.kind}:{draft.source_artifact.id}
+                  </td>
+                  <td>{draft.candidates.length}</td>
+                  <td>
+                    <span
+                      className="extraction-drafts-list__status"
+                      style={{
+                        color:
+                          draft.status === 'promoted'
+                            ? 'green'
+                            : draft.status === 'rejected'
+                            ? 'red'
+                            : draft.status === 'pending_review'
+                            ? 'orange'
+                            : 'blue',
+                      }}
+                    >
+                      {draft.status}
+                    </span>
+                  </td>
+                  <td>{draft.created_at ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
       )}
-    </div>
+    </div>,
   );
 }
 

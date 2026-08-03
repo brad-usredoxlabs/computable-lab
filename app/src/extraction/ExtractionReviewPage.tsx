@@ -1,7 +1,10 @@
 import { useParams, useSearchParams } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type JSX, type ReactNode } from 'react';
 import { ProjectionTapTabEditor } from '../editor/taptab/TapTabEditor';
 import { promoteThread } from '../shared/api/aiThreadClient';
+import { AppShell } from '../shared/shell';
+import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip';
+import './extraction.css';
 
 interface AmbiguitySpan {
   path: string;
@@ -179,6 +182,18 @@ function generateConversationRecordId(): string {
   return `CONV-${stamp}-${rand}`;
 }
 
+/** Wrap a page body in the app shell (GlobalNavbar + tab strip + content). */
+function renderShell(body: ReactNode): JSX.Element {
+  return (
+    <AppShell
+      brand="Extraction Review"
+      layout="workspace"
+      topbarTabs={<WorkspaceTabStrip />}
+      leftPane={<div className="extraction-scroll">{body}</div>}
+    />
+  );
+}
+
 export function ExtractionReviewPage(): JSX.Element {
   // Phase 6: recordId may come from a path param (legacy /extraction/review/:recordId)
   // or a search param (/literature?view=review&recordId=…).
@@ -211,6 +226,12 @@ export function ExtractionReviewPage(): JSX.Element {
             ? (nested as { payload: unknown }).payload
             : nested) ?? data
         setRecord(unwrapped as ExtractionDraft)
+        // Auto-open the first candidate so the extracted-protocol steps are
+        // visible immediately (not hidden behind a table-row click).
+        const draft = unwrapped as ExtractionDraft
+        if (draft && Array.isArray(draft.candidates) && draft.candidates.length > 0) {
+          setOpenIndex(0)
+        }
         setLoading(false)
       })
       .catch(err => { if (!cancelled) { setError(err.message); setLoading(false); } });
@@ -305,13 +326,13 @@ export function ExtractionReviewPage(): JSX.Element {
     }
   };
 
-  if (loading) return <div>Loading extraction draft...</div>;
-  if (error) return <div role="alert">Failed to load: {error}</div>;
-  if (!record) return <div>Not found</div>;
+  if (loading) return renderShell(<div className="extraction-review"><p>Loading extraction draft...</p></div>);
+  if (error) return renderShell(<div className="extraction-review"><p role="alert">Failed to load: {error}</p></div>);
+  if (!record) return renderShell(<div className="extraction-review"><p>Not found</p></div>);
 
   const openCandidate = openIndex !== null ? record.candidates[openIndex] : null;
 
-  return (
+  return renderShell(
     <div className="extraction-review">
       <h1>Extraction Review: {record.recordId}</h1>
       <section>
@@ -323,6 +344,7 @@ export function ExtractionReviewPage(): JSX.Element {
           {record.extractor_profile && <><dt>Extractor</dt><dd>{record.extractor_profile}</dd></>}
         </dl>
       </section>
+
       <section>
         <h2>Candidates ({record.candidates.length})</h2>
         <table role="table">
@@ -335,7 +357,6 @@ export function ExtractionReviewPage(): JSX.Element {
                 key={i}
                 onClick={() => setOpenIndex(i)}
                 aria-selected={openIndex === i}
-                style={{ cursor: 'pointer', backgroundColor: openIndex === i ? '#e0e0e0' : 'transparent' }}
               >
                 <td>{i + 1}</td>
                 <td>{c.target_kind}</td>
@@ -353,36 +374,38 @@ export function ExtractionReviewPage(): JSX.Element {
           </tbody>
         </table>
       </section>
+
       {openIndex !== null && openCandidate && (
-        <aside role="complementary" aria-label="Candidate detail">
-          <button onClick={() => setOpenIndex(null)} aria-label="Close" style={{ float: 'right', fontSize: '24px', border: 'none', background: 'none', cursor: 'pointer' }}>×</button>
-          <h3>Candidate {openIndex + 1}</h3>
-          <p>Confidence: {openCandidate.confidence?.toFixed(2) ?? '—'}</p>
-          <p>Uncertainty: {openCandidate.uncertainty ?? '—'}</p>
-          <h4>Evidence</h4>
-          <blockquote>{openCandidate.evidence_span ?? '—'}</blockquote>
-          <h4>Ambiguity spans</h4>
-          <ul>{(openCandidate.ambiguity_spans ?? []).map((s, i) => <li key={i}>{s.path}: {s.reason}</li>)}</ul>
+        <div className="candidate-detail" data-testid="candidate-detail" role="complementary" aria-label="Candidate detail">
+          <div className="candidate-detail__head">
+            <h3>Candidate {openIndex + 1}</h3>
+            <button className="candidate-detail__close" aria-label="Close" onClick={() => setOpenIndex(null)}>×</button>
+          </div>
+          <div className="candidate-detail__meta">
+            <p>Kind: {openCandidate.target_kind} · Confidence: {openCandidate.confidence?.toFixed(2) ?? '—'} · Uncertainty: {openCandidate.uncertainty ?? '—'}</p>
+            {(openCandidate.ambiguity_spans?.length ?? 0) > 0 && <h4>Ambiguity spans</h4>}
+            {(openCandidate.ambiguity_spans?.length ?? 0) > 0 && (
+              <ul>{(openCandidate.ambiguity_spans ?? []).map((s, i) => <li key={i}>{s.path}: {s.reason}</li>)}</ul>
+            )}
+          </div>
+          <h4>Extracted protocol</h4>
           <CandidateTapTabSurface targetKind={openCandidate.target_kind} draft={openCandidate.draft} />
-          <h4>Actions</h4>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+          <div className="candidate-detail__actions">
             <button
               onClick={() => promote(openIndex)}
               disabled={openCandidate.status === 'promoted' || openCandidate.status === 'rejected' || actionInProgress !== null}
-              style={{ padding: '4px 8px', cursor: (openCandidate.status === 'promoted' || openCandidate.status === 'rejected' || actionInProgress !== null) ? 'not-allowed' : 'pointer' }}
             >
               Promote
             </button>
             <button
               onClick={() => reject(openIndex)}
               disabled={openCandidate.status === 'promoted' || openCandidate.status === 'rejected' || actionInProgress !== null}
-              style={{ padding: '4px 8px', cursor: (openCandidate.status === 'promoted' || openCandidate.status === 'rejected' || actionInProgress !== null) ? 'not-allowed' : 'pointer' }}
             >
               Reject
             </button>
           </div>
-        </aside>
+        </div>
       )}
-    </div>
+    </div>,
   );
 }

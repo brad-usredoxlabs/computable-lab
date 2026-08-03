@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { ExtractionDraftsListPage } from './ExtractionDraftsListPage';
+import { ThemeProvider } from '../shared/shell';
+import { OpenTabsProvider } from '../shared/shell/OpenTabsContext';
 
 // Mock fetch
 const mockFetch = vi.fn();
@@ -57,9 +59,9 @@ describe('ExtractionDraftsListPage', () => {
     });
 
     const { unmount } = render(
-      <MemoryRouter>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter>
         <ExtractionDraftsListPage />
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     );
 
     await waitFor(() => {
@@ -85,9 +87,9 @@ describe('ExtractionDraftsListPage', () => {
     });
 
     const { unmount } = render(
-      <MemoryRouter>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter>
         <ExtractionDraftsListPage />
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     );
 
     await waitFor(() => {
@@ -113,9 +115,9 @@ describe('ExtractionDraftsListPage', () => {
     });
 
     const { unmount } = render(
-      <MemoryRouter>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter>
         <ExtractionDraftsListPage />
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     );
 
     await waitFor(() => {
@@ -141,12 +143,12 @@ describe('ExtractionDraftsListPage', () => {
     });
 
     const { unmount } = render(
-      <MemoryRouter initialEntries={['/extraction']}>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction']}>
         <Routes>
           <Route path="/extraction" element={<ExtractionDraftsListPage />} />
           <Route path="/extraction/review/:recordId" element={<div data-testid="review-page">Review Page</div>} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     );
 
     await waitFor(() => {
@@ -170,9 +172,9 @@ describe('ExtractionDraftsListPage', () => {
     mockFetch.mockImplementation(() => new Promise(() => {})); // Never resolves
 
     const { unmount } = render(
-      <MemoryRouter>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter>
         <ExtractionDraftsListPage />
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     );
 
     expect(screen.getByText('Loading extraction drafts...')).toBeInTheDocument();
@@ -184,9 +186,9 @@ describe('ExtractionDraftsListPage', () => {
     mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
     const { unmount } = render(
-      <MemoryRouter>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter>
         <ExtractionDraftsListPage />
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     );
 
     await waitFor(() => {
@@ -203,9 +205,9 @@ describe('ExtractionDraftsListPage', () => {
     });
 
     const { unmount } = render(
-      <MemoryRouter>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter>
         <ExtractionDraftsListPage />
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     );
 
     await waitFor(() => {
@@ -222,9 +224,9 @@ describe('ExtractionDraftsListPage', () => {
     });
 
     const { unmount } = render(
-      <MemoryRouter>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter>
         <ExtractionDraftsListPage />
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     );
 
     await waitFor(() => {
@@ -248,12 +250,12 @@ describe('ExtractionDraftsListPage', () => {
     });
 
     const { unmount } = render(
-      <MemoryRouter initialEntries={['/extraction']}>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction']}>
         <Routes>
           <Route path="/extraction" element={<ExtractionDraftsListPage />} />
           <Route path="/extraction/review/:recordId" element={<div data-testid="review-page">Review Page</div>} />
         </Routes>
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     );
 
     await waitFor(() => {
@@ -308,9 +310,9 @@ describe('ExtractionDraftsListPage', () => {
     global.fetch = uploadFetch;
 
     const { unmount } = render(
-      <MemoryRouter>
+      <ThemeProvider><OpenTabsProvider><MemoryRouter>
         <ExtractionDraftsListPage />
-      </MemoryRouter>
+      </MemoryRouter></OpenTabsProvider></ThemeProvider>
     );
 
     await waitFor(() => {
