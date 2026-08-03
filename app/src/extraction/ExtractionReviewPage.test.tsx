@@ -1,792 +1,154 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, waitFor, fireEvent, cleanup, within } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
+import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
-import { ExtractionReviewPage } from './ExtractionReviewPage'
 import { ThemeProvider } from '../shared/shell'
 import { OpenTabsProvider } from '../shared/shell/OpenTabsContext'
+import { ExtractionReviewPage } from './ExtractionReviewPage'
+import type { JSX } from 'react'
+
+const DRAFT = {
+  recordId: 'XDR-test-001',
+  kind: 'extraction-draft',
+  source_artifact: { kind: 'file', id: 'VPDF-123' },
+  candidates: [
+    {
+      target_kind: 'protocol',
+      confidence: 0.7,
+      draft: { title: 'Draft protocol', steps: [] },
+    },
+  ],
+  status: 'pending_review',
+}
+
+const STEPS = {
+  title: 'ZymoBIOMICS 96 MagBead DNA Kit',
+  steps: [
+    { ordinal: 1, text: 'Add 550 uL lysis solution to each well.' },
+    { ordinal: 2, text: 'Bead-beat for 5 minutes.' },
+  ],
+}
+
+function renderReview(ui: JSX.Element) {
+  return render(
+    <ThemeProvider>
+      <OpenTabsProvider>
+        <MemoryRouter initialEntries={['/extraction/review/XDR-test-001']}>
+          <Routes>
+            <Route path="/extraction/review/:recordId" element={ui} />
+          </Routes>
+        </MemoryRouter>
+      </OpenTabsProvider>
+    </ThemeProvider>,
+  )
+}
+
+function mockApi(opts: { pending?: boolean; stepsPending?: boolean; stepsReject?: boolean } = {}) {
+  vi.spyOn(global, 'fetch').mockImplementation(async (input) => {
+    const url = typeof input === 'string' ? input : String((input as Request).url)
+    if (url.includes('/api/records/')) {
+      if (opts.pending) return new Promise<Response>(() => {}) as unknown as Promise<Response>
+      return { ok: true, json: async () => ({ record: { recordId: DRAFT.recordId, payload: DRAFT } }) } as Response
+    }
+    if (url.includes('/api/extraction/human-steps/')) {
+      if (opts.stepsPending) return new Promise<Response>(() => {}) as unknown as Promise<Response>
+      if (opts.stepsReject) return { ok: false, status: 500, statusText: 'LLM error' } as Response
+      return { ok: true, json: async () => STEPS } as Response
+    }
+    if (url.includes('/api/extraction/drafts/')) {
+      return { ok: true, json: async () => ({ recordId: 'PRT-1', promotionId: 'PROM-1' }) } as Response
+    }
+    return { ok: true, json: async () => ({}) } as Response
+  })
+}
 
 describe('ExtractionReviewPage', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks()
+  })
   afterEach(() => {
     cleanup()
     vi.restoreAllMocks()
   })
 
-  it('renders loading state initially', async () => {
-    // Mock fetch that never resolves to keep it in loading state
-    vi.spyOn(global, 'fetch').mockImplementation(() => new Promise(() => {}))
-    
-    render(
-      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-001']}>
-        <Routes>
-          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
-        </Routes>
-      </MemoryRouter></OpenTabsProvider></ThemeProvider>
-    )
-    
-    expect(screen.getByText('Loading extraction draft...')).toBeInTheDocument()
+  it('renders loading state initially', () => {
+    mockApi({ pending: true })
+    renderReview(<ExtractionReviewPage />)
+    expect(screen.getByText('Loading candidate protocol...')).toBeInTheDocument()
   })
 
-  it('renders extraction draft with 2 candidates', async () => {
-    const mockData = {
-      recordId: 'XDR-test-001',
-      kind: 'extraction-draft',
-      source_artifact: {
-        kind: 'pdf',
-        id: 'PDF-123',
-        locator: '/path/to/file.pdf'
-      },
-      candidates: [
-        {
-          target_kind: 'protocol',
-          confidence: 0.95,
-          uncertainty: 'low',
-          evidence_span: 'Mix 5ml of solution A',
-          draft: { display_name: 'Protocol A', steps: [] }
-        },
-        {
-          target_kind: 'equipment',
-          confidence: 0.87,
-          uncertainty: 'medium',
-          evidence_span: 'Use centrifuge at 3000rpm',
-          draft: { name: 'Centrifuge Model X' }
-        }
-      ],
-      status: 'pending-review',
-      extractor_profile: 'protocol-extractor-v1'
-    }
-
-    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockData
-    } as Response)
-
-    render(
-      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-001']}>
-        <Routes>
-          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
-        </Routes>
-      </MemoryRouter></OpenTabsProvider></ThemeProvider>
-    )
-
-    await waitFor(() => {
-      expect(screen.getByText('Extraction Review: XDR-test-001')).toBeInTheDocument()
-    })
-
-    // Check source artifact info
-    expect(screen.getByText('Source')).toBeInTheDocument()
-    // Use queryAllByText to handle duplicate "Kind" in table header
-    const kindLabels = screen.getAllByText('Kind')
-    expect(kindLabels.length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('pdf')).toBeInTheDocument()
-    expect(screen.getByText('PDF-123')).toBeInTheDocument()
-    expect(screen.getByText('Locator')).toBeInTheDocument()
-    expect(screen.getByText('/path/to/file.pdf')).toBeInTheDocument()
-    expect(screen.getByText('Extractor')).toBeInTheDocument()
-    expect(screen.getByText('protocol-extractor-v1')).toBeInTheDocument()
-
-    // Check candidates table
-    expect(screen.getByText('Candidates (2)')).toBeInTheDocument()
-    
-    // Verify table structure
-    const table = screen.getByRole('table')
-    expect(table).toBeInTheDocument()
-
-    // Check for 2 candidate rows (excluding header)
-    const rows = screen.getAllByRole('row')
-    expect(rows).toHaveLength(3) // 1 header + 2 data rows
-
-    // Check first candidate (scoped to the table; the auto-opened detail
-    // drawer also renders these values, so query within the table only)
-    expect(within(table).getByText('1')).toBeInTheDocument()
-    expect(within(table).getByText('protocol')).toBeInTheDocument()
-    expect(within(table).getByText('Protocol A')).toBeInTheDocument()
-    expect(within(table).getByText('0.95')).toBeInTheDocument()
-    expect(within(table).getByText('low')).toBeInTheDocument()
-    expect(within(table).getByText('Mix 5ml of solution A')).toBeInTheDocument()
-
-    // Check second candidate
-    expect(within(table).getByText('2')).toBeInTheDocument()
-    expect(within(table).getByText('equipment')).toBeInTheDocument()
-    expect(within(table).getByText('Centrifuge Model X')).toBeInTheDocument()
-    expect(within(table).getByText('0.87')).toBeInTheDocument()
-    expect(within(table).getByText('medium')).toBeInTheDocument()
-    expect(within(table).getByText('Use centrifuge at 3000rpm')).toBeInTheDocument()
+  it('shows a thinking timeline while the LLM is generating', async () => {
+    mockApi({ stepsPending: true })
+    renderReview(<ExtractionReviewPage />)
+    expect(await screen.findByTestId('thinking')).toBeInTheDocument()
   })
 
-  it('renders error state when fetch fails', async () => {
-    vi.spyOn(global, 'fetch').mockRejectedValueOnce(new Error('Network error'))
-
-    render(
-      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-001']}>
-        <Routes>
-          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
-        </Routes>
-      </MemoryRouter></OpenTabsProvider></ThemeProvider>
-    )
-
-    await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument()
-    })
-
-    expect(screen.getByText(/Failed to load: Network error/)).toBeInTheDocument()
+  it('renders the numbered candidate protocol steps after generation', async () => {
+    mockApi()
+    renderReview(<ExtractionReviewPage />)
+    // Section + both steps appear once generation completes.
+    expect(await screen.findByTestId('candidate-protocol')).toBeInTheDocument()
+    expect(await screen.findByText('Add 550 uL lysis solution to each well.')).toBeInTheDocument()
+    expect(screen.getByText('Bead-beat for 5 minutes.')).toBeInTheDocument()
+    expect(screen.getByText('1.')).toBeInTheDocument()
+    expect(screen.getAllByText('Candidate Protocol').length).toBeGreaterThan(0)
   })
 
-  it('renders error for non-ok HTTP response', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
-      ok: false,
-      status: 404
-    } as Response)
-
-    render(
-      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-001']}>
-        <Routes>
-          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
-        </Routes>
-      </MemoryRouter></OpenTabsProvider></ThemeProvider>
-    )
-
-    await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument()
-    })
-
-    expect(screen.getByText(/Failed to load: HTTP 404/)).toBeInTheDocument()
+  it('shows an error and disables nothing critical when generation fails', async () => {
+    mockApi({ stepsReject: true })
+    renderReview(<ExtractionReviewPage />)
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Promote' })).toBeInTheDocument()
   })
 
-  it('handles candidates without optional fields', async () => {
-    const mockData = {
-      recordId: 'XDR-test-002',
-      kind: 'extraction-draft',
-      source_artifact: {
-        kind: 'xlsx',
-        id: 'XLSX-456'
-      },
-      candidates: [
-        {
-          target_kind: 'labware',
-          draft: { name: 'Test Tube' }
-        }
-      ],
-      status: 'pending-review'
-    }
-
-    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockData
-    } as Response)
-
-    render(
-      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-002']}>
-        <Routes>
-          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
-        </Routes>
-      </MemoryRouter></OpenTabsProvider></ThemeProvider>
-    )
-
-    await waitFor(() => {
-      expect(screen.getByText('Extraction Review: XDR-test-002')).toBeInTheDocument()
-    })
-
-    expect(within(screen.getByRole('table')).getByText('Test Tube')).toBeInTheDocument()
-    // Use queryAllByText to handle multiple "—" cells
-    const dashes = screen.getAllByText('—')
-    expect(dashes.length).toBeGreaterThanOrEqual(3) // confidence, uncertainty, evidence
-  })
-
-  it('opens drawer when clicking a row and closes with Escape', async () => {
-    const mockData = {
-      recordId: 'XDR-test-003',
-      kind: 'extraction-draft',
-      source_artifact: {
-        kind: 'pdf',
-        id: 'PDF-789',
-        locator: '/path/to/protocol.pdf'
-      },
-      candidates: [
-        {
-          target_kind: 'protocol',
-          confidence: 0.92,
-          uncertainty: 'low',
-          evidence_span: 'Incubate at 37°C for 30 minutes',
-          ambiguity_spans: [
-            { path: 'steps[0].duration', reason: 'Ambiguous time unit' }
-          ],
-          draft: {
-            display_name: 'Incubation Protocol',
-            steps: [
-              { name: 'Incubate', duration: 30, unit: 'minutes', temperature: 37 }
-            ]
-          }
-        },
-        {
-          target_kind: 'equipment',
-          confidence: 0.88,
-          evidence_span: 'Use incubator Model Z',
-          draft: { name: 'Incubator Model Z' }
-        }
-      ],
-      status: 'pending-review'
-    }
-
-    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockData
-    } as Response)
-
-    const { container, unmount } = render(
-      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-003']}>
-        <Routes>
-          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
-        </Routes>
-      </MemoryRouter></OpenTabsProvider></ThemeProvider>
-    )
-
-    // Wait for the page to load within this container
-    await waitFor(() => {
-      expect(container.textContent).toContain('Extraction Review: XDR-test-003')
-    })
-
-    // Click the first row
-    const rows = container.querySelectorAll('tbody tr')
-    const firstDataRow = rows[0]
-    fireEvent.click(firstDataRow)
-
-    // Drawer should appear with role="complementary"
-    const drawer = await new Promise<HTMLElement>((resolve) => {
-      const check = () => {
-        const d = container.querySelector('[role="complementary"]') as HTMLElement
-        if (d) resolve(d)
-        else setTimeout(check, 50)
+  it('promotes the primary candidate', async () => {
+    const calls: string[] = []
+    vi.spyOn(global, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : String((input as Request).url)
+      calls.push(url)
+      if (url.includes('/api/records/')) {
+        return { ok: true, json: async () => ({ record: { recordId: DRAFT.recordId, payload: DRAFT } }) } as Response
       }
-      check()
-    })
-    expect(drawer).toBeInTheDocument()
-
-    // Check that the drawer contains the candidate details
-    expect(container.textContent).toContain('Candidate 1')
-    expect(container.textContent).toContain('Confidence: 0.92')
-    expect(container.textContent).toContain('Uncertainty: low')
-    expect(container.textContent).toContain('Evidence')
-    expect(container.textContent).toContain('Incubate at 37°C for 30 minutes')
-    expect(container.textContent).toContain('Ambiguity spans')
-    expect(container.textContent).toContain('steps[0].duration: Ambiguous time unit')
-    expect(container.textContent).toContain('Draft')
-
-    // Check that the TapTab surface is rendered (not raw JSON pre)
-    // The TapTab surface uses a div with class candidate-taptab-surface
-    const taptabSurface = container.querySelector('.candidate-taptab-surface')
-    expect(taptabSurface).toBeInTheDocument()
-
-    // Check that the TapTab section heading contains the kind label
-    expect(container.textContent).toContain('Protocol Draft')
-
-    // Press Escape to close the drawer
-    fireEvent.keyDown(document, { key: 'Escape' })
-
-    // Drawer should be closed
-    await waitFor(() => {
-      expect(container.querySelector('[role="complementary"]')).not.toBeInTheDocument()
-    })
-
-    unmount()
-  })
-
-  it('shows Promote and Reject buttons in the drawer', async () => {
-    const mockData = {
-      recordId: 'XDR-test-004',
-      kind: 'extraction-draft',
-      source_artifact: {
-        kind: 'pdf',
-        id: 'PDF-999',
-      },
-      candidates: [
-        {
-          target_kind: 'protocol',
-          confidence: 0.90,
-          draft: { display_name: 'Test Protocol' }
-        }
-      ],
-      status: 'pending-review'
-    }
-
-    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockData
-    } as Response)
-
-    const { container } = render(
-      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-004']}>
-        <Routes>
-          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
-        </Routes>
-      </MemoryRouter></OpenTabsProvider></ThemeProvider>
-    )
-
-    await waitFor(() => {
-      expect(screen.getByText('Extraction Review: XDR-test-004')).toBeInTheDocument()
-    })
-
-    // Click the first row to open drawer
-    const rows = container.querySelectorAll('tbody tr')
-    fireEvent.click(rows[0])
-
-    // Wait for drawer to appear
-    await waitFor(() => {
-      expect(container.querySelector('[role="complementary"]')).toBeInTheDocument()
-    })
-
-    // Check for Promote and Reject buttons
-    expect(screen.getByText('Promote')).toBeInTheDocument()
-    expect(screen.getByText('Reject')).toBeInTheDocument()
-  })
-
-  it('calls promote API and updates candidate status on success', async () => {
-    const mockData = {
-      recordId: 'XDR-test-005',
-      kind: 'extraction-draft',
-      source_artifact: { kind: 'freetext', id: 'test' },
-      candidates: [
-        {
-          target_kind: 'protocol',
-          confidence: 0.90,
-          draft: { display_name: 'Test Protocol' }
-        }
-      ],
-      status: 'pending-review'
-    }
-
-    const mockFetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => mockData })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, recordId: 'CAN-protocol-123' }) });
-
-    vi.spyOn(global, 'fetch').mockImplementation(mockFetch as unknown as typeof fetch)
-
-    const { container } = render(
-      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-005']}>
-        <Routes>
-          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
-        </Routes>
-      </MemoryRouter></OpenTabsProvider></ThemeProvider>
-    )
-
-    await waitFor(() => {
-      expect(screen.getByText('Extraction Review: XDR-test-005')).toBeInTheDocument()
-    })
-
-    // Click the first row to open drawer
-    const rows = container.querySelectorAll('tbody tr')
-    fireEvent.click(rows[0])
-
-    // Wait for drawer to appear
-    await waitFor(() => {
-      expect(container.querySelector('[role="complementary"]')).toBeInTheDocument()
-    })
-
-    // Click Promote button
-    const promoteButton = screen.getByText('Promote')
-    fireEvent.click(promoteButton)
-
-    // Verify API call was made
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        '/api/extraction/drafts/XDR-test-005/candidates/0/promote',
-        expect.objectContaining({ method: 'POST' })
-      )
-    })
-  })
-
-  it('calls reject API and updates candidate status on success', async () => {
-    const mockData = {
-      recordId: 'XDR-test-006',
-      kind: 'extraction-draft',
-      source_artifact: { kind: 'freetext', id: 'test' },
-      candidates: [
-        {
-          target_kind: 'protocol',
-          confidence: 0.90,
-          draft: { display_name: 'Test Protocol' }
-        }
-      ],
-      status: 'pending-review'
-    }
-
-    const mockFetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => mockData })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) });
-
-    vi.spyOn(global, 'fetch').mockImplementation(mockFetch as unknown as typeof fetch)
-
-    const { container } = render(
-      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-test-006']}>
-        <Routes>
-          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
-        </Routes>
-      </MemoryRouter></OpenTabsProvider></ThemeProvider>
-    )
-
-    await waitFor(() => {
-      expect(screen.getByText('Extraction Review: XDR-test-006')).toBeInTheDocument()
-    })
-
-    // Click the first row to open drawer
-    const rows = container.querySelectorAll('tbody tr')
-    fireEvent.click(rows[0])
-
-    // Wait for drawer to appear
-    await waitFor(() => {
-      expect(container.querySelector('[role="complementary"]')).toBeInTheDocument()
-    })
-
-    // Click Reject button
-    const rejectButton = screen.getByText('Reject')
-    fireEvent.click(rejectButton)
-
-    // Verify API call was made
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        '/api/extraction/drafts/XDR-test-006/candidates/0/reject',
-        expect.objectContaining({ method: 'POST' })
-      )
-    })
-  })
-
-  // ── New tests for TapTab surface ───────────────────────────────────
-
-  it('renders TapTab surface for known target_kind (protocol)', async () => {
-    const mockData = {
-      recordId: 'XDR-taptab-001',
-      kind: 'extraction-draft',
-      source_artifact: { kind: 'pdf', id: 'PDF-001' },
-      candidates: [
-        {
-          target_kind: 'protocol',
-          confidence: 0.95,
-          draft: {
-            display_name: 'Test Protocol',
-            steps: ['Step 1', 'Step 2'],
-            notes: 'Some notes'
-          }
-        }
-      ],
-      status: 'pending-review'
-    }
-
-    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockData
-    } as Response)
-
-    const { container } = render(
-      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-taptab-001']}>
-        <Routes>
-          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
-        </Routes>
-      </MemoryRouter></OpenTabsProvider></ThemeProvider>
-    )
-
-    await waitFor(() => {
-      expect(screen.getByText('Extraction Review: XDR-taptab-001')).toBeInTheDocument()
-    })
-
-    // Click the row to open drawer
-    const rows = container.querySelectorAll('tbody tr')
-    fireEvent.click(rows[0])
-
-    // Wait for drawer
-    await waitFor(() => {
-      expect(container.querySelector('[role="complementary"]')).toBeInTheDocument()
-    })
-
-    // TapTab surface should be rendered
-    const taptabSurface = container.querySelector('.candidate-taptab-surface')
-    expect(taptabSurface).toBeInTheDocument()
-
-    // Should show the section heading with the kind label
-    expect(container.textContent).toContain('Protocol Draft')
-
-    // Should NOT show raw JSON pre block for known kinds
-    // The TipTap editor may render pre elements internally, but the old
-    // raw JSON display would have contained the full draft as text.
-    const preElements = container.querySelectorAll('pre')
-    const hasRawDraftJson = Array.from(preElements).some(p =>
-      p.textContent?.includes('Test Protocol') && p.textContent?.includes('Step 1')
-    )
-    expect(hasRawDraftJson).toBe(false)
-  })
-
-  it('renders structured fallback for unsupported target_kind', async () => {
-    const mockData = {
-      recordId: 'XDR-fallback-001',
-      kind: 'extraction-draft',
-      source_artifact: { kind: 'pdf', id: 'PDF-002' },
-      candidates: [
-        {
-          target_kind: 'unknown-thing',
-          confidence: 0.50,
-          draft: {
-            foo: 'bar',
-            baz: 42
-          }
-        }
-      ],
-      status: 'pending-review'
-    }
-
-    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockData
-    } as Response)
-
-    const { container } = render(
-      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-fallback-001']}>
-        <Routes>
-          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
-        </Routes>
-      </MemoryRouter></OpenTabsProvider></ThemeProvider>
-    )
-
-    await waitFor(() => {
-      expect(screen.getByText('Extraction Review: XDR-fallback-001')).toBeInTheDocument()
-    })
-
-    // Click the row to open drawer
-    const rows = container.querySelectorAll('tbody tr')
-    fireEvent.click(rows[0])
-
-    // Wait for drawer
-    await waitFor(() => {
-      expect(container.querySelector('[role="complementary"]')).toBeInTheDocument()
-    })
-
-    // Should NOT have TapTab surface
-    const taptabSurface = container.querySelector('.candidate-taptab-surface')
-    expect(taptabSurface).not.toBeInTheDocument()
-
-    // Should have structured fallback
-    const fallback = container.querySelector('.candidate-draft-fallback')
-    expect(fallback).toBeInTheDocument()
-
-    // Should show the draft fields
-    expect(container.textContent).toContain('foo')
-    expect(container.textContent).toContain('bar')
-    expect(container.textContent).toContain('baz')
-    expect(container.textContent).toContain('42')
-  })
-
-  it('renders empty draft fallback gracefully', async () => {
-    const mockData = {
-      recordId: 'XDR-empty-001',
-      kind: 'extraction-draft',
-      source_artifact: { kind: 'pdf', id: 'PDF-003' },
-      candidates: [
-        {
-          target_kind: 'protocol',
-          confidence: 0.30,
-          draft: {}
-        }
-      ],
-      status: 'pending-review'
-    }
-
-    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockData
-    } as Response)
-
-    const { container } = render(
-      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-empty-001']}>
-        <Routes>
-          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
-        </Routes>
-      </MemoryRouter></OpenTabsProvider></ThemeProvider>
-    )
-
-    await waitFor(() => {
-      expect(screen.getByText('Extraction Review: XDR-empty-001')).toBeInTheDocument()
-    })
-
-    // Click the row to open drawer
-    const rows = container.querySelectorAll('tbody tr')
-    fireEvent.click(rows[0])
-
-    // Wait for drawer
-    await waitFor(() => {
-      expect(container.querySelector('[role="complementary"]')).toBeInTheDocument()
-    })
-
-    // TapTab surface should still render (with placeholder)
-    const taptabSurface = container.querySelector('.candidate-taptab-surface')
-    expect(taptabSurface).toBeInTheDocument()
-
-    // Should show empty draft message
-    expect(container.textContent).toContain('Empty draft')
-  })
-
-  it('promote/reject buttons remain functional with TapTab surface', async () => {
-    const mockData = {
-      recordId: 'XDR-actions-001',
-      kind: 'extraction-draft',
-      source_artifact: { kind: 'pdf', id: 'PDF-004' },
-      candidates: [
-        {
-          target_kind: 'equipment',
-          confidence: 0.85,
-          draft: { name: 'Centrifuge', model: 'X-200' }
-        }
-      ],
-      status: 'pending-review'
-    }
-
-    const mockFetch = vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => mockData })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) });
-
-    vi.spyOn(global, 'fetch').mockImplementation(mockFetch as unknown as typeof fetch)
-
-    const { container } = render(
-      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-actions-001']}>
-        <Routes>
-          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
-        </Routes>
-      </MemoryRouter></OpenTabsProvider></ThemeProvider>
-    )
-
-    await waitFor(() => {
-      expect(screen.getByText('Extraction Review: XDR-actions-001')).toBeInTheDocument()
-    })
-
-    // Click the row to open drawer
-    const rows = container.querySelectorAll('tbody tr')
-    fireEvent.click(rows[0])
-
-    // Wait for drawer
-    await waitFor(() => {
-      expect(container.querySelector('[role="complementary"]')).toBeInTheDocument()
-    })
-
-    // TapTab surface should be rendered
-    expect(container.querySelector('.candidate-taptab-surface')).toBeInTheDocument()
-
-    // Promote and Reject buttons should still be present
-    expect(screen.getByText('Promote')).toBeInTheDocument()
-    expect(screen.getByText('Reject')).toBeInTheDocument()
-
-    // Click Promote
-    fireEvent.click(screen.getByText('Promote'))
-
-    // Verify API call
-    await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        '/api/extraction/drafts/XDR-actions-001/candidates/0/promote',
-        expect.objectContaining({ method: 'POST' })
-      )
-    })
-  })
-
-  it('closes drawer via close button (×)', async () => {
-    const mockData = {
-      recordId: 'XDR-close-001',
-      kind: 'extraction-draft',
-      source_artifact: { kind: 'pdf', id: 'PDF-005' },
-      candidates: [
-        {
-          target_kind: 'protocol',
-          confidence: 0.90,
-          draft: { display_name: 'Test' }
-        }
-      ],
-      status: 'pending-review'
-    }
-
-    vi.spyOn(global, 'fetch').mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockData
-    } as Response)
-
-    const { container } = render(
-      <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={['/extraction/review/XDR-close-001']}>
-        <Routes>
-          <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
-        </Routes>
-      </MemoryRouter></OpenTabsProvider></ThemeProvider>
-    )
-
-    await waitFor(() => {
-      expect(screen.getByText('Extraction Review: XDR-close-001')).toBeInTheDocument()
-    })
-
-    // Click the row to open drawer
-    const rows = container.querySelectorAll('tbody tr')
-    fireEvent.click(rows[0])
-
-    // Wait for drawer
-    await waitFor(() => {
-      expect(container.querySelector('[role="complementary"]')).toBeInTheDocument()
-    })
-
-    // Click the close button (×)
-    const closeBtn = container.querySelector('button[aria-label="Close"]')
-    expect(closeBtn).toBeInTheDocument()
-    fireEvent.click(closeBtn!)
-
-    // Drawer should be closed
-    await waitFor(() => {
-      expect(container.querySelector('[role="complementary"]')).not.toBeInTheDocument()
-    })
-  })
-
-  it('renders all known target kinds with TapTab surface', async () => {
-    const knownKinds = ['protocol', 'equipment', 'labware', 'material', 'assay', 'plate', 'run', 'study', 'experiment', 'context', 'event-graph']
-
-    for (const kind of knownKinds) {
-      const mockData = {
-        recordId: `XDR-${kind}-001`,
-        kind: 'extraction-draft',
-        source_artifact: { kind: 'pdf', id: 'PDF-006' },
-        candidates: [
-          {
-            target_kind: kind,
-            confidence: 0.80,
-            draft: { name: `Test ${kind}` }
-          }
-        ],
-        status: 'pending-review'
+      if (url.includes('/api/extraction/human-steps/')) {
+        return { ok: true, json: async () => STEPS } as Response
       }
+      if (url.includes('/api/extraction/drafts/')) {
+        return { ok: true, json: async () => ({ recordId: 'PRT-1', promotionId: 'PROM-1' }) } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    })
+    renderReview(<ExtractionReviewPage />)
+    const promote = await screen.findByRole('button', { name: 'Promote' })
+    await waitFor(() => expect(promote).not.toBeDisabled())
+    fireEvent.click(promote)
+    await waitFor(() =>
+      expect(calls.some((c) => c.includes('/api/extraction/drafts/XDR-test-001/candidates/0/promote'))).toBe(true),
+    )
+    expect(await screen.findByText('promoted')).toBeInTheDocument()
+  })
 
-      vi.spyOn(global, 'fetch').mockResolvedValueOnce({
-        ok: true,
-        json: async () => mockData
-      } as Response)
-
-      const { container } = render(
-        <ThemeProvider><OpenTabsProvider><MemoryRouter initialEntries={[`/extraction/review/XDR-${kind}-001`]}>
-          <Routes>
-            <Route path="/extraction/review/:recordId" element={<ExtractionReviewPage />} />
-          </Routes>
-        </MemoryRouter></OpenTabsProvider></ThemeProvider>
-      )
-
-      await waitFor(() => {
-        expect(container.textContent).toContain(`Extraction Review: XDR-${kind}-001`)
-      })
-
-      // Click the row to open drawer
-      const rows = container.querySelectorAll('tbody tr')
-      fireEvent.click(rows[0])
-
-      // Wait for drawer
-      await waitFor(() => {
-        expect(container.querySelector('[role="complementary"]')).toBeInTheDocument()
-      })
-
-      // Should have TapTab surface
-      expect(container.querySelector('.candidate-taptab-surface')).toBeInTheDocument()
-
-      // Should show the kind label
-      const kindLabel = kind.charAt(0).toUpperCase() + kind.slice(1)
-      expect(container.textContent).toContain(`${kindLabel} Draft`)
-
-      cleanup()
-      vi.clearAllMocks()
-    }
+  it('rejects the primary candidate', async () => {
+    const calls: string[] = []
+    vi.spyOn(global, 'fetch').mockImplementation(async (input) => {
+      const url = typeof input === 'string' ? input : String((input as Request).url)
+      calls.push(url)
+      if (url.includes('/api/records/')) {
+        return { ok: true, json: async () => ({ record: { recordId: DRAFT.recordId, payload: DRAFT } }) } as Response
+      }
+      if (url.includes('/api/extraction/human-steps/')) {
+        return { ok: true, json: async () => STEPS } as Response
+      }
+      if (url.includes('/api/extraction/drafts/')) {
+        return { ok: true, json: async () => ({}) } as Response
+      }
+      return { ok: true, json: async () => ({}) } as Response
+    })
+    renderReview(<ExtractionReviewPage />)
+    const reject = await screen.findByRole('button', { name: 'Reject' })
+    await waitFor(() => expect(reject).not.toBeDisabled())
+    fireEvent.click(reject)
+    await waitFor(() =>
+      expect(calls.some((c) => c.includes('/api/extraction/drafts/XDR-test-001/candidates/0/reject'))).toBe(true),
+    )
+    expect(await screen.findByText('rejected')).toBeInTheDocument()
   })
 })
