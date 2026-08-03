@@ -79,6 +79,7 @@ import { buildResidentContext } from './ai/residentContext.js';
 import { createIngestionAIHandlers } from './api/handlers/IngestionAIHandlers.js';
 import { createMaterialAIHandlers } from './api/handlers/MaterialAIHandlers.js';
 import { createAiIngestionHandlers } from './api/handlers/AiIngestionHandlers.js';
+import { createHumanStepsHandlers, type HumanStepsHandlers } from './api/handlers/HumanStepsHandlers.js';
 import { createProtocolIdeHandlers } from './api/handlers/ProtocolIdeHandlers.js';
 import { createPlannedRunHandlers } from './api/handlers/PlannedRunHandlers.js';
 import { createAiThreadHandlers } from './api/handlers/AiThreadHandlers.js';
@@ -778,6 +779,7 @@ export async function createServer(
   let ingestionAIHandlersImpl = createIngestionAIHandlers(undefined, ctx.store);
   let materialAIHandlersImpl = createMaterialAIHandlers(undefined, ctx.store);
   let aiIngestionHandlersImpl = createAiIngestionHandlers(undefined, undefined, ctx.store);
+  let humanStepsHandlersImpl: HumanStepsHandlers | undefined;
   let aiRecordDraftHandlersImpl: ReturnType<typeof createAiRecordDraftHandlers> | undefined;
   let currentOrchestrator: import('./ai/types.js').AgentOrchestrator | undefined;
   let currentWarmup: import('./ai/warm/PromptWarmupManager.js').PromptWarmupManager | undefined;
@@ -900,6 +902,7 @@ export async function createServer(
       ingestionAIHandlersImpl = createIngestionAIHandlers(orchestrator, ctx.store);
       materialAIHandlersImpl = createMaterialAIHandlers(orchestrator, ctx.store);
       aiIngestionHandlersImpl = createAiIngestionHandlers(inferenceClient, inferenceConfig.model, ctx.store);
+      humanStepsHandlersImpl = createHumanStepsHandlers(inferenceClient, inferenceConfig.model, ctx.store);
       // Make the AI runtime available to the protocol-ide streaming endpoint.
       protocolIdeAiDeps.current = {
         extractionService: runner,
@@ -1184,6 +1187,9 @@ export async function createServer(
     routeOpts.knowledgeAIHandlers = knowledgeAIHandlers;
     routeOpts.ingestionAIHandlers = gatewayIngestionAIHandlers ?? ingestionAIHandlersImpl;
     routeOpts.aiIngestionHandlers = aiIngestionHandlersImpl;
+    if (humanStepsHandlersImpl !== undefined) {
+      routeOpts.humanStepsHandlers = humanStepsHandlersImpl;
+    }
     routeOpts.materialAIHandlers = gatewayMaterialAIHandlers ?? materialAIHandlersImpl;
     routeOpts.aiRecordDraftHandlers = aiRecordDraftHandlers;
     routeOpts.extractHandlers = extractHandlers;

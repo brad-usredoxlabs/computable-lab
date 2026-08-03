@@ -205,6 +205,11 @@ export function ExtractionReviewPage(): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [actionInProgress, setActionInProgress] = useState<number | null>(null);
+  // Concise LLM human steps (the primary, biologist-readable artifact).
+  const [humanSteps, setHumanSteps] = useState<Array<{ ordinal: number; text: string }>>([]);
+  const [humanTitle, setHumanTitle] = useState<string | null>(null);
+  const [humanLoading, setHumanLoading] = useState(false);
+  const [humanError, setHumanError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +242,34 @@ export function ExtractionReviewPage(): JSX.Element {
       .catch(err => { if (!cancelled) { setError(err.message); setLoading(false); } });
     return () => { cancelled = true; };
   }, [recordId]);
+
+  // Fetch concise LLM human steps for the source artifact (vendor PDF). This is
+  // the primary, biologist-readable protocol; the role/deck structure below is
+  // the machine view.
+  useEffect(() => {
+    if (!record) return;
+    const srcId = record.source_artifact?.id;
+    if (!srcId) return;
+    let cancelled = false;
+    setHumanLoading(true);
+    setHumanError(null);
+    fetch(`/api/extraction/human-steps/${encodeURIComponent(srcId)}`, { method: 'POST' })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d) => {
+        if (cancelled) return;
+        setHumanSteps(Array.isArray(d?.steps) ? d.steps : []);
+        setHumanTitle(typeof d?.title === 'string' ? d.title : null);
+        setHumanLoading(false);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setHumanError(err instanceof Error ? err.message : String(err));
+        setHumanLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [record]);
 
   // Handle Escape key to close drawer
   useEffect(() => {
@@ -335,6 +368,28 @@ export function ExtractionReviewPage(): JSX.Element {
   return renderShell(
     <div className="extraction-review">
       <h1>Extraction Review: {record.recordId}</h1>
+
+      <section className="human-protocol" data-testid="human-protocol">
+        <div className="human-protocol__head">
+          <h2>Human protocol</h2>
+          {humanTitle && <span className="human-protocol__title">{humanTitle}</span>}
+        </div>
+        {humanLoading ? (
+          <p>Generating human-readable protocol…</p>
+        ) : humanError ? (
+          <p role="alert">Couldn't generate human steps: {humanError}</p>
+        ) : humanSteps.length === 0 ? (
+          <p>No human-readable steps available for this source.</p>
+        ) : (
+          <ol className="human-protocol__list">
+            {humanSteps.map((s) => (
+              <li key={s.ordinal}>{s.text}</li>
+            ))}
+          </ol>
+        )}
+        <p className="human-protocol__note">The structured machine/role view follows below.</p>
+      </section>
+
       <section>
         <h2>Source</h2>
         <dl>

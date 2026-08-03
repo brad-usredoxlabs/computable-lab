@@ -46,6 +46,40 @@
   grid-template-columns: 140px 1fr;
   gap: 4px 12px;
 }
+
+/* Concise LLM "Human protocol" — the primary, biologist-readable artifact. */
+.human-protocol {
+  background: var(--cl-bg-elev) !important;
+  border: 1px solid var(--cl-accent, #2563eb) !important;
+}
+.human-protocol__head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.human-protocol__head h2 {
+  margin: 0 !important;
+}
+.human-protocol__title {
+  color: var(--cl-text-dim);
+  font-size: 13px;
+}
+.human-protocol__list {
+  margin: 0;
+  padding-left: 26px;
+}
+.human-protocol__list li {
+  font-size: 15px;
+  line-height: 1.55;
+  margin-bottom: 10px;
+  color: var(--cl-text);
+}
+.human-protocol__note {
+  margin-top: 12px;
+  color: var(--cl-text-faint);
+  font-size: 12px;
+}
 .extraction-review dt,
 .extraction-drafts-list dt {
   color: var(--cl-text-dim);

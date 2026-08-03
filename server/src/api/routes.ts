@@ -44,6 +44,7 @@ import type { ChemistryHandlers } from './handlers/ChemistryHandlers.js';
 import type { IngestionHandlers } from './handlers/IngestionHandlers.js';
 import type { IngestionAIHandlers } from './handlers/IngestionAIHandlers.js';
 import type { AiIngestionHandlers } from './handlers/AiIngestionHandlers.js';
+import type { HumanStepsHandlers } from './handlers/HumanStepsHandlers.js';
 import type { ExtractHandlers } from './handlers/ExtractHandlers.js';
 import type { MaterialAIHandlers } from './handlers/MaterialAIHandlers.js';
 import type { SemanticsHandlers } from './handlers/SemanticsHandlers.js';
@@ -114,6 +115,7 @@ export interface RouteOptions {
   ingestionHandlers?: IngestionHandlers;
   ingestionAIHandlers?: IngestionAIHandlers;
   aiIngestionHandlers?: AiIngestionHandlers;
+  humanStepsHandlers?: HumanStepsHandlers;
   extractHandlers?: ExtractHandlers;
   materialAIHandlers?: MaterialAIHandlers;
   semanticsHandlers?: SemanticsHandlers;
@@ -746,6 +748,14 @@ export function registerRoutes(
     fastify.post('/ai/analyze-ingestion', aiIngestionHandlers.analyzeIngestion.bind(aiIngestionHandlers));
   }
 
+  const { humanStepsHandlers } = options;
+  if (humanStepsHandlers) {
+    fastify.post(
+      '/extraction/human-steps/:vendorPdfId',
+      humanStepsHandlers.generateHumanSteps.bind(humanStepsHandlers),
+    );
+  }
+
   const { materialAIHandlers } = options;
   if (materialAIHandlers) {
     fastify.post('/ai/draft-material', materialAIHandlers.draftMaterial.bind(materialAIHandlers));
@@ -788,6 +798,7 @@ export function registerRoutes(
     // New extraction-draft flow endpoints
     fastify.post('/extraction/protocols/draft', protocolHandlers.extractProtocolDraft.bind(protocolHandlers));
     fastify.post('/extraction/protocols/:draftId/promote', protocolHandlers.promoteProtocolDraft.bind(protocolHandlers));
+    fastify.post('/extraction/vendor-pdfs/:vendorPdfId/draft', protocolHandlers.createVendorPdfDraft.bind(protocolHandlers));
     
     fastify.post('/protocols/import', protocolHandlers.importProtocolPdf.bind(protocolHandlers));
     fastify.post('/protocols/materials/compile', protocolHandlers.compileMaterialIntents.bind(protocolHandlers));
