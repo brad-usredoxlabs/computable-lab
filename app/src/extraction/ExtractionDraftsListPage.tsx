@@ -49,9 +49,20 @@ export function ExtractionDraftsListPage(): JSX.Element {
       })
       .then((data) => {
         if (!cancelled) {
-          // API returns { records: [...], total: number }
-          setDrafts((data as { records: ExtractionDraft[] }).records || []);
-          setLoading(false);
+          // API returns { records: [...], total }. Each entry is the record
+          // envelope ({ recordId, schemaId, payload, meta }); the draft fields
+          // (recordId, candidates, source_artifact, status) live in `payload`.
+          const records = (data as { records: unknown[] }).records || []
+          setDrafts(
+            records.map((r) => {
+              const env = r as { payload?: unknown }
+              if (env && typeof env === 'object' && 'payload' in env) {
+                return (env.payload ?? env) as ExtractionDraft
+              }
+              return r as ExtractionDraft
+            }),
+          )
+          setLoading(false)
         }
       })
       .catch((err) => {
