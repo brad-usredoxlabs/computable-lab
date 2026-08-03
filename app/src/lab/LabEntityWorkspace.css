@@ -111,6 +111,46 @@
   color: var(--cl-text-faint);
 }
 
+/* CURIE fields — distinct styling for ontology references */
+.lab-entity-workspace__field--curie {
+  grid-column: 1 / -1;
+}
+
+.lab-entity-workspace__field--curie-synonym dt {
+  color: var(--cl-text-faint);
+  font-style: italic;
+}
+
+.lab-entity-workspace__curie {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+  overflow: visible;
+  white-space: normal;
+}
+
+.lab-entity-workspace__curie-id {
+  font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-type-lab);
+  background: var(--cl-type-lab-soft);
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.lab-entity-workspace__curie-label {
+  color: var(--cl-text);
+  font-size: 13px;
+}
+
+.lab-entity-workspace__curie-ns {
+  color: var(--cl-text-dim);
+  font-size: 11px;
+}
+
 .lab-entity-workspace__error,
 .lab-entity-workspace__hint {
   color: var(--cl-text-dim);
@@ -122,4 +162,13 @@
   .lab-entity-workspace__connections-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* Read-only record view (TapTab editor surface). */
+.lab-entity-workspace__viewer {
+  padding: 20px 24px;
+  background: var(--cl-bg-elev);
+  border: 1px solid var(--cl-border);
+  border-radius: 10px;
+  margin-top: 8px;
 }

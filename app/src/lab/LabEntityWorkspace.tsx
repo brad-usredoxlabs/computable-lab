@@ -1,41 +1,62 @@
 /**
  * LabEntityWorkspace — individual lab entity view at /lab/:category/:entityId.
  *
- * Phase 8 shell implementation. Shows entity record with basic fields.
- * Full protocol steps, material hierarchy, equipment calibration, etc.
- * are follow-on work.
- *
- * Spec reference: specs/computable-lab-ui-specification.md §8.2-§8.6
+ * Shows the record as a READ-ONLY TapTab (structured editor) surface so the
+ * user sees the actual record content, not a metadata field dump. Uses the
+ * same editor projection + ProjectionTapTabEditor as RecordEditPanel, but in
+ * `disabled` (read-only) mode.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
 import { apiClient } from '../shared/api/client'
+import { ProjectionTapTabEditor } from '../editor/taptab'
+import type { EditorProjectionResponse } from '../types/uiSpec'
 import type { RecordEnvelope } from '../types/kernel'
 import './LabEntityWorkspace.css'
 
 export function LabEntityWorkspace() {
   const { category, entityId } = useParams<{ category: string; entityId: string }>()
   const [record, setRecord] = useState<RecordEnvelope | null>(null)
+  const [projection, setProjection] = useState<EditorProjectionResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!entityId) return
+    let cancelled = false
     setLoading(true)
     setError(null)
-    apiClient.getRecord(entityId)
-      .then((rec) => setRecord(rec))
-      .catch((err: unknown) => {
-        setError(err instanceof Error ? err.message : String(err))
+    setProjection(null)
+    Promise.all([
+      apiClient.getRecord(entityId),
+      // Editor projection may be unavailable for kinds without a uiSpec —
+      // degrade to a plain message rather than crashing.
+      apiClient.getRecordEditorProjection(entityId).catch(() => null),
+    ])
+      .then(([rec, proj]) => {
+        if (cancelled) return
+        setRecord(rec)
+        if (proj) setProjection(proj)
       })
-      .finally(() => setLoading(false))
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [entityId])
 
   const payload = record?.payload as Record<string, unknown> | null
   const title = typeof payload?.title === 'string' ? payload.title : entityId ?? ''
   const kind = typeof payload?.kind === 'string' ? payload.kind : category ?? ''
+
+  // Read-only view — the editor is `disabled`, so no slot mutation is needed.
+  const slots = useMemo(() => projection?.slots ?? [], [projection])
 
   const workspaceContent = (
     <div className="lab-entity-workspace" data-testid="lab-entity-workspace">
@@ -56,37 +77,19 @@ export function LabEntityWorkspace() {
             </div>
           </header>
 
-          <section className="lab-entity-workspace__section" data-testid="lab-entity-details">
-            <h2 className="lab-entity-workspace__section-title">Details</h2>
-            <dl className="lab-entity-workspace__fields">
-              {Object.entries(payload).slice(0, 12).map(([key, value]) => {
-                if (typeof value === 'object') return null
-                return (
-                  <div key={key} className="lab-entity-workspace__field">
-                    <dt>{key}</dt>
-                    <dd>{String(value)}</dd>
-                  </div>
-                )
-              })}
-            </dl>
-          </section>
-
-          <section className="lab-entity-workspace__section" data-testid="lab-entity-connections">
-            <h2 className="lab-entity-workspace__section-title">Connections</h2>
-            <div className="lab-entity-workspace__connections-grid">
-              <div>
-                <h3>Recent Runs</h3>
-                <p className="lab-entity-workspace__placeholder">No runs using this entity.</p>
-              </div>
-              <div>
-                <h3>Related Claims</h3>
-                <p className="lab-entity-workspace__placeholder">No related claims.</p>
-              </div>
-              <div>
-                <h3>Projects</h3>
-                <p className="lab-entity-workspace__placeholder">No linked projects.</p>
-              </div>
-            </div>
+          <section className="lab-entity-workspace__viewer" data-testid="lab-entity-viewer">
+            {projection ? (
+              <ProjectionTapTabEditor
+                blocks={projection.blocks}
+                slots={slots}
+                data={payload}
+                disabled
+              />
+            ) : (
+              <p className="lab-entity-workspace__hint">
+                No structured read-only view is available for this record.
+              </p>
+            )}
           </section>
         </>
       )}
