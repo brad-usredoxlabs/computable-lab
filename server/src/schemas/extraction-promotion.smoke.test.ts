@@ -87,8 +87,8 @@ describe('extraction-promotion schema triplet', () => {
       const parsed = parseYaml(content);
       const recordIdRule = parsed.rules.find((r: any) => r.id === 'xpr-recordid-pattern');
       expect(recordIdRule).toBeDefined();
-      expect(recordIdRule.check).toBe('regex');
-      expect(recordIdRule.value).toContain('XPR-');
+      expect(recordIdRule.assert).toMatchObject({ op: 'regex', path: '$.recordId' });
+      expect(recordIdRule.assert.pattern).toContain('^XPR-');
     });
 
     it('has xpr-hash-64 rule', () => {
@@ -96,9 +96,9 @@ describe('extraction-promotion schema triplet', () => {
       const parsed = parseYaml(content);
       const hashRule = parsed.rules.find((r: any) => r.id === 'xpr-hash-64');
       expect(hashRule).toBeDefined();
-      expect(hashRule.check).toBe('regex');
-      expect(hashRule.value).toContain('[0-9a-f]');
-      expect(hashRule.value).toContain('{64}');
+      expect(hashRule.assert).toMatchObject({ op: 'regex', path: '$.source_content_hash' });
+      expect(hashRule.assert.pattern).toContain('[0-9a-f]');
+      expect(hashRule.assert.pattern).toContain('{64}');
     });
 
     it('has xpr-promoted-at-iso rule', () => {
@@ -106,7 +106,7 @@ describe('extraction-promotion schema triplet', () => {
       const parsed = parseYaml(content);
       const promotedAtRule = parsed.rules.find((r: any) => r.id === 'xpr-promoted-at-iso');
       expect(promotedAtRule).toBeDefined();
-      expect(promotedAtRule.check).toBe('iso-datetime');
+      expect(promotedAtRule.assert).toMatchObject({ op: 'regex', path: '$.promoted_at' });
     });
 
     it('has xpr-version-1 rule', () => {
@@ -114,8 +114,7 @@ describe('extraction-promotion schema triplet', () => {
       const parsed = parseYaml(content);
       const versionRule = parsed.rules.find((r: any) => r.id === 'xpr-version-1');
       expect(versionRule).toBeDefined();
-      expect(versionRule.check).toBe('eq');
-      expect(versionRule.value).toBe(1);
+      expect(versionRule.assert).toMatchObject({ op: 'equals', path: '$.version', value: 1 });
     });
 
     it('has xpr-status-enum rule', () => {
@@ -123,8 +122,8 @@ describe('extraction-promotion schema triplet', () => {
       const parsed = parseYaml(content);
       const statusRule = parsed.rules.find((r: any) => r.id === 'xpr-status-enum');
       expect(statusRule).toBeDefined();
-      expect(statusRule.check).toBe('enum');
-      expect(statusRule.value).toEqual(expect.arrayContaining(['active', 'retracted']));
+      expect(statusRule.assert).toMatchObject({ op: 'in', path: '$.status' });
+      expect(statusRule.assert.values).toEqual(expect.arrayContaining(['active', 'retracted']));
     });
   });
 

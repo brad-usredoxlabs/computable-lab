@@ -2,35 +2,61 @@ lintVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/workflow/extraction-promotion.schema.yaml"
 rules:
   - id: xpr-recordid-pattern
+    title: "recordId must start with XPR-"
     severity: error
-    path: recordId
-    check: regex
-    value: ^XPR-
-    message: extraction-promotion.recordId must start with XPR-
+    scope: record
+    assert:
+      op: regex
+      path: "$.recordId"
+      pattern: "^XPR-"
+    message:
+      template: "extraction-promotion.recordId must start with XPR- (got '{{$.recordId}}')"
+      paths: ["$.recordId"]
 
   - id: xpr-hash-64
+    title: "source_content_hash must be a 64-char hex SHA-256"
     severity: error
-    path: source_content_hash
-    check: regex
-    value: ^[0-9a-f]{64}$
-    message: source_content_hash must be a 64-char hex SHA-256
+    scope: record
+    assert:
+      op: regex
+      path: "$.source_content_hash"
+      pattern: "^[0-9a-f]{64}$"
+    message:
+      template: "source_content_hash must be a 64-char hex SHA-256"
+      paths: []
 
   - id: xpr-promoted-at-iso
+    title: "promoted_at must be ISO-8601"
     severity: error
-    path: promoted_at
-    check: iso-datetime
-    message: promoted_at must be ISO-8601
+    scope: record
+    assert:
+      op: regex
+      path: "$.promoted_at"
+      pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}'
+    message:
+      template: "promoted_at must be ISO-8601"
+      paths: []
 
   - id: xpr-version-1
+    title: "version must be 1"
     severity: error
-    path: version
-    check: eq
-    value: 1
-    message: Phase-1 extraction-promotion records must have version 1
+    scope: record
+    assert:
+      op: equals
+      path: "$.version"
+      value: 1
+    message:
+      template: "Phase-1 extraction-promotion records must have version 1"
+      paths: []
 
   - id: xpr-status-enum
+    title: "status must be active or retracted"
     severity: error
-    path: status
-    check: enum
-    value: [active, retracted]
-    message: status must be active or retracted
+    scope: record
+    assert:
+      op: in
+      path: "$.status"
+      values: [active, retracted]
+    message:
+      template: "status must be active or retracted"
+      paths: []
