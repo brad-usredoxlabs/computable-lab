@@ -59,6 +59,9 @@ const ArtifactHostPage = lazy(async () => import('./shared/shell/ArtifactHostPag
 const RecordHostPage = lazy(async () => import('./shared/shell/RecordHostPage').then((m) => ({ default: m.RecordHostPage })))
 // Phase 4.1: standalone deck (event-graph) route
 const DeckHostPage = lazy(async () => import('./shared/shell/DeckHostPage').then((m) => ({ default: m.DeckHostPage })))
+// Ingestion/extraction draft routes (VendorPdfWorkflowTab navigates to these)
+const ExtractionDraftsListPage = lazy(async () => import('./extraction/ExtractionDraftsListPage').then((m) => ({ default: m.ExtractionDraftsListPage })))
+const ExtractionReviewPage = lazy(async () => import('./extraction/ExtractionReviewPage').then((m) => ({ default: m.ExtractionReviewPage })))
 
 function DeferredRoute({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<div style={{ padding: '1rem' }}>Loading...</div>}>{children}</Suspense>
@@ -117,6 +120,11 @@ export function App() {
               <Route path="/lab/:category/:entityId" element={<DeferredRoute><LabEntityWorkspace /></DeferredRoute>} />
               <Route path="/ingestion" element={<DeferredRoute><IngestionPage /></DeferredRoute>} />
               <Route path="/ingestion/:tab" element={<DeferredRoute><IngestionPage /></DeferredRoute>} />
+
+              {/* Extraction drafts — reached from ingestion "Extract Protocol" and
+                  ExtractionDraftsListPage. (Legacy LiteratureBody also uses these.) */}
+              <Route path="/extraction" element={<DeferredRoute><ExtractionDraftsListPage /></DeferredRoute>} />
+              <Route path="/extraction/review/:recordId" element={<DeferredRoute><ExtractionReviewPage /></DeferredRoute>} />
               <Route path="/splash" element={<DeferredRoute><SplashRoute /></DeferredRoute>} />
 
               {/* Creation-entry-points spec §4.1: project creation needs a

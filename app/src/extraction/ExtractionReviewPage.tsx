@@ -200,7 +200,19 @@ export function ExtractionReviewPage(): JSX.Element {
     }
     fetch(`/api/records/${recordId}`)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then(data => { if (!cancelled) { setRecord(data as ExtractionDraft); setLoading(false); } })
+      .then(data => {
+        if (cancelled) return
+        // `/api/records/:id` returns the record envelope ({ record: { payload } });
+        // the draft fields (recordId, candidates, source_artifact, status) live in
+        // record.payload. Fall back to data.record / data for older shapes.
+        const nested = (data as { record?: { payload?: unknown } | unknown }).record
+        const unwrapped =
+          (nested && typeof nested === 'object' && 'payload' in (nested as Record<string, unknown>)
+            ? (nested as { payload: unknown }).payload
+            : nested) ?? data
+        setRecord(unwrapped as ExtractionDraft)
+        setLoading(false)
+      })
       .catch(err => { if (!cancelled) { setError(err.message); setLoading(false); } });
     return () => { cancelled = true; };
   }, [recordId]);
