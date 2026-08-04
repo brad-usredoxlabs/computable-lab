@@ -90,6 +90,8 @@ import { getOntologyTermRegistry } from '../registry/OntologyTermRegistry.js';
 import { getVerbActionMap } from '../registry/VerbActionMapRegistry.js';
 import { getLabwareDefinitionRegistry } from '../registry/LabwareDefinitionRegistry.js';
 import { bindOntologyMentions, type OntologyMentionBinding } from './mentions/bindOntologyMentions.js';
+import { buildMaterialResolutions } from './buildMaterialResolutions.js';
+import { computeAssurance, bindingConfidence, type AssuranceResult } from './assurance.js';
 import { fuzzyFindByName } from '../registry/fuzzyMatch.js';
 import * as path from 'node:path';
 import '../compiler/patterns/index.js'; // registers all pattern expanders
@@ -140,6 +142,8 @@ export interface RunChatbotCompileArgs {
      * unchanged.
      */
     store?: import('../store/types.js').RecordStore;
+    /** RESOLVE threshold for prompt assurance (default 0.9). */
+    assuranceThreshold?: number;
   };
   /** Optional conversation identifier used to key the lab-state cache. */
   conversationId?: string;
@@ -181,6 +185,36 @@ const PIPELINE_YAML_PATH = path.resolve(
   import.meta.dirname ?? __dirname,
   '../../../schema/registry/compile-pipelines/chatbot-compile.yaml',
 );
+
+/** Default RESOLVE threshold for prompt assurance (Brad: "can live with > 0.9"). */
+const DEFAULT_ASSURANCE_THRESHOLD = 0.9;
+
+/**
+ * Heuristic quantity-completeness: 1 when every entity-carrying event already
+ * carries a volume/count/concentration/etc., else a degraded fraction. This is
+ * intentionally simple — refine per event-type as calibration data arrives.
+ */
+function computeQuantityCompleteness(events: PlateEventPrimitive[]): number {
+  const relevant = events.filter((e) =>
+    e.event_type === 'add_material'
+    || e.event_type === 'transfer'
+    || e.event_type === 'mix'
+    || e.event_type === 'centrifuge'
+    || e.event_type === 'incubate',
+  );
+  if (relevant.length === 0) return 1;
+  const withQuantity = relevant.filter((e) => {
+    const d = e.details as Record<string, unknown>;
+    const keys = Object.keys(d);
+    return keys.some((k) =>
+      /volume|vol_?ul|concentr|count|cell_?count|amount|quantity|duration|time|rpm|temp/i.test(k)
+      && typeof d[k] !== 'undefined'
+      && d[k] !== null
+      && d[k] !== '',
+    );
+  });
+  return withQuantity.length === relevant.length ? 1 : withQuantity.length / relevant.length;
+}
 
 function normalizePromptForCompile(prompt: string): string {
   return prompt
@@ -563,6 +597,46 @@ export async function runChatbotCompile(
   if (convId && cache) {
     cache.put(convId, labStateDelta.snapshotAfter);
   }
+
+  // ---- Resolve assurance (Phase 0 + Phase 1/2) ---------------------------
+  // Derive per-material resolutions from in-scope evidence and compute the
+  // RESOLVE/CONFIRM decision. Draft-only: never persists anything here.
+  const materialResolutions = buildMaterialResolutions({
+    mentions: effectiveMentions,
+    ontologyBindings,
+    unresolvedRefs: ai.unresolvedRefs ?? [],
+  });
+  const criticalBindings = materialResolutions.map((r) => {
+    const mention = r.status === 'resolved'
+      ? (r.mention ?? '')
+      : r.status === 'unresolved' || r.status === 'new_local_proposed'
+        ? r.mention
+        : '';
+    return { mention, resolution: r, confidence: bindingConfidence(r) };
+  });
+  const deterministicCompleteness =
+    typeof deterministicPlanOutput.deterministicCompleteness === 'number'
+      ? deterministicPlanOutput.deterministicCompleteness
+      : 1;
+  const unresolvedRefCount =
+    (ai.unresolvedRefs?.length ?? 0)
+    + terminalArtifacts.gaps.filter((g) => g.kind === 'unresolved_ref').length;
+  const validationErrors = (validationReport.findings ?? [])
+    .filter((f) => (f as { severity?: string }).severity === 'error');
+  const quantityCompleteness = computeQuantityCompleteness(events);
+
+  const assurance: AssuranceResult = computeAssurance({
+    criticalBindings,
+    materialResolutions,
+    deterministicCompleteness,
+    quantityCompleteness,
+    validationErrorCount: validationErrors.length,
+    validationQuality: validationErrors.length === 0 ? 1 : Math.max(0, 1 - 0.2 * validationErrors.length),
+    unresolvedRefCount,
+    hasUnverifiedCurie: ontologyBindings.some((b) => b.minted && (b.requiresReview === undefined ? false : b.requiresReview)),
+    threshold: args.deps.assuranceThreshold ?? DEFAULT_ASSURANCE_THRESHOLD,
+  });
+  terminalArtifacts.assurance = assurance;
 
   // Surface every pass's output as a plain object so fix-it tooling can see
   // intermediate state without re-running the pipeline. The orchestrator's

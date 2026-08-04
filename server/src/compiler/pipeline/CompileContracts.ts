@@ -15,6 +15,7 @@ import type { ProtocolIntentValidationOutput } from '../protocolIntent/ProtocolI
 import type { PassDiagnostic } from './types.js';
 import type { ValidationReport } from '../validation/ValidationReport.js';
 import type { DeterministicProtocolPlan, DownstreamCompileJob } from './passes/ChatbotCompilePasses.js';
+import type { AssuranceResult } from '../../ai/assurance.js';
 
 // ---------------------------------------------------------------------------
 // LabStateSnapshot — re-exported from the canonical state module
@@ -316,6 +317,8 @@ export interface TerminalArtifacts {
   validationReport?: ValidationReport;
   /** Lifecycle/admissibility decisions attached to records proposed during compile. */
   lifecycleDecisions?: LifecycleDecision[];
+  /** Prompt-level resolution assurance (RESOLVE/CONFIRM decision + blockers). */
+  assurance?: AssuranceResult;
 }
 
 // ---------------------------------------------------------------------------

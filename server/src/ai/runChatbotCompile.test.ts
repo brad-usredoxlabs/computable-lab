@@ -226,6 +226,11 @@ describe('runChatbotCompile', () => {
     // Outcome should be 'complete' so AgentOrchestrator short-circuits the LLM loop.
     expect(result.outcome).toBe('complete');
 
+    // The compile attaches prompt assurance; a clean seed with an existing
+    // aliquot + full quantity should be RESOLVE with no blockers.
+    expect(result.terminalArtifacts.assurance?.decision).toBe('RESOLVE');
+    expect(result.terminalArtifacts.assurance?.blockers).toEqual([]);
+
     // The mentioned-in-clause labware addition triggers one labware-by-hint lookup
     // for the plate's display name (matching current emit behavior).
     expect(searchLabwareByHint).toHaveBeenCalledTimes(1);
