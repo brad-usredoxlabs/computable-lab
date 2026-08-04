@@ -142,6 +142,30 @@ describe('computeAssurance — hard gate semantics', () => {
     expect(r.decision).toBe('RESOLVE');
     expect(r.blockers).toEqual([]);
   });
+
+  it('drops the grounded sub-score toward zero when no resolution is resolved', () => {
+    // All materials are minted/unresolved → grounded=0 → aggregate drops well
+    // below threshold, but the mint blockers are what force CONFIRM.
+    const r = computeAssurance(
+      base({
+        criticalBindings: [
+          binding('a', { status: 'new_local_proposed', mention: 'a' }),
+          binding('b', { status: 'unresolved', mention: 'b' }),
+        ],
+        materialResolutions: [
+          { status: 'new_local_proposed', mention: 'a' },
+          { status: 'unresolved', mention: 'b' },
+        ],
+        deterministicCompleteness: 1,
+        quantityCompleteness: 1,
+        validationQuality: 1,
+      }),
+    );
+    expect(r.decision).toBe('CONFIRM');
+    expect(r.score).toBeLessThan(0.9);
+    expect(r.blockers.some((f) => f.code === 'NEW_LOCAL_ENTITY')).toBe(true);
+    expect(r.blockers.some((f) => f.code === 'UNRESOLVED_REFERENCE')).toBe(true);
+  });
 });
 
 describe('threshold override', () => {

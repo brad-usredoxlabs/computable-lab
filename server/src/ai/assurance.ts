@@ -240,6 +240,10 @@ export function computeAssurance(input: AssuranceInput): AssuranceResult {
 
   const decision =
     blockers.length === 0 &&
+    // Redundant with the LOW_BINDING_CONFIDENCE blocker collection above, but
+    // kept as defense-in-depth: a resolved binding below criticalSlotMinimum
+    // must NEVER resolve regardless of the aggregate. If you remove one of
+    // these two checks, remove the other too (they must stay in agreement).
     input.criticalBindings.every((b) => bindingConfidence(b.resolution) >= criticalSlotMinimum) &&
     score >= threshold
       ? 'RESOLVE'
