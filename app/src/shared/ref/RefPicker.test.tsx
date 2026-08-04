@@ -87,4 +87,35 @@ describe('RefPicker tier-5 mint affordance', () => {
     expect(await screen.findByText(/Create local term/)).toBeTruthy()
     expect(screen.queryByText('No results found')).toBeNull()
   })
+
+  it('closes the dropdown without emitting a ref when minting fails', async () => {
+    mockResolveResults.results = [
+      {
+        curie: '',
+        label: 'novel-drug-x',
+        namespace: 'local',
+        tier: 5,
+        source: 'mint',
+        mint: { label: 'novel-drug-x' },
+      },
+    ]
+    mockMintLocalTerm.mockRejectedValueOnce(new Error('boom'))
+
+    const onChange = vi.fn()
+    render(<RefPicker value={null} onChange={onChange} minQueryLength={2} />)
+
+    const input = screen.getByPlaceholderText('Search...')
+    fireEvent.change(input, { target: { value: 'novel-drug-x' } })
+    fireEvent.focus(input)
+
+    fireEvent.click(await screen.findByText(/Create local term/))
+
+    await waitFor(() => {
+      expect(mockMintLocalTerm).toHaveBeenCalledWith('material', 'novel-drug-x', 'novel-drug-x')
+    })
+    // On failure the picker emits no value (no successful ref).
+    expect(onChange).not.toHaveBeenCalled()
+    // And it closes the dropdown.
+    expect(screen.queryByText(/Create local term/)).toBeNull()
+  })
 })

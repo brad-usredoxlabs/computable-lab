@@ -142,11 +142,17 @@ export function RefPicker({
     }
   }, [focusedIndex])
 
+  // The mint row is keyboard-reachable as one extra item after the suggestion
+  // list. -1 = nothing focused; [0, suggestions.length-1] = suggestion rows;
+  // mintIndex (=== suggestions.length) = the mint row, when present.
+  const mintIndex = mintCandidate ? suggestions.length : -1
+  const lastFocusable = mintCandidate ? suggestions.length : suggestions.length - 1
+
   // Handle keyboard navigation
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
-      setFocusedIndex((i) => Math.min(i + 1, suggestions.length - 1))
+      setFocusedIndex((i) => Math.min(i + 1, lastFocusable))
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setFocusedIndex((i) => Math.max(i - 1, 0))
@@ -154,6 +160,8 @@ export function RefPicker({
       e.preventDefault()
       if (focusedIndex >= 0 && suggestions[focusedIndex]) {
         selectRef(suggestions[focusedIndex])
+      } else if (focusedIndex === mintIndex && mintCandidate) {
+        void selectMint(mintCandidate.mint!.label)
       }
     } else if (e.key === 'Escape') {
       setIsOpen(false)
@@ -365,13 +373,14 @@ export function RefPicker({
           {mintCandidate && (
             <li
               role="option"
-              aria-selected={false}
+              aria-selected={focusedIndex === mintIndex}
               onClick={() => selectMint(mintCandidate.mint!.label)}
+              onMouseEnter={() => setFocusedIndex(mintIndex)}
               style={{
                 padding: '10px 16px',
                 cursor: minting ? 'wait' : 'pointer',
                 borderTop: '1px solid #f1f5f9',
-                backgroundColor: '#fffbeb',
+                backgroundColor: focusedIndex === mintIndex ? '#ffedd5' : '#fffbeb',
               }}
             >
               <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#b45309' }}>
