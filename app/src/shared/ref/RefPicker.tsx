@@ -9,6 +9,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useResolveSearch } from '../hooks/useResolveSearch'
 import { resolveCandidateToRef, tierBadge, type ResolveRef } from '../api/resolveUtil'
 import { RefBadge, type Ref } from './RefBadge'
+import { apiClient } from '../api/client'
 
 /**
  * RefPicker props
@@ -104,7 +105,17 @@ export function RefPicker({
     maxResults,
   })
 
-  const selectableResults = resolveResults.filter((candidate) => candidate.source !== 'mint' && candidate.curie)
+  const selectableResults = resolveResults.filter(
+    (candidate) => candidate.source !== 'mint' && candidate.curie,
+  )
+
+  // Tier-5 mint affordance: the resolve() spine always appends a
+  // `source: 'mint'` candidate (curie empty, carries { label }). Surface it as
+  // a pinned-bottom "Create local term" row instead of discarding it, so a
+  // user can explicitly mint a new local-namespace term when nothing matches —
+  // matching the slash-menu resolver's tier-5 floor. Selecting it creates a
+  // draft material record server-side and returns the minted record ref.
+  const mintCandidate = resolveResults.find((candidate) => candidate.source === 'mint' && candidate.mint?.label)
 
   // Convert resolve results to refs
   const suggestions: ResolveRef[] = selectableResults.map((c) => resolveCandidateToRef(c))
@@ -155,6 +166,25 @@ export function RefPicker({
     setQuery('')
     setIsOpen(false)
     setFocusedIndex(-1)
+  }
+
+  // Mint a new local-namespace term (tier 5): create a draft material record
+  // server-side, then emit it as a local record ref. Mirrors the slash-menu
+  // resolver's mint — tier-1 finds it on the next search.
+  const [minting, setMinting] = useState(false)
+  async function selectMint(label: string) {
+    if (minting) return
+    setMinting(true)
+    try {
+      const res = await apiClient.mintLocalTerm('material', label, label)
+      selectRef({ kind: 'record', id: res.recordId, type: 'material', label: res.label })
+    } catch (e) {
+      console.error('[RefPicker] failed to mint local term', e)
+      setIsOpen(false)
+      setFocusedIndex(-1)
+    } finally {
+      setMinting(false)
+    }
   }
 
   // Clear selection
@@ -241,7 +271,7 @@ export function RefPicker({
             padding: '4px 0',
           }}
         >
-          {selectableResults.length === 0 && !resolveLoading && (
+          {selectableResults.length === 0 && !resolveLoading && !mintCandidate && (
             <li style={{ padding: '12px 16px', color: '#94a3b8', fontSize: '0.875rem' }}>
               No results found
             </li>
@@ -332,6 +362,26 @@ export function RefPicker({
               </li>
             )
           })}
+          {mintCandidate && (
+            <li
+              role="option"
+              aria-selected={false}
+              onClick={() => selectMint(mintCandidate.mint!.label)}
+              style={{
+                padding: '10px 16px',
+                cursor: minting ? 'wait' : 'pointer',
+                borderTop: '1px solid #f1f5f9',
+                backgroundColor: '#fffbeb',
+              }}
+            >
+              <div style={{ fontWeight: 600, fontSize: '0.9rem', color: '#b45309' }}>
+                ＋ Create local term &quot;{mintCandidate.mint!.label}&quot;
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#92400e', marginTop: '2px' }}>
+                {minting ? 'Creating…' : 'Mint a draft term into the lab namespace (tier 5 — last resort)'}
+              </div>
+            </li>
+          )}
         </ul>
       )}
 
