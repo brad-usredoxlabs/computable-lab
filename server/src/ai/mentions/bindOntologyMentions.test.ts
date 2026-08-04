@@ -164,6 +164,24 @@ describe('bindOntologyMentions', () => {
     expect((await store.list({ kind: 'material' }))).toHaveLength(1);
   });
 
+  it('persistNew:false keeps an unknown CURIE draft-only and does NOT write a record (accept-gate)', async () => {
+    // This is the server-side accept gate: a draft compile (runChatbotCompile
+    // passes persistNew:false) must never persist a local record — the user has
+    // not accepted the preview yet. The unknown CURIE stays as a draftOnly
+    // binding that the accept path materializes into a real MAT-… record later.
+    const store = stubStore([]);
+    const { mentions, bindings } = await bindOntologyMentions(
+      [materialMention('CHEBI:5001', 'fenofibrate')],
+      { store, persistNew: false },
+    );
+    expect(mentions[0]!.id).toBe('CHEBI:5001'); // unchanged — no local id minted
+    expect(bindings).toHaveLength(1);
+    expect(bindings[0]!.minted).toBe(false);
+    expect(bindings[0]!.draftOnly).toBe(true);
+    // Nothing written to the store.
+    expect((await store.list({ kind: 'material' }))).toHaveLength(0);
+  });
+
   it('rewrites CURIE ids inside the prompt text when a prompt is supplied', async () => {
     const store = stubStore([]);
     const prompt = 'add 100 uL of [[material:CHEBI:5001|fenofibrate]] to well A1';
