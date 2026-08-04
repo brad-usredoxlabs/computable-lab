@@ -1,4 +1,8 @@
 import type { RecordEnvelope, RecordStore } from '../store/types.js';
+import {
+  localMaterialIdForLabel,
+  localMaterialIdForCurie,
+} from './termId.js';
 
 export const MATERIAL_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/material.schema.yaml';
 
@@ -80,40 +84,6 @@ export function inferMaterialDomainFromCurie(curie: string): string {
     default:
       return 'other';
   }
-}
-
-export function localMaterialIdForCurie(curie: string): string {
-  const slug = curie
-    .trim()
-    .replace(/[^A-Za-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .toUpperCase();
-  return `MAT-${slug || 'ONTOLOGY-TERM'}`;
-}
-
-function labelSlug(label: string): string {
-  return (
-    label
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .slice(0, 24) || 'term'
-  );
-}
-
-/** Stable djb2 hash → 4 base-36 chars; keeps minted ids deterministic so the
- * same free-text label always resolves to the same local record (idempotent
- * re-normalization) while distinct labels that slugify alike stay distinct. */
-function labelHash(label: string): string {
-  let h = 5381;
-  const s = label.trim().toLowerCase();
-  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
-  return h.toString(36).slice(0, 4).padStart(4, '0');
-}
-
-export function localMaterialIdForLabel(label: string): string {
-  return `MAT-${labelSlug(label)}-${labelHash(label)}`;
 }
 
 /** The human label carried by a draft/mint ref — from `label`, else the

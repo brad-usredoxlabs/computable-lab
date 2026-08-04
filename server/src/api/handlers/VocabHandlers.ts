@@ -21,6 +21,7 @@ import type { RecordStore } from '../../store/types.js';
 import { createEnvelope } from '../../types/RecordEnvelope.js';
 import type { NamespaceConfig } from '../../config/types.js';
 import type { ApiError } from '../types.js';
+import { localMaterialIdForLabel } from '../../materials/termId.js';
 
 export interface MintTermRequestBody {
   /** Which vocabulary the term belongs to. Only 'material' is mintable today. */
@@ -66,17 +67,6 @@ const MINTABLE: Record<
   },
 };
 
-function slugify(label: string): string {
-  return (
-    label
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .substring(0, 24) || 'term'
-  );
-}
-
 export function createVocabHandlers(
   store: RecordStore,
   namespace?: NamespaceConfig,
@@ -104,8 +94,10 @@ export function createVocabHandlers(
         };
       }
 
-      const rand = Math.random().toString(36).slice(2, 6);
-      const recordId = `${mintable.idPrefix}-${slugify(label)}-${rand}`;
+      // Deterministic local id: same label always → same recordId, so
+      // re-minting (e.g. re-normalizing an accepted graph, or a user re-picking
+      // the same term) is idempotent. Mirrors MaterialGrounding.ensureLocalMaterialForDraft.
+      const recordId = localMaterialIdForLabel(label);
       const payload = mintable.build(recordId, label, body.sourceQuery);
 
       const envelope = createEnvelope(payload, mintable.schemaId, {
