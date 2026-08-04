@@ -333,6 +333,8 @@ export interface AiAgentResult {
   executionScalePlan?: ExecutionScalePlan
   instrumentApplianceJobs?: InstrumentApplianceJob[]
   ontologyBindings?: DraftOntologyBinding[]
+  /** Prompt-level resolution assurance (RESOLVE/CONFIRM + structured blockers). */
+  assurance?: AiAssuranceResult
   usage?: {
     inputTokens?: number
     outputTokens?: number
@@ -340,6 +342,31 @@ export interface AiAgentResult {
     turns?: number
     toolCalls?: number
   }
+}
+
+export interface AiAssuranceFinding {
+  code:
+    | 'UNRESOLVED_REFERENCE'
+    | 'LOW_BINDING_CONFIDENCE'
+    | 'AMBIGUOUS_BINDING'
+    | 'NEW_LOCAL_ENTITY'
+    | 'MISSING_REQUIRED_QUANTITY'
+    | 'VALIDATION_ERROR'
+  disposition: 'BLOCK' | 'REDUCE_ASSURANCE' | 'INFORMATIONAL'
+  path?: string
+  mention?: string
+  score?: number
+  candidateIds?: string[]
+  message: string
+}
+
+export interface AiAssuranceResult {
+  score: number
+  threshold: number
+  decision: 'RESOLVE' | 'CONFIRM'
+  blockers: AiAssuranceFinding[]
+  degraders: AiAssuranceFinding[]
+  criticalSlotMinimum?: number
 }
 
 // =============================================================================

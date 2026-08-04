@@ -457,13 +457,16 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
 
           if (event.type === 'done') {
             const result = event.result
-            const normalizedPreviewEvents = normalizePreviewEvents(
-              result.events ?? [],
-              promptMentions,
-              result.labwareAdditions ?? [],
-            )
+            const isConfirm = result.assurance?.decision === 'CONFIRM'
+            const normalizedPreviewEvents = isConfirm
+              ? []
+              : normalizePreviewEvents(
+                  result.events ?? [],
+                  promptMentions,
+                  result.labwareAdditions ?? [],
+                )
             setPreviewEvents(normalizedPreviewEvents)
-            setPreviewLabwareAdditions(result.labwareAdditions ?? [])
+            setPreviewLabwareAdditions(isConfirm ? [] : (result.labwareAdditions ?? []))
             // Initialize preview event states to 'pending' for all new events
             const nextStates = new Map<string, PreviewEventState>()
             normalizedPreviewEvents.forEach((e: PlateEvent) => {
@@ -473,9 +476,20 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
             const pending = (result.unresolvedRefs ?? []).filter(
               (p) => p?.ref?.id && !resolvedCache.current.has(p.ref.id)
             )
-            setUnresolvedRefs(pending)
-            setMessages((prev) =>
-              prev.map((m) =>
+            setUnresolvedRefs(isConfirm ? [] : pending)
+            setMessages((prev) => [
+              ...(isConfirm
+                ? [{
+                    id: generateMessageId(),
+                    role: 'system' as const,
+                    content: [
+                      'The system needs a bit more before it can draft these events:',
+                      ...(result.assurance?.blockers ?? []).map((b) => `- ${b.message}`),
+                    ].join('\n'),
+                    timestamp: Date.now(),
+                  }]
+                : []),
+              ...prev.map((m) =>
                 m.id === assistantId
                   ? {
                       ...m,
@@ -494,13 +508,15 @@ export function useAiChat({ aiContext, endpoint, onAcceptEvent, onAddLabwareFrom
                         result.clarificationNeeded.trim().length > 0,
                     }
                   : m
-              )
-            )
-            // Check for empty-success case: AI completed but proposed nothing
+              ),
+            ])
+            // Check for empty-success case: AI completed but proposed nothing.
+            // Skip when CONFIRM — the system did pause for confirmation and we
+            // already surfaced a clarity message above.
             const hasEvents = (result.events?.length ?? 0) > 0
             const hasLabware = (result.labwareAdditions?.length ?? 0) > 0
             const hasApplianceJobs = (result.instrumentApplianceJobs?.length ?? 0) > 0
-            if (result.success && !hasEvents && !hasLabware && !hasApplianceJobs) {
+            if (result.success && !isConfirm && !hasEvents && !hasLabware && !hasApplianceJobs) {
               setMessages((prev) => [
                 ...prev,
                 {
