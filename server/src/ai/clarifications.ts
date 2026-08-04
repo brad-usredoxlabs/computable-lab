@@ -226,3 +226,36 @@ export function parseClarificationAnswers(raw: unknown): AgentClarificationAnswe
   }
   return out;
 }
+
+/**
+ * Map structured assurance BLOCK findings into menu-backed clarification
+ * requests so the UI can render live pickers (materials) or inline answers,
+ * reusing the existing ClarificationPicker/QuestionsPanel pattern.
+ */
+export function clarificationRequestsFromAssurance(
+  blockers: Array<{ code: string; mention?: string; candidateIds?: string[]; message: string }>,
+  startIndex = 0,
+): AgentClarificationRequest[] {
+  const requests: AgentClarificationRequest[] = [];
+  for (let i = 0; i < blockers.length; i++) {
+    const b = blockers[i]!;
+    const kind = normalizeClarificationKind(
+      b.code.includes('QUANTITY') ? 'parameter'
+        : b.mention ?? b.code,
+    );
+    const request: AgentClarificationRequest = {
+      id: `assurance-${startIndex + i + 1}`,
+      kind,
+      prompt: b.message,
+      menuProvider: menuProviderForKind(kind),
+      options: [],
+      ...(b.mention ? { query: b.mention, snippet: b.mention } : {}),
+    };
+    // For a material ambiguity with known candidates, surface them as options.
+    if (b.code === 'AMBIGUOUS_BINDING' && b.candidateIds?.length) {
+      request.options = b.candidateIds.map((cid) => ({ id: cid, label: cid }));
+    }
+    requests.push(request);
+  }
+  return requests;
+}

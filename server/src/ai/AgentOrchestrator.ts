@@ -39,6 +39,7 @@ import { expandEventWells } from './wellRange.js';
 import {
   clarificationRequestFromLegacy,
   clarificationRequestsFromGaps,
+  clarificationRequestsFromAssurance,
   legacyClarificationFromRequests,
   parseClarificationRequests,
 } from './clarifications.js';
@@ -1023,7 +1024,19 @@ export function createAgentOrchestrator(
         };
         logAgentSummary(tid, summary);
         console.log(`[agent ${tid}] chatbot-compile pipeline bypass: success, events=${events.length}, gaps=${compileResult.terminalArtifacts.gaps.length}`);
-        const clarificationRequests = clarificationRequestsFromGaps(compileResult.terminalArtifacts.gaps);
+
+        // ---- Assurance routing (Phase 3) ---------------------------------
+        // When the resolve-assurance decision is CONFIRM, hold the whole draft
+        // (events = []) and surface structured clarification requests derived
+        // from the blockers, so the user confirms BEFORE anything is previewed.
+        const assurance = compileResult.terminalArtifacts.assurance;
+        const shouldConfirm = assurance?.decision === 'CONFIRM';
+        const clarificationRequests = shouldConfirm
+          ? clarificationRequestsFromAssurance(
+              assurance?.blockers ?? [],
+              clarificationRequestsFromGaps(compileResult.terminalArtifacts.gaps).length,
+            )
+          : clarificationRequestsFromGaps(compileResult.terminalArtifacts.gaps);
         if (clarification && !clarificationRequests.some((request) => request.prompt === clarification)) {
           clarificationRequests.push(clarificationRequestFromLegacy({ prompt: clarification, entityType: 'general', options: [] }, clarificationRequests.length));
         }
@@ -1032,7 +1045,8 @@ export function createAgentOrchestrator(
 
         const result: AgentResult = {
           success: true,
-          events,
+          // Hold events on CONFIRM — never auto-return a draft needing confirmation.
+          ...(shouldConfirm ? {} : { events }),
           ...(compileResult.labwareAdditions.length > 0 ? { labwareAdditions: compileResult.labwareAdditions } : {}),
           ...(unresolvedRefs.length > 0 ? { unresolvedRefs: unresolvedRefs as unknown as NonNullable<AgentResult['unresolvedRefs']> } : {}),
           ...(clarificationRequests.length > 0 ? { clarificationRequests } : {}),
@@ -1041,6 +1055,7 @@ export function createAgentOrchestrator(
           ...(compileResult.terminalArtifacts.executionScalePlan ? { executionScalePlan: compileResult.terminalArtifacts.executionScalePlan } : {}),
           ...(compileResult.terminalArtifacts.instrumentApplianceJobs?.length ? { instrumentApplianceJobs: compileResult.terminalArtifacts.instrumentApplianceJobs } : {}),
           ...(compileResult.ontologyBindings?.length ? { ontologyBindings: compileResult.ontologyBindings } : {}),
+          ...(assurance ? { assurance } : {}),
           usage: {
             promptTokens: 0,
             completionTokens: 0,

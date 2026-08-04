@@ -6,6 +6,7 @@
  */
 
 import type { ExecutionScalePlan, InstrumentApplianceJob } from '../compiler/pipeline/CompileContracts.js';
+import type { AssuranceResult } from './assurance.js';
 
 // ============================================================================
 // OpenAI-compatible inference types
@@ -573,6 +574,8 @@ export interface AgentResult {
     description: string
     eventId?: string
   }>;
+  /** Prompt-level resolution assurance (RESOLVE/CONFIRM + structured blockers). */
+  assurance?: AssuranceResult;
 }
 
 /**

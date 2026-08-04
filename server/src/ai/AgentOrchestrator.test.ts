@@ -693,4 +693,134 @@ describe('createAgentOrchestrator', () => {
       expect(diagEvents[0]!.diagnostics).toHaveLength(0);
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Phase 3: assurance CONFIRM routing holds events + builds structured cards
+  // -----------------------------------------------------------------------
+
+  describe('assurance CONFIRM routing (resolve-95%-or-ask)', () => {
+    it('holds events and surfaces a structured material clarification when assurance is CONFIRM', async () => {
+      const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+        events: [
+          {
+            eventId: 'evt-mint-1',
+            event_type: 'add_material',
+            details: { note: 'would mint clofibrate' },
+          } as never,
+        ],
+        labwareAdditions: [],
+        unresolvedRefs: [],
+        diagnostics: [],
+        terminalArtifacts: {
+          events: [
+            {
+              eventId: 'evt-mint-1',
+              event_type: 'add_material',
+              details: { note: 'would mint clofibrate' },
+            },
+          ],
+          directives: [],
+          gaps: [],
+          assurance: {
+            score: 0.9125, // deliberately high — must still CONFIRM
+            threshold: 0.9,
+            decision: 'CONFIRM',
+            blockers: [
+              {
+                code: 'NEW_LOCAL_ENTITY',
+                disposition: 'BLOCK',
+                mention: 'clofibrate',
+                message: '"clofibrate" would create a new local vocabulary term — requires confirmation.',
+              },
+            ],
+            degraders: [],
+          },
+        },
+        outcome: 'complete' as const,
+      });
+
+      const completeStream = vi.fn(async function* () {});
+      const orchestrator = createAgentOrchestrator(
+        { complete: vi.fn(), completeStream },
+        { getToolDefinitions: () => [], executeTool: vi.fn() },
+        { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+        { maxTurns: 2, draftFlowMode: 'preflight-llm' },
+      );
+
+      const result = await orchestrator.run({
+        prompt: 'add 1 uM clofibrate to A1',
+        context: {
+          labwares: [],
+          eventSummary: 'No events yet.',
+          vocabPackId: 'liquid-handling/v1',
+          availableVerbs: ['add_material'],
+        },
+      });
+
+      // Even though the compile returned events and the aggregate score is
+      // 0.9125 (>= 0.9), the CONFIRM decision must hold the whole draft.
+      expect(compileSpy).toHaveBeenCalled();
+      expect(result.events).toBeUndefined();
+      expect(result.assurance?.decision).toBe('CONFIRM');
+      expect(result.clarificationRequests).toBeDefined();
+      expect(result.clarificationRequests![0]!.prompt).toContain('clofibrate');
+      expect(result.clarificationRequests![0]!.query).toBe('clofibrate');
+    });
+
+    it('still returns events when assurance is RESOLVE', async () => {
+      const compileSpy = vi.spyOn(runChatbotCompileModule, 'runChatbotCompile').mockResolvedValue({
+        events: [
+          {
+            eventId: 'evt-ok-1',
+            event_type: 'add_material',
+            details: { note: 'grounded existing aliquot' },
+          } as never,
+        ],
+        labwareAdditions: [],
+        unresolvedRefs: [],
+        diagnostics: [],
+        terminalArtifacts: {
+          events: [
+            {
+              eventId: 'evt-ok-1',
+              event_type: 'add_material',
+              details: { note: 'grounded existing aliquot' },
+            },
+          ],
+          directives: [],
+          gaps: [],
+          assurance: {
+            score: 0.98,
+            threshold: 0.9,
+            decision: 'RESOLVE' as const,
+            blockers: [],
+            degraders: [],
+          },
+        },
+        outcome: 'complete' as const,
+      });
+
+      const completeStream = vi.fn(async function* () {});
+      const orchestrator = createAgentOrchestrator(
+        { complete: vi.fn(), completeStream },
+        { getToolDefinitions: () => [], executeTool: vi.fn() },
+        { model: 'test-model', temperature: 0.1, maxTokens: 512 },
+        { maxTurns: 2, draftFlowMode: 'preflight-llm' },
+      );
+
+      const result = await orchestrator.run({
+        prompt: 'add 1 uL existing aliquot to A1',
+        context: {
+          labwares: [],
+          eventSummary: 'No events yet.',
+          vocabPackId: 'liquid-handling/v1',
+          availableVerbs: ['add_material'],
+        },
+      });
+
+      expect(compileSpy).toHaveBeenCalled();
+      expect(result.events).toHaveLength(1);
+      expect(result.assurance?.decision).toBe('RESOLVE');
+    });
+  });
 });
