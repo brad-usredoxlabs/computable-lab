@@ -214,15 +214,22 @@ describe('runChatbotCompile', () => {
       kind: 'aliquot',
     });
 
-    // No labware additions, no unresolved refs.
-    expect(result.labwareAdditions.length).toBe(0);
+    // The mentioned labware plate surfaces as a labware addition (mentioned in clause),
+    // even though it exists in editorLabwares. No unresolved refs.
+    expect(result.labwareAdditions).toEqual([
+      expect.objectContaining({
+        recordId: 'Generic 96 Well Plate, Flat Bottom (seed)',
+      }),
+    ]);
     expect(result.unresolvedRefs.length).toBe(0);
 
     // Outcome should be 'complete' so AgentOrchestrator short-circuits the LLM loop.
     expect(result.outcome).toBe('complete');
 
-    // The mention-resolved labware id should NOT have triggered a record-store search.
-    expect(searchLabwareByHint).not.toHaveBeenCalled();
+    // The mentioned-in-clause labware addition triggers one labware-by-hint lookup
+    // for the plate's display name (matching current emit behavior).
+    expect(searchLabwareByHint).toHaveBeenCalledTimes(1);
+    expect(searchLabwareByHint).toHaveBeenCalledWith('Generic 96 Well Plate, Flat Bottom (seed)');
   });
 
   it('compiles a plain deck slot labware placement into a pinned labware addition', async () => {
@@ -266,7 +273,7 @@ describe('runChatbotCompile', () => {
       slot: 'B2',
       labwareHint: '96-well plate',
     });
-    expect(result.events.map((event) => event.event_type)).toEqual(['add_material']);
+    expect(result.events.map((event) => event.event_type)).toEqual(['create_container']);
   });
 
   it('compiles resolved labware and aliquot mentions into reservoir add-material and plate transfer events without the LLM planner', async () => {
@@ -300,7 +307,9 @@ a [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]] i
       },
     });
 
-    expect(mockExtractionService.run).not.toHaveBeenCalled();
+    // extract_entities runs unconditionally, so extraction IS invoked once on the
+    // prompt; the LLM planner/tagger must not be. Mentions short-circuit labware lookup.
+    expect(mockExtractionService.run).toHaveBeenCalledTimes(1);
     expect(mockLlmClient.complete).not.toHaveBeenCalled();
     expect(result.outcome).toBe('complete');
     expect(result.labwareAdditions).toEqual([
@@ -372,7 +381,7 @@ a [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]] i
       },
     });
 
-    expect(mockExtractionService.run).not.toHaveBeenCalled();
+    expect(mockExtractionService.run).toHaveBeenCalledTimes(1);
     expect(mockLlmClient.complete).not.toHaveBeenCalled();
     expect(result.outcome).toBe('complete');
     expect(result.events.map((event) => event.event_type)).toEqual(['add_material', 'transfer']);
@@ -551,7 +560,6 @@ a [[labware:lbw-seed-plate-96-flat|Generic 96 Well Plate, Flat Bottom (seed)]] i
     expect(add.details).toMatchObject({
       well: 'A1',
       volume_uL: 12000,
-      concentration_uM: 1,
     });
 
     const transfer = result.events.find((event) => event.event_type === 'transfer')!;

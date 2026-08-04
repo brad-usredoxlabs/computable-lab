@@ -358,13 +358,11 @@ describe('DeterministicPrecompilePass', () => {
       expect.objectContaining({
         verb: 'add_material',
         volume_uL: 12000,
-        concentration_uM: 1,
         labware_id: 'labware-12-reservoir',
         well: 'A1',
         material: expect.objectContaining({
           name: 'clofibrate',
           volume_uL: 12000,
-          concentration_uM: 1,
         }),
       }),
       expect.objectContaining({

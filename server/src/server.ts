@@ -74,7 +74,7 @@ import {
   createProtocolBuilderHandlers,
   createCheckinHandlers,
 } from './api/handlers/index.js';
-import { createResolveSpine, createResolveSpineFromContext, resolveOakServiceUrl } from './resolve/index.js';
+import { createResolveSpineFromContext, createCompileOntologyResolver } from './resolve/index.js';
 import { buildResidentContext } from './ai/residentContext.js';
 import { createIngestionAIHandlers } from './api/handlers/IngestionAIHandlers.js';
 import { createMaterialAIHandlers } from './api/handlers/MaterialAIHandlers.js';
@@ -591,21 +591,16 @@ export async function createServer(
     .resolve('cell', { limit: 1 })
     .catch(() => {});
 
-  // Compile hot path uses an OAK-only spine (no records, no remote): fast,
-  // offline-safe, and consistent with the appliance's on-box ontologies. Only
-  // wired when an OAK service is configured; otherwise the compiler keeps its
-  // frozen ontology-term YAML registry (bare CL — unchanged behavior).
-  const compileOntologyResolver = resolveOakServiceUrl(ctx.appConfig?.ontology)
-    ? (() => {
-        const compileSpine = createResolveSpine(
-          ctx.appConfig?.ontology ? { ontology: ctx.appConfig.ontology } : {},
-        );
-        return async (q: string) =>
-          (await compileSpine.resolve(q, { localOnly: true }))
-            .filter((c) => c.curie && c.source === 'oak')
-            .map((c) => ({ id: c.curie, label: c.label, source: c.namespace.toLowerCase() }));
-      })()
-    : undefined;
+  // Compile hot path uses the SHARED full resolve() spine (local records + OAK +
+  // OLS4), so the compiler agrees with the UI and agent — "one resolution path,
+  // one answer." Local tiers (records, OAK) resolve fast/on-box; the remote OLS4
+  // tier is best-effort under the spine's own timeout and omits when offline.
+  // When no OAK service is configured the spine still serves local records and
+  // OLS4; the resolver is always wired (unlike the old OAK-gated construction).
+  const compileOntologyResolver = createCompileOntologyResolver(
+    resolveSpine,
+    { localOnly: false },
+  );
   const vendorSearchHandlers = createVendorSearchHandlers({
     // Live accessor, not a snapshot: PATCH /api/config (onConfigUpdate above)
     // reassigns ctx.appConfig, so reading it per-request lets a freshly-pasted
