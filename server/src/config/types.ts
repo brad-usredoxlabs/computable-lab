@@ -124,6 +124,12 @@ export interface AIConfig {
   extractor?: ExtractorProfileConfig;
   /** Background KV-context warming against a local llama.cpp server. */
   warmup?: WarmupConfig;
+  /**
+   * RESOLVE threshold for prompt resolution assurance (default 0.9).
+   * Below-threshold compiles pause for user confirmation instead of
+   * auto-previewing. Also used as the default per-critical-binding floor.
+   */
+  assuranceThreshold?: number;
 }
 
 /**

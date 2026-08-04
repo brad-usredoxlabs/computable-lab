@@ -620,6 +620,7 @@ export async function createServer(
   const materialProfileHandlers = createMaterialProfileHandlers(ctx.materialProfileRegistry, ctx.store);
   const extractProtocolHandlers = createExtractProtocolHandlers(ctx.workspaceRoot);
   const aiProfile = ctx.appConfig?.ai ? resolveAiProfile(ctx.appConfig.ai) : undefined;
+  const assuranceThreshold = ctx.appConfig?.ai?.assuranceThreshold;
   // Mutable ref so the orchestrator can be wired after lazy AI init completes.
   const pbOrchestratorRef = { current: undefined as import('./ai/types.js').AgentOrchestrator | undefined };
   const protocolBuilderHandlers = createProtocolBuilderHandlers(
@@ -865,6 +866,7 @@ export async function createServer(
         ...(ctx.appConfig?.ontology ? { ontology: ctx.appConfig.ontology } : {}),
         residentContext: await buildResidentContext(ctx.schemaRegistry, ctx.store),
         store: ctx.store,
+        ...(assuranceThreshold !== undefined ? { assuranceThreshold } : {}),
       };
       
       const orchestrator = createAgentOrchestrator(
@@ -973,6 +975,7 @@ export async function createServer(
           searchLabwareByHint: createLabwareLookup(ctx.store),
           ...(compileOntologyResolver ? { ontologyResolver: compileOntologyResolver } : {}),
           store: ctx.store,
+          ...(assuranceThreshold !== undefined ? { assuranceThreshold } : {}),
         },
         onPassEvent: (event) => {
           if (event.type !== 'pass_started') return;

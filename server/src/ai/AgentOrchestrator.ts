@@ -740,6 +740,8 @@ export interface AgentOrchestratorDeps extends ResolveMentionDeps {
    * the precompile runs. Optional — omitted ⇒ mentions pass through unchanged.
    */
   store?: import('../store/types.js').RecordStore;
+  /** RESOLVE threshold forwarded to runChatbotCompile (undefined ⇒ 0.9). */
+  assuranceThreshold?: number;
   /**
    * Ontology config — gives draft-time material labeling access to the
    * on-box OAK terms endpoint, so grounded CURIEs render as names in well
@@ -922,6 +924,7 @@ export function createAgentOrchestrator(
             labStateCache: getDefaultLabStateCache(),
             ...(deps.ontologyResolver ? { ontologyResolver: deps.ontologyResolver } : {}),
             ...(deps.store ? { store: deps.store } : {}),
+            ...(deps.assuranceThreshold !== undefined ? { assuranceThreshold: deps.assuranceThreshold } : {}),
           },
           ...(preflightDeterministicOnly ? { deterministicOnly: true } : {}),
           ...(inferenceConfig.model ? { model: inferenceConfig.model } : {}),

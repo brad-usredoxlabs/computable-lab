@@ -139,6 +139,38 @@ describe('config loader', () => {
       expect(config.ai?.extractor?.max_tokens).toBe(2048);
     });
 
+    it('loads the assuranceThreshold from ai config', async () => {
+      tempDir = await mkdtemp(join(tmpdir(), 'cl-config-'));
+      const configPath = join(tempDir, 'config.yaml');
+      await writeFile(
+        configPath,
+        [
+          'server:',
+          '  port: 3001',
+          '  host: 0.0.0.0',
+          '  logLevel: info',
+          '  workspaceDir: /tmp/cl-workspaces',
+          '  cors:',
+          '    enabled: true',
+          '    origins: ["*"]',
+          'schemas:',
+          '  source: bundled',
+          '  bundledDir: ./schema',
+          'repositories: []',
+          'ai:',
+          '  inference:',
+          '    baseUrl: http://localhost:8000/v1',
+          '    model: test-model',
+          '  agent: {}',
+          '  assuranceThreshold: 0.85',
+        ].join('\n'),
+        'utf8',
+      );
+
+      const config = await loadConfig({ configPath });
+      expect(config.ai?.assuranceThreshold).toBe(0.85);
+    });
+
     it('merges per-field overrides with defaults', async () => {
       tempDir = await mkdtemp(join(tmpdir(), 'cl-config-'));
       const configPath = join(tempDir, 'config.yaml');
