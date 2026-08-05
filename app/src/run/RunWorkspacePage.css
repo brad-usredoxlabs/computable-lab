@@ -1,0 +1,60 @@
+/* RunWorkspacePage styles */
+.run-workspace-page__error {
+  padding: 2rem;
+  text-align: center;
+}
+
+.run-workspace-page__error h1 {
+  color: #dc2626;
+  margin-bottom: 0.5rem;
+}
+
+.run-workspace-page__error p {
+  color: #6b7280;
+}
+
+.run-workspace__plan-mode {
+  flex: 1;
+  padding: 1rem;
+}
+
+/* The run-toolbar wrapper keeps ModeToggle + DeckToolbar as siblings in the
+   workspace toolbar's flex row (display:contents prevents an extra box). */
+.run-workspace-toolbar {
+  display: contents;
+}
+
+/* Three-mode toggle (Protocol Planning / Design / Execute). */
+.mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg);
+  flex-shrink: 0;
+}
+
+.mode-toggle__button {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cl-text-dim);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mode-toggle__button:hover {
+  background: var(--cl-bg-elev);
+  color: var(--cl-text);
+}
+
+.mode-toggle__button--active {
+  background: var(--cl-accent-soft, rgba(75, 139, 190, 0.15));
+  color: var(--cl-accent, #4b8bbe);
+}
+

@@ -72,6 +72,8 @@ export function ExtractionReviewPage(): JSX.Element {
   // Concise LLM candidate steps (the primary, biologist-readable artifact).
   const [candidateSteps, setCandidateSteps] = useState<Array<{ ordinal: number; text: string }>>([]);
   const [candidateTitle, setCandidateTitle] = useState<string | null>(null);
+  // Full long-form human text (raw) — persisted on the promoted protocol record.
+  const [humanStepsText, setHumanStepsText] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   // Index of the active phase in the thinking timeline (0..N-1).
@@ -122,6 +124,7 @@ export function ExtractionReviewPage(): JSX.Element {
         if (cancelled) return;
         setCandidateSteps(Array.isArray(d?.steps) ? d.steps : []);
         setCandidateTitle(typeof d?.title === 'string' ? d.title : null);
+        setHumanStepsText(typeof d?.raw === 'string' ? d.raw : null);
         setGenerating(false);
       })
       .catch((err) => {
@@ -164,7 +167,7 @@ export function ExtractionReviewPage(): JSX.Element {
       const response = await fetch(`/api/extraction/drafts/${recordId}/candidates/0/promote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify(humanStepsText ? { humanStepsText } : {}),
       });
       if (response.ok) {
         const result = (await response.json()) as { recordId?: string; promotionId?: string };

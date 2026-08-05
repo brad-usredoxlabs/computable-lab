@@ -54,6 +54,7 @@ export function LabEntityWorkspace() {
   const payload = record?.payload as Record<string, unknown> | null
   const title = typeof payload?.title === 'string' ? payload.title : entityId ?? ''
   const kind = typeof payload?.kind === 'string' ? payload.kind : category ?? ''
+  const isProtocol = kind === 'protocol' || kind === 'local-protocol'
 
   // Read-only view — the editor is `disabled`, so no slot mutation is needed.
   const slots = useMemo(() => projection?.slots ?? [], [projection])
@@ -78,7 +79,9 @@ export function LabEntityWorkspace() {
           </header>
 
           <section className="lab-entity-workspace__viewer" data-testid="lab-entity-viewer">
-            {projection ? (
+            {isProtocol ? (
+              <ProtocolEntityView payload={payload} kind={kind} />
+            ) : projection ? (
               <ProjectionTapTabEditor
                 blocks={projection.blocks}
                 slots={slots}
@@ -103,5 +106,62 @@ export function LabEntityWorkspace() {
       topbarTabs={<div />}
       leftPane={workspaceContent}
     />
+  )
+}
+
+/**
+ * ProtocolEntityView — concise executable step list as the MAIN view for a
+ * protocol record, with the full long-form text in a collapsible <details>
+ * block (never the dominant flow). The machine step list is the primary,
+ * biologist-readable artifact; the long text is an expandable supplement.
+ */
+function ProtocolEntityView({
+  payload,
+  kind,
+}: {
+  payload: Record<string, unknown>
+  kind: string
+}) {
+  const steps = Array.isArray(payload.steps) ? (payload.steps as Array<Record<string, unknown>>) : []
+  const humanText = typeof payload.humanStepsText === 'string' ? payload.humanStepsText : null
+  const title = typeof payload.title === 'string' ? payload.title : 'Protocol'
+
+  return (
+    <div className="protocol-entity-view" data-testid="protocol-entity-view">
+      <h2 className="protocol-entity-view__kind">{kind === 'local-protocol' ? 'Local Protocol' : 'Protocol'}</h2>
+
+      {steps.length > 0 ? (
+        <ol className="protocol-entity-view__steps" data-testid="protocol-steps-main">
+          {steps.map((s) => {
+            const label = typeof s.label === 'string' ? s.label : 'Step'
+            const desc = typeof s.description === 'string' ? s.description : null
+            const ordinal =
+              typeof s.ordinal === 'number' ? s.ordinal : (typeof s.ordinal === 'string' ? parseInt(s.ordinal, 10) : null)
+            return (
+              <li key={typeof s.stepId === 'string' ? s.stepId : String(ordinal ?? label)} className="protocol-entity-view__step">
+                <span className="protocol-entity-view__num" aria-hidden>
+                  {ordinal ?? '.'}
+                </span>
+                <span className="protocol-entity-view__step-body">
+                  <span className="protocol-entity-view__label">{label}</span>
+                  {desc ? <span className="protocol-entity-view__desc">{desc}</span> : null}
+                </span>
+              </li>
+            )
+          })}
+        </ol>
+      ) : (
+        <p className="lab-entity-workspace__hint">This protocol has no steps.</p>
+      )}
+
+      {humanText ? (
+        <details className="protocol-entity-view__full" data-testid="protocol-full-text">
+          <summary>Full protocol text</summary>
+          <pre className="protocol-entity-view__full-pre">{humanText}</pre>
+        </details>
+      ) : null}
+
+      <p className="protocol-entity-view__footer">{steps.length} step{steps.length === 1 ? '' : 's'} · {title}</p>
+    </div>
   )
 }

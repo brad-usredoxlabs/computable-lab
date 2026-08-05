@@ -32,6 +32,13 @@ export interface AssistStreamRequest {
   clarificationAnswers?: AiClarificationAnswer[]
   /** Opt into the model's chain-of-thought (off by default — it's slow). */
   enableThinking?: boolean
+  /** Protocol-planning step context injected so the AI adapts/ghosts ONE step. */
+  protocolStepContext?: {
+    stepId: string
+    stepLabel: string
+    highlightedSection: string
+    selectedText: string
+  }
 }
 
 /**

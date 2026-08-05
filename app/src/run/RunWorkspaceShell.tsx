@@ -6,7 +6,6 @@
 import { type ReactNode } from 'react'
 import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
-import { ModeToggle, useModeToggle } from './lib/mode-toggle'
 import './RunWorkspaceShell.css'
 
 export interface RunWorkspaceShellProps {
@@ -16,12 +15,9 @@ export interface RunWorkspaceShellProps {
 }
 
 export function RunWorkspaceShell({ children, rightPane, viewerToolbar }: RunWorkspaceShellProps) {
-  const { mode, setMode } = useModeToggle()
-
   return (
     <AppShell
       brand="Run Workspace"
-      topbarMiddle={<ModeToggle mode={mode} onChange={setMode} />}
       layout="workspace"
       topbarTabs={<WorkspaceTabStrip />}
       leftPane={children}

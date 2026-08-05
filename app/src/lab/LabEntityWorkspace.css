@@ -175,3 +175,91 @@
   border-radius: 10px;
   margin-top: 8px;
 }
+
+/* Protocol entity view — concise steps primary, full text collapsible. */
+.protocol-entity-view__kind {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--cl-type-lab);
+  margin: 0 0 12px 0;
+}
+
+.protocol-entity-view__steps {
+  list-style: none;
+  margin: 0 0 16px 0;
+  padding: 0;
+  counter-reset: protocol-step;
+}
+
+.protocol-entity-view__step {
+  display: flex;
+  gap: 12px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--cl-border);
+  align-items: baseline;
+}
+
+.protocol-entity-view__step:last-child {
+  border-bottom: none;
+}
+
+.protocol-entity-view__num {
+  font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-text-dim);
+  min-width: 20px;
+  flex-shrink: 0;
+}
+
+.protocol-entity-view__step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.protocol-entity-view__label {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--cl-text);
+}
+
+.protocol-entity-view__desc {
+  font-size: 13px;
+  color: var(--cl-text-dim);
+}
+
+.protocol-entity-view__full {
+  margin-top: 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg);
+}
+
+.protocol-entity-view__full summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cl-text);
+  padding: 10px 12px;
+}
+
+.protocol-entity-view__full-pre {
+  margin: 0;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--cl-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-top: 1px solid var(--cl-border);
+}
+
+.protocol-entity-view__footer {
+  font-size: 12px;
+  color: var(--cl-text-faint);
+  margin-top: 12px;
+}
+

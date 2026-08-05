@@ -50,6 +50,13 @@ export interface AssistBody {
   history?: ConversationHistoryMessage[];
   clarificationAnswers?: AgentClarificationAnswer[];
   enableThinking?: boolean;
+  /** Protocol-planning step context → rendered so the AI adapts/ghosts ONE step. */
+  protocolStepContext?: {
+    stepId: string;
+    stepLabel: string;
+    highlightedSection: string;
+    selectedText?: string;
+  };
 }
 
 /**
@@ -290,6 +297,7 @@ export function createAIHandlers(
       let history: ConversationHistoryMessage[] | undefined;
       let enableThinking: boolean | undefined;
       let clarificationAnswers: AgentClarificationAnswer[] | undefined;
+      let protocolStepContext: NonNullable<AssistBody['protocolStepContext']> | undefined;
       let fileAttachments: FileAttachment[] = [];
       let uploadedFiles: UploadedFile[] = [];
 
@@ -322,6 +330,7 @@ export function createAIHandlers(
         history = fields['history'] ? JSON.parse(fields['history']) : undefined;
         enableThinking = fields['enableThinking'] === 'true' ? true : undefined;
         clarificationAnswers = fields['clarificationAnswers'] ? JSON.parse(fields['clarificationAnswers']) as AgentClarificationAnswer[] : undefined;
+        protocolStepContext = fields['protocolStepContext'] ? JSON.parse(fields['protocolStepContext']) as NonNullable<AssistBody['protocolStepContext']> : undefined;
 
         // Convert to FileAttachment[] for the pipeline (do NOT extract content for inlining)
         fileAttachments = uploadedFiles.map((f) => ({
@@ -338,6 +347,7 @@ export function createAIHandlers(
         history = body.history;
         enableThinking = body.enableThinking;
         clarificationAnswers = body.clarificationAnswers;
+        protocolStepContext = body.protocolStepContext;
       }
 
       if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
@@ -401,6 +411,7 @@ export function createAIHandlers(
         vocabPackId: 'general',
         availableVerbs: [],
         ...context,
+        ...(protocolStepContext ? { protocolStepContext } : {}),
       };
 
       // NOTE: File attachments are passed directly to orchestrator.run(),

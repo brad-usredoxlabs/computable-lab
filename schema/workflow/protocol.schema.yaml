@@ -51,6 +51,10 @@ properties:
     type: string
     description: "Optional authoring notes, caveats, or project-specific guidance."
 
+  humanStepsText:
+    type: string
+    description: "Full long-form human-readable protocol (e.g. the /extraction/human-steps output) incl. clarifying notes; kept alongside the concise machine `steps`."
+
   authoring:
     type: object
     additionalProperties: false
@@ -290,6 +294,51 @@ $defs:
         type: string
         pattern: "^PHASE-[A-Z0-9-]+$"
         description: "Optional reference to a phase-template record."
+
+  # -------------------------
+  # Execution metadata
+  # -------------------------
+  ExecutionMeta:
+    type: object
+    additionalProperties: false
+    description: "Runtime execution tracking for a protocol step. Populated by the execution layer."
+    properties:
+      startedAt:
+        type: string
+        format: date-time
+        description: "ISO8601 timestamp when this step began execution."
+      completedAt:
+        type: string
+        format: date-time
+        description: "ISO8601 timestamp when this step finished execution."
+      executedBy:
+        type: string
+        description: "Identifier of the person or system that executed this step."
+      deviations:
+        type: array
+        description: "Optional list of deviations recorded during execution of this step."
+        items:
+          type: object
+          additionalProperties: false
+          required: [ deviationId, description ]
+          properties:
+            deviationId:
+              type: string
+              description: "Unique identifier for this deviation."
+            description:
+              type: string
+              description: "Human-readable description of what deviated and why."
+            severity:
+              type: string
+              enum: [ info, warning, critical ]
+              description: "Severity level of the deviation."
+            occurredAt:
+              type: string
+              format: date-time
+              description: "When the deviation occurred."
+            resolved:
+              type: boolean
+              description: "Whether the deviation was resolved."
 
   # -------------------------
   # Parameter definitions
@@ -543,7 +592,6 @@ $defs:
       A value that can be literal or parameter reference. Keep this simple so agents don't hardcode.
     oneOf:
     - type: number
-    - type: integer
     - type: boolean
     - type: string
     - type: object
@@ -604,15 +652,26 @@ $defs:
   # -------------------------
   ProtocolStep:
     type: object
-    required: [ stepId, kind ]
+    required: [ stepId, label, ordinal, kind ]
     properties:
       stepId:
         type: string
-        description: "Local step identifier unique within this protocol."
+        pattern: "^[a-z][a-z0-9-]*$"
+        description: "Local step identifier unique within this protocol (lowercase alphanumeric with hyphens)."
       label:
         type: string
+        minLength: 1
+        description: "Human-readable label for this step."
+      description:
+        type: string
+        description: "Optional detailed description of what this step does and why."
+      ordinal:
+        type: integer
+        minimum: 1
+        description: "Display/execution order within the protocol (1-based, contiguous)."
       notes:
         type: string
+        description: "Optional freeform operator notes or caveats for this step."
       kind:
         type: string
         enum: [ add_material, transfer, mix, wash, incubate, read, harvest, other ]
@@ -633,6 +692,34 @@ $defs:
         type: string
         pattern: "^[a-z][a-z0-9-]*$"
         description: "Optional reference to a declared phase id."
+
+      # Reference to a sub-event-graph (graph-component-instance) for this step.
+      subGraphRef:
+        allOf:
+        - $ref: "./datatypes/ref.schema.yaml"
+        - type: object
+          properties:
+            kind: { const: record }
+            type: { const: graph-component-instance }
+        description: "Optional pointer to the graph-component-instance that implements this step's sub-event-graph."
+
+      # Step-level settings referencing the Setting schema.
+      settings:
+        type: array
+        description: "Optional step-level editable parameters (settings) that an operator can adjust at execution time."
+        items:
+          $ref: "./setting.schema.yaml"
+        uniqueItems: true
+
+      # Execution tracking metadata populated at runtime.
+      executionMeta:
+        $ref: "#/$defs/ExecutionMeta"
+
+      # Whether this step is optional (can be skipped without invalidating the protocol).
+      isOptional:
+        type: boolean
+        default: false
+        description: "When true, this step may be skipped during execution without marking the run as deviated."
 
     allOf:
     - oneOf:

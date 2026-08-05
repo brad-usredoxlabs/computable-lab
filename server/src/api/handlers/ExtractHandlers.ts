@@ -27,7 +27,7 @@ export interface ExtractHandlers {
     reply: FastifyReply,
   ): Promise<{ recordId: string } | ApiError>;
   promoteCandidate(
-    request: FastifyRequest<{ Params: { id: string; i: string } }>,
+    request: FastifyRequest<{ Params: { id: string; i: string }; Body: PromoteBody }>,
     reply: FastifyReply,
   ): Promise<{ success: boolean; recordId?: string; promotionId?: string; error?: string } | ApiError>;
   rejectCandidate(
@@ -44,6 +44,11 @@ type UploadBody = {
   target_kind?: unknown;
   fileName?: unknown;
   contentBase64?: unknown;
+};
+
+type PromoteBody = {
+  /** Long-form human-readable protocol text to persist on the promoted canonical record. */
+  humanStepsText?: unknown;
 };
 
 export function createExtractHandlers(
@@ -184,10 +189,18 @@ export function createExtractHandlers(
       const candidatePath = `candidates[${candidateIndex}]`;
 
       // Prepare promotion args
+      const bodyHumanStepsText =
+        typeof request.body?.humanStepsText === 'string' && request.body.humanStepsText.trim().length > 0
+          ? request.body.humanStepsText
+          : undefined;
       const promoteArgs: PromoteCandidateArgs = {
         candidate: {
           ...candidate,
-          draft: candidate.draft as Record<string, unknown>,
+          draft: {
+            ...(candidate.draft as Record<string, unknown>),
+            // Persist the long-form human text on the promoted record when supplied.
+            ...(bodyHumanStepsText !== undefined ? { humanStepsText: bodyHumanStepsText } : {}),
+          },
         },
         draftRecordId: id,
         candidatePath,

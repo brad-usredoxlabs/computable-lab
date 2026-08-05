@@ -14,8 +14,9 @@ import { EventEditorProvider } from '../event-editor/EventEditorContext'
 import { WorkspaceProvider, useWorkspace } from '../event-editor/workspace/WorkspaceContext'
 import { RightPane } from '../event-editor/right-pane/RightPane'
 import { RunWorkspaceShell } from './RunWorkspaceShell'
-import { useModeToggle } from './lib/mode-toggle'
+import { useModeToggle, ModeToggle, type RunMode } from './lib/mode-toggle'
 import { ExecutionView } from '../graph/execution/ExecutionView'
+import { ProtocolPlanningView } from './protocol-planning/ProtocolPlanningView'
 import { DeckViewer } from '../event-editor/viewer/deck/DeckViewer'
 import { DeckToolbar } from '../event-editor/viewer/deck/DeckToolbar'
 import { FocusModalsProvider } from '../event-editor/focus/FocusModalsProvider'
@@ -30,7 +31,7 @@ import '../event-editor/styles/eventEditor.css'
 
 export function RunWorkspacePage() {
   const { studyId: urlStudyId, runId } = useParams<{ studyId?: string; runId: string }>()
-  const { mode } = useModeToggle()
+  const { mode, setMode } = useModeToggle()
   const [resolvedStudyId, setResolvedStudyId] = useState<string | null>(urlStudyId ?? null)
   const [resolvedEventGraphId, setResolvedEventGraphId] = useState<string | undefined>(undefined)
   const [runTitle, setRunTitle] = useState<string | null>(null)
@@ -75,6 +76,20 @@ export function RunWorkspacePage() {
     }, true)
   }, [runId, runTitle])
 
+  // Reflect an instant run rename (dispatched by DeckToolbar on commit) in the
+  // displayed title and the top-level run tab without waiting for a refetch.
+  useEffect(() => {
+    if (!runId) return
+    const onRenamed = (event: Event) => {
+      const detail = (event as CustomEvent<{ runId?: string; title?: string }>).detail
+      if (detail?.runId === runId && typeof detail.title === 'string') {
+        setRunTitle(detail.title)
+      }
+    }
+    window.addEventListener('cl:run-renamed', onRenamed)
+    return () => window.removeEventListener('cl:run-renamed', onRenamed)
+  }, [runId])
+
   if (!runId) {
     return (
       <div className="run-workspace-page__error">
@@ -114,7 +129,12 @@ export function RunWorkspacePage() {
         <FocusModalsProvider>
           <RunWorkspaceShell
             rightPane={<RightPane />}
-            viewerToolbar={<DeckToolbar tab={deckTab} breadcrumb={runBreadcrumb} />}
+            viewerToolbar={
+              <div className="run-workspace-toolbar">
+                <ModeToggle mode={mode} onChange={setMode} />
+                <DeckToolbar tab={deckTab} breadcrumb={runBreadcrumb} />
+              </div>
+            }
           >
             <RunWorkspaceContent runId={runId} mode={mode} />
           </RunWorkspaceShell>
@@ -140,7 +160,7 @@ function RunPaneMode() {
 
 interface RunWorkspaceContentProps {
   runId: string
-  mode: 'plan' | 'execute'
+  mode: RunMode
 }
 
 function RunWorkspaceContent({ runId, mode }: RunWorkspaceContentProps) {
@@ -161,6 +181,10 @@ function RunWorkspaceContent({ runId, mode }: RunWorkspaceContentProps) {
   const handleDeviationCaptured = (deviationId: string) => {
     console.log('Deviation captured:', deviationId)
     // TODO: Handle deviation
+  }
+
+  if (mode === 'protocol-planning') {
+    return <ProtocolPlanningView runId={runId} />
   }
 
   if (mode === 'execute') {

@@ -396,6 +396,16 @@ export interface EditorContext {
   eventGraphId?: string;
   /** GraphLemur protocol-source and iterative-preview revision context. */
   graphLemur?: GraphLemurContext;
+  /**
+   * Protocol-planning step context: the current step + user-highlighted
+   * subsection, so the AI adapts/ghosts THAT step (past steps dimmed).
+   */
+  protocolStepContext?: {
+    stepId: string;
+    stepLabel: string;
+    highlightedSection: string;
+    selectedText?: string;
+  };
 }
 
 export interface LabwareSummary {

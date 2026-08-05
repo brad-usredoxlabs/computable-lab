@@ -31,6 +31,15 @@ interface ProtocolSelectionState {
   visibleSteps: Set<string>
   /** Cached sub-graphs keyed by stepId. */
   stepGraphs: Record<string, ProtocolStepGraph>
+  /**
+   * The "live" step in protocol-planning mode. When set (non-null), the
+   * preview bridge tags events as PAST vs CURRENT so the current step is
+   * highlighted and past steps render dimmed. When null (default), the flat
+   * "ghost all visible steps" behavior is preserved for the Protocol tab.
+   */
+  currentStepId: string | null
+  /** Set the current step (null to restore flat ghosting). */
+  setCurrentStepId: (id: string | null) => void
   /** Set the active step (null to deselect). */
   setActiveStepId: (id: string | null) => void
   /** Toggle a step's canvas visibility. */
@@ -47,6 +56,7 @@ const ProtocolSelectionContext = createContext<ProtocolSelectionState | null>(nu
 
 export function ProtocolSelectionProvider({ children }: { children: ReactNode }) {
   const [activeStepId, setActiveStepId] = useState<string | null>(null)
+  const [currentStepId, setCurrentStepId] = useState<string | null>(null)
   const [visibleSteps, setVisibleStepsState] = useState<Set<string>>(new Set())
   const [stepGraphs, setStepGraphs] = useState<Record<string, ProtocolStepGraph>>({})
 
@@ -86,6 +96,8 @@ export function ProtocolSelectionProvider({ children }: { children: ReactNode })
     <ProtocolSelectionContext.Provider
       value={{
         activeStepId,
+        currentStepId,
+        setCurrentStepId,
         visibleSteps,
         stepGraphs,
         setActiveStepId,

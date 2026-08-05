@@ -2,6 +2,24 @@ import { describe, expect, it } from 'vitest';
 import { buildSystemPrompt } from './systemPrompt.js';
 
 describe('buildSystemPrompt', () => {
+  it('renders protocol-step context (protocol planning) as a dedicated block', () => {
+    const prompt = buildSystemPrompt({
+      labwares: [],
+      eventSummary: 'No events yet.',
+      vocabPackId: 'liquid-handling/v1',
+      availableVerbs: ['transfer'],
+      protocolStepContext: {
+        stepId: 'step-2',
+        stepLabel: 'Seal and read',
+        highlightedSection: 'Seal the plate and read fluorescence over 60 min.',
+      },
+    });
+
+    expect(prompt).toContain('CURRENT PROTOCOL STEP (protocol planning):');
+    expect(prompt).toContain('Step: Seal and read (step-2)');
+    expect(prompt).toContain('User-highlighted detail: "Seal the plate and read fluorescence over 60 min."');
+    expect(prompt).toContain('Adapt exactly THIS step to this lab');
+  });
   it('formats well-state concentration truth and counts explicitly', () => {
     const prompt = buildSystemPrompt({
       labwares: [],

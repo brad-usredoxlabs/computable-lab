@@ -464,8 +464,28 @@ export function buildSystemPrompt(
   const extraContexts = [
     formatGraphLemurContext(context),
     formatDraftRevisionContext(context),
+    formatProtocolStepContext(context),
   ].filter(Boolean);
   return extraContexts.length > 0 ? `${prompt}\n\n---\n\n${extraContexts.join('\n\n---\n\n')}` : prompt;
+}
+
+/**
+ * Render protocol-planning step context — the live step the user selected and
+ * the highlighted detail — so the AI adapts/ghosts exactly that step (past
+ * steps render dimmed on the deck). Returns null when absent.
+ */
+function formatProtocolStepContext(context: EditorContext): string | null {
+  const step = context.protocolStepContext;
+  if (!step) return null;
+  const lines = [
+    'CURRENT PROTOCOL STEP (protocol planning):',
+    `- Step: ${step.stepLabel} (${step.stepId})`,
+  ];
+  if (step.highlightedSection) {
+    lines.push(`- User-highlighted detail: "${step.highlightedSection}"`);
+  }
+  lines.push('- Adapt exactly THIS step to this lab and ghost its events onto the editor. Prior steps stay as context but are already on the deck (dimmed).');
+  return lines.join('\n');
 }
 
 /**

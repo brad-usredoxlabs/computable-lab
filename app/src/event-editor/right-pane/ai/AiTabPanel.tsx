@@ -499,6 +499,39 @@ export function AiTabPanel() {
     return () => window.removeEventListener('pdf-text-selection', handlePdfSelection)
   }, [chat])
 
+  // Listen for protocol-step selections from the protocol-planning surface.
+  // StepDetailPane dispatches `protocol-step-selection` when the user selects a
+  // subsection of a step's long-form text and sends it to the AI, so the AI can
+  // adapt/ghost that step (past steps dimmed, current highlighted).
+  useEffect(() => {
+    const handleStepSelection = (e: Event) => {
+      const detail = (e as CustomEvent).detail as {
+        runId: string
+        stepId: string
+        stepLabel: string
+        highlightedSection: string
+        surface?: string
+      }
+      if (!detail || !detail.stepId || !detail.highlightedSection) return
+      void chat.send(
+        `Here is the current protocol step adapt request:\n\n` +
+          `Adapt step "${detail.stepLabel}" (${detail.stepId}) to this lab. ` +
+          `Ghost the events for this step onto the editor.`,
+        {
+          enableThinking: false,
+          protocolStepContext: {
+            stepId: detail.stepId,
+            stepLabel: detail.stepLabel,
+            highlightedSection: detail.highlightedSection,
+            selectedText: detail.highlightedSection,
+          },
+        },
+      )
+    }
+    window.addEventListener('protocol-step-selection', handleStepSelection)
+    return () => window.removeEventListener('protocol-step-selection', handleStepSelection)
+  }, [chat])
+
   // A ghost preview is on the deck → the next prompt revises it (the context
   // builder attaches draftRevision). Surface that explicitly in the input.
   const previewActive = Boolean(

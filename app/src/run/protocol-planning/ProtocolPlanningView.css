@@ -1,0 +1,318 @@
+/* ProtocolPlanningView — run workspace "Protocol Planning" (localization) mode. */
+
+.protocol-planning-view {
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 24px;
+}
+
+.protocol-planning-view__header {
+  margin-bottom: 16px;
+}
+
+.protocol-planning-view__title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--cl-text);
+  margin: 0 0 4px 0;
+}
+
+.protocol-planning-view__sub {
+  font-size: 13px;
+  color: var(--cl-text-dim);
+  margin: 0;
+}
+
+.protocol-planning-view__grid {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 20px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .protocol-planning-view__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.protocol-planning-view__section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cl-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0 0 10px 0;
+}
+
+.protocol-planning-view__steps {
+  background: var(--cl-bg-elev);
+  border: 1px solid var(--cl-border);
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.protocol-planning-view__chips {
+  list-style: none;
+  margin: 0 0 16px 0;
+  padding: 0;
+}
+
+.protocol-planning-view__chip-row {
+  display: flex;
+  margin-bottom: 8px;
+}
+
+.protocol-planning-view__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg);
+}
+
+.protocol-planning-view__chip-num {
+  font-family: 'SF Mono', SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  color: var(--cl-text-dim);
+}
+
+.protocol-planning-view__chip-label {
+  font-size: 13px;
+  color: var(--cl-text);
+}
+
+.protocol-planning-view__chip-lock {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--cl-text-faint);
+  border: 1px solid var(--cl-border);
+  border-radius: 3px;
+  padding: 1px 5px;
+}
+
+.protocol-planning-view__hint {
+  font-size: 13px;
+  color: var(--cl-text-dim);
+}
+
+.protocol-planning-view__error {
+  font-size: 12px;
+  color: var(--cl-danger, #c0392b);
+}
+
+.protocol-planning-view__localize {
+  margin-top: 8px;
+  border-top: 1px solid var(--cl-border);
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.protocol-planning-view__btn {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--cl-border);
+  background: var(--cl-bg);
+  color: var(--cl-text);
+  cursor: pointer;
+}
+
+.protocol-planning-view__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.protocol-planning-view__adapt {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.protocol-planning-view__adapt-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.protocol-planning-view__adapt-row {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  padding: 4px 0;
+}
+
+.protocol-planning-view__adapt-role {
+  font-weight: 600;
+  color: var(--cl-text);
+  min-width: 100px;
+}
+
+.protocol-planning-view__adapt-ref {
+  color: var(--cl-text-dim);
+}
+
+.protocol-planning-view__bind-form {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.protocol-planning-view__bind-form input {
+  font-size: 12px;
+  padding: 5px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 5px;
+  background: var(--cl-bg);
+  color: var(--cl-text);
+}
+
+.protocol-planning-view__msg {
+  font-size: 12px;
+  color: var(--cl-text-dim);
+}
+
+.protocol-planning-view__inventory {
+  position: sticky;
+  top: 0;
+}
+
+/* LabInventoryPanel — compact instrument/material readout. */
+.lab-inventory-panel {
+  background: var(--cl-bg-elev);
+  border: 1px solid var(--cl-border);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.lab-inventory-panel__section {
+  margin-bottom: 14px;
+}
+
+.lab-inventory-panel__section:last-child {
+  margin-bottom: 0;
+}
+
+.lab-inventory-panel__title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--cl-text-dim);
+  margin: 0 0 8px 0;
+}
+
+.lab-inventory-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lab-inventory-panel__item {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 12px;
+  padding: 3px 0;
+}
+
+.lab-inventory-panel__item-name {
+  color: var(--cl-text);
+}
+
+.lab-inventory-panel__item-model {
+  color: var(--cl-text-faint);
+  font-size: 11px;
+}
+
+.lab-inventory-panel__hint {
+  font-size: 12px;
+  color: var(--cl-text-dim);
+}
+
+/* Clickable step chip (protocol planning). */
+.protocol-planning-view__chip {
+  cursor: pointer;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg);
+  font: inherit;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.protocol-planning-view__chip:hover {
+  border-color: var(--cl-accent, #4b8bbe);
+}
+
+.protocol-planning-view__chip--active {
+  border-color: var(--cl-accent, #4b8bbe);
+  outline: 2px solid color-mix(in srgb, var(--cl-accent, #4b8bbe) 40%, transparent);
+}
+
+.protocol-planning-view__detail {
+  margin-top: 14px;
+  border-top: 1px solid var(--cl-border);
+  padding-top: 14px;
+}
+
+/* StepDetailPane — selectable long-form detail for the selected step. */
+.step-detail-pane__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.step-detail-pane__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cl-text);
+  margin: 0;
+}
+
+.step-detail-pane__btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--cl-border);
+  background: var(--cl-bg);
+  color: var(--cl-text);
+  cursor: pointer;
+}
+
+.step-detail-pane__text {
+  margin: 0;
+  padding: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--cl-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--cl-bg);
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  user-select: text;
+}
+
+.step-detail-pane__hint {
+  font-size: 11px;
+  color: var(--cl-text-faint);
+  margin: 6px 0 0 0;
+}
+

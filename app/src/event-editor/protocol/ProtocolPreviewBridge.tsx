@@ -29,6 +29,7 @@ export function ProtocolPreviewBridge() {
 
   const visibleSteps = protocolSelection?.visibleSteps ?? new Set<string>()
   const stepGraphs = protocolSelection?.stepGraphs ?? {}
+  const currentStepId = protocolSelection?.currentStepId ?? null
 
   useEffect(() => {
     const allEvents: PlateEvent[] = []
@@ -39,7 +40,21 @@ export function ProtocolPreviewBridge() {
       const graph = stepGraphs[stepId]
       if (!graph) continue
       for (const event of graph.events) {
-        allEvents.push(event as unknown as PlateEvent)
+        const ev = event as unknown as PlateEvent
+        if (currentStepId !== null) {
+          // Protocol-planning per-step layering: tag each event with its
+          // originating step and whether it is past or current so the deck
+          // can dim past steps and highlight the live one.
+          const status = stepId === currentStepId ? 'current' : 'past'
+          allEvents.push({
+            ...ev,
+            _protocolStepId: stepId,
+            _protocolStepStatus: status,
+          } as unknown as PlateEvent)
+        } else {
+          // Flat "ghost all visible steps" (Protocol tab default) — unchanged.
+          allEvents.push(ev)
+        }
       }
       for (const labware of graph.labwares) {
         const lw = labware as unknown as Labware
@@ -64,7 +79,7 @@ export function ProtocolPreviewBridge() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleSteps, stepGraphs])
+  }, [visibleSteps, stepGraphs, currentStepId])
 
   return null
 }

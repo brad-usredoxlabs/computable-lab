@@ -27,6 +27,16 @@ interface SendOptions {
   clarificationAnswers?: AiClarificationAnswer[]
   /** Opt into the model's chain-of-thought for this send (off by default). */
   enableThinking?: boolean
+  /**
+   * Protocol-planning step context: the current step + user-highlighted
+   * subsection, so the AI adapts/ghosts THAT step (past steps dimmed).
+   */
+  protocolStepContext?: {
+    stepId: string
+    stepLabel: string
+    highlightedSection: string
+    selectedText: string
+  }
 }
 
 export interface UseChatThreadResult {
@@ -118,6 +128,7 @@ export function useChatThread({
         history: history.slice(0, -1), // exclude the prompt itself — sent separately
         ...(options?.clarificationAnswers?.length ? { clarificationAnswers: options.clarificationAnswers } : {}),
         ...(options?.enableThinking !== undefined ? { enableThinking: options.enableThinking } : {}),
+        ...(options?.protocolStepContext ? { protocolStepContext: options.protocolStepContext } : {}),
       }
 
       const stream = runStream ?? runAssistStream

@@ -252,6 +252,81 @@ describe('ExtractHandlers - promoteCandidate', () => {
       message: 'Extraction draft not found',
     });
   });
+
+  it('persists humanStepsText from the body onto the promoted record', async () => {
+    const draft = {
+      kind: 'extraction-draft',
+      recordId: 'XDR-test-001',
+      source_artifact: { kind: 'file' as const, id: 'ART-1' },
+      status: 'pending_review',
+      candidates: [
+        {
+          target_kind: 'protocol',
+          status: 'pending_review',
+          confidence: 0.9,
+          draft: {
+            kind: 'protocol',
+            recordId: 'PRT-1',
+            title: 'ROS Assay',
+            steps: [],
+          },
+          ambiguity_spans: [],
+        },
+      ],
+    };
+
+    const createdEnvelopes: RecordEnvelope[] = [];
+    const mockStore: RecordStore = {
+      get: vi.fn().mockResolvedValue({ recordId: 'XDR-test-001', schemaId: 'x', payload: draft }),
+      create: vi.fn().mockImplementation(async (args: { envelope: RecordEnvelope }) => {
+        createdEnvelopes.push(args.envelope);
+        return { success: true, recordId: args.envelope.recordId } as StoreResult;
+      }),
+      update: vi.fn().mockResolvedValue({ success: true } as StoreResult),
+    } as unknown as RecordStore;
+
+    const mockSchemaRegistry: SchemaRegistry = {
+      getAll: vi.fn().mockReturnValue([
+        {
+          id: 'protocol.schema.yaml',
+          schema: {
+            $id: 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml',
+            properties: { kind: { const: 'protocol' } },
+          },
+        },
+      ]),
+    } as unknown as SchemaRegistry;
+
+    const mockValidator: AjvValidator = {
+      validate: vi.fn().mockReturnValue({ valid: true, errors: [] }),
+    } as unknown as AjvValidator;
+
+    const handlers: ExtractHandlers = createExtractHandlers(
+      {} as ExtractionRunnerService,
+      mockStore,
+      mockSchemaRegistry,
+      mockValidator,
+    );
+
+    const mockRequest = {
+      params: { id: 'XDR-test-001', i: '0' },
+      body: { humanStepsText: '1. Add cells\n2. Seal plate' },
+    } as unknown as FastifyRequest<{ Params: { id: string; i: string }; Body: { humanStepsText?: unknown } }>;
+
+    const mockReply = {} as unknown as FastifyReply;
+
+    const result = await handlers.promoteCandidate(mockRequest, mockReply);
+
+    expect(result).toEqual(expect.objectContaining({ success: true }));
+    // Validator saw the humanStepsText merged into the draft.
+    const validatedDraft = (
+      mockValidator.validate as unknown as { mock: { calls: Array<[unknown, string]> } }
+    ).mock.calls[0][0] as Record<string, unknown>;
+    expect(validatedDraft.humanStepsText).toBe('1. Add cells\n2. Seal plate');
+    // The canonical record persisted with humanStepsText.
+    const canonical = createdEnvelopes.find((e) => e.schemaId.includes('/protocol.schema.yaml'));
+    expect(canonical?.payload).toMatchObject({ humanStepsText: '1. Add cells\n2. Seal plate' });
+  });
 });
 
 describe('ExtractHandlers - rejectCandidate', () => {

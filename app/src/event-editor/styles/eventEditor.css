@@ -645,6 +645,24 @@
   position: relative;
 }
 
+/* ---- Protocol-planning per-step layering (past dimmed, current highlighted) ---- */
+
+.event-editor .tile[data-past-step='true'] {
+  opacity: 0.4;
+  filter: grayscale(0.6);
+}
+
+.event-editor .tile[data-current-step='true'] {
+  outline: 2px solid var(--cl-accent, #4b8bbe);
+  outline-offset: -2px;
+  position: relative;
+}
+
+.event-editor .tile[data-past-step='true']:hover {
+  opacity: 1;
+  filter: none;
+}
+
 .event-editor .tile__ghost-tag,
 .event-editor .tile__affected-tag {
   position: absolute;
