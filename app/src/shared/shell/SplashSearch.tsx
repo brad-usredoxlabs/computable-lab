@@ -2,7 +2,7 @@
  * SplashSearch — cross-type search for the splash landing. Hits /tree/search
  * once, groups results by entity type, and offers type filter chips.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { searchRecords } from '../../shared/api/treeClient'
 import type { IndexEntry } from '../../types/tree'
@@ -16,6 +16,7 @@ import {
   type WorkspaceTab,
 } from '../../event-editor/workspace/types'
 import { resolveProtocolPick, isProtocolKind } from '../lib/protocolRouting'
+import { openContent, openInNewTab } from '../lib/openContent'
 import './SplashSearch.css'
 
 export interface SplashSearchResult {
@@ -89,28 +90,51 @@ export function SplashSearch() {
 
   const countFor = (t: SearchEntityType) => grouped[t].length
 
+  const buildTab = (r: SplashSearchResult): { tab: WorkspaceTab; route: string } => {
+    if (r.entityType === 'project') {
+      return {
+        tab: { id: projectTabId(r.recordId), kind: 'project', studyId: r.recordId, title: r.title },
+        route: r.path,
+      }
+    }
+    if (r.entityType === 'run') {
+      return {
+        tab: { id: runTabId(r.recordId), kind: 'run', runId: r.recordId, title: r.title },
+        route: r.path,
+      }
+    }
+    if (r.entityType === 'claim') {
+      return {
+        tab: { id: claimTabId(r.recordId), kind: 'claim', claimId: r.recordId, title: r.title },
+        route: r.path,
+      }
+    }
+    return {
+      tab: { id: labEntityTabId(r.recordId), kind: 'lab-entity', schemaId: '', recordId: r.recordId, entityType: r.kind, title: r.title },
+      route: r.path,
+    }
+  }
+
   const openResult = async (r: SplashSearchResult) => {
     if (isProtocolKind(r.kind)) {
       const dest = await resolveProtocolPick(r.recordId, r.path)
       if (dest.kind === 'project' && dest.studyId) {
-        openTabs?.openTab({ id: projectTabId(dest.studyId), kind: 'project', studyId: dest.studyId, title: r.title }, true)
-        navigate(dest.route)
+        openContent(openTabs, navigate, {
+          id: projectTabId(dest.studyId), kind: 'project', studyId: dest.studyId, title: r.title,
+        }, dest.route)
         return
       }
       // fall through: lab-global protocol → open as lab-entity
     }
-    let tab: WorkspaceTab
-    if (r.entityType === 'project') {
-      tab = { id: projectTabId(r.recordId), kind: 'project', studyId: r.recordId, title: r.title }
-    } else if (r.entityType === 'run') {
-      tab = { id: runTabId(r.recordId), kind: 'run', runId: r.recordId, title: r.title }
-    } else if (r.entityType === 'claim') {
-      tab = { id: claimTabId(r.recordId), kind: 'claim', claimId: r.recordId, title: r.title }
-    } else {
-      tab = { id: labEntityTabId(r.recordId), kind: 'lab-entity', schemaId: '', recordId: r.recordId, entityType: r.kind, title: r.title }
-    }
-    openTabs?.openTab(tab, true)
-    navigate(r.path)
+    const { tab, route } = buildTab(r)
+    openContent(openTabs, navigate, tab, route)
+  }
+
+  const openInNewTabResult = (e: MouseEvent, r: SplashSearchResult) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const { tab, route } = buildTab(r)
+    openInNewTab(openTabs, navigate, tab, route)
   }
 
   return (
@@ -159,6 +183,8 @@ export function SplashSearch() {
                     className="splash-search__result"
                     data-testid={`splash-search-result-${r.recordId}`}
                     onClick={() => openResult(r)}
+                    onContextMenu={(e) => openInNewTabResult(e, r)}
+                    title="Left-click: open here · Right-click: open in new tab"
                   >
                     <span className={`splash-search__type splash-search__type--${r.entityType}`}>
                       {r.typeLabel}

@@ -64,17 +64,13 @@ export function RunWorkspacePage() {
     return () => { cancelled = true }
   }, [urlStudyId, runId])
 
-  // Open a run tab in the tab strip on mount
+  // Open a run tab on mount (deep-links, direct navigation, refresh) — but
+  // IN THE CURRENT TAB (browser model), not a separate/duplicate top-level tab.
   useEffect(() => {
     if (!runId || !openTabs) return
     const title = runTitle ?? `Run ${runId}`
-    openTabs.openTab({
-      id: runTabId(runId),
-      kind: 'run',
-      runId,
-      title,
-    }, true)
-  }, [runId, runTitle])
+    openTabs.navigateActiveTab({ id: runTabId(runId), kind: 'run', runId, title })
+  }, [runId, runTitle, openTabs])
 
   // Reflect an instant run rename (dispatched by DeckToolbar on commit) in the
   // displayed title and the top-level run tab without waiting for a refetch.

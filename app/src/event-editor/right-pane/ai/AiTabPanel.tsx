@@ -17,6 +17,7 @@ import { useNavigate } from 'react-router-dom'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
 import { useOptionalEventEditor } from '../../EventEditorContext'
 import { useOptionalOpenTabs } from '../../../shared/shell/OpenTabsContext'
+import { openContent } from '../../../shared/lib/openContent'
 import { apiClient, type AiWarmStatus } from '../../../shared/api/client'
 import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/platformRegistry'
 import { getVerbsForDisplay } from '../../../shared/vocab/registry'
@@ -476,8 +477,7 @@ export function AiTabPanel() {
         artifactId,
         title: existing?.title ?? artifactId,
       }
-      openTabs?.openTab(tab, true)
-      navigate(`/artifact/pdf/${artifactId}`)
+      openContent(openTabs, navigate, tab, `/artifact/pdf/${artifactId}`)
     },
     [addedSources, openTabs, navigate],
   )

@@ -86,7 +86,7 @@ export function DeckHostPage() {
       ...(runId ? { runId } : {}),
       title: meta.title,
     }
-    openTabs.openTab(tab, true)
+    openTabs.navigateActiveTab(tab)
   }, [eventGraphId, runId, meta, openTabs])
 
   if (!eventGraphId) {

@@ -26,7 +26,7 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 export function WorkspaceTabStrip() {
-  const { state, closeTab, activateTab, openTab, canGoBack, canGoForward, back, forward } = useOpenTabs()
+  const { state, closeTab, activateTab, openTab, canGoBack, canGoForward, back, forward, withinBack, withinForward } = useOpenTabs()
   const navigate = useNavigate()
 
   const handleAddTab = () => {
@@ -36,6 +36,19 @@ export function WorkspaceTabStrip() {
   }
 
   const handleBack = () => {
+    const canWithin = (() => {
+      const e = state.tabs.find((t) => t.tab.id === state.activeTabId)
+      return e ? e.contentCursor > 0 : false
+    })()
+    if (canWithin) {
+      // Per-tab Back: compute target from current state, then move.
+      const e = state.tabs.find((t) => t.tab.id === state.activeTabId)!
+      const target = e.contentHistory[e.contentCursor - 1]
+      withinBack()
+      const path = target ? tabPath(target) : null
+      if (path) navigate(path)
+      return
+    }
     const targetId = backTargetId(state)
     if (targetId === null) return
     back()
@@ -45,6 +58,18 @@ export function WorkspaceTabStrip() {
   }
 
   const handleForward = () => {
+    const canWithin = (() => {
+      const e = state.tabs.find((t) => t.tab.id === state.activeTabId)
+      return e ? e.contentCursor < e.contentHistory.length - 1 : false
+    })()
+    if (canWithin) {
+      const e = state.tabs.find((t) => t.tab.id === state.activeTabId)!
+      const target = e.contentHistory[e.contentCursor + 1]
+      withinForward()
+      const path = target ? tabPath(target) : null
+      if (path) navigate(path)
+      return
+    }
     const targetId = forwardTargetId(state)
     if (targetId === null) return
     forward()

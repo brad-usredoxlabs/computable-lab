@@ -26,6 +26,12 @@ export interface OpenTabState {
   activeRightPaneMode: WorkspaceRightPaneMode
   /** Each tab's origin trail ("how I got here"), oldest → most recent. */
   breadcrumb: BreadcrumbItem[]
+  /**
+   * This tab's own visited-content trail (browser-model Back/Forward), oldest →
+   * newest. `contentCursor` is the index of the current content.
+   */
+  contentHistory: WorkspaceTab[]
+  contentCursor: number
 }
 
 export interface OpenTabsState {
@@ -43,6 +49,13 @@ export interface OpenTabsState {
 export type OpenTabsAction =
   | { type: 'open'; tab: WorkspaceTab; activate?: boolean; seedBreadcrumb?: BreadcrumbItem[] }
   | { type: 'navigate'; tabId: string; tab: WorkspaceTab; crumb?: BreadcrumbItem }
+  /**
+   * Browser-model in-place navigation: replace the ACTIVE tab's content with
+   * `tab`, minting a fresh unique slot id so an entity already open in another
+   * tab never collides with / re-activates that tab. Does not create a new tab
+   * and does not switch to a different existing tab.
+   */
+  | { type: 'navigate-active'; tab: WorkspaceTab; crumb?: BreadcrumbItem }
   | { type: 'close'; tabId: string }
   | { type: 'activate'; tabId: string }
   | { type: 'rename'; tabId: string; title: string }
@@ -50,6 +63,9 @@ export type OpenTabsAction =
   | { type: 'replace'; state: OpenTabsState }
   | { type: 'back' }
   | { type: 'forward' }
+  /** Move the ACTIVE tab back/forward within ITS OWN content history. */
+  | { type: 'within-back' }
+  | { type: 'within-forward' }
 
 /**
  * Record a visit to `newActive` on the across-tab history. Returns the next
@@ -86,6 +102,17 @@ export function forwardTargetId(state: OpenTabsState): string | null {
   return c < state.history.length ? state.history[c] : null
 }
 
+/** Create a fresh tab state entry; its current content is the history's first entry. */
+function newOpenTabState(tab: WorkspaceTab, seedBreadcrumb?: BreadcrumbItem[]): OpenTabState {
+  return {
+    tab,
+    activeRightPaneMode: defaultRightPaneMode(tab),
+    breadcrumb: seedBreadcrumb ?? [],
+    contentHistory: [tab],
+    contentCursor: 0,
+  }
+}
+
 export function openTabsReducer(state: OpenTabsState, action: OpenTabsAction): OpenTabsState {
   switch (action.type) {
     case 'open': {
@@ -98,11 +125,7 @@ export function openTabsReducer(state: OpenTabsState, action: OpenTabsAction): O
           i === existingIndex ? { ...t, tab: action.tab } : t,
         )
       } else {
-        const newEntry: OpenTabState = {
-          tab: action.tab,
-          activeRightPaneMode: defaultRightPaneMode(action.tab),
-          breadcrumb: action.seedBreadcrumb ?? [],
-        }
+        const newEntry = newOpenTabState(action.tab, action.seedBreadcrumb)
         nextTabs = [...state.tabs, newEntry]
       }
       if (!shouldActivate) {
@@ -124,6 +147,99 @@ export function openTabsReducer(state: OpenTabsState, action: OpenTabsAction): O
         history: visit.history,
         historyCursor: visit.historyCursor,
       }
+    }
+    case 'navigate-active': {
+      // Replace the ACTIVE tab's content in place. If there's no active tab
+      // (nothing open yet), fall back to opening a fresh tab.
+      const idx = state.tabs.findIndex((t) => t.tab.id === state.activeTabId)
+      const { tab, crumb } = action
+      if (idx < 0) {
+        const newEntry = newOpenTabState(tab, crumb ? [crumb] : undefined)
+        const visit = recordVisit(state, action.tab.id)
+        return {
+          ...state,
+          tabs: [...state.tabs, newEntry],
+          activeTabId: action.tab.id,
+          history: visit.history,
+          historyCursor: visit.historyCursor,
+        }
+      }
+      // If the active slot already holds the SAME entity (its id is the base id
+      // before any freshness suffix), keep the same slot id — this makes host
+      // mount re-registration idempotent and navigation within a tab stable.
+      const activeTabId = state.activeTabId
+      const isSameEntity =
+        activeTabId !== null && (activeTabId === tab.id || activeTabId.startsWith(`${tab.id}:`))
+      if (isSameEntity) {
+        // The active slot already holds this entity. Preserve the slot's OWN
+        // id (which may be a freshly-minted one) so we never collide with an
+        // already-open tab carrying the base id. Keep content + crumb + trail.
+        const keptTab = { ...tab, id: activeTabId as string }
+        const nextTabs = state.tabs.map((entry, i) =>
+          i === idx
+            ? {
+                ...entry,
+                tab: keptTab,
+                breadcrumb: crumb ? entry.breadcrumb.concat([crumb]) : entry.breadcrumb,
+                // Push this navigation onto the tab's own content trail.
+                contentHistory: [...entry.contentHistory, keptTab],
+                contentCursor: entry.contentHistory.length,
+              }
+            : entry,
+        )
+        return { ...state, tabs: nextTabs }
+      }
+      // Mint a fresh unique slot id so navigating to an entity that is ALREADY
+      // open in another tab never collides with (or re-activates) that tab.
+      // Keeps the same slot position in the strip; only the content changes.
+      const freshId = `${tab.id}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`
+      const freshTab = { ...tab, id: freshId }
+      const nextTabs = state.tabs.map((entry, i) =>
+        i === idx
+          ? {
+              ...entry,
+              tab: freshTab,
+              breadcrumb: crumb ? entry.breadcrumb.concat([crumb]) : entry.breadcrumb,
+              contentHistory: [...entry.contentHistory, tab],
+              contentCursor: entry.contentHistory.length,
+            }
+          : entry,
+      )
+      return { ...state, tabs: nextTabs, activeTabId: freshId }
+    }
+    case 'within-back': {
+      // Move the ACTIVE tab back one step in its own content trail, restoring
+      // that content. Does not touch other tabs or the global history — each
+      // tab has independent Back/Forward. Mint a fresh id so the restored
+      // content stays a distinct slot (never collides with another open tab).
+      const idx = state.tabs.findIndex((t) => t.tab.id === state.activeTabId)
+      if (idx < 0) return state
+      const entry = state.tabs[idx]
+      const prev = entry.contentCursor - 1
+      if (prev < 0) return state
+      const target = entry.contentHistory[prev]
+      const freshId = `${target.id}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`
+      const nextTabs = state.tabs.map((e, i) =>
+        i === idx
+          ? { ...e, tab: { ...target, id: freshId }, contentCursor: prev }
+          : e,
+      )
+      return { ...state, tabs: nextTabs, activeTabId: freshId }
+    }
+    case 'within-forward': {
+      const idx = state.tabs.findIndex((t) => t.tab.id === state.activeTabId)
+      if (idx < 0) return state
+      const entry = state.tabs[idx]
+      const next = entry.contentCursor + 1
+      if (next >= entry.contentHistory.length) return state
+      const target = entry.contentHistory[next]
+      const freshId = `${target.id}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`
+      const nextTabs = state.tabs.map((e, i) =>
+        i === idx
+          ? { ...e, tab: { ...target, id: freshId }, contentCursor: next }
+          : e,
+      )
+      return { ...state, tabs: nextTabs, activeTabId: freshId }
     }
     case 'close': {
       const nextTabs = state.tabs.filter((t) => t.tab.id !== action.tabId)
@@ -238,6 +354,8 @@ interface StoredTabEntry {
   tab: WorkspaceTab
   activeRightPaneMode: WorkspaceRightPaneMode
   breadcrumb?: BreadcrumbItem[]
+  contentHistory?: WorkspaceTab[]
+  contentCursor?: number
 }
 
 interface StoredState {
@@ -255,11 +373,21 @@ function loadFromStorage(userId?: string): OpenTabsState {
     const parsed = JSON.parse(raw) as StoredState
     if (!Array.isArray(parsed.tabs)) return { tabs: [], activeTabId: null, history: [], historyCursor: -1 }
     return {
-      tabs: parsed.tabs.map((t) => ({
-        tab: t.tab,
-        activeRightPaneMode: t.activeRightPaneMode ?? 'ai',
-        breadcrumb: t.breadcrumb ?? [],
-      })),
+      tabs: parsed.tabs.map((t) => {
+        const entry = {
+          tab: t.tab,
+          activeRightPaneMode: t.activeRightPaneMode ?? 'ai',
+          breadcrumb: t.breadcrumb ?? [],
+        }
+        // Migrate older persisted tabs to the per-tab content history model.
+        const contentHistory = Array.isArray(t.contentHistory) && t.contentHistory.length > 0
+          ? t.contentHistory
+          : [t.tab]
+        const contentCursor = typeof t.contentCursor === 'number' && t.contentCursor >= 0
+          ? Math.min(t.contentCursor, contentHistory.length - 1)
+          : contentHistory.length - 1
+        return { ...entry, contentHistory, contentCursor }
+      }),
       activeTabId: parsed.activeTabId ?? null,
       history: Array.isArray(parsed.history) ? parsed.history : [],
       historyCursor: typeof parsed.historyCursor === 'number' ? parsed.historyCursor : -1,
@@ -277,6 +405,8 @@ function saveToStorage(state: OpenTabsState, userId?: string) {
         tab: t.tab,
         activeRightPaneMode: t.activeRightPaneMode,
         breadcrumb: t.breadcrumb,
+        contentHistory: t.contentHistory,
+        contentCursor: t.contentCursor,
       })),
       activeTabId: state.activeTabId,
       history: state.history,
@@ -293,6 +423,8 @@ function saveToStorage(state: OpenTabsState, userId?: string) {
 export interface OpenTabsContextValue {
   state: OpenTabsState
   openTab: (tab: WorkspaceTab, activate?: boolean, seedBreadcrumb?: BreadcrumbItem[]) => void
+  /** Browser-model in-place navigation: replace the ACTIVE tab's content. */
+  navigateActiveTab: (tab: WorkspaceTab, crumb?: BreadcrumbItem) => void
   navigateTab: (tabId: string, tab: WorkspaceTab, crumb?: BreadcrumbItem) => void
   closeTab: (tabId: string) => void
   activateTab: (tabId: string) => void
@@ -305,6 +437,12 @@ export interface OpenTabsContextValue {
    *  navigates to the target — see backTargetId/forwardTargetId. */
   back: () => void
   forward: () => void
+  /** Whether the ACTIVE tab can go back/forward within its OWN content trail. */
+  canGoBackWithin: boolean
+  canGoForwardWithin: boolean
+  /** Move within the ACTIVE tab's own content trail. */
+  withinBack: () => void
+  withinForward: () => void
 }
 
 const OpenTabsContext = createContext<OpenTabsContextValue | null>(null)
@@ -341,6 +479,9 @@ export function OpenTabsProvider({ userId, children }: OpenTabsProviderProps) {
     navigateTab: useCallback((tabId: string, tab: WorkspaceTab, crumb?: BreadcrumbItem) => {
       dispatch({ type: 'navigate', tabId, tab, ...(crumb ? { crumb } : {}) })
     }, []),
+    navigateActiveTab: useCallback((tab: WorkspaceTab, crumb?: BreadcrumbItem) => {
+      dispatch({ type: 'navigate-active', tab, ...(crumb ? { crumb } : {}) })
+    }, []),
     closeTab: useCallback((tabId: string) => {
       dispatch({ type: 'close', tabId })
     }, []),
@@ -357,6 +498,16 @@ export function OpenTabsProvider({ userId, children }: OpenTabsProviderProps) {
     canGoForward: forwardTargetId(state) !== null,
     back: useCallback(() => dispatch({ type: 'back' }), []),
     forward: useCallback(() => dispatch({ type: 'forward' }), []),
+    canGoBackWithin: (() => {
+      const e = state.tabs.find((t) => t.tab.id === state.activeTabId)
+      return e ? e.contentCursor > 0 : false
+    })(),
+    canGoForwardWithin: (() => {
+      const e = state.tabs.find((t) => t.tab.id === state.activeTabId)
+      return e ? e.contentCursor < e.contentHistory.length - 1 : false
+    })(),
+    withinBack: useCallback(() => dispatch({ type: 'within-back' }), []),
+    withinForward: useCallback(() => dispatch({ type: 'within-forward' }), []),
   }
 
   return <OpenTabsContext.Provider value={value}>{children}</OpenTabsContext.Provider>

@@ -29,6 +29,11 @@ const claimTab: WorkspaceTab = {
 
 const emptyState: OpenTabsState = { tabs: [], activeTabId: null, history: [], historyCursor: -1 }
 
+/** Build an OpenTabState for a single tab with the per-tab content history. */
+function tabEntry(tab: WorkspaceTab, mode: 'find' | 'ai' | 'protocol' = 'find', breadcrumb: BreadcrumbItem[] = []): OpenTabsState['tabs'][number] {
+  return { tab, activeRightPaneMode: mode, breadcrumb, contentHistory: [tab], contentCursor: 0 }
+}
+
 const sampleCrumb: BreadcrumbItem = {
   label: 'DHVC Project',
   entityType: 'project',
@@ -53,7 +58,7 @@ describe('openTabsReducer', () => {
 
   it('opens a tab without activating when activate=false', () => {
     const state: OpenTabsState = {
-      tabs: [{ tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] }],
+      tabs: [tabEntry(projectTab)],
       activeTabId: 'project:STU-1',
       history: [],
       historyCursor: -1,
@@ -65,7 +70,7 @@ describe('openTabsReducer', () => {
 
   it('opens a duplicate tab id — replaces and activates', () => {
     const state: OpenTabsState = {
-      tabs: [{ tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [sampleCrumb] }],
+      tabs: [tabEntry(projectTab, 'find', [sampleCrumb])],
       activeTabId: 'project:STU-1',
       history: [],
       historyCursor: -1,
@@ -84,8 +89,8 @@ describe('openTabsReducer', () => {
   it('closes a tab and falls back to sibling', () => {
     const state: OpenTabsState = {
       tabs: [
-        { tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] },
-        { tab: runTab, activeRightPaneMode: 'protocol', breadcrumb: [] },
+        tabEntry(projectTab),
+        tabEntry(runTab, 'protocol'),
       ],
       activeTabId: 'run:RUN-1',
       history: [],
@@ -98,7 +103,7 @@ describe('openTabsReducer', () => {
 
   it('closes the last tab and sets activeTabId to null', () => {
     const state: OpenTabsState = {
-      tabs: [{ tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] }],
+      tabs: [tabEntry(projectTab)],
       activeTabId: 'project:STU-1',
       history: [],
       historyCursor: -1,
@@ -111,8 +116,8 @@ describe('openTabsReducer', () => {
   it('activates an existing tab', () => {
     const state: OpenTabsState = {
       tabs: [
-        { tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] },
-        { tab: claimTab, activeRightPaneMode: 'ai', breadcrumb: [] },
+        tabEntry(projectTab),
+        tabEntry(claimTab, 'ai'),
       ],
       activeTabId: 'project:STU-1',
       history: [],
@@ -124,7 +129,7 @@ describe('openTabsReducer', () => {
 
   it('rejects activation of unknown tab', () => {
     const state: OpenTabsState = {
-      tabs: [{ tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] }],
+      tabs: [tabEntry(projectTab)],
       activeTabId: 'project:STU-1',
       history: [],
       historyCursor: -1,
@@ -136,8 +141,8 @@ describe('openTabsReducer', () => {
   it('sets right-pane mode per tab', () => {
     const state: OpenTabsState = {
       tabs: [
-        { tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] },
-        { tab: runTab, activeRightPaneMode: 'protocol', breadcrumb: [] },
+        tabEntry(projectTab),
+        tabEntry(runTab, 'protocol'),
       ],
       activeTabId: 'project:STU-1',
       history: [],
@@ -154,7 +159,7 @@ describe('openTabsReducer', () => {
 
   it('renames a tab', () => {
     const state: OpenTabsState = {
-      tabs: [{ tab: projectTab, activeRightPaneMode: 'find', breadcrumb: [] }],
+      tabs: [tabEntry(projectTab)],
       activeTabId: 'project:STU-1',
       history: [],
       historyCursor: -1,
@@ -183,9 +188,109 @@ describe('openTabsReducer', () => {
     expect(next.tabs[0]?.breadcrumb).toEqual([])
   })
 
+  it('navigate-active grows the active tab content history (per-tab trail)', () => {
+    const state: OpenTabsState = {
+      tabs: [tabEntry(projectTab, 'ai')],
+      activeTabId: 'project:STU-1',
+      history: [], historyCursor: -1,
+    }
+    const n1 = openTabsReducer(state, { type: 'navigate-active', tab: runTab, crumb: sampleCrumb })
+    expect(n1.tabs[0]?.contentHistory).toHaveLength(2) // [project, run]
+    expect(n1.tabs[0]?.contentCursor).toBe(1)
+    const n2 = openTabsReducer(n1, { type: 'navigate-active', tab: claimTab })
+    expect(n2.tabs[0]?.contentHistory).toHaveLength(3)
+    expect(n2.tabs[0]?.contentCursor).toBe(2)
+  })
+
+  it('within-back/within-forward move within the ACTIVE tab only', () => {
+    const n1 = openTabsReducer({ tabs: [tabEntry(projectTab, 'ai')], activeTabId: 'project:STU-1', history: [], historyCursor: -1 }, { type: 'navigate-active', tab: runTab })
+    const n2 = openTabsReducer(n1, { type: 'navigate-active', tab: claimTab })
+    expect(n2.tabs[0]?.tab.kind).toBe('claim')
+    // Back twice → claim → run → project
+    const b1 = openTabsReducer(n2, { type: 'within-back' })
+    expect(b1.tabs[0]?.tab.kind).toBe('run')
+    const b2 = openTabsReducer(b1, { type: 'within-back' })
+    expect(b2.tabs[0]?.tab.kind).toBe('project')
+    expect(b2.tabs[0]?.contentCursor).toBe(0)
+    // Back at the start is a no-op.
+    expect(openTabsReducer(b2, { type: 'within-back' })).toEqual(b2)
+    // Forward returns to run then claim.
+    const f1 = openTabsReducer(b2, { type: 'within-forward' })
+    expect(f1.tabs[0]?.tab.kind).toBe('run')
+    const f2 = openTabsReducer(f1, { type: 'within-forward' })
+    expect(f2.tabs[0]?.tab.kind).toBe('claim')
+    expect(openTabsReducer(f2, { type: 'within-forward' })).toEqual(f2)
+  })
+
+  it('BUG-REGRESSION: clicking an already-open entity from a NEW tab stays in that new tab (no revert, no duplicate)', () => {
+    // Setup: the run is already open as tab 1 (id base `run:RUN-1`).
+    const tab1 = { ...tabEntry(runTab) }
+    tab1.tab = runTab // base id run:RUN-1
+    const state: OpenTabsState = {
+      tabs: [{ ...tab1, activeRightPaneMode: 'protocol' }],
+      activeTabId: 'run:RUN-1',
+      history: ['run:RUN-1'], historyCursor: 0,
+    }
+    // User clicks "+" → a fresh splash tab becomes active.
+    const splash = { id: 'splash:1', kind: 'splash' as const, title: 'New Tab' }
+    const afterPlus = openTabsReducer(state, { type: 'open', tab: splash })
+    expect(afterPlus.tabs).toHaveLength(2)
+    expect(afterPlus.activeTabId).toBe('splash:1')
+
+    // From the splash tab, click the (already-open) run → navigate-active.
+    const afterClick = openTabsReducer(afterPlus, { type: 'navigate-active', tab: runTab })
+    // STILL exactly two tabs — we did NOT create a third, and did NOT switch
+    // the active slot back to the original run tab.
+    expect(afterClick.tabs).toHaveLength(2)
+    // The active slot is a NEW run (not the original run:RUN-1) — differs by fresh id.
+    expect(afterClick.activeTabId).not.toBe('run:RUN-1')
+    // Both tabs hold the run entity but with DISTINCT slot ids (no duplicate key).
+    const ids = afterClick.tabs.map((t) => t.tab.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('navigate-active replaces the ACTIVE tab content in place without creating a new tab', () => {
+    const state: OpenTabsState = {
+      tabs: [
+        tabEntry(runTab, 'protocol'),
+        tabEntry(projectTab, 'ai'),
+      ],
+      activeTabId: 'run:RUN-1',
+      history: ['run:RUN-1'], historyCursor: 0,
+    }
+    const next = openTabsReducer(state, {
+      type: 'navigate-active',
+      tab: claimTab,
+      crumb: { label: 'First Titration', entityType: 'run', id: 'RUN-1', route: '/runs/RUN-1' },
+    })
+    // Still exactly TWO tabs — no new top-level tab was created.
+    expect(next.tabs).toHaveLength(2)
+    // The run (active) slot's content changed to the claim tab. We mint a fresh
+    // id so an entity already open in another tab does NOT collide/re-activate.
+    const active = next.tabs.find((t) => t.tab.kind === 'claim' && t.tab.claimId === 'CLM-1')
+    expect(active).toBeDefined()
+    expect(next.activeTabId).toBe(active!.tab.id)
+    // The OTHER (project) tab is untouched — we did NOT re-activate it.
+    expect(next.tabs.find((t) => t.tab.id === 'project:STU-1')).toBeDefined()
+    // activeTabId moved to the new content's id, not the other tab.
+    expect(next.activeTabId).not.toBe('project:STU-1')
+    // Crumb appended to the active slot.
+    expect(active?.breadcrumb).toEqual([{ label: 'First Titration', entityType: 'run', id: 'RUN-1', route: '/runs/RUN-1' }])
+  })
+
+  it('navigate-active with no active tab falls back to opening a new tab', () => {
+    const next = openTabsReducer(emptyState, {
+      type: 'navigate-active',
+      tab: claimTab,
+      crumb: { label: 'Claim', entityType: 'claim', id: 'CLM-1', route: '/claims/CLM-1' },
+    })
+    expect(next.tabs).toHaveLength(1)
+    expect(next.activeTabId).toBe(claimTab.id)
+  })
+
   it('navigate replaces tab content and appends a crumb', () => {
     const state: OpenTabsState = {
-      tabs: [{ tab: projectTab, activeRightPaneMode: 'ai', breadcrumb: [sampleCrumb] }],
+      tabs: [tabEntry(projectTab, 'ai', [sampleCrumb])],
       activeTabId: 'project:STU-1',
       history: [],
       historyCursor: -1,
@@ -202,7 +307,7 @@ describe('openTabsReducer', () => {
 
   it('navigate without crumb keeps breadcrumb unchanged', () => {
     const state: OpenTabsState = {
-      tabs: [{ tab: projectTab, activeRightPaneMode: 'ai', breadcrumb: [sampleCrumb] }],
+      tabs: [tabEntry(projectTab, 'ai', [sampleCrumb])],
       activeTabId: 'project:STU-1',
       history: [],
       historyCursor: -1,
@@ -219,8 +324,8 @@ describe('openTabsReducer', () => {
   it('navigate skips tabs that do not match tabId', () => {
     const state: OpenTabsState = {
       tabs: [
-        { tab: projectTab, activeRightPaneMode: 'ai', breadcrumb: [] },
-        { tab: claimTab, activeRightPaneMode: 'ai', breadcrumb: [] },
+        tabEntry(projectTab, 'ai'),
+        tabEntry(claimTab, 'ai'),
       ],
       activeTabId: 'project:STU-1',
       history: [],

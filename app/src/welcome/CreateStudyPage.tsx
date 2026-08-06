@@ -12,22 +12,23 @@
 import { useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
+import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
 import { ProjectTabStrip } from '../event-editor/projects/ProjectTabStrip'
 import { RecordCreatePanel } from '../event-editor/create/RecordCreatePanel'
-import { useOpenStudies } from '../event-editor/workspace/useOpenStudies'
+import { projectTabId } from '../event-editor/workspace/types'
+import { openContent } from '../shared/lib/openContent'
 
 export function CreateStudyPage() {
   const navigate = useNavigate()
-  const { openStudy } = useOpenStudies()
+  const openTabs = useOptionalOpenTabs()
   const [params] = useSearchParams()
   const draftTitle = params.get('title') ?? undefined
 
   const handleCreated = useCallback(
     (recordId: string, title: string) => {
-      openStudy(recordId, title)
-      navigate(`/project/${recordId}`)
+      openContent(openTabs, navigate, { id: projectTabId(recordId), kind: 'project', studyId: recordId, title }, `/project/${recordId}`)
     },
-    [navigate, openStudy],
+    [navigate, openTabs],
   )
 
   return (

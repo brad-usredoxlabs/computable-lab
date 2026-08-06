@@ -14,6 +14,7 @@ import { useWorkspace } from '../../workspace/WorkspaceContext'
 import { recordEditTabId } from '../../workspace/types'
 import { useNavigate } from 'react-router-dom'
 import { useOptionalOpenTabs } from '../../../shared/shell/OpenTabsContext'
+import { openContent } from '../../../shared/lib/openContent'
 import { apiClient } from '../../../shared/api/client'
 import type { AiProtocolCandidateSummary } from '../../../types/ai'
 
@@ -177,11 +178,9 @@ export function ConvertToProtocolModal({
   const handleOpenProtocol = useCallback(() => {
     if (!result?.candidate || !result.recordId) return
 
-    openTabs?.openTab(
-      { id: recordEditTabId(result.recordId), kind: 'record-edit', recordId: result.recordId, recordKind: 'protocol', title: result.candidate.title ?? 'Protocol' },
-      true,
-    )
-    navigate(`/record/${result.recordId}`)
+    openContent(openTabs, navigate, {
+      id: recordEditTabId(result.recordId), kind: 'record-edit', recordId: result.recordId, recordKind: 'protocol', title: result.candidate.title ?? 'Protocol',
+    }, `/record/${result.recordId}`)
     onClose()
   }, [result, openTabs, navigate, onClose])
 

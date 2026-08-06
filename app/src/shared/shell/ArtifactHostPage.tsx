@@ -58,7 +58,7 @@ export function ArtifactHostPage() {
       kind === 'pdf'
         ? { id: `tab-pdf-${artifactId}`, kind: 'pdf', artifactId, title }
         : { id: `tab-doc-${artifactId}`, kind: 'document', artifactId, title }
-    openTabs.openTab(tab, true)
+    openTabs.navigateActiveTab(tab)
   }, [kind, artifactId, title, openTabs])
 
   if (!artifactId || !kind) {

@@ -14,6 +14,7 @@ import { SCRATCH_STUDY_ID } from '../../event-editor/legacyRouteResolution'
 import { loadRecentItems, groupRecentByType } from './recentStore'
 import type { RecentItem } from './recentStore'
 import { KIND_TO_LAB_CATEGORY } from '../lib/kindMeta'
+import { openContent } from '../lib/openContent'
 import { SplashSearch } from './SplashSearch'
 import './SplashPage.css'
 
@@ -29,8 +30,7 @@ export function SplashPage() {
   const openTabs = useOptionalOpenTabs()
 
   const openEntity = (tab: WorkspaceTab, path: string) => {
-    openTabs?.openTab(tab, true)
-    navigate(path)
+    openContent(openTabs, navigate, tab, path)
   }
 
   const recent = groupRecentByType(loadRecentItems())
@@ -51,10 +51,9 @@ export function SplashPage() {
   const handleNewRun = async () => {
     try {
       const { recordId } = await quickCreateRun({ studyId: SCRATCH_STUDY_ID })
-      openTabs?.openTab({
+      openContent(openTabs, navigate, {
         id: runTabId(recordId), kind: 'run', runId: recordId, title: 'New Run',
-      }, true)
-      navigate(`/runs/${recordId}`)
+      }, `/runs/${recordId}`)
     } catch (err) {
       console.error('Failed to create run:', err)
     }
@@ -90,11 +89,10 @@ export function SplashPage() {
             <button key={col.id} type="button" className="splash-page__chip"
               data-testid={`splash-nav-${col.id}`}
               onClick={() => {
-                openTabs?.openTab({
+                openContent(openTabs, navigate, {
                   id: collectionTabId(col.id), kind: 'collection',
                   collection: col.id, title: col.label,
-                }, true)
-                navigate(`/${col.id}`)
+                }, `/${col.id}`)
               }}>
               {col.label}
             </button>

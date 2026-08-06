@@ -13,6 +13,7 @@ import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
 import { runTabId } from '../event-editor/workspace/types'
+import { openContent, openInNewTab } from '../shared/lib/openContent'
 import { apiClient } from '../shared/api/client'
 import type { RunListItem, RunsListResponse } from '../shared/api/client'
 import { CollectionSearchSort } from '../shared/components/CollectionSearchSort'
@@ -114,8 +115,8 @@ export function RunCollectionView({ embedded = false }: { embedded?: boolean } =
 
   const handleNewRun = async () => {
     try {
-      const { recordId } = await quickCreateRun({ studyId: SCRATCH_STUDY_ID })
-      navigate(`/runs/${recordId}/event-editor`)
+      const { recordId, title } = await quickCreateRun({ studyId: SCRATCH_STUDY_ID })
+      openContent(openTabs, navigate, { id: runTabId(recordId), kind: 'run', runId: recordId, title }, `/runs/${recordId}`)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error('Failed to create run:', msg)
@@ -274,16 +275,23 @@ function RunRow({
         className="run-card"
         data-testid={`run-card-${run.recordId}`}
         onClick={() => {
-          if (openTabs) {
-            openTabs.openTab({
-              id: runTabId(run.recordId),
-              kind: 'run',
-              runId: run.recordId,
-              title: run.title ?? run.recordId,
-            }, true)
-          }
-          onNavigate(`/runs/${run.recordId}`)
+          openContent(openTabs, onNavigate, {
+            id: runTabId(run.recordId),
+            kind: 'run',
+            runId: run.recordId,
+            title: run.title ?? run.recordId,
+          }, `/runs/${run.recordId}`)
         }}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          openInNewTab(openTabs, onNavigate, {
+            id: runTabId(run.recordId),
+            kind: 'run',
+            runId: run.recordId,
+            title: run.title ?? run.recordId,
+          }, `/runs/${run.recordId}`)
+        }}
+        title="Left-click: open here · Right-click: open in new tab"
         aria-label={`Run ${run.title} (${run.status})`}
       >
         <span

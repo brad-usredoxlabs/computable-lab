@@ -13,6 +13,7 @@ import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
 import { projectTabId } from '../event-editor/workspace/types'
+import { openContent, openInNewTab } from '../shared/lib/openContent'
 import { apiClient } from '../shared/api/client'
 import { CollectionSearchSort } from '../shared/components/CollectionSearchSort'
 import type { RecordEnvelope } from '../types/kernel'
@@ -163,16 +164,23 @@ export function ProjectCollectionView({ embedded = false }: { embedded?: boolean
                     className="project-card"
                     data-testid={`project-card-${studyId}`}
                     onClick={() => {
-                      if (openTabs) {
-                        openTabs.openTab({
-                          id: projectTabId(studyId),
-                          kind: 'project',
-                          studyId,
-                          title,
-                        }, true)
-                      }
-                      navigate(`/project/${studyId}`)
+                      openContent(openTabs, navigate, {
+                        id: projectTabId(studyId),
+                        kind: 'project',
+                        studyId,
+                        title,
+                      }, `/project/${studyId}`)
                     }}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      openInNewTab(openTabs, navigate, {
+                        id: projectTabId(studyId),
+                        kind: 'project',
+                        studyId,
+                        title,
+                      }, `/project/${studyId}`)
+                    }}
+                    title="Left-click: open here · Right-click: open in new tab"
                   >
                     <div className="project-card__type-badge">P</div>
                     <div className="project-card__body">

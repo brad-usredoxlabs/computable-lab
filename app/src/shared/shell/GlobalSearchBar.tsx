@@ -7,7 +7,7 @@
  * Spec reference: specs/computable-lab-ui-specification.md §4.1, §2.4
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type MouseEvent as ReactMouseEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { searchRecords } from '../../shared/api/treeClient'
 import type { IndexEntry } from '../../types/tree'
@@ -16,7 +16,8 @@ import {
   type SearchEntityType,
 } from '../lib/kindMeta'
 import { resolveProtocolPick, isProtocolKind } from '../lib/protocolRouting'
-import { projectTabId } from '../../event-editor/workspace/types'
+import { openContent, openInNewTab } from '../lib/openContent'
+import { projectTabId, runTabId, claimTabId, labEntityTabId, type WorkspaceTab } from '../../event-editor/workspace/types'
 import { useOptionalOpenTabs } from '../shell/OpenTabsContext'
 import './GlobalSearchBar.css'
 
@@ -30,6 +31,21 @@ interface SearchResult {
 
 function resultPath(result: SearchResult): string {
   return recordRoute(result.recordId, result.kind, result.entityType)
+}
+
+/** Build the top-level tab + route for a search result (non-protocol branches). */
+function buildResultTab(result: SearchResult): { tab: WorkspaceTab; route: string } {
+  const route = resultPath(result)
+  if (result.entityType === 'project') {
+    return { tab: { id: projectTabId(result.recordId), kind: 'project', studyId: result.recordId, title: result.title }, route }
+  }
+  if (result.entityType === 'run') {
+    return { tab: { id: runTabId(result.recordId), kind: 'run', runId: result.recordId, title: result.title }, route }
+  }
+  if (result.entityType === 'claim') {
+    return { tab: { id: claimTabId(result.recordId), kind: 'claim', claimId: result.recordId, title: result.title }, route }
+  }
+  return { tab: { id: labEntityTabId(result.recordId), kind: 'lab-entity', schemaId: '', recordId: result.recordId, entityType: result.kind, title: result.title }, route }
 }
 
 export function GlobalSearchBar() {
@@ -92,12 +108,36 @@ export function GlobalSearchBar() {
     if (isProtocolKind(result.kind)) {
       const dest = await resolveProtocolPick(result.recordId, resultPath(result))
       if (dest.kind === 'project' && dest.studyId) {
-        openTabs?.openTab({ id: projectTabId(dest.studyId), kind: 'project', studyId: dest.studyId, title: result.title }, true)
-        navigate(dest.route)
+        openContent(openTabs, navigate, {
+          id: projectTabId(dest.studyId), kind: 'project', studyId: dest.studyId, title: result.title,
+        }, dest.route)
         return
       }
     }
-    navigate(resultPath(result))
+    const { tab, route } = buildResultTab(result)
+    openContent(openTabs, navigate, tab, route)
+  }
+
+  const handleOpenInNewTab = (e: ReactMouseEvent, result: SearchResult) => {
+    e.preventDefault()
+    setOpen(false)
+    setQuery('')
+    setResults([])
+    if (isProtocolKind(result.kind)) {
+      void resolveProtocolPick(result.recordId, resultPath(result)).then((dest) => {
+        if (dest.kind === 'project' && dest.studyId) {
+          openInNewTab(openTabs, navigate, {
+            id: projectTabId(dest.studyId), kind: 'project', studyId: dest.studyId, title: result.title,
+          }, dest.route)
+          return
+        }
+        const { tab, route } = buildResultTab(result)
+        openInNewTab(openTabs, navigate, tab, route)
+      })
+      return
+    }
+    const { tab, route } = buildResultTab(result)
+    openInNewTab(openTabs, navigate, tab, route)
   }
 
   return (
@@ -121,6 +161,8 @@ export function GlobalSearchBar() {
               className={`global-search-bar__result global-search-bar__result--${r.entityType}`}
               data-testid={`global-search-result-${r.recordId}`}
               onClick={() => handleSelect(r)}
+              onContextMenu={(e) => handleOpenInNewTab(e, r)}
+              title="Left-click: open here · Right-click: open in new tab"
             >
               <span className={`global-search-bar__result-type global-search-bar__result-type--${r.entityType}`}>
                 {r.typeLabel}

@@ -61,7 +61,7 @@ export function RecordHostPage() {
         recordId,
         title: recordId,
       }
-      openTabs.openTab(tab, true)
+      openTabs.navigateActiveTab(tab)
     } else if (nodeType) {
       const nt = nodeType as CreateNodeType
       const tab: WorkspaceTab = {
@@ -72,7 +72,7 @@ export function RecordHostPage() {
         ...(nt === 'run' && parentId ? { experimentId: parentId } : {}),
         ...(nt === 'experiment' && parentId ? { studyId: parentId } : {}),
       }
-      openTabs.openTab(tab, true)
+      openTabs.navigateActiveTab(tab)
     }
   }, [recordId, nodeType, parentId, openTabs])
 

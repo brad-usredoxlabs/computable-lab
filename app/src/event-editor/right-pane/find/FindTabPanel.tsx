@@ -27,6 +27,7 @@ import {
 } from '../useProjectInventory'
 import { useOptionalEventEditor } from '../../EventEditorContext'
 import { artifactKindLabel, tabForArtifact } from '../openArtifactInViewer'
+import { openContent } from '../../../shared/lib/openContent'
 import { getStudyTree } from '../../../shared/api/treeClient'
 import { apiClient, type ProtocolContextResponse } from '../../../shared/api/client'
 import type {
@@ -189,11 +190,11 @@ export function FindTabPanel() {
   const navigate = useNavigate()
   const openTabs = useOptionalOpenTabs()
 
-  // Open a record editor / creator as ITS OWN top-level tab (Phase 2b),
-  // carrying the project-origin breadcrumb, and navigate to its route.
+  // Open a record editor / creator IN THE CURRENT TAB (browser model), carrying
+  // the project-origin breadcrumb, and navigate to its route. Never creates or
+  // re-activates a different top-level tab.
   const openRecordTab = useCallback((tab: WorkspaceTab, route: string) => {
-    openTabs?.openTab(tab, true, projectCrumb ? [projectCrumb] : undefined)
-    navigate(route)
+    openContent(openTabs, navigate, tab, route, projectCrumb)
   }, [openTabs, navigate, projectCrumb])
 
   const refreshProtocolContext = useCallback(() => {
@@ -426,8 +427,7 @@ function ExperimentRow({
   const hasRuns = experiment.runs.length > 0
 
   const openRecordTab = useCallback((tab: WorkspaceTab, route: string) => {
-    openTabs?.openTab(tab, true, projectCrumb ? [projectCrumb] : undefined)
-    navigate(route)
+    openContent(openTabs, navigate, tab, route, projectCrumb)
   }, [openTabs, navigate, projectCrumb])
 
   const openNewRun = useCallback(() => {
@@ -554,12 +554,9 @@ function RunRow({
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
 
   const openRun = useCallback(() => {
-    openTabs?.openTab(
-      { id: runTabId(run.recordId), kind: 'run', runId: run.recordId, title: run.title },
-      true,
-      projectCrumb ? [projectCrumb] : undefined,
-    )
-    navigate(`/runs/${run.recordId}`)
+    openContent(openTabs, navigate, {
+      id: runTabId(run.recordId), kind: 'run', runId: run.recordId, title: run.title,
+    }, `/runs/${run.recordId}`, projectCrumb)
   }, [run.recordId, run.title, projectCrumb, openTabs, navigate])
 
   const attachProtocolMethod = useCallback(async () => {
@@ -577,7 +574,7 @@ function RunRow({
         experimentId: run.experimentId,
       })
       window.dispatchEvent(new CustomEvent('cl:records-changed'))
-      // The run's method deck opens as its OWN top-level tab (Phase 4.1),
+      // The run's method deck opens IN THE CURRENT TAB (browser model),
       // seeded with the project-origin breadcrumb, and we navigate to it.
       const deckTab: WorkspaceTab = {
         id: deckTabId(result.methodEventGraphId),
@@ -586,8 +583,7 @@ function RunRow({
         runId: run.recordId,
         title: run.title,
       }
-      openTabs?.openTab(deckTab, true, projectCrumb ? [projectCrumb] : undefined)
-      navigate(`/deck/${result.methodEventGraphId}/${run.recordId}`)
+      openContent(openTabs, navigate, deckTab, `/deck/${result.methodEventGraphId}/${run.recordId}`, projectCrumb)
     } catch (err) {
       window.alert(err instanceof Error ? err.message : String(err))
     } finally {
@@ -652,8 +648,7 @@ function ArtifactRow({ artifact, projectCrumb }: { artifact: ArtifactSummary; pr
             tab.kind === 'pdf'
               ? `/artifact/pdf/${tab.artifactId}`
               : `/artifact/document/${tab.artifactId}`
-          openTabs?.openTab(tab, true, projectCrumb ? [projectCrumb] : undefined)
-          navigate(route)
+          openContent(openTabs, navigate, tab, route, projectCrumb)
         }
       }}
       title={
@@ -685,13 +680,10 @@ function InventoryRow({ record, projectCrumb }: { record: InventoryRecord; proje
       disabled={!editable}
       onClick={() => {
         if (!editable) return
-        // Open the record in its own top-level tab (Phase 2b).
-        openTabs?.openTab(
-          { id: recordEditTabId(record.recordId), kind: 'record-edit', recordId: record.recordId, recordKind: record.kind, title: record.title },
-          true,
-          projectCrumb ? [projectCrumb] : undefined,
-        )
-        navigate(`/record/${record.recordId}`)
+        // Open the record IN THE CURRENT TAB (browser model).
+        openContent(openTabs, navigate, {
+          id: recordEditTabId(record.recordId), kind: 'record-edit', recordId: record.recordId, recordKind: record.kind, title: record.title,
+        }, `/record/${record.recordId}`, projectCrumb)
       }}
       title={
         anchors.length > 0
