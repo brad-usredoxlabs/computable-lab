@@ -20,6 +20,8 @@ import { ProtocolPlanningView } from './protocol-planning/ProtocolPlanningView'
 import { DeckViewer } from '../event-editor/viewer/deck/DeckViewer'
 import { DeckToolbar } from '../event-editor/viewer/deck/DeckToolbar'
 import { FocusModalsProvider } from '../event-editor/focus/FocusModalsProvider'
+import { ProtocolSelectionProvider } from '../event-editor/protocol/ProtocolSelectionContext'
+import { ProtocolPreviewBridge } from '../event-editor/protocol/ProtocolPreviewBridge'
 import { apiClient } from '../shared/api/client'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
 import { runTabId, type WorkspaceTab } from '../event-editor/workspace/types'
@@ -116,27 +118,30 @@ export function RunWorkspacePage() {
   const runBreadcrumb = openTabs?.state.tabs.find((t) => t.tab.id === runTabId(runId))?.breadcrumb ?? []
 
   return (
-    <WorkspaceProvider studyId={resolvedStudyId}>
-      <RunPaneMode />
-      <EventEditorProvider
-        runId={runId}
-        {...(resolvedEventGraphId ? { eventGraphId: resolvedEventGraphId } : {})}
-      >
-        <FocusModalsProvider>
-          <RunWorkspaceShell
-            rightPane={<RightPane />}
-            viewerToolbar={
-              <div className="run-workspace-toolbar">
-                <ModeToggle mode={mode} onChange={setMode} />
-                <DeckToolbar tab={deckTab} breadcrumb={runBreadcrumb} />
-              </div>
-            }
-          >
-            <RunWorkspaceContent runId={runId} mode={mode} />
-          </RunWorkspaceShell>
-        </FocusModalsProvider>
-      </EventEditorProvider>
-    </WorkspaceProvider>
+    <ProtocolSelectionProvider>
+      <WorkspaceProvider studyId={resolvedStudyId}>
+        <RunPaneMode />
+        <EventEditorProvider
+          runId={runId}
+          {...(resolvedEventGraphId ? { eventGraphId: resolvedEventGraphId } : {})}
+        >
+          <ProtocolPreviewBridge />
+          <FocusModalsProvider>
+            <RunWorkspaceShell
+              rightPane={<RightPane />}
+              viewerToolbar={
+                <div className="run-workspace-toolbar">
+                  <ModeToggle mode={mode} onChange={setMode} />
+                  <DeckToolbar tab={deckTab} breadcrumb={runBreadcrumb} />
+                </div>
+              }
+            >
+              <RunWorkspaceContent runId={runId} mode={mode} />
+            </RunWorkspaceShell>
+          </FocusModalsProvider>
+        </EventEditorProvider>
+      </WorkspaceProvider>
+    </ProtocolSelectionProvider>
   )
 }
 
