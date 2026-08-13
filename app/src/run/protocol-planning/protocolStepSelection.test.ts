@@ -1,38 +1,19 @@
-import { describe, it, expect, vi } from 'vitest'
-import {
-  buildProtocolStepPrompt,
-  dispatchProtocolStepSelection,
-  PROTOCOL_STEP_SELECTION_EVENT,
-  type ProtocolStepSelectionDetail,
-} from './protocolStepSelection'
+import { describe, it, expect } from 'vitest'
+import { buildStepLocalizePrompt } from './protocolStepSelection'
 
-describe('protocolStepSelection', () => {
-  it('builds a self-contained prompt from a step selection', () => {
-    const detail: ProtocolStepSelectionDetail = {
-      runId: 'RUN-1',
-      stepId: 'step-2',
-      stepLabel: 'Seal and read',
-      highlightedSection: 'Seal the plate and read fluorescence over 60 min.',
-      surface: 'protocol-planning',
-    }
-    const prompt = buildProtocolStepPrompt(detail)
-    expect(prompt).toContain('Adapt step step-2 ("Seal and read") to this lab.')
-    expect(prompt).toContain('User-highlighted detail: "Seal the plate and read fluorescence over 60 min."')
-    expect(prompt).toContain('Ghost the events for this step onto the editor.')
+const step = { stepId: 'step-2', label: 'Incubate 30 min' }
+
+describe('buildStepLocalizePrompt', () => {
+  it('includes the step id, label, and the user instruction', () => {
+    const prompt = buildStepLocalizePrompt(step, 'use the QuantStudio 5 block')
+    expect(prompt).toContain('step-2')
+    expect(prompt).toContain('Incubate 30 min')
+    expect(prompt).toContain('QuantStudio 5')
   })
 
-  it('dispatches the protocol-step-selection event with the detail', () => {
-    const detail: ProtocolStepSelectionDetail = {
-      runId: 'RUN-1',
-      stepId: 'step-1',
-      stepLabel: 'Add cells',
-      highlightedSection: 'Seed 96-well plate',
-    }
-    const dispatchFn = vi.fn()
-    dispatchProtocolStepSelection(detail, dispatchFn)
-    expect(dispatchFn).toHaveBeenCalledTimes(1)
-    const event = dispatchFn.mock.calls[0][0] as CustomEvent<ProtocolStepSelectionDetail>
-    expect(event.type).toBe(PROTOCOL_STEP_SELECTION_EVENT)
-    expect(event.detail).toEqual(detail)
+  it('omits an empty instruction cleanly', () => {
+    const prompt = buildStepLocalizePrompt(step, '   ')
+    expect(prompt).not.toContain('User instruction')
+    expect(prompt).toContain('Localize step step-2')
   })
 })

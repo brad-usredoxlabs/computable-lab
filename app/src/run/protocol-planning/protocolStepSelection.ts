@@ -28,6 +28,21 @@ export function buildProtocolStepPrompt(detail: ProtocolStepSelectionDetail): st
   ].join('\n\n')
 }
 
+/** Build the prompt for the step-localization AI input (Phase D). */
+export function buildStepLocalizePrompt(
+  step: { stepId: string; label: string },
+  instruction: string,
+): string {
+  const trimmed = instruction.trim()
+  return [
+    `Localize step ${step.stepId} ("${step.label}") for THIS lab's instruments and labware.`,
+    trimmed ? `User instruction: "${trimmed}"` : null,
+    "Draft/ghost this step's events onto the current event graph so I can review them on the deck.",
+  ]
+    .filter((line): line is string => typeof line === 'string')
+    .join('\n\n')
+}
+
 /**
  * Dispatch a `protocol-step-selection` event. `dispatchFn` is injectable for
  * tests (defaults to `window.dispatchEvent`).

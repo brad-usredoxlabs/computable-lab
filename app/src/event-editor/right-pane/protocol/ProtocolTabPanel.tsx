@@ -27,6 +27,8 @@ import { SettingsPanel, type Setting } from './SettingsPanel'
 import { useProtocolSelection, ProtocolSelectionProvider, type ProtocolStepGraph } from '../../protocol/ProtocolSelectionContext'
 import { ProtocolSelector } from './ProtocolSelector'
 import { StepDetailPane } from '../../../run/protocol-planning/StepDetailPane'
+import { StepLocalizationPane } from './StepLocalizationPane'
+import './protocolTabPanel.css'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                                */
@@ -1092,6 +1094,27 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
               stepId={expandedStepId}
               stepLabel={expanded?.label ?? expandedStepId}
               text={section ?? expanded?.description ?? humanStepsText}
+            />
+          )
+        })()
+      ) : null}
+
+      {/* Step-localization AI input (Phase D) for the expanded step */}
+      {expandedStepId ? (
+        (() => {
+          const expanded = steps.find((s) => s.stepId === expandedStepId)
+          const section = expanded
+            ? splitHumanSteps(humanStepsText ?? '')[expanded.ordinal]
+            : undefined
+          return (
+            <StepLocalizationPane
+              runId={runId}
+              step={
+                expanded
+                  ? { stepId: expanded.stepId, label: expanded.label }
+                  : { stepId: expandedStepId, label: expandedStepId }
+              }
+              stepText={section ?? expanded?.description ?? humanStepsText ?? undefined}
             />
           )
         })()

@@ -1,0 +1,49 @@
+/* StepLocalizationPane — compact AI thread in the Protocol tab (Phase D). */
+.step-localization-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg-elev);
+}
+
+.step-localization-pane__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.step-localization-pane__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-text);
+}
+
+.step-localization-pane__streaming {
+  font-size: 11px;
+  color: var(--cl-accent);
+}
+
+.step-localization-pane__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.step-localization-pane__btn {
+  appearance: none;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg-elev-2);
+  color: var(--cl-text);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.step-localization-pane__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
