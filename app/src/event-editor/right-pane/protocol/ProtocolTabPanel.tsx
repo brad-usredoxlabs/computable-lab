@@ -19,7 +19,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ExecutionProvider, useExecution } from '../../execution/ExecutionContext'
 import { StepExecutionModal } from '../../../components/StepExecutionModal'
 import type { StepInfo } from '../../../components/StepExecutionModal'
-import type { AiProtocolCandidateStepSummary } from '../../../types/ai'
 import type { PlateEvent } from '../../../types/events'
 import { updateExecutionState } from '../../../shared/api/execution'
 import { apiClient, type ProtocolContextResponse } from '../../../shared/api/client'
@@ -87,19 +86,43 @@ export interface ProtocolTabPanelProps {
 /* Helpers                                                              */
 /* ------------------------------------------------------------------ */
 
+/** A concise one-line title for a step, derived from its long-form label. */
+function briefLabel(label: string | undefined): string | undefined {
+  if (!label) return undefined
+  const first = label.split(/\r?\n/)[0]?.trim()
+  if (!first) return undefined
+  return first.length > 88 ? `${first.slice(0, 88)}…` : first
+}
+
+/** Fields the step chip + localized step need, regardless of data source. */
+interface MappedStep {
+  stepId?: string
+  stepNumber?: number
+  ordinal?: number
+  title?: string
+  label?: string
+  text?: string
+  notes?: string
+  description?: string
+  uncertainty?: ProtocolStep['uncertainty']
+  materials?: string[]
+  labware?: string[]
+  equipment?: string[]
+}
+
 /**
- * Convert AiProtocolCandidateStepSummary into our internal ProtocolStep
- * shape so the UI has a consistent model regardless of data source.
+ * Convert Ak protocol step into our internal ProtocolStep shape so the UI has
+ * a consistent model regardless of data source. The `/api/protocols/{id}/steps`
+ * path carries the full step text in `label`; the extraction path uses
+ * `title`/`text` — map both.
  */
-function toProtocolStep(
-  step: AiProtocolCandidateStepSummary,
-  index: number,
-): ProtocolStep {
+function toProtocolStep(step: MappedStep, index: number): ProtocolStep {
+  const ordinal = step.ordinal ?? step.stepNumber ?? index + 1
   return {
-    stepId: `step-${step.stepNumber ?? index}`,
-    ordinal: step.stepNumber ?? index + 1,
-    label: step.title ?? `Step ${step.stepNumber ?? index + 1}`,
-    description: step.text,
+    stepId: typeof step.stepId === 'string' && step.stepId ? step.stepId : `step-${step.stepNumber ?? index}`,
+    ordinal,
+    label: step.title ?? briefLabel(step.label ?? step.description) ?? `Step ${ordinal}`,
+    description: step.text ?? step.label ?? step.description ?? step.notes,
     visible: true,
     settings: [
       ...(step.materials ?? []).map((m, i) => ({
@@ -338,7 +361,18 @@ function StepChip({ step, isActive, onToggle, onPlay, onSelect, onCompletionChan
             )}
           </div>
           {step.description && (
-            <div style={{ fontSize: '12px', color: 'var(--cl-text-dim)', marginTop: '2px', lineHeight: 1.4 }}>
+            <div
+              style={{
+                fontSize: '12px',
+                color: 'var(--cl-text-dim)',
+                marginTop: '2px',
+                lineHeight: 1.4,
+                display: '-webkit-box',
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}
+            >
               {step.description}
             </div>
           )}
@@ -1093,18 +1127,21 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       )}
 
       {/* Step detail (long-form full text) for the expanded step */}
-      {expandedStepId && humanStepsText ? (
+      {expandedStepId ? (
         (() => {
           const expanded = steps.find((s) => s.stepId === expandedStepId)
-          const section = expanded
-            ? splitHumanSteps(humanStepsText)[expanded.ordinal]
-            : undefined
+          const section =
+            expanded && humanStepsText
+              ? splitHumanSteps(humanStepsText)[expanded.ordinal]
+              : undefined
+          const text = section ?? expanded?.description
+          if (!text) return null
           return (
             <StepDetailPane
               runId={runId}
               stepId={expandedStepId}
               stepLabel={expanded?.label ?? expandedStepId}
-              text={section ?? expanded?.description ?? humanStepsText}
+              text={text}
             />
           )
         })()
