@@ -730,28 +730,39 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
     let cancelled = false
 
     async function fetchSteps() {
+      if (!runId) return
       setIsLoading(true)
       setError(null)
 
-      // Resolve the long-form (humanStepsText) from the run's attached
-      // protocol: run → plannedRunRef (PLR) → protocolRef → protocol record.
+      // Resolve the run's attached protocol id: run → plannedRunRef (PLR) →
+      // protocolRef. `/api/protocols/{id}/steps` requires a PROTOCOL id, not
+      // the run id (which would 400 NOT_A_PROTOCOL and hide the steps).
+      let protocolId: string | null = null
+      try {
+        const runEnv = await apiClient.getRecord(runId)
+        const rp = (runEnv?.payload ?? runEnv) as Record<string, unknown> | null
+        const plr = rp?.plannedRunRef as { id?: string } | undefined
+        if (plr?.id) {
+          const plrEnv = await apiClient.getRecord(plr.id)
+          const pp = (plrEnv?.payload ?? plrEnv) as Record<string, unknown> | null
+          const protoRef = (pp?.protocolRef ?? pp?.sourceRef) as { id?: string } | undefined
+          if (typeof protoRef?.id === 'string') protocolId = protoRef.id
+        }
+      } catch {
+        // resolution failed — fall back to the run id below
+      }
+      const stepsId = protocolId ?? runId
+
+      // Load the long-form text from the resolved protocol record so a
+      // selected step can expand its full detail.
       async function loadHumanSteps() {
-        if (!runId) return
+        const recordId = protocolId ?? runId
+        if (!recordId) return
         try {
-          const runEnv = await apiClient.getRecord(runId)
-          const rp = (runEnv?.payload ?? runEnv) as Record<string, unknown> | null
-          const plr = rp?.plannedRunRef as { id?: string } | undefined
-          if (plr?.id) {
-            const plrEnv = await apiClient.getRecord(plr.id)
-            const pp = (plrEnv?.payload ?? plrEnv) as Record<string, unknown> | null
-            const protoRef = (pp?.protocolRef ?? pp?.sourceRef) as { id?: string } | undefined
-            if (protoRef?.id) {
-              const protoEnv = await apiClient.getRecord(protoRef.id)
-              const pp2 = (protoEnv?.payload ?? protoEnv) as Record<string, unknown> | null
-              const t = pp2?.humanStepsText
-              if (typeof t === 'string' && !cancelled) setHumanStepsText(t)
-            }
-          }
+          const protoEnv = await apiClient.getRecord(recordId)
+          const pp = (protoEnv?.payload ?? protoEnv) as Record<string, unknown> | null
+          const t = pp?.humanStepsText
+          if (typeof t === 'string' && !cancelled) setHumanStepsText(t)
         } catch {
           // non-fatal — step detail just stays collapsed
         }
@@ -759,7 +770,7 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
 
       try {
         // Try to get protocol steps from the run's protocol context
-        const res = await fetch(`/api/protocols/${runId}/steps`)
+        const res = await fetch(`/api/protocols/${stepsId}/steps`)
         if (!res.ok) {
           // Fallback 1: try the extraction API
           const extRes = await fetch(`/api/extractions/${runId}/protocol-steps`)
