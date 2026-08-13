@@ -26,6 +26,7 @@ import { apiClient, type ProtocolContextResponse } from '../../../shared/api/cli
 import { SettingsPanel, type Setting } from './SettingsPanel'
 import { useProtocolSelection, ProtocolSelectionProvider, type ProtocolStepGraph } from '../../protocol/ProtocolSelectionContext'
 import { ProtocolSelector } from './ProtocolSelector'
+import { StepDetailPane } from '../../../run/protocol-planning/StepDetailPane'
 
 /* ------------------------------------------------------------------ */
 /* Types                                                                */
@@ -74,8 +75,8 @@ export interface ProtocolStep {
 }
 
 export interface ProtocolTabPanelProps {
-  /** The run ID to fetch protocol steps for. */
-  runId: string
+  /** The run ID to fetch protocol steps for. Null means no active run context. */
+  runId: string | null
   /** The study ID for workspace context. */
   studyId: string
 }
@@ -127,6 +128,37 @@ function defaultRunName(protocolLabel: string): string {
   const now = new Date()
   const dateStr = now.toISOString().slice(0, 10)
   return `${dateStr} ${protocolLabel} Run`
+}
+
+/**
+ * Split a long-form (humanStepsText) protocol into ordinal-keyed sections on
+ * lines starting with /^\s*\d+\./. Returns { } when nothing splits, so callers
+ * fall back to the whole text keyed at 1.
+ */
+export function splitHumanSteps(text: string): Record<number, string> {
+  const sections: Record<number, string> = {}
+  let cur: number | null = null
+  const buf: string[] = []
+  const flush = () => {
+    if (cur !== null) {
+      const content = buf.join('\n').trim()
+      if (content) sections[cur] = content
+    }
+    buf.length = 0
+  }
+  for (const line of text.split(/\r?\n/)) {
+    const m = line.match(/^\s*(\d+)\.\s?(.*)$/)
+    if (m) {
+      flush()
+      cur = parseInt(m[1], 10)
+      if (m[2]) buf.push(m[2])
+    } else {
+      buf.push(line)
+    }
+  }
+  flush()
+  if (Object.keys(sections).length === 0) return { 1: text }
+  return sections
 }
 
 /**
@@ -619,6 +651,23 @@ function RunHeader({
 /* ------------------------------------------------------------------ */
 
 function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
+  // No run context — can't fetch protocol steps or attach a protocol.
+  // Show a helpful message directing the user to open a run first.
+  if (!runId) {
+    return (
+      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--cl-text)' }}>
+          No run selected
+        </div>
+        <p style={{ fontSize: '12px', color: 'var(--cl-text-dim)', lineHeight: 1.4 }}>
+          Open a run from the{' '}
+          <strong style={{ color: 'var(--cl-text)' }}>Find</strong> tab to
+          see protocol steps here, or select a protocol to attach to a run.
+        </p>
+      </div>
+    )
+  }
+
   const [steps, setSteps] = useState<ProtocolStep[]>([])
   const protocolSelection = useProtocolSelection()
   const activeStepId = protocolSelection?.activeStepId ?? null
@@ -636,6 +685,11 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
 
   // Step settings keyed by stepId (fetched on demand when a step is selected)
   const [stepSettings, setStepSettings] = useState<Record<string, Setting[]>>({})
+
+  // Phase D: long-form protocol text (humanStepsText) + the currently expanded
+  // step's detail pane. Selecting a step drives the deck ghost (current highlight).
+  const [humanStepsText, setHumanStepsText] = useState<string | null>(null)
+  const [expandedStepId, setExpandedStepId] = useState<string | null>(null)
 
   // Step execution modal state
   const [modalOpen, setModalOpen] = useState(false)
@@ -676,6 +730,31 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
     async function fetchSteps() {
       setIsLoading(true)
       setError(null)
+
+      // Resolve the long-form (humanStepsText) from the run's attached
+      // protocol: run → plannedRunRef (PLR) → protocolRef → protocol record.
+      async function loadHumanSteps() {
+        if (!runId) return
+        try {
+          const runEnv = await apiClient.getRecord(runId)
+          const rp = (runEnv?.payload ?? runEnv) as Record<string, unknown> | null
+          const plr = rp?.plannedRunRef as { id?: string } | undefined
+          if (plr?.id) {
+            const plrEnv = await apiClient.getRecord(plr.id)
+            const pp = (plrEnv?.payload ?? plrEnv) as Record<string, unknown> | null
+            const protoRef = (pp?.protocolRef ?? pp?.sourceRef) as { id?: string } | undefined
+            if (protoRef?.id) {
+              const protoEnv = await apiClient.getRecord(protoRef.id)
+              const pp2 = (protoEnv?.payload ?? protoEnv) as Record<string, unknown> | null
+              const t = pp2?.humanStepsText
+              if (typeof t === 'string' && !cancelled) setHumanStepsText(t)
+            }
+          }
+        } catch {
+          // non-fatal — step detail just stays collapsed
+        }
+      }
+
       try {
         // Try to get protocol steps from the run's protocol context
         const res = await fetch(`/api/protocols/${runId}/steps`)
@@ -707,6 +786,11 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
           const rawSteps = data?.steps ?? data ?? []
           if (!cancelled) {
             setSteps(rawSteps.map((s: any, i: number) => toProtocolStep(s, i)))
+          }
+          if (typeof data?.humanStepsText === 'string') {
+            if (!cancelled) setHumanStepsText(data.humanStepsText)
+          } else {
+            await loadHumanSteps()
           }
         }
       } catch (err) {
@@ -977,6 +1061,8 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
                 await fetchStepSettings(step.stepId)
               }
               setActiveStepId(wasActive ? null : step.stepId)
+              setExpandedStepId(wasActive ? null : step.stepId)
+              protocolSelection?.setCurrentStepId(wasActive ? null : step.stepId)
             }}
             onCompletionChange={handleCompletionChange}
           />
@@ -992,6 +1078,24 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
           onSave={(savedSettings) => handleSettingsSave(activeStepId, savedSettings)}
         />
       )}
+
+      {/* Step detail (long-form full text) for the expanded step */}
+      {expandedStepId && humanStepsText ? (
+        (() => {
+          const expanded = steps.find((s) => s.stepId === expandedStepId)
+          const section = expanded
+            ? splitHumanSteps(humanStepsText)[expanded.ordinal]
+            : undefined
+          return (
+            <StepDetailPane
+              runId={runId}
+              stepId={expandedStepId}
+              stepLabel={expanded?.label ?? expandedStepId}
+              text={section ?? expanded?.description ?? humanStepsText}
+            />
+          )
+        })()
+      ) : null}
 
       {/* Step execution modal */}
       {pendingStep && (
