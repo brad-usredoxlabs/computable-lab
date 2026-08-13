@@ -16,7 +16,6 @@ import { RightPane } from '../event-editor/right-pane/RightPane'
 import { RunWorkspaceShell } from './RunWorkspaceShell'
 import { useModeToggle, ModeToggle, type RunMode } from './lib/mode-toggle'
 import { ExecutionView } from '../graph/execution/ExecutionView'
-import { ProtocolPlanningView } from './protocol-planning/ProtocolPlanningView'
 import { DeckViewer } from '../event-editor/viewer/deck/DeckViewer'
 import { DeckToolbar } from '../event-editor/viewer/deck/DeckToolbar'
 import { FocusModalsProvider } from '../event-editor/focus/FocusModalsProvider'
@@ -182,10 +181,6 @@ function RunWorkspaceContent({ runId, mode }: RunWorkspaceContentProps) {
   const handleDeviationCaptured = (deviationId: string) => {
     console.log('Deviation captured:', deviationId)
     // TODO: Handle deviation
-  }
-
-  if (mode === 'protocol-planning') {
-    return <ProtocolPlanningView runId={runId} />
   }
 
   if (mode === 'execute') {
