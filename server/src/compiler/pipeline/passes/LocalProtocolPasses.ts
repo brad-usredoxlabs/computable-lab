@@ -313,12 +313,26 @@ export function createExpandLocalCustomizationsPass(
         // No mutation needed — deep copy already has it
       }
 
+      // Plate-setting sections — concrete lab-layer bindings declared above
+      // the steps. Projected for downstream resolution passes.
+      const resolvedSetup = {
+        labwares: asRowArray(localProtocol.payload['labwares']),
+        equipment: asRowArray(localProtocol.payload['equipment']),
+        materials: asRowArray(localProtocol.payload['materials']),
+      };
+      expandedProtocol['resolvedSetup'] = resolvedSetup;
+
       return {
         ok: true,
         output: { expandedProtocol },
       };
     },
   };
+}
+
+/** Coerce a possibly-absent setup section to a plain row array. */
+function asRowArray(v: unknown): Array<Record<string, unknown>> {
+  return Array.isArray(v) ? (v as Array<Record<string, unknown>>) : [];
 }
 
 // ---------------------------------------------------------------------------
@@ -368,6 +382,9 @@ export function createProjectLocalExpandedProtocolPass(
       const phases = expandedProtocol['phases'] as
         | unknown[]
         | undefined;
+      const resolvedSetup = expandedProtocol['resolvedSetup'] as
+        | { labwares: unknown[]; equipment: unknown[]; materials: unknown[] }
+        | undefined;
 
       const metadata = {
         stepCount: Array.isArray(steps) ? steps.length : 0,
@@ -375,6 +392,9 @@ export function createProjectLocalExpandedProtocolPass(
         labwareKind: expandedProtocol['resolvedLabwareKind'] ?? null,
         plateCount: expandedProtocol['resolvedPlateCount'] ?? null,
         sampleCount: expandedProtocol['resolvedSampleCount'] ?? null,
+        setupLabwareCount: resolvedSetup?.labwares.length ?? 0,
+        setupEquipmentCount: resolvedSetup?.equipment.length ?? 0,
+        setupMaterialCount: resolvedSetup?.materials.length ?? 0,
       };
 
       return {

@@ -392,6 +392,87 @@ describe('createExpandLocalCustomizationsPass', () => {
     expect(result.ok).toBe(false);
     expect(result.diagnostics![0]!.code).toBe('missing_canonical_protocol');
   });
+
+  it('projects setup sections into expandedProtocol.resolvedSetup', () => {
+    const localProtocolPayload = {
+      kind: 'local-protocol',
+      recordId: 'LPR-test-001',
+      title: 'Test Local Protocol',
+      inherits_from: { kind: 'record', type: 'protocol', id: 'PRT-000001' },
+      status: 'draft',
+      materials: [
+        { role: 'treatment', ref: { kind: 'record', id: 'MAT-7', type: 'material-spec' } },
+      ],
+    };
+
+    const canonicalProtocolPayload = {
+      kind: 'protocol',
+      recordId: 'PRT-000001',
+      title: 'Test Protocol',
+      steps: [{ stepId: 'step-1', kind: 'other' }],
+    };
+
+    const outputs = new Map<string, unknown>([
+      [
+        'resolve_protocol_ref',
+        {
+          localProtocol: { payload: localProtocolPayload },
+          canonicalProtocol: { payload: canonicalProtocolPayload },
+        },
+      ],
+    ]);
+
+    const pass = createExpandLocalCustomizationsPass();
+    const state = makeMockState({}, outputs);
+    const result = pass.run({ pass_id: 'expand_local_customizations', state });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as { expandedProtocol: Record<string, unknown> };
+    expect(output.expandedProtocol.resolvedSetup).toEqual({
+      labwares: [],
+      equipment: [],
+      materials: [{ role: 'treatment', ref: { kind: 'record', id: 'MAT-7', type: 'material-spec' } }],
+    });
+  });
+
+  it('projects empty resolvedSetup when the local protocol declares no sections', () => {
+    const localProtocolPayload = {
+      kind: 'local-protocol',
+      recordId: 'LPR-test-002',
+      title: 'Test',
+      inherits_from: { kind: 'record', type: 'protocol', id: 'PRT-000001' },
+      status: 'draft',
+    };
+
+    const canonicalProtocolPayload = {
+      kind: 'protocol',
+      recordId: 'PRT-000001',
+      title: 'Test Protocol',
+      steps: [],
+    };
+
+    const outputs = new Map<string, unknown>([
+      [
+        'resolve_protocol_ref',
+        {
+          localProtocol: { payload: localProtocolPayload },
+          canonicalProtocol: { payload: canonicalProtocolPayload },
+        },
+      ],
+    ]);
+
+    const pass = createExpandLocalCustomizationsPass();
+    const state = makeMockState({}, outputs);
+    const result = pass.run({ pass_id: 'expand_local_customizations', state });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as { expandedProtocol: Record<string, unknown> };
+    expect(output.expandedProtocol.resolvedSetup).toEqual({
+      labwares: [],
+      equipment: [],
+      materials: [],
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -450,5 +531,36 @@ describe('createProjectLocalExpandedProtocolPass', () => {
 
     expect(result.ok).toBe(false);
     expect(result.diagnostics![0]!.code).toBe('missing_expanded_protocol');
+  });
+
+  it('includes setup section counts in metadata', () => {
+    const expandedProtocol = {
+      kind: 'protocol',
+      recordId: 'PRT-000001',
+      title: 'Test Protocol',
+      steps: [{ stepId: 'step-1', kind: 'other' }],
+      resolvedSetup: {
+        labwares: [{ role: 'sample_plate' }, { role: 'reservoir' }],
+        equipment: [{ role: 'plate_reader' }],
+        materials: [],
+      },
+    };
+
+    const outputs = new Map<string, unknown>([
+      ['expand_local_customizations', { expandedProtocol }],
+    ]);
+
+    const pass = createProjectLocalExpandedProtocolPass();
+    const state = makeMockState({}, outputs);
+    const result = pass.run({ pass_id: 'project_local_expanded_protocol', state });
+
+    expect(result.ok).toBe(true);
+    const output = result.output as {
+      expandedProtocol: Record<string, unknown>;
+      metadata: Record<string, unknown>;
+    };
+    expect(output.metadata.setupLabwareCount).toBe(2);
+    expect(output.metadata.setupEquipmentCount).toBe(1);
+    expect(output.metadata.setupMaterialCount).toBe(0);
   });
 });
