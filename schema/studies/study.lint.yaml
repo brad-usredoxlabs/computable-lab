@@ -1,4 +1,15 @@
 # Lint rules for Study records
 lintVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/study.schema.yaml"
-rules: []
+rules:
+  - id: "study-short-slug"
+    title: "shortSlug must be kebab-case"
+    severity: "warning"
+    scope: "record"
+    assert:
+      op: "regex"
+      path: "$.shortSlug"
+      pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    message:
+      template: "Study '{{$.recordId}}' shortSlug '{{$.shortSlug}}' is not kebab-case"
+      paths: ["$.recordId", "$.shortSlug"]

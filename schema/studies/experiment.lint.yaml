@@ -1,4 +1,15 @@
 # Lint rules for Experiment records
 lintVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/experiment.schema.yaml"
-rules: []
+rules:
+  - id: "experiment-short-slug"
+    title: "shortSlug must be kebab-case"
+    severity: "warning"
+    scope: "record"
+    assert:
+      op: "regex"
+      path: "$.shortSlug"
+      pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    message:
+      template: "Experiment '{{$.recordId}}' shortSlug '{{$.shortSlug}}' is not kebab-case"
+      paths: ["$.recordId", "$.shortSlug"]
