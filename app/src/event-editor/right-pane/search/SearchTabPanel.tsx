@@ -7,12 +7,10 @@
  *    extracted text / prompt body when present
  *  - clicking a row opens the matching viewer tab
  *
- * Vendor-PDF search (the GraphLemur Exa endpoint that the legacy AI dock
- * exposes) is intentionally NOT here yet — that ingest flow is Phase 9
- * once it can write the result as a study-scoped artifact. The simple
- * substring filter on cached extracted text covers the most common need
- * ("find that protocol with the buffer prep step") without the network
- * roundtrip.
+ * Vendor-PDF ingestion now lives in the top-level Ingestion destination
+ * (/ingestion/vendor-pdf); this panel links out to it. The local substring
+ * filter on cached extracted text covers "find that artifact in this study"
+ * without a network roundtrip.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -22,9 +20,8 @@ import { useOptionalOpenTabs } from '../../../shared/shell/OpenTabsContext'
 import { useStudyArtifacts } from '../useStudyArtifacts'
 import { apiClient } from '../../../shared/api/client'
 import { artifactKindLabel, tabForArtifact } from '../openArtifactInViewer'
-import { VendorPdfSearchSection } from './VendorPdfSearchSection'
+import { openContent } from '../../../shared/lib/openContent'
 import type { Artifact, ArtifactSummary } from '../../../types/artifact'
-import type { WorkspaceTab } from '../../workspace/types'
 import './search.css'
 
 interface RowMatch {
@@ -35,9 +32,8 @@ interface RowMatch {
 
 export function SearchTabPanel() {
   const ws = useWorkspace()
-  const openTabs = useOptionalOpenTabs()
   const navigate = useNavigate()
-  const { artifacts, loading, error, refresh } = useStudyArtifacts(
+  const { artifacts, loading, error } = useStudyArtifacts(
     ws.state.studyId,
   )
   const [query, setQuery] = useState('')
@@ -122,8 +118,8 @@ export function SearchTabPanel() {
       ) : !trimmed ? (
         <p className="right-panel__hint">
           Search across artifact titles, ids, and cached extracted text in
-          this study. Use the vendor-PDF search below to ingest a new PDF
-          from Exa.
+          this study. Use the button below to ingest a new vendor PDF from
+          the Ingestion pipeline.
         </p>
       ) : matches.length === 0 ? (
         <p className="right-panel__hint">
@@ -138,23 +134,17 @@ export function SearchTabPanel() {
           ))}
         </div>
       )}
-      <VendorPdfSearchSection
-        studyId={ws.state.studyId}
-        onIngested={() => {
-          void refresh()
-        }}
-        onBuildProtocol={(artifactId, info) => {
-          // Open the PDF as its own top-level tab at a standalone route
-          const tab: WorkspaceTab = {
-            id: `tab-pdf-${artifactId}`,
-            kind: 'pdf',
-            artifactId,
-            title: info.title ?? 'PDF protocol',
-          }
-          openTabs?.openTab(tab, true)
-          navigate(`/artifact/pdf/${artifactId}`)
-        }}
-      />
+      <button
+        type="button"
+        className="right-panel__row right-panel__row--cta"
+        data-testid="search-tab-vendor-pdf-cta"
+        onClick={() => navigate('/ingestion/vendor-pdf')}
+      >
+        <span className="right-panel__row-title">Ingest a vendor PDF…</span>
+        <span className="right-panel__row-sub">
+          Search &amp; ingest vendor PDFs in the Ingestion pipeline
+        </span>
+      </button>
     </div>
   )
 }
@@ -177,8 +167,7 @@ function SearchRow({ match }: { match: RowMatch }) {
             tab.kind === 'pdf'
               ? `/artifact/pdf/${tab.artifactId}`
               : `/artifact/document/${tab.artifactId}`
-          openTabs?.openTab(tab, true)
-          navigate(route)
+          openContent(openTabs, navigate, tab, route)
         }
       }}
     >

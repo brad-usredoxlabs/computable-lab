@@ -81,6 +81,7 @@ export interface BuildPreviewArgs {
   labwareRequirements: AiLabwareRequirement[]
   existingLabwares: Record<string, Labware>
   activeDeckScope?: AiActiveDeckScope
+  existingPlacements?: EventEditorPlacement[]
 }
 
 export interface BuildPreviewResult {
@@ -101,6 +102,84 @@ function scopeSkipReason(label: string, location: PlacementLocation, scope: AiAc
     + ' is locked to ' + scope.platformId + '/' + scope.variantId + ' (allowed slots: ' + slots + ')'
 }
 
+// Physical tile footprint (mm) — matches LawnSurface.tsx constants.
+// Labware tiles render at fixed pixel size, but positions are in real-world mm.
+const TILE_MM_W = 127
+const TILE_MM_H = 85
+const TILE_MM_W_PORTRAIT = 85
+const TILE_MM_H_PORTRAIT = 127
+// Minimum gap between adjacent lawn tiles (mm) so new items don't land on
+// existing ones when the AI omits explicit positions.
+const LAWN_GAP_MM = 16
+
+/** Estimate tile footprint for a labware that will land on a lawn surface. */
+function lawnTileDimensions(labware: Labware): { wMm: number; hMm: number } {
+  if (labware.layoutFamily === 'tube') return { wMm: TILE_MM_W_PORTRAIT, hMm: TILE_MM_H_PORTRAIT }
+  // Portrait when rows > columns (e.g. 1x8 reservoir), otherwise landscape.
+  const addr = labware.addressing
+  const portrait = addr && addr.rows && addr.columns && addr.rows > addr.columns
+  return portrait
+    ? { wMm: TILE_MM_W_PORTRAIT, hMm: TILE_MM_H_PORTRAIT }
+    : { wMm: TILE_MM_W, hMm: TILE_MM_H }
+}
+
+/**
+ * Compute a non-overlapping lawn position for a new labware.
+ * Scans existing lawn placements plus placements we've already positioned
+ * in this batch, then returns the next free grid slot.
+ */
+function nextLawnPosition(
+  labware: Labware,
+  existing: EventEditorPlacement[],
+  placed: Array<{ x: number; y: number; w: number; h: number }>,
+): { kind: 'lawn'; xMm: number; yMm: number } {
+  const { wMm, hMm } = lawnTileDimensions(labware)
+
+  // Collect all occupied rectangles (existing + items we already placed).
+  const occupied: Array<{ x: number; y: number; w: number; h: number }> = []
+
+  for (const p of existing) {
+    if (p.location.kind === 'lawn') {
+      // We don't have labware info for existing placements, so use the
+      // standard landscape tile as a safe over-estimate.
+      occupied.push({
+        x: p.location.xMm,
+        y: p.location.yMm,
+        w: TILE_MM_W,
+        h: TILE_MM_H,
+      })
+    }
+  }
+  for (const r of placed) {
+    occupied.push(r)
+  }
+
+  // Simple grid search: try positions in a regular grid until we find one
+  // that doesn't overlap any existing tile.
+  const startX = LAWN_GAP_MM
+  const startY = LAWN_GAP_MM
+  for (let col = 0; col < 20; col += 1) {
+    for (let row = 0; row < 20; row += 1) {
+      const x = startX + col * (TILE_MM_W + LAWN_GAP_MM)
+      const y = startY + row * (TILE_MM_H + LAWN_GAP_MM)
+      const candidate = { x, y, w: wMm, h: hMm }
+      const overlap = occupied.some((o) => {
+        return (
+          candidate.x < o.x + o.w &&
+          candidate.x + candidate.w > o.x &&
+          candidate.y < o.y + o.h &&
+          candidate.y + candidate.h > o.y
+        )
+      })
+      if (!overlap) {
+        return { kind: 'lawn', xMm: x, yMm: y }
+      }
+    }
+  }
+  // Fallback: last resort position (shouldn't happen in practice).
+  return { kind: 'lawn', xMm: TILE_MM_W + LAWN_GAP_MM + placed.length * (TILE_MM_W + LAWN_GAP_MM), yMm: TILE_MM_H + LAWN_GAP_MM }
+}
+
 export function buildPreviewFromDraft({
   platform,
   variant,
@@ -109,11 +188,14 @@ export function buildPreviewFromDraft({
   labwareRequirements,
   existingLabwares,
   activeDeckScope,
+  existingPlacements = [],
 }: BuildPreviewArgs): BuildPreviewResult {
   const previewLabwares: Record<string, Labware> = {}
   const allocatedLabwares: Labware[] = Object.values(existingLabwares)
   const previewPlacements: EventEditorPlacement[] = []
   const skips: string[] = []
+  // Track lawn rectangles we've placed in this batch for collision avoidance.
+  const lawnPlaced: Array<{ x: number; y: number; w: number; h: number }> = []
 
   const proposedLabware = [
     ...labwareRequirements.map((requirement) => ({
@@ -139,11 +221,16 @@ export function buildPreviewFromDraft({
       && activeDeckScope.allowedSlots.length === 1
         ? activeDeckScope.allowedSlots[0]
         : null
-    const location: PlacementLocation = slotId
-      ? { kind: 'slot', slotId }
-      : implicitSingleSlot
-        ? { kind: 'slot', slotId: implicitSingleSlot }
-        : { kind: 'lawn', xMm: 20 + index * 24, yMm: 20 + index * 18 }
+    let location: PlacementLocation
+    if (slotId) {
+      location = { kind: 'slot', slotId }
+    } else if (implicitSingleSlot) {
+      location = { kind: 'slot', slotId: implicitSingleSlot }
+    } else {
+      location = nextLawnPosition(labware, existingPlacements, lawnPlaced)
+      const { wMm, hMm } = lawnTileDimensions(labware)
+      lawnPlaced.push({ x: location.xMm, y: location.yMm, w: wMm, h: hMm })
+    }
 
     if (!platform || !variant) {
       skips.push(`${proposal.label}: deck not loaded`)

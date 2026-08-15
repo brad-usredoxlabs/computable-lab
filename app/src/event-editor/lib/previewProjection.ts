@@ -15,6 +15,12 @@ export interface PreviewWellIndex {
   byLabware: Map<string, Set<WellId>>
   /** Every preview event, grouped by the labwareId it touches. */
   eventsByLabware: Map<string, PlateEvent[]>
+  /**
+   * labwareId → wellId → protocol step status ('current' | 'past') when the
+   * preview carries protocol-planning step layering. 'current' wins over
+   * 'past' when a well is touched by both.
+   */
+  statusByLabware: Map<string, Map<WellId, 'current' | 'past'>>
 }
 
 const EMPTY_WELLS: ReadonlySet<WellId> = new Set()
@@ -22,20 +28,35 @@ const EMPTY_WELLS: ReadonlySet<WellId> = new Set()
 export function buildPreviewWellIndex(preview: EventEditorPreview | null): PreviewWellIndex {
   const byLabware = new Map<string, Set<WellId>>()
   const eventsByLabware = new Map<string, PlateEvent[]>()
-  if (!preview) return { byLabware, eventsByLabware }
+  const statusByLabware = new Map<string, Map<WellId, 'current' | 'past'>>()
+  if (!preview) return { byLabware, eventsByLabware, statusByLabware }
 
   for (const event of preview.previewEvents) {
     const labwareIds = collectEventLabwareIds(event)
     const wells = getAffectedWells(event)
+    // Per-event protocol step status carried by ProtocolPreviewBridge.
+    const ev = event as PlateEvent & { _protocolStepStatus?: 'current' | 'past' }
+    const status = ev._protocolStepStatus
     for (const labwareId of labwareIds) {
       if (!byLabware.has(labwareId)) byLabware.set(labwareId, new Set())
       const set = byLabware.get(labwareId)!
-      for (const w of wells) set.add(w)
       if (!eventsByLabware.has(labwareId)) eventsByLabware.set(labwareId, [])
       eventsByLabware.get(labwareId)!.push(event)
+      let statusMap: Map<WellId, 'current' | 'past'> | undefined
+      if (status) {
+        if (!statusByLabware.has(labwareId)) statusByLabware.set(labwareId, new Map())
+        statusMap = statusByLabware.get(labwareId)!
+      }
+      for (const w of wells) {
+        set.add(w)
+        if (statusMap && status) {
+          // 'current' < 'past' so the live step always wins the attribute.
+          if ((statusMap.get(w) ?? 'past') >= status) statusMap.set(w, status)
+        }
+      }
     }
   }
-  return { byLabware, eventsByLabware }
+  return { byLabware, eventsByLabware, statusByLabware }
 }
 
 /**
@@ -53,6 +74,18 @@ export function previewWellsForLabware(
 ): ReadonlySet<WellId> {
   return index.byLabware.get(labwareId) ?? EMPTY_WELLS
 }
+
+/**
+ * Per-well protocol step status for a labware (from preview events' layering).
+ */
+export function previewStepStatusForLabware(
+  index: PreviewWellIndex,
+  labwareId: string,
+): ReadonlyMap<WellId, 'current' | 'past'> {
+  return index.statusByLabware.get(labwareId) ?? EMPTY_STATUS
+}
+
+const EMPTY_STATUS: ReadonlyMap<WellId, 'current' | 'past'> = new Map()
 
 /**
  * Look up a preview placement that anchors to a specific deck slot. Returns

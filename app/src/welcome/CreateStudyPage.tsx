@@ -13,7 +13,7 @@ import { useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
-import { ProjectTabStrip } from '../event-editor/projects/ProjectTabStrip'
+import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { RecordCreatePanel } from '../event-editor/create/RecordCreatePanel'
 import { projectTabId } from '../event-editor/workspace/types'
 import { openContent } from '../shared/lib/openContent'
@@ -34,7 +34,7 @@ export function CreateStudyPage() {
   return (
     <AppShell
       brand="New project"
-      topbarTabs={<ProjectTabStrip />}
+      topbarTabs={<WorkspaceTabStrip />}
       layout="workspace"
       leftPane={
         <RecordCreatePanel

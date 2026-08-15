@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { initializeApp } from '../server.js';
 import type { AppContext } from '../server.js';
 import { ExecutionEvidenceService } from './ExecutionEvidenceService.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 async function seedRun(
   ctx: AppContext,
@@ -118,6 +119,7 @@ describe('ExecutionEvidenceService', () => {
   beforeAll(async () => {
     await mkdir(resolve(testDir, 'schema'), { recursive: true });
     await mkdir(resolve(testDir, 'records'), { recursive: true });
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

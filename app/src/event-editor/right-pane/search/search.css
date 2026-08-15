@@ -181,3 +181,26 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* Right-pane helper classes used by VendorPdfSearchSection — duplicated here
+   so the section renders styled even outside the right pane (e.g. /ingestion),
+   where rightPane.css is not loaded. Same values as rightPane.css. */
+.right-panel__heading {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cl-text-faint);
+  margin: 8px 0 4px;
+}
+
+.right-panel__hint {
+  font-size: 12px;
+  color: var(--cl-text-faint);
+  margin: 0;
+}
+
+.right-panel__error {
+  color: var(--cl-danger);
+  font-size: 12px;
+}

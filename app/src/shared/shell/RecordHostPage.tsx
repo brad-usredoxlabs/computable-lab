@@ -49,6 +49,29 @@ export function RecordHostPage() {
     }
   }, [recordId])
 
+  // In create mode a run's :parentId is the EXPERIMENT it hangs under (the
+  // route is /record/new/run/:experimentId). Resolve that experiment's study
+  // so the run is stamped with the correct studyId (a run belongs to a study
+  // through its experiment, not through the experiment's own id). Without this
+  // the run gets studyId=<experimentId> and no experimentId, orphaning it from
+  // the study tree (invisible on the project homepage and /runs).
+  useEffect(() => {
+    if (nodeType !== 'run' || !parentId) return
+    let cancelled = false
+    void apiClient
+      .getRecord(parentId)
+      .then((env) => {
+        if (cancelled) return
+        const p = env?.payload as { studyId?: string; links?: { studyId?: string } } | undefined
+        const sid = p?.studyId ?? p?.links?.studyId
+        if (sid) setStudyId(sid)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [nodeType, parentId])
+
   // Register/refresh the top-level tab so a deep link or refresh keeps it in
   // the strip (deep-link restore, Phase 4.3). openTab on an existing id
   // replaces the tab but preserves the breadcrumb seeded by the opener.
@@ -84,7 +107,8 @@ export function RecordHostPage() {
     <RecordCreatePanel
       key={`create:${nodeType}:${parentId ?? ''}`}
       nodeType={(nodeType as CreateNodeType)}
-      studyId={parentId ?? studyId}
+      studyId={nodeType === 'run' ? studyId : (parentId ?? studyId)}
+      experimentId={nodeType === 'run' && parentId ? parentId : undefined}
       onCreated={() => navigate('/projects')}
       onCancel={handleClose}
     />

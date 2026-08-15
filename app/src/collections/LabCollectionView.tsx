@@ -12,14 +12,15 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
 import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { useOptionalOpenTabs } from '../shared/shell/OpenTabsContext'
-import { labEntityTabId, projectTabId } from '../event-editor/workspace/types'
+import { labEntityTabId, projectTabId, type WorkspaceTab } from '../event-editor/workspace/types'
 import { resolveProtocolPick } from '../shared/lib/protocolRouting'
+import { openContent, openInNewTab } from '../shared/lib/openContent'
 import { CollectionSearchSort } from '../shared/components/CollectionSearchSort'
 import { apiClient } from '../shared/api/client'
 import type { RecordEnvelope } from '../types/kernel'
 import './LabCollectionView.css'
 
-type LabCategory = 'protocols' | 'materials' | 'labware' | 'equipment' | 'people' | 'documents'
+type LabCategory = 'protocols' | 'materials' | 'labware' | 'equipment' | 'people' | 'documents' | 'vendor-pdfs'
 
 const CATEGORIES: { id: LabCategory; label: string; kind: string }[] = [
   { id: 'protocols', label: 'Protocols', kind: 'protocol' },
@@ -28,6 +29,7 @@ const CATEGORIES: { id: LabCategory; label: string; kind: string }[] = [
   { id: 'equipment', label: 'Instruments & Equipment', kind: 'equipment' },
   { id: 'people', label: 'People', kind: 'person' },
   { id: 'documents', label: 'Documents', kind: 'document' },
+  { id: 'vendor-pdfs', label: 'Vendor PDFs', kind: 'vendor-pdf' },
 ]
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -157,6 +159,19 @@ function extractHelperTokens(
       const desc = typeof p.description === 'string' ? p.description : undefined
       if (desc) {
         const truncated = desc.length > 80 ? desc.slice(0, 77) + '…' : desc
+        tokens.push({ text: truncated })
+      }
+      break
+    }
+
+    case 'vendor-pdf': {
+      const src = p.source as { vendor?: string } | undefined
+      if (src?.vendor) tokens.push({ text: src.vendor })
+      const st = typeof p.state === 'string' ? p.state : undefined
+      if (st) tokens.push({ text: st, tag: statusVariant(st) })
+      const titleT = typeof p.title === 'string' ? p.title : undefined
+      if (titleT) {
+        const truncated = titleT.length > 80 ? titleT.slice(0, 77) + '…' : titleT
         tokens.push({ text: truncated })
       }
       break
@@ -298,6 +313,16 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
               {cat.label}
             </button>
           ))}
+          {activeCategory === 'vendor-pdfs' && (
+            <button
+              type="button"
+              className="lab-collection__category lab-collection__category--new"
+              data-testid="lab-category-new-vendor-pdf"
+              onClick={() => navigate('/ingestion/vendor-pdf')}
+            >
+              + New PDF
+            </button>
+          )}
         </nav>
 
         {error ? (
@@ -326,22 +351,43 @@ export function LabCollectionView({ embedded = false }: { embedded?: boolean } =
                       if (isProtocolCat) {
                         const dest = await resolveProtocolPick(record.recordId, `/lab/${activeCategory}/${record.recordId}`)
                         if (dest.kind === 'project' && dest.studyId) {
-                          if (openTabs) openTabs.openTab({ id: projectTabId(dest.studyId), kind: 'project', studyId: dest.studyId, title: displayName }, true)
-                          navigate(dest.route)
+                          openContent(openTabs, navigate, {
+                            id: projectTabId(dest.studyId), kind: 'project', studyId: dest.studyId, title: displayName,
+                          }, dest.route)
                           return
                         }
                       }
-                      if (openTabs) {
-                        openTabs.openTab({
-                          id: labEntityTabId(record.recordId),
-                          kind: 'lab-entity',
-                          schemaId: activeKind,
-                          recordId: record.recordId,
-                          entityType: activeCategory,
-                          title: displayName,
-                        }, true)
+                      const tab: WorkspaceTab = {
+                        id: labEntityTabId(record.recordId),
+                        kind: 'lab-entity',
+                        schemaId: activeKind,
+                        recordId: record.recordId,
+                        entityType: activeCategory,
+                        title: displayName,
                       }
-                      navigate(`/lab/${activeCategory}/${record.recordId}`)
+                      openContent(openTabs, navigate, tab, `/lab/${activeCategory}/${record.recordId}`)
+                    }}
+                    onContextMenu={async (e) => {
+                      e.preventDefault()
+                      const isProtocolCat = activeCategory === 'protocols'
+                      if (isProtocolCat) {
+                        const dest = await resolveProtocolPick(record.recordId, `/lab/${activeCategory}/${record.recordId}`)
+                        if (dest.kind === 'project' && dest.studyId) {
+                          openInNewTab(openTabs, navigate, {
+                            id: projectTabId(dest.studyId), kind: 'project', studyId: dest.studyId, title: displayName,
+                          }, dest.route)
+                          return
+                        }
+                      }
+                      const tab: WorkspaceTab = {
+                        id: labEntityTabId(record.recordId),
+                        kind: 'lab-entity',
+                        schemaId: activeKind,
+                        recordId: record.recordId,
+                        entityType: activeCategory,
+                        title: displayName,
+                      }
+                      openInNewTab(openTabs, navigate, tab, `/lab/${activeCategory}/${record.recordId}`)
                     }}
                   >
                     <div className="lab-entity-card__type-badge">

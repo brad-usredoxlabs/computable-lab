@@ -67,6 +67,10 @@ export function SourceIntakePanel({ onSourceLoaded }: SourceIntakePanelProps) {
         setUrlError('URL must start with http:// or https://')
         return false
       }
+      if (!url.toLowerCase().trim().endsWith('.pdf')) {
+        setUrlError('URL must end with .pdf')
+        return false
+      }
       setUrlError('')
       return true
     } catch {
@@ -114,6 +118,13 @@ export function SourceIntakePanel({ onSourceLoaded }: SourceIntakePanelProps) {
   const handlePasteSubmit = useCallback(() => {
     setExtractError('')
     if (!pastedText.trim()) return
+    
+    const MIN_CHARS = 100
+    if (pastedText.trim().length < MIN_CHARS) {
+      setExtractError(`Please paste at least ${MIN_CHARS} characters for reliable extraction. You pasted ${pastedText.trim().length} characters.`)
+      return
+    }
+    
     const s = buildSummary(pastedText)
     setSummary(s)
     actions.setSourceText(pastedText)

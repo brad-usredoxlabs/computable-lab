@@ -64,6 +64,13 @@ function renderSection(onIngested = vi.fn()) {
   }
 }
 
+function renderSectionNoStudy(onIngested = vi.fn()) {
+  return {
+    onIngested,
+    ...render(<VendorPdfSearchSection onIngested={onIngested} />),
+  }
+}
+
 describe('VendorPdfSearchSection', () => {
   it('runs a search and renders rows', async () => {
     searchMock.mockResolvedValue({ items: sampleResults, configured: true, query: 'ultra', vendors: [] })
@@ -116,6 +123,29 @@ describe('VendorPdfSearchSection', () => {
     expect(
       screen.getByTestId('vendor-pdf-ingest-success').textContent,
     ).toContain('ART-ABCDEF123456')
+  })
+
+  it('omits studyId from the ingest call when not provided (free-floating)', async () => {
+    searchMock.mockResolvedValue({ items: sampleResults, configured: true, query: 'ultra', vendors: [] })
+    ingestMock.mockResolvedValue({
+      sourcePdf: {},
+      sourceProtocolCandidate: {},
+      extraction: {},
+      recordedArtifact: { recordId: 'VPDF-ABCDEF123456', extractedTextPageCount: 1 },
+    })
+    renderSectionNoStudy()
+    fireEvent.change(screen.getByTestId('vendor-pdf-search-input'), {
+      target: { value: 'ultra' },
+    })
+    fireEvent.click(screen.getByTestId('vendor-pdf-search-submit'))
+    await waitFor(() =>
+      expect(screen.getByText('NEBNext Ultra II')).toBeTruthy(),
+    )
+    fireEvent.click(screen.getByText('NEBNext Ultra II'))
+    await waitFor(() => expect(ingestMock).toHaveBeenCalled())
+    const ingestArgs = ingestMock.mock.calls[0][0]
+    expect(ingestArgs).not.toHaveProperty('studyId')
+    expect(ingestArgs.url).toBe('https://neb.example/ultra.pdf')
   })
 
   it('surfaces an inline warning when the server returns no recordedArtifact', async () => {

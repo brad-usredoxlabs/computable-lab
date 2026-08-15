@@ -269,7 +269,7 @@ function buildEvidenceCitationsFromComment(
 ): EvidenceCitation[] {
   const citations: EvidenceCitation[] = [];
 
-  for (const anchor of comment.anchors) {
+  for (const anchor of comment.anchors ?? []) {
     if (anchor.kind === 'source') {
       citations.push({
         sourceRef: anchor.documentRef,
@@ -342,7 +342,7 @@ function generateUserCards(
     });
 
     // Extract graph anchor from node anchors
-    const nodeAnchor = comment.anchors.find((a) => a.kind === 'node');
+    const nodeAnchor = comment.anchors?.find((a) => a.kind === 'node');
 
     const card: IssueCard = {
       id: generateIssueCardId(),

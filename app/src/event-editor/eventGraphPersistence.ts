@@ -53,6 +53,13 @@ export interface PersistAcceptedEventGraphInput {
   placements: EventEditorPlacement[]
   platformId?: string
   variantId?: string
+  /**
+   * Optional last AI-thread user message that produced this committed graph.
+   * When present, a best-effort (fire-and-forget, never awaited) corpus POST is
+   * triggered after the durable save succeeds — one anonymized event-editor
+   * training pair for the moat. Omitting it skips the corpus seam entirely.
+   */
+  corpusUserPrompt?: string
 }
 
 interface LoadEventGraphResult {
@@ -86,6 +93,8 @@ type EnsureRunDeckLockFn = (
 type LoadEventGraphFn = (eventGraphId: string) => Promise<LoadEventGraphResult>
 type GetRecordFn = typeof apiClient.getRecord
 type UpdateRecordFn = typeof apiClient.updateRecord
+
+type CorpusSaveFn = typeof apiClient.saveCorpusEntry
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
@@ -254,6 +263,7 @@ export async function persistAcceptedEventGraph(
   input: PersistAcceptedEventGraphInput,
   saveEventGraph: SaveEventGraphFn = apiClient.saveEventGraph,
   ensureDeckLock: EnsureRunDeckLockFn = ensureRunDeckLock,
+  corpusSave: CorpusSaveFn = apiClient.saveCorpusEntry,
 ): Promise<PersistAcceptedEventGraphResult> {
   try {
     await ensureDeckLock(input)
@@ -264,9 +274,48 @@ export async function persistAcceptedEventGraph(
   const payload = buildAcceptedEventGraphPayload(input)
   const result = await saveEventGraph(input.eventGraphId, payload)
   assertSavedEventGraphValid(result)
+
+  // Auto-capture seam: once the durable save succeeds, fire-and-forget ONE
+  // anonymized (prompt → accepted graph) pair to the corpus (best-effort; never
+  // block the app save, never await). Only when the caller supplied the prompt
+  // that produced this committed graph. NEVER posts the preview ghost — this is
+  // the persisted/committed graph.
+  if (input.corpusUserPrompt && input.corpusUserPrompt.trim().length > 0) {
+    const committedGraph = {
+      events: input.events as unknown as Record<string, unknown>[],
+      labwares: Object.values(input.labwares) as unknown as Record<string, unknown>[],
+    }
+    const entry = {
+      source: 'event-editor' as const,
+      sourceType: 'app' as const,
+      prompt: { user: input.corpusUserPrompt },
+      acceptedGraph: commitSnapshotToPlain(committedGraph),
+      confirmedBy: 'accepted-EVG' as const,
+    }
+    void corpusSave(entry).then((res) => {
+      if (!res.ok && res.error !== 'corpus.disabled') {
+        console.warn('corpus:not-posted', res.error)
+      }
+    })
+  }
+
   return {
     eventGraphId: extractSavedEventGraphId(result, input.eventGraphId),
     ...(result.commit ? { commit: result.commit } : {}),
+  }
+}
+
+/**
+ * Deep-copy a committed graph into plain JSON-safe objects so the corpus seam
+ * never shares a live reference with the editor state.
+ */
+function commitSnapshotToPlain(graph: {
+  events: Record<string, unknown>[]
+  labwares: Record<string, unknown>[]
+}): Record<string, unknown> {
+  return {
+    events: graph.events.map((e) => ({ ...e })),
+    labwares: graph.labwares.map((w) => ({ ...w })),
   }
 }
 

@@ -62,6 +62,11 @@ export function PreviewActionBar() {
         labwares: { ...state.labwares, ...activePreview.previewLabwares },
         placements: [...state.placements, ...activePreview.previewPlacements],
         ...(state.runId ? { platformId: state.platformId, variantId: state.variantId } : {}),
+        // Auto-capture seam: only when the preview was produced by an AI prompt
+        // (the common case) do we POST one corpus pair on the durable save.
+        ...(activePreview.sourcePrompt
+          ? { corpusUserPrompt: activePreview.sourcePrompt }
+          : {}),
       })
       actions.commitPreview(acceptedEvents, persisted.eventGraphId, persisted.commit)
       if (workspace) {

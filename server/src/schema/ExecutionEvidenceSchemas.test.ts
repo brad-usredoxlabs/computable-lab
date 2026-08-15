@@ -94,6 +94,7 @@ describe('Execution evidence schemas', () => {
         plannedRunRef: ref('planned-run', 'PLR-000001'),
         robotPlanRef: ref('robot-plan', 'RPL-000001'),
         deviationType: 'remediation',
+        severity: 'minor',
         status: 'accepted',
         compiledIntent: {
           stepId: 'step-1',

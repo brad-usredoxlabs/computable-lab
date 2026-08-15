@@ -103,7 +103,7 @@ function ProtocolRoleListWidget({ value, readOnly, onCommit, label, allowedKey, 
         </span>
       )}
       {!readOnly && (
-        <div className="taptab-protocol-add">
+        <div className="taptab-protocol-add" contentEditable={false}>
           <ProtocolMentionEditor
             value={newRole}
             placeholder={`Add ${addRoleLabel(label)}`}
@@ -124,7 +124,7 @@ function ProtocolRoleListWidget({ value, readOnly, onCommit, label, allowedKey, 
               newRoleMentions.current = mentions
             }}
           />
-          <button ref={addButtonRef} type="button" onFocus={removeSlashMenuRoots} onClick={addRole}>Add</button>
+          <button ref={addButtonRef} type="button" className="taptab-protocol-add-btn" tabIndex={0} contentEditable={false} onFocus={removeSlashMenuRoots} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); addRole(); }}>Add</button>
         </div>
       )}
     </div>
@@ -178,7 +178,7 @@ export function ProtocolStepRolesWidget({ value, readOnly, onCommit, onRecordPat
         </ol>
       )}
       {!readOnly && (
-        <div className="taptab-protocol-add taptab-protocol-add-step">
+        <div className="taptab-protocol-add taptab-protocol-add-step" contentEditable={false}>
           <ProtocolMentionEditor
             value={newStep}
             className="taptab-protocol-step-editor"
@@ -193,7 +193,7 @@ export function ProtocolStepRolesWidget({ value, readOnly, onCommit, onRecordPat
               newStepMentions.current = mentions
             }}
           />
-          <button type="button" onClick={addStep}>Add</button>
+          <button type="button" className="taptab-protocol-add-btn" tabIndex={0} contentEditable={false} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); addStep(); }}>Add</button>
         </div>
       )}
     </div>

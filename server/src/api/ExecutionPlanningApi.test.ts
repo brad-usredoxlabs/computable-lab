@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { createServer, initializeApp } from '../server.js';
 import type { AppContext } from '../server.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 const eventGraphSchema = `
 $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -96,6 +97,7 @@ describe('Execution Planning API', () => {
     await writeFile(resolve(testDir, 'schema/execution-plan.schema.yaml'), executionPlanSchema);
     await writeFile(resolve(testDir, 'schema/robot-plan.schema.yaml'), robotPlanSchema);
 
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

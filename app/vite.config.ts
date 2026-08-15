@@ -81,6 +81,17 @@ export default defineConfig({
     watch: {
       ignored: ['!**/node_modules/@cla-lab/ai-overlay-appliance/**'],
     },
+    host: true,
+    port: 5174,
+    allowedHosts: ['computable', 'appliance-01', 'appliance-2', '.ts.net'],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        timeout: 15 * 60 * 1000,
+        proxyTimeout: 15 * 60 * 1000,
+      },
+    },
   },
   optimizeDeps: {
     // The AI overlay imports `@cla-lab-host/*` (CL source) through the alias
@@ -163,22 +174,6 @@ export default defineConfig({
       },
     }),
   ],
-  server: {
-    host: true,
-    port: 5174,
-    // Same allowlist as `preview` below so dev mode is reachable over the
-    // LAN / tailnet (bare hostnames and *.ts.net MagicDNS FQDNs).
-    allowedHosts: ['computable', 'appliance-01', 'appliance-2', '.ts.net'],
-    proxy: {
-      // Proxy all API routes to the backend server
-      '/api': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-        timeout: 15 * 60 * 1000,
-        proxyTimeout: 15 * 60 * 1000,
-      },
-    },
-  },
   // `vite preview` is what the appliance's cla-lab-frontend systemd unit
   // runs. Vite 5 blocks unknown Host headers unless explicitly allowed —
   // listing the appliance hostname here lets browsers reach the kiosk over

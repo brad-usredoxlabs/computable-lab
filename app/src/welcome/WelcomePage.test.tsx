@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom'
 import { ThemeProvider } from '../shared/shell'
+import { OpenTabsProvider } from '../shared/shell/OpenTabsContext'
 import {
   clearOpenStudies,
   openStudy,
@@ -45,20 +46,22 @@ function LocationRecorder() {
 function renderWelcome() {
   return render(
     <ThemeProvider>
-      <MemoryRouter initialEntries={['/']}>
-        <Routes>
-          <Route
-            path="/"
-            element={
-              <>
-                <WelcomePage />
-                <LocationRecorder />
-              </>
-            }
-          />
-          <Route path="/project/:studyId" element={<LocationRecorder />} />
-        </Routes>
-      </MemoryRouter>
+      <OpenTabsProvider>
+        <MemoryRouter initialEntries={['/']}>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                <>
+                  <WelcomePage />
+                  <LocationRecorder />
+                </>
+              }
+            />
+            <Route path="/project/:studyId" element={<LocationRecorder />} />
+          </Routes>
+        </MemoryRouter>
+      </OpenTabsProvider>
     </ThemeProvider>,
   )
 }

@@ -27,6 +27,7 @@ describe('ProtocolPhasesSchema', () => {
     const schemaRoot = join(process.cwd(), '..', 'schema');
     const paths = [
       'workflow/protocol.schema.yaml',
+      'workflow/setting.schema.yaml',
       'core/common.schema.yaml',
       'core/datatypes/ref.schema.yaml',
     ];
@@ -75,6 +76,8 @@ describe('ProtocolPhasesSchema', () => {
         steps: [
           {
             stepId: 'step-001',
+            label: 'Add dye',
+            ordinal: 1,
             kind: 'add_material',
             phaseId: 'prep',
             target: { labwareRole: 'plate' },
@@ -84,6 +87,8 @@ describe('ProtocolPhasesSchema', () => {
           },
           {
             stepId: 'step-002',
+            label: 'Incubate plate',
+            ordinal: 2,
             kind: 'incubate',
             phaseId: 'treatment',
             target: { labwareRole: 'plate' },
@@ -92,6 +97,8 @@ describe('ProtocolPhasesSchema', () => {
           },
           {
             stepId: 'step-003',
+            label: 'Read fluorescence',
+            ordinal: 3,
             kind: 'read',
             phaseId: 'readout',
             target: { labwareRole: 'plate' },
@@ -125,6 +132,8 @@ describe('ProtocolPhasesSchema', () => {
         steps: [
           {
             stepId: 'step-001',
+            label: 'Add dye',
+            ordinal: 1,
             kind: 'add_material',
             target: { labwareRole: 'plate' },
             wells: { kind: 'all' },
@@ -133,6 +142,8 @@ describe('ProtocolPhasesSchema', () => {
           },
           {
             stepId: 'step-002',
+            label: 'Transfer',
+            ordinal: 2,
             kind: 'transfer',
             source: { labwareRole: 'source_plate', wells: { kind: 'all' } },
             target: { labwareRole: 'dest_plate', wells: { kind: 'all' } },
@@ -168,6 +179,8 @@ describe('ProtocolPhasesSchema', () => {
         steps: [
           {
             stepId: 'step-001',
+            label: 'Add dye',
+            ordinal: 1,
             kind: 'add_material',
             target: { labwareRole: 'plate' },
             wells: { kind: 'all' },
@@ -202,6 +215,8 @@ describe('ProtocolPhasesSchema', () => {
         steps: [
           {
             stepId: 'step-001',
+            label: 'Add dye',
+            ordinal: 1,
             kind: 'add_material',
             target: { labwareRole: 'plate' },
             wells: { kind: 'all' },
@@ -236,6 +251,8 @@ describe('ProtocolPhasesSchema', () => {
         steps: [
           {
             stepId: 'step-001',
+            label: 'Add dye',
+            ordinal: 1,
             kind: 'add_material',
             phaseId: 'Bad ID',
             target: { labwareRole: 'plate' },

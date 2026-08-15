@@ -328,6 +328,55 @@ export function createProtocolHandlers(ctx: AppContext) {
     },
 
     /**
+     * POST /extraction/vendor-pdfs/:vendorPdfId/draft
+     * Create an extraction-draft from a first-class vendor-pdf record.
+     * Reuses (or re-extracts) the vendor-pdf's ProtocolCandidate, maps it
+     * into a universal-protocol-shaped candidate draft, and wraps it in
+     * an extraction-draft so the existing review/promote flow completes it.
+     */
+    async createVendorPdfDraft(
+      request: FastifyRequest<{
+        Params: { vendorPdfId: string };
+        Body: {
+          regenerate?: boolean;
+          title?: string;
+        };
+      }>,
+      reply: FastifyReply,
+    ): Promise<{ success: boolean; draftId?: string; candidateCount?: number } | ApiError> {
+      const vendorPdfId = request.params.vendorPdfId;
+      if (!vendorPdfId || vendorPdfId.trim().length === 0) {
+        reply.status(400);
+        return { error: 'BAD_REQUEST', message: 'vendorPdfId is required' };
+      }
+
+      try {
+        const body = request.body ?? {};
+        const { recordId, draft } = await extraction.createDraftFromVendorPdf({
+          vendorPdfId,
+          ...(body.regenerate !== undefined ? { regenerate: body.regenerate } : {}),
+          ...(body.title !== undefined ? { title: body.title } : {}),
+        });
+        reply.status(201);
+        return {
+          success: true,
+          draftId: recordId,
+          candidateCount: draft.candidates.length,
+        };
+      } catch (err) {
+        if (err instanceof ProtocolExtractionError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
      * POST /protocols/:id/authoring-session
      * Link a canonical protocol to a Protocol IDE-style authoring sidecar.
      */

@@ -5,6 +5,7 @@ import { initializeApp } from '../server.js';
 import type { AppContext } from '../server.js';
 import { MeasurementActiveControlService } from './MeasurementActiveControlService.js';
 import { LABOS_BRIDGE_CONTRACT_VERSION } from '../execution/sidecar/BridgeContracts.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 const measurementSchema = `
 $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -49,6 +50,7 @@ describe('MeasurementActiveControlService', () => {
         '',
       ].join('\n'),
     );
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

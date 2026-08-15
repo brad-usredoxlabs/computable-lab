@@ -4,6 +4,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { initializeApp } from '../server.js';
 import type { AppContext } from '../server.js';
 import { ExecutionTaskService } from './ExecutionTaskService.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 const robotPlanSchema = `
 $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -82,6 +83,7 @@ describe('ExecutionTaskService', () => {
     await writeFile(resolve(testDir, 'schema/execution-task.schema.yaml'), executionTaskSchema);
     await writeFile(resolve(testDir, 'schema/instrument-log.schema.yaml'), instrumentLogSchema);
 
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

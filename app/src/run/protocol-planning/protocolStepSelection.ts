@@ -44,6 +44,35 @@ export function buildStepLocalizePrompt(
 }
 
 /**
+ * Compose the FULL step-localization prompt from editable surfaces.
+ * Pure prompt composition — no side effects. The editable title falls back to
+ * the step's label when empty; the full text and instruction are optional.
+ */
+export interface FullLocalizeInput {
+  step: { stepId: string; label: string }
+  /** User-edited step title (may be empty → falls back to step.label). */
+  titleText?: string
+  /** User-edited full step text (may be empty → omitted). */
+  fullText?: string
+  /** How-to-do-this-step instruction (may be empty → omitted). */
+  instruction?: string
+}
+
+export function composeFullLocalizePrompt(input: FullLocalizeInput): string {
+  const { step, titleText, fullText, instruction } = input
+  const title = (titleText ?? '').trim() || step.label
+  const fullTextLine = (fullText ?? '').trim() ? `Full step text: "${fullText!.trim()}"` : null
+  const instructionLine = (instruction ?? '').trim() ? `User instruction: "${instruction!.trim()}"` : null
+  const lines: string[] = [
+    `Localize step ${step.stepId} ("${title}") for THIS lab's instruments and labware.`,
+    ...(fullTextLine ? [fullTextLine] : []),
+    ...(instructionLine ? [instructionLine] : []),
+    "Draft/ghost this step's events onto the current event graph so I can review them on the deck.",
+  ]
+  return lines.filter(Boolean).join('\n\n')
+}
+
+/**
  * Dispatch a `protocol-step-selection` event. `dispatchFn` is injectable for
  * tests (defaults to `window.dispatchEvent`).
  */

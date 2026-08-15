@@ -495,4 +495,3 @@ $defs:
         type: string
       equipmentRef:
         $ref: "./datatypes/ref.schema.yaml"
-        minimum: 0

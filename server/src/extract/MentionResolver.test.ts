@@ -1,4 +1,4 @@
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect } from 'vitest';
 import {
   resolveMention,
   resolveMentions,
@@ -713,7 +713,6 @@ describe('resolveMentions', () => {
       expect(result.status).toBe('unresolved');
     });
   });
-});
 
   describe('Mixed resolution results', () => {
     it('handles a mix of resolved and unresolved mentions', () => {

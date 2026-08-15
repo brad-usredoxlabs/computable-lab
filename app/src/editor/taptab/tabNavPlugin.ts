@@ -105,6 +105,15 @@ export function createTabNavPlugin(): Plugin {
           return false;
         }
 
+        // If focus is on an interactive button (Add button, etc.), let native
+        // browser Tab navigation handle it — don't intercept. This allows
+        // Tab to cycle between Add buttons and other focusable elements
+        // naturally, instead of forcing focus back into the editor fields.
+        const activeEl = view.dom.ownerDocument.activeElement;
+        if (activeEl && activeEl.closest('.taptab-protocol-add-btn')) {
+          return false;
+        }
+
         // Prevent default browser behavior
         event.preventDefault();
 
@@ -116,8 +125,7 @@ export function createTabNavPlugin(): Plugin {
           return true;
         }
 
-        const activeElement = view.dom.ownerDocument.activeElement;
-        const currentIndex = fieldRows.findIndex((el) => el.contains(activeElement));
+        const currentIndex = fieldRows.findIndex((el) => el.contains(activeEl));
 
         const backwards = event.shiftKey;
         const target =

@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { initializeApp } from '../server.js';
 import type { AppContext } from '../server.js';
 import { ExecutionTimelineService } from './ExecutionTimelineService.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 describe('ExecutionTimelineService', () => {
   const testDir = resolve(process.cwd(), 'tmp/execution-timeline-service-test');
@@ -12,6 +13,7 @@ describe('ExecutionTimelineService', () => {
   beforeAll(async () => {
     await mkdir(resolve(testDir, 'schema'), { recursive: true });
     await mkdir(resolve(testDir, 'records'), { recursive: true });
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

@@ -67,6 +67,7 @@ import type { ArtifactBlobHandlers } from './handlers/ArtifactBlobHandlers.js';
 import { getLabwareDefinitionRegistry } from '../registry/LabwareDefinitionRegistry.js';
 import type { PredicatesHandlers } from './handlers/PredicatesHandlers.js';
 import type { ProtocolPromotionHandlers } from './handlers/ProtocolPromotionHandlers.js';
+import type { CorpusHandlers } from './handlers/CorpusHandlers.js';
 import type { HealthResponse } from './types.js';
 
 /**
@@ -106,6 +107,7 @@ export interface RouteOptions {
   extractProtocolHandlers?: ExtractProtocolHandlers;
   protocolBuilderHandlers?: ProtocolBuilderHandlers;
   protocolPromotionHandlers?: ProtocolPromotionHandlers;
+  corpusHandlers?: CorpusHandlers;
   checkinHandlers?: CheckinHandlers;
   platformHandlers?: PlatformHandlers;
   labSettingsHandlers?: LabSettingsHandlers;
@@ -1087,5 +1089,16 @@ export function registerRoutes(
       '/studies/:studyId/artifacts/:artifactId/blob',
       artifactBlobHandlers.getArtifactBlob,
     );
+  }
+
+  // ============================================================================
+  // Corpus Service bridge (THE MOAT) — optional - requires corpusHandlers
+  // The SPA cannot reach the appliance-local corpus service directly; this
+  // endpoint is the server-side proxy. Best-effort, never throws.
+  // ============================================================================
+
+  const { corpusHandlers } = options;
+  if (corpusHandlers) {
+    fastify.post('/corpus/entries', corpusHandlers.saveCorpusEntry.bind(corpusHandlers));
   }
 }

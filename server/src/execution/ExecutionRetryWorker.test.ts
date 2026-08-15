@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { initializeApp } from '../server.js';
 import type { AppContext } from '../server.js';
 import { ExecutionRetryWorker } from './ExecutionRetryWorker.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 const plannedRunSchema = `
 $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -92,6 +93,7 @@ describe('ExecutionRetryWorker', () => {
     await writeFile(resolve(testDir, 'schema/execution-run.schema.yaml'), executionRunSchema);
     await writeFile(resolve(testDir, 'schema/instrument-log.schema.yaml'), instrumentLogSchema);
     await writeFile(resolve(testDir, 'records/robot-artifact/integra_assist/RP-000001.xml'), '<VialabProtocol id="RP-000001" />');
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

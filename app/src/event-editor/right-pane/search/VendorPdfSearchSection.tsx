@@ -15,11 +15,18 @@
 import { useCallback, useState } from 'react'
 import { apiClient } from '../../../shared/api/client'
 import type { GraphLemurPdfSearchResult } from '../../../shared/api/client'
+import './search.css'
 
 type VendorPdfResult = GraphLemurPdfSearchResult
 
 export interface VendorPdfSearchSectionProps {
-  studyId: string
+  /**
+   * Optional parent study. When provided, the ingest call supplies it and the
+   * server records `links.studyId` on the first-class vendor-pdf (in-study
+   * "+ Add source" context). When omitted (standalone / Ingestion workflow),
+   * the PDF is ingested as a free-floating first-class vendor-pdf record.
+   */
+  studyId?: string
   /**
    * Called after the server confirms the artifact was written. The
    * second arg carries enough metadata that callers can show a chip /
@@ -84,7 +91,7 @@ export function VendorPdfSearchSection({
           url: result.url,
           ...(result.title ? { title: result.title } : {}),
           ...(result.vendor ? { vendor: result.vendor } : {}),
-          studyId,
+          ...(studyId ? { studyId } : {}),
           query,
         })
         // The vendor blocked the binary download and the server fell back to
@@ -113,11 +120,11 @@ export function VendorPdfSearchSection({
             onBuildProtocol?.(response.recordedArtifact.recordId, info)
           }
         } else {
-          // Server didn't write a record — most likely the studyId wasn't
-          // accepted (e.g. workspace root not configured). Surface so the
-          // user knows the chip isn't durable.
+          // Server didn't write a record — most likely the workspace root
+          // isn't configured (no store). Surface so the user knows the PDF
+          // wasn't persisted as a durable first-class record.
           setIngestError(
-            'Ingested in legacy chat-draft mode — no durable artifact written. Check server workspace config.',
+            'Ingested but no durable record was written — check that the server workspace is configured.',
           )
         }
       } catch (err) {

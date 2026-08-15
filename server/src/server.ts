@@ -83,6 +83,7 @@ import { createHumanStepsHandlers, type HumanStepsHandlers } from './api/handler
 import { createProtocolIdeHandlers } from './api/handlers/ProtocolIdeHandlers.js';
 import { createPlannedRunHandlers } from './api/handlers/PlannedRunHandlers.js';
 import { createAiThreadHandlers } from './api/handlers/AiThreadHandlers.js';
+import { createCorpusHandlers } from './api/handlers/CorpusHandlers.js';
 import { AiThreadStore } from './ai-threads/index.js';
 import { JsonLdIndex } from './jsonld-index/index.js';
 import { JsonLdProjector } from './jsonld/JsonLdProjector.js';
@@ -1103,6 +1104,14 @@ export async function createServer(
   // wizard. Tolerant of a missing registry; handler returns 503 in that case.
   const predicatesHandlers = createPredicatesHandlers(ctx.predicateRegistry);
 
+  // Best-effort bridge to the cl-appliance Corpus Service (THE MOAT). Reads
+  // corpus config live per-request so enabling via env/config takes effect
+  // without a restart. Always mounted; the handler itself returns
+  // {ok:false,error:'corpus.disabled'} when disabled.
+  const corpusHandlers = createCorpusHandlers({
+    getAppConfig: () => ctx.appConfig,
+  });
+
   // Per-study workspace state — sidecar YAML at
   // records/studies/<id>/workspace.yaml. Carries UI shape (open tabs,
   // pane widths, right-pane mode), not scientific data.
@@ -1167,6 +1176,7 @@ export async function createServer(
       predicatesHandlers,
       workspaceHandlers,
       artifactBlobHandlers,
+      corpusHandlers,
       schemaCount: () => ctx.schemaRegistry.size,
       ruleCount: () => ctx.lintEngine.ruleCount,
       uiSpecCount: () => ctx.uiSpecLoader.size(),

@@ -340,17 +340,42 @@ export interface ExecutionState {
 }
 
 /**
- * Deviation data for inline tracking
+ * Deviation data for inline tracking.
+ *
+ * Captures a single field-level deviation with full provenance:
+ * which field changed, what it was, what it became, why, and who recorded it.
  */
 export interface DeviationData {
-  code: string
-  message: string
+  /** Unique identifier for this deviation record */
+  eventId: string
+  /** The field/parameter that changed (e.g., 'temperature', 'duration', 'volume') */
+  field: string
+  /** The value before the deviation */
+  originalValue: unknown
+  /** The value after the deviation */
+  newValue: unknown
+  /** Human-readable explanation of why the deviation occurred */
+  reason: string
+  /** Who or what system recorded this deviation (provenance) */
+  recordedBy: string
+  /** ISO 8601 timestamp when the deviation was recorded */
+  recordedAt: string
+  /** Category of deviation — measurement dimensions */
+  deviationType: 'timing' | 'volume' | 'temperature' | 'concentration' | 'operator' | 'system' | 'environmental' | 'inserted'
+  /** Severity level of the deviation */
   severity: 'info' | 'warning' | 'error'
+  /** Machine-readable deviation code */
+  code: string
+  /** Short human-readable message */
+  message: string
+  /** Original reporter (may differ from recorder if relayed) */
   reportedBy: string
+  /** When the deviation was first reported */
   reportedAt: string
+  /** Expected value per protocol specification */
   expectedValue?: unknown
+  /** Actual observed value (for multi-step deviations where newValue differs from actual) */
   actualValue?: unknown
-  deviationType?: 'operator' | 'system' | 'environmental' | 'inserted'
 }
 
 /**

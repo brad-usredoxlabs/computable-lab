@@ -6,6 +6,7 @@ export const KIND_TO_LAB_CATEGORY: Record<string, string> = {
   equipment: 'equipment', instrument: 'equipment', 'calibration-record': 'equipment',
   person: 'people',
   document: 'documents',
+  'vendor-pdf': 'vendor-pdfs',
 }
 
 /** Map a record `kind` to a human type label. */
@@ -16,6 +17,7 @@ export const KIND_LABEL: Record<string, string> = {
   labware: 'Labware', 'labware-instance': 'Labware Instance',
   equipment: 'Equipment', instrument: 'Instrument', 'calibration-record': 'Calibration',
   person: 'Person', document: 'Document', relationship: 'Relationship',
+  'vendor-pdf': 'Vendor PDF',
 }
 
 /** Entity-type buckets for search grouping / color coding. */

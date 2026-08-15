@@ -341,6 +341,18 @@
   min-width: 0;
 }
 
+/* Single-pane workspace (no right pane, e.g. /splash): no resizable panels —
+   let the lone left pane fill the whole surface. react-resizable-panels is
+   skipped for this shape, so we supply the flex layout explicitly. */
+.cl-app--workspace .cl-workspace__panels--single {
+  display: flex;
+  flex-direction: column;
+}
+
+.cl-app--workspace .cl-workspace__panels--single > .cl-workspace__pane {
+  flex: 1 1 auto;
+}
+
 .cl-app--workspace .cl-workspace__pane {
   display: flex;
   flex-direction: column;
@@ -440,5 +452,89 @@
       max-height: 100dvh;
     }
   }
+}
+
+/* ---- Mobile / narrow viewport -------------------------------- */
+/* Compact the workspace toolbar so the miniaturized deck/vocab controls sit
+   as a slim strip at the top rather than a full-size row. */
+@media (max-width: 768px) {
+  .cl-app--workspace .cl-workspace__toolbar {
+    min-height: 0;
+    padding: 3px 8px;
+    gap: 4px;
+  }
+}
+
+/* Mobile drawer — the tabbed right pane slides in/out from the right edge.
+   Only rendered in the isMobile branch of WorkspaceMain. When docked it sits
+   ~90% off-screen; its revealed edge stays tappable to pull it into place. */
+.cl-app--workspace .cl-workspace__drawer-stage {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cl-app--workspace .cl-workspace__pane--main {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.cl-app--workspace .cl-workspace__drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 88%;
+  max-width: 480px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  background: var(--cl-bg-elev);
+  border-left: 1px solid var(--cl-border);
+  box-shadow: -6px 0 20px rgba(0, 0, 0, 0.18);
+  transform: translateX(90%);
+  transition: transform 220ms ease;
+}
+
+.cl-app--workspace .cl-workspace__drawer--open {
+  transform: translateX(0);
+}
+
+.cl-app--workspace .cl-workspace__drawer-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* Revealed edge / pull handle — a vertical tab at the drawer's left edge.
+   When docked (~90% off-screen) this stays visible against the right of the
+   main pane so the user can tap it to slide the panel in; tapping the main
+   pane slides it back out. */
+.cl-app--workspace .cl-workspace__drawer-peek {
+  position: absolute;
+  left: -18px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 36px;
+  height: 72px;
+  border: 1px solid var(--cl-border);
+  border-left: none;
+  background: var(--cl-bg-elev-2);
+  border-radius: 0 10px 10px 0;
+  cursor: pointer;
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cl-text-dim);
+}
+
+.cl-app--workspace .cl-workspace__drawer-peek::after {
+  content: '‹';
+  font-size: 20px;
+  line-height: 1;
 }
 

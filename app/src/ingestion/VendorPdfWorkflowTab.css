@@ -1,0 +1,87 @@
+.vendor-pdf-workflow {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.vendor-pdf-workflow__recent {
+  padding-top: 0.5rem;
+}
+
+.vendor-pdf-workflow__heading {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.vendor-pdf-workflow__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.vendor-pdf-workflow__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--cl-border, #ddd);
+  border-radius: 8px;
+}
+
+.vendor-pdf-workflow__item-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.vendor-pdf-workflow__item-title {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vendor-pdf-workflow__item-meta {
+  font-size: 0.8rem;
+  color: var(--cl-text-muted, #666);
+}
+
+.vendor-pdf-workflow__item-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.vendor-pdf-workflow__item-btn {
+  appearance: none;
+  border: 1px solid var(--cl-border, #ddd);
+  background: transparent;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.vendor-pdf-workflow__item-btn:hover {
+  border-color: var(--cl-accent, #2563eb);
+  color: var(--cl-accent, #2563eb);
+}
+
+.vendor-pdf-workflow__item-btn--primary {
+  border-color: var(--cl-accent, #2563eb);
+  color: var(--cl-accent, #2563eb);
+  font-weight: 600;
+}
+
+.vendor-pdf-workflow__item-btn--primary:hover:not(:disabled) {
+  background: var(--cl-accent, #2563eb);
+  color: #fff;
+}
+
+.vendor-pdf-workflow__error,
+.vendor-pdf-workflow__hint {
+  color: var(--cl-text-muted, #666);
+  font-size: 0.9rem;
+}

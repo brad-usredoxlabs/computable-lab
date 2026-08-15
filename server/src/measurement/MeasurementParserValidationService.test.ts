@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { initializeApp } from '../server.js';
 import type { AppContext } from '../server.js';
 import { MeasurementParserValidationService } from './MeasurementParserValidationService.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 describe('MeasurementParserValidationService', () => {
   const testDir = resolve(process.cwd(), 'tmp/measurement-parser-validation-service-test');
@@ -21,6 +22,7 @@ describe('MeasurementParserValidationService', () => {
         '',
       ].join('\n'),
     );
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

@@ -69,6 +69,7 @@ const RECORD_ID_PATTERNS = [
   /^TML-\d+$/,      // Timeline
   /^WCX-\d+$/,      // Well Context
   /^ART-\d+$/,      // Artifact (study-scoped supporting record)
+  /^VPDF-[A-Z0-9][A-Z0-9_-]*$/,  // Vendor PDF
   /^[\w]+-[\w-]+$/, // Generic pattern (prefix-identifier)
 ];
 
@@ -78,7 +79,7 @@ const RECORD_ID_PATTERNS = [
  * @param text - Text to slugify
  * @returns URL-safe slug
  */
-function slugify(text: string): string {
+export function slugify(text: string): string {
   return text
     .toLowerCase()
     .trim()

@@ -3,17 +3,30 @@ import type { RecordEnvelope } from '../types/RecordEnvelope.js';
 import { extractAddMaterialVolume, normalizeRef, resolveAddMaterialRef } from '../materials/AddMaterialSupport.js';
 import { defaultCanonicalVerbForStepKind } from '../workflow/verbs/protocolVerbRegistry.js';
 import { runPromotionCompile } from '../compiler/pipeline/PromotionCompileRunner.js';
+import { readFile, access } from 'node:fs/promises';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { ProtocolCandidate, ProtocolStepCandidate, ExtractedCandidateItem } from '../ingestion/vendor-protocol/types.js';
+import { extractVendorProtocolCandidateFromInput } from '../ingestion/vendor-protocol/VendorProtocolCandidateService.js';
 
 const PROTOCOL_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml';
 
 // Use an absolute path that works both in development and test environments
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 // From server/src/protocol/ProtocolExtractionService.ts, go up to server/, then to root, then to schema/
 const PROMOTION_COMPILE_PIPELINE_PATH = join(__dirname, '../../../schema/registry/compile-pipelines/promotion-compile.yaml');
+
+/**
+ * Sanitize a document ID into a filesystem-safe filename.
+ * Mirrors safeFileName from VendorProtocolCandidateService.
+ */
+function safeFileName(value: string): string {
+  return value
+    .replace(/[^A-Za-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 100) || 'vendor-protocol-candidate';
+}
 
 type EventGraphEvent = {
   eventId?: unknown;
@@ -658,5 +671,392 @@ export class ProtocolExtractionService {
       recordId: canonicalRecordId,
       envelope: canonicalEnvelope,
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Vendor-PDF → extraction-draft bridge
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Create an extraction-draft from a first-class vendor-pdf record.
+   *
+   * Loads the vendor-pdf, obtains its ProtocolCandidate (either from the
+   * persisted candidate JSON artifact or by re-extracting from extractedText),
+   * maps the candidate into a universal-protocol-shaped draft, and persists
+   * an extraction-draft so the existing review/promote flow can complete it.
+   *
+   * @param input - vendor-pdf id, optional regenerate flag, and optional title
+   * @returns The recordId and draft of the created extraction-draft
+   */
+  async createDraftFromVendorPdf(input: {
+    vendorPdfId: string;
+    regenerate?: boolean;
+    title?: string;
+  }): Promise<{ recordId: string; draft: ProtocolExtractionDraft }> {
+    if (typeof input.vendorPdfId !== 'string' || input.vendorPdfId.trim().length === 0) {
+      throw new ProtocolExtractionError('BAD_REQUEST', 'vendorPdfId is required', 400);
+    }
+
+    const vendorPdfId = input.vendorPdfId.trim();
+
+    // 1. Load the vendor-pdf record
+    const vendorPdfEnvelope = await this.ctx.store.get(vendorPdfId);
+    if (!vendorPdfEnvelope) {
+      throw new ProtocolExtractionError('NOT_FOUND', `Vendor PDF not found: ${vendorPdfId}`, 404);
+    }
+
+    const vendorPdfPayload = vendorPdfEnvelope.payload as Record<string, unknown>;
+
+    // 2. Determine documentId
+    const vpcRef = vendorPdfPayload.vendorProtocolCandidateRef as { kind?: string; type?: string; id?: string } | undefined;
+    const documentId = typeof vpcRef?.id === 'string' && vpcRef.id.trim().length > 0
+      ? vpcRef.id.trim()
+      : vendorPdfId;
+
+    // 3. Resolve workspaceRoot
+    const workspaceRoot = this.ctx.workspaceRoot;
+
+    // 4. Obtain a ProtocolCandidate
+    let candidate: ProtocolCandidate;
+
+    if (input.regenerate === true) {
+      // Always re-extract from the vendor-pdf's extractedText
+      const extractedTextArr = vendorPdfPayload.extractedText as Array<{ text?: string }> | undefined;
+      const joinedText = extractedTextArr
+        ? extractedTextArr.map(p => typeof p.text === 'string' ? p.text : '').join('\n\n')
+        : '';
+      if (!joinedText) {
+        throw new ProtocolExtractionError('BAD_REQUEST', `Vendor PDF ${vendorPdfId} has no extractedText to re-extract from`, 400);
+      }
+      const extractionResult = await extractVendorProtocolCandidateFromInput({
+        workspaceRoot,
+        text: joinedText,
+        documentId,
+        fileName: typeof vendorPdfPayload.title === 'string' ? vendorPdfPayload.title : vendorPdfId,
+        persist: true,
+      });
+      candidate = extractionResult.candidate;
+    } else {
+      // Try to load the candidate from the persisted JSON artifact
+      const candidatePath = join(workspaceRoot, 'artifacts', 'foundry', 'protocol-candidates', `${safeFileName(documentId)}.json`);
+      try {
+        await access(candidatePath);
+        const raw = await readFile(candidatePath, 'utf-8');
+        candidate = JSON.parse(raw);
+      } catch {
+        // File not found — fall back to re-extracting from extractedText
+        const extractedTextArr = vendorPdfPayload.extractedText as Array<{ text?: string }> | undefined;
+        const joinedText = extractedTextArr
+          ? extractedTextArr.map(p => typeof p.text === 'string' ? p.text : '').join('\n\n')
+          : '';
+        if (!joinedText) {
+          throw new ProtocolExtractionError('BAD_REQUEST', `Vendor PDF ${vendorPdfId} has no extractedText and no cached candidate`, 400);
+        }
+        const extractionResult = await extractVendorProtocolCandidateFromInput({
+          workspaceRoot,
+          text: joinedText,
+          documentId,
+          fileName: typeof vendorPdfPayload.title === 'string' ? vendorPdfPayload.title : vendorPdfId,
+          persist: true,
+        });
+        candidate = extractionResult.candidate;
+      }
+    }
+
+    // 5. Mint the canonical protocol recordId that this draft will become on promote.
+    //    protocol.schema.yaml requires top-level `recordId` (the promote path validates
+    //    the candidate.draft against the real schema), so the vendor mapper MUST emit it.
+    const protocolRecordId = await this.nextProtocolId();
+
+    // 6. Build the universal-protocol-shaped draft
+    const draftBody = this.buildProtocolBodyFromCandidate(candidate, {
+      title: input.title ?? undefined,
+      vendorPdfId,
+      recordId: protocolRecordId,
+    });
+
+    // 7. Generate extraction-draft recordId
+    const draftRecordId = await this.nextExtractionDraftId();
+
+    // 8. Build and persist the extraction-draft
+    const protocolCandidate: ProtocolExtractionCandidate = {
+      target_kind: 'protocol',
+      draft: draftBody,
+      confidence: 0.7,
+    };
+
+    const extractionDraft: ProtocolExtractionDraft = {
+      kind: 'extraction-draft',
+      recordId: draftRecordId,
+      source_artifact: {
+        kind: 'file',
+        id: vendorPdfId,
+      },
+      candidates: [protocolCandidate],
+      status: 'pending_review',
+    };
+
+    const draftEnvelope: RecordEnvelope = {
+      recordId: draftRecordId,
+      schemaId: 'https://computable-lab.com/schema/computable-lab/workflow/extraction-draft.schema.yaml',
+      payload: extractionDraft,
+    };
+
+    const createResult = await this.ctx.store.create({
+      envelope: draftEnvelope,
+      message: `Create extraction-draft ${draftRecordId} from vendor-pdf ${vendorPdfId}`,
+    });
+
+    if (!createResult.success || !createResult.envelope) {
+      if (createResult.validation && !createResult.validation.valid) {
+        const validationErrors = createResult.validation.errors?.map((e: { path: string; message: string }) => `${e.path}: ${e.message}`).join('; ') ?? 'unknown validation error';
+        throw new ProtocolExtractionError('VALIDATION_ERROR', `Extraction-draft validation failed: ${validationErrors}`, 422);
+      }
+      throw new ProtocolExtractionError('CREATE_FAILED', createResult.error ?? 'Failed to create extraction-draft', 400);
+    }
+
+    return {
+      recordId: draftRecordId,
+      draft: extractionDraft,
+    };
+  }
+
+  /**
+   * Map a ProtocolCandidate into a universal-protocol-shaped draft body.
+   *
+   * Maps candidate action kinds → protocol step kinds:
+   *   add → add_material
+   *   transfer → transfer
+   *   mix → mix
+   *   incubate → incubate
+   *   aspirate/discard/centrifuge/magnetize/dry/elute/seal/repeat/other → other
+   *
+   * Populates roles from candidate materials/labware/equipment lists.
+   */
+  private buildProtocolBodyFromCandidate(
+    pc: ProtocolCandidate,
+    opts: { title: string | undefined; vendorPdfId: string; recordId: string },
+  ): Record<string, unknown> {
+    // --- Roles ---
+    const seenRoleIds = new Set<string>();
+    const ensureRoleId = (prefix: string, label: string): string => {
+      const token = toIdToken(label);
+      let roleId = `${prefix}_${token}`;
+      let i = 2;
+      while (seenRoleIds.has(roleId)) {
+        roleId = `${prefix}_${token}_${i}`;
+        i += 1;
+      }
+      seenRoleIds.add(roleId);
+      return roleId;
+    };
+
+    const materialRoles: Array<{ roleId: string; description?: string; allowedMaterialIds?: string[] }> = pc.materials.map((m: ExtractedCandidateItem) => {
+      const roleId = ensureRoleId('material', m.label);
+      return { roleId, description: m.sourceText };
+    });
+
+    const labwareRoles: Array<{ roleId: string; description?: string; expectedLabwareKinds?: string[] }> = pc.labware.map((l: ExtractedCandidateItem) => {
+      const roleId = ensureRoleId('labware', l.label);
+      return { roleId, description: l.sourceText };
+    });
+
+    const instrumentRoles: Array<{ roleId: string; description?: string; allowedInstrumentIds?: string[] }> = pc.equipment.map((e: ExtractedCandidateItem) => {
+      const roleId = ensureRoleId('instrument', e.label);
+      return { roleId, description: e.sourceText };
+    });
+
+    // Build a label→roleId map for lookups
+    const materialLabelToRole = new Map<string, string>();
+    for (const m of pc.materials) {
+      const roleId = ensureRoleId('material', m.label);
+      materialLabelToRole.set(m.label, roleId);
+    }
+    // Re-compute (roles above already created them; this is for the map)
+    const labwareLabelToRole = new Map<string, string>();
+    for (const l of pc.labware) {
+      const roleId = ensureRoleId('labware', l.label);
+      labwareLabelToRole.set(l.label, roleId);
+    }
+    const equipmentLabelToRole = new Map<string, string>();
+    for (const e of pc.equipment) {
+      const roleId = ensureRoleId('instrument', e.label);
+      equipmentLabelToRole.set(e.label, roleId);
+    }
+
+    // --- Steps ---
+    const steps: Record<string, unknown>[] = pc.steps.map((step: ProtocolStepCandidate, idx: number) => {
+      const stepId = `step-${String(idx + 1).padStart(3, '0')}`;
+      const ordinal = step.stepNumber > 0 ? step.stepNumber : idx + 1;
+      const label = step.substep || step.sourceText || `Step ${ordinal}`;
+      const notes = step.notes.length > 0 ? step.notes.join('; ') : undefined;
+
+      // Determine the dominant action kind from the step's actions
+      const action = step.actions.length > 0 ? step.actions[0] : null;
+      const actionKind = (action ? action.actionKind : 'other') as string;
+
+      const protocolStep = this.mapActionToProtocolStep({
+        actionKind,
+        step,
+        stepId,
+        ordinal,
+        label,
+        notes,
+        materialLabelToRole,
+        labwareLabelToRole,
+        equipmentLabelToRole,
+      });
+
+      return protocolStep;
+    });
+
+    // Fallback: if there are no steps, produce a single placeholder step
+    if (steps.length === 0) {
+      steps.push({
+        stepId: 'step-001',
+        ordinal: 1,
+        label: 'Protocol steps not detected',
+        kind: 'other',
+        description: 'No actionable steps were extracted from the vendor protocol.',
+      });
+    }
+
+    // --- Protocol body ---
+    const protocolTitle = opts.title
+      ? opts.title.trim()
+      : (pc.title?.trim() ? pc.title.trim() : `Vendor Protocol ${opts.vendorPdfId}`);
+
+    const rolesObj: Record<string, unknown> = {};
+    if (labwareRoles.length > 0) rolesObj.labwareRoles = labwareRoles;
+    if (materialRoles.length > 0) rolesObj.materialRoles = materialRoles;
+    if (instrumentRoles.length > 0) rolesObj.instrumentRoles = instrumentRoles;
+
+    const draftBody: Record<string, unknown> = {
+      protocolLayer: 'universal',
+      kind: 'protocol',
+      recordId: opts.recordId,
+      title: protocolTitle,
+      state: 'draft',
+      steps,
+      roles: rolesObj,
+      tags: ['autogenerated', 'source:vendor'],
+      source: {
+        type: 'vendor',
+        ref: {
+          kind: 'record',
+          type: 'vendor-pdf',
+          id: opts.vendorPdfId,
+        },
+      },
+    };
+
+    if (pc.scope) {
+      draftBody.description = pc.scope;
+    }
+
+    return draftBody;
+  }
+
+  /**
+   * Map a ProtocolActionCandidate's actionKind to a protocol step.
+   */
+  private mapActionToProtocolStep(params: {
+    actionKind: string;
+    step: ProtocolStepCandidate;
+    stepId: string;
+    ordinal: number;
+    label: string;
+    notes: string | undefined;
+    materialLabelToRole: Map<string, string>;
+    labwareLabelToRole: Map<string, string>;
+    equipmentLabelToRole: Map<string, string>;
+  }): Record<string, unknown> {
+    const { actionKind, step, stepId, ordinal, label, notes, materialLabelToRole, labwareLabelToRole, equipmentLabelToRole: _eltr } = params;
+    void _eltr; // reserved for future instrument role resolution
+    const action = step.actions[0] ?? null;
+
+    // Resolve target labware role
+    const targetLabel = action?.target ?? step.labware[0] ?? null;
+    const targetRole = targetLabel ? (labwareLabelToRole.get(targetLabel) ?? 'labware_default') : 'labware_default';
+    const sourceLabel = action?.source ?? null;
+    const sourceRole = sourceLabel ? (labwareLabelToRole.get(sourceLabel) ?? 'labware_source') : 'labware_source';
+
+    // Material role lookup
+    const materialLabel = action?.material ?? step.materials[0] ?? null;
+    const materialRole = materialLabel ? (materialLabelToRole.get(materialLabel) ?? 'material_unknown') : 'material_unknown';
+
+    // Extract scalar quantities
+    const volume = action?.volume ?? step.conditions?.volumes?.[0] ?? null;
+    const duration = action?.duration ?? step.conditions?.durations?.[0] ?? null;
+    const temperature = action?.temperature ?? step.conditions?.temperatures?.[0] ?? null;
+
+    const volumeUl = typeof volume?.value === 'number' ? volume.value : undefined;
+    const durationMin = typeof duration?.value === 'number' ? duration.value : undefined;
+    const temperatureC = typeof temperature?.value === 'number' ? temperature.value : undefined;
+
+    // Base fields every step gets
+    const base: Record<string, unknown> = {
+      stepId,
+      ordinal,
+      label,
+    };
+    if (notes) base.notes = notes;
+
+    const canonicalVerb = defaultCanonicalVerbForStepKind.bind(null);
+
+    switch (actionKind) {
+      case 'add':
+        return {
+          ...base,
+          kind: 'add_material',
+          semanticVerb: { canonical: canonicalVerb('add_material') },
+          target: { labwareRole: targetRole },
+          wells: { kind: 'all' },
+          material: { materialRole },
+          volume_uL: volumeUl ?? 0.1,
+        };
+
+      case 'transfer':
+        return {
+          ...base,
+          kind: 'transfer',
+          semanticVerb: { canonical: canonicalVerb('transfer') },
+          source: { labwareRole: sourceRole, wells: { kind: 'all' } },
+          target: { labwareRole: targetRole, wells: { kind: 'all' } },
+          volume_uL: volumeUl ?? 0.1,
+        };
+
+      case 'mix':
+        return {
+          ...base,
+          kind: 'mix',
+          semanticVerb: { canonical: canonicalVerb('mix') },
+          target: { labwareRole: targetRole },
+          wells: { kind: 'all' },
+          ...(volumeUl ? { volume_uL: volumeUl } : {}),
+        };
+
+      case 'incubate':
+        return {
+          ...base,
+          kind: 'incubate',
+          semanticVerb: { canonical: canonicalVerb('incubate') },
+          target: { labwareRole: targetRole },
+          duration_min: durationMin ?? 0.1,
+          ...(temperatureC ? { temperature_C: temperatureC } : {}),
+        };
+
+      // Everything else → kind: 'other' with a description
+      default:
+        return {
+          ...base,
+          kind: 'other',
+          semanticVerb: { canonical: canonicalVerb('other') },
+          description: step.sourceText || `Vendor action: ${actionKind}`,
+          ...(volumeUl ? { volume_uL: volumeUl } : {}),
+          ...(durationMin ? { duration_min: durationMin } : {}),
+          ...(temperatureC ? { temperature_C: temperatureC } : {}),
+        };
+    }
   }
 }

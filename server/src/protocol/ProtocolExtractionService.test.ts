@@ -1,6 +1,6 @@
 /**
  * Tests for ProtocolExtractionService
- * 
+ *
  * These tests verify the two-step extraction flow:
  * 1. extractDraftFromEventGraph - creates an extraction-draft with candidates
  * 2. promoteDraft - promotes a candidate to canonical protocol + audit record
@@ -26,6 +26,22 @@ vi.mock('../compiler/pipeline/PromotionCompileRunner.js', () => ({
 }));
 
 import { runPromotionCompile } from '../compiler/pipeline/PromotionCompileRunner.js';
+
+// Mock node:fs/promises for vendor-pdf candidate loading
+vi.mock('node:fs/promises', () => ({
+  readFile: vi.fn(),
+  access: vi.fn(),
+  writeFile: vi.fn().mockResolvedValue(undefined),
+  mkdir: vi.fn().mockResolvedValue(undefined),
+}));
+
+// Mock VendorProtocolCandidateService
+vi.mock('../ingestion/vendor-protocol/VendorProtocolCandidateService.js', () => ({
+  extractVendorProtocolCandidateFromInput: vi.fn(),
+}));
+
+import * as fs from 'node:fs/promises';
+import { extractVendorProtocolCandidateFromInput } from '../ingestion/vendor-protocol/VendorProtocolCandidateService.js';
 
 describe('ProtocolExtractionService', () => {
   let service: ProtocolExtractionService;
@@ -459,6 +475,331 @@ describe('ProtocolExtractionService', () => {
       expect(mockStore.get).toHaveBeenCalledWith(eventGraphId);
       // Verify it called promoteDraft
       expect(runPromotionCompile).toHaveBeenCalled();
+    });
+  });
+
+  describe('createDraftFromVendorPdf', () => {
+    const vendorPdfId = 'VPF-000001';
+    const documentId = 'DOC-ABC-123';
+
+    const mockCandidate: Record<string, unknown> = {
+      kind: 'vendor-protocol-candidate',
+      title: 'Test Kit Protocol',
+      scope: 'A test protocol for validation',
+      source: {
+        documentId,
+        filename: 'test-protocol.pdf',
+        pageCount: 10,
+      },
+      materials: [
+        {
+          id: 'mat-1',
+          label: 'Buffer A',
+          sourceText: 'Add 200 µL Buffer A',
+          confidence: 0.95,
+          provenance: { documentId: 'DOC-ABC-123', pageStart: 1 },
+        },
+      ],
+      labware: [
+        {
+          id: 'lw-1',
+          label: '96-well plate',
+          sourceText: '96-well reaction plate',
+          confidence: 0.9,
+          provenance: { documentId: 'DOC-ABC-123', pageStart: 1 },
+        },
+      ],
+      equipment: [],
+      steps: [
+        {
+          id: 'step-1',
+          stepNumber: 1,
+          sourceText: 'Add 200 µL Buffer A to each well',
+          actions: [
+            {
+              actionKind: 'add' as const,
+              sourceText: 'Add 200 µL Buffer A',
+              target: '96-well plate',
+              material: 'Buffer A',
+              volume: { raw: '200 µL', value: 200, unit: 'µL' },
+              provenance: { documentId: 'DOC-ABC-123', pageStart: 1 },
+            },
+          ],
+          conditions: {},
+          materials: ['Buffer A'],
+          labware: ['96-well plate'],
+          equipment: [],
+          notes: [],
+          branches: [],
+          provenance: { documentId: 'DOC-ABC-123', pageStart: 1 },
+          confidence: 0.9,
+        },
+      ],
+      tables: [],
+      notes: [],
+      outputs: [],
+      diagnostics: [],
+      sections: [],
+    };
+
+    const mockVendorPdfEnvelope: RecordEnvelope = {
+      recordId: vendorPdfId,
+      schemaId: 'https://computable-lab.com/schema/computable-lab/lab/vendor-pdf.schema.yaml',
+      payload: {
+        kind: 'vendor-pdf',
+        recordId: vendorPdfId,
+        title: 'Test Kit Protocol PDF',
+        file: { name: 'test-protocol.pdf', sha256: 'abc123' },
+        source: { vendor: 'Test Vendor', catalogNumber: 'TK-001' },
+        vendorProtocolCandidateRef: {
+          kind: 'record',
+          type: 'vendor-protocol-candidate',
+          id: documentId,
+        },
+        extractedText: [{ text: 'Page 1 text' }, { text: 'Page 2 text' }],
+      },
+    };
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      mockStore.get.mockReset();
+      mockStore.list.mockReset().mockResolvedValue([]);
+      mockStore.create.mockReset().mockResolvedValue({ success: true, envelope: {} });
+      mockStore.update.mockReset().mockResolvedValue({ success: true });
+      (fs.access as ReturnType<typeof vi.fn>).mockReset();
+      (fs.readFile as ReturnType<typeof vi.fn>).mockReset();
+      (extractVendorProtocolCandidateFromInput as ReturnType<typeof vi.fn>).mockReset();
+
+      ctx = {
+        store: mockStore as unknown as AppContext['store'],
+        workspaceRoot: '/tmp/test-workspace',
+      } as unknown as AppContext;
+
+      service = new ProtocolExtractionService(ctx);
+
+      vi.spyOn(service as any, 'nextExtractionDraftId').mockResolvedValue('XDR-000001');
+    });
+
+    it('should create a draft from a vendor-pdf record when the candidate JSON exists', async () => {
+      // Mock store.get to return the vendor-pdf
+      mockStore.get.mockResolvedValueOnce(mockVendorPdfEnvelope);
+
+      // Mock fs.access to succeed (file exists)
+      (fs.access as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+      // Mock fs.readFile to return the candidate JSON
+      (fs.readFile as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+        JSON.stringify(mockCandidate)
+      );
+
+      const result = await service.createDraftFromVendorPdf({ vendorPdfId });
+
+      expect(result.recordId).toBe('XDR-000001');
+      expect(result.draft.kind).toBe('extraction-draft');
+      expect(result.draft.source_artifact.id).toBe(vendorPdfId);
+      expect(result.draft.source_artifact.kind).toBe('file');
+      expect(result.draft.candidates).toHaveLength(1);
+      expect(result.draft.candidates[0].target_kind).toBe('protocol');
+      expect(result.draft.status).toBe('pending_review');
+
+      // The draft body should have the expected universal-protocol shape
+      const draftBody = result.draft.candidates[0].draft as Record<string, unknown>;
+      expect(draftBody.protocolLayer).toBe('universal');
+      expect(draftBody.kind).toBe('protocol');
+      // protocol.schema.yaml requires top-level recordId — the promote path validates
+      // candidate.draft against the real schema, so the vendor mapper MUST emit it.
+      expect(draftBody.recordId).toBeDefined();
+      expect(draftBody.recordId).toMatch(/^PRT-/);
+      expect(draftBody.title).toBe('Test Kit Protocol');
+      expect(draftBody.state).toBe('draft');
+      expect(draftBody.tags).toContain('autogenerated');
+      expect(draftBody.tags).toContain('source:vendor');
+      expect(draftBody.source).toEqual({
+        type: 'vendor',
+        ref: {
+          kind: 'record',
+          type: 'vendor-pdf',
+          id: vendorPdfId,
+        },
+      });
+
+      // Verify steps are mapped correctly
+      const steps = draftBody.steps as Array<Record<string, unknown>>;
+      expect(steps.length).toBe(1);
+      expect(steps[0].kind).toBe('add_material');
+
+      // Verify roles are populated
+      const roles = draftBody.roles as Record<string, unknown>;
+      expect(Array.isArray(roles.materialRoles as unknown[])).toBe(true);
+      expect((roles.materialRoles as unknown[]).length).toBe(1);
+      expect(((roles.materialRoles as unknown[])[0] as Record<string, unknown>).roleId).toBe('material_buffer_a');
+      expect(Array.isArray(roles.labwareRoles as unknown[])).toBe(true);
+      expect((roles.labwareRoles as unknown[]).length).toBe(1);
+
+      // Should NOT have called extractVendorProtocolCandidateFromInput (file was found)
+      expect(extractVendorProtocolCandidateFromInput).not.toHaveBeenCalled();
+
+      // Verify the draft was persisted via store.create
+      expect(mockStore.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          envelope: expect.objectContaining({
+            recordId: 'XDR-000001',
+            schemaId: 'https://computable-lab.com/schema/computable-lab/workflow/extraction-draft.schema.yaml',
+          }),
+        })
+      );
+    });
+
+    it('should re-extract (regenerate) when requested', async () => {
+      mockStore.get.mockResolvedValueOnce(mockVendorPdfEnvelope);
+
+      const mockExtractionResult = {
+        kind: 'vendor-protocol-candidate-extraction',
+        candidate: mockCandidate,
+        source: { inputKind: 'text' as const },
+        document: { pageCount: 2 },
+      };
+
+      (extractVendorProtocolCandidateFromInput as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(mockExtractionResult);
+
+      const result = await service.createDraftFromVendorPdf({
+        vendorPdfId,
+        regenerate: true,
+      });
+
+      expect(result.recordId).toBe('XDR-000001');
+      expect(result.draft.status).toBe('pending_review');
+
+      // Should have called extractVendorProtocolCandidateFromInput
+      expect(extractVendorProtocolCandidateFromInput).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceRoot: '/tmp/test-workspace',
+          text: 'Page 1 text\n\nPage 2 text',
+          documentId,
+          persist: true,
+        })
+      );
+    });
+
+    it('should fall back to re-extraction when candidate JSON is missing', async () => {
+      mockStore.get.mockResolvedValueOnce(mockVendorPdfEnvelope);
+
+      // Mock fs.access to throw (file not found)
+      (fs.access as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('ENOENT'));
+
+      const mockExtractionResult = {
+        kind: 'vendor-protocol-candidate-extraction',
+        candidate: mockCandidate,
+        source: { inputKind: 'text' as const },
+        document: { pageCount: 2 },
+      };
+
+      (extractVendorProtocolCandidateFromInput as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce(mockExtractionResult);
+
+      const result = await service.createDraftFromVendorPdf({ vendorPdfId });
+
+      expect(result.recordId).toBe('XDR-000001');
+      expect(result.draft.candidates[0].target_kind).toBe('protocol');
+
+      // Should have fallen back to re-extraction
+      expect(extractVendorProtocolCandidateFromInput).toHaveBeenCalled();
+    });
+
+    it('should throw 404 when the vendor-pdf is missing', async () => {
+      mockStore.get.mockResolvedValueOnce(null);
+
+      await expect(
+        service.createDraftFromVendorPdf({ vendorPdfId })
+      ).rejects.toThrow(ProtocolExtractionError);
+
+      // Verify error details
+      try {
+        await service.createDraftFromVendorPdf({ vendorPdfId });
+      } catch (err: any) {
+        expect(err.code).toBe('NOT_FOUND');
+        expect(err.statusCode).toBe(404);
+        expect(err.message).toContain('Vendor PDF not found');
+      }
+    });
+
+    it('should use documentId from vendorProtocolCandidateRef.id', async () => {
+      mockStore.get.mockResolvedValueOnce(mockVendorPdfEnvelope);
+      (fs.access as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+      (fs.readFile as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+        JSON.stringify(mockCandidate)
+      );
+
+      await service.createDraftFromVendorPdf({ vendorPdfId });
+
+      // The fs.access should have been called with the path containing the documentId
+      expect(fs.access).toHaveBeenCalledWith(
+        expect.stringContaining('DOC-ABC-123')
+      );
+    });
+
+    it('should throw 400 when vendorPdfId is empty', async () => {
+      await expect(
+        service.createDraftFromVendorPdf({ vendorPdfId: '' })
+      ).rejects.toThrow('vendorPdfId is required');
+    });
+
+    it('should produce "other" step kind for unmappable action kinds', async () => {
+      const candidateWithCentrifuge: Record<string, unknown> = {
+        ...mockCandidate,
+        steps: [
+          {
+            id: 'step-1',
+            stepNumber: 1,
+            sourceText: 'Centrifuge for 5 min at 1000xg',
+            actions: [
+              {
+                actionKind: 'centrifuge' as const,
+                sourceText: 'Centrifuge',
+                provenance: { documentId: 'DOC-ABC-123', pageStart: 1 },
+                duration: { raw: '5 min', value: 5, unit: 'min' },
+              },
+            ],
+            conditions: {},
+            materials: [],
+            labware: [],
+            equipment: [],
+            notes: [],
+            branches: [],
+            provenance: { documentId: 'DOC-ABC-123', pageStart: 1 },
+            confidence: 0.8,
+          },
+        ],
+      };
+
+      mockStore.get.mockResolvedValueOnce(mockVendorPdfEnvelope);
+      (fs.access as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+      (fs.readFile as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+        JSON.stringify(candidateWithCentrifuge)
+      );
+
+      const result = await service.createDraftFromVendorPdf({ vendorPdfId });
+
+      const steps = result.draft.candidates[0].draft.steps as Array<Record<string, unknown>>;
+      expect(steps[0].kind).toBe('other');
+      expect(steps[0].description).toBe('Centrifuge for 5 min at 1000xg');
+    });
+
+    it('should use custom title when provided', async () => {
+      mockStore.get.mockResolvedValueOnce(mockVendorPdfEnvelope);
+      (fs.access as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+      (fs.readFile as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+        JSON.stringify(mockCandidate)
+      );
+
+      const result = await service.createDraftFromVendorPdf({
+        vendorPdfId,
+        title: 'My Custom Protocol Title',
+      });
+
+      const draftBody = result.draft.candidates[0].draft as Record<string, unknown>;
+      expect(draftBody.title).toBe('My Custom Protocol Title');
     });
   });
 });

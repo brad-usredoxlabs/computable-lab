@@ -1,0 +1,75 @@
+.ingestion-page {
+  padding: 1.5rem;
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+.ingestion-page__header {
+  margin-bottom: 1rem;
+}
+
+.ingestion-page__title {
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.ingestion-page__subtitle {
+  margin: 0;
+  color: var(--cl-text-muted, #666);
+  font-size: 0.9rem;
+}
+
+.ingestion-page__tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--cl-border, #ddd);
+  margin-bottom: 1rem;
+  padding-bottom: 0;
+}
+
+.ingestion-page__tab {
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--cl-text-muted, #666);
+}
+
+.ingestion-page__tab:hover {
+  color: var(--cl-text, #222);
+}
+
+.ingestion-page__tab--active {
+  color: var(--cl-accent, #2563eb);
+  border-bottom-color: var(--cl-accent, #2563eb);
+  font-weight: 600;
+}
+
+.ingestion-page__body {
+  padding: 0.5rem 0;
+}
+
+.ingestion-page__placeholder {
+  padding: 1.5rem;
+  border: 1px dashed var(--cl-border, #ddd);
+  border-radius: 8px;
+}
+
+.ingestion-page__placeholder h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.ingestion-page__placeholder p {
+  margin: 0.25rem 0;
+  color: var(--cl-text-muted, #666);
+}
+
+.ingestion-page__note {
+  font-style: italic;
+  font-size: 0.85rem;
+}

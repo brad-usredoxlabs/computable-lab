@@ -174,6 +174,38 @@
   color: var(--cl-text-dim);
 }
 
+/* Mobile — miniaturized deck/vocab/tool controls pinned at the top.
+   Compact the deck-layout + vocabulary switchers into a slim strip so they
+   sit right at the top of the workspace without an overflowing full-size
+   row. Scoped to the DeckToolbar (`.viewer-toolbar--deck`), which carries
+   the `.event-editor` context class. */
+@media (max-width: 768px) {
+  .event-editor .viewer-toolbar--deck {
+    gap: 4px;
+    flex-wrap: nowrap;
+  }
+
+  .event-editor .viewer-toolbar--deck .chip-select {
+    padding: 2px 6px;
+    gap: 4px;
+    font-size: 11px;
+    max-width: 150px;
+  }
+
+  .event-editor .viewer-toolbar--deck .chip-select select {
+    max-width: 88px;
+  }
+
+  .event-editor .viewer-toolbar--deck .chip-select__label {
+    font-size: 10px;
+  }
+
+  .event-editor .viewer-toolbar--deck .tip-chip {
+    padding: 2px 6px;
+    font-size: 10px;
+  }
+}
+
 .event-editor .chip-select__lock {
   font-size: 11px;
   line-height: 1;
@@ -637,6 +669,25 @@
 .event-editor .tile[data-ghost='true']:hover {
   opacity: 1;
   background: rgba(190, 75, 219, 0.14);
+}
+
+/* ---- Protocol-planning step layering on the deck/focus wells --------------
+   ProtocolPreviewBridge tags ghosted step events with a per-step status.
+   Past steps are dimmed/desaturated; the live step gets an accent outline so
+   the user can see which step they are localizing now vs already-done steps. */
+
+.event-editor .well-grid__well[data-protocol-step-status='past'],
+.event-editor .well-grid__tip[data-protocol-step-status='past'] {
+  opacity: 0.4;
+  filter: grayscale(0.6);
+}
+
+.event-editor .well-grid__well[data-protocol-step-status='current'],
+.event-editor .well-grid__tip[data-protocol-step-status='current'] {
+  stroke: var(--cl-accent, #4dabf7);
+  stroke-width: 2;
+  paint-order: stroke;
+  stroke-opacity: 1;
 }
 
 .event-editor .tile[data-affected='true'] {

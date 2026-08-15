@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { createServer, initializeApp } from '../server.js';
 import type { AppContext } from '../server.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 const robotPlanSchema = `
 $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -85,6 +86,7 @@ describe('Execution Task API', () => {
     process.env['CL_EXECUTION_MODE'] = 'remote';
     process.env['CL_EXECUTOR_TOKENS'] = 'integra-token=integra_assist;op-token=opentrons_ot2';
 
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

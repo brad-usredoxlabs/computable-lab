@@ -15,7 +15,7 @@
  * patterns from the ExecutionTabPanel.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ExecutionProvider, useExecution } from '../../execution/ExecutionContext'
 import { StepExecutionModal } from '../../../components/StepExecutionModal'
 import type { StepInfo } from '../../../components/StepExecutionModal'
@@ -25,7 +25,6 @@ import { apiClient, type ProtocolContextResponse } from '../../../shared/api/cli
 import { SettingsPanel, type Setting } from './SettingsPanel'
 import { useProtocolSelection, ProtocolSelectionProvider, type ProtocolStepGraph } from '../../protocol/ProtocolSelectionContext'
 import { ProtocolSelector } from './ProtocolSelector'
-import { StepDetailPane } from '../../../run/protocol-planning/StepDetailPane'
 import { StepLocalizationPane } from './StepLocalizationPane'
 import { SetupSectionWidget } from '../../../editor/taptab/widgets/LocalProtocolSetupWidgets'
 import type { LocalProtocolSetupRows } from './StepLocalizationPane'
@@ -355,6 +354,20 @@ function CheckIcon() {
   )
 }
 
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      className="w-3 h-3"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+      style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 120ms ease' }}
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 6l6 6-6 6" />
+    </svg>
+  )
+}
+
 /* ------------------------------------------------------------------ */
 /* Uncertainty badge                                                    */
 /* ------------------------------------------------------------------ */
@@ -456,6 +469,24 @@ function StepChip({ step, isActive, onToggle, onPlay, onSelect, onCompletionChan
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: '4px', flexShrink: 0, alignItems: 'flex-start' }}>
+          {/* Expand affordance — makes clear the chip opens the localization panel */}
+          <button
+            type="button"
+            className="protocol-step-chip__expand"
+            onClick={(e) => { e.stopPropagation(); onSelect() }}
+            title={isActive ? 'Collapse step panel' : 'Click to localize this step'}
+            aria-expanded={isActive}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: '4px',
+              padding: '4px 8px', fontSize: '11px', fontWeight: 600,
+              color: isActive ? 'var(--cl-accent)' : 'var(--cl-text-dim)',
+              background: 'transparent', border: `1px solid ${isActive ? 'var(--cl-accent)' : 'var(--cl-border)'}`,
+              borderRadius: '4px', cursor: 'pointer',
+            }}
+          >
+            <ChevronIcon open={isActive} />
+            {isActive ? 'Collapse' : 'Localize'}
+          </button>
           {/* Visibility toggle */}
           <label
             className="inline-flex items-center gap-1 cursor-pointer"
@@ -812,6 +843,21 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   // step's detail pane. Selecting a step drives the deck ghost (current highlight).
   const [humanStepsText, setHumanStepsText] = useState<string | null>(null)
   const [expandedStepId, setExpandedStepId] = useState<string | null>(null)
+
+  // When a step expands, scroll its localization panel into view so the panel
+  // (which can be taller than the right-pane scroller) is never left off-screen.
+  const expandedPanelRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (expandedStepId) {
+      // Defer one frame so the panel has mounted before measuring.
+      requestAnimationFrame(() => {
+        // block:'center' keeps the panel's actionable middle (accept/redraft +
+        // prompt + Localize) in view even when the panel is taller than the
+        // right-pane scroller.
+        expandedPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+    }
+  }, [expandedStepId])
 
   // Step execution modal state
   const [modalOpen, setModalOpen] = useState(false)
@@ -1283,83 +1329,61 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       {/* Step chips */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {steps.map((step) => (
-          <StepChip
-            key={step.stepId}
-            step={step}
-            isActive={activeStepId === step.stepId}
-            onToggle={() => handleToggleVisibility(step.stepId)}
-            onPlay={() => handlePlayStep(step)}
-            onSelect={async () => {
-              const wasActive = activeStepId === step.stepId
-              if (!wasActive) {
-                await fetchStepSettings(step.stepId)
-              }
-              setActiveStepId(wasActive ? null : step.stepId)
-              setExpandedStepId(wasActive ? null : step.stepId)
-              protocolSelection?.setCurrentStepId(wasActive ? null : step.stepId)
-            }}
-            onCompletionChange={handleCompletionChange}
-          />
+          <div key={step.stepId} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <StepChip
+              step={step}
+              isActive={activeStepId === step.stepId}
+              onToggle={() => handleToggleVisibility(step.stepId)}
+              onPlay={() => handlePlayStep(step)}
+              onSelect={async () => {
+                const wasActive = activeStepId === step.stepId
+                if (!wasActive) {
+                  await fetchStepSettings(step.stepId)
+                }
+                setActiveStepId(wasActive ? null : step.stepId)
+                setExpandedStepId(wasActive ? null : step.stepId)
+                protocolSelection?.setCurrentStepId(wasActive ? null : step.stepId)
+              }}
+              onCompletionChange={handleCompletionChange}
+            />
+
+            {/* Settings panel for the selected step — inline under that step */}
+            {activeStepId === step.stepId && stepSettings[step.stepId] !== undefined && (
+              <SettingsPanel
+                protocolId={runId}
+                stepId={step.stepId}
+                settings={stepSettings[step.stepId]}
+                onSave={(savedSettings) => handleSettingsSave(step.stepId, savedSettings)}
+              />
+            )}
+
+            {/* Step-localization AI input — inline under the EXPANDED step, pushing
+                subsequent steps down (per the Protocol Planning panel spec). */}
+            {expandedStepId === step.stepId && (() => {
+              const section = splitHumanSteps(humanStepsText ?? '')[step.ordinal]
+              // Empty/whitespace section (no humanStepsText → splitHumanSteps('')
+              // keys a '' at ordinal 1) falls through to the step's real description.
+              const text = (section && section.trim()) ? section : (step.description ?? humanStepsText ?? undefined)
+              return (
+                <div ref={expandedPanelRef}>
+                  <StepLocalizationPane
+                    key={`sl-${step.stepId}`}
+                    runId={runId}
+                    step={{ stepId: step.stepId, label: step.label }}
+                    stepText={text}
+                    localProtocolSetup={
+                      // Concrete LPR rows only — the universal-protocol role
+                      // preview is abstract (no refs), so it must not ride in
+                      // the localization context as if it were a declared setup.
+                      localSetup && !setupIsPreview ? localSetup : undefined
+                    }
+                  />
+                </div>
+              )
+            })()}
+          </div>
         ))}
       </div>
-
-      {/* Settings panel for the selected step */}
-      {activeStepId && stepSettings[activeStepId] !== undefined && (
-        <SettingsPanel
-          protocolId={runId}
-          stepId={activeStepId}
-          settings={stepSettings[activeStepId]}
-          onSave={(savedSettings) => handleSettingsSave(activeStepId, savedSettings)}
-        />
-      )}
-
-      {/* Step detail (long-form full text) for the expanded step */}
-      {expandedStepId ? (
-        (() => {
-          const expanded = steps.find((s) => s.stepId === expandedStepId)
-          const section =
-            expanded && humanStepsText
-              ? splitHumanSteps(humanStepsText)[expanded.ordinal]
-              : undefined
-          const text = section ?? expanded?.description
-          if (!text) return null
-          return (
-            <StepDetailPane
-              runId={runId}
-              stepId={expandedStepId}
-              stepLabel={expanded?.label ?? expandedStepId}
-              text={text}
-            />
-          )
-        })()
-      ) : null}
-
-      {/* Step-localization AI input (Phase D) for the expanded step */}
-      {expandedStepId ? (
-        (() => {
-          const expanded = steps.find((s) => s.stepId === expandedStepId)
-          const section = expanded
-            ? splitHumanSteps(humanStepsText ?? '')[expanded.ordinal]
-            : undefined
-          return (
-            <StepLocalizationPane
-              runId={runId}
-              step={
-                expanded
-                  ? { stepId: expanded.stepId, label: expanded.label }
-                  : { stepId: expandedStepId, label: expandedStepId }
-              }
-              stepText={section ?? expanded?.description ?? humanStepsText ?? undefined}
-              localProtocolSetup={
-                // Concrete LPR rows only — the universal-protocol role
-                // preview is abstract (no refs), so it must not ride in
-                // the localization context as if it were a declared setup.
-                localSetup && !setupIsPreview ? localSetup : undefined
-              }
-            />
-          )
-        })()
-      ) : null}
 
       {/* Step execution modal */}
       {pendingStep && (

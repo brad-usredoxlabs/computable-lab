@@ -10,7 +10,7 @@
 
 import { createContext, useContext, useEffect, useReducer, useCallback, type ReactNode } from 'react'
 import type { WellId } from '../../types/plate'
-import type { PlateEvent } from '../../types/events'
+import type { PlateEvent, DeviationData } from '../../types/events'
 import type { Labware, LabwareType, LabwareRecordPayload } from '../../types/labware'
 import {
   clampLabwareOrientation,
@@ -89,6 +89,8 @@ export type LabwareEditorAction =
   | { type: 'UPDATE_EVENT'; event: PlateEvent }
   | { type: 'DELETE_EVENT'; eventId: string }
   | { type: 'REORDER_EVENTS'; events: PlateEvent[] }
+  | { type: 'INSERT_EVENT_AT'; event: PlateEvent; index: number }
+  | { type: 'UPDATE_EVENT_DEVIATION'; eventId: string; deviation: DeviationData }
   | { type: 'SELECT_EVENT'; eventId: string | null }
   | { type: 'EDIT_EVENT'; eventId: string | null }
   // Dual-pane actions
@@ -133,7 +135,7 @@ const initialState: LabwareEditorState = {
 /**
  * Reducer for editor state
  */
-function editorReducer(state: LabwareEditorState, action: LabwareEditorAction): LabwareEditorState {
+export function editorReducer(state: LabwareEditorState, action: LabwareEditorAction): LabwareEditorState {
   switch (action.type) {
     // === Labware actions ===
     case 'ADD_LABWARE': {
@@ -349,6 +351,48 @@ function editorReducer(state: LabwareEditorState, action: LabwareEditorAction): 
         ...state,
         events: action.events,
         isDirty: true,
+      }
+    }
+
+    case 'INSERT_EVENT_AT': {
+      // Insert event at the specified index
+      const newEvents = [...state.events]
+      newEvents.splice(action.index, 0, action.event)
+      return {
+        ...state,
+        events: newEvents,
+        isDirty: true,
+      }
+    }
+
+    case 'UPDATE_EVENT_DEVIATION': {
+      // Update or add a deviation to an existing event
+      const newEvents = state.events.map(e => {
+        if (e.eventId === action.eventId) {
+          const existingDeviations = (e.deviations || []) as DeviationData[]
+          const updatedEvent = {
+            ...e,
+            deviations: [...existingDeviations, action.deviation],
+          }
+          // Also mark executionState as deviated if not already
+          if (updatedEvent.executionState) {
+            updatedEvent.executionState = {
+              ...updatedEvent.executionState,
+              state: 'deviated',
+              deviationNote: action.deviation.message,
+              deviationDetails: action.deviation as unknown as Record<string, unknown>,
+            }
+          }
+          return updatedEvent
+        }
+        return e
+      })
+      // Only mark dirty if an event was actually updated
+      const eventWasUpdated = newEvents.some(e => e.eventId === action.eventId)
+      return {
+        ...state,
+        events: newEvents,
+        isDirty: eventWasUpdated,
       }
     }
 

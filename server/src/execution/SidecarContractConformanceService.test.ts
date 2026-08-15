@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { initializeApp } from '../server.js';
 import type { AppContext } from '../server.js';
 import { SidecarContractConformanceService } from './SidecarContractConformanceService.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 const schemaFiles: Array<{ name: string; content: string }> = [
   {
@@ -137,6 +138,7 @@ describe('SidecarContractConformanceService', () => {
     for (const file of schemaFiles) {
       await writeFile(resolve(testDir, `schema/sidecar/${file.name}`), file.content);
     }
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

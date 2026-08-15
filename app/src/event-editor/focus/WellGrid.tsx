@@ -33,6 +33,13 @@ interface WellGridProps {
    * cells the floating Accept button will commit.
    */
   previewWellIds?: ReadonlySet<WellId>
+  /**
+   * Optional per-well protocol-planning step status. When present, each well
+   * gets a `data-protocol-step-status` attribute ('past' dimmed, 'current'
+   * highlighted) so the deck shows which step the user is localizing now vs
+   * already-done steps.
+   */
+  protocolStepStatus?: ReadonlyMap<WellId, 'current' | 'past'>
   /** Wells with committed or preview-computed material/volume state. */
   occupiedWellIds?: ReadonlySet<WellId>
   /**
@@ -69,6 +76,7 @@ export function WellGrid({
   hoveredWellId,
   selectedWellIds,
   previewWellIds = EMPTY_WELLS,
+  protocolStepStatus,
   occupiedWellIds = EMPTY_WELLS,
   tubeWellIds = EMPTY_TUBES,
   compositionStyles,
@@ -217,6 +225,7 @@ export function WellGrid({
         const hovered = well.wellId === hoveredWellId
         const selected = selectedWellIds.has(well.wellId)
         const previewed = previewWellIds.has(well.wellId)
+        const stepStatus = protocolStepStatus?.get(well.wellId)
         const occupied = occupiedWellIds.has(well.wellId)
         const hasTube = tubeWellIds.has(well.wellId)
         const interactive: CSSProperties = onWellClick ? { cursor: 'pointer' } : {}
@@ -237,6 +246,7 @@ export function WellGrid({
           'data-hovered': hovered ? 'true' : 'false',
           'data-selected': selected ? 'true' : 'false',
           'data-preview': previewed ? 'true' : 'false',
+          'data-protocol-step-status': stepStatus ?? undefined,
           'data-occupied': occupied ? 'true' : 'false',
           'data-tube': hasTube ? 'true' : 'false',
           'data-tip': isTipRack ? 'true' : 'false',

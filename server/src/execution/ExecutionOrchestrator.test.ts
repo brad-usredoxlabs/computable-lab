@@ -6,6 +6,7 @@ import type { AppContext } from '../server.js';
 import { ExecutionOrchestrator } from './ExecutionOrchestrator.js';
 import { ExecutionRunner } from './ExecutionRunner.js';
 import { ExecutionControlService } from './ExecutionControlService.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 const protocolSchema = `
 $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -223,6 +224,7 @@ describe('ExecutionOrchestrator', () => {
     await writeFile(resolve(testDir, 'schema/execution-environment.schema.yaml'), executionEnvironmentSchema);
     await writeFile(resolve(testDir, 'schema/execution-plan.schema.yaml'), executionPlanSchema);
 
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

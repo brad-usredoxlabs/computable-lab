@@ -22,14 +22,14 @@
  *   - 'document'        → <DocumentEditor /> + DocumentStateProvider
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { AppShell } from '../../shared/shell'
 import {
   WorkspaceProvider,
   useWorkspace,
 } from '../workspace/WorkspaceContext'
-import { useOpenStudies } from '../workspace/useOpenStudies'
+import { useOptionalOpenTabs } from '../../shared/shell/OpenTabsContext'
 import { EventEditorProvider } from '../EventEditorContext'
 import { FocusModalsProvider } from '../focus/FocusModalsProvider'
 import { PdfStateProvider } from '../viewer/pdf/PdfViewerContext'
@@ -47,8 +47,9 @@ import { RunCollectionView } from '../../collections/RunCollectionView'
 import { LabCollectionView } from '../../collections/LabCollectionView'
 import { ProtocolSelectionProvider } from '../protocol/ProtocolSelectionContext'
 import { ProtocolPreviewBridge } from '../protocol/ProtocolPreviewBridge'
+import { apiClient } from '../../shared/api/client'
 import type { WorkspaceTab } from '../workspace/types'
-import { projectDetailsTabId } from '../workspace/types'
+import { projectDetailsTabId, projectTabId } from '../workspace/types'
 import '../viewer/viewer.css'
 import '../styles/eventEditor.css'
 import './ProjectWorkspacePage.css'
@@ -95,12 +96,34 @@ function WorkspaceShellHost({
   autoOpenEventGraphId,
 }: WorkspaceShellHostProps) {
   const ws = useWorkspace()
-  const { openStudy } = useOpenStudies()
+  const openTabs = useOptionalOpenTabs()
+  const [studyTitle, setStudyTitle] = useState<string | null>(null)
 
-  // Deep-linked study → make sure the topbar tab strip shows it.
+  // Fetch the study title so the top-level project tab isn't a raw STU- id.
   useEffect(() => {
-    openStudy(studyId)
-  }, [studyId, openStudy])
+    let cancelled = false
+    apiClient
+      .getRecord(studyId)
+      .then((env) => {
+        if (cancelled) return
+        const payload = (env as { payload?: Record<string, unknown> })?.payload
+        const t = typeof payload?.title === 'string' && payload.title.trim() ? payload.title : null
+        if (t) setStudyTitle(t)
+      })
+      .catch(() => {
+        /* title is a nicety — fall back to the id */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [studyId])
+
+  // Ensure the CURRENT project tab exists for this study (deep-links, direct
+  // navigation, refresh) — in the current tab (browser model), never a separate
+  // re-activated tab. Idempotent when the active tab is already this project.
+  useEffect(() => {
+    openTabs?.navigateActiveTab({ id: projectTabId(studyId), kind: 'project', studyId, title: studyTitle ?? studyId })
+  }, [studyId, studyTitle, openTabs])
 
   // Phase 10 deep-link: open a deck tab for the named event graph.
   const openedRef = useRef<string | null>(null)

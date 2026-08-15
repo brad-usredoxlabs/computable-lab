@@ -2026,6 +2026,32 @@ export const apiClient = {
     return response.records
   },
 
+  /**
+   * Save an anonymized (prompt → accepted/confirmed graph) pair to the
+   * cl-appliance Corpus Service via the server-side bridge (THE MOAT).
+   * Best-effort: the server never lets a corpus failure break the app save.
+   */
+  async saveCorpusEntry(entry: {
+    source: 'protocol-loop' | 'event-editor'
+    sourceType: 'app'
+    prompt: {
+      user: string
+      system?: string
+      deck?: string
+      bindings?: string[]
+      step_context?: Record<string, unknown>
+    }
+    acceptedGraph: Record<string, unknown>
+    confirmedBy: 'user' | 'accepted-EVG'
+    corrections?: Array<Record<string, unknown>>
+  }): Promise<{ ok: boolean; entryId?: string; deduped?: boolean; error?: string }> {
+    const response = await request<{ ok: boolean; entryId?: string; deduped?: boolean; error?: string }>(
+      '/corpus/entries',
+      { method: 'POST', body: JSON.stringify(entry) },
+    )
+    return response
+  },
+
   async getPlatforms(): Promise<PlatformManifest[]> {
     const response = await request<{ platforms: PlatformManifest[] }>('/platforms')
     return response.platforms
@@ -2176,6 +2202,19 @@ export const apiClient = {
       method: 'POST',
       body: JSON.stringify(params),
     })
+  },
+
+  async createVendorPdfExtractionDraft(
+    vendorPdfId: string,
+    body?: { regenerate?: boolean; title?: string },
+  ): Promise<{ success: boolean; draftId?: string; candidateCount?: number }> {
+    return request<{ success: boolean; draftId?: string; candidateCount?: number }>(
+      `/extraction/vendor-pdfs/${encodeURIComponent(vendorPdfId)}/draft`,
+      {
+        method: 'POST',
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      },
+    )
   },
 
   async searchEquipmentExa(params: {

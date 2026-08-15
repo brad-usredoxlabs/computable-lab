@@ -20,6 +20,7 @@
  */
 
 import { useWorkspace } from '../workspace/WorkspaceContext'
+import { useOptionalEventEditor } from '../EventEditorContext'
 import type { WorkspaceRightPaneMode } from '../workspace/types'
 import { AiTabPanel } from './ai/AiTabPanel'
 import { SearchTabPanel } from './search/SearchTabPanel'
@@ -45,12 +46,20 @@ export function RightPane() {
   const activeTab = ws.state.activeTabId
     ? ws.state.tabs.find((t: any) => t.id === ws.state.activeTabId) ?? null
     : null
-  const runId =
+  // Prefer a run context carried by the active workspace tab (execution tab,
+  // deck bound to a run, or a run tab). Fall back to the event-editor
+  // context, which the run workspace seeds with `runId` directly — its active
+  // workspace tab is the project-details landing tab and carries no runId.
+  const editor = useOptionalEventEditor()
+  const tabRunId =
     activeTab?.kind === 'execution'
       ? activeTab.runId
       : activeTab?.kind === 'deck' && activeTab?.runId
         ? activeTab.runId
-        : null
+        : activeTab?.kind === 'run'
+          ? activeTab.runId
+          : null
+  const runId = tabRunId ?? editor?.state.runId ?? null
 
   return (
     <div className="right-pane" data-testid="right-pane">

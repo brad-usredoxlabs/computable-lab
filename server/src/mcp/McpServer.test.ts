@@ -12,6 +12,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { initializeApp, type AppContext } from '../server.js';
 import { createMcpServer } from './McpServerFactory.js';
 import { jsonResult, errorResult, textResult } from './helpers.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 // Test fixtures
 const TEST_SCHEMA = {
@@ -51,6 +52,7 @@ describe('MCP Server', () => {
     await mkdir(join(testDir, 'records'), { recursive: true });
 
     // Initialize app context
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir);
     server = await createMcpServer(ctx);
   });

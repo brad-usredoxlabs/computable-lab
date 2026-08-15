@@ -1,0 +1,93 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/vendor-pdf.schema.yaml"
+title: "VendorPdf"
+description: >
+  A first-class, lab-level record representing an ingested vendor document
+  (e.g. a kit protocol PDF). It is FREE-FLOATING: it requires no parent
+  study/experiment/run. It may carry an optional parent link (links.studyId)
+  when ingested contextually from inside a study (kept as part of the
+  ingestion record). Extraction products are referenced via
+  vendorProtocolCandidateRef / promotedProtocolRef, not embedded.
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required:
+- kind
+- recordId
+- title
+- source
+- state
+
+properties:
+  kind:
+    const: "vendor-pdf"
+
+  recordId:
+    type: string
+    pattern: "^VPDF-[A-Z0-9][A-Z0-9_-]*$"
+
+  title:
+    type: string
+
+  shortSlug:
+    type: string
+
+  state:
+    type: string
+    enum: [ draft, in_progress, ingested, extracted, superseded, archived ]
+    description: "Lifecycle state of the vendor document."
+
+  # Optional parent filing links captured at ingest time (Decision 5): a
+  # vendor-pdf ingested from inside a study records that study here so the
+  # contextual link survives. The record is still first-class and free-floating.
+  links:
+    type: object
+    additionalProperties: false
+    description: "Optional parent filing links captured at ingest time."
+    properties:
+      studyId: { type: string }
+      experimentId: { type: string }
+      runId: { type: string }
+
+  source:
+    type: object
+    additionalProperties: false
+    required: [ engine, url, ingestedAt ]
+    properties:
+      engine:
+        const: "exa"
+      vendor: { type: string }
+      title: { type: string }
+      url: { type: string, format: uri }
+      query: { type: string }
+      ingestedAt: { type: string, format: date-time }
+      pageCount: { type: integer, minimum: 0 }
+
+  file:
+    $ref: "./datatypes/file-ref.schema.yaml"
+
+  extractedText:
+    type: array
+    description: "Per-page extracted plain text (index 0 is page 1)."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ pageNumber, text ]
+      properties:
+        pageNumber: { type: integer, minimum: 1 }
+        text: { type: string }
+
+  vendorProtocolCandidateRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Reference to the extraction sidecar (vendor-protocol-candidate)."
+
+  promotedProtocolRef:
+    $ref: "./datatypes/ref.schema.yaml"
+    description: "Reference to the universal protocol promoted from this PDF (source.type=vendor)."
+
+  tags:
+    type: array
+    items: { type: string }
+    uniqueItems: true

@@ -113,7 +113,8 @@ export interface GraphLemurPdfIngestResponse {
    */
   recordedArtifact?: {
     recordId: string;
-    studyId: string;
+    /** Present only when the request carried a `studyId`. */
+    studyId?: string;
     extractedTextPageCount: number;
   };
 }
@@ -1184,48 +1185,118 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
           ...(vendor ? { vendor } : {}),
           ...(sourcePdf.title ? { title: sourcePdf.title } : {}),
         });
+        // Phase 2: always persist a first-class vendor-pdf record.
+        // Phase 9: also persist a study-scoped artifact record when studyId
+        // is supplied (back-compat). Best-effort — a failure doesn't break
+        // the legacy chat flow.
 
-        // Phase 9: persist the ingest as a study-scoped artifact record so it
-        // shows up in the workspace Browse tab and the PDF viewer can open it
-        // later by id. Best-effort — a failure here doesn't break the legacy
-        // chat flow that just wants the sourcePdf metadata.
+        // --- shared: layout extraction (reused by both record types) ---
+        const artifactTitle =
+          title ||
+          extraction.candidate.title ||
+          sourcePdf.url ||
+          'Vendor PDF';
+        let extractedTextPages: Array<{ pageNumber: number; text: string }> = [];
+        try {
+          const layout = await extractVendorPdfText({
+            workspaceRoot,
+            artifactPath: download.relativePath,
+            fileName: download.relativePath.split('/').pop() ?? 'document.pdf',
+            mode: 'layout',
+          });
+          extractedTextPages = layout.layoutText?.pages ?? [];
+        } catch (extractionErr) {
+          request.log?.warn?.(
+            { err: extractionErr },
+            'GraphLemur ingest: layout extraction failed; records will have no extractedText',
+          );
+        }
+
+        const nowIso = new Date().toISOString();
+        const documentId = `graph-lemur-${download.sha256.slice(0, 12)}`;
+        const vpdfRecordId = `VPDF-${download.sha256.slice(0, 12).toUpperCase()}`;
+
+        // --- shared: vendor-pdf record payload (first-class, durable) ---
+        const vpdfPayload: Record<string, unknown> = {
+          kind: 'vendor-pdf' as const,
+          recordId: vpdfRecordId,
+          title: artifactTitle,
+          state: 'ingested',
+          source: {
+            engine: 'exa' as const,
+            ...(vendor ? { vendor } : {}),
+            url: sourcePdf.url,
+            ...(ingestQuery ? { query: ingestQuery } : {}),
+            ingestedAt: nowIso,
+            pageCount: extraction.document.pageCount,
+          },
+          file: {
+            file_name: download.relativePath.split('/').pop() ?? 'document.pdf',
+            media_type: 'application/pdf',
+            source_url: sourcePdf.url,
+            size_bytes: download.bytesDownloaded,
+            sha256: download.sha256,
+            stored_path: download.relativePath,
+            page_count: extraction.document.pageCount,
+          },
+          extractedText: extractedTextPages.map((p) => ({
+            pageNumber: p.pageNumber,
+            text: p.text,
+          })),
+          vendorProtocolCandidateRef: {
+            kind: 'record',
+            type: 'vendor-protocol-candidate',
+            id: documentId,
+          },
+        };
+
+        // When studyId was provided, add links.studyId to the vendor-pdf record.
+        if (requestedStudyId) {
+          vpdfPayload.links = { studyId: requestedStudyId };
+        }
+
         let recordedArtifact: GraphLemurPdfIngestResponse['recordedArtifact'];
-        if (requestedStudyId && store) {
-          const artifactTitle =
-            title ||
-            extraction.candidate.title ||
-            sourcePdf.url ||
-            'Vendor PDF';
-          // Content-addressed id: the sha256 prefix gives idempotency across
-          // re-ingests of the same PDF. If the record already exists, treat
-          // that as a successful no-op rather than surfacing an error.
-          const recordId = `ART-${download.sha256.slice(0, 12).toUpperCase()}`;
-          let extractedTextPages: Array<{ pageNumber: number; text: string }> = [];
-          try {
-            const layout = await extractVendorPdfText({
-              workspaceRoot,
-              artifactPath: download.relativePath,
-              fileName: download.relativePath.split('/').pop() ?? 'document.pdf',
-              mode: 'layout',
-            });
-            extractedTextPages = layout.layoutText?.pages ?? [];
-          } catch (extractionErr) {
-            // Layout extraction is best-effort; the artifact is still useful
-            // even with empty extractedText (the PDF viewer falls back to
-            // pdfjs's on-the-fly text layer for selection).
-            request.log?.warn?.(
-              { err: extractionErr },
-              'GraphLemur ingest: layout extraction failed; artifact will have no extractedText',
-            );
-          }
 
-          const nowIso = new Date().toISOString();
-          // The schema URI belongs in the envelope's `schemaId` (passed to
-          // createEnvelope below), not the payload. The artifact schema
-          // declares `unevaluatedProperties: false`, so a stray `$schema`
-          // here makes validation fail and store.create returns success:false,
-          // which the frontend surfaces as "legacy chat-draft mode."
-          const payload = {
+        // --- persist vendor-pdf (always, when store is available) ---
+        if (store) {
+          const vpdfEnvelope = createEnvelope(
+            vpdfPayload,
+            'https://computable-lab.com/schema/computable-lab/vendor-pdf.schema.yaml',
+            { kind: 'vendor-pdf' },
+          );
+          if (vpdfEnvelope) {
+            const exists = await store.exists(vpdfRecordId).catch(() => false);
+            if (!exists) {
+              const result = await store.create({
+                envelope: vpdfEnvelope,
+                message: `GraphLemur ingest (vendor-pdf): ${artifactTitle}`,
+              });
+              if (result.success) {
+                recordedArtifact = {
+                  recordId: vpdfRecordId,
+                  ...(requestedStudyId ? { studyId: requestedStudyId } : {}),
+                  extractedTextPageCount: extractedTextPages.length,
+                };
+              } else {
+                request.log?.warn?.(
+                  { error: result.error },
+                  'GraphLemur ingest: vendor-pdf record create failed',
+                );
+              }
+            } else {
+              recordedArtifact = {
+                recordId: vpdfRecordId,
+                ...(requestedStudyId ? { studyId: requestedStudyId } : {}),
+                extractedTextPageCount: extractedTextPages.length,
+              };
+            }
+          }
+        }
+
+        // --- Phase 9 legacy: also persist study-scoped artifact when studyId present ---
+        if (requestedStudyId && store) {
+          const recordId = `ART-${download.sha256.slice(0, 12).toUpperCase()}`;
+          const artifactPayload = {
             kind: 'artifact' as const,
             recordId,
             title: artifactTitle,
@@ -1253,7 +1324,7 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
           };
 
           const envelope = createEnvelope(
-            payload,
+            artifactPayload,
             'https://computable-lab.com/schema/computable-lab/artifact.schema.yaml',
             { kind: 'artifact' },
           );
@@ -1264,26 +1335,12 @@ export function createVendorSearchHandlers(options: VendorSearchHandlerOptions =
                 envelope,
                 message: `GraphLemur ingest: ${artifactTitle}`,
               });
-              if (result.success) {
-                recordedArtifact = {
-                  recordId,
-                  studyId: requestedStudyId,
-                  extractedTextPageCount: extractedTextPages.length,
-                };
-              } else {
+              if (!result.success) {
                 request.log?.warn?.(
                   { error: result.error },
                   'GraphLemur ingest: artifact record create failed',
                 );
               }
-            } else {
-              // Already on disk from a previous ingest — return its id so the
-              // caller can still reference the record.
-              recordedArtifact = {
-                recordId,
-                studyId: requestedStudyId,
-                extractedTextPageCount: extractedTextPages.length,
-              };
             }
           }
         }

@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { initializeApp } from '../server.js';
 import type { AppContext } from '../server.js';
 import { ExecutionMaterializer } from './ExecutionMaterializer.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 const protocolSchema = `
 $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -46,6 +47,7 @@ describe('ExecutionMaterializer', () => {
     await writeFile(resolve(testDir, 'schema/protocol.schema.yaml'), protocolSchema);
     await writeFile(resolve(testDir, 'schema/planned-run.schema.yaml'), plannedRunSchema);
 
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

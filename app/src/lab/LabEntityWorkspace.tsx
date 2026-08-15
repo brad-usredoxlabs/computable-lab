@@ -103,7 +103,6 @@ export function LabEntityWorkspace() {
     <AppShell
       brand="Lab"
       layout="workspace"
-      topbarTabs={<div />}
       leftPane={workspaceContent}
     />
   )

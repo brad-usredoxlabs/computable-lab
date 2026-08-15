@@ -4,6 +4,7 @@ import { mkdir, writeFile, rm } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 import { initializeApp, createServer } from '../server.js';
 import type { AppContext } from '../server.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 const protocolSchema = `
 $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -155,6 +156,7 @@ describe('Execution Orchestration API', () => {
     await writeFile(resolve(testDir, 'schema/instrument-log.schema.yaml'), instrumentLogSchema);
     await writeFile(resolve(testDir, 'schema/execution-run.schema.yaml'), executionRunSchema);
 
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

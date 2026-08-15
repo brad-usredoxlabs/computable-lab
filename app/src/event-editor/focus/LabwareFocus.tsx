@@ -23,6 +23,7 @@ import { useFocusModals } from './FocusModalsProvider'
 import {
   buildPreviewWellIndex,
   previewWellsForLabware,
+  previewStepStatusForLabware,
 } from '../lib/previewProjection'
 import { ReadPlateModal } from '../rail/ReadPlateModal'
 import type { LabwareOrientation, WellSelection } from '../types'
@@ -161,6 +162,10 @@ export function LabwareFocus() {
   )
   const previewEventsForLabware = useMemo(
     () => (labware ? previewIndex.eventsByLabware.get(labware.labwareId) ?? [] : []),
+    [previewIndex, labware],
+  )
+  const protocolStepStatus = useMemo(
+    () => (labware ? previewStepStatusForLabware(previewIndex, labware.labwareId) : undefined),
     [previewIndex, labware],
   )
   const occupiedWellIds = useMemo(
@@ -495,6 +500,7 @@ export function LabwareFocus() {
             hoveredWellId={hover?.wellId ?? null}
             selectedWellIds={selectedSet}
             previewWellIds={previewWells}
+            protocolStepStatus={protocolStepStatus}
             occupiedWellIds={occupiedWellIds}
             tubeWellIds={tubeWellIds}
             compositionStyles={compositionStyles}

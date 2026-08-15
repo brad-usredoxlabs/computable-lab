@@ -5,6 +5,8 @@
  * Phase 2: source intake panel
  * Phase 3: AI extraction
  * Phase 4: configuration panel with step toggles, inline overrides, labware mapping
+ * Phase 5: AI draft generation
+ * Phase 6: iterative feedback loop
  * Phase 7: promotion and export
  *
  * The page wraps everything in `ProtocolBuilderProvider` so config state
@@ -14,6 +16,7 @@
 
 import { useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { AppShell } from '../shared/shell/AppShell'
 import { ProtocolBuilderProvider, useProtocolBuilderState } from './ProtocolBuilderContext'
 import { SourceIntakePanel } from './SourceIntakePanel'
 import { ExtractionPanel } from '../components/protocol-builder/ExtractionPanel'
@@ -30,9 +33,15 @@ export interface ProtocolBuilderPageProps {}
 
 export function ProtocolBuilderPage(_props: ProtocolBuilderPageProps) {
   return (
-    <ProtocolBuilderProvider>
-      <ProtocolBuilderPageInner />
-    </ProtocolBuilderProvider>
+    <AppShell
+      brand="Semantic ELN"
+      layout="stacked"
+      rootClassName="protocol-builder-page"
+    >
+      <ProtocolBuilderProvider>
+        <ProtocolBuilderPageInner />
+      </ProtocolBuilderProvider>
+    </AppShell>
   )
 }
 

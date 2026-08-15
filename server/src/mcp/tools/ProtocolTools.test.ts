@@ -5,6 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { initializeApp, type AppContext } from '../../server.js';
 import { ToolRegistry } from '../../ai/ToolRegistry.js';
 import { registerProtocolTools } from './protocolTools.js';
+import { setupTestWorkspace } from '../../test/setupApp.js';
 
 const eventGraphSchema = `
 $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -61,6 +62,7 @@ describe('protocol MCP tools', () => {
     await writeFile(resolve(testDir, 'schema/event-graph.schema.yaml'), eventGraphSchema);
     await writeFile(resolve(testDir, 'schema/protocol.schema.yaml'), protocolSchema);
 
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

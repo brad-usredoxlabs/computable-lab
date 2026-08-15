@@ -2,13 +2,20 @@
  * Phase 9 ingest → artifact-record tests.
  *
  *  - ingest with `studyId` writes a kind=artifact record to the store
- *  - ingest without `studyId` doesn't write (legacy behavior preserved)
+ *  - ingest WITHOUT `studyId` persists a kind=vendor-pdf record (Phase 2)
  *  - ingest with no `store` configured doesn't write (handler still
  *    returns sourcePdf metadata so legacy chat keeps working)
  *  - re-ingesting the same PDF (same sha256) is a no-op (idempotent)
  *  - malformed studyId returns 400
  *  - failures inside extractVendorPdfText degrade gracefully (artifact
  *    still written, with empty extractedText)
+ *
+ * Phase 2 vendor-pdf tests:
+ *  - vendor-pdf record always written (with or without studyId)
+ *  - vendor-pdf carries links.studyId only when studyId was provided
+ *  - vendor-pdf recordId is VPDF-<sha256_prefix>
+ *  - vendor-pdf source.engine === 'exa'
+ *  - vendor-pdf carries vendorProtocolCandidateRef
  */
 
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -196,7 +203,7 @@ afterEach(() => {
 });
 
 describe('GraphLemur PDF ingest → artifact', () => {
-  it('writes a kind=artifact record when studyId is supplied', async () => {
+  it('writes a kind=vendor-pdf record AND legacy artifact when studyId is supplied', async () => {
     const { store, upserted } = makeStubStore();
     const handlers = createVendorSearchHandlers({
       workspaceRoot: '/workspace',
@@ -212,23 +219,48 @@ describe('GraphLemur PDF ingest → artifact', () => {
       reply.reply,
     );
     expect(reply.statusCode).toBe(200);
+
+    // vendor-pdf record
+    expect(upserted).toHaveLength(2);
+    const vpdfEnv = upserted[0];
+    expect(vpdfEnv.recordId).toBe(`VPDF-${SAMPLE_SHA.slice(0, 12).toUpperCase()}`);
+    const vpdfPayload = vpdfEnv.payload as Record<string, unknown>;
+    expect(vpdfPayload.kind).toBe('vendor-pdf');
+    expect(vpdfPayload.state).toBe('ingested');
+    const vpdfSource = vpdfPayload.source as Record<string, unknown>;
+    expect(vpdfSource.engine).toBe('exa');
+    expect(vpdfSource.query).toBe('buffer prep');
+    const vpdfLinks = vpdfPayload.links as Record<string, unknown>;
+    expect(vpdfLinks).toBeDefined();
+    expect(vpdfLinks.studyId).toBe('STU-000001');
+    const vpdfRef = vpdfPayload.vendorProtocolCandidateRef as Record<string, unknown>;
+    expect(vpdfRef.kind).toBe('record');
+    expect(vpdfRef.type).toBe('vendor-protocol-candidate');
+    expect(vpdfRef.id).toBe(`graph-lemur-${SAMPLE_SHA.slice(0, 12)}`);
+    const vpdfFile = vpdfPayload.file as Record<string, unknown>;
+    expect(vpdfFile.stored_path).toBe('artifacts/foundry/pdfs/protocol.pdf');
+    expect(vpdfFile.sha256).toBe(SAMPLE_SHA);
+    const vpdfExtracted = vpdfPayload.extractedText as Array<unknown>;
+    expect(vpdfExtracted).toHaveLength(2);
+
+    // Legacy artifact record (Phase 9 back-compat)
+    const artEnv = upserted[1];
+    expect(artEnv.recordId).toBe(`ART-${SAMPLE_SHA.slice(0, 12).toUpperCase()}`);
+    const artPayload = artEnv.payload as Record<string, unknown>;
+    expect(artPayload.kind).toBe('artifact');
+    expect(artPayload.artifactKind).toBe('pdf');
+    expect(artPayload.studyId).toBe('STU-000001');
+
+    // recordedArtifact reflects vendor-pdf
     expect((result as { recordedArtifact?: { recordId: string } }).recordedArtifact)
       .toBeDefined();
-    expect(upserted).toHaveLength(1);
-    const env = upserted[0];
-    expect(env.recordId).toBe(`ART-${SAMPLE_SHA.slice(0, 12).toUpperCase()}`);
-    const payload = env.payload as Record<string, unknown>;
-    expect(payload.kind).toBe('artifact');
-    expect(payload.artifactKind).toBe('pdf');
-    expect(payload.studyId).toBe('STU-000001');
-    const file = payload.file as Record<string, unknown>;
-    expect(file.stored_path).toBe('artifacts/foundry/pdfs/protocol.pdf');
-    expect(file.sha256).toBe(SAMPLE_SHA);
-    const extractedText = payload.extractedText as Array<unknown>;
-    expect(extractedText).toHaveLength(2);
+    expect((result as { recordedArtifact?: { recordId: string; studyId?: string } }).recordedArtifact?.recordId)
+      .toBe(`VPDF-${SAMPLE_SHA.slice(0, 12).toUpperCase()}`);
+    expect((result as { recordedArtifact?: { recordId: string; studyId?: string } }).recordedArtifact?.studyId)
+      .toBe('STU-000001');
   });
 
-  it('does NOT write a record when studyId is omitted (legacy chat path)', async () => {
+  it('writes a kind=vendor-pdf record when studyId is omitted (no legacy artifact)', async () => {
     const { store, upserted } = makeStubStore();
     const handlers = createVendorSearchHandlers({
       workspaceRoot: '/workspace',
@@ -240,8 +272,29 @@ describe('GraphLemur PDF ingest → artifact', () => {
       reply.reply,
     );
     expect(reply.statusCode).toBe(200);
-    expect((result as { recordedArtifact?: unknown }).recordedArtifact).toBeUndefined();
-    expect(upserted).toHaveLength(0);
+
+    // vendor-pdf record written
+    expect(upserted).toHaveLength(1);
+    const env = upserted[0];
+    expect(env.recordId).toBe(`VPDF-${SAMPLE_SHA.slice(0, 12).toUpperCase()}`);
+    const payload = env.payload as Record<string, unknown>;
+    expect(payload.kind).toBe('vendor-pdf');
+    expect(payload.state).toBe('ingested');
+    const source = payload.source as Record<string, unknown>;
+    expect(source.engine).toBe('exa');
+    // No links key when studyId not provided
+    expect(payload.links).toBeUndefined();
+    const ref = payload.vendorProtocolCandidateRef as Record<string, unknown>;
+    expect(ref.kind).toBe('record');
+    expect(ref.type).toBe('vendor-protocol-candidate');
+
+    // recordedArtifact reflects vendor-pdf without studyId
+    expect((result as { recordedArtifact?: { recordId: string; studyId?: string } }).recordedArtifact)
+      .toBeDefined();
+    expect((result as { recordedArtifact?: { recordId: string; studyId?: string } }).recordedArtifact?.recordId)
+      .toBe(`VPDF-${SAMPLE_SHA.slice(0, 12).toUpperCase()}`);
+    expect((result as { recordedArtifact?: { recordId: string; studyId?: string } }).recordedArtifact?.studyId)
+      .toBeUndefined();
   });
 
   it('does NOT write when no store is configured (legacy server)', async () => {
@@ -263,7 +316,8 @@ describe('GraphLemur PDF ingest → artifact', () => {
 
   it('is idempotent on re-ingest (same sha256)', async () => {
     const { store, upserted, shouldExist } = makeStubStore();
-    // Mark the artifact id as already-existing so the handler skips create().
+    // Mark the vendor-pdf id as already-existing so the handler skips create().
+    shouldExist.add(`VPDF-${SAMPLE_SHA.slice(0, 12).toUpperCase()}`);
     shouldExist.add(`ART-${SAMPLE_SHA.slice(0, 12).toUpperCase()}`);
     const handlers = createVendorSearchHandlers({
       workspaceRoot: '/workspace',
@@ -279,10 +333,10 @@ describe('GraphLemur PDF ingest → artifact', () => {
     );
     expect(reply.statusCode).toBe(200);
     // No new write, but recordedArtifact still surfaced so the caller
-    // can reference the existing artifact.
+    // can reference the existing vendor-pdf record.
     expect(upserted).toHaveLength(0);
     expect((result as { recordedArtifact?: { recordId: string } }).recordedArtifact?.recordId)
-      .toBe(`ART-${SAMPLE_SHA.slice(0, 12).toUpperCase()}`);
+      .toBe(`VPDF-${SAMPLE_SHA.slice(0, 12).toUpperCase()}`);
   });
 
   it('rejects malformed studyId with 400', async () => {
@@ -302,7 +356,7 @@ describe('GraphLemur PDF ingest → artifact', () => {
     expect(reply.statusCode).toBe(400);
   });
 
-  it('writes the artifact with empty extractedText when layout extraction fails', async () => {
+  it('writes both records with empty extractedText when layout extraction fails', async () => {
     mockExtractVendorPdfText.mockRejectedValueOnce(new Error('pdfjs explosion'));
     const { store, upserted } = makeStubStore();
     const handlers = createVendorSearchHandlers({
@@ -317,9 +371,12 @@ describe('GraphLemur PDF ingest → artifact', () => {
       }),
       reply.reply,
     );
-    expect(upserted).toHaveLength(1);
-    const extractedText = (upserted[0].payload as Record<string, unknown>)
-      .extractedText as Array<unknown>;
-    expect(extractedText).toHaveLength(0);
+    // Both vendor-pdf and legacy artifact written, both with empty extractedText
+    expect(upserted).toHaveLength(2);
+    for (const env of upserted) {
+      const extractedText = (env.payload as Record<string, unknown>)
+        .extractedText as Array<unknown>;
+      expect(extractedText).toHaveLength(0);
+    }
   });
 });

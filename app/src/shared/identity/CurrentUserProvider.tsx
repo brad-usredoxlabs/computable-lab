@@ -13,7 +13,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { apiClient, type MeResponse, type UserSummary } from '../api/client'
-import { setCurrentUserId } from '../api/base'
+import { getCurrentUserId, setCurrentUserId } from '../api/base'
 
 interface CurrentUserContextValue {
   loading: boolean
@@ -45,6 +45,15 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
         if (cancelled) return
         setUsers(u)
         setMe(m)
+        // Stale/invalid selected user recovery: when the backend can't resolve
+        // the stored `x-user-id` to an active local user (e.g. the user record
+        // was deleted/reset), `/me` returns `userId: null`. Clear the stored id
+        // and reload so every record API falls back to the local admin instead
+        // of 401ing ("A valid local user is required") on every request.
+        if (m && m.userId == null && getCurrentUserId() != null) {
+          setCurrentUserId(null)
+          window.location.reload()
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false)

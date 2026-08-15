@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { createServer, initializeApp } from '../server.js';
 import type { AppContext } from '../server.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 describe('Protocol Import API', () => {
   const testDir = resolve(process.cwd(), 'tmp/protocol-import-api-test');
@@ -13,6 +14,7 @@ describe('Protocol Import API', () => {
   beforeAll(async () => {
     await mkdir(resolve(testDir, 'schema'), { recursive: true });
     await mkdir(resolve(testDir, 'records'), { recursive: true });
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

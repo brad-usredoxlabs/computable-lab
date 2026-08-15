@@ -67,7 +67,79 @@ properties:
   deviationRef:
     $ref: "./datatypes/ref.schema.yaml"
 
+  deviations:
+    type: array
+    items:
+      $ref: "#/$defs/deviation_data"
+
 $defs:
+  deviation_data:
+    type: object
+    additionalProperties: false
+    description: >
+      A single field-level deviation with full provenance: which field changed,
+      what it was, what it became, why, and who recorded it.
+    required:
+      - eventId
+      - field
+      - originalValue
+      - newValue
+      - reason
+      - recordedBy
+      - recordedAt
+      - deviationType
+      - severity
+      - code
+      - message
+      - reportedBy
+      - reportedAt
+    properties:
+      eventId:
+        type: string
+        description: "Unique identifier for this deviation record"
+      field:
+        type: string
+        description: "The field/parameter that changed (e.g., temperature, duration, volume)"
+      originalValue:
+        description: "The value before the deviation"
+      newValue:
+        description: "The value after the deviation"
+      reason:
+        type: string
+        description: "Human-readable explanation of why the deviation occurred"
+      recordedBy:
+        type: string
+        description: "Who or what system recorded this deviation (provenance)"
+      recordedAt:
+        type: string
+        format: date-time
+        description: "ISO 8601 timestamp when the deviation was recorded"
+      deviationType:
+        type: string
+        enum: [ timing, volume, temperature, concentration, operator, system, environmental, inserted ]
+        description: "Category of deviation — measurement dimensions"
+      severity:
+        type: string
+        enum: [ info, warning, error ]
+        description: "Severity level of the deviation"
+      code:
+        type: string
+        description: "Machine-readable deviation code"
+      message:
+        type: string
+        description: "Short human-readable message"
+      reportedBy:
+        type: string
+        description: "Original reporter (may differ from recorder if relayed)"
+      reportedAt:
+        type: string
+        format: date-time
+        description: "When the deviation was first reported"
+      expectedValue:
+        description: "Expected value per protocol specification"
+      actualValue:
+        description: "Actual observed value"
+
   evidence_actor:
     type: object
     additionalProperties: false

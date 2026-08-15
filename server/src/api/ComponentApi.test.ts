@@ -4,6 +4,7 @@ import { mkdir, writeFile, rm } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 import { initializeApp, createServer } from '../server.js';
 import type { AppContext } from '../server.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 const graphComponentSchema = `
 $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -59,6 +60,7 @@ describe('Component API', () => {
     await writeFile(resolve(testDir, 'schema/graph-component.schema.yaml'), graphComponentSchema);
     await writeFile(resolve(testDir, 'schema/graph-component-version.schema.yaml'), graphComponentVersionSchema);
     await writeFile(resolve(testDir, 'schema/graph-component-instance.schema.yaml'), graphComponentInstanceSchema);
+    await setupTestWorkspace(testDir);
 
     _ctx = await initializeApp(testDir, {
       schemaDir: 'schema',

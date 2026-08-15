@@ -85,6 +85,12 @@ describe('LabEntityWorkspace — protocol entity view', () => {
     expect(screen.getByText('Seal and read')).toBeDefined()
   })
 
+  it('keeps the workspace tab strip visible (reported "zero tabs" bug)', async () => {
+    renderProtocolRoute()
+    await screen.findByTestId('protocol-steps-main')
+    expect(screen.getByTestId('workspace-tab-strip')).toBeDefined()
+  })
+
   it('keeps the full protocol text inside a collapsed details block', async () => {
     renderProtocolRoute()
     const details = await screen.findByTestId('protocol-full-text')

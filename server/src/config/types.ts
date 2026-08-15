@@ -17,6 +17,7 @@ export interface AppConfig {
   lab?: LabConfig;
   integrations?: IntegrationsConfig;
   ontology?: OntologyConfig;
+  corpus?: CorpusConfig;
 }
 
 /**
@@ -40,6 +41,25 @@ export interface OntologyConfig {
   localOntologies?: string[];
   /** Per-request timeout against the local ontology service (ms, default 1500). */
   timeoutMs?: number;
+}
+
+/**
+ * cl-appliance Corpus Service configuration (THE MOAT).
+ *
+ * When enabled, the server POSTs anonymized (prompt → confirmed event graph)
+ * pairs to the corpus service for training data. Default: disabled (opt-in via
+ * config.yaml or env).
+ */
+export interface CorpusConfig {
+  /**
+   * Master switch (default false). Can also be flipped via CLA_CORPUS_ENABLED.
+   */
+  enabled?: boolean;
+  /**
+   * Base URL of the cl-appliance corpus service
+   * (default "http://127.0.0.1:8790"). Can be overridden via CLA_CORPUS_URL.
+   */
+  serviceBaseUrl?: string;
 }
 
 export type ExecutionMode = 'local' | 'remote' | 'hybrid';

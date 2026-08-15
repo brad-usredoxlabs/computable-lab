@@ -18,7 +18,7 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import {
   WorkspaceProvider,
 } from '../../workspace/WorkspaceContext'
@@ -174,5 +174,37 @@ describe('SearchTabPanel', () => {
     await waitFor(() =>
       expect(screen.getByText('records endpoint is down')).toBeTruthy(),
     )
+  })
+
+  it('renders a CTA that routes to the Ingestion pipeline', async () => {
+    listRecordsByKind.mockResolvedValue({
+      records: sampleArtifacts,
+      total: sampleArtifacts.length,
+    })
+    render(
+      <MemoryRouter initialEntries={['/project/STU-000001']}>
+        <Routes>
+          <Route
+            path="/project/:studyId"
+            element={
+              <WorkspaceProvider
+                studyId="STU-000001"
+                saveDebounceMs={0}
+                loadFn={async () => ({ state: defaultWorkspaceState('STU-000001') })}
+                saveFn={async (_id, s) => ({ state: s })}
+              >
+                <SearchTabPanel />
+              </WorkspaceProvider>
+            }
+          />
+          <Route path="/ingestion/vendor-pdf" element={<div data-testid="ingestion-target" />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('search-tab-vendor-pdf-cta')).toBeTruthy(),
+    )
+    fireEvent.click(screen.getByTestId('search-tab-vendor-pdf-cta'))
+    expect(screen.getByTestId('ingestion-target')).toBeDefined()
   })
 })

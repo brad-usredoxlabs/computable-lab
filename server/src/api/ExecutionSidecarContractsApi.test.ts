@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { createServer, initializeApp } from '../server.js';
 import type { AppContext } from '../server.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 const schemaFiles: Array<{ name: string; content: string }> = [
   {
@@ -138,6 +139,7 @@ describe('Execution Sidecar Contracts API', () => {
     for (const file of schemaFiles) {
       await writeFile(resolve(testDir, `schema/sidecar/${file.name}`), file.content);
     }
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

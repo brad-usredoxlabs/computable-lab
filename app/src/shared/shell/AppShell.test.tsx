@@ -13,10 +13,11 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { AppShell } from './AppShell'
 import { ThemeProvider } from './useTheme'
+import { OpenTabsProvider } from './OpenTabsContext'
 
 afterEach(() => {
   cleanup()
@@ -26,10 +27,30 @@ function renderShell(props: Parameters<typeof AppShell>[0]) {
   return render(
     <MemoryRouter>
       <ThemeProvider>
-        <AppShell {...props} />
+        <OpenTabsProvider>
+          <AppShell {...props} />
+        </OpenTabsProvider>
       </ThemeProvider>
     </MemoryRouter>,
   )
+}
+
+/** Force the mobile viewport branch by mocking window.matchMedia to match. */
+function installMobileViewport() {
+  const original = window.matchMedia
+  window.matchMedia = ((query: string) => ({
+    matches: query.includes('max-width'),
+    media: query,
+    onchange: null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    addListener: () => {},
+    removeListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia
+  return () => {
+    window.matchMedia = original
+  }
 }
 
 describe('AppShell — stacked (default) layout', () => {
@@ -98,6 +119,40 @@ describe('AppShell — workspace layout', () => {
     expect(document.querySelector('.cl-app--workspace')).toBeTruthy()
     // react-resizable-panels emits a handle element for each PanelResizeHandle.
     expect(document.querySelector('.cl-workspace__handle')).toBeTruthy()
+    // Desktop (wide) viewport keeps the side-by-side horizontal split.
+    expect(
+      document
+        .querySelector('.cl-workspace__panels')
+        ?.getAttribute('data-panel-group-direction'),
+    ).toBe('horizontal')
+  })
+
+  it('slides the tabbed nav in from the right as a drawer on mobile', () => {
+    const restore = installMobileViewport()
+    renderShell({
+      brand: <span>CL</span>,
+      layout: 'workspace',
+      leftPane: <div data-testid="left-pane">GRAPH</div>,
+      rightPane: <div data-testid="right-pane">NAV</div>,
+    })
+    expect(screen.getByTestId('left-pane')).toBeTruthy()
+    expect(screen.getByTestId('right-pane')).toBeTruthy()
+    // No resizable-panels split on mobile — the nav is a slide-in drawer.
+    expect(document.querySelector('[data-panel-group]')).toBeNull()
+    const drawer = document.querySelector(
+      '.cl-workspace__drawer',
+    ) as HTMLElement
+    expect(drawer).toBeTruthy()
+    expect(drawer.classList.contains('cl-workspace__drawer--open')).toBe(false)
+
+    // Tapping the revealed edge slides the drawer into place.
+    fireEvent.click(screen.getByLabelText('Show panel'))
+    expect(drawer.classList.contains('cl-workspace__drawer--open')).toBe(true)
+
+    // Tapping the main pane docks it back out of the way.
+    fireEvent.click(screen.getByTestId('left-pane'))
+    expect(drawer.classList.contains('cl-workspace__drawer--open')).toBe(false)
+    restore()
   })
 
   it('Phase 12: workspace topbar has NO chrome row — only the tab strip', () => {
@@ -130,6 +185,13 @@ describe('AppShell — workspace layout', () => {
     })
     expect(screen.getByTestId('left-pane-only')).toBeTruthy()
     expect(document.querySelector('.cl-workspace__handle')).toBeNull()
+    // A single-pane workspace (e.g. /splash) must NOT mount a resizable-panels
+    // group at all — a lone collapsible Panel flipped vertical on portrait
+    // collapses to 0 height and blanks the main pane.
+    expect(document.querySelector('[data-panel-group]')).toBeNull()
+    expect(
+      document.querySelector('.cl-workspace__panels--single'),
+    ).toBeTruthy()
   })
 
   it('ignores plain children in workspace mode (left pane is the surface)', () => {
@@ -142,6 +204,26 @@ describe('AppShell — workspace layout', () => {
     })
     expect(screen.queryByTestId('ignored-children')).toBeNull()
     expect(screen.getByTestId('left')).toBeTruthy()
+  })
+
+  it('workspace layout defaults to the unified tab strip when none is passed', () => {
+    renderShell({
+      brand: <span>X</span>,
+      layout: 'workspace',
+      leftPane: <div />,
+    })
+    expect(screen.getByTestId('workspace-tab-strip')).toBeDefined()
+  })
+
+  it('workspace layout respects an explicit topbarTabs override', () => {
+    renderShell({
+      brand: <span>X</span>,
+      layout: 'workspace',
+      topbarTabs: <div data-testid="custom" />,
+      leftPane: <div />,
+    })
+    expect(screen.getByTestId('custom')).toBeDefined()
+    expect(screen.queryByTestId('workspace-tab-strip')).toBeNull()
   })
 })
 

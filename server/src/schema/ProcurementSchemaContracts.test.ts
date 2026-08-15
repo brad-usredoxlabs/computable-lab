@@ -28,6 +28,7 @@ describe('ProcurementSchemaContracts', () => {
       'core/datatypes/composition-entry.schema.yaml',
       'core/datatypes/file-ref.schema.yaml',
       'core/common.schema.yaml',
+      'workflow/event-graph.schema.yaml',
       'workflow/procurement-manifest.schema.yaml',
       'lab/vendor-offer.schema.yaml',
       'workflow/budget.schema.yaml',

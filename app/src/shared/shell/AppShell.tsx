@@ -4,6 +4,7 @@ import { useTheme } from './useTheme'
 import { useViewport } from './useViewport'
 import { BrandMenu } from './BrandMenu'
 import { GlobalNavbar } from './GlobalNavbar'
+import { WorkspaceTabStrip } from './WorkspaceTabStrip'
 import './AppShell.css'
 
 /**
@@ -19,7 +20,9 @@ import './AppShell.css'
  * - `topbarMiddle`  — endpoint-specific chips (vocab, tool, mode, etc.).
  * - `topbarRight`   — right-hand chrome (theme toggle, endpoint nav links).
  * - `topbarTabs`    — second row beneath the chrome row, for project tabs
- *                     (browser-tab style). Rendered only when provided.
+ *                     (browser-tab style). In the workspace layout this
+ *                     defaults to <WorkspaceTabStrip /> when not provided,
+ *                     so the appliance always shows the user's tab set.
  * - `viewerToolbar` — context-sensitive toolbar above the workspace viewer
  *                     (deck chips, rich-text toolbar, PDF nav). Only used
  *                     in workspace layout.
@@ -114,7 +117,7 @@ export function AppShell({
         // untouched for /protocols, /browser, /literature, /settings.
         <header className="topbar topbar--workspace">
           <GlobalNavbar />
-          <div className="topbar__tabs">{topbarTabs}</div>
+          <div className="topbar__tabs">{topbarTabs ?? <WorkspaceTabStrip />}</div>
         </header>
       ) : (
         <AppShellTopBar
@@ -164,18 +167,78 @@ function WorkspaceMain({
   panelAutoSaveId,
 }: WorkspaceMainProps) {
   const hasRight = rightPane !== undefined && rightPane !== null
+  const { isMobile } = useViewport()
+  const [drawerOpen, setDrawerOpen] = useState(false)
+
+  const topBar = viewerToolbar ? (
+    <div className="cl-workspace__toolbar">{viewerToolbar}</div>
+  ) : null
+
+  // No right pane: there's nothing to split against, so render the left pane
+  // filling the whole surface. Skips react-resizable-panels entirely here —
+  // a lone `collapsible` Panel flipped to vertical on portrait collapses to 0
+  // height, which blanked /splash and other single-pane workspace routes.
+  if (!hasRight) {
+    return (
+      <div className="cl-workspace">
+        {topBar}
+        <div className="cl-workspace__panels cl-workspace__panels--single">
+          <div className="cl-workspace__pane cl-workspace__pane--left">
+            {leftPane}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Mobile (portrait): the right pane becomes a right-side slide-in drawer,
+  // docked ~90% out of the way. Tap its revealed edge to slide it into place;
+  // tap the main pane to slide it back to the docked configuration.
+  if (isMobile) {
+    return (
+      <div className="cl-workspace">
+        {topBar}
+        <div className="cl-workspace__drawer-stage">
+          <div
+            className="cl-workspace__pane cl-workspace__pane--main"
+            onClick={() => setDrawerOpen(false)}
+          >
+            {leftPane}
+          </div>
+          <div
+            className={
+              drawerOpen
+                ? 'cl-workspace__drawer cl-workspace__drawer--open'
+                : 'cl-workspace__drawer'
+            }
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="cl-workspace__drawer-peek"
+              aria-label={drawerOpen ? 'Hide panel' : 'Show panel'}
+              aria-expanded={drawerOpen}
+              onClick={() => setDrawerOpen((o) => !o)}
+            />
+            <div className="cl-workspace__drawer-body">{rightPane}</div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Desktop (wide): the viewer and the tabbed nav sit in a horizontal
+  // resizable split.
   return (
     <div className="cl-workspace">
-      {viewerToolbar ? (
-        <div className="cl-workspace__toolbar">{viewerToolbar}</div>
-      ) : null}
+      {topBar}
       <PanelGroup
         direction="horizontal"
         className="cl-workspace__panels"
         {...(panelAutoSaveId ? { autoSaveId: panelAutoSaveId } : {})}
       >
         <Panel
-          defaultSize={hasRight ? 60 : 100}
+          defaultSize={60}
           minSize={20}
           collapsible
           collapsedSize={0}
@@ -183,20 +246,16 @@ function WorkspaceMain({
         >
           {leftPane}
         </Panel>
-        {hasRight ? (
-          <>
-            <PanelResizeHandle className="cl-workspace__handle" />
-            <Panel
-              defaultSize={40}
-              minSize={20}
-              collapsible
-              collapsedSize={0}
-              className="cl-workspace__pane cl-workspace__pane--right"
-            >
-              {rightPane}
-            </Panel>
-          </>
-        ) : null}
+        <PanelResizeHandle className="cl-workspace__handle" />
+        <Panel
+          defaultSize={40}
+          minSize={20}
+          collapsible
+          collapsedSize={0}
+          className="cl-workspace__pane cl-workspace__pane--right"
+        >
+          {rightPane}
+        </Panel>
       </PanelGroup>
     </div>
   )

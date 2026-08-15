@@ -409,6 +409,15 @@ export interface ChatMessage {
   instrumentApplianceJobs?: InstrumentApplianceJob[]
   /** True when this assistant message is a doc-discussion answer (prose only, no events) eligible for "Apply to graph". */
   docDiscussion?: boolean
+  /**
+   * The resolved request context consumed to produce this turn (surface
+   * context + mentions + editor mode), captured on user messages so the
+   * thread self-contains the protocol step / surface state the draft was
+   * derived from — not just the typed prompt. Persisted as
+   * `metadata.consumedContext` for the training-pair exporter. A thread
+   * without this field is an incomplete (prompt, step, graph) training pair.
+   */
+  consumedContext?: Record<string, unknown>
 }
 
 export interface AiConversationMessage {

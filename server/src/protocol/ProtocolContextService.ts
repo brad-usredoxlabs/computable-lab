@@ -144,12 +144,24 @@ export class ProtocolContextService {
     const runMethods = uniqueById([...runPlannedMethods, ...runEventGraphMethods]);
     const promotableRunMethods = runMethods.filter((record) => ['planned-run', 'event-graph'].includes(recordKind(record) ?? ''));
 
+    // Lab-wide universal protocols: no study / experiment / run scope. These
+    // are the "Lab Protocols" the selector offers in addition to project /
+    // experiment / run-scoped ones.
+    const labProtocols = uniqueById([
+      ...protocols.filter(
+        (record) => !linkString(record, 'studyId') && !linkString(record, 'experimentId') && !linkString(record, 'runId'),
+      ),
+      ...localProtocols.filter(
+        (record) => !linkString(record, 'studyId') && !linkString(record, 'experimentId') && !linkString(record, 'runId'),
+      ),
+    ]);
+
     return {
       projectTemplates,
       experimentProtocols,
       runMethods,
       promotableRunMethods,
-      availableProtocols: uniqueById([...runMethods, ...experimentProtocols, ...projectTemplates]),
+      availableProtocols: uniqueById([...labProtocols, ...runMethods, ...experimentProtocols, ...projectTemplates]),
     };
   }
 
@@ -247,8 +259,12 @@ export class ProtocolContextService {
     const updatedRunPayload = {
       ...runPayload,
       methodEventGraphId,
-      plannedRunRef: refFor(plannedRunId, 'planned-run', plannedRunTitle),
-      ...(kind === 'local-protocol' ? { localProtocolRef: protocolRef } : {}),
+      // The run schema's plannedRunRef/localProtocolRef use
+      // `additionalProperties: false` (kind/id/type only), so strip the
+      // display `label` the generic refFor adds — otherwise run validation
+      // rejects the update (un-evaluated property `label`).
+      plannedRunRef: { kind: 'record', id: plannedRunId, type: 'planned-run' },
+      ...(kind === 'local-protocol' ? { localProtocolRef: { kind: 'record', id: options.protocolId, type: 'local-protocol' } } : {}),
       methodPlatform: 'manual',
       methodVocabId: 'liquid-handling/v1',
       methodAttachedAt: now,

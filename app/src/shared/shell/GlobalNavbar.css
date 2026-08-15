@@ -70,3 +70,80 @@
   align-items: center;
   gap: 4px;
 }
+
+/* ---- Mobile: collapse destinations into a hamburger slide-down menu ---- */
+
+.global-navbar--mobile {
+  position: relative;
+}
+
+.global-navbar--mobile .global-navbar__spacer {
+  flex: 1;
+}
+
+.global-navbar__hamburger {
+  appearance: none;
+  background: var(--cl-bg-elev-2);
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  color: var(--cl-text);
+  width: 30px;
+  height: 30px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.global-navbar__hamburger:hover {
+  background: var(--cl-bg-elev-3);
+}
+
+.global-navbar__menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: var(--cl-bg-elev);
+  border-bottom: 1px solid var(--cl-border);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+  padding: 8px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.global-navbar--mobile .global-navbar__destinations {
+  flex-direction: column;
+  gap: 2px;
+}
+
+.global-navbar--mobile .global-navbar__dest {
+  text-align: left;
+  padding: 10px 12px;
+  font-size: 14px;
+  border-radius: 4px;
+}
+
+.global-navbar__menu-search {
+  width: 100%;
+}
+
+.global-navbar__menu-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+  border-top: 1px solid var(--cl-border);
+  padding-top: 10px;
+}
+
+.global-navbar__menu-actions,
+.global-navbar__menu-trailing {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}

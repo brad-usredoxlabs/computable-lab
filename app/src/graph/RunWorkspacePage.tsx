@@ -61,7 +61,7 @@ export function RunWorkspacePage() {
   const aiChat = useAiChat({ aiContext, endpoint: 'event-editor' })
   useRegisterAiChat(aiChat)
 
-  const resolvedRunId = runId || ''
+  const resolvedRunId = runId ?? 'RUN-UNKNOWN'
 
   // Result-to-Evidence Pipeline hooks
   const interpretation = useResultInterpretation(resolvedRunId)

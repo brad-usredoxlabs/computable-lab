@@ -17,7 +17,7 @@
 import { useCallback, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppShell } from '../shared/shell'
-import { ProjectTabStrip } from '../event-editor/projects/ProjectTabStrip'
+import { WorkspaceTabStrip } from '../shared/shell/WorkspaceTabStrip'
 import { StudyPickerPopover } from '../event-editor/projects/StudyPickerPopover'
 import { useOpenStudies } from '../event-editor/workspace/useOpenStudies'
 import './welcome.css'
@@ -39,7 +39,7 @@ export function WelcomePage() {
   return (
     <AppShell
       brand="Welcome"
-      topbarTabs={<ProjectTabStrip />}
+      topbarTabs={<WorkspaceTabStrip />}
       layout="workspace"
       leftPane={
         <div

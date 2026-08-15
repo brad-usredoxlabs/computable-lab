@@ -5,6 +5,7 @@ import { initializeApp } from '../server.js';
 import type { AppContext } from '../server.js';
 import { ExecutionPoller } from './ExecutionPoller.js';
 import { ExecutionControlService } from './ExecutionControlService.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 const plannedRunSchema = `
 $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -57,6 +58,7 @@ describe('ExecutionPoller', () => {
     await mkdir(resolve(testDir, 'records'), { recursive: true });
     await writeFile(resolve(testDir, 'schema/planned-run.schema.yaml'), plannedRunSchema);
     await writeFile(resolve(testDir, 'schema/execution-run.schema.yaml'), executionRunSchema);
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

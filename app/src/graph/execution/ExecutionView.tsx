@@ -4,12 +4,17 @@
  * and deviation capture capabilities.
  */
 
-import { useState, useMemo } from 'react'
-import type { PlateEvent } from '../../types/events'
-import { ExecutionNav } from './ExecutionNav'
-import { CurrentStepPanel } from './CurrentStepPanel'
-import { StepProgress } from './StepProgress'
-import { DeviationPanel } from './DeviationPanel'
+import { useState, useMemo } from 'react';
+import type { PlateEvent } from '../../types/events';
+import { getEventSummary } from '../../types/events.js';
+import type { RunExecutionState, DeviationData } from '../../shared/api/execution.js';
+import { ExecutionNav } from './ExecutionNav.js';
+import { CurrentStepPanel } from './CurrentStepPanel.js';
+import { StepProgress } from './StepProgress.js';
+import { DeviationPanel } from './DeviationPanel.js';
+import { PromoteToProtocolModal } from '../../run/PromoteToProtocolModal.js';
+import { createProtocolFromDraft } from '../../shared/api/protocols.js';
+import './execution.css';
 
 export interface ExecutionViewProps {
   runId: string
@@ -17,18 +22,21 @@ export interface ExecutionViewProps {
   executionStates: Record<string, { state: string; startedAt?: string; completedAt?: string; deviationNote?: string; deviationDetails?: Record<string, unknown> }>
   onExecutionStateChange: (eventId: string, state: { state: string; startedAt?: string; completedAt?: string; deviationNote?: string; deviationDetails?: Record<string, unknown> }) => Promise<void>
   onDeviationCaptured: (deviationId: string) => void
+  studyId?: string
 }
 
 export function ExecutionView({
-  runId,
+  runId: _runId,
   events,
   executionStates,
   onExecutionStateChange,
   onDeviationCaptured,
+  studyId,
 }: ExecutionViewProps) {
   const [currentEventIndex, setCurrentEventIndex] = useState(0)
   const [showDeviationPanel, setShowDeviationPanel] = useState(false)
   const [deviationForEvent, setDeviationForEvent] = useState<string | null>(null)
+  const [showPromoteModal, setShowPromoteModal] = useState(false)
 
   const currentEvent = events[currentEventIndex]
   const currentEventId = currentEvent?.eventId
@@ -41,6 +49,33 @@ export function ExecutionView({
       return timeA.localeCompare(timeB)
     })
   }, [events])
+
+  // Check if execution is complete (all events completed or skipped)
+  const isExecutionComplete = useMemo(() => {
+    return Object.values(executionStates).every(
+      (s) => s.state === 'completed' || s.state === 'skipped'
+    )
+  }, [executionStates])
+
+  // Collect deviations from execution states
+  const deviations: DeviationData[] = useMemo(() => {
+    return Object.entries(executionStates)
+      .filter(([_, s]) => s.deviationDetails)
+      .map(([eventId, s]) => {
+        const details = s.deviationDetails as unknown as DeviationData
+        return {
+          eventId,
+          deviationType: details.deviationType || 'operator',
+          deviationCode: details.deviationCode || 'UNKNOWN',
+          expectedValue: details.expectedValue,
+          actualValue: details.actualValue,
+          notes: details.notes,
+          severity: details.severity || 'info',
+          reportedBy: details.reportedBy || 'system',
+          reportedAt: details.reportedAt || new Date().toISOString(),
+        }
+      })
+  }, [executionStates])
 
   const handleCompleteStep = async () => {
     if (!currentEventId) return
@@ -102,12 +137,67 @@ export function ExecutionView({
     setCurrentEventIndex(nextIndex)
   }
 
+  const handlePromoteToProtocol = async (protocolData: {
+    protocolName: string;
+    protocolDescription?: string;
+    version: string;
+    corrections: Array<{
+      eventId: string;
+      originalValue: string;
+      correctedValue: string;
+      note?: string;
+    }>;
+  }) => {
+    try {
+      const result = await createProtocolFromDraft(
+        {
+          protocolName: protocolData.protocolName,
+          protocolDescription: protocolData.protocolDescription,
+          version: protocolData.version,
+          steps: sortedEvents.map((event) => {
+            // Extract action description from event details
+            const action = getEventSummary(event);
+            return {
+              eventId: event.eventId,
+              originalAction: action,
+              correctedAction: protocolData.corrections.find((c) => c.eventId === event.eventId)?.correctedValue,
+              deviationNote: protocolData.corrections.find((c) => c.eventId === event.eventId)?.note,
+            };
+          }),
+        },
+        _runId,
+        studyId,
+      );
+
+      if (result.success && result.protocolId) {
+        // Show success message and close modal
+        setShowPromoteModal(false);
+        // TODO: Show success notification with link to created protocol
+        console.log('Protocol created:', result.protocolId);
+      }
+    } catch (error) {
+      console.error('Failed to create protocol:', error);
+      // TODO: Show error notification
+      throw error;
+    }
+  }
+
   return (
     <div className="execution-view">
       <div className="execution-view__header">
         <h2 className="execution-view__title">Execution Mode</h2>
-        <div className="execution-view__progress">
-          Step {currentEventIndex + 1} of {sortedEvents.length}
+        <div className="execution-view__header-actions">
+          <div className="execution-view__progress">
+            Step {currentEventIndex + 1} of {sortedEvents.length}
+          </div>
+          {isExecutionComplete && (
+            <button
+              className="execution-view__promote-button"
+              onClick={() => setShowPromoteModal(true)}
+            >
+              Promote to Protocol
+            </button>
+          )}
         </div>
       </div>
 
@@ -146,7 +236,6 @@ export function ExecutionView({
       {/* Deviation Panel Modal */}
       {showDeviationPanel && deviationForEvent && (
         <DeviationPanel
-          runId={runId}
           eventId={deviationForEvent}
           event={currentEvent}
           onSubmit={handleDeviationSubmitted}
@@ -154,6 +243,25 @@ export function ExecutionView({
             setShowDeviationPanel(false)
             setDeviationForEvent(null)
           }}
+        />
+      )}
+
+      {/* Promote to Protocol Modal */}
+      {showPromoteModal && (
+        <PromoteToProtocolModal
+          runId={_runId}
+          events={sortedEvents.map((event) => ({
+            eventId: event.eventId,
+            action: getEventSummary(event),
+            at: event.at,
+            t_offset: event.t_offset,
+          }))}
+          executionState={
+            executionStates as unknown as RunExecutionState
+          }
+          deviations={deviations}
+          onClose={() => setShowPromoteModal(false)}
+          onConfirm={handlePromoteToProtocol}
         />
       )}
 

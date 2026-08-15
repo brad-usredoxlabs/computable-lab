@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { createServer, initializeApp } from '../server.js';
 import type { AppContext } from '../server.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 const executionRunSchema = `
 $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -53,6 +54,7 @@ describe('Execution Incident API', () => {
     await mkdir(resolve(testDir, 'records'), { recursive: true });
     await writeFile(resolve(testDir, 'schema/execution-run.schema.yaml'), executionRunSchema);
     await writeFile(resolve(testDir, 'schema/execution-incident.schema.yaml'), incidentSchema);
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

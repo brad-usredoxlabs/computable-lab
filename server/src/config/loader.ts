@@ -23,6 +23,7 @@ import type {
   LabConfig,
   IntegrationsConfig,
   OntologyConfig,
+  CorpusConfig,
   ExtractorProfileConfig,
 } from './types.js';
 import { DEFAULT_CONFIG, DEFAULT_REPO_CONFIG } from './types.js';
@@ -422,6 +423,19 @@ function validateLabConfig(config: unknown, path = 'lab'): asserts config is Lab
   }
 }
 
+function validateCorpusConfig(config: unknown, path = 'corpus'): asserts config is CorpusConfig {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    throw new ConfigValidationError('must be an object', path, config);
+  }
+  const c = config as Record<string, unknown>;
+  if (c.enabled !== undefined && typeof c.enabled !== 'boolean') {
+    throw new ConfigValidationError('enabled must be a boolean', `${path}.enabled`, c.enabled);
+  }
+  if (c.serviceBaseUrl !== undefined && typeof c.serviceBaseUrl !== 'string') {
+    throw new ConfigValidationError('serviceBaseUrl must be a string', `${path}.serviceBaseUrl`, c.serviceBaseUrl);
+  }
+}
+
 function validateIntegrationsConfig(config: unknown, path = 'integrations'): asserts config is IntegrationsConfig {
   if (!config || typeof config !== 'object' || Array.isArray(config)) {
     throw new ConfigValidationError('must be an object', path, config);
@@ -569,6 +583,10 @@ export function validateConfig(config: unknown): asserts config is Partial<AppCo
   if (c.ontology !== undefined) {
     validateOntologyConfig(c.ontology, 'ontology');
   }
+
+  if (c.corpus !== undefined) {
+    validateCorpusConfig(c.corpus, 'corpus');
+  }
 }
 
 /**
@@ -670,6 +688,10 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<AppCo
 
   if (partialConfig.ontology !== undefined) {
     config.ontology = partialConfig.ontology;
+  }
+
+  if (partialConfig.corpus !== undefined) {
+    config.corpus = partialConfig.corpus;
   }
 
   return config;

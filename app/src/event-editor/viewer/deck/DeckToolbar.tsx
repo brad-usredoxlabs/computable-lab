@@ -44,17 +44,22 @@ export function DeckToolbar({ tab, breadcrumb }: DeckToolbarProps) {
 
   const handleRename = async (newTitle: string) => {
     if (!tab || !runId) return
-    // Update the workspace tab title immediately (optimistic)
+    const prevTitle = tabTitle ?? 'Run'
+    // Update immediately (optimistic) — both the workspace tab (project deck
+    // case) and the run workspace's displayed title via the rename signal.
     ws.renameTab(tab.id, newTitle)
+    window.dispatchEvent(new CustomEvent('cl:run-renamed', { detail: { runId, title: newTitle } }))
     // Persist to the run record on the server
     try {
       const existing = await apiClient.getRecord(runId)
       const payload = existing.payload as Record<string, unknown>
       payload.title = newTitle
       await apiClient.updateRecord(runId, payload)
+      window.dispatchEvent(new CustomEvent('cl:records-changed'))
     } catch (err) {
       // Revert the tab title on failure
-      ws.renameTab(tab.id, tabTitle ?? 'Run')
+      ws.renameTab(tab.id, prevTitle)
+      window.dispatchEvent(new CustomEvent('cl:run-renamed', { detail: { runId, title: prevTitle } }))
       console.error('Failed to rename run:', err)
     }
   }

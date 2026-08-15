@@ -6,6 +6,7 @@ import type { AppContext } from '../../server.js';
 import { createMeasurementHandlers } from './MeasurementHandlers.js';
 import { createGeminiEmActiveReadJob } from '../../compiler/artifacts/InstrumentApplianceJob.js';
 import type { InstrumentRunFile } from '../../compiler/artifacts/InstrumentRunFile.js';
+import { setupTestWorkspace } from '../../test/setupApp.js';
 
 const measurementSchema = `
 $schema: "https://json-schema.org/draft/2020-12/schema"
@@ -51,6 +52,7 @@ describe('MeasurementHandlers appliance job execution', () => {
     await mkdir(resolve(testDir, 'schema'), { recursive: true });
     await mkdir(resolve(testDir, 'records/inbox'), { recursive: true });
     await writeFile(resolve(testDir, 'schema/measurement.schema.yaml'), measurementSchema);
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',

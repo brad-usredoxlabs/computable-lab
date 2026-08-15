@@ -107,7 +107,6 @@ export function ClaimWorkspace() {
     <AppShell
       brand="Claim"
       layout="workspace"
-      topbarTabs={<div />}
       leftPane={workspaceContent}
     />
   )

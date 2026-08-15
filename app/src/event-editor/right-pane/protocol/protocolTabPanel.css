@@ -48,6 +48,106 @@
   cursor: default;
 }
 
+/* --- appended: editable StepLocalizationPane styles --- */
+.step-localization-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg-elev);
+  margin-top: 8px;
+}
+
+.step-localization-pane__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cl-text-dim);
+}
+
+.editable-protocol-text {
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  background: var(--cl-bg);
+  min-height: 32px;
+}
+
+.editable-protocol-text--title .ProseMirror {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.editable-protocol-text--prose .ProseMirror {
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 80px;
+}
+
+.step-localization-pane__popup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--cl-accent);
+  border-radius: 6px;
+  background: var(--cl-bg-elev-2);
+}
+
+.step-localization-pane__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.step-localization-pane__btn {
+  padding: 6px 12px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg-elev);
+  color: var(--cl-text);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.step-localization-pane__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.step-localization-pane__btn--primary {
+  background: var(--cl-accent);
+  color: #fff;
+}
+
+.step-localization-pane__redraft {
+  width: 100%;
+  font: inherit;
+  min-height: 40px;
+  padding: 6px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg);
+  color: var(--cl-text);
+  resize: vertical;
+}
+
+/* Missing classes referenced by StepLocalizationPane.tsx */
+.step-localization-pane__corpus {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.step-localization-pane__btn--corpus {
+  font-size: 11px;
+}
+
+.step-localization-pane__save-msg {
+  font-size: 11px;
+  color: var(--cl-accent);
+}
+
 /* --- Plate setup sections ("This assay needs") — above the step chips --- */
 .protocol-setup-sections {
   display: flex;

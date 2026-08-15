@@ -14,6 +14,7 @@ describe('Protocol prose fields schema', () => {
     const schemaRoot = join(process.cwd(), '..', 'schema');
     const paths = [
       'workflow/protocol.schema.yaml',
+      'workflow/setting.schema.yaml',
       'workflow/local-protocol.schema.yaml',
       'core/common.schema.yaml',
       'core/datatypes/ref.schema.yaml',
@@ -40,6 +41,8 @@ describe('Protocol prose fields schema', () => {
       steps: [
         {
           stepId: 'step-001',
+          label: 'Review protocol',
+          ordinal: 1,
           kind: 'other',
           description: 'Review protocol prose before execution.',
         },

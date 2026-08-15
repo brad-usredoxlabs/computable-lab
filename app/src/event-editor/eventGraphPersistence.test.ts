@@ -237,4 +237,91 @@ describe('event-editor accepted event graph persistence', () => {
       orientation: 'landscape',
     }])
   })
+
+  describe('corpus auto-capture seam', () => {
+    it('posts exactly one committed-graph entry with source event-editor + accepted-EVG when a prompt is supplied', async () => {
+      const saveEventGraph = vi.fn().mockResolvedValue({ record: { recordId: 'EVG-001' } })
+      const corpusSave = vi.fn().mockResolvedValue({ ok: true, entryId: 'ENT-1', deduped: false })
+
+      await persistAcceptedEventGraph({
+        eventGraphId: 'EVG-001',
+        runId: 'RUN-001',
+        events: [event],
+        labwares: { 'plate-1': labware },
+        placements: [placement],
+        corpusUserPrompt: 'build the ROS assay',
+      }, saveEventGraph, vi.fn(), corpusSave)
+
+      // Fire-and-forget → flush the microtask queue.
+      await Promise.resolve()
+      await Promise.resolve()
+
+      expect(corpusSave).toHaveBeenCalledTimes(1)
+      const entry = corpusSave.mock.calls[0]![0]
+      expect(entry.source).toBe('event-editor')
+      expect(entry.sourceType).toBe('app')
+      expect(entry.confirmedBy).toBe('accepted-EVG')
+      expect(entry.prompt.user).toBe('build the ROS assay')
+      // committed graph (never a preview ghost)
+      expect(entry.acceptedGraph.events).toEqual([event])
+      expect(entry.acceptedGraph.labwares).toEqual([labware])
+    })
+
+    it('does not post when corpusUserPrompt is absent or empty', async () => {
+      const saveEventGraph = vi.fn().mockResolvedValue({ record: { recordId: 'EVG-001' } })
+      const corpusSave = vi.fn().mockResolvedValue({ ok: true })
+
+      await persistAcceptedEventGraph({
+        eventGraphId: 'EVG-001',
+        runId: null,
+        events: [event],
+        labwares: { 'plate-1': labware },
+        placements: [placement],
+        corpusUserPrompt: '   ',
+      }, saveEventGraph, vi.fn(), corpusSave)
+
+      await Promise.resolve()
+      expect(corpusSave).not.toHaveBeenCalled()
+    })
+
+    it('warns and continues when the corpus save fails (non-disabled) — never blocks the app save', async () => {
+      const saveEventGraph = vi.fn().mockResolvedValue({ record: { recordId: 'EVG-001' } })
+      const corpusSave = vi.fn().mockResolvedValue({ ok: false, error: 'http_503' })
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+      await persistAcceptedEventGraph({
+        eventGraphId: 'EVG-001',
+        runId: null,
+        events: [event],
+        labwares: { 'plate-1': labware },
+        placements: [placement],
+        corpusUserPrompt: 'build the assay',
+      }, saveEventGraph, vi.fn(), corpusSave)
+
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(warn).toHaveBeenCalledWith('corpus:not-posted', 'http_503')
+      // the app save itself succeeded
+      expect(saveEventGraph).toHaveBeenCalledTimes(1)
+    })
+
+    it('silently skips the warning when the corpus is disabled', async () => {
+      const saveEventGraph = vi.fn().mockResolvedValue({ record: { recordId: 'EVG-001' } })
+      const corpusSave = vi.fn().mockResolvedValue({ ok: false, error: 'corpus.disabled' })
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+      await persistAcceptedEventGraph({
+        eventGraphId: 'EVG-001',
+        runId: null,
+        events: [event],
+        labwares: { 'plate-1': labware },
+        placements: [placement],
+        corpusUserPrompt: 'build the assay',
+      }, saveEventGraph, vi.fn(), corpusSave)
+
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(warn).not.toHaveBeenCalled()
+    })
+  })
 })

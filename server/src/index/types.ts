@@ -63,6 +63,9 @@ export interface IndexEntry {
   targetType?: string;
   /** Relationship edge: verb / predicate */
   verb?: string;
+
+  /** Multi-project links (runs linked to multiple studies) */
+  projectIds?: string[];
 }
 
 /**

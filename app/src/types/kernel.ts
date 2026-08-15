@@ -14,6 +14,9 @@ export interface RecordEnvelope {
     kind?: string
     path?: string
     commitSha?: string
+    createdAt?: string
+    updatedAt?: string
+    createdBy?: string
   }
 }
 

@@ -24,6 +24,7 @@ import type { ResolutionCandidate } from '../extract/MentionResolver.js';
 import { ExtractionRunnerService } from '../extract/ExtractionRunnerService.js';
 import { ExtractionMetrics } from '../extract/ExtractionMetrics.js';
 import { createExtractHandlers } from '../api/handlers/ExtractHandlers.js';
+import { setupTestWorkspace } from '../test/setupApp.js';
 
 // ──────────────────────────────────────────────
 // Minimal schemas needed for the extraction pipeline
@@ -201,6 +202,7 @@ describe('E2E: PDF upload → extract → draft → promote → canonical + audi
     await writeFile(resolve(testDir, 'schema/workflow/extraction-promotion.schema.yaml'), extractionPromotionSchema);
 
     // Initialize app with test directory
+    await setupTestWorkspace(testDir);
     ctx = await initializeApp(testDir, {
       schemaDir: 'schema',
       recordsDir: 'records',
