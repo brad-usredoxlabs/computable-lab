@@ -24,17 +24,22 @@ vi.mock('./ProtocolAuthoringWidgets', async () => {
     ProtocolMentionEditor: ({
       placeholder,
       onCommit,
+      defaultSlashCommand,
+      defaultSlashQuery,
     }: {
       value: string
       placeholder: string
       className: string
       serialize: 'wire' | 'readable'
       defaultSlashCommand?: string
+      defaultSlashQuery?: string
       onCommit: (text: string, mentions: Array<Record<string, unknown>>) => void
       onMentionSelected?: (mention: unknown) => void
     }) =>
       React.createElement('input', {
         'data-testid': 'mock-mention-editor',
+        'data-slash-command': defaultSlashCommand ?? '',
+        'data-slash-query': defaultSlashQuery ?? '',
         placeholder,
         onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
           onCommit(e.target.value, e.target.value ? [{ type: 'material', entityKind: 'material', id: e.target.value, label: e.target.value }] : []),
@@ -63,6 +68,21 @@ describe('SetupSectionWidget', () => {
     // unbound row is an editable rich-text line (slash-combobox placeholder present)
     expect(screen.getAllByTestId('mock-mention-editor').length).toBe(1)
     expect(screen.getByPlaceholderText(/pick labware/i)).toBeDefined()
+  })
+
+  it('primes the slash-combobox with the ghosted label as the section query on unbound rows', () => {
+    const rows: SetupRow[] = [
+      { role: 'material_proteinase_k', description: 'Proteinase K' },
+      { role: 'material_pbs', description: 'PBS' },
+    ]
+    render(<SetupSectionWidget kind="material" value={rows} readOnly={false} onCommit={onCommitSpy()} suggestionRows={[0, 1]} />)
+    const editors = screen.getAllByTestId('mock-mention-editor')
+    // material section → /m command; query = the ghosted label (the search term)
+    expect(editors).toHaveLength(2)
+    expect(editors[0].getAttribute('data-slash-command')).toBe('m')
+    expect(editors[0].getAttribute('data-slash-query')).toBe('Proteinase K')
+    expect(editors[1].getAttribute('data-slash-command')).toBe('m')
+    expect(editors[1].getAttribute('data-slash-query')).toBe('PBS')
   })
 
   it('commits an edited line with a picked mention to a bound ref', () => {

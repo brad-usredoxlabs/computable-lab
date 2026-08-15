@@ -381,6 +381,7 @@ export function ProtocolMentionEditor({
   onCommit,
   onDraftChange,
   defaultSlashCommand,
+  defaultSlashQuery,
   onMentionSelected,
   focusSignal,
 }: {
@@ -391,6 +392,15 @@ export function ProtocolMentionEditor({
   onCommit: (text: string, mentions: SlashMention[]) => void
   onDraftChange?: (text: string, mentions: SlashMention[]) => void
   defaultSlashCommand?: string
+  /**
+   * When set (with `defaultSlashCommand`), focusing the field primes the slash
+   * combobox with this SEPARATE string as its search QUERY — i.e. it behaves as
+   * if the user typed `/{command} {query}`. Used by the protocol-planning setup
+   * rows: a ghosted suggestion label (e.g. "proteinase K") becomes the
+   * `/m proteinase K` search, so the combobox opens pre-filtered to that term —
+   * local-first → ontology → create-new — instead of a blank `/m `.
+   */
+  defaultSlashQuery?: string
   onMentionSelected?: (mention: SlashMention) => void
   focusSignal?: number
 }) {
@@ -401,6 +411,8 @@ export function ProtocolMentionEditor({
   const editorRef = useRef<Editor | null>(null)
   const latestValueRef = useRef(value)
   const focusSignalRef = useRef(focusSignal)
+  const slashQueryRef = useRef(defaultSlashQuery)
+  slashQueryRef.current = defaultSlashQuery
   const [hasPrimedSlash, setHasPrimedSlash] = useState(false)
 
   const editor = useEditor({
@@ -440,7 +452,7 @@ export function ProtocolMentionEditor({
           return false
         },
         focus: () => {
-          primeDefaultSlashCommand(editorRef.current, defaultSlashCommand)
+          primeDefaultSlashCommand(editorRef.current, defaultSlashCommand, slashQueryRef.current)
           setHasPrimedSlash(isPrimedSlashText(editorRef.current, defaultSlashCommand))
           return false
         },
@@ -479,7 +491,7 @@ export function ProtocolMentionEditor({
     setHasPrimedSlash(false)
     window.setTimeout(() => {
       editor.chain().focus().run()
-      primeDefaultSlashCommand(editor, defaultSlashCommand)
+      primeDefaultSlashCommand(editor, defaultSlashCommand, slashQueryRef.current)
       setHasPrimedSlash(isPrimedSlashText(editor, defaultSlashCommand))
     }, 0)
   }, [defaultSlashCommand, editor, focusSignal, value])
@@ -495,12 +507,17 @@ export function removeSlashMenuRoots() {
   document.querySelectorAll('[data-slash-menu-root="true"]').forEach((node) => node.remove())
 }
 
-function primeDefaultSlashCommand(editor: Editor | null, command: string | undefined) {
+function primeDefaultSlashCommand(editor: Editor | null, command: string | undefined, query?: string) {
   if (!editor || !command) return
   const rawText = editorContentToReadableText(editor.getJSON())
-  if (stripPrimedSlashCommandText(rawText, command)) return
+  const trimmedQuery = (query ?? '').trim()
+  // When a search query is supplied (a ghosted suggestion label), ALWAYS prime —
+  // replace the field content with `/cmd <query>` so the slash-combobox opens
+  // pre-filtered to that term (as if the user had typed it). Without a query,
+  // keep the legacy behavior: prime `/cmd ` but leave already-primed text alone.
+  if (!trimmedQuery && stripPrimedSlashCommandText(rawText, command)) return
   if (rawText.trim()) editor.commands.setContent(protocolTextToDoc(''), { emitUpdate: false })
-  editor.chain().focus().insertContent(`/${command} `).run()
+  editor.chain().focus().insertContent(`/${command} ${trimmedQuery}`.trimEnd() + ' ').run()
 }
 
 function isPrimedSlashText(editor: Editor | null, command: string | undefined): boolean {

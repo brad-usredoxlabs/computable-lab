@@ -154,8 +154,9 @@ export function SetupSectionWidget({ kind, value, readOnly, onCommit, suggestion
               />
             </>
           ) : (
-            /* Unbound row — an editable rich-text document line. Focused it reads the
-               human label; typing /l /e /m (per kind) opens the slash-combobox. */
+            /* Unbound row — an editable rich-text document line. Focusing it
+               primes the section's slash-combobox (/l /e /m) pre-filtered to the
+               ghosted label (e.g. "proteinase K" opens `/m proteinase K`). */
             <>
               <ProtocolMentionEditor
                 key={`line-${i}-${row.description ?? row.role}`}
@@ -163,6 +164,8 @@ export function SetupSectionWidget({ kind, value, readOnly, onCommit, suggestion
                 placeholder={copy.pickPlaceholder}
                 className="taptab-setup-line__editor"
                 serialize="readable"
+                defaultSlashCommand={copy.slash}
+                defaultSlashQuery={row.description ?? row.role}
                 onCommit={(text, mentions) => commitRow(i, text, mentions)}
               />
               {rowIsSuggestion(i, row) && (
