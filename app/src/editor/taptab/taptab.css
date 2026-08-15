@@ -1123,3 +1123,80 @@
   flex-direction: row;
   flex-wrap: wrap;
 }
+
+/* ── Local-protocol plate-setting sections (Labwares/Equipment/Materials) ── */
+
+.taptab-setup-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.375rem 0;
+  border-bottom: 1px solid var(--shell-border);
+}
+
+.taptab-setup-row__role {
+  font-weight: 600;
+  color: var(--shell-text-secondary);
+  min-width: 9rem;
+}
+
+.taptab-setup-row__desc {
+  color: var(--shell-text-muted);
+  font-size: 0.8125rem;
+  flex: 1 1 auto;
+}
+
+.taptab-setup-row__pending {
+  font-size: 0.8125rem;
+  font-style: italic;
+  color: var(--shell-text-muted);
+  border: 1px dashed var(--shell-border);
+  border-radius: 999px;
+  padding: 0.125rem 0.625rem;
+  cursor: pointer;
+}
+
+.taptab-setup-row__x {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--shell-text-muted);
+  cursor: pointer;
+  font-size: 0.875rem;
+  line-height: 1;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+}
+
+.taptab-setup-row__x:hover {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.taptab-setup-add {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  padding: 0.5rem 0;
+}
+
+.taptab-setup-add__role,
+.taptab-setup-add__desc {
+  width: 100%;
+  border: 1px solid var(--shell-border);
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.375rem;
+  font: inherit;
+  background: var(--shell-bg, #fff);
+  color: inherit;
+}
+
+.taptab-setup-add__pick {
+  width: 100%;
+}
+
+.taptab-setup-add__actions {
+  display: flex;
+  gap: 0.375rem;
+}
