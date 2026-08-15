@@ -24,6 +24,8 @@ const VALID_WIDGET_TYPES: Set<string> = new Set([
   'protocol-prose-authoring', 'protocol-material-roles',
   'protocol-labware-roles', 'protocol-equipment-roles', 'protocol-step-roles',
   'protocol-ai-suggestions',
+  'local-protocol-labwares', 'local-protocol-equipment',
+  'local-protocol-materials', 'local-protocol-steps',
 ]);
 
 /**
