@@ -16,6 +16,12 @@ import { ProtocolMentionEditor, removeSlashMenuRoots } from './ProtocolAuthoring
 import { RefBadge, type Ref } from '../../../shared/ref/RefBadge'
 import { API_BASE } from '../../../shared/api/base'
 import type { SlashMention } from '../../../shared/taptab/slashMenu'
+// This widget renders the setup rows AND the ProtocolMentionEditor slash-combobox
+// inside them. Its styles live in taptab.css. Import that stylesheet HERE so the
+// widget is fully styled in EVERY context it renders (the right-pane Protocol tab
+// of protocol-planning mode imports no taptab.css on its own) — a reusable
+// component must own its stylesheet, not depend on a parent consumer importing it.
+import '../taptab.css'
 
 /**
  * One plate-setting row: a biologist-facing role plus (optionally) a
@@ -46,10 +52,10 @@ interface SetupSectionWidgetProps {
   suggestionRows?: number[]
 }
 
-const KIND_COPY: Record<SetupKind, { noun: string; slash: string; pickPlaceholder: string }> = {
-  labware: { noun: 'labware', slash: 'l', pickPlaceholder: 'Pick labware (/l)' },
-  equipment: { noun: 'equipment', slash: 'e', pickPlaceholder: 'Pick equipment (/e)' },
-  material: { noun: 'material', slash: 'm', pickPlaceholder: 'Pick material (/m)' },
+const KIND_COPY: Record<SetupKind, { title: string; noun: string; slash: string; pickPlaceholder: string }> = {
+  labware: { title: 'Labwares', noun: 'labware', slash: 'l', pickPlaceholder: 'Pick labware (/l)' },
+  equipment: { title: 'Equipment', noun: 'equipment', slash: 'e', pickPlaceholder: 'Pick equipment (/e)' },
+  material: { title: 'Materials', noun: 'material', slash: 'm', pickPlaceholder: 'Pick material (/m)' },
 }
 
 export function SetupSectionWidget({ kind, value, readOnly, onCommit, suggestionRows }: SetupSectionWidgetProps) {
@@ -87,32 +93,82 @@ export function SetupSectionWidget({ kind, value, readOnly, onCommit, suggestion
     commit(next)
   }
 
+  /**
+   * Commit an EDITED rich-text line. `text` is the human-readable line content
+   * (may be the picked term label, or the role the user typed); `mentions[0]`
+   * is the concrete labware/equipment/material the slash-combobox resolved to
+   * (local-first → ontology → create-new), which becomes the row's binding.
+   * Editing a suggested row to a concrete term replaces its ghost role label
+   * (kept as description) and binds the ref; a row the user leaves unbound
+   * keeps its role text as the role.
+   */
+  const commitRow = (index: number, text: string, mentions: SlashMention[]) => {
+    const next = [...rows]
+    const row = { ...next[index] }
+    const label = text.trim()
+    const mention = mentions[0] ?? null
+    if (mention) {
+      row.ref = mentionToSetupRef(mention, kind)
+      row.description = mention.label || label || row.description
+    } else {
+      delete row.ref
+      if (label && label !== row.role) row.description = label
+    }
+    next[index] = row
+    commit(next)
+  }
+
+  const rowIsSuggestion = (i: number, row: SetupRow) => suggestionSet.has(i) && !row.ref
+
   return (
-    <div className="taptab-protocol-list" data-testid={`setup-section-${kind}`}>
+    <div className="taptab-protocol-list taptab-setup-doc" data-testid={`setup-section-${kind}`}>
+      <h4 className="protocol-setup-sections__subtitle">{copy.title}</h4>
       {rows.length === 0 && !adding && (
         <span className="taptab-widget-empty">Nothing set yet — add what this assay needs.</span>
       )}
       {rows.map((row, i) => (
-        <div className="taptab-setup-row" key={`${row.role}-${i}`} data-testid={`setup-row-${i + 1}`}>
-          <span className="taptab-setup-row__role">{row.role}</span>
-          {row.description ? <span className="taptab-setup-row__desc">{row.description}</span> : null}
-          {row.ref ? (
-            <RefBadge
-              value={toRefBadgeRef(row.ref)}
-              size="md"
-              showExternalLink={false}
-              onRemove={readOnly ? undefined : () => updateRowRef(i, null)}
-            />
-          ) : suggestionSet.has(i) ? (
-            <span className="taptab-setup-row__suggested" data-testid={`setup-row-suggested-${i + 1}`}>
-              suggested
-            </span>
+        <div
+          key={`${row.role}-${i}`}
+          className={`taptab-setup-line${rowIsSuggestion(i, row) ? ' taptab-setup-line--suggested' : ''}`}
+          data-testid={`setup-row-${i + 1}`}
+        >
+          {readOnly ? (
+            /* Read-only preview (universal-protocol role view): plain text + suggested tag */
+            <>
+              <span className="taptab-setup-row__role">{row.description ?? row.role}</span>
+              {row.ref ? (
+                <RefBadge value={toRefBadgeRef(row.ref)} size="md" showExternalLink={false} />
+              ) : rowIsSuggestion(i, row) ? (
+                <span className="taptab-setup-row__suggested" data-testid={`setup-row-suggested-${i + 1}`}>suggested</span>
+              ) : null}
+            </>
+          ) : row.ref ? (
+            /* Bound row: role label + the concrete term badge (removable clears the binding) */
+            <>
+              <span className="taptab-setup-row__role">{row.role}</span>
+              <RefBadge
+                value={toRefBadgeRef(row.ref)}
+                size="md"
+                showExternalLink={false}
+                onRemove={() => updateRowRef(i, null)}
+              />
+            </>
           ) : (
-            !readOnly && (
-              <span className="taptab-setup-row__pending" data-testid={`setup-row-pending-${i + 1}`}>
-                not set yet
-              </span>
-            )
+            /* Unbound row — an editable rich-text document line. Focused it reads the
+               human label; typing /l /e /m (per kind) opens the slash-combobox. */
+            <>
+              <ProtocolMentionEditor
+                key={`line-${i}-${row.description ?? row.role}`}
+                value={row.description ?? row.role}
+                placeholder={copy.pickPlaceholder}
+                className="taptab-setup-line__editor"
+                serialize="readable"
+                onCommit={(text, mentions) => commitRow(i, text, mentions)}
+              />
+              {rowIsSuggestion(i, row) && (
+                <span className="taptab-setup-row__suggested" data-testid={`setup-row-suggested-${i + 1}`}>suggested</span>
+              )}
+            </>
           )}
           {!readOnly && (
             <button

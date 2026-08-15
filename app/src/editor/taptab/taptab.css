@@ -1212,3 +1212,59 @@
   display: flex;
   gap: 0.375rem;
 }
+
+/* ── Document-style setup lines ("This assay needs") ───────────── */
+
+.taptab-setup-doc {
+  padding: 0.125rem 0;
+}
+
+.taptab-setup-doc .protocol-setup-sections__subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--shell-text-primary, #111827);
+}
+
+.taptab-setup-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.375rem 0;
+  border-bottom: 1px solid var(--shell-border);
+}
+
+.taptab-setup-line:last-of-type {
+  border-bottom: none;
+}
+
+.taptab-setup-line__editor {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.taptab-setup-line__editor .taptab-protocol-mention-editor__content {
+  padding: 0.125rem 0 0.125rem 0.5rem;
+}
+
+/* A GHOSTED SUGGESTION — an inherited universal-protocol role the user has not
+   yet bound to a concrete term. Dashed accent wrapper + faint italic label so
+   it reads as "pick this or remove it", distinct from a bound row. */
+.taptab-setup-line--suggested {
+  border: 1px dashed color-mix(in srgb, var(--shell-accent, #2563eb) 55%, transparent);
+  border-radius: 0.375rem;
+  background: color-mix(in srgb, var(--shell-accent, #2563eb) 4%, transparent);
+  padding: 0.375rem 0.5rem;
+}
+
+.taptab-setup-line--suggested .taptab-protocol-mention-editor__content,
+.taptab-setup-line--suggested .taptab-setup-row__role {
+  font-style: italic;
+  color: var(--shell-text-secondary, #6b7280);
+}
+
+.taptab-setup-line--suggested:focus-within {
+  border-color: var(--shell-accent, #2563eb);
+}

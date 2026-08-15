@@ -16,6 +16,11 @@ import type { SlashMention } from '../../../shared/taptab/slashMenu'
 import { buildOntologyCopilotExtension } from '../../../shared/taptab/ontologyCopilot/OntologyCopilotExtension'
 import { RefBadge, type Ref } from '../../../shared/ref/RefBadge'
 import { focusAdjacentTapTabField } from '../tabNavPlugin'
+// ProtocolMentionEditor renders the slash-combobox DOM (slash menu + mention
+// chip). Its styles live in taptab.css — import it HERE so the editor is styled
+// in every context (including the right-pane Protocol tab of protocol-planning
+// mode, which does not import taptab.css on its own).
+import '../taptab.css'
 
 interface ProtocolWidgetProps {
   value: unknown

@@ -49,17 +49,30 @@ describe('SetupSectionWidget', () => {
     vi.clearAllMocks()
   })
 
-  it('renders existing rows with their ref labels and pending state', () => {
+  it('renders a section header plus rows: bound rows show ref label, unbound rows are editable lines', () => {
     const rows: SetupRow[] = [
       { role: 'Sample plate', description: '96-well', ref: { kind: 'record', id: 'LBW-0001', type: 'labware', label: '96-well PCR plate' } },
       { role: 'Reservoir' },
     ]
     render(<SetupSectionWidget kind="labware" value={rows} readOnly={false} onCommit={onCommitSpy()} />)
+    // per-section header
+    expect(screen.getByText('Labwares')).toBeDefined()
+    // bound row renders its role + the concrete ref label
     expect(screen.getByText('Sample plate')).toBeDefined()
     expect(screen.getByText('96-well PCR plate')).toBeDefined()
-    expect(screen.getByText('Reservoir')).toBeDefined()
-    expect(screen.getByTestId('setup-row-pending-2')).toBeDefined() // "not set yet" affordance
-    expect(screen.queryByTestId('setup-row-pending-1')).toBeNull()
+    // unbound row is an editable rich-text line (slash-combobox placeholder present)
+    expect(screen.getAllByTestId('mock-mention-editor').length).toBe(1)
+    expect(screen.getByPlaceholderText(/pick labware/i)).toBeDefined()
+  })
+
+  it('commits an edited line with a picked mention to a bound ref', () => {
+    const onCommit = onCommitSpy()
+    render(<SetupSectionWidget kind="material" value={[{ role: 'material_lysis_buffer', description: 'Lysis Buffer' }]} readOnly={false} onCommit={onCommit} />)
+    // the suggested/unbound row is an editable line; picking a term binds it
+    fireEvent.change(screen.getByTestId('mock-mention-editor'), { target: { value: 'MAT-9999' } })
+    expect(onCommit).toHaveBeenCalledWith([
+      { role: 'material_lysis_buffer', description: 'MAT-9999', ref: { kind: 'record', id: 'MAT-9999', type: 'material', label: 'MAT-9999' } },
+    ])
   })
 
   it('commits a new row with a picked ref', () => {
@@ -112,7 +125,7 @@ describe('SetupSectionWidget', () => {
     expect(screen.getByText('dextran sulfate')).toBeDefined()
   })
 
-  it('renders a "suggested" badge for unbound rows in suggestionRows instead of "not set yet"', () => {
+  it('renders a "suggested" ghost for unbound rows in suggestionRows', () => {
     const rows: SetupRow[] = [
       { role: 'labware_96_well_plate', description: '96-well plate' },
       { role: 'Sample plate', ref: { kind: 'record', id: 'LBW-0001', type: 'labware', label: 'PCR plate' } },
@@ -122,18 +135,20 @@ describe('SetupSectionWidget', () => {
     // ghosted suggestion badge on the seeded row
     expect(screen.getByTestId('setup-row-suggested-1')).toBeDefined()
     expect(screen.getByTestId('setup-row-suggested-1').textContent).toBe('suggested')
-    // user-added unbound row keeps the "not set yet" affordance (not a suggestion)
-    expect(screen.getByTestId('setup-row-pending-3')).toBeDefined()
-    expect(screen.queryByTestId('setup-row-pending-1')).toBeNull()
-    expect(screen.queryByTestId('setup-row-pending-2')).toBeNull()
+    // bound row is NOT a suggestion
+    expect(screen.queryByTestId('setup-row-suggested-2')).toBeNull()
+    // user-added unbound row is an editable line but NOT ghosted as a suggestion
+    expect(screen.queryByTestId('setup-row-suggested-3')).toBeNull()
+    // editable line present for the two unbound rows (suggestion + user-added)
+    expect(screen.getAllByTestId('mock-mention-editor').length).toBe(2)
     // still fully editable (one remove control per row)
     expect(screen.getAllByRole('button', { name: /remove labware row/i })).toHaveLength(3)
   })
 
-  it('without suggestionRows, unbound rows render "not set yet" (back-compat)', () => {
+  it('without suggestionRows, unbound rows are editable lines with no ghost tag (back-compat)', () => {
     const rows: SetupRow[] = [{ role: 'Reservoir' }]
     render(<SetupSectionWidget kind="labware" value={rows} readOnly={false} onCommit={onCommitSpy()} />)
-    expect(screen.getByTestId('setup-row-pending-1')).toBeDefined()
+    expect(screen.getByTestId('mock-mention-editor')).toBeDefined()
     expect(screen.queryByTestId('setup-row-suggested-1')).toBeNull()
   })
 
