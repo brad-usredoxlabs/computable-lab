@@ -35,6 +35,7 @@ properties:
 
   studyId:
     type: string
+    pattern: "^STU-"
     description: "Parent Study recordId."
 
   state:

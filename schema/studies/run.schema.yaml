@@ -34,10 +34,12 @@ properties:
 
   experimentId:
     type: string
+    pattern: "^EXP-"
     description: "Optional experiment recordId. Experiments are now optional grouping (saved views), not a required parent."
 
   studyId:
     type: string
+    pattern: "^STU-"
     description: "Parent study (project) recordId. Convenience field — when projectIds is present, this is auto-populated from projectIds[0]."
 
   projectIds:
@@ -45,6 +47,7 @@ properties:
     description: "Projects this run is linked to. A run MAY link to multiple projects (spec §2.2). When present, this replaces the singular studyId as the primary project link."
     items:
       type: string
+      pattern: "^STU-"
     uniqueItems: true
 
   label:
