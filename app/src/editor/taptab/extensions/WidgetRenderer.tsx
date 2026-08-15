@@ -25,6 +25,10 @@ import {
   ProtocolProseAuthoringWidget,
   ProtocolStepRolesWidget,
 } from '../widgets/ProtocolAuthoringWidgets';
+import {
+  LocalProtocolStepsWidget,
+  SetupSectionWidget,
+} from '../widgets/LocalProtocolSetupWidgets';
 import type { StructuredValue } from '../../../shared/forms/suggestionPlan';
 
 function isRecordLikeRef(value: unknown): value is { id?: unknown; label?: unknown; type?: unknown; kind?: unknown } {
@@ -200,6 +204,22 @@ export function WidgetRenderer({
 
   if (widget === 'protocol-ai-suggestions') {
     return <ProtocolAiSuggestionsWidget value={value} readOnly={readOnly} recordId={recordId} onCommit={onCommit} />;
+  }
+
+  if (widget === 'local-protocol-labwares') {
+    return <SetupSectionWidget kind="labware" value={value} readOnly={readOnly} onCommit={onCommit} />;
+  }
+
+  if (widget === 'local-protocol-equipment') {
+    return <SetupSectionWidget kind="equipment" value={value} readOnly={readOnly} onCommit={onCommit} />;
+  }
+
+  if (widget === 'local-protocol-materials') {
+    return <SetupSectionWidget kind="material" value={value} readOnly={readOnly} onCommit={onCommit} />;
+  }
+
+  if (widget === 'local-protocol-steps') {
+    return <LocalProtocolStepsWidget value={value} readOnly={readOnly} onCommit={onCommit} />;
   }
 
   if (widget === 'readonly') {

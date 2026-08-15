@@ -11,9 +11,10 @@
  * Reuses ProtocolMentionEditor (ProtocolAuthoringWidgets.tsx) — the same
  * TipTap + slash-menu stack the universal-protocol role widgets use.
  */
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ProtocolMentionEditor, removeSlashMenuRoots } from './ProtocolAuthoringWidgets'
 import { RefBadge, type Ref } from '../../../shared/ref/RefBadge'
+import { API_BASE } from '../../../shared/api/base'
 import type { SlashMention } from '../../../shared/taptab/slashMenu'
 
 /**
@@ -201,4 +202,69 @@ export function toRefBadgeRef(ref: NonNullable<SetupRow['ref']>): Ref {
     return { kind: 'ontology' as const, id: ref.id, namespace: ref.namespace ?? '', label: ref.label ?? ref.id }
   }
   return { kind: 'record' as const, type: ref.type ?? '', id: ref.id, label: ref.label ?? ref.id }
+}
+
+interface LocalProtocolStep {
+  stepId: string
+  label?: string
+  description?: string
+}
+
+/**
+ * LocalProtocolStepsWidget — read-only list of the inherited universal
+ * protocol's steps. The UI spec feeds this widget the `inherits_from.id`
+ * string (record id of the universal protocol); the widget fetches
+ * GET /api/protocols/{id}/steps. Display-only: editing steps belongs to the
+ * universal protocol's own TapTab form. `onCommit` is part of the
+ * WidgetRenderer contract and intentionally unused.
+ */
+export function LocalProtocolStepsWidget({
+  value,
+  readOnly,
+  onCommit,
+}: {
+  value: unknown
+  readOnly: boolean
+  onCommit: (v: unknown) => void
+}) {
+  const protocolId = typeof value === 'string' ? value : ''
+  const [steps, setSteps] = useState<LocalProtocolStep[]>([])
+  const [state, setState] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle')
+
+  useEffect(() => {
+    if (!protocolId) return
+    let cancelled = false
+    setState('loading')
+    fetch(`${API_BASE}/protocols/${encodeURIComponent(protocolId)}/steps`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((data: { steps?: LocalProtocolStep[] }) => {
+        if (cancelled) return
+        setSteps(Array.isArray(data.steps) ? data.steps : [])
+        setState('ready')
+      })
+      .catch(() => {
+        if (!cancelled) setState('error')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [protocolId])
+
+  void readOnly
+  void onCommit
+
+  if (!protocolId) return <span className="taptab-widget-empty">No inherited protocol linked.</span>
+  if (state === 'loading') return <span className="taptab-widget-empty">Loading steps…</span>
+  if (state === 'error') return <span className="taptab-widget-empty">Could not load steps.</span>
+  if (steps.length === 0) return <span className="taptab-widget-empty">The inherited protocol has no steps yet.</span>
+  return (
+    <ol className="taptab-protocol-numbered-list" data-testid="local-protocol-steps">
+      {steps.map((s, i) => (
+        <li key={s.stepId ?? i} className="taptab-protocol-step-item">
+          <span className="taptab-protocol-step">{`${i + 1}. ${s.label ?? s.description ?? s.stepId}`}</span>
+          {s.description && s.label ? <span className="taptab-setup-row__desc">{s.description}</span> : null}
+        </li>
+      ))}
+    </ol>
+  )
 }

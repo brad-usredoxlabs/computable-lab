@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import {
   SetupSectionWidget,
+  LocalProtocolStepsWidget,
   mentionToSetupRef,
   toRefBadgeRef,
   type SetupRow,
@@ -109,6 +110,39 @@ describe('SetupSectionWidget', () => {
     expect(screen.queryByRole('button', { name: /add material/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /remove/i })).toBeNull()
     expect(screen.getByText('dextran sulfate')).toBeDefined()
+  })
+})
+
+describe('LocalProtocolStepsWidget', () => {
+  const originalFetch = global.fetch
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders inherited steps read-only', async () => {
+    global.fetch = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        steps: [
+          { stepId: 'step-1', label: 'Add cells' },
+          { stepId: 'step-2', label: 'Read' },
+        ],
+      }),
+    })) as never
+    render(<LocalProtocolStepsWidget value="PRT-1" readOnly onCommit={vi.fn()} />)
+    expect(await screen.findByText(/1\. Add cells/)).toBeDefined()
+    expect(screen.getByText(/2\. Read/)).toBeDefined()
+    expect(screen.queryByRole('textbox')).toBeNull() // read-only
+    global.fetch = originalFetch
+  })
+
+  it('shows an empty state when no protocol is linked', () => {
+    global.fetch = vi.fn() as never
+    render(<LocalProtocolStepsWidget value="" readOnly onCommit={vi.fn()} />)
+    expect(screen.getByText(/no inherited protocol linked/i)).toBeDefined()
+    expect(global.fetch).not.toHaveBeenCalled()
+    global.fetch = originalFetch
   })
 })
 
