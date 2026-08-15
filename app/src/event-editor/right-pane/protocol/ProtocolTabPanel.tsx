@@ -823,32 +823,53 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       } catch {
         // resolution failed — fall back to the run id below
       }
-      const stepsId = protocolId ?? runId
-
-      // Fetch the resolved protocol record ONCE and read everything we need
-      // from it: (1) long-form text (humanStepsText) for the expandable step
-      // detail, and (2) when the attached protocol is a local-protocol
-      // (LPR-*), its plate-setting sections — rendered above the step chips
-      // and riding in every localization prompt as read-only context.
-      async function loadProtocolRecordExtras() {
-        const recordId = protocolId ?? runId
-        if (!recordId) return
-        try {
-          const env = await apiClient.getRecord(recordId)
-          if (cancelled) return
+      // Fetch the attached protocol's record ONCE, up front: (1) its
+      // plate-setting sections (when it is a local-protocol / LPR-*), rendered
+      // above the step chips and riding in every localization prompt; (2) any
+      // long-form text; and (3) for an LPR, the inherited universal protocol's
+      // id — `/api/protocols/{id}/steps` only accepts a UNIVERSAL protocol id
+      // (400 NOT_A_PROTOCOL for an LPR), so steps are fetched from the
+      // inherited protocol.
+      const attachedId = protocolId ?? runId
+      let stepsId = attachedId
+      let resolvedSetup: LocalProtocolSetupRows | null = null
+      try {
+        const env = await apiClient.getRecord(attachedId)
+        if (!cancelled) {
           const pp = (env?.payload ?? env) as Record<string, unknown> | null
           const t = pp?.humanStepsText
           if (typeof t === 'string') setHumanStepsText(t)
-          const setup = extractLocalProtocolSetup(env)
-          if (setup) {
-            setLocalProtocolId(recordId)
-            setLocalSetup(setup)
-          } else {
-            setLocalProtocolId(null)
-            setLocalSetup(null)
+          resolvedSetup = extractLocalProtocolSetup(env)
+          if (pp?.kind === 'local-protocol') {
+            const inh = pp?.inherits_from as { id?: string } | undefined
+            if (typeof inh?.id === 'string') stepsId = inh.id
+          }
+        }
+      } catch {
+        // non-fatal — step detail stays collapsed; no setup sections shown
+      }
+      if (!cancelled) {
+        if (resolvedSetup) {
+          setLocalProtocolId(attachedId)
+          setLocalSetup(resolvedSetup)
+        } else {
+          setLocalProtocolId(null)
+          setLocalSetup(null)
+        }
+      }
+
+      // For an LPR, the long-form text lives on the INHERITED universal
+      // protocol (the steps are read from it too) — fetch it once.
+      if (!cancelled && stepsId !== attachedId) {
+        try {
+          const parentEnv = await apiClient.getRecord(stepsId)
+          if (!cancelled) {
+            const pp = (parentEnv?.payload ?? parentEnv) as Record<string, unknown> | null
+            const t = pp?.humanStepsText
+            if (typeof t === 'string') setHumanStepsText(t)
           }
         } catch {
-          // non-fatal — step detail stays collapsed; no setup sections shown
+          // non-fatal — step detail just stays collapsed
         }
       }
 
@@ -907,11 +928,6 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       } finally {
         if (!cancelled) setIsLoading(false)
       }
-
-      // Independent of the steps fetch outcome — long-form text + setup
-      // sections are read from the resolved protocol record in a single fetch
-      // (even for a local protocol whose steps come from the candidate).
-      await loadProtocolRecordExtras()
     }
 
     void fetchSteps()
