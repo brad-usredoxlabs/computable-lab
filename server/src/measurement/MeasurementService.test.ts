@@ -28,6 +28,26 @@ properties:
         metric: { type: string }
         value: { type: number }
         channelId: { type: string }
+  artifacts:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      required: [role]
+      properties:
+        role: { type: string }
+        fileRef:
+          type: object
+          additionalProperties: false
+          required: [file_name, media_type]
+          properties:
+            file_name: { type: string }
+            media_type: { type: string }
+            stored_path: { type: string }
+            source_url: { type: string }
+            size_bytes: { type: integer }
+            sha256: { type: string }
+            page_count: { type: integer }
   parserInfo:
     type: object
 `;
@@ -73,8 +93,17 @@ describe('MeasurementService', () => {
     expect(result.recordId).toBe('MSR-000001');
     const envelope = await ctx.store.get(result.recordId);
     expect(envelope).not.toBeNull();
-    const payload = envelope!.payload as { assayType: string; data: unknown[] };
+    const payload = envelope!.payload as {
+      assayType: string;
+      data: unknown[];
+      artifacts?: Array<{ fileRef?: Record<string, unknown> }>;
+    };
     expect(payload.assayType).toBe('plate_reader');
     expect(payload.data.length).toBe(2);
+    expect(payload.artifacts?.[0]?.fileRef).toEqual({
+      file_name: 'gemini.csv',
+      media_type: 'text/csv',
+      stored_path: 'records/inbox/gemini.csv',
+    });
   });
 });
