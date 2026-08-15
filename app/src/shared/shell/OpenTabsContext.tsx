@@ -17,6 +17,7 @@ import {
   useContext,
   useReducer,
   useEffect,
+  useMemo,
   type ReactNode,
 } from 'react'
 import type { BreadcrumbItem, WorkspaceRightPaneMode, WorkspaceTab } from '../../event-editor/workspace/types'
@@ -471,33 +472,51 @@ export function OpenTabsProvider({ userId, children }: OpenTabsProviderProps) {
     saveToStorage(state, userId)
   }, [state, userId])
 
-  const value: OpenTabsContextValue = {
+  // Stable dispatch callbacks (memoized once, independent of `state`).
+  const openTab = useCallback((tab: WorkspaceTab, activate?: boolean, seedBreadcrumb?: BreadcrumbItem[]) => {
+    dispatch({ type: 'open', tab, ...(activate !== undefined ? { activate } : {}), ...(seedBreadcrumb ? { seedBreadcrumb } : {}) })
+  }, [])
+  const navigateTab = useCallback((tabId: string, tab: WorkspaceTab, crumb?: BreadcrumbItem) => {
+    dispatch({ type: 'navigate', tabId, tab, ...(crumb ? { crumb } : {}) })
+  }, [])
+  const navigateActiveTab = useCallback((tab: WorkspaceTab, crumb?: BreadcrumbItem) => {
+    dispatch({ type: 'navigate-active', tab, ...(crumb ? { crumb } : {}) })
+  }, [])
+  const closeTab = useCallback((tabId: string) => {
+    dispatch({ type: 'close', tabId })
+  }, [])
+  const activateTab = useCallback((tabId: string) => {
+    dispatch({ type: 'activate', tabId })
+  }, [])
+  const renameTab = useCallback((tabId: string, title: string) => {
+    dispatch({ type: 'rename', tabId, title })
+  }, [])
+  const setRightPaneMode = useCallback((tabId: string, mode: WorkspaceRightPaneMode) => {
+    dispatch({ type: 'set-right-pane-mode', tabId, mode })
+  }, [])
+  const back = useCallback(() => dispatch({ type: 'back' }), [])
+  const forward = useCallback(() => dispatch({ type: 'forward' }), [])
+  const withinBack = useCallback(() => dispatch({ type: 'within-back' }), [])
+  const withinForward = useCallback(() => dispatch({ type: 'within-forward' }), [])
+
+  // Memoize so the context object's identity only changes when `state`
+  // changes. Consumers that put the context object in effect deps (or that
+  // dispatch inside such an effect) must not re-fire on every provider
+  // render — a fresh object identity per render turned those into infinite
+  // update loops.
+  const value: OpenTabsContextValue = useMemo(() => ({
     state,
-    openTab: useCallback((tab: WorkspaceTab, activate?: boolean, seedBreadcrumb?: BreadcrumbItem[]) => {
-      dispatch({ type: 'open', tab, ...(activate !== undefined ? { activate } : {}), ...(seedBreadcrumb ? { seedBreadcrumb } : {}) })
-    }, []),
-    navigateTab: useCallback((tabId: string, tab: WorkspaceTab, crumb?: BreadcrumbItem) => {
-      dispatch({ type: 'navigate', tabId, tab, ...(crumb ? { crumb } : {}) })
-    }, []),
-    navigateActiveTab: useCallback((tab: WorkspaceTab, crumb?: BreadcrumbItem) => {
-      dispatch({ type: 'navigate-active', tab, ...(crumb ? { crumb } : {}) })
-    }, []),
-    closeTab: useCallback((tabId: string) => {
-      dispatch({ type: 'close', tabId })
-    }, []),
-    activateTab: useCallback((tabId: string) => {
-      dispatch({ type: 'activate', tabId })
-    }, []),
-    renameTab: useCallback((tabId: string, title: string) => {
-      dispatch({ type: 'rename', tabId, title })
-    }, []),
-    setRightPaneMode: useCallback((tabId: string, mode: WorkspaceRightPaneMode) => {
-      dispatch({ type: 'set-right-pane-mode', tabId, mode })
-    }, []),
+    openTab,
+    navigateTab,
+    navigateActiveTab,
+    closeTab,
+    activateTab,
+    renameTab,
+    setRightPaneMode,
     canGoBack: backTargetId(state) !== null,
     canGoForward: forwardTargetId(state) !== null,
-    back: useCallback(() => dispatch({ type: 'back' }), []),
-    forward: useCallback(() => dispatch({ type: 'forward' }), []),
+    back,
+    forward,
     canGoBackWithin: (() => {
       const e = state.tabs.find((t) => t.tab.id === state.activeTabId)
       return e ? e.contentCursor > 0 : false
@@ -506,9 +525,9 @@ export function OpenTabsProvider({ userId, children }: OpenTabsProviderProps) {
       const e = state.tabs.find((t) => t.tab.id === state.activeTabId)
       return e ? e.contentCursor < e.contentHistory.length - 1 : false
     })(),
-    withinBack: useCallback(() => dispatch({ type: 'within-back' }), []),
-    withinForward: useCallback(() => dispatch({ type: 'within-forward' }), []),
-  }
+    withinBack,
+    withinForward,
+  }), [state, openTab, navigateTab, navigateActiveTab, closeTab, activateTab, renameTab, setRightPaneMode, back, forward, withinBack, withinForward])
 
   return <OpenTabsContext.Provider value={value}>{children}</OpenTabsContext.Provider>
 }

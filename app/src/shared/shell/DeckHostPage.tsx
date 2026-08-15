@@ -73,12 +73,12 @@ export function DeckHostPage() {
     }
   }, [eventGraphId, runId])
 
-  // Register/refresh the top-level tab so the strip shows it. openTab on an
-  // existing id replaces the tab but preserves any seedBreadcrumb — the opener
-  // (e.g. attachProtocolMethod) seeds the project origin, and a raw deep link
-  // just lands with an empty trail.
+  // Register/refresh the top-level tab so the strip shows it. Deps use the
+  // stable `navigateActiveTab` callback (not the context object, which has a
+  // fresh identity every provider render → infinite update loop).
+  const navigateActiveTab = openTabs?.navigateActiveTab
   useEffect(() => {
-    if (!eventGraphId || !meta || !openTabs) return
+    if (!eventGraphId || !meta || !navigateActiveTab) return
     const tab: WorkspaceTab = {
       id: deckTabId(eventGraphId),
       kind: 'deck',
@@ -86,8 +86,8 @@ export function DeckHostPage() {
       ...(runId ? { runId } : {}),
       title: meta.title,
     }
-    openTabs.navigateActiveTab(tab)
-  }, [eventGraphId, runId, meta, openTabs])
+    navigateActiveTab(tab)
+  }, [eventGraphId, runId, meta, navigateActiveTab])
 
   if (!eventGraphId) {
     return (

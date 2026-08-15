@@ -67,11 +67,16 @@ export function RunWorkspacePage() {
 
   // Open a run tab on mount (deep-links, direct navigation, refresh) — but
   // IN THE CURRENT TAB (browser model), not a separate/duplicate top-level tab.
+  // Deps: the stable `navigateActiveTab` callback (memoized inside
+  // OpenTabsProvider), NOT the context object itself — that object gets a
+  // fresh identity on every provider render, and depending on it here made
+  // this effect re-fire on every dispatch it caused (infinite update loop).
+  const navigateActiveTab = openTabs?.navigateActiveTab
   useEffect(() => {
-    if (!runId || !openTabs) return
+    if (!runId || !navigateActiveTab) return
     const title = runTitle ?? `Run ${runId}`
-    openTabs.navigateActiveTab({ id: runTabId(runId), kind: 'run', runId, title })
-  }, [runId, runTitle, openTabs])
+    navigateActiveTab({ id: runTabId(runId), kind: 'run', runId, title })
+  }, [runId, runTitle, navigateActiveTab])
 
   // Reflect an instant run rename (dispatched by DeckToolbar on commit) in the
   // displayed title and the top-level run tab without waiting for a refetch.

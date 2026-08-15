@@ -75,8 +75,11 @@ export function RecordHostPage() {
   // Register/refresh the top-level tab so a deep link or refresh keeps it in
   // the strip (deep-link restore, Phase 4.3). openTab on an existing id
   // replaces the tab but preserves the breadcrumb seeded by the opener.
+  // Deps use the stable `navigateActiveTab` callback (not the context object,
+  // which has a fresh identity every provider render → infinite update loop).
+  const navigateActiveTab = openTabs?.navigateActiveTab
   useEffect(() => {
-    if (!openTabs) return
+    if (!navigateActiveTab) return
     if (!nodeType && recordId) {
       const tab: WorkspaceTab = {
         id: recordEditTabId(recordId),
@@ -84,7 +87,7 @@ export function RecordHostPage() {
         recordId,
         title: recordId,
       }
-      openTabs.navigateActiveTab(tab)
+      navigateActiveTab(tab)
     } else if (nodeType) {
       const nt = nodeType as CreateNodeType
       const tab: WorkspaceTab = {
@@ -95,9 +98,9 @@ export function RecordHostPage() {
         ...(nt === 'run' && parentId ? { experimentId: parentId } : {}),
         ...(nt === 'experiment' && parentId ? { studyId: parentId } : {}),
       }
-      openTabs.navigateActiveTab(tab)
+      navigateActiveTab(tab)
     }
-  }, [recordId, nodeType, parentId, openTabs])
+  }, [recordId, nodeType, parentId, navigateActiveTab])
 
   const isCreate = !!nodeType
 

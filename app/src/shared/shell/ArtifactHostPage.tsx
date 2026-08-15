@@ -51,15 +51,18 @@ export function ArtifactHostPage() {
   // Register/refresh the top-level tab so a deep link or refresh keeps it in
   // the strip. openTab on an existing id replaces the tab but preserves the
   // breadcrumb (the opener, e.g. SearchTabPanel, seeds the origin trail).
+  // Deps use the stable `navigateActiveTab` callback (not the context object,
+  // which has a fresh identity every provider render → infinite update loop).
   const title = artifact?.title ?? artifactId ?? 'Artifact'
+  const navigateActiveTab = openTabs?.navigateActiveTab
   useEffect(() => {
-    if (!artifactId || !kind || !openTabs) return
+    if (!artifactId || !kind || !navigateActiveTab) return
     const tab: WorkspaceTab =
       kind === 'pdf'
         ? { id: `tab-pdf-${artifactId}`, kind: 'pdf', artifactId, title }
         : { id: `tab-doc-${artifactId}`, kind: 'document', artifactId, title }
-    openTabs.navigateActiveTab(tab)
-  }, [kind, artifactId, title, openTabs])
+    navigateActiveTab(tab)
+  }, [kind, artifactId, title, navigateActiveTab])
 
   if (!artifactId || !kind) {
     return (
