@@ -30,6 +30,31 @@ export interface LocalProtocolPayload {
   status: 'draft' | 'active' | 'superseded' | 'retracted';
   supersedes?: { kind: 'record'; id: string; type: string };
   notes?: string;
+  /**
+   * Plate-setting sections (biologist-facing "what this assay needs"),
+   * declared ABOVE the steps. Each row binds a role to a concrete record or
+   * ontology term; `ref` absent = pending pick the user completes in the UI.
+   */
+  labwares?: SetupRowPayload[];
+  equipment?: SetupRowPayload[];
+  materials?: SetupRowPayload[];
+}
+
+/** One plate-setting row: a role plus optional note and concrete binding. */
+export interface SetupRowPayload {
+  role: string;
+  description?: string;
+  ref?: { kind: 'record'; id: string; type: string };
+}
+
+/**
+ * Abstract roles declared by the inherited universal protocol, used to seed
+ * the plate-setting sections with pending rows at local-protocol creation.
+ */
+export interface InheritedRoles {
+  materialRoles?: Array<{ roleId: string; description?: string; allowedMaterialIds?: string[] }>;
+  labwareRoles?: Array<{ roleId: string; description?: string; expectedLabwareKinds?: string[] }>;
+  instrumentRoles?: Array<{ roleId: string; description?: string; allowedInstrumentIds?: string[] }>;
 }
 
 export interface BuildLocalProtocolArgs {
@@ -43,6 +68,8 @@ export interface BuildLocalProtocolArgs {
   labStateRefs?: ReadonlyArray<string>;
   notes?: string;
   status?: LocalProtocolPayload['status'];
+  /** Inherited universal-protocol roles — seed the plate-setting sections. */
+  inheritedRoles?: InheritedRoles;
 }
 
 /**
@@ -101,6 +128,12 @@ export function buildLocalProtocol(args: BuildLocalProtocolArgs): LocalProtocolP
     }));
   }
 
+  // Seed the plate-setting sections from the inherited universal protocol's
+  // abstract roles. Each role becomes a pending row (biologist-facing role +
+  // description); a role carrying concrete ids gets its first id attached as
+  // a record ref so the user can review/confirm rather than start from empty.
+  const setupSections = buildSetupSections(args.inheritedRoles);
+
   // Build the base payload with required fields
   const payload: LocalProtocolPayload = {
     protocolLayer: 'lab',
@@ -117,6 +150,16 @@ export function buildLocalProtocol(args: BuildLocalProtocolArgs): LocalProtocolP
     payload.lab_state_refs = lab_state_refs;
   }
 
+  if (setupSections.labwares) {
+    payload.labwares = setupSections.labwares;
+  }
+  if (setupSections.equipment) {
+    payload.equipment = setupSections.equipment;
+  }
+  if (setupSections.materials) {
+    payload.materials = setupSections.materials;
+  }
+
   if (args.notes && args.notes.length > 0) {
     payload.notes = args.notes;
   }
@@ -124,4 +167,58 @@ export function buildLocalProtocol(args: BuildLocalProtocolArgs): LocalProtocolP
   // Note: supersedes is NOT included in Phase-1 output per spec
 
   return payload;
+}
+
+/**
+ * Seed the three plate-setting sections from an inherited universal
+ * protocol's abstract roles. Each role becomes a pending row (biologist-
+ * facing role + description); a role carrying concrete ids gets its first
+ * id attached as a record ref so the user can review/confirm rather than
+ * start from empty. Returns only the non-empty sections so callers can
+ * spread the result without emitting empty arrays.
+ *
+ * Exported so the specialize-for-experiment path (which assembles its
+ * payload inline rather than via buildLocalProtocol) can share the same
+ * seeding logic.
+ */
+export function buildSetupSections(roles: InheritedRoles | undefined): {
+  labwares?: SetupRowPayload[];
+  equipment?: SetupRowPayload[];
+  materials?: SetupRowPayload[];
+} {
+  const sections: {
+    labwares?: SetupRowPayload[];
+    equipment?: SetupRowPayload[];
+    materials?: SetupRowPayload[];
+  } = {};
+  const labwareRows = setupRows(roles?.labwareRoles, 'expectedLabwareKinds', 'labware');
+  const equipmentRows = setupRows(roles?.instrumentRoles, 'allowedInstrumentIds', 'equipment');
+  const materialRows = setupRows(roles?.materialRoles, 'allowedMaterialIds', 'material');
+  if (labwareRows.length > 0) sections.labwares = labwareRows;
+  if (equipmentRows.length > 0) sections.equipment = equipmentRows;
+  if (materialRows.length > 0) sections.materials = materialRows;
+  return sections;
+}
+
+/**
+ * Map inherited abstract roles to plate-setting rows. `idKey` selects the
+ * role field that may carry concrete record ids (only the first is bound);
+ * `refType` is the record `type` for any attached ref.
+ */
+function setupRows(
+  roles:
+    | Array<{ roleId: string; description?: string; allowedMaterialIds?: string[]; expectedLabwareKinds?: string[]; allowedInstrumentIds?: string[] }>
+    | undefined,
+  idKey: 'allowedMaterialIds' | 'expectedLabwareKinds' | 'allowedInstrumentIds',
+  refType: string
+): SetupRowPayload[] {
+  if (!roles || roles.length === 0) return [];
+  return roles.map((r) => {
+    const row: SetupRowPayload = { role: r.roleId };
+    if (r.description) row.description = r.description;
+    const concrete = r[idKey];
+    const id = concrete?.[0];
+    if (id) row.ref = { kind: 'record', id, type: refType };
+    return row;
+  });
 }

@@ -2,7 +2,7 @@ import { OperationalAdmissibilityService } from '../../authorization/Operational
 import { EquipmentCapabilityService } from '../../capabilities/EquipmentCapabilityService.js';
 import { PolicyProfileService } from '../../policy/PolicyProfileService.js';
 import { buildLocalProtocol } from './LocalProtocolBuilder.js';
-import type { LocalProtocolPayload } from './LocalProtocolBuilder.js';
+import type { InheritedRoles, LocalProtocolPayload } from './LocalProtocolBuilder.js';
 import type {
   ActivePolicyScope,
   ApprovalAuthority,
@@ -51,6 +51,8 @@ type ProtocolPayload = {
   recordId?: unknown;
   title?: unknown;
   steps?: unknown;
+  /** Abstract roles (material/labware/instrument) — seed the local-protocol plate-setting sections. */
+  roles?: InheritedRoles;
 };
 
 type PlannedRunBindings = {
@@ -627,6 +629,8 @@ export class ProtocolCompiler {
       globalProtocolTitle: protocol.title as string,
       compiledSteps: mappedSteps,
       status: 'draft',
+      // Seed the plate-setting sections from the universal protocol's abstract roles.
+      ...(protocol.roles ? { inheritedRoles: protocol.roles } : {}),
     });
 
     return {

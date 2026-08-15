@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { RecordEnvelope, RecordStore } from '../store/types.js';
 import { slugify } from '../compiler/material/MaterialCompiler.js';
+import { buildSetupSections, type InheritedRoles } from '../compiler/protocol/LocalProtocolBuilder.js';
 
 const LOCAL_PROTOCOL_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/local-protocol.schema.yaml';
 const PLANNED_RUN_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/planned-run.schema.yaml';
@@ -281,6 +282,20 @@ export class ProtocolContextService {
     const inheritedRef = kind === 'local-protocol'
       ? asObject(sourcePayload.inherits_from)
       : refFor(options.protocolId, 'protocol', recordTitle(source));
+    // Seed the plate-setting sections from the inherited universal protocol's
+    // abstract roles. Specializing from a universal protocol: roles are on the
+    // source payload (already loaded — no extra fetch). Specializing from an
+    // existing local protocol: roles live on its universal parent — one fetch.
+    let inheritedRoles: InheritedRoles | undefined;
+    if (kind === 'protocol') {
+      inheritedRoles = asObject(sourcePayload.roles);
+    } else {
+      const parentProtocolId = asObject(sourcePayload.inherits_from).id;
+      if (typeof parentProtocolId === 'string') {
+        const parent = await this.store.get(parentProtocolId);
+        inheritedRoles = asObject(asObject(parent?.payload).roles);
+      }
+    }
     const now = new Date().toISOString();
     const payload = {
       kind: 'local-protocol',
@@ -296,6 +311,7 @@ export class ProtocolContextService {
       ...(typeof sourcePayload.overview === 'string' ? { overview: sourcePayload.overview } : {}),
       ...(typeof sourcePayload.purpose === 'string' ? { purpose: sourcePayload.purpose } : {}),
       ...(typeof sourcePayload.notes === 'string' ? { notes: sourcePayload.notes } : {}),
+      ...buildSetupSections(inheritedRoles),
       overrides: {},
       createdAt: now,
       updatedAt: now,

@@ -271,4 +271,58 @@ describe('LocalProtocolBuilder', () => {
       });
     });
   });
+
+  describe('buildLocalProtocol setup sections', () => {
+    it('seeds pending rows from inherited roles', () => {
+      const payload = buildLocalProtocol({
+        globalProtocolRecordId: 'PRT-qpcr',
+        globalProtocolTitle: 'qPCR',
+        compiledSteps: [],
+        inheritedRoles: {
+          materialRoles: [
+            { roleId: 'sample', description: 'qPCR sample plate' },
+            { roleId: 'treatment', description: 'Master mix' }
+          ],
+          labwareRoles: [{ roleId: 'sample_plate', description: '96-well PCR plate' }],
+          instrumentRoles: [{ roleId: 'plate_reader', description: 'Real-time PCR machine' }]
+        }
+      });
+
+      expect(payload.labwares).toEqual([{ role: 'sample_plate', description: '96-well PCR plate' }]);
+      expect(payload.equipment).toEqual([{ role: 'plate_reader', description: 'Real-time PCR machine' }]);
+      expect(payload.materials).toEqual([
+        { role: 'sample', description: 'qPCR sample plate' },
+        { role: 'treatment', description: 'Master mix' }
+      ]);
+    });
+
+    it('attaches refs when roles carry concrete ids', () => {
+      const payload = buildLocalProtocol({
+        globalProtocolRecordId: 'PRT-1',
+        globalProtocolTitle: 'T',
+        compiledSteps: [],
+        inheritedRoles: {
+          materialRoles: [{ roleId: 'dye', description: 'Dye', allowedMaterialIds: ['MAT-0009'] }]
+        }
+      });
+
+      expect(payload.materials).toEqual([
+        { role: 'dye', description: 'Dye', ref: { kind: 'record', id: 'MAT-0009', type: 'material' } }
+      ]);
+      expect('labwares' in payload).toBe(false);
+      expect('equipment' in payload).toBe(false);
+    });
+
+    it('omits the section arrays entirely when there are no roles (exactOptionalPropertyTypes-safe payload)', () => {
+      const payload = buildLocalProtocol({
+        globalProtocolRecordId: 'PRT-1',
+        globalProtocolTitle: 'T',
+        compiledSteps: []
+      });
+
+      expect('labwares' in payload).toBe(false);
+      expect('equipment' in payload).toBe(false);
+      expect('materials' in payload).toBe(false);
+    });
+  });
 });
