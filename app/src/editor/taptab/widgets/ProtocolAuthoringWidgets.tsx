@@ -368,7 +368,7 @@ function roleMentionIds(mentions: SlashMention[], allowedKey: string): string[] 
   return uniqueStrings(ids)
 }
 
-function ProtocolMentionEditor({
+export function ProtocolMentionEditor({
   value,
   placeholder,
   className,
@@ -486,7 +486,7 @@ function ProtocolMentionEditor({
   )
 }
 
-function removeSlashMenuRoots() {
+export function removeSlashMenuRoots() {
   document.querySelectorAll('[data-slash-menu-root="true"]').forEach((node) => node.remove())
 }
 
