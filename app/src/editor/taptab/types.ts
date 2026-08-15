@@ -39,7 +39,11 @@ export type WidgetType =
   | 'protocol-labware-roles'
   | 'protocol-equipment-roles'
   | 'protocol-step-roles'
-  | 'protocol-ai-suggestions';
+  | 'protocol-ai-suggestions'
+  | 'local-protocol-labwares'
+  | 'local-protocol-equipment'
+  | 'local-protocol-materials'
+  | 'local-protocol-steps';
 
 /**
  * Field configuration for a FieldRow component.

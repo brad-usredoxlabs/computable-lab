@@ -29,6 +29,10 @@ export type WidgetType =
   | 'protocol-equipment-roles'
   | 'protocol-step-roles'
   | 'protocol-ai-suggestions'
+  | 'local-protocol-labwares'
+  | 'local-protocol-equipment'
+  | 'local-protocol-materials'
+  | 'local-protocol-steps'
 
 export type LayoutDirection = 'vertical' | 'horizontal' | 'grid' | 'sections'
 

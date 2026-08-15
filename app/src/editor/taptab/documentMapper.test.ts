@@ -3,6 +3,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import YAML from 'yaml';
 import { describe, it, expect } from 'vitest';
 import { buildDocument } from './documentMapper';
@@ -232,7 +233,7 @@ describe('buildDocument', () => {
 describe('protocol UI projection', () => {
   it('shows structured protocol authoring fields and hides Overview', () => {
     const uiSpec = YAML.parse(
-      readFileSync(new URL('../../../../schema/workflow/protocol.ui.yaml', import.meta.url), 'utf8'),
+      readFileSync(join(process.cwd(), '..', 'schema', 'workflow', 'protocol.ui.yaml'), 'utf8'),
     ) as UISpec
     const doc = buildDocument(uiSpec, {
       recordId: 'PRT-test',
@@ -268,13 +269,30 @@ describe('protocol UI projection', () => {
       'Consumables / Labware',
       'Equipment',
       'Steps',
+      'Full Protocol Text',
       'Notes',
     ])
     expect(labels).not.toContain('Overview')
     expect(labels).not.toContain('Protocol Structure')
     expect(labels).not.toContain('Structure Suggestions')
-    expect(widgets.filter((widget) => widget === 'protocol-prose-authoring')).toHaveLength(2)
+    expect(widgets.filter((widget) => widget === 'protocol-prose-authoring')).toHaveLength(3)
     expect(widgets).not.toContain('protocol-ai-suggestions')
     expect(widgets).toContain('protocol-labware-roles')
+  })
+
+  it('maps local-protocol ui spec: setup sections first, then steps', () => {
+    const spec = YAML.parse(
+      readFileSync(join(process.cwd(), '..', 'schema', 'workflow', 'local-protocol.ui.yaml'), 'utf8'),
+    ) as UISpec
+    const sections = spec.form!.sections
+    const titles = sections.map((s) => s.title)
+    expect(titles).toEqual(['Labwares', 'Equipment', 'Materials', 'Steps', 'Identity'])
+    const widgets = sections.flatMap((s) => s.fields.map((f) => f.widget))
+    expect(widgets).toContain('local-protocol-labwares')
+    expect(widgets).toContain('local-protocol-equipment')
+    expect(widgets).toContain('local-protocol-materials')
+    expect(widgets).toContain('local-protocol-steps')
+    // Setup sections come before steps (biologist reads setup first)
+    expect(titles.indexOf('Materials')).toBeLessThan(titles.indexOf('Steps'))
   })
 })
