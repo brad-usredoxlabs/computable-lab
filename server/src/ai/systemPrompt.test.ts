@@ -20,6 +20,49 @@ describe('buildSystemPrompt', () => {
     expect(prompt).toContain('User-highlighted detail: "Seal the plate and read fluorescence over 60 min."');
     expect(prompt).toContain('Adapt exactly THIS step to this lab');
   });
+
+  it('renders localProtocolSetup sections for the localization surface', () => {
+    const prompt = buildSystemPrompt({
+      labwares: [],
+      eventSummary: 'No events yet.',
+      vocabPackId: 'liquid-handling/v1',
+      availableVerbs: ['transfer'],
+      protocolStepContext: {
+        stepId: 'step-1',
+        stepLabel: 'Add treatment',
+        highlightedSection: '',
+      },
+      localProtocolSetup: {
+        labwares: [
+          { role: 'Sample plate', ref: { kind: 'record', id: 'LBW-0001', type: 'labware', label: '96-well PCR plate' } },
+        ],
+        materials: [
+          { role: 'Treatment', description: 'Rotenone 1uM', ref: { kind: 'record', id: 'MAT-1', type: 'material-spec', label: 'Rotenone 1µM' } },
+        ],
+        equipment: [],
+      },
+    });
+
+    expect(prompt).toContain('Plate setup (this lab)');
+    expect(prompt).toContain('Sample plate → 96-well PCR plate (LBW-0001)');
+    expect(prompt).toContain('Treatment → Rotenone 1µM (MAT-1) — Rotenone 1uM');
+    // Empty sections contribute no rows
+    expect(prompt).not.toContain('Equipment: ');
+  });
+
+  it('renders pending setup rows (no ref yet) as "not set yet"', () => {
+    const prompt = buildSystemPrompt({
+      labwares: [],
+      eventSummary: 'No events yet.',
+      vocabPackId: 'liquid-handling/v1',
+      availableVerbs: ['transfer'],
+      localProtocolSetup: {
+        labwares: [{ role: 'Sample plate' }],
+      },
+    });
+
+    expect(prompt).toContain('Sample plate → not set yet');
+  });
   it('formats well-state concentration truth and counts explicitly', () => {
     const prompt = buildSystemPrompt({
       labwares: [],

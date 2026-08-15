@@ -27,6 +27,8 @@ import { useProtocolSelection, ProtocolSelectionProvider, type ProtocolStepGraph
 import { ProtocolSelector } from './ProtocolSelector'
 import { StepDetailPane } from '../../../run/protocol-planning/StepDetailPane'
 import { StepLocalizationPane } from './StepLocalizationPane'
+import { SetupSectionWidget } from '../../../editor/taptab/widgets/LocalProtocolSetupWidgets'
+import type { LocalProtocolSetupRows } from './StepLocalizationPane'
 import './protocolTabPanel.css'
 
 /* ------------------------------------------------------------------ */
@@ -184,6 +186,37 @@ export function splitHumanSteps(text: string): Record<number, string> {
   flush()
   if (Object.keys(sections).length === 0) return { 1: text }
   return sections
+}
+
+/**
+ * Extract the plate-setting sections (labwares/equipment/materials rows) from
+ * a resolved protocol record. Returns null when the record is not a
+ * local-protocol or declares no setup rows — so the Protocol tab only shows
+ * the "This assay needs" block for local-protocol runs.
+ */
+export function extractLocalProtocolSetup(
+  record: object | null | undefined,
+): LocalProtocolSetupRows | null {
+  const candidate = record as
+    | (Record<string, unknown> & { payload?: unknown })
+    | null
+    | undefined
+  const payload = (candidate?.payload ?? candidate) as Record<string, unknown> | null
+  if (!payload || typeof payload !== 'object') return null
+  if (payload.kind !== 'local-protocol') return null
+  const pick = (v: unknown): Array<Record<string, unknown>> | undefined =>
+    Array.isArray(v) && v.length > 0
+      ? (v as Array<Record<string, unknown>>)
+      : undefined
+  const labwares = pick(payload.labwares)
+  const equipment = pick(payload.equipment)
+  const materials = pick(payload.materials)
+  if (!labwares && !equipment && !materials) return null
+  return {
+    ...(labwares ? { labwares } : {}),
+    ...(equipment ? { equipment } : {}),
+    ...(materials ? { materials } : {}),
+  }
 }
 
 /**
@@ -718,6 +751,11 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   const [noProtocol, setNoProtocol] = useState(false)
   const [protocolContext, setProtocolContext] = useState<ProtocolContextResponse | null>(null)
   const [refetchTrigger, setRefetchTrigger] = useState(0)
+  // Plate-setting sections declared on the run's local protocol (if the
+  // attached protocol is an LPR-*). Rendered above the step chips and fed to
+  // each StepLocalizationPane as read-only localization context.
+  const [localProtocolId, setLocalProtocolId] = useState<string | null>(null)
+  const [localSetup, setLocalSetup] = useState<LocalProtocolSetupRows | null>(null)
 
   // Step settings keyed by stepId (fetched on demand when a step is selected)
   const [stepSettings, setStepSettings] = useState<Record<string, Setting[]>>({})
@@ -787,18 +825,30 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       }
       const stepsId = protocolId ?? runId
 
-      // Load the long-form text from the resolved protocol record so a
-      // selected step can expand its full detail.
-      async function loadHumanSteps() {
+      // Fetch the resolved protocol record ONCE and read everything we need
+      // from it: (1) long-form text (humanStepsText) for the expandable step
+      // detail, and (2) when the attached protocol is a local-protocol
+      // (LPR-*), its plate-setting sections — rendered above the step chips
+      // and riding in every localization prompt as read-only context.
+      async function loadProtocolRecordExtras() {
         const recordId = protocolId ?? runId
         if (!recordId) return
         try {
-          const protoEnv = await apiClient.getRecord(recordId)
-          const pp = (protoEnv?.payload ?? protoEnv) as Record<string, unknown> | null
+          const env = await apiClient.getRecord(recordId)
+          if (cancelled) return
+          const pp = (env?.payload ?? env) as Record<string, unknown> | null
           const t = pp?.humanStepsText
-          if (typeof t === 'string' && !cancelled) setHumanStepsText(t)
+          if (typeof t === 'string') setHumanStepsText(t)
+          const setup = extractLocalProtocolSetup(env)
+          if (setup) {
+            setLocalProtocolId(recordId)
+            setLocalSetup(setup)
+          } else {
+            setLocalProtocolId(null)
+            setLocalSetup(null)
+          }
         } catch {
-          // non-fatal — step detail just stays collapsed
+          // non-fatal — step detail stays collapsed; no setup sections shown
         }
       }
 
@@ -836,9 +886,9 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
           }
           if (typeof data?.humanStepsText === 'string') {
             if (!cancelled) setHumanStepsText(data.humanStepsText)
-          } else {
-            await loadHumanSteps()
           }
+          // When the steps endpoint doesn't carry the text, the record fetch
+          // below (loadProtocolRecordExtras) fills it in.
         }
       } catch (err) {
         if (!cancelled) {
@@ -857,6 +907,11 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       } finally {
         if (!cancelled) setIsLoading(false)
       }
+
+      // Independent of the steps fetch outcome — long-form text + setup
+      // sections are read from the resolved protocol record in a single fetch
+      // (even for a local protocol whose steps come from the candidate).
+      await loadProtocolRecordExtras()
     }
 
     void fetchSteps()
@@ -870,6 +925,25 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       setVisibleSteps(steps.map(s => s.stepId))
     }
   }, [steps, visibleSteps.size, setVisibleSteps])
+
+  /**
+   * Persist a changed plate-setting section back to the run's local-protocol
+   * record and refresh the in-memory copy. Read-modify-write on the full
+   * payload so concurrent edits to other fields survive.
+   */
+  const patchSetup = useCallback(async (key: 'labwares' | 'equipment' | 'materials', rows: unknown[]) => {
+    if (!localProtocolId) return
+    try {
+      const env = await apiClient.getRecord(localProtocolId).catch(() => null)
+      const payload = (env?.payload ?? env) as Record<string, unknown>
+      await apiClient.updateRecord(localProtocolId, { ...payload, [key]: rows })
+      setLocalSetup((prev) => (prev ? { ...prev, [key]: rows } : prev))
+      // Let any TapTab form (or other record subscriber) resync the record.
+      window.dispatchEvent(new CustomEvent('cl:records-changed'))
+    } catch (err) {
+      console.warn('Failed to save plate setup section:', err)
+    }
+  }, [localProtocolId])
 
   /** Fetch the compiled sub-graph for a single step. */
   const fetchStepGraph = useCallback(async (stepId: string): Promise<EventGraph | null> => {
@@ -1093,6 +1167,33 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
         onPlayAll={handlePlayAll}
       />
 
+      {/* Plate setup (this lab) — the local protocol's declared bindings,
+          above the steps, so a biologist reads what the assay needs before
+          localizing a step. Edits here persist back to the LPR record. */}
+      {localSetup ? (
+        <section className="protocol-setup-sections" data-testid="protocol-setup-sections">
+          <h3 className="protocol-setup-sections__title">This assay needs</h3>
+          <SetupSectionWidget
+            kind="labware"
+            value={localSetup.labwares ?? []}
+            readOnly={false}
+            onCommit={(rows) => void patchSetup('labwares', rows)}
+          />
+          <SetupSectionWidget
+            kind="equipment"
+            value={localSetup.equipment ?? []}
+            readOnly={false}
+            onCommit={(rows) => void patchSetup('equipment', rows)}
+          />
+          <SetupSectionWidget
+            kind="material"
+            value={localSetup.materials ?? []}
+            readOnly={false}
+            onCommit={(rows) => void patchSetup('materials', rows)}
+          />
+        </section>
+      ) : null}
+
       {/* Step chips */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {steps.map((step) => (
@@ -1163,6 +1264,7 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
                   : { stepId: expandedStepId, label: expandedStepId }
               }
               stepText={section ?? expanded?.description ?? humanStepsText ?? undefined}
+              localProtocolSetup={localSetup ?? undefined}
             />
           )
         })()

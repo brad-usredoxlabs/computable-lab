@@ -406,6 +406,17 @@ export interface EditorContext {
     highlightedSection: string;
     selectedText?: string;
   };
+  /**
+   * Plate-setting sections declared on the run's local protocol (labwares /
+   * equipment / materials rows: { role, description?, ref? }). Read-only
+   * context for step localization: the model binds step role references
+   * against these already-declared bindings instead of inventing them.
+   */
+  localProtocolSetup?: {
+    labwares?: Array<Record<string, unknown>>;
+    equipment?: Array<Record<string, unknown>>;
+    materials?: Array<Record<string, unknown>>;
+  };
 }
 
 export interface LabwareSummary {

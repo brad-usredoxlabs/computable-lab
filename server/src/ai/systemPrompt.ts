@@ -465,6 +465,7 @@ export function buildSystemPrompt(
     formatGraphLemurContext(context),
     formatDraftRevisionContext(context),
     formatProtocolStepContext(context),
+    formatLocalProtocolSetup(context),
   ].filter(Boolean);
   return extraContexts.length > 0 ? `${prompt}\n\n---\n\n${extraContexts.join('\n\n---\n\n')}` : prompt;
 }
@@ -485,6 +486,41 @@ function formatProtocolStepContext(context: EditorContext): string | null {
     lines.push(`- User-highlighted detail: "${step.highlightedSection}"`);
   }
   lines.push('- Adapt exactly THIS step to this lab and ghost its events onto the editor. Prior steps stay as context but are already on the deck (dimmed).');
+  return lines.join('\n');
+}
+
+/**
+ * Render the run's local-protocol plate-setting sections (Labwares /
+ * Equipment / Materials) so step localization binds step role references
+ * against bindings the lab already declared, instead of the model inventing
+ * them inside a single prompt. Pending rows (no ref yet) render as
+ * "not set yet" so the model knows the setup is incomplete.
+ */
+function formatLocalProtocolSetup(context: EditorContext): string | null {
+  const setup = context.localProtocolSetup;
+  if (!setup) return null;
+  const lines: string[] = [
+    'Plate setup (this lab) — concrete bindings declared ABOVE the steps on this lab\'s local protocol. Reference them when localizing a step; do not re-invent or contradict them:',
+  ];
+  const sections: Array<[string, 'labwares' | 'equipment' | 'materials']> = [
+    ['Labwares', 'labwares'],
+    ['Equipment', 'equipment'],
+    ['Materials', 'materials'],
+  ];
+  let anyRows = false;
+  for (const [label, key] of sections) {
+    for (const row of setup[key] ?? []) {
+      anyRows = true;
+      const role = typeof row.role === 'string' ? row.role : '(unnamed role)';
+      const ref = row.ref as { label?: string; id?: string } | undefined;
+      const refPart = ref?.label ? `${ref.label}${ref.id ? ` (${ref.id})` : ''}` : 'not set yet';
+      const desc = typeof row.description === 'string' && row.description ? ` — ${row.description}` : '';
+      lines.push(`- ${label}: ${role} → ${refPart}${desc}`);
+    }
+  }
+  if (!anyRows) {
+    lines.push('- (no setup rows declared yet — the local protocol has no plate-setting sections)');
+  }
   return lines.join('\n');
 }
 

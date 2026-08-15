@@ -47,3 +47,25 @@
   opacity: 0.4;
   cursor: default;
 }
+
+/* --- Plate setup sections ("This assay needs") — above the step chips --- */
+.protocol-setup-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg-elev);
+}
+
+.protocol-setup-sections__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--cl-text);
+}
+
+.protocol-setup-sections .taptab-protocol-list {
+  gap: 6px;
+}

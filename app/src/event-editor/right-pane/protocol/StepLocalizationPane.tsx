@@ -28,14 +28,31 @@ import type { PlateEvent } from '../../../types/events'
 /** Stable surface id the backend can use to fork the agent prompt. */
 export const PROTOCOL_LOCALIZE_SURFACE = 'protocol-step-localization'
 
+/**
+ * Plate-setting rows declared on the run's local protocol — read-only
+ * context for step localization. Mirrors the local-protocol schema shape:
+ * each row is { role, description?, ref? }.
+ */
+export interface LocalProtocolSetupRows {
+  labwares?: Array<Record<string, unknown>>
+  equipment?: Array<Record<string, unknown>>
+  materials?: Array<Record<string, unknown>>
+}
+
 export interface StepLocalizationPaneProps {
   runId: string
   step: { stepId: string; label: string }
   /** Full long-form step text, sent as context so the AI knows the step. */
   stepText?: string
+  /**
+   * Plate-setting sections (Labwares/Equipment/Materials) from the run's
+   * local protocol. Rides in the assist context as `localProtocolSetup` so
+   * the model localizes steps against an already-declared setup.
+   */
+  localProtocolSetup?: LocalProtocolSetupRows
 }
 
-export function StepLocalizationPane({ runId, step, stepText }: StepLocalizationPaneProps) {
+export function StepLocalizationPane({ runId, step, stepText, localProtocolSetup }: StepLocalizationPaneProps) {
   const ws = useWorkspace()
   const editor = useOptionalEventEditor()
   const editorState = editor?.state ?? null
@@ -128,9 +145,10 @@ export function StepLocalizationPane({ runId, step, stepText }: StepLocalization
       studyId: ws.state.studyId,
       activeTabKind: 'run',
       protocolStepContext,
+      ...(localProtocolSetup ? { localProtocolSetup } : {}),
       ...acceptedGraphProjection,
     }
-  }, [editorState, ws.state.studyId, protocolStepContext])
+  }, [editorState, ws.state.studyId, protocolStepContext, localProtocolSetup])
 
   // Promote the draft into the editor's ghost preview (revision-aware).
   const onDraftResult = useCallback(
