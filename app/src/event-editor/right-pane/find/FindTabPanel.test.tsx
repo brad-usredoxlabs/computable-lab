@@ -19,16 +19,18 @@ import {
   screen,
   waitFor,
 } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { WorkspaceProvider, useWorkspace } from '../../workspace/WorkspaceContext'
 import { defaultWorkspaceState } from '../../workspace/types'
 
 const listRecordsByKind = vi.fn()
 const getStudyInventoryUsage = vi.fn()
+const getProtocolContext = vi.fn()
 vi.mock('../../../shared/api/client', () => ({
   apiClient: {
     listRecordsByKind: (...args: unknown[]) => listRecordsByKind(...args),
     getStudyInventoryUsage: (...args: unknown[]) => getStudyInventoryUsage(...args),
+    getProtocolContext: (...args: unknown[]) => getProtocolContext(...args),
   },
 }))
 
@@ -140,6 +142,11 @@ function TabsProbe() {
   )
 }
 
+// Surfaces the current route so a test can assert navigation happened.
+function LocationProbe() {
+  return <div data-testid="location">{useLocation().pathname}</div>
+}
+
 function renderFind() {
   return render(
     <MemoryRouter>
@@ -151,6 +158,7 @@ function renderFind() {
       >
         <FindTabPanel />
         <TabsProbe />
+        <LocationProbe />
       </WorkspaceProvider>
     </MemoryRouter>,
   )
@@ -159,7 +167,9 @@ function renderFind() {
 beforeEach(() => {
   listRecordsByKind.mockReset()
   getStudyInventoryUsage.mockReset()
+  getProtocolContext.mockReset()
   getStudyInventoryUsage.mockResolvedValue({ studyId: 'STU-000001', materials: [], labwares: [] })
+  getProtocolContext.mockResolvedValue({ projectTemplates: [], experimentProtocols: [] })
   getStudyTree.mockReset()
   getRunMethod.mockReset()
 })
@@ -221,7 +231,7 @@ describe('FindTabPanel', () => {
     expect(await screen.findByTestId('find-tab-run-RUN-001')).toBeTruthy()
   })
 
-  it('shows a hint when the study has no experiments', async () => {
+  it('shows a hint when the study has no experiments or runs', async () => {
     listRecordsByKind.mockResolvedValue({ records: [], total: 0 })
     getStudyTree.mockResolvedValue({
       studies: [
@@ -234,7 +244,85 @@ describe('FindTabPanel', () => {
       ],
     })
     renderFind()
-    expect(await screen.findByText(/No experiments yet/)).toBeTruthy()
+    expect(await screen.findByText(/No experiments or runs yet/)).toBeTruthy()
+  })
+
+  it('shows study-level runs (no experiment) in the Runs section', async () => {
+    // Flattened ownership (2026-08-15 schema audit): the run schema makes
+    // experiment optional grouping, so a run with only studyId must be
+    // visible in the Find tree — not just under experiments.
+    listRecordsByKind.mockResolvedValue({ records: [], total: 0 })
+    getStudyTree.mockResolvedValue({
+      studies: [
+        {
+          recordId: 'STU-000001',
+          title: 'Hepatocyte toxicity',
+          path: 'records/studies/STU-000001',
+          experiments: [],
+          runs: [
+            {
+              recordId: 'RUN-DIRECT',
+              title: 'Direct run',
+              studyId: 'STU-000001',
+              path: 'records/run/RUN-DIRECT',
+              recordCounts: {
+                eventGraphs: 1,
+                plates: 0,
+                contexts: 0,
+                claims: 0,
+                materials: 0,
+                attachments: 0,
+                other: 0,
+              },
+            },
+          ],
+        },
+      ],
+    })
+    renderFind()
+    expect(await screen.findByTestId('find-tab-run-RUN-DIRECT')).toBeTruthy()
+    expect(screen.getByTestId('find-tab-runs-heading').textContent).toContain('Runs (1)')
+  })
+
+  it('hides the Runs section when a study has no study-level runs', async () => {
+    listRecordsByKind.mockResolvedValue({ records: [], total: 0 })
+    getStudyTree.mockResolvedValue(sampleTree)
+    renderFind()
+    expect(await screen.findByTestId('find-tab-experiment-EXP-001')).toBeTruthy()
+    expect(screen.queryByTestId('find-tab-runs-heading')).toBeNull()
+  })
+
+  it('clicking a study-level run opens it in a run tab', async () => {
+    listRecordsByKind.mockResolvedValue({ records: [], total: 0 })
+    getStudyTree.mockResolvedValue({
+      studies: [
+        {
+          recordId: 'STU-000001',
+          title: 'S',
+          path: 'p',
+          experiments: [],
+          runs: [
+            {
+              recordId: 'RUN-DIRECT',
+              title: 'Direct run',
+              studyId: 'STU-000001',
+              path: 'records/run/RUN-DIRECT',
+              recordCounts: {
+                eventGraphs: 0, plates: 0, contexts: 0, claims: 0,
+                materials: 0, attachments: 0, other: 0,
+              },
+            },
+          ],
+        },
+      ],
+    })
+    renderFind()
+    const runRow = await screen.findByTestId('find-tab-run-RUN-DIRECT')
+    fireEvent.click(runRow)
+    // Browser model: clicking a run navigates the current tab to /runs/:runId.
+    await waitFor(() =>
+      expect(screen.getByTestId('location').textContent).toBe('/runs/RUN-DIRECT'),
+    )
   })
 
   it('clicking a run resolves the method event graph', async () => {

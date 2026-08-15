@@ -325,24 +325,52 @@ export function FindTabPanel() {
           <p className="right-panel__error">{treeError}</p>
         ) : treeLoading ? (
           <p className="right-panel__hint">Loading tree…</p>
-        ) : !study || study.experiments.length === 0 ? (
-          <p className="right-panel__hint">
-            No experiments yet for <code>{studyId}</code> — use + above to
-            create the first one.
-          </p>
-        ) : (
-          <ul className="find-tab__tree-list">
-            {study.experiments.map((exp) => (
-              <ExperimentRow
-                key={exp.recordId}
-                experiment={exp}
-                studyId={studyId}
-                projectTemplates={protocolContext?.projectTemplates ?? []}
-                experimentProtocols={protocolContext?.experimentProtocols ?? []}
-                projectCrumb={projectCrumb}
-              />
-            ))}
-          </ul>
+        ) : !study ? null : (
+          <>
+            {study.experiments.length === 0 && !study.runs?.length ? (
+              <p className="right-panel__hint">
+                No experiments or runs yet for <code>{studyId}</code> — use +
+                above to create the first one.
+              </p>
+            ) : null}
+            {study.experiments.length > 0 ? (
+              <ul className="find-tab__tree-list">
+                {study.experiments.map((exp) => (
+                  <ExperimentRow
+                    key={exp.recordId}
+                    experiment={exp}
+                    studyId={studyId}
+                    projectTemplates={protocolContext?.projectTemplates ?? []}
+                    experimentProtocols={protocolContext?.experimentProtocols ?? []}
+                    projectCrumb={projectCrumb}
+                  />
+                ))}
+              </ul>
+            ) : null}
+            {/* Runs linked directly to this study (no experiment): the run
+                schema treats experiment as optional grouping, so these runs
+                must be first-class members of the Find tree. */}
+            {study.runs?.length ? (
+              <>
+                <h4
+                  className="right-panel__heading find-tab__group-heading"
+                  data-testid="find-tab-runs-heading"
+                >
+                  Runs ({study.runs.length})
+                </h4>
+                <ul className="find-tab__tree-list">
+                  {study.runs.map((run) => (
+                    <StudyRunRow
+                      key={run.recordId}
+                      run={run}
+                      studyId={studyId}
+                      projectCrumb={projectCrumb}
+                    />
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </>
         )}
       </section>
 
@@ -622,6 +650,89 @@ function RunRow({
           {createMenuOpen ? (
             <div className="find-tab__create-menu" role="menu">
               <button type="button" role="menuitem" onClick={() => void attachProtocolMethod()}>Method from protocol</button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </li>
+  )
+}
+
+/**
+ * StudyRunRow — a run linked directly to the study (no experiment).
+ *
+ * Reuses RunRow's open-in-tab behavior but without the "method from protocol"
+ * affordance: study-level runs don't yet have the experiment context the
+ * method-attach flow expects. Clicking the row opens the run at /runs/:runId.
+ */
+function StudyRunRow({
+  run,
+  studyId,
+  projectCrumb,
+}: {
+  run: RunTreeNode
+  studyId: string
+  projectCrumb?: BreadcrumbItem
+}) {
+  const navigate = useNavigate()
+  const openTabs = useOptionalOpenTabs()
+  const [createMenuOpen, setCreateMenuOpen] = useState(false)
+
+  const openRun = useCallback(() => {
+    openContent(openTabs, navigate, {
+      id: runTabId(run.recordId), kind: 'run', runId: run.recordId, title: run.title,
+    }, `/runs/${run.recordId}`, projectCrumb)
+  }, [run.recordId, run.title, openTabs, navigate])
+
+  const openNewRun = useCallback(() => {
+    setCreateMenuOpen(false)
+    openContent(
+      openTabs,
+      navigate,
+      {
+        id: recordCreateTabId('run', studyId),
+        kind: 'record-create',
+        nodeType: 'run',
+        studyId,
+        title: 'New run',
+      },
+      `/record/new/run/${studyId}`,
+      projectCrumb,
+    )
+  }, [studyId, openTabs, navigate, projectCrumb])
+
+  return (
+    <li>
+      <div className="find-tab__tree-row-wrap">
+        <button
+          type="button"
+          className="find-tab__tree-row"
+          data-testid={`find-tab-run-${run.recordId}`}
+          onClick={() => void openRun()}
+          title={`Open ${run.title} in its own tab`}
+        >
+          <span className="find-tab__chev" aria-hidden>
+            ▶
+          </span>
+          <span className="find-tab__row-title">{run.title}</span>
+        </button>
+        <div className="find-tab__create-menu-wrap">
+          <button
+            type="button"
+            className="find-tab__create-btn"
+            onClick={() => setCreateMenuOpen((open) => !open)}
+            data-testid={`find-tab-new-run-${run.recordId}`}
+            title="New run in this project"
+            aria-haspopup="menu"
+            aria-expanded={createMenuOpen}
+          >
+            +
+          </button>
+          {createMenuOpen ? (
+            <div className="find-tab__create-menu" role="menu">
+              <button type="button" role="menuitem" onClick={openNewRun}>
+                Run
+              </button>
             </div>
           ) : null}
         </div>
