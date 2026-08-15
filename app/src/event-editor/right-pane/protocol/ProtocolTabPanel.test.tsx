@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { splitHumanSteps, extractLocalProtocolSetup, extractUniversalProtocolSetup } from './ProtocolTabPanel'
+import { splitHumanSteps, extractLocalProtocolSetup, extractUniversalProtocolSetup, setupSuggestionIndices, extractUniversalRoleIds } from './ProtocolTabPanel'
 
 describe('splitHumanSteps', () => {
   it('keys a whole-text protocol at ordinal 1 when it does not split', () => {
@@ -126,5 +126,77 @@ describe('extractUniversalProtocolSetup', () => {
     expect(extractUniversalProtocolSetup({ recordId: 'CAN-5', payload: { kind: 'protocol', roles: { labwareRoles: [] } } })).toBeNull()
     expect(extractUniversalProtocolSetup(null)).toBeNull()
     expect(extractUniversalProtocolSetup(undefined)).toBeNull()
+  })
+})
+
+describe('setupSuggestionIndices', () => {
+  const universalRoles = ['labware_96_well_plate', 'labware_bashingbead_lysis_rack']
+
+  it('flags unbound rows whose role matches a universal role id as suggestions', () => {
+    expect(
+      setupSuggestionIndices(
+        [
+          { role: 'labware_96_well_plate', description: '96-well plate' },
+          { role: 'Sample plate', ref: { kind: 'record', id: 'LBW-1', type: 'labware' } },
+          { role: 'Reservoir' }, // user-added role, not in the universal protocol
+        ],
+        universalRoles,
+      ),
+    ).toEqual([0])
+  })
+
+  it('excludes rows that have a ref, even when the role matches', () => {
+    expect(
+      setupSuggestionIndices(
+        [
+          { role: 'labware_96_well_plate', ref: { kind: 'record', id: 'L1', type: 'labware' } },
+          { role: 'labware_bashingbead_lysis_rack' },
+        ],
+        universalRoles,
+      ),
+    ).toEqual([1])
+  })
+
+  it('falls back to "no ref" when universal role ids are unknown', () => {
+    expect(
+      setupSuggestionIndices([
+        { role: 'Anything' },
+        { role: 'Bound', ref: { kind: 'record', id: 'L1', type: 'labware' } },
+      ]),
+    ).toEqual([0])
+  })
+
+  it('tolerates empty arrays and non-array input', () => {
+    expect(setupSuggestionIndices([])).toEqual([])
+    expect(setupSuggestionIndices(undefined)).toEqual([])
+    expect(setupSuggestionIndices(null)).toEqual([])
+  })
+})
+
+describe('extractUniversalRoleIds', () => {
+  it('extracts declared role ids per section from a universal protocol record', () => {
+    expect(
+      extractUniversalRoleIds({
+        recordId: 'CAN-1',
+        payload: {
+          kind: 'protocol',
+          roles: {
+            labwareRoles: [{ roleId: 'labware_96_well_plate' }, { roleId: 'labware_rack', description: 'rack' }],
+            instrumentRoles: [{ roleId: 'instrument_centrifuge' }],
+            materialRoles: [{ roleId: 'material_buffer' }, {}],
+          },
+        },
+      }),
+    ).toEqual({
+      labwares: ['labware_96_well_plate', 'labware_rack'],
+      equipment: ['instrument_centrifuge'],
+      materials: ['material_buffer'],
+    })
+  })
+
+  it('returns null for non-records, missing roles, and null input', () => {
+    expect(extractUniversalRoleIds({ recordId: 'LPR-1', payload: { kind: 'local-protocol' } })).toBeNull()
+    expect(extractUniversalRoleIds(null)).toBeNull()
+    expect(extractUniversalRoleIds(undefined)).toBeNull()
   })
 })

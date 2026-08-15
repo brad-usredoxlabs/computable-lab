@@ -105,11 +105,50 @@ describe('SetupSectionWidget', () => {
         value={[{ role: 'Dye', ref: { kind: 'ontology', id: 'CHEBI:1', namespace: 'CHEBI', label: 'dextran sulfate' } }]}
         readOnly
         onCommit={onCommitSpy()}
-      />,
+      />
     )
     expect(screen.queryByRole('button', { name: /add material/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /remove/i })).toBeNull()
     expect(screen.getByText('dextran sulfate')).toBeDefined()
+  })
+
+  it('renders a "suggested" badge for unbound rows in suggestionRows instead of "not set yet"', () => {
+    const rows: SetupRow[] = [
+      { role: 'labware_96_well_plate', description: '96-well plate' },
+      { role: 'Sample plate', ref: { kind: 'record', id: 'LBW-0001', type: 'labware', label: 'PCR plate' } },
+      { role: 'Reservoir' },
+    ]
+    render(<SetupSectionWidget kind="labware" value={rows} readOnly={false} onCommit={onCommitSpy()} suggestionRows={[0]} />)
+    // ghosted suggestion badge on the seeded row
+    expect(screen.getByTestId('setup-row-suggested-1')).toBeDefined()
+    expect(screen.getByTestId('setup-row-suggested-1').textContent).toBe('suggested')
+    // user-added unbound row keeps the "not set yet" affordance (not a suggestion)
+    expect(screen.getByTestId('setup-row-pending-3')).toBeDefined()
+    expect(screen.queryByTestId('setup-row-pending-1')).toBeNull()
+    expect(screen.queryByTestId('setup-row-pending-2')).toBeNull()
+    // still fully editable (one remove control per row)
+    expect(screen.getAllByRole('button', { name: /remove labware row/i })).toHaveLength(3)
+  })
+
+  it('without suggestionRows, unbound rows render "not set yet" (back-compat)', () => {
+    const rows: SetupRow[] = [{ role: 'Reservoir' }]
+    render(<SetupSectionWidget kind="labware" value={rows} readOnly={false} onCommit={onCommitSpy()} />)
+    expect(screen.getByTestId('setup-row-pending-1')).toBeDefined()
+    expect(screen.queryByTestId('setup-row-suggested-1')).toBeNull()
+  })
+
+  it('removing a suggested row commits the remaining rows', () => {
+    const onCommit = onCommitSpy()
+    const rows: SetupRow[] = [
+      { role: 'labware_96_well_plate' },
+      { role: 'Sample plate', ref: { kind: 'record', id: 'LBW-0001', type: 'labware', label: 'PCR plate' } },
+    ]
+    render(<SetupSectionWidget kind="labware" value={rows} readOnly={false} onCommit={onCommit} suggestionRows={[0]} />)
+    // Remove the FIRST row (the suggested one)
+    fireEvent.click(screen.getAllByRole('button', { name: /remove labware row/i })[0])
+    expect(onCommit).toHaveBeenCalledWith([
+      { role: 'Sample plate', ref: { kind: 'record', id: 'LBW-0001', type: 'labware', label: 'PCR plate' } },
+    ])
   })
 })
 

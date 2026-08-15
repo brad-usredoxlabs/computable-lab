@@ -35,6 +35,15 @@ interface SetupSectionWidgetProps {
   value: unknown
   readOnly: boolean
   onCommit: (rows: SetupRow[]) => void
+  /**
+   * Indices (into `value`) of rows that are GHOSTED SUGGESTIONS — seeded from
+   * the inherited universal protocol's declared roles and not yet confirmed
+   * with a concrete binding (no `ref`). Rendered with a dashed "suggested"
+   * badge instead of the "not set yet" pending affordance, so the biologist
+   * can tell a suggestion apart from a row they added that's simply awaiting a
+   * pick. Absent/empty = no suggestions.
+   */
+  suggestionRows?: number[]
 }
 
 const KIND_COPY: Record<SetupKind, { noun: string; slash: string; pickPlaceholder: string }> = {
@@ -43,9 +52,10 @@ const KIND_COPY: Record<SetupKind, { noun: string; slash: string; pickPlaceholde
   material: { noun: 'material', slash: 'm', pickPlaceholder: 'Pick material (/m)' },
 }
 
-export function SetupSectionWidget({ kind, value, readOnly, onCommit }: SetupSectionWidgetProps) {
+export function SetupSectionWidget({ kind, value, readOnly, onCommit, suggestionRows }: SetupSectionWidgetProps) {
   const rows = Array.isArray(value) ? (value as SetupRow[]) : []
   const copy = KIND_COPY[kind]
+  const suggestionSet = new Set(suggestionRows ?? [])
   const [adding, setAdding] = useState(false)
   const [roleText, setRoleText] = useState('')
   const [descText, setDescText] = useState('')
@@ -93,6 +103,10 @@ export function SetupSectionWidget({ kind, value, readOnly, onCommit }: SetupSec
               showExternalLink={false}
               onRemove={readOnly ? undefined : () => updateRowRef(i, null)}
             />
+          ) : suggestionSet.has(i) ? (
+            <span className="taptab-setup-row__suggested" data-testid={`setup-row-suggested-${i + 1}`}>
+              suggested
+            </span>
           ) : (
             !readOnly && (
               <span className="taptab-setup-row__pending" data-testid={`setup-row-pending-${i + 1}`}>

@@ -1157,6 +1157,18 @@
   cursor: pointer;
 }
 
+.taptab-setup-row__suggested {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--shell-accent, #2563eb);
+  border: 1px dashed var(--shell-accent, #2563eb);
+  border-radius: 999px;
+  padding: 0.125rem 0.625rem;
+  background: color-mix(in srgb, var(--shell-accent, #2563eb) 8%, transparent);
+  opacity: 0.85;
+}
+
 .taptab-setup-row__x {
   margin-left: auto;
   border: none;

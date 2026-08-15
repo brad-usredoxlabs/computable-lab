@@ -262,6 +262,55 @@ export function extractUniversalProtocolSetup(
 }
 
 /**
+ * Indices of draft setup rows that are GHOSTED SUGGESTIONS — seeded from the
+ * inherited universal protocol's declared roles and not yet confirmed with a
+ * concrete binding (`ref` absent). A row counts as a suggestion when its role
+ * matches one of the universal protocol's declared role ids (`universalRoles`,
+ * e.g. `labware_96_well_plate`) AND it has no ref yet. When the universal role
+ * list is unknown (null/undefined), falls back to "no ref" — the seeding shape.
+ * User-added rows (different role) are NOT suggestions. The Protocol tab
+ * passes these to SetupSectionWidget so suggestions render with a dashed
+ * "suggested" badge.
+ */
+export function setupSuggestionIndices(rows: unknown, universalRoles?: string[] | null): number[] {
+  if (!Array.isArray(rows)) return []
+  const roleSet = universalRoles && universalRoles.length > 0 ? new Set(universalRoles) : null
+  return rows
+    .map((r, i) => {
+      const row = r as { role?: unknown; ref?: unknown } | null
+      if (row?.ref) return -1
+      if (roleSet) return typeof row?.role === 'string' && roleSet.has(row.role) ? i : -1
+      return i // unknown universal roles — any unbound row is a pending suggestion
+    })
+    .filter((i) => i >= 0)
+}
+
+/**
+ * Extract the declared abstract role ids from a universal protocol's `roles`
+ * payload (labwareRoles / instrumentRoles / materialRoles → roleId), for the
+ * suggestion matching in setupSuggestionIndices. Returns null when the record
+ * has no roles.
+ */
+export function extractUniversalRoleIds(
+  record: object | null | undefined,
+): { labwares: string[]; equipment: string[]; materials: string[] } | null {
+  const candidate = record as (Record<string, unknown> & { payload?: unknown }) | null | undefined
+  const payload = (candidate?.payload ?? candidate) as Record<string, unknown> | null
+  if (!payload || typeof payload !== 'object') return null
+  const roles = payload.roles as Record<string, unknown> | undefined
+  if (!roles || typeof roles !== 'object') return null
+  const ids = (v: unknown): string[] =>
+    Array.isArray(v)
+      ? (v as Array<{ roleId?: unknown }>).map((r) => (typeof r?.roleId === 'string' ? r.roleId : '')).filter(Boolean)
+      : []
+  return {
+    labwares: ids(roles.labwareRoles),
+    equipment: ids(roles.instrumentRoles),
+    materials: ids(roles.materialRoles),
+  }
+}
+
+/**
  * Format a datetime-local value from an ISO string.
  * Converts "2026-07-29T10:30:00Z" → "2026-07-29T10:30"
  */
@@ -835,6 +884,18 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   // protocol, no local protocol in the chain) — as opposed to concrete rows
   // stored on an LPR (editable, persisted back to the record).
   const [setupIsPreview, setSetupIsPreview] = useState(false)
+  // The universal protocol behind a preview (or freshly-resolved) setup — used
+  // by the auto-specialize effect to know which universal protocol to draft
+  // from when the attached method is not yet a local protocol.
+  const [universalProtocolId, setUniversalProtocolId] = useState<string | null>(null)
+  const [universalProtocolTitle, setUniversalProtocolTitle] = useState<string | null>(null)
+  // Declared abstract role ids of the attached universal protocol (from the
+  // LPR's inherits_from parent, or the record itself in preview mode) — used
+  // to mark which draft rows are still ghosted "suggestions" from it.
+  const [universalRoleIds, setUniversalRoleIds] = useState<{ labwares: string[]; equipment: string[]; materials: string[] } | null>(null)
+  // Guards the auto-specialize effect: one draft LPR per run+universal-protocol
+  // (idempotent even if the user toggles the tab before the re-fetch lands).
+  const specializedKeyRef = useRef<string | null>(null)
 
   // Step settings keyed by stepId (fetched on demand when a step is selected)
   const [stepSettings, setStepSettings] = useState<Record<string, Setting[]>>({})
@@ -928,6 +989,9 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       let stepsId = attachedId
       let resolvedSetup: LocalProtocolSetupRows | null = null
       let resolvedIsPreview = false
+      let resolvedUniversalId: string | null = null
+      let resolvedUniversalTitle: string | null = null
+      let resolvedRoleIds: { labwares: string[]; equipment: string[]; materials: string[] } | null = null
       try {
         const env = await apiClient.getRecord(attachedId)
         if (!cancelled) {
@@ -947,6 +1011,9 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
             if (preview) {
               resolvedSetup = preview
               resolvedIsPreview = true
+              resolvedUniversalId = attachedId
+              if (typeof pp?.title === 'string') resolvedUniversalTitle = pp.title
+              resolvedRoleIds = extractUniversalRoleIds(env)
             }
           }
         }
@@ -963,6 +1030,9 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
           setLocalSetup(null)
           setSetupIsPreview(false)
         }
+        setUniversalProtocolId(resolvedUniversalId)
+        setUniversalProtocolTitle(resolvedUniversalTitle)
+        setUniversalRoleIds(resolvedRoleIds)
       }
 
       // For an LPR, the long-form text lives on the INHERITED universal
@@ -974,6 +1044,12 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
             const pp = (parentEnv?.payload ?? parentEnv) as Record<string, unknown> | null
             const t = pp?.humanStepsText
             if (typeof t === 'string') setHumanStepsText(t)
+            // The LPR's declared role ids come from the INHERITED universal
+            // protocol — needed to mark which draft rows are still ghosted
+            // "suggestions" from it. (Arrives after the first state-update
+            // block, so set it here explicitly.)
+            resolvedRoleIds = extractUniversalRoleIds(parentEnv)
+            setUniversalRoleIds(resolvedRoleIds)
           }
         } catch {
           // non-fatal — step detail just stays collapsed
@@ -1067,6 +1143,93 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       console.warn('Failed to save plate setup section:', err)
     }
   }, [localProtocolId])
+
+  /**
+   * Ensure the run's attached method is a DRAFT LOCAL PROTOCOL (LPR) so the
+   * Protocol tab is always an editable draft, never a read-only view of a
+   * universal protocol. When the run is attached directly to a universal
+   * protocol (no localProtocolRef on the run), create an LPR seeded from the
+   * universal protocol's declared roles (the "suggestions") and RE-POINT the
+   * existing planned-run + run at it in place (PLR protocolRef/sourceRef →
+   * localProtocolRef; run.localProtocolRef set; sourceType=local-protocol) —
+   * no new PLR/EVG, so the deck, steps and method graph are preserved.
+   * No-op when the run already has a local protocol (or lacks the study/
+   * experiment links the server requires).
+   */
+  const ensureLocalProtocolDraft = useCallback(
+    async (universal: { id: string; title?: string }) => {
+      const runEnv = await apiClient.getRecord(runId)
+      const rp = (runEnv?.payload ?? runEnv) as Record<string, unknown> | null
+      if (!rp || rp.kind !== 'run') return
+      if (rp.localProtocolRef) return // already on an LPR — nothing to do
+      const studyId = typeof rp.studyId === 'string' ? rp.studyId : undefined
+      const experimentId = typeof rp.experimentId === 'string' ? rp.experimentId : undefined
+      if (!studyId || !experimentId) return
+      const plrId = (rp.plannedRunRef as { id?: string } | undefined)?.id
+      if (!plrId) return
+
+      // 1. Create the draft local protocol, seeded from the inherited roles.
+      const spec = await apiClient.specializeProtocolForExperiment({
+        protocolId: universal.id,
+        studyId,
+        experimentId,
+        title: `${universal.title ?? universal.id} (lab draft)`,
+      })
+      const lprId = spec?.record?.recordId ?? null
+      if (!lprId) return
+      const lprRef = { kind: 'record', id: lprId, type: 'local-protocol' }
+
+      // 2. Re-point the EXISTING planned-run at the LPR in place.
+      try {
+        const plrEnv = await apiClient.getRecord(plrId)
+        const pp = (plrEnv?.payload ?? plrEnv) as Record<string, unknown> | null
+        if (pp && pp.kind === 'planned-run') {
+          const plrPayload: Record<string, unknown> = {
+            ...pp,
+            sourceType: 'local-protocol',
+            sourceRef: lprRef,
+            localProtocolRef: lprRef,
+          }
+          delete plrPayload.protocolRef // universal ref is replaced by the LPR
+          await apiClient.updateRecord(plrId, plrPayload)
+        }
+      } catch (err) {
+        console.warn('Failed to re-point planned-run at the new local protocol:', err)
+        return
+      }
+
+      // 3. Attach the LPR to the run and resync the tab (steps re-fetch from
+      //    the LPR's inherited universal protocol; setup becomes editable).
+      try {
+        await apiClient.updateRecord(runId, {
+          ...rp,
+          localProtocolRef: lprRef,
+          updatedAt: new Date().toISOString(),
+        })
+      } catch (err) {
+        console.warn('Failed to attach local protocol to run:', err)
+        return
+      }
+      window.dispatchEvent(new CustomEvent('cl:records-changed'))
+      setRefetchTrigger((t) => t + 1)
+    },
+    [runId],
+  )
+
+  // Protocol Planning means the user is working on a DRAFT, not on the
+  // universal protocol: when the attached method is a universal protocol,
+  // specialize it into a draft LPR (seeded from the declared roles = the
+  // ghosted "suggestions") and re-point the run at it, so the setup section
+  // below renders as the editable draft instead of a read-only preview.
+  useEffect(() => {
+    if (!setupIsPreview || !localSetup) return
+    const universalId = typeof universalProtocolId === 'string' ? universalProtocolId : null
+    if (!universalId) return
+    const key = `${runId}:${universalId}`
+    if (specializedKeyRef.current === key) return
+    specializedKeyRef.current = key
+    void ensureLocalProtocolDraft({ id: universalId, ...(universalProtocolTitle ? { title: universalProtocolTitle } : {}) })
+  }, [setupIsPreview, localSetup, universalProtocolId, universalProtocolTitle, runId, ensureLocalProtocolDraft])
 
   /** Fetch the compiled sub-graph for a single step. */
   const fetchStepGraph = useCallback(async (stepId: string): Promise<EventGraph | null> => {
@@ -1304,23 +1467,32 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
               Declared roles from the universal protocol — no concrete bindings yet. Use the
               local version of this protocol to pick labware, equipment and materials.
             </p>
-          ) : null}
+          ) : (
+            <p className="protocol-setup-sections__hint" data-testid="protocol-setup-draft-hint">
+              Draft local protocol — “suggested” rows are ghosted from the universal protocol’s
+              declared roles. Pick concrete labware, equipment and materials (or remove what you
+              don’t use). Edits save to this run’s draft.
+            </p>
+          )}
           <SetupSectionWidget
             kind="labware"
             value={localSetup.labwares ?? []}
             readOnly={setupIsPreview}
+            suggestionRows={setupSuggestionIndices(localSetup.labwares ?? [], universalRoleIds?.labwares)}
             onCommit={(rows) => void patchSetup('labwares', rows)}
           />
           <SetupSectionWidget
             kind="equipment"
             value={localSetup.equipment ?? []}
             readOnly={setupIsPreview}
+            suggestionRows={setupSuggestionIndices(localSetup.equipment ?? [], universalRoleIds?.equipment)}
             onCommit={(rows) => void patchSetup('equipment', rows)}
           />
           <SetupSectionWidget
             kind="material"
             value={localSetup.materials ?? []}
             readOnly={setupIsPreview}
+            suggestionRows={setupSuggestionIndices(localSetup.materials ?? [], universalRoleIds?.materials)}
             onCommit={(rows) => void patchSetup('materials', rows)}
           />
         </section>
