@@ -12,6 +12,8 @@ pnpm-debug.log*
 dist/
 build/
 tmp/
+app/dist-node/
+*.tsbuildinfo
 
 # Runtime
 .run/
