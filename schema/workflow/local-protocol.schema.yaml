@@ -43,6 +43,32 @@ properties:
     type: string
     description: "Optional statement of the experiment or lab purpose for this local protocol."
 
+  # ── Plate-setting sections (biologist-facing "what this assay needs") ──
+  # Concrete lab-layer setup, declared ABOVE the steps. Each row binds a
+  # biologist-facing role to a concrete record or ontology term. `ref` is
+  # optional so the AI can draft rows that the user then completes with the
+  # local-first → ontology → create-new combobox.
+  labwares:
+    type: array
+    description: "Labwares / consumables this assay needs (plate-setting section)."
+    items:
+      $ref: "#/$defs/SetupRow"
+    uniqueItems: true
+
+  equipment:
+    type: array
+    description: "Equipment / instruments this assay needs (plate-setting section)."
+    items:
+      $ref: "#/$defs/SetupRow"
+    uniqueItems: true
+
+  materials:
+    type: array
+    description: "Materials / reagents this assay needs (plate-setting section)."
+    items:
+      $ref: "#/$defs/SetupRow"
+    uniqueItems: true
+
   inherits_from:
     $ref: "./datatypes/ref.schema.yaml"
     description: "Required: the global protocol this realizes."
@@ -122,3 +148,20 @@ properties:
     type: array
     items: { type: string }
     uniqueItems: true
+
+$defs:
+  SetupRow:
+    type: object
+    additionalProperties: false
+    required: [role]
+    properties:
+      role:
+        type: string
+        minLength: 1
+        description: "Biologist-facing role name, e.g. 'Sample plate', 'Plate reader', 'Treatment medium'."
+      description:
+        type: string
+        description: "Optional human note (concentration, lot, why this one)."
+      ref:
+        $ref: "./datatypes/ref.schema.yaml"
+        description: "Concrete binding: a workspace record ref or an ontology ref. Absent = pending pick."
