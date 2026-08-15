@@ -220,6 +220,49 @@ export function extractLocalProtocolSetup(
 }
 
 /**
+ * Derive read-only plate-setting rows from a UNIVERSAL protocol's declared
+ * abstract roles (roles.labwareRoles / instrumentRoles / materialRoles). Used
+ * as a fallback preview when a run is attached directly to a universal
+ * protocol (no local protocol in the chain): the Protocol tab shows what the
+ * assay needs in role form, so the biologist sees the setup surface before
+ * specializing into a local protocol. Rows have no `ref` — a universal
+ * protocol declares roles, not concrete bindings — and the section renders
+ * read-only.
+ */
+export function extractUniversalProtocolSetup(
+  record: object | null | undefined,
+): LocalProtocolSetupRows | null {
+  const candidate = record as
+    | (Record<string, unknown> & { payload?: unknown })
+    | null
+    | undefined
+  const payload = (candidate?.payload ?? candidate) as Record<string, unknown> | null
+  if (!payload || typeof payload !== 'object') return null
+  if (payload.kind !== 'protocol') return null
+  const roles = payload.roles as Record<string, unknown> | undefined
+  if (!roles || typeof roles !== 'object') return null
+  const toRows = (v: unknown): Array<Record<string, unknown>> | undefined => {
+    if (!Array.isArray(v)) return undefined
+    const rows = (v as Array<Record<string, unknown>>).flatMap((r) => {
+      const role = typeof r?.roleId === 'string' ? r.roleId : ''
+      if (!role) return [] // a setup row without a role name is useless
+      const description = typeof r?.description === 'string' ? r.description : ''
+      return [{ role, ...(description ? { description } : {}) }]
+    })
+    return rows.length > 0 ? rows : undefined
+  }
+  const labwares = toRows(roles.labwareRoles)
+  const equipment = toRows(roles.instrumentRoles)
+  const materials = toRows(roles.materialRoles)
+  if (!labwares && !equipment && !materials) return null
+  return {
+    ...(labwares ? { labwares } : {}),
+    ...(equipment ? { equipment } : {}),
+    ...(materials ? { materials } : {}),
+  }
+}
+
+/**
  * Format a datetime-local value from an ISO string.
  * Converts "2026-07-29T10:30:00Z" → "2026-07-29T10:30"
  */
@@ -756,6 +799,11 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   // each StepLocalizationPane as read-only localization context.
   const [localProtocolId, setLocalProtocolId] = useState<string | null>(null)
   const [localSetup, setLocalSetup] = useState<LocalProtocolSetupRows | null>(null)
+  // True when the setup rows shown are a read-only PREVIEW derived from a
+  // universal protocol's declared roles (run attached directly to a universal
+  // protocol, no local protocol in the chain) — as opposed to concrete rows
+  // stored on an LPR (editable, persisted back to the record).
+  const [setupIsPreview, setSetupIsPreview] = useState(false)
 
   // Step settings keyed by stepId (fetched on demand when a step is selected)
   const [stepSettings, setStepSettings] = useState<Record<string, Setting[]>>({})
@@ -833,6 +881,7 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       const attachedId = protocolId ?? runId
       let stepsId = attachedId
       let resolvedSetup: LocalProtocolSetupRows | null = null
+      let resolvedIsPreview = false
       try {
         const env = await apiClient.getRecord(attachedId)
         if (!cancelled) {
@@ -843,6 +892,16 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
           if (pp?.kind === 'local-protocol') {
             const inh = pp?.inherits_from as { id?: string } | undefined
             if (typeof inh?.id === 'string') stepsId = inh.id
+          } else if (pp?.kind === 'protocol') {
+            // Run attached DIRECTLY to a universal protocol (no local
+            // protocol in the chain): show the declared roles as a read-only
+            // "This assay needs" preview so the setup surface is visible
+            // before the run is specialized into an LPR.
+            const preview = extractUniversalProtocolSetup(env)
+            if (preview) {
+              resolvedSetup = preview
+              resolvedIsPreview = true
+            }
           }
         }
       } catch {
@@ -850,11 +909,13 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       }
       if (!cancelled) {
         if (resolvedSetup) {
-          setLocalProtocolId(attachedId)
+          setLocalProtocolId(resolvedIsPreview ? null : attachedId)
           setLocalSetup(resolvedSetup)
+          setSetupIsPreview(resolvedIsPreview)
         } else {
           setLocalProtocolId(null)
           setLocalSetup(null)
+          setSetupIsPreview(false)
         }
       }
 
@@ -1185,26 +1246,35 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
 
       {/* Plate setup (this lab) — the local protocol's declared bindings,
           above the steps, so a biologist reads what the assay needs before
-          localizing a step. Edits here persist back to the LPR record. */}
+          localizing a step. Edits here persist back to the LPR record. When
+          the run is attached directly to a universal protocol, this is a
+          read-only preview of the protocol's declared roles (no concrete
+          bindings exist yet — specialize into a local protocol to set them). */}
       {localSetup ? (
         <section className="protocol-setup-sections" data-testid="protocol-setup-sections">
           <h3 className="protocol-setup-sections__title">This assay needs</h3>
+          {setupIsPreview ? (
+            <p className="protocol-setup-sections__hint" data-testid="protocol-setup-preview-hint">
+              Declared roles from the universal protocol — no concrete bindings yet. Use the
+              local version of this protocol to pick labware, equipment and materials.
+            </p>
+          ) : null}
           <SetupSectionWidget
             kind="labware"
             value={localSetup.labwares ?? []}
-            readOnly={false}
+            readOnly={setupIsPreview}
             onCommit={(rows) => void patchSetup('labwares', rows)}
           />
           <SetupSectionWidget
             kind="equipment"
             value={localSetup.equipment ?? []}
-            readOnly={false}
+            readOnly={setupIsPreview}
             onCommit={(rows) => void patchSetup('equipment', rows)}
           />
           <SetupSectionWidget
             kind="material"
             value={localSetup.materials ?? []}
-            readOnly={false}
+            readOnly={setupIsPreview}
             onCommit={(rows) => void patchSetup('materials', rows)}
           />
         </section>
@@ -1280,7 +1350,12 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
                   : { stepId: expandedStepId, label: expandedStepId }
               }
               stepText={section ?? expanded?.description ?? humanStepsText ?? undefined}
-              localProtocolSetup={localSetup ?? undefined}
+              localProtocolSetup={
+                // Concrete LPR rows only — the universal-protocol role
+                // preview is abstract (no refs), so it must not ride in
+                // the localization context as if it were a declared setup.
+                localSetup && !setupIsPreview ? localSetup : undefined
+              }
             />
           )
         })()

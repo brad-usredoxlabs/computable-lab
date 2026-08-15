@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { splitHumanSteps, extractLocalProtocolSetup } from './ProtocolTabPanel'
+import { splitHumanSteps, extractLocalProtocolSetup, extractUniversalProtocolSetup } from './ProtocolTabPanel'
 
 describe('splitHumanSteps', () => {
   it('keys a whole-text protocol at ordinal 1 when it does not split', () => {
@@ -74,5 +74,57 @@ describe('extractLocalProtocolSetup', () => {
     ).toEqual({ materials: [{ role: 'Dye' }] })
     expect(extractLocalProtocolSetup(null)).toBeNull()
     expect(extractLocalProtocolSetup(undefined)).toBeNull()
+  })
+})
+
+describe('extractUniversalProtocolSetup', () => {
+  const roles = {
+    labwareRoles: [
+      { roleId: 'labware_bashingbead_lysis_rack', description: 'BashingBead Lysis Rack' },
+    ],
+    instrumentRoles: [{ roleId: 'instrument_bead_beater', description: 'Bead-Beating' }],
+    materialRoles: [{ roleId: 'material_zymobiomics_lysis_solution', description: 'ZymoBIOMICS Lysis Solution' }],
+  }
+
+  it('derives read-only setup rows from a universal protocol roles.*', () => {
+    const env = { recordId: 'CAN-1', payload: { kind: 'protocol', title: 'Zymo', roles } }
+    expect(extractUniversalProtocolSetup(env)).toEqual({
+      labwares: [{ role: 'labware_bashingbead_lysis_rack', description: 'BashingBead Lysis Rack' }],
+      equipment: [{ role: 'instrument_bead_beater', description: 'Bead-Beating' }],
+      materials: [{ role: 'material_zymobiomics_lysis_solution', description: 'ZymoBIOMICS Lysis Solution' }],
+    })
+  })
+
+  it('keeps roles without a description (role-only row), drops fully empty ones', () => {
+    const env = {
+      recordId: 'CAN-2',
+      payload: {
+        kind: 'protocol',
+        roles: { labwareRoles: [{ roleId: 'no_desc' }, { roleId: 'ok', description: 'Plate' }, {}] },
+      },
+    }
+    expect(extractUniversalProtocolSetup(env)).toEqual({
+      labwares: [{ role: 'no_desc' }, { role: 'ok', description: 'Plate' }],
+    })
+  })
+
+  it('drops empty sections', () => {
+    const env = {
+      recordId: 'CAN-3',
+      payload: { kind: 'protocol', roles: { labwareRoles: [], materialRoles: [{ roleId: 'm', description: 'Dye' }] } },
+    }
+    expect(extractUniversalProtocolSetup(env)).toEqual({
+      materials: [{ role: 'm', description: 'Dye' }],
+    })
+  })
+
+  it('returns null for non-protocol records, missing/empty roles, and null input', () => {
+    expect(
+      extractUniversalProtocolSetup({ recordId: 'LPR-1', payload: { kind: 'local-protocol', roles: { labwareRoles: [{ roleId: 'a', description: 'A' }] } } }),
+    ).toBeNull()
+    expect(extractUniversalProtocolSetup({ recordId: 'CAN-4', payload: { kind: 'protocol', title: 'Bare' } })).toBeNull()
+    expect(extractUniversalProtocolSetup({ recordId: 'CAN-5', payload: { kind: 'protocol', roles: { labwareRoles: [] } } })).toBeNull()
+    expect(extractUniversalProtocolSetup(null)).toBeNull()
+    expect(extractUniversalProtocolSetup(undefined)).toBeNull()
   })
 })

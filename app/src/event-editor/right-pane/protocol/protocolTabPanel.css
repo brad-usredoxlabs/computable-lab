@@ -66,6 +66,13 @@
   color: var(--cl-text);
 }
 
+.protocol-setup-sections__hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--cl-text-dim);
+}
+
 .protocol-setup-sections .taptab-protocol-list {
   gap: 6px;
 }
