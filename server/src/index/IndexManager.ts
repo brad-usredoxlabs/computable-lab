@@ -620,46 +620,49 @@ export class IndexManager {
 
       const experimentNodes: ExperimentTreeNode[] = [];
 
+      // Shared run-node builder (DRY): used by the experiment loop and by
+      // the study-level direct runs below. `experimentId` is only present
+      // when the run nests under a specific experiment.
+      const buildRunNode = (run: IndexEntry, experimentId?: string): RunTreeNode => {
+        // Count records linked to this run
+        const runRecords = allEntries.filter(
+          e => e.links?.runId === run.recordId && e.kind !== 'run'
+        );
+
+        const counts = {
+          eventGraphs: runRecords.filter(r => r.kind === 'event-graph' || r.schemaId.includes('event-graph')).length,
+          plates: runRecords.filter(r => r.kind === 'plate' || r.schemaId.includes('plate')).length,
+          contexts: runRecords.filter(r => r.kind === 'context' || r.schemaId.includes('context')).length,
+          claims: runRecords.filter(r => r.kind === 'claim' || r.schemaId.includes('claim')).length,
+          materials: runRecords.filter(r => r.kind === 'material' || r.schemaId.includes('material')).length,
+          attachments: runRecords.filter(r => r.kind === 'attachment' || r.schemaId.includes('attachment')).length,
+          other: 0,
+        };
+        counts.other = runRecords.length - Object.values(counts).reduce((a, b) => a + b, 0);
+
+        const runArtifactSummaries = (artifactsByRun.get(run.recordId) ?? [])
+          .map((a) => indexEntryToArtifactSummary(a, study.recordId, experimentId));
+
+        return {
+          recordId: run.recordId,
+          title: run.title || run.recordId,
+          path: run.path,
+          studyId: study.recordId,
+          ...(experimentId !== undefined ? { experimentId } : {}),
+          recordCounts: counts,
+          ...(runArtifactSummaries.length > 0
+            ? { artifacts: runArtifactSummaries }
+            : {}),
+        };
+      };
+
       for (const exp of studyExperiments) {
         // Get runs for this experiment
         const expRuns = runs.filter(
           r => r.links?.experimentId === exp.recordId
         );
 
-        const runNodes: RunTreeNode[] = [];
-
-        for (const run of expRuns) {
-          // Count records linked to this run
-          const runRecords = allEntries.filter(
-            e => e.links?.runId === run.recordId && e.kind !== 'run'
-          );
-
-          const counts = {
-            eventGraphs: runRecords.filter(r => r.kind === 'event-graph' || r.schemaId.includes('event-graph')).length,
-            plates: runRecords.filter(r => r.kind === 'plate' || r.schemaId.includes('plate')).length,
-            contexts: runRecords.filter(r => r.kind === 'context' || r.schemaId.includes('context')).length,
-            claims: runRecords.filter(r => r.kind === 'claim' || r.schemaId.includes('claim')).length,
-            materials: runRecords.filter(r => r.kind === 'material' || r.schemaId.includes('material')).length,
-            attachments: runRecords.filter(r => r.kind === 'attachment' || r.schemaId.includes('attachment')).length,
-            other: 0,
-          };
-          counts.other = runRecords.length - Object.values(counts).reduce((a, b) => a + b, 0);
-
-          const runArtifactSummaries = (artifactsByRun.get(run.recordId) ?? [])
-            .map((a) => indexEntryToArtifactSummary(a, study.recordId, exp.recordId));
-
-          runNodes.push({
-            recordId: run.recordId,
-            title: run.title || run.recordId,
-            path: run.path,
-            studyId: study.recordId,
-            experimentId: exp.recordId,
-            recordCounts: counts,
-            ...(runArtifactSummaries.length > 0
-              ? { artifacts: runArtifactSummaries }
-              : {}),
-          });
-        }
+        const runNodes: RunTreeNode[] = expRuns.map((run) => buildRunNode(run, exp.recordId));
 
         const expArtifactSummaries = (artifactsByExperiment.get(exp.recordId) ?? [])
           .map((a) => indexEntryToArtifactSummary(a, study.recordId, exp.recordId));
@@ -675,6 +678,23 @@ export class IndexManager {
             : {}),
         });
       }
+
+      // Runs linked to THIS study without an experiment (or via projectIds[]):
+      // the schema makes experiment optional grouping, so the tree must not
+      // require it to show a run. Runs already nested under one of this
+      // study's experiments are NOT duplicated at study level.
+      const experimentRunIds = new Set(
+        experimentNodes.flatMap((exp) => exp.runs.map((r) => r.recordId)),
+      );
+      const directRuns = runs.filter((r) => {
+        if (r.links?.experimentId) return false; // experiment-linked runs nest under the experiment
+        if (experimentRunIds.has(r.recordId)) return false;
+        return (
+          r.links?.studyId === study.recordId
+          || r.projectIds?.includes(study.recordId)
+        );
+      });
+      const directRunNodes: RunTreeNode[] = directRuns.map((run) => buildRunNode(run));
 
       const studyArtifactSummaries = (artifactsByStudy.get(study.recordId) ?? [])
         .map((a) => indexEntryToArtifactSummary(a, study.recordId));
@@ -696,6 +716,9 @@ export class IndexManager {
         title: study.title || study.recordId,
         path: study.path,
         experiments: experimentNodes,
+        ...(directRunNodes.length > 0
+          ? { runs: directRunNodes }
+          : {}),
         ...(studyArtifactSummaries.length > 0
           ? { artifacts: studyArtifactSummaries }
           : {}),

@@ -299,6 +299,111 @@ describe('IndexManager.getStudyTree — Phase 12 artifact attachment', () => {
     expect(run.recordCounts.eventGraphs).toBe(1);
     expect(run.artifacts).toHaveLength(1);
   });
+
+  // ── Flattened ownership (2026-08-15 schema audit, Task 6) ──────────────
+  // The run schema makes experiment an OPTIONAL grouping: a run may link to
+  // its study directly (studyId), to multiple studies (projectIds[]), or to
+  // an experiment. The tree must surface all three; before this fix, a run
+  // without an experimentId was invisible in the Projects tree.
+
+  it('shows a run under the study (no experiment) via studyId', async () => {
+    repo.setIndex([
+      entry({ recordId: 'STU-1', kind: 'study' }),
+      entry({
+        recordId: 'RUN-1',
+        kind: 'run',
+        links: { studyId: 'STU-1' },
+      }),
+    ]);
+    const tree = await mgr.getStudyTree();
+    expect(tree[0].runs).toEqual([
+      expect.objectContaining({ recordId: 'RUN-1', studyId: 'STU-1' }),
+    ]);
+    expect(tree[0].experiments).toEqual([]);
+  });
+
+  it('shows a run under EACH study in projectIds[]', async () => {
+    repo.setIndex([
+      entry({ recordId: 'STU-1', kind: 'study' }),
+      entry({ recordId: 'STU-2', kind: 'study' }),
+      entry({
+        recordId: 'RUN-1',
+        kind: 'run',
+        projectIds: ['STU-1', 'STU-2'],
+      }),
+    ]);
+    const tree = await mgr.getStudyTree();
+    expect(tree[0].runs).toEqual([
+      expect.objectContaining({ recordId: 'RUN-1' }),
+    ]);
+    expect(tree[1].runs).toEqual([
+      expect.objectContaining({ recordId: 'RUN-1' }),
+    ]);
+  });
+
+  it('still nests experiment-linked runs under their experiment', async () => {
+    repo.setIndex([
+      entry({ recordId: 'STU-1', kind: 'study' }),
+      entry({ recordId: 'EXP-1', kind: 'experiment', links: { studyId: 'STU-1' } }),
+      entry({
+        recordId: 'RUN-1',
+        kind: 'run',
+        links: { studyId: 'STU-1', experimentId: 'EXP-1' },
+      }),
+    ]);
+    const tree = await mgr.getStudyTree();
+    expect(tree[0].experiments[0].runs).toEqual([
+      expect.objectContaining({ recordId: 'RUN-1', experimentId: 'EXP-1' }),
+    ]);
+    // An experiment-nested run is NOT also duplicated at study level
+    expect(tree[0].runs).toBeUndefined();
+  });
+
+  it('does not duplicate an experiment-nested run at study level when both links exist', async () => {
+    repo.setIndex([
+      entry({ recordId: 'STU-1', kind: 'study' }),
+      entry({ recordId: 'EXP-1', kind: 'experiment', links: { studyId: 'STU-1' } }),
+      entry({
+        recordId: 'RUN-1',
+        kind: 'run',
+        links: { studyId: 'STU-1', experimentId: 'EXP-1' },
+        projectIds: ['STU-1'],
+      }),
+    ]);
+    const tree = await mgr.getStudyTree();
+    expect(tree[0].experiments[0].runs).toHaveLength(1);
+    expect(tree[0].runs).toBeUndefined();
+  });
+
+  it('keeps study-level runs out of experiments and vice versa (mixed tree)', async () => {
+    repo.setIndex([
+      entry({ recordId: 'STU-1', kind: 'study' }),
+      entry({ recordId: 'EXP-1', kind: 'experiment', links: { studyId: 'STU-1' } }),
+      entry({
+        recordId: 'RUN-EXP',
+        kind: 'run',
+        links: { studyId: 'STU-1', experimentId: 'EXP-1' },
+      }),
+      entry({
+        recordId: 'RUN-DIRECT',
+        kind: 'run',
+        links: { studyId: 'STU-1' },
+      }),
+      entry({
+        recordId: 'RUN-MULTI',
+        kind: 'run',
+        projectIds: ['STU-1'],
+      }),
+    ]);
+    const tree = await mgr.getStudyTree();
+    expect(tree[0].experiments[0].runs).toEqual([
+      expect.objectContaining({ recordId: 'RUN-EXP' }),
+    ]);
+    expect(tree[0].runs?.map(r => r.recordId).sort()).toEqual([
+      'RUN-DIRECT',
+      'RUN-MULTI',
+    ]);
+  });
 });
 
 // Marker so the file isn't flagged as missing exports under isolatedModules.

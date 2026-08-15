@@ -25,6 +25,12 @@ export interface StudyTreeNode {
   shortSlug?: string
   path: string
   experiments: ExperimentTreeNode[]
+  /**
+   * Runs linked to this study WITHOUT an experiment (via studyId or
+   * projectIds[]). Experiments are optional grouping per the run schema.
+   * Absent on tree responses emitted before the field landed.
+   */
+  runs?: RunTreeNode[]
   artifacts?: ArtifactSummary[]
   protocolLibrary?: ProjectProtocolLibrary
 }

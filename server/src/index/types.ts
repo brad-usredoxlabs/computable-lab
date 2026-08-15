@@ -104,6 +104,13 @@ export interface StudyTreeNode {
   shortSlug?: string;
   path: string;
   experiments: ExperimentTreeNode[];
+  /**
+   * Runs linked to this study WITHOUT an experiment (via studyId or
+   * projectIds[]). The run schema treats experiment as optional grouping,
+   * so these runs are first-class members of the study. Optional for
+   * back-compat with tree responses emitted before the field landed.
+   */
+  runs?: RunTreeNode[];
   artifacts?: ArtifactSummaryEntry[];
   protocolLibrary?: ProjectProtocolLibrary;
 }
@@ -151,7 +158,12 @@ export interface RunTreeNode {
   shortSlug?: string;
   path: string;
   studyId: string;
-  experimentId: string;
+  /**
+   * Undefined for study-level runs: experiments are optional grouping
+   * (saved views) per the run schema, so a run may link to a study
+   * directly.
+   */
+  experimentId?: string;
   recordCounts: {
     eventGraphs: number;
     plates: number;
