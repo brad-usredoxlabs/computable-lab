@@ -1,4 +1,18 @@
 # Lint rules for Run records
 lintVersion: 1
 schemaId: "https://computable-lab.com/schema/computable-lab/run.schema.yaml"
-rules: []
+rules:
+  - id: "run-has-parent-link"
+    title: "A run must link to at least one study (studyId or projectIds)"
+    severity: "warning"
+    scope: "record"
+    assert:
+      op: "any"
+      predicates:
+        - op: "exists"
+          path: "$.studyId"
+        - op: "nonEmpty"
+          path: "$.projectIds"
+    message:
+      template: "Run '{{$.recordId}}' links to no study (studyId and projectIds both empty)"
+      paths: ["$.recordId"]
