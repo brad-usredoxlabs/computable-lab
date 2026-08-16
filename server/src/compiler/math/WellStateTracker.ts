@@ -219,3 +219,147 @@ export function reduceTransfer(source: WellState, target: WellState, volumeFract
     addComponentAmount(target, ref, 'soluble', moving, comp.template);
   }
 }
+
+// ── A3: partitioning reducers (SPE / magnetize / discard / elute / wash) ──
+
+export interface MagnetizeOp {
+  kind: 'magnetize' | 'magnetize_incubate';
+  /** Structural hint: this event binds the well's soluble content to the solid phase. */
+  phase: 'adsorbed';
+  /**
+   * Optional selectivity: only bind these component refs. Absent = bind all
+   * soluble components. Declaring the bound set is how SPE keeps non-binding
+   * impurities soluble so the subsequent wash can remove them.
+   */
+  materialRefs?: string[];
+}
+
+export interface DiscardSupernatantOp {
+  kind: 'discard_supernatant';
+  /** Residual liquid volume retained after discarding (e.g. bead slurry). */
+  residualVolumeUl: number;
+}
+
+export interface WashOp {
+  kind: 'wash';
+  /** Volume of wash buffer added each cycle. */
+  bufferVolumeUl: number;
+  /** Number of wash cycles (add → mix → discard). */
+  washCount: number;
+}
+
+export interface EluteOp {
+  kind: 'elute';
+  /** Final elution volume the bound analyte is released into. */
+  elutionVolumeUl: number;
+  /** Structural hint: this event releases the bound/solid-phase analyte. */
+  phase: 'adsorbed';
+}
+
+export interface ResuspendOp {
+  kind: 'resuspend';
+  /** Volume the resuspended pellet is brought to. */
+  volumeUl: number;
+  /** Structural hint: this event returns the bound/solid-phase analyte to solution. */
+  phase: 'adsorbed';
+}
+
+export type PartitioningOp = MagnetizeOp | DiscardSupernatantOp | WashOp | EluteOp | ResuspendOp;
+
+/**
+ * Magnetize: bind soluble content onto the solid phase. Driven by the event's
+ * declared `phase: 'adsorbed'` — the tracker does NOT infer which analytes are
+ * magnetizable from context. When `materialRefs` is given, only those
+ * components bind (non-binding impurities stay soluble and wash away); when
+ * absent, all soluble components bind.
+ */
+export function reduceMagnetize(well: WellState, materialRefs?: string[]): void {
+  if (materialRefs && materialRefs.length > 0) {
+    for (const ref of materialRefs) {
+      const comp = well.components.get(ref);
+      if (!comp) {
+        markDirty(well, `reduceMagnetize: unknown component ref '${ref}'`);
+        continue;
+      }
+      comp.bound += comp.soluble;
+      comp.soluble = 0;
+    }
+    return;
+  }
+  for (const comp of well.components.values()) {
+    comp.bound += comp.soluble;
+    comp.soluble = 0;
+  }
+}
+
+/**
+ * Discard supernatant: remove the entire liquid phase (all soluble components
+ * go with it); bound components are retained on the solid. This is the step
+ * that makes SPE correct — the retained elution concentration is NOT C₁V₁=C₂V₂.
+ */
+export function reduceDiscardSupernatant(well: WellState, residualVolumeUl: number): void {
+  if (!Number.isFinite(residualVolumeUl) || residualVolumeUl < 0) {
+    markDirty(well, `reduceDiscardSupernatant: invalid residual volume (${residualVolumeUl})`);
+    return;
+  }
+  for (const comp of well.components.values()) {
+    comp.soluble = 0;
+  }
+  well.volume_ul = residualVolumeUl;
+}
+
+/**
+ * Wash: for each cycle, add buffer → mix → discard supernatant. Soluble
+ * impurities are removed with each discard; bound analyte is retained. Net
+ * effect after k washes: all soluble amounts → 0, bound untouched.
+ */
+export function reduceWash(well: WellState, bufferVolumeUl: number, washCount: number): void {
+  if (!Number.isInteger(washCount) || washCount < 0) {
+    markDirty(well, `reduceWash: invalid washCount (${washCount})`);
+    return;
+  }
+  if (washCount === 0) return;
+  if (!Number.isFinite(bufferVolumeUl) || bufferVolumeUl < 0) {
+    markDirty(well, `reduceWash: invalid bufferVolumeUl (${bufferVolumeUl})`);
+    return;
+  }
+  for (let i = 0; i < washCount; i++) {
+    well.volume_ul += bufferVolumeUl; // add buffer
+    well.homogenized = true; // mix
+    // discard supernatant: remove all liquid + soluble
+    for (const comp of well.components.values()) {
+      comp.soluble = 0;
+    }
+    well.volume_ul = 0;
+  }
+}
+
+/**
+ * Elute: release the bound analyte into the elution volume. Concentration
+ * becomes bound / elution_vol — an INCREASE relative to the removed supernatant,
+ * the opposite of a dilution.
+ */
+export function reduceElute(well: WellState, elutionVolumeUl: number): void {
+  if (!Number.isFinite(elutionVolumeUl) || elutionVolumeUl < 0) {
+    markDirty(well, `reduceElute: invalid elution volume (${elutionVolumeUl})`);
+    return;
+  }
+  for (const comp of well.components.values()) {
+    comp.soluble = comp.bound;
+    comp.bound = 0;
+  }
+  well.volume_ul = elutionVolumeUl;
+}
+
+/** Resuspend pellet: return the bound analyte to solution at a given volume. */
+export function reduceResuspend(well: WellState, volumeUl: number): void {
+  if (!Number.isFinite(volumeUl) || volumeUl < 0) {
+    markDirty(well, `reduceResuspend: invalid volume (${volumeUl})`);
+    return;
+  }
+  for (const comp of well.components.values()) {
+    comp.soluble = comp.bound;
+    comp.bound = 0;
+  }
+  well.volume_ul = volumeUl;
+}
