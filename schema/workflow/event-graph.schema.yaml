@@ -328,6 +328,12 @@ $defs:
       notes:
         type: string
         description: "Optional notes about this event."
+
+      phase:
+        type: string
+        description: "Explicit compartment hint for well-state propagation: whether the material(s) affected by this event are in the free solution ('soluble') or immobilized on a solid phase ('adsorbed'). Absent defaults to 'soluble'. The well-state tracker NEVER infers this from context."
+        enum: [ soluble, adsorbed ]
+
       deviations:
         type: array
         description: "Structured operator feedback about deviations during execution."

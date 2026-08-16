@@ -103,6 +103,13 @@ interface BaseEventDetails {
   labwareId?: string
   /** Wells affected by this event */
   wells?: WellId[]
+  /**
+   * Explicit compartment hint for well-state propagation: whether the
+   * material(s) affected by this event are in free solution ('soluble') or
+   * immobilized on a solid phase ('adsorbed'). Absent defaults to 'soluble'.
+   * The well-state tracker never infers this from context.
+   */
+  phase?: 'soluble' | 'adsorbed'
 }
 
 /**
