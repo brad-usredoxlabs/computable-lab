@@ -101,6 +101,14 @@ export interface ProtocolActionCandidate {
   source?: string;
   material?: string;
   volume?: ExtractedScalarQuantity;
+  /**
+   * Optional final working CONCENTRATION of the material in the destination well
+   * (the concentration-first north star). When present and parseable, the step is
+   * emitted as `working_concentration` instead of a baked `volume_uL`, so the recipe
+   * is stock-strength- and scale-invariant. e.g. "add fenofibrate to a final
+   * concentration of 10 nM" → { raw: '10 nM', value: 10, unit: 'nM' }.
+   */
+  concentration?: ExtractedScalarQuantity;
   duration?: ExtractedScalarQuantity;
   temperature?: ExtractedScalarQuantity;
   speed?: ExtractedScalarQuantity;

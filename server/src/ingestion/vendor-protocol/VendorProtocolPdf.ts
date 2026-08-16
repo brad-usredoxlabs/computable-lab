@@ -359,12 +359,16 @@ export function extractVendorProtocolTables(input: {
   return tables;
 }
 
-function extractQuantities(text: string, kind: 'volume' | 'duration' | 'temperature' | 'speed'): ExtractedScalarQuantity[] {
+function extractQuantities(text: string, kind: 'volume' | 'duration' | 'temperature' | 'speed' | 'concentration'): ExtractedScalarQuantity[] {
   const patterns = {
     volume: /(?:up to\s*)?(\d+(?:,\d{3})?(?:\.\d+)?|≤\s*\d+(?:\.\d+)?)\s*(µl|μl|ul|ml|l)\b/giu,
     duration: /(\d+(?:-\d+)?(?:\.\d+)?)\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?)\b/giu,
     temperature: /([–-]?\s*\d+(?:\.\d+)?)\s*°?\s*C\b/giu,
     speed: /(≥\s*)?(\d+(?:,\d{3})?)\s*x\s*g\b/giu,
+    // Final working CONCENTRATION in the destination, e.g. "to a final concentration of 10 nM",
+    // "at 10 uM", "0.5 mg/mL". Prefer the molar / mass-per-vol / % unit so the step can be
+    // emitted as working_concentration (the concentration-first north star).
+    concentration: /(?:final(?:\s+working)?\s+concentration\s+(?:of\s+|to\s+to\s+)?|to\s+(?:a\s+)?(?:final\s+)?working\s+concentration\s+of\s+)?(\d+(?:\.\d+)?)\s*(nM|uM|µM|μM|mM|M|ng\/mL|ug\/mL|µg\/mL|μg\/mL|mg\/mL|g\/L|U\/mL|%\s*(?:v\/v|w\/v))\b/giu,
   } as const;
   return [...text.matchAll(patterns[kind])].map((match) => {
     const raw = normalizeText(match[0]);
@@ -374,7 +378,9 @@ function extractQuantities(text: string, kind: 'volume' | 'duration' | 'temperat
       ? 'C'
       : kind === 'speed'
         ? 'x g'
-        : match[2]?.toLowerCase().replace('μ', 'u').replace('µ', 'u');
+        : kind === 'concentration'
+          ? (match[1] && match[2]) ? match[2].trim().replace('μ', 'u').replace('µ', 'u') : undefined
+          : match[2]?.toLowerCase().replace('μ', 'u').replace('µ', 'u');
     return {
       raw,
       ...(typeof value === 'number' && Number.isFinite(value) ? { value } : {}),
@@ -470,6 +476,7 @@ function extractActionCandidates(
 ): ProtocolActionCandidate[] {
   const actions = splitActionClauses(stepText).map((clause) => {
     const volumes = extractQuantities(clause, 'volume');
+    const concentrations = extractQuantities(clause, 'concentration');
     const durations = extractQuantities(clause, 'duration');
     const temperatures = extractQuantities(clause, 'temperature');
     const speeds = extractQuantities(clause, 'speed');
@@ -480,6 +487,7 @@ function extractActionCandidates(
       sourceText: clause,
       ...(material ? { material } : {}),
       ...(volumes[0] ? { volume: volumes[0] } : {}),
+      ...(concentrations[0] ? { concentration: concentrations[0] } : {}),
       ...(durations[0] ? { duration: durations[0] } : {}),
       ...(temperatures[0] ? { temperature: temperatures[0] } : {}),
       ...(speeds[0] ? { speed: speeds[0] } : {}),

@@ -801,5 +801,67 @@ describe('ProtocolExtractionService', () => {
       const draftBody = result.draft.candidates[0].draft as Record<string, unknown>;
       expect(draftBody.title).toBe('My Custom Protocol Title');
     });
+
+    it('emits working_concentration instead of volume_uL when the action carries a final concentration', async () => {
+      const candidateWithConc: Record<string, unknown> = {
+        ...mockCandidate,
+        steps: [
+          {
+            id: 'step-1',
+            stepNumber: 1,
+            sourceText: 'Add fenofibrate to a final concentration of 10 nM in each well',
+            actions: [
+              {
+                actionKind: 'add' as const,
+                sourceText: 'Add fenofibrate to a final concentration of 10 nM',
+                target: '96-well plate',
+                material: 'Buffer A',
+                concentration: { raw: '10 nM', value: 10, unit: 'nM' },
+                provenance: { documentId: 'DOC-ABC-123', pageStart: 1 },
+              },
+            ],
+            conditions: {},
+            materials: ['Buffer A'],
+            labware: ['96-well plate'],
+            equipment: [],
+            notes: [],
+            branches: [],
+            provenance: { documentId: 'DOC-ABC-123', pageStart: 1 },
+            confidence: 0.9,
+          },
+        ],
+      };
+
+      mockStore.get.mockResolvedValueOnce(mockVendorPdfEnvelope);
+      (fs.access as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+      (fs.readFile as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+        JSON.stringify(candidateWithConc)
+      );
+
+      const result = await service.createDraftFromVendorPdf({ vendorPdfId });
+
+      const steps = result.draft.candidates[0].draft.steps as Array<Record<string, unknown>>;
+      const step = steps[0];
+      expect(step.kind).toBe('add_material');
+      // concentration-first north star: no baked volume; working_concentration emitted
+      expect(step).not.toHaveProperty('volume_uL');
+      expect(step.working_concentration).toEqual({ value: 10, unit: 'nM', basis: 'molar' });
+    });
+
+    it('still emits legacy volume_uL when the action has a volume but no concentration (back-compat)', async () => {
+      // mockCandidate's single step has action.volume only — no concentration
+      mockStore.get.mockResolvedValueOnce(mockVendorPdfEnvelope);
+      (fs.access as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+      (fs.readFile as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+        JSON.stringify(mockCandidate)
+      );
+
+      const result = await service.createDraftFromVendorPdf({ vendorPdfId });
+
+      const steps = result.draft.candidates[0].draft.steps as Array<Record<string, unknown>>;
+      expect(steps[0].kind).toBe('add_material');
+      expect(steps[0]).toHaveProperty('volume_uL');
+      expect(steps[0]).not.toHaveProperty('working_concentration');
+    });
   });
 });

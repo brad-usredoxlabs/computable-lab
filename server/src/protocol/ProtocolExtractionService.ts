@@ -74,6 +74,43 @@ function asStringArray(input: unknown): string[] {
   return input.filter((v): v is string => typeof v === 'string' && v.trim().length > 0).map((v) => v.trim());
 }
 
+/**
+ * Map an extracted concentration quantity to the concentration-first
+ * `working_concentration` datatype shape ({ value, unit, basis }). Returns null
+ * when the extraction has no usable value+unit, or the unit is not in the
+ * concentration schema enum — so the caller falls back to legacy `volume_uL`.
+ */
+function toWorkingConcentration(conc: { raw?: string; value?: number; unit?: string } | null | undefined): Record<string, unknown> | null {
+  if (!conc) return null;
+  if (typeof conc.value !== 'number' || !Number.isFinite(conc.value) || conc.value <= 0) return null;
+  const unit = typeof conc.unit === 'string' ? conc.unit.trim() : '';
+  if (!unit) return null;
+  const basis = inferConcentrationBasisRaw(unit);
+  if (!basis) return null;
+  return { value: conc.value, unit: normalizeConcentrationUnit(unit), basis };
+}
+
+/**
+ * Map a concentration unit to its schema basis (molar / mass_per_volume /
+ * activity_per_volume / count_per_volume / volume_fraction / mass_fraction).
+ * Mirrors the concentration datatype's unit→basis table without calling into the
+ * materials module (kept local to the extraction service).
+ */
+function inferConcentrationBasisRaw(unit: string): string | null {
+  const u = unit.replace('μ', 'u').replace('µ', 'u').trim();
+  if (/^u?M$/i.test(u) || /^(m|u|n|p|f)M$/i.test(u)) return 'molar';
+  if (/^(g\/L|mg\/mL|ug\/mL|ng\/mL)$/i.test(u)) return 'mass_per_volume';
+  if (/^U\/(mL|uL)$/i.test(u)) return 'activity_per_volume';
+  if (/^cells\/(mL|uL)$/i.test(u)) return 'count_per_volume';
+  if (/^% v\/v$/i.test(u)) return 'volume_fraction';
+  if (/^% w\/v$/i.test(u)) return 'mass_fraction';
+  return null;
+}
+
+function normalizeConcentrationUnit(unit: string): string {
+  return unit.replace('μ', 'u').replace('µ', 'u');
+}
+
 function wellSelectorFromList(wells: unknown): { kind: 'all' } | { kind: 'explicit'; wells: string[] } {
   const values = asStringArray(wells);
   if (values.length === 0) return { kind: 'all' };
@@ -987,12 +1024,18 @@ export class ProtocolExtractionService {
 
     // Extract scalar quantities
     const volume = action?.volume ?? step.conditions?.volumes?.[0] ?? null;
+    const concentration = action?.concentration ?? null;
     const duration = action?.duration ?? step.conditions?.durations?.[0] ?? null;
     const temperature = action?.temperature ?? step.conditions?.temperatures?.[0] ?? null;
 
     const volumeUl = typeof volume?.value === 'number' ? volume.value : undefined;
     const durationMin = typeof duration?.value === 'number' ? duration.value : undefined;
     const temperatureC = typeof temperature?.value === 'number' ? temperature.value : undefined;
+    // Concentration-first: when the source gives a final working concentration
+    // (e.g. "10 nM"), emit `working_concentration` (reusing the concentration
+    // datatype) instead of baking an absolute volume, so the recipe is stock-
+    // and scale-invariant. Only usable when both value + a known unit present.
+    const workingConcentration = toWorkingConcentration(concentration);
 
     // Base fields every step gets
     const base: Record<string, unknown> = {
@@ -1013,7 +1056,9 @@ export class ProtocolExtractionService {
           target: { labwareRole: targetRole },
           wells: { kind: 'all' },
           material: { materialRole },
-          volume_uL: volumeUl ?? 0.1,
+          // Concentration-first: use working_concentration when the source gave a
+          // final concentration; only then fall back to legacy volume_uL.
+          ...(workingConcentration ? { working_concentration: workingConcentration } : { volume_uL: volumeUl ?? 0.1 }),
         };
 
       case 'transfer':

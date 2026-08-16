@@ -30,6 +30,10 @@ sections:
         mentions: string[]        # Mention tokens — references to separate material/equipment candidates
         duration_min?: number     # optional duration in minutes
         temperature_c?: number    # optional temperature in Celsius
+        concentration?:           # optional FINAL working concentration in the destination well
+          value: number           #   (the concentration-first north star; preferred over volume_uL)
+          unit: string            #   e.g. 'nM', 'uM', 'mg/mL', '% v/v'
+        volume_ul?: number        # optional absolute volume in µL (only when NO concentration given)
         evidence_span: string     # REQUIRED: verbatim text from source that justifies this step
         uncertainty?:             # optional confidence indicator
           | 'low'

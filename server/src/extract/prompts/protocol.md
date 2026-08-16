@@ -84,6 +84,8 @@ Every step MUST have:
 Optional step fields:
 - `duration_min`: Duration in minutes (if specified in source)
 - `temperature_c`: Temperature in Celsius (if specified in source)
+- `concentration`: The FINAL working concentration of the material in the destination well (if the source gives one), as `{ value, unit }`. Examples: `{ value: 10, unit: "nM" }`, `{ value: 0.5, unit: "mg/mL" }`. This is the concentration-first north star: prefer it when the source phrases dosing as a target concentration (e.g. "add fenofibrate to 10 nM final") rather than an absolute volume. When the source only gives a volume, emit `volume_uL` instead — do NOT invent a concentration.
+- `volume_ul`: Absolute volume in µL (only when the source gives a volume and NO target concentration)
 
 ## Materials and Equipment Are Separate Candidates
 
