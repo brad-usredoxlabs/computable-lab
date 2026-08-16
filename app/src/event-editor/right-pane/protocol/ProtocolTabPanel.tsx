@@ -56,6 +56,12 @@ export interface ProtocolStep {
   description?: string
   /** Whether this step is currently visible on the deck. */
   visible: boolean
+  /**
+   * Concentration-first quantity: the final working concentration of the material
+   * in the well (e.g. { value: 10, unit: 'nM', basis: 'molar' }). When present the
+   * recipe is stock- and scale-invariant — the UI shows this instead of a µL.
+   */
+  workingConcentration?: { value: number | string; unit?: string; basis?: string; raw?: string }
   /** Step settings with optional controlled indicators. */
   settings?: Array<{
     settingId: string
@@ -105,10 +111,36 @@ interface MappedStep {
   text?: string
   notes?: string
   description?: string
+  /** Conc-first quantity on the step (may be nested under step.working_concentration). */
+  workingConcentration?: unknown
+  concentration?: unknown
   uncertainty?: ProtocolStep['uncertainty']
   materials?: string[]
   labware?: string[]
   equipment?: string[]
+}
+
+/**
+ * Normalize a step's `working_concentration` (schema shape: { value, unit?, basis? },
+ * or an extracted { raw, value?, unit? }) into the internal workingConcentration
+ * display shape. Returns undefined when absent or unusable, so the chip falls back
+ * to the legacy µL display.
+ */
+function toStepWorkingConcentration(raw: unknown): ProtocolStep['workingConcentration'] {
+  if (!raw || typeof raw !== 'object') return undefined
+  const obj = raw as Record<string, unknown>
+  if (typeof obj.value !== 'number' && typeof obj.value !== 'string') return undefined
+  const value = obj.value
+  const unit = typeof obj.unit === 'string' && obj.unit ? obj.unit : undefined
+  const basis = typeof obj.basis === 'string' && obj.basis ? obj.basis : undefined
+  const rawStr = typeof obj.raw === 'string' && obj.raw ? obj.raw : undefined
+  return { value, ...(unit ? { unit } : {}), ...(basis ? { basis } : {}), ...(rawStr ? { raw: rawStr } : {}) }
+}
+
+/** Human-readable "10 nM" for a workingConcentration, or the raw text when available. */
+export function formatWorkingConcentration(wc: NonNullable<ProtocolStep['workingConcentration']>): string {
+  if (wc.raw) return wc.raw
+  return `${String(wc.value)}${wc.unit ? ` ${wc.unit}` : ''}`
 }
 
 /**
@@ -119,12 +151,14 @@ interface MappedStep {
  */
 function toProtocolStep(step: MappedStep, index: number): ProtocolStep {
   const ordinal = step.ordinal ?? step.stepNumber ?? index + 1
+  const working = toStepWorkingConcentration(step.workingConcentration ?? step.concentration)
   return {
     stepId: typeof step.stepId === 'string' && step.stepId ? step.stepId : `step-${step.stepNumber ?? index}`,
     ordinal,
     label: step.title ?? briefLabel(step.label ?? step.description) ?? `Step ${ordinal}`,
     description: step.text ?? step.label ?? step.description ?? step.notes,
     visible: true,
+    ...(working ? { workingConcentration: working } : {}),
     settings: [
       ...(step.materials ?? []).map((m, i) => ({
         settingId: `mat-${m}-${i}`,
@@ -512,6 +546,28 @@ function StepChip({ step, isActive, onToggle, onPlay, onSelect, onCompletionChan
               }}
             >
               {step.description}
+            </div>
+          )}
+          {step.workingConcentration && (
+            <div
+              data-testid={`step-concentration-${step.stepId}`}
+              style={{
+                marginTop: '4px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--cl-accent)',
+                background: 'color-mix(in srgb, var(--cl-accent) 8%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--cl-accent) 30%, transparent)',
+                borderRadius: '999px',
+                padding: '1px 8px',
+                width: 'fit-content',
+              }}
+              title={`Final working concentration — the recipe north star, stock/scale-invariant`}
+            >
+              ≤ {formatWorkingConcentration(step.workingConcentration)}
             </div>
           )}
         </div>

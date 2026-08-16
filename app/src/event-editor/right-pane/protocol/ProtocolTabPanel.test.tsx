@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { splitHumanSteps, extractLocalProtocolSetup, extractUniversalProtocolSetup, setupSuggestionIndices, extractUniversalRoleIds } from './ProtocolTabPanel'
+import { splitHumanSteps, extractLocalProtocolSetup, extractUniversalProtocolSetup, setupSuggestionIndices, extractUniversalRoleIds, formatWorkingConcentration } from './ProtocolTabPanel'
 
 describe('splitHumanSteps', () => {
   it('keys a whole-text protocol at ordinal 1 when it does not split', () => {
@@ -198,5 +198,21 @@ describe('extractUniversalRoleIds', () => {
     expect(extractUniversalRoleIds({ recordId: 'LPR-1', payload: { kind: 'local-protocol' } })).toBeNull()
     expect(extractUniversalRoleIds(null)).toBeNull()
     expect(extractUniversalRoleIds(undefined)).toBeNull()
+  })
+})
+
+describe('formatWorkingConcentration', () => {
+  it('renders value + unit as "10 nM"', () => {
+    expect(formatWorkingConcentration({ value: 10, unit: 'nM', basis: 'molar' })).toBe('10 nM')
+  })
+
+  it('falls back to a raw source string when present', () => {
+    expect(formatWorkingConcentration({ value: 10, unit: 'nM', raw: 'to a final concentration of 10 nM' })).toBe(
+      'to a final concentration of 10 nM',
+    )
+  })
+
+  it('renders just the value when no unit is available', () => {
+    expect(formatWorkingConcentration({ value: 0.5 })).toBe('0.5')
   })
 })
