@@ -1,0 +1,41 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/reference-ratio.schema.yaml"
+title: "ReferenceRatio"
+description: >
+  An ADVISORY authoring/provenance annotation describing the dilution a protocol step
+  achieves as a ratio of components (e.g. "sample : DNA/RNA Shield = 1 : 2.5"). It is NOT the
+  load-bearing quantity of a recipe — the working concentration of the active material in the
+  final well is the invariant (see working-concentration-quantity.md). The ratio is kept so a
+  biologist can read the dilution series at a glance and so the compiler can CHECK it against a
+  resolved working-concentration (C1V1=C2V2), but it is never what the resolver uses to produce
+  volumes. It is always optional.
+
+type: object
+additionalProperties: false
+
+required:
+- numerator
+- denominator
+
+properties:
+  numerator:
+    type: number
+    exclusiveMinimum: 0
+    description: "The first component's part of the ratio (e.g. 1 for 'sample')."
+
+  denominator:
+    type: number
+    exclusiveMinimum: 0
+    description: "The second component's part of the ratio (e.g. 2.5 for 'DNA/RNA Shield')."
+
+  basis_label:
+    type: string
+    description: "Optional human label for the basis component the ratio is expressed against (e.g. 'sample', 'lysate')."
+
+  ratioed_label:
+    type: string
+    description: "Optional human label for the component being ratioed (e.g. 'DNA/RNA Shield', 'binding buffer')."
+
+  rationale:
+    type: string
+    description: "Optional freeform note (e.g. '2:5 sample:shield per vendor kit')."

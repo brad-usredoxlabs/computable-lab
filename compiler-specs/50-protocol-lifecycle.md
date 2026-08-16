@@ -176,6 +176,28 @@ A **structural-correspondence pass** runs at local-protocol-compile and at run-p
 
 Verb and order are the minimal invariant; everything else is a refinement knob.
 
+### 6.3a The concentration invariant (working-concentration first)
+
+There is a second, biology-level invariant that complements "same verbs, same order": the
+**final working concentration of each active component in the assay well** is the conserved
+quantity across the whole chain. A step's recipe essence is "the well contains fenofibrate at
+10 nM" — irrespective of stock strength (1 mM / 1 µM / 100 nM / 100×), batch volume, or scale.
+See `working-concentration-quantity.md` for the full design. In short:
+
+- **`working-concentration` is the north star.** A step declares the intended final well
+  concentration of its active material (reusing `concentration.schema.yaml`).
+- **Ratio is the mechanism, not the invariant.** `V_stock = C_target × V_well / C_stock` (C₁V₁=C₂V₂).
+  The authoring "sample : diluent" ratio is advisory, derived-from/checked-against the target.
+- **Stock strength, well volume, and sample count are free knobs.** Swapping a substituted
+  material (each carrying its own `formulation.concentration`) or scaling a batch never changes
+  `working-concentration`; only the derived `V_stock` changes.
+- **The bakery analogy is itself a concentration:** scaling a batch "10× flour" works because the
+  hydration (flour:water = a `% w/v` concentration) is locked; flour weight is not the invariant.
+
+**Enforcement:** a step carrying `working-concentration` whose material has no resolvable stock
+concentration (`material-spec.formulation.concentration`) blocks compile with a diagnostic naming
+the material — it never silently defaults to a fabricated concentration.
+
 ### 6.4 If a lab needs a different structure
 
 It is authoring a **sibling global protocol**, not a variant local-protocol. The "we do it differently" case is a branch at the global layer, not a rewrite at the local layer.

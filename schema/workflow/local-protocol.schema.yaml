@@ -73,6 +73,14 @@ properties:
     $ref: "./datatypes/ref.schema.yaml"
     description: "Required: the global protocol this realizes."
 
+  variantRef:
+    type: string
+    description: >
+      Optional: which conditional branch (a protocol `variants[].variantId`) of the
+      inherited universal protocol this local protocol realizes (e.g. the
+      'mammalian-cell-culture' branch). Preserves the matrix choice as first-class,
+      alongside the substitutions that swap in this lab's reagents.
+
   lab_state_refs:
     type: array
     description: "Environmental lab-state assumptions this local-protocol depends on (50 §10)."

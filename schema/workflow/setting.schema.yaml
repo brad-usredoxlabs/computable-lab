@@ -32,10 +32,11 @@ properties:
 
   type:
     type: string
-    enum: [ string, number, boolean, duration, temperature, volume, select ]
+    enum: [ string, number, boolean, duration, temperature, volume, concentration, ratio, select ]
     description: >
-      Data type of the setting value. Specialized types (duration, temperature, volume)
-      imply appropriate UI widgets and unit handling.
+      Data type of the setting value. Specialized types (duration, temperature, volume,
+      concentration) imply appropriate UI widgets and unit handling. `concentration` reuses
+      the concentration datatype's unit/basis; `ratio` is a numeric proportion.
 
   defaultValue:
     description: "Default value if not overridden. Type depends on the setting type."

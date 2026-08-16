@@ -30,6 +30,8 @@ describe('ProtocolPhasesSchema', () => {
       'workflow/setting.schema.yaml',
       'core/common.schema.yaml',
       'core/datatypes/ref.schema.yaml',
+      'core/datatypes/concentration.schema.yaml',
+      'core/datatypes/reference-ratio.schema.yaml',
     ];
 
     const contents = new Map<string, string>();

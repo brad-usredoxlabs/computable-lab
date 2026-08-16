@@ -258,6 +258,18 @@ properties:
       $ref: "#/$defs/Phase"
     uniqueItems: true
 
+  # Preserved vendor/literature conditional branches (e.g. "if bacterial DNA /
+  # if mammalian cell culture"). The extractor may emit these instead of (or in
+  # addition to) fissioning into separate protocols, so a protocol can express
+  # its shared parent + branch axis explicitly. A local protocol picks a branch
+  # via `variantRef`. Optional and additive.
+  variants:
+    type: array
+    description: "Optional starting-material condition branches preserved from the source."
+    items:
+      $ref: "#/$defs/ProtocolVariant"
+    uniqueItems: true
+
   steps:
     type: array
     minItems: 1
@@ -650,6 +662,38 @@ $defs:
   # -------------------------
   # Step union
   # -------------------------
+  ProtocolVariant:
+    type: object
+    additionalProperties: false
+    required: [ variantId, label ]
+    description: >
+      A preserved conditional starting-material branch (e.g. "if bacterial DNA" /
+      "if mammalian cell culture"). Lets a protocol keep its branch axis instead of
+      silently fissioning into separate protocols; a local protocol realizes one
+      branch via `variantRef`. Optional and additive.
+    properties:
+      variantId:
+        type: string
+        pattern: "^[a-z][a-z0-9-]*$"
+        description: "Stable branch identifier (e.g. 'mammalian-cell-culture')."
+      label:
+        type: string
+        minLength: 1
+        description: "Human-readable branch label (e.g. 'Mammalian cell culture')."
+      starting_material:
+        type: string
+        description: "Starting-material description (e.g. 'DNA from mammalian cell culture')."
+      kind_hint:
+        type: string
+        description: "Machine-readable tagging for the starting-material kind (e.g. 'mammalian-cells')."
+      stepIds:
+        type: array
+        items: { type: string }
+        uniqueItems: true
+        description: "Optional stepIds in this protocol's steps[] that this branch activates."
+      notes:
+        type: string
+
   ProtocolStep:
     type: object
     required: [ stepId, label, ordinal, kind ]
@@ -738,7 +782,13 @@ $defs:
   StepAddMaterial:
     type: object
     
-    required: [ kind, target, wells, material, volume_uL ]
+    required: [ kind, target, wells, material ]
+    # A dispensing step must express HOW MUCH: either a legacy absolute volume
+    # OR a working concentration (the north star) that the compiler resolves to
+    # stock/diluent volumes. Both allowed; neither optional-only.
+    oneOf:
+    - required: [ volume_uL ]
+    - required: [ working_concentration ]
     properties:
       kind: { const: "add_material" }
       target:
@@ -759,6 +809,15 @@ $defs:
           materialId:
             type: string
             description: "Optional: pin to a specific material concept instead of a role."
+      # NORTH STAR — the final assay-well concentration of the active material
+      # (e.g. fenofibrate 10 nM, whatever the stock). Reuses the existing
+      # concentration datatype; see working-concentration-quantity.md.
+      working_concentration:
+        $ref: "./datatypes/concentration.schema.yaml"
+      # ADVISORY authoring proxy — the dilution this step achieves (e.g. 1:2.5).
+      # Never the invariant; the resolver uses working_concentration, not this.
+      ratio:
+        $ref: "./datatypes/reference-ratio.schema.yaml"
       volume_uL:
         $ref: "#/$defs/Expr"
 
@@ -782,6 +841,12 @@ $defs:
         properties:
           labwareRole: { type: string }
           wells: { $ref: "#/$defs/WellSelector" }
+      # Optional target concentration of the transferred material in the
+      # destination well (for transfers that dilute into a carrier).
+      working_concentration:
+        $ref: "./datatypes/concentration.schema.yaml"
+      ratio:
+        $ref: "./datatypes/reference-ratio.schema.yaml"
       volume_uL:
         $ref: "#/$defs/Expr"
       mappingHint:
