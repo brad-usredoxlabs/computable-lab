@@ -85,7 +85,7 @@ function gramsToDisplayMass(valueG: number): { value: number; unit: string } {
   return { value: Number(valueG.toFixed(6)), unit: 'g' };
 }
 
-function concentrationToBase(concentration: Concentration): number | undefined {
+export function concentrationToBase(concentration: Concentration): number | undefined {
   switch (concentration.basis) {
     case 'molar':
       switch (concentration.unit) {
@@ -125,7 +125,7 @@ function concentrationToBase(concentration: Concentration): number | undefined {
   }
 }
 
-function concentrationFromBase(value: number, template: Concentration): Concentration | undefined {
+export function concentrationFromBase(value: number, template: Concentration): Concentration | undefined {
   switch (template.basis) {
     case 'molar':
       switch (template.unit) {
