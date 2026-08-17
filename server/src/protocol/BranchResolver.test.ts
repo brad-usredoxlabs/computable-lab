@@ -10,6 +10,41 @@ import { describe, it, expect } from 'vitest';
 import { resolveBranchAxes, activeStepIdsForResolution } from './BranchResolver.js';
 import type { BranchAxisLike } from './BranchResolver.js';
 
+const SAMPLE_RESOURCE_AXIS: BranchAxisLike = {
+  axisId: 'sample-type',
+  label: 'Starting sample type',
+  shared_stepIds: ['lyse-common'],
+  conditions: [
+    {
+      id: 'mammalian',
+      label: 'Mammalian cell culture',
+      predicate: { op: 'equals', path: '$.sampleType', value: 'mammalian' },
+      then_stepIds: ['lyse-mam'],
+      then_resourceRefs: [],
+    },
+    {
+      id: 'bacterial',
+      label: 'Bacterial',
+      predicate: { op: 'equals', path: '$.sampleType', value: 'bacterial' },
+      then_stepIds: ['lyse-bact', 'bead-beat'],
+      then_resourceRefs: [{ role: 'bead-beater', ref: { kind: 'record', id: 'EQP-beadbeater-1', type: 'equipment' } }],
+    },
+    {
+      id: 'plant',
+      label: 'Plant tissue',
+      predicate: { op: 'equals', path: '$.sampleType', value: 'plant' },
+      then_stepIds: ['freeze', 'bead-beat'],
+      insert_steps: [
+        { stepId: 'pre-freeze', kind: 'incubate', label: 'Freeze at -80C', details: { temperature_C: -80 } },
+      ],
+      then_resourceRefs: [
+        { role: 'bead-beater', ref: { kind: 'record', id: 'EQP-beadbeater-1', type: 'equipment' } },
+        { role: 'freezer', ref: { kind: 'record', id: 'EQP-freezer-80', type: 'equipment' } },
+      ],
+    },
+  ],
+};
+
 const SAMPLE_AXIS: BranchAxisLike = {
   axisId: 'sample-type',
   label: 'Starting sample type',
@@ -118,5 +153,34 @@ describe('activeStepIdsForResolution', () => {
       ],
     );
     expect(active).toEqual(['lyse-common', 'lys-bact', 'bind-1', 'wash-1', 'elute-1']);
+  });
+});
+
+describe('F3 — branch-scoped resources + step insertion', () => {
+  it('plant branch resolves the bead-beater + -80 freezer resources and inserts a pre-freeze step', () => {
+    const r = resolveBranchAxes({ branchAxes: [SAMPLE_RESOURCE_AXIS], choices: { sampleType: 'plant' } });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.activeStepIds).toEqual(['lyse-common', 'freeze', 'bead-beat']);
+    expect(r.resolvedResourceRefs.map((x) => x.role).sort()).toEqual(['bead-beater', 'freezer']);
+    expect(r.insertedSteps).toEqual([
+      expect.objectContaining({ stepId: 'pre-freeze', label: 'Freeze at -80C' }),
+    ]);
+  });
+
+  it('mammalian branch needs NO bead-beater or freezer and inserts nothing', () => {
+    const r = resolveBranchAxes({ branchAxes: [SAMPLE_RESOURCE_AXIS], choices: { sampleType: 'mammalian' } });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.activeStepIds).toEqual(['lyse-common', 'lyse-mam']);
+    expect(r.resolvedResourceRefs).toEqual([]);
+    expect(r.insertedSteps).toEqual([]);
+  });
+
+  it('bead-beater resource is shared-but-not-universal (bacteria + plant, not mammalian)', () => {
+    const bacteria = resolveBranchAxes({ branchAxes: [SAMPLE_RESOURCE_AXIS], choices: { sampleType: 'bacterial' } });
+    if (!bacteria.ok) throw new Error('bacteria unresolved');
+    expect(bacteria.resolvedResourceRefs.map((x) => x.role)).toContain('bead-beater');
+    expect(bacteria.resolvedResourceRefs.map((x) => x.role)).not.toContain('freezer');
   });
 });

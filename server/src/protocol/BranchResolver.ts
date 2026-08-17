@@ -27,6 +27,16 @@ export interface BranchConditionLike {
   predicate: unknown;
   then_stepIds?: string[];
   else_stepIds?: string[];
+  /** Branch-scoped resources this branch requires (equipment/labware/material refs). */
+  then_resourceRefs?: Array<{ role: string; ref: unknown }>;
+  /** Steps inserted into the local copy only when this branch is selected. */
+  insert_steps?: Array<Record<string, unknown>>;
+}
+
+/** A branch-scoped resource ref (e.g. bead-beater, -80 C freezer). */
+export interface BranchResourceRef {
+  role: string;
+  ref: unknown;
 }
 
 export interface BranchAxisLike {
@@ -48,6 +58,10 @@ export interface BranchResolved {
   /** Ordered starting step set: shared ∪ every matching branch's then_stepIds. */
   activeStepIds: string[];
   resolutions: BranchAxisResolution[];
+  /** Union of branch-scoped resources required by the matching branches. */
+  resolvedResourceRefs: BranchResourceRef[];
+  /** Branch-inserted steps (deduped by stepId) added to the localized copy. */
+  insertedSteps: Record<string, unknown>[];
   warnings: string[];
 }
 
@@ -78,9 +92,27 @@ export function resolveBranchAxes(args: {
   const resolutions: BranchAxisResolution[] = [];
   const warnings: string[] = [];
   const unresolvedAxes: string[] = [];
+  const resolvedResourceRefs: BranchResourceRef[] = [];
+  const insertedSteps: Record<string, unknown>[] = [];
+  const seenResource = new Set<string>();
+  const seenInserted = new Set<string>();
 
   const push = (id: string): void => {
     if (!activeStepIds.includes(id)) activeStepIds.push(id);
+  };
+  const pushResource = (r: { role: string; ref: unknown }): void => {
+    const key = `${r.role}::${JSON.stringify(r.ref ?? null)}`;
+    if (!seenResource.has(key)) {
+      seenResource.add(key);
+      resolvedResourceRefs.push(r);
+    }
+  };
+  const pushInserted = (s: Record<string, unknown>): void => {
+    const id = String(s.stepId ?? '');
+    if (id && !seenInserted.has(id)) {
+      seenInserted.add(id);
+      insertedSteps.push(s);
+    }
   };
 
   for (const axis of axes) {
@@ -89,7 +121,11 @@ export function resolveBranchAxes(args: {
     const matching = (axis.conditions ?? []).filter((c) => evaluate(c, args.choices));
     const branchIds = matching.map((c) => c.id);
     if (matching.length > 0) {
-      for (const cond of matching) for (const id of cond.then_stepIds ?? []) push(id);
+      for (const cond of matching) {
+        for (const id of cond.then_stepIds ?? []) push(id);
+        for (const r of cond.then_resourceRefs ?? []) pushResource(r);
+        for (const s of cond.insert_steps ?? []) pushInserted(s);
+      }
     } else {
       unresolvedAxes.push(axis.axisId);
       warnings.push(`branch axis '${axis.axisId}' did not match any condition`);
@@ -105,7 +141,7 @@ export function resolveBranchAxes(args: {
     };
   }
 
-  return { ok: true, activeStepIds, resolutions, warnings };
+  return { ok: true, activeStepIds, resolutions, resolvedResourceRefs, insertedSteps, warnings };
 }
 
 /**

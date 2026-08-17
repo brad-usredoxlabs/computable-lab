@@ -73,6 +73,49 @@ $defs:
         type: array
         items: { type: string }
         description: "Optional steps that run when this branch is NOT chosen (an else clause)."
+      then_resourceRefs:
+        type: array
+        description: "Optional branch-scoped resources this branch requires (equipment/labware/material refs). The active branch's resource refs are unioned onto the localized copy (e.g. a bead-beater, a -80 C freezer)."
+        items:
+          type: object
+          additionalProperties: false
+          required: [ role, ref ]
+          properties:
+            role:
+              type: string
+              description: "Role the resource satisfies (e.g. 'bead-beater', 'freezer')."
+            ref:
+              $ref: "./ref.schema.yaml"
+              description: "Resource record ref (equipment / labware / material)."
+      insert_steps:
+        type: array
+        description: "Optional steps INSERTED into the localized copy only when this branch is selected (e.g. the plant branch adds a pre-freeze step the others lack)."
+        items:
+          type: object
+          additionalProperties: false
+          required: [ stepId ]
+          properties:
+            stepId:
+              type: string
+              pattern: "^[a-z][a-z0-9-]*$"
+              description: "Stable step id for the inserted step."
+            kind:
+              type: string
+              description: "Step kind (add_material / mix / incubate / ...)."
+            label:
+              type: string
+              description: "Human-readable label."
+            semanticVerb:
+              type: object
+              additionalProperties: true
+              description: "Semantic verb descriptor."
+            details:
+              type: object
+              additionalProperties: true
+              description: "Step-specific payload (volume, duration, etc.)."
+            equipmentRef:
+              $ref: "./ref.schema.yaml"
+              description: "Optional equipment this inserted step needs (bound & cascade-deleted with the step)."
 
   # A whole branch axis: one decision (e.g. starting sample type, or labware
   # format) with the conditions that resolve it. A protocol may carry several
