@@ -25,6 +25,7 @@ properties:
     - transfer
     - mix
     - wash
+    - dilute
     - incubate
     - read
     - harvest
@@ -34,6 +35,13 @@ properties:
     - move_tube
     - remove_tube
     - other
+    - magnetize
+    - magnetize_incubate
+    - elute
+    - resuspend
+    - remove_supernatant
+    - decant
+    - discard
 
   at:
     type: string

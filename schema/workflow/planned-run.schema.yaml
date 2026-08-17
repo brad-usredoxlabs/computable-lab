@@ -403,6 +403,10 @@ $defs:
       disposition:
         type: string
         enum: [ allowed, needs-confirmation, blocked ]
+      phase:
+        type: string
+        enum: [ soluble, adsorbed ]
+        description: "Explicit compartment hint propagated onto the events compiled from this step. Absent defaults to 'soluble'. The well-state tracker never infers this from context."
       requiresConfirmation:
         type: boolean
       notes:

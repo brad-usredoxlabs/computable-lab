@@ -297,6 +297,7 @@ $defs:
         - transfer
         - mix
         - wash
+        - dilute
         - incubate
         - read
         - harvest
@@ -312,7 +313,13 @@ $defs:
         - place_tube
         - move_tube
         - remove_tube
-        - deviation
+        - magnetize
+        - magnetize_incubate
+        - elute
+        - resuspend
+        - remove_supernatant
+        - decant
+        - discard
         description: "Type of the event."
       at:
         type: string

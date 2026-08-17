@@ -737,6 +737,12 @@ $defs:
         pattern: "^[a-z][a-z0-9-]*$"
         description: "Optional reference to a declared phase id."
 
+      # Explicit compartment hint propagated onto the compiled event(s)
+      phase:
+        type: string
+        description: "Explicit compartment hint for well-state propagation: whether the material(s) produced/affected by this step are in free solution ('soluble') or immobilized on a solid phase ('adsorbed'). Absent defaults to 'soluble'. The well-state tracker never infers this from context."
+        enum: [ soluble, adsorbed ]
+
       # Reference to a sub-event-graph (graph-component-instance) for this step.
       subGraphRef:
         allOf:

@@ -155,7 +155,7 @@ export function trackRunningComposition({ events, initialWells = {} }: TrackComp
         forEachTargetWell(wells, event, initialWells, (w) => reduceMix(w));
         break;
       case 'wash': {
-        const vol = parseVolume(details) ?? num(details.bufferVolumeUl);
+        const vol = num(details.washVolume_uL) ?? num(details.washVolumeUl) ?? parseVolume(details) ?? num(details.bufferVolumeUl);
         const cycles = num(details.cycles ?? details.washCount) ?? 1;
         forEachTargetWell(wells, event, initialWells, (w) => {
           if (vol === undefined) {

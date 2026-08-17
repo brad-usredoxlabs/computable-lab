@@ -69,4 +69,29 @@ describe('PlateEvent explicit phase contract', () => {
     expect(baseReq).not.toContain('phase');
     expect(graphReq).not.toContain('phase');
   });
+
+  it('declares an optional phase field on ProtocolStep (protocol schema)', () => {
+    const entry = entries.find((e) => e.id.endsWith('/protocol.schema.yaml'));
+    expect(entry).toBeDefined();
+    const defs = entry!.schema.$defs as Record<string, unknown>;
+    const step = defs.ProtocolStep as Record<string, unknown>;
+    const props = (step.properties ?? {}) as Record<string, unknown>;
+    const phase = props.phase as Record<string, unknown> | undefined;
+    expect(phase).toBeDefined();
+    expect(phase!.type).toBe('string');
+    expect(phase!.enum).toEqual(['soluble', 'adsorbed']);
+    expect((step.required as unknown[] | undefined) ?? []).not.toContain('phase');
+  });
+
+  it('declares an optional phase field on CompiledProtocolStep (planned-run schema)', () => {
+    const entry = entries.find((e) => e.id.endsWith('/planned-run.schema.yaml'));
+    expect(entry).toBeDefined();
+    const defs = entry!.schema.$defs as Record<string, unknown>;
+    const step = defs.CompiledProtocolStep as Record<string, unknown>;
+    const props = (step.properties ?? {}) as Record<string, unknown>;
+    const phase = props.phase as Record<string, unknown> | undefined;
+    expect(phase).toBeDefined();
+    expect(phase!.type).toBe('string');
+    expect(phase!.enum).toEqual(['soluble', 'adsorbed']);
+  });
 });
