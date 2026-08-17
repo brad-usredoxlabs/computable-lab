@@ -159,6 +159,71 @@ the "concentration is the invariant" rule and surfaces the gap visibly.
 
 ---
 
+## 4A. Well-state propagation — the deterministic composition tracker
+
+The resolver above gets a recipe to concrete volumes. The **well-state tracker** (`server/src/compiler/math/WellStateTracker.ts`
++ `eventReducers.ts`) is the deterministic state machine that carries each well's **composition** forward
+through the ordered event graph, so the run's wells can be *proven* to reach their target concentrations
+without hand math. It is the "analogous-to-the-deterministic-compiler" backbone the AI review dialogue
+(`after add + bind + wash×2 + elute, well A1 contains 10 nM at 100 µL`) consumes.
+
+### 4A.1 What a well carries
+
+```
+WellState {
+  volume_ul: number
+  components: Map<materialRef, ComponentAmount>
+}
+ComponentAmount {
+  soluble: number    // amount in the free solution (dilutable / mixable / removable by decant)
+  bound:   number    // amount immobilized on the solid phase (beads / pellet); NOT removed by discarding supernatant
+  basis, template    // amount unit basis + a template Concentration for re-expressing derived concentrations
+}
+```
+
+Amount (moles / g / cells / fraction) is the tracking unit, **not** concentration. Concentration is *derived*,
+never stored: `C_soluble = soluble / volume_ul`, whereas after an elution the retained concentration is
+`bound / elution_volume` — a different denominator that a purely volumetric C₁V₁=C₂V₂ model gets wrong.
+
+### 4A.2 The explicit `phase` field (self-documenting, never inferred)
+
+Every plate event (and protocol step) carries an optional `phase: 'soluble' | 'adsorbed'`
+(absent → `'soluble'`). The tracker **never infers** which analytes are bound from context — the event
+*declares* it. `magnetize`/`elute`/`resuspend` are structural hints that pair with this explicit phase
+(rather than the tracker guessing intent from the event kind).
+
+### 4A.3 The event → reducer map (the semantic core)
+
+| Event kind | Reducer effect |
+|---|---|
+| `add_material` | incoming amount + volume; `volume_ul` grows; amount = conc × volume (base); carries into `soluble` (or `bound` when `phase: 'adsorbed'`). |
+| `transfer` | splits the source freely: soluble moves proportionally to the transferred volume fraction; **bound stays with the solid** (a partial liquid transfer does not carry the pellet). |
+| `mix` | no net volume/amount change; marks the well homogenized. |
+| `dilute` | add pure solvent; every soluble amount unchanged, `volume_ul` grows → C₁V₁=C₂V₂. |
+| `wash` | for each cycle: add buffer → mix → discard supernatant. Soluble impurities diluted then removed; **bound retained**. Net: soluble → 0, bound untouched. |
+| `magnetize` / `magnetize_incubate` | bind soluble → bound (optionally only the `materialRefs` declared as the bound set, so non-binding impurities stay soluble and wash away). |
+| `remove_supernatant` / `decant` / `discard` | remove the entire liquid phase: soluble → 0, `volume_ul` → residual; bound retained. **This is what makes SPE correct.** |
+| `resuspend` | bound → soluble at the resuspension volume. |
+| `elute` | bound → soluble at the elution volume → concentration = `bound / elution_vol` — an **increase**, not a dilution. |
+| `harvest` | emit the well's final derived composition as the produced artifact. |
+
+**Why this is right (the Zymo MagBead case):** add sample (200 µL @ 10 nM) + shield (500 µL) → the DNA is
+fully soluble at 700 µL ≈ 2.857 nM. Magnetize (bind DNA) + discard supernatant + wash×2 → the DNA is the full
+retained amount `2e-12 mol` on the beads. Elute into 50 µL → `2e-12 / 50e-6 = 40 nM` — a **10× enrichment**,
+the *opposite* of a dilution. A volumetric-only model would compute the discard as removing the analyte and
+never produce the correct elution concentration.
+
+### 4A.4 Public API & determinism
+
+`trackRunningComposition({ events, initialWells }) → Map<wellId, WellFinal>` walks the ordered event list,
+adapting each PlateEvent to its reducer. Non-physical inputs (negative amounts, unknown bound refs, missing
+elution volume) never silently drop: they set `well.dirty = true` and append a warning. Amounts are always
+additive per basis (the same-basis invariant). Well volume overrun is a warning, never a clamp. Implemented at
+`server/src/compiler/math/WellStateTracker.ts` (type + core + reducers) and `eventReducers.ts` (the event walk),
+reusing `formulationMath.concentrationToBase` / `concentrationFromBase` for unit/base math.
+
+---
+
 ## 5. Implementation tasks (post-sign-off)
 
 Bite-sized, TDD, each independently committable:
