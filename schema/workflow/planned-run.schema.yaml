@@ -47,6 +47,26 @@ properties:
     $ref: "./datatypes/ref.schema.yaml"
     description: "Reference to the source protocol or event graph."
 
+  # Protocol chaining (Plan 2): bind the protocol's declared inputContexts
+  # roles to promoted source contexts (CTX / context-snapshot) produced by an
+  # upstream protocol. Realizes the intent context -> downstream source.
+  sourceBindings:
+    type: array
+    description: "Binds each declared inputContexts.role to a promoted source context this run realizes as the downstream's source."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ role, contextRef ]
+      properties:
+        role:
+          type: string
+          pattern: "^[a-z][a-z0-9-]*$"
+          description: "Matches a protocol inputContexts[].role (e.g. 'source-rna-plate')."
+        contextRef:
+          $ref: "./datatypes/ref.schema.yaml"
+          description: "Ref to the promoted source context (CTX / context-snapshot) that upstream produced."
+    uniqueItems: true
+
   links:
     type: object
     description: "Optional project filing links for finding planned runs from study/experiment/run surfaces."

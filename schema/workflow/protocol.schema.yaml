@@ -207,6 +207,23 @@ properties:
       $ref: "#/$defs/ProducedArtifact"
     uniqueItems: true
 
+  # Declarative contract for SOURCE contexts this protocol CONSUMES (protocol
+  # chaining, Plan 2). A downstream protocol (e.g. rtPCR) declares it needs a
+  # source plate/context; a run realizes the chain by binding a promoted
+  # plate-context (from an upstream protocol) to that role, and consumption is
+  # an explicit gate (the downstream's first action is a transfer off the
+  # bound source). Additive; absent = the protocol starts from scratch.
+  inputContexts:
+    type: array
+    description: >
+      Optional declarative contract: source context(s) this protocol consumes
+      when chained after an upstream protocol. Each entry names a source ROLE
+      a run must bind to a promoted context (CTX/snapshot) that was produced
+      by an upstream protocol.
+    items:
+      $ref: "#/$defs/InputContext"
+    uniqueItems: true
+
   executionProfiles:
     type: array
     description: "Optional reusable execution strategies (single-channel vs multi-channel, lane sequencing)."
@@ -496,6 +513,30 @@ $defs:
   # -------------------------
   # Produced artifacts
   # -------------------------
+  # Declarative input contract: a source context role this protocol consumes
+  # when chained after an upstream protocol. A run binds a promoted context
+  # (CTX / context-snapshot) to this role; consumption is an explicit gate.
+  InputContext:
+    type: object
+    additionalProperties: false
+    required: [ role ]
+    properties:
+      role:
+        type: string
+        pattern: "^[a-z][a-z0-9-]*$"
+        description: "Source role a run binds to a promoted context (e.g. 'source-rna-plate')."
+      description:
+        type: string
+        description: "What source this role expects (e.g. 'purified RNA plate from the extraction protocol')."
+      sourceKind:
+        type: string
+        enum: [ plate-context, context-snapshot, material-context ]
+        description: "What kind of source context this role accepts. Absent = any promoted context."
+      consumesByDefault:
+        type: boolean
+        default: true
+        description: "Whether the run should emit an explicit transfer-off-the-source event as the first action (the consumption gate)."
+
   ProducedArtifact:
     type: object
     additionalProperties: false
