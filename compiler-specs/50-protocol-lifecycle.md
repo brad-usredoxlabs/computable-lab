@@ -142,6 +142,50 @@ Structural validity is checked using the context-role predicate DSL (40 §4.3): 
 
 This is a migration, scoped as part of Phase 1 for the ROS workflow.
 
+## 5A. Branch-first localization — conditional axes resolve BEFORE the starting steps
+
+Vendor protocols carry **if/then/else logic** ("if bacterial DNA / if mammalian cell culture", "tubes in a
+rack vs 96-well"). Localization (universal → local) must resolve these branches **first**, and the resolved
+branch(es) determine which starting steps the local protocol realizes. This is the **condition-first**
+ordering: select the high-level branch(es), then derive the starting step set.
+
+**What a branch axis is.** A universal `protocol` may declare `branch_axes[]` — each a decision over a
+`choices` map (e.g. `{ sampleType, labwareFormat, ... }`):
+
+```yaml
+branch_axes:
+  - axisId: sample-type
+    label: "Starting sample type"
+    shared_stepIds: [ lyse-common ]
+    conditions:
+      - id: bacterial
+        predicate: { op: equals, path: $.sampleType, value: "bacterial dna" }
+        then_stepIds: [ lys-bact, bind-1, wash-1, elute-1 ]
+      - id: mammalian
+        predicate: { op: equals, path: $.sampleType, value: "mammalian cell culture" }
+        then_stepIds: [ lyse-mam, grind-1, bind-1, wash-1, elute-1 ]
+```
+
+`predicate` reuses the **PredicateEvaluator** vocabulary (`server/src/lint/`) so a branch condition and a lint
+rule speak one language (DRY). Starting steps = `shared_stepIds` ∪ `then_stepIds` of every matching condition.
+
+**Resolution happens in phase 0 of localization.** `ProtocolCompiler.lowerToLabProtocol` resolves
+`branch_axes` against the supplied `branchChoices` and **filters the universal steps to the active set (the
+un-selected branch's steps are dropped) before any capability/admissibility work**. An unresolved axis (a
+choice matching no condition) **blocks** the localization with a `BRANCH_AXIS_UNRESOLVED` diagnostic — never a
+silent pass-through. The local-protocol-compile pipeline mirrors this via the `resolve_branch_axes` pass,
+which reads the LPR's already-resolved `branch_resolution` and filters the expanded steps.
+
+**What is recorded.** The local protocol carries `branch_resolution[]` (per axis: `axisId`, `matched`,
+`branchIds`), the structured multi-axis home for which branch was realized; `variantRef` stays as back-compat
+for single-axis protocols.
+
+**Platform is orthogonal, NOT a branch.** The same 384-well recipe runs on an Integra *or* an Opentrons —
+picking a robot changes no biology and no starting steps. A user may still open localization by naming a
+target platform (an intent/capability scoping step so pipette/tip constraints apply from the start), recorded
+as a **localization intent** (planned-run `deckPlatformId` forward-pointer), NOT as a branch axis. It gates
+**deck compilation**, never the recipe's step set. Deck variant/format stay run-time compile facts.
+
 ## 6. Structural correspondence: "same verbs, same order"
 
 The load-bearing invariant of the lifecycle:
