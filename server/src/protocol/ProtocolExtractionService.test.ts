@@ -650,6 +650,40 @@ describe('ProtocolExtractionService', () => {
       );
     });
 
+    it('lifts vendor step branches into branch_axes on the protocol body (Task 3)', async () => {
+      mockStore.get.mockResolvedValueOnce(mockVendorPdfEnvelope);
+      (fs.access as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+      const branchyCandidate = JSON.parse(JSON.stringify(mockCandidate)) as {
+        steps: Array<Record<string, unknown>>;
+      };
+      branchyCandidate.steps = [{
+        ...((mockCandidate.steps as Array<Record<string, unknown>>)[0]),
+        branches: [
+          'a. If using BashingBead rack: lyse in 200 µl',
+          'b. If using a 96-well plate: lyse in 600 µl',
+        ],
+      }];
+      (fs.readFile as ReturnType<typeof vi.fn>).mockResolvedValueOnce(JSON.stringify(branchyCandidate));
+
+      const result = await service.createDraftFromVendorPdf({ vendorPdfId });
+      const draftBody = result.draft.candidates[0].draft as Record<string, unknown>;
+      const branchAxes = draftBody.branch_axes as Array<Record<string, unknown>>;
+
+      expect(branchAxes).toBeDefined();
+      expect(branchAxes).toHaveLength(1);
+      const axis = branchAxes[0];
+      // axisId satisfies the schema pattern and targets the mapped step id
+      expect(axis.axisId).toMatch(/^branch-axis-step-001$/);
+      expect((axis.conditions as unknown[]).length).toBe(2);
+      // conditions reuse the PredicateEvaluator equals op and target step-001
+      expect((axis.conditions as Array<Record<string, unknown>>)[0]).toMatchObject({
+        id: 'branch-1',
+        predicate: { op: 'equals', path: '$.branchSelection' },
+        then_stepIds: ['step-001'],
+      });
+    });
+
     it('should re-extract (regenerate) when requested', async () => {
       mockStore.get.mockResolvedValueOnce(mockVendorPdfEnvelope);
 

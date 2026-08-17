@@ -8,6 +8,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ProtocolCandidate, ProtocolStepCandidate, ExtractedCandidateItem } from '../ingestion/vendor-protocol/types.js';
 import { extractVendorProtocolCandidateFromInput } from '../ingestion/vendor-protocol/VendorProtocolCandidateService.js';
+import { deriveBranchAxes } from '../ingestion/vendor-protocol/deriveBranchAxes.js';
 
 const PROTOCOL_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/protocol.schema.yaml';
 
@@ -989,6 +990,23 @@ export class ProtocolExtractionService {
 
     if (pc.scope) {
       draftBody.description = pc.scope;
+    }
+
+    // Task 3 — condition-first localization template: lift the vendor step
+    // branches[] (the lettered if/then/else sub-options) into declarative
+    // branch_axes so the branches become executable step selections instead of
+    // being dropped at protocol build. No-op for candidates without branchy
+    // steps (branches [] → deriveBranchAxes returns []), keeping existing
+    // outputs byte-identical. stepIds are aligned to the mapper's index-based
+    // `step-NNN` ids above.
+    const branchAxes = deriveBranchAxes(
+      pc.steps.map((s, idx) => ({
+        stepId: `step-${String(idx + 1).padStart(3, '0')}`,
+        branches: s.branches,
+      })),
+    );
+    if (branchAxes.length > 0) {
+      draftBody.branch_axes = branchAxes;
     }
 
     return draftBody;
