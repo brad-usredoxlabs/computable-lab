@@ -20,6 +20,7 @@ describe('Protocol prose fields schema', () => {
       'core/datatypes/ref.schema.yaml',
       'core/datatypes/concentration.schema.yaml',
       'core/datatypes/reference-ratio.schema.yaml',
+      'core/datatypes/condition.schema.yaml',
     ];
     const contents = new Map<string, string>();
     for (const path of paths) contents.set(path, await readFile(join(schemaRoot, path), 'utf8'));
