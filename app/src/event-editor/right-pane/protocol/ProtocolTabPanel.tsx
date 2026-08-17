@@ -27,6 +27,7 @@ import { useProtocolSelection, ProtocolSelectionProvider, type ProtocolStepGraph
 import { ProtocolSelector } from './ProtocolSelector'
 import { StepLocalizationPane } from './StepLocalizationPane'
 import { SetupSectionWidget } from '../../../editor/taptab/widgets/LocalProtocolSetupWidgets'
+import { BranchPicker } from '../../protocol/BranchPicker'
 import type { LocalProtocolSetupRows } from './StepLocalizationPane'
 import './protocolTabPanel.css'
 
@@ -1553,6 +1554,10 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
           />
         </section>
       ) : null}
+
+      {/* Branch picker: conditional if/then/else choices that drive the
+          subset step build (F2). */}
+      <BranchPicker steps={steps} />
 
       {/* Step chips */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
