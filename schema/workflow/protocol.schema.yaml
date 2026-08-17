@@ -270,6 +270,17 @@ properties:
       $ref: "#/$defs/ProtocolVariant"
     uniqueItems: true
 
+  # Declarative branch axes (if/then/else over choices of sample type / labware
+  # format). Each axis is resolved FIRST during localization; the resolved
+  # branch(es) determine the local protocol's starting step set. Conditions
+  # reuse the PredicateEvaluator vocabulary (datatypes/condition.schema.yaml).
+  branch_axes:
+    type: array
+    description: "Optional declarative if/then/else branch templates for localization."
+    items:
+      $ref: "./datatypes/condition.schema.yaml#/$defs/BranchAxis"
+    uniqueItems: true
+
   steps:
     type: array
     minItems: 1

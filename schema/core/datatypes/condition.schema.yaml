@@ -1,0 +1,102 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/datatypes/condition.schema.yaml"
+title: "BranchCondition"
+description: >
+  Declarative branch-axis / if-then-else condition templates for protocol
+  localization. Reuses the lint PredicateEvaluator predicate vocabulary so a
+  branch condition (which starting steps a vendor protocol selects under a
+  choice of sample type / labware format) and a lint rule speak the SAME
+  predicate language (DRY — no second predicate engine).
+type: object
+allOf:
+  - $ref: "#/$defs/BranchAxis"
+
+$defs:
+  # A self-contained predicate over a `choices` object, e.g.
+  #   { op: 'equals', path: '$.sampleType', value: 'mammalian cell culture' }
+  # Ops and field shapes match PredicateEvaluator (server/src/lint/types.ts)
+  # for the subset usable for branch selection over a choices map.
+  Predicate:
+    type: object
+    additionalProperties: false
+    required: [ op ]
+    properties:
+      op:
+        type: string
+        enum: [ equals, in, exists, nonEmpty, regex, all, any, not ]
+      path:
+        type: string
+        description: "JSONPath into the choices object (e.g. '$.sampleType')."
+      value:
+        description: "Literal target for 'equals' (string | number | boolean | null)."
+      values:
+        type: array
+        items: { }
+        description: "Allowed set for 'in'."
+      pattern:
+        type: string
+        description: "RegExp source for 'regex'."
+      predicates:
+        type: array
+        items:
+          $ref: "#/$defs/Predicate"
+        description: "Sub-predicates for 'all' (AND) / 'any' (OR)."
+      not:
+        $ref: "#/$defs/Predicate"
+        description: "Sub-predicate for 'not'."
+
+  # A single branch of a branch axis. `id` converges with
+  # protocol.variants[].variantId (and local-protocol.variantRef) so one
+  # identifier namespace spans ingestion template → universal branch → local
+  # pointer.
+  BranchCondition:
+    type: object
+    additionalProperties: false
+    required: [ id, predicate, then_stepIds ]
+    properties:
+      id:
+        type: string
+        pattern: "^[a-z][a-z0-9-]*$"
+        description: "Branch/variant id (matches variants[].variantId)."
+      label:
+        type: string
+        minLength: 1
+        description: "Human-readable branch label (e.g. 'Mammalian cell culture')."
+      predicate:
+        $ref: "#/$defs/Predicate"
+        description: "Condition that selects this branch (evaluated over the localization choices)."
+      then_stepIds:
+        type: array
+        items: { type: string }
+        description: "Protocol step ids that belong to this branch (the starting steps when this branch is chosen)."
+      else_stepIds:
+        type: array
+        items: { type: string }
+        description: "Optional steps that run when this branch is NOT chosen (an else clause)."
+
+  # A whole branch axis: one decision (e.g. starting sample type, or labware
+  # format) with the conditions that resolve it. A protocol may carry several
+  # axes; each is resolved independently at localization phase 0.
+  BranchAxis:
+    type: object
+    additionalProperties: false
+    required: [ axisId, label, conditions ]
+    properties:
+      axisId:
+        type: string
+        pattern: "^[a-z][a-z0-9-]*$"
+        description: "Stable axis id (e.g. 'sample_type', 'labware_format')."
+      label:
+        type: string
+        minLength: 1
+        description: "Human-readable axis label (e.g. 'Starting sample type')."
+      conditions:
+        type: array
+        minItems: 1
+        items:
+          $ref: "#/$defs/BranchCondition"
+        description: "Disjoint conditions; the FIRST whose predicate matches (over the choices) wins."
+      shared_stepIds:
+        type: array
+        items: { type: string }
+        description: "Step ids that run on EVERY branch of this axis (included unconditionally)."
