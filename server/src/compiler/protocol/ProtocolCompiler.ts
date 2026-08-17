@@ -14,6 +14,12 @@ import type { RecordStore } from '../../store/types.js';
 import type { RecordEnvelope } from '../../types/RecordEnvelope.js';
 import type { VerbDefinitionPayload } from '../../types/capabilityAuthorization.js';
 import { resolveProtocolStepSemanticVerb } from '../../workflow/verbs/protocolVerbRegistry.js';
+import {
+  resolveBranchAxes,
+  type BranchChoices,
+  type BranchAxisResolution,
+  type BranchAxisLike,
+} from '../../protocol/BranchResolver.js';
 
 type RecordRef = {
   kind: 'record';
@@ -53,6 +59,10 @@ type ProtocolPayload = {
   steps?: unknown;
   /** Abstract roles (material/labware/instrument) — seed the local-protocol plate-setting sections. */
   roles?: InheritedRoles;
+  /** Declarative if/then/else branch axes (condition-first localization). */
+  branch_axes?: unknown;
+  /** Back-compat single-axis branch pointer (variants[].variantId). */
+  variantRef?: unknown;
 };
 
 type PlannedRunBindings = {
@@ -120,6 +130,8 @@ export interface ProtocolCompilerResult {
   steps: CompiledProtocolStep[];
   activePolicy: ResolvedPolicyProfile;
   localProtocol: LocalProtocolPayload;
+  /** Resolved branch axes (condition-first localization). Present when the protocol carries branch_axes. */
+  branchResolution?: BranchAxisResolution[];
 }
 
 export interface ProtocolCompilerContext {
@@ -127,6 +139,8 @@ export interface ProtocolCompilerContext {
   scope?: ActivePolicyScope;
   operatorPersonId?: string;
   supervisorPersonId?: string;
+  /** Localization branch choices (condition-first): { sampleType, labwareFormat, ... }. */
+  branchChoices?: BranchChoices;
 }
 
 function asProtocolPayload(envelope: RecordEnvelope): ProtocolPayload {
@@ -336,7 +350,51 @@ export class ProtocolCompiler {
 
     const { byId: verbsById, byCanonical: verbsByCanonical } = await this.resolveVerbDefinitions();
     const protocol = asProtocolPayload(input.protocolEnvelope);
-    const protocolSteps = Array.isArray(protocol.steps) ? protocol.steps as ProtocolStepPayload[] : [];
+    const protocolStepsRaw = Array.isArray(protocol.steps) ? protocol.steps as ProtocolStepPayload[] : [];
+
+    // Phase-0: resolve branch axes FIRST (condition-first localization). The
+    // resolved branch(es) determine which starting steps this local protocol
+    // realizes — steps of un-selected branches are dropped before any
+    // capability/admissibility work. An unresolved axis blocks localization
+    // (never a silent pass-through).
+    const branchAxes = Array.isArray(protocol.branch_axes) ? protocol.branch_axes as BranchAxisLike[] : [];
+    let protocolSteps = protocolStepsRaw;
+    let branchResolution: BranchAxisResolution[] | undefined;
+    if (branchAxes.length > 0) {
+      const resolved = resolveBranchAxes({
+        branchAxes,
+        choices: input.context?.branchChoices ?? {},
+      });
+      if (!resolved.ok) {
+        diagnostics.push({
+          code: 'BRANCH_AXIS_UNRESOLVED',
+          stepId: '',
+          severity: 'error',
+          message: resolved.gap,
+          subject: 'policy',
+          disposition: 'blocked',
+        });
+        return {
+          status: 'blocked',
+          sourceLayer: 'universal',
+          targetLayer: 'lab',
+          diagnostics,
+          remediationOptions: [],
+          steps: [],
+          activePolicy,
+          localProtocol: buildLocalProtocol({
+            globalProtocolRecordId: protocol.recordId as string,
+            globalProtocolTitle: protocol.title as string,
+            compiledSteps: [],
+            status: 'draft',
+            ...(protocol.roles ? { inheritedRoles: protocol.roles } : {}),
+          }),
+        };
+      }
+      const active = new Set(resolved.activeStepIds);
+      protocolSteps = protocolStepsRaw.filter((step, idx) => active.has(stepIdFor(step, idx)));
+      branchResolution = resolved.resolutions;
+    }
 
     // Build localProtocol from the compiled steps (will be populated after the loop)
     let localProtocol: LocalProtocolPayload | undefined;
@@ -633,6 +691,16 @@ export class ProtocolCompiler {
       ...(protocol.roles ? { inheritedRoles: protocol.roles } : {}),
     });
 
+    // Attach the resolved branch axes to the local protocol (first-class
+    // provenance of which branch each axis realized during localization).
+    if (branchResolution) {
+      localProtocol.branch_resolution = branchResolution.map((r) => ({
+        axisId: r.axisId,
+        matched: r.matched,
+        ...(r.branchIds.length > 0 ? { branchIds: r.branchIds } : {}),
+      }));
+    }
+
     return {
       status: steps.some((step) => step.disposition === 'blocked') ? 'blocked' : 'ready',
       sourceLayer: 'universal',
@@ -642,6 +710,7 @@ export class ProtocolCompiler {
       steps,
       activePolicy,
       localProtocol,
+      ...(branchResolution ? { branchResolution } : {}),
     };
   }
 }

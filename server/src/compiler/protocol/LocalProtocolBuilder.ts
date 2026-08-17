@@ -38,6 +38,13 @@ export interface LocalProtocolPayload {
   labwares?: SetupRowPayload[];
   equipment?: SetupRowPayload[];
   materials?: SetupRowPayload[];
+  /**
+   * Resolved branch axes from condition-first localization: which branch of
+   * each universal branch_axes axis this LPR realizes. Recorded here (instead
+   * of only in the single-string `variantRef`) so multi-axis choices + the
+   * choices themselves are first-class provenance.
+   */
+  branch_resolution?: unknown[];
 }
 
 /** One plate-setting row: a role plus optional note and concrete binding. */

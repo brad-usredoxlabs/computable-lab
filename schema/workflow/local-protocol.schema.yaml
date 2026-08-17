@@ -81,6 +81,34 @@ properties:
       'mammalian-cell-culture' branch). Preserves the matrix choice as first-class,
       alongside the substitutions that swap in this lab's reagents.
 
+  # Resolved branch axes from condition-first localization (Decided). Each entry
+  # records how one universal branch axis was resolved to the branch(es) whose
+  # starting steps this local protocol realizes. Structured, multi-axis home;
+  # `variantRef` (single string) stays as back-compat for single-axis protocols.
+  branch_resolution:
+    type: array
+    description: "Resolved branch axes from localization (which branch of each universal branch_axes axis this LPR realizes)."
+    items:
+      type: object
+      additionalProperties: false
+      required: [ axisId, matched ]
+      properties:
+        axisId:
+          type: string
+          pattern: "^[a-z][a-z0-9-]*$"
+          description: "Matches a protocol branch_axes[].axisId."
+        matched:
+          type: boolean
+          description: "Whether a branch condition matched the localization choices."
+        branchIds:
+          type: array
+          items: { type: string }
+          description: "Chosen branch ids (branch_axes[].conditions[].id / variants[].variantId) whose steps are included."
+        choices:
+          type: object
+          additionalProperties: true
+          description: "The localization choices that produced this resolution (provenance)."
+
   lab_state_refs:
     type: array
     description: "Environmental lab-state assumptions this local-protocol depends on (50 §10)."
