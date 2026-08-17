@@ -19,6 +19,7 @@ import {
   type BranchChoices,
   type BranchAxisResolution,
   type BranchAxisLike,
+  type BranchResourceRef,
 } from '../../protocol/BranchResolver.js';
 
 type RecordRef = {
@@ -132,6 +133,8 @@ export interface ProtocolCompilerResult {
   localProtocol: LocalProtocolPayload;
   /** Resolved branch axes (condition-first localization). Present when the protocol carries branch_axes. */
   branchResolution?: BranchAxisResolution[];
+  /** Branch-scoped resources the resolved branch(es) require (F3). */
+  branchResources?: BranchResourceRef[];
 }
 
 export interface ProtocolCompilerContext {
@@ -360,6 +363,7 @@ export class ProtocolCompiler {
     const branchAxes = Array.isArray(protocol.branch_axes) ? protocol.branch_axes as BranchAxisLike[] : [];
     let protocolSteps = protocolStepsRaw;
     let branchResolution: BranchAxisResolution[] | undefined;
+    let branchResources: BranchResourceRef[] | undefined;
     if (branchAxes.length > 0) {
       const resolved = resolveBranchAxes({
         branchAxes,
@@ -394,6 +398,15 @@ export class ProtocolCompiler {
       const active = new Set(resolved.activeStepIds);
       protocolSteps = protocolStepsRaw.filter((step, idx) => active.has(stepIdFor(step, idx)));
       branchResolution = resolved.resolutions;
+      branchResources = resolved.resolvedResourceRefs.length > 0 ? resolved.resolvedResourceRefs : undefined;
+      // Branch-triggered step insertion (F3): append steps the branch adds
+      // (e.g. plant's pre-freeze step) so they are compiled into the copy.
+      if (resolved.insertedSteps.length > 0) {
+        protocolSteps = [
+          ...protocolSteps,
+          ...(resolved.insertedSteps as ProtocolStepPayload[]),
+        ];
+      }
     }
 
     // Build localProtocol from the compiled steps (will be populated after the loop)
@@ -700,6 +713,9 @@ export class ProtocolCompiler {
         ...(r.branchIds.length > 0 ? { branchIds: r.branchIds } : {}),
       }));
     }
+    if (branchResources) {
+      (localProtocol as unknown as { branch_resources?: unknown }).branch_resources = branchResources;
+    }
 
     return {
       status: steps.some((step) => step.disposition === 'blocked') ? 'blocked' : 'ready',
@@ -711,6 +727,7 @@ export class ProtocolCompiler {
       activePolicy,
       localProtocol,
       ...(branchResolution ? { branchResolution } : {}),
+      ...(branchResources ? { branchResources } : {}),
     };
   }
 }

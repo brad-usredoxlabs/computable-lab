@@ -124,4 +124,28 @@ describe('ProtocolCompiler branch-first localization', () => {
     expect(result.branchResolution).toBeUndefined();
     expect(result.localProtocol.branch_resolution).toBeUndefined();
   });
+
+  it('F3: branch-triggered inserted step compiles in + branch resources are returned', async () => {
+    const envelope = branchedProtocolEnvelope();
+    const axes = (envelope.payload as Record<string, unknown>).branch_axes as Array<Record<string, unknown>>;
+    (axes[0] as { conditions?: Array<Record<string, unknown>> }).conditions![1] = {
+      ...(axes[0] as { conditions: Array<Record<string, unknown>> }).conditions![1],
+      insert_steps: [{ stepId: 'pre-freeze', kind: 'incubate', label: 'Freeze at -80C' }],
+      then_resourceRefs: [
+        { role: 'bead-beater', ref: { kind: 'record', id: 'EQP-beadbeater-1', type: 'equipment' } },
+      ],
+    };
+    const compiler = makeCompiler();
+    const result = await compiler.lowerToLabProtocol({
+      protocolEnvelope: envelope,
+      context: { branchChoices: { sampleType: 'mammalian cell culture' }, policyProfiles: permissiveRemediation },
+    });
+    // inserted step appears in the compiled step set
+    expect(stepIdsOf(result)).toContain('pre-freeze');
+    // branch resources surfaced on the result + local protocol
+    expect(result.branchResources?.map((r) => r.role)).toContain('bead-beater');
+    expect(
+      (result.localProtocol as unknown as { branch_resources?: Array<{ role: string }> }).branch_resources?.map((r) => r.role),
+    ).toContain('bead-beater');
+  });
 });
