@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { resolveBranchAxes } from './BranchResolver.js';
+import { resolveBranchAxes, activeStepIdsForResolution } from './BranchResolver.js';
 import type { BranchAxisLike } from './BranchResolver.js';
 
 const SAMPLE_AXIS: BranchAxisLike = {
@@ -94,5 +94,29 @@ describe('resolveBranchAxes', () => {
     const r = resolveBranchAxes({ branchAxes: [], choices: {} });
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.activeStepIds).toEqual([]);
+  });
+});
+
+describe('activeStepIdsForResolution', () => {
+  it('derives the active step set from an already-resolved branch selection', () => {
+    const active = activeStepIdsForResolution(
+      [SAMPLE_AXIS, LABWARE_AXIS],
+      [
+        { axisId: 'sample-type', matched: true, branchIds: ['mammalian'] },
+        { axisId: 'labware-format', matched: true, branchIds: ['tubes'] },
+      ],
+    );
+    expect(active).toEqual(['lyse-common', 'lyse-mam', 'grind-1', 'bind-1', 'wash-1', 'elute-1', 'rack-mount']);
+  });
+
+  it('an unmatched axis contributes only its shared steps', () => {
+    const active = activeStepIdsForResolution(
+      [SAMPLE_AXIS, LABWARE_AXIS],
+      [
+        { axisId: 'sample-type', matched: true, branchIds: ['bacterial'] },
+        { axisId: 'labware-format', matched: false },
+      ],
+    );
+    expect(active).toEqual(['lyse-common', 'lys-bact', 'bind-1', 'wash-1', 'elute-1']);
   });
 });

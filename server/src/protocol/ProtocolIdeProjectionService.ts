@@ -367,6 +367,10 @@ export class ProtocolIdeProjectionService {
           ajvValidator: this.deps.ajvValidator as unknown as Parameters<typeof createValidateLocalProtocolPass>[0]['ajvValidator'],
         });
       }
+      case 'resolve_branch_axes': {
+        const { createResolveBranchAxesPass } = await import('../compiler/pipeline/passes/ResolveBranchAxesPass.js');
+        return createResolveBranchAxesPass({});
+      }
       case 'expand_local_customizations': {
         const { createExpandLocalCustomizationsPass } = await import('../compiler/pipeline/passes/LocalProtocolPasses.js');
         return createExpandLocalCustomizationsPass({});
@@ -400,11 +404,12 @@ export class ProtocolIdeProjectionService {
       'protocol_realize',
       'resolve_protocol_ref',
       'validate_local_protocol',
+      'resolve_branch_axes',
       'expand_local_customizations',
       'project_local_expanded_protocol',
       'events_emit',
     ];
-    const families = ['parse', 'normalize', 'expand', 'disambiguate', 'validate', 'expand', 'project', 'project'];
+    const families = ['parse', 'normalize', 'expand', 'disambiguate', 'validate', 'disambiguate', 'expand', 'project', 'project'];
     const promises = passIds.map((id, i) => passFactory(id, families[i]!));
     return Promise.all(promises);
   }

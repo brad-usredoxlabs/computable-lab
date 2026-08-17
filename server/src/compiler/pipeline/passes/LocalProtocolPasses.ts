@@ -313,6 +313,26 @@ export function createExpandLocalCustomizationsPass(
         // No mutation needed — deep copy already has it
       }
 
+      // Branch resolution (condition-first localization, Task 5): if a
+      // resolve_branch_axes pass ran and resolved the canonical protocol's
+      // branch_axes against the local protocol's branch_resolution, filter the
+      // expanded steps to the ACTIVE starting step set (shared ∪ chosen
+      // branch). No-op when the pass is absent / nothing to resolve (back-compat).
+      const branchOut = outputs.get('resolve_branch_axes') as
+        | { branchActiveStepIds?: unknown; branch_resolution?: unknown }
+        | undefined;
+      const branchActive = Array.isArray(branchOut?.branchActiveStepIds)
+        ? new Set<string>(branchOut.branchActiveStepIds as string[])
+        : undefined;
+      if (Array.isArray(expandedProtocol['steps']) && branchActive) {
+        expandedProtocol['steps'] = (expandedProtocol['steps'] as Array<Record<string, unknown>>).filter(
+          (s) => branchActive.has((s.stepId as string) ?? (s.id as string)),
+        );
+        if (branchOut?.branch_resolution !== undefined) {
+          expandedProtocol['branch_resolution'] = branchOut.branch_resolution;
+        }
+      }
+
       // Plate-setting sections — concrete lab-layer bindings declared above
       // the steps. Projected for downstream resolution passes.
       const resolvedSetup = {

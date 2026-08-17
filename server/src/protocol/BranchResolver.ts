@@ -107,3 +107,37 @@ export function resolveBranchAxes(args: {
 
   return { ok: true, activeStepIds, resolutions, warnings };
 }
+
+/**
+ * Derive the active step set from an ALREADY-RESOLVED branch resolution (the
+ * per-axis chosen branchIds stored on a local protocol by localization). Used
+ * by the local-protocol-compile pipeline to materialize the same branch
+ * selection without re-evaluating raw choices.
+ */
+export interface BranchResolutionEntry {
+  axisId: string;
+  matched: boolean;
+  branchIds?: string[];
+}
+
+export function activeStepIdsForResolution(
+  branchAxes: BranchAxisLike[],
+  resolution: BranchResolutionEntry[],
+): string[] {
+  const out: string[] = [];
+  const push = (id: string): void => {
+    if (!out.includes(id)) out.push(id);
+  };
+  for (const axis of branchAxes) {
+    for (const id of axis.shared_stepIds ?? []) push(id);
+    const entry = resolution.find((r) => r.axisId === axis.axisId);
+    if (entry?.matched && entry.branchIds) {
+      const condsById = new Map((axis.conditions ?? []).map((c) => [c.id, c]));
+      for (const branchId of entry.branchIds) {
+        const cond = condsById.get(branchId);
+        for (const sid of cond?.then_stepIds ?? []) push(sid);
+      }
+    }
+  }
+  return out;
+}

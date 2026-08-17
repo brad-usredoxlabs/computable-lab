@@ -34,7 +34,7 @@ function createStubPass(id: string, family: string): Pass {
 }
 
 /**
- * Get all 6 pass ids expected in the local-protocol-compile pipeline.
+ * Get all 7 pass ids expected in the local-protocol-compile pipeline.
  */
 function getAllPassIds(): string[] {
   return [
@@ -42,13 +42,14 @@ function getAllPassIds(): string[] {
     'normalize_local_protocol',
     'resolve_protocol_ref',
     'validate_local_protocol',
+    'resolve_branch_axes',
     'expand_local_customizations',
     'project_local_expanded_protocol',
   ];
 }
 
 /**
- * Get all 6 stub passes for the local-protocol-compile pipeline.
+ * Get all 7 stub passes for the local-protocol-compile pipeline.
  */
 function getAllStubPasses(): Pass[] {
   const families = [
@@ -56,6 +57,7 @@ function getAllStubPasses(): Pass[] {
     'normalize',
     'disambiguate',
     'validate',
+    'disambiguate',
     'expand',
     'project',
   ];
@@ -64,8 +66,8 @@ function getAllStubPasses(): Pass[] {
 }
 
 describe('runLocalProtocolPipeline', () => {
-  describe('Case 1: Loads YAML and runs 6 stub passes end-to-end', () => {
-    it('should load the pipeline YAML and execute all 6 passes successfully', async () => {
+  describe('Case 1: Loads YAML and runs 7 stub passes end-to-end', () => {
+    it('should load the pipeline YAML and execute all 7 passes successfully', async () => {
       const input = {
         local_protocol_id: 'LP-001',
         canonical_protocol_ref: 'PROTO-123',
@@ -83,8 +85,8 @@ describe('runLocalProtocolPipeline', () => {
       // Verify overall success
       expect(result.ok).toBe(true);
 
-      // Verify all 6 passes ran successfully
-      expect(result.pass_statuses).toHaveLength(6);
+      // Verify all 7 passes ran successfully
+      expect(result.pass_statuses).toHaveLength(7);
       for (const status of result.pass_statuses) {
         expect(status.status).toBe('ok');
       }
@@ -177,7 +179,7 @@ describe('runLocalProtocolPipeline', () => {
       expect(spec.entrypoint).toBe('local-protocol-compile');
 
       // Check passes count
-      expect(spec.passes).toHaveLength(6);
+      expect(spec.passes).toHaveLength(7);
 
       // Check each pass has required fields
       const expectedPasses = [
@@ -185,6 +187,7 @@ describe('runLocalProtocolPipeline', () => {
         { id: 'normalize_local_protocol', family: 'normalize' },
         { id: 'resolve_protocol_ref', family: 'disambiguate' },
         { id: 'validate_local_protocol', family: 'validate' },
+        { id: 'resolve_branch_axes', family: 'disambiguate' },
         { id: 'expand_local_customizations', family: 'expand' },
         { id: 'project_local_expanded_protocol', family: 'project' },
       ];
@@ -226,11 +229,14 @@ describe('runLocalProtocolPipeline', () => {
       expect(spec.passes[3].id).toBe('validate_local_protocol');
       expect(spec.passes[3].depends_on).toEqual(['resolve_protocol_ref']);
 
-      expect(spec.passes[4].id).toBe('expand_local_customizations');
-      expect(spec.passes[4].depends_on).toEqual(['validate_local_protocol']);
+      expect(spec.passes[4].id).toBe('resolve_branch_axes');
+      expect(spec.passes[4].depends_on).toEqual(['resolve_protocol_ref']);
 
-      expect(spec.passes[5].id).toBe('project_local_expanded_protocol');
-      expect(spec.passes[5].depends_on).toEqual(['expand_local_customizations']);
+      expect(spec.passes[5].id).toBe('expand_local_customizations');
+      expect(spec.passes[5].depends_on).toEqual(['validate_local_protocol', 'resolve_branch_axes']);
+
+      expect(spec.passes[6].id).toBe('project_local_expanded_protocol');
+      expect(spec.passes[6].depends_on).toEqual(['expand_local_customizations']);
     });
   });
 });

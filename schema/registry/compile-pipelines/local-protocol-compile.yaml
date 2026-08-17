@@ -30,10 +30,15 @@ passes:
     description: "Validate the local-protocol against its schema; check for required fields and constraints."
     depends_on: [resolve_protocol_ref]
 
+  - id: resolve_branch_axes
+    family: disambiguate
+    description: "Resolve the canonical protocol's branch_axes against the local protocol's branch_resolution; emit the active starting step ids."
+    depends_on: [resolve_protocol_ref]
+
   - id: expand_local_customizations
     family: expand
-    description: "Expand local customizations over the canonical protocol; merge overrides and extensions."
-    depends_on: [validate_local_protocol]
+    description: "Expand local customizations over the canonical protocol; merge overrides and extensions; filter steps to the resolved branch."
+    depends_on: [validate_local_protocol, resolve_branch_axes]
 
   - id: project_local_expanded_protocol
     family: project
