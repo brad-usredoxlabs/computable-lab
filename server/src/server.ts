@@ -1219,6 +1219,12 @@ export async function createServer(
       registerExtractionProtocolStepsRoutes(instance, ctx);
     }
 
+    // Scientist-Intent Compile Routes (small-LLM portable protocol YAML → EVG)
+    {
+      const { registerIntentCompileRoutes } = await import('./api/handlers/IntentCompileHandlers.js');
+      registerIntentCompileRoutes(instance, ctx);
+    }
+
     // Run Execution Routes (planned → in_progress → completed lifecycle)
     {
       const { registerRunExecutionRoutes } = await import('./api/routes/run-execution.js');

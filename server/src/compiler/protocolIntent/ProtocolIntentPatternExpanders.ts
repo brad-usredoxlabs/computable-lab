@@ -203,7 +203,92 @@ function expandMediaSwapDuplicateColumns(pattern: ProtocolPatternIntent): PlateE
   return events;
 }
 
+function expandSerialDilutionByFactor(pattern: ProtocolPatternIntent): PlateEventPrimitive[] {
+  const targetLabware = pattern.targetLabware;
+  const waste = stringParam(pattern.params, ['waste', 'wasteLabware']) ?? 'default_waste';
+  const factor = numberParam(pattern.params, ['factor']);
+  const points = numberParam(pattern.params, ['points']) ?? 2;
+  const replicates = numberParam(pattern.params, ['replicates']) ?? 1;
+  const baseColumn = numberParam(pattern.params, ['targetColumn', 'column']) ?? pattern.targetColumns?.[0] ?? 1;
+  const transferVolumeUl = numberParam(pattern.params, ['transferVolumeUl', 'volumeUl', 'transferVolume']);
+  const discardVolumeUl = numberParam(pattern.params, ['finalAspirateToWasteUl', 'discardVolumeUl']);
+  const mix = pattern.params?.mix as Record<string, unknown> | undefined;
+  const mixCycles = numberParam(mix, ['cycles']);
+  const mixVolumeUl = numberParam(mix, ['volumeUl']);
+  const rows = DEFAULT_ROWS.slice(0, points); // A.. up to points entries, one per dilution depth
+  const events: PlateEventPrimitive[] = [];
+
+  for (let replicate = 0; replicate < replicates; replicate++) {
+    const column = baseColumn + replicate;
+    rows.forEach((row, index) => {
+      const currentWell = well(row, column);
+      const depth = index; // 0 = stock (1x), 1 = stock/factor, ...
+      events.push(mixEvent({
+        pattern,
+        index: events.length,
+        labware: targetLabware,
+        well: currentWell,
+        cycles: mixCycles,
+        volumeUl: mixVolumeUl,
+        extra: {
+          serialDilutionFactor: factor,
+          serialDilutionPoint: depth,
+          serialDilutionReplicate: replicate,
+          serialDilutionRatio: `1:${factor}`,
+        },
+      }));
+
+      const nextRow = rows[index + 1];
+      if (nextRow) {
+        events.push(transferEvent({
+          pattern,
+          index: events.length,
+          suffix: 'serial-transfer',
+          sourceLabware: targetLabware,
+          destinationLabware: targetLabware,
+          sourceWell: currentWell,
+          destinationWell: well(nextRow, column),
+          volumeUl: transferVolumeUl,
+          extra: {
+            serialDilutionFactor: factor,
+            serialDilutionPoint: depth,
+            serialDilutionReplicate: replicate,
+            serialDilutionRatio: `1:${factor}`,
+          },
+        }));
+      } else {
+        // final point of this ladder: aspirate the excess to waste to cap the chain
+        events.push(transferEvent({
+          pattern,
+          index: events.length,
+          suffix: 'serial-final-waste',
+          sourceLabware: targetLabware,
+          destinationLabware: waste,
+          sourceWell: currentWell,
+          volumeUl: discardVolumeUl ?? transferVolumeUl,
+          waste,
+          extra: {
+            serialDilutionFactor: factor,
+            serialDilutionPoint: depth,
+            serialDilutionReplicate: replicate,
+            phase: 'final_discard',
+          },
+        }));
+      }
+    });
+  }
+
+  return events;
+}
+
 function expandSerialDilution(pattern: ProtocolPatternIntent): PlateEventPrimitive[] {
+  // factor/points/replicates intent path (concentration law, small-LLM contract)
+  const factor = numberParam(pattern.params, ['factor']);
+  const points = numberParam(pattern.params, ['points']);
+  if (factor !== undefined && points !== undefined) {
+    return expandSerialDilutionByFactor(pattern);
+  }
+
   const targetLabware = pattern.targetLabware;
   const waste = stringParam(pattern.params, ['waste', 'wasteLabware']) ?? 'default_waste';
   const rows = normalizeRows(pattern);

@@ -1,0 +1,90 @@
+pipelineId: scientist-intent-compile
+entrypoint: scientist-intent-compile
+description: >
+  Compile a portable scientist-intent wire document into TerminalArtifacts
+  (canonical events + gaps + deck + resources) by reusing the deterministic
+  downstream of the chatbot pipeline. The `ai_precompile` output slot is seeded
+  synthetically by the runner (from normalizeScientistIntent), then every
+  downstream pass — protocol-intent state planning, validation, lowering,
+  geometric-pattern expansion, biology-verb expansion, labware resolution,
+  role resolution, volume computation, resources, deck layout, validation, and
+  instrument run-file emission — runs unchanged against it.
+passes:
+  - id: ai_precompile
+    family: parse
+    description: Synthetic seeding slot populated by runScientistIntentCompile with normalizeScientistIntent output (protocolIntent + candidateEvents).
+
+  - id: protocol_intent_state_plan
+    family: expand
+    depends_on: [ai_precompile]
+    description: Fold protocolIntent into deterministic execution state.
+
+  - id: validate_protocol_intent
+    family: validate
+    depends_on: [ai_precompile]
+    description: Validate ProtocolIntent resources/operations/patterns ref integrity.
+
+  - id: lower_protocol_intent
+    family: expand
+    depends_on: [protocol_intent_state_plan, validate_protocol_intent]
+    description: Lower ProtocolIntent resources and simple operations into primitive events + candidate labware + directives.
+
+  - id: expand_protocol_intent_patterns
+    family: expand
+    depends_on: [protocol_intent_state_plan, validate_protocol_intent]
+    description: Expand geometric macros (serial_dilution, media_swap, repeat_rows) into primitive transfer/mix events.
+
+  - id: expand_biology_verbs
+    family: expand
+    depends_on: [ai_precompile]
+    description: Lower candidateEvents biology verbs (seed, incubate, read, wash, harvest, spin, ...) through the verb expander registry.
+
+  - id: apply_directives
+    family: expand
+    depends_on: [lower_protocol_intent]
+    description: Turn lower_protocol_intent.directives entries into DirectiveNode[] with generated directiveIds.
+
+  - id: resolve_labware
+    family: disambiguate
+    depends_on: [lower_protocol_intent]
+    description: Resolve symbolic labware hints to existing labware-instance records; emit additions for unmatched.
+
+  - id: resolve_references
+    family: disambiguate
+    depends_on: [ai_precompile]
+    description: Resolve named protocol/assay/pattern/compound-class references from registries.
+
+  - id: resolve_roles
+    family: expand
+    depends_on: [expand_protocol_intent_patterns, expand_biology_verbs, lower_protocol_intent]
+    description: Map role coordinates to concrete well addresses under current orientation.
+
+  - id: compute_volumes
+    family: expand
+    depends_on: [resolve_roles]
+    description: Resolve just_enough / percent / placeholder volumes to uL.
+
+  - id: compute_resources
+    family: emit
+    depends_on: [compute_volumes]
+    description: Emit resource manifest (tip racks, reservoir loads, consumables).
+
+  - id: plan_deck_layout
+    family: emit
+    depends_on: [compute_resources]
+    description: Full deck layout plan with pinned slots, auto-filled remainder, conflicts.
+
+  - id: lab_state
+    family: emit
+    depends_on: [resolve_roles]
+    description: Fold events over prior lab state and emit labStateDelta.
+
+  - id: emit_instrument_run_files
+    family: emit
+    depends_on: [resolve_roles]
+    description: Generate InstrumentRunFile artifacts for read-event instrument groups.
+
+  - id: validate
+    family: validate
+    depends_on: [plan_deck_layout]
+    description: Aggregate findings from all registered validation checks.

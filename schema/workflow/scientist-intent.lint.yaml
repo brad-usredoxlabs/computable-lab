@@ -1,0 +1,46 @@
+# Lint rules for ScientistIntent wire documents.
+# Declarative business-rules DSL (exists, nonEmpty, regex, equals, in, all, any, not).
+# Values that depend on a specific `action` are enforced structurally by the
+# JSON schema (enum + required + unevaluatedProperties) and by the normalizer,
+# which folds the closed vocabulary into ProtocolIntent. These rules add
+# cross-document scalar-path checks the schema avoids because the per-action
+# branching is not expressible in the scalar predicate DSL.
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/scientist-intent.schema.yaml"
+
+rules:
+# A serial_dilution intent must carry a numeric factor somewhere in actions.
+- id: serial-dilution-requires-factor
+  title: "serial dilution requires factor"
+  description: "serial_dilution intents must carry a numeric factor (> 1) in actions."
+  severity: warning
+  scope: record
+  assert:
+    op: any
+    predicates:
+    - predicate: not
+      args:
+      - predicate: exists
+        args: ["actions"]
+    - predicate: exists
+      args: ["actions", "factor"]
+  message:
+    template: "serial_dilution requires a numeric 'factor' (> 1)"
+
+# Symbolic source labels must be non-empty when present.
+- id: symbolic-labels-non-empty
+  title: "symbolic labels non-empty"
+  description: "Symbolic source/target/labware labels are required to be non-empty."
+  severity: warning
+  scope: record
+  assert:
+    op: all
+    predicates:
+    - predicate: not
+      args:
+      - predicate: exists
+        args: ["actions"]
+    - predicate: nonEmpty
+      args: ["actions[*].source"]
+  message:
+    template: "symbolic source labels must be non-empty"

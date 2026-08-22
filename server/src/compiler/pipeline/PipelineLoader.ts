@@ -23,6 +23,7 @@ export const VALID_ENTRYPOINTS = [
   'ingestion-compile',
   'chatbot-compile',
   'protocol-ide-extract-and-realize',
+  'scientist-intent-compile',
 ] as const;
 
 type Entrypoint = (typeof VALID_ENTRYPOINTS)[number];

@@ -29,6 +29,8 @@ properties:
       - extraction-compile
       - ingestion-compile
       - chatbot-compile
+      - protocol-ide-extract-and-realize
+      - scientist-intent-compile
     description: "The compiler entrypoint this pipeline services."
 
   description:

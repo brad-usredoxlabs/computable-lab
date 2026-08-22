@@ -110,6 +110,77 @@ describe('ProtocolIntentPatternExpanders', () => {
     });
   });
 
+  // ── serial_dilution factor/points/replicates (concentration law) ──
+  // Per-point concentration = stock / factor^i; replicates span adjacent columns.
+  it('expands a factor/points serial dilution into a 2-fold ladder down a column', () => {
+    const pattern: ProtocolPatternIntent = {
+      id: 'pattern-serial-fp',
+      kind: 'serial_dilution',
+      targetLabware: 'plate_D',
+      params: {
+        factor: 2,
+        points: 4,
+        replicates: 1,
+        transferVolumeUl: 50,
+        mix: { cycles: 5, volumeUl: 100 },
+      },
+    };
+
+    const events = expandProtocolIntentPattern(pattern);
+
+    // 4 points x one ladder: per point a mix + (next) transfer, final point → waste
+    // order: mix, transfer, mix, transfer, mix, transfer, mix, transfer(final waste)
+    expect(events.map((event) => event.event_type)).toEqual([
+      'mix', 'transfer',
+      'mix', 'transfer',
+      'mix', 'transfer',
+      'mix', 'transfer',
+    ]);
+    // each point carries the track-fold depth (0..3 => 1x,2x,4x,8x)
+    expect(events[0].details).toMatchObject({
+      well: 'A1',
+      serialDilutionFactor: 2,
+      serialDilutionPoint: 0,
+    });
+    expect(events[1].details).toMatchObject({ source_well: 'A1', well: 'B1' });
+    expect(events[3].details).toMatchObject({ source_well: 'B1', well: 'C1' });
+    expect(events[5].details).toMatchObject({ source_well: 'C1', well: 'D1' });
+    // last point is the final discard to waste
+    expect(events[7].details).toMatchObject({
+      source_well: 'D1',
+      destination_labware: 'default_waste',
+      phase: 'final_discard',
+      serialDilutionPoint: 3,
+    });
+  });
+
+  it('expands a factor/points serial dilution with replicates across adjacent columns', () => {
+    const pattern: ProtocolPatternIntent = {
+      id: 'serial-reps',
+      kind: 'serial_dilution',
+      targetLabware: 'plate_D',
+      params: {
+        factor: 2,
+        points: 3,
+        replicates: 2,
+        transferVolume: 25,
+        mix: { cycles: 5, volumeUl: 100 },
+      },
+    };
+
+    const events = expandProtocolIntentPattern(pattern);
+
+    // 3 points × 2 replicates → two ladders (col 1 and col 2), each 3 points
+    // each ladder: mix + transfer + mix + transfer + mix + discard = 6 events
+    expect(events).toHaveLength(12);
+    // ladder 1 uses column 1, ladder 2 uses column 2
+    expect(events[0].details).toMatchObject({ well: 'A1', serialDilutionReplicate: 0 });
+    expect(events[6].details).toMatchObject({ well: 'A2', serialDilutionReplicate: 1 });
+    // final discard on each ladder's last point
+    expect(events[5].details).toMatchObject({ source_well: 'C1', phase: 'final_discard' });
+    expect(events[11].details).toMatchObject({ source_well: 'C2', phase: 'final_discard' });
+  });
+
   it('expands repeat_rows into row transfer plus mix events', () => {
     const pattern: ProtocolPatternIntent = {
       id: 'pattern-repeat-resazurin',

@@ -1,0 +1,167 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/scientist-intent.schema.yaml"
+title: "ScientistIntent"
+description: >
+  Portable high-level scientist protocol intent. The small-LLM output contract:
+  a closed-vocabulary list of high-level biology verbs/patterns with
+  natural-language or numeric parameters and SYMBOLIC resource labels. Never
+  contains resolved record IDs, deck slots, or low-level event primitives —
+  those are owned by the deterministic compiler downstream.
+type: object
+additionalProperties: false
+required:
+- intentId
+- actions
+
+properties:
+  intentId:
+    type: string
+    minLength: 1
+
+  sourcePrompt:
+    type: string
+
+  actions:
+    type: array
+    minItems: 1
+    items:
+      type: object
+      additionalProperties: false
+      unevaluatedProperties: false
+      required:
+      - action
+      properties:
+        action:
+          type: string
+          enum:
+          # Simple biology verbs (simpleVerbs.ts expanders)
+          - seed
+          - incubate
+          - mix
+          - resuspend
+          - dilute
+          - shake
+          - count
+          - read
+          - add_material
+          - create_container
+          - transfer
+          - stain
+          - fix
+          - permeabilize
+          - block
+          - quench
+          - label
+          - transfect
+          # Compound verbs
+          - aliquot
+          - wash
+          - elute
+          - harvest
+          - passage
+          - freeze
+          - thaw
+          # Centrifugation
+          - spin
+          - pellet
+          # Geometric pattern macros (intent-layer unrolls geometry)
+          - serial_dilution
+          - media_swap_duplicate_columns
+          - source_wells_to_duplicate_target_columns
+          - repeat_rows
+
+        # ---- symbolic noun labels (NEVER resolved IDs) ----
+        source:
+          type: string
+          minLength: 1
+        sourceHint:
+          type: string
+        sourceWells:
+          type: array
+          items:
+            type: string
+        target:
+          type: string
+          minLength: 1
+        targetHint:
+          type: string
+        targetWells:
+          type: array
+          items:
+            type: string
+        labware:
+          type: string
+          minLength: 1
+        labwareHint:
+          type: string
+
+        # ---- quantities / parameters ----
+        source_name:
+          type: string
+        factor:
+          type: number
+        points:
+          type: integer
+          minimum: 2
+        replicates:
+          type: integer
+          minimum: 1
+        ratio:
+          type: string
+        volume: {}
+        volumeUl:
+          type: number
+        cycles:
+          type: integer
+          minimum: 0
+        duration:
+          type: string
+        temperatureC:
+          type: number
+        rpm:
+          type: number
+        material:
+          type: string
+        mode:
+          type: string
+        wavelength:
+          type: string
+        instrument:
+          type: string
+        assayId:
+          type: string
+        readout:
+          type: string
+        params:
+          type: object
+          additionalProperties: true
+
+  unresolved:
+    type: array
+    items:
+      type: object
+      additionalProperties: false
+      unevaluatedProperties: false
+      required:
+      - label
+      - reason
+      properties:
+        label:
+          type: string
+        reason:
+          type: string
+        candidates:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            unevaluatedProperties: false
+            required:
+            - label
+            properties:
+              label:
+                type: string
+              confidence:
+                type: number
+                minimum: 0
+                maximum: 1
