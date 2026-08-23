@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { parseScientistIntent, ScientistIntentValidationError } from './parseScientistIntent.js';
 import { normalizeScientistIntent } from './normalizeScientistIntent.js';
 import { compileScientistIntent } from './compileScientistIntent.js';
-import { compileFromSmallLlm, stripYamlFence } from './intentCompile.js';
+import { compileFromSmallLlm, stripYamlFence, extractBranchQuestionsFromSmallLlm } from './intentCompile.js';
+import { liftScientistIntent, canonicalActionName, coerceNumeric } from './liftScientistIntent.js';
 
 const THREE_ACTION = `
 intentId: example-001
@@ -134,6 +135,44 @@ actions:
     expect(types).toContain('mix');
     expect(types).toContain('transfer');
   });
+
+  it('parses tool-call arguments (the primary small-model path) and compiles them', async () => {
+    // Mock a tool-call emission: `emit_scientist_intent` arguments as structured JSON.
+    const llm = {
+      complete: async () => ({
+        choices: [{
+          message: {
+            content: null,
+            tool_calls: [{
+              function: {
+                name: 'emit_scientist_intent',
+                arguments: JSON.stringify({
+                  intentId: 'dilution-tool',
+                  actions: [
+                    { action: 'serial_dilution', source: 'standards', target: 'fresh_plate', factor: 2, points: 4, replicates: 1 },
+                    { action: 'incubate', duration: '10 min', temperatureC: 37 },
+                    { action: 'read', mode: 'absorbance', wavelength: '450 nm' },
+                  ],
+                }),
+              },
+            }],
+          },
+        }],
+      }),
+    };
+
+    const { intent, compile } = await compileFromSmallLlm({
+      prompt: '2-fold serial dilution 4 points then incubate and read at 450nm',
+      llmClient: llm as never,
+      deps: { searchLabwareByHint: async (h) => [{ recordId: `LAB-${h}`, title: h }] },
+    });
+
+    expect(intent.actions).toHaveLength(3);
+    expect(intent.actions[0]).toMatchObject({ action: 'serial_dilution', factor: 2, points: 4 });
+    const types = compile.terminalArtifacts.events.map((e) => e.event_type);
+    expect(types).toContain('mix');
+    expect(types).toContain('transfer');
+  });
 });
 
 describe('compileScientistIntent', () => {
@@ -157,5 +196,77 @@ describe('compileScientistIntent', () => {
     const eventTypes = terminalArtifacts.events.map((e) => e.event_type);
     expect(eventTypes).toContain('mix');
     expect(eventTypes).toContain('transfer');
+  });
+});
+
+describe('liftScientistIntent (verb-synonym lift)', () => {
+  it('maps natural ecosystem verbs to the canonical closed set', () => {
+    expect(canonicalActionName('aspirate')).toBe('transfer');
+    expect(canonicalActionName('dispense')).toBe('transfer');
+    expect(canonicalActionName('centrifuge')).toBe('spin');
+    expect(canonicalActionName('pellet')).toBe('spin');
+    expect(canonicalActionName('dry')).toBe('incubate');
+    expect(canonicalActionName('repeat_cycle')).toBe('mix');
+    expect(canonicalActionName('incubate')).toBe('incubate');
+    expect(canonicalActionName('read')).toBe('read');
+  });
+
+  it('coerces numeric strings and whitelists/drops noise params', () => {
+    const lifted = liftScientistIntent({
+      intentId: 'ex',
+      actions: [
+        { action: 'aspirate', volumeUl: '550', volume: '550', ratio: 'discard all', label: 'discard' },
+        { action: 'centrifuge', rpm: '4000', timeMin: '5', ratio: '>=4000 xg' },
+      ],
+    });
+    const acts = (lifted.actions as Array<Record<string, unknown>>);
+    expect(acts[0]).toMatchObject({ action: 'transfer', volumeUl: 550, volume: 550 });
+    expect(acts[0]).not.toHaveProperty('ratio');
+    expect(acts[0]).not.toHaveProperty('label');
+    expect(acts[1]).toMatchObject({ action: 'spin', rpm: 4000, duration: '5' });
+    expect(coerceNumeric('550')).toBe(550);
+    expect(coerceNumeric('10 min')).toBe('10 min');
+  });
+});
+
+describe('extractBranchQuestionsFromSmallLlm (localization preamble)', () => {
+  it('parses branch-question tool-call output into a stable axes shape', async () => {
+    const llm = {
+      complete: async () => ({
+        choices: [{
+          message: {
+            content: null,
+            tool_calls: [{
+              function: {
+                name: 'emit_branch_questions',
+                arguments: JSON.stringify({
+                  axes: [
+                    { axisId: 'sample_type', question: 'What sample?', choices: [{ value: 'bacterial', label: 'Bacteria' }, { value: 'mammalian', label: 'Mammalian' }] },
+                    { axisId: 'bad', question: '', choices: 'oops' },
+                  ],
+                }),
+              },
+            }],
+          },
+        }],
+      }),
+    };
+
+    const result = await extractBranchQuestionsFromSmallLlm({
+      protocolText: 'vendor protocol text',
+      llmClient: llm as never,
+    });
+    expect(result.axes).toHaveLength(1);
+    expect(result.axes[0].axisId).toBe('sample_type');
+    expect(result.axes[0].choices).toHaveLength(2);
+  });
+
+  it('returns empty axes when no tool call is made', async () => {
+    const llm = { complete: async () => ({ choices: [{ message: { content: 'boring' } }] }) };
+    const result = await extractBranchQuestionsFromSmallLlm({
+      protocolText: 'x',
+      llmClient: llm as never,
+    });
+    expect(result.axes).toEqual([]);
   });
 });
