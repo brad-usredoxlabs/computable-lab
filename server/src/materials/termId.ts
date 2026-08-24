@@ -51,3 +51,11 @@ export function localMaterialIdForCurie(curie: string): string {
     .toUpperCase();
   return `MAT-${slug || 'ONTOLOGY-TERM'}`;
 }
+
+/** Deterministic canonical `TERM-<slug>-<hash>` id for a canonical term label.
+ * Same label → same id (idempotent); "F praus"/"FPRAUS" (same normalized label)
+ * collide onto ONE term. This is the single source of truth for canonical-term
+ * identity minting, used by EnsureTerm + the resolve spine's term provider. */
+export function localTermIdForLabel(label: string): string {
+  return `TERM-${labelSlug(label)}-${labelHash(label)}`;
+}

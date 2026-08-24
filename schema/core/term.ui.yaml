@@ -1,0 +1,65 @@
+# UI specification for Term records
+uiVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/term.schema.yaml"
+
+display:
+  titleField: "$.preferredLabel"
+  icon: "term"
+
+form:
+  layout: "sections"
+  sections:
+  - title: "Identity"
+    fields:
+    - path: "$.id"
+      widget: "text"
+      label: "ID"
+      readonly: true
+    - path: "$.kind"
+      widget: "select"
+      label: "Kind"
+    - path: "$.preferredLabel"
+      widget: "text"
+      label: "Preferred Label"
+      required: true
+    - path: "$.aliases"
+      widget: "chips"
+      label: "Aliases / Spelling Variants"
+      placeholder: "e.g. F praus, FPRAUS, f pruas"
+    - path: "$.status"
+      widget: "select"
+      label: "Curation Status"
+      readonly: true
+      props:
+        ownedByApp: true
+        lifecycleDefault: "proposed"
+    - path: "$.lifecycleId"
+      widget: "text"
+      label: "Lifecycle"
+      readonly: true
+      props:
+        ownedByApp: true
+  - title: "Linkouts"
+    description: "Heterogeneous identifier basket (ontology CURIEs, vendor products, action verbs, external URLs)."
+    fields:
+    - path: "$.linkouts"
+      widget: "list"
+      label: "Linkouts"
+  - title: "Details"
+    fields:
+    - path: "$.domain"
+      widget: "select"
+      label: "Domain"
+    - path: "$.notes"
+      widget: "markdown"
+      label: "Notes"
+
+list:
+  columns:
+  - path: "$.id"
+    label: "ID"
+    width: "200px"
+  - path: "$.preferredLabel"
+    label: "Preferred Label"
+  - path: "$.kind"
+    label: "Kind"

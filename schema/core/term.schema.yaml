@@ -1,0 +1,125 @@
+$schema: "https://json-schema.org/draft/2020-12/schema"
+$id: "https://computable-lab.com/schema/computable-lab/term.schema.yaml"
+title: "Term"
+description: >
+  The canonical identity node for any named thing the lab reasons about —
+  materials (aliquotable concepts), labware, instruments/equipment, action
+  verbs, kits, organisms, conditions, or other. Every named thing resolves to
+  exactly ONE term. `preferredLabel` is the human-facing name; `aliases[]`
+  captures every spelling variant the lab actually uses (e.g. "F praus",
+  "FPRAUS", "f pruas"); `linkouts[]` carries the heterogeneous identifier
+  basket (ontology CURIEs, vendor catalog numbers, action-verb mappings,
+  external URLs) so the same thing is provably one node across every
+  representation. CURIEs and vendor SKUs are LINKOUTS (provenance), not
+  identity.
+
+type: object
+unevaluatedProperties: false
+allOf:
+- $ref: "./common.schema.yaml#/$defs/FAIRCommon"
+
+required: [ kind, id, preferredLabel, status ]
+
+properties:
+  kind:
+    type: string
+    description: "Concept domain this term names."
+    enum:
+    - material
+    - labware
+    - instrument
+    - verb
+    - kit
+    - organism
+    - condition
+    - other
+
+  id:
+    type: string
+    pattern: "^TERM-[A-Za-z0-9-]+-[0-9a-z]{4}$"
+    description: "Stable deterministic local identifier (TERM-<slug>-<hash>)."
+
+  preferredLabel:
+    type: string
+    minLength: 1
+    description: "Human-facing canonical name (e.g. \"ethanol\", \"96-well plate\", \"incubate\")."
+
+  aliases:
+    type: array
+    items: { type: string, minLength: 1 }
+    uniqueItems: true
+    description: "Every spelling variant / synonym the lab uses for this term."
+
+  status:
+    type: string
+    description: "Vocabulary curation state (same lifecycle as material concepts)."
+    enum: [ proposed, in_review, active, rejected, deprecated ]
+
+  lifecycleId:
+    type: string
+    const: "lab-vocabulary-control"
+    description: "Lifecycle governing local vocabulary curation."
+
+  domain:
+    type: string
+    description: "Optional material/physical-domain hint (chemical, cell_line, media, …)."
+
+  linkouts:
+    type: array
+    description: "Heterogeneous identifier basket — ontology CURIEs, vendor products, action verbs, external URLs. The same term carries ALL of them; none is 'the' id."
+    items:
+      type: object
+      required: [ kind ]
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+          enum: [ ontology, vendor, action, external ]
+        # ontology
+        namespace:
+          type: string
+          description: "Ontology prefix (CHEBI, NCIT, CL, NCBITaxon, GO, …)."
+        curie:
+          type: string
+          description: "Ontology CURIE (e.g. CHEBI:16236)."
+        uri:
+          type: string
+          format: uri
+          description: "Full IRI when available."
+        # vendor
+        vendor:
+          type: string
+          description: "Vendor/supplier name (e.g. Thermo, Sigma)."
+        catalog_number:
+          type: string
+          description: "Vendor catalog / SKU."
+        grade:
+          type: string
+          description: "Grade, purity, packaging, or volume distinction."
+        # action
+        verb:
+          type: string
+          description: "Compiler verb this maps to (e.g. incubate, mix, transfer)."
+        exact:
+          type: string
+          description: "Optional EXACT ontology class (e.g. EXACT:Class_49)."
+        # external
+        url:
+          type: string
+          format: uri
+        # shared
+        label:
+          type: string
+          description: "Display label for this linkout."
+
+  root_ref:
+    description: >
+      Optional reference to the physical/instantiation role record(s) this
+      term anchors (e.g. a material-spec/instance/lot/aliquot, or a specific
+      labware unit). Concept identity lives here; the physical hierarchy hangs
+      off the term.
+    $ref: "./datatypes/ref.schema.yaml"
+
+  notes:
+    type: string
+    description: "Free-form notes about this term."

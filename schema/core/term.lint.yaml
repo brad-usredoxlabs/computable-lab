@@ -1,0 +1,41 @@
+# Lint rules for Term records
+lintVersion: 1
+schemaId: "https://computable-lab.com/schema/computable-lab/term.schema.yaml"
+
+# Cross-record rule that cannot be expressed in the scalar single-record DSL
+# (enforced at the write gate + migration time, not here):
+#   term-alias-unique-across-terms
+#     No two term records may share a normalized alias (case/whitespace/non-alnum
+#     insensitive). The write path (EnsureTerm / merge) dedups by normalized alias
+#     before minting, so a duplicate cannot be CREATED; the store-wide scanner
+#     verifies none already exists. Severity: error.
+
+rules:
+- id: term-id-format
+  description: "id must exist and match the TERM-<slug>-<hash> pattern."
+  severity: error
+  assert:
+    op: all
+    rules:
+    - predicate: exists
+      args: ["id"]
+    - predicate: regex
+      args: ["id", "^TERM-[A-Za-z0-9-]+-[0-9a-z]{4}$"]
+
+- id: preferred-label-required
+  description: "preferredLabel must exist and be non-empty."
+  severity: error
+  assert:
+    op: all
+    rules:
+    - predicate: exists
+      args: ["preferredLabel"]
+    - predicate: nonEmpty
+      args: ["preferredLabel"]
+
+- id: status-in-vocabulary
+  description: "status must be one of the vocabulary-curation states."
+  severity: error
+  assert:
+    predicate: "in"
+    args: ["status", ["proposed", "in_review", "active", "rejected", "deprecated"]]
