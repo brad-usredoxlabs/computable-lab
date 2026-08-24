@@ -14,12 +14,25 @@ function stubStore(initial: RecordEnvelope[] = []): RecordStore {
   return {
     list: async (filter) => {
       if (filter?.kind) return records.filter((r) => (r.payload as { kind?: string }).kind === filter.kind);
+      if (filter?.schemaId) return records.filter((r) => r.schemaId === filter.schemaId);
       return records;
     },
+    get: async (recordId) => records.find((r) => r.recordId === recordId) ?? null,
+    getByPath: async () => null,
+    exists: async (recordId) => records.some((r) => r.recordId === recordId),
     create: async ({ envelope }) => {
       records.push(envelope);
       return { success: true, envelope };
     },
+    update: async ({ envelope }) => {
+      const i = records.findIndex((r) => r.recordId === envelope.recordId);
+      if (i >= 0) records[i] = envelope;
+      return { success: true, envelope };
+    },
+    delete: async () => ({ success: true }),
+    validate: async () => ({ valid: true }),
+    lint: async () => ({ valid: true }),
+    getWithValidation: async () => ({ success: true }),
   } as unknown as RecordStore;
 }
 
@@ -77,35 +90,37 @@ describe('inferDomainFromNamespace', () => {
 });
 
 describe('bindOntologyMentions', () => {
-  it('mints a new concept material on first sight of a CURIE', async () => {
+  it('grounds a first-sight CURIE onto a canonical term as a confirm-once linkout', async () => {
     const store = stubStore([]);
     const { mentions, bindings } = await bindOntologyMentions(
       [materialMention('CHEBI:5001', 'fenofibrate')],
       { store },
     );
-    expect(mentions[0]!.id).toMatch(/^MAT-/);
+    expect(mentions[0]!.id).toMatch(/^TERM-/); // canonical term, not a bare MAT-
     expect(bindings).toHaveLength(1);
     expect(bindings[0]!.minted).toBe(true);
     expect(bindings[0]!.via).toBe('class-ref');
     expect(bindings[0]!.curie).toBe('CHEBI:5001');
+    expect(bindings[0]!.linkout).toBe(true);
+    expect(bindings[0]!.requiresReview).toBe(true);
 
-    // The minted record carries the grounding ref in class[] and enters
-    // vocabulary review instead of becoming active lab vocabulary.
-    const written = await store.list({ kind: 'material' });
+    // The minted record is a TERM carrying the CURIE as a linkout, and enters
+    // vocabulary review instead of becoming an auto-minted bare-CURIE material.
+    const written = await store.list({ schemaId: 'https://computable-lab.com/schema/computable-lab/term.schema.yaml' });
     expect(written).toHaveLength(1);
     const payload = written[0]!.payload as {
-      class?: Array<{ id: string }>;
+      kind?: string;
+      preferredLabel?: string;
+      linkouts?: Array<{ curie?: string; kind?: string }>;
       status?: string;
       lifecycleId?: string;
-      provenance?: { sourceCurie?: string; source?: string };
     };
-    expect(payload.class?.[0]?.id).toBe('CHEBI:5001');
+    expect(payload.kind).toBe('material'); // grounded as a material-kind term
+    expect(payload.preferredLabel).toBe('fenofibrate');
+    expect(payload.linkouts?.[0]).toEqual(expect.objectContaining({ curie: 'CHEBI:5001', kind: 'ontology' }));
     expect(payload.status).toBe('proposed');
     expect(payload.lifecycleId).toBe('lab-vocabulary-control');
-    expect(payload.provenance?.source).toBe('ai_mention');
-    expect(payload.provenance?.sourceCurie).toBe('CHEBI:5001');
     expect(bindings[0]!.state).toBe('proposed');
-    expect(bindings[0]!.requiresReview).toBe(true);
   });
 
   it('reuses an existing material whose class[] already carries the CURIE', async () => {
@@ -190,7 +205,7 @@ describe('bindOntologyMentions', () => {
       { store, prompt },
     );
     const newId = mentions[0]!.id;
-    expect(newId).toMatch(/^MAT-/);
+    expect(newId).toMatch(/^TERM-/); // grounded onto a canonical term, not a bare MAT-
     expect(rewritten).toBe(`add 100 uL of [[material:${newId}|fenofibrate]] to well A1`);
   });
 

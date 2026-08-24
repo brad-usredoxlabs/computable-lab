@@ -21,7 +21,7 @@
 
 import type { PromptMention } from '../promptMentions.js';
 import type { RecordStore } from '../../store/types.js';
-import { createRecord, token, SCHEMA_IDS } from '../../api/handlers/MaterialLifecycleHandlers.js';
+import { ensureTermForCurie } from '../../terms/EnsureTerm.js';
 
 export interface OntologyMentionBinding {
   /** The CURIE that triggered the bind. */
@@ -42,6 +42,8 @@ export interface OntologyMentionBinding {
   requiresReview?: boolean;
   /** True when the CURIE remains draft-only and was not written to local records. */
   draftOnly?: boolean;
+  /** True when the CURIE was grounded as a linkout on a canonical term (Phase 5). */
+  linkout?: boolean;
 }
 
 export interface BindOntologyMentionsResult {
@@ -198,50 +200,31 @@ export async function bindOntologyMentions(
       continue;
     }
 
-    // 3) mint a new concept material with class[] grounding ref
-    const recordId = token('MAT');
-    const namespace = curie.split(':')[0] ?? '';
-    const payload: Record<string, unknown> = {
-      kind: 'material',
-      id: recordId,
-      name: label,
-      domain: inferDomainFromNamespace(namespace),
-      status: 'proposed',
-      lifecycleId: 'lab-vocabulary-control',
-      provenance: {
-        source: 'ai_mention',
-        sourceCurie: curie,
-        sourceLabel: label,
-        createdBy: 'compiler',
-        createdAt: new Date().toISOString(),
-        note: 'Created as a proposed local vocabulary record from an ontology-grounded prompt mention.',
-      },
-      class: [{ kind: 'ontology', id: curie, namespace, label }],
-    };
-    const created = await createRecord(
-      deps.store,
-      recordId,
-      SCHEMA_IDS.material,
-      payload,
-      `Auto-bind from AI mention: ${curie}`,
-    );
-    if (!created) {
+    // 3) Ground the CURIE onto a canonical TERM as a confirm-once linkout.
+    // Phase 5 policy: a real ontology identifier is PROVENANCE, not identity —
+    // it becomes a proposed linkout on the canonical term (requires review),
+    // NOT a separate bare-CURIE `MAT-…` record minted on first sighting.
+    let grounded;
+    try {
+      grounded = await ensureTermForCurie(deps.store, label, curie);
+    } catch {
       // Couldn't write — leave the CURIE in place (no worse than today).
       out[i] = m;
       continue;
     }
-    materials = [...materials, created];
+    const recordId = grounded.envelope.recordId;
     resolvedThisCall.set(curie, recordId);
     promptRewrites.set(curie, recordId);
     bindings.push({
       curie,
       recordId,
-      minted: true,
+      minted: grounded.minted,
       via: 'class-ref',
       label,
       lifecycleId: 'lab-vocabulary-control',
       state: 'proposed',
-      requiresReview: true,
+      requiresReview: grounded.requiresReview,
+      linkout: true,
     });
     out[i] = { ...m, id: recordId };
   }

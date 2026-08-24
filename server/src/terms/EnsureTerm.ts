@@ -143,3 +143,48 @@ export async function ensureTermForLabel(
   }
   return created.envelope as RecordEnvelope;
 }
+
+/**
+ * Ground an ontology CURIE (or vendor SKU) into a canonical term as a
+ * confirm-once linkout — the Phase 5 policy. Given a plain free-text label and
+ * a CURIE, ensure (or reuse) the term and attach the CURIE/SKU as a proposed
+ * `linkout`, requiring human review before the term is usable. This REPLACES the
+ * old bare-CURIE `MAT-…` auto-mint: a real ontology identifier is provenance, not
+ * identity, so it becomes a linkout on the canonical term rather than minting a
+ * separate material record on first sighting.
+ *
+ * Returns the term envelope + a flag indicating whether it was newly minted
+ * (requires review) or reused.
+ */
+export async function ensureTermForCurie(
+  store: RecordStore,
+  label: string,
+  curie: string,
+  options: { kind?: TermKind; vendor?: boolean } = {},
+): Promise<{ envelope: RecordEnvelope; minted: boolean; requiresReview: boolean }> {
+  const trimmed = (label ?? '').trim() || curie;
+  const linkout = options.vendor
+    ? {
+        kind: 'vendor' as const,
+        vendor: (curie.split(':')[0] ?? 'unknown').trim(),
+        catalog_number: curie.includes(':') ? curie.split(':')[1] ?? '' : curie,
+        label: trimmed,
+      }
+    : {
+        kind: 'ontology' as const,
+        curie,
+        namespace: curie.split(':')[0]?.toUpperCase() ?? '',
+        label: trimmed,
+      };
+
+  const preExisting = await store.list({ schemaId: TERM_SCHEMA_ID });
+  const preIds = new Set(preExisting.map((e) => e.recordId));
+
+  const env = await ensureTermForLabel(store, trimmed, (options.kind as never) ?? 'material', {
+    source: 'ai_mention',
+    linkouts: [linkout],
+  });
+
+  const requiresReview = !preIds.has(env.recordId);
+  return { envelope: env, minted: requiresReview, requiresReview };
+}
