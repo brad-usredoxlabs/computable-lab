@@ -1231,6 +1231,18 @@ export async function createServer(
       registerIntentCompileFromPromptRoutes(instance, ctx);
     }
 
+    // Scientist-Intent Accept (persist accepted local-protocol from one-shot macro)
+    {
+      const { registerIntentAcceptRoutes } = await import('./api/handlers/IntentAcceptHandlers.js');
+      registerIntentAcceptRoutes(instance, ctx);
+    }
+
+    // Scientist-Intent Training-Pair (whole accepted flow → corpus moat, macro-focused)
+    {
+      const { registerIntentTrainingPairRoutes } = await import('./api/handlers/IntentTrainingPairHandlers.js');
+      registerIntentTrainingPairRoutes(instance, ctx);
+    }
+
     // Run Execution Routes (planned → in_progress → completed lifecycle)
     {
       const { registerRunExecutionRoutes } = await import('./api/routes/run-execution.js');
