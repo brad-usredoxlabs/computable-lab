@@ -26,6 +26,7 @@ import { SettingsPanel, type Setting } from './SettingsPanel'
 import { useProtocolSelection, ProtocolSelectionProvider, type ProtocolStepGraph } from '../../protocol/ProtocolSelectionContext'
 import { ProtocolSelector } from './ProtocolSelector'
 import { StepLocalizationPane } from './StepLocalizationPane'
+import { ProtocolLocalizationThread } from './ProtocolLocalizationThread'
 import { SetupSectionWidget } from '../../../editor/taptab/widgets/LocalProtocolSetupWidgets'
 import { BranchPicker } from '../../protocol/BranchPicker'
 import type { LocalProtocolSetupRows } from './StepLocalizationPane'
@@ -1509,6 +1510,27 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
         onRunNameChange={setRunName}
         onPlayAll={handlePlayAll}
       />
+
+      {/* One-shot protocol localization (chat-first) — collapsed by default so
+          it doesn't disturb the steps view. The thread derives the source
+          universal protocol from the attached/available protocol context. */}
+      <details className="protocol-localization-details" data-testid="protocol-localization-details">
+        <summary>Localize a universal protocol in chat (one-shot)</summary>
+        {(() => {
+          const src = protocolContext?.availableProtocols?.[0] ?? protocolContext?.projectTemplates?.[0] ?? null
+          const srcPayload = src?.payload as Record<string, unknown> | undefined
+          return (
+            <ProtocolLocalizationThread
+              key={src?.recordId ?? 'one-shot'}
+              sourceProtocolId={src?.recordId}
+              sourceTitle={typeof srcPayload?.title === 'string'
+                ? srcPayload.title
+                : typeof srcPayload?.name === 'string' ? srcPayload.name : undefined}
+              links={{ ...(studyId ? { studyId } : {}) }}
+            />
+          )
+        })()}
+      </details>
 
       {/* Plate setup (this lab) — the local protocol's declared bindings,
           above the steps, so a biologist reads what the assay needs before

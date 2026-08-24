@@ -3337,6 +3337,57 @@ export const apiClient = {
     })
   },
 
+  // ── Scientist-intent one-shot localization (chat-first) ────────────────
+  /** POST /intent/compile-from-prompt — branch-ask or one-shot compile. */
+  async intentCompileFromPrompt(body: {
+    protocolText: string
+    sourceProtocolId?: string
+    answers?: Record<string, string>
+  }): Promise<{
+    needsAnswers?: boolean
+    axes?: Array<{ axisId: string; question: string; choices: Array<{ value: string; label: string }> }>
+    outcome?: string
+    terminalArtifacts?: Record<string, unknown>
+    localMacro?: { intentId?: string; actions?: unknown[]; [key: string]: unknown }
+  }> {
+    return request('/intent/compile-from-prompt', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  /** POST /intent/accept — persist an accepted local-protocol from a macro. */
+  async intentAccept(body: {
+    sourceProtocolId: string
+    sourceTitle?: string
+    title?: string
+    localMacro: { intentId?: string; actions?: unknown[]; [key: string]: unknown }
+    answers?: Record<string, string>
+    links?: { studyId?: string; experimentId?: string; runId?: string }
+  }): Promise<{ ok: boolean; recordId?: string; localProtocol?: Record<string, unknown> }> {
+    return request('/intent/accept', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  /** POST /intent/training-pair — whole accepted flow → corpus moat. */
+  async intentTrainingPair(body: {
+    userPrompt?: string
+    thread?: Array<{ role: string; content: string }>
+    sourceProtocolId?: string
+    acceptedProtocolId?: string
+    acceptedProtocolResult?: string
+    localMacro?: { intentId?: string; actions?: unknown[]; [key: string]: unknown }
+    acceptedGraph?: Record<string, unknown>
+    confirmedAt?: string
+  }): Promise<{ ok: boolean; entryId?: string; deduped?: boolean; error?: string }> {
+    return request('/intent/training-pair', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
   async orchestrateExecution(body: {
     plannedRunId?: string
     robotPlanId?: string
