@@ -9,18 +9,19 @@
  */
 
 /** Resolution tiers, in priority order (lower = preferred). */
-export type ResolveTier = 1 | 2 | 3 | 4 | 5;
+export type ResolveTier = 0 | 1 | 2 | 3 | 4 | 5;
 
 /** Material-hierarchy layer a candidate sits at (see materials-are-a-hierarchy). */
 export type MaterialLevel = 'concept' | 'spec' | 'instance' | 'aliquot' | 'unknown';
 
 /** Provider source identifiers, one per tier. */
 export type ResolveSource =
-  | 'local-record' // tier 1
-  | 'oak' //          tier 2 (on-box local ontology service)
-  | 'ols4' //         tier 3 (remote EBI OLS4)
-  | 'vendor' //       tier 4
-  | 'mint'; //        tier 5 (affordance, not a search hit)
+  | 'canonical-term' // tier 0 (canonical term node — alias-first)
+  | 'local-record' //   tier 1
+  | 'oak' //            tier 2 (on-box local ontology service)
+  | 'ols4' //           tier 3 (remote EBI OLS4)
+  | 'vendor' //         tier 4
+  | 'mint'; //          tier 5 (affordance, not a search hit)
 
 /**
  * A raw hit from a single provider, before tier/score are attached.

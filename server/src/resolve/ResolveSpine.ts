@@ -1,16 +1,19 @@
 /**
  * The resolve() spine.
  *
- * One implementation of term → ranked CURIE candidates, walking the five-tier
- * hierarchy (local record → local OAK → remote OLS4 → vendor → mint-local).
- * Every consumer — the compiler's NounPhraseResolver, the UI slash menu and
- * copilot, and the agent's resolve tool — calls this so they all agree on what
- * a term resolves to. Output is always CURIE-typed; tier 5 is a mint affordance.
+ * One implementation of term → ranked CURIE candidates, walking the six-tier
+ * hierarchy (canonical term → local record → local OAK → remote OLS4 → vendor
+ * → mint-local). Every consumer — the compiler's NounPhraseResolver, the UI
+ * slash menu and copilot, and the agent's resolve tool — calls this so they
+ * all agree on what a term resolves to. Output is always CURIE-typed; tier 5 is
+ * a mint affordance.
  *
- * Ranking: tier dominates (base 1.0 / 0.8 / 0.6 / 0.4 / 0.05), then match
+ * Ranking: tier dominates (base 1.2 / 1.0 / 0.8 / 0.6 / 0.4 / 0.05), then match
  * quality (exact > prefix > substring). The tier gap (0.2) exceeds the max
- * match bonus (0.15), so a local substring hit always outranks a remote exact
- * hit — "prefer what the lab already has."
+ * match bonus (0.15), so a canonical-term alias hit (tier 0) always outranks a
+ * local substring hit (tier 1) or a remote exact hit (tier 3) — "prefer what
+ * the lab already has," extended to lab-owned spelling variants (the F-praus
+ * fix: aliases are authoritative).
  *
  * Local tiers (records, OAK) resolve fast/synchronously; remote tiers (OLS4,
  * vendor) run best-effort under a short timeout and are simply omitted when
@@ -31,8 +34,9 @@ import type {
 import { createOakProvider } from './providers/oak.js';
 import { createOls4Provider } from './providers/ols4.js';
 import { createRecordProvider } from './providers/records.js';
+import { createTermProvider } from './providers/terms.js';
 
-const TIER_BASE: Record<ResolveTier, number> = { 1: 1.0, 2: 0.8, 3: 0.6, 4: 0.4, 5: 0.05 };
+const TIER_BASE: Record<ResolveTier, number> = { 0: 1.2, 1: 1.0, 2: 0.8, 3: 0.6, 4: 0.4, 5: 0.05 };
 const DEFAULT_LOCAL_TIMEOUT_MS = 1500;
 const DEFAULT_REMOTE_TIMEOUT_MS = 2500;
 const DEFAULT_LIMIT = 20;
@@ -40,6 +44,8 @@ const DEFAULT_LIMIT = 20;
 export interface ResolveSpineDeps {
   /** Ontology config (drives the OAK tier + OLS4 ontology restriction). */
   ontology?: OntologyConfig;
+  /** Tier 0 — canonical term nodes (alias-first; the identity spine). */
+  termProvider?: ResolveProvider;
   /** Tier 1 — existing workspace records (incl. previously-minted local terms). */
   recordProvider?: ResolveProvider;
   /** Tier 4 — vendor/catalog search. */
@@ -150,6 +156,9 @@ export function createResolveSpine(deps: ResolveSpineDeps = {}): ResolveSpine {
   const remoteTimeout = deps.remoteTimeoutMs ?? DEFAULT_REMOTE_TIMEOUT_MS;
 
   const tiers: TierSpec[] = [];
+  if (deps.termProvider) {
+    tiers.push({ tier: 0, source: 'canonical-term', provider: deps.termProvider, remote: false });
+  }
   if (deps.recordProvider) {
     tiers.push({ tier: 1, source: 'local-record', provider: deps.recordProvider, remote: false });
   }
@@ -238,7 +247,10 @@ export function createResolveSpineFromContext(ctx: {
   store: RecordStore;
   appConfig?: { ontology?: OntologyConfig } | undefined;
 }): ResolveSpine {
-  const deps: ResolveSpineDeps = { recordProvider: createRecordProvider(ctx.store) };
+  const deps: ResolveSpineDeps = {
+    termProvider: createTermProvider(ctx.store),
+    recordProvider: createRecordProvider(ctx.store),
+  };
   if (ctx.appConfig?.ontology) deps.ontology = ctx.appConfig.ontology;
   return createResolveSpine(deps);
 }
