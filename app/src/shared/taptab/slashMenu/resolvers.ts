@@ -132,6 +132,7 @@ function appendOntologyHits(
  * left to the material picker.
  */
 const RESOLVE_SOURCE_LABEL: Record<ResolveCandidate['source'], string> = {
+  'canonical-term': 'Canonical lab term (identity spine)',
   'local-record': 'Workspace record (this lab)',
   oak: 'On-box ontology snapshot (OAK)',
   ols4: 'EBI Ontology Lookup Service (remote)',

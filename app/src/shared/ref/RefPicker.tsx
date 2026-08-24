@@ -64,6 +64,8 @@ function SpinnerIcon({ size = 16 }: { size?: number }) {
 /** Tier badge style helper */
 function tierBadgeStyle(variant: string) {
   switch (variant) {
+    case 'canonical':
+      return 'bg-teal-50 text-teal-700'
     case 'local':
       return 'bg-emerald-50 text-emerald-600'
     case 'new':

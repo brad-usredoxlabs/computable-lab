@@ -4,6 +4,11 @@
  * Converts the ranked candidates returned by POST /api/resolve into formats
  * consumed by the existing UI components (ontology picker chips, combobox
  * dropdown items, etc.).
+ *
+ * NOTE: the chip/ref format used by the ontology pickers expects an ontology
+ * shape (id/namespace/label/uri). A canonical-term hit (tier 0) reuses that same
+ * ontology shape with the term's `local:TERM-…` CURIE so no existing consumer
+ * breaks; `sourceLabel`/`tierBadge` surface it as "Canonical term".
  */
 
 import type { ResolveCandidate } from './client'
@@ -17,35 +22,38 @@ export interface ResolveRef {
   id: string
   namespace: string
   label: string
-  uri: string
+  uri?: string
 }
 
-/**
- * Convert a ResolveCandidate to the chip/ref format used by the ontology
- * pickers. Existing components expect OLSResultRef with id/namespace/label/uri.
- */
+/** Convert a ResolveCandidate to the chip/ref format used by the pickers. */
 export function resolveCandidateToRef(candidate: ResolveCandidate): ResolveRef {
+  const namespace =
+    candidate.source === 'canonical-term'
+      ? 'local'
+      : candidate.namespace
   return {
     kind: 'ontology',
     id: candidate.curie,
-    namespace: candidate.namespace,
+    namespace,
     label: candidate.label,
-    uri: candidate.uri ?? `https://identifiers.org/${encodeURIComponent(candidate.curie)}`,
+    ...(candidate.uri
+      ? { uri: candidate.uri }
+      : { uri: candidate.curie.startsWith('local:')
+        ? candidate.curie
+        : `https://identifiers.org/${encodeURIComponent(candidate.curie)}` }),
   }
 }
 
-/**
- * Check if a candidate comes from a local source (tier 1-2).
- */
+/** Check if a candidate comes from a local source (tier 0-2). */
 export function isLocalCandidate(candidate: ResolveCandidate): boolean {
   return candidate.tier <= 2
 }
 
-/**
- * Get a human-readable source label for a candidate.
- */
+/** Get a human-readable source label for a candidate. */
 export function sourceLabel(candidate: ResolveCandidate): string {
   switch (candidate.source) {
+    case 'canonical-term':
+      return 'Canonical term'
     case 'local-record':
       return 'Local record'
     case 'oak':
@@ -61,10 +69,11 @@ export function sourceLabel(candidate: ResolveCandidate): string {
   }
 }
 
-/**
- * Get a tier badge label for display.
- */
-export function tierBadge(candidate: ResolveCandidate): { label: string; variant: 'local' | 'remote' | 'new' } {
+/** Get a tier badge label for display. */
+export function tierBadge(candidate: ResolveCandidate): { label: string; variant: 'canonical' | 'local' | 'remote' | 'new' } {
+  if (candidate.source === 'canonical-term') {
+    return { label: 'Canonical', variant: 'canonical' }
+  }
   if (candidate.source === 'mint') {
     return { label: 'New', variant: 'new' }
   }
@@ -74,7 +83,5 @@ export function tierBadge(candidate: ResolveCandidate): { label: string; variant
   return { label: 'Remote', variant: 'remote' }
 }
 
-/**
- * @deprecated Use ResolveRef instead. Re-exported here for backward compatibility.
- */
+/** @deprecated Use ResolveRef instead. Re-exported here for backward compatibility. */
 export type OLSResultRef = ResolveRef
