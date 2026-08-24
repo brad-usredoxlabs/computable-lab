@@ -132,6 +132,7 @@ export async function migrateConceptToTerms(
     for (const env of records) {
       const payload = asRecord(env.payload);
       const termKind = CONCEPT_KIND_TO_TERM[kind];
+      if (termKind === undefined) continue; // mapped kind — defensive
 
       // Preferred label: the concept record's human name.
       const label =
