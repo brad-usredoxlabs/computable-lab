@@ -1225,6 +1225,12 @@ export async function createServer(
       registerIntentCompileRoutes(instance, ctx);
     }
 
+    // Scientist-Intent Compile-From-Prompt (chat-first one-shot localization)
+    {
+      const { registerIntentCompileFromPromptRoutes } = await import('./api/handlers/IntentCompileFromPromptHandlers.js');
+      registerIntentCompileFromPromptRoutes(instance, ctx);
+    }
+
     // Run Execution Routes (planned → in_progress → completed lifecycle)
     {
       const { registerRunExecutionRoutes } = await import('./api/routes/run-execution.js');
