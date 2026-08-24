@@ -22,6 +22,7 @@ export const TERM_SCHEMA_ID = 'https://computable-lab.com/schema/computable-lab/
 
 export type TermKind =
   | 'material'
+  | 'vendor'
   | 'labware'
   | 'instrument'
   | 'verb'

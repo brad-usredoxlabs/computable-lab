@@ -85,6 +85,19 @@ describe('term schema', () => {
     expect(out.valid).toBe(false);
   });
 
+  it('validates the migration-produced kinds (vendor/labware/instrument/verb)', async () => {
+    const result = await loadTermSchemas();
+    const validator = createValidator({ strict: false });
+    for (const entry of result.entries) validator.addSchema(entry.schema, entry.id);
+
+    for (const kind of ['vendor', 'labware', 'instrument', 'verb', 'kit', 'organism', 'condition']) {
+      const t = validTerm();
+      t.kind = kind;
+      const out = validator.validate(t, TERM_SCHEMA_ID);
+      expect(out.valid).toBe(true);
+    }
+  });
+
   it('rejects an unknown term kind', async () => {
     const result = await loadTermSchemas();
     const validator = createValidator({ strict: false });

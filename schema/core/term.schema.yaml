@@ -26,6 +26,7 @@ properties:
     description: "Concept domain this term names."
     enum:
     - material
+    - vendor
     - labware
     - instrument
     - verb
