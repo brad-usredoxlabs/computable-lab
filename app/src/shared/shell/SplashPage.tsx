@@ -68,6 +68,22 @@ export function SplashPage() {
         <SplashSearch />
       </div>
 
+      {/* Primary create actions — at the TOP of the splash page (new tab),
+          not buried in a bottom Create section. New Run first (dominant),
+          then New Project. */}
+      <section className="splash-page__section" data-testid="splash-create-top">
+        <div className="splash-page__create-actions">
+          <button type="button" className="splash-page__create-btn splash-page__create-btn--primary"
+            data-testid="splash-new-run" onClick={handleNewRun}>
+            + New Run
+          </button>
+          <button type="button" className="splash-page__create-btn"
+            data-testid="splash-new-project" onClick={handleNewProject}>
+            + New Project
+          </button>
+        </div>
+      </section>
+
       <section className="splash-page__section">
         <h2 className="splash-page__section-title">Browse a type</h2>
         <div className="splash-page__chips">
@@ -128,20 +144,6 @@ export function SplashPage() {
         {Object.keys(recent).length === 0 ? (
           <p className="splash-page__hint">Recently viewed items will appear here.</p>
         ) : null}
-      </section>
-
-      <section className="splash-page__section">
-        <h2 className="splash-page__section-title">Create</h2>
-        <div className="splash-page__create-actions">
-          <button type="button" className="splash-page__create-btn splash-page__create-btn--primary"
-            data-testid="splash-new-run" onClick={handleNewRun}>
-            + New Run
-          </button>
-          <button type="button" className="splash-page__create-btn"
-            data-testid="splash-new-project" onClick={handleNewProject}>
-            + New Project
-          </button>
-        </div>
       </section>
     </div>
   )

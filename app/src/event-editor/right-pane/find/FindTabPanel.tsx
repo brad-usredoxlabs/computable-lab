@@ -254,13 +254,6 @@ export function FindTabPanel() {
     }
   }, [studyId, openTabs, navigate, projectCrumb])
 
-  // New Project from within a project homepage: create one via the same
-  // /create/study path the home "+ Create → New Project" uses.
-  const createNewProject = useCallback(() => {
-    setCreateMenuOpen(false)
-    navigate('/create/study')
-  }, [navigate])
-
   const createProjectProtocol = useCallback(async () => {
     setCreateMenuOpen(false)
     try {
@@ -315,9 +308,9 @@ export function FindTabPanel() {
         </button>
       </header>
 
-      {/* Primary project actions — New Run FIRST, same create path as the
-          home "+ Create → New Run" (quickCreateRun → /runs/:runId → event
-          editor). New Project follows. Bottom-of-header, always visible. */}
+      {/* Primary project action — New Run at the top of the project homepage.
+          Same create path as home "+ Create → New Run" (quickCreateRun →
+          /runs/:runId → event editor), but scoped to THIS project. */}
       <div className="find-tab__actions" data-testid="find-tab-actions">
         <button
           type="button"
@@ -327,15 +320,6 @@ export function FindTabPanel() {
           title="Create a run in this project and open it in the event editor"
         >
           + New Run
-        </button>
-        <button
-          type="button"
-          className="find-tab__action"
-          onClick={createNewProject}
-          data-testid="find-tab-new-project"
-          title="Create a new project"
-        >
-          + New Project
         </button>
       </div>
 
