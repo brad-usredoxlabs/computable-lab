@@ -138,6 +138,57 @@ describe('resolveMaterial', () => {
       mention: { type: 'material', entityKind: 'material', id: 'MAT-TRIS' },
     })
   })
+
+  it('surfaces the canonical identity-spine term (tier 0) in the streaming resolve additions', async () => {
+    // First-paint workspace search + formulation summary return nothing, so the
+    // only thing that can surface is the tier-0 canonical-term hit streamed via
+    // the below-first-paint resolve() calls.
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) } as Response)
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ items: [] }) } as Response)
+    // localOnly resolve → canonical-term at tier 0
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        candidates: [
+          {
+            curie: 'local:TERM-faecalibacterium-prausnitzii-0001',
+            label: 'Faecalibacterium prausnitzii',
+            namespace: 'local',
+            tier: 0,
+            level: 'unknown',
+            score: 1.2,
+            source: 'canonical-term',
+          },
+        ],
+      }),
+    } as Response)
+    // full resolve → empty (the canonical hit already landed above)
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: async () => ({ candidates: [] }) } as Response)
+
+    const additions: Awaited<ReturnType<typeof resolveMaterial>>[number][] = []
+    const more = (items: typeof additions) => additions.push(...items)
+    const out = await resolveMaterial('f praaus', ctx({ onUpdate: more }))
+    // initial paint: no workspace hits, just the pinned mint affordance
+    expect(out.filter((s) => s.key !== 'mint:f praaus')).toHaveLength(0)
+
+    // Allow the async below-first-paint stream to resolve.
+    await new Promise((r) => setTimeout(r, 0))
+    expect(additions.length).toBeGreaterThan(0)
+    const canonical = additions.find((s) => s.badge === 'Canonical')
+    expect(canonical).toBeDefined()
+    expect(canonical).toMatchObject({
+      key: 'term:TERM-faecalibacterium-prausnitzii-0001',
+      label: 'Faecalibacterium prausnitzii',
+      badge: 'Canonical',
+      subtitle: 'TERM-faecalibacterium-prausnitzii-0001',
+      mention: {
+        type: 'material',
+        entityKind: 'material',
+        // local: prefix stripped — references the canonical TERM record id
+        id: 'TERM-faecalibacterium-prausnitzii-0001',
+      },
+    })
+  })
 })
 
 describe('resolveLabware', () => {

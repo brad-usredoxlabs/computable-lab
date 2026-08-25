@@ -156,15 +156,38 @@ export function candidateDetail(c: ResolveCandidate): SlashSuggestion['detail'] 
 
 function ontologySuggestions(candidates: ResolveCandidate[]): SlashSuggestion[] {
   return candidates
-    .filter((c) => (c.source === 'oak' || c.source === 'ols4') && c.curie)
-    .map((c) => ({
-      key: `ontology:${c.curie}`,
-      label: c.label,
-      badge: c.namespace ? c.namespace.toUpperCase() : 'Ontology',
-      subtitle: c.curie,
-      detail: candidateDetail(c),
-      mention: { type: 'material', entityKind: 'material', id: c.curie, label: c.label },
-    }))
+    // Canonical identity-spine hits (tier 0) are the lab's OWN canonical term
+    // node — they must never be dropped, or a lab alias (e.g. "F praus",
+    // spelled 8 ways) resolves nowhere in /m even though the backend ranked it
+    // first. True ontology tiers (OAK + OLS4) follow.
+    .filter((c) => {
+      if (c.source === 'canonical-term') return Boolean(c.curie)
+      return (c.source === 'oak' || c.source === 'ols4') && Boolean(c.curie)
+    })
+    .map((c) => {
+      if (c.source === 'canonical-term') {
+        const termId = c.curie.replace(/^local:/, '')
+        return {
+          key: `term:${termId}`,
+          label: c.label,
+          badge: 'Canonical',
+          subtitle: termId,
+          detail: candidateDetail(c),
+          // References the canonical TERM record (a local id, not the local:
+          // CURIE prefix) so downstream materialization/refs resolve to the
+          // lab's identity node.
+          mention: { type: 'material', entityKind: 'material', id: termId, label: c.label },
+        }
+      }
+      return {
+        key: `ontology:${c.curie}`,
+        label: c.label,
+        badge: c.namespace ? c.namespace.toUpperCase() : 'Ontology',
+        subtitle: c.curie,
+        detail: candidateDetail(c),
+        mention: { type: 'material', entityKind: 'material', id: c.curie, label: c.label },
+      }
+    })
 }
 
 export const resolveLabware: SlashResolver = async (query, ctx) => {
