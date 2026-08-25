@@ -14,7 +14,7 @@
  * No new streaming machinery — reuses the existing preview/commit actions on
  * EventEditorContext and the apiClient methods.
  */
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useOptionalEventEditor } from '../../EventEditorContext'
 import { buildPreviewFromDraft } from '../ai/draftPreview'
 import { getPlatformManifest, getVariantManifest } from '../../../shared/lib/platformRegistry'
@@ -60,6 +60,15 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
   const [accepting, setAccepting] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const firstUserPrompt = useRef<string>(initialProtocolText.trim())
+
+  // Keep protocolText in sync with a late-arriving initialProtocolText (the
+  // universal protocol's humanStepsText loads async and lands after mount).
+  useEffect(() => {
+    if (protocolText.trim()) return
+    if (!initialProtocolText.trim()) return
+    setProtocolText(initialProtocolText.trim())
+    firstUserPrompt.current = initialProtocolText.trim()
+  }, [initialProtocolText, protocolText])
 
   const editorState = editor?.state ?? null
 
@@ -148,6 +157,18 @@ export function ProtocolLocalizationThread(props: ProtocolLocalizationThreadProp
       setLocalizing(false)
     }
   }, [protocolText, sourceProtocolId, ghostEvents])
+
+  // Task 1/Point 3 — when a universal protocol is attached (sourceProtocolId +
+  // text present), AUTO-RUN the branch-question extraction so the if/then
+  // branches are asked BEFORE the user lands on raw "a. If ... b. If ..." steps.
+  // Runs once per source protocol so later reloads don't re-ask.
+  const autoAskedRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!sourceProtocolId || !protocolText.trim()) return
+    if (autoAskedRef.current === sourceProtocolId) return
+    autoAskedRef.current = sourceProtocolId
+    void handleLocalize()
+  }, [sourceProtocolId, protocolText, handleLocalize])
 
   const handleAnswerAxis = useCallback((axisId: string, value: string) => {
     setAnswers((prev) => ({ ...prev, [axisId]: value }))

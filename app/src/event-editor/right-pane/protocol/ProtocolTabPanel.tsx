@@ -1492,10 +1492,23 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
         }}
       />
     )
-  }
-  if (isLoading) return <LoadingState />
+  }  if (isLoading) return <LoadingState />
   if (error && steps.length === 0) return <ErrorState error={error} />
   if (steps.length === 0) return <EmptyState />
+
+  // Source universal protocol for the one-shot thread: prefer an available
+  // protocol, else a project template. The `<details>` opens by default when
+  // one exists, so the branch questions auto-run before raw if/then steps.
+  const oneShotSrc = (() => {
+    const raw = protocolContext?.availableProtocols?.[0] ?? protocolContext?.projectTemplates?.[0] ?? null
+    if (!raw) return { recordId: undefined, title: undefined }
+    const payload = (raw.payload ?? raw) as Record<string, unknown> | null
+    return {
+      recordId: raw.recordId as string | undefined,
+      title: typeof payload?.title === 'string' ? payload.title
+        : typeof payload?.name === 'string' ? payload.name : undefined,
+    }
+  })()
 
   return (
     <div style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', height: '100%' }}>
@@ -1511,25 +1524,24 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
         onPlayAll={handlePlayAll}
       />
 
-      {/* One-shot protocol localization (chat-first) — collapsed by default so
-          it doesn't disturb the steps view. The thread derives the source
-          universal protocol from the attached/available protocol context. */}
-      <details className="protocol-localization-details" data-testid="protocol-localization-details">
+      {/* One-shot protocol localization (chat-first) — primary load path for a
+          run attached to a UNIVERSAL protocol. Open by default (not collapsed)
+          so the branch questions run and the if/then is localized before the
+          user reads raw step prose. Collapsed only when no universal protocol
+          is attached (a localized LPR landing doesn't re-ask). */}
+      <details
+        className="protocol-localization-details"
+        data-testid="protocol-localization-details"
+        open={Boolean(oneShotSrc.recordId)}
+      >
         <summary>Localize a universal protocol in chat (one-shot)</summary>
-        {(() => {
-          const src = protocolContext?.availableProtocols?.[0] ?? protocolContext?.projectTemplates?.[0] ?? null
-          const srcPayload = src?.payload as Record<string, unknown> | undefined
-          return (
-            <ProtocolLocalizationThread
-              key={src?.recordId ?? 'one-shot'}
-              sourceProtocolId={src?.recordId}
-              sourceTitle={typeof srcPayload?.title === 'string'
-                ? srcPayload.title
-                : typeof srcPayload?.name === 'string' ? srcPayload.name : undefined}
-              links={{ ...(studyId ? { studyId } : {}) }}
-            />
-          )
-        })()}
+        <ProtocolLocalizationThread
+          key={`${oneShotSrc.recordId ?? 'one-shot'}:${humanStepsText ? 'h' : 'n'}`}
+          sourceProtocolId={oneShotSrc.recordId}
+          sourceTitle={oneShotSrc.title}
+          initialProtocolText={humanStepsText ?? ''}
+          links={{ ...(studyId ? { studyId } : {}) }}
+        />
       </details>
 
       {/* Plate setup (this lab) — the local protocol's declared bindings,

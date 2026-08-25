@@ -66,6 +66,21 @@ vi.mock('../../EventEditorContext', () => ({
 }))
 
 describe('ProtocolLocalizationThread', () => {
+  it('auto-runs branch questions on mount when a source universal protocol is provided (Point 3)', async () => {
+    mockClient.intentCompileFromPrompt
+      .mockResolvedValueOnce(BRANCH_RES)
+
+    render(<ProtocolLocalizationThread initialProtocolText="zymo text" sourceProtocolId="prt-zymo" />)
+
+    // No manual "Localize" click needed — the branch questions appear
+    // automatically because a source universal protocol is attached.
+    await waitFor(() => expect(screen.getByTestId('pl-clarify')).toBeTruthy())
+    expect(screen.getByText('What sample?')).toBeTruthy()
+    expect(mockClient.intentCompileFromPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({ protocolText: 'zymo text', sourceProtocolId: 'prt-zymo' }),
+    )
+  })
+
   it('localizes one-shot: branch-ask → answer → compile → ghost + hold macro', async () => {
     mockClient.intentCompileFromPrompt
       .mockResolvedValueOnce(BRANCH_RES)
@@ -73,8 +88,7 @@ describe('ProtocolLocalizationThread', () => {
 
     render(<ProtocolLocalizationThread initialProtocolText="zymo text" sourceProtocolId="prt-zymo" />)
 
-    // click Localize → branch questions appear
-    fireEvent.click(screen.getByTestId('pl-localize-btn'))
+    // branch questions appear automatically (auto-run)
     await waitFor(() => expect(screen.getByTestId('pl-clarify')).toBeTruthy())
 
     // choose Bacterial, submit answers → compiled result
@@ -94,7 +108,7 @@ describe('ProtocolLocalizationThread', () => {
     mockClient.intentTrainingPair.mockResolvedValueOnce(CORPUS_RES)
 
     render(<ProtocolLocalizationThread initialProtocolText="zymo text" sourceProtocolId="prt-zymo" />)
-    fireEvent.click(screen.getByTestId('pl-localize-btn'))
+    // auto-run compiles immediately (no branches), macro held
     await waitFor(() => expect(screen.getByTestId('pl-refine')).toBeTruthy())
 
     fireEvent.click(screen.getByTestId('pl-accept'))
