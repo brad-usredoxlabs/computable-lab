@@ -176,3 +176,228 @@
 .protocol-setup-sections .taptab-protocol-list {
   gap: 6px;
 }
+
+/* --- One-shot protocol localization thread (chat-first) ---
+   The thread was rendering with NO stylesheet (classes used in the TSX but
+   never styled) — this block gives it the same design-system treatment as
+   StepLocalizationPane. */
+.protocol-localization-details {
+  border: 1px solid var(--cl-border);
+  border-radius: 8px;
+  background: var(--cl-bg-elev);
+  margin-bottom: 8px;
+}
+
+.protocol-localization-details > summary {
+  cursor: pointer;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-text);
+  user-select: none;
+}
+
+.protocol-localization-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--cl-border);
+}
+
+.protocol-localization-thread__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-text);
+}
+
+.protocol-localization-thread__label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cl-text-dim);
+}
+
+.protocol-localization-thread__label + [data-testid="pl-protocol-text"],
+[data-testid="pl-protocol-text"] {
+  width: 100%;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 80px;
+  padding: 6px 8px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg);
+  color: var(--cl-text);
+  resize: vertical;
+}
+
+[data-testid="pl-localize-btn"] {
+  align-self: flex-start;
+  appearance: none;
+  padding: 6px 12px;
+  border: 1px solid var(--cl-accent);
+  border-radius: 4px;
+  background: var(--cl-accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-testid="pl-localize-btn"]:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.protocol-localization-thread__clarify {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--cl-accent);
+  border-radius: 6px;
+  background: var(--cl-bg-elev-2);
+}
+
+.protocol-localization-thread__clarify p {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-text);
+}
+
+.pl-axis {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pl-axis__q {
+  font-size: 12px;
+  color: var(--cl-text);
+}
+
+.pl-axis__choices {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pl-axis__choice {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--cl-text);
+  cursor: pointer;
+}
+
+[data-testid="pl-submit-answers"] {
+  align-self: flex-start;
+  appearance: none;
+  padding: 6px 12px;
+  border: 1px solid var(--cl-accent);
+  border-radius: 4px;
+  background: var(--cl-accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-testid="pl-submit-answers"]:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.protocol-localization-thread__refine {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--cl-border);
+  border-radius: 6px;
+  background: var(--cl-bg-elev-2);
+}
+
+.pl-macro {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.pl-macro__label {
+  font-weight: 600;
+  color: var(--cl-text);
+}
+
+.pl-macro pre {
+  margin: 0;
+  font-size: 12px;
+  color: var(--cl-accent);
+}
+
+[data-testid="pl-refine-input"] {
+  width: 100%;
+  font: inherit;
+  font-size: 12px;
+  min-height: 40px;
+  padding: 6px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg);
+  color: var(--cl-text);
+  resize: vertical;
+}
+
+[data-testid="pl-refine-send"] {
+  align-self: flex-start;
+  appearance: none;
+  padding: 6px 12px;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg-elev);
+  color: var(--cl-text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+[data-testid="pl-refine-send"]:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.protocol-localization-thread__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-testid="pl-accept"] {
+  appearance: none;
+  padding: 6px 12px;
+  border: 1px solid var(--cl-accent);
+  border-radius: 4px;
+  background: var(--cl-accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-testid="pl-accept"]:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.protocol-localization-thread__msg {
+  font-size: 11px;
+  color: var(--cl-text-dim);
+}
+
