@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseScientistIntent, ScientistIntentValidationError } from './parseScientistIntent.js';
 import { normalizeScientistIntent } from './normalizeScientistIntent.js';
 import { compileScientistIntent } from './compileScientistIntent.js';
@@ -172,6 +172,44 @@ actions:
     const types = compile.terminalArtifacts.events.map((e) => e.event_type);
     expect(types).toContain('mix');
     expect(types).toContain('transfer');
+  });
+
+  it('falls back to plain-text chat when the forced tool call yields a bare prompt echo', async () => {
+    // The tiny model sometimes returns a literal echo of the prompt template
+    // ("intentId: A short stable ID", "- actions: Array of action objects...")
+    // instead of real YAML, OR returns empty content when forced into a tool
+    // call. compileFromSmallLlm must retry as a plain-text completion (no
+    // tools), which empirically produces valid YAML.
+    const toolCallCalls: number[] = [];
+    const llm = {
+      complete: vi.fn(async (req: any) => {
+        if (req.tools) {
+          toolCallCalls.push(1);
+          // First (tool) attempt emits the TEMPLATE ECHO as content, no tool_calls.
+          return {
+            choices: [{
+              message: { content: 'intentId: A short stable ID\n- actions: Array of action objects with action, source, target, labware, etc.', tool_calls: undefined },
+            }],
+          };
+        }
+        // Second (plain-text) attempt emits real YAML.
+        return {
+          choices: [{
+            message: { content: 'intentId: fallback-001\nactions:\n  - action: add_material\n    source: lysis_solution\n    target: lysis_module\n    material: Lysis Solution\n    volumeUl: 550\n  - action: spin' },
+          }],
+        };
+      }),
+    };
+
+    const { intent } = await compileFromSmallLlm({
+      prompt: 'Add 550 ul of Lysis Solution to the lysis module, then spin',
+      llmClient: llm as never,
+    });
+
+    expect(toolCallCalls).toHaveLength(1); // tool path tried once
+    expect(intent.actions).toHaveLength(2);
+    expect(intent.actions[0]).toMatchObject({ action: 'add_material', volumeUl: 550 });
+    expect(intent.actions[1]).toMatchObject({ action: 'spin' });
   });
 });
 

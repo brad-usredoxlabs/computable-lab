@@ -230,36 +230,58 @@ export async function compileFromSmallLlm(
 ): Promise<{ intent: ScientistIntent; compile: Awaited<ReturnType<typeof compileScientistIntent>> }> {
   const system = args.systemPrompt ?? INTENT_COMPILE_SYSTEM_PROMPT;
   const userPrompt = composeIntentPrompt(args.prompt, args.labInventory);
-  const raw = await args.llmClient.complete({
+  const baseRequest = {
     model: args.model ?? 'small-model',
     messages: [
       { role: 'system', content: system },
       { role: 'user', content: userPrompt },
     ],
+    max_tokens: INTENT_COMPILE_MAX_TOKENS,
+  };
+
+  // Attempt 1: forced intent-tool call. Some small models / llama.cpp builds
+  // return EMPTY when forced into a function call (they don't implement
+  // function-calling); in that case `message.tool_calls` and `message.content`
+  // are both empty, so we fall through to plain-text output (Attempt 2).
+  let raw = await args.llmClient.complete({
+    ...baseRequest,
     tools: [buildScientistIntentTool()],
     tool_choice: { type: 'function', function: { name: SCIENTIST_INTENT_TOOL_NAME } },
-    max_tokens: INTENT_COMPILE_MAX_TOKENS,
   } as never);
 
-  const message = raw.choices?.[0]?.message;
-  const toolArgs = message?.tool_calls?.[0]?.function?.arguments;
+  let message = raw.choices?.[0]?.message;
+  let toolArgs = message?.tool_calls?.[0]?.function?.arguments;
+  let text = (message?.content ?? '').trim();
+
   let intent: ScientistIntent;
-  if (toolArgs) {
-    // Tool arguments are already the `{intentId, actions, unresolved}` shape, but
-    // a small model may use non-canonical verbs/params. Lift to the canonical
-    // closed vocabulary FIRST so the document is schema-clean before validation.
-    let parsedArgs: unknown;
-    try {
-      parsedArgs = JSON.parse(toolArgs);
-    } catch {
-      parsedArgs = toolArgs;
+  try {
+    if (toolArgs) {
+      let parsedArgs: unknown;
+      try {
+        parsedArgs = JSON.parse(toolArgs);
+      } catch {
+        parsedArgs = toolArgs;
+      }
+      const lifted = liftScientistIntent(parsedArgs);
+      intent = parseScientistIntent(JSON.stringify(lifted));
+    } else {
+      intent = parseScientistIntent(stripYamlFence(text));
     }
-    const lifted = liftScientistIntent(parsedArgs);
-    intent = parseScientistIntent(JSON.stringify(lifted));
-  } else {
-    const text = message?.content ?? '';
-    intent = parseScientistIntent(stripYamlFence(text));
+  } catch (toolErr) {
+    // Attempt 2: the tool path produced nothing parseable (empty content, or a
+    // bare echo of the prompt template). Retry as a PLAIN text completion (no
+    // tools) — empirically this is where small models emit clean YAML.
+    if (!toolArgs && !text) {
+      throw toolErr; // nothing to work from; surface the real error
+    }
+    const retry = await args.llmClient.complete({
+      ...baseRequest,
+    } as never);
+    const retryMessage = retry.choices?.[0]?.message;
+    const retryText = (retryMessage?.content ?? '').trim();
+    intent = parseScientistIntent(stripYamlFence(retryText));
   }
+
   const compiled = await compileScientistIntent(intent, args.deps);
   return { intent, compile: compiled };
 }
