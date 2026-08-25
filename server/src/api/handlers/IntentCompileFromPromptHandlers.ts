@@ -41,11 +41,17 @@ interface CompileFromPromptDeps {
 }
 
 function toInferenceConfig(deps: CompileFromPromptDeps, ctx: AppContext): { baseUrl: string; model: string; provider: 'openai-compatible'; enableThinking: false; temperature: 0 } {
-  const infer = ctx.appConfig?.ai?.inference;
+  // The one-shot localization path runs a SMALL dedicated model (lfm2.5-class
+  // 3B / qwen3.6-35b fallback), NOT the main big-model inference endpoint
+  // (config ai.inference = qwen3.8-27b). Prefer an explicit small-model config
+  // if present, else the standard small-model endpoint on this host.
+  const small = (ctx.appConfig?.ai as Record<string, unknown> | undefined)?.['smallModel'] as
+    | { baseUrl?: string; model?: string }
+    | undefined;
   return {
     provider: 'openai-compatible',
-    baseUrl: deps.baseUrl ?? infer?.baseUrl ?? 'http://127.0.0.1:8899/v1',
-    model: deps.model ?? infer?.model ?? 'lfm2.5-2.6b',
+    baseUrl: deps.baseUrl ?? small?.baseUrl ?? 'http://127.0.0.1:8899/v1',
+    model: deps.model ?? small?.model ?? 'lfm2.5-2.6b',
     enableThinking: false,
     temperature: 0,
   };

@@ -37,6 +37,15 @@ export interface ScientistIntentLlmClient {
 }
 
 /**
+ * Token budget for the small-model scientist-intent calls. The small model is a
+ * REASONING model: a tight budget truncates its thinking chain and it returns an
+ * empty / partial completion. This is deliberately generous (10x a plausible
+ * safe minimum) per the performance-test budget rule, sized for the worst real
+ * localization prompt plus its reasoning.
+ */
+export const INTENT_COMPILE_MAX_TOKENS = 8000;
+
+/**
  * Closed-vocabulary system prompt for the small model. Kept as an inline
  * constant by design: it is an I/O contract, not a mutable registry template,
  * and hardcoding it here is the deterministic handoff point the compiler
@@ -229,6 +238,7 @@ export async function compileFromSmallLlm(
     ],
     tools: [buildScientistIntentTool()],
     tool_choice: { type: 'function', function: { name: SCIENTIST_INTENT_TOOL_NAME } },
+    max_tokens: INTENT_COMPILE_MAX_TOKENS,
   } as never);
 
   const message = raw.choices?.[0]?.message;
@@ -363,6 +373,7 @@ export async function extractBranchQuestionsFromSmallLlm(
     ],
     tools: [buildBranchQuestionsTool()],
     tool_choice: { type: 'function', function: { name: BRANCH_QUESTIONS_TOOL_NAME } },
+    max_tokens: INTENT_COMPILE_MAX_TOKENS,
   } as never);
 
   const toolArgs = raw.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
