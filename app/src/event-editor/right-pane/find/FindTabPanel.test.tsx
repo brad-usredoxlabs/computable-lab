@@ -244,7 +244,7 @@ describe('FindTabPanel', () => {
       ],
     })
     renderFind()
-    expect(await screen.findByText(/No experiments or runs yet/)).toBeTruthy()
+    expect(await screen.findByText(/No runs yet/)).toBeTruthy()
   })
 
   it('shows study-level runs (no experiment) in the Runs section', async () => {

@@ -125,6 +125,40 @@
   color: var(--cl-text);
 }
 
+/* Primary project actions (New Run / New Project) — top of the homepage. */
+.find-tab__actions {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px 2px;
+}
+
+.find-tab__action {
+  appearance: none;
+  border: 1px solid var(--cl-border);
+  border-radius: 4px;
+  background: var(--cl-bg-elev);
+  color: var(--cl-text);
+  padding: 5px 10px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.find-tab__action--primary {
+  background: var(--cl-accent, #2563eb);
+  border-color: var(--cl-accent, #2563eb);
+  color: #fff;
+}
+
+.find-tab__action:hover {
+  background: var(--cl-bg-elev-2);
+}
+
+.find-tab__action--primary:hover {
+  background: var(--cl-accent-hover, #1d4ed8);
+}
+
 .find-tab__group {
   display: flex;
   flex-direction: column;

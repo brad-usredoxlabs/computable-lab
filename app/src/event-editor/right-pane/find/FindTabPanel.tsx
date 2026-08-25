@@ -30,6 +30,7 @@ import { artifactKindLabel, tabForArtifact } from '../openArtifactInViewer'
 import { openContent } from '../../../shared/lib/openContent'
 import { getStudyTree } from '../../../shared/api/treeClient'
 import { apiClient, type ProtocolContextResponse } from '../../../shared/api/client'
+import { quickCreateRun } from '../../create/quickCreateRun'
 import type {
   ExperimentTreeNode,
   RunTreeNode,
@@ -234,13 +235,31 @@ export function FindTabPanel() {
     return () => window.removeEventListener('cl:records-changed', onChanged)
   }, [refreshTree, refreshProtocolContext, refresh, inventory, usage])
 
-  const openNewExperiment = useCallback(() => {
+  // New Run creates a run scoped to THIS project (studyId), opens it at the
+  // SAME path as home-page run creation (/runs/:runId), and lands straight in
+  // the event editor. No experiment required, no TapTab surface.
+  const createProjectRun = useCallback(async () => {
     setCreateMenuOpen(false)
-    openRecordTab(
-      { id: recordCreateTabId('experiment', studyId), kind: 'record-create', nodeType: 'experiment', studyId, title: 'New experiment' },
-      `/record/new/experiment/${studyId}`,
-    )
-  }, [studyId, openRecordTab])
+    try {
+      const { recordId, title } = await quickCreateRun({ studyId })
+      openContent(
+        openTabs,
+        navigate,
+        { id: runTabId(recordId), kind: 'run', runId: recordId, title },
+        `/runs/${recordId}`,
+        projectCrumb,
+      )
+    } catch (err) {
+      console.error('Failed to create run:', err)
+    }
+  }, [studyId, openTabs, navigate, projectCrumb])
+
+  // New Project from within a project homepage: create one via the same
+  // /create/study path the home "+ Create → New Project" uses.
+  const createNewProject = useCallback(() => {
+    setCreateMenuOpen(false)
+    navigate('/create/study')
+  }, [navigate])
 
   const createProjectProtocol = useCallback(async () => {
     setCreateMenuOpen(false)
@@ -296,6 +315,30 @@ export function FindTabPanel() {
         </button>
       </header>
 
+      {/* Primary project actions — New Run FIRST, same create path as the
+          home "+ Create → New Run" (quickCreateRun → /runs/:runId → event
+          editor). New Project follows. Bottom-of-header, always visible. */}
+      <div className="find-tab__actions" data-testid="find-tab-actions">
+        <button
+          type="button"
+          className="find-tab__action find-tab__action--primary"
+          onClick={() => void createProjectRun()}
+          data-testid="find-tab-new-run"
+          title="Create a run in this project and open it in the event editor"
+        >
+          + New Run
+        </button>
+        <button
+          type="button"
+          className="find-tab__action"
+          onClick={createNewProject}
+          data-testid="find-tab-new-project"
+          title="Create a new project"
+        >
+          + New Project
+        </button>
+      </div>
+
       <section className="find-tab__tree" data-testid="find-tab-tree">
         <div className="find-tab__group-head">
           <h4 className="right-panel__heading find-tab__group-heading">
@@ -315,7 +358,6 @@ export function FindTabPanel() {
             </button>
             {createMenuOpen ? (
               <div className="find-tab__create-menu" role="menu">
-                <button type="button" role="menuitem" onClick={openNewExperiment}>Experiment</button>
                 <button type="button" role="menuitem" onClick={() => void createProjectProtocol()}>Protocol</button>
               </div>
             ) : null}
@@ -329,8 +371,7 @@ export function FindTabPanel() {
           <>
             {study.experiments.length === 0 && !study.runs?.length ? (
               <p className="right-panel__hint">
-                No experiments or runs yet for <code>{studyId}</code> — use +
-                above to create the first one.
+                No runs yet in <code>{studyId}</code> — use <strong>New Run</strong> above.
               </p>
             ) : null}
             {study.experiments.length > 0 ? (
