@@ -61,10 +61,13 @@ export function useResolveOntology(opts: UseResolveOntologyOptions): UseResolveO
         const fetchLimit = Math.max(maxResults, 40)
         const { candidates } = await apiClient.resolve({ term: q, kinds: ['material'], limit: fetchLimit })
         if (latestQueryRef.current !== query) return
-        // Keep true ontology tiers (OAK + OLS4) that carry a CURIE. Re-rank
-        // so the exact/shortest match leads (exact → prefix → substring → other, shortest first).
+        // Keep the canonical identity spine (tier 0) plus true ontology tiers
+        // (OAK + OLS4) that carry a CURIE. Tier-0 canonical-term hits are the
+        // lab's OWN identity nodes — they must NEVER be dropped, or a lab alias
+        // ("f prausnitzii", spelled 8 ways) resolves nowhere even though the
+        // backend ranked it first. Re-rank so exact/shortest leads.
         const filtered = (candidates ?? []).filter(
-          (c) => (c.source === 'oak' || c.source === 'ols4') && Boolean(c.curie),
+          (c) => (c.source === 'canonical-term' || c.source === 'oak' || c.source === 'ols4') && Boolean(c.curie),
         )
         setResults(rankByLabelMatch(filtered, (c) => c.label, q).slice(0, maxResults))
       } catch {
