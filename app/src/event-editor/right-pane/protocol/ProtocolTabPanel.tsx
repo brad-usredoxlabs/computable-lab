@@ -103,6 +103,33 @@ function briefLabel(label: string | undefined): string | undefined {
   return first.length > 88 ? `${first.slice(0, 88)}…` : first
 }
 
+/** Serialize a protocol's structured `steps` into the plain human-readable
+ *  protocol text the one-shot localizer consumes. Each step contributes its
+ *  label (which carries the long-form prose incl. any if/then branches) plus
+ *  an optional description. Falls back to `humanStepsText` when present. */
+export function protocolTextFromSource(
+  payload: Record<string, unknown> | null | undefined,
+  humanStepsText?: string | null,
+): string {
+  if (humanStepsText) return humanStepsText.trim()
+  if (!payload) return ''
+  const maybeHuman = payload.humanStepsText
+  if (typeof maybeHuman === 'string' && maybeHuman.trim()) return maybeHuman.trim()
+  const steps = payload.steps
+  if (Array.isArray(steps)) {
+    const lines = steps.map((s, i) => {
+      const o = s && typeof s === 'object' && !Array.isArray(s) ? s as Record<string, unknown> : {}
+      const label = typeof o.label === 'string' && o.label.trim() ? o.label.trim() : ''
+      const description = typeof o.description === 'string' && o.description.trim() ? o.description.trim() : ''
+      const ordinal = typeof o.ordinal === 'number' ? o.ordinal : i + 1
+      const body = [label, description].filter(Boolean).join('\n')
+      return body ? `${ordinal}. ${body}` : null
+    }).filter((l): l is string => l !== null)
+    if (lines.length) return lines.join('\n\n')
+  }
+  return ''
+}
+
 /** Fields the step chip + localized step need, regardless of data source. */
 interface MappedStep {
   stepId?: string
@@ -947,6 +974,7 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   // from when the attached method is not yet a local protocol.
   const [universalProtocolId, setUniversalProtocolId] = useState<string | null>(null)
   const [universalProtocolTitle, setUniversalProtocolTitle] = useState<string | null>(null)
+  const [oneShotSourceText, setOneShotSourceText] = useState<string>('')
   // Declared abstract role ids of the attached universal protocol (from the
   // LPR's inherits_from parent, or the record itself in preview mode) — used
   // to mark which draft rows are still ghosted "suggestions" from it.
@@ -1064,7 +1092,9 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
             // Run attached DIRECTLY to a universal protocol (no local
             // protocol in the chain): show the declared roles as a read-only
             // "This assay needs" preview so the setup surface is visible
-            // before the run is specialized into an LPR.
+            // before the run is specialized into an LPR. Also capture this
+            // universal protocol's steps as the one-shot source text, so the
+            // one-shot thread is usable even without a humanStepsText field.
             const preview = extractUniversalProtocolSetup(env)
             if (preview) {
               resolvedSetup = preview
@@ -1072,6 +1102,7 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
               resolvedUniversalId = attachedId
               if (typeof pp?.title === 'string') resolvedUniversalTitle = pp.title
               resolvedRoleIds = extractUniversalRoleIds(env)
+              setOneShotSourceText(protocolTextFromSource(pp, humanStepsText))
             }
           }
         }
@@ -1539,10 +1570,10 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
       >
         <summary>Localize a universal protocol in chat (one-shot)</summary>
         <ProtocolLocalizationThread
-          key={`${oneShotSrc.recordId ?? 'one-shot'}:${humanStepsText ? 'h' : 'n'}`}
+          key={`${oneShotSrc.recordId ?? 'one-shot'}:${oneShotSourceText ? 't' : 'n'}`}
           sourceProtocolId={oneShotSrc.recordId}
           sourceTitle={oneShotSrc.title}
-          initialProtocolText={humanStepsText ?? ''}
+          initialProtocolText={oneShotSourceText || (humanStepsText ?? '')}
           links={{ ...(studyId ? { studyId } : {}) }}
         />
       </details>

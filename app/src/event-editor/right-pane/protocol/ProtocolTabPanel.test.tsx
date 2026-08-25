@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { splitHumanSteps, extractLocalProtocolSetup, extractUniversalProtocolSetup, setupSuggestionIndices, extractUniversalRoleIds, formatWorkingConcentration } from './ProtocolTabPanel'
+import { splitHumanSteps, extractLocalProtocolSetup, extractUniversalProtocolSetup, setupSuggestionIndices, extractUniversalRoleIds, formatWorkingConcentration, protocolTextFromSource } from './ProtocolTabPanel'
 
 describe('splitHumanSteps', () => {
   it('keys a whole-text protocol at ordinal 1 when it does not split', () => {
@@ -24,6 +24,32 @@ describe('splitHumanSteps', () => {
 
   it('handles leading whitespace and empty sections', () => {
     expect(splitHumanSteps('  1. A\n\n2. B')).toEqual({ 1: 'A', 2: 'B' })
+  })
+})
+
+describe('protocolTextFromSource (one-shot source text)', () => {
+  it('prefers humanStepsText when present', () => {
+    const payload = { steps: [{ ordinal: 1, label: 'Step A' }] }
+    expect(protocolTextFromSource(payload, 'full human text')).toBe('full human text')
+    expect(protocolTextFromSource(payload)).toBe('1. Step A')
+  })
+
+  it('serializes structured steps into ordinal-prefixed prose', () => {
+    const payload = {
+      steps: [
+        { ordinal: 1, label: 'Add sample to the BashingBead module' },
+        { ordinal: 2, label: 'Seal the plate', description: 'Use sealing foil' },
+      ],
+    }
+    const out = protocolTextFromSource(payload)
+    expect(out).toContain('1. Add sample to the BashingBead module')
+    expect(out).toContain('2. Seal the plate')
+    expect(out).toContain('Use sealing foil')
+  })
+
+  it('returns empty when there is no text source', () => {
+    expect(protocolTextFromSource({})).toBe('')
+    expect(protocolTextFromSource(null)).toBe('')
   })
 })
 
