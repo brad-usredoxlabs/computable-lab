@@ -98,6 +98,12 @@ export function canonicalSet(): Set<string> {
 
 /** Lift one action: canonicalize the verb + coerce/whitelist params. */
 export function liftAction(raw: Record<string, unknown>): Record<string, unknown> {
+  // Small models sometimes nest params under a `parameters` object (OpenAI-style
+  // tool output) instead of flattening them onto the action. Flatten first so
+  // the canonical lift sees volumeUl / temperatureC / material etc.
+  if (raw.parameters && typeof raw.parameters === 'object' && !Array.isArray(raw.parameters)) {
+    raw = { ...raw, ...(raw.parameters as Record<string, unknown>) };
+  }
   const actionName = canonicalActionName(
     typeof raw.action === 'string' ? raw.action : typeof raw.verb === 'string' ? raw.verb : undefined,
   );

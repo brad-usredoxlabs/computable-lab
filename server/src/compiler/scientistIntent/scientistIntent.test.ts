@@ -192,10 +192,11 @@ actions:
             }],
           };
         }
-        // Second (plain-text) attempt emits real YAML.
+        // Second (plain-text) attempt emits real YAML (params nested under
+        // `parameters` — OpenAI-style — which must be lifted+flattened).
         return {
           choices: [{
-            message: { content: 'intentId: fallback-001\nactions:\n  - action: add_material\n    source: lysis_solution\n    target: lysis_module\n    material: Lysis Solution\n    volumeUl: 550\n  - action: spin' },
+            message: { content: 'intentId: fallback-001\nactions:\n  - action: add_material\n    parameters:\n      source: lysis_solution\n      target: lysis_module\n      material: Lysis Solution\n      volumeUl: 550\n  - action: spin' },
           }],
         };
       }),

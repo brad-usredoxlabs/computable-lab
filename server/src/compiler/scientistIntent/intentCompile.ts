@@ -17,6 +17,7 @@
 import { parseScientistIntent } from './parseScientistIntent.js';
 import { compileScientistIntent, type ScientistIntentCompileDeps } from './compileScientistIntent.js';
 import { liftScientistIntent } from './liftScientistIntent.js';
+import { parse as parseYaml } from 'yaml';
 import type { CompletionRequest } from '../../ai/types.js';
 import type { ScientistIntent } from './types.js';
 
@@ -279,7 +280,12 @@ export async function compileFromSmallLlm(
     } as never);
     const retryMessage = retry.choices?.[0]?.message;
     const retryText = (retryMessage?.content ?? '').trim();
-    intent = parseScientistIntent(stripYamlFence(retryText));
+    // Plain-text YAML from a small model still needs the same lift the tool
+    // path applies (verb aliases + flattening nested `parameters`), so parse
+    // to a raw doc, lift it, then validate the lifted form.
+    const rawDoc = parseYamlDoc(stripYamlFence(retryText));
+    const lifted = liftScientistIntent(rawDoc ?? {});
+    intent = parseScientistIntent(JSON.stringify(lifted));
   }
 
   const compiled = await compileScientistIntent(intent, args.deps);
@@ -295,6 +301,19 @@ export function stripYamlFence(text: string): string {
   const idx = t.indexOf('intentId:');
   if (idx > 0) t = t.slice(idx).trim();
   return t;
+}
+
+/** Parse a YAML doc into a plain object WITHOUT schema validation (used for the
+ *  plain-text fallback before lift+validate). Returns null on parse error. */
+export function parseYamlDoc(text: string): Record<string, unknown> | null {
+  try {
+    const parsed = parseYaml(text);
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
