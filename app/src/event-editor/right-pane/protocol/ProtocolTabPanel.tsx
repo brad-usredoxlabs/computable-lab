@@ -1496,17 +1496,20 @@ function ProtocolTabPanelInner({ runId, studyId }: ProtocolTabPanelProps) {
   if (error && steps.length === 0) return <ErrorState error={error} />
   if (steps.length === 0) return <EmptyState />
 
-  // Source universal protocol for the one-shot thread: prefer an available
-  // protocol, else a project template. The `<details>` opens by default when
-  // one exists, so the branch questions auto-run before raw if/then steps.
+  // Source universal protocol for the one-shot thread. Prefer the run's
+  // attached universal protocol (set on the happy path when a universal
+  // protocol is attached), else an available protocol / project template from
+  // context. The `<details>` opens by default when one exists, so the branch
+  // questions auto-run before raw if/then steps.
   const oneShotSrc = (() => {
     const raw = protocolContext?.availableProtocols?.[0] ?? protocolContext?.projectTemplates?.[0] ?? null
-    if (!raw) return { recordId: undefined, title: undefined }
-    const payload = (raw.payload ?? raw) as Record<string, unknown> | null
+    const payload = raw ? (raw.payload ?? raw) as Record<string, unknown> | null : null
     return {
-      recordId: raw.recordId as string | undefined,
-      title: typeof payload?.title === 'string' ? payload.title
-        : typeof payload?.name === 'string' ? payload.name : undefined,
+      recordId: universalProtocolId ?? raw?.recordId as string | undefined,
+      title: universalProtocolTitle ?? (
+        typeof payload?.title === 'string' ? payload.title
+          : typeof payload?.name === 'string' ? payload.name : undefined
+      ),
     }
   })()
 
