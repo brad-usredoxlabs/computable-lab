@@ -194,7 +194,11 @@ export function createResolveSpine(deps: ResolveSpineDeps = {}): ResolveSpine {
           spec.remote ? remoteTimeout : localTimeout,
         );
         return hits
-          .filter((hit) => hasLexicalSupport(trimmed, hit.label, hit.definition))
+          // Tier-0 canonical-term hits are already authoritative: the term
+          // provider only returns records whose normalized alias matched, so the
+          // loose lexical re-filter (which strips single-char tokens like "F" in
+          // "F praus") must NOT drop them — it would lose "FPRAUS" as a query.
+          .filter((hit) => spec.source === 'canonical-term' || hasLexicalSupport(trimmed, hit.label, hit.definition))
           .map((hit) => toCandidate(hit, spec, trimmed, opts.level));
       }),
     );

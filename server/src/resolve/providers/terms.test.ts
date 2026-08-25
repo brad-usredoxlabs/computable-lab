@@ -95,6 +95,20 @@ describe('term provider (tier 0 — alias-first)', () => {
     // exact alias for "F praus" term outranks the prefix-only "F prausnitzii" term
     expect(hits[0]!.label).toBe('F praus');
   });
+
+  it('does not drop an all-caps no-space alias (FPRAUS) via the spine lexical re-filter', async () => {
+    // Regression: hasLexicalSupport tokenizes the matched alias and strips the
+    // single-char "F" from "F praus", so the generic re-filter loses a query of
+    // "FPRAUS" even though the alias normalized-match is exact. Tier-0 hits are
+    // authoritative and must bypass that filter.
+    stubFetch({ ols4: [{ curie: 'NCBITaxon:853', label: 'Faecalibacterium prausnitzii', namespace: 'NCBITaxon' }] });
+    const store = new TermStore();
+    store.seed('Faecalibacterium prausnitzii', ['F praus', 'FPRAUS', 'F pruas'], 'organism');
+    const spine = createResolveSpine({ termProvider: createTermProvider(store) });
+    const out = await spine.resolve('FPRAUS');
+    expect(out[0]!.source).toBe('canonical-term');
+    expect(out[0]!.curie).toBe('local:TERM-faecalibacterium-prausnitzii-0000');
+  });
 });
 
 describe('resolve() spine tier 0 (canonical-first)', () => {
