@@ -83,6 +83,34 @@ export interface IntentCompileFromPromptArgs {
   model?: string;
   deps?: ScientistIntentCompileDeps;
   systemPrompt?: string;
+  /** The lab's on-box inventory (instruments/labware/materials) so the small
+   *  model grounds symbolic labels in what THIS lab actually owns. When
+   *  present, it is injected as a `LAB INVENTORY` block in the user prompt. */
+  labInventory?: LabInventory;
+}
+
+/** Lightweight lab-inventory snapshot for the one-shot localizer. Each list is
+ *  the lab-global names (labels) of records of that kind. */
+export interface LabInventory {
+  instruments?: string[];
+  labware?: string[];
+  materials?: string[];
+}
+
+/** Build the user prompt, optionally prefixing the lab-inventory context. */
+export function composeIntentPrompt(prompt: string, inventory?: LabInventory): string {
+  if (!inventory) return prompt;
+  const sections: string[] = [];
+  if (inventory.instruments?.length) sections.push(`INSTRUMENTS: ${inventory.instruments.join(', ')}`);
+  if (inventory.labware?.length) sections.push(`LABWARE: ${inventory.labware.join(', ')}`);
+  if (inventory.materials?.length) sections.push(`MATERIALS: ${inventory.materials.join(', ')}`);
+  if (sections.length === 0) return prompt;
+  return [
+    'LAB INVENTORY (this lab owns; prefer these when binding labware/instruments):',
+    ...sections,
+    '',
+    prompt,
+  ].join('\n');
 }
 
 /**
@@ -192,11 +220,12 @@ export async function compileFromSmallLlm(
   args: IntentCompileFromPromptArgs,
 ): Promise<{ intent: ScientistIntent; compile: Awaited<ReturnType<typeof compileScientistIntent>> }> {
   const system = args.systemPrompt ?? INTENT_COMPILE_SYSTEM_PROMPT;
+  const userPrompt = composeIntentPrompt(args.prompt, args.labInventory);
   const raw = await args.llmClient.complete({
     model: args.model ?? 'small-model',
     messages: [
       { role: 'system', content: system },
-      { role: 'user', content: args.prompt },
+      { role: 'user', content: userPrompt },
     ],
     tools: [buildScientistIntentTool()],
     tool_choice: { type: 'function', function: { name: SCIENTIST_INTENT_TOOL_NAME } },

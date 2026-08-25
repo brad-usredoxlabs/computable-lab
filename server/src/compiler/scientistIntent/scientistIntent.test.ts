@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parseScientistIntent, ScientistIntentValidationError } from './parseScientistIntent.js';
 import { normalizeScientistIntent } from './normalizeScientistIntent.js';
 import { compileScientistIntent } from './compileScientistIntent.js';
-import { compileFromSmallLlm, stripYamlFence, extractBranchQuestionsFromSmallLlm } from './intentCompile.js';
+import { compileFromSmallLlm, stripYamlFence, extractBranchQuestionsFromSmallLlm, composeIntentPrompt } from './intentCompile.js';
 import { liftScientistIntent, canonicalActionName, coerceNumeric } from './liftScientistIntent.js';
 
 const THREE_ACTION = `
@@ -172,6 +172,33 @@ actions:
     const types = compile.terminalArtifacts.events.map((e) => e.event_type);
     expect(types).toContain('mix');
     expect(types).toContain('transfer');
+  });
+});
+
+describe('composeIntentPrompt (lab inventory context)', () => {
+  it('returns the prompt unchanged when no inventory is provided', () => {
+    expect(composeIntentPrompt('dilute 1:2')).toBe('dilute 1:2');
+  });
+
+  it('injects a LAB INVENTORY block listing instruments/labware/materials', () => {
+    const out = composeIntentPrompt('lyse the cells in the bead basher', {
+      instruments: ['QuantStudio 5', 'Bead Basher'],
+      labware: ['96-well plate', 'cryoking tube'],
+      materials: ['ZymoBIOMICS Lysis Solution'],
+    });
+    expect(out).toContain('LAB INVENTORY');
+    expect(out).toContain('INSTRUMENTS: QuantStudio 5, Bead Basher');
+    expect(out).toContain('LABWARE: 96-well plate, cryoking tube');
+    expect(out).toContain('MATERIALS: ZymoBIOMICS Lysis Solution');
+    // The original prompt must still be present after the block
+    expect(out.endsWith('lyse the cells in the bead basher')).toBe(true);
+  });
+
+  it('omits empty inventory sections', () => {
+    const out = composeIntentPrompt('incubate', { instruments: ['QS5'] });
+    expect(out).toContain('INSTRUMENTS: QS5');
+    expect(out).not.toContain('LABWARE:');
+    expect(out).not.toContain('MATERIALS:');
   });
 });
 

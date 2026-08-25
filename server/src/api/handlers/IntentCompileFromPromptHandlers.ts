@@ -28,6 +28,7 @@ import {
   compileFromSmallLlm,
   extractBranchQuestionsFromSmallLlm,
   type BranchQuestionsResult,
+  type LabInventory,
 } from '../../compiler/scientistIntent/intentCompile.js';
 
 interface CompileFromPromptDeps {
@@ -59,6 +60,46 @@ interface CompileFromPromptBody {
 export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: CompileFromPromptDeps = {}) {
   const store: RecordStore = deps.store ?? ctx.store;
   const searchLabwareByHint = createLabwareLookup(store);
+
+  // Lab-inventory snapshot for the one-shot localizer: the lab-GLOBAL names of
+  // instruments/equipment, labware, and materials. Kept separate per kind so
+  // the small model can ground symbolic labels in what this lab actually owns.
+  async function loadLabInventory(): Promise<LabInventory> {
+    const names = async (kind: string, ...fields: string[]): Promise<string[]> => {
+      const out: string[] = [];
+      let records;
+      try {
+        records = await store.list({ kind, limit: 500 });
+      } catch {
+        return out;
+      }
+      for (const env of records) {
+        const p = env && typeof env.payload === 'object' && !Array.isArray(env.payload)
+          ? env.payload as Record<string, unknown>
+          : {};
+        for (const f of fields) {
+          const v = p[f];
+          if (typeof v === 'string' && v.trim()) { out.push(v.trim()); break; }
+        }
+      }
+      // Dedup, keep order.
+      return [...new Set(out)];
+    };
+    const [instruments, labware] = await Promise.all([
+      names('instrument', 'name', 'displayName', 'title'),
+      names('labware', 'name', 'display_name', 'title'),
+    ]);
+    // equipment records may use kind 'equipment' (LabInventoryPanel lists 'equipment')
+    let equipment = await names('equipment', 'name', 'displayName', 'title');
+    const instruments2 = await names('instrument-definition', 'name', 'title');
+    equipment = [...equipment, ...instruments2];
+    const materials = await names('material', 'name', 'title');
+    return {
+      ...(equipment.length ? { instruments: [...new Set(equipment)] } : {}),
+      ...(labware.length ? { labware } : {}),
+      ...(materials.length ? { materials } : {}),
+    };
+  }
 
   return {
     async compileFromPrompt(
@@ -101,11 +142,13 @@ export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: Com
 
       // Answers present: emit the macro + deterministic compile.
       try {
+        const labInventory = await loadLabInventory();
         const { intent, compile } = await compileFromSmallLlm({
           prompt: protocolText,
           llmClient: llmClient as never,
           model: toInferenceConfig(deps, ctx).model,
           deps: { searchLabwareByHint },
+          labInventory,
         });
         return reply.send({
           outcome: compile.outcome,
