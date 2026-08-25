@@ -85,8 +85,7 @@ export function createIntentCompileFromPromptHandlers(ctx: AppContext, deps: Com
       // Dedup, keep order.
       return [...new Set(out)];
     };
-    const [instruments, labware] = await Promise.all([
-      names('instrument', 'name', 'displayName', 'title'),
+    const [labware] = await Promise.all([
       names('labware', 'name', 'display_name', 'title'),
     ]);
     // equipment records may use kind 'equipment' (LabInventoryPanel lists 'equipment')

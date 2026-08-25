@@ -70,6 +70,29 @@ describe('ProtocolPlanningView', () => {
     expect(screen.getByText('Protocol Planning')).toBeDefined()
   })
 
+  it('Point 4 — renders a soft-first deck-bootstrap section listing lab inventory labware', async () => {
+    stubFetch([{ stepId: 's1', ordinal: 1, label: 'Add cells', kind: 'add_material' }])
+    vi.mocked(apiClient.getRecord).mockResolvedValue(env('RUN-1', { kind: 'run', studyId: 'STU-1' }) as never)
+    vi.mocked(apiClient.listRecordsByKind).mockResolvedValue({
+      records: [
+        env('LBW-PLATE-96', { name: '96-well plate' }),
+        env('LBW-CRYOTUBE', { name: 'cryoking tube' }),
+        env('LBW-JIG', { name: 'custom bead-basher jig' }),
+      ],
+      total: 3,
+    } as never)
+
+    render(<ProtocolPlanningView runId="RUN-1" />)
+    expect(await screen.findByTestId('deck-bootstrap')).toBeDefined()
+    // soft-first: it is present but NOT a hard gate — steps still render
+    expect(await screen.findByTestId('deck-labware-LBW-PLATE-96')).toBeDefined()
+    expect(screen.getByTestId('deck-labware-LBW-CRYOTUBE')).toBeDefined()
+    expect(screen.getByTestId('deck-labware-LBW-JIG')).toBeDefined()
+    // picking labware shows the deck count without blocking anything
+    fireEvent.click(screen.getByTestId('deck-labware-LBW-PLATE-96'))
+    expect(screen.getByTestId('deck-picked-count').textContent).toContain('1 labware placed on deck')
+  })
+
   it('renders a step chip per fetched protocol step', async () => {
     stubFetch([
       { stepId: 's1', ordinal: 1, label: 'Add cells', kind: 'add_material', description: 'Seed' },

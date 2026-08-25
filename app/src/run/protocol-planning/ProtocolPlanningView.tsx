@@ -68,6 +68,50 @@ export function ProtocolPlanningView({ runId }: ProtocolPlanningViewProps): JSX.
   // detail-pane-only when the provider isn't mounted.
   const protocolSelection = useProtocolSelection()
 
+  // Point 4 — soft-first deck bootstrap: labware the lab owns, and the subset
+  // the user would like placed on the deck BEFORE events bind (so the
+  // visualization is correct: plates, cryoking tubes, custom jig, etc.). Soft =
+  // not a hard prerequisite; just a visual "load first" callout.
+  interface AvailableLabware { recordId: string; label: string }
+  const [deckLabware, setDeckLabware] = useState<AvailableLabware[]>([])
+  const [deckPicked, setDeckPicked] = useState<Set<string>>(new Set())
+  const [deckLabwareLoading, setDeckLabwareLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadLabware() {
+      setDeckLabwareLoading(true)
+      try {
+        const res = await Promise.resolve(apiClient.listRecordsByKind('labware', 100)).catch(() => null)
+        if (cancelled) return
+        setDeckLabware((res?.records ?? []).map((env) => {
+          const p = (env?.payload ?? {}) as Record<string, unknown>
+          const label = typeof p.name === 'string' && p.name.trim()
+            ? p.name
+            : typeof p.display_name === 'string' && p.display_name.trim()
+              ? p.display_name
+              : typeof p.title === 'string' && p.title.trim()
+                ? p.title
+                : env?.recordId ?? ''
+          return { recordId: env?.recordId ?? '', label }
+        }).filter((l) => l.recordId))
+      } finally {
+        if (!cancelled) setDeckLabwareLoading(false)
+      }
+    }
+    void loadLabware()
+    return () => { cancelled = true }
+  }, [])
+
+  const toggleDeckLabware = (recordId: string) => {
+    setDeckPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(recordId)) next.delete(recordId)
+      else next.add(recordId)
+      return next
+    })
+  }
+
   const handleStepSelect = useCallback(
     (step: PlannedStep) => {
       setSelectedStepId(step.stepId)
@@ -234,6 +278,46 @@ export function ProtocolPlanningView({ runId }: ProtocolPlanningViewProps): JSX.
       <div className="protocol-planning-view__grid">
         <section className="protocol-planning-view__steps" data-testid="protocol-steps-chips">
           <h3 className="protocol-planning-view__section-title">Steps</h3>
+
+          {/* Point 4 — soft-first deck bootstrap: place the labware this run
+              uses onto the deck BEFORE events bind, so the visualization is
+              correct from step 1. Soft = recommended, not a hard gate. */}
+          <section className="protocol-planning-view__deck-bootstrap" data-testid="deck-bootstrap">
+            <h4 className="protocol-planning-view__section-title">
+              Step 0 — Load labware onto deck
+            </h4>
+            <p className="protocol-planning-view__hint">
+              Start by placing the labwares you&apos;ll use (plates, cryoking tubes,
+              custom jig…) so the run&apos;s event graph is visualized on the right
+              deck. Pick from the lab inventory below.
+            </p>
+            {deckLabwareLoading ? (
+              <p className="protocol-planning-view__hint">Loading labware…</p>
+            ) : deckLabware.length === 0 ? (
+              <p className="protocol-planning-view__hint">No labware records — add labware in the Lab tab.</p>
+            ) : (
+              <div className="protocol-planning-view__deck-list">
+                {deckLabware.map((lw) => (
+                  <label key={lw.recordId} className="protocol-planning-view__deck-item">
+                    <input
+                      type="checkbox"
+                      checked={deckPicked.has(lw.recordId)}
+                      onChange={() => toggleDeckLabware(lw.recordId)}
+                      data-testid={`deck-labware-${lw.recordId}`}
+                    />
+                    <span>{lw.label}</span>
+                    <code className="protocol-planning-view__deck-id">{lw.recordId}</code>
+                  </label>
+                ))}
+              </div>
+            )}
+            {deckPicked.size > 0 ? (
+              <p className="protocol-planning-view__hint" data-testid="deck-picked-count">
+                {deckPicked.size} labware placed on deck (view the Design tab to arrange them).
+              </p>
+            ) : null}
+          </section>
+
           {loading ? (
             <p className="protocol-planning-view__hint">Loading steps…</p>
           ) : steps.length === 0 ? (
