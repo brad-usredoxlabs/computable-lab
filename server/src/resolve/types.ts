@@ -38,6 +38,10 @@ export interface ProviderHit {
   level?: MaterialLevel;
   /** Term definition / description text, when the provider has one. */
   definition?: string;
+  /** Term kind when the hit is a canonical term (material|organism|condition|...). */
+  termKind?: string;
+  /** Material/physical domain hint when the hit carries one (e.g. cell_line). */
+  domain?: string;
 }
 
 /**
@@ -55,6 +59,10 @@ export interface RankedCandidate {
   uri?: string;
   /** Term definition / description text, when the source ontology or record has one. */
   definition?: string;
+  /** Term kind when the hit is a canonical term (material|organism|condition|...). */
+  termKind?: string;
+  /** Material/physical domain hint when the hit carries one (e.g. cell_line). */
+  domain?: string;
   /** Present only on the tier-5 affordance: the free text to mint locally. */
   mint?: { label: string; domain?: string };
 }

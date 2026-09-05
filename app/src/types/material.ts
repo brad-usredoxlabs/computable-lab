@@ -139,6 +139,12 @@ export const CONCENTRATION_UNITS: readonly { value: string; label: string; basis
   { value: 'U/uL', label: 'U/uL', basis: 'activity_per_volume' },
   { value: 'cells/mL', label: 'cells/mL', basis: 'count_per_volume' },
   { value: 'cells/uL', label: 'cells/uL', basis: 'count_per_volume' },
+  { value: 'CFU/mL', label: 'CFU/mL', basis: 'count_per_volume' },
+  { value: 'CFU/uL', label: 'CFU/uL', basis: 'count_per_volume' },
+  { value: 'organisms/mL', label: 'organisms/mL', basis: 'count_per_volume' },
+  { value: 'organisms/uL', label: 'organisms/uL', basis: 'count_per_volume' },
+  { value: 'worms/mL', label: 'worms/mL', basis: 'count_per_volume' },
+  { value: 'worms/uL', label: 'worms/uL', basis: 'count_per_volume' },
   { value: '% v/v', label: '% v/v', basis: 'volume_fraction' },
   { value: '% w/v', label: '% w/v', basis: 'mass_fraction' },
 ] as const
@@ -201,6 +207,12 @@ export function concentrationToCanonicalBase(concentration: ConcentrationValue):
       switch (normalized.unit) {
         case 'cells/mL': return normalized.value * 1e3
         case 'cells/uL': return normalized.value * 1e6
+        case 'CFU/mL': return normalized.value * 1e3
+        case 'CFU/uL': return normalized.value * 1e6
+        case 'organisms/mL': return normalized.value * 1e3
+        case 'organisms/uL': return normalized.value * 1e6
+        case 'worms/mL': return normalized.value * 1e3
+        case 'worms/uL': return normalized.value * 1e6
         default: return undefined
       }
     case 'volume_fraction':

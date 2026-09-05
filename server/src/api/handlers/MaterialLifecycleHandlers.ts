@@ -258,6 +258,20 @@ function classifyMaterialRecord(envelope: RecordEnvelope): MaterialSearchItem | 
       subtitle: 'Bare concept record',
     };
   }
+  if (kind === 'term') {
+    // Canonical term node (the identity spine). Surface organisms, conditions,
+    // cell lines etc. as concept-only picks so the add-material form GATES on
+    // term.kind/domain (organism/cell_line → count-first; condition → ...).
+    const termKind = stringValue(payload.kind) ?? '';
+    const domain = stringValue(payload.domain);
+    return {
+      recordId: envelope.recordId,
+      kind,
+      title,
+      category: 'concept-only',
+      subtitle: [termKind ? `${termKind.charAt(0).toUpperCase()}${termKind.slice(1)}` : '', domain ? ` · ${domain}` : ''].join(''),
+    };
+  }
   return null;
 }
 
@@ -379,6 +393,8 @@ const MATERIAL_SEARCH_SCHEMA_IDS = [
   SCHEMA_IDS.materialInstance,
   SCHEMA_IDS.aliquot,
   SCHEMA_IDS.material,
+  // canonical term nodes (identity spine) — organisms/conditions/cell lines
+  'https://computable-lab.com/schema/computable-lab/term.schema.yaml',
 ] as const;
 
 export function createMaterialLifecycleHandlers(store: RecordStore, indexManager?: IndexManager, lifecycleEngine?: LifecycleEngine) {

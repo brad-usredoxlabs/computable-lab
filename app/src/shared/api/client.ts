@@ -211,6 +211,10 @@ export interface ResolveCandidate {
   uri?: string
   /** Term definition / description text, when the source ontology or record has one. */
   definition?: string
+  /** Term kind when the hit is a canonical term (material|organism|condition|...). */
+  termKind?: string
+  /** Material/physical domain hint when the hit carries one (e.g. cell_line). */
+  domain?: string
   mint?: { label: string; domain?: string }
 }
 
@@ -1919,6 +1923,15 @@ export const apiClient = {
   async getRecord(recordId: string): Promise<RecordEnvelope> {
     const response = await request<RecordResponse>(`/records/${encodeURIComponent(recordId)}`)
     return response.record
+  },
+
+  /**
+   * Biological Types & Culture Systems declarative measure registry (Phase B).
+   * Served from schema/registry/biological-types/biological-types.yaml — the
+   * single source of "what do I ask for this organism?"
+   */
+  async getBiologicalTypesRegistry(): Promise<{ registry: import('../bioTypes').BiologicalTypesRegistry }> {
+    return request(`/biological-types`)
   },
 
   /**

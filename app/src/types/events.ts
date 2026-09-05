@@ -108,6 +108,14 @@ interface BaseEventDetails {
 /**
  * Add material event details
  */
+export type CountMeasuredBy = 'cell_counter' | 'hemocytometer' | 'od600' | 'total_protein' | 'hoechst_nuclei' | 'manual'
+
+export interface CountEstimate {
+  measuredBy: CountMeasuredBy
+  isEstimate?: boolean
+  tolerancePct?: number
+}
+
 export interface AddMaterialDetails extends BaseEventDetails {
   material_ref?: string | Ref
   material_spec_ref?: string | Ref
@@ -139,6 +147,16 @@ export interface AddMaterialDetails extends BaseEventDetails {
   concentration?: ConcentrationValue
   composition_snapshot?: CompositionEntryValue[]
   count?: number
+  /** Resolved biological-type term ref (organism/cell-line type or strain). Picks the measure rule. */
+  biological_type?: Ref
+  /** Optional organism strain term ref (species→strain spine). */
+  strain_ref?: Ref
+  /** Honesty layer over a seed count: mechanism + that it is an estimate. */
+  count_estimate?: CountEstimate
+  /** Culture-system/condition term refs (term.kind: condition) — anoxic, organ-on-a-chip, ... */
+  condition_refs?: Ref[]
+  /** Optional source/counter density (count_per_volume, e.g. cells/uL). */
+  counter_density?: ConcentrationValue
   note?: string
   instance_lot?: {
     vendor?: string

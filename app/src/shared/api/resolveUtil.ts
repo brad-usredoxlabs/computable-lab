@@ -23,6 +23,10 @@ export interface ResolveRef {
   namespace: string
   label: string
   uri?: string
+  /** Term kind when the candidate is a canonical term (material|organism|condition|...). */
+  termKind?: string
+  /** Material/physical domain hint (e.g. cell_line). Set from candidate/mint. */
+  domain?: string
 }
 
 /** Convert a ResolveCandidate to the chip/ref format used by the pickers. */
@@ -31,11 +35,14 @@ export function resolveCandidateToRef(candidate: ResolveCandidate): ResolveRef {
     candidate.source === 'canonical-term'
       ? 'local'
       : candidate.namespace
+  const domain = candidate.domain || candidate.mint?.domain
   return {
     kind: 'ontology',
     id: candidate.curie,
     namespace,
     label: candidate.label,
+    ...(candidate.termKind ? { termKind: candidate.termKind } : {}),
+    ...(domain ? { domain } : {}),
     ...(candidate.uri
       ? { uri: candidate.uri }
       : { uri: candidate.curie.startsWith('local:')

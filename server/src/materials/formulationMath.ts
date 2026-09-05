@@ -115,6 +115,12 @@ export function concentrationToBase(concentration: Concentration): number | unde
       switch (concentration.unit) {
         case 'cells/mL': return concentration.value * 1e3;
         case 'cells/uL': return concentration.value * 1e6;
+        case 'CFU/mL': return concentration.value * 1e3;
+        case 'CFU/uL': return concentration.value * 1e6;
+        case 'organisms/mL': return concentration.value * 1e3;
+        case 'organisms/uL': return concentration.value * 1e6;
+        case 'worms/mL': return concentration.value * 1e3;
+        case 'worms/uL': return concentration.value * 1e6;
         default: return undefined;
       }
     case 'volume_fraction':
@@ -155,6 +161,12 @@ export function concentrationFromBase(value: number, template: Concentration): C
       switch (template.unit) {
         case 'cells/mL': return { ...template, value: Number((value / 1e3).toFixed(6)) };
         case 'cells/uL': return { ...template, value: Number((value / 1e6).toFixed(6)) };
+        case 'CFU/mL': return { ...template, value: Number((value / 1e3).toFixed(6)) };
+        case 'CFU/uL': return { ...template, value: Number((value / 1e6).toFixed(6)) };
+        case 'organisms/mL': return { ...template, value: Number((value / 1e3).toFixed(6)) };
+        case 'organisms/uL': return { ...template, value: Number((value / 1e6).toFixed(6)) };
+        case 'worms/mL': return { ...template, value: Number((value / 1e3).toFixed(6)) };
+        case 'worms/uL': return { ...template, value: Number((value / 1e6).toFixed(6)) };
         default: return undefined;
       }
     case 'volume_fraction':

@@ -92,6 +92,8 @@ export function createTermProvider(store: RecordStore): ResolveProvider {
           label,
           namespace: 'local',
           level: kindLevel(payload),
+          ...(typeof payload.kind === 'string' ? { termKind: payload.kind } : {}),
+          ...(typeof payload.domain === 'string' ? { domain: payload.domain } : {}),
           // carry the matched alias as `definition` so the spine's generic
           // hasLexicalSupport filter accepts an alias hit whose *label* has no
           // textual overlap with the query (the F-praus case).

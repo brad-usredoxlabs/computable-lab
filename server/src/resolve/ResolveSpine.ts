@@ -239,6 +239,8 @@ function toCandidate(
     source: spec.source,
     ...(hit.uri ? { uri: hit.uri } : {}),
     ...(hit.definition ? { definition: hit.definition } : {}),
+    ...(hit.termKind ? { termKind: hit.termKind } : {}),
+    ...(hit.domain ? { domain: hit.domain } : {}),
   };
 }
 
