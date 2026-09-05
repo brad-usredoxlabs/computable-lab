@@ -43,6 +43,7 @@ import type {
   ComponentSuggestionResponse,
 } from '../../types/componentGraph'
 import type { CompositionEntryValue, ConcentrationValue } from '../../types/material'
+import type { LabProfile } from '../../types/labProfile'
 import type {
   InstrumentApplianceJob,
   InstrumentApplianceJobExecutionResult,
@@ -1938,6 +1939,11 @@ export const apiClient = {
    */
   async getBiologicalTypesRegistry(): Promise<{ registry: import('../bioTypes').BiologicalTypesRegistry }> {
     return request(`/biological-types`)
+  },
+
+  /** GET /api/lab-profile — declarative lab identity ("THIS lab"). */
+  async getLabProfile(): Promise<{ profile: LabProfile }> {
+    return request(`/lab-profile`)
   },
 
   /**

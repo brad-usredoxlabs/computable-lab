@@ -23,6 +23,7 @@ import {
   LabMaterialTrackingSection,
   WebSearchSettingsSection,
   GroupMembershipSection,
+  LabProfileSection,
 } from './settings'
 import { Slot } from '../extensions'
 import type { SectionId } from './settings/EditableSection'
@@ -173,6 +174,9 @@ export function SettingsPage() {
             saving={saving}
           />
         )}
+
+        {/* ---- Read-only: Lab Profile (THIS lab) ---- */}
+        <LabProfileSection />
 
         {/* ---- Editable: Sync ---- */}
         {repo && (
