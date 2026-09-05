@@ -7,3 +7,5 @@ export { StorageService } from './StorageService.js';
 export type { PublicStorageDevice } from './StorageService.js';
 export { createStorageProvider } from './createStorageProvider.js';
 export { LocalMountStorageProvider } from './LocalMountStorageProvider.js';
+export { S3StorageProvider } from './S3StorageProvider.js';
+export type { S3ClientLike } from './S3StorageProvider.js';
