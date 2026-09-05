@@ -14,3 +14,5 @@ export { GraphQueryEngine } from './GraphQueryEngine.js';
 export type { GraphQueryEngineDeps, ResolveSpineLike } from './GraphQueryEngine.js';
 export { GraphValidation } from './GraphValidation.js';
 export type { GraphValidationIssue, GraphValidationResult } from './GraphValidation.js';
+export { CollectionService } from './CollectionService.js';
+export type { CollectionMetadata } from './CollectionService.js';
