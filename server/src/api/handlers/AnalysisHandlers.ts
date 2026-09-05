@@ -9,6 +9,7 @@ import {
   type CreateRevisionInput,
   type CreateRunInput,
 } from '../../analysis/analysisService.js';
+import { AnalysisRunner } from '../../analysis/analysisRunner.js';
 
 export function createAnalysisHandlers(ctx: AppContext) {
   const service = new AnalysisService(ctx);
@@ -81,6 +82,24 @@ export function createAnalysisHandlers(ctx: AppContext) {
     async listRuns(_req: FastifyRequest): Promise<{ runs: import('../../types/RecordEnvelope.js').RecordEnvelope[]; total: number }> {
       const runs = await service.list('analysis-run');
       return { runs, total: runs.length };
+    },
+
+    async executeRun(
+      request: FastifyRequest<{ Params: { id: string } }>,
+      reply: FastifyReply,
+    ) {
+      const runner = new AnalysisRunner(ctx);
+      try {
+        const result = await runner.executeRun(request.params.id);
+        return { success: true, ...result };
+      } catch (err) {
+        if (err instanceof AnalysisServiceError) {
+          reply.status(err.statusCode);
+          return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return { error: 'INTERNAL_ERROR', message: err instanceof Error ? err.message : String(err) };
+      }
     },
   };
 }

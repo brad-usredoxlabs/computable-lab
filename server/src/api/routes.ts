@@ -1144,5 +1144,6 @@ export function registerRoutes(
     fastify.get('/analysis-runs', analysisHandlers.listRuns.bind(analysisHandlers));
     fastify.post('/analysis-runs', analysisHandlers.createRun.bind(analysisHandlers));
     fastify.get('/analysis-runs/:id', analysisHandlers.getRun.bind(analysisHandlers));
+    fastify.post('/analysis-runs/:id/execute', analysisHandlers.executeRun.bind(analysisHandlers));
   }
 }
