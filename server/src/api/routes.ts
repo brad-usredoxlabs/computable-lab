@@ -1127,5 +1127,6 @@ export function registerRoutes(
   if (storageHandlers) {
     fastify.get('/storage/devices', storageHandlers.listDevices.bind(storageHandlers));
     fastify.get('/storage/devices/:id/browse', storageHandlers.browse.bind(storageHandlers));
+    fastify.post('/storage/acquire', storageHandlers.acquire.bind(storageHandlers));
   }
 }
