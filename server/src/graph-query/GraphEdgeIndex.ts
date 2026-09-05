@@ -77,7 +77,8 @@ export class GraphEdgeIndex {
         id    TEXT PRIMARY KEY,
         type  TEXT NOT NULL,
         label TEXT NOT NULL,
-        props TEXT NOT NULL DEFAULT '{}'
+        props TEXT NOT NULL DEFAULT '{}',
+        src   TEXT NOT NULL DEFAULT '{}'
       );
       CREATE INDEX IF NOT EXISTS graph_nodes_type_idx ON graph_nodes(type);
 
@@ -99,14 +100,15 @@ export class GraphEdgeIndex {
   addNode(node: GraphNode): void {
     this.db
       .prepare(
-        `INSERT INTO graph_nodes (id, type, label, props) VALUES (@id, @type, @label, @props)
-         ON CONFLICT(id) DO UPDATE SET type=excluded.type, label=excluded.label, props=excluded.props`,
+        `INSERT INTO graph_nodes (id, type, label, props, src) VALUES (@id, @type, @label, @props, @src)
+         ON CONFLICT(id) DO UPDATE SET type=excluded.type, label=excluded.label, props=excluded.props, src=excluded.src`,
       )
       .run({
         id: node.id,
         type: node.type,
         label: node.label,
         props: JSON.stringify(node.properties ?? {}),
+        src: JSON.stringify(node.source ?? {}),
       });
   }
 
@@ -129,21 +131,35 @@ export class GraphEdgeIndex {
 
   node(id: string): GraphNode | null {
     const row = this.db
-      .prepare<[string], { id: string; type: string; label: string; props: string }>(
-        `SELECT id, type, label, props FROM graph_nodes WHERE id = ?`,
+      .prepare<[string], { id: string; type: string; label: string; props: string; src: string }>(
+        `SELECT id, type, label, props, src FROM graph_nodes WHERE id = ?`,
       )
       .get(id);
     if (!row) return null;
-    return { id: row.id, type: row.type, label: row.label, properties: JSON.parse(row.props) };
+    return this.rowToNode(row);
   }
 
   nodesByType(type: string): GraphNode[] {
     const rows = this.db
-      .prepare<[string], { id: string; type: string; label: string; props: string }>(
-        `SELECT id, type, label, props FROM graph_nodes WHERE type = ? ORDER BY id`,
+      .prepare<[string], { id: string; type: string; label: string; props: string; src: string }>(
+        `SELECT id, type, label, props, src FROM graph_nodes WHERE type = ? ORDER BY id`,
       )
       .all(type);
-    return rows.map((r) => ({ id: r.id, type: r.type, label: r.label, properties: JSON.parse(r.props) }));
+    return rows.map((r) => this.rowToNode(r));
+  }
+
+  private rowToNode(row: { id: string; type: string; label: string; props: string; src: string }): GraphNode {
+    const props = JSON.parse(row.props) as Record<string, unknown> | undefined;
+    const src = JSON.parse(row.src) as { recordId?: string; path?: string; eventId?: string } | undefined;
+    const node: GraphNode = { id: row.id, type: row.type, label: row.label };
+    if (props && Object.keys(props).length > 0) node.properties = props;
+    if (src && src.recordId !== undefined) {
+      const s: { recordId: string; path?: string; eventId?: string } = { recordId: src.recordId };
+      if (src.path !== undefined) s.path = src.path;
+      if (src.eventId !== undefined) s.eventId = src.eventId;
+      node.source = s;
+    }
+    return node;
   }
 
   /** All node ids of a type (cheap). */

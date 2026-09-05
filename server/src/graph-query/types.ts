@@ -114,6 +114,8 @@ export interface TraverseQuery {
   depth?: number;
   targetType?: string;
   limit?: number;
+  /** Return a human-readable interpretation (§18). */
+  explain?: boolean;
 }
 
 export interface PathQuery {
@@ -123,6 +125,8 @@ export interface PathQuery {
   relationshipTypes?: string[];
   maxDepth?: number;
   includeProvenance?: boolean;
+  /** Return a human-readable interpretation (§18). */
+  explain?: boolean;
 }
 
 export interface NeighborhoodQuery {
@@ -133,6 +137,8 @@ export interface NeighborhoodQuery {
   objectTypes?: string[];
   limits?: Record<string, number>;
   includeProvenance?: boolean;
+  /** Return a human-readable interpretation (§18). */
+  explain?: boolean;
 }
 
 export interface LineageQuery {
@@ -142,6 +148,8 @@ export interface LineageQuery {
   depth?: number;
   includeOperations?: boolean;
   includeProvenance?: boolean;
+  /** Return a human-readable interpretation (§18). */
+  explain?: boolean;
 }
 
 export interface AggregateQuery extends QueryBase {

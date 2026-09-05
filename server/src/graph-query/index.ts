@@ -10,3 +10,7 @@ export { GraphProjector } from './GraphProjector.js';
 export type { ProjectableEventGraph, ProjectableEvent, ProjectedGraph } from './GraphProjector.js';
 export { GraphEdgeIndex } from './GraphEdgeIndex.js';
 export type { EdgeQueryOptions, TraversalEdge, GraphEdgeBuildInput } from './GraphEdgeIndex.js';
+export { GraphQueryEngine } from './GraphQueryEngine.js';
+export type { GraphQueryEngineDeps, ResolveSpineLike } from './GraphQueryEngine.js';
+export { GraphValidation } from './GraphValidation.js';
+export type { GraphValidationIssue, GraphValidationResult } from './GraphValidation.js';
