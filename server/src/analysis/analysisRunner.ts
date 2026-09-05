@@ -272,6 +272,22 @@ export class AnalysisRunner {
       }
 
       await service.setRunStatus(runId, 'succeeded');
+
+      // Capture a corpus training pair (surface:analysis → accepted manifest).
+      // Opt-in via CLA_CORPUS_LOCAL_PATH; never throws.
+      try {
+        const { captureAnalysisCorpusPair } = await import('../corpus/analysisCorpus.js');
+        captureAnalysisCorpusPair({
+          runId,
+          revisionId: revId,
+          label: revPayload.sdkVersion ? `analysis ${revId}` : revId,
+          manifest,
+          asOf: new Date().toISOString(),
+        });
+      } catch {
+        // corpus capture is best-effort; ignore failures here
+      }
+
       return { recordId: runId, status: 'succeeded', manifest };
     } finally {
       await rm(inputDir, { recursive: true, force: true });
