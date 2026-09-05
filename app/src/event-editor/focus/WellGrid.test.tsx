@@ -9,6 +9,50 @@ afterEach(() => {
 })
 
 describe('WellGrid', () => {
+  it('fires onWellClick on a plain click (no drag, no modifier) — selection must not be swallowed by range-select capture', () => {
+    const labware = createLabware('plate_96', 'plate')
+    const onWellRangeSelect = vi.fn()
+    const onWellClick = vi.fn()
+    const { container } = render(
+      <WellGrid
+        labware={labware}
+        orientation="landscape"
+        size={300}
+        hoveredWellId={null}
+        selectedWellIds={new Set()}
+        onHover={() => undefined}
+        onWellClick={onWellClick}
+        onWellRangeSelect={onWellRangeSelect}
+      />,
+    )
+
+    const a1 = container.querySelector('[data-well-id="A1"]') as Element
+
+    // A plain mouse left-click: pointer-down + pointer-up with NO movement,
+    // then the native click event on the well. The range-select path must not
+    // suppress the click (capture is only taken past the drag threshold), so
+    // onWellClick fires → plain-click selection still works.
+    fireEvent.pointerDown(a1, {
+      pointerId: 1,
+      pointerType: 'mouse',
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+    })
+    fireEvent.pointerUp(a1, {
+      pointerId: 1,
+      pointerType: 'mouse',
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+    })
+    fireEvent.click(a1, { pointerId: 1, pointerType: 'mouse', button: 0 })
+
+    expect(onWellRangeSelect).not.toHaveBeenCalled()
+    expect(onWellClick).toHaveBeenCalledTimes(1)
+    expect(onWellClick.mock.calls[0][0]).toBe('A1')
+  })
+
   it('selects a range while pointer capture retargets moves to the svg', () => {
     const labware = createLabware('plate_96', 'plate')
     const onWellRangeSelect = vi.fn()

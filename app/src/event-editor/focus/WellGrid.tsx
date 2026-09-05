@@ -113,6 +113,7 @@ export function WellGrid({
     startY: number
     dragging: boolean
   } | null>(null)
+  const capturedRef = useRef(false)
   const suppressClickRef = useRef(false)
   const nativeDragListenersRef = useRef<{
     move: (event: PointerEvent) => void
@@ -138,6 +139,15 @@ export function WellGrid({
     const dx = event.clientX - drag.startX
     const dy = event.clientY - drag.startY
     if (!drag.dragging && dx * dx + dy * dy < 36) return
+    // A drag has actually begun (pointer moved past the tap threshold). Only NOW
+    // capture the pointer — capturing on pointer-down retargets the subsequent
+    // native `click` event to the SVG, which suppresses the well's onClick and
+    // breaks plain-click selection (you'd only select via ctrl/cmd-click, which
+    // skips this path). Capture here, post-threshold, keeps both working.
+    if (!capturedRef.current) {
+      svg.setPointerCapture?.(event.pointerId)
+      capturedRef.current = true
+    }
     const wasDragging = drag.dragging
     drag.dragging = true
     suppressClickRef.current = true
@@ -151,7 +161,10 @@ export function WellGrid({
     longPress.handlers.onPointerUp(event as unknown as React.PointerEvent)
     const drag = dragRef.current
     if (drag?.pointerId === event.pointerId) {
-      svg.releasePointerCapture?.(event.pointerId)
+      if (capturedRef.current) {
+        svg.releasePointerCapture?.(event.pointerId)
+        capturedRef.current = false
+      }
       dragRef.current = null
     }
     removeNativeDragListeners()
@@ -173,7 +186,9 @@ export function WellGrid({
       startY: event.clientY,
       dragging: false,
     }
-    svg.setPointerCapture?.(event.pointerId)
+    // Do NOT setPointerCapture here. See updatePointerDrag — capture is only
+    // taken once the drag exceeds the tap threshold so a plain click still
+    // reaches the well's onClick (plain-click selection).
 
     removeNativeDragListeners()
     const move = (nativeEvent: PointerEvent) => {
