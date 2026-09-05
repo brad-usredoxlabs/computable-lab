@@ -47,6 +47,17 @@ describe('analysis-revision schema', () => {
     }).valid).toBe(true);
   });
 
+  it('accepts a revision with a model input', () => {
+    expect(validateFor(IDS.rev)({
+      kind: 'analysis-revision',
+      id: 'ANREV-000010',
+      title: 'predict with model',
+      entryScript: 'def run(ctx):\n    m = ctx.input("model").file_bytes()',
+      sdkVersion: '0.1.0',
+      inputs: [{ name: 'model', dataKind: 'model', required: true }],
+    }).valid).toBe(true);
+  });
+
   it('rejects a revision missing entryScript', () => {
     expect(validateFor(IDS.rev)({
       kind: 'analysis-revision',
@@ -105,6 +116,20 @@ describe('analysis-output-artifact schema', () => {
       name: 'peak_results',
       dataKind: 'table',
       inlineValue: [{ start: 0.1, end: 0.5, area: 3.2 }],
+    }).valid).toBe(true);
+  });
+
+  it('accepts a model artifact with a data-reference', () => {
+    expect(validateFor(IDS.out)({
+      kind: 'analysis-output-artifact',
+      id: 'AOUT-000010',
+      title: 'trained model',
+      runRef: { kind: 'record', id: 'ANR-000001', type: 'analysis-run' },
+      name: 'model',
+      dataKind: 'model',
+      format: 'pkl',
+      dataReferenceRef: { kind: 'record', id: 'DREF-000001', type: 'data-reference' },
+      sourceRelations: [{ kind: 'record', id: 'DREF-000000', type: 'data-reference' }],
     }).valid).toBe(true);
   });
 

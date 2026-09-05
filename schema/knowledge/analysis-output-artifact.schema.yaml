@@ -39,7 +39,7 @@ properties:
 
   dataKind:
     type: string
-    enum: [ table, signal, signal-collection, spatial-array, image, binary, metric ]
+    enum: [ table, signal, signal-collection, spatial-array, image, model, binary, metric ]
 
   format:
     type: string

@@ -60,7 +60,7 @@ properties:
         description: { type: string }
         dataKind:
           type: string
-          enum: [ table, signal, signal-collection, spatial-array, image, binary, metric ]
+          enum: [ table, signal, signal-collection, spatial-array, image, model, binary, metric ]
         required: { type: boolean }
 
   # A JSON-Schema fragment that constrains `parameters` for a run of this
