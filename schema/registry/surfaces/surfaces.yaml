@@ -1,0 +1,59 @@
+version: 1
+title: "Work-Surface Registry"
+description: >
+  Declarative registration of every navigable work surface in computable-lab.
+  Surfaces are DECLARED, not hardcoded: each registration describes the path,
+  the object types the surface scopes to, which sub-object kinds are selectable
+  for an AI action, and the surface's AI role. plan/design/execute are MODES of
+  ONE run surface (one tab per run — locked decision #3) sharing surface id
+  `run-plan|run-design|run-execute`.
+
+surfaces:
+  - id: find
+    label: "Find / Search"
+    path: "/find"
+    objectTypes: [project, run, well, collection]
+    selectableKinds: [well, cell, event, material]
+    aiRole: "search selection → AI context"
+  - id: run-plan
+    label: "Run · Plan"
+    path: "/project/:studyId/run/:runId"
+    objectTypes: [run]
+    selectableKinds: [event, well, material, protocol-step]
+    aiRole: "protocol localization & planning"
+  - id: run-design
+    label: "Run · Design"
+    path: "/project/:studyId/run/:runId"
+    objectTypes: [run]
+    selectableKinds: [event, well, material]
+    aiRole: "event-graph editing"
+  - id: run-execute
+    label: "Run · Execute"
+    path: "/project/:studyId/run/:runId"
+    objectTypes: [run]
+    selectableKinds: [event, well, material]
+    aiRole: "batch execution"
+  - id: results
+    label: "Results"
+    path: "/project/:studyId/results"
+    objectTypes: [run]
+    selectableKinds: [well, measurement, event]
+    aiRole: "readouts & results"
+  - id: analysis
+    label: "Analysis"
+    path: "/analysis"
+    objectTypes: [project, run, collection]
+    selectableKinds: [well, cell, event, material]
+    aiRole: "interrogative goals answered in place"
+  - id: knowledge
+    label: "Knowledge"
+    path: "/knowledge"
+    objectTypes: [claim, protocol, material, document]
+    selectableKinds: [document, protocol, material]
+    aiRole: "literature & knowledge base"
+  - id: project
+    label: "Project"
+    path: "/project/:studyId"
+    objectTypes: [project]
+    selectableKinds: []
+    aiRole: "project home"
