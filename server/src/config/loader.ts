@@ -528,6 +528,45 @@ function validateOntologyConfig(config: unknown, path = 'ontology'): asserts con
 }
 
 /**
+ * Validate storage device configuration.
+ */
+function validateStorageDevices(config: unknown, path: string): asserts config is Array<{ id: string; kind: string }> {
+  if (!config || typeof config !== 'object' || !Array.isArray(config)) {
+    throw new ConfigValidationError('must be an array', path, config);
+  }
+  const ids = new Set<string>();
+  config.forEach((device, index) => {
+    const d = device as Record<string, unknown>;
+    if (!d || typeof d !== 'object' || Array.isArray(d)) {
+      throw new ConfigValidationError('each device must be an object', `${path}[${index}]`, device);
+    }
+    if (!d.id || typeof d.id !== 'string') {
+      throw new ConfigValidationError('id is required', `${path}[${index}].id`, d.id);
+    }
+    if (ids.has(d.id)) {
+      throw new ConfigValidationError(`duplicate storage device id: ${d.id}`, `${path}[${index}].id`, d.id);
+    }
+    ids.add(d.id as string);
+    if (!d.label || typeof d.label !== 'string') {
+      throw new ConfigValidationError('label is required', `${path}[${index}].label`, d.label);
+    }
+    if (d.kind !== 's3' && d.kind !== 'local-mount') {
+      throw new ConfigValidationError('kind must be one of: s3, local-mount', `${path}[${index}].kind`, d.kind);
+    }
+    if (d.kind === 'local-mount' && (!d.mountPath || typeof d.mountPath !== 'string')) {
+      throw new ConfigValidationError('mountPath is required for local-mount devices', `${path}[${index}].mountPath`, d.mountPath);
+    }
+    if (d.kind === 's3' && (!d.bucket || typeof d.bucket !== 'string')) {
+      throw new ConfigValidationError('bucket is required for s3 devices', `${path}[${index}].bucket`, d.bucket);
+    }
+  });
+  const defaults = config.filter((d) => (d as Record<string, unknown>).default);
+  if (defaults.length > 1) {
+    throw new ConfigValidationError('only one storage device can be marked as default', `${path}.default`, null);
+  }
+}
+
+/**
  * Validate the entire configuration.
  */
 export function validateConfig(config: unknown): asserts config is Partial<AppConfig> {
@@ -574,6 +613,10 @@ export function validateConfig(config: unknown): asserts config is Partial<AppCo
 
   if (c.lab !== undefined) {
     validateLabConfig(c.lab, 'lab');
+  }
+
+  if (c.storageDevices !== undefined) {
+    validateStorageDevices(c.storageDevices, 'storageDevices');
   }
 
   if (c.integrations !== undefined) {
@@ -663,6 +706,7 @@ export async function loadConfig(options: LoadConfigOptions = {}): Promise<AppCo
     server: deepMerge(DEFAULT_CONFIG.server, partialConfig.server ?? {}),
     schemas: deepMerge(DEFAULT_CONFIG.schemas, partialConfig.schemas ?? {}),
     repositories: (partialConfig.repositories ?? []).map(applyRepoDefaults),
+    storageDevices: partialConfig.storageDevices ?? [],
     execution: deepMerge(DEFAULT_CONFIG.execution ?? { mode: 'local', adapters: {} }, partialConfig.execution ?? {}),
     lab: deepMerge(DEFAULT_CONFIG.lab ?? { materialTracking: { mode: 'relaxed', allowAdHocEventInstances: true } }, partialConfig.lab ?? {}),
   };

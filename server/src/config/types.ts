@@ -4,6 +4,7 @@
  * These types define the structure of config.yaml and provide
  * type-safe access to server configuration.
  */
+import type { StorageDeviceConfig } from '../storage/types.js'
 
 /**
  * Top-level server configuration.
@@ -12,6 +13,11 @@ export interface AppConfig {
   server: ServerConfig;
   schemas: SchemaConfig;
   repositories: RepositoryConfig[];
+  /**
+   * External storage devices (S3 bucket/NAS, or local mount such as a USB
+   * stick). Large raw instrument data lives here, referenced from git records.
+   */
+  storageDevices?: StorageDeviceConfig[];
   ai?: AIConfig;
   execution?: ExecutionConfig;
   lab?: LabConfig;
@@ -392,6 +398,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     bundledDir: './schema',
   },
   repositories: [],
+  storageDevices: [],
   execution: {
     mode: 'local',
     adapters: {},

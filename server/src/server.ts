@@ -142,6 +142,7 @@ import { LocalIdentityService, LOCAL_ADMIN_USER_ID } from './security/LocalIdent
 import { loadDefaultMaterialProfileRegistry, type MaterialProfileRegistry } from './materials/MaterialProfileRegistry.js';
 import { loadDefaultLabProfile, mergeNamespace, type LabProfile } from './labProfile/labProfile.js';
 import { AuthorizationService } from './security/AuthorizationService.js';
+import { StorageService } from './storage/StorageService.js';
 
 /**
  * Null extractor that returns empty results with a diagnostic.
@@ -243,6 +244,7 @@ export interface AppContext {
   jsonLdProjector: JsonLdProjector;
   graphQueryService?: GraphQueryService;
   extractionRunner?: ExtractionRunnerService;
+  storageService: StorageService;
 }
 
 /**
@@ -586,6 +588,7 @@ export async function initializeApp(
     jsonLdIndex,
     jsonLdProjector,
     ...(graphQueryService ? { graphQueryService } : {}),
+    storageService: new StorageService(appConfig?.storageDevices ?? []),
   };
 }
 
