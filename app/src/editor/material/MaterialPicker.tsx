@@ -71,6 +71,37 @@ function orderLocalResults(entries: MaterialSearchItem[]): MaterialSearchItem[] 
   })
 }
 
+/**
+ * Decide which local concept-only candidate rows to render given the query and
+ * whether remote ontology hits exist. Local concept matches whose title or
+ * recordId matches the query (case-insensitive) are ALWAYS shown — a lab that
+ * just minted a local term (e.g. "HepaRG cell") must see it again to reuse it,
+ * even when the ontology resolver returns hits for the same name. Weak/partial
+ * concept matches are collapsed (hidden) whenever higher-value results or
+ * ontology hits are present, to avoid clutter.
+ */
+export function visibleConceptMatches(
+  conceptResults: MaterialSearchItem[],
+  query: string,
+  opts: {
+    showConcepts: boolean
+    hasHigherValueResults: boolean
+  },
+): MaterialSearchItem[] {
+  const { showConcepts, hasHigherValueResults } = opts
+  const queryNorm = query.trim().toLowerCase()
+  if (!queryNorm) return showConcepts ? conceptResults : []
+  const exact = conceptResults.filter((entry) => {
+    const title = ((entry.title || '') as string).trim().toLowerCase()
+    const id = (entry.recordId || '').trim().toLowerCase()
+    return title === queryNorm || id === queryNorm || id.includes(queryNorm)
+  })
+  const weak = conceptResults.filter((entry) => !exact.includes(entry))
+  // Exact local matches always surface; weak matches collapse unless the user
+  // expanded concepts or there are no better/ontology results to show.
+  return [...exact, ...(showConcepts || !hasHigherValueResults ? weak : [])]
+}
+
 function kindBadgeLabel(kind?: string): string {
   if (kind === 'material-spec') return 'Saved Stock'
   if (kind === 'vendor-product') return 'Vendor Reagent'
@@ -338,9 +369,11 @@ export function MaterialPicker({
   const biologicalDerivedResults = orderedLocalResults.filter((entry) => entry.category === 'biological-derived')
   const conceptResults = orderedLocalResults.filter((entry) => entry.category === 'concept-only')
   const visiblePreparedResults = showPreparedMaterials ? preparedResults : []
-  const visibleConceptResults = showConcepts || (formulationResults.length === 0 && preparedResults.length === 0 && vendorResults.length === 0 && biologicalDerivedResults.length === 0 && olsResults.length === 0)
-    ? conceptResults
-    : []
+  const hasHigherValueResults = formulationResults.length > 0 || preparedResults.length > 0 || vendorResults.length > 0 || biologicalDerivedResults.length > 0 || olsResults.length > 0
+  const visibleConceptResults = visibleConceptMatches(conceptResults, query, {
+    showConcepts,
+    hasHigherValueResults,
+  })
   const visibleLocalResults = [
     ...formulationResults,
     ...vendorResults,
