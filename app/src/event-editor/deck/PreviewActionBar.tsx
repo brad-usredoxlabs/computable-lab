@@ -35,17 +35,20 @@ export function PreviewActionBar() {
   const [termDecisions, setTermDecisions] = useState<Record<string, TermDecision>>({})
   const acceptingRef = useRef(false)
   const preview = state.preview
-  if (!preview) return null
-  const activePreview = preview
 
   // Terms that need an explicit sign-off decision. Accept is hard-blocked until
-  // every one is approved or replaced.
+  // every one is approved or replaced. Computed from the LIVE preview reference
+  // (NOT the dereferenced object) so the hook runs on every render regardless of
+  // whether a preview is staged — hooks must not come after an early return.
   const decisionNeeded = useMemo(
-    () => (activePreview.ontologyBindings ?? []).filter(bindingNeedsDecision),
-    [activePreview.ontologyBindings],
+    () => (preview?.ontologyBindings ?? []).filter(bindingNeedsDecision),
+    [preview?.ontologyBindings],
   )
   const pendingDecisions = decisionNeeded.filter((b) => !termDecisions[b.curie])
   const acceptBlocked = pendingDecisions.length > 0
+
+  if (!preview) return null
+  const activePreview = preview
 
   const labwareCount = activePreview.previewPlacements.length
   const eventCount = activePreview.previewEvents.length
