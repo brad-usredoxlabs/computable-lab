@@ -52,7 +52,57 @@ test.describe('Find (graph search) UI', () => {
     await expect(page.getByTestId('graph-search-send-ai')).toBeVisible({ timeout: 10_000 })
     await page.getByTestId('graph-search-send-ai').click()
     const ctx = page.getByTestId('graph-search-ai-context')
-    await expect(ctx).toContainText('selection:', { timeout: 10_000 })
+    // SurfaceContext status line: surface + selected count + goal (phase 3).
+    await expect(ctx).toContainText('surface=find', { timeout: 10_000 })
+    await expect(ctx).toContainText('1 selected', { timeout: 10_000 })
+  })
+
+  test('send-to-AI dispatches a well-formed SurfaceContext (surface + selection + goal)', async ({ page }) => {
+    await page.goto(`${BASE}/find?q=clofibrate`)
+    const input = page.getByTestId('graph-search-input')
+    await expect(input).toBeVisible({ timeout: 15_000 })
+    await expect(page.locator('[data-hit="true"]').first()).toBeVisible({ timeout: 15_000 })
+
+    // Select 2 clofibrate wells and set a custom goal.
+    await page.getByTestId('row-select-well').nth(0).check()
+    await page.getByTestId('row-select-well').nth(1).check()
+    await expect(page.getByTestId('graph-search-send-ai')).toBeVisible({ timeout: 10_000 })
+    const prompt = page.getByTestId('graph-search-ai-prompt')
+    await expect(prompt).toBeVisible()
+    await prompt.fill('compute mean ROS')
+
+    // Capture the dispatched surface-ai-request event payload.
+    await page.evaluate(() => {
+      ;(window as unknown as { __surfaceCtx: unknown }).__surfaceCtx = null
+      window.addEventListener('surface-ai-request', (e) => {
+        ;(window as unknown as { __surfaceCtx: unknown }).__surfaceCtx =
+          (e as CustomEvent).detail?.ctx ?? (e as CustomEvent).detail
+      })
+    })
+    await page.getByTestId('graph-search-send-ai').click()
+
+    // The handler is async (awaits collection/selection creation before
+    // dispatching), so wait for the event payload before asserting it.
+    await page.waitForFunction(
+      () => (window as unknown as { __surfaceCtx: unknown }).__surfaceCtx !== null,
+      undefined,
+      { timeout: 10_000 },
+    )
+    const ctx = await page.evaluate(() =>
+      (window as unknown as { __surfaceCtx: unknown }).__surfaceCtx,
+    )
+    expect(ctx).toEqual(
+      expect.objectContaining({
+        surface: 'find',
+        active: expect.objectContaining({ objectType: 'collection' }),
+      }),
+    )
+    const selection = (ctx as { selection: Array<{ ref: { type: string; id: string } }> }).selection
+    expect(selection).toHaveLength(2)
+    expect(selection[0]!.ref.type).toBe('well')
+    expect(selection[0]!.ref.id).toContain('well:')
+    // goal round-trips through the editable prompt input.
+    expect((ctx as { prompt: string }).prompt).toBe('compute mean ROS')
   })
 
   test('master search: /find?q=<text> auto-runs the graph search (from top bar / splash)', async ({ page }) => {

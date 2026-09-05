@@ -90,4 +90,18 @@ test.describe('Settings Page', () => {
     await expect(schemaSectionByH2.locator('.info-row__label', { hasText: 'Source' })).toBeVisible()
     await expect(schemaSectionByH2.locator('.info-row__label', { hasText: 'Total Schemas' })).toBeVisible()
   })
+
+  test('lab profile section shows the declarative lab identity', async ({ page }) => {
+    await page.waitForTimeout(2000)
+
+    const group = page.getByTestId('lab-profile-section')
+    await expect(group).toBeVisible()
+    // Label + live namespace override + ontology prefix.
+    await expect(group.locator('.info-row__label', { hasText: 'Label' })).toBeVisible()
+    await expect(group.getByText('Ontology prefix')).toBeVisible()
+    // Read-only chips for instruments/protocols/reagents render.
+    await expect(group.getByText('Instruments')).toBeVisible()
+    await expect(group.getByText('Protocols')).toBeVisible()
+    await expect(group.getByText('Reagents')).toBeVisible()
+  })
 })
