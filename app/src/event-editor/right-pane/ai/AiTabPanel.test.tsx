@@ -205,6 +205,33 @@ describe('AiTabPanel', () => {
     expect(prompt).toContain('compute mean ROS')
   })
 
+  it('routes the selected data into the AI chat message', async () => {
+    renderWithTab()
+    await screen.findByTestId('ai-tab-system-prompt')
+    chatSend.mockClear()
+    window.dispatchEvent(
+      new CustomEvent(SURFACE_AI_REQUEST_EVENT, {
+        detail: {
+          ctx: {
+            surface: 'find',
+            active: { objectType: 'collection', objectId: 'selection:a', label: 'Find selection' },
+            selection: [
+              {
+                ref: { kind: 'record', id: 'well:EVG-c:plate-1:A1', type: 'well', label: 'A1' },
+                data: { treatment: 'clofibrate 1mM', materialRefs: ['MAT-CLO'] },
+              },
+            ],
+            prompt: 'what dose?',
+          },
+        },
+      }),
+    )
+    expect(chatSend).toHaveBeenCalledTimes(1)
+    const prompt = chatSend.mock.calls[0][0] as string
+    expect(prompt).toContain('clofibrate 1mM')
+    expect(prompt).toContain('MAT-CLO')
+  })
+
   it('ignores a malformed surface-ai-request (no ctx)', async () => {
     renderWithTab()
     await screen.findByTestId('ai-tab-system-prompt')

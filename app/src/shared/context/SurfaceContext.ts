@@ -33,6 +33,13 @@ export interface ActiveObject {
 export interface SelectionItem {
   ref: Ref
   label?: string
+  /**
+   * The actual data about the selected object — resolved from the graph node
+   * properties (e.g. a well's materialRefs, labware, treatment, measurements).
+   * Deliberately present: this is the DATA the AI needs to answer, not just
+   * the id. Kept compact (properties, not the full graph).
+   */
+  data?: Record<string, unknown>
 }
 
 export interface SurfaceContext {
@@ -57,15 +64,16 @@ export const SURFACE_AI_REQUEST_EVENT = 'surface-ai-request'
 
 /**
  * Build the AI message preamble for a dispatched SurfaceContext — the
- * deterministic "from surface, selected N, goal" that grounds the model.
+ * deterministic "from surface, selected N, goal" that grounds the model, WITH
+ * the actual data about each selected object (so the model can answer).
  */
 export function surfaceAiPrompt(ctx: SurfaceContext): string {
-  const labels = ctx.selection
-    .map((s) => (s.ref.label ?? s.ref.id ?? s.label ?? '').trim())
-    .filter((s) => s.length > 0)
-  return [
-    `From the ${ctx.surface} surface, ${ctx.selection.length} selected`,
-    ...(labels.length > 0 ? [`( ${labels.join(', ')} )`] : []),
-    `Goal: ${ctx.prompt}`,
-  ].join(' ')
+  const lines: string[] = [`From the ${ctx.surface} surface, ${ctx.selection.length} selected:`]
+  for (const item of ctx.selection) {
+    const name = item.ref.label ?? item.label ?? item.ref.id
+    const data = item.data && Object.keys(item.data).length > 0 ? JSON.stringify(item.data) : ''
+    lines.push(data ? `- ${name}: ${data}` : `- ${name}`)
+  }
+  lines.push(`Goal: ${ctx.prompt}`)
+  return lines.join('\n')
 }

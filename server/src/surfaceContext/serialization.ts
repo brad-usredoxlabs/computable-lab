@@ -32,6 +32,7 @@ function slim(ctx: SurfaceContext): Record<string, unknown> {
         ...(item.ref.kind === 'ontology' ? { namespace: item.ref.namespace } : {}),
       },
       ...(item.label !== undefined && item.label.length > 0 ? { label: item.label } : {}),
+      ...(item.data && Object.keys(item.data).length > 0 ? { data: item.data } : {}),
     }));
   }
   if (ctx.prompt && ctx.prompt.trim().length > 0) {

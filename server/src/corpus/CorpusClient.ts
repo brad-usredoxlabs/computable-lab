@@ -75,6 +75,11 @@ export function resolveCorpusConfig(override?: Partial<CorpusConfig>): CorpusCon
  * store carries de-identified pairs. Best-effort; safe to leave untouched.
  */
 export function anonymizeGraph(graph: unknown): unknown {
+  if (typeof graph === 'string') {
+    return graph
+      .replace(/\b(MSP|EVG|MAT|ALQ|PRT|PLR)-[A-Za-z0-9_-]{1,30}\b/g, '$1-###')
+      .replace(/[A-Za-z0-9]{36}/g, 'ID');
+  }
   if (!graph || typeof graph !== 'object') return graph;
   if (Array.isArray(graph)) return graph.map(anonymizeGraph);
   const out: Record<string, unknown> = {};
@@ -82,7 +87,7 @@ export function anonymizeGraph(graph: unknown): unknown {
     let nv = v;
     if (typeof v === 'string') {
       nv = v
-        .replace(/\b(MSP|EVG|MAT|ALQ|PRT|PLR)-\d+\b/g, '$1-###')
+        .replace(/\b(MSP|EVG|MAT|ALQ|PRT|PLR)-[A-Za-z0-9_-]{1,30}\b/g, '$1-###')
         .replace(/[A-Za-z0-9]{36}/g, 'ID');
     } else {
       nv = anonymizeGraph(v);
@@ -106,11 +111,21 @@ export function anonymizeSurfaceContext(sc: Record<string, unknown>): Record<str
     if (!item || typeof item !== 'object') return item;
     const entry = item as Record<string, unknown>;
     const ref = entry.ref as Record<string, unknown> | undefined;
-    if (!ref || typeof ref.id !== 'string') return entry;
-    const id = ref.id
-      .replace(/^(well|cell|plate):?.{1,18}$/i, '$1:###')
-      .replace(/\b(MSP|EVG|MAT|ALQ|PRT|PLR)-\d+\b/g, '$1-###');
-    return { ...entry, ref: { ...ref, id } };
+    const scrubId = (id: unknown) =>
+      typeof id === 'string'
+        ? id
+            .replace(/^(well|cell|plate):?.{1,18}$/i, '$1:###')
+            .replace(/\b(MSP|EVG|MAT|ALQ|PRT|PLR)-\d+\b/g, '$1-###')
+        : id;
+    let refOut = entry;
+    if (ref && typeof ref.id === 'string') {
+      refOut = { ...entry, ref: { ...ref, id: scrubId(ref.id) } };
+    }
+    // scrub internal ids inside the resolved data payloads too
+    if (entry.data && typeof entry.data === 'object') {
+      refOut = { ...refOut, data: anonymizeGraph(entry.data) };
+    }
+    return refOut;
   });
   return { ...out, selection: scrubbed };
 }

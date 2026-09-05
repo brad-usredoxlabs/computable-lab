@@ -24,6 +24,23 @@ describe('SurfaceContext serialization round-trip', () => {
     expect(back.prompt).toBe('Analyze these wells');
   });
 
+  it('YAML round-trip keeps resolved selection data intact', () => {
+    const withData = {
+      ...WELL_CTX,
+      selection: [
+        {
+          ref: { kind: 'record', id: 'well:EVG-c:plate-1:A1', type: 'well', label: 'A1' },
+          data: { treatment: 'clofibrate 1mM', materialRefs: ['MAT-CLO'] },
+        },
+      ],
+    };
+    const back = parseSurfaceContext(toYaml(withData as never));
+    expect(back.selection[0].data).toMatchObject({
+      treatment: 'clofibrate 1mM',
+      materialRefs: ['MAT-CLO'],
+    });
+  });
+
   it('JSON round-trip keeps selection refs intact', () => {
     const back = parseSurfaceContext(toJson(WELL_CTX));
     expect(back.selection[0].ref).toMatchObject({ id: 'well:1', type: 'well' });

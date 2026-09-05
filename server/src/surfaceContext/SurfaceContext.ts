@@ -34,6 +34,8 @@ export interface ActiveObject {
 export interface SelectionItem {
   ref: Ref;
   label?: string;
+  /** Resolved graph-node data (well materialRefs/labware/treatment/measurements). */
+  data?: Record<string, unknown>;
 }
 
 export interface SurfaceContext {

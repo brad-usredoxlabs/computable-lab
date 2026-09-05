@@ -159,4 +159,19 @@ describe('SurfaceContext corpus capture (phase 5)', () => {
     const ids = (out.selection as Array<{ ref: { id: string } }>).map((s) => s.ref.id);
     expect(ids).toEqual(['well:###', 'cell:###', 'EVG-###']);
   });
+
+  it('anonymizeSurfaceContext scrubs internal ids inside resolved selection data', () => {
+    const out = anonymizeSurfaceContext({
+      surface: 'find',
+      selection: [
+        {
+          ref: { kind: 'record', id: 'well:EVG-c:plate-1:A1', type: 'well' },
+          data: { materialRefs: ['MAT-CLO-7'], labwareId: 'plate-1', treatment: 'clofibrate' },
+        },
+      ],
+    });
+    const sel = (out.selection as Array<{ ref: { id: string }; data: { materialRefs: string[] } }>)[0]!;
+    expect(sel.ref.id).toBe('well:###');
+    expect(sel.data.materialRefs[0]).toBe('MAT-###');
+  });
 });

@@ -31,4 +31,28 @@ describe('selectionToSurfaceContext', () => {
     if (ref.kind !== 'record') throw new Error('expected record ref')
     expect(ref.type).toBe('cell')
   })
+
+  it('carries resolved node data into the selection (the AI gets real data)', () => {
+    const ctx = selectionToSurfaceContext({
+      ids: ['well:EVG-x:plate-1:A1'],
+      nodes: {
+        'well:EVG-x:plate-1:A1': {
+          labwareId: 'plate-1',
+          materialRefs: ['MAT-CLO'],
+          treatment: 'clofibrate 1mM',
+        },
+      },
+      prompt: 'analyze',
+    })
+    expect(ctx.selection[0]!.data).toEqual({
+      labwareId: 'plate-1',
+      materialRefs: ['MAT-CLO'],
+      treatment: 'clofibrate 1mM',
+    })
+  })
+
+  it('omits data when a selected id has no resolved node', () => {
+    const ctx = selectionToSurfaceContext({ ids: ['well:1'], nodes: { 'other:2': { x: 1 } } })
+    expect(ctx.selection[0]!.data).toBeUndefined()
+  })
 })

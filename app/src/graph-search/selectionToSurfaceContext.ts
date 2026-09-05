@@ -1,10 +1,14 @@
 /**
  * selectionToSurfaceContext — pure builder that turns a Find-surface selection
- * (well/cell node ids) into a well-formed SurfaceContext (phase 3, Task 3.1).
+ * (well/cell node ids) into a well-formed SurfaceContext (phase 3, Task 3.1),
+ * carrying the RESOLVED well data (not just ids) so the AI has the substance
+ * it needs to answer.
  *
  * Pure + unit-testable (no API, no DOM): ids → well refs, surface=find, active
  * object = the selection collection, prompt = the user's goal (editable) or a
- * sane default.
+ * sane default. `nodes` maps graph-node id → its resolved properties; those
+ * properties are attached to each SelectionItem.data so the AI sees the real
+ * data about each selected well.
  */
 import type { SurfaceContext, SelectionItem } from '../shared/context/SurfaceContext'
 
@@ -31,6 +35,8 @@ export function idsToSelection(ids: readonly string[]): SelectionItem[] {
 
 export interface SelectionToSurfaceContextInput {
   ids: readonly string[]
+  /** Optional per-id resolved graph-node properties to carry into the AI context. */
+  nodes?: Record<string, Record<string, unknown> | undefined>
   prompt?: string
   asOf?: string
   label?: string
@@ -38,6 +44,11 @@ export interface SelectionToSurfaceContextInput {
 
 export function selectionToSurfaceContext(input: SelectionToSurfaceContextInput): SurfaceContext {
   const prompt = input.prompt?.trim() || DEFAULT_PROMPT
+  const selection: SelectionItem[] = idsToSelection(input.ids).map((item) => {
+    const data = input.nodes?.[item.ref.id]
+    if (!data || Object.keys(data).length === 0) return item
+    return { ...item, data }
+  })
   const ctx: SurfaceContext = {
     surface: 'find',
     active: {
@@ -45,7 +56,7 @@ export function selectionToSurfaceContext(input: SelectionToSurfaceContextInput)
       objectId: `selection:${input.ids.length > 0 ? input.ids.join('+') : 'empty'}`,
       label: input.label ?? `Find selection (${input.ids.length} wells)`,
     },
-    selection: idsToSelection(input.ids),
+    selection,
     prompt,
   }
   if (input.asOf) ctx.asOf = input.asOf

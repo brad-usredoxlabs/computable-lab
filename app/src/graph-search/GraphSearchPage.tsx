@@ -172,10 +172,22 @@ export function GraphSearchPage() {
       // find → collection → selection (spec §7 end-to-end loop).
       const { handle: collection } = await createGraphCollection(ids)
       await createGraphSelection(collection, ids)
-      // Build a real SurfaceContext from the selection (the bindist:
-      // surface × selection × prompt) and dispatch it into the AI chat.
+      // Resolve each selected id → its graph-node data so the AI receives the
+      // actual data (materialRefs, labware, treatments, measurements), not just
+      // an id. This is the SUBSTANCE the model analyzes.
+      const nodes: Record<string, Record<string, unknown>> = {}
+      if (result) {
+        for (const obj of result.objects) {
+          if (ids.includes(obj.id) && obj.properties && Object.keys(obj.properties).length > 0) {
+            nodes[obj.id] = obj.properties
+          }
+        }
+      }
+      // Build a real SurfaceContext from the selection + its data (the bindist:
+      // surface × selection × data × prompt) and dispatch it into the AI chat.
       const sc: SurfaceContext = selectionToSurfaceContext({
         ids,
+        nodes,
         prompt: aiPrompt.trim() || 'Analyze these wells',
         asOf: new Date().toISOString(),
         label: 'Find selection',
@@ -185,7 +197,7 @@ export function GraphSearchPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
-  }, [selectedIds, aiPrompt])
+  }, [selectedIds, aiPrompt, result])
 
   const plates = useMemo(() => (result ? groupByPlate(result.objects) : []), [result])
 
