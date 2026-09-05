@@ -160,11 +160,13 @@ export function GraphSearchPage() {
             )}
 
             {plates.length > 0 && (
-              <GraphSearchPlateView
-                plates={plates}
-                selectedIds={selectedIds}
-                onToggle={toggleSelect}
-              />
+              <div className="graph-search__grid-wrap">
+                <GraphSearchPlateView
+                  plates={plates}
+                  selectedIds={selectedIds}
+                  onToggle={toggleSelect}
+                />
+              </div>
             )}
 
             <GraphSearchTable

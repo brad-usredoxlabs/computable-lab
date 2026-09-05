@@ -1,47 +1,54 @@
 /**
- * Graph Search / Find UI — live-browser verification.
+ * Graph Search / Find UI — live-browser verification (full-frame plate map).
  *
- * Drives the real user workflow in the running app: search "rotenone" in the
- * Find panel → a plate view renders with the 6 treated wells (A1,A2,A3,B1,B2,
- * C3) highlighted → rows render in the table → selecting rows toggles.
- *
- * Run against the worktree's isolated stack (see README in dev notes):
- *   backend on :3009, vite on :5188 (proxies /api → :3009).
+ * Runs against the worktree's isolated stack:
+ *   backend :3022, vite :5192 (proxies /api → :3022).
  */
 import { test, expect } from '@playwright/test'
 
-const BASE = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5188'
+const BASE = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:5192'
 
 test.describe('Find (graph search) UI', () => {
-  test('searches rotenone wells, renders plate highlight + table, and selects', async ({ page }) => {
+  test('searches rotenone wells, renders the FULL 96-well frame with matches highlighted, and selects', async ({ page }) => {
     await page.goto(`${BASE}/find`)
-    // The Find page mounts with a search box.
     const input = page.getByTestId('graph-search-input')
     await expect(input).toBeVisible({ timeout: 15_000 })
 
-    // Type a material and submit via the form.
     await input.fill('rotenone')
     await page.getByTestId('graph-search-submit').click()
 
-    // Summary shows the result count (6 wells).
     const summary = page.getByTestId('graph-search-summary')
     await expect(summary).toBeVisible({ timeout: 15_000 })
-    await expect(summary).toContainText('6 objects')
+    // Both rotenone graphs project 6 wells each → 12 total well nodes.
+    await expect(summary).toContainText('12 objects', { timeout: 15_000 })
 
-    // Plate grid renders; the 6 hit cells are marked data-hit="true".
+    // Full-frame: a plate_96 renders 8 row rows (A..H). `.grid-label` count =
+    // the corner cell + 8 row labels = 9. The plate view no longer truncates
+    // to the touched A..C rows.
+    const rowLabels = page.getByTestId('graph-search-plate').first().locator('.graph-search__grid-label')
+    await expect(rowLabels).toHaveCount(9, { timeout: 15_000 })
+
+    // Column headers run 1..12 (full 96-well width), present via header cells.
+    const colHeaders = page.getByTestId('graph-search-plate').first().locator('.graph-search__grid-col')
+    await expect(colHeaders).toHaveCount(12, { timeout: 15_000 })
+
+    // Exactly 12 hit cells across all plates (6 per rotenone graph).
     const hitCells = page.locator('[data-hit="true"]')
-    await expect(hitCells).toHaveCount(6, { timeout: 15_000 })
+    await expect(hitCells).toHaveCount(12, { timeout: 15_000 })
 
-    // Table renders the 6 well rows.
+    // Non-match cells exist (full frame has cells that are NOT hits) and are labeled.
+    const emptyCells = page.locator('[data-hit="false"]')
+    await expect(emptyCells.count()).resolves.toBeGreaterThan(0)
+
+    // Table renders all 12 well rows.
     const tableRows = page.getByTestId('graph-search-table').locator('tbody tr')
-    await expect(tableRows).toHaveCount(6, { timeout: 15_000 })
+    await expect(tableRows).toHaveCount(12, { timeout: 10_000 })
 
-    // Selecting a well via its checkbox updates the selection count in summary.
-    const firstCheckbox = page.getByTestId('row-select-well').first()
-    await firstCheckbox.check()
+    // Selecting via checkbox updates the count.
+    await page.getByTestId('row-select-well').first().check()
     await expect(summary).toContainText('1 selected', { timeout: 10_000 })
 
-    // Toggling the plate cell also works (click B2 cell → selected attr).
+    // Clicking a non-match cell does nothing (no nodeId); clicking a hit toggles.
     const b2 = page.locator('[data-well="B2"]').first()
     await b2.click()
     await expect(b2).toHaveAttribute('data-selected', 'true', { timeout: 10_000 })
@@ -52,16 +59,13 @@ test.describe('Find (graph search) UI', () => {
     const input = page.getByTestId('graph-search-input')
     await expect(input).toBeVisible({ timeout: 15_000 })
 
-    // Natural-language planning: submit a phrase, not a structured query.
     await input.fill('wells treated with rotenone')
     await page.getByTestId('graph-search-submit').click()
 
-    // The planner-derived explain shows; the 6 wells surface.
     const summary = page.getByTestId('graph-search-summary')
-    await expect(summary).toContainText('6 objects', { timeout: 15_000 })
+    await expect(summary).toContainText('12 objects', { timeout: 15_000 })
     await expect(summary).toContainText('rotenone', { timeout: 10_000 })
 
-    // Select two wells via checkboxes, then send to AI.
     const checkboxes = page.getByTestId('row-select-well')
     await checkboxes.nth(0).check()
     await checkboxes.nth(1).check()
