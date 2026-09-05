@@ -2605,6 +2605,18 @@ export const apiClient = {
     })
   },
 
+  /** POST /plate-maps/export — export a plate-map CSV/TSV from an event graph. */
+  async exportPlateMap(body: {
+    eventGraphId: string
+    labwareId?: string
+    format?: 'csv' | 'tsv'
+  }): Promise<{ content: string; format: 'csv' | 'tsv' }> {
+    return request('/plate-maps/export', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
   async executeInstrumentApplianceJob(
     job: InstrumentApplianceJob,
     options?: { confirmLiveExecution?: boolean },
