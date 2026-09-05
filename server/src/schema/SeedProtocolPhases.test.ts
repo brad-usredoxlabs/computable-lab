@@ -91,6 +91,18 @@ const PROTOCOL_DEFS: ProtocolDef[] = [
       'step-5': 'prep',
     },
   },
+  {
+    file: 'prt-seed-biological-transfer.yaml',
+    phases: [
+      { id: 'transfer', label: 'Biological Transfer', ordinal: 1, templateRef: 'PHASE-TREATMENT' },
+    ],
+    stepPhaseIds: {
+      'step-1': 'transfer',
+      'step-2': 'transfer',
+      'step-3': 'transfer',
+      'step-4': 'transfer',
+    },
+  },
 ];
 
 describe('seed protocol phases (spec-004)', () => {

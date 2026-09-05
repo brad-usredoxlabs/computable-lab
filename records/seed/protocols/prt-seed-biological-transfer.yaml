@@ -1,0 +1,108 @@
+$schema: https://computable-lab.com/schema/computable-lab/protocol.schema.yaml
+kind: protocol
+recordId: prt-seed-biological-transfer
+shortSlug: biological-transfer
+title: Biological Material Transfer (plate N per well, top-up to final volume)
+description: >
+  Seed protocol shipped with computable-lab for out-of-box usage. A generic,
+  type-parameterized template for plating ANY biological material (cell line,
+  C. elegans, yeast, E. coli, organoid, ...): release the source culture, plate
+  ~N units per well (count-per-volume working concentration — the north star is
+  the seed density), then top up each well to the final volume with medium. The
+  measure follows the biological TYPE's rule via the biological-types registry;
+  the numbers below are placeholders the lab substitutes at localization.
+version: "1.0.0"
+state: effective
+tags:
+  - seed
+  - biological
+  - count-first
+  - transfer
+roles:
+  labwareRoles:
+    - roleId: source
+      description: Source vessel/rack holding the harvested biological suspension
+      expectedLabwareKinds:
+        - lbw-seed-tuberack-mixed-4x50ml-6x15ml
+    - roleId: plate
+      description: Target 96-well plate to be seeded
+      expectedLabwareKinds:
+        - lbw-seed-plate-96-flat
+  materialRoles:
+    - roleId: biological
+      description: Biological material (cell line / organism) being plated count-first
+      allowedMaterialIds:
+        - biological
+    - roleId: topping_medium
+      description: Culture medium used to top up each well to the final volume
+      allowedMaterialIds:
+        - medium
+parameters: []
+phases:
+  - id: transfer
+    label: Biological Transfer
+    ordinal: 1
+    templateRef: PHASE-TREATMENT
+steps:
+  - stepId: step-1
+    phaseId: transfer
+    kind: add_material
+    label: Release biological material from source (harvest/resuspend)
+    target:
+      labwareRole: source
+    wells:
+      kind: explicit
+      wells:
+        - A1
+    material:
+      materialRole: biological
+    volume_uL: 1000
+  - stepId: step-2
+    phaseId: transfer
+    kind: add_material
+    label: Plate ~50,000 units per well (count-per-volume seed density)
+    target:
+      labwareRole: plate
+    wells:
+      kind: explicit
+      wells:
+        - A1
+        - B1
+        - C1
+        - D1
+    material:
+      materialRole: biological
+    working_concentration:
+      value: 50000
+      unit: cells/mL
+      basis: count_per_volume
+  - stepId: step-3
+    phaseId: transfer
+    kind: add_material
+    label: Top up each well to 200 µL final volume with medium
+    target:
+      labwareRole: plate
+    wells:
+      kind: explicit
+      wells:
+        - A1
+        - B1
+        - C1
+        - D1
+    material:
+      materialRole: topping_medium
+    volume_uL: 200
+  - stepId: step-4
+    phaseId: transfer
+    kind: mix
+    label: Gently mix seeded wells
+    target:
+      labwareRole: plate
+    wells:
+      kind: explicit
+      wells:
+        - A1
+        - B1
+        - C1
+        - D1
+    cycles: 5
