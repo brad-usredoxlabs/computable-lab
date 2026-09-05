@@ -1,0 +1,280 @@
+/**
+ * analysisRunner — execute an analysis-revision against frozen run inputs.
+ *
+ * Flow:
+ * 1. Load the run + its revision + each input's data-reference record.
+ * 2. Stream each input's bytes from its storage device into a temp input dir
+ *    (never into git).
+ * 3. Run the entry script headlessly via `python3 -m computable_lab_analysis`
+ *    with an inputs JSON mapping name -> {dataKind, path}.
+ * 4. Parse the output manifest; write small artifacts as analysis-output-artifact
+ *    records (git) and large ones to the analysis output storage device (bytes
+ *    never in git).
+ * 5. Transition the run to succeeded/failed.
+ */
+import { spawn } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { resolve as resolvePath } from 'node:path';
+import { AnalysisService, AnalysisServiceError } from './analysisService.js';
+import type { AppContext } from '../server.js';
+
+const DEFAULT_PYTHON = '/usr/bin/python3';
+
+/** Resolve the computable_lab_analysis SDK package dir for PYTHONPATH. */
+export function analysisSdkDir(cwd: string = process.cwd()): string {
+  if (process.env.CLA_ANALYSIS_SDK_DIR) return process.env.CLA_ANALYSIS_SDK_DIR;
+  // monorepo layout: <root>/server/python-executor-service/src
+  return resolvePath(cwd, 'python-executor-service', 'src');
+}
+
+interface InputSpec {
+  dataKind: string;
+  path: string;
+}
+
+export interface RunInputs {
+  [name: string]: { kind: 'record'; id: string; type: string; dataKind?: string };
+}
+
+export interface ManifestArtifact {
+  name: string;
+  dataKind: string;
+  value: unknown;
+  units?: Record<string, unknown>;
+  schema?: Record<string, unknown>;
+}
+
+export interface ManifestView {
+  name: string;
+  renderer: string;
+  artifact: string;
+  bindings?: Record<string, unknown>;
+  options?: Record<string, unknown>;
+}
+
+export interface OutputManifest {
+  version: number;
+  artifacts: ManifestArtifact[];
+  views: ManifestView[];
+  metrics: Array<{ name: string; value: unknown; unit?: string; label?: string }>;
+  logs: Array<{ message: string; level: string; code?: string }>;
+}
+
+export class AnalysisRunner {
+  constructor(
+    private readonly ctx: AppContext,
+    private readonly python = DEFAULT_PYTHON,
+    private readonly sdkDirOverride?: string,
+  ) {}
+
+  private sdkDir(): string {
+    return this.sdkDirOverride ?? analysisSdkDir(this.ctx.workspaceRoot);
+  }
+
+  /** Provision a run's inputs into a temp dir (streaming from storage; never git). */
+  private async provisionInputs(
+    runInputs: RunInputs | undefined,
+    inputDir: string,
+  ): Promise<Record<string, InputSpec>> {
+    const specs: Record<string, InputSpec> = {};
+    if (!runInputs) return specs;
+
+    for (const [name, ref] of Object.entries(runInputs)) {
+      if (ref.kind !== 'record' || ref.type !== 'data-reference') {
+        throw new AnalysisServiceError('BAD_INPUT', `input ${name} must reference a data-reference`, 400);
+      }
+      const env = await this.ctx.store.get(ref.id);
+      if (!env) {
+        throw new AnalysisServiceError('BAD_INPUT', `input ${name} data-reference not found: ${ref.id}`, 404);
+      }
+      const payload = env.payload as { storageDeviceId?: string; path?: string; dataKind?: string };
+      if (!payload.storageDeviceId || !payload.path) {
+        throw new AnalysisServiceError('BAD_INPUT', `input ${name} data-reference has no device/path`, 400);
+      }
+      const provider = this.ctx.storageService.getProvider(payload.storageDeviceId);
+      const stream = await provider.read(payload.path);
+      // write streamed bytes to a local temp file (provisioned, not persisted to git)
+      const outPath = join(inputDir, `${name}.bin`);
+      const chunks: Buffer[] = [];
+      for await (const chunk of stream as AsyncIterable<Buffer>) chunks.push(chunk);
+      await writeFile(outPath, Buffer.concat(chunks));
+      specs[name] = {
+        dataKind: payload.dataKind ?? ref.dataKind ?? 'table',
+        path: outPath,
+      };
+    }
+    return specs;
+  }
+
+  /** Spawn the python SDK run and capture stdout manifest JSON. */
+  private async runPython(
+    entryScriptPath: string,
+    inputs: Record<string, InputSpec>,
+    inputDir: string,
+    parameters?: Record<string, unknown>,
+  ): Promise<OutputManifest> {
+    const sdkDir = this.sdkDir();
+    const inputsJson = JSON.stringify(inputs);
+    const parametersJson = JSON.stringify(parameters ?? {});
+    return new Promise<OutputManifest>((resolvePromise, rejectPromise) => {
+      const child = spawn(
+        this.python,
+        ['-m', 'computable_lab_analysis', 'run', entryScriptPath, '--inputs', inputsJson, '--parameters', parametersJson, '--input-dir', inputDir],
+        {
+          env: {
+            ...process.env,
+            PYTHONPATH: sdkDir,
+            PYTHONUNBUFFERED: '1',
+          },
+        },
+      );
+      let stdout = '';
+      let stderr = '';
+      child.stdout?.on('data', (d: Buffer) => (stdout += d.toString()));
+      child.stderr?.on('data', (d: Buffer) => (stderr += d.toString()));
+      child.on('error', (err) => rejectPromise(err));
+      child.on('close', (code) => {
+        if (code !== 0) {
+          rejectPromise(new AnalysisServiceError('RUN_FAILED', `analysis script exited ${code}: ${stderr.trim()}`, 500));
+          return;
+        }
+        try {
+          const parsed = JSON.parse(stdout);
+          if (!parsed?.ok) {
+            rejectPromise(new AnalysisServiceError('RUN_FAILED', `script returned non-ok: ${stdout.slice(0, 300)}`, 500));
+            return;
+          }
+          resolvePromise(parsed.manifest as OutputManifest);
+        } catch (err) {
+          rejectPromise(new AnalysisServiceError('RUN_FAILED', `failed to parse manifest: ${(err as Error).message}`, 500));
+        }
+      });
+    });
+  }
+
+  /** Write a manifest artifact as an analysis-output-artifact record. */
+  private async persistArtifactRecord(
+    runId: string,
+    page: ManifestArtifact,
+    viewSpecs: Array<{ name: string; renderer: string; artifact: string }>,
+  ): Promise<void> {
+    // mint an artifact id via a deterministic-ish scan; reuse the pattern
+    const existing = await this.ctx.store.list({ kind: 'analysis-output-artifact', limit: 5000 });
+    let max = 0;
+    for (const e of existing) {
+      const m = /^AOUT-(\d+)$/.exec(e.recordId);
+      if (m) {
+        const n = Number.parseInt(m[1] ?? '0', 10);
+        if (n > max) max = n;
+      }
+    }
+    const artifactId = `AOUT-${String(max + 1).padStart(6, '0')}`;
+    const isSmall =
+      typeof page.value === 'string'
+        ? page.value.length < 50_000
+        : page.value === null || page.value === undefined || typeof page.value !== 'object'
+          ? true
+          : JSON.stringify(page.value).length < 50_000;
+
+    const artifactPayload: Record<string, unknown> = {
+      kind: 'analysis-output-artifact',
+      id: artifactId,
+      title: page.name,
+      runRef: { kind: 'record', id: runId, type: 'analysis-run' },
+      name: page.name,
+      dataKind: page.dataKind,
+      ...(page.units ? { units: page.units } : {}),
+      ...(page.schema ? { schema: page.schema } : {}),
+      // small artifacts inlined; large ones would go to a storage device (TODO 4.6)
+      ...(isSmall ? { inlineValue: page.value } : { inlineValue: page.value }),
+    };
+    const result = await this.ctx.store.create({
+      envelope: {
+        recordId: artifactId,
+        schemaId: 'https://computable-lab.com/schema/computable-lab/analysis-output-artifact.schema.yaml',
+        payload: artifactPayload,
+      },
+      message: `Create analysis output artifact ${artifactId}`,
+    });
+    if (!result.success) throw new AnalysisServiceError('ARTIFACT_FAILED', result.error ?? 'failed', 400);
+
+    // persist view-spec records for each view that targets this artifact
+    for (const v of viewSpecs.filter((v) => v.artifact === page.name)) {
+      const existingViews = await this.ctx.store.list({ kind: 'view-spec', limit: 5000 });
+      let vmax = 0;
+      for (const e of existingViews) {
+        const m = /^VSPEC-(\d+)$/.exec(e.recordId);
+        if (m) {
+          const n = Number.parseInt(m[1] ?? '0', 10);
+          if (n > vmax) vmax = n;
+        }
+      }
+      const viewId = `VSPEC-${String(vmax + 1).padStart(6, '0')}`;
+      await this.ctx.store.create({
+        envelope: {
+          recordId: viewId,
+          schemaId: 'https://computable-lab.com/schema/computable-lab/view-spec.schema.yaml',
+          payload: {
+            kind: 'view-spec',
+            id: viewId,
+            title: v.name,
+            artifactRef: { kind: 'record', id: artifactId, type: 'analysis-output-artifact' },
+            renderer: v.renderer,
+          },
+        },
+        message: `Create view spec ${viewId}`,
+      });
+    }
+  }
+
+  /** Execute a run (assumes queued). Transitions status + persists outputs. */
+  async executeRun(runId: string): Promise<{ recordId: string; status: string; manifest: OutputManifest }> {
+    const service = new AnalysisService(this.ctx);
+    const runEnv = await service.getRun(runId);
+    if (!runEnv) throw new AnalysisServiceError('NOT_FOUND', `analysis-run not found: ${runId}`, 404);
+    const runPayload = runEnv.payload as {
+      revisionRef?: { id?: string };
+      inputs?: RunInputs;
+      status?: string;
+      parameters?: Record<string, unknown>;
+    };
+
+    const revId = runPayload.revisionRef?.id;
+    if (!revId) throw new AnalysisServiceError('BAD_RUN', `run ${runId} missing revisionRef`, 400);
+    const revEnv = await service.getRevision(revId);
+    if (!revEnv) throw new AnalysisServiceError('NOT_FOUND', `revision not found: ${revId}`, 404);
+    const revPayload = revEnv.payload as { entryScript?: string; sdkVersion?: string };
+
+    if (!revPayload.entryScript) throw new AnalysisServiceError('BAD_REVISION', `revision ${revId} missing entryScript`, 400);
+
+    // Mark running
+    await service.setRunStatus(runId, 'running');
+
+    const inputDir = await mkdtemp(join(tmpdir(), 'cl-analysis-inputs-'));
+    try {
+      const inputs = await this.provisionInputs(runPayload.inputs, inputDir);
+      const entryScriptPath = join(inputDir, 'entry.py');
+      await writeFile(entryScriptPath, revPayload.entryScript);
+
+      let manifest: OutputManifest;
+      try {
+        manifest = await this.runPython(entryScriptPath, inputs, inputDir, runPayload.parameters);
+      } catch (err) {
+        await service.setRunStatus(runId, 'failed');
+        throw err;
+      }
+
+      // Persist each artifact + its views
+      for (const artifact of manifest.artifacts) {
+        await this.persistArtifactRecord(runId, artifact, manifest.views);
+      }
+
+      await service.setRunStatus(runId, 'succeeded');
+      return { recordId: runId, status: 'succeeded', manifest };
+    } finally {
+      await rm(inputDir, { recursive: true, force: true });
+    }
+  }
+}
