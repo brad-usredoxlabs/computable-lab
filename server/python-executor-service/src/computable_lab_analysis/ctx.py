@@ -7,6 +7,7 @@ mounted input dir supplied by the CL runner) before invoking the script.
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import os
 import sys
@@ -57,6 +58,14 @@ class DatasetHandle:
             text = Path(self.path).read_text(encoding="utf-8")
             return _csv_rows(text)
         return []
+
+    def file_bytes(self) -> bytes:
+        """Return the raw bytes of a file-backed input (model, image, raw file)."""
+        if self.path:
+            return Path(self.path).read_bytes()
+        if self.inline is not None and isinstance(self.inline, (bytes, bytearray)):
+            return bytes(self.inline)
+        raise RuntimeError(f"input '{self.name}' has no file path or inline bytes")
 
     @property
     def source_path(self) -> Optional[str]:
@@ -110,6 +119,9 @@ class Artifact:
     value: Any
     units: Optional[Dict[str, Any]] = None
     schema: Optional[Dict[str, Any]] = None
+    # File emission: when set, CL streams this local file to a storage device
+    # rather than inlining `value` into a record. {path, sha256, sizeBytes, format}
+    blob: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -138,6 +150,7 @@ class OutputManifest:
                     "name": a.name,
                     "dataKind": a.data_kind,
                     "value": a.value,
+                    **({"blob": a.blob} if a.blob else {}),
                     **({"units": a.units} if a.units else {}),
                     **({"schema": a.schema} if a.schema else {}),
                 }
@@ -211,6 +224,45 @@ class Context:
         schema: Optional[Dict[str, Any]] = None,
     ) -> Artifact:
         artifact = Artifact(name=name, data_kind=kind, value=data, units=units, schema=schema)
+        self._manifest.artifacts.append(artifact)
+        return artifact
+
+    def publish_file(
+        self,
+        name: str,
+        path: str,
+        *,
+        kind: str = "binary",
+        format: Optional[str] = None,
+        units: Optional[Dict[str, str]] = None,
+        schema: Optional[Dict[str, Any]] = None,
+    ) -> Artifact:
+        """Register a file the script wrote as an output artifact.
+
+        kind: model | table | signal | image | binary | ...
+        format: joblib | pt | pkl | csv | png | ...
+        CL streams the bytes to a storage device (never git) and records a
+        data-reference + sha256.
+        """
+        p = Path(path)
+        if not p.exists():
+            raise FileNotFoundError(f"publish_file: '{path}' does not exist")
+        if not p.is_file():
+            raise ValueError(f"publish_file: '{path}' is not a regular file")
+        data = p.read_bytes()
+        artifact = Artifact(
+            name=name,
+            data_kind=kind,
+            value=p.name,
+            units=units,
+            schema=schema,
+            blob={
+                "path": str(p),
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "sizeBytes": len(data),
+                "format": (format or p.suffix.lstrip(".")) or "bin",
+            },
+        )
         self._manifest.artifacts.append(artifact)
         return artifact
 

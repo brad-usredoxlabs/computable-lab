@@ -20,6 +20,32 @@ class ContextTests(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
+    def test_publish_file_registers_blob_with_sha_and_size(self) -> None:
+        blob = self._dir / "model.pkl"
+        blob.write_bytes(b"\x80\x04model-bytes-abcd")
+        ctx = Context()
+        ctx.publish_file("model", str(blob), kind="model", format="pkl")
+        a = ctx.manifest().artifacts[0]
+        self.assertEqual(a.name, "model")
+        self.assertEqual(a.data_kind, "model")
+        self.assertEqual(a.value, "model.pkl")
+        self.assertEqual(a.blob["format"], "pkl")
+        import hashlib
+        self.assertEqual(a.blob["sha256"], hashlib.sha256(b"\x80\x04model-bytes-abcd").hexdigest())
+        self.assertEqual(a.blob["sizeBytes"], len(b"\x80\x04model-bytes-abcd"))
+        # serialized manifest carries the blob
+        d = ctx.manifest().to_dict()["artifacts"][0]
+        self.assertEqual(d["blob"]["path"], str(blob))
+
+    def test_publish_file_missing_path_raises(self) -> None:
+        ctx = Context()
+        with self.assertRaises(FileNotFoundError):
+            ctx.publish_file("model", str(self._dir / "nope.pkl"))
+
+    def test_input_file_bytes_reads_model_bytes(self) -> None:
+        ctx = Context(inputs={"model": {"dataKind": "model", "path": str(self._csv)}})
+        self.assertEqual(ctx.input("model").file_bytes(), self._csv.read_bytes())
+
     def test_parameters_are_immutable_snapshot(self) -> None:
         ctx = Context(parameters={"window": [0.1, 0.5], "n": 3})
         params = ctx.parameters
