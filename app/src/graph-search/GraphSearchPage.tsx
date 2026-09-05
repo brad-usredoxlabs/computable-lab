@@ -10,16 +10,17 @@
  * plate appears when wells are present.
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AppShell } from '../shared/shell'
 import {
   graphSearch,
   graphPlanSearch,
   graphAiContext,
+  graphContext,
   createGraphCollection,
   createGraphSelection,
-  wellsTreatedQuery,
   type GraphResult,
+  type VesselContextResult,
 } from '../shared/api/graphSearchClient'
 import { GraphSearchTable } from './GraphSearchTable'
 import { GraphSearchPlateView } from './GraphSearchPlateView'
@@ -52,7 +53,13 @@ export function GraphSearchPage() {
   }, [])
 
   const runPlaceholder = useCallback((material: string) => {
-    void runFind(wellsTreatedQuery(material))
+    // "wells treated with X" — direct well query with treatment expansion.
+    void runFind({
+      op: 'find',
+      type: 'well',
+      where: [{ field: 'treatment.name', operator: 'contains', value: material }],
+      limit: 200,
+    })
   }, [runFind])
 
   const runNaturalLanguage = useCallback(async (text: string) => {
@@ -85,6 +92,46 @@ export function GraphSearchPage() {
   }, [])
 
   const [aiContext, setAiContext] = useState<string | null>(null)
+  const [vesselContext, setVesselContext] = useState<VesselContextResult | null>(null)
+  const [vesselError, setVesselError] = useState<string | null>(null)
+
+  const runVesselContext = useCallback(async (materialRef: string) => {
+    setVesselError(null)
+    try {
+      const ctx = await graphContext(materialRef)
+      setVesselContext(ctx.count > 0 ? ctx : null)
+    } catch (err) {
+      setVesselError(err instanceof Error ? err.message : String(err))
+    }
+  }, [])
+  const distinctMaterials = result ? [...new Set(result.objects
+    .flatMap((o) => {
+      // treatment/measurement nodes carry materialRef; well nodes carry
+      // materialRefs[] (enriched from their treated_with edges).
+      const refs: string[] = []
+      const single = o.properties?.materialRef
+      if (typeof single === 'string' && single.length > 0) refs.push(single)
+      if (Array.isArray(o.properties?.materialRefs)) {
+        for (const r of o.properties.materialRefs as unknown[]) if (typeof r === 'string') refs.push(r)
+      }
+      return refs
+    })
+    .filter((r): r is string => typeof r === 'string' && r.length > 0))]
+    : []
+  const primaryMaterial = distinctMaterials[0]
+
+  // Auto-surface vessel contexts (tube/stock/aliquot) for the results' primary
+  // material. Clears on new results; no-op when there's no material or none
+  // found (vesselContext stays null → nothing renders).
+  useEffect(() => {
+    if (!primaryMaterial) {
+      setVesselContext(null)
+      setVesselError(null)
+      return
+    }
+    void runVesselContext(primaryMaterial)
+  }, [primaryMaterial, runVesselContext])
+
   const sendSelectionToAi = useCallback(async () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
@@ -168,6 +215,35 @@ export function GraphSearchPage() {
                 />
               </div>
             )}
+
+            {vesselContext && vesselContext.count > 0 && (
+              <div className="graph-search__vessels" data-testid="graph-search-vessels">
+                <div className="graph-search__vessels-title">
+                  Also in tubes/stocks{primaryMaterial ? ` for ${primaryMaterial}` : ''}
+                </div>
+                {vesselContext.instances.map((inst) => {
+                  const storage = (inst.properties?.storage ?? {}) as { location?: string; temperature_C?: number }
+                  const status = typeof inst.properties?.status === 'string' ? inst.properties.status : undefined
+                  return (
+                    <div key={inst.id} className="graph-search__vessel" data-testid="graph-vessel-instance">
+                      <span className="graph-search__vessel-name">{inst.label}</span>
+                      <span className="graph-search__vessel-meta">
+                        {storage.location ? ` at ${storage.location}` : ''}
+                        {typeof storage.temperature_C === 'number' ? ` (${storage.temperature_C}°C)` : ''}
+                        {status ? ` · ${status}` : ''}
+                      </span>
+                    </div>
+                  )
+                })}
+                {vesselContext.aliquots.map((a) => (
+                  <div key={a.id} className="graph-search__vessel" data-testid="graph-vessel-aliquot">
+                    <span className="graph-search__vessel-name">{a.label}</span>
+                    <span className="graph-search__vessel-meta">aliquot</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {vesselError && <div className="graph-search__error">{vesselError}</div>}
 
             <GraphSearchTable
               nodes={result.objects}

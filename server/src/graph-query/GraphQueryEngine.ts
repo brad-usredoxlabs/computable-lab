@@ -214,7 +214,7 @@ export class GraphQueryEngine {
     const objects: GraphNode[] = [];
     for (const id of candidates) {
       const node = this.index.node(id) ?? (await this.materializeRecordNode(id));
-      if (node) objects.push(node);
+      if (node) objects.push(this.enrichWithMaterialRefs(node));
     }
 
     return {
@@ -635,6 +635,28 @@ export class GraphQueryEngine {
       default:
         return null;
     }
+  }
+
+  /**
+   * For well nodes, attach the materialRef(s) of the treatment(s) targeting
+   * them (via treated_with edges) so consumers can resolve what a well holds
+   * without a separate lookup.
+   */
+  private enrichWithMaterialRefs(node: GraphNode): GraphNode {
+    if (node.type !== 'well') return node;
+    const refs: string[] = [];
+    for (const edge of this.index.out(node.id, { verb: 'treated_with' })) {
+      const target = this.index.node(edge.target);
+      if (target?.properties && typeof target.properties.materialRef === 'string') {
+        refs.push(target.properties.materialRef);
+      }
+    }
+    if (refs.length === 0) return node;
+    const props = { ...(node.properties ?? {}) };
+    props.materialRefs = refs;
+    const out: GraphNode = { ...node };
+    out.properties = props;
+    return out;
   }
 
   private async findByLabel(term: string, type?: string, limit = 20): Promise<GraphNode[]> {

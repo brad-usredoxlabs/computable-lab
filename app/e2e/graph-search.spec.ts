@@ -66,6 +66,13 @@ test.describe('Find (graph search) UI', () => {
     await expect(summary).toContainText('12 objects', { timeout: 15_000 })
     await expect(summary).toContainText('rotenone', { timeout: 10_000 })
 
+    // Vessel context block: rotenone also exists as a tube/stock, so the
+    // search surfaces BOTH the plate wells AND the stock (all-possibilities).
+    const vessels = page.getByTestId('graph-search-vessels')
+    await expect(vessels).toBeVisible({ timeout: 10_000 })
+    await expect(vessels).toContainText('Also in tubes/stocks', { timeout: 10_000 })
+    await expect(page.getByTestId('graph-vessel-instance').first()).toContainText('Rotenone master stock', { timeout: 10_000 })
+
     const checkboxes = page.getByTestId('row-select-well')
     await checkboxes.nth(0).check()
     await checkboxes.nth(1).check()

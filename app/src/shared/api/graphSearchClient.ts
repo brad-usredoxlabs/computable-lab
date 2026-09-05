@@ -155,6 +155,23 @@ export async function graphAiContext(selection: string, prompt: string): Promise
   return (await res.json()) as { prompt: string; selection: string; nodeIds: string[] }
 }
 
+export interface VesselContextResult {
+  instances: GraphNode[]
+  aliquots: GraphNode[]
+  count: number
+}
+
+/** Find tube / stock / aliquot vessel contexts that hold a material. */
+export async function graphContext(material: string): Promise<VesselContextResult> {
+  const res = await fetch(`${API_BASE}/search/graph/context`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ material }),
+  })
+  if (!res.ok) throw new Error(`graph context failed: ${res.status}`)
+  return (await res.json()) as VesselContextResult
+}
+
 async function safeJson(res: Response): Promise<{ error?: string } | null> {
   try {
     return (await res.json()) as { error?: string }

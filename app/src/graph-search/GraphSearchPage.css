@@ -218,3 +218,33 @@
   color: var(--cl-text-muted, #6b7280);
   font-size: 0.8rem;
 }
+
+.graph-search__vessels {
+  border: 1px solid var(--cl-border, #e5e7eb);
+  border-left: 3px solid #059669;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  margin: 0.5rem 0 0.75rem;
+  font-size: 0.85rem;
+}
+
+.graph-search__vessels-title {
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.graph-search__vessel {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.1rem 0;
+}
+
+.graph-search__vessel-name {
+  font-weight: 500;
+}
+
+.graph-search__vessel-meta {
+  color: var(--cl-text-muted, #6b7280);
+  font-size: 0.8rem;
+}

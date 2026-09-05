@@ -18,3 +18,5 @@ export { CollectionService } from './CollectionService.js';
 export type { CollectionMetadata } from './CollectionService.js';
 export { NLPlanner } from './NLPlanner.js';
 export type { PlanResult, PlanDeps } from './NLPlanner.js';
+export { VesselContextResolver } from './VesselContextResolver.js';
+export type { VesselContextResult } from './VesselContextResolver.js';

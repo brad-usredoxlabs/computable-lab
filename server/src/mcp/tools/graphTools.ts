@@ -193,6 +193,19 @@ export function registerGraphTools(server: McpServer, ctx: AppContext, registry?
       }
     });
 
+  dualRegister(server, registry, 'lab.context',
+    'Find the tube / stock / aliquot vessel contexts that hold a material (plates + stocks/tubes together).',
+    { material: z.string() },
+    async (args) => {
+      const svc = svcOf(ctx);
+      try {
+        const result = svc.vessels.resolveVesselContexts(args.material);
+        return jsonResult({ material: args.material, ...result });
+      } catch (err) {
+        return errorResult(`Tool error: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    });
+
   dualRegister(server, registry, 'lab.get_collection',
     'Resolve an ephemeral collection:q_xxx or selection:q_yyy handle to its node ids (§7).',
     { handle: z.string() },
