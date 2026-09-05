@@ -1003,6 +1003,7 @@ export function registerRoutes(
     fastify.get('/measurements/:id', measurementHandlers.getMeasurement.bind(measurementHandlers));
     fastify.get('/measurements/:id/well/:well', measurementHandlers.getMeasurementWell.bind(measurementHandlers));
     fastify.post('/plate-maps/export', measurementHandlers.exportPlateMap.bind(measurementHandlers));
+    fastify.post('/plate-maps/map-return', measurementHandlers.mapReturnData.bind(measurementHandlers));
   }
 
   // ============================================================================

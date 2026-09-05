@@ -15,6 +15,10 @@ import { AdapterParameterError, getActiveReadParameterShape, listActiveReadTarge
 import { PlateMapExporter } from '../../execution/PlateMapExporter.js';
 import { ExecutionError } from '../../execution/ExecutionOrchestrator.js';
 import {
+  mapReturnDataToPlate,
+  type ReturnDataMappingInput,
+} from '../../storage/plateMappingService.js';
+import {
   GEMINI_EM_ADAPTER_ID,
   GEMINI_EM_OPERATION,
   evaluateInstrumentExecutionReadiness,
@@ -571,6 +575,50 @@ export function createMeasurementHandlers(ctx: AppContext) {
         if (err instanceof ExecutionError) {
           reply.status(err.statusCode);
           return { error: err.code, message: err.message };
+        }
+        reply.status(500);
+        return {
+          error: 'INTERNAL_ERROR',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    },
+
+    /**
+     * POST /plate-maps/map-return
+     * Tie an acquired data-reference's rows to a plate layout by well identity.
+     * Ambiguous identity → requires user mapping; the response flags it.
+     */
+    async mapReturnData(
+      request: FastifyRequest<{ Body: ReturnDataMappingInput }>,
+      reply: FastifyReply,
+    ): Promise<{
+      fileWells: string[];
+      matched: string[];
+      unmatchedInFile: string[];
+      missingInFile: string[];
+      ambiguous: boolean;
+      reason: string;
+      wellSource: { source: string; plateSnapshotId?: string };
+    } | ApiError> {
+      try {
+        const { fileWells, wellSource, mapping } = await mapReturnDataToPlate(ctx, request.body);
+        return {
+          fileWells,
+          matched: mapping.matched,
+          unmatchedInFile: mapping.unmatchedInFile,
+          missingInFile: mapping.missingInFile,
+          ambiguous: mapping.ambiguous,
+          reason: mapping.reason,
+          wellSource: {
+            source: wellSource.source,
+            ...(wellSource.plateSnapshotId ? { plateSnapshotId: wellSource.plateSnapshotId } : {}),
+          },
+        };
+      } catch (err) {
+        if ((err as { code?: string }).code === 'NOT_FOUND' || /not found/.test((err as Error).message)) {
+          reply.status(404);
+          return { error: 'NOT_FOUND', message: (err as Error).message };
         }
         reply.status(500);
         return {
